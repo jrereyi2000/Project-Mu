@@ -1,0 +1,34 @@
+# Secrets
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Large local data (videos, frames, headshot batch files) — see PROJECT_SPEC.md §1.1
+data/
+
+# Database dumps
+db/backups/
+*.sql.gz
+
+# Generated headshots (regenerate via headshots/process_headshots.py)
+static/players/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Frontend build output & deps (Mu_Network/.gitignore covers the rest)
+Mu_Network/node_modules/
+Mu_Network/dist/
+
+# Local safety copies
+backup/
+
+# Large reference PDFs (kept locally, too big for the repo)
+docs/reference/Panthers History.pdf

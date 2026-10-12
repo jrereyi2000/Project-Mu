@@ -1,0 +1,4254 @@
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+
+export const SystemContext = createContext({ season: 2035, week: 18, availableSeasons: [2035] });
+
+type Team = { name: string; abbr: string };
+
+const teams: Team[] = [
+  { name: "Arizona Cardinals", abbr: "ari" },
+  { name: "Atlanta Falcons", abbr: "atl" },
+  { name: "Baltimore Ravens", abbr: "bal" },
+  { name: "Buffalo Bills", abbr: "buf" },
+  { name: "Carolina Panthers", abbr: "car" },
+  { name: "Chicago Bears", abbr: "chi" },
+  { name: "Cincinnati Bengals", abbr: "cin" },
+  { name: "Cleveland Browns", abbr: "cle" },
+  { name: "Dallas Cowboys", abbr: "dal" },
+  { name: "Denver Broncos", abbr: "den" },
+  { name: "Detroit Lions", abbr: "det" },
+  { name: "Green Bay Packers", abbr: "gb" },
+  { name: "Houston Texans", abbr: "hou" },
+  { name: "Indianapolis Colts", abbr: "ind" },
+  { name: "Jacksonville Jaguars", abbr: "jax" },
+  { name: "Kansas City Chiefs", abbr: "kc" },
+  { name: "Las Vegas Raiders", abbr: "lv" },
+  { name: "Los Angeles Chargers", abbr: "lac" },
+  { name: "Los Angeles Rams", abbr: "lar" },
+  { name: "Miami Dolphins", abbr: "mia" },
+  { name: "Minnesota Vikings", abbr: "min" },
+  { name: "New England Patriots", abbr: "ne" },
+  { name: "New Orleans Saints", abbr: "no" },
+  { name: "New York Giants", abbr: "nyg" },
+  { name: "New York Jets", abbr: "nyj" },
+  { name: "Philadelphia Eagles", abbr: "phi" },
+  { name: "Pittsburgh Steelers", abbr: "pit" },
+  { name: "San Francisco 49ers", abbr: "sf" },
+  { name: "Seattle Seahawks", abbr: "sea" },
+  { name: "Tampa Bay Buccaneers", abbr: "tb" },
+  { name: "Tennessee Titans", abbr: "ten" },
+  { name: "Washington Commanders", abbr: "wsh" },
+];
+
+const logo = (abbr: string) => {
+  const clean = (abbr || "").toLowerCase();
+  const normalized = clean === "az" ? "ari" : clean;
+  return `https://a.espncdn.com/i/teamlogos/nfl/500/${normalized}.png`;
+};
+
+const DEFAULT_AVATAR = "https://sleepercdn.com/images/v2/icons/player_default.webp";
+
+// Bump whenever static/players/ is regenerated so browsers can't reuse previously cached headshots.
+const HEADSHOT_VERSION = "2026-10-12-crop";
+
+type HeadshotPlayer ={ espn_id?: number | string | null; id?: number | string | null } | null | undefined;
+
+// Ordered headshot sources: ESPN (NFL, then college for players still in school), then the generated
+// headshot served by api.py from static/players/{player_id}.webp, then the placeholder.
+const getHeadshotCandidates = (player: HeadshotPlayer) => {
+  const urls: string[] = [];
+  if (player?.espn_id) {
+    urls.push(`https://a.espncdn.com/i/headshots/nfl/players/full/${player.espn_id}.png`);
+    urls.push(`https://a.espncdn.com/i/headshots/college-football/players/full/${player.espn_id}.png`);
+  }
+  if (player?.id != null && /^\d+$/.test(String(player.id))) {
+    urls.push(`http://localhost:8000/static/players/${player.id}.webp?v=${HEADSHOT_VERSION}`);
+  }
+  urls.push(DEFAULT_AVATAR);
+  return urls;
+};
+
+const getPlayerHeadshot = (player: HeadshotPlayer) => getHeadshotCandidates(player)[0];
+
+// <img onError> handler: advance to the next headshot source each time one fails to load.
+const handleHeadshotError = (e: React.SyntheticEvent<HTMLImageElement>, player: HeadshotPlayer) => {
+  const img = e.currentTarget;
+  const candidates = getHeadshotCandidates(player);
+  const key = candidates.join("|");
+  const attempt = img.dataset.headshotKey === key ? Number(img.dataset.headshotAttempt || 0) + 1 : 1;
+  img.dataset.headshotKey = key;
+  img.dataset.headshotAttempt = String(attempt);
+  if (attempt < candidates.length) img.src = candidates[attempt];
+  return attempt < candidates.length ? candidates[attempt] : null;
+};
+
+const tickerGames = [
+  ["4:25 PM", "KC", "kc", "27", "BUF", "buf", "24"],
+  ["8:20 PM", "SF", "sf", "31", "SEA", "sea", "17"],
+  ["4:25 PM", "DAL", "dal", "20", "PHI", "phi", "23"],
+  ["1:00 PM", "BAL", "bal", "34", "CIN", "cin", "21"],
+  ["8:15 PM", "DET", "det", "38", "GB", "gb", "24"],
+];
+
+const stories = [
+  {
+    kicker: "Film Room",
+    title: "The pressure package reshaping the AFC playoff picture",
+    blurb:
+      "Three disguised looks, one impossible choice. How simulated defenses are forcing elite quarterbacks off their first read.",
+    author: "Mina Kimes",
+    initials: "MK",
+    read: "8 min read",
+  },
+  {
+    kicker: "League Intel",
+    title: "Five teams that can still crash the postseason party",
+    blurb:
+      "The models see chaos ahead. We break down the contenders with the schedules—and the rosters—to make a late run.",
+    author: "Seth Walder",
+    initials: "SW",
+    read: "6 min read",
+  },
+  {
+    kicker: "Draft Lab",
+    title: "The next generation: Scouting the class of tomorrow",
+    blurb:
+      "Speed at the edges, size inside and a quarterback class loaded with variance. Our early board is here.",
+    author: "Matt Miller",
+    initials: "MM",
+    read: "11 min read",
+  },
+  {
+    kicker: "Quarterback Room",
+    title: "The four throws defining this year's MVP race",
+    blurb: "A film-based comparison of the anticipation, arm talent and late-game decisions separating the finalists.",
+    author: "Dan Orlovsky",
+    initials: "DO",
+    read: "7 min read",
+  },
+  {
+    kicker: "Numbers Game",
+    title: "What every contender must fix before the postseason",
+    blurb: "One revealing weakness for each playoff-bound roster—and whether there is still time to solve it.",
+    author: "Aaron Schatz",
+    initials: "AS",
+    read: "9 min read",
+  },
+  {
+    kicker: "Power Rankings",
+    title: "A new team takes the top spot with two weeks left",
+    blurb: "The league's balance of power shifts again after a statement win under the brightest lights.",
+    author: "Eric Moody",
+    initials: "EM",
+    read: "5 min read",
+  },
+  {
+    kicker: "Scheme Lab",
+    title: "Why motion is becoming the league's most valuable weapon",
+    blurb: "The best offenses are creating answers before the snap. These five concepts explain how.",
+    author: "Ben Solak",
+    initials: "BS",
+    read: "10 min read",
+  },
+  {
+    kicker: "Playoff Machine",
+    title: "Every path to the postseason entering Week 17",
+    blurb: "Clinching scenarios, elimination games and the tiebreakers that could decide the final seven spots.",
+    author: "Kevin Seifert",
+    initials: "KS",
+    read: "8 min read",
+  },
+];
+
+const localStories = [
+  {
+    team: "dal",
+    tag: "Dallas Cowboys Beat",
+    title: "Why Dallas is finally letting its secondary play fast",
+    author: "Todd Archer",
+    time: "18m",
+  },
+  {
+    team: "phi",
+    tag: "Philadelphia Eagles Beat",
+    title: "The subtle adjustment unlocking Philly's run game",
+    author: "Tim McManus",
+    time: "42m",
+  },
+  {
+    team: "buf",
+    tag: "Buffalo Bills Beat",
+    title: "Inside Buffalo's fourth-quarter identity shift",
+    author: "Alaina Getzenberg",
+    time: "1h",
+  },
+  {
+    team: "sf",
+    tag: "San Francisco 49ers Beat",
+    title: "A new chess piece is emerging in the Bay",
+    author: "Nick Wagoner",
+    time: "2h",
+  },
+  {
+    team: "det",
+    tag: "Detroit Lions Beat",
+    title: "The North runs through Detroit—and the numbers agree",
+    author: "Eric Woodyard",
+    time: "3h",
+  },
+];
+
+const divisions: Record<string, string[]> = {
+  "AFC East": ["buf", "mia", "ne", "nyj"],
+  "AFC North": ["bal", "cin", "cle", "pit"],
+  "AFC South": ["hou", "ind", "jax", "ten"],
+  "AFC West": ["den", "kc", "lv", "lac"],
+  "NFC East": ["dal", "nyg", "phi", "wsh"],
+  "NFC North": ["chi", "det", "gb", "min"],
+  "NFC South": ["atl", "car", "no", "tb"],
+  "NFC West": ["ari", "lar", "sf", "sea"],
+};
+
+const teamRecords = [
+  "10–5", "8–7", "12–3", "11–4", "6–9", "7–8", "9–6", "5–10",
+  "10–5", "9–6", "12–3", "10–5", "9–6", "7–8", "6–9", "11–4",
+  "7–8", "8–7", "9–6", "10–5", "11–4", "6–9", "8–7", "5–10",
+  "7–8", "12–3", "9–6", "11–4", "8–7", "10–5", "6–9", "7–8",
+];
+
+const playerNames = [
+  "Marcus Reed", "Devin Carter", "Jalen Brooks", "Tyson Mitchell", "Andre Hayes",
+  "Caleb Foster", "Malik Robinson", "Darius Walker", "Trey Coleman", "Nolan Price",
+  "Isaiah Bennett", "Cameron Ward",
+];
+
+function getPlayerProfile(category: string, index: number) {
+  const team = teams[(index * 5 + 2) % teams.length];
+  const name = `${playerNames[index % playerNames.length]}${index >= playerNames.length ? ` ${index % 2 ? "Jr." : "II"}` : ""}`;
+  const position = category === "passing" ? "QB" : category === "rushing" ? "HB" : category === "receiving" ? "WR" : category === "tightend" ? "TE" : category === "fullback" ? "FB" : ["QB", "HB", "WR", "TE", "FB"][index % 5];
+  return { name, team, position, number: 2 + (index % 88) };
+}
+
+function getPlayerIdForTeam(team: Team, slot: number) {
+  const baseId = ((teams.indexOf(team) - 2) * 13 + 32) % 32;
+  return baseId + slot * 32;
+}
+
+function getDivision(abbr: string) {
+  return Object.entries(divisions).find(([, members]) => members.includes(abbr))?.[0] ?? "NFL";
+}
+
+function getTeamPosition(abbr: string) {
+  const division = getDivision(abbr);
+  const members = divisions[division];
+  return members.indexOf(abbr) + 1;
+}
+
+function TeamPage({ team }: { team: Team }) {
+  const systemStatus = useContext(SystemContext);
+  const [tab, setTab] = useState<"main" | "roster" | "stats">("main");
+  const [teamData, setTeamData] = useState<any>(null);
+  const [standings, setStandings] = useState<any[]>([]);
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [seasonStats, setSeasonStats] = useState<any>(null);
+  const [teamNews, setTeamNews] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/team/${team.abbr}?season=${systemStatus.season}`)
+      .then(res => res.json())
+      .then(data => {
+        setTeamData(data);
+        if (data && !data.error && data.team) {
+          fetch(`http://localhost:8000/api/team/${data.team.id}/season_stats/${systemStatus.season}`)
+            .then(res => res.json())
+            .then(stats => setSeasonStats(stats));
+        }
+      });
+      
+    fetch(`http://localhost:8000/api/standings/${systemStatus.season}`)
+      .then((res) => res.json())
+      .then((data) => setStandings(data));
+
+    fetch(`http://localhost:8000/api/team/${team.abbr}/schedule?season=${systemStatus.season}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.error) setSchedule(data);
+      });
+
+    fetch(`http://localhost:8000/api/team/${team.abbr}/news?season=${systemStatus.season}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && Array.isArray(data.articles)) {
+          setTeamNews(data.articles);
+        }
+      })
+      .catch((err) => console.error("Error fetching team news:", err));
+  }, [team.abbr, systemStatus.season]);
+
+  const teamIndex = teams.findIndex((item) => item.abbr === team.abbr);
+  const division = getDivision(team.abbr);
+  
+  let ordinal = "1st";
+  if (standings.length > 0) {
+    const divisionTeams = standings
+      .filter((s) => s.division === division)
+      .sort((a, b) => b.wins - a.wins || (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst));
+    const rankIndex = divisionTeams.findIndex((s) => s.abbr.toLowerCase() === team.abbr.toLowerCase());
+    if (rankIndex !== -1) {
+      ordinal = ["1st", "2nd", "3rd", "4th"][rankIndex];
+    }
+  } else {
+    const position = getTeamPosition(team.abbr);
+    ordinal = ["1st", "2nd", "3rd", "4th"][position - 1];
+  }
+
+  const nickname = team.name.split(" ").at(-1);
+
+  const record = teamData && !teamData.error ? `${teamData.team.wins}-${teamData.team.losses}` : "0-0";
+  const roster = teamData && !teamData.error ? teamData.roster : [];
+
+  const teamArticles = [
+    {
+      label: "Film Study",
+      title: `The adjustment that could unlock the ${nickname}' postseason run`,
+      excerpt: `A closer look at the personnel package changing how opponents prepare for ${team.name}.`,
+    },
+    {
+      label: "Locker Room",
+      title: `${playerNames[teamIndex % playerNames.length]} is setting the standard when it matters most`,
+      excerpt: "Teammates explain the preparation, patience and leadership driving a late-season surge.",
+    },
+    {
+      label: "Matchup Preview",
+      title: `Three keys for ${team.name} heading into Week 17`,
+      excerpt: "The pressure points, coverage tendencies and hidden matchups that will decide Sunday.",
+    },
+    {
+      label: "Roster Report",
+      title: `Why the young core is ahead of schedule`,
+      excerpt: "Development at three premium positions has changed the franchise's competitive timeline.",
+    },
+  ];
+
+  return (
+    <main className="team-page" style={{ "--team-color": teamData?.team?.team_color || "#e31837" } as React.CSSProperties}>
+      <section className="team-masthead">
+        <div className="team-masthead-bg" />
+        <div className="team-identity">
+          <img src={logo(team.abbr)} alt={`${team.name} logo`} />
+          <div>
+            <span>{division}</span>
+            <h1>{team.name}</h1>
+            <a href="#standings" className="team-standing" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <strong>{record}</strong>
+              <i />
+              <b>{ordinal} in {division}</b>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <nav className="team-tabs" aria-label={`${team.name} sections`}>
+        {(["main", "roster", "stats"] as const).map((item) => (
+          <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>
+            {item}
+          </button>
+        ))}
+        <a href={`#team-schedule-${team.abbr}`}>Schedule</a>
+      </nav>
+
+      {tab === "main" && (
+        <div className="team-content-grid">
+          <section className="team-news">
+            <div className="team-section-title"><span>Team Coverage</span><h2>Latest from the beat</h2></div>
+            {(() => {
+              const heroArticle = teamNews.length > 0 ? teamNews[0] : null;
+              const heroTitle = heroArticle?.headline || `Inside the belief driving ${team.name} into the stretch run`;
+              const heroExcerpt = heroArticle?.excerpt || `One locker room, one shared standard and a season still waiting to be defined. Our beat reporter goes inside the week that changed everything.`;
+              const heroAuthor = heroArticle?.author?.display_name || "Jordan Ellis";
+              const heroRole = heroArticle ? "FRANCHISE BEAT" : `${team.name.toUpperCase()} BEAT REPORTER`;
+              const heroLink = heroArticle ? `#article-${heroArticle.id}` : `#article-team-hero-${team.abbr}`;
+              const heroSlot = heroArticle?.slot || "Exclusive";
+
+              return (
+                <article className="team-hero">
+                  <a className="team-hero-image" href={heroLink}>
+                    <img
+                      src="https://images.unsplash.com/photo-1704713611761-e0fbbdecc3e9?auto=format&fit=crop&w=1500&q=85"
+                      alt="Football players running onto the field"
+                    />
+                    <span>{team.name} Spotlight</span>
+                  </a>
+                  <div className="team-hero-copy">
+                    <span>{heroSlot} · 9 min read</span>
+                    <a href={heroLink}><h2>{heroTitle}</h2></a>
+                    <p>{heroExcerpt}</p>
+                    <div className="author-row">
+                      <span className="avatar">{team.abbr.toUpperCase()}</span>
+                      <span><b>{heroAuthor}</b><small>{heroRole}</small></span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })()}
+
+            <div className="team-article-feed">
+              {(() => {
+                // If we have live DB articles beyond the hero (slice 1), prioritize them; fill remainder with templates
+                const dbFeed = teamNews.slice(1);
+                const feedItems: any[] = [];
+                
+                dbFeed.forEach((art) => {
+                  feedItems.push({
+                    isDb: true,
+                    id: art.id,
+                    label: art.article_type ? art.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : "Beat Report",
+                    title: art.headline,
+                    excerpt: art.excerpt,
+                    author: art.author?.display_name || "Beat Reporter",
+                    link: `#article-${art.id}`
+                  });
+                });
+
+                teamArticles.forEach((tmpl, idx) => {
+                  if (feedItems.length < 4) {
+                    feedItems.push({
+                      isDb: false,
+                      id: null,
+                      label: tmpl.label,
+                      title: tmpl.title,
+                      excerpt: tmpl.excerpt,
+                      author: "Jordan Ellis",
+                      link: `#article-team-${team.abbr}-${idx}`
+                    });
+                  }
+                });
+
+                return feedItems.slice(0, 4).map((article, index) => (
+                  <article className="team-feed-card" key={article.id || article.title}>
+                    <span className="story-number">0{index + 1}</span>
+                    <div>
+                      <span className="kicker">{article.label}</span>
+                      <a href={article.link}><h3>{article.title}</h3></a>
+                      <p>{article.excerpt}</p>
+                      <small>By {article.author} · {index + 2}h ago</small>
+                    </div>
+                  </article>
+                ));
+              })()}
+            </div>
+          </section>
+
+          <aside className="team-schedule">
+            <div className="team-section-title"><span>Week {systemStatus.week}</span><h2>Schedule</h2></div>
+            <div className="schedule-summary">
+              {schedule
+                .filter((g) => g.week >= systemStatus.week)
+                .slice(0, 3)
+                .map((game, index) => {
+                  const isHome = game.home_abbr.toLowerCase() === team.abbr.toLowerCase();
+                  const opponentAbbr = isHome ? game.away_abbr.toLowerCase() : game.home_abbr.toLowerCase();
+                  const opponentName = isHome ? (game.away_name || game.away_team) : (game.home_name || game.home_team);
+                  const isPast = game.status === "COMPLETED";
+                  const fullTime = game.game_time ? game.game_time.toUpperCase() : "TBD";
+                  const teamScore = isHome ? game.home_score : game.away_score;
+                  const opponentScore = isHome ? game.away_score : game.home_score;
+                  const isWin = teamScore > opponentScore;
+                  const isTie = teamScore === opponentScore;
+                  const resultStr = isTie ? "T" : isWin ? "W" : "L";
+                  
+                  return (
+                    <a
+                      className={isPast ? "completed" : ""}
+                      href={`#game-${game.id}`}
+                      key={game.week}
+                    >
+                      <div className="schedule-week">
+                        <span>WEEK {game.week}</span>
+                        <b>{isPast ? "FINAL" : fullTime}</b>
+                      </div>
+                      <div className="schedule-opponent">
+                        <span>{isHome ? "VS" : "AT"}</span>
+                        <img src={logo(opponentAbbr)} alt="" />
+                        <div><strong>{opponentName}</strong><small>{getDivision(opponentAbbr)}</small></div>
+                        {isPast && <em>{resultStr} {Math.max(teamScore, opponentScore)}–{Math.min(teamScore, opponentScore)}</em>}
+                      </div>
+                    </a>
+                  );
+                })}
+            </div>
+            <a href={`#team-schedule-${team.abbr}`}>View full team schedule <span>→</span></a>
+          </aside>
+        </div>
+      )}
+
+      {tab === "roster" && (
+        <section className="team-data-view">
+          <div className="team-section-title"><span>Active Players</span><h2>{team.name} Roster</h2></div>
+          <div className="roster-table">
+            <div className="data-row data-head"><span>Player</span><span>Pos</span><span>No.</span><span>Experience</span></div>
+            {roster.map((player: any) => (
+              <div className="data-row" key={player.id}>
+                <span>
+                  <a href={`#player-${player.id}`}><b>{player.name}</b></a>
+                  <small>{team.name}</small>
+                </span>
+                <span>{player.position}</span>
+                <span>{player.player_number}</span>
+                <span>{player.years_of_experience} yrs</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {tab === "stats" && (
+        <section className="team-data-view">
+            <div className="team-section-title"><span>Season {systemStatus.season}</span><h2>Team Statistics</h2></div>
+            <div className="stats-grid">
+              {[
+                ["Points Per Game", seasonStats ? seasonStats.points_per_game : "-", "PPG"],
+                ["Points Allowed Per Game", seasonStats ? seasonStats.points_allowed_per_game : "-", "PAPG"],
+                ["Total Yards", seasonStats ? seasonStats.total_yards : "-", "YDS"],
+                ["Pass Yards / Game", seasonStats ? seasonStats.pass_yards_per_game : "-", "PYPG"],
+                ["Rush Yards / Game", seasonStats ? seasonStats.rush_yards_per_game : "-", "RYPG"],
+              ].map((stat) => (
+                <article key={stat[0]}><span>{stat[0]}</span><strong>{stat[1]}</strong><small>SEASON STAT · {stat[2]}</small></article>
+              ))}
+            </div>
+
+          <div style={{ height: "4rem" }}></div>
+          <div className="team-section-title"><span>Season {systemStatus.season}</span><h2>Team Ratings</h2></div>
+            <div className="stats-grid">
+              {[
+                ["Overall Rating", teamData ? teamData.team.team_ovr : "-", "OVR"],
+                ["Offense Rating", teamData ? teamData.team.off_ovr : "-", "OFF"],
+                ["Defense Rating", teamData ? teamData.team.def_ovr : "-", "DEF"],
+                ["Total Wins", teamData ? teamData.team.wins : "-", "W"],
+                ["Total Losses", teamData ? teamData.team.losses : "-", "L"],
+              ].map((stat) => (
+                <article key={stat[0]}><span>{stat[0]}</span><strong>{stat[1]}</strong><small>TEAM RATING · {stat[2]}</small></article>
+              ))}
+            </div>
+          </section>
+      )}
+    </main>
+  );
+}
+
+function SchedulePage() {
+  const systemStatus = useContext(SystemContext);
+  const [selectedWeek, setSelectedWeek] = useState(systemStatus.week);
+  const [selectedSeason, setSelectedSeason] = useState(systemStatus.season);
+  
+  // Re-sync if context updates before we mount properly
+  useEffect(() => {
+    if (systemStatus.week !== selectedWeek) setSelectedWeek(systemStatus.week);
+    if (systemStatus.season !== selectedSeason) setSelectedSeason(systemStatus.season);
+  }, [systemStatus]);
+  
+  const [seasonOpen, setSeasonOpen] = useState(false);
+  const [matchups, setMatchups] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/schedule?season=${selectedSeason}&week=${selectedWeek}`)
+      .then(res => res.json())
+      .then(data => {
+        // Map the API data back to the format the UI expects
+        const formatted = data.map((game: any) => {
+          const parts = game.game_time ? game.game_time.split(" ") : ["Sun", "TBD"];
+          const dayMap: Record<string, string> = { "Thu": "Thursday", "Fri": "Friday", "Sat": "Saturday", "Sun": "Sunday", "Mon": "Monday" };
+          const dayName = parts[0] ? (dayMap[parts[0]] || parts[0]) : "Sunday";
+          const time = parts.length > 1 ? parts.slice(1).join(" ").toUpperCase() : "TBD";
+          
+          let network = "GRIDIRON+";
+          if (dayName === "Thursday") network = "PRIME";
+          else if (dayName === "Monday") network = "ESPN";
+          else if (dayName === "Sunday") {
+            if (time.includes("8:") || time.includes("7:")) network = "NBC / PEACOCK";
+            else network = game.id % 2 === 0 ? "CBS" : "FOX";
+          }
+          
+          return {
+            id: game.id,
+            away: { name: game.away_name, abbr: game.away_abbr },
+            home: { name: game.home_name, abbr: game.home_abbr },
+            awayRecord: `${game.away_wins}-${game.away_losses}`,
+            homeRecord: `${game.home_wins}-${game.home_losses}`,
+            awayScore: game.away_score,
+            homeScore: game.home_score,
+            isFinal: game.status === "COMPLETED",
+            day: dayName,
+            time: time,
+            network: network,
+          };
+        });
+        setMatchups(formatted);
+      });
+  }, [selectedSeason, selectedWeek]);
+
+  const groups = Array.from(new Set(matchups.map(g => g.day)));
+
+  return (
+    <main className="schedule-page">
+      <section className="schedule-masthead">
+        <div>
+          <div className="schedule-title-row">
+            <div>
+              <span>{selectedSeason} REGULAR SEASON</span>
+              <h1>League Schedule</h1>
+              <p>Every matchup. Every market. One week at a time.</p>
+            </div>
+            <div className="season-select" onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setSeasonOpen(false);
+            }}>
+              <span>Season</span>
+              <button className={seasonOpen ? "open" : ""} onClick={() => setSeasonOpen(!seasonOpen)} aria-expanded={seasonOpen}>
+                <span><strong>{selectedSeason}</strong>{selectedSeason === systemStatus.season ? "Current season" : "Past season"}</span>
+                <Chevron />
+              </button>
+              {seasonOpen && (
+                <div className="season-menu">
+                  <div className="season-menu-label">Select season</div>
+                  {systemStatus.availableSeasons.map((season) => (
+                    <button
+                      className={selectedSeason === season ? "selected" : ""}
+                      onClick={() => {
+                        setSelectedSeason(season);
+                        setSeasonOpen(false);
+                      }}
+                      key={season}
+                    >
+                      <span>{season}</span>
+                      <small>{season === systemStatus.season ? "Current" : "Full season"}</small>
+                      {selectedSeason === season && <i>✓</i>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="week-selector" aria-label="Select schedule week">
+        <button
+          onClick={() => setSelectedWeek(Math.max(1, selectedWeek - 1))}
+          disabled={selectedWeek === 1}
+          aria-label="Previous week"
+        >
+          <Chevron direction="left" />
+          <span><small>Previous</small>Week {Math.max(1, selectedWeek - 1)}</span>
+        </button>
+        <div>
+          <span>{selectedSeason} SEASON</span>
+          <strong>Week {selectedWeek}</strong>
+          <small>{selectedWeek === 17 ? "DEC 24–28" : selectedWeek < 17 ? "PREVIOUS WEEK" : "UPCOMING WEEK"}</small>
+        </div>
+        <button
+          onClick={() => setSelectedWeek(Math.min(18, selectedWeek + 1))}
+          disabled={selectedWeek === 18}
+          aria-label="Next week"
+        >
+          <span><small>Next</small>Week {Math.min(18, selectedWeek + 1)}</span>
+          <Chevron direction="right" />
+        </button>
+      </section>
+
+      <div className="schedule-list-wrap">
+        <div className="schedule-list-heading">
+          <div><span className="red-rule" /><h2>Week {selectedWeek} Matchups</h2></div>
+          <span>ALL TIMES EASTERN</span>
+        </div>
+        <div className="weekly-games">
+          {groups.map((day) => (
+            <section className="game-day" key={day}>
+              <div className="game-day-label"><span>{day}</span><i /></div>
+              {matchups.filter((game) => game.day === day).map((game, index) => {
+                const isFinal = game.isFinal;
+                return (
+                  <a className="league-game" href={`#game-${game.id}`} key={game.id}>
+                    <div className="game-broadcast">
+                      <span>{isFinal ? `FINAL · ${game.time}` : game.time}</span>
+                      <small>{game.network}</small>
+                    </div>
+                    <div className="league-matchup">
+                      <div className="schedule-team away-team">
+                        <span><strong>{game.away.name}</strong><small>{game.awayRecord} · AWAY</small></span>
+                        <img src={logo(game.away.abbr.toLowerCase())} alt={`${game.away.name} logo`} />
+                        {isFinal && <b>{game.awayScore}</b>}
+                      </div>
+                      <span className="versus">{isFinal ? "—" : "@"}</span>
+                      <div className="schedule-team">
+                        <img src={logo(game.home.abbr.toLowerCase())} alt={`${game.home.name} logo`} />
+                        <span><strong>{game.home.name}</strong><small>{game.homeRecord} · HOME</small></span>
+                        {isFinal && <b>{game.homeScore}</b>}
+                      </div>
+                    </div>
+                    <span className="game-details">Matchup details <span>→</span></span>
+                  </a>
+                );
+              })}
+            </section>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function TeamSchedulePage({ team }: { team: Team }) {
+  const systemStatus = useContext(SystemContext);
+  const [season, setSeason] = useState(systemStatus.season);
+
+  // Re-sync if context updates
+  useEffect(() => {
+    if (systemStatus.season !== season) setSeason(systemStatus.season);
+  }, [systemStatus.season]);
+
+  const [seasonOpen, setSeasonOpen] = useState(false);
+  const [games, setGames] = useState<any[]>([]);
+  const [teamData, setTeamData] = useState<any>(null);
+
+  useEffect(() => {
+    // Fetch schedule
+    fetch(`http://localhost:8000/api/team/${team.abbr}/schedule?season=${season}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          const formatted = data.map((game: any) => {
+            const isHome = game.home_abbr.toLowerCase() === team.abbr.toLowerCase();
+            const opponentName = isHome ? game.away_name : game.home_name;
+            const opponentAbbr = isHome ? game.away_abbr : game.home_abbr;
+            const teamScore = isHome ? game.home_score : game.away_score;
+            const opponentScore = isHome ? game.away_score : game.home_score;
+            const isFinal = game.status === "COMPLETED";
+            const parts = game.game_time ? game.game_time.split(" ") : [];
+            const time = parts.length > 1 ? parts.slice(1).join(" ").toUpperCase() : "TBD";
+            const fullTime = game.game_time ? game.game_time.toUpperCase() : "TBD";
+            
+            return {
+              id: game.id,
+              week: game.week,
+              time: fullTime,
+              opponent: { name: opponentName, abbr: opponentAbbr },
+              home: isHome,
+              final: isFinal,
+              bye: false, // We'll assume no bye week for now unless missing weeks
+              teamScore,
+              opponentScore,
+              isWin: teamScore > opponentScore,
+              isTie: teamScore === opponentScore
+            };
+          });
+          setGames(formatted);
+        }
+      });
+      
+    // Fetch team info for record
+    fetch(`http://localhost:8000/api/team/${team.abbr}?season=${season}`)
+      .then(res => res.json())
+      .then(data => setTeamData(data));
+  }, [team.abbr, season]);
+
+  const teamRecord = teamData && !teamData.error ? `${teamData.team.wins}-${teamData.team.losses}` : "0-0";
+  const divisionPosition = getTeamPosition(team.abbr);
+  const divisionOrdinal = ["1st", "2nd", "3rd", "4th"][divisionPosition - 1];
+
+  return (
+    <main className="team-schedule-page" style={{ "--team-color": teamData?.team?.team_color || "#e31837" } as React.CSSProperties}>
+      <section className="team-schedule-masthead">
+        <div className="team-schedule-identity">
+          <img src={logo(team.abbr)} alt={`${team.name} logo`} />
+          <div>
+            <a href={`#team-${team.abbr}`}>← Team home</a>
+            <span>{season} REGULAR SEASON</span>
+            <h1>{team.name}<br /><em>Schedule</em></h1>
+            <p>{teamRecord} · {divisionOrdinal} in {getDivision(team.abbr)}</p>
+          </div>
+          <div className="season-select team-season-select" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setSeasonOpen(false);
+          }}>
+            <span>Season</span>
+            <button className={seasonOpen ? "open" : ""} onClick={() => setSeasonOpen(!seasonOpen)} aria-expanded={seasonOpen}>
+              <span><strong>{season}</strong>{season === systemStatus.season ? "Current season" : "Past season"}</span>
+              <Chevron />
+            </button>
+            {seasonOpen && (
+              <div className="season-menu">
+                <div className="season-menu-label">Select season</div>
+                {systemStatus.availableSeasons.map((item) => (
+                  <button
+                    className={season === item ? "selected" : ""}
+                    onClick={() => { setSeason(item); setSeasonOpen(false); }}
+                    key={item}
+                  >
+                    <span>{item}</span>
+                    <small>{item === systemStatus.season ? "Current" : "Full season"}</small>
+                    {season === item && <i>✓</i>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="team-full-schedule">
+        <div className="schedule-list-heading">
+          <div><span className="red-rule" /><h2>{season} Game Log</h2></div>
+          <span>{team.name.toUpperCase()} · ALL TIMES EASTERN</span>
+        </div>
+        <div className="team-game-list">
+          {games.map((game) => {
+            if (game.bye) {
+              return (
+                <article className="team-week-row bye-week" key={game.week}>
+                  <span>WEEK {game.week}</span>
+                  <div><strong>Bye Week</strong><small>Rest and recovery</small></div>
+                </article>
+              );
+            }
+            return (
+              <a className={`team-week-row`} href={`#game-${game.id}`} key={game.week}>
+                <div className="team-week-meta">
+                  <span>WEEK {game.week}</span>
+                  <small>{game.final ? `FINAL · ${game.time}` : game.time}</small>
+                </div>
+                <div className="team-week-opponent">
+                  <span>{game.home ? "VS" : "AT"}</span>
+                  <img src={logo(game.opponent.abbr.toLowerCase())} alt="" />
+                  <div><strong>{game.opponent.name}</strong><small>{getDivision(game.opponent.abbr)}</small></div>
+                </div>
+                <div className="team-week-result">
+                  {game.final ? (
+                    <>
+                      <b className={game.isTie ? "tie" : game.isWin ? "win" : "loss"}>{game.isTie ? "T" : game.isWin ? "W" : "L"}</b>
+                      <strong>{Math.max(game.teamScore, game.opponentScore)}–{Math.min(game.teamScore, game.opponentScore)}</strong>
+                    </>
+                  ) : <span>UPCOMING</span>}
+                </div>
+                <span className="opponent-page">Game details →</span>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function GamePage({ gameId }: { gameId: number }) {
+  const [tab, setTab] = useState<"team" | "player">("team");
+  const [gameData, setGameData] = useState<any>(null);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/game/${gameId}`)
+      .then(res => res.json())
+      .then(data => setGameData(data));
+  }, [gameId]);
+
+  if (!gameData || gameData.error) return <main style={{ padding: "4rem", textAlign: "center" }}>Loading game...</main>;
+
+  const { game } = gameData;
+  const isFinal = game.status === "COMPLETED";
+  const awayScore = game.away_score;
+  const homeScore = game.home_score;
+  const week = game.week;
+  const season = game.season;
+  
+  // Create mock team objects to pass to child components if necessary
+  const away = { name: game.away_name, abbr: game.away_abbr.toLowerCase() };
+  const home = { name: game.home_name, abbr: game.home_abbr.toLowerCase() };
+  const realAway = teams.find(t => t.abbr === away.abbr) || teams[0];
+  const realHome = teams.find(t => t.abbr === home.abbr) || teams[0];
+
+  const teamStats = gameData.team_stats || [];
+  const awayStats = teamStats.find((t: any) => t.team_abbr.toLowerCase() === away.abbr.toLowerCase()) || {};
+  const homeStats = teamStats.find((t: any) => t.team_abbr.toLowerCase() === home.abbr.toLowerCase()) || {};
+
+  const statRows = [
+    ["Total Yards", String(awayStats.total_offense || 0), String(homeStats.total_offense || 0)],
+    ["Passing Yards", String(awayStats.passing_yards || 0), String(homeStats.passing_yards || 0)],
+    ["Rushing Yards", String(awayStats.rushing_yards || 0), String(homeStats.rushing_yards || 0)],
+    ["Passing Touchdowns", String(awayStats.passing_tds || 0), String(homeStats.passing_tds || 0)],
+    ["Rushing Touchdowns", String(awayStats.rushing_tds || 0), String(homeStats.rushing_tds || 0)],
+    ["Turnovers", String(awayStats.turnovers || 0), String(homeStats.turnovers || 0)],
+  ];
+  const rawStats = gameData.stats || [];
+  
+  const passingPlayers = rawStats
+    .filter((p: any) => p.pass_yards >= 1)
+    .sort((a: any, b: any) => b.pass_yards - a.pass_yards)
+    .map((p: any) => ({
+      id: p.player_id || p.id,
+      name: p.player_name,
+      abbr: p.team_abbr.toLowerCase(),
+      stats: [`${p.completions}/${p.pass_attempts}`, String(p.pass_yards), String(p.pass_tds), String(p.interceptions)]
+    }));
+
+  const rushingPlayers = rawStats
+    .filter((p: any) => p.rush_yards >= 1)
+    .sort((a: any, b: any) => b.rush_yards - a.rush_yards)
+    .map((p: any) => ({
+      id: p.player_id || p.id,
+      name: p.player_name,
+      abbr: p.team_abbr.toLowerCase(),
+      stats: [String(p.rush_attempts), String(p.rush_yards), p.rush_attempts > 0 ? (p.rush_yards / p.rush_attempts).toFixed(1) : "0.0", String(p.rush_tds)]
+    }));
+
+  const receivingPlayers = rawStats
+    .filter((p: any) => p.rec_yards >= 1)
+    .sort((a: any, b: any) => b.rec_yards - a.rec_yards)
+    .map((p: any) => ({
+      id: p.player_id || p.id,
+      name: p.player_name,
+      abbr: p.team_abbr.toLowerCase(),
+      stats: [String(p.receptions), String(p.rec_yards), p.receptions > 0 ? (p.rec_yards / p.receptions).toFixed(1) : "0.0", String(p.rec_tds)]
+    }));
+
+  const playerGroups = [
+    {
+      title: "Passing",
+      labels: ["Player", "C/ATT", "YDS", "TD", "INT"],
+      category: "passing",
+      players: passingPlayers,
+    },
+    {
+      title: "Rushing",
+      labels: ["Player", "CAR", "YDS", "AVG", "TD"],
+      category: "rushing",
+      players: rushingPlayers,
+    },
+    {
+      title: "Receiving",
+      labels: ["Player", "REC", "YDS", "AVG", "TD"],
+      category: "receiving",
+      players: receivingPlayers,
+    },
+  ];
+
+  let network = "GRIDIRON+";
+  const gameTimeStr = game.game_time || "";
+  if (gameTimeStr.toLowerCase().includes("thu")) network = "PRIME";
+  else if (gameTimeStr.toLowerCase().includes("mon")) network = "ESPN";
+  else if (gameTimeStr.toLowerCase().includes("sun")) {
+    if (gameTimeStr.includes("8:") || gameTimeStr.includes("7:")) network = "NBC / PEACOCK";
+    else network = game.id % 2 === 0 ? "CBS" : "FOX";
+  }
+
+  return (
+    <main className="game-page">
+      <section className="game-masthead">
+        <div className="game-context">
+          <span>{season} REGULAR SEASON · WEEK {week}</span>
+          <strong>{isFinal ? `FINAL · ${game.game_time ? game.game_time.toUpperCase() : ''} ET` : game.game_time ? `${game.game_time.toUpperCase()} ET` : "TBD"}</strong>
+        </div>
+        <div className="game-scoreboard">
+          <a href={`#team-${away.abbr}`} className="game-team away">
+            <div><span>AWAY</span><h1>{away.name}</h1><small>{game.away_wins}-{game.away_losses}</small></div>
+            <img src={logo(away.abbr)} alt={`${away.name} logo`} />
+            <strong>{isFinal ? awayScore : "—"}</strong>
+          </a>
+          <div className="game-divider"><span>{isFinal ? "FINAL" : "VS"}</span><i /></div>
+          <a href={`#team-${home.abbr}`} className="game-team">
+            <strong>{isFinal ? homeScore : "—"}</strong>
+            <img src={logo(home.abbr)} alt={`${home.name} logo`} />
+            <div><span>HOME</span><h1>{home.name}</h1><small>{game.home_wins}-{game.home_losses}</small></div>
+          </a>
+        </div>
+        <div className="game-location">{network} · {game.home_stadium ? game.home_stadium.toUpperCase() : "GRIDIRON FIELD"} · {home.name.toUpperCase()}</div>
+      </section>
+
+      <nav className="game-tabs" aria-label="Game statistics">
+        <button className={tab === "team" ? "active" : ""} onClick={() => setTab("team")}>Team Stats</button>
+        <button className={tab === "player" ? "active" : ""} onClick={() => setTab("player")}>Player Stats</button>
+      </nav>
+
+      {tab === "team" ? (
+        <section className="game-stats-panel">
+          <div className="game-stats-title"><span>Game Comparison</span><h2>Team Statistics</h2></div>
+          <div className="comparison-head">
+            <span><img src={logo(away.abbr)} alt="" />{away.abbr.toUpperCase()}</span>
+            <span>TEAM STATS</span>
+            <span>{home.abbr.toUpperCase()}<img src={logo(home.abbr)} alt="" /></span>
+          </div>
+          <div className="comparison-table">
+            {statRows.map((stat, index) => {
+              const awayValue = Number.parseFloat(stat[1]);
+              const homeValue = Number.parseFloat(stat[2]);
+              return (
+                <div className="comparison-row" key={stat[0]}>
+                  <strong className={awayValue > homeValue ? "leader" : ""}>{stat[1]}</strong>
+                  <span>{stat[0]}</span>
+                  <strong className={homeValue > awayValue ? "leader" : ""}>{stat[2]}</strong>
+                  {index < 5 && <i style={{ 
+                    "--away-share": `${awayValue + homeValue > 0 ? (awayValue / (awayValue + homeValue)) * 100 : 50}%`,
+                    "--away-color": game.away_color || "var(--red)",
+                    "--home-color": game.home_color || "var(--gray-300)"
+                  } as CSSProperties} />}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : (
+        <section className="game-stats-panel">
+          <div className="game-stats-title"><span>Game Leaders</span><h2>Player Statistics</h2></div>
+          <div className="player-stat-groups">
+            {playerGroups.map((group) => (
+              <article className="player-stat-card" key={group.title}>
+                <h3>{group.title}</h3>
+                <div className="player-stat-row stat-labels">
+                  {group.labels.map((label) => <span key={label}>{label}</span>)}
+                </div>
+                <div className="player-stat-list" style={{ maxHeight: "270px", overflowY: "auto" }}>
+                  {group.players.map((player: any) => (
+                    <div className="player-stat-row" key={player.id}>
+                      <span>
+                        <a className="game-player-link" href={`#player-${player.id}`}>
+                          <img src={logo(player.abbr)} alt="" />{player.name}
+                        </a>
+                      </span>
+                      {player.stats.map((val: string, index: number) => (
+                        <span key={index}>{val}</span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function PlayerPage({ category, playerId }: { category: string; playerId: number }) {
+  const systemStatus = useContext(SystemContext);
+  const [showAllGames, setShowAllGames] = useState(false);
+  const [gameLogSeason, setGameLogSeason] = useState(systemStatus.season);
+  const [gameLogSeasonOpen, setGameLogSeasonOpen] = useState(false);
+  const [playerData, setPlayerData] = useState<any>(null);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/player/${playerId}?season=${systemStatus.season}`)
+      .then(res => res.json())
+      .then(data => setPlayerData(data));
+  }, [playerId, systemStatus.season]);
+
+  if (!playerData || playerData.error) {
+    return <main className="player-page" style={{ padding: "4rem", textAlign: "center" }}>Loading player...</main>;
+  }
+
+  const { player, game_log, career_stats } = playerData;
+  
+  const visibleGames = showAllGames ? game_log : game_log.slice(-5);
+  const isQuarterback = player.position === "QB";
+  const positionLabel = player.position === "QB" ? "Quarterback" : player.position === "HB" ? "Halfback" : player.position === "FB" ? "Fullback" : player.position === "WR" ? "Wide Receiver" : "Tight End";
+  
+  // Calculate season highlights from career_stats for the current season
+  const currentSeasonStats = career_stats.find((s: any) => s.season === systemStatus.season) || {};
+  const seasonHighlight = isQuarterback
+    ? { yards: currentSeasonStats.pass_yards || 0, yardsLabel: "PASSING YARDS", touchdowns: currentSeasonStats.pass_tds || 0, touchdownLabel: "PASSING TD" }
+    : ["HB", "FB"].includes(player.position)
+      ? { yards: currentSeasonStats.rush_yards || 0, yardsLabel: "RUSHING YARDS", touchdowns: currentSeasonStats.rush_tds || 0, touchdownLabel: "RUSHING TD" }
+      : { yards: currentSeasonStats.rec_yards || 0, yardsLabel: "RECEIVING YARDS", touchdowns: currentSeasonStats.rec_tds || 0, touchdownLabel: "RECEIVING TD" };
+
+  const playerStories = [
+    { tag: "Film Study", title: `How ${player.name} is changing the geometry of the ${player.team_name} offense`, excerpt: "A detailed look at the alignments, reads and timing behind a career-defining stretch.", byline: "Jordan Ellis", time: "2h ago" },
+    { tag: "Player Spotlight", title: `${player.name}'s preparation is becoming the standard inside the building`, excerpt: "Teammates and coaches explain the habits powering one of the season's most consistent performers.", byline: "Maya Brooks", time: "Yesterday" },
+    { tag: "Matchup Preview", title: `The matchup that could decide ${player.name}'s Week 17 impact`, excerpt: "One personnel battle sits at the center of this week's game plan—and both sides know it.", byline: "Daniel Cho", time: "2d ago" },
+    { tag: "Numbers Game", title: `What the advanced metrics reveal about ${player.name}'s breakout`, excerpt: "Efficiency, explosiveness and hidden value: the numbers explain why the production is sustainable.", byline: "Seth Walder", time: "3d ago" },
+    { tag: "Locker Room", title: `${player.name} on leadership, pressure and the postseason chase`, excerpt: "A candid conversation about the moments that have shaped this season and what still lies ahead.", byline: "Jordan Ellis", time: "5d ago" },
+    { tag: "League Intel", title: `Where ${player.name} ranks among the league's best at ${player.position}`, excerpt: "Scouts weigh the complete profile, from weekly consistency to game-changing upside.", byline: "Mina Kimes", time: "1w ago" },
+  ];
+
+  return (
+    <main className="player-page" style={{ "--team-color": player.team_color || "#e31837" } as React.CSSProperties}>
+      <section className="player-profile-hero">
+        <div className="player-profile-inner">
+          <div className="player-portrait" aria-label="Player portrait placeholder">
+            <span>{player.player_number}</span>
+            {getPlayerHeadshot(player) !== DEFAULT_AVATAR ? (
+              <img
+                src={getPlayerHeadshot(player)}
+                alt={player.name}
+                style={{ width: "100%", maxHeight: "290px", objectFit: "contain", objectPosition: "center bottom", position: "relative", zIndex: 1, filter: "drop-shadow(0 12px 15px #0615254d)" }}
+                onError={(e) => {
+                  const next = handleHeadshotError(e, player);
+                  if (next && next !== DEFAULT_AVATAR) return;
+                  e.currentTarget.style.display = "none";
+                  const fallback = e.currentTarget.parentElement?.querySelector(".player-portrait-svg-fallback");
+                  if (fallback) (fallback as HTMLElement).style.display = "block";
+                }}
+              />
+            ) : null}
+            <svg className="player-portrait-svg-fallback" viewBox="0 0 220 250" aria-hidden="true" style={{ display: getPlayerHeadshot(player) !== DEFAULT_AVATAR ? "none" : "block" }}>
+              <circle cx="110" cy="69" r="42" />
+              <path d="M42 234c4-66 27-105 68-105s64 39 68 105H42Z" />
+              <path d="M65 150 32 174l18 60h120l18-60-33-24" />
+            </svg>
+            <small>PLAYER IMAGE</small>
+          </div>
+          <div className="player-profile-copy">
+            <a href={`#team-${player.team_abbr.toLowerCase()}`}><img src={logo(player.team_abbr.toLowerCase())} alt="" />{player.team_name}</a>
+            <span>#{player.player_number} · {positionLabel}</span>
+            <h1>{player.name}</h1>
+            <div className="player-bio">
+              <div><small>POSITION</small><strong>{player.position}</strong></div>
+              <div><small>HEIGHT</small><strong>{player.height}</strong></div>
+              <div><small>WEIGHT</small><strong>{player.weight} lbs</strong></div>
+              <div><small>EXPERIENCE</small><strong>{player.years_of_experience} years</strong></div>
+            </div>
+          </div>
+          <div className="player-season-card">
+            <span>{systemStatus.season} SEASON</span>
+            <strong>{seasonHighlight.yards}</strong>
+            <small>{seasonHighlight.yardsLabel}</small>
+            <div><b>{seasonHighlight.touchdowns}</b><span>{seasonHighlight.touchdownLabel}</span></div>
+          </div>
+        </div>
+      </section>
+
+      <div className="player-data-layout">
+        <section className="player-log-section">
+          <div className="player-log-heading">
+            <div className="team-section-title"><span>{gameLogSeason} Regular Season</span><h2>Game Log</h2></div>
+            <div className="player-log-actions">
+              <div className="game-log-season-select" onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setGameLogSeasonOpen(false);
+              }}>
+                <span>Season</span>
+                <button className={gameLogSeasonOpen ? "open" : ""} onClick={() => setGameLogSeasonOpen(!gameLogSeasonOpen)} aria-expanded={gameLogSeasonOpen}>
+                  <strong>{gameLogSeason}</strong><Chevron />
+                </button>
+                {gameLogSeasonOpen && (
+                  <div className="game-log-season-menu">
+                    {systemStatus.availableSeasons.map((year) => (
+                      <button
+                        className={gameLogSeason === year ? "selected" : ""}
+                        onClick={() => { setGameLogSeason(year); setGameLogSeasonOpen(false); }}
+                        key={year}
+                      >
+                        <span>{year}</span>
+                        <small>{year === systemStatus.season ? "Current" : "Season"}</small>
+                        {gameLogSeason === year && <i>✓</i>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setShowAllGames(!showAllGames)}>
+                {showAllGames ? "Show last 5 games" : "Show all 17 games"}
+                <Chevron direction={showAllGames ? "up" : "down"} />
+              </button>
+            </div>
+          </div>
+          <div className="player-table-scroll">
+            <table className="player-history-table">
+              <thead>
+                <tr>
+                  <th>WK</th><th>OPPONENT</th><th>RESULT</th>
+                  {isQuarterback
+                    ? <><th>CMP/ATT</th><th>PASS YDS</th><th>PASS TD</th><th>INT</th><th>CAR</th><th>RUSH YDS</th><th>RUSH TD</th></>
+                    : <><th>CAR</th><th>RUSH YDS</th><th>RUSH TD</th><th>REC</th><th>REC YDS</th><th>REC TD</th></>}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleGames.map((game: any) => {
+                  const isHome = game.home_team_id === player.team_id;
+                  const opponent_name = isHome ? game.away_name : game.home_name;
+                  const opponent_abbr = isHome ? game.away_abbr.toLowerCase() : game.home_abbr.toLowerCase();
+                  const location = isHome ? "vs" : "at";
+                  const teamScore = isHome ? game.home_score : game.away_score;
+                  const oppScore = isHome ? game.away_score : game.home_score;
+                  const isWin = teamScore > oppScore;
+                  
+                  return (
+                    <tr key={game.week}>
+                      <td>{game.week}</td>
+                      <td><a href={`#team-${opponent_abbr}`}><img src={logo(opponent_abbr)} alt="" /><span>{location} {opponent_name}</span></a></td>
+                      <td>{game.status === 'COMPLETED' ? <><b className={isWin ? "win" : "loss"}>{isWin ? "W" : "L"}</b> {Math.max(teamScore, oppScore)}–{Math.min(teamScore, oppScore)}</> : "-"}</td>
+                      {isQuarterback ? (
+                        <>
+                          <td>{game.completions || 0}/{game.pass_attempts || 0}</td>
+                          <td>{game.pass_yards || 0}</td>
+                          <td>{game.pass_tds || 0}</td>
+                          <td>{game.interceptions || 0}</td>
+                          <td>{game.rush_attempts || 0}</td>
+                          <td>{game.rush_yards || 0}</td>
+                          <td>{game.rush_tds || 0}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td>{game.rush_attempts || 0}</td>
+                          <td>{game.rush_yards || 0}</td>
+                          <td>{game.rush_tds || 0}</td>
+                          <td>{game.receptions || 0}</td>
+                          <td>{game.rec_yards || 0}</td>
+                          <td>{game.rec_tds || 0}</td>
+                        </>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="player-career-section">
+          <div className="team-section-title"><span>Career Production</span><h2>Career Stats</h2></div>
+          <div className="player-table-scroll">
+            <table className="player-history-table career-table">
+              <thead>
+                <tr>
+                  <th>SEASON</th><th>TEAM</th><th>GP</th>
+                  {isQuarterback
+                    ? <><th>CMP/ATT</th><th>PASS YDS</th><th>PASS TD</th><th>RUSH YDS</th><th>RUSH TD</th></>
+                    : <><th>CAR</th><th>RUSH YDS</th><th>RUSH TD</th><th>REC</th><th>REC YDS</th><th>REC TD</th></>}
+                </tr>
+              </thead>
+              <tbody>
+                {career_stats.map((s: any) => (
+                  <tr key={s.season}>
+                    <td><strong>{s.season}</strong></td>
+                    <td><a href={`#team-${s.team_abbr.toLowerCase()}`}><img src={logo(s.team_abbr.toLowerCase())} alt="" /><span>{s.team_name}</span></a></td>
+                    <td>{s.gp || 0}</td>
+                    {isQuarterback ? (
+                      <>
+                        <td>{s.completions || 0}/{s.pass_attempts || 0}</td>
+                        <td>{s.pass_yards || 0}</td>
+                        <td>{s.pass_tds || 0}</td>
+                        <td>{s.rush_yards || 0}</td>
+                        <td>{s.rush_tds || 0}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td>{s.rush_attempts || 0}</td>
+                        <td>{s.rush_yards || 0}</td>
+                        <td>{s.rush_tds || 0}</td>
+                        <td>{s.receptions || 0}</td>
+                        <td>{s.rec_yards || 0}</td>
+                        <td>{s.rec_tds || 0}</td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="player-stories-section">
+          <div className="team-section-title"><h2>Player Coverage</h2></div>
+          <div className="player-story-list">
+            {playerStories.map((story, index) => (
+              <article className="player-story-card" key={story.title}>
+                <div className="player-story-index">{String(index + 1).padStart(2, "0")}</div>
+                <div className="player-story-team"><img src={logo(player.team_abbr.toLowerCase())} alt="" /><span>#{player.player_number}</span></div>
+                <div className="player-story-copy">
+                  <span>{story.tag}</span>
+                  <a href={`#article-player-${playerId}-${index}`}><h3>{story.title}</h3></a>
+                  <p>{story.excerpt}</p>
+                  <small>By {story.byline} · {story.time}</small>
+                </div>
+                <a className="player-story-arrow" href={`#article-player-${playerId}-${index}`} aria-label={`Read ${story.title}`}>→</a>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+const offensiveStatCategories = ["Passing", "Rushing", "Receiving", "Scoring"];
+
+const statColumns: Record<string, string[]> = {
+  Passing: ["ATT", "CMP", "CMP %", "YDS/ATT", "PASS YDS", "TD", "INT", "RATE", "1ST", "1ST%", "20+", "40+", "LNG", "SCK"],
+  Rushing: ["ATT", "YDS", "AVG", "LNG", "TD", "1ST", "1ST%", "20+", "FUM"],
+  Receiving: ["REC", "TGT", "YDS", "AVG", "LNG", "TD", "1ST", "20+", "YAC"],
+  Scoring: ["PTS", "TD", "PASS TD", "RUSH TD", "REC TD", "FG", "XP", "2PT"],
+  Downs: ["1ST", "PASS 1ST", "RUSH 1ST", "3D ATT", "3D CONV", "3D%", "4D ATT", "4D%"],
+  Tackles: ["TOT", "SOLO", "AST", "TFL", "QB HIT", "FF", "FR"],
+  Sacks: ["SCK", "SCK YDS", "QB HIT", "TFL", "FF", "PRESSURES"],
+  Interceptions: ["INT", "YDS", "AVG", "LNG", "TD", "PD"],
+  Coverage: ["TGT", "CMP", "CMP%", "YDS", "TD", "PD", "RATE"],
+  Kicking: ["FGM", "FGA", "FG%", "LNG", "XPM", "XPA", "PTS"],
+  Punting: ["PUNTS", "YDS", "AVG", "NET", "LNG", "IN 20", "TB"],
+  "Kick Returns": ["RET", "YDS", "AVG", "LNG", "TD"],
+  "Punt Returns": ["RET", "YDS", "AVG", "LNG", "TD", "FC"],
+};
+
+function StatsPage({ mode }: { mode: "team" | "player" }) {
+  const [category, setCategory] = useState("Passing");
+  const systemStatus = useContext(SystemContext);
+  const [season, setSeason] = useState(systemStatus.season);
+  const [seasonType, setSeasonType] = useState("Regular Season");
+  const [statsYearOpen, setStatsYearOpen] = useState(false);
+  const [statsSeasonOpen, setStatsSeasonOpen] = useState(false);
+  const [sort, setSort] = useState<{ key: string; direction: "asc" | "desc" }>({ key: "rank", direction: "asc" });
+  const [page, setPage] = useState(1);
+  const [statsData, setStatsData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`http://localhost:8000/api/stats/${mode}?season=${season}&category=${category}`)
+      .then(res => res.json())
+      .then(data => {
+        setStatsData(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setStatsData([]);
+        setLoading(false);
+      });
+  }, [mode, season, category]);
+
+  const columns = mode === "player" && category === "Scoring"
+    ? ["PASSING TD", "RUSHING TD", "RECEIVING TD", "TOTAL TD"]
+    : category === "Passing"
+      ? ["ATT", "CMP", "CMP %", "YDS/ATT", "PASS YDS", "TD", "INT", "RATE"]
+      : category === "Rushing"
+        ? ["ATT", "YDS", "AVG", "TD", "FUM"]
+        : category === "Receiving"
+          ? ["REC", "YDS", "AVG", "TD"]
+          : ["PTS", "TOTAL TD", "PASS TD", "RUSH TD"];
+
+  const sortedRows = [...statsData].sort((a, b) => {
+    let first: any;
+    let second: any;
+    if (sort.key === "rank") {
+      return 0;
+    } else if (sort.key === "name") {
+      first = mode === "team" ? a.team_name : a.name ?? "";
+      second = mode === "team" ? b.team_name : b.name ?? "";
+    } else if (sort.key === "team") {
+      first = a.team_name;
+      second = b.team_name;
+    } else if (sort.key === "position") {
+      first = a.position ?? "";
+      second = b.position ?? "";
+    } else {
+      const valA = a.stats?.[sort.key];
+      const valB = b.stats?.[sort.key];
+      first = typeof valA === "number" ? valA : parseFloat(String(valA || "").replace(/[^0-9.-]/g, "")) || 0;
+      second = typeof valB === "number" ? valB : parseFloat(String(valB || "").replace(/[^0-9.-]/g, "")) || 0;
+    }
+
+    const comparison = typeof first === "string"
+      ? first.localeCompare(String(second))
+      : (first || 0) - (second || 0);
+
+    return sort.direction === "asc" ? comparison : -comparison;
+  });
+
+  const pageSize = 20;
+  const pageCount = mode === "player" ? Math.max(1, Math.ceil(sortedRows.length / pageSize)) : 1;
+  const visibleRows = mode === "player"
+    ? sortedRows.slice((page - 1) * pageSize, page * pageSize)
+    : sortedRows;
+
+  const toggleSort = (key: string) => {
+    setPage(1);
+    setSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === "desc" ? "asc" : "desc",
+    }));
+  };
+
+  const sortIndicator = (key: string) => sort.key === key ? (sort.direction === "asc" ? "↑" : "↓") : "↕";
+
+  return (
+    <main className="stats-page">
+      <section className="stats-masthead">
+        <div>
+          <span>LEAGUE DATA CENTER</span>
+          <h1>{mode === "team" ? "Team" : "Player"} Statistics</h1>
+          <p>Verified performance data from across the simulated league.</p>
+        </div>
+      </section>
+
+      <section className="stats-workspace">
+        <div className="stats-heading">
+          <span>{season} {mode.toUpperCase()} STATS · OFFENSE</span>
+          <h2>{category}</h2>
+        </div>
+
+        <div className="stat-category-tabs">
+          {offensiveStatCategories.map((item) => (
+            <button className={category === item ? "active" : ""} onClick={() => { setCategory(item); setPage(1); setSort({ key: "rank", direction: "asc" }); }} key={item}>{item}</button>
+          ))}
+        </div>
+
+        <div className="stats-filter-bar">
+          <div className="stats-filter-controls">
+            <div className="standings-filter-dropdown stats-year-dropdown" onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setStatsYearOpen(false);
+            }}>
+              <span>Year</span>
+              <button className={statsYearOpen ? "open" : ""} onClick={() => { setStatsYearOpen(!statsYearOpen); setStatsSeasonOpen(false); }} aria-expanded={statsYearOpen}>
+                <strong>{season}</strong><Chevron />
+              </button>
+              {statsYearOpen && (
+                <div className="standings-filter-menu">
+                  {systemStatus.availableSeasons.map((item) => (
+                    <button className={season === item ? "selected" : ""} onClick={() => { setSeason(item); setPage(1); setStatsYearOpen(false); }} key={item}>
+                      <span>{item}</span><small>{item === systemStatus.season ? "Current" : "Season"}</small>{season === item && <i>✓</i>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {mode === "player" && (
+              <div className="standings-filter-dropdown stats-season-type" onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setStatsSeasonOpen(false);
+              }}>
+                <span>Season</span>
+                <button className={statsSeasonOpen ? "open" : ""} onClick={() => { setStatsSeasonOpen(!statsSeasonOpen); setStatsYearOpen(false); }} aria-expanded={statsSeasonOpen}>
+                  <strong>{seasonType}</strong><Chevron />
+                </button>
+                {statsSeasonOpen && (
+                  <div className="standings-filter-menu">
+                    {["Regular Season", "Postseason"].map((item) => (
+                      <button className={seasonType === item ? "selected" : ""} onClick={() => { setSeasonType(item); setPage(1); setStatsSeasonOpen(false); }} key={item}>
+                        <span>{item}</span><small>{item === "Regular Season" ? "Weeks 1–18" : "Playoffs"}</small>{seasonType === item && <i>✓</i>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="stats-updated"><span>Updated</span><strong>Today · 9:42 AM ET</strong></div>
+        </div>
+      </section>
+
+      <section className="stats-table-section">
+        <div className="stats-table-meta">
+          <span>{mode === "team" ? "32 TEAMS" : "QUALIFIED PLAYERS"}</span>
+          <span>REGULAR SEASON</span>
+        </div>
+        <div className="stats-table-scroll">
+          <table className="league-stats-table">
+            <thead>
+              <tr>
+                <th aria-sort={sort.key === "rank" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                  <button onClick={() => toggleSort("rank")}>RK <i>{sortIndicator("rank")}</i></button>
+                </th>
+                <th aria-sort={sort.key === "name" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                  <button onClick={() => toggleSort("name")}>{mode === "team" ? "TEAM" : "PLAYER"} <i>{sortIndicator("name")}</i></button>
+                </th>
+                {mode === "player" && <>
+                  <th aria-sort={sort.key === "team" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                    <button onClick={() => toggleSort("team")}>TEAM <i>{sortIndicator("team")}</i></button>
+                  </th>
+                  <th aria-sort={sort.key === "position" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                    <button onClick={() => toggleSort("position")}>POS <i>{sortIndicator("position")}</i></button>
+                  </th>
+                </>}
+                {columns.map((column) => {
+                  return (
+                    <th aria-sort={sort.key === column ? (sort.direction === "asc" ? "ascending" : "descending") : "none"} key={column}>
+                      <button onClick={() => toggleSort(column)}>{column} <i>{sortIndicator(column)}</i></button>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={columns.length + (mode === "player" ? 4 : 2)} style={{ textAlign: "center", padding: "3rem", color: "var(--gray-500)" }}>
+                    Loading {category} statistics...
+                  </td>
+                </tr>
+              ) : visibleRows.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length + (mode === "player" ? 4 : 2)} style={{ textAlign: "center", padding: "3rem", color: "var(--gray-500)" }}>
+                    No statistics found for {category} in {season}.
+                  </td>
+                </tr>
+              ) : (
+                visibleRows.map((row, rowIndex) => {
+                  const rankNumber = (mode === "player" ? (page - 1) * pageSize : 0) + rowIndex + 1;
+                  return (
+                    <tr key={row.id ?? rowIndex}>
+                      <td>{String(rankNumber).padStart(2, "0")}</td>
+                      <td>
+                        {mode === "team" ? (
+                          <a href={`#team-${row.team_abbr.toLowerCase()}`}>
+                            <img src={logo(row.team_abbr.toLowerCase())} alt="" />
+                            <strong>{row.team_name}</strong>
+                          </a>
+                        ) : (
+                          <a className="stats-player" href={`#player-${row.id}`}>
+                            <span className="player-number">{row.player_number}</span>
+                            <strong>{row.name}</strong>
+                          </a>
+                        )}
+                      </td>
+                      {mode === "player" && (
+                        <>
+                          <td>
+                            <a className="player-team-cell" href={`#team-${row.team_abbr.toLowerCase()}`}>
+                              <img className="table-team-logo" src={logo(row.team_abbr.toLowerCase())} alt="" />
+                              {row.team_name}
+                            </a>
+                          </td>
+                          <td>{row.position}</td>
+                        </>
+                      )}
+                      {columns.map((column) => (
+                        <td key={column}>{row.stats?.[column] ?? "—"}</td>
+                      ))}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        {mode === "player" && !loading && sortedRows.length > pageSize && (
+          <div className="stats-pagination">
+            <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedRows.length)} of {sortedRows.length} players</span>
+            <div>
+              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page"><Chevron direction="left" /></button>
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map((item) => (
+                <button className={page === item ? "active" : ""} onClick={() => setPage(item)} key={item}>{item}</button>
+              ))}
+              <button onClick={() => setPage(Math.min(pageCount, page + 1))} disabled={page === pageCount} aria-label="Next page"><Chevron direction="right" /></button>
+            </div>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function StandingsPage() {
+  const [view, setView] = useState<"division" | "conference" | "league">("division");
+  const systemStatus = useContext(SystemContext);
+  const [year, setYear] = useState(systemStatus.season);
+  const [seasonType, setSeasonType] = useState("Regular Season");
+  const [yearOpen, setYearOpen] = useState(false);
+  const [seasonTypeOpen, setSeasonTypeOpen] = useState(false);
+
+  const [standingsData, setStandingsData] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/standings/${year}`)
+      .then(r => r.json())
+      .then(data => setStandingsData(data));
+  }, [year]);
+
+  const standingFor = (team: Team) => {
+    const raw = standingsData.find(s => s.abbr.toLowerCase() === team.abbr.toLowerCase()) || {
+      wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0,
+      homeWins: 0, homeLosses: 0, awayWins: 0, awayLosses: 0,
+      streak: "0", lastFive: "0-0"
+    };
+    const wins = raw.wins;
+    const losses = raw.losses;
+    const ties = raw.ties;
+    const pct = (wins + (ties * 0.5)) / Math.max(1, wins + losses + ties);
+    
+    // We mock division and conference records for now since the API doesn't compute them
+    const index = teams.indexOf(team);
+    
+    return {
+      team, wins, losses, ties, pct: pct.toFixed(3).replace(/^0\./, "."), 
+      pointsFor: raw.pointsFor, pointsAgainst: raw.pointsAgainst,
+      differential: raw.pointsFor - raw.pointsAgainst,
+      home: `${raw.homeWins}–${raw.homeLosses}${raw.ties ? '–'+raw.ties : ''}`,
+      away: `${raw.awayWins}–${raw.awayLosses}${raw.ties ? '–'+raw.ties : ''}`,
+      division: `${raw.divWins || 0}–${raw.divLosses || 0}${raw.divTies ? '–'+raw.divTies : ''}`,
+      conference: `${raw.confWins || 0}–${raw.confLosses || 0}${raw.confTies ? '–'+raw.confTies : ''}`,
+      streak: raw.streak,
+      lastFive: raw.lastFive,
+    };
+  };
+
+  const [sortState, setSortState] = useState<Record<string, { key: string, dir: "desc" | "asc" }>>({});
+
+  const toggleSort = (groupLabel: string, key: string) => {
+    setSortState(prev => {
+      const current = prev[groupLabel] || { key: "W", dir: "desc" };
+      if (current.key === key) {
+        return { ...prev, [groupLabel]: { key, dir: current.dir === "desc" ? "asc" : "desc" } };
+      }
+      return { ...prev, [groupLabel]: { key, dir: key === "TEAM" ? "asc" : "desc" } };
+    });
+  };
+
+  const sortIndicator = (groupLabel: string, key: string) => {
+    const current = sortState[groupLabel] || { key: "W", dir: "desc" };
+    return current.key === key ? (current.dir === "asc" ? "↑" : "↓") : "↕";
+  };
+
+  const parseRecordWins = (record: string) => {
+    if (!record || record === "0") return 0;
+    const parts = record.includes("–") ? record.split("–") : record.split("-");
+    return parseInt(parts[0]) || 0;
+  };
+
+  const parseStreak = (streak: string) => {
+    if (!streak || streak === "0") return 0;
+    const val = parseInt(streak);
+    return streak.includes("W") ? val : -val;
+  };
+
+  const sortedTeams = (members: Team[], groupLabel: string) => {
+    const currentSort = sortState[groupLabel] || { key: "W", dir: "desc" };
+    const { key: sortKey, dir: sortDir } = currentSort;
+
+    return [...members].sort((a, b) => {
+      const sA = standingFor(a);
+      const sB = standingFor(b);
+      
+      if (sortKey === "TEAM") { 
+        return sortDir === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+      }
+
+      let valA: any = sA.wins;
+      let valB: any = sB.wins;
+
+      if (sortKey === "W") { valA = sA.wins; valB = sB.wins; }
+      else if (sortKey === "L") { valA = sA.losses; valB = sB.losses; }
+      else if (sortKey === "T") { valA = sA.ties; valB = sB.ties; }
+      else if (sortKey === "PCT") { valA = Number(sA.pct); valB = Number(sB.pct); }
+      else if (sortKey === "PF") { valA = sA.pointsFor; valB = sB.pointsFor; }
+      else if (sortKey === "PA") { valA = sA.pointsAgainst; valB = sB.pointsAgainst; }
+      else if (sortKey === "DIFF") { valA = sA.differential; valB = sB.differential; }
+      else if (sortKey === "HOME") { valA = parseRecordWins(sA.home); valB = parseRecordWins(sB.home); }
+      else if (sortKey === "AWAY") { valA = parseRecordWins(sA.away); valB = parseRecordWins(sB.away); }
+      else if (sortKey === "DIV") { valA = parseRecordWins(sA.division); valB = parseRecordWins(sB.division); }
+      else if (sortKey === "CONF") { valA = parseRecordWins(sA.conference); valB = parseRecordWins(sB.conference); }
+      else if (sortKey === "STRK") { valA = parseStreak(sA.streak); valB = parseStreak(sB.streak); }
+      else if (sortKey === "LAST 5") { valA = parseRecordWins(sA.lastFive); valB = parseRecordWins(sB.lastFive); }
+
+      const comparison = valA - valB;
+      if (comparison === 0) {
+        if (sA.differential !== sB.differential) {
+          return sortDir === "desc" ? sB.differential - sA.differential : sA.differential - sB.differential;
+        }
+        return sortDir === "desc" ? sB.wins - sA.wins : sA.wins - sB.wins;
+      }
+      return sortDir === "desc" ? valB - valA : valA - valB;
+    });
+  };
+
+  const divisionGroups = Object.entries(divisions).map(([label, abbreviations]) => ({
+    label,
+    teams: abbreviations.map((abbr) => teams.find((team) => team.abbr === abbr) as Team),
+  }));
+  const conferenceGroups = ["AFC", "NFC"].map((conference) => ({
+    label: `${conference} Conference`,
+    teams: teams.filter((team) => getDivision(team.abbr).startsWith(conference)),
+  }));
+  const groups = view === "division"
+    ? divisionGroups
+    : view === "conference"
+      ? conferenceGroups
+      : [{ label: "National Football League", teams: teams }];
+
+  return (
+    <main className="standings-page">
+      <section className="standings-masthead">
+        <div><span>LEAGUE TABLE</span><h1>Standings</h1><p>The complete {systemStatus.season} postseason picture, from every division to the full league.</p></div>
+      </section>
+
+      <section className="standings-controls">
+        <div className="standings-view-tabs">
+          {(["division", "conference", "league"] as const).map((item) => (
+            <button className={view === item ? "active" : ""} onClick={() => setView(item)} key={item}>{item}</button>
+          ))}
+        </div>
+        <div className="standings-filters">
+          <div className="standings-filter-dropdown" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setYearOpen(false);
+          }}>
+            <span>Year</span>
+            <button className={yearOpen ? "open" : ""} onClick={() => { setYearOpen(!yearOpen); setSeasonTypeOpen(false); }} aria-expanded={yearOpen}>
+              <strong>{year}</strong><Chevron />
+            </button>
+            {yearOpen && (
+              <div className="standings-filter-menu">
+                {systemStatus.availableSeasons.map((item) => (
+                  <button className={year === item ? "selected" : ""} onClick={() => { setYear(item); setYearOpen(false); }} key={item}>
+                    <span>{item}</span><small>{item === systemStatus.season ? "Current" : "Season"}</small>{year === item && <i>✓</i>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="standings-filter-dropdown season-type-dropdown" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setSeasonTypeOpen(false);
+          }}>
+            <span>Season</span>
+            <button className={seasonTypeOpen ? "open" : ""} onClick={() => { setSeasonTypeOpen(!seasonTypeOpen); setYearOpen(false); }} aria-expanded={seasonTypeOpen}>
+              <strong>{seasonType}</strong><Chevron />
+            </button>
+            {seasonTypeOpen && (
+              <div className="standings-filter-menu">
+                {["Regular Season", "Postseason"].map((item) => (
+                  <button className={seasonType === item ? "selected" : ""} onClick={() => { setSeasonType(item); setSeasonTypeOpen(false); }} key={item}>
+                    <span>{item}</span><small>{item === "Regular Season" ? "Weeks 1–18" : "Playoffs"}</small>{seasonType === item && <i>✓</i>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="standings-tables">
+        {groups.map((group, groupIndex) => {
+          const conference = group.label.startsWith("AFC") ? "American Football Conference" : group.label.startsWith("NFC") ? "National Football Conference" : null;
+          const showConference = view === "division" && (groupIndex === 0 || groupIndex === 4);
+          const currentSort = sortState[group.label] || { key: "W", dir: "desc" };
+          return (
+            <div className="standings-group-wrap" key={group.label}>
+              {showConference && <div className="conference-banner">{conference}</div>}
+              <div className="standings-table-scroll">
+                <table className="standings-table">
+                  <thead>
+                    <tr>
+                      <th aria-sort={currentSort.key === "TEAM" ? (currentSort.dir === "asc" ? "ascending" : "descending") : "none"}>
+                        <button onClick={() => toggleSort(group.label, "TEAM")}>{group.label} <i>{sortIndicator(group.label, "TEAM")}</i></button>
+                      </th>
+                      {["W", "L", "T", "PCT", "PF", "PA", "DIFF", "HOME", "AWAY", "DIV", "CONF", "STRK", "LAST 5"].map(col => (
+                        <th key={col} aria-sort={currentSort.key === col ? (currentSort.dir === "asc" ? "ascending" : "descending") : "none"}>
+                          <button onClick={() => toggleSort(group.label, col)}>{col} <i>{sortIndicator(group.label, col)}</i></button>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedTeams(group.teams, group.label).map((team, index) => {
+                      const standing = standingFor(team);
+                      return (
+                        <tr key={team.abbr}>
+                          <td><a href={`#team-${team.abbr}`}><span>{index + 1}</span><img src={logo(team.abbr)} alt="" /><strong>{team.name}</strong></a></td>
+                          <td><b>{standing.wins}</b></td><td>{standing.losses}</td><td>{standing.ties}</td><td><b>{standing.pct}</b></td>
+                          <td>{standing.pointsFor}</td><td>{standing.pointsAgainst}</td><td className={standing.differential >= 0 ? "positive" : "negative"}>{standing.differential > 0 ? "+" : ""}{standing.differential}</td>
+                          <td>{standing.home}</td><td>{standing.away}</td><td>{standing.division}</td><td>{standing.conference}</td><td>{standing.streak}</td><td>{standing.lastFive}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
+      </section>
+    </main>
+  );
+}
+
+function PowerRankingsPage() {
+  const [rankingWeek, setRankingWeek] = useState(17);
+  const rankedTeams = [...teams].sort((a, b) => {
+    const winsA = Number(teamRecords[teams.indexOf(a)].split("–")[0]);
+    const winsB = Number(teamRecords[teams.indexOf(b)].split("–")[0]);
+    return winsB - winsA || a.name.localeCompare(b.name);
+  });
+  const rankingNotes = [
+    "The complete profile is peaking at the right time. They are winning early downs, protecting the football and forcing opponents to chase the game.",
+    "A balanced offense and a deep rotation up front make this one of the league's hardest teams to prepare for on a short week.",
+    "The explosive plays get the attention, but situational execution is the reason this team remains firmly in the contender tier.",
+    "There are still questions at the margins, yet the underlying efficiency points to a team capable of winning in multiple ways.",
+    "The path forward depends on consistency. The ceiling is obvious when the protection, timing and coverage plan work together.",
+  ];
+
+  return (
+    <main className="rankings-page">
+      <section className="rankings-masthead">
+        <div>
+          <span>GRIDIRON POWER INDEX</span>
+          <h1>Power Rankings</h1>
+          <p>Every team, every week—ranked by form, underlying performance and postseason outlook.</p>
+        </div>
+      </section>
+
+      <section className="rankings-navigation">
+        <div className="rankings-week-nav">
+          <span>Previous rankings</span>
+          {[14, 15, 16, 17].map((week) => (
+            <button className={rankingWeek === week ? "active" : ""} onClick={() => setRankingWeek(week)} key={week}>Week {week}</button>
+          ))}
+        </div>
+        <div className="rankings-jump">
+          <span>Jump to a team</span>
+          <div>
+            {teams.map((team) => (
+              <button onClick={() => document.getElementById(`rank-${team.abbr}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} key={team.abbr}>
+                <img src={logo(team.abbr)} alt="" />{team.abbr.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rankings-list">
+        <div className="rankings-list-head">
+          <span>WEEK {rankingWeek}</span>
+          <strong>THE FULL 32</strong>
+          <small>Updated Monday · 9:00 AM ET</small>
+        </div>
+        {rankedTeams.map((team, index) => {
+          const teamIndex = teams.indexOf(team);
+          const opponent = teams[(teamIndex + rankingWeek + 3) % teams.length];
+          const previousRank = Math.max(1, Math.min(32, index + 1 + ((teamIndex % 5) - 2)));
+          const movement = previousRank - (index + 1);
+          return (
+            <article className="ranking-entry" id={`rank-${team.abbr}`} key={team.abbr}>
+              <div className="ranking-number">{String(index + 1).padStart(2, "0")}</div>
+              <div className="ranking-team-lockup">
+                <img src={logo(team.abbr)} alt={`${team.name} logo`} />
+                <div>
+                  <a href={`#team-${team.abbr}`}><h2>{team.name}</h2></a>
+                  <span>{teamRecords[teamIndex]} · {getDivision(team.abbr)}</span>
+                </div>
+                <div className={`ranking-movement ${movement >= 0 ? "up" : "down"}`}>
+                  <small>LAST WEEK</small>
+                  <strong>{previousRank}</strong>
+                  <i>{movement === 0 ? "—" : movement > 0 ? `↑ ${movement}` : `↓ ${Math.abs(movement)}`}</i>
+                </div>
+              </div>
+              <div className="ranking-result">
+                <span>WEEK {rankingWeek - 1} RESULT</span>
+                <strong>{teamIndex % 3 === 0 ? "L" : "W"} {24 + (teamIndex % 11)}–{17 + (teamIndex % 10)} vs {opponent.abbr.toUpperCase()}</strong>
+              </div>
+              <div className="ranking-copy">
+                <h3>{index < 5 ? "Why they belong in the contender conversation" : index < 16 ? "The case for a late-season climb" : "What needs to change next"}</h3>
+                <p>{rankingNotes[index % rankingNotes.length]} For {team.name}, Week {rankingWeek} is another chance to prove the strongest parts of the roster can hold up when the game tightens in the fourth quarter.</p>
+                <small>Analysis by {index % 2 ? "Mina Kimes" : "Seth Walder"} · National Reporter</small>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+    </main>
+  );
+}
+
+function ArticlePage({ articleId }: { articleId: string }) {
+  const systemStatus = useContext(SystemContext);
+  const [dbArticle, setDbArticle] = useState<any>(null);
+  const isDbArticle = /^\d+$/.test(articleId);
+
+  useEffect(() => {
+    if (isDbArticle) {
+      fetch(`http://localhost:8000/api/news/article/${articleId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error) setDbArticle(data);
+        })
+        .catch(err => console.error("Error loading article:", err));
+    }
+  }, [articleId, isDbArticle]);
+
+  const nationalMatch = articleId.match(/^national-(\d+)$/);
+  const localMatch = articleId.match(/^local-([a-z]+)$/);
+  const teamHeroMatch = articleId.match(/^team-hero-([a-z]+)$/);
+  const teamStoryMatch = articleId.match(/^team-([a-z]+)-(\d+)$/);
+  const playerStoryMatch = articleId.match(/^player-(passing|rushing|receiving|scoring|tightend|fullback)-(\d+)-(\d+)$/);
+  let data = {
+    category: "The Big Read",
+    title: "One night. Two contenders. Everything on the line.",
+    dek: "The league's most explosive offense meets the defense built to stop it. Inside the tactical battle that will define the season.",
+    author: "Bill Barnwell",
+    role: "National Writer",
+    initials: "BB",
+    subject: "the league's defining matchup",
+    image: "https://images.unsplash.com/photo-1634306320557-4c4e4660692f?auto=format&fit=crop&w=1800&q=88",
+    body: null as string | null,
+    teams: [] as any[],
+    players: [] as any[],
+  };
+
+  if (isDbArticle && dbArticle) {
+    const authorName = dbArticle.author?.display_name || dbArticle.persona || "Staff Writer";
+    const initials = authorName.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() || "NW";
+    const primaryTeam = dbArticle.tagged_teams?.find((t: any) => t.mention_type === 'PRIMARY') || dbArticle.tagged_teams?.[0];
+    const catLabel = dbArticle.article_type ? dbArticle.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : "Analysis";
+    data = {
+      ...data,
+      category: catLabel,
+      title: dbArticle.headline || data.title,
+      dek: dbArticle.excerpt || data.dek,
+      author: authorName,
+      role: dbArticle.author?.archetype ? `${dbArticle.author.archetype.replace(/_/g, " ")}` : "Staff Writer",
+      initials,
+      subject: primaryTeam ? primaryTeam.name : "the league",
+      body: dbArticle.content || "",
+      teams: dbArticle.tagged_teams || [],
+      players: dbArticle.tagged_players || [],
+    };
+  } else if (nationalMatch) {
+    const story = stories[Number(nationalMatch[1])] ?? stories[0];
+    data = { ...data, category: story.kicker, title: story.title, dek: story.blurb, author: story.author, role: "National Reporter", initials: story.initials, subject: story.title.toLowerCase() };
+  } else if (localMatch) {
+    const story = localStories.find((item) => item.team === localMatch[1]) ?? localStories[0];
+    const team = teams.find((item) => item.abbr === story.team) ?? teams[0];
+    data = { ...data, category: story.tag, title: story.title, dek: `Inside the decisions, matchups and personalities shaping the latest chapter for ${team.name}.`, author: story.author, role: `${team.name} Beat Reporter`, initials: story.author.split(" ").map((part) => part[0]).join(""), subject: team.name };
+  } else if (teamHeroMatch || teamStoryMatch) {
+    const abbr = teamHeroMatch?.[1] ?? teamStoryMatch?.[1] ?? "sf";
+    const team = teams.find((item) => item.abbr === abbr) ?? teams[0];
+    const storyIndex = Number(teamStoryMatch?.[2] ?? 0);
+    const titles = [
+      `Inside the belief driving ${team.name} into the stretch run`,
+      `The adjustment that could unlock the ${team.name} postseason run`,
+      `Three keys for ${team.name} heading into Week 17`,
+      `Why the ${team.name} young core is ahead of schedule`,
+    ];
+    data = {
+      ...data,
+      category: teamHeroMatch ? "Exclusive" : "Team Coverage",
+      title: titles[storyIndex % titles.length],
+      dek: `One locker room, one shared standard and a season still waiting to be defined. A closer look inside ${team.name}.`,
+      author: "Jordan Ellis",
+      role: `${team.name} Beat Reporter`,
+      initials: "JE",
+      subject: team.name,
+      image: "https://images.unsplash.com/photo-1704713611761-e0fbbdecc3e9?auto=format&fit=crop&w=1800&q=85",
+    };
+  } else if (playerStoryMatch) {
+    const category = playerStoryMatch[1];
+    const playerId = Number(playerStoryMatch[2]);
+    const storyIndex = Number(playerStoryMatch[3]);
+    const player = getPlayerProfile(category, playerId);
+    const titles = [
+      `How ${player.name} is changing the geometry of the ${player.team.name} offense`,
+      `${player.name}'s preparation is becoming the standard inside the building`,
+      `The matchup that could decide ${player.name}'s Week 17 impact`,
+      `What the advanced metrics reveal about ${player.name}'s breakout`,
+      `${player.name} on leadership, pressure and the postseason chase`,
+      `Where ${player.name} ranks among the league's best at ${player.position}`,
+    ];
+    data = { ...data, category: "Player Coverage", title: titles[storyIndex % titles.length], dek: `The film, numbers and voices behind ${player.name}'s impact on the ${player.team.name} this season.`, author: "Jordan Ellis", role: "National Reporter", initials: "JE", subject: player.name };
+  }
+
+  return (
+    <main className="article-page">
+      <article>
+        <header className="article-header">
+          <div className="article-breadcrumb"><a href="#">The Newsroom</a><span>/</span><b>{data.category}</b></div>
+          <span className="article-kicker">{data.category}</span>
+          <h1>{data.title}</h1>
+          <p>{data.dek}</p>
+          <div className="article-byline">
+            <span className="avatar red">{data.initials}</span>
+            <div><strong>{data.author}</strong><span>{data.role}</span></div>
+            <div><small>PUBLISHED</small><b>December 23, {systemStatus.season} · 9:15 AM ET</b></div>
+            <div><small>READ TIME</small><b>9 min</b></div>
+          </div>
+        </header>
+
+        <figure className="article-hero-media">
+          <img src={data.image} alt="Football action under stadium lights" />
+          <figcaption>Week 17 brings the season's biggest questions into sharper focus. <span>GRIDIRON IMAGES</span></figcaption>
+        </figure>
+
+        <div className="article-layout">
+          <aside className="article-share">
+            <span>SHARE</span>
+            <button aria-label="Copy article link">↗</button>
+            <button aria-label="Share by email">@</button>
+          </aside>
+          <div className="article-body">
+            {data.body ? (
+              data.body.split(/\n\n+/).map((para, i) => {
+                const clean = para.trim();
+                if (!clean) return null;
+                if (clean.startsWith("# ")) {
+                  return null; // Skip markdown H1 as it is already the headline
+                }
+                if (clean.startsWith("## ")) {
+                  return <h2 key={i}>{clean.replace(/^##\s+/, "")}</h2>;
+                }
+                if (clean.startsWith("### ")) {
+                  return <h3 key={i}>{clean.replace(/^###\s+/, "")}</h3>;
+                }
+                if (clean.startsWith("> ")) {
+                  return <blockquote key={i}>{clean.replace(/^>\s+/, "").replace(/\*\*EXCERPT:\*\*\s*/, "")}</blockquote>;
+                }
+                return <p key={i} className={i === 1 ? "article-lead" : ""}>{clean.replace(/\*\*(.*?)\*\*/g, "$1")}</p>;
+              })
+            ) : (
+              <>
+                <p className="article-lead">There is a point late in every season when possibility becomes pressure. For {data.subject}, that moment has arrived—not as a single play or result, but as a collection of details that have started to define everything.</p>
+                <p>The evidence appears on film before it reaches the box score. Alignments are cleaner. Decisions arrive a beat faster. The space between a promising idea and a winning one has narrowed, giving coaches confidence to reach deeper into the call sheet when the game demands it.</p>
+                <h2>The details behind the rise</h2>
+                <p>On early downs, the approach has become more varied without becoming more complicated. Motion reveals coverage. Formations create leverage. The result is an offense playing with answers instead of searching for them after the snap.</p>
+                <blockquote><span>“</span>The best teams don't wait for the game to tell them who they are. They impose that identity from the opening series.</blockquote>
+                <p>That confidence extends beyond the headline numbers. Teammates point to preparation, communication and a willingness to live with the correct decision even when the outcome is imperfect. Over the course of a long season, those habits compound.</p>
+                <h2>What comes next</h2>
+                <p>The remaining challenge is translating control into consistency. Opponents will change the picture, test protection rules and force the ball toward uncomfortable matchups. The response will determine whether this run becomes a memorable stretch or something larger.</p>
+                <p>For now, the trajectory is clear. The stakes are rising, the margin for error is shrinking and {data.subject} is entering the decisive part of the calendar with a real opportunity to shape what happens next.</p>
+              </>
+            )}
+            <div className="article-author-note">
+              <span className="avatar">{data.initials}</span>
+              <div><strong>{data.author}</strong><p>{data.author} covers the league for Gridiron, specializing in film analysis, roster construction and the stories behind the numbers.</p></div>
+            </div>
+          </div>
+          <aside className="article-related">
+            <span>KEEP READING</span>
+            {stories.slice(0, 3).map((story, index) => (
+              <a href={`#article-national-${index}`} key={story.title}><small>0{index + 1}</small><strong>{story.title}</strong><i>→</i></a>
+            ))}
+          </aside>
+        </div>
+      </article>
+    </main>
+  );
+}
+
+const fantasyArticles = [
+  {
+    label: "Trade Analyzer",
+    title: "Buy Low, Sell High: Capitalizing on the Market Gravity Shift",
+    author: "Local Beat Reporter",
+    time: "6 min",
+    team: "buf",
+  },
+  {
+    label: "Strategy Lab",
+    title: "Rest of Season Player Tiers: Who to Target for the Playoffs",
+    author: "Research Agent",
+    time: "9 min",
+    team: "det",
+  },
+  {
+    label: "Waiver Wire",
+    title: "Bandwagon Pickups for High Watchability Teams",
+    author: "National Pundit",
+    time: "5 min",
+    team: "gb",
+  },
+];
+
+const fantasyProjections = [
+  { name: "J. Chase", position: "WR", team: "CIN", points: "21.4", trend: "up", change: "+1.8", id: "4362628" },
+  { name: "S. Barkley", position: "RB", team: "PHI", points: "20.8", trend: "up", change: "+0.9", id: "3929630" },
+  { name: "L. Jackson", position: "QB", team: "BAL", points: "20.3", trend: "down", change: "−0.4", id: "3916387" },
+  { name: "J. Jefferson", position: "WR", team: "MIN", points: "19.9", trend: "up", change: "+1.2", id: "4262921" },
+  { name: "J. Allen", position: "QB", team: "BUF", points: "19.6", trend: "down", change: "−0.7", id: "3918298" },
+  { name: "B. Hall", position: "RB", team: "NYJ", points: "18.7", trend: "up", change: "+0.6", id: "4427366" },
+];
+
+type FantasyRankingsView = "weekly" | "adp" | "projections" | "ros";
+
+const fantasyRankingPlayers = [
+  { name: "Ja'Marr Chase", position: "WR", team: "CIN", value: "21.4", opponent: "vs PIT", trend: 1, id: "4362628" },
+  { name: "Saquon Barkley", position: "RB", team: "PHI", value: "20.8", opponent: "@ DAL", trend: 2, id: "3929630" },
+  { name: "Justin Jefferson", position: "WR", team: "MIN", value: "19.9", opponent: "vs DET", trend: 0, id: "4262921" },
+  { name: "Lamar Jackson", position: "QB", team: "BAL", value: "20.3", opponent: "@ TB", trend: -1, id: "3916387" },
+  { name: "Breece Hall", position: "RB", team: "NYJ", value: "18.7", opponent: "vs NE", trend: 3, id: "4427366" },
+  { name: "Amon-Ra St. Brown", position: "WR", team: "DET", value: "18.5", opponent: "@ MIN", trend: 1, id: "4374302" },
+  { name: "Josh Allen", position: "QB", team: "BUF", value: "19.6", opponent: "vs TEN", trend: -2, id: "3918298" },
+  { name: "Bijan Robinson", position: "RB", team: "ATL", value: "17.9", opponent: "vs SEA", trend: 0, id: "4430807" },
+  { name: "CeeDee Lamb", position: "WR", team: "DAL", value: "17.6", opponent: "vs PHI", trend: 2, id: "4241389" },
+  { name: "Travis Kelce", position: "TE", team: "KC", value: "15.8", opponent: "@ SF", trend: -1, id: "15847" },
+  { name: "Jahmyr Gibbs", position: "RB", team: "DET", value: "17.3", opponent: "@ MIN", trend: 4, id: "4429795" },
+  { name: "Malik Nabers", position: "WR", team: "NYG", value: "16.9", opponent: "vs WAS", trend: 2, id: "4432764" },
+];
+
+type FantasyPlayer = typeof fantasyRankingPlayers[number];
+
+const FantasyPlayerContext = createContext<{
+  openPlayer: (player: FantasyPlayer) => void;
+} | null>(null);
+
+function useFantasyPlayer() {
+  const context = useContext(FantasyPlayerContext);
+  if (!context) throw new Error("Fantasy player context is unavailable");
+  return context;
+}
+
+function FantasyPlayerModal({ player: p, close }: { player: FantasyPlayer; close: () => void }) {
+  const [activeTab, setActiveTab] = useState<"news" | "logs" | "stats" | "outlook">("logs");
+  const [showAllSeasons, setShowAllSeasons] = useState(false);
+  const playerId = p.playerId || (p as any).id;
+  const systemStatus = useContext(SystemContext);
+  const [playerData, setPlayerData] = useState<any>(null);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/player/${playerId}?season=${systemStatus.season}`)
+      .then(res => res.json())
+      .then(data => setPlayerData(data));
+  }, [playerId, systemStatus.season]);
+
+  if (!playerData || playerData.error) {
+    return (
+      <div className="fantasy-player-modal">
+        <button className="fantasy-modal-scrim" onClick={close} aria-label="Close modal" />
+        <div className="fantasy-player-dialog" style={{ padding: "40px", textAlign: "center" }}>
+          <button className="fantasy-modal-close" onClick={close}>×</button>
+          <p style={{ color: "#52606c", fontWeight: 700 }}>Loading player analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { player, game_log, career_stats } = playerData;
+  const isQuarterback = player.position === "QB";
+  const isRushPrimary = ["HB", "RB", "FB"].includes(player.position);
+  const teamAbbr = player.team_abbr || "CIN";
+  const teamAbbrLower = teamAbbr.toLowerCase();
+
+  // Calculate fantasy points for games (PPR format)
+  const calcFpts = (g: any) => {
+    if (g.status !== "COMPLETED") return "—";
+    if (g.fantasy_points !== undefined && g.fantasy_points !== null) {
+      return parseFloat(g.fantasy_points).toFixed(1);
+    }
+    const passYds = (g.pass_yards || 0) * 0.04;
+    const passTd = (g.pass_tds || 0) * 4;
+    const intDeduct = (g.interceptions || 0) * 2;
+    const rushYds = (g.rush_yards || 0) * 0.1;
+    const rushTd = (g.rush_tds || 0) * 6;
+    const recYds = (g.rec_yards || 0) * 0.1;
+    const recTd = (g.rec_tds || 0) * 6;
+    const pprRec = (g.receptions || 0) * 1.0;
+    const fumbDeduct = (g.fumb || 0) * 2;
+    const total = passYds + passTd - intDeduct + rushYds + rushTd + recYds + recTd + pprRec - fumbDeduct;
+    return total > 0 ? total.toFixed(1) : "0.0";
+  };
+
+  const completedGames = (game_log || []).filter((g: any) => g.status === "COMPLETED");
+  const totalFpts = completedGames.reduce((acc: number, g: any) => acc + (parseFloat(calcFpts(g)) || 0), 0);
+  const avgFpts = completedGames.length > 0 ? (totalFpts / completedGames.length).toFixed(1) : "14.2";
+  const outlook = playerData.weekly_outlook || {};
+  const projFpts = outlook.projection || (p as any).points || (parseFloat(avgFpts) > 0 ? avgFpts : "21.4");
+
+  // Determine current/next game matchup
+  const currentWeekGame = (game_log || []).find((g: any) => g.week === systemStatus.week) || (game_log || [])[game_log.length - 1];
+  const isHome = outlook.is_home !== undefined ? outlook.is_home : (currentWeekGame ? currentWeekGame.home_team_id === player.team_id : true);
+  const oppAbbr = outlook.opp_abbr || (currentWeekGame ? (isHome ? currentWeekGame.away_abbr : currentWeekGame.home_abbr) : "PIT");
+  const oppName = outlook.opp_name || (currentWeekGame ? (isHome ? currentWeekGame.away_name : currentWeekGame.home_name) : "Steelers");
+  const matchupText = `${isHome ? "vs" : "@"} ${oppAbbr}`;
+
+  const scrollToSection = (sec: "news" | "logs" | "stats" | "outlook") => {
+    setActiveTab(sec);
+    const el = document.getElementById(`fantasy-player-${player.id}-${sec}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const posRank = outlook.pos_rank || outlook.ecr_rank || `${player.position}1`;
+  const rosRank = outlook.ros_rank || `${player.position}1`;
+
+  return (
+    <div className="fantasy-player-modal">
+      <button className="fantasy-modal-scrim" onClick={close} aria-label="Close modal" />
+      <div className="fantasy-player-dialog">
+        <button className="fantasy-modal-close" onClick={close}>×</button>
+
+        {/* HERO HEADER matching Screenshot 1 */}
+        <header className="fantasy-player-hero">
+          <div className="fantasy-modal-portrait">
+            <span />
+            <img
+              src={getPlayerHeadshot(player)}
+              alt={player.name}
+              onError={(e) => handleHeadshotError(e, player)}
+            />
+          </div>
+
+          <div className="fantasy-modal-identity">
+            <h2>{player.name}</h2>
+            <div className="fantasy-modal-bio">
+              <strong>{player.position} — {teamAbbr}</strong>
+              <i>|</i>
+              <b>Week {systemStatus.week}</b>
+              <i>|</i>
+              <span>98% Rostered</span>
+            </div>
+
+            <div className="fantasy-modal-metrics">
+              <div>
+                <small>WK {systemStatus.week} RANK</small>
+                <strong>{posRank}</strong>
+              </div>
+              <div>
+                <small>PPR PROJ</small>
+                <strong style={{ color: "var(--fantasy-green)" }}>{projFpts}</strong>
+              </div>
+              <div>
+                <small>MATCHUP</small>
+                <strong>{matchupText}</strong>
+              </div>
+              <div>
+                <small>ROS</small>
+                <strong>{rosRank}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="fantasy-modal-team">
+            <img src={logo(teamAbbrLower)} alt={player.team_name} />
+            <span>PPR</span>
+          </div>
+        </header>
+
+        {/* STICKY TAB BAR */}
+        <nav className="fantasy-modal-tabs">
+          <button
+            className={activeTab === "news" ? "active" : ""}
+            onClick={() => scrollToSection("news")}
+          >
+            Latest News
+          </button>
+          <button
+            className={activeTab === "logs" ? "active" : ""}
+            onClick={() => scrollToSection("logs")}
+          >
+            Game Logs
+          </button>
+          <button
+            className={activeTab === "stats" ? "active" : ""}
+            onClick={() => scrollToSection("stats")}
+          >
+            Season Stats
+          </button>
+          <button
+            className={activeTab === "outlook" ? "active" : ""}
+            onClick={() => scrollToSection("outlook")}
+          >
+            Outlook
+          </button>
+          <a href={`#player-${player.id}`} onClick={close}>Full profile ↗</a>
+        </nav>
+
+        {/* MODAL BODY (All 4 sections on same scrollable view) */}
+        <div className="fantasy-modal-content">
+
+          {/* SECTION 1: LATEST NEWS / EXPERT NOTE */}
+          <section id={`fantasy-player-${player.id}-news`} style={{ scrollMarginTop: "78px" }}>
+            <div className="fantasy-expert-note">
+              <div className="fantasy-expert-avatar">
+                <span>MU</span>
+                <strong>Avery Cole</strong>
+                <small>Fantasy Analyst</small>
+              </div>
+              <div>
+                <span>EXPERT NOTE • 2 HOURS AGO</span>
+                <h3>Volume and matchup both point to a confident Week {systemStatus.week} start.</h3>
+                <p>
+                  {player.name} remains one of the most dependable PPR options at {player.position}.
+                  The underlying usage has held steady, and this week's matchup creates a clear path to both floor and ceiling production.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 2: GAME LOGS */}
+          <section
+            className="fantasy-modal-log"
+            id={`fantasy-player-${player.id}-logs`}
+            style={{ marginTop: "40px", paddingTop: "32px", borderTop: "1px solid var(--fantasy-line)", scrollMarginTop: "78px" }}
+          >
+            <div className="fantasy-modal-section-head">
+              <div>
+                <span>{systemStatus.season} SEASON</span>
+                <h3>GAME LOGS</h3>
+              </div>
+              <b>PPR SCORING</b>
+            </div>
+
+            <div className="fantasy-season-table-scroll">
+              <div
+                className="fantasy-season-groups"
+                style={{
+                  gridTemplateColumns: isQuarterback
+                    ? "65px 75px 75px 55px repeat(6, 68px) repeat(4, 68px)"
+                    : "65px 75px 75px 55px repeat(4, 68px) repeat(4, 68px)",
+                  width: "max-content",
+                  minWidth: "100%",
+                }}
+              >
+                <span style={{ gridColumn: "1 / 3" }} />
+                <strong style={{ gridColumn: "3 / 5" }}>FANTASY</strong>
+                <strong style={{ gridColumn: isQuarterback ? "5 / 11" : "5 / 9" }}>
+                  {isQuarterback ? "PASSING" : "RUSHING"}
+                </strong>
+                <strong style={{ gridColumn: isQuarterback ? "11 / 15" : "9 / 13" }}>
+                  {isQuarterback ? "RUSHING" : "RECEIVING"}
+                </strong>
+              </div>
+
+              <div
+                className="fantasy-season-labels"
+                style={{
+                  gridTemplateColumns: isQuarterback
+                    ? "65px 75px 75px 55px repeat(6, 68px) repeat(4, 68px)"
+                    : "65px 75px 75px 55px repeat(4, 68px) repeat(4, 68px)",
+                }}
+              >
+                <span>WK</span>
+                <span>OPP</span>
+                <span>FPTS</span>
+                <span>FIN</span>
+                {isQuarterback ? (
+                  <>
+                    <span>CMP</span>
+                    <span>ATT</span>
+                    <span>Y/A</span>
+                    <span>YARDS</span>
+                    <span>TDS</span>
+                    <span>INTS</span>
+                    <span>ATT</span>
+                    <span>YARDS</span>
+                    <span>Y/A</span>
+                    <span>TDS</span>
+                  </>
+                ) : (
+                  <>
+                    <span>ATT</span>
+                    <span>YARDS</span>
+                    <span>Y/A</span>
+                    <span>TDS</span>
+                    <span>REC</span>
+                    <span>YARDS</span>
+                    <span>Y/R</span>
+                    <span>TDS</span>
+                  </>
+                )}
+              </div>
+
+              <div className="fantasy-season-values-wrap">
+                {(game_log || []).map((game: any, idx: number) => {
+                  const isBye = game.status === "BYE";
+                  const isGameHome = game.home_team_id === player.team_id;
+                  const opp = isBye ? "BYE" : (isGameHome ? game.away_abbr : game.home_abbr);
+                  const loc = isBye ? "" : (isGameHome ? "vs" : "@");
+                  const fpts = isBye ? "—" : calcFpts(game);
+                  const isComp = game.status === "COMPLETED";
+
+                  // Passing stats
+                  const pCmp = game.completions ?? 0;
+                  const pAtt = game.pass_attempts ?? 0;
+                  const pYds = game.pass_yards ?? 0;
+                  const pTds = game.pass_tds ?? 0;
+                  const pInts = game.interceptions ?? 0;
+                  const pYa = pAtt > 0 ? (pYds / pAtt).toFixed(1) : "0.0";
+
+                  // Rushing stats
+                  const rAtt = game.rush_attempts ?? 0;
+                  const rYds = game.rush_yards ?? 0;
+                  const rTds = game.rush_tds ?? 0;
+                  const rYa = rAtt > 0 ? (rYds / rAtt).toFixed(1) : "0.0";
+
+                  // Receiving stats
+                  const rec = game.receptions ?? 0;
+                  const recYds = game.rec_yards ?? 0;
+                  const recTds = game.rec_tds ?? 0;
+                  const recYr = rec > 0 ? (recYds / rec).toFixed(1) : "0.0";
+
+                  // Weekly position rank (e.g., WR1, QB1, RB1)
+                  const finRank = isComp ? (game.weekly_pos_rank || `${player.position}1`) : "—";
+
+                  return (
+                    <div
+                      className="fantasy-season-values"
+                      key={game.week || idx}
+                      style={{
+                        gridTemplateColumns: isQuarterback
+                          ? "65px 75px 75px 55px repeat(6, 68px) repeat(4, 68px)"
+                          : "65px 75px 75px 55px repeat(4, 68px) repeat(4, 68px)",
+                        opacity: isBye ? 0.6 : 1,
+                      }}
+                    >
+                      <strong>{game.week}</strong>
+                      <strong>{loc ? `${loc} ${opp}` : opp}</strong>
+                      <strong style={{ color: isComp ? "var(--fantasy-green)" : "inherit", background: isComp ? "#dff5ed" : "#fff" }}>
+                        {fpts}
+                      </strong>
+                      <strong>{finRank}</strong>
+
+                      {isQuarterback ? (
+                        <>
+                          <strong>{isComp ? pCmp : "—"}</strong>
+                          <strong>{isComp ? pAtt : "—"}</strong>
+                          <strong>{isComp ? pYa : "—"}</strong>
+                          <strong className={isComp ? "stat-highlight" : ""}>{isComp ? pYds : "—"}</strong>
+                          <strong>{isComp ? pTds : "—"}</strong>
+                          <strong>{isComp ? pInts : "—"}</strong>
+                          <strong>{isComp ? rAtt : "—"}</strong>
+                          <strong>{isComp ? rYds : "—"}</strong>
+                          <strong>{isComp ? rYa : "—"}</strong>
+                          <strong>{isComp ? rTds : "—"}</strong>
+                        </>
+                      ) : (
+                        <>
+                          <strong>{isComp ? rAtt : "—"}</strong>
+                          <strong className={isComp && isRushPrimary ? "stat-highlight" : ""}>{isComp ? rYds : "—"}</strong>
+                          <strong>{isComp ? rYa : "—"}</strong>
+                          <strong>{isComp ? rTds : "—"}</strong>
+                          <strong>{isComp ? rec : "—"}</strong>
+                          <strong className={isComp && !isRushPrimary ? "stat-highlight" : ""}>{isComp ? recYds : "—"}</strong>
+                          <strong>{isComp ? recYr : "—"}</strong>
+                          <strong>{isComp ? recTds : "—"}</strong>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 3: SEASON STATS */}
+          <section
+            className="fantasy-modal-season-section"
+            id={`fantasy-player-${player.id}-stats`}
+            style={{ marginTop: "40px", paddingTop: "32px", borderTop: "1px solid var(--fantasy-line)", scrollMarginTop: "78px" }}
+          >
+            <div className="fantasy-modal-section-head">
+              <div>
+                <span>{systemStatus.season} SEASON</span>
+                <h3>SEASON STATS</h3>
+              </div>
+              <b>THROUGH WEEK {Math.max(1, systemStatus.week - 1)}</b>
+            </div>
+
+            <div className="fantasy-season-table-scroll">
+              <div
+                className="fantasy-season-groups"
+                style={{
+                  gridTemplateColumns: isQuarterback
+                    ? "65px 75px 75px 55px repeat(6, 68px) repeat(4, 68px)"
+                    : "65px 75px 75px 55px repeat(4, 68px) repeat(4, 68px)",
+                  width: "max-content",
+                  minWidth: "100%",
+                }}
+              >
+                <span style={{ gridColumn: "1 / 3" }} />
+                <strong style={{ gridColumn: "3 / 5" }}>FANTASY</strong>
+                <strong style={{ gridColumn: isQuarterback ? "5 / 11" : "5 / 9" }}>
+                  {isQuarterback ? "PASSING" : "RUSHING"}
+                </strong>
+                <strong style={{ gridColumn: isQuarterback ? "11 / 15" : "9 / 13" }}>
+                  {isQuarterback ? "RUSHING" : "RECEIVING"}
+                </strong>
+              </div>
+
+              <div
+                className="fantasy-season-labels"
+                style={{
+                  gridTemplateColumns: isQuarterback
+                    ? "65px 75px 75px 55px repeat(6, 68px) repeat(4, 68px)"
+                    : "65px 75px 75px 55px repeat(4, 68px) repeat(4, 68px)",
+                }}
+              >
+                <span>YR</span>
+                <span>TM</span>
+                <span>FPTS</span>
+                <span>FIN</span>
+                {isQuarterback ? (
+                  <>
+                    <span>CMP</span>
+                    <span>ATT</span>
+                    <span>Y/A</span>
+                    <span>YARDS</span>
+                    <span>TDS</span>
+                    <span>INTS</span>
+                    <span>ATT</span>
+                    <span>YARDS</span>
+                    <span>Y/A</span>
+                    <span>TDS</span>
+                  </>
+                ) : (
+                  <>
+                    <span>ATT</span>
+                    <span>YARDS</span>
+                    <span>Y/A</span>
+                    <span>TDS</span>
+                    <span>REC</span>
+                    <span>YARDS</span>
+                    <span>Y/R</span>
+                    <span>TDS</span>
+                  </>
+                )}
+              </div>
+
+              <div className={`fantasy-season-values-wrap ${showAllSeasons ? "expanded" : ""}`}>
+                {(career_stats && career_stats.length > 0 ? career_stats : [{
+                  season: systemStatus.season,
+                  team_abbr: teamAbbr,
+                  gp: completedGames.length || 6,
+                  completions: 0,
+                  pass_attempts: 0,
+                  pass_yards: 0,
+                  pass_tds: 0,
+                  interceptions: 0,
+                  rush_attempts: 31,
+                  rush_yards: 146,
+                  rush_tds: 3,
+                  receptions: 38,
+                  rec_yards: 498,
+                  rec_tds: 9,
+                }]).map((st: any, i: number) => {
+                  const yrShort = `'${String(st.season || systemStatus.season).slice(-2)}`;
+                  const gp = st.gp || completedGames.length || 6;
+                  const pts = st.total_fpts !== undefined && st.total_fpts !== null
+                    ? parseFloat(st.total_fpts).toFixed(1)
+                    : (parseFloat(avgFpts) * gp).toFixed(1);
+
+                  // Passing stats
+                  const cCmp = st.completions ?? 0;
+                  const cAtt = st.pass_attempts ?? 0;
+                  const cYds = st.pass_yards ?? 0;
+                  const cTds = st.pass_tds ?? 0;
+                  const cInts = st.interceptions ?? 0;
+                  const cYa = cAtt > 0 ? (cYds / cAtt).toFixed(1) : "0.0";
+
+                  // Rushing stats
+                  const cRAtt = st.rush_attempts ?? 0;
+                  const cRYds = st.rush_yards ?? 0;
+                  const cRTds = st.rush_tds ?? 0;
+                  const cRYa = cRAtt > 0 ? (cRYds / cRAtt).toFixed(1) : "0.0";
+
+                  // Receiving stats
+                  const cRec = st.receptions ?? 0;
+                  const cRecYds = st.rec_yards ?? 0;
+                  const cRecTds = st.rec_tds ?? 0;
+                  const cRecYr = cRec > 0 ? (cRecYds / cRec).toFixed(1) : "0.0";
+
+                  // Overall season finish rank across the league (e.g., #1, #2)
+                  const finRank = `#${st.overall_rank || 1}`;
+
+                  return (
+                    <div
+                      className="fantasy-season-values"
+                      key={st.season || i}
+                      style={{
+                        gridTemplateColumns: isQuarterback
+                          ? "65px 75px 75px 55px repeat(6, 68px) repeat(4, 68px)"
+                          : "65px 75px 75px 55px repeat(4, 68px) repeat(4, 68px)",
+                      }}
+                    >
+                      <strong>{yrShort}</strong>
+                      <strong>{st.team_abbr || teamAbbr}</strong>
+                      <strong style={{ color: "var(--fantasy-blue)", background: "#edf5fa" }}>{pts}</strong>
+                      <strong>{finRank}</strong>
+
+                      {isQuarterback ? (
+                        <>
+                          <strong>{cCmp}</strong>
+                          <strong>{cAtt}</strong>
+                          <strong>{cYa}</strong>
+                          <strong className="stat-highlight">{cYds}</strong>
+                          <strong>{cTds}</strong>
+                          <strong>{cInts}</strong>
+                          <strong>{cRAtt}</strong>
+                          <strong>{cRYds}</strong>
+                          <strong>{cRYa}</strong>
+                          <strong>{cRTds}</strong>
+                        </>
+                      ) : (
+                        <>
+                          <strong>{cRAtt}</strong>
+                          <strong className={isRushPrimary ? "stat-highlight" : ""}>{cRYds}</strong>
+                          <strong>{cRYa}</strong>
+                          <strong>{cRTds}</strong>
+                          <strong>{cRec}</strong>
+                          <strong className={!isRushPrimary ? "stat-highlight" : ""}>{cRecYds}</strong>
+                          <strong>{cRecYr}</strong>
+                          <strong>{cRecTds}</strong>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button
+                className="fantasy-more-seasons"
+                onClick={() => setShowAllSeasons(!showAllSeasons)}
+              >
+                {showAllSeasons ? "Show fewer seasons ↑" : "View more seasons ↓"}
+              </button>
+            </div>
+          </section>
+
+          {/* SECTION 4: LINEUP OUTLOOK */}
+          <section
+            className="fantasy-matchup-outlook"
+            id={`fantasy-player-${player.id}-outlook`}
+            style={{ marginTop: "40px", paddingTop: "32px", borderTop: "1px solid var(--fantasy-line)", scrollMarginTop: "78px" }}
+          >
+            <div className="fantasy-modal-section-head">
+              <div>
+                <span>LINEUP OUTLOOK</span>
+                <h3>WEEK {systemStatus.week} OUTLOOK</h3>
+              </div>
+            </div>
+
+            {(() => {
+              const outlook = playerData.weekly_outlook || {};
+              const starsCount = Math.max(1, Math.min(5, outlook.stars || 3));
+              const homeLogo = logo((outlook.home_abbr || "cin").toLowerCase());
+              const awayLogo = logo((outlook.away_abbr || "pit").toLowerCase());
+              return (
+                <div className="fantasy-matchup-card" style={{ marginTop: "16px" }}>
+                  <div className="fantasy-matchup-banner">
+                    <div>
+                      <img src={homeLogo} alt={outlook.home_name || "Home"} />
+                      <span>
+                        <small>{outlook.home_name ? outlook.home_name.toUpperCase() : "HOME"}</small>
+                        <strong>{outlook.home_abbr || "HOME"}</strong>
+                      </span>
+                    </div>
+                    <i>vs</i>
+                    <div>
+                      <span>
+                        <small>{outlook.away_name ? outlook.away_name.toUpperCase() : "AWAY"}</small>
+                        <strong>{outlook.away_abbr || "AWAY"}</strong>
+                      </span>
+                      <img src={awayLogo} alt={outlook.away_name || "Away"} />
+                    </div>
+                  </div>
+
+                  <div className="fantasy-kickoff">
+                    <span />
+                    <strong>{outlook.kickoff || `SUN 1:00 PM ET`}</strong>
+                    <span />
+                  </div>
+
+                  <div className="fantasy-outlook-metrics">
+                    <div>
+                      <strong>{outlook.ecr_rank || `${player.position}1`}</strong>
+                      <span>ECR</span>
+                    </div>
+                    <div>
+                      <strong>{outlook.projection || projFpts}</strong>
+                      <span>Projection</span>
+                    </div>
+                    <div>
+                      <div className="fantasy-stars">
+                        {"★".repeat(starsCount)}
+                        <i>{"★".repeat(5 - starsCount)}</i>
+                      </div>
+                      <span>Matchup</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </section>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FantasyPlayerProvider({ children }: { children: ReactNode }) {
+  const [player, setPlayer] = useState<FantasyPlayer | null>(null);
+  return (
+    <FantasyPlayerContext.Provider value={{ openPlayer: setPlayer }}>
+      {children}
+      {player && <FantasyPlayerModal player={player} close={() => setPlayer(null)} />}
+    </FantasyPlayerContext.Provider>
+  );
+}
+
+function FantasyHeader({ active }: { active: "news" | "rankings" }) {
+  const systemStatus = useContext(SystemContext);
+  const { openPlayer } = useFantasyPlayer();
+  const [search, setSearch] = useState("");
+  const [allPlayers, setAllPlayers] = useState<any[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/fantasy/players?season=${systemStatus.season || 2035}`)
+      .then((res) => res.json())
+      .then((data) => setAllPlayers(data.players || []))
+      .catch(() => setAllPlayers([]));
+  }, [systemStatus.season]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "Escape") {
+        setSearch("");
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const searchClean = search.trim().toLowerCase();
+  const matches = searchClean
+    ? allPlayers
+        .filter((player) =>
+          `${player.name} ${player.team} ${player.position}`.toLowerCase().includes(searchClean)
+        )
+        .slice(0, 8)
+    : [];
+
+  return (
+    <header className="fantasy-header">
+      <nav className="fantasy-nav" aria-label="Fantasy navigation">
+        <a className="fantasy-brand" href="#fantasy" aria-label="Mu Fantasy Analytics home">
+          <span className="fantasy-brand-mark"><i /><b>M</b></span>
+          <span><strong>MU FANTASY</strong><small>ANALYTICS</small></span>
+        </a>
+        <div className="fantasy-nav-links">
+          <a className="fantasy-nfl-link" href="#">NFL</a>
+          <a className={active === "news" ? "active" : ""} href="#fantasy">News &amp; Articles</a>
+          <a className={active === "rankings" ? "active" : ""} href="#fantasy-rankings">Rankings</a>
+        </div>
+        <div className="fantasy-tools">
+          <div className="fantasy-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search players"
+              aria-label="Search fantasy players"
+              autoComplete="off"
+            />
+            <kbd>⌘ K</kbd>
+            {search && (
+              <div className="fantasy-search-results">
+                <span>{matches.length ? `PLAYERS (${matches.length})` : "NO PLAYERS FOUND"}</span>
+                {matches.map((player) => (
+                  <button onClick={() => { openPlayer(player); setSearch(""); }} key={player.id}>
+                    <i>
+                      <img
+                        src={getPlayerHeadshot(player)}
+                        alt=""
+                        onError={(e) => handleHeadshotError(e, player)}
+                      />
+                    </i>
+                    <span><strong>{player.name}</strong><small>{player.position} • {player.team} • {player.fpts} FPTS</small></span>
+                    <b>→</b>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="fantasy-profile" aria-label="Open profile menu">MJ</button>
+        </div>
+      </nav>
+    </header>
+  );
+}
+
+function FantasyRankingsPage({ view }: { view: FantasyRankingsView }) {
+  const systemStatus = useContext(SystemContext);
+  const { openPlayer } = useFantasyPlayer();
+  const [position, setPosition] = useState("FLEX");
+  const [week, setWeek] = useState(systemStatus.week || 1);
+  const [visibleCount, setVisibleCount] = useState(50);
+  const [dbData, setDbData] = useState<any>(null);
+  const [dbLoading, setDbLoading] = useState(false);
+
+  useEffect(() => {
+    if (systemStatus.week) setWeek(systemStatus.week);
+  }, [systemStatus.week]);
+
+  const isWeekly = view === "weekly";
+  const isRos = view === "ros";
+  const isAdp = view === "adp";
+  const isDbView = isWeekly || isRos || isAdp;
+
+  useEffect(() => {
+    if (!isDbView) return;
+    setDbLoading(true);
+    setVisibleCount(50);
+    const endpoint = isWeekly ? "weekly" : isRos ? "ros" : "adp";
+    const posParam = isAdp ? "ALL" : position;
+    fetch(`http://localhost:8000/api/fantasy/rankings/${endpoint}?season=${systemStatus.season}&week=${week}&position=${posParam}&limit=500`)
+      .then((res) => res.json())
+      .then((data) => setDbData(data))
+      .catch(() => setDbData(null))
+      .finally(() => setDbLoading(false));
+  }, [view, systemStatus.season, week, position, isDbView, isWeekly, isRos, isAdp]);
+
+  const weeklyMode: "projected" | "final" | "unavailable" = dbData?.mode || "unavailable";
+  const dbPlayers: any[] = dbData?.players || [];
+  const filteredPlayers: any[] = isDbView
+    ? dbPlayers.slice(0, visibleCount)
+    : fantasyRankingPlayers.filter((player) => position === "FLEX" || player.position === position);
+  const totalPlayers = isDbView ? dbPlayers.length : filteredPlayers.length;
+  const viewCopy = {
+    weekly: {
+      eyebrow: weeklyMode === "final" ? "FINAL RESULTS" : "CURRENT WEEK",
+      title: `Week ${week} Fantasy Football Rankings`,
+      description: weeklyMode === "final"
+        ? `Final PPR finishes for Week ${week}, ranked by actual fantasy points scored.`
+        : "PPR rankings built from matchup quality, opportunity, and our latest player projections.",
+      value: weeklyMode === "final" ? "FPTS" : "PROJ. FPTS",
+    },
+    adp: { eyebrow: "DRAFT MARKET", title: `${systemStatus.season} Preseason ADP`, description: "Average draft position for PPR redraft leagues with team bye weeks, rest-of-season position ranks, and schedule strength.", value: "AVG. PICK" },
+    projections: { eyebrow: "WEEKLY OUTLOOK", title: `Week ${week} Player Projections`, description: `Statistical PPR projections for every fantasy-relevant player on the Week ${week} slate.`, value: "PROJ. FPTS" },
+    ros: { eyebrow: "SEASON LONG", title: "Rest of Season Rankings", description: "Forward-looking PPR rankings accounting for role stability, schedule strength, and playoff-week upside.", value: "PROJECTED ROS FPTS" },
+  }[view];
+  const displayedValue = (player: any, index: number) => {
+    if (view === "adp") return `${index + 1}.${(index * 3) % 10}`;
+    return player.value;
+  };
+  const trendTitle = (player: any) =>
+    isWeekly && player.prev_finish
+      ? `Week ${week - 1} finish: ${player.prev_finish}`
+      : isRos && player.adp_rank
+      ? `Preseason ADP: #${player.adp_rank} · ROS: #${player.overall_rank || player.rank}`
+      : undefined;
+  const showPosColumn = isDbView && position === "FLEX";
+  const rankingGridStyle = isWeekly
+    ? {
+        gridTemplateColumns: showPosColumn
+          ? "60px minmax(230px, 1fr) 70px 95px 95px 95px 65px"
+          : "60px minmax(240px, 1fr) 100px 100px 100px 70px",
+        minWidth: showPosColumn ? "780px" : "720px",
+      }
+    : isRos
+    ? {
+        gridTemplateColumns: showPosColumn
+          ? "60px minmax(220px, 1fr) 80px 115px 115px 145px 70px"
+          : "60px minmax(240px, 1fr) 120px 120px 155px 75px",
+        minWidth: showPosColumn ? "810px" : "770px",
+      }
+    : isAdp
+    ? {
+        gridTemplateColumns: "60px minmax(240px, 1fr) 100px 125px 125px 125px",
+        minWidth: "775px",
+      }
+    : undefined;
+
+  return (
+    <div className="fantasy-shell">
+      <FantasyHeader active="rankings" />
+      <main className="fantasy-rankings-main">
+        <div className="fantasy-rankings-status">
+          <a href="#fantasy-rankings">Rankings home</a>
+          <span>{systemStatus.season} season</span>
+          <b>PPR scoring</b>
+        </div>
+        <div className="fantasy-rankings-layout">
+          <aside className="fantasy-rankings-rail">
+            <a className="fantasy-rail-home" href="#fantasy-rankings">
+              <span>R</span><div><strong>NFL Rankings Home</strong><small>YOUR WEEKLY COMMAND CENTER</small></div>
+            </a>
+            <section>
+              <a className={view === "weekly" ? "active" : ""} href="#fantasy-rankings">Weekly Rankings <b>→</b></a>
+              <a className={view === "ros" ? "active" : ""} href="#fantasy-ros">ROS Rankings <b>→</b></a>
+              <a className={view === "adp" ? "active" : ""} href="#fantasy-adp">Preseason ADP <b>→</b></a>
+            </section>
+            <div className="fantasy-rail-note">
+              <span>PPR</span>
+              <strong>One scoring system.<br />No second guessing.</strong>
+              <p>Every ranking and projection across Mu uses full-point PPR scoring.</p>
+            </div>
+          </aside>
+
+          <section className="fantasy-rankings-content">
+            <header className="fantasy-rankings-title">
+              <span>{viewCopy.eyebrow}</span>
+              <h1>{viewCopy.title}</h1>
+              <p>{viewCopy.description}</p>
+            </header>
+
+            <div className="fantasy-rankings-board">
+              <div className="fantasy-board-intro">
+                <div><span>FEATURED BOARD</span><h2>{viewCopy.title}</h2><p>{isWeekly ? (weeklyMode === "final" ? `Week ${week} is final — ranked by actual PPR points scored.` : `Ranked by projected PPR points for Week ${week}. Trend compares to each player's Week ${Math.max(1, week - 1)} positional finish.`) : isRos ? "Forward-looking PPR rest-of-season rankings combining points scored to date with future projections." : isAdp ? "Preseason consensus average draft position with team bye weeks, positional order, and schedule strength." : "Updated today at 9:42 AM ET by the Mu fantasy intelligence team."}</p></div>
+                {isWeekly ? (
+                  <div className="fantasy-week-control">
+                    <button onClick={() => setWeek(Math.max(1, week - 1))} aria-label="Previous week">←</button>
+                    <span><small>NFL WEEK</small><strong>{week}</strong></span>
+                    <button onClick={() => setWeek(Math.min(18, week + 1))} aria-label="Next week">→</button>
+                  </div>
+                ) : null}
+              </div>
+
+              {!isAdp ? (
+                <div className="fantasy-ranking-filters">
+                  <div><span>POSITION</span><div>{["QB", "RB", "WR", "TE", "FLEX"].map((item) => <button className={position === item ? "active" : ""} onClick={() => setPosition(item)} key={item}>{item}</button>)}</div></div>
+                </div>
+              ) : null}
+
+              <div className="fantasy-ranking-table">
+                <div className="fantasy-ranking-head" style={rankingGridStyle}>
+                  <span>RANK</span>
+                  <span>PLAYER</span>
+                  {isAdp ? (
+                    <>
+                      <span>POSITION</span>
+                      <span>TEAM (BYE)</span>
+                      <span>SEASON SOS</span>
+                      <span>PLAYOFF SOS</span>
+                    </>
+                  ) : (
+                    <>
+                      {showPosColumn ? <span>{isRos ? "ROS RANK" : "POS"}</span> : null}
+                      {isWeekly ? <span>OPPONENT</span> : null}
+                      {isWeekly ? <span>MATCHUP</span> : null}
+                      {isRos ? <span>SEASON SOS</span> : null}
+                      {isRos ? <span>PLAYOFF SOS</span> : null}
+                      <span>{viewCopy.value}</span>
+                      <span>TREND</span>
+                    </>
+                  )}
+                </div>
+                {isDbView && dbLoading && filteredPlayers.length === 0 ? (
+                  <div className="fantasy-board-footer"><span>Loading rankings…</span></div>
+                ) : isDbView && filteredPlayers.length === 0 ? (
+                  <div className="fantasy-board-footer"><span>No rankings available yet.</span></div>
+                ) : null}
+                {filteredPlayers.map((player, index) => (
+                  <button className="fantasy-ranking-row" style={rankingGridStyle} onClick={() => openPlayer(player)} key={player.id || player.name}>
+                    <strong>{player.rank || index + 1}</strong>
+                    <div className="fantasy-ranked-player">
+                      <span>
+                        <img
+                          src={getPlayerHeadshot(player)}
+                          alt=""
+                          onError={(e) => handleHeadshotError(e, player)}
+                        />
+                      </span>
+                      <div><strong>{player.name}</strong><small><b>{player.position}</b>{isAdp ? "" : player.team}</small></div>
+                    </div>
+                    {isAdp ? (
+                      <>
+                        <span className="fantasy-pos-rank">{player.pos_rank}</span>
+                        <span style={{ fontWeight: 600, color: "var(--fantasy-subtext, #8da0b8)" }}>{player.team_bye || `${player.team} (${player.bye_week || "—"})`}</span>
+                        <span className="fantasy-stars" title={`${player.season_sos || 3}/5 season SOS`}>
+                          {"★".repeat(player.season_sos || 3)}
+                          <i>{"★".repeat(5 - (player.season_sos || 3))}</i>
+                        </span>
+                        <span className="fantasy-stars" title={`${player.playoff_sos || 3}/5 playoff SOS (Wks 15-17)`}>
+                          {"★".repeat(player.playoff_sos || 3)}
+                          <i>{"★".repeat(5 - (player.playoff_sos || 3))}</i>
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {showPosColumn ? <span className="fantasy-pos-rank">{player.pos_rank}</span> : null}
+                        {isWeekly ? <span>{player.opponent}</span> : null}
+                        {isWeekly ? (
+                          player.stars ? (
+                            <span className="fantasy-stars" title={`${player.stars}/5 matchup`}>
+                              {"★".repeat(player.stars)}
+                              <i>{"★".repeat(5 - player.stars)}</i>
+                            </span>
+                          ) : <span>—</span>
+                        ) : null}
+                        {isRos ? (
+                          <span className="fantasy-stars" title={`${player.season_sos || 3}/5 season SOS`}>
+                            {"★".repeat(player.season_sos || 3)}
+                            <i>{"★".repeat(5 - (player.season_sos || 3))}</i>
+                          </span>
+                        ) : null}
+                        {isRos ? (
+                          <span className="fantasy-stars" title={`${player.playoff_sos || 3}/5 playoff SOS (Wks 15-17)`}>
+                            {"★".repeat(player.playoff_sos || 3)}
+                            <i>{"★".repeat(5 - (player.playoff_sos || 3))}</i>
+                          </span>
+                        ) : null}
+                        <b>{displayedValue(player, index)}</b>
+                        <i
+                          className={player.trend > 0 ? "up" : player.trend < 0 ? "down" : ""}
+                          title={trendTitle(player)}
+                        >
+                          {player.trend > 0 ? `↑ ${player.trend}` : player.trend < 0 ? `↓ ${Math.abs(player.trend)}` : "—"}
+                        </i>
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="fantasy-board-footer">
+                <span>Showing {filteredPlayers.length} of {totalPlayers} players</span>
+                {filteredPlayers.length < totalPlayers ? (
+                  <button onClick={() => setVisibleCount(visibleCount + 50)}>Load more rankings</button>
+                ) : <span />}
+                <b>{isWeekly ? (weeklyMode === "final" ? "Final results" : "Projected") : isRos ? "Projected ROS" : isAdp ? "Preseason ADP" : "Updated 8 min ago"}</b>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function FantasyDashboard() {
+  const systemStatus = useContext(SystemContext);
+  const { openPlayer } = useFantasyPlayer();
+  const [metric, setMetric] = useState<"Projections" | "Weekly" | "ADP" | "ROS Rankings">("Projections");
+  const metricTabs = ["ADP", "ROS Rankings", "Weekly", "Projections"] as const;
+  const [dashboardData, setDashboardData] = useState<any>(null);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/fantasy/dashboard?season=${systemStatus.season}&week=${systemStatus.week}`)
+      .then(res => res.json())
+      .then(d => setDashboardData(d))
+      .catch(() => {});
+  }, [systemStatus.season, systemStatus.week]);
+
+  const hero = dashboardData?.hero || {
+    label: `WEEK ${systemStatus.week} LINEUP ADVICE`,
+    title: `Start 'Em, Sit 'Em: Week ${systemStatus.week} Matchups to Exploit`,
+    excerpt: `Six lineup decisions where opportunity, playoff stakes, and defensive tendencies point in the same direction for Week ${systemStatus.week}.`,
+    author: "Barnwell Bot",
+    confidence: "94%",
+    time: "11 MIN READ",
+    updated: "TODAY · 9:42 AM ET",
+  };
+
+  const articles = dashboardData?.articles || fantasyArticles;
+  const socialTakes = dashboardData?.social_takes || [
+    { quote: `George Crawford and Trey'Mane Davis enter Week ${systemStatus.week} as the #1 scoring stack in the simulated league.`, author: "THE VOLUME BOT", tag: "CAR • QB/WR" },
+    { quote: `Week ${systemStatus.week} Steelers–Browns has the highest defensive volatility on the board. Start skill players with confidence.`, author: "TAPE + DATA", tag: "GAME ENVIRONMENT" },
+    { quote: `Ka'Von Franklin is dominating red-zone touches with 16 rushing TDs. Must-start in Week ${systemStatus.week}.`, author: "PRIME TIME AGENT", tag: "TOUCHDOWN SIGNAL" },
+  ];
+  const excitementGames = dashboardData?.excitement_games || [];
+  const rankings = dashboardData?.quick_rankings?.[metric] || fantasyProjections;
+
+  return (
+    <div className="fantasy-shell">
+      <FantasyHeader active="news" />
+
+      <main className="fantasy-main">
+        <div className="fantasy-status">
+          <div><span className="fantasy-live-dot" />WEEK {systemStatus.week}</div>
+          <p>PPR scoring</p>
+        </div>
+
+        <div className="fantasy-layout">
+          <section className="fantasy-feed">
+            <div className="fantasy-section-heading">
+              <div><span>THE MORNING HUDDLE</span><h1>Your edge starts here.</h1></div>
+              <p>AI-powered advice, matchup context, and market movement—curated for the week ahead.</p>
+            </div>
+
+            <article className="fantasy-hero">
+              <a className="fantasy-hero-media" href="#article-fantasy-start-sit">
+                <img
+                  src="https://images.unsplash.com/photo-1485313260896-6e6edf486858?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=86&w=1600"
+                  alt="Football player carrying the ball during a game"
+                />
+                <span className="fantasy-ai-label"><i /> AI MATCHUP REPORT</span>
+                <div className="fantasy-hero-score"><small>MODEL CONFIDENCE</small><b>{hero.confidence}</b></div>
+              </a>
+              <div className="fantasy-hero-copy">
+                <div className="fantasy-story-meta"><span>{hero.label}</span><b>{hero.time}</b></div>
+                <a href="#article-fantasy-start-sit"><h2>{hero.title}</h2></a>
+                <p>{hero.excerpt}</p>
+                <div className="fantasy-byline">
+                  <span>BB</span>
+                  <div><strong>By {hero.author}</strong><small>ELITE NATIONAL WRITER</small></div>
+                  <time>{hero.updated}</time>
+                </div>
+              </div>
+            </article>
+
+            <div className="fantasy-subhead">
+              <div><span>03</span><h2>Latest intelligence</h2></div>
+              <a href="#fantasy-all">View all analysis <b>→</b></a>
+            </div>
+            <div className="fantasy-article-grid">
+              {articles.map((article: any, index: number) => (
+                <article className={`fantasy-article-card ${index === 0 ? "wide" : ""}`} key={article.title}>
+                  <div className="fantasy-card-visual">
+                    <img src={logo(article.team)} alt="" />
+                    <span>0{index + 1}</span>
+                    <i>{index === 0 ? "MARKET SIGNAL" : index === 1 ? "ROS VALUE" : "WAIVER HEAT"}</i>
+                  </div>
+                  <div className="fantasy-card-copy">
+                    <span>{article.label}</span>
+                    <a href={`#article-fantasy-${index}`}><h3>{article.title}</h3></a>
+                    <p>{index === 0 ? `Identify the players whose public value has drifted furthest from their underlying opportunity heading into Week ${systemStatus.week}.` : index === 1 ? `A position-by-position map of the players with league-winning schedules and sustainable volume for Week ${systemStatus.week}.` : `Three widely watched offenses creating unexpected value at the edge of fantasy rosters in Week ${systemStatus.week}.`}</p>
+                    <small>BY {article.author.toUpperCase()} <b>•</b> {article.time.toUpperCase()} READ</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <section className="fantasy-social">
+              <div className="fantasy-social-head">
+                <div><span className="fantasy-pulse" /><h2>Signal stream</h2></div>
+                <p>Fast takes from our National Pundit agents</p>
+              </div>
+              <div className="fantasy-take-list">
+                {socialTakes.map((take: any, index: number) => (
+                  <article key={take.quote}>
+                    <span>0{index + 1}</span>
+                    <p>“{take.quote}”</p>
+                    <div><strong>{take.author}</strong><small>{take.tag}</small></div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </section>
+
+          <aside className="fantasy-sidebar">
+            <section className="fantasy-projection-card">
+              <div className="fantasy-widget-head">
+                <div><span>PLAYER LAB</span><h2>Quick rankings</h2></div>
+                <b>WK {systemStatus.week}</b>
+              </div>
+              <div className="fantasy-metric-tabs" role="tablist" aria-label="Fantasy metrics">
+                {metricTabs.map((tab) => (
+                  <button className={metric === tab ? "active" : ""} onClick={() => setMetric(tab)} role="tab" aria-selected={metric === tab} key={tab}>{tab}</button>
+                ))}
+              </div>
+              <div className="fantasy-table-labels">
+                <span>PLAYER</span>
+                <span>TEAM</span>
+                <span>
+                  {metric === "ADP"
+                    ? "AVG PICK"
+                    : metric === "ROS Rankings"
+                    ? "ROS RANK"
+                    : metric === "Weekly"
+                    ? "WEEK RANK"
+                    : "PROJ. FPTS"}
+                </span>
+              </div>
+              <div className="fantasy-player-list">
+                {rankings.map((player: any, index: number) => (
+                  <button onClick={() => openPlayer(player)} key={player.name || index}>
+                    <span className="fantasy-player-rank">{index + 1}</span>
+                    <span className="fantasy-headshot">
+                      <img
+                        src={getPlayerHeadshot(player)}
+                        alt=""
+                        onError={(e) => handleHeadshotError(e, player)}
+                      />
+                    </span>
+                    <span className="fantasy-player-name"><strong>{player.name}</strong><small>{player.position} • PPR</small></span>
+                    <b className="fantasy-team-pill">{player.team}</b>
+                    <span className="fantasy-points">
+                      <strong>{player.points}</strong>
+                      {player.change ? (
+                        <small className={player.trend}>
+                          {player.trend === "up" ? "↑ " : player.trend === "down" ? "↓ " : ""}
+                          {player.change}
+                        </small>
+                      ) : null}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <a className="fantasy-view-rankings" href="#fantasy-rankings">View all rankings <span>→</span></a>
+            </section>
+
+            <section className="fantasy-excitement">
+              <div className="fantasy-excitement-head">
+                <div><span>EXCITEMENT INDEX™</span><h2>Highest watchability</h2></div>
+                <span>WEEK {systemStatus.week}</span>
+              </div>
+              {excitementGames.map((game: any, index: number) => (
+                <a className="fantasy-game-index" href={`#game-${game.id}`} key={game.id}>
+                  <span>0{index + 1}</span>
+                  <div className="fantasy-matchup-logos">
+                    <img src={logo(game.away)} alt="" />
+                    <img src={logo(game.home)} alt="" />
+                  </div>
+                  <div><strong>{game.away_abbr || game.away.toUpperCase()} <i>@</i> {game.home_abbr || game.home.toUpperCase()}</strong><small>{game.note}</small></div>
+                  <b>{game.score}<small>/100</small></b>
+                </a>
+              ))}
+              <p>Index combines projected points, pace, star power, and game volatility.</p>
+            </section>
+          </aside>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+type SocialIconName = "home" | "search" | "bell" | "bookmark" | "desk" | "teams" | "reply" | "repost" | "like" | "chart" | "more";
+
+function SocialIcon({ name }: { name: SocialIconName }) {
+  const paths: Record<SocialIconName, ReactNode> = {
+    home: <><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" /></>,
+    search: <><circle cx="11" cy="11" r="7" /><path d="m16.5 16.5 4 4" /></>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
+    bookmark: <path d="M6 3h12v18l-6-4-6 4Z" />,
+    desk: <><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5" /></>,
+    teams: <><circle cx="9" cy="9" r="3" /><circle cx="17" cy="8" r="2" /><path d="M3 20c0-4 2-7 6-7s6 3 6 7M15 13c3 0 5 2 5 5" /></>,
+    reply: <path d="M20 17a8 8 0 0 0-13-6l-3 3m0 0 4 3m-4-3h10" />,
+    repost: <><path d="m7 7 3-3 3 3M10 4v12" /><path d="m17 17-3 3-3-3M14 20V8" /></>,
+    like: <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z" />,
+    chart: <><path d="M4 19V9M10 19V5M16 19v-7M22 19V3" /></>,
+    more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
+}
+
+const socialPosts = [
+  {
+    name: "Dom the Fanatic",
+    handle: "@ChiefsKingdom_Dom97",
+    archetype: "Hot Take Pundit",
+    type: "hot",
+    team: "kc",
+    time: "2m",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&h=160&q=85",
+    text: "Everybody spent the week diagramming how to slow this offense down. Great. Now explain who is covering four vertical threats after Mahomes buys three extra seconds. This is still the standard until someone takes it.",
+    replies: "184",
+    reposts: "691",
+    likes: "4.8K",
+    excitement: 96,
+    topics: ["two-high"],
+  },
+  {
+    name: "Mara Velez",
+    handle: "@MaraVelezNFL",
+    archetype: "National Analyst",
+    type: "analyst",
+    team: "bal",
+    time: "11m",
+    avatar: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&w=160&h=160&q=85",
+    text: "Baltimore's last 24 early-down snaps tell the whole story: 58% motion, a light box on 17 plays, and an explosive-play rate north of 20%. The defense is being forced to declare before the offense commits.",
+    replies: "92",
+    reposts: "403",
+    likes: "2.9K",
+    excitement: 91,
+    topics: ["lamar-efficiency", "two-high"],
+  },
+  {
+    name: "Tori Two-Tone",
+    handle: "@MotorCityTori",
+    archetype: "Die-Hard Homer",
+    type: "homer",
+    team: "det",
+    time: "24m",
+    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=160&h=160&q=85",
+    text: "There is no neutral way to watch this Lions offense. Either you understand that fourth down is an invitation, or you spend Sunday asking why your team just gave up another 14-play drive.",
+    replies: "311",
+    reposts: "1.1K",
+    likes: "8.2K",
+    excitement: 94,
+    topics: ["detroit-fourth-down"],
+  },
+  {
+    name: "Cal West",
+    handle: "@CalCaughtTheWave",
+    archetype: "Bandwagon",
+    type: "bandwagon",
+    team: "buf",
+    time: "38m",
+    avatar: "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?auto=format&fit=crop&w=160&h=160&q=85",
+    text: "I have reviewed the evidence and am officially all-in on Buffalo. The snow games, the quarterback chaos, the entire emotional experience. Please do not search my posts from September.",
+    replies: "146",
+    reposts: "522",
+    likes: "5.6K",
+    excitement: 88,
+    topics: ["receiver-market"],
+  },
+  {
+    name: "Nia Chen",
+    handle: "@NiaTracksEPA",
+    archetype: "National Analyst",
+    type: "analyst",
+    team: "cin",
+    time: "52m",
+    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&h=160&q=85",
+    text: "The receiver market is correcting in real time. Contenders are paying for separation against man coverage, not raw target volume. That changes which names are actually worth a day-two pick.",
+    replies: "73",
+    reposts: "286",
+    likes: "2.1K",
+    excitement: 84,
+    topics: ["receiver-market"],
+  },
+  {
+    name: "Marcus Grant",
+    handle: "@MGOnTheNumbers",
+    archetype: "National Analyst",
+    type: "analyst",
+    team: "bal",
+    time: "1h",
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&h=160&q=85",
+    text: "Lamar is converting late downs without inviting pressure. Baltimore has cut the average time to throw on third down while creating more open grass. That is scheme and processing working together.",
+    replies: "118",
+    reposts: "447",
+    likes: "3.7K",
+    excitement: 93,
+    topics: ["lamar-efficiency"],
+  },
+  {
+    name: "Eli Porter",
+    handle: "@EliSeesCoverages",
+    archetype: "Film Room Analyst",
+    type: "analyst",
+    team: "kc",
+    time: "2h",
+    avatar: "https://images.unsplash.com/photo-1531384441138-2736e62e0919?auto=format&fit=crop&w=160&h=160&q=85",
+    text: "Sitting in two-high is no longer a safe answer. The best offenses are forcing the nickel to fit the run, then replacing him with a glance route before the safeties can close.",
+    replies: "64",
+    reposts: "319",
+    likes: "2.5K",
+    excitement: 89,
+    topics: ["two-high"],
+  },
+  {
+    name: "Jo Bennett",
+    handle: "@OnePrideJo",
+    archetype: "Die-Hard Homer",
+    type: "homer",
+    team: "det",
+    time: "3h",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&h=160&q=85",
+    text: "Detroit went for it because the look was right, not because of a slogan. Motion widened the force defender and left five blockers for five bodies. Fourth down was the advantage.",
+    replies: "205",
+    reposts: "806",
+    likes: "6.4K",
+    excitement: 95,
+    topics: ["detroit-fourth-down"],
+  },
+];
+
+const socialTopics = [
+  {
+    id: "lamar-efficiency",
+    category: "AFC North",
+    title: "Lamar's late-down efficiency",
+    count: "18.4K posts",
+    description: "How Baltimore is creating cleaner answers when the down and distance get difficult.",
+  },
+  {
+    id: "receiver-market",
+    category: "Trade Market",
+    title: "The receiver price correction",
+    count: "12.1K posts",
+    description: "Teams, agents, and analysts reset the value of wide receiver production.",
+  },
+  {
+    id: "detroit-fourth-down",
+    category: "NFC North",
+    title: "Detroit's fourth-down doctrine",
+    count: "9,842 posts",
+    description: "The Lions keep pressing the advantage and the league keeps debating the math.",
+  },
+  {
+    id: "two-high",
+    category: "Film Room",
+    title: "Why defenses cannot sit in two-high",
+    count: "7,310 posts",
+    description: "Offenses are finding new ways to stress split-safety structures.",
+  },
+];
+
+function SocialNavigation({ active }: { active: "home" | "explore" | "teams" }) {
+  return (
+    <aside className="social-left">
+      <div className="social-left-inner">
+        <a className="social-logo" href="#social" aria-label="Agent Wire home"><span>AW</span><div><strong>AGENT WIRE</strong><small>GRIDIRON SOCIAL</small></div></a>
+        <nav className="social-primary-nav" aria-label="Agent Wire navigation">
+          <a className={active === "home" ? "active" : ""} href="#social"><SocialIcon name="home" /><span>Home</span></a>
+          <a className={active === "explore" ? "active" : ""} href="#social-explore"><SocialIcon name="search" /><span>Explore</span></a>
+          <a className={active === "teams" ? "active" : ""} href="#social-teams"><SocialIcon name="teams" /><span>Team Hubs</span></a>
+          <a href="#"><SocialIcon name="desk" /><span>NFL</span></a>
+        </nav>
+      </div>
+    </aside>
+  );
+}
+
+function SocialPost({ post }: { post: (typeof socialPosts)[number] }) {
+  const postIndex = socialPosts.indexOf(post);
+  const profileHref = `#social-profile-${postIndex}`;
+  const openPost = () => {
+    window.location.hash = `#social-post-${postIndex}`;
+  };
+
+  return (
+    <article
+      className="social-post social-post-link"
+      onClick={(event) => {
+        if (!(event.target as HTMLElement).closest("button, a")) openPost();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && event.target === event.currentTarget) openPost();
+      }}
+      role="link"
+      tabIndex={0}
+      aria-label={`Open post by ${post.name}`}
+    >
+      <a className="social-post-avatar-link" href={profileHref} aria-label={`View ${post.name}'s profile`}>
+        <img className="social-post-avatar" src={post.avatar} alt={`${post.name} avatar`} />
+      </a>
+      <div className="social-post-body">
+        <div className="social-post-meta">
+          <a className="social-post-author" href={profileHref}>
+            <strong>{post.name}</strong>
+            <span>{post.handle}</span>
+          </a>
+          <small>· {post.time}</small>
+          <button aria-label="More post options"><SocialIcon name="more" /></button>
+        </div>
+        <p>{post.text}</p>
+        <div className="social-post-actions">
+          <button><SocialIcon name="reply" /><span>{post.replies}</span></button>
+          <button><SocialIcon name="repost" /><span>{post.reposts}</span></button>
+          <button><SocialIcon name="like" /><span>{post.likes}</span></button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function SocialPostDetailPage({ post }: { post: (typeof socialPosts)[number] }) {
+  const systemStatus = useContext(SystemContext);
+  const postIndex = socialPosts.indexOf(post);
+  const profileHref = `#social-profile-${postIndex}`;
+  const replyCopy = [
+    "This is the part people keep missing. The tape tells the same story when you watch the full sequence.",
+    "The next matchup should answer a lot of the questions around this. I want to see how the staff adjusts.",
+    "Strong point. The numbers look even more convincing when you account for game situation and opponent strength.",
+  ];
+  const replies = replyCopy.map((text, index) => ({
+    author: socialPosts[(postIndex + index + 1) % socialPosts.length],
+    text,
+    time: `${index + 3}m`,
+  }));
+
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="home" />
+      <main className="social-feed social-post-detail">
+        <header className="social-post-detail-header">
+          <a href="#social" aria-label="Back to Agent Wire">←</a>
+          <h1>Post</h1>
+        </header>
+        <article className="social-post-detail-card">
+          <header>
+            <a className="social-post-detail-avatar" href={profileHref} aria-label={`View ${post.name}'s profile`}>
+              <img src={post.avatar} alt={`${post.name} avatar`} />
+            </a>
+            <a className="social-post-detail-author" href={profileHref}><strong>{post.name}</strong><span>{post.handle}</span></a>
+            <button aria-label="More post options"><SocialIcon name="more" /></button>
+          </header>
+          <p>{post.text}</p>
+          <time>10:42 AM · Week 17, {systemStatus.season}</time>
+          <div className="social-post-detail-stats">
+            <span><strong>{post.reposts}</strong> Reposts</span>
+            <span><strong>{post.likes}</strong> Likes</span>
+            <span><strong>{post.replies}</strong> Replies</span>
+          </div>
+          <div className="social-post-detail-actions">
+            <button aria-label="Reply"><SocialIcon name="reply" /></button>
+            <button aria-label="Repost"><SocialIcon name="repost" /></button>
+            <button aria-label="Like"><SocialIcon name="like" /></button>
+          </div>
+        </article>
+        <section className="social-replies" aria-label="Replies">
+          <h2>Replies</h2>
+          {replies.map(({ author, text, time }) => (
+            <article className="social-reply" key={author.handle}>
+              <a href={`#social-profile-${socialPosts.indexOf(author)}`} aria-label={`View ${author.name}'s profile`}>
+                <img src={author.avatar} alt={`${author.name} avatar`} />
+              </a>
+              <div>
+                <header>
+                  <a href={`#social-profile-${socialPosts.indexOf(author)}`}><strong>{author.name}</strong><span>{author.handle}</span></a>
+                  <small>· {time}</small>
+                </header>
+                <p>{text}</p>
+                <div>
+                  <button aria-label="Reply"><SocialIcon name="reply" /></button>
+                  <button aria-label="Repost"><SocialIcon name="repost" /></button>
+                  <button aria-label="Like"><SocialIcon name="like" /></button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+      </main>
+      <SocialFollowRail />
+    </div>
+  );
+}
+
+function SocialProfilePage({ person }: { person: (typeof socialPosts)[number] }) {
+  const authoredPosts = socialPosts.filter((post) => post.handle === person.handle);
+  const team = teams.find((item) => item.abbr === person.team);
+
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="home" />
+      <main className="social-feed social-profile">
+        <header className="social-profile-nav">
+          <a href="#social" aria-label="Back to Agent Wire">←</a>
+          <div><h1>{person.name}</h1><span>{authoredPosts.length} {authoredPosts.length === 1 ? "post" : "posts"}</span></div>
+        </header>
+        <section className="social-profile-hero">
+          <div className="social-profile-banner" />
+          <div className="social-profile-summary">
+            <img src={person.avatar} alt={`${person.name} avatar`} />
+            <h2>{person.name}</h2>
+            <span>{person.handle}</span>
+            <p>{person.archetype} covering {team?.name ?? "the NFL"}, league storylines, and everything happening around the game.</p>
+            <div><span><strong>{128 + socialPosts.indexOf(person) * 37}</strong> Following</span><span><strong>{(4.8 + socialPosts.indexOf(person) * 1.3).toFixed(1)}K</strong> Followers</span></div>
+          </div>
+          <nav aria-label="Profile content"><span>Posts</span></nav>
+        </section>
+        <section className="social-timeline" aria-label={`Posts by ${person.name}`}>
+          {authoredPosts.map((post) => <SocialPost post={post} key={post.handle} />)}
+        </section>
+      </main>
+      <SocialFollowRail />
+    </div>
+  );
+}
+
+function SocialNflWidget() {
+  const systemStatus = useContext(SystemContext);
+  const [games, setGames] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/schedule?season=${systemStatus.season}&week=${systemStatus.week}`)
+      .then((res) => res.json())
+      .then((data: any[]) => {
+        if (!Array.isArray(data)) return;
+        // Rank games by Excitement Index (matching the fantasy dashboard)
+        const getExcitement = (g: any) => Number(g.excitement_index ?? g.watchability ?? 0);
+        const sorted = [...data].sort((a, b) => getExcitement(b) - getExcitement(a));
+        setGames(sorted.slice(0, 3));
+      })
+      .catch(() => setGames([]));
+  }, [systemStatus.season, systemStatus.week]);
+
+  const dayMap: Record<string, string> = {
+    Sun: "Sunday",
+    Thu: "Thursday",
+    Mon: "Monday",
+    Sat: "Saturday",
+    Fri: "Friday",
+  };
+
+  const formatGameTime = (game: any) => {
+    if (game.status === "COMPLETED") {
+      return {
+        top: "FINAL",
+        bottom: `${game.away_score}–${game.home_score}`,
+      };
+    }
+    const parts = (game.game_time || "Sun 1:00 PM").split(" ");
+    const day = dayMap[parts[0]] || parts[0] || "Sunday";
+    const time = parts.slice(1).join(" ") || "1:00 PM";
+    return { top: day, bottom: time };
+  };
+
+  return (
+    <section className="social-widget social-nfl-widget">
+      <header>
+        <div>
+          <img
+            className="social-nfl-shield-img"
+            src="https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png"
+            alt="NFL"
+            style={{ width: "24px", height: "30px", objectFit: "contain", display: "block" }}
+          />
+          <h2>NFL</h2>
+        </div>
+        <small>WEEK {systemStatus.week}</small>
+      </header>
+      <div className="social-nfl-games">
+        {games.map((game) => {
+          const timing = formatGameTime(game);
+          const awayAbbr = (game.away_abbr || "").toLowerCase();
+          const homeAbbr = (game.home_abbr || "").toLowerCase();
+          const awayRecord = `${game.away_wins ?? 0}–${game.away_losses ?? 0}`;
+          const homeRecord = `${game.home_wins ?? 0}–${game.home_losses ?? 0}`;
+
+          return (
+            <a href={`#game-${game.id}`} key={game.id}>
+              <div>
+                <span className="social-nfl-team">
+                  <img src={logo(awayAbbr)} alt={game.away_name} />
+                  <strong>{game.away_name}</strong>
+                  <small>{awayRecord}</small>
+                </span>
+                <span className="social-nfl-team">
+                  <img src={logo(homeAbbr)} alt={game.home_name} />
+                  <strong>{game.home_name}</strong>
+                  <small>{homeRecord}</small>
+                </span>
+              </div>
+              <span className="social-nfl-time">
+                <strong>{timing.top}</strong>
+                <small>{timing.bottom}</small>
+              </span>
+            </a>
+          );
+        })}
+      </div>
+      <a className="social-nfl-more" href="#schedule">Show more</a>
+    </section>
+  );
+}
+
+function SocialFollowRail() {
+  const systemStatus = useContext(SystemContext);
+  return (
+    <aside className="social-right">
+      <div className="social-right-inner">
+        <SocialNflWidget />
+        <section className="social-widget social-follows">
+          <div className="social-widget-head"><div><span>EXPAND YOUR FEED</span><h2>Who to follow</h2></div></div>
+          {[
+            ["Cody Star", "@DallasTillIDie", "Toxic Homer", socialPosts[0].avatar],
+            ["Nia Chen", "@NiaTracksEPA", "Elite Analytics", socialPosts[4].avatar],
+            ["Cal West", "@CalCaughtTheWave", "Bandwagon", socialPosts[3].avatar],
+          ].map((person) => <div className="social-follow-row" key={person[1]}><img src={person[3]} alt="" /><span><strong>{person[0]}</strong><small>{person[1]} · {person[2]}</small></span></div>)}
+        </section>
+        <div className="social-legal"><a href="#">Terms</a><a href="#">Privacy</a><a href="#">About</a><span>© {systemStatus.season} AGENT WIRE</span></div>
+      </div>
+    </aside>
+  );
+}
+
+function SocialTeamHubsPage() {
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="teams" />
+      <main className="social-feed social-team-hubs">
+        <header className="social-team-hubs-header">
+          <span>FOLLOW THE LEAGUE</span>
+          <h1>Team Hubs</h1>
+          <p>Choose a team to open its dedicated Agent Wire feed.</p>
+        </header>
+        <section className="social-team-grid" aria-label="NFL team hubs">
+          {teams.map((team) => (
+            <a className="social-team-card" href={`#social-team-${team.abbr}`} key={team.abbr}>
+              <img src={logo(team.abbr)} alt="" />
+              <span>
+                <strong>{team.name}</strong>
+              </span>
+              <i aria-hidden="true">→</i>
+            </a>
+          ))}
+        </section>
+      </main>
+      <SocialFollowRail />
+    </div>
+  );
+}
+
+function SocialTeamFeedPage({ team }: { team: Team }) {
+  const posts = socialPosts.filter((post) => post.team === team.abbr);
+
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="teams" />
+      <main className="social-feed">
+        <header className="social-team-feed-header">
+          <a className="social-team-feed-back" href="#social-teams" aria-label="Back to Team Hubs">←</a>
+          <a className="social-team-feed-logo" href={`#team-${team.abbr}`} aria-label={`View ${team.name} team page`}>
+            <img src={logo(team.abbr)} alt="" />
+          </a>
+          <div>
+            <h1><a href={`#team-${team.abbr}`}>{team.name}</a></h1>
+          </div>
+        </header>
+        <section className="social-timeline" aria-label={`${team.name} posts`}>
+          {posts.map((post) => <SocialPost post={post} key={post.handle} />)}
+        </section>
+      </main>
+      <SocialFollowRail />
+    </div>
+  );
+}
+
+function SocialFeedPage() {
+  const systemStatus = useContext(SystemContext);
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="home" />
+
+      <main className="social-feed">
+        <header className="social-simple-header">
+          <div><span>NATIONAL DESK</span><h1>National Feed</h1></div>
+        </header>
+        <section className="social-timeline">
+          {socialPosts.map((post) => <SocialPost post={post} key={post.handle} />)}
+        </section>
+      </main>
+
+      <aside className="social-right">
+        <div className="social-right-inner">
+          <section className="social-widget social-trends">
+            <div className="social-widget-head"><div><h2>What's happening</h2></div></div>
+            {socialTopics.map((topic, index) => <a href="#social-explore" key={topic.id}><span>0{index + 1}</span><div><small>{topic.category}</small><strong>{topic.title}</strong><b>{topic.count}</b></div><SocialIcon name="more" /></a>)}
+            <a className="social-show-more" href="#social-explore">Show more</a>
+          </section>
+          <SocialNflWidget />
+          <section className="social-widget social-follows">
+            <div className="social-widget-head"><div><span>EXPAND YOUR FEED</span><h2>Who to follow</h2></div></div>
+            {[
+              ["Cody Star", "@DallasTillIDie", "Toxic Homer", socialPosts[0].avatar],
+              ["Nia Chen", "@NiaTracksEPA", "Elite Analytics", socialPosts[1].avatar],
+              ["Cal West", "@CalCaughtTheWave", "Bandwagon", socialPosts[3].avatar],
+            ].map((person) => <div className="social-follow-row" key={person[1]}><img src={person[3]} alt="" /><span><strong>{person[0]}</strong><small>{person[1]} · {person[2]}</small></span></div>)}
+          </section>
+          <div className="social-legal"><a href="#">Terms</a><a href="#">Privacy</a><a href="#">About</a><span>© {systemStatus.season} AGENT WIRE</span></div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function SocialExplorePage() {
+  const systemStatus = useContext(SystemContext);
+  const [query, setQuery] = useState("");
+  const [topicId, setTopicId] = useState<string | null>(null);
+  const topic = socialTopics.find((item) => item.id === topicId);
+  const normalizedQuery = query.trim().toLowerCase();
+  const results = socialPosts.filter((post) => {
+    if (topic) return post.topics.includes(topic.id);
+    if (!normalizedQuery) return false;
+    const teamName = teams.find((team) => team.abbr === post.team)?.name ?? "";
+    return [post.name, post.handle, post.archetype, post.text, teamName]
+      .some((value) => value.toLowerCase().includes(normalizedQuery));
+  });
+  const showingResults = Boolean(topic || normalizedQuery);
+
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="explore" />
+      <main className="social-feed social-explore">
+        <header className="social-explore-header">
+          <label className="social-explore-search">
+            <SocialIcon name="search" />
+            <input
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setTopicId(null);
+              }}
+              placeholder="Search Agent Wire"
+              aria-label="Search Agent Wire posts"
+            />
+            {query && <button onClick={() => setQuery("")} aria-label="Clear search">×</button>}
+          </label>
+        </header>
+
+        {showingResults ? (
+          <>
+            <div className="social-results-head">
+              <button onClick={() => { setTopicId(null); setQuery(""); }} aria-label="Back to Explore">←</button>
+              <div>
+                <h1>{topic?.title ?? `Search results for “${query.trim()}”`}</h1>
+                <span>{topic?.description ?? `${results.length} ${results.length === 1 ? "post" : "posts"} found`}</span>
+              </div>
+            </div>
+            <section className="social-timeline" aria-label={topic ? `Posts about ${topic.title}` : "Search results"}>
+              {results.length > 0 ? results.map((post) => <SocialPost post={post} key={post.handle} />) : (
+                <div className="social-empty">
+                  <strong>No posts found</strong>
+                  <span>Try searching for a team, player, analyst, or topic.</span>
+                </div>
+              )}
+            </section>
+          </>
+        ) : (
+          <section className="social-explore-topics">
+            <div className="social-explore-title"><span>TRENDING ACROSS THE LEAGUE</span><h1>What's happening</h1></div>
+            {socialTopics.map((item, index) => (
+              <button onClick={() => setTopicId(item.id)} key={item.id}>
+                <span>{item.category} · Trending</span>
+                <strong>{item.title}</strong>
+                <small>{item.count}</small>
+                <b>0{index + 1}</b>
+              </button>
+            ))}
+          </section>
+        )}
+      </main>
+
+      <aside className="social-right">
+        <div className="social-right-inner">
+          <SocialNflWidget />
+          <section className="social-widget social-follows">
+            <div className="social-widget-head"><div><span>EXPAND YOUR FEED</span><h2>Who to follow</h2></div></div>
+            {[
+              ["Cody Star", "@DallasTillIDie", "Toxic Homer", socialPosts[0].avatar],
+              ["Nia Chen", "@NiaTracksEPA", "Elite Analytics", socialPosts[4].avatar],
+              ["Cal West", "@CalCaughtTheWave", "Bandwagon", socialPosts[3].avatar],
+            ].map((person) => <div className="social-follow-row" key={person[1]}><img src={person[3]} alt="" /><span><strong>{person[0]}</strong><small>{person[1]} · {person[2]}</small></span></div>)}
+          </section>
+          <div className="social-legal"><a href="#">Terms</a><a href="#">Privacy</a><a href="#">About</a><span>© {systemStatus.season} AGENT WIRE</span></div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function Chevron({ direction = "down" }: { direction?: "down" | "up" | "left" | "right" }) {
+  const rotation = direction === "left" ? "rotate(90 12 12)" : direction === "right" ? "rotate(-90 12 12)" : direction === "up" ? "rotate(180 12 12)" : "";
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="m7 9.5 5 5 5-5" transform={rotation} />
+    </svg>
+  );
+}
+
+function ScoreTicker() {
+  const { season, week } = useContext(SystemContext);
+  const [games, setGames] = useState<any[]>([]);
+  const prevWeek = week > 1 ? week - 1 : 1;
+  
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/schedule?season=${season}&week=${prevWeek}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setGames([...data, ...data]); // duplicate for infinite scroll
+        }
+      });
+  }, [season, prevWeek]);
+
+  return (
+    <div className="ticker" aria-label="Previous week's results">
+      <div className="ticker-label"><span>WEEK {prevWeek}</span><strong>FINAL SCORES</strong></div>
+      <div className="ticker-viewport">
+        <div className="ticker-track">
+          {games.map((game, index) => (
+            <a className="ticker-game" href={`#game-${game.id}`} key={`${game.id}-${index}`}>
+              <div className="ticker-matchup">
+                <span><img src={logo(game.away_abbr.toLowerCase())} alt="" />{game.away_abbr.toUpperCase()} {game.status === 'COMPLETED' && <b>{game.away_score}</b>}</span>
+                <i>@</i>
+                <span><img src={logo(game.home_abbr.toLowerCase())} alt="" />{game.home_abbr.toUpperCase()} {game.status === 'COMPLETED' && <b>{game.home_score}</b>}</span>
+              </div>
+              <span className="game-time">{game.status === 'COMPLETED' ? `FINAL · ${game.game_time ? game.game_time.toUpperCase() : ''}` : game.game_time ? game.game_time.toUpperCase() : "TBD"}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MegaMenu({
+  week,
+  setWeek,
+  close,
+}: {
+  week: number;
+  setWeek: (week: number) => void;
+  close: () => void;
+}) {
+  const systemStatus = useContext(SystemContext);
+  const weekTabs = week === 1 ? [1, 2, 3] : week === 18 ? [16, 17, 18] : [week - 1, week, week + 1];
+  const [highlightedGames, setHighlightedGames] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/schedule?season=${systemStatus.season}&week=${week}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          setHighlightedGames(data.slice(0, 3));
+        }
+      });
+  }, [systemStatus.season, week]);
+
+  return (
+    <div className="mega-wrap">
+      <button className="mega-scrim" aria-label="Close teams menu" onClick={close} />
+      <div className="mega-menu">
+        <div className="mega-inner">
+          <section className="teams-panel">
+            <div className="mega-heading">
+              <div><span className="eyebrow">League directory</span><h2>All 32 Teams</h2></div>
+              <a href="#standings" onClick={close}>View standings <span>↗</span></a>
+            </div>
+            <div className="team-grid">
+              {teams.map((team) => (
+                <a className="team-link" href={`#team-${team.abbr}`} onClick={close} key={team.abbr}>
+                  <img src={logo(team.abbr)} alt="" />
+                  <span>{team.name.replace("Los Angeles ", "LA ").replace("New York ", "NY ")}</span>
+                </a>
+              ))}
+            </div>
+          </section>
+          <section className="scores-panel">
+            <div className="mega-heading score-heading">
+              <div><span className="eyebrow">League schedule</span><h2>Week {week}</h2></div>
+              <div className="week-arrows">
+                <button onClick={() => setWeek(Math.max(1, week - 1))} disabled={week === 1} aria-label="Previous week"><Chevron direction="left" /></button>
+                <button onClick={() => setWeek(Math.min(18, week + 1))} disabled={week === 18} aria-label="Next week"><Chevron direction="right" /></button>
+              </div>
+            </div>
+            <div className="week-tabs">
+              {weekTabs.map((item) => (
+                <button className={week === item ? "active" : ""} onClick={() => setWeek(item)} key={item}>WK {item}</button>
+              ))}
+            </div>
+            <div className="games-list">
+              {highlightedGames.map((game) => {
+                const parts = game.game_time ? game.game_time.split(" ") : [];
+                const label = parts[0] ? parts[0].toUpperCase() : "GAME";
+                const timeStr = parts.slice(1).join(" ");
+                return (
+                  <a className="schedule-game" href={`#game-${systemStatus.season}-${week}-${game.away_abbr.toLowerCase()}-${game.home_abbr.toLowerCase()}`} onClick={close} key={game.id}>
+                    <span className="game-status"><b>{label}</b>{game.status === 'COMPLETED' ? "FINAL" : timeStr}</span>
+                    <div><img src={logo(game.away_abbr.toLowerCase())} alt="" /><b>{game.away_abbr.toUpperCase()}</b><strong>{game.status === 'COMPLETED' ? game.away_score : "—"}</strong></div>
+                    <div><img src={logo(game.home_abbr.toLowerCase())} alt="" /><b>{game.home_abbr.toUpperCase()}</b><strong>{game.status === 'COMPLETED' ? game.home_score : "—"}</strong></div>
+                  </a>
+                );
+              })}
+            </div>
+            <a className="full-schedule" href="#schedule" onClick={close}>Full league schedule <span>→</span></a>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatsDropdown({ close }: { close: () => void }) {
+  return (
+    <div className="stats-dropdown-wrap">
+      <button className="mega-scrim" aria-label="Close stats menu" onClick={close} />
+      <div className="stats-dropdown">
+        <div className="stats-dropdown-title"><span className="eyebrow">League Data Center</span><h2>Explore Statistics</h2></div>
+        <div className="stats-dropdown-options">
+          <a href="#stats-team" onClick={close}>
+            <span>01</span>
+            <div><strong>Team Stats</strong><small>Compare all 32 clubs across offense, defense and special teams.</small></div>
+            <i>→</i>
+          </a>
+          <a href="#stats-player" onClick={close}>
+            <span>02</span>
+            <div><strong>Player Stats</strong><small>League leaders, individual production and position rankings.</small></div>
+            <i>→</i>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [showAllStories, setShowAllStories] = useState(false);
+  const [systemStatus, setSystemStatus] = useState({ season: 2035, week: 18, availableSeasons: [2035] });
+  const [week, setWeek] = useState(18);
+  const [newsData, setNewsData] = useState<any>(null);
+  const [route, setRoute] = useState(window.location.hash);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("http://localhost:8000/api/status").then(r => r.json()),
+      fetch("http://localhost:8000/api/seasons").then(r => r.json())
+    ]).then(([statusData, seasonsData]) => {
+      setSystemStatus({ ...statusData, availableSeasons: Array.isArray(seasonsData) ? seasonsData : [statusData.season] });
+      setWeek(statusData.week);
+
+      fetch(`http://localhost:8000/api/news/week/${statusData.week}?season=${statusData.season}`)
+        .then(r => r.json())
+        .then(news => setNewsData(news))
+        .catch(err => console.error("Error fetching news:", err));
+    });
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setStatsOpen(false);
+      }
+    };
+    const updateRoute = () => {
+      setRoute(window.location.hash);
+      setMenuOpen(false);
+      setStatsOpen(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("hashchange", updateRoute);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("hashchange", updateRoute);
+    };
+  }, []);
+
+  const selectedTeam = route.startsWith("#team-")
+    && !route.startsWith("#team-schedule-")
+    ? teams.find((team) => team.abbr === route.replace("#team-", ""))
+    : undefined;
+  const selectedScheduleTeam = route.startsWith("#team-schedule-")
+    ? teams.find((team) => team.abbr === route.replace("#team-schedule-", ""))
+    : undefined;
+  const gameRoute = route.match(/^#game-(\d+)$/);
+  const playerRoute = route.match(/^#player-(?:[a-z]+-)?(\d+)$/);
+  const articleRoute = route.match(/^#article-(.+)$/);
+  const socialTeamRoute = route.match(/^#social-team-([a-z]+)$/);
+  const socialTeam = socialTeamRoute
+    ? teams.find((team) => team.abbr === socialTeamRoute[1])
+    : undefined;
+  const socialPostRoute = route.match(/^#social-post-(\d+)$/);
+  const socialPost = socialPostRoute ? socialPosts[Number(socialPostRoute[1])] : undefined;
+  const socialProfileRoute = route.match(/^#social-profile-(\d+)$/);
+  const socialProfile = socialProfileRoute ? socialPosts[Number(socialProfileRoute[1])] : undefined;
+
+  let content: ReactNode = null;
+  if (route === "#fantasy") {
+    content = <FantasyPlayerProvider><FantasyDashboard /></FantasyPlayerProvider>;
+  } else if (route === "#fantasy-rankings") {
+    content = <FantasyPlayerProvider><FantasyRankingsPage view="weekly" /></FantasyPlayerProvider>;
+  } else if (route === "#fantasy-adp") {
+    content = <FantasyPlayerProvider><FantasyRankingsPage view="adp" /></FantasyPlayerProvider>;
+  } else if (route === "#fantasy-weekly-projections") {
+    content = <FantasyPlayerProvider><FantasyRankingsPage view="weekly" /></FantasyPlayerProvider>;
+  } else if (route === "#fantasy-ros") {
+    content = <FantasyPlayerProvider><FantasyRankingsPage view="ros" /></FantasyPlayerProvider>;
+  } else if (route === "#social") {
+    content = <SocialFeedPage />;
+  } else if (route === "#social-explore") {
+    content = <SocialExplorePage />;
+  } else if (route === "#social-teams") {
+    content = <SocialTeamHubsPage />;
+  } else if (socialPost) {
+    content = <SocialPostDetailPage post={socialPost} />;
+  } else if (socialProfile) {
+    content = <SocialProfilePage person={socialProfile} />;
+  } else if (socialTeam) {
+    content = <SocialTeamFeedPage team={socialTeam} key={socialTeam.abbr} />;
+  }
+
+  if (content) {
+    return (
+      <SystemContext.Provider value={systemStatus}>
+        {content}
+      </SystemContext.Provider>
+    );
+  }
+
+  return (
+    <SystemContext.Provider value={systemStatus}>
+      <div className="app-shell">
+      <ScoreTicker />
+      <header className="site-header">
+        <nav className="nav-inner" aria-label="Primary navigation">
+          <a className="brand" href="#" aria-label="Gridiron home">
+            <span className="brand-mark">G</span>
+            <span><b>GRIDIRON</b><small>THE SIMULATION NETWORK</small></span>
+          </a>
+          <div className="nav-links">
+            <button className={`teams-trigger ${menuOpen ? "active" : ""}`} onClick={() => { setMenuOpen(!menuOpen); setStatsOpen(false); }} aria-expanded={menuOpen}>
+              Teams <Chevron />
+            </button>
+            <button className={`stats-trigger ${statsOpen ? "active" : ""}`} onClick={() => { setStatsOpen(!statsOpen); setMenuOpen(false); }} aria-expanded={statsOpen}>
+              Stats <Chevron />
+            </button>
+            <a href="#standings">Standings</a>
+            <a href="#schedule">Schedule</a>
+            <a href="#fantasy">Fantasy</a>
+            <a href="#social">Social</a>
+          </div>
+          <div className="nav-tools">
+            <button aria-label="Search">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
+            </button>
+            <span className="live-dot">LIVE</span>
+          </div>
+        </nav>
+        {menuOpen && <MegaMenu week={week} setWeek={setWeek} close={() => setMenuOpen(false)} />}
+        {statsOpen && <StatsDropdown close={() => setStatsOpen(false)} />}
+      </header>
+
+      {articleRoute ? (
+        <ArticlePage articleId={articleRoute[1]} key={route} />
+      ) : playerRoute ? (
+        <PlayerPage category="any" playerId={Number(playerRoute[1])} key={route} />
+      ) : gameRoute ? (
+        <GamePage gameId={Number(gameRoute[1])} key={route} />
+      ) : route === "#stats-team" ? (
+        <StatsPage mode="team" />
+      ) : route === "#stats-player" ? (
+        <StatsPage mode="player" />
+      ) : route === "#standings" ? (
+        <StandingsPage />
+      ) : route === "#rankings" ? (
+        <PowerRankingsPage />
+      ) : selectedScheduleTeam ? (
+        <TeamSchedulePage team={selectedScheduleTeam} key={selectedScheduleTeam.abbr} />
+      ) : selectedTeam ? (
+        <TeamPage team={selectedTeam} key={selectedTeam.abbr} />
+      ) : route === "#schedule" ? (
+        <SchedulePage />
+      ) : <main>
+        <div className="edition-bar">
+          <span>THE NEWSROOM</span>
+          <span>{systemStatus.season} SEASON</span>
+          <span>WEEK {systemStatus.week}</span>
+        </div>
+
+        <div className="page-grid">
+          <section className="main-column">
+            <div className="section-heading">
+              <div><span className="red-rule" /><h1>National Desk</h1></div>
+              <p>Reporting, analysis, and film study from across the league</p>
+            </div>
+
+            {/* HERO STORY */}
+            {(() => {
+              const hero = newsData?.slotted?.hero;
+              const heroId = hero?.id ?? "game-of-week";
+              const heroTitle = hero?.headline || "One night. Two contenders. Everything on the line.";
+              const heroExcerpt = hero?.excerpt || "The league's most explosive offense meets the defense built to stop it. Inside the tactical battle that will define the season.";
+              const heroAuthor = hero?.author?.display_name || "Bill Barnwell";
+              const heroInitials = heroAuthor.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() || "BB";
+              const heroRole = hero?.author?.archetype ? hero.author.archetype.replace(/_/g, " ") : "National Writer";
+              const heroSlotLabel = hero?.slot ? hero.slot.toUpperCase() : "GAME OF THE WEEK";
+
+              return (
+                <article className="hero-story">
+                  <a href={`#article-${heroId}`} className="hero-image">
+                    <img
+                      src="https://images.unsplash.com/photo-1634306320557-4c4e4660692f?auto=format&fit=crop&w=1800&q=88"
+                      alt="Football player celebrating under stadium lights"
+                    />
+                    <div className="hero-shade" />
+                    <span className="hero-label">{heroSlotLabel}</span>
+                    <span className="play-button" aria-hidden="true"><i /></span>
+                  </a>
+                  <div className="hero-content">
+                    <div className="hero-meta"><span>THE BIG READ</span><span>12 MIN READ</span></div>
+                    <a href={`#article-${heroId}`}><h2>{heroTitle}</h2></a>
+                    <p>{heroExcerpt}</p>
+                    <div className="byline">
+                      <span className="avatar red">{heroInitials}</span>
+                      <span><small>DEEP DIVE BY</small><b>{heroAuthor}</b><em>{heroRole}</em></span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })()}
+
+            <div className="latest-heading">
+              <h2>{showAllStories ? "This Week's Stories" : "Latest Analysis"}</h2>
+              <button onClick={() => setShowAllStories(!showAllStories)}>
+                {showAllStories ? "Show featured" : "See all stories"} <span>{showAllStories ? "↑" : "→"}</span>
+              </button>
+            </div>
+            <div className={`story-grid ${showAllStories ? "expanded" : ""}`}>
+              {(() => {
+                const slotted = newsData?.slotted;
+                const dynamicStories: any[] = [];
+                if (slotted) {
+                  if (Array.isArray(slotted.secondary)) dynamicStories.push(...slotted.secondary);
+                  if (Array.isArray(slotted.features)) dynamicStories.push(...slotted.features);
+                  if (Array.isArray(slotted.other)) dynamicStories.push(...slotted.other);
+                }
+
+                const storyList = dynamicStories.length > 0
+                  ? (showAllStories ? dynamicStories : dynamicStories.slice(0, 3))
+                  : (showAllStories ? stories : stories.slice(0, 3));
+
+                return storyList.map((story: any, index: number) => {
+                  const isDb = Boolean(story.id);
+                  const artLink = isDb ? `#article-${story.id}` : `#article-national-${index}`;
+                  const title = story.headline || story.title;
+                  const blurb = story.excerpt || story.blurb;
+                  const author = story.author?.display_name || story.author || "National Reporter";
+                  const initials = isDb ? author.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() : story.initials;
+                  const kicker = story.article_type ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : (story.kicker || "Analysis");
+                  const readTime = story.read || "7 min read";
+
+                  return (
+                    <article className={`story-card ${index === 0 ? "feature-card" : ""}`} key={story.id || title}>
+                      <span className="story-number">0{index + 1}</span>
+                      <div className="story-copy">
+                        <span className="kicker">{kicker}</span>
+                        <a href={artLink}><h3>{title}</h3></a>
+                        <p>{blurb}</p>
+                        <div className="author-row">
+                          <span className="avatar">{initials}</span>
+                          <span><b>{author}</b><small>NATIONAL REPORTER · {readTime}</small></span>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                });
+              })()}
+            </div>
+          </section>
+
+          <aside className="sidebar">
+            <div className="sticky-panel">
+              <div className="sidebar-title">
+                <span className="pulse" />
+                <div><span>POPULAR MARKETS</span><h2>Trending Local Coverage</h2></div>
+              </div>
+              <div className="market-list">
+                {(() => {
+                  const primers = newsData?.slotted?.local_primers;
+                  if (Array.isArray(primers) && primers.length > 0) {
+                    return primers.map((story: any, index: number) => {
+                      const primaryTeam = story.tagged_teams?.find((t: any) => t.mention_type === 'PRIMARY') || story.tagged_teams?.[0];
+                      const teamAbbr = primaryTeam?.abbr?.toLowerCase() || "nfl";
+                      const teamName = primaryTeam?.name || "Local";
+                      const author = story.author?.display_name || "Franchise Beat";
+
+                      return (
+                        <article className="market-story" key={story.id}>
+                          <span className="rank">{String(index + 1).padStart(2, "0")}</span>
+                          <div className="market-copy">
+                            <span className="team-tag"><img src={logo(teamAbbr)} alt="" />{teamName} Beat</span>
+                            <a href={`#article-${story.id}`}><h3>{story.headline}</h3></a>
+                            <p>By {author} <span>·</span> Beat Reporter</p>
+                          </div>
+                        </article>
+                      );
+                    });
+                  }
+
+                  return localStories.map((story, index) => (
+                    <article className="market-story" key={story.title}>
+                      <span className="rank">{String(index + 1).padStart(2, "0")}</span>
+                      <div className="market-copy">
+                        <span className="team-tag"><img src={logo(story.team)} alt="" />{story.tag}</span>
+                        <a href={`#article-local-${story.team}`}><h3>{story.title}</h3></a>
+                        <p>By {story.author} <span>·</span> {story.time} ago</p>
+                      </div>
+                    </article>
+                  ));
+                })()}
+              </div>
+              <a className="local-link" href="#social-teams">Explore all local markets <span>↗</span></a>
+            </div>
+            <div className="power-card">
+              <span>SIM ENGINE</span>
+              <h3>Week {systemStatus.week}<br />Power Index</h3>
+              <div className="power-teams">
+                <span><b>01</b><img src={logo("car")} alt="" />CAR<em>88.2</em></span>
+                <span><b>02</b><img src={logo("det")} alt="" />DET<em>63.3</em></span>
+                <span><b>03</b><img src={logo("ari")} alt="" />ARI<em>61.7</em></span>
+              </div>
+              <a href="#rankings">Full rankings →</a>
+            </div>
+          </aside>
+        </div>
+      </main>}
+      <footer>
+        <div className="footer-brand">GRIDIRON<span>25</span></div>
+        <p>A fictional football simulation network. All scores and reporting are simulated.</p>
+        <div><a href="#about">About</a><a href="#privacy">Privacy</a><a href="#terms">Terms</a></div>
+      </footer>
+    </div>
+    </SystemContext.Provider>
+  );
+}
+
+export default App;

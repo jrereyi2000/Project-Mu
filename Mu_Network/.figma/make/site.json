@@ -1,0 +1,10 @@
+{
+  "description": "Experience a dynamic sports media hub for a simulated Madden NFL universe, featuring real-time game updates, in-depth articles, and team-focused content.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

@@ -1,0 +1,840 @@
+{
+  "article_types": {
+    "MACRO_SLATE_RECAP": {
+      "name": "The Macro Slate Recap",
+      "allowed_writers": [
+        "BARNWELL",
+        "ROSENTHAL"
+      ],
+      "writer_display_names": [
+        "Barnwell",
+        "Rosenthal"
+      ],
+      "writing_archetype_category": "Weekly Recaps",
+      "granularity": "Week-level",
+      "focus": "Cross-league trends, regression candidates, aesthetic watchability power rankings.",
+      "data_queried": [
+        "Single-Game Excitement (E)",
+        "Offensive Pace (P)",
+        "League-wide Point Differentials",
+        "Pythagorean Win Expectation"
+      ],
+      "example_prompt_hook": "Analyze the full league slate. Identify macro-level trends across the schedule, diagnose fraudulent records winning ugly on variance, and rank the aesthetic watchability of the week's most electric sandboxes.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Macro Slate Recap\nGranularity: Week-level.\nFocus: Cross-league trends, regression candidates, aesthetic watchability power rankings.\nScope: You are writing across the entire week's slate. Synthesize high-level patterns across multiple matchups, isolate lucky or unlucky teams using point differentials and tempo, and contextualize what this specific week meant for the broader NFL landscape.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (MACRO_SLATE_RECAP):\nYou are provided with the full scoreboard and metrics for the week. Do not write a traditional, chronological recap of a single game. You must select 3 to 4 games that collectively illustrate a larger league-wide trend. Look for a weekend defined by high Upset Leverage ($U$) across multiple favorites, a sudden drop in Offensive Pace ($P$) across the league, or a dominance of high-variance shootouts. Select the games that best serve as evidence for your overarching macro thesis.",
+      "structure_directive": null,
+      "structure_source": "writer"
+    },
+    "PLAYER_DEEP_PROFILE": {
+      "name": "The Player Deep Profile",
+      "allowed_writers": [
+        "CHADIHA",
+        "JOYNER",
+        "ROSENTHAL"
+      ],
+      "writer_display_names": [
+        "Jeffri Chadiha (Narrative/Legacy)",
+        "KC Joyner (Scientific Efficiency)",
+        "Gregg Rosenthal (Aesthetic/Vibes)"
+      ],
+      "writing_archetype_category": "Player Season Overview",
+      "granularity": "In-Season Trajectory / Career Arc",
+      "focus": "Prestige, longform player profile evaluating their season-to-date trajectory, breakout status, MVP credentials, or legacy implications.",
+      "data_queried": [
+        "Player Popularity Index (Pop_player)",
+        "Awards Equity (A_awards)",
+        "Playoff Clout (S_playoff)",
+        "SpikeIndex",
+        "Franchise Platform (F_platform)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (PLAYER SELECTION):\nYou are provided with the season-to-date player leaderboards, cumulative stats, and popularity indices. You must select one player whose current campaign defines the narrative of the league. Look for an aging legend desperately trying to preserve their Awards Equity and Playoff Clout, an MVP frontrunner with a massive cultural footprint, or a volatile breakout star who leads the league in explosive ceiling performances. Pick a player whose individual story carries massive historical or cultural weight, regardless of whether it is Week 3 or Week 17.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a prestige, longform player profile summarizing their season-to-date campaign and career trajectory (approx. 800\u20131,200 words).\n\n1. The Defining Moment (The Hook):\nStart with a captivating headline using #.\nWrite a rich, scene-setting introduction that isolates one defining moment, stretch of games, or overarching narrative from their season so far. Do not list their stat line immediately; focus on the feeling of watching them play this year.\n\n2. The Anatomy of Their Season:\nUse a ## header (e.g., ## The Engine of the Offense).\nBreak down how they produced their numbers. Weave in their Boom-or-Bust Volatility (SpikeIndex) and their overall Offensive Rhythm. Did they carry a bad roster? Did they benefit from an elite supporting cast?\n\n3. The Cultural Footprint & Legacy:\nUse a ## header (e.g., ## The Weight of the Crown).\nAnalyze where this season places them in the historical hierarchy. You must discuss their National Cultural Footprint ($Pop_{\\text{player}}$) and the platform their franchise provides. Analyze how this season impacts their Championship Pedigree and Awards Equity.\n\n4. The Horizon:\nUse a ### header to look toward the remainder of their career.\nEnd with a poignant thought on what their legacy will be if their trajectory continues, or how quickly their window might close. End sharply. Do not use wrap-up filler.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Player Deep Profile\nGranularity: In-Season Trajectory / Career Arc.\nFocus: Aging superstars, breakthrough rookie sensations, MVP debates, legacy vs. twilight.\nScope: Do not write a generic game recap. Center your entire piece around the emotional, physical, and schematic journey of a singular marquee player across their season-to-date campaign.",
+      "example_prompt_hook": "Select a marquee player whose campaign currently defines the season. Deliver a definitive longform profile on their offensive engine, their cultural footprint, and their career horizon based on their season-to-date tape.",
+      "structure_source": "article"
+    },
+    "FRANCHISE_STATE_OF_THE_UNION": {
+      "name": "The Franchise State of the Union",
+      "allowed_writers": [
+        "SANDO"
+      ],
+      "writer_display_names": [
+        "Sando"
+      ],
+      "writing_archetype_category": "Front-Office Columnists",
+      "granularity": "3-to-5 year franchise trajectory",
+      "focus": "General Manager job security, roster demographic distributions, draft hit rates, rebuilding vs. purgatory.",
+      "data_queried": [
+        "Blue-Chip Pedigree (P_draft)",
+        "Under-25 Production (Y_prod)",
+        "Purgatory Penalty",
+        "Base Market Gravity (B)",
+        "Roster Age"
+      ],
+      "example_prompt_hook": "Analyze a franchise in transition. Ignore the single-game box score. Evaluate their front office's 3-to-5 year trajectory using the Purgatory Penalty, aging roster constraints, and draft equity.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Franchise State of the Union\nGranularity: 3-to-5 year franchise trajectory.\nFocus: General Manager job security, roster demographic distributions, draft hit rates, rebuilding vs. purgatory.\nScope: Step away from the in-game action. Evaluate the organizational health, roster construction cycle, and coaching/front-office stability of a specific franchise through the eyes of rival executives, scouts, and decision-makers.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (FRANCHISE_STATE_OF_THE_UNION):\nYou are provided with full multi-year franchise data, roster demographic distributions, and standing trends. Do not select a stable, well-run contender operating normally within its window. You must identify a franchise sitting at an existential organizational fork in the road:\n- An aging roster actively triggering the Purgatory Penalty, stuck hovering around .500 with diminished future assets.\n- A high Base Market Gravity ($B$) or storied Legacy Floor ($S_{\\text{all-time}}$) franchise collapsing under market pressure and fan expectations.\n- A rebuilding organization with immense Blue-Chip Pedigree ($P_{\\text{draft}}$) and elite Under-25 Production Share ($Y_{\\text{prod}}$) on the precipice of entering a multi-year contention window.\nSelect the single organization whose front office, coaching hierarchy, or foundational blueprint demands a comprehensive, multi-year audit.",
+      "structure_directive": null,
+      "structure_source": "writer"
+    },
+    "SINGLE_GAME_SCHEMATIC_AUTOPSY": {
+      "name": "The Single-Game Schematic Autopsy",
+      "allowed_writers": [
+        "JOYNER",
+        "KIMES",
+        "ORLOVSKY"
+      ],
+      "writer_display_names": [
+        "KC Joyner (Scientific Efficiency)",
+        "Mina Kimes (Metric-Driven Schematic Breakdown)",
+        "Dan Orlovsky (QB Film Room / Telestrator)"
+      ],
+      "writing_archetype_category": "Film Analysts",
+      "granularity": "Single-game play-by-play",
+      "focus": "Point-of-attack wins, run-pass splits, specific receiver coverage isolations.",
+      "data_queried": [
+        "Advanced Game Analytics (Offensive Pace, Single-Game Excitement)",
+        "Game Box Scores",
+        "Player Snap & Efficiency Shares",
+        "Red Zone Conversion Rates"
+      ],
+      "example_prompt_hook": "Select a single compelling matchup from the slate. Break down the play-level tactical mechanics that decided the outcome: offensive pace, point-of-attack leverage, and individual matchup exploitation.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Single-Game Schematic Autopsy\nGranularity: Single-game play-by-play.\nFocus: Point-of-attack wins, run-pass splits, specific receiver coverage isolations.\nScope: Focus laser-sharp on one specific game's tactical blueprint. Chart why the game unfolded the way it did using evidence-based film charting principles, tactical concepts, and efficiency data rather than narrative or emotion.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (SINGLE_GAME_SCHEMATIC_AUTOPSY):\nYou are given the full league slate. Ignore narratives, market size, and playoff implications. You must select the single game with the most extreme tactical anomaly. Look for an abnormally high Offensive Pace ($P$), a massive SpikeIndex from a heavily schemed player, or a game where the Opponent-Adjusted Game Credit exposes a glaring mismatch. Choose the game that offers the best \"film room\" educational value regarding blocking concepts, coverage shells, or specific play-calling.",
+      "structure_directive": null,
+      "structure_source": "writer"
+    },
+    "POWER_RANKINGS": {
+      "name": "The Power Rankings (32-Team Thematic Consensus)",
+      "allowed_writers": [
+        "SANDO",
+        "ROSENTHAL"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Executive Tiers & Front-Office Context)",
+        "Gregg Rosenthal (Vibe & Watchability Rankings)"
+      ],
+      "writing_archetype_category": "32-Team Thematic Consensus",
+      "granularity": "Week-level / Full League 1-32 Hierarchy",
+      "focus": "Comprehensive publication-ready 32-team Power Ranking evaluating every team 1-32 through an explicit weekly editorial theme, underlying metrics, and movement indicators.",
+      "data_queried": [
+        "Opponent-Adjusted Game Credit",
+        "Team Watchability Index (W)",
+        "Trajectory Multiplier (T)",
+        "Purgatory Penalty",
+        "Base Market Gravity (B)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (32-TEAM POWER RANKINGS SELECTION):\nYou are provided with full standings, game outcomes, and advanced analytics for all 32 teams. Do not simply copy the raw win-loss standings. Evaluate the true hierarchy across the league by cross-referencing on-field success with underlying metrics:\n- Separate true contenders from \"paper tigers\" carrying inflated records against soft schedules using Opponent-Adjusted Game Credit.\n- Reward teams surging on positive underlying efficiency via the Trajectory Multiplier ($T$).\n- Penalize aging, stagnating squads sliding into middle-tier mediocrity under the Purgatory Penalty.\nYou must establish an explicit Weekly Editorial Theme across the piece (e.g., \"First-Month Verdicts\", \"The Four-Word Season Diagnosis\", or \"Fatal Flaws and Championship Ceilings\"). Every individual team entry must directly answer this unifying theme rather than offering a generic game recap.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a comprehensive, publication-ready 32-team Power Ranking (approx. 1,800\u20132,400 words).\n\n1. The Macro Overview (The Hook):\nOpen with a journalistic headline using # (e.g., # NFL Power Rankings Week 5: 1-32 Hierarchy and First-Month Realities).\nWrite a 2-paragraph introduction outlining the battle for the #1 spot and the overarching narrative defining the league this week.\nExplicitly define the Weekly Theme that governs the evaluations for all 32 franchises.\n\n2. The 32-Team Enumeration (Strict Rule):\nYou must rank and write an entry for EVERY SINGLE TEAM FROM 1 TO 32 without exception. Do not truncate the list, do not summarize teams in groups, and do not stop after the top 10.\nUse numbered ## headers formatted as: ## [Rank]. [Team Name] ([Record]) (e.g., ## 1. Carolina Panthers (4-0)).\nInclude movement indicators in parentheses when applicable (e.g., (Previous: 3 | Rise: +2)).\n\n3. The Thematic Blurb Requirements:\nBegin each team blurb with a bold thematic kicker matching the intro hook (e.g., Four-word recap: Living on borrowed time. or First-month verdict: Elite defense masking passing stalls.).\nFollow immediately with exactly 3 to 4 analytical sentences evaluating the franchise.\nData Integration Rule: Translate underlying database metrics into natural football terminology. Cite tempo and per-possession scoring pace, draft pedigree, youth production share, or opponent-adjusted quality without displaying raw mathematical symbols (avoid $P$, $T$, $W$, P_draft, etc.).\n\n4. The Walk-Off (The Drop-Off):\nAfter completing team # 32, conclude with a single concise paragraph evaluating the widening gap between the league's inner-circle contenders and the bottom tier.\nDo not use formulaic sign-offs like \"In conclusion\" or \"To summarize.\" End cleanly once the final thought is stated.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Power Rankings (32-Team Thematic Consensus)\nGranularity: Week-level / Full League 1-32 Hierarchy.\nFocus: Comprehensive, publication-ready 32-team Power Ranking evaluating every team 1-32 through an explicit weekly editorial theme, underlying metrics, and movement indicators.\nScope: Rank and write an entry for all 32 NFL franchises from 1 to 32. Establish a unifying weekly editorial theme, evaluate paper tigers vs. true contenders, and provide tight thematic blurbs for every team.",
+      "example_prompt_hook": "Rank all 32 NFL franchises from 1 to 32 under an explicit weekly editorial theme. Separate paper tigers from true contenders using opponent-adjusted credit and trajectory, provide a 3-to-4 sentence analytical blurb for every team with movement indicators, and diagnose the widening gap between tiers.",
+      "structure_source": "article"
+    },
+    "AWARDS_TRACKER": {
+      "name": "The Awards Tracker",
+      "allowed_writers": [
+        "YATES",
+        "SIMMONS"
+      ],
+      "writer_display_names": [
+        "Field Yates (Objective/Factual)",
+        "Bill Simmons (Narrative/Historical Debate)"
+      ],
+      "writing_archetype_category": "The Hardware Race",
+      "granularity": "Season-level / Hardware Campaign",
+      "focus": "Active MVP, OPOY, and OROY award races, evaluating true contenders vs. empty-calorie stat accumulators, narrative momentum, and trench warfare.",
+      "data_queried": [
+        "Awards Equity (A_awards)",
+        "Player Popularity (Pop_player)",
+        "Team Success (T_success)",
+        "SpikeIndex"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (AWARDS WATCH SELECTION):\nYou are provided with the cumulative season stats, team records, and popularity indices. You must evaluate the active race for MVP, Offensive Player of the Year, and Offensive Rookie of the Year. You must aggressively apply the \"Empty Calories\" Suppressor\u2014ignore players racking up meaningless stats on sub-.300 teams. You are looking for the rare intersection of elite, highly-visible statistical production (SpikeIndex) and the narrative weight of playing on a true contender ($T_{\\text{success}}$).",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an elite \"Awards Watch\" column (approx. 800\u20131,000 words).\n\n1. The MVP Frontrunner (The Heavy Crown):\nStart with a definitive headline using #.\nUse a ## header to identify the clear MVP favorite. Analyze how their National Cultural Footprint ($Pop_{\\text{player}}$) and their team's record are shaping the media narrative in their favor. Detail how they are carrying their offense.\n\n2. The Contenders (The Chasers):\nUse a ## header to list 2-3 players within striking distance of the frontrunner.\nCompare their Boom-or-Bust Volatility (SpikeIndex) against the favorite. If a contender has massive Historical Franchise Prestige on their side, explain how that narrative momentum could help them steal the award late in the year.\n\n3. The Offensive Rookie Race:\nUse a ## header devoted entirely to the Offensive Rookie of the Year race. Focus on rookie performance considering the learning curve of the NFL.\nHighlight a couple of rookie leading the race. End the article sharply after the defensive breakdown.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Awards Tracker\nGranularity: Season-level / Hardware Campaign.\nFocus: MVP, OPOY, and OROY hardware races, narrative momentum, and true contenders vs. empty calories.\nScope: Track and debate the active award races across the league. Filter out stat-padders on losing squads and evaluate the intersection of individual brilliance, cultural footprint, and team success.",
+      "example_prompt_hook": "Analyze the active MVP and OPOY races across the league. Apply the empty-calories suppressor to eliminate meaningless stats, examine the frontrunner vs. the chasers, and break down the rookie race.",
+      "structure_source": "article"
+    },
+    "SLATE_LOOKAHEAD_PREDICTIONS": {
+      "name": "The Weekly Slate Lookahead (ESPN Multi-Angle Matchup Preview)",
+      "allowed_writers": [
+        "BARNWELL",
+        "ACHO",
+        "ROSENTHAL"
+      ],
+      "writer_display_names": [
+        "Bill Barnwell (Efficiency & Statistical Modeling)",
+        "Emmanuel Acho (Contrarian Matchups & Narratives)",
+        "Gregg Rosenthal (Aesthetic Matchups & Watchability)"
+      ],
+      "writing_archetype_category": "ESPN Multi-Angle Matchup Preview",
+      "granularity": "Week-ahead / Matchup Preview Guide",
+      "focus": "Comprehensive, modular weekly preview guide modeled after ESPN's multi-perspective game capsules covering team context, key stats, watchability, tactical predictions, fantasy spotlights, and projected final scores.",
+      "data_queried": [
+        "Upcoming Matchup Schedule",
+        "Single-Game Excitement Index (E)",
+        "Offensive Pace (P)",
+        "Upset Leverage (U_projected)",
+        "Team Watchability (W)",
+        "SpikeIndex",
+        "Base Market Gravity (B)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (SLATE LOOKAHEAD SELECTION):\nYou are provided with the full upcoming schedule, team records, and advanced team metrics. You must evaluate the entire weekly slate. Do not treat every game identically; curate your analysis through distinct analytical perspectives:\n- Identify the high-tempo clashes featuring elite Offensive Pace ($P$) or high Watchability ($W$) to spotlight why fans must tune in.\n- Use Upset Leverage ($U$) and underlying regression metrics to flag prime candidates for a shocker where a heavy favorite is vulnerable.\n- Analyze specific skill-player mismatches and SpikeIndex volatility to isolate individual breakout opportunities.\nYou must preview the full slate using an integrated, multi-analyst format covering locker room buzz, analytics, viewing appeal, and fantasy angles.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a comprehensive, modular weekly preview guide modeled after ESPN's multi-perspective game capsules (approx. 2,000\u20132,500 words).\n\n1. The Slate Overview (The Hook):\nOpen with an editorial headline using # (e.g., # NFL Week Lookahead: Matchup Previews, Predictions, Fantasy Angles, and Film Room Notes).\nWrite a 2-paragraph introduction identifying the defining storylines, high-stakes divisional showdowns, and trap games that shape this slate.\nInclude a complete matchup jump list detailing every game (e.g., PHI-JAX | CHI-GB | LV-NE | DEN-LAC...).\n\n2. The Full Slate Enumeration (Strict Rule):\nYou must generate a full preview capsule for EVERY SINGLE GAME on the weekly schedule. Do not omit any matchups. Do not group games together. Do not truncate the list or stop after the marquee games.\n\n3. Modular Matchup Capsules (Strict Structure):\nFor each game on the schedule, use a ## heading formatted as:\n## [Away Team] ([Record]) at [Home Team] ([Record])\nImmediately below, add a line with kickoff time and broadcast network (e.g., 1:00 p.m. ET | CBS). Do not include any betting lines.\nInside each matchup capsule, provide the following structured sub-sections:\n- What We're Hearing (Team Context): 1\u20132 short paragraphs detailing locker room sentiment, roster changes, or how the teams are managing pressure or key injuries. Quote an internal player or coach perspective where fitting.\n- Stat to Know: A single high-impact data point contextualizing the matchup (e.g., defensive split vs. explosive passing, third-down conversion rate, or per-possession tempo).\n- Why You Should Watch This Game: 1\u20132 sharp, engaging sentences highlighting the game's aesthetic appeal, schematic drama, or player matchup that makes it appointment viewing.\n- Bold Prediction & Tactical Angle: A data-driven forecast explaining how a schematic advantage (e.g., point-of-attack blocking or pass rush mismatch) will break the game open.\n- Fantasy & Player Spike Spotlight: A targeted analysis of a skill player whose usage or volatility suggests an explosive ceiling or a brutal matchup floor.\n- Official Prediction: A concise breakdown of how the game script will unfold, followed by an official projected scoreline:\nProjected Final: [Winner] [Score], [Loser] [Score]\n\n4. Data Integration Rule:\nTranslate all internal analytical engine variables ($P$, $U$, $W$, SpikeIndex, $P_{\\text{draft}}$) into authentic football terminology (tempo, high-leverage variance, must-see rating, boom-or-bust ceiling, blue-chip capital). Never output raw variable symbols or formula notation in the published copy.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Weekly Slate Lookahead (ESPN Multi-Angle Matchup Preview)\nGranularity: Week-ahead / Matchup Preview Guide.\nFocus: Comprehensive, modular weekly preview guide modeled after ESPN's multi-perspective game capsules covering team context, key stats, watchability, tactical predictions, fantasy spotlights, and projected final scores.\nScope: Deliver in-depth, structured game capsules for featured matchups across the slate. Combine locker-room context, key metrics, viewer appeal, fantasy outlook, and final score projections without displaying raw algebraic variables.",
+      "example_prompt_hook": "Preview the upcoming weekend slate using ESPN-style modular game capsules. For each featured matchup, break down locker-room buzz, a key statistical split, why fans should tune in, a bold tactical forecast, fantasy spike spotlight, and an official final score prediction.",
+      "structure_source": "article"
+    },
+    "PLAYOFF_PREDICTOR": {
+      "name": "The Playoff Predictor",
+      "allowed_writers": [
+        "ROSENTHAL",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Gregg Rosenthal (Chaos/Wild Card brackets)",
+        "Bill Barnwell (Efficiency-based pathing)"
+      ],
+      "writing_archetype_category": "Bracketology & Postseason Tiers",
+      "granularity": "Late-Season / Playoff Race",
+      "focus": "Projected postseason bracket mapping, identifying fraudulent division leaders ripe for first-round upsets, and dangerous Wild Card gatecrashers.",
+      "data_queried": [
+        "Trajectory Multiplier (T)",
+        "Watchability Volatility (sigma_top)",
+        "Opponent-Adjusted Game Credit",
+        "Base Market Gravity (B)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (PLAYOFF PREDICTION SELECTION):\nYou are provided with the current standings, wild-card tiebreakers, and team metrics. You must map out the projected postseason bracket. Do not simply chalk the current #1 seeds into the Super Bowl. You must identify the \"fraudulent\" division leaders who are ripe for a first-round upset due to poor Opponent-Adjusted Game Credit, and identify the terrifying Wild Card teams surging on a massive Trajectory spike. Frame your selections around which teams present the most dangerous matchup nightmare in a single-elimination setting.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a definitive \"Playoff Picture & Predictions\" column (approx. 800\u20131,000 words).\n\n1. The Postseason Landscape (The Hook):\nStart with a definitive headline using #.\nWrite a 2-paragraph introduction defining the current shape of the conferences. Is it a top-heavy year dominated by two juggernauts, or a chaotic, wide-open race?\n\n2. The Bracket Locks (The Favorites):\nUse a ## header (e.g., ## The Divisional Round By-passers).\nIdentify the 2-3 teams that are mathematically and structurally built to make deep runs. Weave in their Offensive Rhythm and Baseline Roster Talent to explain why they are immune to early-round upsets.\n\n3. The Dangerous Gatecrashers (The Wild Cards):\nUse a ## header to highlight 1-2 lower-seeded teams no one wants to face in January.\nHighlight their Boom-or-Bust Volatility or their explosive Youth Production Share. Explain exactly how their high-variance style can ruin a #2 seed's season on Wild Card weekend.\n\n4. The First-Round Exit Warning:\nUse a ### header to place one current playoff team on \"Upset Alert.\"\nDetail why their underlying metrics (like a low offensive tempo or reliance on lucky turnover margins) guarantee they will be eliminated in the first round. Stop immediately after delivering the warning.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Playoff Predictor\nGranularity: Late-Season / Playoff Race.\nFocus: Postseason bracketology, true contenders vs. fraudulent division winners, and dangerous Wild Card spoilers.\nScope: Project the postseason bracket and pathing. Interrogate top seeds for first-round vulnerability and isolate surging lower seeds with matchup nightmare profiles.",
+      "example_prompt_hook": "Map out the projected postseason bracket. Expose a fraudulent division leader on upset alert, identify the terrifying Wild Card gatecrashers, and establish the true conference heavyweights.",
+      "structure_source": "article"
+    },
+    "SUPER_BOWL_CONTENDER_BLUEPRINT": {
+      "name": "The Super Bowl Contender Blueprint",
+      "allowed_writers": [
+        "SANDO",
+        "JOYNER",
+        "CHADIHA"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Front-Office Windows)",
+        "KC Joyner (Statistical Profiling)",
+        "Jeffri Chadiha (Legacy & Clout)"
+      ],
+      "writing_archetype_category": "The Championship Litmus Test",
+      "granularity": "Championship / Postseason Arc",
+      "focus": "Championship contender autopsy evaluating whether top-tier teams possess the statistical profile, quarterback clout, and roster balance to win three straight playoff games.",
+      "data_queried": [
+        "Playoff Clout (S_playoff)",
+        "Awards Equity (A_awards)",
+        "Legacy Floor (S_all-time)",
+        "Offensive Pace (P)",
+        "Youth Production Share (Y_prod)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (SUPER BOWL CONTENDER SELECTION):\nYou are provided with the elite top-tier teams in the NFL. Your job is to separate the \"very good regular season teams\" from the \"actual Super Bowl champions.\" Evaluate the league's heavyweights strictly through the lens of championship criteria. Look for the exact statistical profile required to win a ring: elite quarterback Awards Equity, battle-tested veteran Playoff Clout, and a balanced Youth Production Share. You must aggressively dismiss pretenders who lack the schematic balance or the historical pedigree to win three straight games against elite competition.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a rigid \"Championship Contender Autopsy\" (approx. 1,000 words).\n\n1. The Championship Standard (The Hook):\nStart with a definitive headline using #.\nWrite a 1-2 paragraph introduction outlining exactly what traits are required to win the Lombardi Trophy this season. Establish the barrier to entry (e.g., \"If you don't have an elite Offensive Tempo, you cannot win in January\").\n\n2. The Blue-Chip Heavyweights (The Inner Circle):\nUse ## headers to break down the 2-3 teams that check every championship box.\nYou must weave in their veteran Championship Pedigree, their Historical Franchise Prestige, and the overwhelming Baseline Roster Talent that makes them the definitive favorites.\n\n3. The Paper Tigers (The Fatal Flaw):\nUse a ## header (e.g., ## The Pretenders).\nIdentify a team with 11+ wins that cannot win the Super Bowl. You must diagnose their fatal flaw using natural language metrics\u2014whether it is a lack of Playoff Clout under center, a failing Offensive Rhythm in the red zone, or an aging roster suffering from the Purgatory Penalty masquerading as a contender.\n\n4. The Missing Piece:\nUse a ### header to identify one elite team that is exactly one piece away.\nBriefly state what they need (e.g., a secondary playmaker or an edge rusher) to elevate from a playoff team to a Super Bowl champion. End the column sharply.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Super Bowl Contender Blueprint\nGranularity: Championship / Postseason Arc.\nFocus: Championship DNA, true Lombardi contenders vs. regular-season pretenders, and missing pieces.\nScope: Apply a rigid championship litmus test to the league's top teams. Separate 11-win paper tigers from battle-tested heavyweights equipped to win the Lombardi Trophy.",
+      "example_prompt_hook": "Apply the championship litmus test to the league's top tier. Crown the inner-circle heavyweights, dissect an 11-win paper tiger with a fatal playoff flaw, and identify the contender that is one piece away.",
+      "structure_source": "article"
+    },
+    "LOCAL_POSTGAME_REPORT_CARD": {
+      "name": "The Postgame Report Card (The Beat Gradeout)",
+      "allowed_writers": [
+        "LOCAL_BEAT_REPORTER"
+      ],
+      "writer_display_names": [
+        "Local Beat Writer / Postgame Columnist"
+      ],
+      "writing_archetype_category": "Local Beat Postgame",
+      "granularity": "Single-game immediate / 2-4 hours post-whistle",
+      "focus": "Immediate unit execution versus expectations, unit letter grades (A+ through F), offensive line protection breakdowns, third-down stalls, and coaching decisions.",
+      "data_queried": [
+        "Unit Offensive Pace (P)",
+        "Opponent-Adjusted Game Credit",
+        "Turnover Margin",
+        "Red Zone Efficiency",
+        "Pressure Rates"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (LOCAL POSTGAME FOCUS):\nYou are covering strictly this franchise. Do not compare this game to the broader national slate. Your filter is immediate execution versus expectations. You are isolating which specific positional unit won or lost this game. Prioritize third-down conversion failures, offensive line protection breakdowns, and sudden schematic collapses over broad narrative platitudes.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an immediate, granular postgame assessment (approx. 700\u2013900 words).\n\n1. The Instant Takeaway:\n- Open with a direct headline using # focused on the central reason for the outcome (e.g., # Report Card: Protection Breakdowns Sink Second-Half Surge).\n- Deliver a 2-paragraph summary of the game's turning point and the overall performance grade.\n\n2. The Unit-by-Unit Grades:\n- Use ## headers to evaluate every core unit:\n  * ## Passing Offense\n  * ## Rushing Attack\n  * ## Front Seven & Run Defense\n  * ## Secondary & Pass Rush\n  * ## Special Teams & Coaching Decisions\n- Assign each unit a letter grade (A+ through F) in bold on the line immediately below the header (e.g., **Grade: B+**).\n- Provide 2\u20133 precise sentences per unit detailing snap execution, blocking assignments, and critical third-down plays.\n\n3. The Final Mark:\n- End with a standalone bold overall team grade (**Composite Grade: [Grade]**) and one direct statement on what must change by Wednesday practice.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Postgame Report Card (The Beat Gradeout)\nGranularity: Single-game immediate postgame assessment.\nFocus: Unit execution vs. expectations, unit-by-unit letter grades (A+ through F), immediate turning points, and coaching accountability.\nScope: Strictly cover your assigned franchise's most recent game. Isolate positional breakdowns, line play, and situational execution without referencing unrelated national games.",
+      "example_prompt_hook": "Grade out your assigned team's performance following the final whistle. Deliver an instant takeaway, assign bold letter grades across all 5 core positional units with execution notes, and conclude with the composite team grade.",
+      "structure_source": "article"
+    },
+    "LOCAL_MATCHUP_PRIMER": {
+      "name": "The Local Matchup Primer & Game-Plan Blueprint (The Friday Preview)",
+      "allowed_writers": [
+        "LOCAL_BEAT_REPORTER"
+      ],
+      "writer_display_names": [
+        "Senior Beat Reporter"
+      ],
+      "writing_archetype_category": "Local Beat Game Preview",
+      "granularity": "Single-game forward-looking / Friday/Saturday preview",
+      "focus": "Home-team perspective matchup reality, 3 hyper-specific micro battles, game-plan victory blueprint, and final score prediction.",
+      "data_queried": [
+        "Opponent Matchup Deficiencies",
+        "Upset Leverage (U_projected)",
+        "Injury Report Availability",
+        "Defensive Front vs. O-Line Matchup"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (LOCAL PREVIEW FOCUS):\nYou are looking at the upcoming opponent strictly through the home team's eyes. Do not write a generic preview for both fan bases. Your curation isolates the 2 or 3 micro-battles that determine whether this specific team wins or loses. Focus on cluster injuries, trench advantages, and specific player matchups rather than broad team records.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a definitive home-team game-plan blueprint (approx. 800\u20131,000 words).\n\n1. The Matchup Reality:\n- Open with an authoritative headline using #.\n- Write 2 paragraphs setting the stakes for the franchise: divisional standings, injury status, and the emotional mood inside the locker room heading into the weekend.\n\n2. Three Matchups That Decide the Game:\n- Use numbered ## headers to highlight 3 hyper-specific player or unit battles (e.g., ## 1. Left Tackle vs. Opponent's Star Edge Rusher).\n- Break down the technique, physical traits, and tactical help (chips, slide protection) required to win each individual clash.\n\n3. The Blueprint to Victory:\n- Use a ## header outlining the home team's exact checklist:\n  * The Scripted Drive: Early offensive tempo requirements.\n  * The Defensive Mandate: Third-down stop percentage target or takeaway requirement.\n\n4. Beat Prediction:\n- End with a concise final prediction detailing game script and scoreline:\nProjected Final: [Team Name] [Score], [Opponent Name] [Score]",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Local Matchup Primer & Game-Plan Blueprint\nGranularity: Single-game forward-looking preview.\nFocus: Home-team tactical perspective, 3 pivotal micro-battles, scripted offensive/defensive mandates, and beat score prediction.\nScope: Deliver a definitive home-team preview from the beat reporter's desk. Break down the specific schematic keys and player clashes necessary to defeat this week's opponent.",
+      "example_prompt_hook": "Preview your assigned team's upcoming matchup through the eyes of the home locker room. Break down the divisional stakes, highlight the three pivotal micro-battles, map out the victory blueprint, and project the final score.",
+      "structure_source": "article"
+    },
+    "LOCAL_PLAYER_SPOTLIGHT": {
+      "name": "The Local Player Spotlight (The Beat Film & Profile Breakdown)",
+      "allowed_writers": [
+        "LOCAL_BEAT_REPORTER"
+      ],
+      "writer_display_names": [
+        "Franchise Beat Reporter / Film Analyst"
+      ],
+      "writing_archetype_category": "Local Beat Player Profile",
+      "granularity": "In-Season / Multi-Game Player Arc",
+      "focus": "Single local player's role evolution, developmental leap, contract-year performance, tape & assignment execution, coaching trust, and roster implications.",
+      "data_queried": [
+        "SpikeIndex",
+        "Target/Snap Share Deltas",
+        "Positional Multiplier (M_pos)",
+        "Blue-Chip Pedigree (P_draft)",
+        "Under-25 Production Share (Y_prod)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (LOCAL PLAYER FOCUS):\nYou are evaluating strictly one player from this franchise. Do not pick a national superstar simply because of their fame unless they are undergoing an internal schematic shift. Look for:\n- An unheralded mid-round or undrafted player carving out a critical situational role.\n- A high-pedigree early draft pick ($P_{\\text{draft}}$) either breaking out or struggling with scheme complexity.\n- A contract-year contributor whose week-to-week performance is dramatically altering their offseason extension value.\nChoose a player whose daily practice habits, snap distribution, and micro-role reflect the coaching staff's developmental philosophy.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an in-depth local beat profile (approx. 700\u2013900 words).\n\n1. The Locker-Room Scene / The Turning Point:\n- Open with a grounded, journalistic headline using # (e.g., # Inside the Film Room: How [Player Name] Became the Linchpin of the Third-Down Offense).\n- Write 2 paragraphs setting up the player's standing inside the building. Contrast where they began training camp with their current on-field trust level.\n\n2. The Tape & Assignment Execution:\n- Use a ## header (e.g., ## The Schematic Fit: Winning the Margin Plays).\n- Detail specific assignments: footwork, hand placement, leverage against double teams, or route adjustments against zone shells.\n- Translate usage into football reality without raw mathematical notation (e.g., explain how their target volume or backfield snap rate has surged across consecutive weeks).\n\n3. Coaching Trust & Roster Implication:\n- Use a ## header (e.g., ## The Front-Office Equation).\n- Assess the long-term roster context. How does their emergence impact veteran depth charts, future cap space, or upcoming draft priorities?\n\n4. The Sunday Mandate:\n- Conclude with a ### header identifying the next major test this player faces in the upcoming matchup (e.g., handling shadow coverage, neutralizing a premier edge rusher). End cleanly without summary filler.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Local Player Spotlight (The Beat Film & Profile Breakdown)\nGranularity: In-Season / Multi-Game Player Arc.\nFocus: Role evolution, tape and assignment execution, coaching staff trust, and long-term roster value.\nScope: Profile an individual player on your assigned franchise's roster. Examine their developmental growth, film details, and front-office implications without straying into other teams.",
+      "example_prompt_hook": "Deliver an in-depth local beat profile on a rising or critical player on your roster. Contrast their training camp baseline with their current role, break down their assignment execution on tape, and evaluate their long-term contract and roster standing.",
+      "structure_source": "article"
+    },
+    "LOCAL_SEASON_PROGRESS_REPORT": {
+      "name": "The Local Season-to-Date Progress Report (The Franchise Season Audit)",
+      "allowed_writers": [
+        "LOCAL_BEAT_REPORTER"
+      ],
+      "writer_display_names": [
+        "Senior Beat Columnist"
+      ],
+      "writing_archetype_category": "Local Beat Franchise Audit",
+      "granularity": "Midseason / Season-to-Date Arc",
+      "focus": "Comprehensive evaluation of the home team's campaign, offensive/defensive identity check, structural strengths, lingering flaws, coaching staff seat temperature, and second-half win benchmark.",
+      "data_queried": [
+        "Trajectory Multiplier (T)",
+        "Opponent-Adjusted Game Credit",
+        "Youth Production Share (Y_prod)",
+        "Purgatory Penalty",
+        "Base Market Gravity (B)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (LOCAL PROGRESS AUDIT):\nYou are evaluating the complete season-to-date trajectory of the franchise through the lens of local expectations and offseason promises. Do not compare the team to other divisions or the broad national hierarchy. Look directly at internal progress:\n- Has the coaching staff installed a recognizable offensive and defensive identity?\n- Is the team actively escaping the Purgatory Penalty, or are they stagnating in .500 mediocrity despite heavy cap investment?\n- Are the younger draft assets ($Y_{\\text{prod}}$) ascending, or is the team reliant on aging veterans with expiring deals?\nDeliver an honest, beat-level reality check for the local fan base.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a midterm progress report (approx. 900\u20131,200 words).\n\n1. The Identity Check (The Midterm Reality):\n- Open with a decisive headline using # (e.g., # Season at the Turn: Answering the Core Questions Surrounding [Team Name]).\n- Write a 2-to-3 paragraph overview assessing whether the team's record matches their actual on-field quality. Define whether the locker room is building toward a sustainable window or living week-to-week on borrowed time.\n\n2. What Has Worked (The Foundation):\n- Use a ## header (e.g., ## The Structural Strengths).\n- Highlight the units or developmental arcs exceeding preseason projections. Detail how coordinator adjustments or breakout young players have raised the team's weekly baseline.\n\n3. The Lingering Flaws & Identity Crises:\n- Use a ## header (e.g., ## The Fatal Flaws Holding the Ceiling Down).\n- Pinpoint recurring failures that remain uncorrected (e.g., red-zone execution stalls, poor gap integrity in run defense, slow scripted offensive starts).\n\n4. Front Office & Coaching Staff Temperature:\n- Use a ## header evaluating the coaching seat and leadership decisions.\n- Frame whether head-coach game management and coordinator play-calling have earned front-office confidence for the remainder of the season.\n\n5. The Second-Half Verdict:\n- End with a ### header setting the benchmark for the final stretch.\n- Name the exact win threshold or structural improvement required over the remaining schedule to consider this season a success. Finish abruptly without a closing summary.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Local Season-to-Date Progress Report\nGranularity: Midseason / Season-to-Date Arc.\nFocus: Internal identity evaluation, structural strengths, unresolved flaws, coaching hot seats, and second-half success criteria.\nScope: Conduct a comprehensive midseason reality check on your assigned franchise. Assess whether preseason goals are being met, evaluate younger building blocks, and gauge coaching accountability.",
+      "example_prompt_hook": "Audit your assigned franchise's season-to-date campaign. Break down what has worked, expose lingering identity flaws, take the temperature of the coaching staff and front office, and establish the second-half benchmark for success.",
+      "structure_source": "article"
+    },
+    "SEASON_PROGRESS_AUDIT": {
+      "name": "The Season Progress Audit (Cumulative Campaign Audit)",
+      "allowed_writers": [
+        "BARNWELL",
+        "ROSENTHAL",
+        "SANDO"
+      ],
+      "writer_display_names": [
+        "Bill Barnwell (Macro Regression & Sustainability)",
+        "Gregg Rosenthal (Cumulative Vibes & Entertainment Hierarchy)",
+        "Mike Sando (Executive Temperature Check)"
+      ],
+      "writing_archetype_category": "League-Wide Season-to-Date Review",
+      "granularity": "Flexible Cumulative / Season-to-Date",
+      "focus": "Macro regression & sustainability, cumulative vibes & entertainment hierarchy, executive temperature checks, real vs fugazi contenders, youth core engines.",
+      "data_queried": [
+        "Cumulative Opponent-Adjusted Game Credit",
+        "Team Watchability Index (W)",
+        "Trajectory Multipliers (T)",
+        "Under-25 Production Share (Y_prod)",
+        "Purgatory Penalty",
+        "Base Market Gravity (B)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (PROGRESS AUDIT SELECTION):\nYou are evaluating cumulative performance from Week 1 through the current week. Do not focus on the most recent Sunday in isolation. Curate 3 to 4 systemic storylines across the season to date:\n1. The Record Mirages: Teams with strong win-loss records masking negative underlying efficiency and lucky one-score margins.\n2. The Structural Engines: Teams whose trajectory, per-play success rates, and opponent-adjusted credits show they are significantly more dangerous than their record indicates.\n3. The Identity Shift: Units or schemes that have radically pivoted or broken down compared to preseason assumptions.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a comprehensive season progress assessment column (approx. 1,000\u20131,400 words).\n\n1. The Macro State of Play (The Season to Date):\nOpen with an authoritative, journalistic headline using # (e.g., # [Season Week Marker]: The Structural Truth Across the NFL).\nWrite a 2-paragraph introduction framing the narrative arc of the season so far. Identify the central systemic trend governing the year (e.g., a league-wide offensive surge, the dominance of zone-match coverages, or a collapse of the traditional middle class).\n\n2. Real or Mirage? The Contender Litmus Test:\nUse a ## header.\nContrast two franchises with identical or similar winning records: one backed by elite underlying efficiency metrics and one propped up by high-variance turnover luck and one-score bounces.\nTranslate underlying database indicators into natural football language, contrasting down-to-down sustainability against fraudulent record pacing.\n\n3. The Under-the-Hood Ascenders:\nUse a ## header isolating the impact of young cores or schematic advantages across the league.\nSpotlight 1\u20132 teams quietly surging on youth production ($Y_{\\text{prod}}$) or schematic advantages.\n\n4. The Panic Index:\nUse a ## header addressing the league's most disappointing tier.\nDiagnose the veteran-heavy rosters sliding toward mediocrity. Evaluate franchises slipping into organizational crisis.\n\n5. The Next Four Weeks:\nConclude with a ### header projecting the defining battleground of the season's upcoming stretch.\nDeliver a decisive forecast on which upcoming scheduling shifts or regressions will reshape the standings before the next quarter-pole. Conclude directly without generic wrap-up clich\u00e9s.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Season Progress Audit\nGranularity: Flexible Cumulative / Season-to-Date.\nFocus: Macro regression & sustainability, systemic storylines, executive temperature checks, real vs fugazi contenders, youth core engines.\nScope: Curate the 3 to 4 defining structural storylines of the NFL season through the current week. Separate sustainable contenders from high-variance mirages, highlight surging youth nuclei, and evaluate front-office panic in purgatory franchises.",
+      "example_prompt_hook": "Curate the defining macro storylines of the season through the current week. Contrast a legitimate contender against a fugazi winner, spotlight the youth cores driving underlying surges, and audit veteran rosters sliding into purgatory.",
+      "structure_source": "article"
+    },
+    "PLAYER_PROGRESS_REPORT": {
+      "name": "The Player Progress Report (The Tape & Trajectory Audit)",
+      "allowed_writers": [
+        "BARNWELL",
+        "CHADIHA",
+        "YATES"
+      ],
+      "writer_display_names": [
+        "Bill Barnwell (Efficiency & Regression)",
+        "Jeffri Chadiha (Narrative & Legacy)",
+        "Field Yates (Fantasy Volume & Milestones)"
+      ],
+      "writing_archetype_category": "Player Progress Overview",
+      "granularity": "Flexible In-Season / Season-to-Date Arc",
+      "focus": "Mid-campaign player valuation shifts, usage and snap trajectory, underlying efficiency vs. box-score luck, and rest-of-season sustainability.",
+      "data_queried": [
+        "Player Popularity Index (Pop_player)",
+        "Awards Equity (A_awards)",
+        "Baseline Rating (R_rating)",
+        "SpikeIndex",
+        "Target/Usage Deltas",
+        "Offensive Pace (P)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (PLAYER PROGRESS SELECTION):\nYou are evaluating the cumulative season-to-date trajectory of a single player at this point in the season. Do not choose an established player performing within baseline expectations. You must identify a player whose season-to-date performance is forcing an immediate recalibration of their trajectory:\n- An aging veteran whose declining efficiency and diminished SpikeIndex indicate their competitive window or starting role is slipping away.\n- A rising talent drastically outpacing their Baseline Rating ($R_{\\text{rating}}$) and expanding their team's offensive efficiency.\n- A high-volume contributor whose raw numbers look strong, but whose lack of down-to-down consistency or declining Awards Equity ($A_{\\text{awards}}$) suggests upcoming regression.\nSelect the single player whose season-to-date arc answers a central narrative question about their role, developmental ceiling, or place in the league hierarchy.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a sharp, comprehensive player progress evaluation (approx. 800\u20131,000 words).\n\n1. The Progress Thesis (The Hook):\nOpen with a decisive headline using # (e.g., # The Progress Report: How [Player Name] Redefined His Role Through [X] Weeks).\nWrite a 2-paragraph introduction contrasting preseason expectations against actual on-field output to this point in the season. Establish the stakes of their campaign.\n\n2. The Tape vs. The Numbers (The Underlying Efficiency):\nUse a ## header (e.g., ## The Tape Meets the Metric Split).\nContrast raw box-score numbers with down-to-down operational efficiency. Break down how the player is generating production (e.g., scheme design, separation vs. tight coverage, run-after-catch ability, or pocket navigation).\nTranslate volatility indicators like the SpikeIndex into authentic football terminology without using raw algebraic variables (e.g., cite explosive play rate, boom-or-bust consistency, or high-leverage efficiency).\n\n3. Roster Gravity & Market Footprint:\nUse a ## header (e.g., ## Offensive Burden and Team Reliance).\nEvaluate their standing within the offensive architecture and league landscape. Analyze how their weekly output affects defensive game plans and whether their franchise platform is elevating their national visibility.\n\n4. The Rest-of-Season Outlook:\nConclude with a ### header projecting their trajectory across the remainder of the schedule.\nDeliver a firm verdict on whether their current performance level is sustainable or due for regression, factoring in upcoming defensive matchups and schematic counters. End immediately after the final verdict.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Player Progress Report (The Tape & Trajectory Audit)\nGranularity: Flexible In-Season / Season-to-Date Arc.\nFocus: Mid-campaign player valuation shifts, usage and snap trajectory, underlying efficiency vs. box-score luck, and rest-of-season sustainability.\nScope: Conduct a deep mid-campaign valuation audit on a singular player whose performance is forcing a complete recalibration of their trajectory, role, or long-term ceiling.",
+      "example_prompt_hook": "Evaluate a player whose season-to-date campaign has radically shifted their trajectory. Contrast their preseason baseline against operational efficiency, diagnose their offensive burden, and project their rest-of-season sustainability.",
+      "structure_source": "article"
+    },
+    "PRE_SEASON_ROSTER_TIERS": {
+      "name": "The Pre-Season Roster & Tier Grades",
+      "allowed_writers": [
+        "SANDO",
+        "BARNWELL",
+        "ROSENTHAL"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Executive Tiers & Roster Baselines)",
+        "Bill Barnwell (Structural Efficiency)",
+        "Gregg Rosenthal (Vibes & Watchability Tiers)"
+      ],
+      "writing_archetype_category": "Preseason Tiers & Roster Evaluation",
+      "granularity": "Preseason / 32-Team Overview",
+      "focus": "Grouping all 32 NFL franchises into distinct structural tiers based on baseline roster talent, blue-chip pedigree, purgatory status, and championship equity.",
+      "data_queried": [
+        "Baseline Roster Talent",
+        "Blue-Chip Pedigree (P_draft)",
+        "Under-25 Production (Y_prod)",
+        "Purgatory Penalty",
+        "Base Market Gravity (B)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (PRESEASON TIER SELECTION):\nYou are provided with the preseason baseline metrics, demographic distributions, and draft pedigrees for all 32 NFL franchises. Do not simply rank teams 1 through 32, and do not default to last year's playoff standings. You must categorize the entire league into 5 to 6 distinct, conceptually unified tiers (e.g., 'The Inner-Circle Heavyweights', 'The High-Variance Dark Horses', 'The Purgatory Trap', 'The Foundational Rebuilds'). Rely heavily on Blue-Chip Pedigree ($P_{\\text{draft}}$), youth progression, and the Purgatory Penalty to define an organization's true preseason ceiling.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a comprehensive preseason tier column mapping all 32 teams (approx. 1,800\u20132,200 words).\n\n1. The Preseason Thesis (The Hook):\nOpen with an authoritative headline using #.\nWrite a 2-paragraph introduction defining the macro landscape of the league heading into Week 1. What separates the elite from the middle class this year?\n\n2. The Tier Categories (Strict 32-Team Rule):\nYou must place EVERY SINGLE TEAM from the 32-team league into exactly one tier. Do not omit any team. Do not truncate the list.\nUse ## headers for each tier (e.g., ## Tier 1: The Lombardi Favorites).\nUnder each tier header, briefly define the criteria for this specific group (1 paragraph).\n\n3. The Team Blurbs:\nWithin each tier, use bold text for the team name, followed by a 2-to-3 sentence analytical justification for their placement. \nData Integration: Translate baseline talent, youth production share ($Y_{\\text{prod}}$), and draft capital into natural football terminology. Explain how their roster demographics justify their preseason expectations.\n\n4. The Basement (The Drop-Off):\nEnsure the final tier explicitly covers the teams entering the year with the lowest expectations. Conclude with a single brief thought on which basement team has the best chance to completely shock the league.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Pre-Season Roster & Tier Grades\nGranularity: Preseason / 32-Team Overview.\nFocus: Comprehensive preseason categorization grouping all 32 franchises into 5\u20136 structural tiers based on roster baseline, youth progression, and purgatory risk.\nScope: Map out the preseason hierarchy. Define distinct tiers and provide tight analytical blurbs for every single team in the league, establishing the baseline expectations before Week 1 kickoff.",
+      "example_prompt_hook": "Group all 32 NFL franchises into structured preseason tiers based on baseline roster talent and draft pedigree. Define the criteria for each tier and provide a tight analytical justification for every team's placement, ensuring no team is left out.",
+      "structure_source": "article"
+    },
+    "NFL_TOP_100_HIERARCHY": {
+      "name": "The NFL Top 100 & Positional Value Hierarchy",
+      "allowed_writers": [
+        "THE_ATHLETIC",
+        "YATES"
+      ],
+      "writer_display_names": [
+        "The Athletic Staff (Consensus Roster Building)",
+        "Field Yates (Factual List-Maker)"
+      ],
+      "writing_archetype_category": "The Preseason / Offseason Hierarchy",
+      "granularity": "Preseason / League-Wide Player Hierarchy",
+      "focus": "Prestige top 100 player hierarchy evaluating elite talent, positional value, legacy hardware vs. projection, and grouped tier analysis.",
+      "data_queried": [
+        "Baseline Rating (R_rating)",
+        "Positional Multiplier (M_pos)",
+        "Career Awards Equity (A_career)",
+        "Explosive Ceiling (SpikeIndex)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (TOP 100 SELECTION):\nYou are tasked with establishing the definitive top 100 players in the NFL. You must balance a player's pure Baseline Roster Talent against the reality of their Positional Value. You are forced to make hard editorial choices: how much weight do you assign to an aging veteran clinging to Championship Pedigree versus a 22-year-old phenom with elite traits? Identify the true inner-circle top 10 for individual breakdown, and strategically group the remaining 90 players into analytical tiers to digest the league's talent pool.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a prestige Top 100 list and tier breakdown (approx. 1,500\u20132,000 words).\n\n1. The Criteria (The Methodology):\nStart with a definitive headline using #.\nWrite a 2-paragraph introduction explaining your valuation methodology, explicitly stating how you weighed past hardware versus future projection and positional scarcity.\n\n2. The Elite Inner Circle (1\u201310):\nUse numbered ## headers for the top 10 players (e.g., ## 1. Patrick Mahomes, QB).\nFor each top-10 player, write a tight, 3-to-4 sentence justification. Weave in their National Cultural Footprint, their Explosive Ceiling, and the sheer gravity they bring to their franchise.\n\n3. The Remaining 90 (Tiered Breakdown):\nUse ## headers to group players 11 through 100 into distinct analytical tiers (e.g., ## The All-Pro Waiting Room (11-30), ## The Franchise Cornerstones (31-60), ## The Elite Specialists (61-100)).\nInstead of 90 individual blurbs, provide the list of names for each tier and write a 2-paragraph macro analysis explaining the defining traits of the players trapped in this group.\n\n4. The Snub (The Controversy):\nUse a ### header to highlight one or two massive omissions from the Top 100 entirely.\nDevote the final paragraph to high-profile players who missed the cut. Explicitly cite their lack of Explosive Ceiling, inflated 'empty calories' stats, or playoff failures as the exact reason they were left off.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The NFL Top 100 & Positional Value Hierarchy\nGranularity: Preseason / League-Wide Player Hierarchy.\nFocus: Player hierarchy, positional value, legacy hardware vs. traits, top 10 countdown, and grouped tiers for 11-100.\nScope: Establish the definitive top 100 player hierarchy across the league. Individually rank the elite top 10, group the remaining 90 into macro-analytical tiers, and dissect controversial snubs.",
+      "example_prompt_hook": "Rank the top 100 NFL players. Break down the top 10 individually, group players 11-100 into analytical tiers, and justify the high-profile snubs left off the list entirely.",
+      "structure_source": "article"
+    },
+    "POSITIONAL_PLAYER_TIERS": {
+      "name": "The Positional Tiers Breakdown",
+      "allowed_writers": [
+        "SANDO",
+        "YATES",
+        "KIMES"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Executive/Scout Consensus)",
+        "Field Yates (Factual & Fantasy Volume)",
+        "Mina Kimes (Schematic Efficiency)"
+      ],
+      "writing_archetype_category": "Positional Rankings",
+      "granularity": "Midseason / Position Group Audit",
+      "focus": "Grouping all starting players at a specific premium position into strictly defined analytical and structural tiers.",
+      "data_queried": [
+        "Baseline Rating (R_rating)",
+        "SpikeIndex",
+        "Opponent-Adjusted Game Credit",
+        "Under-25 Production (Y_prod)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (TIER SELECTION):\nYou are evaluating the entire league-wide landscape of a single position (e.g., all 32 starting Quarterbacks, or the top 40 Wide Receivers). Do not rank them strictly 1 to 32. You must group the players into 4 to 5 distinct thematic tiers based on their underlying metrics, tape, and current trajectory. Differentiate the 'High-Variance Gunslingers' (elite SpikeIndex but poor efficiency) from the 'System Elevators' (elite Opponent-Adjusted Credit).",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a comprehensive positional tier column (approx. 1,200\u20131,500 words).\n\n1. The Positional Thesis (The Hook):\nOpen with a definitive headline using #.\nWrite a 2-paragraph introduction defining the current state of this position across the NFL. Are we in a golden age, or is there a severe lack of middle-class talent?\n\n2. The Tier Breakdowns:\nUse ## headers for each tier (e.g., ## Tier 1: The Offensive Engines, ## Tier 2: The High-Variance Ceilings).\nBelow the header, write a 1-paragraph summary explaining the defining traits of the players in this specific group.\nList the players included in the tier using bold text, followed by a 1-to-2 sentence justification for their placement based on their Baseline Rating, per-play efficiency, or youth trajectory.\n\n3. The Replacement Level:\nEnsure the final tier explicitly covers the players fighting for their jobs. Name the veterans who are actively holding their offenses back. End the piece after the final tier.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Positional Tiers Breakdown\nGranularity: Midseason / Position Group Audit.\nFocus: Grouping starters at a specific position into structural tiers based on efficiency, ceiling, and scheme fit.\nScope: Map out the entire positional landscape. Create defined buckets and assign every relevant starter to a tier with brief analytical justifications.",
+      "example_prompt_hook": "Evaluate a single premium position across the NFL. Group the league's starters into 4 to 5 thematic tiers based on their underlying efficiency and explosive ceiling, providing a tight justification for each player's placement.",
+      "structure_source": "article"
+    },
+    "POSITIONAL_TOP_10_HIERARCHY": {
+      "name": "The Positional Top 10 Hierarchy",
+      "allowed_writers": [
+        "BARNWELL",
+        "CHADIHA",
+        "SKIP_BAYLESS"
+      ],
+      "writer_display_names": [
+        "Bill Barnwell (Efficiency & Regression)",
+        "Jeffri Chadiha (Legacy & Narrative)",
+        "Skip Bayless (Clutch Gene & Superstars)"
+      ],
+      "writing_archetype_category": "Positional Rankings",
+      "granularity": "In-Season / Elite Positional Audit",
+      "focus": "A rigid, prestige 1-through-10 ranking of the absolute best players at a single premium position right now, debating legacy vs. current film.",
+      "data_queried": [
+        "Awards Equity (A_awards)",
+        "Explosive Ceiling (SpikeIndex)",
+        "Playoff Clout (S_playoff)",
+        "Player Popularity (Pop_player)"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (TOP 10 SELECTION):\nYou are forced to rank the absolute top 10 players at one specific premium position (e.g., Edge Rushers, Cornerbacks, or Left Tackles). You must weigh past hardware and Playoff Clout against current explosive metrics (SpikeIndex). Do not mention average or replacement-level players. This is strictly a debate about the elite. You must make hard editorial choices between aging legends with massive Awards Equity versus young phenoms with unmatched physical traits.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a prestige Top 10 positional countdown (approx. 1,000\u20131,200 words).\n\n1. The Positional Landscape:\nStart with a definitive headline using #.\nWrite a 1-paragraph introduction establishing the criteria for this specific Top 10. Explain what separates the #1 overall player from the rest of the top 5.\n\n2. The Top 10 Countdown:\nUse numbered ## headers for every player (e.g., ## 1. [Player Name], [Team]).\nFor each player, write a tight, 3-to-4 sentence justification. Detail their explosive ceiling, their National Cultural Footprint, and their ability to neutralize the opponent's game plan.\n\n3. The Controversial Snub:\nUse a ### header to highlight one massive omission (e.g., ### The Outside Looking In: [Player Name]).\nDevote the final paragraph to a high-profile player who just missed the top 10. Explicitly cite their lack of a SpikeIndex, empty-calorie stats, or failure in high-leverage moments as the reason they missed the cut.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Positional Top 10 Hierarchy\nGranularity: In-Season / Elite Positional Audit.\nFocus: A rigid 1-to-10 countdown of the elite players at a single position, evaluating peak efficiency, legacy, and pure talent.\nScope: Rank the absolute top 10 players at a specific position. Justify their placement among the elite, and thoroughly dissect the most controversial snub left off the list.",
+      "example_prompt_hook": "Rank the absolute top 10 players at a premium position right now. Balance past hardware against current explosive tape, provide a numbered countdown, and justify the most controversial snub left outside the top 10.",
+      "structure_source": "article"
+    },
+    "NATIONAL_OPINION_COLUMN": {
+      "name": "The National Opinion Column",
+      "allowed_writers": [
+        "SIMMONS",
+        "ACHO",
+        "YATES",
+        "BAYLESS",
+        "KIMES"
+      ],
+      "writer_display_names": [
+        "Bill Simmons (Historical / Pop Culture / Narrative)",
+        "Emmanuel Acho (Uncomfortable Truths / Contrarian)",
+        "Field Yates (Lists / Milestones / Volume)",
+        "Skip Bayless (Clutch Gene / Fourth Quarter Drama)",
+        "Mina Kimes (Metric-Driven Schematic Perspective)"
+      ],
+      "writing_archetype_category": "National Perspective",
+      "granularity": "Week-level / Macro Narrative",
+      "focus": "Singular viewpoint editorial focusing on league narratives, historical debates, contrarian reality checks, milestone valuations, or fourth-quarter clutch execution.",
+      "data_queried": [
+        "Player Popularity Index (Pop_player)",
+        "Awards Equity (A_awards)",
+        "Base Market Gravity (B)",
+        "SpikeIndex",
+        "Offensive Pace (P)"
+      ],
+      "example_prompt_hook": "Isolate the defining cultural narrative or superstar controversy of the week. Challenge mainstream consensus, run a historical parallel, or interrogate fourth-quarter execution.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The National Opinion Column\nGranularity: Week-level / Macro Narrative.\nFocus: League narratives, historical debates, contrarian reality checks, milestone valuations, and clutch execution.\nScope: Deliver a high-impact, singular-viewpoint national column centered around one defining player, team controversy, or macro storyline. Do not write a generic game recap; construct a passionate, evidence-backed argument governed by your assigned editorial voice.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (NATIONAL_OPINION_COLUMN):\nYou are provided with the full weekly slate, cumulative metrics, and player leaderboards. Do not write a traditional game recap or multi-game preview. You must isolate a single high-profile topic carrying an outsized National Cultural Footprint ($Pop_{\\text{player}}$) or massive Franchise Market Gravity ($B$). Filter your selection through your assigned columnist archetype:\n- If Bill Simmons: Identify historical parallels, body-language red flags, franchise panic meters, or 'wonky' narrative trends.\n- If Emmanuel Acho: Locate the overwhelming mainstream consensus that the public takes for granted, and curate the uncomfortable contrarian counter-argument.\n- If Field Yates: Curate milestone pace anomalies, target/snap share surges, or positional tier movements.\n- If Skip Bayless: Curate a marquee superstar quarterback or historic franchise that either collapsed under pressure or dominated in high-leverage fourth-quarter situations.\nSelect the single narrative that provides the strongest platform for a passionate, definitive editorial argument.",
+      "structure_directive": null,
+      "structure_source": "writer"
+    },
+    "PLAYOFF_AUTOPSY": {
+      "name": "The Playoff Autopsy (Postseason Exit & Window Audit)",
+      "allowed_writers": [
+        "SANDO",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Front-Office Windows & Executive Accountability)",
+        "Bill Barnwell (Tactical Autopsy & Regression/Sustainability)"
+      ],
+      "writing_archetype_category": "Postseason Exit Diagnostics",
+      "granularity": "Postseason Exit / Offseason Horizon",
+      "focus": "Forensic breakdown of a postseason elimination, identifying the schematic failure points that got exposed, evaluating championship window sustainability, and defining the immediate draft and roster mandate.",
+      "data_queried": [
+        "Opponent-Adjusted Game Credit",
+        "Under-25 Production (Y_prod)",
+        "Blue-Chip Pedigree (P_draft)",
+        "Purgatory Penalty",
+        "Base Market Gravity (B)",
+        "Legacy Floor (S_all-time)",
+        "Offensive Pace (P)"
+      ],
+      "example_prompt_hook": "Conduct a definitive playoff autopsy on an eliminated contender. Pinpoint where the game plan fractured, evaluate whether their championship window is closing or just opening, and establish the front office's primary offseason directive.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Playoff Autopsy\nGranularity: Postseason Exit / Offseason Horizon.\nFocus: Forensic examination of an eliminated playoff team, schematic breakdown of their postseason exit, championship window trajectory, and offseason front-office mandate.\nScope: Deliver a definitive postseason autopsy on a newly eliminated franchise. Diagnose the tactical malfunction that doomed their playoff run, evaluate the age curve of their core, and set the terms of their upcoming offseason without speculating on specific salary figures or trade proposals.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (PLAYOFF_AUTOPSY):\nYou are provided with the results of the most recent playoff round along with full-season and multi-year franchise analytics. You must select an eliminated team whose exit represents a significant organizational crossroads:\n- An aging heavyweight whose championship window appears to have slammed shut under the weight of veteran attrition and the Purgatory Penalty.\n- A high Base Market Gravity ($B$) franchise facing immense fan and executive scrutiny after a high-profile collapse or premature exit.\n- An ascending young roster powered by elite Under-25 Production Share ($Y_{\\text{prod}}$) whose postseason loss served as a foundational learning experience rather than a systemic failure.\nSelect the eliminated franchise whose exit raises the most urgent structural questions heading into the spring.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a rigorous postseason autopsy and franchise diagnosis (approx. 900\u20131,200 words).\n\n1. The Scene of the Crash (The Exit):\nOpen with an authoritative headline using # (e.g., # Playoff Autopsy: How [Opponent] Solved [Team Name] and What Comes Next).\nWrite 2 paragraphs analyzing the finality of the elimination game. Identify the exact moment or systemic matchup disadvantage that doomed their postseason run.\n\n2. The Schematic Fracture (What Broke on Film):\nUse a ## header (e.g., ## The Film Room: Where the Game Plan Fractured).\nBreak down the specific tactical collapse that decided their fate (e.g., protection breakdown against blitz packages, inability to generate explosive plays against split-safety looks, or red-zone execution failures). Contrast their regular-season baseline against this postseason exposure without using raw algebraic variables.\n\n3. The Window Audit (Ascending, Stagnant, or Slamming Shut):\nUse a ## header (e.g., ## The Championship Window Litmus Test).\nEvaluate the structural age and foundation of the roster. Examine whether the team's core is sustained by high Under-25 Production ($Y_{\\text{prod}}$) and incoming draft capital ($P_{\\text{draft}}$), or whether the roster is sliding into middle-tier mediocrity under the Purgatory Penalty.\n\n4. Front Office & Coaching Seat Temperature:\nUse a ## header (e.g., ## Organizational Heat & Accountability).\nAssess the pressure on the coaching staff and front office. Frame whether this playoff defeat demands a schematic overhaul, play-calling adjustments, or patience with an ascending foundation.\n\n5. The Spring Mandate:\nConclude with a ### header stating the singular priority for the upcoming offseason.\nDefine the specific positional archetype, schematic adjustment, or draft focus required to return to the postseason and advance further next January. Conclude cleanly without transitional wrap-ups.",
+      "structure_source": "article"
+    },
+    "X_FACTOR_VOLATILITY_SPOTLIGHT": {
+      "name": "The X-Factor Volatility Spotlight (Super Bowl Ceiling Audit)",
+      "allowed_writers": [
+        "BARNWELL",
+        "JOYNER",
+        "YATES"
+      ],
+      "writer_display_names": [
+        "Bill Barnwell (Variance & Efficiency Analytics)",
+        "KC Joyner (Matchup Exploitation)",
+        "Field Yates (Volume Spikes & Fantasy/Prop Context)"
+      ],
+      "writing_archetype_category": "Super Bowl Matchup Spotlight",
+      "granularity": "Single-Game Predictive / Super Bowl Arc",
+      "focus": "Identifying the highly volatile, non-quarterback skill players whose Boom-or-Bust profiles (SpikeIndex) could single-handedly wreck the Super Bowl game script.",
+      "data_queried": [
+        "SpikeIndex",
+        "Target/Snap Share Deltas",
+        "Opponent Matchup Deficiencies",
+        "Offensive Pace (P)",
+        "Under-25 Production (Y_prod)"
+      ],
+      "example_prompt_hook": "Identify the ultimate Super Bowl X-Factor. Analyze a volatile skill player with a massive SpikeIndex, break down the specific schematic mismatch they can exploit, and predict how they could break the game script.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The X-Factor Volatility Spotlight\nGranularity: Single-Game Predictive.\nFocus: Boom-or-Bust volatility, specific schematic mismatches, and game-script disruption.\nScope: Deliver a hyper-focused predictive spotlight on 1 to 2 high-variance skill players (non-QBs) playing in the Super Bowl. Use their SpikeIndex to explain how their explosive ceiling or devastating floor could serve as the ultimate X-factor that decides the Lombardi Trophy.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (X_FACTOR_SPOTLIGHT):\nYou are provided with the Super Bowl matchup and full-season advanced metrics for both rosters. You must select the ultimate 'X-Factor' player for this specific matchup. Do not pick the star Quarterback, and do not pick a steady, low-variance possession receiver. You are hunting for volatility:\n- A boom-or-bust deep threat with a massive SpikeIndex who faces a vulnerable defensive secondary.\n- A situational pass rusher whose pressure rate creates high Upset Leverage.\n- A dynamic rookie ($Y_{\\text{prod}}$) whose usage has spiked in the postseason, making them an unpredictable variable for the opposing defensive coordinator.\nSelect the player whose variance will dictate the final outcome of the game.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a predictive X-Factor breakdown (approx. 800\u20131,000 words).\n\n1. The Game-Breaker Thesis (The Hook):\nOpen with a sharp, definitive headline using # (e.g., # The Ultimate X-Factor: Why [Player Name] Holds the Keys to the Super Bowl).\nWrite a 2-paragraph introduction identifying the player and explaining why the general public is underestimating their potential impact on the game script.\n\n2. The Anatomy of the Spike (The Volatility Audit):\nUse a ## header (e.g., ## The Boom-or-Bust Profile).\nTranslate their SpikeIndex into natural football terminology. Explain their floor vs. their ceiling. When this player hits their absolute peak, what does it look like on the field? Back this up with their target volume, route participation, or situational snap counts.\n\n3. The Schematic Mismatch (The Film Room):\nUse a ## header (e.g., ## Exploiting the Matchup).\nBreak down the specific weakness in the opponent's defense that this player is uniquely equipped to exploit. Detail the tactical alignment (e.g., motioning into the slot against a slower linebacker, or winning one-on-ones on the boundary).\n\n4. The Script Prediction:\nConclude with a ### header projecting their exact Super Bowl output.\nPredict whether they will hit their massive ceiling and win the game for their team, or hit their floor and stall the offense. State exactly how many explosive plays (20+ yards) or high-leverage stops they will generate. End cleanly without summary filler.",
+      "structure_source": "article"
+    },
+    "OFFICIAL_AP_ALL_PRO_ROSTER": {
+      "name": "The Official AP All-Pro Roster",
+      "allowed_writers": [
+        "YATES",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Field Yates (Definitive Roster & Stats)",
+        "Bill Barnwell (Efficiency & Positional Value)"
+      ],
+      "writing_archetype_category": "Year-End Hardware",
+      "granularity": "Season-Level / Year-End Roster",
+      "focus": "The definitive First and Second-Team AP All-Pro selections, statistical justifications, positional dominance, and voting anomalies.",
+      "data_queried": [
+        "Awards Equity (A_awards)",
+        "Baseline Rating (R_rating)",
+        "SpikeIndex",
+        "Player Popularity Index (Pop_player)",
+        "Empty Calories Suppressor"
+      ],
+      "example_prompt_hook": "Reveal the official AP All-Pro First and Second Teams. Construct both complete 29-player units across Offense, Defense, and Special Teams, provide statistical justifications for the top skill talent, and evaluate positional dominance without speculative snub commentary.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Official AP All-Pro Roster\nGranularity: Season-Level / Year-End Roster.\nFocus: The definitive First and Second-Team AP All-Pro selections, statistical justifications, positional dominance, and voting anomalies.\nScope: Serve as the authoritative publication of record revealing both the First and Second AP All-Pro teams in full. Deliver exhaustive, official roster lists across offense, defense, and special teams with targeted statistical rationale.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (ALL-PRO ROSTER SELECTION):\nYou are selecting and revealing the definitive year-end AP All-Pro roster. You must construct both the complete First Team and Second Team. Weigh full-season efficiency, raw volume, and high-leverage execution. Apply the 'Empty Calories' suppressor aggressively\u2014do not award honors to players racking up garbage-time stats on sub-.300 teams.\n- If Field Yates: Focus on the raw statistical dominance and milestone volume that separated the First Team from the Second Team.\n- If Bill Barnwell: Focus on underlying down-to-down efficiency, positional value, and how specific defensive schemes inflated or suppressed voting equity.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as the definitive, publication-ready All-Pro Roster Reveal (approx. 1,200\u20131,500 words).\n\n1. The Voting Overview (The Hook):\n- Open with a definitive headline using # (e.g., # The 2026 AP All-Pro Team: The Official First and Second-Team Rosters).\n- Write a 2-paragraph introduction identifying the defining characteristic of this year's voting class (e.g., unanimous selections, a historic rookie class, or a changing of the guard at quarterback).\n\n2. The First-Team Offense:\n- Use a ## header (e.g., ## First-Team Offense).\n- Output a cleanly formatted Markdown list containing the exact modern AP Offensive slots: 1 QB, 1 RB, 1 FB, 3 WRs, 1 TE, 1 All-Purpose Player, 1 LT, 1 LG, 1 C, 1 RG, 1 RT.\n- Provide a brief 1-sentence statistical justification for the skill-position players (QB, RB, WRs, TE) translating their Boom-or-Bust Volatility (SpikeIndex) or Awards Equity into natural football language.\n\n3. The First-Team Defense & Special Teams:\n- Use a ## header (e.g., ## First-Team Defense & Special Teams).\n- Output a formatted Markdown list containing the exact modern AP Defensive slots: 2 Edge Rushers, 2 Interior Linemen, 3 Linebackers, 2 Cornerbacks, 1 Slot Cornerback, 2 Safeties.\n- Below defense, list the Special Teams slots: 1 Kicker, 1 Punter, 1 Kick Returner, 1 Punt Returner, 1 Special Teamer, 1 Long Snapper.\n- Provide a brief 1-sentence justification for the most dominant defensive unit or unanimous selection.\n\n4. The Second-Team Offense:\n- Use a ## header (e.g., ## Second-Team Offense).\n- Output a cleanly formatted Markdown list of the offensive runners-up matching the exact positional slots above.\n\n5. The Second-Team Defense & Special Teams:\n- Use a ## header (e.g., ## Second-Team Defense & Special Teams).\n- Output a cleanly formatted Markdown list of the defensive and special teams runners-up matching the exact positional slots above.\n- End the article cleanly after the Long Snapper. Do not include a concluding summary paragraph.",
+      "structure_source": "article"
+    },
+    "SUPER_BOWL_COMPREHENSIVE_PREVIEW": {
+      "name": "The Super Bowl Comprehensive Game Preview (The Lombardi Mega-Preview)",
+      "allowed_writers": [
+        "BARNWELL",
+        "ROSENTHAL",
+        "CHADIHA"
+      ],
+      "writer_display_names": [
+        "Bill Barnwell (Macro Analytics & Efficiency Models)",
+        "Gregg Rosenthal (Matchup Aesthetics & Game Flow)",
+        "Jeffri Chadiha (Championship Clout & Legacy Stakes)"
+      ],
+      "writing_archetype_category": "Championship Mega-Preview",
+      "granularity": "Single-Game Pinnacle / Full-Season Culmination",
+      "focus": "Definitive multi-angle Super Bowl preview covering tactical schemes, efficiency baselines, line-of-scrimmage trench warfare, quarterback legacy stakes, and final score projections.",
+      "data_queried": [
+        "Opponent-Adjusted Game Credit",
+        "Single-Game Excitement Index (E)",
+        "Offensive Pace (P)",
+        "Playoff Clout (S_playoff)",
+        "Awards Equity (A_awards)",
+        "Legacy Floor (S_all-time)",
+        "Base Market Gravity (B)",
+        "SpikeIndex",
+        "Youth Production Share (Y_prod)"
+      ],
+      "example_prompt_hook": "Deliver the definitive Super Bowl preview. Break down the clash of offensive pace against defensive efficiency, evaluate the quarterback legacy stakes, diagnose the trench battles, and issue an official final score prediction.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Super Bowl Comprehensive Game Preview\nGranularity: Single-Game Pinnacle / Full-Season Culmination.\nFocus: Comprehensive championship preview, tactical chess match, efficiency baselines, trench warfare, and legacy impact.\nScope: You are anchoring Super Bowl week with the marquee preview of the season. Deliver an exhaustive, multi-faceted analysis of the matchup without referencing betting spreads, moneylines, over/under totals, or contractual salaries. Translate all internal metrics into authentic football analysis and issue a definitive final scoreline.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (SUPER_BOWL_PREVIEW):\nYou are previewing the final game of the NFL season between the two conference champions. Synthesize the entire season's worth of data and film. Do not treat this as a standard weekly preview; center your analysis around the defining tensions that determine championship outcomes:\n- Contrast their Offensive Pace ($P$) and cumulative Opponent-Adjusted Game Credit to determine who dictates tempo.\n- Interrogate whether an explosive passing attack with high SpikeIndex volatility can survive against an elite, disciplined pass rush.\n- Weigh the historical gravity of the moment, assessing how Quarterback Playoff Clout ($S_{\\text{playoff}}$) and coaching postseason experience influence execution under maximum pressure.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as the premier championship mega-preview (approx. 1,800\u20132,200 words).\n\n1. The Grand Stage (The Overture):\nOpen with an authoritative headline using # (e.g., # Super Bowl LXI Preview: Tactical Mismatches, Legacy Stakes, and the Path to the Lombardi Trophy).\nWrite a rich 3-paragraph introduction framing the historical significance of the matchup, the contrasting identities of the two champions, and the central question of the game.\n\n2. The Quarterback Legacy & The Stakes:\nUse a ## header (e.g., ## The Signal-Callers: Championship Clout and the Pressure Cooker).\nExamine the starting quarterbacks head-to-head. Evaluate how their decision-making against blitz packages and off-script creation will hold up under single-elimination pressure. Incorporate their Playoff Clout and historical pedigree without reciting raw formula variables.\n\n3. Trench Warfare: The Line of Scrimmage:\nUse a ## header (e.g., ## In the Trenches: Pass-Rush Paths vs. Pass Protection Rules).\nDeliver a granular breakdown of the line of scrimmage. Analyze interior pass rush vs. center/guard communication, edge contain against outside zone runs, and which front holds the point-of-attack advantage.\n\n4. The Chess Match: Coordinators and Scheme Exploitation:\nUse a ## header (e.g., ## The Schematic Fault Lines: Two-High Shells vs. Motion Concepts).\nDissect the coordinator battle. Detail how the offense will use motion and condensed sets to create leverage, and how the defense will rotate coverage shells to disguise intent.\n\n5. The Volatility Factor (The X-Factor Unit):\nUse a ## header isolating special teams, turnover margins, and skill-player boom-or-bust variance (SpikeIndex).\nHighlight the non-QB unit or situational dynamic (third-and-short conversions, red-zone touchdowns vs. field goals) that could suddenly swing momentum.\n\n6. The Game Script & Official Prediction:\nConclude with a ## header outlining how the game will unfold across all four quarters.\nDetail the turning point in the second half, identify the Super Bowl MVP archetype, and end with the bold projected scoreline:\n**Projected Final: [Winner Name] [Score], [Loser Name] [Score]**",
+      "structure_source": "article"
+    },
+    "MARKET_GRAVITY_LEGACY_AUDIT": {
+      "name": "The Market Gravity & Legacy Floor Audit (The Super Bowl Prestige Column)",
+      "allowed_writers": [
+        "SIMMONS",
+        "CHADIHA"
+      ],
+      "writer_display_names": [
+        "Bill Simmons (Historical / Pop Culture / Narrative)",
+        "Jeffri Chadiha (Championship Clout & Legacy Stakes)"
+      ],
+      "writing_archetype_category": "Championship Legacy Audit",
+      "granularity": "Franchise Historical / Macro Narrative",
+      "focus": "Macro-level column evaluating what a Super Bowl championship would mean for the historical prestige, legacy floor, and market gravity of the two participating franchises.",
+      "data_queried": [
+        "Base Market Gravity (B)",
+        "Legacy Floor (S_all-time)",
+        "Historical Franchise Prestige",
+        "National Penetration (N)"
+      ],
+      "example_prompt_hook": "Evaluate the historical stakes of the Super Bowl matchup. Analyze what a Lombardi trophy would do for the Legacy Floor of the winning franchise and how it would shift their Base Market Gravity.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Market Gravity & Legacy Floor Audit\nGranularity: Franchise Historical / Macro Narrative.\nFocus: Franchise prestige, Legacy Floor shifts, Market Gravity implications, and historical stakes.\nScope: Step back from the X's and O's of the Super Bowl matchup. Evaluate the macro-level organizational stakes. What does a championship mean for the historical legacy and market power of these two franchises? Translate metrics like Legacy Floor ($S_{\\text{all-time}}$) and Base Market Gravity ($B$) into narrative weight.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (LEGACY AUDIT):\nYou are evaluating the two Super Bowl finalists through a strictly historical and organizational lens. Do not preview the on-field game plan or positional matchups. Your task is to weigh the franchise implications of a victory:\n- For a historic powerhouse, does a win solidify their Legacy Floor as a dynasty, or does a loss signal the erosion of their National Penetration?\n- For a historically futile or small-market franchise, does a Lombardi permanently elevate their Base Market Gravity and rewrite decades of failure?\nSelect the narrative angle that best captures the existential stakes for the franchises involved.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as a prestige historical column (approx. 1,000\u20131,200 words).\n\n1. The Historical Weight (The Hook):\nOpen with a sweeping headline using # (e.g., # The Weight of the Ring: How Super Bowl LXI Will Reshape Franchise History).\nWrite a 2-paragraph introduction establishing the organizational histories of both teams and what a championship means for their respective fanbases.\n\n2. The Legacy Floor Analysis (Team A):\nUse a ## header focused on the AFC Champion's historical burden.\nTranslate their Legacy Floor ($S_{\\text{all-time}}$) into narrative terms. Discuss their Canton Alumni Share, past championship history, and what a win or loss does to their permanent historical standing.\n\n3. The Market Gravity Analysis (Team B):\nUse a ## header focused on the NFC Champion's market power.\nTranslate their Base Market Gravity ($B$) and National Penetration ($N$) into narrative terms. Are they an ascending market darling, or a struggling franchise trying to establish a new cultural footprint?\n\n4. The Existential Verdict:\nConclude with a ### header declaring which franchise has more to lose. Summarize the permanent organizational shift that Sunday's result will trigger.",
+      "structure_source": "article"
+    },
+    "SUPER_BOWL_ROUNDTABLE_CONSENSUS": {
+      "name": "The Bold Predictions & Panel Consensus (The Super Bowl Roundtable)",
+      "allowed_writers": [
+        "ROUNDTABLE_PANEL",
+        "THE_ATHLETIC",
+        "KIMES",
+        "SIMMONS",
+        "ACHO",
+        "YATES"
+      ],
+      "writer_display_names": [
+        "Super Bowl Roundtable Panel (Kimes, Simmons, Acho, Yates)",
+        "The Athletic Staff (Roundtable Panel & Consensus)",
+        "Mina Kimes (Film & Schematic Metrics)",
+        "Bill Simmons (Historical / Pop Culture / Narrative)",
+        "Emmanuel Acho (Uncomfortable Truths / Contrarian)",
+        "Field Yates (Fantasy Volume & Prop Volatility)"
+      ],
+      "writing_archetype_category": "The Super Bowl Roundtable",
+      "granularity": "Single-Game Pinnacle / Super Bowl Consensus",
+      "focus": "A multi-voice feature designed to highlight conflicting models, narrative disagreements, extreme bold predictions, and final scoreboard consensus before the Super Bowl.",
+      "data_queried": [
+        "Upset Leverage (U_projected)",
+        "Single-Game Excitement Index (E)",
+        "SpikeIndex",
+        "Player Popularity Index (Pop_player)"
+      ],
+      "example_prompt_hook": "Convene the expert roundtable for the Super Bowl. Feature conflicting bold predictions across tape analysis, contrarian logic, historical narrative, and fantasy props, name under-the-radar MVP candidates, and issue the panel's official score consensus.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Bold Predictions & Panel Consensus\nGranularity: Single-Game Pinnacle / Super Bowl Consensus.\nFocus: Multi-voice expert roundtable, conflicting analytical models, bold prop/game predictions, and final scoreboard consensus.\nScope: Act as an expert multi-analyst panel previewing the Super Bowl. Feature distinct analytical personas offering sharp, conflicting bold predictions, under-the-radar MVP picks, and final scorelines culminating in a unified panel consensus.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (THE ROUNDTABLE CONSENSUS):\nThis is a multi-voice feature designed to highlight conflicting models and narrative disagreements before the Super Bowl. You are acting as a panel of four distinct analysts. Do not have everyone agree.\n- Analyst 1 (The Metrics/Tape Analyst like Kimes): Must base their prediction strictly on a schematic mismatch (e.g., pressure rates, coverage shells).\n- Analyst 2 (The Contrarian like Acho): Must pick against the public consensus, citing a specific vulnerability in the favorite.\n- Analyst 3 (The Narrativist like Simmons): Must focus on legacy, historical weight, and which team \"needs it more.\"\n- Analyst 4 (The Fantasy/Prop Expert like Yates): Must focus on a highly specific player prop or a volatile SpikeIndex player who will swing the game.\nThe panel must provide four distinct \"Bold Predictions\" that border on the extreme, followed by a final, official score prediction from each.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an expert roundtable (approx. 1,000\u20131,200 words).\n\n1. The Introduction (The Stakes):\nOpen with a headline using # (e.g., # Super Bowl LXI Predictions: Our Experts Call the Winner, the MVP, and the Game's Biggest Shock).\nWrite a 1-to-2 paragraph intro framing the clash of styles between the two teams and introducing the panel.\n\n2. The Bold Predictions:\nUse a ## header (e.g., ## The Bold Predictions).\nCreate four sub-sections using ### [Analyst Name's] Prediction: [The Prediction Kicker].\nEach analyst gets exactly 1 paragraph (3\u20134 sentences) to make a hyper-specific, slightly outrageous claim about how the game unfolds (e.g., a defensive lineman winning MVP, a team being shut out in the first half, a specific trick play). They must write strictly in their assigned persona.\n\n3. The X-Factor / MVP Picks:\nUse a ## header (e.g., ## The Under-the-Radar MVP).\nUse a bulleted list where each analyst names one player (outside of the starting QBs) who will dictate the outcome, tying it back to their specific analytical lens (e.g., SpikeIndex, Youth Production).\n\n4. The Final Consensus (The Scoreboard):\nUse a ## header (e.g., ## Official Super Bowl Picks).\nList the final score prediction for each analyst in a clean format:\n[Analyst Name]: [Winning Team] [Score], [Losing Team] [Score] (e.g., Mina Kimes: Chiefs 27, Eagles 24)\nEnd the article with a single bolded line stating the overall panel consensus (e.g., **Panel Consensus: Chiefs 3-1**).",
+      "structure_source": "article"
+    },
+    "QUARTERBACK_DUEL_TAPE_BREAKDOWN": {
+      "name": "The Quarterback Duel Tape Breakdown (Film Room Head-to-Head)",
+      "allowed_writers": [
+        "ORLOVSKY",
+        "KIMES",
+        "JOYNER"
+      ],
+      "writer_display_names": [
+        "Dan Orlovsky (QB Mechanics & Telestrator Breakdown)",
+        "Mina Kimes (Metric-Driven Schematic Film Study)",
+        "KC Joyner (Scientific Efficiency & Matchup Splits)"
+      ],
+      "writing_archetype_category": "Film Room Tactical Breakdown",
+      "granularity": "Single-Game Marquee Matchup / Pre-Kickoff Film Study",
+      "focus": "Comprehensive quarterback tape evaluation dissecting pocket mechanics, processing speeds against simulated pressure, middle-of-the-field coverage reads, and high-leverage situational creation.",
+      "data_queried": [
+        "Baseline Rating (R_rating)",
+        "Awards Equity (A_awards)",
+        "SpikeIndex",
+        "Offensive Pace (P)",
+        "Playoff Clout (S_playoff)",
+        "Opponent Matchup Deficiencies"
+      ],
+      "example_prompt_hook": "Deconstruct the Super Bowl quarterback duel through the coaching tape. Contrast how both signal-callers process split-safety looks, navigate collapsing pockets, and handle simulated pressures on third down.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Quarterback Duel Tape Breakdown\nGranularity: Single-Game Marquee Matchup / Pre-Kickoff Film Study.\nFocus: Quarterback mechanics, processing versus coverage disguise, pocket navigation, and off-script explosive play creation.\nScope: Step inside the film room to break down the two starting signal-callers head-to-head before kickoff. Do not write a broad team preview or focus on legacy narratives; focus squarely on the quarterback craft\u2014footwork, base platform, eyes against disguised coverage shells, and anticipation versus blitz looks. Translate all internal tracking metrics into authentic film analysis without citing betting odds or contract numbers.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (QB_DUEL_SELECTION):\nYou are previewing the championship game strictly through the tape of the two starting quarterbacks. Isolate the exact schematic obstacles each passer faces from the opposing defensive coordinator:\n- Contrast their timing inside structure versus their off-platform creation ability under pressure.\n- Analyze how their individual SpikeIndex manifests on film: is their ceiling driven by rhythmic, anticipatory intermediate strikes or high-variance out-of-structure deep shots?\n- Interrogate their efficiency against two-high shell rotations, evaluating whether they take underneath checkdowns or force high-risk throws into tight windows.\nFocus entirely on the mechanical and mental execution required to win from the pocket.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as an in-depth coaching tape breakdown (approx. 1,000\u20131,300 words).\n\n1. The Film Room Overture:\nOpen with a technical, film-study headline using # (e.g., # Inside the Film Room: Deconstructing the Super Bowl Quarterback Duel).\nWrite 2 paragraphs contrasting the mechanical styles and processing rhythms of the two signal-callers heading into the matchup.\n\n2. Film Study: [Quarterback A] vs. Opposing Defensive Disguises:\nUse a ## header focused on Quarterback A (e.g., ## [QB A Name]: Operating on Time vs. Simulated Pressures).\nBreak down his footwork, release point, and how he reads safety rotations post-snap. Detail the specific coverage shell (Cover 3 match, quarters, Cover 1 robber) the opposing defense will use to take away his primary read.\n\n3. Film Study: [Quarterback B] vs. Opposing Defensive Disguises:\nUse a ## header focused on Quarterback B (e.g., ## [QB B Name]: Pocket Navigation and Second-Reaction Creation).\nAnalyze how he handles edge and interior pressure paths. Detail whether his base breaks down under distress and how the opposing front seven can constrict his throwing lanes.\n\n4. The High-Leverage Flashpoint: Third-and-Long & The Red Zone:\nUse a ## header dissecting situational passing execution.\nContrast how both quarterbacks perform when the defense knows a pass is coming. Highlight conversion rates against blitz packages and red-zone throw placement into compressed coverage.\n\n5. The Tape Room Verdict:\nConclude with a ### header naming the quarterback who possesses the technical and schematic edge to protect the football and execute the game-winning drive. End directly after the assessment without wrap-up filler.",
+      "structure_source": "article"
+    },
+    "SUPER_BOWL_MEDIA_INTERVIEW_AUDIT": {
+      "name": "The Super Bowl Media & Interview Audit (The Psychological Press Check)",
+      "allowed_writers": [
+        "CHADIHA",
+        "SIMMONS",
+        "CLARK"
+      ],
+      "writer_display_names": [
+        "Jeffri Chadiha (Narrative & Leadership)",
+        "Bill Simmons (Body Language & Historical Pressure)",
+        "Ryan Clark (Locker Room Dynamics)"
+      ],
+      "writing_archetype_category": "Super Bowl Media & Narrative Audit",
+      "granularity": "Super Bowl Week / Media Availability & Narrative Arc",
+      "focus": "Evaluating pre-game press conferences, Opening Night transcripts, locker room temperature, psychological pressure, and narrative control leading into the Super Bowl.",
+      "data_queried": [
+        "Provided Press Conference Quotes",
+        "Head Coach / Quarterback Tenure",
+        "Legacy Floor (S_all-time)",
+        "Awards Equity (MVP Pressure)",
+        "Player Popularity Index (Pop_player)",
+        "Base Market Gravity (B)"
+      ],
+      "example_prompt_hook": "Conduct a psychological press audit of Super Bowl week. Dissect the subtext of podium quotes, analyze quarterback body language under the microscope, isolate unforced errors for bulletin-board material, and determine which team won the media week.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Super Bowl Media & Interview Audit\nGranularity: Super Bowl Week / Media Availability & Narrative Arc.\nFocus: Podium psychology, locker room temperature, quote subtext, bulletin-board motivation, and narrative control.\nScope: Step away from on-field X's and O's. Conduct a rigorous psychological audit of Super Bowl media week. Analyze Opening Night transcripts, coach press conferences, and quarterback podium demeanor. Evaluate how both teams handle the pressure cooker without referencing betting spreads, moneylines, or contractual salaries.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (MEDIA & PSYCHOLOGY AUDIT):\nYou are analyzing the pre-game press conferences, Opening Night transcripts, and media availability of the two Super Bowl teams. You are not writing a tactical breakdown. You are evaluating the psychological pressure, locker room temperature, and narrative control:\n- Identify the overarching media narrative (e.g., \"The veteran dynasty treating this like business as usual\" vs. \"The young upstarts overwhelmed by the lights\").\n- Analyze specific quotes for bulletin-board material, deflection of pressure, or subtle signs of anxiety.\n- Evaluate how the head coaches are managing the media circus and shielding their rosters.\nSelect the defining psychological tension between the two franchises heading into Sunday.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a psychological and narrative audit of Super Bowl week (approx. 900\u20131,100 words).\n\n1. The Temperature Check (The Hook):\nOpen with a headline using # (e.g., # Winning the Podium: Who Is Handling the Super Bowl Spotlight Better?).\nWrite a 2-paragraph introduction comparing the overall demeanor of the two franchises. Contrast their behavior against their historical Legacy Floor (e.g., a blue-blood franchise vs. a team making its first appearance in decades).\n\n2. The Defining Quote (The Pivot Point):\nUse a ## header (e.g., ## The Quote That Mattered).\nFeature one specific, highly analyzed quote from a key figure (Coach, QB, or star player). Use blockquotes (>) for the quote itself.\nBreak down the subtext. Is it a sign of supreme confidence, a manufactured chip on their shoulder, or a subtle slip of frustration?\n\n3. Quarterback Demeanor & The Weight of the Moment:\nUse a ## header (e.g., ## The QBs Under the Microscope).\nContrast the media strategies of the two starting quarterbacks. Discuss how their Player Popularity Index and legacy stakes (e.g., first ring vs. dynasty building) are influencing their answers. Who is absorbing the pressure for their team?\n\n4. Bulletin-Board Material & Unforced Errors:\nUse a ## header (e.g., ## The Unforced Errors).\nHighlight the assistant coach or supporting player who said too much. Analyze how the opposing locker room will use that soundbite for motivation.\n\n5. The Final Read (The Verdict):\nConclude with a ### header summarizing which team definitively \"won\" the media week and whether their relaxed/focused demeanor will translate to the opening drive.",
+      "structure_source": "article"
+    },
+    "FRANCHISE_ARCHITECTURE_BLUEPRINT": {
+      "name": "The Franchise Architecture Blueprint (The Super Bowl Roster Build)",
+      "allowed_writers": [
+        "SANDO",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Front-Office Executive Blueprint)",
+        "Bill Barnwell (Resource Allocation & Positional Value)"
+      ],
+      "writing_archetype_category": "Front-Office Roster Construction",
+      "granularity": "Multi-Year / Foundational Roster Core",
+      "focus": "Forensic breakdown of how the two Super Bowl rosters were constructed, emphasizing positional resource allocation, draft pedigree yield, and youth production integration.",
+      "data_queried": [
+        "Blue-Chip Pedigree (P_draft)",
+        "Under-25 Production (Y_prod)",
+        "Positional Multiplier (M_pos)",
+        "Baseline Rating (R_rating)",
+        "Opponent-Adjusted Game Credit"
+      ],
+      "example_prompt_hook": "Deconstruct the roster architecture of the two Super Bowl finalists. Compare how both front offices allocated positional resources, maximized blue-chip draft capital, and integrated youth production to build a championship core.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Franchise Architecture Blueprint\nGranularity: Multi-Year / Foundational Roster Core.\nFocus: Roster construction philosophies, positional resource allocation, draft capital yield, and youth vs. veteran deployment.\nScope: You are writing a definitive front-office breakdown of the two Super Bowl finalists during the bye week. Analyze how the two general managers constructed these rosters over the past 3-5 years. Rely on positional value, draft pedigree, and production efficiency rather than referencing specific player salary cap numbers or raw trade packages.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (ARCHITECTURE_BLUEPRINT):\nYou are analyzing the two Super Bowl teams exclusively through an executive lens. Do not preview the upcoming game's tactical matchups. Contrast their roster-building philosophies:\n- Evaluate whether a team is powered by an overwhelming Blue-Chip Pedigree ($P_{\\text{draft}}$) at premium positions or if they found undervalued efficiency on the margins.\n- Assess the impact of Under-25 Production Share ($Y_{\\text{prod}}$) in balancing their veteran core.\n- Isolate the specific positional group (e.g., investing heavily in the defensive line versus stacking elite perimeter playmakers) that serves as the foundation for their respective title runs.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as a front-office deep dive (approx. 1,000\u20131,200 words).\n\n1. The Executive Summary (The Hook):\nOpen with an authoritative headline using # (e.g., # Blueprint to the Lombardi: How the [Team A] and [Team B] Built Their Super Bowl Cores).\nWrite a 2-paragraph introduction framing the differing front-office philosophies of the two general managers and the distinct paths they took to the title game.\n\n2. The Core Architecture: [AFC Champion Name]:\nUse a ## header focused on the AFC team.\nDetail their roster foundation. Highlight how they utilized high Blue-Chip Pedigree ($P_{\\text{draft}}$) or integrated massive Under-25 Production ($Y_{\\text{prod}}$) to build out their premium positions (Quarterback, Edge, Tackle, Corner).\n\n3. The Core Architecture: [NFC Champion Name]:\nUse a ## header focused on the NFC team.\nContrast their build with the AFC champion. If they lack high draft pedigree, explain how they maximized veteran Baseline Ratings ($R_{\\text{rating}}$) and positional efficiency to cover up structural holes.\n\n4. The Positional Value Disconnect:\nUse a ## header (e.g., ## The Divergent Resource Allocation).\nIdentify the one specific position group where the two front offices took entirely different architectural approaches (e.g., Team A invested entirely in elite edge rushers, while Team B built the best secondary in football).\n\n5. The Industry Takeaway:\nConclude with a ### header summarizing the primary roster-building lesson the rest of the league's 30 general managers must learn from these two finalists.",
+      "structure_source": "article"
+    },
+    "DRAFT_BLUEPRINT_ROSTER_AUDIT": {
+      "name": "The Draft Blueprint & Roster Core Audit (Picks 1\u201328)",
+      "allowed_writers": [
+        "SANDO",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Front-Office Mandates)",
+        "Bill Barnwell (Roster Core Diagnostics)"
+      ],
+      "writing_archetype_category": "Draft & Offseason Horizon",
+      "granularity": "Offseason / Multi-Year Core Audit",
+      "focus": "Diagnostic audit of eliminated teams with locked draft picks (1\u201328), analyzing roster age curves, foundational core needs, and draft-capital mandates.",
+      "data_queried": [
+        "Under-25 Production (Y_prod)",
+        "Blue-Chip Pedigree (P_draft)",
+        "Purgatory Penalty",
+        "Base Market Gravity (B)"
+      ],
+      "example_prompt_hook": "Audit the roster cores of eliminated playoff teams and lottery franchises. Define their primary draft mandate and diagnose which units require total overhauls.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Draft Blueprint & Roster Core Audit\nGranularity: Offseason / Multi-Year Core Audit.\nFocus: Roster age curves, core unit stability, draft capital prioritization, and rebuild timelines.\nScope: Audit the structural health of teams locked into picks 1\u201328. Group teams by organizational status and define the exact positional blueprint they must execute in the draft without citing specific player salary numbers or speculative trades.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (DRAFT_BLUEPRINT):\nYou are evaluating the 28 eliminated franchises holding locked first-round draft capital. Group franchises by structural health:\n- Teams with high Under-25 Production ($Y_{\\text{prod}}$) that only need a single blue-chip cornerstone.\n- Veteran rosters entering the Purgatory Penalty requiring a hard offensive or defensive reset.\nSelect the 3 to 4 most urgent franchise blueprints to highlight in depth.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an executive roster blueprint (approx. 1,000\u20131,200 words).\n\n1. The Offseason Landscape:\nOpen with a headline using # (e.g., # The Offseason Blueprint: Core Diagnostics and Draft Mandates for 28 Eliminated Rosters).\nWrite a 2-paragraph introduction framing the talent gap between the final four contenders and the rest of the league.\n\n2. The Core Audits (3\u20134 Featured Franchises):\nUse ## headers for each featured franchise (e.g., ## Dallas Cowboys: Escaping the Roster Purgatory Trap).\nFor each team, evaluate their foundational core: cite their youth production share and draft pedigree. Specify their primary positional mandate for April.\n\n3. Macro Positional Scarcity:\nUse a ## header evaluating which position group is in highest demand across the eliminated 28 teams.\n\n4. The Mandate:\nConclude with a ### header declaring the single front office facing the most consequential draft weekend in franchise history.",
+      "structure_source": "article"
+    },
+    "OFFSEASON_MOCK_DRAFT": {
+      "name": "Offseason Mock Draft 1.0 (Picks 1\u201324 Locked)",
+      "allowed_writers": [
+        "YATES",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Field Yates (Needs & Value Board)",
+        "Bill Barnwell (Analytics & Positional Capital)"
+      ],
+      "writing_archetype_category": "Draft & Offseason Horizon",
+      "granularity": "Offseason / Round 1 Projection",
+      "focus": "First-round mock draft projecting selections for locked draft slots based on team needs, positional value, and blue-chip player traits.",
+      "data_queried": [
+        "Blue-Chip Pedigree (P_draft)",
+        "Under-25 Production (Y_prod)",
+        "Positional Multiplier (M_pos)",
+        "Team Roster Deficiencies"
+      ],
+      "example_prompt_hook": "Project the first 24 picks of the NFL Draft. Balance premium positional value against immediate roster holes for eliminated franchises.",
+      "directive": "ARTICLE TYPE SPECIFICATION: Offseason Mock Draft\nGranularity: Offseason / Round 1 Projection.\nFocus: Round 1 mock selections, franchise needs, premium positional value, and draft capital.\nScope: Project selections for the locked draft order following the Divisional round (Picks 1\u201324). Do not project speculative trades. Focus strictly on team fit, scheme requirements, and positional value multipliers.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (MOCK_DRAFT):\nYou are projecting the first 24 picks of the NFL Draft for eliminated teams. Prioritize premium positional value (QB, OT, EDGE, CB) over low-impact positions. Evaluate team rosters using their Under-25 Production Share ($Y_{\\text{prod}}$) to determine whether an organization needs an immediate foundational starter or can afford a developmental high-ceiling prospect.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as an authoritative Mock Draft (approx. 1,500\u20131,800 words).\n\n1. The Board Overview:\nOpen with a headline using # (e.g., # 2027 NFL Mock Draft 1.0: First-Round Projections for Picks 1\u201324).\nWrite a 2-paragraph introduction identifying the strengths of this draft class and the run on premium positions.\n\n2. The First-Round Projections (Picks 1\u201324):\nUse numbered ## headers for each selection formatted as: ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School] (e.g., ## 1. Carolina Panthers: James Pearce Jr., EDGE, Tennessee).\nUnder each pick, provide exactly 2 to 3 sentences explaining the team need, the player's physical traits, and how they fit the scheme.\n\n3. The Draft Floor Watch:\nConclude with a ### header analyzing which eliminated team has the highest pressure to hit on their pick to escape roster purgatory.",
+      "structure_source": "article"
+    }
+  }
+}
