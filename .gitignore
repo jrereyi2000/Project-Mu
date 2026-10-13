@@ -38,3 +38,6 @@ verify_output/
 
 # Saved console output of a local weekly run (python3 -m newsroom.weekly_run > WEEKLY_RUN)
 WEEKLY_RUN
+
+# Remote Play capture screenshots / CSVs from madden_capture.py (see PROJECT_SPEC.md §1.1)
+captures/
