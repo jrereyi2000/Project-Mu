@@ -34,6 +34,11 @@ class WeekLabelTest(unittest.TestCase):
             mc.previous_week("SEASON WEEK 1")
 
 
+class OcrTextTest(unittest.TestCase):
+    def test_cyrillic_lookalikes_become_latin(self):
+        self.assertEqual("MCPH\u0415\u0415".translate(mc.HOMOGLYPHS), "MCPHEE")
+
+
 class _Frame:
     """classify() only needs .text and .find(); boxes are irrelevant here."""
     def __init__(self, *labels):
@@ -109,6 +114,15 @@ class CardParseTest(unittest.TestCase):
         c = mc.parse_card(items)
         self.assertEqual((c["first"], c["last"], c["number"], c["position"], c["archetype"]),
                          ("Chuck", "Byrne", 0, "LS", "Power"))
+
+    def test_repeated_list_name_settled_by_position(self):
+        # Seahawks, Oct 13: S.Lewis LT and S.Lewis HB on adjacent rows
+        lines = [[("S.LEWIS", (0, 0, 100, 30)), ("LT", (770, 0, 800, 30))],
+                 [("S.LEWIS", (0, 50, 100, 80)), ("HB", (770, 50, 800, 80))]]
+        W, x0 = 3024, 3024 * mc.LIST_BOX[0]
+        self.assertEqual(mc.list_row_for(lines, {"first": "Shonn", "last": "Lewis", "position": "HB"}, W, x0)["i"], 1)
+        self.assertEqual(mc.list_row_for(lines, {"first": "Shaq", "last": "Lewis", "position": "LT"}, W, x0)["i"], 0)
+        self.assertTrue(mc.list_row_for(lines, {"first": "Shaq", "last": "Lewis", "position": "QB"}, W, x0)["ambiguous"])
 
     def test_height_checks(self):
         base = {k: 1 for k in mc.CARD_FIELDS}

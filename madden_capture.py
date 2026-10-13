@@ -24,7 +24,7 @@ Usage
 Key map (chiaki-ng "Keyboard as controller"):
   Cross=S  Circle=D  L1=2  R1=3  L2=1  R2=4  D-pad=arrow keys  Escape=Esc
 """
-import argparse, datetime, hashlib, os, re, subprocess, sys, time
+import argparse, datetime, glob, hashlib, os, re, subprocess, sys, time
 
 import Quartz
 import Vision
@@ -205,8 +205,13 @@ def ocr(path):
         bb = obs.boundingBox()
         x0 = bb.origin.x * W
         y0 = (1 - bb.origin.y - bb.size.height) * H
-        out.append((str(cand[0].string()).upper(), (x0, y0, x0 + bb.size.width * W, y0 + bb.size.height * H)))
+        out.append((str(cand[0].string()).translate(HOMOGLYPHS).upper(), (x0, y0, x0 + bb.size.width * W, y0 + bb.size.height * H)))
     return out
+
+
+# Vision sometimes returns Cyrillic/Greek look-alikes inside Latin words ("MCPHЕЕ", Oct 13)
+HOMOGLYPHS = str.maketrans("АВСЕНІЈКМОРЅТХУаеорсухіјΑΒΕΗΙΚΜΝΟΡΤΧΥΖ",
+                           "ABCEHIJKMOPSTXYaeopcyxijABEHIKMNOPTXYZ")
 
 
 def norm(s):
@@ -1034,7 +1039,7 @@ def ocr_cg(cg):
         if cand:
             bb = obs.boundingBox()
             x0, y0 = bb.origin.x * W, (1 - bb.origin.y - bb.size.height) * H
-            out.append((str(cand[0].string()).upper(), (x0, y0, x0 + bb.size.width * W, y0 + bb.size.height * H)))
+            out.append((str(cand[0].string()).translate(HOMOGLYPHS).upper(), (x0, y0, x0 + bb.size.width * W, y0 + bb.size.height * H)))
     return out
 
 
@@ -1161,11 +1166,13 @@ def list_row_for(lines, card, win_w, list_x0):
     """In the roster-table OCR lines (_rows of the LIST_BOX crop, starting list_x0 px into a
     window win_w px wide), the row naming this card's player ("G.CRAWFORD"):
     {"i": line index, "NAME", "POS", "AGE", "OVR"} as read (a column is absent when OCR
-    skipped it), or None."""
+    skipped it), or None. A name on several rows is settled by position; if that fails the
+    row comes back with "ambiguous": True."""
     if not card or not card.get("last"):
         return None
     last = norm(card["last"])
     first = norm(card["first"] or "")[:1]
+    found = []
     for i, line in enumerate(lines):
         name = norm(line[0][0])
         if name.endswith(last) and (not first or name.startswith(first)):
@@ -1174,8 +1181,14 @@ def list_row_for(lines, card, win_w, list_x0):
                 for t, b in line[1:]:
                     if abs((b[0] + b[2]) / 2 + list_x0 - x * win_w) < 0.025 * win_w:
                         row[col] = t
-            return row
-    return None
+            found.append(row)
+    # the same list name can repeat (Seahawks: S.Lewis LT and S.Lewis HB on adjacent rows)
+    if len(found) > 1:
+        same_pos = [r for r in found if card.get("position") and norm(r.get("POS", "")) == card["position"]]
+        if len(same_pos) == 1:
+            return same_pos[0]
+        found[0]["ambiguous"] = True        # can't tell which row: don't use it to check a step
+    return found[0] if found else None
 
 
 def read_card(prev_key, timeout=3.0):
@@ -1332,14 +1345,16 @@ def capture_team_roster(out, index, team, writer):
         # A press that arrives late (chiaki lag) plus the retry press moves two rows. The new
         # player must be on the line right under the previous one; if not, step back.
         prev_row = list_row_for(lines, prev, W, W * LIST_BOX[0])
-        if list_row and prev_row and list_row["i"] - prev_row["i"] > 1:
+        if list_row and prev_row and list_row["i"] - prev_row["i"] > 1 \
+                and not (list_row.get("ambiguous") or prev_row.get("ambiguous")):
             log(f"  {team}: skipped {list_row['i'] - prev_row['i'] - 1} row(s) after {prev['last']}; stepping back")
             press("up", hold=0.1, wait=0.6, times=list_row["i"] - prev_row["i"] - 1)
             skips += 1
             if skips > 20:
                 raise Abort(f"{team}: rows keep getting skipped; stopping")
             continue
-        if prev is not None and not (list_row and prev_row):
+        if prev is not None and (not (list_row and prev_row)
+                                 or list_row.get("ambiguous") or prev_row.get("ambiguous")):
             flags.append("step_unverified")
         if list_row is None:
             flags.append("not_in_list")
@@ -1367,32 +1382,61 @@ def capture_team_roster(out, index, team, writer):
     return row
 
 
-def run_roster(out, max_teams=32):
-    import csv
+def run_roster(out, max_teams=32, resume=False):
+    """All teams, starting at the one the list opens on (the user's team) and following the
+    team dropdown until it comes back round. roster/done.txt lists finished teams; with
+    resume=True, a stopped run continues in the same folder: finished teams are skipped and
+    the team that was cut short is captured again."""
+    import csv, shutil
     log("== Rosters ==")
+    rdir = os.path.join(out, "roster")
+    os.makedirs(rdir, exist_ok=True)
+    cards_path, done_path = os.path.join(rdir, "cards.csv"), os.path.join(rdir, "done.txt")
+    done = {}                                       # norm(team) -> folder index
+    if resume and os.path.exists(done_path):
+        for line in open(done_path):
+            if line.strip():
+                idx, t = line.split()
+                done[t] = int(idx)
+        kept = [r for r in csv.reader(open(cards_path))][1:] if os.path.exists(cards_path) else []
+        kept = [r for r in kept if norm(r[0]) in done]
+        for d in glob.glob(os.path.join(rdir, "[0-9]*_*")):  # the cut-short team's folder
+            if norm(os.path.basename(d).split("_", 1)[1]) not in done:
+                shutil.rmtree(d)
+        log(f"Resuming {out}: {len(done)} teams already done")
+    else:
+        kept = []
+        open(done_path, "w").close()
     f = open_roster()
     first = roster_team(f)
     if not first:
         raise Abort("Can't read the roster team chip")
-    os.makedirs(os.path.join(out, "roster"), exist_ok=True)
-    seen, total = [], 0
-    with open(os.path.join(out, "roster", "cards.csv"), "w", newline="") as fh:
+    seen, total = [], len(kept)
+    with open(cards_path, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["team", "row"] + CARD_FIELDS + ["flags", "card_png"])
+        w.writerows(kept)
         team = first
         while True:
-            log(f"Team: {team}")
             seen.append(norm(team))
-            total += capture_team_roster(out, len(seen), team, w)
-            fh.flush()
+            if norm(team) in done:
+                log(f"Team: {team} (already captured)")
+            else:
+                log(f"Team: {team}")
+                idx = max(list(done.values()) + [0]) + 1
+                total += capture_team_roster(out, idx, team, w)
+                fh.flush()
+                done[norm(team)] = idx
+                with open(done_path, "a") as dh:
+                    dh.write(f"{idx} {norm(team)}\n")
             if len(seen) >= max_teams:
                 break
             team = next_roster_team(os.path.join(out, "team_debug"))
             if norm(team) in seen:
                 break
-    log(f"Captured {len(seen)} teams, {total} players")
-    if max_teams >= 32 and len(seen) != 32:
-        raise Abort(f"Expected 32 teams, captured {len(seen)}: {seen}")
+    log(f"Captured {len(done)} teams, {total} players")
+    if max_teams >= 32 and len(done) != 32:
+        raise Abort(f"Expected 32 teams, captured {len(done)}: {sorted(done)}")
 
 
 def probe_l2(out):
@@ -1477,6 +1521,7 @@ def main():
     ap.add_argument("--only", choices=["stats", "team", "schedule", "roster"],
                     help="roster is never part of the default run")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
+    ap.add_argument("--resume", metavar="RUN", help="--only roster: continue a stopped run in captures/RUN")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
     ap.add_argument("--all-rows", action="store_true", help="don't stop stats lists at all-zero rows")
     ap.add_argument("--foreground", action="store_true", help="bring chiaki-ng to front and send global keys")
@@ -1491,7 +1536,9 @@ def main():
     if FOREGROUND:
         activate_app()
     global DEBUG_DIR
-    out = os.path.join(OUT_ROOT, datetime.datetime.now().strftime("%Y-%m-%d_%H%M"))
+    out = os.path.join(OUT_ROOT, a.resume or datetime.datetime.now().strftime("%Y-%m-%d_%H%M"))
+    if a.resume and not os.path.isdir(out):
+        sys.exit(f"No capture folder {out}")
     DEBUG_DIR = os.path.join(out, "stop_debug")
 
     try:
@@ -1524,7 +1571,7 @@ def main():
         if a.only in (None, "schedule"):
             run_schedule(out, a.week)
         if a.only == "roster":
-            run_roster(out, a.teams)
+            run_roster(out, a.teams, resume=bool(a.resume))
         log("Returning to the hub")
         go_hub()
         log(f"Done. Screenshots in {out}")
