@@ -912,6 +912,9 @@ Readers must experience this as professional, authentic sports journalism. You m
 - Instead of "Legacy Floor (S_all-time)" -> write "historical franchise prestige", "championship pedigree".
 - Instead of "SpikeIndex" -> write "explosive ceiling", "boom-or-bust volatility", "single-game scoring explosion".
 Strict Rule: No raw algebraic symbols, formula notation, or LaTeX math equations ($...$) may appear in your final text.
+
+NO MADDEN RATINGS IN PUBLISHED TEXT:
+Player and team ratings (OVR, overall, team/offense/defense overall, depth-chart tiers built from them) are for your own judgment of talent only. Never cite a rating number or refer to ratings in your text: no "92 OVR", "a 92 overall", "rated 85", "the league's highest-rated QB", "a 78-overall starter", "team OVR", and never mention Madden, the video game, or game ratings. This league is covered as real football. Show talent through production, role, age and results instead, e.g. "an All-Pro-caliber left tackle", "the best cover corner in the conference", "a starter-quality backup", "a roster built on elite trench play".
 """
 
         article_header_directive = ""

@@ -75,10 +75,13 @@ Project Mu/
 ├── tools/
 │   ├── debug/                 #   One-off frame/OCR debugging scripts
 │   ├── verify_session.sh      #   One-shot newsroom check: roundtable migration, unit tests, verify_newsroom.py, weekly dry run → verify_output/
-│   └── verify_newsroom.py     #   Checks of the newsroom against the live DB (tool week cutoffs, brief, prompts, local portfolio, weekly news endpoint, agent memory); its one write test runs in a rolled-back transaction
+│   ├── verify_newsroom.py     #   Checks of the newsroom against the live DB (tool week cutoffs, brief, prompts, local portfolio, weekly news endpoint, agent memory); its one write test runs in a rolled-back transaction
+│   ├── vision_dump.py         #   Apple Vision OCR of a capture folder or frame folder → vision_ocr.json (read-only; used for the Oct 13 OCR tests)
+│   └── vision_cells.py        #   Per-cell Apple Vision OCR experiment from cell_plan.json → vision_cells.json (read-only)
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md
+│   ├── PIPELINE_MIGRATION.md  #   Agreed plan for moving ingestion to madden_capture.py over chiaki-ng (phases, decisions, verified facts)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
 │   ├── reference/             #   Source PDFs
@@ -454,7 +457,7 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - *Orlovsky:* the most extreme quarterback performances only, good or bad.
   - *Clark:* locker-room dynamics, player sacrifice and leadership under pressure.
 - **Historical Comparisons (optional, 1990–2023):** National writers may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens the argument. It isn't required; the prompt says most articles need none, allows at most one, forbids inventing a historical team, and gives no canned examples (the old ones, e.g. the 2000 Ravens, got reused everywhere). Beat reporters don't receive this instruction.
-- **Invented detail vs. data:** Scores, records, stat lines and rankings must come from the brief or the tools. Writers may invent what happens inside games (specific plays, drives, game script) consistent with the final score and box score, and anonymous sources such as Sando's "NFC executive" quotes. Injuries, betting lines and contract details are never used: the league has no data for them, and the prompts either don't ask for them or forbid them.
+- **Invented detail vs. data:** Scores, records, stat lines and rankings must come from the brief or the tools. Writers may invent what happens inside games (specific plays, drives, game script) consistent with the final score and box score, and anonymous sources such as Sando's "NFC executive" quotes. Injuries, betting lines and contract details are never used: the league has no data for them, and the prompts either don't ask for them or forbid them. Madden ratings are never cited: writers may use OVR and team ratings from their tools to judge talent, but the shared `natural_language_rule` block (appended to every article and tweet prompt) forbids rating numbers, "OVR"/"overall" wording and any mention of Madden or the video game in published text.
 - **Database Context & Research Tools:** Agents have autonomous access to query live simulation context via ReAct AFC tools:
   - `get_weekly_slate`: Returns the complete scoreboard for all games in a given week with final scores, victory margins, excitement indices, and team IDs.
   - `get_season_standings`: Returns full NFL division standings with wins, losses, win %, points scored (PF), points allowed (PA), and point differential.
