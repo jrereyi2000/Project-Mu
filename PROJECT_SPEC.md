@@ -30,7 +30,8 @@ Project Mu/
 ├── engines/                   # Deterministic analytics (Sections 2 & 6, steps 2–3)
 │   ├── game_stat_generator.py #   CPU-sim backfill → culture engines → swarm trigger
 │   ├── backfill_team_stats.py
-│   ├── twi_engine.py, popularity_engine.py, player_popularity_engine.py, gotw_engine.py
+│   ├── gotw_engine.py         #   Game Excitement Index (E) → games.excitement_index
+│   ├── twi_engine.py, popularity_engine.py, player_popularity_engine.py
 │   └── fantasy_adp_engine.py  #   Preseason ADP board
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
@@ -41,7 +42,8 @@ Project Mu/
 │   ├── db_handler.py          #   Shared connection / UPSERT layer (DATABASE_URL)
 │   ├── init_db.sql, run_sql.py
 │   ├── backup_db.sh, restore_db.sh   # pg_dump / restore via the madden-db Docker container
-│   ├── migrations/            #   migrate_db.py, migrate_player_stats.py, migrate_season_stats.py
+│   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql (apply SQL ones via
+│   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
 │   ├── headshot_appearance_generator.py, make_headshot.py
@@ -89,7 +91,10 @@ $$E = 0.35(C) + 0.25(P) + 0.20(S) + 0.20(U)$$
 - **$C$ (Competitiveness)**: Final score margin and overtime drama: $\min(100, \max(0, 100 - 4 \cdot |\text{Score}_A - \text{Score}_B|) + \text{OT Bonus})$.
 - **$P$ (Production & Pace)**: Combined points and offensive yardage volume.
 - **$S$ (Star Impact & Outliers)**: Top-3 player OVR averages and standout single-game milestone box scores (e.g. 400+ pass yards, 4+ TDs).
-- **$U$ (Upset & Narrative Leverage)**: Pre-game talent differential and heavyweight clashes.
+- **$U$ (Upset & Narrative Leverage)**: Pre-game talent differential (`team_seasons.team_ovr` for the game's season) and heavyweight clashes.
+- Computed by `engines/gotw_engine.py` and stored in `games.excitement_index`. A game's $E$ depends only on that game's data, so once scored it is **not** re-scored automatically (re-scoring would let it drift as player/team ratings change during the season, which would in turn shift TWI and popularity).
+  - **Pipeline (Section 6, step 3):** `batch_evaluate(season, only_missing=True, game_ids=<games just backfilled>)` scores only completed games with no $E$ yet plus the games whose box scores were inserted in that run.
+  - **Manual re-scoring** (e.g. after a box-score correction): `python3 -m engines.gotw_engine --game-ids 805 832`; `--season 2035 --missing-only` fills gaps; no flags re-scores every completed game in all seasons (`--season` limits it to one).
 - For upcoming/scheduled games, matchup excitement scales smoothly from the average TWI of the opposing teams:
   $$\text{Scheduled Excitement} = \min(98, \max(85, \lfloor \text{Matchup TWI} \times 1.45 \rfloor))$$
 
@@ -137,7 +142,9 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 - **`games`**:
   - `id` (PK), `season` (int), `week` (int), `home_team_id` (FK), `away_team_id` (FK), `home_score` (int), `away_score` (int), `status` (varchar: 'COMPLETED' | 'SCHEDULED' | 'BYE'), `game_time` (varchar, e.g. 'Sun 1:00 PM'), `game_type` (varchar, default 'REGULAR_SEASON'), `excitement_index` (float8), `completed_at` (timestamp). `UNIQUE(season, week, home_team_id, away_team_id)` (constraint `games_season_week_home_away_key`).
 - **`player_stats`**:
-  - `id` (PK), `game_id` (FK), `team_id` (FK), `player_name` (varchar), `position` (varchar), `completions`, `pass_attempts`, `pass_yards`, `pass_tds`, `interceptions`, `rush_attempts`, `rush_yards`, `rush_tds`, `receptions`, `rec_yards`, `rec_tds`, `fumb`, `fantasy_points` (numeric(6,2), `GENERATED ALWAYS ... STORED` full-PPR column — read-only, never insert/update it). `UNIQUE(game_id, player_name, position)`.
+  - `id` (PK), `game_id` (FK), `team_id` (FK), `player_name` (varchar), `position` (varchar), `completions`, `pass_attempts`, `pass_yards`, `pass_tds`, `interceptions`, `rush_attempts`, `rush_yards`, `rush_tds`, `receptions`, `rec_yards`, `rec_tds`, `fumb`, `fantasy_points` (numeric(6,2), **generated column**). `UNIQUE(game_id, player_name, position)`.
+  - `fantasy_points` is a PostgreSQL `GENERATED ALWAYS ... STORED` column computed from the row's box score with full-PPR scoring: 0.04/pass yd (1 per 25), 4/pass TD, −2/INT, 0.1/rush & rec yd (1 per 10), 6/rush & rec TD, 1/reception, −2/fumble; NULL stats count as 0. It recomputes automatically on every insert or stat correction and is read-only: ingestion and backfill code must **not** insert or update it (Postgres rejects writes). All fantasy surfaces (`vw_fantasy_scores`, `vw_fantasy_defense_vs_position`, game logs, rankings, player popularity) read this column.
+  - Introduced by `db/migrations/2026_10_12_fantasy_points_generated.sql` (self-verifying; rolls back on any value change). Restoring a database dump taken before 2026-10-12 brings back the old plain column; re-apply the migration afterwards. Fresh databases built from `db/init_db.sql` already have the generated column.
 - **`team_stats`**:
   - `id` (PK), `game_id` (FK), `team_name` (varchar), `score`, `first_downs`, `total_offense`, `total_plays`, `rushing_attempts`, `rushing_yards`, `rushing_tds`, `passing_completions`, `passing_attempts`, `passing_yards`, `passing_tds`, `third_down_attempts`, `third_down_conversions`, `fourth_down_attempts`, `fourth_down_conversions`, `turnovers` (all int). `UNIQUE(game_id, team_name)`.
 - **`season_stats`**:
@@ -283,7 +290,8 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
 2. **Mathematical Backfill:**
    - `engines/game_stat_generator.py` is invoked. It subtracts the real `player_stats` from the `season_stats` and mathematically distributes the remaining stats into the missing CPU-simmed games, perfectly synchronizing the database.
 3. **Culture Engines (Concurrent Franchise Execution & Batch Updates):**
-   - Appended to the end of the backfill generator, `engines/game_stat_generator.py` runs `TWIEngine().backfill_twi()` and `PopularityEngine().calculate_popularity()` concurrently across parallel worker threads.
+   - Appended to the end of the backfill generator, `engines/game_stat_generator.py` first runs `gotw_engine.batch_evaluate(season, only_missing=True, game_ids=...)` to score the Game Excitement Index ($E$) for newly completed games (those with no `excitement_index`) and any games it just backfilled. Previously scored games are left unchanged. This must precede TWI, which only counts games with a non-null `excitement_index`.
+   - It then runs `TWIEngine().backfill_twi()` and `PopularityEngine().calculate_popularity()` concurrently across parallel worker threads.
    - Once franchise metrics are computed, `PlayerPopularityEngine().calculate_popularity()` executes vectorized batch updates using PostgreSQL `executemany` (reducing DB execution time from ~1s to ~0.16s).
 4. **The Swarm Trigger & Editorial Commissioning:**
    - The generator dynamically compiles a dual-horizon Weekly Slate Digest:

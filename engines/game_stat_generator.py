@@ -166,11 +166,18 @@ def generate_team_and_player_stats(season_year: int):
     print("\n[SWARM PIPELINE] Triggering Post-Week Analytics & Swarm...")
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from engines.gotw_engine import batch_evaluate
         from engines.twi_engine import TWIEngine
         from engines.popularity_engine import PopularityEngine
         from engines.player_popularity_engine import PlayerPopularityEngine
         from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
-        
+
+        # 0. Score Game Excitement (E) for games that have none yet plus the games just backfilled above.
+        #    Must run before TWI, which only counts games whose excitement_index is set.
+        backfilled_game_ids = sorted({int(r['game_id']) for r in player_stats_rows + team_stats_rows})
+        print("-> Running Game Excitement Engine (E)...")
+        batch_evaluate(season=season_year, only_missing=True, game_ids=backfilled_game_ids)
+
         # 1. Run Mathematical Culture Indices (Parallelize TWIEngine & Franchise POP)
         print("-> Running Team Watchability Engine & Franchise Popularity Engine in Parallel...")
         with ThreadPoolExecutor(max_workers=2) as executor:
