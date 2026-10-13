@@ -9,7 +9,42 @@ from engines.matchup_edges import compute_edges, fetch_ratings, fetch_units
 from engines.game_credit_engine import compute_game_credit, fetch_completed_games, trajectory_label
 import json
 
+from newsroom.run_context import context_season, cutoff_week, is_visible_week
+
 db = DatabaseHandler()
+
+
+def resolve_season(season=0) -> int:
+    """Season a tool reads: the explicit argument, else the article being written (newsroom/run_context.py),
+    else league_state.current_season, else the latest season with games."""
+    if season:
+        return int(season)
+    ctx = context_season()
+    if ctx:
+        return ctx
+    with psycopg.connect(db.db_conn_info) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_season FROM league_state LIMIT 1;")
+            row = cur.fetchone()
+            if row and row[0]:
+                return int(row[0])
+            cur.execute("SELECT MAX(season) FROM games;")
+            row = cur.fetchone()
+            return int(row[0]) if row and row[0] else 0
+
+
+def _article_cutoff_params() -> tuple:
+    """SQL params hiding articles from the current article's publication week onward (and the article itself)."""
+    season = context_season()
+    week = cutoff_week(season) if season else None
+    if season is None or week is None:
+        return (None, None, None, None)
+    return (season, season, season, week)
+
+
+def _visible_completed_games(cur, season: int) -> list:
+    """Completed games of `season` the current article may see (none from its publication week onward)."""
+    return [g for g in fetch_completed_games(cur, season) if is_visible_week(season, g["week"])]
 
 SKILL_POSITIONS = ("HB", "FB", "WR", "TE")
 
@@ -44,7 +79,7 @@ def get_game_box_score(game_id: int) -> str:
                     SELECT 
                         ht.name AS home_team, g.home_score, 
                         at.name AS away_team, g.away_score, 
-                        g.excitement_index, g.week
+                        g.excitement_index, g.week, g.season
                     FROM games g
                     JOIN teams ht ON g.home_team_id = ht.id
                     JOIN teams at ON g.away_team_id = at.id
@@ -53,6 +88,8 @@ def get_game_box_score(game_id: int) -> str:
                 game_row = cur.fetchone()
                 if not game_row:
                     return f"Game ID {game_id} not found."
+                if not is_visible_week(game_row[6], game_row[5]):
+                    return f"Game ID {game_id} (Week {game_row[5]}) has not been played yet as of this article."
 
                 # Get Top Player Stats for the game (joining teams table for team_name)
                 cur.execute("""
@@ -92,6 +129,7 @@ def get_game_box_score(game_id: int) -> str:
 def get_player_season_stats(player_identifier: str) -> str:
     """Fetch cumulative season stats, Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout, and season touch/yard share for skill players. Accepts player name (e.g. 'Drake Maye') or player ID."""
     try:
+        s_val = resolve_season()
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 target_id = None
@@ -128,9 +166,9 @@ def get_player_season_stats(player_identifier: str) -> str:
                     LEFT JOIN teams t ON ps.team_id = t.id
                     LEFT JOIN season_stats ss ON p.player_name = ss.player_name AND ss.season = ps.season
                     LEFT JOIN fantasy_projections fp ON p.player_name = fp.player_name AND fp.season = ps.season AND fp.week = 1
-                    WHERE p.id = %s AND ps.season = 2035
+                    WHERE p.id = %s AND ps.season = %s
                     LIMIT 1;
-                """, (target_id,))
+                """, (target_id, s_val))
 
                 row = cur.fetchone()
                 if not row:
@@ -153,17 +191,17 @@ def get_player_season_stats(player_identifier: str) -> str:
                         WITH team AS (
                             SELECT SUM(COALESCE(rush_attempts, 0) + COALESCE(receptions, 0)) AS touches,
                                    SUM(COALESCE(rush_yards, 0) + COALESCE(rec_yards, 0)) AS yards
-                            FROM season_stats WHERE season = 2035 AND team_id = (
-                                SELECT team_id FROM player_seasons WHERE player_id = %s AND season = 2035)
+                            FROM season_stats WHERE season = %s AND team_id = (
+                                SELECT team_id FROM player_seasons WHERE player_id = %s AND season = %s)
                         )
                         SELECT COALESCE(ss.rush_attempts, 0) + COALESCE(ss.receptions, 0),
                                COALESCE(ss.rush_yards, 0) + COALESCE(ss.rec_yards, 0), team.touches, team.yards
                         FROM players p
-                        JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
-                        JOIN season_stats ss ON ss.player_name = p.player_name AND ss.season = 2035 AND ss.team_id = ps.team_id
+                        JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                        JOIN season_stats ss ON ss.player_name = p.player_name AND ss.season = %s AND ss.team_id = ps.team_id
                         CROSS JOIN team
                         WHERE p.id = %s LIMIT 1;
-                    """, (target_id, target_id))
+                    """, (s_val, target_id, s_val, s_val, s_val, target_id))
                     u = cur.fetchone()
                     if u and u[2]:
                         usage = {
@@ -222,6 +260,7 @@ def get_player_context(player_identifier: str) -> str:
 def get_team_context(team_identifier: str) -> str:
     """Fetch a team's current record, watchability index, popularity, and top 3 players. Accepts team name, abbreviation, or team ID (e.g. 'Patriots', 'NE', or 17)."""
     try:
+        s_val = resolve_season()
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 team_id = _resolve_team_id(cur, team_identifier)
@@ -232,8 +271,8 @@ def get_team_context(team_identifier: str) -> str:
                     SELECT name, wins, losses, watchability_index, popularity_index, team_ovr, off_ovr, def_ovr
                     FROM teams t
                     JOIN team_seasons ts ON t.id = ts.team_id
-                    WHERE t.id = %s AND ts.season = 2035
-                """, (team_id,))
+                    WHERE t.id = %s AND ts.season = %s
+                """, (team_id, s_val))
 
                 team_row = cur.fetchone()
                 if not team_row:
@@ -243,10 +282,10 @@ def get_team_context(team_identifier: str) -> str:
                     SELECT COALESCE(p.full_name, p.player_name), ps.position, ps.overall_rating
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
-                    WHERE ps.team_id = %s AND ps.season = 2035
+                    WHERE ps.team_id = %s AND ps.season = %s
                     ORDER BY ps.overall_rating DESC
                     LIMIT 3;
-                """, (team_id,))
+                """, (team_id, s_val))
 
                 top_players = [f"{r[0]} ({r[1]} - {r[2]} OVR)" for r in cur.fetchall()]
 
@@ -270,10 +309,10 @@ def get_team_context(team_identifier: str) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_team_season_schedule(team_identifier: str, season: int = 2035) -> str:
+def get_team_season_schedule(team_identifier: str, season: int = 0) -> str:
     """Fetch a team's complete season schedule and game-by-game results: scores, opponents, win/loss outcomes, victory margins, one-score game status, and game IDs for every game that season. Accepts team name, abbreviation, or team ID."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 team_id = _resolve_team_id(cur, team_identifier)
@@ -317,7 +356,8 @@ def get_team_season_schedule(team_identifier: str, season: int = 2035) -> str:
                     t_score = r[5] or 0
                     o_score = r[6] or 0
                     margin = r[7]
-                    status = r[9]
+                    # Games from the article's publication week onward count as not played yet
+                    status = r[9] if (r[9] != "COMPLETED" or is_visible_week(s_val, r[1])) else "SCHEDULED"
 
                     if status == "COMPLETED":
                         pf += t_score
@@ -371,22 +411,23 @@ def get_team_season_schedule(team_identifier: str, season: int = 2035) -> str:
 def get_league_leaderboards() -> str:
     """Fetch the current top 5 teams by Watchability (W) and Popularity (POP)."""
     try:
+        s_val = resolve_season()
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 # Top Watchability
                 cur.execute("""
                     SELECT t.name, ts.watchability_index 
                     FROM teams t JOIN team_seasons ts ON t.id = ts.team_id 
-                    WHERE ts.season = 2035 ORDER BY ts.watchability_index DESC NULLS LAST LIMIT 5;
-                """)
+                    WHERE ts.season = %s ORDER BY ts.watchability_index DESC NULLS LAST LIMIT 5;
+                """, (s_val,))
                 top_w = [f"{r[0]} ({round(float(r[1] or 0), 1)} Watchability)" for r in cur.fetchall()]
 
                 # Top Popularity
                 cur.execute("""
                     SELECT t.name, ts.popularity_index 
                     FROM teams t JOIN team_seasons ts ON t.id = ts.team_id 
-                    WHERE ts.season = 2035 ORDER BY ts.popularity_index DESC NULLS LAST LIMIT 5;
-                """)
+                    WHERE ts.season = %s ORDER BY ts.popularity_index DESC NULLS LAST LIMIT 5;
+                """, (s_val,))
                 top_pop = [f"{r[0]} ({round(float(r[1] or 0), 1)} Popularity)" for r in cur.fetchall()]
 
                 result = {
@@ -398,10 +439,10 @@ def get_league_leaderboards() -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_advanced_team_analytics(team_identifier: str, season: int = 2035) -> str:
+def get_advanced_team_analytics(team_identifier: str, season: int = 0) -> str:
     """Fetch a team's stored index components: Team Watchability Index (TWI) and its parts (ceiling/chaos volatility sigma_top, Blue-Chip Draft Pedigree P_draft, Under-25 Production Share Y_prod, Purgatory Penalty), Franchise Popularity, Base Market Gravity (B) with its local/national breakdown where published, Legacy Floor (historical franchise prestige), Playoff Clout, and starter age. Accepts team name, abbreviation, or team ID."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 team_id = _resolve_team_id(cur, team_identifier)
@@ -475,6 +516,8 @@ def get_advanced_game_analytics(game_id: int) -> str:
                 if not row:
                     return f"Game ID {game_id} not found."
                 season, week, status, home_id, away_id, hs, as_, e_raw, e_proj, home, away, home_ovr, away_ovr = row
+                if status == "COMPLETED" and not is_visible_week(season, week):
+                    status = "SCHEDULED"  # not played yet as of the article being written
 
                 if home_ovr == away_ovr:
                     favorite, underdog = "Even matchup (equal OVR)", None
@@ -487,7 +530,7 @@ def get_advanced_game_analytics(game_id: int) -> str:
                     cur.execute("SELECT COALESCE(SUM(total_offense), 0) FROM team_stats WHERE game_id = %s;", (game_id,))
                     yards = cur.fetchone()[0]
                     favorite_won = (hs > as_ and home_ovr >= away_ovr) or (as_ > hs and away_ovr >= home_ovr)
-                    credits, _, _ = compute_game_credit(fetch_completed_games(cur, season))
+                    credits, _, _ = compute_game_credit(_visible_completed_games(cur, season))
                     game_credit = {}
                     for tid, tname in ((home_id, home), (away_id, away)):
                         entry = next((g for g in credits[tid].game_log if g["game_id"] == game_id), None) if tid in credits else None
@@ -517,13 +560,13 @@ def get_advanced_game_analytics(game_id: int) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 2035) -> str:
+def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 0) -> str:
     """Fetch Opponent-Adjusted Game Credit: schedule-adjusted points per game vs. a league-average team (margins capped at 24, home field removed). Without a team, returns all 32 teams ranked with season credit, recent-form credit, strength of schedule, expected wins, and win luck (wins minus expected wins; positive = record flatters them, i.e. paper tiger). Also returns the Trajectory Multiplier (last 4 games vs. season level, 0.80-1.20; 1.00 = steady) with a Surging/Rising/Steady/Fading/Sliding label. With a team name, abbreviation, or ID, returns that team's summary plus a game-by-game credit log."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
-                games = fetch_completed_games(cur, s_val)
+                games = _visible_completed_games(cur, s_val)
                 if not games:
                     return f"No completed games for Season {s_val}."
                 credits, hfa, margin_sd = compute_game_credit(games)
@@ -577,13 +620,13 @@ def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 2035) 
         return f"Error: {str(e)}"
 
 @tool
-def get_team_efficiency_profile(team_identifier: str = "", season: int = 2035) -> str:
+def get_team_efficiency_profile(team_identifier: str = "", season: int = 0) -> str:
     """Fetch season efficiency from points and yards: Pythagorean wins (the record points for/against predict; pyth_luck = wins minus that, positive = record flatters them), team pace & production (0-100), yards per game passing and rushing, and giveaways per game. Without a team, returns all 32 teams sorted by pyth_luck; with a team name, abbreviation, or ID, returns that team only."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
-                profiles = compute_team_efficiency(fetch_team_game_rows(cur, s_val))
+                profiles = compute_team_efficiency(fetch_team_game_rows(cur, s_val, before_week=cutoff_week(s_val)))
                 if not profiles:
                     return f"No completed games for Season {s_val}."
                 cur.execute("SELECT id, name FROM teams;")
@@ -619,10 +662,10 @@ def get_team_efficiency_profile(team_identifier: str = "", season: int = 2035) -
         return f"Error: {str(e)}"
 
 @tool
-def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", season: int = 2035) -> str:
+def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", season: int = 0) -> str:
     """Fetch Matchup Edge for a game, in both directions: pass edge (passing offense vs. the opponent's coverage rating), rush edge (rushing offense vs. defensive rating), ball-security edge (who gives the ball away more), and Trench Edge (offensive line OVR vs. the opponent's top pass rushers). Edges are in standard deviations (0 = even, +1 = clear advantage). Without an opponent, uses the team's next scheduled game. Accepts team names, abbreviations, or IDs."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 team_id = _resolve_team_id(cur, team_identifier)
@@ -637,15 +680,17 @@ def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", seaso
                     cur.execute("""
                         SELECT week, CASE WHEN home_team_id = %s THEN away_team_id ELSE home_team_id END
                         FROM games
-                        WHERE season = %s AND status = 'SCHEDULED' AND (home_team_id = %s OR away_team_id = %s)
+                        WHERE season = %s AND (home_team_id = %s OR away_team_id = %s)
+                          AND (status = 'SCHEDULED' OR (%s::int IS NOT NULL AND week >= %s::int))
+                          AND (%s::int IS NULL OR week >= %s::int)
                         ORDER BY week LIMIT 1;
-                    """, (team_id, s_val, team_id, team_id))
+                    """, (team_id, s_val, team_id, team_id, *([cutoff_week(s_val)] * 4)))
                     nxt = cur.fetchone()
                     if not nxt:
                         return f"No scheduled game for team ID {team_id}; pass an opponent."
                     context, opp_id = f"Week {nxt[0]} matchup", nxt[1]
 
-                profiles = compute_team_efficiency(fetch_team_game_rows(cur, s_val))
+                profiles = compute_team_efficiency(fetch_team_game_rows(cur, s_val, before_week=cutoff_week(s_val)))
                 ratings = fetch_ratings(cur, s_val)
                 units = fetch_units(cur, s_val)
                 cur.execute("SELECT id, name FROM teams;")
@@ -675,11 +720,11 @@ def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", seaso
         return f"Error: {str(e)}"
 
 @tool
-def get_weekly_slate(week: int, season: int = 2035) -> str:
+def get_weekly_slate(week: int, season: int = 0) -> str:
     """Fetch the complete scoreboard for all games in a given week, including game IDs, matchups, final scores, victory margins, and excitement ratings."""
     try:
         w_val = int(week)
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -701,10 +746,15 @@ def get_weekly_slate(week: int, season: int = 2035) -> str:
                     return f"No games found for Season {s_val}, Week {w_val}."
 
                 slate = []
+                week_visible = is_visible_week(s_val, w_val)
                 for g in games:
+                    if g[9] == "COMPLETED" and not week_visible:
+                        # Not played yet as of the article being written: show it as a scheduled game
+                        g = (g[0], g[1], None, g[3], None, None, g[6], g[7], g[8], "SCHEDULED", g[10])
                     slate.append({
                         "game_id": g[0],
-                        "matchup": f"{g[1]} {g[2]} @ {g[3]} {g[4]}",
+                        "matchup": f"{g[1]} {g[2]} @ {g[3]} {g[4]}" if g[9] == "COMPLETED" else f"{g[1]} @ {g[3]}",
+                        "status": g[9],
                         "away_team": f"{g[1]} (ID: {g[8]})",
                         "home_team": f"{g[3]} (ID: {g[7]})",
                         "away_score": g[2],
@@ -726,10 +776,13 @@ def get_weekly_slate(week: int, season: int = 2035) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_season_standings(season: int = 2035) -> str:
+def get_season_standings(season: int = 0) -> str:
     """Fetch the complete NFL standings for a season, grouped by division, including wins, losses, win percentage, points scored (PF), points allowed (PA), and point differential."""
     try:
-        s_val = int(season)
+        # Inside an article run, results from its publication week onward are excluded and the record is
+        # counted from games; otherwise the stored team_seasons record is used.
+        s_val = resolve_season(season)
+        cut = cutoff_week(s_val)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -738,13 +791,16 @@ def get_season_standings(season: int = 2035) -> str:
                         ts.wins, ts.losses,
                         ROUND((ts.wins::numeric / NULLIF(ts.wins + ts.losses, 0)::numeric), 3) as win_pct,
                         COALESCE(SUM(CASE WHEN g.home_team_id = t.id THEN g.home_score WHEN g.away_team_id = t.id THEN g.away_score ELSE 0 END), 0) as pf,
-                        COALESCE(SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score WHEN g.away_team_id = t.id THEN g.home_score ELSE 0 END), 0) as pa
+                        COALESCE(SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score WHEN g.away_team_id = t.id THEN g.home_score ELSE 0 END), 0) as pa,
+                        COUNT(*) FILTER (WHERE (g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score)) AS games_wins,
+                        COUNT(*) FILTER (WHERE (g.home_team_id = t.id AND g.home_score < g.away_score) OR (g.away_team_id = t.id AND g.away_score < g.home_score)) AS games_losses
                     FROM teams t
                     JOIN team_seasons ts ON t.id = ts.team_id AND ts.season = %s
                     LEFT JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id) AND g.season = %s AND g.status = 'COMPLETED'
+                         AND (%s::int IS NULL OR g.week < %s::int)
                     GROUP BY t.id, t.name, t.conference, t.division, ts.wins, ts.losses
                     ORDER BY t.conference, t.division, win_pct DESC, (SUM(CASE WHEN g.home_team_id = t.id THEN g.home_score ELSE g.away_score END) - SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score ELSE g.home_score END)) DESC;
-                """, (s_val, s_val))
+                """, (s_val, s_val, cut, cut))
                 rows = cur.fetchall()
                 if not rows:
                     return f"No standings found for Season {s_val}."
@@ -757,15 +813,24 @@ def get_season_standings(season: int = 2035) -> str:
                     pf = int(r[7])
                     pa = int(r[8])
                     diff = pf - pa
+                    if cut is not None:
+                        w, l = int(r[9]), int(r[10])
+                        record, win_pct = f"{w}-{l}", (round(w / (w + l), 3) if w + l else 0.0)
+                    else:
+                        record, win_pct = f"{r[4]}-{r[5]}", (float(r[6]) if r[6] is not None else 0.0)
                     standings[div].append({
                         "team": r[1],
                         "team_id": r[0],
-                        "record": f"{r[4]}-{r[5]}",
-                        "win_pct": float(r[6]) if r[6] is not None else 0.0,
+                        "record": record,
+                        "win_pct": win_pct,
                         "points_for": pf,
                         "points_against": pa,
                         "point_differential": f"+{diff}" if diff > 0 else str(diff)
                     })
+
+                if cut is not None:
+                    for teams in standings.values():
+                        teams.sort(key=lambda t: (t["win_pct"], t["points_for"] - t["points_against"]), reverse=True)
 
                 result = {
                     "season": s_val,
@@ -776,11 +841,11 @@ def get_season_standings(season: int = 2035) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_top_popular_players(limit: int = 20, season: int = 2035) -> str:
+def get_top_popular_players(limit: int = 20, season: int = 0) -> str:
     """Fetch the top most popular players across the NFL for a season, ordered by popularity index, including player ID, name, position, team, Madden OVR, age, experience, and popularity rating."""
     try:
         lim = int(limit)
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -825,10 +890,10 @@ def get_top_popular_players(limit: int = 20, season: int = 2035) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_all_team_popularities(season: int = 2035) -> str:
+def get_all_team_popularities(season: int = 0) -> str:
     """Fetch all 32 NFL teams ranked by popularity index, including team ID, record, watchability rating, overall rating, and popularity score."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -896,10 +961,10 @@ JIMMY_JOHNSON_CHART = {
 }
 
 @tool
-def get_draft_order(season: int = 2035) -> str:
+def get_draft_order(season: int = 0) -> str:
     """Fetch the official Round 1 NFL Draft selection order (Picks 1-32) for a given season, based on reverse regular season record, point differential tiebreakers, and postseason finish."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -990,10 +1055,10 @@ def get_draft_order(season: int = 2035) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_team_draft_needs(team_identifier: str, season: int = 2035) -> str:
+def get_team_draft_needs(team_identifier: str, season: int = 0) -> str:
     """Fetch a team's primary roster needs ranked by urgency, evaluating starter rating deficits, positional depth, age cliffs, and statistical phase rankings. Accepts team name, abbreviation, or team ID."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 team_id = _resolve_team_id(cur, team_identifier)
@@ -1107,10 +1172,10 @@ def get_team_draft_needs(team_identifier: str, season: int = 2035) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_team_roster_depth_chart(team_identifier: str, season: int = 2035) -> str:
+def get_team_roster_depth_chart(team_identifier: str, season: int = 0) -> str:
     """Fetch a team's complete depth chart organized by position group (QB, RB, WR, TE, OT, IOL, EDGE, DT, LB, CB, S), showing ratings, age tiers, and roster demographics. Accepts team name, abbreviation, or team ID."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 team_id = _resolve_team_id(cur, team_identifier)
@@ -1220,10 +1285,10 @@ def get_draft_trade_value(pick_number: int) -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_franchise_rebuild_status(team_identifier: str, season: int = 2035) -> str:
+def get_franchise_rebuild_status(team_identifier: str, season: int = 0) -> str:
     """Fetch a franchise's macro rebuild lifecycle stage (Championship Window, Youth Ascent, Roster Purgatory, Ground-Up Rebuild) and recommended draft posture. Accepts team name, abbreviation, or team ID."""
     try:
-        s_val = int(season)
+        s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 team_id = _resolve_team_id(cur, team_identifier)
@@ -1345,9 +1410,10 @@ def get_team_articles(team_identifier: str, limit: int = 5) -> str:
                     FROM article_teams at
                     JOIN news_feed nf ON at.article_id = nf.id
                     WHERE at.team_id = %s
+                      AND (%s::int IS NULL OR nf.season < %s::int OR (nf.season = %s::int AND nf.week < %s::int))
                     ORDER BY nf.season DESC, nf.week DESC, at.mention_type = 'PRIMARY' DESC, at.mention_count DESC, nf.id DESC
                     LIMIT %s;
-                """, (team_id, limit))
+                """, (team_id, *_article_cutoff_params(), limit))
                 rows = cur.fetchall()
 
                 if not rows:
@@ -1436,9 +1502,10 @@ def get_player_articles(player_identifier: str, limit: int = 5) -> str:
                     FROM article_players ap
                     JOIN news_feed nf ON ap.article_id = nf.id
                     WHERE ap.player_id = %s
+                      AND (%s::int IS NULL OR nf.season < %s::int OR (nf.season = %s::int AND nf.week < %s::int))
                     ORDER BY nf.season DESC, nf.week DESC, ap.mention_type = 'PRIMARY' DESC, ap.mention_count DESC, nf.id DESC
                     LIMIT %s;
-                """, (player_id, limit))
+                """, (player_id, *_article_cutoff_params(), limit))
                 rows = cur.fetchall()
 
                 if not rows:

@@ -22,6 +22,45 @@ db_pool = ConnectionPool(
     open=True
 )
 
+# --- On-demand local beat wakeups (team news pages) ---
+# A team page view starts the local beat swarm in a background thread so the request never waits on Gemini.
+# One attempt per (team, season, week) every LOCAL_WAKEUP_RETRY_SECONDS: covers the run in progress and
+# stops repeated page views from re-triggering a wakeup that failed. Set NEWSROOM_AUTO_LOCAL_WAKEUP=0 to disable.
+import threading
+import time
+
+AUTO_LOCAL_WAKEUP = os.environ.get("NEWSROOM_AUTO_LOCAL_WAKEUP", "1") != "0"
+LOCAL_WAKEUP_RETRY_SECONDS = 600
+_local_wakeup_lock = threading.Lock()
+_local_wakeup_attempts = {}  # (team_id, season, week) -> start time
+
+
+def start_local_wakeup(team_id: int, season: int, week: int, label: str = "") -> bool:
+    """Starts a live local beat wakeup in the background; returns False if one was attempted recently."""
+    key = (team_id, season, week)
+    now = time.time()
+    with _local_wakeup_lock:
+        last = _local_wakeup_attempts.get(key)
+        if last is not None and now - last < LOCAL_WAKEUP_RETRY_SECONDS:
+            return False
+        _local_wakeup_attempts[key] = now
+
+    def run():
+        try:
+            from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
+            sd = SwarmDispatcher(debug_mode=False)
+            brief = build_weekly_assignment_brief(CONN_INFO, season=season, week=week)
+            sd.dispatch_team_local(
+                team_id=team_id, brief=brief, season=season, week=week,
+                live=True, save_to_db=True, max_workers=5,
+            )
+        except Exception as e:
+            print(f"Auto-wakeup failed for team {label} (#{team_id}): {e}")
+
+    threading.Thread(target=run, name=f"local-wakeup-{team_id}-{season}-{week}", daemon=True).start()
+    return True
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -249,36 +288,20 @@ def get_team_news(abbr: str, season: Optional[int] = None, limit: int = 10):
             if season is None:
                 season = curr_season
 
-            # 2. Check if team-specific beat coverage has already been written for the active week.
-            # Matchup primers may have been commissioned as national/slate slots, but local beat
-            # reports (LOCAL_POSTGAME_REPORT_CARD) are only written when the team's local beat is awakened.
+            # 2. Check if the team's local beat has already been woken for the active week. Local wakeups
+            # file every article under the team with slot 'Local Beat N' (national primers use 'Slot 6-8').
             target_week = curr_week if season == curr_season else None
             if target_week is not None:
                 cur.execute("""
-                    SELECT COUNT(*) AS cnt 
+                    SELECT COUNT(*) AS cnt
                     FROM news_feed n
-                    LEFT JOIN article_teams at ON at.article_id = n.id AND at.team_id = %s
                     WHERE n.season = %s AND n.week = %s AND n.content_type = 'ARTICLE'
-                      AND n.article_type = 'LOCAL_POSTGAME_REPORT_CARD'
-                      AND (at.team_id = %s OR n.team_id = %s);
-                """, (team_id, season, target_week, team_id, team_id))
+                      AND n.team_id = %s AND n.slot LIKE 'Local Beat%%';
+                """, (season, target_week, team_id))
                 cnt_row = cur.fetchone()
-                if not cnt_row or cnt_row["cnt"] == 0:
-                    try:
-                        from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
-                        sd = SwarmDispatcher(debug_mode=False)
-                        brief = build_weekly_assignment_brief(CONN_INFO, season=season, week=target_week)
-                        sd.dispatch_team_local(
-                            team_id=team_id,
-                            brief=brief,
-                            season=season,
-                            week=target_week,
-                            live=False,
-                            save_to_db=True,
-                            max_workers=5
-                        )
-                    except Exception as e:
-                        print(f"Auto-wakeup failed for team {abbr} (#{team_id}): {e}")
+                if (not cnt_row or cnt_row["cnt"] == 0) and AUTO_LOCAL_WAKEUP:
+                    # Runs in the background; the new beat coverage shows up on a later page load.
+                    start_local_wakeup(team_id, season, target_week, label=abbr)
 
             # 3. Query articles tagged with this team via article_teams OR news_feed.team_id
             cur.execute("""
@@ -1900,6 +1923,8 @@ def get_weekly_news(week: int, season: int = 2035):
     - Feature Trio (Slot 3, Slot 4, Slot 5)
     - Local Matchup Primers (Slot 6, Slot 7, Slot 8)
     - Standalone (Power Rankings)
+    - Other (anything else, e.g. unslotted articles)
+    Team-page beat coverage (slot 'Local Beat N') is excluded; it is served by /api/team/{abbr}/news.
     """
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
@@ -1914,6 +1939,8 @@ def get_weekly_news(week: int, season: int = 2035):
                     OR (n.team_id IS NULL AND UPPER(am.archetype) = UPPER(n.persona))
                 )
                 WHERE n.season = %s AND n.week = %s AND n.content_type = 'ARTICLE'
+                  -- Team-page beat coverage ('Local Beat N') belongs on team pages, not the weekly slate
+                  AND (n.slot IS NULL OR n.slot NOT LIKE 'Local Beat%%')
                 ORDER BY n.id ASC, am.id ASC;
             """, (season, week))
             articles = cur.fetchall()
@@ -2019,7 +2046,7 @@ def get_weekly_news(week: int, season: int = 2035):
                     slotted_response["secondary"].append(art_dict)
                 elif s_lower in ("slot 3", "slot 4", "slot 5"):
                     slotted_response["features"].append(art_dict)
-                elif s_lower in ("slot 6", "slot 7", "slot 8") or "local" in (a["article_type"] or "").lower():
+                elif s_lower in ("slot 6", "slot 7", "slot 8"):
                     slotted_response["local_primers"].append(art_dict)
                 elif "standalone" in s_lower or a["article_type"] == "POWER_RANKINGS":
                     slotted_response["standalone"] = art_dict
@@ -2107,7 +2134,8 @@ def trigger_team_wakeup(team_id: int, season: int = 2035, week: int = 18, live: 
     - Wakes up all beat reporters for the team to write localized articles.
     - Wakes up local die-hard fan personas for reaction tweets.
     - Wakes up national pundits if team popularity warrants attention.
-    Runs in parallel across max_workers threads.
+    Runs in parallel across max_workers threads. Only live=true calls Gemini and saves; live=false is a dry run
+    (prompts are compiled, nothing is written to news_feed).
     """
     from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
     sd = SwarmDispatcher(debug_mode=False)
@@ -2118,7 +2146,7 @@ def trigger_team_wakeup(team_id: int, season: int = 2035, week: int = 18, live: 
         season=season,
         week=week,
         live=live,
-        save_to_db=True,
+        save_to_db=live,
         max_workers=max_workers
     )
     return {
@@ -2126,7 +2154,10 @@ def trigger_team_wakeup(team_id: int, season: int = 2035, week: int = 18, live: 
         "team_id": team_id,
         "season": season,
         "week": week,
-        "message": f"Team #{team_id} local media wakeup dispatched with {max_workers} parallel workers."
+        "message": (
+            f"Team #{team_id} local media wakeup dispatched with {max_workers} parallel workers."
+            if live else f"Team #{team_id} dry run: prompts compiled, nothing saved (pass live=true to generate)."
+        ),
     }
 
 if __name__ == "__main__":

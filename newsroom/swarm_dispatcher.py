@@ -8,6 +8,11 @@ import collections
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
+from newsroom.entity_patterns import team_mention_pattern
+from newsroom.run_context import reset_article_context, set_article_context
+from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
+from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings, records_by_team
+from newsroom.playoff_overrides import find_active_override, normalize_temporal_mode, validate_playoff_overrides
 from newsroom.power_rankings import (
     fix_prompt as power_rankings_fix_prompt,
     load_team_index,
@@ -92,12 +97,6 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
         "season": season,
         "calendar_week": week,
         "recap_week": recap_week if week > 1 else None,
-        # Default slate_manifest points to the completed games (for backward compatibility)
-        "slate_manifest": {
-            "target_week": recap_week if week > 1 else week,
-            "total_games": 0,
-            "all_games": []
-        },
         # Explicit recap slate (from the just-concluded week)
         "recap_slate": {
             "week": recap_week if week > 1 else week,
@@ -113,7 +112,14 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
             "all_games": []
         },
         "standout_performances": [],
-        "league_leaders": {
+        # League as it stood entering this week: regular-season division standings plus culture leaders
+        "season_landscape": {
+            "standings_through_week": min(week - 1, REGULAR_SEASON_FINAL_WEEK),
+            "standings_note": (
+                "Regular-season division standings from completed games before this week, best record first "
+                "(PF/PA = points for/against, diff = point differential). Playoff games are not included."
+            ),
+            "division_standings": {},
             "most_watchable_teams": [],
             "most_popular_teams": []
         },
@@ -123,10 +129,12 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
             "above or below it."
         ),
         "curatorial_guidance": (
-            "CURATORIAL AUTONOMY: You have complete editorial independence to choose which matchups, "
-            "teams, or players from this slate to highlight. Do NOT feel obligated to write about "
-            "the same games as other journalists. Select games and storylines that align with your distinct "
-            "journalistic beat and persona. You have access to autonomous database tools to investigate "
+            "CURATORIAL AUTONOMY: If your instructions include an EDITORIAL DESK SUBJECT ASSIGNMENT, that "
+            "team or game is your subject and is not negotiable; the freedom below applies only to the angles, "
+            "players and storylines you choose within it. Otherwise, you have complete editorial independence "
+            "to choose which matchups, teams, or players from this slate to highlight. Do NOT feel obligated to "
+            "write about the same games as other journalists. Select games and storylines that align with your "
+            "distinct journalistic beat and persona. You have access to autonomous database tools to investigate "
             "box scores, player stats, season standings, and team analytics for any game or franchise."
         )
     }
@@ -162,11 +170,8 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                     "excitement_index": display_excitement(g[6]) if g[6] else None
                 }
                 brief["recap_slate"]["all_games"].append(game_dict)
-                # Populate default slate_manifest with completed games
-                brief["slate_manifest"]["all_games"].append(game_dict)
 
             brief["recap_slate"]["total_games"] = len(recap_games)
-            brief["slate_manifest"]["total_games"] = len(recap_games)
 
             # 2. Fetch upcoming scheduled games for the PREVIEW slate (week)
             cur.execute("""
@@ -230,23 +235,39 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                 }
                 brief["standout_performances"].append(perf_item)
 
-            # 4. Fetch top watchable and popular teams
+            # 4. Season landscape: division standings entering this week (newsroom/season_landscape.py)
+            cur.execute("SELECT id, name, city, conference, division FROM teams;")
+            teams = [dict(zip(("id", "name", "city", "conference", "division"), r)) for r in cur.fetchall()]
             cur.execute("""
-                SELECT t.name, ts.team_id, ts.wins, ts.losses, ts.watchability_index
+                SELECT week, home_team_id, away_team_id, home_score, away_score
+                FROM games
+                WHERE season = %s AND week < %s AND status = 'COMPLETED'
+                  AND home_score IS NOT NULL AND away_score IS NOT NULL;
+            """, (season, week))
+            games = [dict(zip(("week", "home_team_id", "away_team_id", "home_score", "away_score"), r))
+                     for r in cur.fetchall()]
+            standings = division_standings(teams, games, before_week=week)
+            landscape = brief["season_landscape"]
+            landscape["division_standings"] = standings
+            records = records_by_team(standings)
+
+            # Top watchable and popular teams (records from the standings above)
+            cur.execute("""
+                SELECT t.name, ts.team_id, ts.watchability_index
                 FROM teams t JOIN team_seasons ts ON t.id = ts.team_id
                 WHERE ts.season = %s ORDER BY ts.watchability_index DESC NULLS LAST LIMIT 5;
             """, (season,))
-            brief["league_leaders"]["most_watchable_teams"] = [
-                f"{r[0]} ({r[2]}-{r[3]}, Watchability: {round(float(r[4] or 0), 1)})" for r in cur.fetchall()
+            landscape["most_watchable_teams"] = [
+                f"{r[0]} ({records.get(r[1], '0-0')}, Watchability: {round(float(r[2] or 0), 1)})" for r in cur.fetchall()
             ]
 
             cur.execute("""
-                SELECT t.name, ts.team_id, ts.wins, ts.losses, ts.popularity_index
+                SELECT t.name, ts.team_id, ts.popularity_index
                 FROM teams t JOIN team_seasons ts ON t.id = ts.team_id
                 WHERE ts.season = %s ORDER BY ts.popularity_index DESC NULLS LAST LIMIT 5;
             """, (season,))
-            brief["league_leaders"]["most_popular_teams"] = [
-                f"{r[0]} ({r[2]}-{r[3]}, Popularity: {round(float(r[4] or 0), 1)})" for r in cur.fetchall()
+            landscape["most_popular_teams"] = [
+                f"{r[0]} ({records.get(r[1], '0-0')}, Popularity: {round(float(r[2] or 0), 1)})" for r in cur.fetchall()
             ]
 
     return brief
@@ -264,7 +285,7 @@ REGULAR_SEASON_FEATURE_POOLS = {
             "SEASON_PROGRESS_AUDIT",
             "ROTATING_COLUMNIST",
         ],
-        "columnists": ["SIMMONS", "KIMES", "ACHO", "BAYLESS"],
+        "columnists": ["SIMMONS", "KIMES", "ACHO", "SKIP_BAYLESS"],
     },
     2: {  # Phase 2: Midseason Separation & Roster Diagnostics (Weeks 6–10)
         "pool": [
@@ -276,7 +297,7 @@ REGULAR_SEASON_FEATURE_POOLS = {
             "FRANCHISE_STATE_OF_THE_UNION",
             "ROTATING_COLUMNIST",
         ],
-        "columnists": ["YATES", "KIMES", "ACHO", "SIMMONS", "BAYLESS"],
+        "columnists": ["YATES", "KIMES", "ACHO", "SIMMONS", "SKIP_BAYLESS"],
     },
     3: {  # Phase 3: The Stretch Run & Postseason Pathing (Weeks 11–14)
         "pool": [
@@ -288,7 +309,7 @@ REGULAR_SEASON_FEATURE_POOLS = {
             "PLAYER_PROGRESS_REPORT",
             "ROTATING_COLUMNIST",
         ],
-        "columnists": ["BAYLESS", "KIMES", "YATES", "ACHO"],
+        "columnists": ["SKIP_BAYLESS", "KIMES", "YATES", "ACHO"],
     },
     4: {  # Phase 4: Elimination & Championship Windows (Weeks 15–18)
         "pool": [
@@ -299,7 +320,7 @@ REGULAR_SEASON_FEATURE_POOLS = {
             "SEASON_PROGRESS_AUDIT",
             "ROTATING_COLUMNIST",
         ],
-        "columnists": ["SIMMONS", "BAYLESS", "YATES", "KIMES"],
+        "columnists": ["SIMMONS", "SKIP_BAYLESS", "YATES", "KIMES"],
     },
 }
 
@@ -366,6 +387,26 @@ POSTSEASON_EDITORIAL_SLATES = {
     ],
 }
 
+# Agents never drawn as random "pundits" for reaction tweets: long-form-only writers (their personas are
+# article voices; SKIP_BAYLESS's tweets come from SKIP_TWEET, so Skip never tweets twice), the roundtable panel,
+# beat reporters, and fans (fans tweet through their own selection rules).
+TWEET_EXCLUDED_ARCHETYPES = (
+    "BARNWELL", "SANDO", "JOYNER", "ROSENTHAL", "CHADIHA", "KIMES", "ORLOVSKY",
+    "SKIP_BAYLESS", "ROUNDTABLE_PANEL",
+    "LOCAL_BEAT_REPORTER", "DIE_HARD_FAN", "BANDWAGON_FAN",
+)
+
+# Old or shorthand writer names -> the archetype used in agent_personas.json, curatorial directives and agent_memories.
+WRITER_ARCHETYPE_ALIASES = {
+    "BAYLESS": "SKIP_BAYLESS",
+}
+
+
+def canonical_writer_archetype(archetype: str) -> str:
+    arch = (archetype or "").upper().strip()
+    return WRITER_ARCHETYPE_ALIASES.get(arch, arch)
+
+
 class EntityTaggingService:
     """Extracts and resolves mentioned teams and players from generated articles, storing them in article_teams and article_players."""
 
@@ -381,23 +422,8 @@ class EntityTaggingService:
         cur.execute("SELECT id, name, city, abbreviation FROM teams;")
         teams = []
         for tid, name, city, abbr in cur.fetchall():
-            regex_parts = []
-            # Full team name (e.g. "Buffalo Bills")
-            full_name = f"{city} {name}".strip()
-            regex_parts.append(r"\b" + re.escape(full_name) + r"\b")
-
-            # Team nickname (e.g. "Bills", "49ers", "Cowboys")
-            regex_parts.append(r"\b" + re.escape(name) + r"\b")
-
-            # Team abbreviation (e.g. "KC", "BUF", "NE")
-            if len(abbr) >= 2:
-                regex_parts.append(r"\b" + re.escape(abbr) + r"\b")
-
-            # City name if distinct and non-generic
-            if city not in ("New York", "Los Angeles"):
-                regex_parts.append(r"\b" + re.escape(city) + r"\b")
-
-            combined_pat = re.compile("|".join(regex_parts), re.IGNORECASE)
+            # Case-sensitive, and word-like abbreviations (NO, WAS, TEN...) are skipped: see newsroom/entity_patterns.py
+            combined_pat = team_mention_pattern(name, city, abbr)
             teams.append({
                 "id": tid,
                 "name": name,
@@ -604,6 +630,8 @@ class SwarmDispatcher:
                 self.playoff_overrides = json.load(f).get("playoff_overrides", {})
         else:
             self.playoff_overrides = {}
+        for problem in validate_playoff_overrides(self.playoff_overrides, self.article_types_data.keys()):
+            print(f"⚠️ playoff_overrides.json: {problem}")
 
         self.tools = [
             get_game_box_score,
@@ -679,6 +707,7 @@ class SwarmDispatcher:
         """Assembles the exact persona, memory, assignment brief, and tools prompt for an agent.
 
         slot_target (from newsroom.slot_targets) pins the article's subject chosen by the Editorial Desk."""
+        archetype = canonical_writer_archetype(archetype)
         base_archetype_prompt = self.personas_data.get(
             archetype,
             f"You are an NFL media agent with archetype {archetype}."
@@ -704,12 +733,7 @@ class SwarmDispatcher:
             article_type_info = self.get_article_type_for_writer(archetype, requested_type=article_type)
             if article_type_info:
                 # Check for playoff-specific overrides based on target_weeks
-                at_id = article_type_info.get("id")
-                if at_id in self.playoff_overrides:
-                    for ov in self.playoff_overrides[at_id]:
-                        if week in ov.get("target_weeks", []):
-                            active_playoff_override = ov
-                            break
+                active_playoff_override = find_active_override(self.playoff_overrides, article_type_info.get("id"), week)
 
                 format_display = f"ARTICLE - {article_type_info['name']} (Writing Category: {article_type_info['writing_archetype_category']})"
                 if active_playoff_override:
@@ -747,7 +771,7 @@ Assigned Team ID: {assigned_team_id if assigned_team_id is not None else 'Nation
 
         # Determine Temporal Mode (RETROSPECTIVE, PROSPECTIVE, or CUMULATIVE)
         at_id = article_type_info.get("id") if article_type_info else None
-        temporal_mode = active_playoff_override.get("temporal_mode") if active_playoff_override else None
+        temporal_mode = normalize_temporal_mode(active_playoff_override.get("temporal_mode")) if active_playoff_override else None
         if not temporal_mode and at_id:
             temporal_mode = TEMPORAL_ARTICLE_MODES.get(at_id, "CUMULATIVE")
 
@@ -763,11 +787,17 @@ TEMPORAL PUBLISHING CONTEXT (RETROSPECTIVE SLATE REVIEW):
 - Use your database tools to investigate the completed Week {recap_week} box scores, margins, and player stats.
 """
         elif temporal_mode == "PROSPECTIVE":
+            # An override can preview a later week (Week 22, the Super Bowl bye, previews the Week 23 game).
+            preview_week = (active_playoff_override or {}).get("preview_week") or week
+            preview_lookup = (
+                f"\n- Week {preview_week} matchups are not in the assignment brief's preview_slate; call `get_weekly_slate` with week={preview_week} to get them."
+                if preview_week != week else ""
+            )
             temporal_instruction = f"""
 TEMPORAL PUBLISHING CONTEXT (PROSPECTIVE MATCHUP PREVIEW):
-- You are publishing ahead of Week {week} action.
-- Focus strictly on previewing the upcoming scheduled matchups for Week {week}.
-- Analyze team records, head-to-head match-ups, injury statuses, and tactical blueprints for the games taking place in Week {week}.
+- You are publishing during Week {week}, ahead of the Week {preview_week} games.
+- Focus strictly on previewing the upcoming scheduled matchups for Week {preview_week}; they have not been played yet.
+- Analyze team records, head-to-head match-ups, and tactical blueprints for the games taking place in Week {preview_week}. There is no injury data in this league: do not mention injuries or injury reports.{preview_lookup}
 """
         elif temporal_mode == "CUMULATIVE":
             temporal_instruction = f"""
@@ -777,7 +807,7 @@ TEMPORAL PUBLISHING CONTEXT (CUMULATIVE / ENTERING WEEK {week}):
 - Week {week} games have not taken place yet.
 """
 
-        national_writers_list = ("BARNWELL", "SANDO", "JOYNER", "ROSENTHAL", "CHADIHA", "YATES", "SIMMONS", "ACHO", "THE_ATHLETIC", "ROUNDTABLE_PANEL", "SKIP_BAYLESS", "BAYLESS", "KIMES", "ORLOVSKY", "CLARK")
+        national_writers_list = ("BARNWELL", "SANDO", "JOYNER", "ROSENTHAL", "CHADIHA", "YATES", "SIMMONS", "ACHO", "THE_ATHLETIC", "ROUNDTABLE_PANEL", "SKIP_BAYLESS", "KIMES", "ORLOVSKY", "CLARK")
 
         national_writer_guidelines = ""
         if content_type == "ARTICLE" and archetype in national_writers_list:
@@ -813,7 +843,7 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 2. RESEARCH TOOLS:
 - Query your team's most recent box score and player performances with `get_game_box_score`.
 - Query your team's complete game schedule, results, and margins with `get_team_season_schedule`.
-- Query individual roster stats and injury/development notes with `get_player_season_stats` and `get_player_context`.
+- Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`. There is no injury data in this league: do not mention injuries or injury reports.
 - Query team baseline ratings and top stars with `get_team_context`.
 3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the locker room. Quote coaching staff sentiment, cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
 """
@@ -979,11 +1009,19 @@ If you need specific stats, use your database tools before producing your final 
             print(compiled_prompt["task_instruction"].strip())
             print("=" * 70)
 
+        # Set when a live call produced nothing publishable; such output is never saved to news_feed.
+        failure_reason = None
+
+        # Writer tools (newsroom/db_tools.py) read this article's season and hide results from its publication
+        # week onward. Gemini runs the tools on this thread, so the context covers every tool call below.
+        run_ctx_token = set_article_context(season, week)
+
         # Call Gemini if live mode is active
         if live:
             if not self.api_key:
                 print("\n⚠️  [GEMINI LIVE CALL SKIPPED]: GEMINI_API_KEY environment variable is not set.")
                 print("   Set it via: export GEMINI_API_KEY=\"your_key\" or pass --api-key YOUR_KEY")
+                failure_reason = "missing GEMINI_API_KEY"
                 generated_text = f"[{ctype}] Gemini execution skipped: Missing GEMINI_API_KEY."
             else:
                 print(f"\n🚀 Sending prompt to Gemini ({model}) with Autonomous Database Tools...")
@@ -1063,6 +1101,10 @@ If you need specific stats, use your database tools before producing your final 
                             if retry_text:
                                 generated_text = retry_text
 
+                    if not (generated_text or "").strip():
+                        failure_reason = "model returned no text"
+                        generated_text = ""
+
                     total_tool_calls = sum(tool_call_counts.values())
                     print("\n📊 --- RESEARCH TOOL USAGE SUMMARY ---")
                     print(f"Total Database Tool Calls: {total_tool_calls} (Cap: 50)")
@@ -1082,6 +1124,7 @@ If you need specific stats, use your database tools before producing your final 
                     print(f"\n❌ Error calling Gemini: {e}")
                     import traceback
                     traceback.print_exc()
+                    failure_reason = f"Gemini error: {e}"
                     generated_text = f"Error calling Gemini: {e}"
         else:
             t_mode = compiled_prompt.get("temporal_mode")
@@ -1090,6 +1133,8 @@ If you need specific stats, use your database tools before producing your final 
                 generated_text = f"[{ctype}] Mock analysis by {display} ({handle}) reviewing Week {r_week} action."
             else:
                 generated_text = f"[{ctype}] Mock analysis by {display} ({handle}) analyzing Week {week} action."
+
+        reset_article_context(run_ctx_token)
 
         excerpt = None
         if ctype == "ARTICLE":
@@ -1133,9 +1178,14 @@ If you need specific stats, use your database tools before producing your final 
             headline = None
             excerpt = None
 
-        # Save output to news_feed table ONLY if explicitly enabled
+        # Save output to news_feed table ONLY if explicitly enabled, and only real model output:
+        # error text, empty responses and offline mock text are never published.
         article_id = None
-        if save_to_db:
+        if save_to_db and not live:
+            print(f"⏭️  [NOT SAVED] {display} [{assigned_slot}]: mock output (live=False) is never written to news_feed.")
+        elif save_to_db and failure_reason:
+            print(f"⏭️  [NOT SAVED] {display} [{assigned_slot}]: {failure_reason}.")
+        elif save_to_db:
             try:
                 with psycopg.connect(self.db.db_conn_info) as conn:
                     with conn.cursor() as cur:
@@ -1188,7 +1238,8 @@ If you need specific stats, use your database tools before producing your final 
             "excerpt": excerpt,
             "article_id": article_id,
             "slot": assigned_slot,
-            "article_type": at_id
+            "article_type": at_id,
+            "error": failure_reason,
         }
 
     def _power_rankings_team_index(self) -> list:
@@ -1198,16 +1249,14 @@ If you need specific stats, use your database tools before producing your final 
 
     def get_agent_record(self, archetype: str) -> tuple:
         """Retrieves or synthesizes the agent memory record for a writer archetype."""
-        arch_upper = archetype.upper().strip()
-        aliases = [arch_upper]
-        if arch_upper in ("SKIP_BAYLESS", "BAYLESS", "SKIP_TWEET"):
-            aliases = ["SKIP_BAYLESS", "BAYLESS", "SKIP_TWEET"]
+        # Exact archetype match only: Skip Bayless's tweet account (SKIP_TWEET) is a separate agent and must
+        # never be picked up for his columns.
+        arch_upper = canonical_writer_archetype(archetype)
 
         display_names = {
             "THE_ATHLETIC": "The Athletic Staff",
             "ROUNDTABLE_PANEL": "Super Bowl Roundtable Panel (Kimes, Simmons, Acho, Yates)",
             "SKIP_BAYLESS": "Skip Bayless",
-            "BAYLESS": "Skip Bayless",
             "BARNWELL": "Bill Barnwell",
             "SANDO": "Mike Sando",
             "JOYNER": "KC Joyner",
@@ -1226,9 +1275,9 @@ If you need specific stats, use your database tools before producing your final 
                 cur.execute("""
                     SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
                     FROM agent_memories 
-                    WHERE UPPER(archetype) = ANY(%s) 
+                    WHERE UPPER(archetype) = %s
                     ORDER BY id ASC LIMIT 1;
-                """, (aliases,))
+                """, (arch_upper,))
                 agent = cur.fetchone()
                 if agent:
                     agent_id, arch, memory, handle, display, assigned_team = agent
@@ -1351,7 +1400,7 @@ If you need specific stats, use your database tools before producing your final 
                 continue
 
             if preferred_archetype:
-                chosen_archetype = preferred_archetype
+                chosen_archetype = canonical_writer_archetype(preferred_archetype)
             elif at_id == "LOCAL_MATCHUP_PRIMER":
                 chosen_archetype = "LOCAL_BEAT_REPORTER"
             else:
@@ -1447,9 +1496,9 @@ If you need specific stats, use your database tools before producing your final 
                 cur.execute("""
                     SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
                     FROM agent_memories 
-                    WHERE archetype NOT IN ('BARNWELL', 'SANDO', 'JOYNER', 'ROSENTHAL', 'CHADIHA', 'KIMES', 'ORLOVSKY', 'LOCAL_BEAT_REPORTER', 'DIE_HARD_FAN', 'BANDWAGON_FAN') 
+                    WHERE NOT (archetype = ANY(%s)) 
                     ORDER BY RANDOM() LIMIT 4;
-                """)
+                """, (list(TWEET_EXCLUDED_ARCHETYPES),))
                 pundits = cur.fetchall()
 
                 cur.execute("""
@@ -1461,7 +1510,7 @@ If you need specific stats, use your database tools before producing your final 
                 bandwagons = cur.fetchall()
 
                 # Die-Hard Homers from exciting games
-                exciting_game_ids = [g["game_id"] for g in brief.get("slate_manifest", {}).get("all_games", [])[:5]]
+                exciting_game_ids = [g["game_id"] for g in brief.get("recap_slate", {}).get("all_games", [])[:5]]
                 homers = []
                 if exciting_game_ids:
                     cur.execute("""
@@ -1586,37 +1635,65 @@ If you need specific stats, use your database tools before producing your final 
 
                 num_pundits = 3 if pop > 70 else (1 if pop > 55 else 0)
 
+                # 4. Inputs for the local beat portfolio: last week's result, this week's game, and what exists
+                cur.execute("""
+                    SELECT 1 FROM games
+                    WHERE season = %s AND week = %s AND status = 'COMPLETED' AND %s IN (home_team_id, away_team_id)
+                    LIMIT 1;
+                """, (season, week - 1, team_id))
+                played_last_week = cur.fetchone() is not None
+                cur.execute("""
+                    SELECT g.id, t.name, o.id, o.name
+                    FROM games g
+                    JOIN teams t ON t.id = %s
+                    JOIN teams o ON o.id = CASE WHEN g.home_team_id = %s THEN g.away_team_id ELSE g.home_team_id END
+                    WHERE g.season = %s AND g.week = %s AND g.status <> 'BYE' AND %s IN (g.home_team_id, g.away_team_id)
+                    LIMIT 1;
+                """, (team_id, team_id, season, week, team_id))
+                this_week_game = cur.fetchone()
+                cur.execute("""
+                    SELECT DISTINCT article_type FROM news_feed
+                    WHERE season = %s AND week = %s AND team_id = %s AND content_type = 'ARTICLE'
+                      AND article_type LIKE 'LOCAL\\_%%';
+                """, (season, week, team_id))
+                existing_local_types = {r[0] for r in cur.fetchall()}
+
                 pundits = []
                 if num_pundits > 0:
                     cur.execute("""
                         SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
                         FROM agent_memories 
-                        WHERE archetype NOT IN ('BARNWELL', 'SANDO', 'JOYNER', 'ROSENTHAL', 'CHADIHA', 'KIMES', 'ORLOVSKY', 'LOCAL_BEAT_REPORTER', 'DIE_HARD_FAN', 'BANDWAGON_FAN') 
+                        WHERE NOT (archetype = ANY(%s)) 
                         ORDER BY RANDOM() LIMIT %s;
-                    """, (num_pundits,))
+                    """, (list(TWEET_EXCLUDED_ARCHETYPES), num_pundits))
                     pundits = cur.fetchall()
 
         print(f"-> Waking up {len(local_beats)} Beat Reporters and {len(local_homers)} Die-Hards.")
         print(f"-> Team POP is {pop:.1f}. Waking up {len(pundits)} National Pundits to comment.")
 
-        # Compile Beat Article tasks using full local beat portfolio:
-        # 1. LOCAL_POSTGAME_REPORT_CARD (Unit grades & instant recap)
-        # 2. LOCAL_MATCHUP_PRIMER (Tactical preview & micro battles)
-        # 3. LOCAL_PLAYER_SPOTLIGHT (Film breakdown & player profile)
-        # 4. LOCAL_SEASON_PROGRESS_REPORT (Midseason/season franchise audit)
-        local_article_types_pool = [
-            "LOCAL_POSTGAME_REPORT_CARD",
-            "LOCAL_MATCHUP_PRIMER",
-            "LOCAL_PLAYER_SPOTLIGHT",
-            "LOCAL_SEASON_PROGRESS_REPORT" if week >= 6 else "LOCAL_POSTGAME_REPORT_CARD",
-        ]
+        # Full local beat portfolio every wakeup, dealt across the team's reporters (newsroom/local_portfolio.py):
+        # postgame report (if they played last week), matchup primer (if they play this week), player spotlight,
+        # and season progress report (Week 6+), skipping types the team already has this week.
+        portfolio = plan_local_portfolio(
+            len(local_beats), week, played_last_week, this_week_game is not None, existing_local_types
+        )
+        print(f"-> Local beat portfolio: {[t for _, t in portfolio] or 'nothing new to write'}")
+        primer_target = None
+        if this_week_game:
+            game_id, team_name, opp_id, opp_name = this_week_game
+            primer_target = {
+                "team_id": team_id, "team_name": team_name, "game_id": game_id,
+                "opponent_team_id": opp_id, "opponent_name": opp_name,
+                "note": f"Preview the {team_name}' Week {week} game against the {opp_name} from the {team_name} locker room.",
+            }
         article_tasks = []
-        for idx, b in enumerate(local_beats):
-            assigned_local_type = local_article_types_pool[idx % len(local_article_types_pool)]
+        for idx, (reporter_idx, assigned_local_type) in enumerate(portfolio):
+            b = local_beats[reporter_idx]
             local_slot = f"Local Beat {idx + 1}"
             p = self.compile_agent_prompt(
                 b[0], b[1], b[2], b[3], b[4], b[5],
-                brief, season, week, "ARTICLE", article_type=assigned_local_type
+                brief, season, week, "ARTICLE", article_type=assigned_local_type,
+                slot_target=primer_target if assigned_local_type == LOCAL_PRIMER else None,
             )
             article_tasks.append((p, team_id, assigned_local_type, b[4] or b[0], local_slot, assigned_local_type))
 

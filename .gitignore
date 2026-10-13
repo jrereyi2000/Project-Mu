@@ -32,3 +32,6 @@ backup/
 
 # Large reference PDFs (kept locally, too big for the repo)
 docs/reference/Panthers History.pdf
+
+# Output of tools/verify_session.sh
+verify_output/

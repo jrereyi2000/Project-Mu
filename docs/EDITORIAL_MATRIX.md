@@ -38,7 +38,7 @@ Each weekly generation dynamically selects **three non-repeating article types**
 * `PLAYER_PROGRESS_REPORT`
 * `FRANCHISE_STATE_OF_THE_UNION`
 * `SEASON_PROGRESS_AUDIT`
-* Rotating National Columnist (`COLUMNIST_SIMMONS`, `COLUMNIST_KIMES`, `COLUMNIST_ACHO`, or `COLUMNIST_BAYLESS`)
+* Rotating National Columnist (`COLUMNIST_SIMMONS`, `COLUMNIST_KIMES`, `COLUMNIST_ACHO`, or `COLUMNIST_SKIP_BAYLESS`)
 
 ### Phase 2: Midseason Separation & Roster Diagnostics (Weeks 6–10)
 * `POSITIONAL_PLAYER_TIERS`
@@ -48,7 +48,7 @@ Each weekly generation dynamically selects **three non-repeating article types**
 * `PLAYER_PROGRESS_REPORT`
 * `FRANCHISE_STATE_OF_THE_UNION`
 * `PLAYOFF_PREDICTOR` *(Available starting Week 10)*
-* Rotating National Columnist (`COLUMNIST_YATES`, `COLUMNIST_KIMES`, `COLUMNIST_ACHO`, `COLUMNIST_SIMMONS`, or `COLUMNIST_BAYLESS`)
+* Rotating National Columnist (`COLUMNIST_YATES`, `COLUMNIST_KIMES`, `COLUMNIST_ACHO`, `COLUMNIST_SIMMONS`, or `COLUMNIST_SKIP_BAYLESS`)
 
 ### Phase 3: The Stretch Run & Postseason Pathing (Weeks 11–14)
 * `PLAYOFF_PREDICTOR`
@@ -57,7 +57,7 @@ Each weekly generation dynamically selects **three non-repeating article types**
 * `POSITIONAL_TOP_10_HIERARCHY`
 * `SEASON_PROGRESS_AUDIT`
 * `PLAYER_PROGRESS_REPORT`
-* Rotating National Columnist (`COLUMNIST_BAYLESS`, `COLUMNIST_KIMES`, `COLUMNIST_YATES`, or `COLUMNIST_ACHO`)
+* Rotating National Columnist (`COLUMNIST_SKIP_BAYLESS`, `COLUMNIST_KIMES`, `COLUMNIST_YATES`, or `COLUMNIST_ACHO`)
 
 ### Phase 4: Elimination & Championship Windows (Weeks 15–18)
 * `SUPER_BOWL_CONTENDER_BLUEPRINT`
@@ -65,7 +65,7 @@ Each weekly generation dynamically selects **three non-repeating article types**
 * `AWARDS_TRACKER`
 * `FRANCHISE_STATE_OF_THE_UNION` *(Curated specifically for mathematically eliminated teams / Black Monday prep)*
 * `SEASON_PROGRESS_AUDIT`
-* Rotating National Columnist (`COLUMNIST_SIMMONS`, `COLUMNIST_BAYLESS`, `COLUMNIST_YATES`, or `COLUMNIST_KIMES`)
+* Rotating National Columnist (`COLUMNIST_SIMMONS`, `COLUMNIST_SKIP_BAYLESS`, `COLUMNIST_YATES`, or `COLUMNIST_KIMES`)
 
 ---
 

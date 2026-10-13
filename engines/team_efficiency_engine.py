@@ -68,20 +68,21 @@ def compute_team_efficiency(rows: list) -> dict:
     return profiles
 
 
-def fetch_team_game_rows(cur, season: int) -> list:
+def fetch_team_game_rows(cur, season: int, before_week: int = None) -> list:
+    """One row per team per completed game. before_week (optional) keeps only games from earlier weeks."""
     cur.execute("""
         WITH tg AS (
             SELECT g.id AS game_id, g.home_team_id AS team_id, g.home_score AS pf, g.away_score AS pa
-            FROM games g WHERE g.season = %(s)s AND g.status = 'COMPLETED'
+            FROM games g WHERE g.season = %(s)s AND g.status = 'COMPLETED' AND (%(w)s::int IS NULL OR g.week < %(w)s::int)
             UNION ALL
             SELECT g.id, g.away_team_id, g.away_score, g.home_score
-            FROM games g WHERE g.season = %(s)s AND g.status = 'COMPLETED'
+            FROM games g WHERE g.season = %(s)s AND g.status = 'COMPLETED' AND (%(w)s::int IS NULL OR g.week < %(w)s::int)
         )
         SELECT tg.team_id, tg.pf, tg.pa, ts.total_offense, ts.passing_yards, ts.rushing_yards, ts.turnovers
         FROM tg
         LEFT JOIN teams t ON t.id = tg.team_id
         LEFT JOIN team_stats ts ON ts.game_id = tg.game_id AND ts.team_name = t.name
-    """, {"s": season})
+    """, {"s": season, "w": before_week})
     rows = []
     for team_id, pf, pa, yds, pass_yds, rush_yds, giveaways in cur.fetchall():
         rows.append({

@@ -162,8 +162,10 @@ def generate_team_and_player_stats(season_year: int):
         conn.commit()
     print(f"Database sync complete: Tried to insert {len(team_stats_rows)} team rows and {len(player_stats_rows)} player rows.")
     
-    # --- 🏈 PHASE 2: TRIGGER THE AUTOMATED AI SWARM ---
-    print("\n[SWARM PIPELINE] Triggering Post-Week Analytics & Swarm...")
+    # --- 🏈 PHASE 2: POST-WEEK ANALYTICS ---
+    # The newsroom swarm is not run here: it is a separate step (newsroom/weekly_run.py) that the
+    # pipeline calls after this sync, so stats edits and repeat captures don't publish a new slate.
+    print("\n[ANALYTICS PIPELINE] Running post-week analytics engines...")
     try:
         from engines.gotw_engine import batch_evaluate
         from engines.twi_engine import TWIEngine
@@ -174,7 +176,6 @@ def generate_team_and_player_stats(season_year: int):
         from engines.player_popularity_engine import PlayerPopularityEngine
         from engines.excitement_projection import project_scheduled_games
         from engines.fantasy_projection_engine import project_upcoming_week
-        from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
 
         # 0. Score Game Excitement (E) for games that have none yet plus the games just backfilled above.
         #    Must run before TWI, which only counts games whose excitement_index is set.
@@ -209,29 +210,13 @@ def generate_team_and_player_stats(season_year: int):
         # Weekly fantasy projections (fantasy_projections) for the next week with scheduled games
         print("-> Projecting fantasy points for the upcoming week...")
         project_upcoming_week(season_year)
-        
-        # 2. Compile the Assignment Brief for the AI
-        print("-> Compiling AI Assignment Brief (Weekly Slate Digest)...")
-        with psycopg.connect(DATABASE_URL) as conn:
-            with conn.cursor() as cur:
-                # Find the current week dynamically
-                cur.execute("SELECT MAX(week) FROM games WHERE season = %s AND status = 'COMPLETED'", (season_year,))
-                current_week = cur.fetchone()[0] or 1
+        print("\n✅ Stats sync and analytics engines complete.")
 
-        brief = build_weekly_assignment_brief(DATABASE_URL, season=season_year, week=current_week)
-        
-        # 3. Wake the Swarm (Production mode saves to DB with concurrency)
-        print("-> Dispatching the National AI Swarm (Parallel Workers)...")
-        SwarmDispatcher(debug_mode=False).dispatch_weekly_national(
-            brief, season=season_year, week=current_week, live=True, save_to_db=True, max_workers=5
-        )
-        print("\n✅ ALL PIPELINES COMPLETE. Content generated.")
-        
     except Exception as e:
         import traceback
-        print(f"\n❌ SWARM TRIGGER FAILED: {e}")
+        print(f"\n❌ ANALYTICS PIPELINE FAILED: {e}")
         traceback.print_exc()
 
 if __name__ == "__main__":
-    # We can pass run_swarm=True when calling it, or just let it run by default if executed directly.
+    # Stats sync + analytics engines only. Publish the newsroom slate with: python3 -m newsroom.weekly_run
     generate_team_and_player_stats(season_year=2035)

@@ -259,8 +259,11 @@ def run_pipeline(source: str, is_live: bool = False, use_db: bool = False, num_w
                                 from engines.game_stat_generator import generate_team_and_player_stats
                                 generate_team_and_player_stats(season_year=2035)
                                 print("[Orchestrator] Box Score Synchronization complete!")
+                                # Publish the next week's newsroom slate (skips if that week is already published)
+                                from newsroom.weekly_run import run_weekly_swarm
+                                run_weekly_swarm(season=2035)
                             except Exception as e:
-                                print(f"[Orchestrator] Generator failed: {e}")
+                                print(f"[Orchestrator] Stats sync / newsroom run failed: {e}")
                         import threading
                         threading.Thread(target=run_gen).start()
                 
@@ -367,8 +370,11 @@ def run_pipeline(source: str, is_live: bool = False, use_db: bool = False, num_w
                                 from engines.game_stat_generator import generate_team_and_player_stats
                                 generate_team_and_player_stats(season_year=2035)
                                 print("[Orchestrator] Box Score Synchronization complete!")
+                                # Publish the next week's newsroom slate (skips if that week is already published)
+                                from newsroom.weekly_run import run_weekly_swarm
+                                run_weekly_swarm(season=2035)
                             except Exception as e:
-                                print(f"[Orchestrator] Generator failed: {e}")
+                                print(f"[Orchestrator] Stats sync / newsroom run failed: {e}")
                         import threading
                         threading.Thread(target=run_gen).start()
                         

@@ -29,7 +29,7 @@ Project Mu/
 │   ├── ingest_stream.py, sort_video.py, batch_historical.py, batch_menus.py
 │   └── roster_scanner.py, schedule_scanner.py, heal_roster.py
 ├── engines/                   # Deterministic analytics (Sections 2 & 6, steps 2–3)
-│   ├── game_stat_generator.py #   CPU-sim backfill → culture engines → swarm trigger
+│   ├── game_stat_generator.py #   CPU-sim backfill → culture engines (no swarm; see newsroom/weekly_run.py)
 │   ├── backfill_team_stats.py
 │   ├── gotw_engine.py         #   Game Excitement Index (E) → games.excitement_index; E components, player matching, 70–100 display scale
 │   ├── excitement_projection.py #  Projected E for scheduled games → games.projected_excitement (+ --backtest)
@@ -44,7 +44,13 @@ Project Mu/
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
 │   ├── slot_targets.py        #   Editorial Matrix slot targeting (primer games, exits, eliminations)
+│   ├── playoff_overrides.py   #   Playoff override lookup, temporal-mode normalization, config validation
+│   ├── run_context.py         #   Season/publication week of the article being written (tool season + week cutoff)
+│   ├── entity_patterns.py     #   Case-sensitive team-mention patterns for article tagging
+│   ├── local_portfolio.py     #   Plans a team's weekly local beat portfolio across its reporters
+│   ├── season_landscape.py    #   Division standings for the assignment brief's season_landscape
 │   ├── power_rankings.py      #   Parse/validate/store the weekly POWER_RANKINGS article → power_rankings table
+│   ├── weekly_run.py          #   Weekly national run: picks the publication week, skips published weeks, locks
 │   ├── db_tools.py            #   ReAct research tools exposed to writer agents
 │   └── config/                #   agent_personas.json, article_types.json, article_structure_directives.json,
 │                              #   curatorial_autonomy_directives.json, playoff_overrides.json
@@ -52,9 +58,11 @@ Project Mu/
 │   ├── db_handler.py          #   Shared connection / UPSERT layer (DATABASE_URL)
 │   ├── init_db.sql, run_sql.py
 │   ├── backup_db.sh, restore_db.sh   # pg_dump / restore via the madden-db Docker container
+│   ├── clear_news_feed.sh     #   Back up then delete generated news_feed content (--articles-only keeps tweets)
 │   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql,
 │   │                          #   2026_10_15_stored_index_components.sql, 2026_10_16_trajectory_and_efficiency.sql,
-│   │                          #   2026_10_17_playoff_clout_awards_exposure.sql, 2026_10_18_power_rankings.sql (apply SQL ones via
+│   │                          #   2026_10_17_playoff_clout_awards_exposure.sql, 2026_10_18_power_rankings.sql,
+│   │                          #   2026_10_19_roundtable_panel_agent.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -63,13 +71,15 @@ Project Mu/
 │   └── process_headshots.py   #   Background removal → static/players/{player_id}.webp
 ├── dashboards/                # Streamlit tools: admin_dashboard.py, espn_dashboard.py
 ├── tests/                     # test_*.py scripts
-├── tools/debug/               # One-off frame/OCR debugging scripts
+├── tools/
+│   ├── debug/                 #   One-off frame/OCR debugging scripts
+│   ├── verify_session.sh      #   One-shot newsroom check: roundtable migration, unit tests, verify_newsroom.py, weekly dry run → verify_output/
+│   └── verify_newsroom.py     #   Read-only checks of the newsroom against the live DB (tool week cutoffs, brief, prompts, local portfolio, weekly news endpoint)
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
-│   ├── EDITORIAL_MATRIX.md, WAKEUPS.md
+│   ├── EDITORIAL_MATRIX.md
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
-│   ├── writers/               #   Writer style references (Barnwell, Chadiha, Joyner, Rosenthal, Sando)
 │   ├── reference/             #   Source PDFs
 │   └── sample_articles/       #   Example generated articles
 ├── data/                      # Large local inputs/outputs (not code)
@@ -88,7 +98,9 @@ All Python commands run **from the project root** (relative data paths such as `
 | API server | `python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload` |
 | Frontend | `cd Mu_Network && npm run dev` (Vite on port 8443) |
 | Video pipeline | `python3 -m pipeline.main --file data/video/<clip>.mp4 --db` |
-| Stat backfill + culture engines + swarm | `python3 -m engines.game_stat_generator` |
+| Stat backfill + culture engines | `python3 -m engines.game_stat_generator` |
+| Publish the weekly newsroom slate | `python3 -m newsroom.weekly_run` (next week; skips if already published). `--week N` for a specific week (Week 1 preseason and Week 23 Super Bowl are manual), `--force` to publish again, `--dry-run` to print prompts with no Gemini calls or writes |
+| Clear generated articles/tweets | `bash db/clear_news_feed.sh` (backs up `news_feed`, tags and `power_rankings` to `db/backups/` first, asks to confirm; `--articles-only` keeps tweets) |
 | Re-score Excitement Index (E) | `python3 -m engines.gotw_engine --season 2035` (then refresh the culture indices below) |
 | Refresh culture indices (in this order) | `python3 -m engines.twi_engine` → `python3 -m engines.popularity_engine` → `python3 -m engines.player_popularity_engine` |
 | Opponent-Adjusted Game Credit + Trajectory | `python3 -m engines.game_credit_engine --season 2035` (independent of the culture indices) |
@@ -283,7 +295,7 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
 ### 4.2 Team & Roster Hubs
 - `GET /api/team/{abbr}`: Team metadata, overall/offensive/defensive ratings, division rank, and team color.
 - `GET /api/team/{abbr}/schedule?season={season}`: Full 18-week schedule with completed scores and upcoming dates.
-- `GET /api/team/{abbr}/news?season={season}&limit={limit}`: Returns news articles and beat coverage specifically tagged for or assigned to a franchise (`article_teams` join or `news_feed.team_id`), prioritized by `mention_type` (`PRIMARY` > `FEATURED` > `MENTIONED`) and week recency. If the team's dedicated beat coverage has not yet been written for the current week (determined by checking for existing `LOCAL_POSTGAME_REPORT_CARD` articles, since matchup primers may be pre-commissioned nationally), it automatically triggers the parallel on-demand local swarm wakeup (`SwarmDispatcher.dispatch_team_local`) to generate localized beat reports and fan reaction tweets before returning the feed.
+- `GET /api/team/{abbr}/news?season={season}&limit={limit}`: Returns news articles and beat coverage specifically tagged for or assigned to a franchise (`article_teams` join or `news_feed.team_id`), prioritized by `mention_type` (`PRIMARY` > `FEATURED` > `MENTIONED`) and week recency. If the team's local beat hasn't been woken for the current week (no article filed under the team with a `Local Beat N` slot that week; national primers use `Slot 6–8` and don't count), it starts the on-demand local swarm wakeup (`SwarmDispatcher.dispatch_team_local`, `live=True`, `save_to_db=True`) in a background thread via `start_local_wakeup` and returns the existing feed immediately; the new beat reports and fan tweets appear on a later load. Each (team, season, week) is attempted at most once every `LOCAL_WAKEUP_RETRY_SECONDS` (600s), which covers a run in progress and keeps repeat views from re-triggering a failed one. `NEWSROOM_AUTO_LOCAL_WAKEUP=0` disables it.
 - `GET /api/team/{id}/roster/{season}`: Complete active roster with jersey number (`player_number`), ratings, experience, height, and weight.
 - `GET /api/team/{id}/season_stats/{season}`: Aggregated season totals (passing yards, rushing yards, points per game, points allowed per game).
 
@@ -382,17 +394,29 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
    - It then runs `TWIEngine().backfill_twi()` followed by `PopularityEngine().calculate_popularity()`, sequentially in dependency order, because franchise popularity reads the `watchability_index` that TWI writes. These two used to run in parallel, so popularity could read stale or partially updated TWI.
    - Between TWI and franchise popularity it runs `GameCreditEngine().calculate(season)` (Section 2.4) `TeamEfficiencyEngine().calculate(season)` (Section 2.6) and `PlayoffCloutEngine().calculate(season)` (Section 2.7). They read only `games` / `team_stats` / `player_stats` / `awards`, so their position is not a dependency.
    - Once franchise metrics are computed, `PlayerPopularityEngine().calculate_popularity()` executes vectorized batch updates using PostgreSQL `executemany` (reducing DB execution time from ~1s to ~0.16s).
-   - Then `project_scheduled_games(season)` refreshes `games.projected_excitement` for every still-scheduled game before the assignment brief is compiled.
+   - Then `project_scheduled_games(season)` refreshes `games.projected_excitement` for every still-scheduled game, so the next assignment brief and primer picks see current projections.
    - Finally, `project_upcoming_week(season)` (`engines/fantasy_projection_engine.py`) writes fantasy projections for the first week that still has scheduled games. It reads only `games`, `player_seasons` and `player_stats`, so it has no dependency on the culture engines.
 4. **The Swarm Trigger & Editorial Commissioning:**
-   - The generator dynamically compiles a dual-horizon Weekly Slate Digest:
-     - **`recap_slate`**: Completed scoreboard and standout individual performances from `week - 1` for retrospective recaps.
+   - The swarm is a separate step from the stats sync. `game_stat_generator.py` only syncs stats and runs the engines; the video pipeline (`pipeline/main.py`, both live and file modes) calls `newsroom.weekly_run.run_weekly_swarm(season)` right after it on the same thread. The admin dashboard's `season_stats` edits and a direct `python3 -m engines.game_stat_generator` run no longer publish anything.
+   - **Publication week:** a Week N slate is published before Week N kicks off (recaps Week N−1, previews Week N). `run_weekly_swarm` picks N = the latest *fully completed* week + 1, where fully completed means every non-`BYE` game that week is `COMPLETED`; Week 1 if none. A partly played week doesn't count, so a mid-week Season Stats capture maps to an already-published slate. After Week 21 it publishes Week 22; Week 23 (Super Bowl) and the Week 1 preseason slate must be run by hand with `--week`. Once the Super Bowl week is finished it publishes nothing.
+   - **Once per week:** it skips the week if `news_feed` already has a national-slot article for it (`slot` = `Hero Slot`, `Standalone`, or `Slot N`; local wakeups use `Local Beat N` and don't count), unless `--force`. It holds a PostgreSQL advisory lock on (season, week) for the run, so two triggers can't generate the same week at once.
+   - `run_weekly_swarm` compiles a dual-horizon Weekly Slate Digest:
+     - **`season` / `calendar_week` / `recap_week`**: labels for the publication week and the week being recapped.
+     - **`recap_slate`**: Completed scoreboard from `week - 1` (score, margin, excitement, team IDs), most exciting first, for retrospective recaps. It also picks the teams whose die-hard fans tweet in the weekly run.
+     - **`standout_performances`**: The top 5 individual stat lines from `week - 1`, ranked by passing, rushing and receiving yards and touchdowns.
      - **`preview_slate`**: Upcoming scheduled matchups for `week`, ordered by projected excitement. `projected_excitement` comes from `games.projected_excitement` on the 70–100 display scale, for prospective previews.
      - **`excitement_scale_note`**: Tells writers that Excitement Index values are on the 70–100 scale (≈70 dull, ≈80 typical, 90+ classic) and that projections are rough pre-game estimates. `recap_slate` values and the writer DB tools (`get_weekly_slate`, `get_team_season_schedule`, box score and advanced analytics) use the same display scale.
-     - **`season_landscape`**: Cumulative division standings, records, and popularity/watchability leaders through `week - 1`.
-   - It fires `SwarmDispatcher().dispatch_weekly_national(max_workers=5)`, which commissions the full 10-slot Editorial Matrix slate (`docs/EDITORIAL_MATRIX.md`) via the autonomous Editorial Assignment Desk. The optional `article_count` argument truncates the slate and is for tests/debugging only.
-   - Local on-demand team wakeups (`POST /api/news/team/{team_id}/wakeup`) also utilize `ThreadPoolExecutor(max_workers=5)` to generate a balanced local beat portfolio (`LOCAL_POSTGAME_REPORT_CARD`, `LOCAL_MATCHUP_PRIMER`, `LOCAL_PLAYER_SPOTLIGHT`, and `LOCAL_SEASON_PROGRESS_REPORT`) alongside local fan/pundit reaction tweets concurrently in ~5–8s.
+     - **`season_landscape`**: The league as it stood entering the week. `division_standings` gives every division's teams, best record first, as one line each (`City Team (ID: n) W-L[-T], PF, PA, diff`), counted from completed **regular-season** games before the publication week by `newsroom/season_landscape.division_standings` (playoff games excluded; `standings_through_week` is `week - 1`, capped at 18; `tests/test_season_landscape.py`). `most_watchable_teams` and `most_popular_teams` are the top 5 by `team_seasons` watchability and popularity, labelled with the same standings records.
+     - **`curatorial_guidance`**: Tells writers they may choose their own games, teams and players, except that an `EDITORIAL DESK SUBJECT ASSIGNMENT` in the prompt fixes the subject; then the freedom applies only to angles within it.
+     - The brief is identical for every article and tweet in a run. (The former `slate_manifest`, a duplicate of `recap_slate`, and `league_leaders`, now inside `season_landscape`, were removed.)
+   - It then fires `SwarmDispatcher().dispatch_weekly_national(live=True, save_to_db=True, max_workers=5)`, which commissions the full 10-slot Editorial Matrix slate (`docs/EDITORIAL_MATRIX.md`) via the autonomous Editorial Assignment Desk. The optional `article_count` argument truncates the slate and is for tests/debugging only.
+   - Local on-demand team wakeups (`POST /api/news/team/{team_id}/wakeup`; only `live=true` calls Gemini and saves, `live=false` is a dry run) also utilize `ThreadPoolExecutor(max_workers=5)` to generate the team's local beat portfolio alongside local fan/pundit reaction tweets. The portfolio is planned by `newsroom/local_portfolio.plan_local_portfolio` (see §7.2).
    - The Editorial Desk commissions a structured 10-article matrix (Hero, Slot 1, Slot 2, Slots 3–5 Feature Trio, Slots 6–8 Local Matchup Primers, and Standalone Power Rankings), matches each format to an eligible national writer or beat reporter, and dispatches them with custom curatorial directives and explicit temporal framing (`RETROSPECTIVE`, `PROSPECTIVE`, or `CUMULATIVE`) alongside viral fan/pundit reactions. Other local beat formats (`LOCAL_POSTGAME_REPORT_CARD`, `LOCAL_PLAYER_SPOTLIGHT`, `LOCAL_SEASON_PROGRESS_REPORT`) are not part of the weekly national run; they are produced only by on-demand team wakeups.
+   - **Only real output is saved:** `_execute_agent` writes to `news_feed` only when `live=True` and the model returned text. A missing API key, a Gemini exception, an empty response, or offline mock text (`live=False`) is logged as `[NOT SAVED]` and returned with an `error` field instead. A weekly run where every article failed therefore leaves the week unpublished, and the next trigger retries it (`tests/test_article_saving.py`).
+   - **Reaction tweets:** each weekly run and team wakeup also posts tweets, using the same brief and the `TWEET` format (a single post under 280 characters; no article type, so no week framing or structure directive).
+     - **Weekly run:** 4 random "pundits", 2 random `BANDWAGON_FAN`s, and one random `DIE_HARD_FAN` for each team in `recap_slate`'s 5 most exciting games (up to 10).
+     - **Team wakeup:** every `DIE_HARD_FAN` assigned to the team, plus 3 pundits if the team's popularity index is above 70, 1 if above 55, otherwise none.
+     - **Pundit pool:** any agent whose archetype isn't in `TWEET_EXCLUDED_ARCHETYPES` (`swarm_dispatcher.py`): the long-form-only writers (Barnwell, Sando, Joyner, Rosenthal, Chadiha, Kimes, Orlovsky), `SKIP_BAYLESS` (Skip tweets only as `SKIP_TWEET`, so never twice in a run), `ROUNDTABLE_PANEL`, beat reporters and fans are excluded. Tweets are saved with `content_type = 'TWEET'`: in the weekly run under the agent's own assigned team (none for pundits); in a team wakeup under the woken team, pundits included.
    - **Parallel Multithreaded Execution:** Dispatcher leverages Python `concurrent.futures.ThreadPoolExecutor` (default 5 workers), collapsing total weekly generation time from ~90s sequential down to ~12–15s parallel.
    - **API Connection Pooling:** FastAPI backend (`server/api.py`) utilizes `psycopg_pool.ConnectionPool` (min 4, max 20 connections) with sub-3ms query latency across all REST endpoints.
    - **Persistence & Entity Tagging:** Articles are parsed for creative headlines (`# Headline`) and teaser excerpts (`> **EXCERPT:** ...`), then saved to `news_feed` with explicit `article_type` and `slot` identifiers alongside relational tags in `article_teams` and `article_players`.
@@ -410,12 +434,20 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - **`RETROSPECTIVE`** (`MACRO_SLATE_RECAP`, `SINGLE_GAME_SCHEMATIC_AUTOPSY`, `LOCAL_POSTGAME_REPORT_CARD`, `PLAYOFF_AUTOPSY`): Publishes during calendar `week` evaluating the concluded action from `week - 1`.
   - **`PROSPECTIVE`** (`SLATE_LOOKAHEAD_PREDICTIONS`, `LOCAL_MATCHUP_PRIMER`, Super Bowl Previews): Previews upcoming scheduled matchups for `week`.
   - **`CUMULATIVE`** (`POWER_RANKINGS`, `AWARDS_TRACKER`, `PLAYER_DEEP_PROFILE`, `FRANCHISE_STATE_OF_THE_UNION`, etc.): Evaluates hierarchy entering `week` based on cumulative results through `week - 1`.
-- **Curatorial Autonomy & Slate Digest (`newsroom/config/curatorial_autonomy_directives.json`):** Writers are fed the full 16-game scoreboard and standings context rather than a narrow pre-filtered Top 5 list. Each writer is governed by an explicit curatorial autonomy directive defining their slate selection criteria:
-  - *Bill Barnwell:* Selects subjects based on regression principles, seeking out lucky one-score winners with negative point differentials or fraudulent records exposed by massive upsets.
-  - *Mike Sando:* Ignores final scores/excitement; selects subjects based on front-office pressure, evaluating GM job security for aging rosters under the Purgatory Penalty or assessing coaching development of elite Blue-Chip Pedigree ($P_{\text{draft}}$).
-  - *KC Joyner:* Ignores narrative/market size; selects subjects based on schematic complexity, extreme single-game offensive tempo, boom-or-bust SpikeIndex explosions, or tactical mismatches (e.g. young core exploiting aging coverage).
-  - *Gregg Rosenthal:* Ignores playoff implications/legacy; selects subjects purely on aesthetic entertainment and vibes, prioritizing high-variance "Must-Watch Sandbox" shootouts, weird chaos, and electric rookie QBs.
-  - *Jeffri Chadiha:* Ignores tempo and fantasy stats; selects subjects based on human emotion and historical stakes—aging superstars fighting closing windows, adversity redemption, or historic franchises facing massive market pressure.
+- **Curatorial Autonomy & Slate Digest (`newsroom/config/curatorial_autonomy_directives.json`):** Writers are fed both full scoreboards (last week's results and this week's schedule) and the division standings in the brief's `season_landscape`, rather than a narrow pre-filtered Top 5 list. Subject selection is layered: the article type's own curatorial autonomy block (`article_types.json`, or a playoff override's) comes first, and the writer's directive from `curatorial_autonomy_directives.json` is appended as "YOUR SPECIFIC WRITER SELECTION FILTER". If only one exists, it is used alone. An Editorial Desk subject assignment (§7.3) overrides both. Thirteen writers have a directive:
+  - *Barnwell:* regression candidates: lucky one-score winners, poor point differentials, favorites exposed by upsets.
+  - *Sando:* front-office pressure: aging, mediocre rosters (GM job security) or young blue-chip rosters (coaching development).
+  - *Joyner:* schematic complexity and play-level efficiency: extreme tempo, boom-or-bust performances, tactical mismatches.
+  - *Rosenthal:* entertainment and vibes: high-tempo, high-excitement chaos and electric young quarterbacks.
+  - *Chadiha:* the human element and historical stakes: aging stars, adversity, historic franchises under pressure.
+  - *Yates:* statistical anomalies, milestones and fantasy volume that support factual lists.
+  - *Simmons:* the "wonkiest" game: upsets, bad beats, historic franchises over- or under-achieving the eye test.
+  - *Acho:* exposed flaws and public overreactions: popular favorites that lost, high-tempo offenses shut down.
+  - *The Athletic:* process, scheme and roster trajectory; young-core surges and schedule-adjusted winners; avoids garbage-time inflation.
+  - *Skip Bayless:* superstar drama and the "clutch gene": prime-time chokes or game-winning drives by marquee players.
+  - *Kimes:* games where efficiency tells a different story than the score, and smart defensive schemes.
+  - *Orlovsky:* the most extreme quarterback performances only, good or bad.
+  - *Clark:* locker-room dynamics, player sacrifice and leadership under pressure.
 - **Historical Analogy Mapping (1990–2023):** Writers must independently match the statistical profile of a simulation team to real-life historical NFL teams:
   - *Winning ugly with low Pace & high Win%:* Compare to 2000 Ravens, 2015 Broncos, 2011 Giants.
   - *Explosive Pace but losing shootouts:* Compare to 2018 Chiefs, 2020 Cowboys.
@@ -436,18 +468,28 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - `get_matchup_edges`: Section 2.8. Pass, rush and ball-security edges plus Trench Edge for both offenses in a matchup; with no opponent, uses the team's next scheduled game.
   - `get_team_efficiency_profile`: Section 2.6. Pythagorean wins and pyth luck, pace & production, pass/rush yards and giveaways per game; all 32 sorted by pyth luck, or one team.
   - `get_league_leaderboards`: Returns top 5 teams by watchability and popularity.
+  - `get_draft_order`: Round 1 order (Picks 1–32) by reverse record with point differential as the tiebreaker; once the Super Bowl is played, its loser picks 31 and its winner 32.
+  - `get_team_draft_needs`: A team's roster needs ranked by urgency, from starter rating deficits, positional depth, age cliffs and statistical phase rankings.
+  - `get_team_roster_depth_chart`: A team's full depth chart by position group (QB, RB, WR, TE, OT, IOL, EDGE, DT, LB, CB, S) with ratings, age tiers and roster demographics.
+  - `get_draft_trade_value`: Jimmy Johnson trade-chart points and typical trade packages for any pick (1–260).
+  - `get_franchise_rebuild_status`: A franchise's lifecycle stage (Championship Window, Youth Ascent, Roster Purgatory, Ground-Up Rebuild) and recommended draft posture.
   - `get_team_articles`: Returns recent editorial articles and analysis referencing a specific team (resolves by name, city, abbreviation, or ID).
   - `get_player_articles`: Returns recent editorial articles and profiles referencing a specific player (resolves by name or ID).
+- **Season & week scope of the research tools (`newsroom/run_context.py`):** `_execute_agent` sets the article's season and publication week for its thread before calling Gemini (automatic function calling runs the tools on that thread) and clears it afterwards.
+  - **Season:** tools take `season: int = 0`, meaning "current": the article's season inside a run, otherwise `league_state.current_season`, otherwise the latest season in `games` (`db_tools.resolve_season`). No tool hardcodes a season.
+  - **Week cutoff:** a Week N article can't see results from Week N onward. `get_game_box_score` refuses those games; `get_advanced_game_analytics`, `get_team_season_schedule` and `get_weekly_slate` show them as scheduled with no score; `get_season_standings` counts the record and points from earlier games only; `get_opponent_adjusted_credit`, `get_team_efficiency_profile`, `get_matchup_edges` and the credit inside game analytics use earlier games only (`fetch_team_game_rows(..., before_week=)`); `get_team_articles` / `get_player_articles` return only articles from earlier weeks, which also hides the article's own week. Earlier seasons are fully visible.
+  - **Not cut off:** stored season totals with no per-week history (`season_stats`, `team_seasons` records and indices, player popularity components, ratings, rosters, draft tools). In normal forward runs these already stop at the previous week; when an old week is regenerated they reflect the latest data. `tests/test_run_context.py` covers the context.
 - **Prohibited Internal Symbols:** Strict prompt directive banning internal mathematical symbols (`$P$`, `Y_prod`, `(88.17 W)`, `(64.84 POP)`) in favor of natural sports journalism prose.
 
 ### 7.1 Article Taxonomy & Writer Archetype Alignments (`newsroom/config/article_types.json`)
-The sports publication categorizes longform output into four distinct article types, mapping specific writer personas and archetype categories:
+`article_types.json` defines 31 article types: the 27 national types below and the 4 local beat types in §7.2. Each maps to its allowed writer archetypes and a writing category. A type either carries its own structure directive or, where noted, uses the writer's column format from `article_structure_directives.json`:
 
 1. **The Macro Slate Recap** (`MACRO_SLATE_RECAP`)
    - **Allowed Writers / Archetypes:** Barnwell, Rosenthal (`BARNWELL`, `ROSENTHAL`, `Weekly Recaps`).
    - **Granularity:** Week-level.
    - **Focus:** Cross-league trends, regression candidates, aesthetic watchability power rankings.
    - **Data Queried:** $E_{\text{game}}$, $P_{\text{pace}}$, league-wide point differentials, Pythagorean win expectations.
+   - **Structure Source:** Writer format (Barnwell's column or Rosenthal's Weekend Notebook; `article_structure_directives.json`).
 
 2. **The Player Deep Profile** (`PLAYER_DEEP_PROFILE`)
    - **Allowed Writers / Archetypes:** Jeffri Chadiha (Narrative/Legacy), KC Joyner (Scientific Efficiency), Gregg Rosenthal (Aesthetic/Vibes) (`CHADIHA`, `JOYNER`, `ROSENTHAL`, `Player Season Overview`).
@@ -472,6 +514,7 @@ The sports publication categorizes longform output into four distinct article ty
    - **Granularity:** Single-game play-by-play.
    - **Focus:** Point-of-attack wins, run-pass splits, specific receiver coverage isolations, quarterback processing mechanics.
    - **Data Queried:** Advanced Game Analytics (Offensive Pace, Single-Game Excitement), Game Box Scores, Touch Share & Scrimmage Yard Share (season).
+   - **Structure Source:** Writer format (Joyner's tape-charting breakdown, Kimes's analytical breakdown or Orlovsky's film-room telestrator; `article_structure_directives.json`).
 
 5. **The Power Rankings** (`POWER_RANKINGS`)
    - **Allowed Writers / Archetypes:** Mike Sando (Executive Tiers & Front-Office Context), Gregg Rosenthal (Vibe & Watchability Rankings) (`SANDO`, `ROSENTHAL`, `32-Team Thematic Consensus`).
@@ -479,17 +522,18 @@ The sports publication categorizes longform output into four distinct article ty
    - **Focus:** Comprehensive publication-ready 32-team Power Ranking evaluating every team 1-32 through an explicit weekly editorial theme, underlying metrics, and movement indicators.
    - **Data Queried:** Opponent-Adjusted Game Credit, Team Watchability Index ($W$), Trajectory Multiplier ($T$), Purgatory Penalty, Base Market Gravity ($B$).
    - **Curatorial Autonomy:** Evaluates full 32-team standings and metrics to separate paper tigers from true contenders using Opponent-Adjusted Game Credit, rewards trajectory surging teams, penalizes middle-tier stagnators, and establishes a unifying Weekly Editorial Theme.
-   - **Structure Directive:** 4-part 32-Team Power Ranking (`# 1. The Macro Overview & Weekly Theme`, `## 2. The 32-Team Enumeration 1 to 32 with movement indicators`, `3. The Thematic Blurbs with bold kickers`, `### 4. The Walk-Off / The Drop-Off`).
+   - **Structure Directive:** 4-part 32-Team Power Ranking (`# 1. The Macro Overview & Weekly Theme`, `## 2. The 32-Team Enumeration 1 to 32`, one header per team formatted `## [Rank]. [City] [Team] ([W-L]) (Previous: N | Change: ±N)`, the same format as the continuity block in §7.6, `3. The Thematic Blurbs with bold kickers`, `### 4. The Walk-Off / The Drop-Off`).
    - **Prompt Hook:** Rank all 32 NFL franchises from 1 to 32 under an explicit weekly editorial theme. Separate paper tigers from true contenders using opponent-adjusted credit and trajectory, provide a 3-to-4 sentence analytical blurb for every team with movement indicators, and diagnose the widening gap between tiers.
 
 6. **The Awards Tracker** (`AWARDS_TRACKER`)
    - **Allowed Writers / Archetypes:** Field Yates (Objective/Factual), Bill Simmons (Narrative/Historical Debate) (`YATES`, `SIMMONS`, `The Hardware Race`).
    - **Granularity:** Season-level / Hardware Campaign.
-   - **Focus:** Active MVP, OPOY, and DPOY award races, evaluating true contenders vs. empty-calorie stat accumulators, narrative momentum, and trench warfare.
+   - **Focus:** Active MVP, OPOY, and OROY award races, evaluating true contenders vs. empty-calorie stat accumulators, narrative momentum, and rookie learning curves.
    - **Data Queried:** Awards Equity ($A_{\text{awards}}$), Player Popularity ($Pop_{\text{player}}$), Team Success ($T_{\text{success}}$), SpikeIndex.
    - **Curatorial Autonomy:** Aggressively applies the "Empty Calories" Suppressor on sub-.300 teams, pinpointing the intersection of elite explosive production ($SpikeIndex$) and contender team success ($T_{\text{success}}$).
-   - **Structure Directive:** 3-part Awards Watch (The MVP Frontrunner / The Heavy Crown `#` / `##`, The Contenders / The Chasers `##`, The Defensive Race / The Trench Warfare `##`).
-   - **Prompt Hook:** Analyze the active MVP and DPOY races across the league. Apply the empty-calories suppressor to eliminate meaningless stats, examine the frontrunner vs. the chasers, and break down the defensive trench war.
+   - **Structure Directive:** 3-part Awards Watch (The MVP Frontrunner / The Heavy Crown `#` / `##`, The Contenders / The Chasers `##`, The Offensive Rookie Race `##`).
+   - **Postseason:** Week 21 runs the `AWARDS_FINALISTS` override and Week 22 `AWARDS_WINNERS` (§7.4).
+   - **Prompt Hook:** Analyze the active MVP, OPOY and OROY races across the league. Apply the empty-calories suppressor to eliminate meaningless stats, examine the frontrunner vs. the chasers, and break down the rookie race.
 
 7. **The Weekly Slate Lookahead** (`SLATE_LOOKAHEAD_PREDICTIONS`)
    - **Allowed Writers / Archetypes:** Bill Barnwell (Efficiency & Statistical Modeling), Emmanuel Acho (Contrarian Matchups & Narratives), Gregg Rosenthal (Aesthetic Matchups & Watchability) (`BARNWELL`, `ACHO`, `ROSENTHAL`, `ESPN Multi-Angle Matchup Preview`).
@@ -526,6 +570,7 @@ The sports publication categorizes longform output into four distinct article ty
     - **Curatorial Autonomy:** Applies a rigid championship litmus test to the top tier; separates regular-season 11-win paper tigers from true Lombardi contenders with playoff clout, pedigree, and scheme balance.
     - **Structure Directive:** 4-part Championship Autopsy (`# 1. The Championship Standard`, `## 2. The Blue-Chip Heavyweights`, `## 3. The Paper Tigers`, `### 4. The Missing Piece`).
     - **Prompt Hook:** Apply the championship litmus test to the league's top tier. Crown the inner-circle heavyweights, dissect an 11-win paper tiger with a fatal playoff flaw, and identify the contender that is one piece away.
+    - **Postseason:** Week 20 runs the `DIVISIONAL_ROUND_CONTENDER_AUDIT` override and Week 21 `FINAL_FOUR_CONTENDER_AUDIT` (§7.4). The base version above runs in the regular season (Phase 4).
 
 11. **The Season Progress Audit** (`SEASON_PROGRESS_AUDIT`)
     - **Allowed Writers / Archetypes:** Bill Barnwell (Macro Regression & Sustainability), Gregg Rosenthal (Cumulative Vibes & Entertainment Hierarchy), Mike Sando (Executive Temperature Check) (`BARNWELL`, `ROSENTHAL`, `SANDO`, `League-Wide Season-to-Date Review`).
@@ -552,12 +597,12 @@ The sports publication categorizes longform output into four distinct article ty
     - **Data Queried:** Baseline Roster Talent, Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production ($Y_{\text{prod}}$), Purgatory Penalty, Base Market Gravity ($B$).
     - **Curatorial Autonomy:** Evaluates preseason baseline metrics, demographics, and draft pedigrees across all 32 teams. Categorizes the entire league into 5–6 distinct unified tiers without omitting any team.
     - **Structure Directive:** 4-part 32-Team Tier Column (`# 1. The Preseason Thesis (The Hook)`, `## 2. The Tier Categories (Strict 32-Team Rule)`, `3. The Team Blurbs with 2-3 sentence justifications`, `### 4. The Basement (The Drop-Off)`).
-    - **Prompt Hook:** Group all 32 NFL franchises into structured preseason tiers based on baseline roster talent and draft pedigree. Define the criteria for each tier and provide a tight analytical justification for every team's placement, ensuring no team is left out.
+    - **Prompt Hook:** Group all 32 NFL franchises into 5 to 6 structured preseason tiers based on baseline roster talent and draft pedigree. Define the criteria for each tier and provide a tight analytical justification for every team's placement, ensuring no team is left out.
 
 14. **The Positional Tiers Breakdown** (`POSITIONAL_PLAYER_TIERS`)
     - **Allowed Writers / Archetypes:** Mike Sando (Executive/Scout Consensus), Field Yates (Factual & Fantasy Volume), Mina Kimes (Schematic Efficiency) (`SANDO`, `YATES`, `KIMES`, `Positional Rankings`).
     - **Granularity:** Midseason / Position Group Audit.
-    - **Focus:** Grouping all starting players at a specific premium position into strictly defined analytical and structural tiers based on efficiency, ceiling, and scheme fit.
+    - **Focus:** Grouping all starting players at a specific premium position into strictly defined analytical and structural tiers.
     - **Data Queried:** Baseline Rating ($R_{\text{rating}}$), SpikeIndex, Opponent-Adjusted Game Credit, Under-25 Production ($Y_{\text{prod}}$).
     - **Curatorial Autonomy:** Evaluates the entire league-wide landscape of a single position (e.g., all 32 starting Quarterbacks or top 40 Wide Receivers). Groups players into 4–5 distinct thematic tiers based on underlying metrics, tape, and current trajectory, differentiating high-variance gunslingers from system elevators.
     - **Structure Directive:** 3-part Positional Tier Column (`# 1. The Positional Thesis (The Hook)`, `## 2. The Tier Breakdowns with defining traits and bolded player blurbs`, `3. The Replacement Level covering veterans holding offenses back`).
@@ -573,12 +618,18 @@ The sports publication categorizes longform output into four distinct article ty
     - **Prompt Hook:** Rank the absolute top 10 players at a premium position right now. Balance past hardware against current explosive tape, provide a numbered countdown, and justify the most controversial snub left outside the top 10.
 
 16. **The National Opinion Column** (`NATIONAL_OPINION_COLUMN`)
-    - **Allowed Writers / Archetypes:** Bill Simmons (Historical / Pop Culture / Narrative), Emmanuel Acho (Uncomfortable Truths / Contrarian), Field Yates (Lists / Milestones / Volume), Skip Bayless (Clutch Gene / Fourth Quarter Drama) (`SIMMONS`, `ACHO`, `YATES`, `BAYLESS`, `National Perspective`).
+    - **Allowed Writers / Archetypes:** Bill Simmons (Historical / Pop Culture / Narrative), Emmanuel Acho (Uncomfortable Truths / Contrarian), Field Yates (Lists / Milestones / Volume), Skip Bayless (Clutch Gene / Fourth Quarter Drama), Mina Kimes (Metric-Driven Schematic Perspective) (`SIMMONS`, `ACHO`, `YATES`, `SKIP_BAYLESS`, `KIMES`, `National Perspective`).
     - **Granularity:** Week-level / Macro Narrative.
     - **Focus:** Singular viewpoint editorial focusing on league narratives, historical debates, contrarian reality checks, milestone valuations, or fourth-quarter clutch execution.
     - **Data Queried:** Player Popularity Index ($Pop_{\text{player}}$), Awards Equity ($A_{\text{awards}}$), Base Market Gravity ($B$), SpikeIndex, Offensive Pace ($P$).
     - **Curatorial Autonomy:** Isolates a single high-profile topic carrying an outsized national cultural footprint ($Pop_{\text{player}}$) or massive market gravity ($B$). Filters topic through writer archetype: historical parallels/wonky trends (Simmons), contrarian counter-arguments (Acho), milestone anomalies/share surges (Yates), or clutch execution/choke narratives (Bayless).
-    - **Structure Directive:** Signature columnist format (governed by writer's signature column directive).
+    - **Structure Directive:** None on the article type; each columnist's format comes from `newsroom/config/article_structure_directives.json`:
+      - *Simmons:* cold open built on one comparison → `## The Case` → `## The Levels` (4–6 `###` tiers) → `### The Bad Beat` (one game from the recap week) → walk-off prediction with a stated confidence level.
+      - *Acho:* "Uncomfortable Truths": direct address naming the consensus → `## What Everyone Believes` (stated fairly) → three numbered `##` truths → `## What the Public Is Missing` → `### The Verdict` (one bolded call).
+      - *Yates:* one-paragraph setup → `## The Leaderboard` (markdown table from tool results) → `## Pace & Milestones` (5–8 factual bullets with paces computed from games played) → `## Three Things to Know` → one-line close ("That's the list.").
+      - *Skip Bayless:* one-sentence take → `## The Indictment`/`The Coronation` (one-score games, late-season games vs. winning teams, playoff history, awards) → `### Exhibit A–C` (one game each, from the subject's schedule) → `## Don't Tell Me About the Numbers` → `### The Final Word`.
+      - *Kimes:* pop-culture thesis → `## The Metric Disconnect` → `## The Schematic Chess Match` → `### The Walk-Off`.
+      - The four new formats (Simmons, Acho, Yates, Bayless) end with a grounding rule: every number must come from the brief or tool results, with no invented quotes, injuries, betting lines, contracts or broadcast details. `tests/test_writer_config.py` fails if any writer allowed on a type without its own structure lacks a column format.
     - **Prompt Hook:** Isolate the defining cultural narrative or superstar controversy of the week. Challenge mainstream consensus, run a historical parallel, or interrogate fourth-quarter execution.
 
 17. **The Playoff Autopsy** (`PLAYOFF_AUTOPSY`)
@@ -593,7 +644,7 @@ The sports publication categorizes longform output into four distinct article ty
 18. **The X-Factor Volatility Spotlight** (`X_FACTOR_VOLATILITY_SPOTLIGHT`)
     - **Allowed Writers / Archetypes:** Bill Barnwell (Variance & Efficiency Analytics), KC Joyner (Matchup Exploitation), Field Yates (Volume Spikes & Fantasy/Prop Context) (`BARNWELL`, `JOYNER`, `YATES`, `Super Bowl Matchup Spotlight`).
     - **Granularity:** Single-Game Predictive / Super Bowl Arc.
-    - **Focus:** Identifying volatile, non-quarterback skill players whose boom-or-bust profiles ($SpikeIndex$) could single-handedly disrupt the Super Bowl game script.
+    - **Focus:** Identifying the highly volatile, non-quarterback skill players whose Boom-or-Bust profiles (SpikeIndex) could single-handedly wreck the Super Bowl game script.
     - **Data Queried:** SpikeIndex, Touch Share & Scrimmage Yard Share (season), Matchup Edge (pass, rush, ball security), Offensive Pace ($P$), Under-25 Production ($Y_{\text{prod}}$).
     - **Curatorial Autonomy:** Selects the ultimate non-QB X-factor for the Super Bowl matchup: boom-or-bust deep threat with high $SpikeIndex$, situational pass rusher creating upset leverage, or dynamic rookie with spiked postseason usage.
     - **Structure Directive:** 4-part Predictive X-Factor Breakdown (`# 1. The Game-Breaker Thesis (The Hook)`, `## 2. The Anatomy of the Spike (The Volatility Audit)`, `## 3. The Schematic Mismatch (The Film Room)`, `### 4. The Script Prediction`).
@@ -627,9 +678,9 @@ The sports publication categorizes longform output into four distinct article ty
     - **Prompt Hook:** Evaluate the historical stakes of the Super Bowl matchup. Analyze what a Lombardi trophy would do for the Legacy Floor of the winning franchise and how it would shift their Base Market Gravity.
 
 22. **The Bold Predictions & Panel Consensus** (`SUPER_BOWL_ROUNDTABLE_CONSENSUS`)
-    - **Allowed Writers / Archetypes:** Multi-author byline / Senior Editor (`ROUNDTABLE_PANEL`), The Athletic Staff (`THE_ATHLETIC`), Mina Kimes (`KIMES`), Bill Simmons (`SIMMONS`), Emmanuel Acho (`ACHO`), Field Yates (`YATES`) (`The Super Bowl Roundtable`).
+    - **Allowed Writers / Archetypes:** The Super Bowl Roundtable panel only (`ROUNDTABLE_PANEL`, `The Super Bowl Roundtable`): one AI call writing as a moderator who voices Kimes, Acho, Simmons and Yates. Its `agent_memories` row (`Super_Bowl_Roundtable`, @MuRoundtable) comes from `db/migrations/2026_10_19_roundtable_panel_agent.sql`. The panel never tweets.
     - **Granularity:** Single-Game Pinnacle / Super Bowl Consensus.
-    - **Focus:** Multi-voice feature highlighting conflicting models, narrative disagreements, extreme bold predictions, under-the-radar MVP picks, and final scoreboard consensus.
+    - **Focus:** A multi-voice feature designed to highlight conflicting models, narrative disagreements, extreme bold predictions, and final scoreboard consensus before the Super Bowl.
     - **Data Queried:** Upset Leverage ($U_{\text{projected}}$), Single-Game Excitement Index ($E$), SpikeIndex, Player Popularity Index ($Pop_{\text{player}}$).
     - **Curatorial Autonomy:** Acts as a panel of four distinct analysts with contrasting philosophies (Tape/Metrics: Kimes, Contrarian: Acho, Narrativist: Simmons, Fantasy/Props: Yates). Each analyst delivers a distinct bold prediction bordering on the extreme and an official final scoreline, moderated by an Editor.
     - **Structure Directive:** 4-part Expert Roundtable (`# 1. The Introduction (The Stakes)`, `## 2. The Bold Predictions (### sub-sections for each analyst's bold claim)`, `## 3. The X-Factor / MVP Picks (bulleted list tying back to specific metric lenses)`, `## 4. The Final Consensus (The Scoreboard with individual picks and bolded Panel Consensus)`).
@@ -674,33 +725,36 @@ The sports publication categorizes longform output into four distinct article ty
 27. **Offseason Mock Draft 1.0** (`OFFSEASON_MOCK_DRAFT`)
     - **Allowed Writers / Archetypes:** Field Yates (Needs & Value Board), Bill Barnwell (Analytics & Positional Capital) (`YATES`, `BARNWELL`, `Draft & Offseason Horizon`).
     - **Granularity:** Offseason / Round 1 Projection.
-    - **Focus:** First-round mock draft projecting selections for locked draft slots (Picks 1–24) based on team needs, positional value, and blue-chip player traits.
+    - **Focus:** First-round mock draft projecting selections for locked draft slots based on team needs, positional value, and blue-chip player traits.
     - **Data Queried:** Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production ($Y_{\text{prod}}$), Positional Multiplier ($M_{\text{pos}}$), Team Draft Needs (roster deficiencies).
     - **Curatorial Autonomy:** Projects the first 24 picks of the NFL Draft for eliminated teams following the Divisional round. Prioritizes premium positional value (QB, OT, EDGE, CB) over low-impact positions. Evaluates team rosters using Under-25 Production Share ($Y_{\text{prod}}$) to balance immediate foundational needs against developmental high-ceiling prospects without projecting speculative trades.
     - **Structure Directive:** 3-part Authoritative Mock Draft (`# 1. The Board Overview`, `## 2. The First-Round Projections (Picks 1–24 with ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School])`, `### 3. The Draft Floor Watch`).
     - **Prompt Hook:** Project the first 24 picks of the NFL Draft. Balance premium positional value against immediate roster holes for eliminated franchises.
 
 ### 7.2 Local Beat Reporting Taxonomy (`LOCAL_BEAT_REPORTER`)
-Local Beat Reporters cover their assigned franchise exclusively. Prompts strictly isolate them from unrelated national games and ban artificial 1990–2023 national historical comparisons in favor of granular line play, injury designations, and locker-room accountability:
+Local Beat Reporters cover their assigned franchise exclusively. Their research directive keeps them on their own team's games, and they don't receive the national writers' historical-comparison instruction. There is no injury data in the league, so the beat directive, the shared preview framing and the matchup preview templates tell writers not to mention injuries.
+
+**Weekly portfolio (`newsroom/local_portfolio.py`):** every team wakeup plans the whole portfolio, however many beat reporters the team has: the Postgame Report Card if the team played last week, the Matchup Primer if it plays this week (aimed at that game via an Editorial Desk subject assignment), the Player Spotlight always, and the Season Progress Report from Week 6. Types the team already has that week (e.g. a national Slot 6–8 primer) are skipped. Articles are dealt round-robin across the team's reporters, starting at a different reporter each week, so one reporter writes all of them and no reporter is stuck on the postgame report. Each is saved under the team with slot `Local Beat N` (`tests/test_local_portfolio.py`).
+
 
 1. **The Postgame Report Card** (`LOCAL_POSTGAME_REPORT_CARD`)
    - **Beat Archetype:** Local Beat Writer / Postgame Columnist (2–4 hours post-whistle).
-   - **Focus:** Instant execution vs. expectations, unit-by-unit letter grades (Passing Offense, Rushing Attack, Front Seven & Run Defense, Secondary & Pass Rush, Special Teams & Coaching Decisions), and Composite Team Grade.
+   - **Focus:** Immediate unit execution versus expectations, unit letter grades (A+ through F), offensive line protection breakdowns, third-down stalls, and coaching decisions.
    - **Data Queried:** Unit Offensive Pace ($P$), Opponent-Adjusted Game Credit, Giveaways per Game (ball security), Pass Rush Rating (Madden rank).
 
 2. **The Local Matchup Primer & Game-Plan Blueprint** (`LOCAL_MATCHUP_PRIMER`)
    - **Beat Archetype:** Senior Beat Reporter (Friday / Saturday morning preview).
-   - **Focus:** Matchup reality through home team's eyes, 3 hyper-specific player/unit micro battles (technique, slide protection, chips), victory blueprint checklist, and beat final score prediction.
+   - **Focus:** Home-team perspective matchup reality, 3 hyper-specific micro battles, game-plan victory blueprint, and final score prediction.
    - **Data Queried:** Matchup Edge (pass, rush, ball security), Upset Leverage ($U_{\text{projected}}$), Trench Edge (O-line vs. pass rush ratings).
 
 3. **The Local Player Spotlight** (`LOCAL_PLAYER_SPOTLIGHT`)
    - **Beat Archetype:** Franchise Beat Reporter / Film Analyst.
-   - **Focus:** Single local player's role evolution, developmental leap, contract-year status, locker-room standing, film/assignment technique, front-office roster equation, and Sunday matchup test.
+   - **Focus:** Single local player's role evolution, developmental leap, contract-year performance, tape & assignment execution, coaching trust, and roster implications.
    - **Data Queried:** SpikeIndex, Touch Share & Scrimmage Yard Share (season), Positional Multiplier ($M_{\text{pos}}$), Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production Share ($Y_{\text{prod}}$).
 
 4. **The Local Season-to-Date Progress Report** (`LOCAL_SEASON_PROGRESS_REPORT`)
    - **Beat Archetype:** Senior Beat Columnist (Midseason / Season Audit).
-   - **Focus:** Identity check vs. offseason promises, structural strengths, unresolved flaws, coaching/front-office seat temperature, and second-half win benchmark.
+   - **Focus:** Comprehensive evaluation of the home team's campaign, offensive/defensive identity check, structural strengths, lingering flaws, coaching staff seat temperature, and second-half win benchmark.
    - **Data Queried:** Trajectory Multiplier ($T$), Opponent-Adjusted Game Credit, Youth Production Share ($Y_{\text{prod}}$), Purgatory Penalty, Base Market Gravity ($B$).
 
 ### 7.3 The Editorial Assignment Desk & Article-First Commissioning Architecture
@@ -717,34 +771,48 @@ Rather than waking up a fixed list of writer agents who generate generic article
    - Implements the definitive **18-Week Regular Season & 5-Week Postseason Editorial Matrix** to commission a structured portfolio of article types per week:
      - **Regular Season (Weeks 1–18):** Fixed Hero Slot (`PRE_SEASON_ROSTER_TIERS` in W1, `MACRO_SLATE_RECAP` in W2–18), Slot 1 (`SLATE_LOOKAHEAD_PREDICTIONS`), Slot 2 (`NFL_TOP_100_HIERARCHY` in W1, `SINGLE_GAME_SCHEMATIC_AUTOPSY` in W2–18), Slots 3–5 (Feature Trio selected dynamically from 4 distinct seasonal phase pools), Slots 6–8 (3x `LOCAL_MATCHUP_PRIMER`), and Standalone (`POWER_RANKINGS`).
      - **Postseason (Weeks 19–23):** Custom 10-slot boards tailored for Wild Card Eve (W19), Divisional Eve (W20), Championship Eve (W21), Super Bowl Bye (W22), and Super Bowl Week (W23).
-   - Dynamically rotates national columnists (`SIMMONS`, `KIMES`, `ACHO`, `BAYLESS`, `YATES`) into `NATIONAL_OPINION_COLUMN` slots during regular-season feature trios.
+   - Dynamically rotates national columnists (`SIMMONS`, `KIMES`, `ACHO`, `SKIP_BAYLESS`, `YATES`) into `NATIONAL_OPINION_COLUMN` slots during regular-season feature trios.
 3. **Qualified Writer Matching & Load Balancing:**
    - For each commissioned article type, the Editorial Desk queries `allowed_writers` from the taxonomy (`newsroom/config/article_types.json`).
-   - Dispatches writers while balancing assignment counts (`writer_assignment_counts`) to ensure authorial diversity across the publication without duplicate writer assignments in the same week.
+   - Picks each writer at random from the least-used allowed writers so far this week (`writer_assignment_counts`). This spreads work but doesn't prevent repeats: a writer can get more than one article in a week when the allowed lists overlap. Rotating-columnist slots name their writer directly and skip the balancing.
+   - **Writer records:** every writer name in `allowed_writers` and the columnist pools is an archetype key in `agent_personas.json`. `get_agent_record` loads the `agent_memories` row whose `archetype` matches exactly (oldest first); old shorthand names are mapped first by `WRITER_ARCHETYPE_ALIASES` (`BAYLESS` → `SKIP_BAYLESS`). Tweet-only accounts such as `SKIP_TWEET` are separate agents and are never used for articles. `tests/test_writer_config.py` checks that every article writer has a persona, every opinion columnist has a curatorial directive, and no columnist pool or article type uses an alias.
    - Binds each writer to their specific commissioned `article_type`, ensuring prompt injection of custom curatorial lenses, structure directives, and analytical parameters.
 
 ### 7.4 Playoff-Specific Dynamic Overrides Architecture (`newsroom/config/playoff_overrides.json`)
 During the single-elimination tournament and Super Bowl run (Weeks 19–23), standard regular-season directives are dynamically superseded by targeted postseason overrides. The orchestrator inspects `target_weeks` at compile time and overrides the baseline article directive, curatorial autonomy filter, and structure specification without mutating baseline schemas:
 
+- **Lookup & validation (`newsroom/playoff_overrides.py`):** `find_active_override(overrides, article_type, week)` picks the override; `normalize_temporal_mode` reads `temporal_mode` case-insensitively and accepts only `RETROSPECTIVE`, `PROSPECTIVE` or `CUMULATIVE` (anything else falls back to the article type's mode in `TEMPORAL_ARTICLE_MODES`). `SwarmDispatcher` runs `validate_playoff_overrides` on load and prints a warning per problem: unknown article type or temporal mode, target weeks outside 19–23, a week claimed by two overrides of the same type, or a misused `preview_week`. `tests/test_playoff_overrides.py` also validates the shipped config.
+- **`preview_week` (optional, `PROSPECTIVE` only):** the week whose games the override previews, when it isn't the publication week. The prompt then names that week and tells the writer to fetch it with `get_weekly_slate`, since the brief's `preview_slate` only holds the publication week.
+
 1. **`SINGLE_GAME_SCHEMATIC_AUTOPSY` Playoff Overrides:**
-   - **Weeks 19–22 (`PLAYOFF_ELIMINATION_ROUND_AUTOPSY` | Retrospective):**
+   - **Week 19:** no override. It looks back at regular-season Week 18, so the base article type applies.
+   - **Weeks 20–22 (`PLAYOFF_ELIMINATION_ROUND_AUTOPSY` | `RETROSPECTIVE`):**
      - **Focus:** High-leverage situational football, tightened personnel packages, blitz counters, and scheme-exposure points from the elimination round just completed.
      - **Curatorial Filter:** Isolates the single clash with highest tactical leverage, third-down aggression, or where fourth-down game management swung win probability.
      - **Structure:** 4-part Tape Autopsy (`# 1. The Decisive Blueprint`, `## 2. The Core Schematic Collision`, `## 3. The High-Leverage Breakdown`, `### 4. The Elimination Takeaway`).
-   - **Week 23 (`SUPER_BOWL_SCHEMATIC_MASTERCLASS` | Anticipatory):**
+   - **Week 23 (`SUPER_BOWL_SCHEMATIC_MASTERCLASS` | `PROSPECTIVE`):**
      - **Focus:** Exhaustive pre-game tactical blueprint previewing the Super Bowl clash through an X's and O's coaching lens (disregarding celebrity/media week storylines).
      - **Curatorial Filter:** Trench warfare leverage (pass rush vs. slide protection), safety disguise rotations against primary passing concepts.
      - **Structure:** 5-part Masterclass (`# 1. The Grand Chess Match`, `## 2. Trench Warfare & Point-of-Attack Leverage`, `## 3. Coverage Shells vs. Passing Architecture`, `## 4. The Critical Situational Battle`, `### 5. The Coordinator Verdict`).
 
 2. **`SLATE_LOOKAHEAD_PREDICTIONS` Playoff Overrides:**
-   - **Weeks 19–21 (`POSTSEASON_ROUND_LOOKAHEAD` | Anticipatory):**
+   - **Weeks 19–21 (`POSTSEASON_ROUND_LOOKAHEAD` | `PROSPECTIVE`):**
      - **Focus:** High-stakes single-elimination preview capsules for every game in the upcoming playoff round (Wild Card, Divisional, Conference Championship). Strict ban on betting lines/spreads.
      - **Curatorial Filter:** Mandatory full enumeration covering every scheduled tournament matchup.
-     - **Structure:** Modular Postseason Capsules (`# 1. The Round Overview`, `## 2. Matchup Enumeration with kickoff/broadcast`, `3. Structured Sub-Sections: What We're Hearing, Stat to Know, Tactical Flashpoint, The X-Factor Player, Official Prediction`).
-   - **Week 22 (`SUPER_BOWL_EARLY_TALE_OF_THE_TAPE` | Anticipatory):**
+     - **Structure:** Modular Postseason Capsules (`# 1. The Round Overview`, `## 2. Matchup Enumeration with kickoff time from the slate (no invented broadcast network)`, `3. Structured Sub-Sections: What We're Hearing, Stat to Know, Tactical Flashpoint, The X-Factor Player, Official Prediction`).
+   - **Week 22 (`SUPER_BOWL_EARLY_TALE_OF_THE_TAPE` | `PROSPECTIVE`, `preview_week: 23`):**
      - **Focus:** Comprehensive bye-week Tale of the Tape comparing both Super Bowl finalists from top to bottom.
      - **Curatorial Filter:** Contrasts cumulative efficiency profiles across every unit and neutral-site dome variables.
      - **Structure:** 6-part Tale of the Tape (`# 1. The Championship Tale of the Tape`, `## 2. The Macro Profile & Efficiency Baselines`, `## 3. Unit Clash 1: Team A Offense vs. Team B Defense`, `## 4. Unit Clash 2: Team B Offense vs. Team A Defense`, `## 5. The Volatility & Spike Audit`, `### 6. The Bye-Week Installation Mandate`).
+
+3. **`AWARDS_TRACKER` Playoff Overrides** (both `CUMULATIVE`; award voting covers the regular season only, so writers judge Weeks 1–18 and don't credit playoff games):
+   - **Week 21 (`AWARDS_FINALISTS`):** three finalists each for MVP, OPOY and OROY, with the projected winner. Structure: `# The Ballots Are In`, one `##` per award with three bolded finalists, `## The Projected Winners`, `### The Snub`.
+   - **Week 22 (`AWARDS_WINNERS`):** the publication's winner and runner-up for each award. Structure: `#` headline naming the MVP, one `##` per award (`## MVP: [Player], [Position], [Team]`) with the case and the runner-up, `### The Season in One Line`.
+
+4. **`SUPER_BOWL_CONTENDER_BLUEPRINT` Playoff Overrides** (both `CUMULATIVE`; only teams playing that week's playoff games are in scope, judged on the regular season plus their playoff games so far):
+   - **Week 20 (`DIVISIONAL_ROUND_CONTENDER_AUDIT`):** the eight divisional-round teams, three wins from a title. Structure: `# The Championship Standard`, `##` heavyweights (2–3 teams), `## The Vulnerable Favorite`, `### The Dangerous Underdog`.
+   - **Week 21 (`FINAL_FOUR_CONTENDER_AUDIT`):** the four conference finalists ranked 1–4 by title chances. Structure: `#` hook, four numbered `## [Rank]. [City] [Team] ([W-L])` sections (path, case, fatal flaw), `### The Verdict` naming the champion.
+
 ### 7.5 Database Schema & Newsroom REST API Specifications
 To support seamless frontend newsroom consumption, longform editorial content is persisted with full metadata and relational tagging:
 
@@ -752,22 +820,22 @@ To support seamless frontend newsroom consumption, longform editorial content is
    ```sql
    CREATE TABLE IF NOT EXISTS news_feed (
        id SERIAL PRIMARY KEY,
-       season INT NOT NULL,
-       week INT NOT NULL,
-       team_id INT NULL,
-       content_type VARCHAR(50) NOT NULL,    -- 'ARTICLE' or 'TWEET'
-       persona VARCHAR(50) NOT NULL,         -- e.g. 'BARNWELL', 'SANDO', 'LOCAL_BEAT_REPORTER'
-       article_type VARCHAR(64),             -- e.g. 'MACRO_SLATE_RECAP', 'POWER_RANKINGS'
-       slot VARCHAR(32),                     -- e.g. 'Hero Slot', 'Slot 1', ..., 'Standalone'
+       season INT,
+       week INT,
+       team_id INT,                -- teams.id (no FK constraint in live schema)
+       content_type VARCHAR(50),   -- 'ARTICLE' | 'TWEET'
+       persona VARCHAR(50),        -- e.g. 'BARNWELL', 'SANDO', 'LOCAL_BEAT_REPORTER'
        headline VARCHAR(255),
+       content TEXT,
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
        excerpt TEXT,
-       content TEXT NOT NULL,
-       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+       article_type VARCHAR(64),   -- e.g. 'MACRO_SLATE_RECAP', 'POWER_RANKINGS'
+       slot VARCHAR(32)            -- 'Hero Slot', 'Slot 1'..'Slot 8', 'Standalone', or 'Local Beat N'
    );
    ```
 
 2. **Relational Entity Tagging:**
-   - **`article_teams`**: Maps mentioned franchises (`PRIMARY`, `FEATURED`, `MENTIONED`) with mention frequencies.
+   - **`article_teams`**: Maps mentioned franchises (`PRIMARY`, `FEATURED`, `MENTIONED`) with mention frequencies. Team mentions come from `newsroom/entity_patterns.team_mention_pattern`: full name, nickname, city (except shared New York / Los Angeles) and uppercase abbreviation, all **case-sensitive**, so ordinary words ("was", "no", "ten", "bills") are not team mentions. Abbreviations that are English words (`NO`, `WAS`, `TEN`, `MIN`, `CAR`, `SEA`, `DEN`) are never matched, even in all caps; those teams are found by nickname or city (`tests/test_entity_patterns.py`). A team is `PRIMARY` if it's the article's assigned team, appears in the headline or a header, or is mentioned 5+ times; `FEATURED` at 3+; otherwise `MENTIONED`.
    - **`article_players`**: Maps mentioned players with their active franchise, position, mention tier, and mention frequencies.
 
 3. **Newsroom REST API Endpoints (`server/api.py`):**
@@ -776,8 +844,10 @@ To support seamless frontend newsroom consumption, longform editorial content is
        - **`hero`**: Hero Slot article (top banner).
        - **`secondary`**: Slots 1 and 2 (e.g. Schematic Autopsy, Slate Lookahead).
        - **`features`**: Slots 3, 4, and 5 (seasonal feature trio).
-       - **`local_primers`**: Slots 6, 7, and 8 (local beat matchup breakdowns).
+       - **`local_primers`**: Slots 6, 7, and 8 only (the national desk's local matchup primers).
        - **`standalone`**: Standalone Power Rankings 32-team hierarchy.
+       - **`other`**: Any other article that week (e.g. unslotted); the frontend shows these with the main stories.
+     - Team-page beat coverage (slot `Local Beat N`, from on-demand team wakeups) is excluded; it appears only via `GET /api/team/{abbr}/news`.
      - Includes resolved author objects (`display_name`, `handle`, `archetype`) and attached entity tags (`tagged_teams`, `tagged_players`).
    - **`GET /api/news/article/{article_id}`**:
      - Returns full article text, headline, teaser excerpt, assigned slot, author metadata, and all tagged entities for reading view rendering.
