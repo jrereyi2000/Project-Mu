@@ -202,7 +202,7 @@ def generate_team_and_player_stats(season_year: int):
         # 3. Wake the Swarm (Production mode saves to DB with concurrency)
         print("-> Dispatching the National AI Swarm (Parallel Workers)...")
         SwarmDispatcher(debug_mode=False).dispatch_weekly_national(
-            brief, season=season_year, week=current_week, article_count=6, live=True, save_to_db=True, max_workers=5
+            brief, season=season_year, week=current_week, live=True, save_to_db=True, max_workers=5
         )
         print("\n✅ ALL PIPELINES COMPLETE. Content generated.")
         

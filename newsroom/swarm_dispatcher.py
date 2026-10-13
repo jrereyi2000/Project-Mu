@@ -7,6 +7,7 @@ import random
 import collections
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from db.db_handler import DatabaseHandler
+from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
 from newsroom.db_tools import (
     get_game_box_score,
     get_player_season_stats,
@@ -654,8 +655,11 @@ class SwarmDispatcher:
         week: int,
         content_type: str,
         article_type: str = None,
+        slot_target: dict = None,
     ) -> dict:
-        """Assembles the exact persona, memory, assignment brief, and tools prompt for an agent."""
+        """Assembles the exact persona, memory, assignment brief, and tools prompt for an agent.
+
+        slot_target (from newsroom.slot_targets) pins the article's subject chosen by the Editorial Desk."""
         base_archetype_prompt = self.personas_data.get(
             archetype,
             f"You are an NFL media agent with archetype {archetype}."
@@ -859,6 +863,18 @@ You MUST begin your article text on the very first lines with an explicit Markdo
 Immediately follow the excerpt with the rest of your article sections and analysis.
 """
 
+        slot_target_directive = ""
+        if slot_target:
+            subject = f"{slot_target['team_name']} (Team ID: {slot_target['team_id']})"
+            if slot_target.get("game_id"):
+                subject += f" vs. {slot_target['opponent_name']} (Team ID: {slot_target['opponent_team_id']}, Game ID: {slot_target['game_id']})"
+            slot_target_directive = f"""
+EDITORIAL DESK SUBJECT ASSIGNMENT (MANDATORY — SUPERSEDES ANY SUBJECT-SELECTION INSTRUCTIONS ABOVE):
+- Subject: {subject}
+- Assignment: {slot_target['note']}
+- The Editorial Desk has already chosen this subject. Do not substitute a different team or game; any instruction to select your own team, game, or franchise applies only to choosing angles within this subject.
+"""
+
         task_instruction = f"""ASSIGNMENT BRIEF:
 {json.dumps(brief, indent=2)}
 
@@ -870,6 +886,7 @@ If you need specific stats, use your database tools before producing your final 
 {temporal_instruction}
 {article_type_directive}
 {curatorial_directive}
+{slot_target_directive}
 {national_writer_guidelines}
 {structure_directive}
 {natural_language_rule}"""
@@ -1166,26 +1183,19 @@ If you need specific stats, use your database tools before producing your final 
         memory = "Standard national football analyst perspective."
         return (arch_upper, arch_upper, memory, handle, display, None)
 
-    def _get_distinct_beat_reporter(self, used_ids: set, season: int = None) -> tuple:
-        """Finds a distinct beat reporter not yet assigned this week."""
+    def _get_distinct_beat_reporter(self, used_ids: set, season: int = None, team_id: int = None) -> tuple:
+        """Finds a distinct beat reporter not yet assigned this week (restricted to team_id when given)."""
         try:
             with psycopg.connect(self.db.db_conn_info) as conn:
                 with conn.cursor() as cur:
-                    used_list = list(used_ids)
-                    if used_list:
-                        cur.execute("""
-                            SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id
-                            FROM agent_memories
-                            WHERE archetype = 'LOCAL_BEAT_REPORTER' AND NOT (agent_id = ANY(%s))
-                            ORDER BY RANDOM() LIMIT 1;
-                        """, (used_list,))
-                    else:
-                        cur.execute("""
-                            SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id
-                            FROM agent_memories
-                            WHERE archetype = 'LOCAL_BEAT_REPORTER'
-                            ORDER BY RANDOM() LIMIT 1;
-                        """)
+                    cur.execute("""
+                        SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id
+                        FROM agent_memories
+                        WHERE archetype = 'LOCAL_BEAT_REPORTER'
+                          AND NOT (agent_id = ANY(%s))
+                          AND (%s::int IS NULL OR assigned_team_id = %s::int)
+                        ORDER BY RANDOM() LIMIT 1;
+                    """, (list(used_ids), team_id, team_id))
                     row = cur.fetchone()
                     if row:
                         agent_id, arch, memory, handle, display, assigned_team = row
@@ -1198,7 +1208,7 @@ If you need specific stats, use your database tools before producing your final 
             pass
         return self.get_agent_record("LOCAL_BEAT_REPORTER")
 
-    def commission_weekly_editorial_slate(self, season: int, week: int, target_articles: int = 6) -> list[dict]:
+    def commission_weekly_editorial_slate(self, season: int, week: int, target_articles: int = None) -> list[dict]:
         """Editorial Desk: Decides which article types to commission and assigns qualified writer agents
         following the official NFL 18-Week Regular Season & 5-Week Postseason Editorial Matrix."""
         if not self.article_types_data:
@@ -1258,16 +1268,19 @@ If you need specific stats, use your database tools before producing your final 
                 ("Standalone", "POWER_RANKINGS"),
             ]
 
-        # Filter by target_articles if requested
+        # Optional truncation for tests/debugging only; production runs the full 10-slot matrix
         if target_articles is not None:
             raw_slots = raw_slots[:target_articles]
 
-        # 2. Assign qualified writer agents to each commissioned article slot
+        # 2. Resolve slot subjects (teams/games) per the matrix's Slot Targeting Rules
+        slot_targets = self._resolve_slot_targets(season, week, raw_slots)
+
+        # 3. Assign qualified writer agents to each commissioned article slot
         writer_assignment_counts = collections.defaultdict(int)
         commissioned_slate = []
         used_beat_reporter_ids = set()
 
-        for slot_tuple in raw_slots:
+        for slot_tuple, slot_target in zip(raw_slots, slot_targets):
             slot_name = slot_tuple[0]
             at_id = slot_tuple[1]
             preferred_archetype = slot_tuple[2] if len(slot_tuple) > 2 else None
@@ -1292,7 +1305,8 @@ If you need specific stats, use your database tools before producing your final 
 
             # Fetch agent record
             if chosen_archetype == "LOCAL_BEAT_REPORTER":
-                agent_rec = self._get_distinct_beat_reporter(used_beat_reporter_ids, season)
+                target_team_id = slot_target["team_id"] if slot_target else None
+                agent_rec = self._get_distinct_beat_reporter(used_beat_reporter_ids, season, team_id=target_team_id)
                 if agent_rec:
                     used_beat_reporter_ids.add(agent_rec[0])
             else:
@@ -1307,9 +1321,19 @@ If you need specific stats, use your database tools before producing your final 
                 "handle": agent_rec[3],
                 "display_name": agent_rec[4] or agent_rec[0],
                 "agent_record": agent_rec,
+                "target": slot_target,
             })
 
         return commissioned_slate
+
+    def _resolve_slot_targets(self, season: int, week: int, raw_slots: list) -> list:
+        """Chooses each targeted slot's subject; falls back to writer-chosen subjects if league data is unavailable."""
+        try:
+            snapshot = load_league_snapshot(self.db.db_conn_info, season, week)
+            return resolve_slot_targets(raw_slots, snapshot)
+        except Exception as e:
+            print(f"⚠️ Slot targeting unavailable ({e}); writers will choose their own subjects.")
+            return [None] * len(raw_slots)
 
     def dispatch_single_archetype(self, archetype: str, brief: dict, season: int, week: int, live: bool = False, model: str = "gemini-3.8-flash", save_to_db: bool = False, article_type: str = None):
         """Dispatches a single specific agent archetype for targeted testing and generation."""
@@ -1332,72 +1356,33 @@ If you need specific stats, use your database tools before producing your final 
         brief: dict,
         season: int,
         week: int,
-        article_count: int = 6,
+        article_count: int = None,
         live: bool = False,
         model: str = "gemini-3.8-flash",
         save_to_db: bool = False,
         max_workers: int = 5
     ):
-        """Runs the global weekly wakeup logic with article-first editorial commissioning."""
+        """Runs the global weekly wakeup logic with article-first editorial commissioning.
+
+        Commissions the full 10-slot Editorial Matrix (docs/EDITORIAL_MATRIX.md) by default.
+        article_count truncates the slate and is intended for tests/debugging only."""
         print(f"\n🌍 --- INITIATING WEEKLY NATIONAL WAKEUP (Season {season}, Week {week}) ---")
-        print(f"-> Target National Article Volume: {article_count}")
+        print(f"-> Target Article Volume: {article_count if article_count is not None else 'Full Editorial Matrix'}")
         print(f"-> Concurrency Level: {max_workers} worker threads")
 
-        # 1. Commission the National Editorial Slate (6 National Articles)
+        # 1. Commission the Editorial Matrix slate (Hero, Slots 1–8, Standalone)
         commissioned_articles = self.commission_weekly_editorial_slate(season, week, target_articles=article_count)
         print(f"\n📰 --- COMMISSIONED EDITORIAL DESK ({len(commissioned_articles)} Articles Planned) ---")
         for idx, item in enumerate(commissioned_articles, 1):
             slot_name = item.get("slot", f"Slot {idx}")
-            print(f"   [{idx}] [{slot_name}] {item['article_type_name']} ({item['article_type_id']}) -> {item['display_name']} ({item['archetype']})")
+            target = item.get("target")
+            target_str = f" | Subject: {target['team_name']}" if target else ""
+            print(f"   [{idx}] [{slot_name}] {item['article_type_name']} ({item['article_type_id']}) -> {item['display_name']} ({item['archetype']}){target_str}")
 
-        # 2. Wake up 3 Beat Reporters from 3 of the Top 8 Most Popular Teams
+        # 2. Wake up reaction agents (National Pundits, Bandwagons, Die-Hards)
         with psycopg.connect(self.db.db_conn_info) as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    WITH TopEightTeams AS (
-                        SELECT ts.team_id 
-                        FROM team_seasons ts
-                        JOIN agent_memories am ON am.assigned_team_id = ts.team_id AND am.archetype = 'LOCAL_BEAT_REPORTER'
-                        WHERE ts.season = %s 
-                        GROUP BY ts.team_id, ts.popularity_index
-                        ORDER BY COALESCE(ts.popularity_index, 0) DESC 
-                        LIMIT 8
-                    ),
-                    SelectedTeams AS (
-                        SELECT team_id FROM TopEightTeams 
-                        ORDER BY RANDOM() 
-                        LIMIT 3
-                    ),
-                    RankedReporters AS (
-                        SELECT am.*, ROW_NUMBER() OVER(PARTITION BY am.assigned_team_id ORDER BY RANDOM()) as rn
-                        FROM agent_memories am 
-                        JOIN SelectedTeams st ON am.assigned_team_id = st.team_id
-                        WHERE am.archetype = 'LOCAL_BEAT_REPORTER'
-                    )
-                    SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
-                    FROM RankedReporters WHERE rn = 1;
-                """, (season,))
-                beat_writers = cur.fetchall()
-
-                # Fallback if fewer than 3 beat writers found (e.g. historical season with partial data)
-                if len(beat_writers) < 3:
-                    existing_team_ids = [b[5] for b in beat_writers if b[5] is not None]
-                    cur.execute("""
-                        WITH FallbackReporters AS (
-                            SELECT *, ROW_NUMBER() OVER(PARTITION BY assigned_team_id ORDER BY RANDOM()) as rn
-                            FROM agent_memories 
-                            WHERE archetype = 'LOCAL_BEAT_REPORTER' 
-                              AND assigned_team_id IS NOT NULL 
-                              AND assigned_team_id NOT IN %s
-                        )
-                        SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id
-                        FROM FallbackReporters WHERE rn = 1
-                        ORDER BY RANDOM()
-                        LIMIT %s;
-                    """, (tuple(existing_team_ids) if existing_team_ids else (-1,), 3 - len(beat_writers)))
-                    beat_writers.extend(cur.fetchall())
-
-                # 3. Wake up random National Pundits & Bandwagons
+                # Random National Pundits & Bandwagons
                 cur.execute("""
                     SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
                     FROM agent_memories 
@@ -1414,7 +1399,7 @@ If you need specific stats, use your database tools before producing your final 
                 """)
                 bandwagons = cur.fetchall()
 
-                # 4. Wake up Die-Hard Homers from exciting games
+                # Die-Hard Homers from exciting games
                 exciting_game_ids = [g["game_id"] for g in brief.get("slate_manifest", {}).get("all_games", [])[:5]]
                 homers = []
                 if exciting_game_ids:
@@ -1436,32 +1421,21 @@ If you need specific stats, use your database tools before producing your final 
                         """, (teams_involved,))
                         homers = cur.fetchall()
 
-        print(f"\n-> Dispatching: {len(commissioned_articles)} Commissioned National Articles, {len(beat_writers)} Local Beat Reports (from Top 8 Popular Teams).")
+        print(f"\n-> Dispatching: {len(commissioned_articles)} Commissioned Editorial Matrix Articles.")
         print(f"-> Dispatching: {len(pundits)} Pundit Reactions, {len(bandwagons)} Bandwagon Posts, {len(homers)} Fan Posts.")
 
         # Compile article tasks
         article_tasks = []
         for item in commissioned_articles:
             agent = item["agent_record"]
+            target = item.get("target")
+            # Targeted slots are filed under their subject team; otherwise under the writer's assigned team
+            subject_team_id = target["team_id"] if target else agent[5]
             p = self.compile_agent_prompt(
-                agent[0], agent[1], agent[2], agent[3], agent[4], agent[5],
-                brief, season, week, "ARTICLE", article_type=item["article_type_id"]
+                agent[0], agent[1], agent[2], agent[3], agent[4], subject_team_id,
+                brief, season, week, "ARTICLE", article_type=item["article_type_id"], slot_target=target
             )
-            article_tasks.append((p, agent[5], item["article_type_name"], agent[4] or agent[0], item.get("slot"), item["article_type_id"]))
-
-        local_article_types_pool = [
-            "LOCAL_POSTGAME_REPORT_CARD",
-            "LOCAL_PLAYER_SPOTLIGHT",
-            "LOCAL_SEASON_PROGRESS_REPORT" if week >= 6 else "LOCAL_MATCHUP_PRIMER",
-        ]
-        for idx, b in enumerate(beat_writers):
-            assigned_local_type = local_article_types_pool[idx % len(local_article_types_pool)]
-            p = self.compile_agent_prompt(
-                b[0], b[1], b[2], b[3], b[4], b[5],
-                brief, season, week, "ARTICLE", article_type=assigned_local_type
-            )
-            local_slot = f"Slot {6 + idx}"
-            article_tasks.append((p, b[5], assigned_local_type, b[4] or b[0], local_slot, assigned_local_type))
+            article_tasks.append((p, subject_team_id, item["article_type_name"], agent[4] or agent[0], item.get("slot"), item["article_type_id"]))
 
         # Helper executor for articles
         def _run_article_job(task):

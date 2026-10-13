@@ -161,12 +161,13 @@ def run_test_harness(
             persistent_memory=rec[2],
             handle=rec[3],
             display_name=rec[4],
-            assigned_team_id=rec[5],
+            assigned_team_id=item["target"]["team_id"] if item.get("target") else rec[5],
             brief=brief,
             season=season,
             week=week,
             content_type="ARTICLE",
-            article_type=at_id
+            article_type=at_id,
+            slot_target=item.get("target"),
         )
         compiled_tasks.append({
             "idx": idx,
@@ -213,7 +214,7 @@ def run_test_harness(
             compiled_prompt=t_prompt,
             season=season,
             week=week,
-            team_id=t_rec[5],
+            team_id=t_item["target"]["team_id"] if t_item.get("target") else t_rec[5],
             live=live,
             save_to_db=save_to_db,
             slot=slot_name,

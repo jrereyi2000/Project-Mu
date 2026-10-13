@@ -152,10 +152,10 @@ def process_awards(db, ext: AwardsExtraction):
                             """, (win_id, lose_id, sb.winner_score, sb.loser_score, row[0]))
                         else:
                             # Insert new Super Bowl (Arbitrarily mapping Winner to Home and Loser to Away)
-                            # We set week to 22 which is standard Madden Super Bowl week
+                            # Week 23 is Super Bowl Week per docs/EDITORIAL_MATRIX.md (Week 22 is the Super Bowl bye)
                             cur.execute("""
                                 INSERT INTO games (season, week, home_team_id, away_team_id, home_score, away_score, status, game_type)
-                                VALUES (%s, 22, %s, %s, %s, %s, 'COMPLETED', 'SUPER_BOWL')
+                                VALUES (%s, 23, %s, %s, %s, %s, 'COMPLETED', 'SUPER_BOWL')
                             """, (season, win_id, lose_id, sb.winner_score, sb.loser_score))
                             
                         print(f"Saved SUPER_BOWL to games: {sb.winner_team} ({sb.winner_score}) def {sb.loser_team} ({sb.loser_score})")

@@ -52,7 +52,7 @@ def main():
     parser.add_argument("--article-type", type=str, default=None, help="Optionally target/override the Article Type (e.g. MACRO_SLATE_RECAP, PLAYER_DEEP_PROFILE, FRANCHISE_STATE_OF_THE_UNION, SINGLE_GAME_SCHEMATIC_AUTOPSY).")
     parser.add_argument("--live", action="store_true", help="Send the compiled prompt to Gemini API and print the generated article/tweet.")
     parser.add_argument("--model", type=str, default="gemini-3.8-flash", help="Gemini model name to use for live generation (default: gemini-3.8-flash).")
-    parser.add_argument("--article-count", type=int, default=6, help="Number of national articles the orchestrator should commission (default: 6).")
+    parser.add_argument("--article-count", type=int, default=None, help="Truncate the commissioned slate to N articles (default: full 10-slot Editorial Matrix).")
     parser.add_argument("--api-key", type=str, default=None, help="Optional Gemini API key override (defaults to GEMINI_API_KEY env var).")
     args = parser.parse_args()
 

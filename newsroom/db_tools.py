@@ -645,7 +645,7 @@ def get_draft_order(season: int = 2035) -> str:
                         CASE WHEN home_score > away_score THEN home_team_id ELSE away_team_id END as winner_id,
                         CASE WHEN home_score > away_score THEN away_team_id ELSE home_team_id END as runner_up_id
                     FROM games
-                    WHERE season = %s AND (game_type = 'SUPER_BOWL' OR week = 22) AND status = 'COMPLETED'
+                    WHERE season = %s AND (game_type = 'SUPER_BOWL' OR week = 23) AND status = 'COMPLETED'
                     LIMIT 1;
                 """, (s_val,))
                 sb_row = cur.fetchone()

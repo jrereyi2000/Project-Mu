@@ -35,6 +35,7 @@ Project Mu/
 │   └── fantasy_adp_engine.py  #   Preseason ADP board
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
+│   ├── slot_targets.py        #   Editorial Matrix slot targeting (primer games, exits, eliminations)
 │   ├── db_tools.py            #   ReAct research tools exposed to writer agents
 │   └── config/                #   agent_personas.json, article_types.json, article_structure_directives.json,
 │                              #   curatorial_autonomy_directives.json, playoff_overrides.json
@@ -298,9 +299,9 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
      - **`recap_slate`**: Completed scoreboard and standout individual performances from `week - 1` for retrospective recaps.
      - **`preview_slate`**: Upcoming scheduled matchups and projected excitement for `week` for prospective previews.
      - **`season_landscape`**: Cumulative division standings, records, and popularity/watchability leaders through `week - 1`.
-   - It fires `SwarmDispatcher().dispatch_weekly_national(max_workers=5)` (or the full 10-article matrix queue), engaging the autonomous Editorial Assignment Desk.
+   - It fires `SwarmDispatcher().dispatch_weekly_national(max_workers=5)`, which commissions the full 10-slot Editorial Matrix slate (`docs/EDITORIAL_MATRIX.md`) via the autonomous Editorial Assignment Desk. The optional `article_count` argument truncates the slate and is for tests/debugging only.
    - Local on-demand team wakeups (`POST /api/news/team/{team_id}/wakeup`) also utilize `ThreadPoolExecutor(max_workers=5)` to generate a balanced local beat portfolio (`LOCAL_POSTGAME_REPORT_CARD`, `LOCAL_MATCHUP_PRIMER`, `LOCAL_PLAYER_SPOTLIGHT`, and `LOCAL_SEASON_PROGRESS_REPORT`) alongside local fan/pundit reaction tweets concurrently in ~5–8s.
-   - The Editorial Desk commissions a structured 10-article matrix (Hero, Slot 1, Slot 2, Slots 3–5 Feature Trio, Slots 6–8 Local Matchup Primers, and Standalone Power Rankings), matches each format to an eligible national writer or beat reporter, and dispatches them with custom curatorial directives and explicit temporal framing (`RETROSPECTIVE`, `PROSPECTIVE`, or `CUMULATIVE`) alongside local beat reports and viral fan/pundit reactions.
+   - The Editorial Desk commissions a structured 10-article matrix (Hero, Slot 1, Slot 2, Slots 3–5 Feature Trio, Slots 6–8 Local Matchup Primers, and Standalone Power Rankings), matches each format to an eligible national writer or beat reporter, and dispatches them with custom curatorial directives and explicit temporal framing (`RETROSPECTIVE`, `PROSPECTIVE`, or `CUMULATIVE`) alongside viral fan/pundit reactions. Other local beat formats (`LOCAL_POSTGAME_REPORT_CARD`, `LOCAL_PLAYER_SPOTLIGHT`, `LOCAL_SEASON_PROGRESS_REPORT`) are not part of the weekly national run; they are produced only by on-demand team wakeups.
    - **Parallel Multithreaded Execution:** Dispatcher leverages Python `concurrent.futures.ThreadPoolExecutor` (default 5 workers), collapsing total weekly generation time from ~90s sequential down to ~12–15s parallel.
    - **API Connection Pooling:** FastAPI backend (`server/api.py`) utilizes `psycopg_pool.ConnectionPool` (min 4, max 20 connections) with sub-3ms query latency across all REST endpoints.
    - **Persistence & Entity Tagging:** Articles are parsed for creative headlines (`# Headline`) and teaser excerpts (`> **EXCERPT:** ...`), then saved to `news_feed` with explicit `article_type` and `slot` identifiers alongside relational tags in `article_teams` and `article_players`.
@@ -611,11 +612,13 @@ Local Beat Reporters cover their assigned franchise exclusively. Prompts strictl
 ### 7.3 The Editorial Assignment Desk & Article-First Commissioning Architecture
 Rather than waking up a fixed list of writer agents who generate generic articles, the Swarm operates under an **Article-First Editorial Commissioning Architecture** (`commission_weekly_editorial_slate`):
 
-1. **Weekly Default Distribution (6 National + 3 Local):**
-   - The orchestrator commissions a weekly default publication slate consisting of:
-     - **6 National Articles:** Commissioned across the national taxonomy according to season phase and curatorial variety.
-     - **3 Local Beat Articles:** Commissioned from beat writers representing 3 of the top 8 most popular franchises (`popularity_index` in `team_seasons`).
-   - Additional articles beyond the default 9 are triggered on demand via the "See all stories" interface.
+1. **Weekly Default Distribution (Full 10-Slot Editorial Matrix):**
+   - `docs/EDITORIAL_MATRIX.md` is the source of truth for the weekly slate. Every weekly run (`dispatch_weekly_national`) commissions all 10 matrix slots for the week: Hero, Slots 1–8, and Standalone.
+   - `article_count` / `target_articles` truncate the slate and are reserved for tests and debugging (`tests/test_wakeups.py --article-count`, `tests/test_editorial_flow.py --count`); production never passes them.
+   - The weekly national run does not wake up any extra beat reporters. Slots 6–8 come only from the matrix. Local beat portfolios (`LOCAL_POSTGAME_REPORT_CARD`, `LOCAL_PLAYER_SPOTLIGHT`, `LOCAL_SEASON_PROGRESS_REPORT`, plus team-specific `LOCAL_MATCHUP_PRIMER`) come from on-demand team wakeups (`dispatch_team_local`).
+   - **Slot Targeting (`newsroom/slot_targets.py`):** Before writers are assigned, `commission_weekly_editorial_slate` resolves the subject of every targeted slot per the matrix's *Slot Targeting Rules*. Matchup primers go to the week's most exciting scheduled games, ranked by projected Scheduled Excitement (§2.2) with ties broken by raw Matchup TWI, because scheduled games have no stored Excitement Index (byes excluded, 2-week team rotation in the regular season, covering the side with fewer primers this season), and in Super Bowl week to the AFC and NFC champions. Phase 4 `FRANCHISE_STATE_OF_THE_UNION` goes to a mathematically eliminated team. Week 19 Exit slots go to teams that missed the playoffs, and W20–22 `PLAYOFF_AUTOPSY` slots go to the prior round's losers. All of these are distinct teams, most popular first.
+   - Each primer is written by a beat reporter for its subject team. Every targeted article gets an `EDITORIAL DESK SUBJECT ASSIGNMENT` block in its prompt, which overrides subject-selection instructions, and is saved under the subject's `team_id`. If league data can't be loaded, slots fall back to writer-chosen subjects.
+   - **Postseason week numbering:** 19 = Wild Card, 20 = Divisional, 21 = Conference Championships, 22 = Super Bowl bye, 23 = Super Bowl. Historical imports (`pipeline/batch_menus.py`) store the Super Bowl at week 23. `db/migrations/migrate_super_bowl_week.py` moves older week-22 Super Bowl rows to week 23.
 2. **Matrix-Driven Editorial Slate Planning (`docs/EDITORIAL_MATRIX.md`):**
    - Implements the definitive **18-Week Regular Season & 5-Week Postseason Editorial Matrix** to commission a structured portfolio of article types per week:
      - **Regular Season (Weeks 1–18):** Fixed Hero Slot (`PRE_SEASON_ROSTER_TIERS` in W1, `MACRO_SLATE_RECAP` in W2–18), Slot 1 (`SLATE_LOOKAHEAD_PREDICTIONS`), Slot 2 (`NFL_TOP_100_HIERARCHY` in W1, `SINGLE_GAME_SCHEMATIC_AUTOPSY` in W2–18), Slots 3–5 (Feature Trio selected dynamically from 4 distinct seasonal phase pools), Slots 6–8 (3x `LOCAL_MATCHUP_PRIMER`), and Standalone (`POWER_RANKINGS`).
