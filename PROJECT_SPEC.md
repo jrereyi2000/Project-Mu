@@ -30,7 +30,8 @@ Project Mu/
 ├── engines/                   # Deterministic analytics (Sections 2 & 6, steps 2–3)
 │   ├── game_stat_generator.py #   CPU-sim backfill → culture engines → swarm trigger
 │   ├── backfill_team_stats.py
-│   ├── gotw_engine.py         #   Game Excitement Index (E) → games.excitement_index
+│   ├── gotw_engine.py         #   Game Excitement Index (E) → games.excitement_index; E components, player matching, 70–100 display scale
+│   ├── excitement_projection.py #  Projected E for scheduled games → games.projected_excitement (+ --backtest)
 │   ├── twi_engine.py, popularity_engine.py, player_popularity_engine.py
 │   └── fantasy_adp_engine.py  #   Preseason ADP board
 ├── newsroom/                  # Agent swarm (Section 7)
@@ -43,7 +44,7 @@ Project Mu/
 │   ├── db_handler.py          #   Shared connection / UPSERT layer (DATABASE_URL)
 │   ├── init_db.sql, run_sql.py
 │   ├── backup_db.sh, restore_db.sh   # pg_dump / restore via the madden-db Docker container
-│   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql (apply SQL ones via
+│   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -77,6 +78,9 @@ All Python commands run **from the project root** (relative data paths such as `
 | Frontend | `cd Mu_Network && npm run dev` (Vite on port 8443) |
 | Video pipeline | `python3 -m pipeline.main --file data/video/<clip>.mp4 --db` |
 | Stat backfill + culture engines + swarm | `python3 -m engines.game_stat_generator` |
+| Re-score Excitement Index (E) | `python3 -m engines.gotw_engine --season 2035` (then refresh the culture indices below) |
+| Refresh culture indices (in this order) | `python3 -m engines.twi_engine` → `python3 -m engines.popularity_engine` → `python3 -m engines.player_popularity_engine` |
+| Project E for scheduled games | `python3 -m engines.excitement_projection --season 2035` (`--backtest` scores accuracy, no writes) |
 | Preseason ADP | `python3 -m engines.fantasy_adp_engine` |
 | Headshot post-processing | `python3 -m headshots.process_headshots` |
 | Dashboards | `streamlit run dashboards/admin_dashboard.py` |
@@ -305,7 +309,8 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
 4. **The Swarm Trigger & Editorial Commissioning:**
    - The generator dynamically compiles a dual-horizon Weekly Slate Digest:
      - **`recap_slate`**: Completed scoreboard and standout individual performances from `week - 1` for retrospective recaps.
-     - **`preview_slate`**: Upcoming scheduled matchups and projected excitement for `week` for prospective previews.
+     - **`preview_slate`**: Upcoming scheduled matchups for `week`, ordered by projected excitement. `projected_excitement` comes from `games.projected_excitement` on the 70–100 display scale, for prospective previews.
+     - **`excitement_scale_note`**: Tells writers that Excitement Index values are on the 70–100 scale (≈70 dull, ≈80 typical, 90+ classic) and that projections are rough pre-game estimates. `recap_slate` values and the writer DB tools (`get_weekly_slate`, `get_team_season_schedule`, box score and advanced analytics) use the same display scale.
      - **`season_landscape`**: Cumulative division standings, records, and popularity/watchability leaders through `week - 1`.
    - It fires `SwarmDispatcher().dispatch_weekly_national(max_workers=5)`, which commissions the full 10-slot Editorial Matrix slate (`docs/EDITORIAL_MATRIX.md`) via the autonomous Editorial Assignment Desk. The optional `article_count` argument truncates the slate and is for tests/debugging only.
    - Local on-demand team wakeups (`POST /api/news/team/{team_id}/wakeup`) also utilize `ThreadPoolExecutor(max_workers=5)` to generate a balanced local beat portfolio (`LOCAL_POSTGAME_REPORT_CARD`, `LOCAL_MATCHUP_PRIMER`, `LOCAL_PLAYER_SPOTLIGHT`, and `LOCAL_SEASON_PROGRESS_REPORT`) alongside local fan/pundit reaction tweets concurrently in ~5–8s.
