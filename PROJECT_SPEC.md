@@ -26,7 +26,7 @@ Project Mu/
 │                              #   and the previous week's League Schedule (week picked via the held-L2 dropdown) → captures/<YYYY-MM-DD_HHMM>/{stats,team_stats,schedule}/
 │                              #   `--only roster`: Manage Roster > Roster for all 32 teams (team via the held-L2 dropdown, starting at the user's team);
 │                              #   per row the player card is read on the Mac (Apple Vision on an in-process window grab, settled = two agreeing reads,
-│                              #   each step checked against the list so a late press can't skip a row) → roster/cards.csv (team,row,first,last,number,
+│                              #   each step checked against the list so a late press can't skip a row; a card that stops changing anywhere but the last row stops the run, since a frozen chiaki-ng stream looks like the end of the list) → roster/cards.csv (team,row,first,last,number,
 │                              #   position,archetype,role,dev,age,height,weight,experience,flags,card_png; experience 0 = ROOKIE; flags name missing or
 │                              #   implausible values, e.g. Vision drops the digit 1) + roster/<NN>_<team>/card_NNN.png (card crop) and list_NN.png (one full
 │                              #   screenshot per 14-row list page, for Gemini). ~80 s per team

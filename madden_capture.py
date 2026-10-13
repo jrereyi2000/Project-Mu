@@ -1061,6 +1061,12 @@ def card_changed(cg_a, cg_b):
     return d.histogram()[255] / (d.width * d.height) > 0.01
 
 
+def types_frame_cg(cg):
+    """save_debug() wants an object with .path; write the CGImage to the temp frame file."""
+    save_cg(cg, TMP)
+    return types_frame(TMP)
+
+
 def save_cg(cg, path):
     dest = Quartz.CGImageDestinationCreateWithURL(NSURL.fileURLWithPath_(path), "public.png", 1, None)
     Quartz.CGImageDestinationAddImage(dest, cg, None)
@@ -1238,43 +1244,62 @@ def roster_team(f):
     return None
 
 
-def next_roster_team(debug_dir):
-    """Hold L2, move the team list down one team (skipping NFL), release. Returns the team."""
+def next_roster_team(debug_dir, current):
+    """Hold L2, move the team list down one team (skipping NFL), release. Returns the team.
+    The L2 hold itself is sometimes dropped (Raiders, Oct 13): then release, check the chip
+    (a late press may have switched team already, which then counts as the move) and retry."""
     os.makedirs(debug_dir, exist_ok=True)
-    key_down("l2")
-    try:
-        t_end = time.time() + 3.0
-        while True:
-            time.sleep(0.35)
-            f = Frame()
-            sel = roster_dropdown_selected(f) if "SELECT" in f.text else None
-            if sel:
+    for attempt in range(1, 4):
+        key_down("l2")
+        opened = False
+        try:
+            t_end = time.time() + 3.0
+            while time.time() < t_end:
+                time.sleep(0.35)
+                f = Frame()
+                sel = roster_dropdown_selected(f) if "SELECT" in f.text else None
+                if sel:
+                    opened = True
+                    break
+            if opened:
+                return _move_team_list(f, sel, debug_dir)
+        finally:
+            key_up("l2")                    # no-op if _move_team_list already released it
+        save_debug(f, f"team_list_not_open_{attempt}")
+        time.sleep(1.5)
+        f, _ = wait_for(["ROSTER_LIST"], timeout=10)
+        team = roster_team(f)
+        if team and norm(team) != norm(current):
+            log(f"  L2 acted late and switched to {team}; taking that as the next team")
+            return team
+        log(f"  Team list didn't open (attempt {attempt}); trying again")
+    raise Abort("Team list did not open while holding L2 (3 tries). If chiaki-ng's picture has "
+                "stopped updating, the stream is frozen; once it's back, --resume this run")
+
+
+def _move_team_list(f, start, debug_dir):
+    """With the team list open (L2 held by the caller): move down one team, skipping NFL.
+    Returns the team selected once L2 is released."""
+    for _ in range(8):
+        key_down("down"); time.sleep(0.1); key_up("down")
+        time.sleep(0.5)
+        f = Frame()
+        new = roster_dropdown_selected(f)
+        for _retry in range(3):
+            if new:
                 break
-            if time.time() > t_end:
-                save_debug(f, "team_list_not_open")
-                raise Abort("Team list did not open while holding L2")
-        start = sel
-        for _ in range(8):
-            key_down("down"); time.sleep(0.1); key_up("down")
-            time.sleep(0.5)
+            time.sleep(0.3)
             f = Frame()
             new = roster_dropdown_selected(f)
-            for _retry in range(3):
-                if new:
-                    break
-                time.sleep(0.3)
-                f = Frame()
-                new = roster_dropdown_selected(f)
-            if new and norm(new) != norm(start) and norm(new) not in DIVISION_ENTRIES:
-                break
-            if new and norm(new) in DIVISION_ENTRIES:
-                start = new                 # passed NFL; keep going to the next team
-        else:
-            raise Abort(f"Couldn't move the team list off {start}")
-        subprocess.run(["cp", f.path, os.path.join(debug_dir, f"{norm(new).lower()}.png")])
-        log(f"{new} highlighted; releasing L2")
-    finally:
-        key_up("l2")
+        if new and norm(new) != norm(start) and norm(new) not in DIVISION_ENTRIES:
+            break
+        if new and norm(new) in DIVISION_ENTRIES:
+            start = new                 # passed NFL; keep going to the next team
+    else:
+        raise Abort(f"Couldn't move the team list off {start}")
+    subprocess.run(["cp", f.path, os.path.join(debug_dir, f"{norm(new).lower()}.png")])
+    log(f"{new} highlighted; releasing L2")
+    key_up("l2")
     time.sleep(1.5)
     f, _ = wait_for(["ROSTER_LIST"], timeout=10)
     team = roster_team(f)
@@ -1333,7 +1358,17 @@ def capture_team_roster(out, index, team, writer):
                 if card:
                     break
             if card is None:
-                break                              # end of list
+                # The card also stops changing when chiaki's stream freezes (Rams, Oct 13:
+                # recorded 40 of 53). Only the last row of the list is the real end.
+                W = Quartz.CGImageGetWidth(cg)
+                lines = _rows(ocr_cg(crop_cg(cg, LIST_BOX)))
+                at = list_row_for(lines, prev, W, W * LIST_BOX[0])
+                if at and at["i"] >= len(lines) - 1:
+                    break                          # end of list
+                save_debug(types_frame_cg(cg), f"{norm(team).lower()}_stuck")
+                raise Abort(f"{team}: the card stopped changing at {prev['last']}, which isn't the "
+                            "last row of the list. The chiaki-ng stream may be frozen; check it, "
+                            "then --resume this run")
         if card is None:
             raise Abort(f"{team}: can't read the first player's card")
         W = Quartz.CGImageGetWidth(cg)
@@ -1431,7 +1466,7 @@ def run_roster(out, max_teams=32, resume=False):
                     dh.write(f"{idx} {norm(team)}\n")
             if len(seen) >= max_teams:
                 break
-            team = next_roster_team(os.path.join(out, "team_debug"))
+            team = next_roster_team(os.path.join(out, "team_debug"), team)
             if norm(team) in seen:
                 break
     log(f"Captured {len(done)} teams, {total} players")
