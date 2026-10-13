@@ -87,7 +87,7 @@ def get_game_box_score(game_id: int) -> str:
 
 @tool
 def get_player_season_stats(player_identifier: str) -> str:
-    """Fetch cumulative season stats, Madden OVR, age, experience, awards, popularity, and popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success) for a specific player. Accepts player name (e.g. 'Drake Maye') or player ID."""
+    """Fetch cumulative season stats, Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout for a specific player. Accepts player name (e.g. 'Drake Maye') or player ID."""
     try:
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -118,7 +118,8 @@ def get_player_season_stats(player_identifier: str) -> str:
                         ss.receptions, ss.rec_yards, ss.rec_tds,
                         fp.adp_rank,
                         ps.age, ps.years_of_experience, p.height, p.weight,
-                        ps.spike_index, ps.r_rating, ps.f_platform, ps.t_success
+                        ps.spike_index, ps.r_rating, ps.f_platform, ps.t_success,
+                        ps.a_awards, ps.e_exposure, ps.s_playoff
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     LEFT JOIN teams t ON ps.team_id = t.id
@@ -157,7 +158,13 @@ def get_player_season_stats(player_identifier: str) -> str:
                         "baseline_rating_and_pedigree": row[19],
                         "franchise_platform": row[20],
                         "team_success": row[21],
-                        "scale_note": "0-100. Spike index = 25 per 24+ PPR game this season (capped at 100).",
+                        "awards_equity": row[22],
+                        "exposure": row[23],
+                        "scale_note": "0-100. Spike index = 25 per 24+ PPR game this season (capped at 100). Awards equity weights the last 3 seasons' awards with decay plus 25% of career award points. Exposure = recency-weighted excitement of the games they played in, +25% for each week's top game.",
+                    },
+                    "playoff_clout": {
+                        "score": row[24],
+                        "scale_note": "0-100: 40 per Super Bowl MVP, 25 per Super Bowl win played in, 8 per other playoff win played in. Super Bowl rosters before 2035 aren't recorded, so earlier rings only count through SB MVPs.",
                     },
                     "career_awards": career_awards if career_awards else ["None recorded"],
                     "preseason_adp_rank": row[13] if row[13] else "Undrafted",
@@ -361,7 +368,7 @@ def get_league_leaderboards() -> str:
 
 @tool
 def get_advanced_team_analytics(team_identifier: str, season: int = 2035) -> str:
-    """Fetch a team's stored index components: Team Watchability Index (TWI) and its parts (ceiling/chaos volatility sigma_top, Blue-Chip Draft Pedigree P_draft, Under-25 Production Share Y_prod, Purgatory Penalty), Franchise Popularity, Base Market Gravity (B) with its local/national breakdown where published, Legacy Floor (historical franchise prestige), and starter age. Accepts team name, abbreviation, or team ID."""
+    """Fetch a team's stored index components: Team Watchability Index (TWI) and its parts (ceiling/chaos volatility sigma_top, Blue-Chip Draft Pedigree P_draft, Under-25 Production Share Y_prod, Purgatory Penalty), Franchise Popularity, Base Market Gravity (B) with its local/national breakdown where published, Legacy Floor (historical franchise prestige), Playoff Clout, and starter age. Accepts team name, abbreviation, or team ID."""
     try:
         s_val = int(season)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -372,14 +379,14 @@ def get_advanced_team_analytics(team_identifier: str, season: int = 2035) -> str
 
                 cur.execute("""
                     SELECT t.name, ts.watchability_index, ts.watchability_sigma_top, ts.p_draft, ts.y_prod,
-                           ts.purgatory_penalty, ts.popularity_index
+                           ts.purgatory_penalty, ts.popularity_index, ts.s_playoff
                     FROM teams t JOIN team_seasons ts ON ts.team_id = t.id AND ts.season = %s
                     WHERE t.id = %s;
                 """, (s_val, team_id))
                 row = cur.fetchone()
                 if not row:
                     return f"No {s_val} season row for team ID {team_id}."
-                name, twi, sigma, p_draft, y_prod, penalty, pop = row
+                name, twi, sigma, p_draft, y_prod, penalty, pop, clout = row
 
                 # Same starter definition as the Purgatory Penalty: the 22 highest-rated players
                 cur.execute("""
@@ -409,7 +416,8 @@ def get_advanced_team_analytics(team_identifier: str, season: int = 2035) -> str
                     "market_breakdown": ({"local_scale": m["L"], "local_fervor": m["D"], "national_reach": m["N"]}
                                          if m["N"] is not None else "Not published for this franchise"),
                     "legacy_floor": m["S_all_time"],
-                    "scale_note": "All indices 0-100. Purgatory penalty > 0 only for losing teams whose top-22 players average over 27.5 years old; it is subtracted from TWI. sigma_top above ~12 marks a high-variance, chaotic team.",
+                    "playoff_clout": num(clout),
+                    "scale_note": "All indices 0-100. Purgatory penalty > 0 only for losing teams whose top-22 players average over 27.5 years old; it is subtracted from TWI. sigma_top above ~12 marks a high-variance, chaotic team. Playoff clout decays 15%/season: 100 per Super Bowl title, 50 per Super Bowl loss, 20 per other playoff win.",
                 }
                 return json.dumps(result, indent=2)
     except Exception as e:

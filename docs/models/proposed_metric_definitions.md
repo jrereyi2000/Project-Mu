@@ -55,7 +55,7 @@ Referenced by ~10 article types. Today the excitement engine's $P$ uses points +
 - **Team level (new):** $P_{\text{team}} = \min\!\left(100,\ \frac{PF/G}{35}\cdot 60 + \frac{\text{Yds}/G}{425}\cdot 40\right)$ — the same benchmarks halved to one team.
 - True tempo (plays per game) isn't possible until `total_plays` is captured.
 
-### A5. Playoff Clout ($S_{\text{playoff}}$) — Pending
+### A5. Playoff Clout ($S_{\text{playoff}}$) — Implemented (§2.7)
 Referenced by: `PLAYER_DEEP_PROFILE`, `SUPER_BOWL_CONTENDER_BLUEPRINT`, `POSITIONAL_TOP_10_HIERARCHY`, `SUPER_BOWL_COMPREHENSIVE_PREVIEW`, `QUARTERBACK_DUEL_TAPE_BREAKDOWN`. Not defined anywhere.
 
 **Team:**
@@ -114,7 +114,7 @@ $$\text{Touch share}_{i,g} = \frac{\text{rush\_att}_i + \text{rec}_i}{\sum_{\tex
 - **Usage Delta** = mean touch share over the last 3 games − season mean (percentage points). Skill positions only.
 - Receptions, not targets, so it understates high-volume, low-catch receivers.
 
-### B2. Exposure ($E_{\text{exposure}}$) — Pending (currently hardcoded to 60 for every player)
+### B2. Exposure ($E_{\text{exposure}}$) — Implemented (§2.5)
 The spec exists (`nfl_player_popularity_specification.md` §2.2) but needs SnapShare, which we don't have.
 
 $$E_{\text{exposure}} = \frac{\sum_k w_k\, E_k\, a_{i,k}\,(1 + 0.25\cdot\mathbb{I}_{\text{GOTW},k})}{\sum_k w_k\, a_{i,k}} \qquad w_k = e^{-0.12(T-k)}$$
@@ -123,7 +123,7 @@ $$E_{\text{exposure}} = \frac{\sum_k w_k\, E_k\, a_{i,k}\,(1 + 0.25\cdot\mathbb{
 - GOTW = the highest-E game of that week.
 - $E_k$ is raw E. Defaults to 50 for players with no appearances (defensive players included, since no defensive stats exist).
 
-### B3. Awards Equity ($A_{\text{awards}}$, $A_{\text{career}}$) — Pending (implemented partially today)
+### B3. Awards Equity ($A_{\text{awards}}$, $A_{\text{career}}$) — Implemented (§2.5)
 The spec exists (§2.5). Code counts only last season, with no decay and no career term.
 
 - Points per award: MVP 50, OPOY/DPOY 35, SBMVP 25, OROY/DROY 18. All-Pro isn't tracked.

@@ -169,6 +169,7 @@ def generate_team_and_player_stats(season_year: int):
         from engines.twi_engine import TWIEngine
         from engines.game_credit_engine import GameCreditEngine
         from engines.team_efficiency_engine import TeamEfficiencyEngine
+        from engines.playoff_clout_engine import PlayoffCloutEngine
         from engines.popularity_engine import PopularityEngine
         from engines.player_popularity_engine import PlayerPopularityEngine
         from engines.excitement_projection import project_scheduled_games
@@ -191,6 +192,9 @@ def generate_team_and_player_stats(season_year: int):
 
         print("-> Running Team Efficiency Engine...")
         TeamEfficiencyEngine().calculate(season=season_year)
+
+        print("-> Running Playoff Clout Engine...")
+        PlayoffCloutEngine().calculate(season=season_year)
 
         print("-> Running Franchise Popularity Engine...")
         PopularityEngine().calculate_popularity(season=season_year)

@@ -37,6 +37,7 @@ Project Mu/
 │   ├── market_constants.py    #   B / L / D / N / Legacy Floor per franchise + SB hardware bumps derived from games
 │   ├── game_credit_engine.py  #   Opponent-Adjusted Game Credit (SRS) + Trajectory Multiplier → team_seasons.opp_adj_credit, sos_rating, expected_wins, trajectory_multiplier
 │   ├── team_efficiency_engine.py # Pythagorean wins, team pace/production → team_seasons
+│   ├── playoff_clout_engine.py #  Team & player Playoff Clout → team_seasons.s_playoff, player_seasons.s_playoff
 │   ├── fantasy_adp_engine.py  #   Preseason ADP board → fantasy_projections week 1 adp_rank
 │   └── fantasy_projection_engine.py # Weekly PPR projections, matchup stars, pos/ROS ranks → fantasy_projections (+ --backtest)
 ├── newsroom/                  # Agent swarm (Section 7)
@@ -50,7 +51,8 @@ Project Mu/
 │   ├── init_db.sql, run_sql.py
 │   ├── backup_db.sh, restore_db.sh   # pg_dump / restore via the madden-db Docker container
 │   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql,
-│   │                          #   2026_10_15_stored_index_components.sql, 2026_10_16_trajectory_and_efficiency.sql (apply SQL ones via
+│   │                          #   2026_10_15_stored_index_components.sql, 2026_10_16_trajectory_and_efficiency.sql,
+│   │                          #   2026_10_17_playoff_clout_awards_exposure.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -89,6 +91,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Refresh culture indices (in this order) | `python3 -m engines.twi_engine` → `python3 -m engines.popularity_engine` → `python3 -m engines.player_popularity_engine` |
 | Opponent-Adjusted Game Credit + Trajectory | `python3 -m engines.game_credit_engine --season 2035` (independent of the culture indices) |
 | Team efficiency profile | `python3 -m engines.team_efficiency_engine --season 2035` |
+| Playoff Clout | `python3 -m engines.playoff_clout_engine --season 2035` |
 | Project E for scheduled games | `python3 -m engines.excitement_projection --season 2035` (`--backtest` scores accuracy, no writes) |
 | Preseason ADP | `python3 -m engines.fantasy_adp_engine` |
 | Weekly fantasy projections | `python3 -m engines.fantasy_projection_engine --season 2035 --week 18` (no `--week`: league_state current week; `--all-weeks` backfills 2–18; `--backtest` scores accuracy, no writes) |
@@ -158,7 +161,11 @@ Schedule-adjusted team strength in **points per game relative to a league-averag
   - The hardware bump is +25 per Super Bowl win and +5 per runner-up over the 5 seasons before the current one, derived from `games.game_type = 'SUPER_BOWL'` (`market_constants.recent_hardware_bumps`).
   - $B$ (Base Market Gravity) and $S_{\text{all-time}}$ (Legacy Floor) are constants in `engines/market_constants.py`, transcribed from `docs/models/base_market_gravity_specification.md` and `docs/models/legacy_floor.md`. The $L$/$D$/$N$ breakdown of $B$ is only published for eight franchises.
   - `docs/models/legacy_floor.md` lists the Giants as 2031 and 2033 runner-ups; the recorded results (and the Season Recap video) have the Lions and Falcons. The Legacy Floor values were not recomputed.
-- **Player Pop** $= (0.15F + 0.20E + 0.20P + 0.15R + 0.15A + 0.15T)\cdot M_{\text{pos}}$ (`player_seasons.popularity_index`). The components SpikeIndex, $R_{\text{rating}}$, $F_{\text{platform}}$ and $T_{\text{success}}$ are also stored (`spike_index`, `r_rating`, `f_platform`, `t_success`).
+- **Player Pop** $= (0.15F + 0.20E + 0.20P + 0.15R + 0.15A + 0.15T)\cdot M_{\text{pos}}$ (`player_seasons.popularity_index`). Stored components: SpikeIndex, $R_{\text{rating}}$, $F_{\text{platform}}$, $T_{\text{success}}$, $A_{\text{awards}}$, $E_{\text{exposure}}$ (`spike_index`, `r_rating`, `f_platform`, `t_success`, `a_awards`, `e_exposure`).
+  - **Awards Equity** $A = \min\left(100,\ \sum_{k=1}^{3} e^{-0.35(k-1)} A_{\text{pts}}(Y-k) + 0.25\,A_{\text{career}}\right)$, where $A_{\text{pts}}$ is MVP 50, OPOY/DPOY 35, SBMVP 25, OROY/DROY 18 (COTY 0; All-Pro isn't recorded) and $A_{\text{career}}$ is all award points before season $Y$. Matched on `awards.player_id`. Before 2026-10-12 it compared full award names with abbreviated `players.player_name`, so $A$ was 0 for everyone.
+  - **Exposure** $E = \sum_k w_k E_k (1 + 0.25\,\mathbb{I}_{\text{GOTW},k}) / \sum_k w_k$ over games the player has a stat line in, $w_k = e^{-0.12(T-k)}$, GOTW = the week's highest raw $E$. The appearance flag stands in for the spec's SnapShare. Players with no stat lines (all defenders) get 50. Previously a flat 60.
+  - **Team Success** $T = 0.60\cdot 100\,\text{Win\%} + 0.40\,S_{\text{post}}$, where $S_{\text{post}}$ is 30 for last season's Super Bowl winner and 15 for the runner-up, from `games`.
+  - Data note: the 2033 SB MVP is recorded as "Cade Klubnik" but `player_id` 1477 is `players.full_name` "Cade Loop".
 
 
 ### 2.6 Team Efficiency Profile (`engines/team_efficiency_engine.py`)
@@ -166,6 +173,11 @@ Schedule-adjusted team strength in **points per game relative to a league-averag
 - **Team pace & production** (`pace_production`): $\min\left(100,\ \frac{PF/G}{35}\cdot 60 + \frac{\text{Yds}/G}{425}\cdot 40\right)$, the game-level $P$ benchmarks halved to one team. True tempo needs `team_stats.total_plays`, which is not captured (all 0).
 - Also returned live by `get_team_efficiency_profile`: pass and rush yards per game and giveaways per game (the team's own offense).
 - **Box-score caveat:** for CPU-simmed games, `game_stat_generator.py` splits season totals across games in proportion to each game's combined score (see Section 6, step 2). A team's own season totals are real, but per-game box scores, and anything attributed to opponents game by game (takeaways, yards allowed, TDs vs. points in one game, game-to-game usage changes), are artifacts of that split. Metrics are built only on season totals, scores and ratings for that reason; turnover margin and a TD-finishing-rate stand-in for red-zone efficiency were considered and rejected.
+
+
+### 2.7 Playoff Clout (`engines/playoff_clout_engine.py`)
+- **Team** (`team_seasons.s_playoff`): $\min\left(100,\ \sum_{y \le Y} e^{-0.15(Y-y)}\left[100\cdot\text{SB win} + 50\cdot\text{SB loss} + 20\cdot\text{playoff wins}\right]\right)$. Super Bowls are `games.game_type = 'SUPER_BOWL'`; playoff wins are completed wins in any other non-`REGULAR_SEASON` game.
+- **Player** (`player_seasons.s_playoff`): $\min(100,\ 40\cdot\text{SB MVPs} + 25\cdot\text{SB wins played in} + 8\cdot\text{other playoff wins played in})$. "Played in" = a `player_stats` row for the winning team in that game, which only exists from 2035. Before then only SB MVPs (by `awards.player_id`) count, so veterans' clout is understated.
 
 ---
 
@@ -183,9 +195,9 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 
 ### 3.2 Temporal Snapshot Ledgers
 - **`team_seasons`**:
-  - `id` (PK), `team_id` (FK), `season` (int), `wins` (int), `losses` (int), `team_ovr` (int), `off_ovr` (int), `def_ovr` (int), `pass_off_rank` (int), `rush_off_rank` (int), `pass_rush_rank` (int), `coverage_rank` (int), `watchability_index` (float8), `popularity_index` (float8), `opp_adj_credit`, `opp_adj_credit_recent`, `sos_rating`, `expected_wins` (float8, nullable; see 2.4, added by `db/migrations/2026_10_14_opp_adj_credit.sql`), `watchability_sigma_top`, `p_draft`, `y_prod`, `purgatory_penalty` (float8, nullable; TWI components, see 2.2, added by `db/migrations/2026_10_15_stored_index_components.sql`), `trajectory_multiplier` (2.4), `pythagorean_wins`, `pace_production` (2.6) (float8, nullable; added by `db/migrations/2026_10_16_trajectory_and_efficiency.sql`). `UNIQUE(team_id, season)`; `wins`/`losses` are maintained by `trigger_update_team_records` (see 3.6).
+  - `id` (PK), `team_id` (FK), `season` (int), `wins` (int), `losses` (int), `team_ovr` (int), `off_ovr` (int), `def_ovr` (int), `pass_off_rank` (int), `rush_off_rank` (int), `pass_rush_rank` (int), `coverage_rank` (int), `watchability_index` (float8), `popularity_index` (float8), `opp_adj_credit`, `opp_adj_credit_recent`, `sos_rating`, `expected_wins` (float8, nullable; see 2.4, added by `db/migrations/2026_10_14_opp_adj_credit.sql`), `watchability_sigma_top`, `p_draft`, `y_prod`, `purgatory_penalty` (float8, nullable; TWI components, see 2.2, added by `db/migrations/2026_10_15_stored_index_components.sql`), `trajectory_multiplier` (2.4), `pythagorean_wins`, `pace_production` (2.6) (float8, nullable; added by `db/migrations/2026_10_16_trajectory_and_efficiency.sql`), `s_playoff` (2.7; added by `db/migrations/2026_10_17_playoff_clout_awards_exposure.sql`). `UNIQUE(team_id, season)`; `wins`/`losses` are maintained by `trigger_update_team_records` (see 3.6).
 - **`player_seasons`**:
-  - `id` (PK), `player_id` (FK), `team_id` (FK), `season` (int), `position` (varchar), `age` (int), `overall_rating` (int), `years_of_experience` (int; 0 = rookie, 1 = second-year), `popularity_index` (float8), `spike_index`, `r_rating`, `f_platform`, `t_success` (float8, nullable; player Pop components, see 2.5). `UNIQUE(player_id, season)`.
+  - `id` (PK), `player_id` (FK), `team_id` (FK), `season` (int), `position` (varchar), `age` (int), `overall_rating` (int), `years_of_experience` (int; 0 = rookie, 1 = second-year), `popularity_index` (float8), `spike_index`, `r_rating`, `f_platform`, `t_success`, `a_awards`, `e_exposure` (float8, nullable; player Pop components, see 2.5), `s_playoff` (float8, nullable; 2.7). `UNIQUE(player_id, season)`.
 
 ### 3.3 Games & Statistics Tables
 - **`games`**:
@@ -353,7 +365,7 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
 3. **Culture Engines (Dependency-Ordered Execution & Batch Updates):**
    - Appended to the end of the backfill generator, `engines/game_stat_generator.py` first runs `gotw_engine.batch_evaluate(season, only_missing=True, game_ids=...)` to score the Game Excitement Index ($E$) for newly completed games (those with no `excitement_index`) and any games it just backfilled. Previously scored games are left unchanged. This must precede TWI, which only counts games with a non-null `excitement_index`.
    - It then runs `TWIEngine().backfill_twi()` followed by `PopularityEngine().calculate_popularity()`, sequentially in dependency order, because franchise popularity reads the `watchability_index` that TWI writes. These two used to run in parallel, so popularity could read stale or partially updated TWI.
-   - Between TWI and franchise popularity it runs `GameCreditEngine().calculate(season)` (Section 2.4) and `TeamEfficiencyEngine().calculate(season)` (Section 2.6). They read only `games` / `team_stats`, so their position is not a dependency.
+   - Between TWI and franchise popularity it runs `GameCreditEngine().calculate(season)` (Section 2.4) `TeamEfficiencyEngine().calculate(season)` (Section 2.6) and `PlayoffCloutEngine().calculate(season)` (Section 2.7). They read only `games` / `team_stats` / `player_stats` / `awards`, so their position is not a dependency.
    - Once franchise metrics are computed, `PlayerPopularityEngine().calculate_popularity()` executes vectorized batch updates using PostgreSQL `executemany` (reducing DB execution time from ~1s to ~0.16s).
    - Then `project_scheduled_games(season)` refreshes `games.projected_excitement` for every still-scheduled game before the assignment brief is compiled.
    - Finally, `project_upcoming_week(season)` (`engines/fantasy_projection_engine.py`) writes fantasy projections for the first week that still has scheduled games. It reads only `games`, `player_seasons` and `player_stats`, so it has no dependency on the culture engines.
@@ -399,11 +411,11 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - `get_season_standings`: Returns full NFL division standings with wins, losses, win %, points scored (PF), points allowed (PA), and point differential.
   - `get_top_popular_players`: Returns the top 20 most popular players across the league with Madden OVR, age, experience, and popularity indices.
   - `get_all_team_popularities`: Returns all 32 teams ranked by popularity index, watchability rating, and overall roster quality.
-  - `get_player_context` / `get_player_season_stats`: Resolves player by name or ID; returns age, years of experience, physical measurements (height/weight), career awards list, Madden OVR, cumulative season stats, and stored popularity components (SpikeIndex, $R_{\text{rating}}$, $F_{\text{platform}}$, $T_{\text{success}}$).
+  - `get_player_context` / `get_player_season_stats`: Resolves player by name or ID; returns age, years of experience, physical measurements (height/weight), career awards list, Madden OVR, cumulative season stats, stored popularity components (SpikeIndex, $R_{\text{rating}}$, $F_{\text{platform}}$, $T_{\text{success}}$, $A_{\text{awards}}$, $E_{\text{exposure}}$), and player Playoff Clout.
   - `get_team_context`: Resolves team by name, abbreviation, or ID; returns win-loss record, watchability, popularity, Madden team ratings, and top 3 players.
   - `get_team_season_schedule`: Returns a team's complete season schedule and game log: week-by-week opponents, scores, win/loss outcomes, victory margins, one-score game breakdown, excitement ratings, and game IDs.
   - `get_game_box_score`: Returns team box score and top individual game contributions.
-  - `get_advanced_team_analytics`: Reads the stored TWI components (σ_top, P_draft, Y_prod, Purgatory Penalty), TWI, franchise POP, starter age (top 22 by OVR), and $B$ / $L$ / $D$ / $N$ / Legacy Floor from `market_constants`.
+  - `get_advanced_team_analytics`: Reads the stored TWI components (σ_top, P_draft, Y_prod, Purgatory Penalty), TWI, franchise POP, team Playoff Clout, starter age (top 22 by OVR), and $B$ / $L$ / $D$ / $N$ / Legacy Floor from `market_constants`.
   - `get_advanced_game_analytics`: Completed games return pace/production ($P$ from `gotw_engine.production_score`), Upset Leverage ($U$), excitement, and both teams' Opponent-Adjusted Game Credit. Scheduled games return projected $U$ (`excitement_projection.expected_upset`) and the underdog's win probability.
   - `get_opponent_adjusted_credit`: Opponent-Adjusted Game Credit (Section 2.4). No team → all 32 ranked with credit, recent-form credit, Trajectory Multiplier and label, strength of schedule, raw point differential per game, expected wins and win luck; with a team → that summary plus a game-by-game credit log.
   - `get_team_efficiency_profile`: Section 2.6. Pythagorean wins and pyth luck, pace & production, pass/rush yards and giveaways per game; all 32 sorted by pyth luck, or one team.

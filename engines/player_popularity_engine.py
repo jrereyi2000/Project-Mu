@@ -1,7 +1,44 @@
 import psycopg
 from db.db_handler import DatabaseHandler
-from engines.market_constants import market
+from engines.market_constants import market, super_bowl_results
 import math
+from collections import defaultdict
+
+# Awards Equity (nfl_player_popularity_specification.md §2.5). All-Pro teams aren't recorded.
+AWARD_POINTS = {"MVP": 50, "OPOY": 35, "DPOY": 35, "SBMVP": 25, "OROY": 18, "DROY": 18}
+AWARD_DECAY = 0.35
+AWARD_WINDOW = 3
+CAREER_WEIGHT = 0.25
+
+# Exposure (spec §2.2); the appearance flag stands in for SnapShare, which isn't recorded.
+EXPOSURE_DECAY = 0.12
+GOTW_BONUS = 0.25
+EXPOSURE_DEFAULT = 50.0
+
+
+def awards_equity(player_awards: list, season: int) -> float:
+    """player_awards: [(award_season, award_type)]. Counts seasons before `season`:
+    A = min(100, Σ_{y=1..3} e^{-0.35(y-1)} · points(season - y) + 0.25 · career points)."""
+    by_season = defaultdict(int)
+    for y, award in player_awards:
+        if y < season:
+            by_season[y] += AWARD_POINTS.get(award, 0)
+    recent = sum(math.exp(-AWARD_DECAY * (k - 1)) * by_season.get(season - k, 0) for k in range(1, AWARD_WINDOW + 1))
+    return min(100.0, recent + CAREER_WEIGHT * sum(by_season.values()))
+
+
+def exposure(appearances: list, current_week: int) -> float:
+    """appearances: [(week, raw_E, is_gotw)] for games the player has a stat line in.
+    E = Σ w·E·(1 + 0.25·GOTW) / Σ w with w = e^{-0.12 (current_week - week)}."""
+    if not appearances:
+        return EXPOSURE_DEFAULT
+    num = den = 0.0
+    for week, e, gotw in appearances:
+        w = math.exp(-EXPOSURE_DECAY * (current_week - week))
+        num += w * e * (1 + GOTW_BONUS * gotw)
+        den += w
+    return min(100.0, num / den)
+
 
 class PlayerPopularityEngine:
     def __init__(self):
@@ -28,13 +65,30 @@ class PlayerPopularityEngine:
                 """, (season,))
                 teams = {r[0]: {"name": r[1], "pop": r[2] or 50.0, "wins": r[3], "losses": r[4]} for r in cur.fetchall()}
                 
-                # 2. Fetch Awards (A)
-                cur.execute("SELECT player_name, award_type FROM awards WHERE season = %s", (season-1,))
-                awards = {}
-                for pname, atype in cur.fetchall():
-                    if pname not in awards: awards[pname] = []
-                    awards[pname].append(atype)
-                    
+                # 2. Fetch Awards (A), matched on player_id (award names are full names; players.player_name is abbreviated)
+                cur.execute("SELECT player_id, season, award_type FROM awards WHERE season < %s AND player_id IS NOT NULL", (season,))
+                awards = defaultdict(list)
+                for player_id, a_season, atype in cur.fetchall():
+                    awards[player_id].append((a_season, atype))
+
+                # 2b. Exposure (E): every game the player has a stat line in, with its raw E and Game-of-the-Week flag
+                cur.execute("""
+                    WITH g AS (
+                        SELECT id, week, excitement_index,
+                               excitement_index = MAX(excitement_index) OVER (PARTITION BY week) AS is_gotw
+                        FROM games
+                        WHERE season = %s AND status = 'COMPLETED' AND excitement_index IS NOT NULL
+                    )
+                    SELECT st.player_name, st.team_id, g.week, g.excitement_index, g.is_gotw
+                    FROM player_stats st JOIN g ON g.id = st.game_id
+                """, (season,))
+                appearances = defaultdict(list)
+                current_week = 1
+                for pname, tid, week, e, gotw in cur.fetchall():
+                    appearances[(pname, tid)].append((week, float(e), 1 if gotw else 0))
+                    current_week = max(current_week, week)
+
+
                 # 3. Fetch Spike Games (P)
                 cur.execute("""
                     SELECT player_name, ppr_score
@@ -48,16 +102,20 @@ class PlayerPopularityEngine:
                     
                 # 4. Fetch All Players
                 cur.execute("""
-                    SELECT ps.id, p.full_name, ps.position, ps.overall_rating, ps.age, ps.team_id, p.player_name, ps.years_of_experience
+                    SELECT ps.id, p.full_name, ps.position, ps.overall_rating, ps.age, ps.team_id, p.player_name, ps.years_of_experience, p.id
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     WHERE ps.season = %s
                 """, (season,))
                 
                 players = cur.fetchall()
+                last_sb = {}
+                for sb_season, winner, loser in super_bowl_results(cur, season - 1):
+                    if sb_season == season - 1:
+                        last_sb = {winner: 30, loser: 15}
                 final_results = []
                 
-                for pid, full_name, pos, ovr, age, tid, pname, exp in players:
+                for pid, full_name, pos, ovr, age, tid, pname, exp, player_id in players:
                     team_ctx = teams.get(tid, {"name": "Unknown", "pop": 50.0, "wins": 0, "losses": 0})
                     t_name = team_ctx["name"]
                     t_pop = team_ctx["pop"]
@@ -69,8 +127,7 @@ class PlayerPopularityEngine:
                     F = (0.65 * t_pop) + (0.35 * B)
                     
                     # --- COMPONENT E: Exposure (20%) ---
-                    # Approximate E as team's average game excitability, or just 50 baseline for now
-                    E = 60.0 # Standard baseline unless we want to query games
+                    E = exposure(appearances.get((pname, tid), []), current_week)
                     
                     # --- COMPONENT P: Performance (20%) ---
                     # We look at their fantasy scores this season
@@ -100,19 +157,12 @@ class PlayerPopularityEngine:
                     R = min(100.0, R_base + delta_rookie)
                     
                     # --- COMPONENT A: Awards (15%) ---
-                    my_awards = awards.get(pname, [])
-                    a_pts = 0
-                    if 'MVP' in my_awards: a_pts += 50
-                    if 'OPOY' in my_awards or 'DPOY' in my_awards: a_pts += 35
-                    if 'OROY' in my_awards or 'DROY' in my_awards: a_pts += 18
-                    A = min(100, a_pts * 1.5) # Slight boost to emulate career points
+                    A = awards_equity(awards.get(player_id, []), season)
                     
                     # --- COMPONENT T: Team Success (15%) ---
                     s_curr = min(100, win_pct * 100)
-                    # Add SB lore
-                    s_post = 0
-                    if t_name in ['Panthers']: s_post += 30 # 2034 SB Win
-                    if t_name in ['Jets']: s_post += 15 # 2034 SB Runner Up
+                    # Last season's Super Bowl: winner 30, runner-up 15
+                    s_post = last_sb.get(tid, 0)
                     T = (0.60 * s_curr) + (0.40 * s_post)
                     
                     # --- FINAL MULTIPLIER (M_pos) ---
@@ -125,15 +175,17 @@ class PlayerPopularityEngine:
                     final_results.append({
                         "pid": pid, "name": full_name, "pos": pos, "ovr": ovr, 
                         "team": t_name, "pop": round(Pop, 2), "M": M_pos,
-                        "spike": spike_idx, "R": round(R, 2), "F": round(F, 2), "T": round(T, 2)
+                        "spike": spike_idx, "R": round(R, 2), "F": round(F, 2), "T": round(T, 2),
+                        "A": round(A, 2), "E": round(E, 2)
                     })
 
                 # Batch update all player popularity indices in a single round-trip
                 if final_results:
-                    update_payload = [(r["pop"], r["spike"], r["R"], r["F"], r["T"], r["pid"]) for r in final_results]
+                    update_payload = [(r["pop"], r["spike"], r["R"], r["F"], r["T"], r["A"], r["E"], r["pid"]) for r in final_results]
                     cur.executemany("""
                         UPDATE player_seasons
-                        SET popularity_index = %s, spike_index = %s, r_rating = %s, f_platform = %s, t_success = %s
+                        SET popularity_index = %s, spike_index = %s, r_rating = %s, f_platform = %s, t_success = %s,
+                            a_awards = %s, e_exposure = %s
                         WHERE id = %s;
                     """, update_payload)
                 conn.commit()

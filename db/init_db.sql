@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS team_seasons (
     trajectory_multiplier DOUBLE PRECISION,
     pythagorean_wins DOUBLE PRECISION,
     pace_production DOUBLE PRECISION,
+    s_playoff DOUBLE PRECISION,
     UNIQUE (team_id, season)
 );
 
@@ -88,6 +89,9 @@ CREATE TABLE IF NOT EXISTS player_seasons (
     r_rating DOUBLE PRECISION,
     f_platform DOUBLE PRECISION,
     t_success DOUBLE PRECISION,
+    s_playoff DOUBLE PRECISION,
+    a_awards DOUBLE PRECISION,
+    e_exposure DOUBLE PRECISION,
     UNIQUE (player_id, season)
 );
 
