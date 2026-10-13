@@ -26,7 +26,7 @@ Project Mu/
 │                              #   and the previous week's League Schedule (week picked via the held-L2 dropdown) → captures/<YYYY-MM-DD_HHMM>/{stats,team_stats,schedule}/
 ├── extract.py                 # Gemini vision pass (gemini-3.8-flash, JSON schema) over a captures/ run → stats_<category>.csv (wide tables: left/right pages paired by number, rows joined by position since NAME/POS scroll away; shared columns cross-checked), team_conversions/team_redzoneefficiency/team_penalties.csv, schedule.csv (GEMINI_API_KEY, env or root .env)
 ├── README.md                  # Setup & weekly usage for madden_capture.py / extract.py (permissions, App Nap, safety rules)
-├── captures/                  # madden_capture.py output (screenshots, scope_debug/ + week_debug/ L2-dropdown frames, stop_debug/ frame that caused a stop, extracted CSVs); gitignored
+├── captures/                  # madden_capture.py output (screenshots, scope_debug/ + week_debug/ L2-dropdown frames, stop_debug/ frame that caused a stop, extracted CSVs; <date>_explore/ holds --step mapping frames); gitignored
 ├── server/                    # FastAPI backend
 │   └── api.py                 #   REST API + /static mount (serves ../static)
 ├── pipeline/                  # Video ingestion & OCR extraction (Section 6, step 1)
@@ -121,7 +121,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Project E for scheduled games | `python3 -m engines.excitement_projection --season 2035` (`--backtest` scores accuracy, no writes) |
 | Preseason ADP | `python3 -m engines.fantasy_adp_engine` |
 | Weekly fantasy projections | `python3 -m engines.fantasy_projection_engine --season 2035 --week 18` (no `--week`: league_state current week; `--all-weeks` backfills 2–18; `--backtest` scores accuracy, no writes) |
-| Capture Season Stats, Team Stats (conversions, red zone, penalties) + last week's schedule over Remote Play | `python3 madden_capture.py` (chiaki-ng streaming, anywhere in franchise menus). `--only stats\|team\|schedule`, `--week "SEASON WEEK 12"`, `--test` (read screen only), `--scope-only`, `--probe-l2`, `--all-rows`, `--foreground` |
+| Capture Season Stats, Team Stats (conversions, red zone, penalties) + last week's schedule over Remote Play | `python3 madden_capture.py` (chiaki-ng streaming, anywhere in franchise menus). `--only stats\|team\|schedule`, `--week "SEASON WEEK 12"`, `--test` (read screen only), `--scope-only`, `--probe-l2`, `--all-rows`, `--foreground`. Mapping tool: `--step <key>\|none` presses one key and saves the screenshot, OCR text (with boxes and brightness) and `classify()` result to `captures/<date>_explore/explore/NN_<key>.png/.txt`; `--wait` sets the settle time; Cross needs `--allow-cross` and is always refused on a screen showing ADVANCE WEEK or FORCE WIN |
 | Screenshots → CSVs | `python3 extract.py captures/<run>` (Gemini, 8 parallel requests on table-cropped half-size images; `GEMINI_API_KEY` from env or root `.env`; `MADDEN_EXTRACT_MODEL` / `MADDEN_EXTRACT_WORKERS` override model and parallelism) |
 | Headshot post-processing | `python3 -m headshots.process_headshots` |
 | Dashboards | `streamlit run dashboards/admin_dashboard.py` |

@@ -19,6 +19,7 @@ Usage
   python3 madden_capture.py               # full run: stats + schedule
   python3 madden_capture.py --only stats  # or: --only team, --only schedule
   python3 madden_capture.py --week "SEASON WEEK 12"   # capture a specific schedule week
+  python3 madden_capture.py --step down   # mapping: press one key, save screenshot + OCR (--step none: capture only)
 
 Key map (chiaki-ng "Keyboard as controller"):
   Cross=S  Circle=D  L1=2  R1=3  L2=1  R2=4  D-pad=arrow keys  Escape=Esc
@@ -991,6 +992,37 @@ def probe_l2(out):
     log(f"Probe done. Files in {folder}")
 
 
+EXPLORE_DIR = os.path.join(OUT_ROOT, f"{datetime.date.today():%Y-%m-%d}_explore", "explore")
+DANGER_TEXT = ("ADVANCE WEEK", "FORCE WIN")
+
+
+def step(key, wait=1.5, allow_cross=False):
+    """Mapping tool, not part of any capture: press one key (or none), wait, save the
+    screenshot and its OCR text as explore/NN_<key>.png/.txt and print what classify()
+    makes of it. All of one day's steps share one folder, numbered in order."""
+    if key == "cross":
+        f, s = look()
+        if any(d in f.text for d in DANGER_TEXT):
+            raise Abort(f"Refusing Cross: the screen shows {[d for d in DANGER_TEXT if d in f.text]}")
+        if not allow_cross:
+            raise Abort("Cross can trigger actions on an unmapped screen; add --allow-cross once JR has OK'd it")
+    if key != "none":
+        log(f"Pressing {key}")
+        press(key, wait=wait)
+    os.makedirs(EXPLORE_DIR, exist_ok=True)
+    n = len([x for x in os.listdir(EXPLORE_DIR) if x.endswith(".png")])
+    base = os.path.join(EXPLORE_DIR, f"{n:02d}_{key}")
+    f, s = look()
+    subprocess.run(["cp", f.path, base + ".png"])
+    with open(base + ".txt", "w") as fh:
+        fh.write(f"screen: {s}\n")
+        for t, (x0, y0, x1, y1) in f.items:
+            fh.write(f"{t}\t{x0:.0f},{y0:.0f},{x1:.0f},{y1:.0f}\t{brightness(f.path, (x0, y0, x1, y1)):.0f}\n")
+    print("Screen:", s)
+    print("Saved:", base + ".png")
+    print("Text:", f.text[:600])
+
+
 def main():
     global WIN_ID, PID, FOREGROUND
     ap = argparse.ArgumentParser()
@@ -1001,6 +1033,10 @@ def main():
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
     ap.add_argument("--all-rows", action="store_true", help="don't stop stats lists at all-zero rows")
     ap.add_argument("--foreground", action="store_true", help="bring chiaki-ng to front and send global keys")
+    ap.add_argument("--step", choices=sorted(KEYCODES) + ["none"],
+                    help="mapping tool: press one key (none = just capture), save screenshot + OCR to explore/")
+    ap.add_argument("--wait", type=float, default=1.5, help="--step: seconds to wait after the press")
+    ap.add_argument("--allow-cross", action="store_true", help="--step cross: JR has OK'd Cross on this screen")
     a = ap.parse_args()
 
     WIN_ID, PID = find_window()
@@ -1024,6 +1060,9 @@ def main():
             if s == "SCHED_LIST":
                 print("Week:", week_label(f))
             print("Text:", f.text[:600])
+            return
+        if a.step:
+            step(a.step, a.wait, a.allow_cross)
             return
         if a.probe_l2:
             probe_l2(out)
