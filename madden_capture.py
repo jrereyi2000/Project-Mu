@@ -992,7 +992,7 @@ VALUE_LABELS = ("AGE", "HT", "WT", "EXP", "MORALE")
 POSITIONS = {"QB", "HB", "FB", "WR", "TE", "LT", "LG", "C", "RG", "RT", "LEDG", "REDG", "DT",
              "MIKE", "WILL", "SAM", "CB", "FS", "SS", "K", "P", "LS"}
 # value columns: left edge as a fraction of the card crop's width (measured Oct 13)
-CARD_CROP_W = 726
+CARD_CROP_W, CARD_CROP_H = 726, 420
 VALUE_COLUMNS = {"age": 0.060, "height": 0.245, "weight": 0.427, "experience": 0.613}
 # player roles seen on cards (Oct 13); used only when OCR drops the | before the role
 ROLES = ["FRANCHISE QB", "ELITE PLAYER", "IMPACT STARTER", "RISING STAR", "BORDERLINE STARTER",
@@ -1038,6 +1038,24 @@ def ocr_cg(cg):
     return out
 
 
+def cg_to_pil(cg):
+    from Foundation import NSMutableData
+    data = NSMutableData.data()
+    dest = Quartz.CGImageDestinationCreateWithData(data, "public.png", 1, None)
+    Quartz.CGImageDestinationAddImage(dest, cg, None)
+    Quartz.CGImageDestinationFinalize(dest)
+    import io
+    return Image.open(io.BytesIO(bytes(data))).convert("L")
+
+
+def card_changed(cg_a, cg_b):
+    """True when two card crops show different cards (same test as same_table)."""
+    from PIL import ImageChops
+    a, b = cg_to_pil(cg_a).resize((360, 210)), cg_to_pil(cg_b).resize((360, 210))
+    d = ImageChops.difference(a, b).point(lambda v: 255 if v > 40 else 0)
+    return d.histogram()[255] / (d.width * d.height) > 0.01
+
+
 def save_cg(cg, path):
     dest = Quartz.CGImageDestinationCreateWithURL(NSURL.fileURLWithPath_(path), "public.png", 1, None)
     Quartz.CGImageDestinationAddImage(dest, cg, None)
@@ -1064,12 +1082,16 @@ def parse_card(items):
     """Card OCR items (card-crop pixels) -> dict of CARD_FIELDS (None where unread)."""
     c = dict.fromkeys(CARD_FIELDS)
     lines = _rows(items)
-    num_i = next((i for i, l in enumerate(lines) if re.match(r"^#\s?\d", l[0][0])), None)
+    # The number line ("#64 DT | Nose Tackle | Elite Player") sits at a fixed height on the
+    # card (centre ~43% of the crop), so find it by position: its digits can be misread
+    # ("#0" as "#O"), and the name above it must still be found.
+    num_i = next((i for i, l in enumerate(lines)
+                  if 0.37 * CARD_CROP_H < (l[0][1][1] + l[0][1][3]) / 2 < 0.50 * CARD_CROP_H), None)
     if num_i is not None:
         text = " | ".join(t for t, _ in lines[num_i])
-        m = re.match(r"^#\s?(\d{1,2})\s*([A-Z@0]{1,4})(?![A-Z])(.*)$", text)
+        m = re.match(r"^#\s?([\dOIL]{1,2})\s*([A-Z@0]{1,4})(?![A-Z])(.*)$", text)
         if m:
-            c["number"] = int(m.group(1))
+            c["number"] = int(m.group(1).translate(str.maketrans("OIL", "011")))
             pos = m.group(2).replace("@", "Q").replace("0", "O")      # "#10 @B" = QB
             c["position"] = pos if pos in POSITIONS else None
             # separators come back as |, I, 1 or l ("#54 SAM 1 PASS COVERAGE | DEPTH FILLER")
@@ -1187,8 +1209,20 @@ def roster_dropdown_selected(f):
 
 
 def roster_team(f):
-    team, view = chip_labels(f)
-    return team
+    """The team chip (left of R2). OCR sometimes misses the R2 icon chip_labels() anchors on,
+    so fall back to the chip's position: top-left, ~18% down (mapped Oct 13)."""
+    for attempt in range(3):
+        team, view = chip_labels(f)
+        if team:
+            return team
+        W, H = f.size
+        chip = [(b[0], t) for t, b in f.items
+                if b[0] < W * 0.15 and H * 0.15 < b[1] < H * 0.21 and re.match(r"^[A-Z0-9 ]{3,}$", t)]
+        if chip:
+            return min(chip)[1]
+        time.sleep(0.5)
+        f = Frame()
+    return None
 
 
 def next_roster_team(debug_dir):
@@ -1272,9 +1306,13 @@ def capture_team_roster(out, index, team, writer):
     folder = os.path.join(out, "roster", f"{index:02d}_{norm(team).lower()}")
     os.makedirs(folder, exist_ok=True)
     roster_to_top()
-    prev, row, pages, skips = None, 0, 0, 0
+    prev, prev_card_cg, row, pages, skips = None, None, 0, 0, 0
     while True:
         card, cg = read_card(card_key(prev))
+        if card is None and prev is not None and card_changed(crop_cg(cg, CARD_BOX), prev_card_cg):
+            # a new card that OCR can't settle on: record it as read, never press blindly
+            card = parse_card(ocr_cg(crop_cg(cg, CARD_BOX)))
+            card["_unreadable"] = True
         if card is None and prev is not None:
             for attempt in range(3):              # dropped press, or the end of the list
                 press("down", hold=0.1, wait=0.25)
@@ -1289,6 +1327,8 @@ def capture_team_roster(out, index, team, writer):
         lines = _rows(ocr_cg(crop_cg(cg, LIST_BOX)))
         list_row = list_row_for(lines, card, W, W * LIST_BOX[0])
         flags = card_flags(card)
+        if card.pop("_unreadable", False):
+            flags.append("unreadable_card")
         # A press that arrives late (chiaki lag) plus the retry press moves two rows. The new
         # player must be on the line right under the previous one; if not, step back.
         prev_row = list_row_for(lines, prev, W, W * LIST_BOX[0])
@@ -1317,7 +1357,7 @@ def capture_team_roster(out, index, team, writer):
             save_cg(cg, os.path.join(folder, f"list_{pages:02d}.png"))
         writer.writerow([team, row] + [card[k] if card[k] is not None else "" for k in CARD_FIELDS]
                         + [";".join(flags), os.path.relpath(card_png, out)])
-        prev, row = card, row + 1
+        prev, prev_card_cg, row = card, crop_cg(cg, CARD_BOX), row + 1
         press("down", hold=0.1, wait=0.15)
     # the last page: the list's final 14 rows (highlight on the bottom row)
     save_cg(grab(), os.path.join(folder, f"list_{pages + 1:02d}.png"))

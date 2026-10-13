@@ -102,6 +102,14 @@ class CardParseTest(unittest.TestCase):
         c = mc.parse_card(DAVIS)
         self.assertEqual((c["height"], c["experience"], c["role"]), ("6'4\"", 3, "Elite Player"))
 
+    def test_number_zero_read_as_letter_o(self):
+        items = [("CHUCK", (44, 54, 120, 84)), ("BYRNE", (45, 84, 225, 158)),
+                 ("#O LS | POWER | BORDERLINE STARTER", (42, 162, 482, 194)), ("NORMAL", (118, 241, 210, 265)),
+                 ("AGE", (42, 312, 90, 342))]
+        c = mc.parse_card(items)
+        self.assertEqual((c["first"], c["last"], c["number"], c["position"], c["archetype"]),
+                         ("Chuck", "Byrne", 0, "LS", "Power"))
+
     def test_height_checks(self):
         base = {k: 1 for k in mc.CARD_FIELDS}
         base.update(age=24, weight=200, experience=2)
