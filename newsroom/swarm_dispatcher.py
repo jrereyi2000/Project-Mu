@@ -8,6 +8,13 @@ import collections
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
+from newsroom.power_rankings import (
+    fix_prompt as power_rankings_fix_prompt,
+    load_team_index,
+    parse_power_rankings,
+    previous_rankings_directive,
+    store_power_rankings,
+)
 from engines.gotw_engine import display_excitement
 from newsroom.db_tools import (
     get_game_box_score,
@@ -893,6 +900,15 @@ EDITORIAL DESK SUBJECT ASSIGNMENT (MANDATORY — SUPERSEDES ANY SUBJECT-SELECTIO
 - The Editorial Desk has already chosen this subject. Do not substitute a different team or game; any instruction to select your own team, game, or franchise applies only to choosing angles within this subject.
 """
 
+        power_rankings_directive = ""
+        if at_id == "POWER_RANKINGS":
+            try:
+                with psycopg.connect(self.db.db_conn_info) as conn:
+                    with conn.cursor() as cur:
+                        power_rankings_directive = previous_rankings_directive(cur, season, week)
+            except Exception as e:
+                print(f"⚠️  Could not load previous Power Rankings: {e}")
+
         task_instruction = f"""ASSIGNMENT BRIEF:
 {json.dumps(brief, indent=2)}
 
@@ -905,6 +921,7 @@ If you need specific stats, use your database tools before producing your final 
 {article_type_directive}
 {curatorial_directive}
 {slot_target_directive}
+{power_rankings_directive}
 {national_writer_guidelines}
 {structure_directive}
 {natural_language_rule}"""
@@ -1033,6 +1050,19 @@ If you need specific stats, use your database tools before producing your final 
                             if text_chunks:
                                 generated_text = "\n".join(text_chunks)
 
+                    # Power Rankings must name all 32 teams exactly once to be stored; give the writer one rewrite
+                    if at_id == "POWER_RANKINGS" and generated_text:
+                        _, pr_errors = parse_power_rankings(generated_text, self._power_rankings_team_index())
+                        if pr_errors:
+                            print("\n⚠️ [POWER RANKINGS FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(pr_errors))
+                            retry = chat.send_message(power_rankings_fix_prompt(pr_errors))
+                            retry_text = retry.text
+                            if not retry_text and hasattr(retry, "candidates") and retry.candidates:
+                                parts = retry.candidates[0].content.parts
+                                retry_text = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+                            if retry_text:
+                                generated_text = retry_text
+
                     total_tool_calls = sum(tool_call_counts.values())
                     print("\n📊 --- RESEARCH TOOL USAGE SUMMARY ---")
                     print(f"Total Database Tool Calls: {total_tool_calls} (Cap: 50)")
@@ -1140,6 +1170,14 @@ If you need specific stats, use your database tools before producing your final 
                             t_cnt = len(tag_res.get("teams", []))
                             p_cnt = len(tag_res.get("players", []))
                             print(f"🏷️  [ENTITY TAGGING] Article #{article_id} tagged with {t_cnt} teams and {p_cnt} players.")
+
+                        if article_id and ctype == "ARTICLE" and at_id == "POWER_RANKINGS":
+                            entries, pr_errors = parse_power_rankings(generated_text, load_team_index(cur))
+                            if pr_errors:
+                                print(f"⚠️  [POWER RANKINGS NOT STORED] Article #{article_id}: " + " | ".join(pr_errors))
+                            else:
+                                n = store_power_rankings(cur, season, week, article_id, compiled_prompt["archetype"], entries)
+                                print(f"📊 [POWER RANKINGS STORED] Season {season} Week {week}: {n} teams from article #{article_id}.")
                     conn.commit()
             except Exception as e:
                 print(f"Failed to record news_feed entry for {display}: {e}")
@@ -1152,6 +1190,11 @@ If you need specific stats, use your database tools before producing your final 
             "slot": assigned_slot,
             "article_type": at_id
         }
+
+    def _power_rankings_team_index(self) -> list:
+        with psycopg.connect(self.db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                return load_team_index(cur)
 
     def get_agent_record(self, archetype: str) -> tuple:
         """Retrieves or synthesizes the agent memory record for a writer archetype."""

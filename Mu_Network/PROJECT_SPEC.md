@@ -144,7 +144,7 @@ Acts as the editorial front page and primary entry point into league coverage.
 - Featured Game of the Week story with hero photography.
 - Latest Analysis story grid.
 - Trending Local Coverage sidebar.
-- Power Index card for the current league week.
+- Power Rankings card: the top 3 teams (rank, logo, record) from the latest stored week (`GET /api/power_rankings`), or "Published with this week's column" when none is stored.
 
 #### Interactions
 
@@ -394,19 +394,21 @@ The season type selection updates the control but does not currently change the 
 
 #### Purpose
 
-Ranks all 32 teams with movement, prior result, and editorial analysis.
+Shows the stored weekly Power Rankings (`GET /api/power_rankings`), parsed from that week's Power Rankings column: all 32 teams with rank, record, last week's rank and movement, the writer's kicker and blurb.
 
 #### Controls
 
-- Week selectors for Weeks 14–17.
-- A 32-team jump grid.
+- One button per published week (`available_weeks`); the latest is shown by default.
+- A 32-team jump grid, in ranking order.
 
 #### Behavior
 
-- Selecting a week updates week labels, previous-week result labels, and generated matchup context.
+- The masthead subtitle is the column's headline, and the list header credits the writer.
+- Movement shows ↑/↓ N, "—" for no change, or "NEW" when there is no earlier stored week.
+- "Record entering Week N" is the W-L snapshot stored with the ranking.
+- With no stored rankings, the page shows an empty state instead of a list.
 - Selecting a team in the jump grid smoothly scrolls to that team’s ranking entry.
 - Team headings open team pages.
-- Ranking order is based on simulated records and team name; it does not change by selected week.
 
 ### 5.11 Long-Form Article
 

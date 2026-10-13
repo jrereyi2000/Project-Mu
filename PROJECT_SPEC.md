@@ -44,6 +44,7 @@ Project Mu/
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
 │   ├── slot_targets.py        #   Editorial Matrix slot targeting (primer games, exits, eliminations)
+│   ├── power_rankings.py      #   Parse/validate/store the weekly POWER_RANKINGS article → power_rankings table
 │   ├── db_tools.py            #   ReAct research tools exposed to writer agents
 │   └── config/                #   agent_personas.json, article_types.json, article_structure_directives.json,
 │                              #   curatorial_autonomy_directives.json, playoff_overrides.json
@@ -53,7 +54,7 @@ Project Mu/
 │   ├── backup_db.sh, restore_db.sh   # pg_dump / restore via the madden-db Docker container
 │   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql,
 │   │                          #   2026_10_15_stored_index_components.sql, 2026_10_16_trajectory_and_efficiency.sql,
-│   │                          #   2026_10_17_playoff_clout_awards_exposure.sql (apply SQL ones via
+│   │                          #   2026_10_17_playoff_clout_awards_exposure.sql, 2026_10_18_power_rankings.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -255,6 +256,8 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
   - `id`, `season`, `week`, `team_id`, `content_type` ('ARTICLE' | 'TWEET'), `persona`, `article_type`, `slot`, `headline`, `excerpt`, `content`, `created_at`.
 - **`article_teams`**:
   - `id` (PK, int), `article_id` (FK to `news_feed(id)` ON DELETE CASCADE), `team_id` (FK to `teams(id)` ON DELETE CASCADE), `mention_type` (varchar: 'PRIMARY' | 'FEATURED' | 'MENTIONED'), `mention_count` (int), `created_at` (timestamp), `UNIQUE(article_id, team_id)`.
+- **`power_rankings`**:
+  - `id` (PK), `season`, `week` (the week published for, i.e. entering that week), `rank` (1–32), `team_id` (FK to `teams(id)` ON DELETE CASCADE), `previous_rank` (rank in the latest earlier stored week of the season; NULL if none), `movement` (`previous_rank − rank`, positive = up; NULL if none), `record` (W-L snapshot from `team_seasons` at store time), `kicker`, `blurb`, `article_id` (FK to `news_feed(id)` ON DELETE CASCADE), `persona`, `created_at`. `UNIQUE(season, week, team_id)` and `UNIQUE(season, week, rank)`. Written only by `newsroom/power_rankings.store_power_rankings` (see 7.6).
 - **`article_players`**:
   - `id` (PK, int), `article_id` (FK to `news_feed(id)` ON DELETE CASCADE), `player_id` (FK to `players(id)` ON DELETE CASCADE), `team_id` (FK to `teams(id)` ON DELETE SET NULL), `mention_type` (varchar: 'PRIMARY' | 'FEATURED' | 'MENTIONED'), `mention_count` (int), `created_at` (timestamp), `UNIQUE(article_id, player_id)`.
 
@@ -274,7 +277,8 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
   - Returns matchups for the week, records, kickoff times, home/away TWI (`home_twi`, `away_twi`), combined matchup `watchability`, and `excitement_index` on the 70–100 display scale. That is the final $E$ for completed games and the projection otherwise; `excitement_projected` is true for projections, and the value is null if a game hasn't been projected yet.
 - `GET /api/standings/{season}`:
   - Division and conference standings, wins, losses, win percentage, streak, points for/against, and last 5 games.
-- Power rankings have no dedicated endpoint. The weekly `POWER_RANKINGS` article is served through `GET /api/news/week/{week}` in the `slotted.standalone` slot. The `#rankings` page in `Mu_Network/src/App.tsx` (`PowerRankingsPage`) and the homepage "Power Index" card currently render hardcoded placeholder data.
+- `GET /api/power_rankings?season={season}&week={week}`:
+  - Stored weekly Power Rankings (7.6): `season`, `week`, `available_weeks`, the source `article` (`id`, `headline`, `excerpt`, `persona`, `created_at`), and `rankings` ordered 1–32 (`rank`, `previous_rank`, `movement`, `record`, `kicker`, `blurb`, `team_id`, `abbr`, `name`, `city`, `team_color`, `conference`, `division`). `season` defaults to the current season and `week` to its latest stored week; a week with no stored ranking returns an empty `rankings` list. The same article is also served by `GET /api/news/week/{week}` in `slotted.standalone`.
 
 ### 4.2 Team & Roster Hubs
 - `GET /api/team/{abbr}`: Team metadata, overall/offensive/defensive ratings, division rank, and team color.
@@ -329,7 +333,7 @@ Navigation uses a lightweight hash router (`window.location.hash`):
 - `#schedule`: Full interactive 18-week league schedule.
 - `#game-{id}`: Comprehensive game view with box scores, drive summaries, and scoring logs.
 - `#stats-team` & `#stats-player`: League statistical leaderboards.
-- `#standings` & `#rankings`: Division standings and power rankings.
+- `#standings` & `#rankings`: Division standings and power rankings. `PowerRankingsPage` reads `GET /api/power_rankings`: one button per stored week, each team's rank, logo, record, last-week rank and movement ("NEW" when there is no previous week), kicker and blurb, with an empty state when nothing is stored.
 - `#fantasy`: Mu Fantasy Analytics Command Center.
 - `#fantasy-rankings`: Weekly Fantasy Rankings board.
 - `#fantasy-ros`: Rest of Season Rankings board.
@@ -357,7 +361,7 @@ Navigation uses a lightweight hash router (`window.location.hash`):
 5. **Team Hub Beat Coverage & Article Feed (`TeamPage`)**:
    - Queries `GET /api/team/{abbr}/news?season={season}` to populate the team spotlight hero card and 4-story beat feed with real articles tagged for the franchise (`article_teams`), with seamless fallback to positional template beats.
 6. **Live Newsroom Front Page (`App.tsx`)**:
-   - Fetches `GET /api/news/week/{week}` to bind the Hero Slot story, secondary analysis cards, feature trios, and trending local coverage primers directly to autonomous newsroom outputs. The `slotted.standalone` Power Rankings article is not rendered yet.
+   - Fetches `GET /api/news/week/{week}` to bind the Hero Slot story, secondary analysis cards, feature trios, and trending local coverage primers directly to autonomous newsroom outputs. The sidebar Power Rankings card shows the top 3 from `GET /api/power_rankings` (latest stored week), or a placeholder when none is stored.
 7. **Team & League Logos**:
    - Pulls high-resolution official SVG/PNG logos from ESPN's global CDN (`https://a.espncdn.com/i/teamlogos/nfl/500/${abbr}.png`), normalized across all 32 franchises.
 
@@ -777,3 +781,10 @@ To support seamless frontend newsroom consumption, longform editorial content is
      - Includes resolved author objects (`display_name`, `handle`, `archetype`) and attached entity tags (`tagged_teams`, `tagged_players`).
    - **`GET /api/news/article/{article_id}`**:
      - Returns full article text, headline, teaser excerpt, assigned slot, author metadata, and all tagged entities for reading view rendering.
+
+### 7.6 Stored Weekly Power Rankings (`newsroom/power_rankings.py`)
+The Standalone `POWER_RANKINGS` article is the source of the stored weekly ranking:
+1. **Continuity in the prompt:** `compile_agent_prompt` adds a "POWER RANKINGS CONTINUITY" block, which lists the latest earlier stored week's order (or says none has been published, so every team is "Previous: — | New") and restates the header format `## [Rank]. [City] [Team] ([W-L]) (Previous: N | Change: ±N)`. This means movement indicators come from real prior rankings.
+2. **Parsing:** each numbered header that names a team (resolved by its unique nickname, or abbreviation) or carries a W-L record is a team entry. Other numbered headers (e.g. "## 2. The Drop-Off") are treated as section breaks. The bold lead-in is the `kicker`; the first paragraph after it is the `blurb` (a horizontal rule or blank line ends it, so the walk-off isn't included).
+3. **Validation:** the article must rank all 32 teams exactly once with ranks 1–32. In a live run, a failing article gets one rewrite in the same chat, with the specific errors (missing/duplicate teams or ranks, unmatched headers).
+4. **Storage:** on save to `news_feed`, a valid article replaces that week's `power_rankings` rows. Only the order, kicker and blurb come from the text. `record` is snapshotted from `team_seasons`, and `previous_rank` / `movement` come from the stored previous week, not the writer's indicators. An article that still fails validation is saved as an article but no ranking is stored (logged as `POWER RANKINGS NOT STORED`).

@@ -208,13 +208,6 @@ const divisions: Record<string, string[]> = {
   "NFC West": ["ari", "lar", "sf", "sea"],
 };
 
-const teamRecords = [
-  "10–5", "8–7", "12–3", "11–4", "6–9", "7–8", "9–6", "5–10",
-  "10–5", "9–6", "12–3", "10–5", "9–6", "7–8", "6–9", "11–4",
-  "7–8", "8–7", "9–6", "10–5", "11–4", "6–9", "8–7", "5–10",
-  "7–8", "12–3", "9–6", "11–4", "8–7", "10–5", "6–9", "7–8",
-];
-
 const playerNames = [
   "Marcus Reed", "Devin Carter", "Jalen Brooks", "Tyson Mitchell", "Andre Hayes",
   "Caleb Foster", "Malik Robinson", "Darius Walker", "Trey Coleman", "Nolan Price",
@@ -1750,20 +1743,55 @@ function StandingsPage() {
   );
 }
 
+type PowerRankingEntry = {
+  rank: number;
+  previous_rank: number | null;
+  movement: number | null;
+  record: string | null;
+  kicker: string | null;
+  blurb: string | null;
+  team_id: number;
+  abbr: string;
+  name: string;
+  city: string;
+  team_color: string | null;
+  division: string | null;
+};
+
+type PowerRankingsResponse = {
+  season: number;
+  week: number | null;
+  available_weeks: number[];
+  article: { id: number; headline: string; excerpt: string | null; persona: string | null } | null;
+  rankings: PowerRankingEntry[];
+};
+
+const writerName = (persona: string | null | undefined) =>
+  (persona || "").toLowerCase().split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
+function usePowerRankings(week?: number | null) {
+  const systemStatus = useContext(SystemContext);
+  const [data, setData] = useState<PowerRankingsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const weekParam = week ? `&week=${week}` : "";
+    fetch(`http://localhost:8000/api/power_rankings?season=${systemStatus.season}${weekParam}`)
+      .then((res) => res.json())
+      .then((json) => setData(json))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [systemStatus.season, week]);
+
+  return { data, loading };
+}
+
 function PowerRankingsPage() {
-  const [rankingWeek, setRankingWeek] = useState(17);
-  const rankedTeams = [...teams].sort((a, b) => {
-    const winsA = Number(teamRecords[teams.indexOf(a)].split("–")[0]);
-    const winsB = Number(teamRecords[teams.indexOf(b)].split("–")[0]);
-    return winsB - winsA || a.name.localeCompare(b.name);
-  });
-  const rankingNotes = [
-    "The complete profile is peaking at the right time. They are winning early downs, protecting the football and forcing opponents to chase the game.",
-    "A balanced offense and a deep rotation up front make this one of the league's hardest teams to prepare for on a short week.",
-    "The explosive plays get the attention, but situational execution is the reason this team remains firmly in the contender tier.",
-    "There are still questions at the margins, yet the underlying efficiency points to a team capable of winning in multiple ways.",
-    "The path forward depends on consistency. The ceiling is obvious when the protection, timing and coverage plan work together.",
-  ];
+  const [rankingWeek, setRankingWeek] = useState<number | null>(null);
+  const { data, loading } = usePowerRankings(rankingWeek);
+  const rankings = data?.rankings || [];
+  const shownWeek = data?.week ?? rankingWeek;
 
   return (
     <main className="rankings-page">
@@ -1771,63 +1799,73 @@ function PowerRankingsPage() {
         <div>
           <span>GRIDIRON POWER INDEX</span>
           <h1>Power Rankings</h1>
-          <p>Every team, every week—ranked by form, underlying performance and postseason outlook.</p>
+          <p>{data?.article?.headline || "Every team, every week—ranked by form, underlying performance and postseason outlook."}</p>
         </div>
       </section>
 
       <section className="rankings-navigation">
         <div className="rankings-week-nav">
-          <span>Previous rankings</span>
-          {[14, 15, 16, 17].map((week) => (
-            <button className={rankingWeek === week ? "active" : ""} onClick={() => setRankingWeek(week)} key={week}>Week {week}</button>
+          <span>{(data?.available_weeks.length || 0) > 0 ? "Published rankings" : "No rankings published yet"}</span>
+          {(data?.available_weeks || []).map((week) => (
+            <button className={shownWeek === week ? "active" : ""} onClick={() => setRankingWeek(week)} key={week}>Week {week}</button>
           ))}
         </div>
-        <div className="rankings-jump">
-          <span>Jump to a team</span>
-          <div>
-            {teams.map((team) => (
-              <button onClick={() => document.getElementById(`rank-${team.abbr}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} key={team.abbr}>
-                <img src={logo(team.abbr)} alt="" />{team.abbr.toUpperCase()}
-              </button>
-            ))}
+        {rankings.length > 0 && (
+          <div className="rankings-jump">
+            <span>Jump to a team</span>
+            <div>
+              {rankings.map((team) => (
+                <button onClick={() => document.getElementById(`rank-${team.abbr.toLowerCase()}`)?.scrollIntoView({ behavior: "smooth", block: "start" })} key={team.abbr}>
+                  <img src={logo(team.abbr)} alt="" />{team.abbr}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="rankings-list">
         <div className="rankings-list-head">
-          <span>WEEK {rankingWeek}</span>
+          <span>{shownWeek ? `WEEK ${shownWeek}` : "POWER RANKINGS"}</span>
           <strong>THE FULL 32</strong>
-          <small>Updated Monday · 9:00 AM ET</small>
+          <small>{data?.article?.persona ? `By ${writerName(data.article.persona)}` : ""}</small>
         </div>
-        {rankedTeams.map((team, index) => {
-          const teamIndex = teams.indexOf(team);
-          const opponent = teams[(teamIndex + rankingWeek + 3) % teams.length];
-          const previousRank = Math.max(1, Math.min(32, index + 1 + ((teamIndex % 5) - 2)));
-          const movement = previousRank - (index + 1);
+        {loading && <article className="ranking-entry"><div className="ranking-copy"><p>Loading rankings…</p></div></article>}
+        {!loading && rankings.length === 0 && (
+          <article className="ranking-entry">
+            <div className="ranking-copy">
+              <h3>No Power Rankings for this week yet</h3>
+              <p>Rankings appear here once the weekly Power Rankings column is published with all 32 teams.</p>
+            </div>
+          </article>
+        )}
+        {!loading && rankings.map((team) => {
+          const abbr = team.abbr.toLowerCase();
+          const fullName = `${team.city} ${team.name}`;
+          const movement = team.movement;
           return (
-            <article className="ranking-entry" id={`rank-${team.abbr}`} key={team.abbr}>
-              <div className="ranking-number">{String(index + 1).padStart(2, "0")}</div>
+            <article className="ranking-entry" id={`rank-${abbr}`} key={team.team_id} style={team.team_color ? ({ "--team-color": team.team_color } as CSSProperties) : undefined}>
+              <div className="ranking-number">{String(team.rank).padStart(2, "0")}</div>
               <div className="ranking-team-lockup">
-                <img src={logo(team.abbr)} alt={`${team.name} logo`} />
+                <img src={logo(team.abbr)} alt={`${fullName} logo`} />
                 <div>
-                  <a href={`#team-${team.abbr}`}><h2>{team.name}</h2></a>
-                  <span>{teamRecords[teamIndex]} · {getDivision(team.abbr)}</span>
+                  <a href={`#team-${abbr}`}><h2>{fullName}</h2></a>
+                  <span>{team.record || "—"} · {team.division || getDivision(abbr)}</span>
                 </div>
-                <div className={`ranking-movement ${movement >= 0 ? "up" : "down"}`}>
+                <div className={`ranking-movement ${(movement ?? 0) >= 0 ? "up" : "down"}`}>
                   <small>LAST WEEK</small>
-                  <strong>{previousRank}</strong>
-                  <i>{movement === 0 ? "—" : movement > 0 ? `↑ ${movement}` : `↓ ${Math.abs(movement)}`}</i>
+                  <strong>{team.previous_rank ?? "—"}</strong>
+                  <i>{movement == null ? "NEW" : movement === 0 ? "—" : movement > 0 ? `↑ ${movement}` : `↓ ${Math.abs(movement)}`}</i>
                 </div>
               </div>
               <div className="ranking-result">
-                <span>WEEK {rankingWeek - 1} RESULT</span>
-                <strong>{teamIndex % 3 === 0 ? "L" : "W"} {24 + (teamIndex % 11)}–{17 + (teamIndex % 10)} vs {opponent.abbr.toUpperCase()}</strong>
+                <span>RECORD ENTERING WEEK {shownWeek}</span>
+                <strong>{team.record || "—"}</strong>
               </div>
               <div className="ranking-copy">
-                <h3>{index < 5 ? "Why they belong in the contender conversation" : index < 16 ? "The case for a late-season climb" : "What needs to change next"}</h3>
-                <p>{rankingNotes[index % rankingNotes.length]} For {team.name}, Week {rankingWeek} is another chance to prove the strongest parts of the roster can hold up when the game tightens in the fourth quarter.</p>
-                <small>Analysis by {index % 2 ? "Mina Kimes" : "Seth Walder"} · National Reporter</small>
+                {team.kicker && <h3>{team.kicker}</h3>}
+                <p>{team.blurb}</p>
+                {data?.article?.persona && <small>Analysis by {writerName(data.article.persona)} · National Reporter</small>}
               </div>
             </article>
           );
@@ -3971,6 +4009,7 @@ function App() {
   const [systemStatus, setSystemStatus] = useState({ season: 2035, week: 18, availableSeasons: [2035] });
   const [week, setWeek] = useState(18);
   const [newsData, setNewsData] = useState<any>(null);
+  const [powerRankings, setPowerRankings] = useState<PowerRankingsResponse | null>(null);
   const [route, setRoute] = useState(window.location.hash);
 
   useEffect(() => {
@@ -3985,6 +4024,11 @@ function App() {
         .then(r => r.json())
         .then(news => setNewsData(news))
         .catch(err => console.error("Error fetching news:", err));
+
+      fetch(`http://localhost:8000/api/power_rankings?season=${statusData.season}`)
+        .then(r => r.json())
+        .then(rankings => setPowerRankings(rankings))
+        .catch(err => console.error("Error fetching power rankings:", err));
     });
 
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -4254,12 +4298,13 @@ function App() {
               <a className="local-link" href="#social-teams">Explore all local markets <span>↗</span></a>
             </div>
             <div className="power-card">
-              <span>SIM ENGINE</span>
-              <h3>Week {systemStatus.week}<br />Power Index</h3>
+              <span>POWER RANKINGS</span>
+              <h3>{powerRankings?.week ? <>Week {powerRankings.week}<br />Top 3</> : <>Power<br />Rankings</>}</h3>
               <div className="power-teams">
-                <span><b>01</b><img src={logo("car")} alt="" />CAR<em>88.2</em></span>
-                <span><b>02</b><img src={logo("det")} alt="" />DET<em>63.3</em></span>
-                <span><b>03</b><img src={logo("ari")} alt="" />ARI<em>61.7</em></span>
+                {(powerRankings?.rankings || []).slice(0, 3).map((team) => (
+                  <span key={team.team_id}><b>{String(team.rank).padStart(2, "0")}</b><img src={logo(team.abbr)} alt="" />{team.abbr}<em>{team.record || ""}</em></span>
+                ))}
+                {!powerRankings?.rankings?.length && <span>Published with this week's column</span>}
               </div>
               <a href="#rankings">Full rankings →</a>
             </div>

@@ -438,6 +438,67 @@ def get_seasons():
             return seasons
 
 
+@app.get("/api/power_rankings")
+def get_power_rankings(season: Optional[int] = None, week: Optional[int] = None):
+    """Stored weekly Power Rankings (parsed from the POWER_RANKINGS article). Defaults to the current season's latest
+    ranked week. Returns an empty `rankings` list when the requested week has none."""
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            if season is None:
+                cur.execute("SELECT current_season FROM league_state LIMIT 1;")
+                state = cur.fetchone()
+                season = state['current_season'] if state else 2035
+
+            cur.execute("SELECT DISTINCT week FROM power_rankings WHERE season = %s ORDER BY week", (season,))
+            available_weeks = [r['week'] for r in cur.fetchall()]
+            if week is None:
+                week = available_weeks[-1] if available_weeks else None
+            empty = {"season": season, "week": week, "available_weeks": available_weeks, "article": None, "rankings": []}
+            if week is None or week not in available_weeks:
+                return empty
+
+            cur.execute("""
+                SELECT pr.rank, pr.previous_rank, pr.movement, pr.record, pr.kicker, pr.blurb, pr.persona, pr.article_id,
+                       t.id AS team_id, t.name, t.city, t.abbreviation, t.team_color, t.conference, t.division
+                FROM power_rankings pr
+                JOIN teams t ON t.id = pr.team_id
+                WHERE pr.season = %s AND pr.week = %s
+                ORDER BY pr.rank
+            """, (season, week))
+            rows = cur.fetchall()
+
+            article = None
+            if rows and rows[0]['article_id']:
+                cur.execute("SELECT id, headline, excerpt, persona, created_at FROM news_feed WHERE id = %s",
+                            (rows[0]['article_id'],))
+                a = cur.fetchone()
+                if a:
+                    article = {"id": a['id'], "headline": a['headline'], "excerpt": a['excerpt'],
+                               "persona": a['persona'],
+                               "created_at": a['created_at'].isoformat() if a['created_at'] else None}
+
+            return {
+                "season": season,
+                "week": week,
+                "available_weeks": available_weeks,
+                "article": article,
+                "rankings": [{
+                    "rank": r['rank'],
+                    "previous_rank": r['previous_rank'],
+                    "movement": r['movement'],
+                    "record": r['record'],
+                    "kicker": r['kicker'],
+                    "blurb": r['blurb'],
+                    "team_id": r['team_id'],
+                    "abbr": display_team_abbr(r['abbreviation']),
+                    "name": r['name'],
+                    "city": r['city'],
+                    "team_color": r['team_color'],
+                    "conference": r['conference'],
+                    "division": r['division'],
+                } for r in rows],
+            }
+
 @app.get("/api/standings/{season}")
 def get_standings(season: int):
     with db_pool.connection() as conn:
