@@ -14,6 +14,10 @@ Writes, inside that capture folder:
                          Passing/Defense/Kicking: each left page paired with its right page, rows joined by position)
   team_<tab>.csv         team_conversions, team_redzoneefficiency, team_penalties (32 teams each)
   schedule.csv           the captured week's games and results
+  roster_list.csv        --only roster list pages: TEAM + NAME, POS, AGE, OVR, MOR, ... (icons blank)
+  roster_cards.csv       roster/cards.csv (Apple Vision) with AGE/HT/WT/EXP re-read by Gemini from
+                         the card crops, 20 per request; vision_* keep Vision's values and
+                         vision_disagrees names the fields where the two differ
 """
 import csv, glob, io, os, sys, threading, time
 from collections import OrderedDict
@@ -61,6 +65,34 @@ bottom only if all its cells are readable. Keep numbers as displayed (commas, %,
 minus signs). Use "" for an empty cell. Each row must have one cell per column.
 Ignore the player/team banner at the top and the button hints at the bottom."""
 
+ROSTER_NOTE = """
+This is a team roster (the team is on the left chip, e.g. PANTHERS). The CONV and DEV columns
+show icons, not text: return "" for them. The small green arrow next to some OVR values is an
+icon too: return only the number."""
+
+# Card value strips (AGE, HT, WT, EXP from the roster player card), read in batches.
+CARD_STRIP = (0, 295, 560, 400)       # pixels in madden_capture.py's card crop (727x420)
+CARD_BATCH = 20
+
+
+class CardValues(BaseModel):
+    index: int
+    age: str
+    height: str
+    weight: str
+    experience: str
+
+
+class CardBatch(BaseModel):
+    cards: list[CardValues]
+
+
+CARD_PROMPT = """Each numbered strip is from a Madden NFL player card and shows AGE, HT (height),
+WT (weight) and EXP (years of experience) with their values below the labels. For every strip
+return its number (the white box on the left) and the four values exactly as shown, e.g.
+age "31", height "6'1\"", weight "257", experience "ROOKIE" or "9". Use "" for a value that is
+not visible. Return one entry per strip, in order."""
+
 _client = None
 _client_lock = threading.Lock()
 _cache = {}          # path -> parsed table, filled by prefetch()
@@ -74,12 +106,16 @@ def _get_client():
     return _client
 
 
-def prepare_image(path):
+TABLE_BOX = (0, 0.27, 1, 0.89)          # fractions of the screenshot
+ROSTER_LIST_BOX = (0, 0.10, 0.735, 0.85)  # roster table only: chips + rows, not the player card
+
+
+def prepare_image(path, box=TABLE_BOX):
     """Send Gemini only the table: crop off the player/team banner and the button hints, then
     halve the resolution (3024x1888 Retina captures stay sharp at half size). ~10x less upload."""
     img = Image.open(path).convert("RGB")
     W, H = img.size
-    img = img.crop((0, int(H * 0.27), W, int(H * 0.89)))
+    img = img.crop((int(W * box[0]), int(H * box[1]), int(W * box[2]), int(H * box[3])))
     if img.width > 1600:
         img = img.resize((img.width // 2, img.height // 2), Image.LANCZOS)
     buf = io.BytesIO()
@@ -87,8 +123,39 @@ def prepare_image(path):
     return types.Part.from_bytes(data=buf.getvalue(), mime_type="image/png")
 
 
+def _is_roster(path):
+    return os.path.basename(os.path.dirname(os.path.dirname(path))) == "roster"
+
+
+def _generate(contents, schema, label, retries=4):
+    client = _get_client()
+    for attempt in range(1, retries + 1):
+        try:
+            resp = client.models.generate_content(
+                model=MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                    temperature=0.1,
+                ),
+            )
+            return schema.model_validate_json(resp.text)
+        except Exception as e:
+            if attempt == retries:
+                raise RuntimeError(f"Gemini couldn't read {label}: {e}") from e
+            rate_limited = "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)
+            wait = (10 if rate_limited else 2) * attempt
+            print(f"  {label}: attempt {attempt} failed ({str(e)[:120]}); retrying in {wait}s")
+            time.sleep(wait)
+
+
 def _read_table_remote(path, retries=4):
     """One screenshot -> {"title", "columns", "rows": [[cell, ...], ...]}."""
+    if _is_roster(path):
+        t = _generate([PROMPT + ROSTER_NOTE, prepare_image(path, ROSTER_LIST_BOX)], Table,
+                      os.path.basename(path), retries)
+        return {"title": t.title, "columns": t.columns, "rows": [r.cells for r in t.rows]}
     client = _get_client()
     part = prepare_image(path)
     for attempt in range(1, retries + 1):
@@ -178,6 +245,96 @@ def merge_wide(left_paths, right_paths, label):
     return columns, list(rows)
 
 
+def card_sheet(paths, first_index):
+    """Stack card value strips into one image, each labelled with its index on the left."""
+    from PIL import ImageDraw, ImageFont
+    strips = [Image.open(p).convert("RGB").crop(CARD_STRIP) for p in paths]
+    w, h = CARD_STRIP[2] - CARD_STRIP[0], CARD_STRIP[3] - CARD_STRIP[1]
+    sheet = Image.new("RGB", (w + 110, h * len(strips)), "black")
+    draw = ImageDraw.Draw(sheet)
+    font = ImageFont.load_default(size=44)
+    for i, im in enumerate(strips):
+        y = i * h
+        draw.rectangle((6, y + 14, 100, y + h - 14), fill="white")
+        draw.text((53, y + h / 2), str(first_index + i), fill="black", font=font, anchor="mm")
+        sheet.paste(im, (110, y))
+    buf = io.BytesIO()
+    sheet.save(buf, format="PNG", optimize=True)
+    return types.Part.from_bytes(data=buf.getvalue(), mime_type="image/png")
+
+
+def read_card_values(root, cards):
+    """Gemini reads AGE/HT/WT/EXP for every card (Apple Vision drops the digit 1 and misreads
+    heights in this font). Returns {row index in cards: CardValues}."""
+    jobs = [cards[i:i + CARD_BATCH] for i in range(0, len(cards), CARD_BATCH)]
+    print(f"Reading {len(cards)} card value strips in {len(jobs)} Gemini requests...")
+    out = {}
+
+    def one(start):
+        batch = cards[start:start + CARD_BATCH]
+        part = card_sheet([os.path.join(root, c["card_png"]) for c in batch], start)
+        res = _generate([CARD_PROMPT, part], CardBatch, f"cards {start}-{start + len(batch) - 1}")
+        return start, len(batch), res
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for start, n, res in pool.map(one, range(0, len(cards), CARD_BATCH)):
+            got = {v.index: v for v in res.cards if start <= v.index < start + n}
+            if len(got) != n:
+                print(f"  WARNING cards {start}-{start + n - 1}: Gemini returned {len(got)} of {n}")
+            out.update(got)
+    return out
+
+
+def _card_value(key, v):
+    v = v.strip().replace("’", "'").replace("”", '"').replace("''", '"')
+    if key == "experience" and v.upper() == "ROOKIE":
+        return "0"
+    return v
+
+
+def extract_roster(root):
+    """roster/<NN>_<team>/list_*.png -> roster_list.csv (TEAM + the list columns), and
+    roster/cards.csv (Vision) + Gemini card values -> roster_cards.csv."""
+    team_dirs = sorted(glob.glob(os.path.join(root, "roster", "[0-9]*_*")))
+    if not team_dirs:
+        return
+    prefetch(sorted(p for d in team_dirs for p in glob.glob(os.path.join(d, "list_*.png"))))
+    columns, rows = None, []
+    for d in team_dirs:
+        team = os.path.basename(d).split("_", 1)[1].upper()
+        cols, trows = merge(glob.glob(os.path.join(d, "list_*.png")), team)
+        columns = columns or cols
+        rows += [[team] + list(r) for r in trows]
+    write_csv(os.path.join(root, "roster_list.csv"), ["TEAM"] + list(columns), rows)
+
+    with open(os.path.join(root, "roster", "cards.csv"), newline="") as fh:
+        cards = list(csv.DictReader(fh))
+    values = read_card_values(root, cards)
+    keys = ["age", "height", "weight", "experience"]
+    out_cols = list(cards[0].keys()) + ["vision_" + k for k in keys] + ["vision_disagrees"]
+    out = []
+    for i, c in enumerate(cards):
+        g = values.get(i)
+        disagree = []
+        row = dict(c)
+        for k in keys:
+            row["vision_" + k] = c[k]
+            gv = _card_value(k, getattr(g, k)) if g else ""
+            row[k] = gv
+            if c[k] and gv and c[k] != gv:
+                disagree.append(k)
+        if not g:
+            row["flags"] = ";".join(filter(None, [c["flags"], "no_gemini_values"]))
+        row["vision_disagrees"] = ";".join(disagree)
+        out.append(row)
+    with open(os.path.join(root, "roster_cards.csv"), "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=out_cols)
+        w.writeheader()
+        w.writerows(out)
+    n_dis = sum(1 for r in out if r["vision_disagrees"])
+    print(f"roster_cards.csv: {len(out)} cards; Gemini and Vision disagree on {n_dis}")
+
+
 def write_csv(path, columns, rows):
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
@@ -216,6 +373,8 @@ def main():
     if sched:
         cols, rows = merge(sched, "schedule")
         write_csv(os.path.join(root, "schedule.csv"), cols, rows)
+
+    extract_roster(root)
     print("Done.")
 
 
