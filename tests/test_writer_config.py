@@ -115,6 +115,14 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("HISTORICAL COMPARISONS (OPTIONAL)", src)
         self.assertNotIn("State the historical comparison explicitly", src)
 
+    def test_top_100_counts_down_and_ends_on_number_one(self):
+        info = self.article_types["NFL_TOP_100_HIERARCHY"]
+        text = " ".join(str(info[f]) for f in ("directive", "structure_directive", "example_prompt_hook")).lower()
+        self.assertIn("no. 100 to no. 1", text)
+        self.assertIn("end the article with the no. 1 entry", text)
+        self.assertNotIn("### the snub", text)
+        self.assertNotIn("dissect controversial snubs", text)
+
     def test_bayless_columns_use_his_article_persona(self):
         self.assertEqual(self.aliases.get("BAYLESS"), "SKIP_BAYLESS")
         self.assertIn("SKIP_BAYLESS", self.article_types["NATIONAL_OPINION_COLUMN"]["allowed_writers"])
