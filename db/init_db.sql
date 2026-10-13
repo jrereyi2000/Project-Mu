@@ -86,6 +86,20 @@ CREATE TABLE IF NOT EXISTS player_stats (
     rec_tds INT DEFAULT 0,
     fumb INT DEFAULT 0,
     position VARCHAR(10),
+    -- Full-PPR fantasy points, always derived from the box score above (read-only; never insert/update it).
+    fantasy_points NUMERIC(6, 2) GENERATED ALWAYS AS (
+        ROUND(
+              COALESCE(pass_yards, 0)    * 0.04
+            + COALESCE(pass_tds, 0)      * 4.0
+            - COALESCE(interceptions, 0) * 2.0
+            + COALESCE(rush_yards, 0)    * 0.1
+            + COALESCE(rush_tds, 0)      * 6.0
+            + COALESCE(receptions, 0)    * 1.0
+            + COALESCE(rec_yards, 0)     * 0.1
+            + COALESCE(rec_tds, 0)       * 6.0
+            - COALESCE(fumb, 0)          * 2.0
+        , 2)
+    ) STORED,
     UNIQUE(game_id, player_name, position)
 );
 
@@ -168,23 +182,13 @@ CREATE TABLE IF NOT EXISTS fantasy_projections (
 );
 
 CREATE OR REPLACE VIEW vw_fantasy_scores AS
-SELECT 
+SELECT
     ps.game_id,
     ps.player_name,
     ps.team_id,
     g.season,
     g.week,
-    ROUND(
-        (ps.pass_yards * 0.04) + 
-        (ps.pass_tds * 4.0) - 
-        (ps.interceptions * 2.0) + 
-        (ps.rush_yards * 0.1) + 
-        (ps.rush_tds * 6.0) + 
-        (ps.receptions * 1.0) + 
-        (ps.rec_yards * 0.1) + 
-        (ps.rec_tds * 6.0) - 
-        (ps.fumb * 2.0), 
-    2) AS ppr_score
+    ps.fantasy_points AS ppr_score  -- generated column on player_stats
 FROM player_stats ps
 JOIN games g ON ps.game_id = g.id;
 

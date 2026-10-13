@@ -1,5 +1,5 @@
 import psycopg
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from db.db_handler import DatabaseHandler
 
 class GotWEngine:
@@ -12,12 +12,12 @@ class GotWEngine:
             with conn.cursor() as cur:
                 # 1. Fetch Game Score & Overtime Status
                 cur.execute("""
-                    SELECT home_score, away_score, status 
+                    SELECT home_score, away_score, status, season
                     FROM games WHERE id = %s
                 """, (game_id,))
                 row = cur.fetchone()
                 if not row: return 0.0
-                home_score, away_score, status = row
+                home_score, away_score, status, season = row
                 
                 # 2. Fetch Team Stats (Production)
                 cur.execute("""
@@ -53,8 +53,8 @@ class GotWEngine:
                 home_team_id, away_team_id = teams_row
                 
                 cur.execute("""
-                    SELECT team_id, team_ovr FROM team_seasons WHERE season = 2035 AND team_id IN (%s, %s)
-                """, (home_team_id, away_team_id))
+                    SELECT team_id, team_ovr FROM team_seasons WHERE season = %s AND team_id IN (%s, %s)
+                """, (season, home_team_id, away_team_id))
                 team_ovrs = {r[0]: r[1] for r in cur.fetchall()}
                 home_ovr = team_ovrs.get(home_team_id, 80)
                 away_ovr = team_ovrs.get(away_team_id, 80)
@@ -126,17 +126,38 @@ class GotWEngine:
                 cur.execute("UPDATE games SET excitement_index = %s WHERE id = %s", (excitement_index, game_id))
                 return excitement_index
 
-def batch_evaluate():
+def batch_evaluate(season: Optional[int] = None, only_missing: bool = False, game_ids: Optional[List[int]] = None):
+    """Score completed games and persist games.excitement_index.
+
+    By default every completed game (optionally limited to one season) is re-scored. With
+    only_missing=True, only games that have no excitement_index yet are scored, plus any
+    explicitly listed game_ids (e.g. games whose box scores were just inserted or corrected).
+    Already-scored games are otherwise left alone so their E doesn't drift as ratings change.
+    """
     engine = GotWEngine()
     db = DatabaseHandler()
+    ids = [int(g) for g in (game_ids or [])]
     with psycopg.connect(db.db_conn_info) as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id FROM games WHERE status = 'COMPLETED'")
+            cur.execute("""
+                SELECT id FROM games
+                WHERE status = 'COMPLETED'
+                  AND (%(season)s::int IS NULL OR season = %(season)s)
+                  AND (NOT %(only_missing)s OR excitement_index IS NULL OR id = ANY(%(ids)s))
+                ORDER BY id
+            """, {"season": season, "only_missing": only_missing, "ids": ids})
             games = cur.fetchall()
             for g in games:
                 engine.evaluate_game(g[0])
         conn.commit()
-    print("✅ All completed games have been evaluated and logged!")
+    print(f"✅ Evaluated {len(games)} completed game(s) and logged their Excitement Index.")
+    return len(games)
 
 if __name__ == "__main__":
-    batch_evaluate()
+    import argparse
+    parser = argparse.ArgumentParser(description="Score the Game Excitement Index (E) for completed games.")
+    parser.add_argument("--season", type=int, help="Only consider games from this season")
+    parser.add_argument("--missing-only", action="store_true", help="Only score games without an excitement_index (plus --game-ids)")
+    parser.add_argument("--game-ids", type=int, nargs="+", help="Specific game ids to (re)score, e.g. after a box-score correction")
+    args = parser.parse_args()
+    batch_evaluate(season=args.season, only_missing=args.missing_only or bool(args.game_ids), game_ids=args.game_ids)
