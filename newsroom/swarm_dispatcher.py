@@ -1266,9 +1266,7 @@ If you need specific stats, use your database tools before producing your final 
                     return
                 team_index = load_team_index(cur)
                 if compiled_prompt.get("content_type") == "TWEET":
-                    cur.execute("""INSERT INTO agent_memory_entries (agent_id, season, week, article_id, kind, text, team_id)
-                                   VALUES (%s, %s, %s, %s, 'TAKE', %s, %s);""",
-                                (agent_id, season, week, article_id, text[:agent_memory.TAKE_MAX_CHARS], team_id))
+                    agent_memory.store_tweet_take(cur, agent_id, season, week, article_id, text, team_id)
                     conn.commit()
                     return
                 n_preds = 0

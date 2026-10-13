@@ -75,7 +75,7 @@ Project Mu/
 ├── tools/
 │   ├── debug/                 #   One-off frame/OCR debugging scripts
 │   ├── verify_session.sh      #   One-shot newsroom check: roundtable migration, unit tests, verify_newsroom.py, weekly dry run → verify_output/
-│   └── verify_newsroom.py     #   Read-only checks of the newsroom against the live DB (tool week cutoffs, brief, prompts, local portfolio, weekly news endpoint)
+│   └── verify_newsroom.py     #   Checks of the newsroom against the live DB (tool week cutoffs, brief, prompts, local portfolio, weekly news endpoint, agent memory); its one write test runs in a rolled-back transaction
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md
@@ -869,5 +869,5 @@ Every agent (national writers, beat reporters, pundits and fans) keeps its hand-
 
 **In the prompt:** under "PERSISTENT WORLDVIEW & MEMORIES", after the identity line, `build_memory_block` adds the latest summary, the 6 most recent takes ("stay consistent, or say plainly that you've changed your mind"), up to 3 earlier takes about the article's subject team, and the track record: the season's winner-picking record plus the 5 most recent graded picks with the final score, telling the writer to own misses in their own voice. Only memories from before the article's publication week are used, and graded results only count games from earlier weeks, so regenerating an old week can't see the future. If the memory tables don't exist yet, prompts simply have no memory block.
 
-**Failure handling:** memory recording runs after the article is committed and never affects it; failures are logged as `MEMORY NOT RECORDED`. Deleting `news_feed` rows cascades to their takes and predictions; `db/clear_news_feed.sh` also clears the summaries. Tests: `tests/test_agent_memory.py`; `tools/verify_newsroom.py` builds memory blocks for each kind of agent against the live database.
+**Failure handling:** memory recording runs after the article is committed and never affects it; failures are logged as `MEMORY NOT RECORDED`. Deleting `news_feed` rows cascades to their takes and predictions; `db/clear_news_feed.sh` also clears the summaries. Tests: `tests/test_agent_memory.py`; `tools/verify_newsroom.py` builds memory blocks for each kind of agent against the live database, and exercises the whole write path (parse and store a prediction, store takes and a tweet take, check the week cutoff, gather summary inputs, store a summary, read the graded block back) inside a transaction it rolls back.
 

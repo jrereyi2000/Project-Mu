@@ -172,9 +172,10 @@ def fetch_predictions(cur, agent_id: str, season: int, before_week: int, limit: 
         WHERE p.agent_id = %s AND p.season = %s AND p.week < %s
         ORDER BY p.week DESC, p.id DESC
     """, (before_week, before_week, agent_id, season, before_week))
+    pred_rows = cur.fetchall()   # read before _team_names reuses the cursor
     names = _team_names(cur)
     rows = []
-    for week, label, a, sa, b, sb, aa, ab in cur.fetchall():
+    for week, label, a, sa, b, sb, aa, ab in pred_rows:
         rows.append(grade_prediction({"week": week, "label": label, "score_a": sa, "score_b": sb, "actual_a": aa,
                                       "actual_b": ab, "name_a": names.get(a, str(a)), "name_b": names.get(b, str(b))}))
     return rows[:limit] if limit else rows
@@ -221,6 +222,47 @@ def store_takes(cur, agent_id: str, season: int, week: int, article_id: int, tak
     return n
 
 
+def store_tweet_take(cur, agent_id: str, season: int, week: int, article_id: int, text: str, team_id=None) -> None:
+    """A tweet is remembered as-is (no extraction call)."""
+    cur.execute("""INSERT INTO agent_memory_entries (agent_id, season, week, article_id, kind, text, team_id)
+                   VALUES (%s, %s, %s, %s, 'TAKE', %s, %s);""", (agent_id, season, week, article_id, (text or "")[:TAKE_MAX_CHARS], team_id))
+
+
+def agents_due_for_summary(cur, season: int, week: int) -> list:
+    """[(agent_id, last_through_week)] for agents with SUMMARY_MIN_NEW_TAKES+ takes after their last summary,
+    counting takes through week - 1."""
+    cur.execute("""
+        WITH last AS (SELECT agent_id, MAX(through_week) AS tw FROM agent_season_summaries
+                      WHERE season = %s AND through_week < %s GROUP BY agent_id)
+        SELECT e.agent_id, COALESCE(l.tw, 0)
+        FROM agent_memory_entries e LEFT JOIN last l ON l.agent_id = e.agent_id
+        WHERE e.season = %s AND e.week <= %s AND e.week > COALESCE(l.tw, 0) AND e.kind = 'TAKE'
+        GROUP BY e.agent_id, l.tw HAVING COUNT(*) >= %s;
+    """, (season, week, season, week - 1, SUMMARY_MIN_NEW_TAKES))
+    return cur.fetchall()
+
+
+def summary_inputs(cur, agent_id: str, season: int, week: int, last_tw: int) -> dict:
+    """Everything the summary prompt needs: name, identity, previous summary, new takes, newly graded picks."""
+    cur.execute("SELECT COALESCE(display_name, agent_id), COALESCE(persistent_memory, '') FROM agent_memories WHERE agent_id = %s;", (agent_id,))
+    name, identity = cur.fetchone() or (agent_id, "")
+    cur.execute("SELECT summary FROM agent_season_summaries WHERE agent_id = %s AND season = %s AND through_week = %s;",
+                (agent_id, season, last_tw))
+    prev = cur.fetchone()
+    cur.execute("""SELECT week, text FROM agent_memory_entries WHERE agent_id = %s AND season = %s
+                   AND week > %s AND week < %s AND kind = 'TAKE' ORDER BY week, id;""", (agent_id, season, last_tw, week))
+    takes = [{"week": w, "text": t} for w, t in cur.fetchall()]
+    preds = [p for p in fetch_predictions(cur, agent_id, season, week) if p["week"] > last_tw]
+    return {"name": name, "identity": identity, "previous": prev[0] if prev else "", "takes": takes, "predictions": preds}
+
+
+def store_summary(cur, agent_id: str, season: int, through_week: int, summary: str) -> None:
+    cur.execute("""INSERT INTO agent_season_summaries (agent_id, season, through_week, summary)
+                   VALUES (%s, %s, %s, %s)
+                   ON CONFLICT (agent_id, season, through_week) DO UPDATE SET summary = EXCLUDED.summary, updated_at = NOW();""",
+                (agent_id, season, through_week, summary[:1500]))
+
+
 def store_predictions(cur, agent_id: str, season: int, preview_week: int, article_id: int, preds: list) -> int:
     """Keeps picks that match a game scheduled in `preview_week`; returns how many were stored."""
     n = 0
@@ -262,36 +304,18 @@ def refresh_season_summaries(conn_info: str, api_key: str, model: str, season: i
     with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
         if not tables_exist(cur):
             return 0
-        cur.execute("""
-            WITH last AS (SELECT agent_id, MAX(through_week) AS tw FROM agent_season_summaries
-                          WHERE season = %s AND through_week < %s GROUP BY agent_id)
-            SELECT e.agent_id, COALESCE(l.tw, 0)
-            FROM agent_memory_entries e LEFT JOIN last l ON l.agent_id = e.agent_id
-            WHERE e.season = %s AND e.week <= %s AND e.week > COALESCE(l.tw, 0) AND e.kind = 'TAKE'
-            GROUP BY e.agent_id, l.tw HAVING COUNT(*) >= %s;
-        """, (season, week, season, through, SUMMARY_MIN_NEW_TAKES))
-        due = cur.fetchall()
+        due = agents_due_for_summary(cur, season, week)
 
     def work(item):
         agent_id, last_tw = item
         try:
             with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
-                cur.execute("SELECT COALESCE(display_name, agent_id), COALESCE(persistent_memory, '') FROM agent_memories WHERE agent_id = %s;", (agent_id,))
-                row = cur.fetchone() or (agent_id, "")
-                cur.execute("""SELECT summary FROM agent_season_summaries WHERE agent_id = %s AND season = %s AND through_week = %s;""",
-                            (agent_id, season, last_tw))
-                prev = cur.fetchone()
-                cur.execute("""SELECT week, text FROM agent_memory_entries WHERE agent_id = %s AND season = %s
-                               AND week > %s AND week <= %s AND kind = 'TAKE' ORDER BY week, id;""", (agent_id, season, last_tw, through))
-                takes = [{"week": w, "text": t} for w, t in cur.fetchall()]
-                preds = [p for p in fetch_predictions(cur, agent_id, season, week) if p["week"] > last_tw]
-                text = gemini_text(api_key, model, summary_prompt(row[0], row[1], prev[0] if prev else "", takes, preds, through))
+                inp = summary_inputs(cur, agent_id, season, week, last_tw)
+                text = gemini_text(api_key, model, summary_prompt(inp["name"], inp["identity"], inp["previous"],
+                                                                  inp["takes"], inp["predictions"], through))
                 if not text:
                     return 0
-                cur.execute("""INSERT INTO agent_season_summaries (agent_id, season, through_week, summary)
-                               VALUES (%s, %s, %s, %s)
-                               ON CONFLICT (agent_id, season, through_week) DO UPDATE SET summary = EXCLUDED.summary, updated_at = NOW();""",
-                            (agent_id, season, through, text[:1500]))
+                store_summary(cur, agent_id, season, through, text)
                 conn.commit()
                 return 1
         except Exception as e:

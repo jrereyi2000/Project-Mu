@@ -5,7 +5,7 @@ Run: python3 -m unittest tests.test_agent_memory
 import unittest
 
 from newsroom.agent_memory import (
-    format_memory_block, grade_prediction, parse_score_predictions, parse_takes_json,
+    fetch_predictions, format_memory_block, grade_prediction, parse_score_predictions, parse_takes_json,
 )
 
 TEAMS = [(1, "Bills", "Buffalo", "BUF"), (2, "Dolphins", "Miami", "MIA"), (3, "Chiefs", "Kansas City", "KC"),
@@ -77,6 +77,33 @@ class MemoryBlockTests(unittest.TestCase):
         pred = {"week": 9, "label": "", "name_a": "A", "name_b": "B", "score_a": 1, "score_b": 0,
                 "actual_a": None, "actual_b": None, "result": "pending"}
         self.assertNotIn("TRACK RECORD", format_memory_block("", [], [], [pred], (0, 0)))
+
+
+class FakeCursor:
+    """Like a DB-API cursor, a new execute() replaces the pending result set."""
+    def __init__(self, results):
+        self.results, self._rows = results, []
+
+    def execute(self, sql, params=None):
+        key = "teams" if "FROM teams" in sql else "predictions"
+        self._rows = list(self.results[key])
+
+    def fetchall(self):
+        rows, self._rows = self._rows, []
+        return rows
+
+
+class FetchPredictionsTests(unittest.TestCase):
+    def test_predictions_survive_the_team_name_lookup(self):
+        # Regression: the team-name query used to run before the predictions were read, so this returned [].
+        cur = FakeCursor({
+            "predictions": [(6, "", 1, 27, 2, 24, 17, 31)],
+            "teams": [(1, "Buffalo Bills"), (2, "Miami Dolphins")],
+        })
+        preds = fetch_predictions(cur, "agent", 2035, 7)
+        self.assertEqual(len(preds), 1)
+        self.assertEqual((preds[0]["name_a"], preds[0]["name_b"], preds[0]["result"]),
+                         ("Buffalo Bills", "Miami Dolphins", "wrong"))
 
 
 if __name__ == "__main__":

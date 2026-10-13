@@ -32,6 +32,16 @@ def check(name):
     return wrap
 
 
+NEGATION_RE = re.compile(r"\b(do not|don't|never|no injury data|not mention|without)\b", re.I)
+
+
+def injury_asks(text: str) -> list:
+    """Sentences that mention injuries without forbidding them. Prohibitions ("Do not invent injuries",
+    "There is no injury data") are fine; anything else asks the writer for data the league doesn't have."""
+    sentences = re.split(r"(?<=[.!?])\s+|\n", text or "")
+    return [x.strip() for x in sentences if re.search(r"injur", x, re.I) and not NEGATION_RE.search(x)]
+
+
 def save(name, text):
     with open(os.path.join(OUT, name), "w") as f:
         f.write(text if isinstance(text, str) else json.dumps(text, indent=2, default=str))
@@ -208,8 +218,9 @@ def _():
             problems.append(f"{item['slot']}: fallback persona")
         if not p["temporal_mode"]:
             problems.append(f"{item['slot']}: no temporal mode")
-        if re.search(r"injur", p["task_instruction"], re.I) and "no injury data" not in p["task_instruction"]:
-            problems.append(f"{item['slot']}: asks about injuries")
+        asks = injury_asks(p["task_instruction"])
+        if asks:
+            problems.append(f"{item['slot']}: asks about injuries: {asks[0][:120]}")
     save("30_weekly_plan.txt", "\n".join(plan))
     save("31_weekly_prompts.txt", "".join(prompts))
     assert len(slate) == 10, f"{len(slate)} slots"
@@ -217,7 +228,7 @@ def _():
     return " / ".join(plan)
 
 
-@check("every article type compiles for every allowed writer (all 23 weeks' overrides)")
+@check("every article type compiles for every allowed writer, with no injury asks (all playoff overrides)")
 def _():
     problems = []
     for at_id, info in SD.article_types_data.items():
@@ -234,6 +245,9 @@ def _():
                     problems.append(f"{at_id}/{writer}/W{wk}: no structure section")
                 if not p["temporal_mode"]:
                     problems.append(f"{at_id}/{writer}/W{wk}: no temporal mode")
+                asks = injury_asks(p["task_instruction"])
+                if asks:
+                    problems.append(f"{at_id}/{writer}/W{wk}: asks about injuries: {asks[0][:100]}")
     problems = sorted(set(problems))
     assert not problems, problems[:15]
     return f"{len(SD.article_types_data)} types checked"
@@ -281,6 +295,65 @@ def _():
         cur.execute("SELECT COUNT(*) FROM agent_season_summaries;"); n_s = cur.fetchone()[0]
     save("60_memory_blocks.json", out)
     return f"{len(out)} agents built; stored: {n_e} takes, {n_p} predictions, {n_s} summaries"
+
+
+@check("agent memory write path: takes, tweet take, prediction, grading, summary (rolled back)")
+def _():
+    from newsroom import agent_memory
+    from newsroom.power_rankings import load_team_index
+    agent = "__verify_memory_agent__"
+    W = LAST_DONE  # article published before Week W's games; its pick is graded from Week W + 1 on
+    detail = {}
+    conn = psycopg.connect(CONN)
+    try:
+        with conn.cursor() as cur:
+            team_index = load_team_index(cur)
+            nick = {tid: n for tid, n, _c, _a in team_index}
+            cur.execute("SELECT home_team_id, away_team_id, home_score, away_score FROM games WHERE id = %s;", (GAME_IN_LAST,))
+            home, away, hs, as_ = cur.fetchone()
+            cur.execute("""INSERT INTO news_feed (season, week, content_type, persona, content)
+                           VALUES (%s, %s, 'ARTICLE', 'VERIFY', 'verify') RETURNING id;""", (SEASON, W))
+            art = cur.fetchone()[0]
+
+            # predictions: parse a Projected Final line naming the real game, then store and grade it
+            text = f"Analysis...\n**Projected Final: {nick[home]} 27, {nick[away]} 24**"
+            preds = agent_memory.parse_score_predictions(text, team_index)
+            assert len(preds) == 1, f"parsed {preds}"
+            n_pred = agent_memory.store_predictions(cur, agent, SEASON, W, art, preds)
+            assert n_pred == 1, f"stored {n_pred} predictions (game lookup failed?)"
+
+            # takes: three extracted takes (one tagged with a team) and a tweet take
+            takes = agent_memory.parse_takes_json(
+                f'[{{"take": "The {nick[home]} are for real.", "team": "{nick[home]}", "player": ""}},'
+                '{"take": "Regression is coming for somebody.", "team": "", "player": ""},'
+                '{"take": "This league runs on one-score luck.", "team": "", "player": ""}]')
+            assert agent_memory.store_takes(cur, agent, SEASON, W, art, takes, team_index) == 3
+            agent_memory.store_tweet_take(cur, agent, SEASON, W, art, "Hot take tweet.", home)
+
+            # cutoff: nothing from Week W is visible to a Week W article
+            assert agent_memory.build_memory_block(cur, agent, SEASON, W, home) == "", "Week W memories leaked into Week W"
+
+            # summary: agent is due before Week W + 1; inputs gather; store a summary
+            due = dict(agent_memory.agents_due_for_summary(cur, SEASON, W + 1))
+            assert agent in due, "agent not due for a summary"
+            inp = agent_memory.summary_inputs(cur, agent, SEASON, W + 1, due[agent])
+            assert len(inp["takes"]) == 4 and len(inp["predictions"]) == 1, f"summary inputs {inp}"
+            agent_memory.summary_prompt(inp["name"], inp["identity"], inp["previous"], inp["takes"], inp["predictions"], W)
+            agent_memory.store_summary(cur, agent, SEASON, W, "VERIFY summary text.")
+
+            block = agent_memory.build_memory_block(cur, agent, SEASON, W + 1, home)
+            detail["block"] = block
+            expected_result = "you were right" if (hs > as_) else ("you were WRONG" if hs < as_ else "a tie")
+            for needle in ("VERIFY summary text.", "Regression is coming", "picking winners", expected_result):
+                assert needle in block, f"memory block missing {needle!r}"
+    finally:
+        conn.rollback()
+        conn.close()
+    with psycopg.connect(CONN) as c2, c2.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM agent_memory_entries WHERE agent_id = %s;", (agent,))
+        assert cur.fetchone()[0] == 0, "rollback failed: test rows remain"
+    save("61_memory_write_path.txt", detail.get("block", ""))
+    return "parsed/stored 1 prediction, 4 takes, 1 summary; cutoff held; block graded the pick; all rolled back"
 
 
 lines = [f"{s:5}  {n}\n       {d}" for s, n, d in results]
