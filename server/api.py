@@ -1218,7 +1218,7 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
                 WITH prev_adp AS (
                     SELECT player_name, team_id, adp_rank as prev_rank
                     FROM fantasy_projections
-                    WHERE season = %s AND adp_rank IS NOT NULL
+                    WHERE season = %s AND week = 1 AND adp_rank IS NOT NULL
                 )
                 SELECT fp.player_id, fp.adp_rank, fp.player_name, fp.team_id, fp.position, t.abbreviation as team_abbr,
                        p.espn_id,
@@ -1228,7 +1228,7 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
                 JOIN teams t ON fp.team_id = t.id
                 LEFT JOIN players p ON p.id = fp.player_id
                 LEFT JOIN prev_adp pa ON pa.player_name = fp.player_name AND pa.team_id = fp.team_id
-                WHERE fp.season = %s AND fp.adp_rank IS NOT NULL
+                WHERE fp.season = %s AND fp.week = 1 AND fp.adp_rank IS NOT NULL AND fp.player_id IS NOT NULL
                 ORDER BY fp.adp_rank ASC
                 LIMIT 8;
             """, (prev_season, season))

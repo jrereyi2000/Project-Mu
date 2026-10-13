@@ -35,7 +35,8 @@ Project Mu/
 │   ├── excitement_projection.py #  Projected E for scheduled games → games.projected_excitement (+ --backtest)
 │   ├── twi_engine.py, popularity_engine.py, player_popularity_engine.py
 │   ├── game_credit_engine.py  #   Opponent-Adjusted Game Credit (SRS) → team_seasons.opp_adj_credit, sos_rating, expected_wins
-│   └── fantasy_adp_engine.py  #   Preseason ADP board
+│   ├── fantasy_adp_engine.py  #   Preseason ADP board → fantasy_projections week 1 adp_rank
+│   └── fantasy_projection_engine.py # Weekly PPR projections, matchup stars, pos/ROS ranks → fantasy_projections (+ --backtest)
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
 │   ├── slot_targets.py        #   Editorial Matrix slot targeting (primer games, exits, eliminations)
@@ -85,6 +86,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Opponent-Adjusted Game Credit | `python3 -m engines.game_credit_engine --season 2035` (independent of the culture indices) |
 | Project E for scheduled games | `python3 -m engines.excitement_projection --season 2035` (`--backtest` scores accuracy, no writes) |
 | Preseason ADP | `python3 -m engines.fantasy_adp_engine` |
+| Weekly fantasy projections | `python3 -m engines.fantasy_projection_engine --season 2035 --week 18` (no `--week`: league_state current week; `--all-weeks` backfills 2–18; `--backtest` scores accuracy, no writes) |
 | Headshot post-processing | `python3 -m headshots.process_headshots` |
 | Dashboards | `streamlit run dashboards/admin_dashboard.py` |
 | DB backup / restore | `db/backup_db.sh` / `db/restore_db.sh db/backups/<file>.sql` |
@@ -182,7 +184,16 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 ### 3.4 Fantasy Analytics & Projections
 - **`fantasy_projections`**:
   - `id` (PK), `season` (int), `week` (int), `player_id` (int, players.id — no FK constraint), `player_name` (varchar), `position` (varchar), `team_id` (FK, int), `projected_points` (numeric), `avg_points` (numeric), `matchup_stars` (int 1–5), `pos_rank` (varchar e.g. 'QB1', 'WR1'), `adp_rank` (int), `ros_rank` (varchar), `ros_total_points` (numeric), `delta` (numeric). `UNIQUE(season, week, player_id)`.
-  - **Population:** the only writer in the repo is `engines/fantasy_adp_engine.py`, which writes `adp_rank` into week 1 rows. Its `ON CONFLICT (season, week, player_name, team_id)` matches no constraint on the table, so a re-run currently fails, and it doesn't set `player_id`. No checked-in code writes `projected_points`, `avg_points`, `matchup_stars`, `pos_rank`, `ros_rank`, `ros_total_points` or `delta`. The live 2035 rows (weeks 1, 2 and 18) were loaded outside the repo. When a week has no stored rows, the API derives values on the fly (e.g. the player outlook projects season PPR average × a matchup-stars multiplier of 0.85–1.15).
+  - **Week 1 = preseason ADP board**, written by `engines/fantasy_adp_engine.py` (`adp_rank`, upserted on `(season, week, player_id)`). Some older week 1 rows have no `player_id`; every reader ignores those.
+  - **Weeks 2–18 = weekly projections**, written by `engines/fantasy_projection_engine.py`: one row per rostered QB/HB/FB/WR/TE (≈456 in 2035), using only games completed before that week, so past weeks show what was projected before kickoff. Re-running a week replaces its rows (rows for players no longer projected are deleted). Week 1 is never projected (no earlier games; there is no prior-season data yet).
+    - `projected_points` = baseline × matchup factor. Baseline is the player's PPR per team game to date (team games with no stat line count as 0), shrunk toward a depth-chart prior by 0.25 pseudo-games; the prior is the league's PPR per team game for that depth slot (rank by OVR within team and group, capped at QB2/RB3/WR4/TE2). Matchup factor = (opponent's PPR allowed to the group, shrunk toward the league average by 16 pseudo-games, ÷ league average)^0.5.
+    - `avg_points` = PPR per appearance to date; `delta` = `projected_points − avg_points`.
+    - `matchup_stars` = the opponent's PPR allowed per game to the group, split into five even groups (Postgres-style `NTILE(5)`) across the 32 defenses, 1 = toughest, 5 = easiest. Point-in-time and per game, so it can differ from `vw_fantasy_defense_vs_position` (season totals).
+    - `pos_rank` ranks players with a game that week within QB/RB/WR/TE (RB = HB + FB), e.g. `RB12`. Players on bye get `projected_points` 0, NULL `pos_rank`/`matchup_stars`/`delta`, so they stay on the ROS board but drop out of that week's rankings.
+    - `ros_total_points` = sum of the player's projections for that week through week 18 against each remaining opponent; `ros_rank` ranks it within the group.
+    - `adp_rank` is copied from the season's week 1 row so ROS `TREND` (`adp_rank − overall_ros_rank`) works.
+    - **Accuracy (2035 backtest, weeks 2–17, depth-chart starters QB1/RB1–2/WR1–3/TE1):** MAE 3.29 PPR vs. 6.18 for guessing the league average; correlation 0.79. Almost all of it comes from the per-game average. Production here is very stable week to week; the matchup factor adds little, and recency weighting was tested and dropped. Check with `--backtest`.
+  - When a week has no stored rows, the player outlook (`GET /api/player/{id}`) still falls back to season PPR average × a matchup-stars multiplier of 0.85–1.15.
 - **`vw_fantasy_scores` (View)**:
   - `game_id`, `player_name`, `team_id`, `season`, `week`, `ppr_score` (= `player_stats.fantasy_points`).
 - **`vw_fantasy_defense_vs_position` (View)**:
@@ -241,7 +252,7 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
 ### 4.4 Fantasy Analytics Endpoints
 - `GET /api/fantasy/dashboard?season={season}&week={week}`:
   - Hero editorial take and top 3 marquee games (`excitement_games`). These are ranked by editorial interest: raw (projected) $E$, +3 for a division game, and +2 per team not yet mathematically eliminated (regular season). This is the same `rank_games_by_interest` used for matchup-primer picks. Each game has `score` (display scale), `projected`, and a `note` such as "Week 18 · Projected · Division game · Playoff race".
-  - Waiver wire trends, weekly projections, preseason ADP movers, and rest-of-season rank snapshots.
+  - Waiver wire trends, weekly projections, preseason ADP movers, and rest-of-season rank snapshots. The ADP card reads only week 1 rows with a `player_id` (later weeks carry a copy of `adp_rank`).
 - `GET /api/fantasy/rankings/weekly?season={season}&week={week}&position={pos}&limit={limit}`:
   - Weekly player projections or final results.
   - Dynamic positional ranking (`pos_rank` e.g. `QB1`, `RB1`).
@@ -321,7 +332,8 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
    - It then runs `TWIEngine().backfill_twi()` followed by `PopularityEngine().calculate_popularity()`, sequentially in dependency order, because franchise popularity reads the `watchability_index` that TWI writes. These two used to run in parallel, so popularity could read stale or partially updated TWI.
    - Between TWI and franchise popularity it runs `GameCreditEngine().calculate(season)` (Section 2.4). It reads only `games`, so its position is not a dependency.
    - Once franchise metrics are computed, `PlayerPopularityEngine().calculate_popularity()` executes vectorized batch updates using PostgreSQL `executemany` (reducing DB execution time from ~1s to ~0.16s).
-   - Finally, `project_scheduled_games(season)` refreshes `games.projected_excitement` for every still-scheduled game before the assignment brief is compiled.
+   - Then `project_scheduled_games(season)` refreshes `games.projected_excitement` for every still-scheduled game before the assignment brief is compiled.
+   - Finally, `project_upcoming_week(season)` (`engines/fantasy_projection_engine.py`) writes fantasy projections for the first week that still has scheduled games. It reads only `games`, `player_seasons` and `player_stats`, so it has no dependency on the culture engines.
 4. **The Swarm Trigger & Editorial Commissioning:**
    - The generator dynamically compiles a dual-horizon Weekly Slate Digest:
      - **`recap_slate`**: Completed scoreboard and standout individual performances from `week - 1` for retrospective recaps.

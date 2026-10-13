@@ -108,12 +108,14 @@ def generate_preseason_adp(season: int = 2035):
         with conn.cursor() as cur:
             for _, row in final_df.head(300).iterrows():
                 cur.execute("""
-                    INSERT INTO fantasy_projections (season, week, player_name, team_id, adp_rank, position)
-                    VALUES (%s, 1, %s, %s, %s, %s)
-                    ON CONFLICT (season, week, player_name, team_id) DO UPDATE SET
+                    INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, adp_rank, position)
+                    VALUES (%s, 1, %s, %s, %s, %s, %s)
+                    ON CONFLICT (season, week, player_id) DO UPDATE SET
+                        player_name = EXCLUDED.player_name,
+                        team_id = EXCLUDED.team_id,
                         adp_rank = EXCLUDED.adp_rank,
                         position = EXCLUDED.position;
-                """, (season, row['player_name'], row['team_id'], row['adp_rank'], row['position']))
+                """, (season, int(row['player_id']), row['player_name'], row['team_id'], int(row['adp_rank']), row['position']))
         conn.commit()
     print("✅ Successfully locked in Preseason Draft Board!")
 
