@@ -92,6 +92,7 @@ $$E = 0.35(C) + 0.25(P) + 0.20(S) + 0.20(U)$$
 - **$C$ (Competitiveness)**: Final score margin and overtime drama: $\min(100, \max(0, 100 - 4 \cdot |\text{Score}_A - \text{Score}_B|) + \text{OT Bonus})$.
 - **$P$ (Production & Pace)**: Combined points and offensive yardage volume.
 - **$S$ (Star Impact & Outliers)**: Top-3 player OVR averages and standout single-game milestone box scores (e.g. 400+ pass yards, 4+ TDs).
+  - `player_stats` stores only abbreviated names (e.g. `A. Wright`), which collide across players. Each stat line is matched to the player with that name **on the same team in the game's season**; position breaks the rare same-team tie. Lines with no such player are skipped. Earlier scoring joined on name alone, which counted colliding players' milestone bonuses more than once and could use another player's OVR (`fetch_game_player_rows` in `engines/gotw_engine.py`).
 - **$U$ (Upset & Narrative Leverage)**: Pre-game talent differential (`team_seasons.team_ovr` for the game's season) and heavyweight clashes.
 - Computed by `engines/gotw_engine.py` and stored in `games.excitement_index`. A game's $E$ depends only on that game's data, so once scored it is **not** re-scored automatically (re-scoring would let it drift as player/team ratings change during the season, which would in turn shift TWI and popularity).
   - **Pipeline (Section 6, step 3):** `batch_evaluate(season, only_missing=True, game_ids=<games just backfilled>)` scores only completed games with no $E$ yet plus the games whose box scores were inserted in that run.
@@ -290,9 +291,9 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
    - When the user scrolls Season Stats, it overwrites the `season_stats` ledger.
 2. **Mathematical Backfill:**
    - `engines/game_stat_generator.py` is invoked. It subtracts the real `player_stats` from the `season_stats` and mathematically distributes the remaining stats into the missing CPU-simmed games, perfectly synchronizing the database.
-3. **Culture Engines (Concurrent Franchise Execution & Batch Updates):**
+3. **Culture Engines (Dependency-Ordered Execution & Batch Updates):**
    - Appended to the end of the backfill generator, `engines/game_stat_generator.py` first runs `gotw_engine.batch_evaluate(season, only_missing=True, game_ids=...)` to score the Game Excitement Index ($E$) for newly completed games (those with no `excitement_index`) and any games it just backfilled. Previously scored games are left unchanged. This must precede TWI, which only counts games with a non-null `excitement_index`.
-   - It then runs `TWIEngine().backfill_twi()` and `PopularityEngine().calculate_popularity()` concurrently across parallel worker threads.
+   - It then runs `TWIEngine().backfill_twi()` followed by `PopularityEngine().calculate_popularity()`, sequentially in dependency order, because franchise popularity reads the `watchability_index` that TWI writes. These two used to run in parallel, so popularity could read stale or partially updated TWI.
    - Once franchise metrics are computed, `PlayerPopularityEngine().calculate_popularity()` executes vectorized batch updates using PostgreSQL `executemany` (reducing DB execution time from ~1s to ~0.16s).
 4. **The Swarm Trigger & Editorial Commissioning:**
    - The generator dynamically compiles a dual-horizon Weekly Slate Digest:

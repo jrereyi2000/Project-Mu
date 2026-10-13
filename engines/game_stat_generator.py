@@ -165,7 +165,6 @@ def generate_team_and_player_stats(season_year: int):
     # --- 🏈 PHASE 2: TRIGGER THE AUTOMATED AI SWARM ---
     print("\n[SWARM PIPELINE] Triggering Post-Week Analytics & Swarm...")
     try:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
         from engines.gotw_engine import batch_evaluate
         from engines.twi_engine import TWIEngine
         from engines.popularity_engine import PopularityEngine
@@ -178,14 +177,14 @@ def generate_team_and_player_stats(season_year: int):
         print("-> Running Game Excitement Engine (E)...")
         batch_evaluate(season=season_year, only_missing=True, game_ids=backfilled_game_ids)
 
-        # 1. Run Mathematical Culture Indices (Parallelize TWIEngine & Franchise POP)
-        print("-> Running Team Watchability Engine & Franchise Popularity Engine in Parallel...")
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            fut_twi = executor.submit(TWIEngine().backfill_twi, season=season_year)
-            fut_pop = executor.submit(PopularityEngine().calculate_popularity, season=season_year)
-            for fut in as_completed([fut_twi, fut_pop]):
-                fut.result()
-        
+        # 1. Run Mathematical Culture Indices in dependency order:
+        #    E -> TWI (watchability_index) -> Franchise POP (reads TWI) -> Player POP (reads Franchise POP)
+        print("-> Running Team Watchability Engine...")
+        TWIEngine().backfill_twi(season=season_year)
+
+        print("-> Running Franchise Popularity Engine...")
+        PopularityEngine().calculate_popularity(season=season_year)
+
         print("-> Running Player Popularity Engine...")
         PlayerPopularityEngine().calculate_popularity(season=season_year)
         
