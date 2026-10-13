@@ -59,7 +59,7 @@ Project Mu/
 ├── tools/debug/               # One-off frame/OCR debugging scripts
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
-│   ├── EDITORIAL_MATRIX.md, FANTASY_FOOTBALL_SPEC.md, WAKEUPS.md
+│   ├── EDITORIAL_MATRIX.md, WAKEUPS.md
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played)
 │   ├── writers/               #   Writer style references (Barnwell, Chadiha, Joyner, Rosenthal, Sando)
 │   ├── reference/             #   Source PDFs
@@ -193,7 +193,7 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
     - `ros_total_points` = sum of the player's projections for that week through week 18 against each remaining opponent; `ros_rank` ranks it within the group.
     - `adp_rank` is copied from the season's week 1 row so ROS `TREND` (`adp_rank − overall_ros_rank`) works.
     - **Accuracy (2035 backtest, weeks 2–17, depth-chart starters QB1/RB1–2/WR1–3/TE1):** MAE 3.29 PPR vs. 6.18 for guessing the league average; correlation 0.79. Almost all of it comes from the per-game average. Production here is very stable week to week; the matchup factor adds little, and recency weighting was tested and dropped. Check with `--backtest`.
-  - When a week has no stored rows, the player outlook (`GET /api/player/{id}`) still falls back to season PPR average × a matchup-stars multiplier of 0.85–1.15.
+  - When a player has no stored row for the week, the player outlook (`GET /api/player/{id}`, §4.3) falls back to a rough estimate with no ranks.
 - **`vw_fantasy_scores` (View)**:
   - `game_id`, `player_name`, `team_id`, `season`, `week`, `ppr_score` (= `player_stats.fantasy_points`).
 - **`vw_fantasy_defense_vs_position` (View)**:
@@ -245,7 +245,10 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
   - Player personal information and ratings.
   - Full 18-week `game_log` (accounting for bye weeks and completed game fantasy statistics).
   - Multi-season `career_stats` with games played, yards, touchdowns, and overall fantasy rank.
-  - Dynamic `weekly_outlook` containing upcoming opponent, home/away status, kickoff time, positional projection, and 1–5 defensive matchup stars.
+  - `weekly_outlook` for the league's current week (`league_state.current_week`): opponent, home/away, kickoff, `projection`, `pos_rank`/`ecr_rank`, `ros_rank` and 1–5 `stars`, all from that week's `fantasy_projections` row (`projected: true`).
+    - **Bye:** if the league plays that week but the player's team doesn't, it returns `bye: true`, `projection` "0.0", the stored `ros_rank`, and null ranks/stars (no opponent fields). The modal shows a "BYE WEEK" card.
+    - **No stored row** (e.g. week 1): `projection` is a rough estimate (season PPR average × 0.85–1.15 by matchup stars), `projected: false`, and the ranks are null. The modal shows "—" rather than a rank.
+    - If the season has no games in the current week (e.g. viewing a past season), it uses the team's last game of that season and that week's projection row.
 - `GET /api/player_stats?season={season}&category={category}`:
   - Passing, rushing, receiving, and defensive player leaderboards.
 
@@ -254,7 +257,7 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
   - Hero editorial take and top 3 marquee games (`excitement_games`). These are ranked by editorial interest: raw (projected) $E$, +3 for a division game, and +2 per team not yet mathematically eliminated (regular season). This is the same `rank_games_by_interest` used for matchup-primer picks. Each game has `score` (display scale), `projected`, and a `note` such as "Week 18 · Projected · Division game · Playoff race".
   - Waiver wire trends, weekly projections, preseason ADP movers, and rest-of-season rank snapshots. The ADP card reads only week 1 rows with a `player_id` (later weeks carry a copy of `adp_rank`).
 - `GET /api/fantasy/rankings/weekly?season={season}&week={week}&position={pos}&limit={limit}`:
-  - Weekly player projections or final results.
+  - `mode`: `final` when every game that week is completed (ranked by actual PPR points), otherwise `projected` from that week's `fantasy_projections` rows (players on bye are excluded), and `unavailable` if neither exists.
   - Dynamic positional ranking (`pos_rank` e.g. `QB1`, `RB1`).
   - Prior-week positional finish comparison (`trend`).
   - Exact 1–5 matchup stars.

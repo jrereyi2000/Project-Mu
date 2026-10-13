@@ -688,8 +688,13 @@ def get_player_api(id: int, season: Optional[int] = None):
             """, (season, player['team_id'], player['team_id'], curr_week))
             curr_game = cur.fetchone()
 
+            on_bye = False
             if not curr_game:
-                # If no game found for current week, get the latest scheduled or last game
+                cur.execute("SELECT 1 FROM games WHERE season = %s AND week = %s LIMIT 1;", (season, curr_week))
+                # The league plays this week but the player's team doesn't: a bye.
+                on_bye = cur.fetchone() is not None
+            if not curr_game and not on_bye:
+                # The season has no games in the league's current week (e.g. a past season): use its last game
                 cur.execute("""
                     SELECT g.id, g.week, g.game_time, g.status,
                            t_home.id as home_team_id, t_home.name as home_name, t_home.abbreviation as home_abbr,
@@ -703,27 +708,42 @@ def get_player_api(id: int, season: Optional[int] = None):
                 """, (season, player['team_id'], player['team_id']))
                 curr_game = cur.fetchone()
 
+            outlook_week = curr_game['week'] if curr_game else curr_week
+            # Stored projection (engines/fantasy_projection_engine.py) for the outlook week
+            cur.execute("""
+                SELECT projected_points, avg_points, matchup_stars, pos_rank, ros_rank, ros_total_points
+                FROM fantasy_projections
+                WHERE season = %s AND week = %s AND player_id = %s;
+            """, (season, outlook_week, id))
+            proj_record = cur.fetchone()
+
             weekly_outlook = None
-            if curr_game:
+            if on_bye:
+                weekly_outlook = {
+                    "week": curr_week,
+                    "bye": True,
+                    "projected": True,
+                    "ecr_rank": None,
+                    "pos_rank": None,
+                    "ros_rank": proj_record['ros_rank'] if proj_record else None,
+                    "projection": "0.0",
+                    "stars": None,
+                }
+            elif curr_game:
                 is_home = curr_game['home_team_id'] == player['team_id']
                 opp_team_id = curr_game['away_team_id'] if is_home else curr_game['home_team_id']
                 opp_name = curr_game['away_name'] if is_home else curr_game['home_name']
                 opp_abbr = curr_game['away_abbr'] if is_home else curr_game['home_abbr']
 
-                # Fast lookup from fantasy_projections table
-                cur.execute("""
-                    SELECT projected_points, avg_points, matchup_stars, pos_rank, ros_rank, ros_total_points
-                    FROM fantasy_projections
-                    WHERE season = %s AND week = %s AND player_id = %s;
-                """, (season, curr_week, id))
-                proj_record = cur.fetchone()
-
                 if proj_record and proj_record.get('projected_points') is not None:
+                    projected = True
                     proj_pts = float(proj_record['projected_points'])
-                    stars = int(proj_record['matchup_stars'] or 3)
-                    pos_rank_label = proj_record['pos_rank'] or f"{player['position']}1"
-                    ros_rank_label = proj_record['ros_rank'] or f"{player['position']}1"
+                    stars = int(proj_record['matchup_stars']) if proj_record['matchup_stars'] else None
+                    pos_rank_label = proj_record['pos_rank']
+                    ros_rank_label = proj_record['ros_rank']
                 else:
+                    # No stored projection (e.g. week 1, or a player the engine doesn't cover): rough estimate, no ranks
+                    projected = False
                     cur.execute("""
                         SELECT matchup_stars
                         FROM vw_fantasy_defense_vs_position
@@ -735,11 +755,13 @@ def get_player_api(id: int, season: Optional[int] = None):
                     avg_pts = (sum([float(g.get('fantasy_points') or 0.0) for g in completed_games]) / len(completed_games)) if completed_games else 16.5
                     multiplier = 0.85 + (stars - 1) * 0.075
                     proj_pts = round(avg_pts * multiplier, 1)
-                    pos_rank_label = f"{player['position']}1"
-                    ros_rank_label = f"{player['position']}1"
+                    pos_rank_label = None
+                    ros_rank_label = None
 
                 weekly_outlook = {
                     "week": curr_game['week'],
+                    "bye": False,
+                    "projected": projected,
                     "kickoff": curr_game['game_time'] or "SUN 1:00 PM ET",
                     "is_home": is_home,
                     "home_name": curr_game['home_name'],
@@ -1446,13 +1468,16 @@ def get_weekly_fantasy_rankings(season: int = 2035, week: int = 18, position: st
             """, (season, week))
             opponents = {}
             opponent_ids = {}
-            week_completed = False
+            week_completed = False   # any game this week is final
+            week_all_final = None    # every game this week is final
             for g in cur.fetchall():
                 opponents[g["home_team_id"]] = f"vs {display_team_abbr(g['away_abbr'])}"
                 opponents[g["away_team_id"]] = f"@ {display_team_abbr(g['home_abbr'])}"
                 opponent_ids[g["home_team_id"]] = g["away_team_id"]
                 opponent_ids[g["away_team_id"]] = g["home_team_id"]
                 week_completed = week_completed or g["status"] == "COMPLETED"
+                if g["status"] != "BYE":
+                    week_all_final = (week_all_final is not False) and g["status"] == "COMPLETED"
 
             # Matchup stars by (defense team, position) — same source as player modal
             cur.execute("""
@@ -1470,7 +1495,7 @@ def get_weekly_fantasy_rankings(season: int = 2035, week: int = 18, position: st
 
             prev_finishes = _weekly_finishes(cur, season, week - 1) if week > 1 else {}
 
-            # Prefer stored projections for this week
+            # Stored projections for this week (used unless the week is fully played)
             cur.execute("""
                 SELECT fp.player_id, fp.player_name, fp.position, fp.team_id,
                        t.abbreviation AS team_abbr, fp.projected_points, fp.pos_rank,
@@ -1486,7 +1511,8 @@ def get_weekly_fantasy_rankings(season: int = 2035, week: int = 18, position: st
             proj_rows = cur.fetchall()
 
             rows = []
-            if proj_rows:
+            # A fully played week shows actual finishes; otherwise the stored projections
+            if proj_rows and not week_all_final:
                 mode = "projected"
                 for r in proj_rows:
                     rank_num = int(re.sub(r"\D", "", r["pos_rank"]) or 0)

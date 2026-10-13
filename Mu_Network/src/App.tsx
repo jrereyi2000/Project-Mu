@@ -2133,7 +2133,8 @@ function FantasyPlayerModal({ player: p, close }: { player: FantasyPlayer; close
   const isHome = outlook.is_home !== undefined ? outlook.is_home : (currentWeekGame ? currentWeekGame.home_team_id === player.team_id : true);
   const oppAbbr = outlook.opp_abbr || (currentWeekGame ? (isHome ? currentWeekGame.away_abbr : currentWeekGame.home_abbr) : "PIT");
   const oppName = outlook.opp_name || (currentWeekGame ? (isHome ? currentWeekGame.away_name : currentWeekGame.home_name) : "Steelers");
-  const matchupText = `${isHome ? "vs" : "@"} ${oppAbbr}`;
+  const onBye = outlook.bye === true;
+  const matchupText = onBye ? "BYE" : `${isHome ? "vs" : "@"} ${oppAbbr}`;
 
   const scrollToSection = (sec: "news" | "logs" | "stats" | "outlook") => {
     setActiveTab(sec);
@@ -2143,8 +2144,9 @@ function FantasyPlayerModal({ player: p, close }: { player: FantasyPlayer; close
     }
   };
 
-  const posRank = outlook.pos_rank || outlook.ecr_rank || `${player.position}1`;
-  const rosRank = outlook.ros_rank || `${player.position}1`;
+  // Ranks come only from stored projections; show a dash rather than inventing one
+  const posRank = outlook.pos_rank || outlook.ecr_rank || "—";
+  const rosRank = outlook.ros_rank || "—";
 
   return (
     <div className="fantasy-player-modal">
@@ -2595,7 +2597,26 @@ function FantasyPlayerModal({ player: p, close }: { player: FantasyPlayer; close
 
             {(() => {
               const outlook = playerData.weekly_outlook || {};
-              const starsCount = Math.max(1, Math.min(5, outlook.stars || 3));
+              if (outlook.bye) {
+                return (
+                  <div className="fantasy-matchup-card" style={{ marginTop: "16px" }}>
+                    <div className="fantasy-kickoff">
+                      <span />
+                      <strong>BYE WEEK</strong>
+                      <span />
+                    </div>
+                    <p style={{ textAlign: "center", margin: "12px 0" }}>
+                      {teamAbbr} doesn't play in Week {outlook.week}.
+                    </p>
+                    <div className="fantasy-outlook-metrics">
+                      <div><strong>—</strong><span>ECR</span></div>
+                      <div><strong>0.0</strong><span>Projection</span></div>
+                      <div><strong>{outlook.ros_rank || "—"}</strong><span>ROS</span></div>
+                    </div>
+                  </div>
+                );
+              }
+              const starsCount = outlook.stars ? Math.max(1, Math.min(5, outlook.stars)) : 0;
               const homeLogo = logo((outlook.home_abbr || "cin").toLowerCase());
               const awayLogo = logo((outlook.away_abbr || "pit").toLowerCase());
               return (
@@ -2626,7 +2647,7 @@ function FantasyPlayerModal({ player: p, close }: { player: FantasyPlayer; close
 
                   <div className="fantasy-outlook-metrics">
                     <div>
-                      <strong>{outlook.ecr_rank || `${player.position}1`}</strong>
+                      <strong>{outlook.ecr_rank || "—"}</strong>
                       <span>ECR</span>
                     </div>
                     <div>
@@ -2634,10 +2655,14 @@ function FantasyPlayerModal({ player: p, close }: { player: FantasyPlayer; close
                       <span>Projection</span>
                     </div>
                     <div>
-                      <div className="fantasy-stars">
-                        {"★".repeat(starsCount)}
-                        <i>{"★".repeat(5 - starsCount)}</i>
-                      </div>
+                      {starsCount ? (
+                        <div className="fantasy-stars">
+                          {"★".repeat(starsCount)}
+                          <i>{"★".repeat(5 - starsCount)}</i>
+                        </div>
+                      ) : (
+                        <strong>—</strong>
+                      )}
                       <span>Matchup</span>
                     </div>
                   </div>
