@@ -10,3 +10,6 @@ Whenever you change anything in this directory (code, pipeline, schema, engines,
 - Changed behavior, data flow, or run order of pipeline steps and engines
 
 Edit the relevant existing section rather than appending a changelog. A change is not done until the spec matches it. If a change genuinely doesn't affect anything the spec describes, say so explicitly.
+
+## Commits
+Whenever you make a commit, bring it into `main` right away without asking: if you committed on another branch, check out `main` and merge that branch in. Stop and tell the user only if the merge hits a conflict — do not resolve conflicts on your own. Leave uncommitted changes that aren't yours untouched, and don't push unless asked.
