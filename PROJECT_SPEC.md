@@ -97,8 +97,14 @@ $$E = 0.35(C) + 0.25(P) + 0.20(S) + 0.20(U)$$
 - Computed by `engines/gotw_engine.py` and stored in `games.excitement_index`. A game's $E$ depends only on that game's data, so once scored it is **not** re-scored automatically (re-scoring would let it drift as player/team ratings change during the season, which would in turn shift TWI and popularity).
   - **Pipeline (Section 6, step 3):** `batch_evaluate(season, only_missing=True, game_ids=<games just backfilled>)` scores only completed games with no $E$ yet plus the games whose box scores were inserted in that run.
   - **Manual re-scoring** (e.g. after a box-score correction): `python3 -m engines.gotw_engine --game-ids 805 832`; `--season 2035 --missing-only` fills gaps; no flags re-scores every completed game in all seasons (`--season` limits it to one).
-- For upcoming/scheduled games, matchup excitement scales smoothly from the average TWI of the opposing teams:
-  $$\text{Scheduled Excitement} = \min(98, \max(85, \lfloor \text{Matchup TWI} \times 1.45 \rfloor))$$
+- **Projected Excitement (scheduled games, `engines/excitement_projection.py`)**: the expected value of each component before kickoff, on the same raw scale as $E$, stored in `games.projected_excitement` (migration `db/migrations/2026_10_13_projected_excitement.sql`) and refreshed for every scheduled game by the pipeline (§6):
+  - $C$: $\mathbb{E}[\max(0, 100 - 4|m|)]$ with margin $m \sim N(\mu, \sigma)$, $\mu = k \cdot (\text{OVR}_\text{home} - \text{OVR}_\text{away})$. The slope $k$ (≈2.3 points per OVR) and the residual spread $\sigma$ are fitted from the season's completed games.
+  - $P$: the league-average game. Team scoring and yardage barely persist week to week in this league, so team-specific $P$ only added noise.
+  - $S$: the teams' average top-3 OVR and milestone-outlier points per game, shrunk toward the league average (4 pseudo-games).
+  - $U$: the OVR favourite's win probability, blended over the chalk and upset outcomes.
+  - **Accuracy (2035 backtest, weeks 3+, earlier weeks only):** correlation ≈ 0.23 with actual $E$, and mean error 9.25 vs. 9.38 for always guessing the league average. Pre-game excitement is only weakly predictable, so projections are always labelled as projected. Check with `python3 -m engines.excitement_projection --season 2035 --backtest`.
+  - This replaces the former display-only formula $\min(98, \max(85, \lfloor \text{Matchup TWI} \times 1.45 \rfloor))$. That put 207 of 224 backtested games at exactly 85, and correlated −0.25 with actual $E$.
+- **Display scale (70–100)**: stored and projected $E$ stay raw (TWI and popularity use raw $E$). Everything shown to readers and writers (API, assignment brief, writer DB tools) uses `display_excitement()` in `engines/gotw_engine.py`: $\text{Display} = \min(100, \max(70,\ 70 + 30 \cdot (E - 40) / 60))$. A dull game (raw 40, about the 5th percentile) shows as 70, a typical game (≈58) about 79, the 2035 best (83.7) about 92, and a perfect 100 shows as 100.
 
 ### 2.2 Team Watchability Index ($TWI$)
 Rolling, opponent-adjusted metric defining how entertaining a franchise is to watch over time:
@@ -142,7 +148,7 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 
 ### 3.3 Games & Statistics Tables
 - **`games`**:
-  - `id` (PK), `season` (int), `week` (int), `home_team_id` (FK), `away_team_id` (FK), `home_score` (int), `away_score` (int), `status` (varchar: 'COMPLETED' | 'SCHEDULED' | 'BYE'), `game_time` (varchar, e.g. 'Sun 1:00 PM'), `game_type` (varchar, default 'REGULAR_SEASON'), `excitement_index` (float8), `completed_at` (timestamp). `UNIQUE(season, week, home_team_id, away_team_id)` (constraint `games_season_week_home_away_key`).
+  - `id` (PK), `season` (int), `week` (int), `home_team_id` (FK), `away_team_id` (FK), `home_score` (int), `away_score` (int), `status` (varchar: 'COMPLETED' | 'SCHEDULED' | 'BYE'), `game_time` (varchar, e.g. 'Sun 1:00 PM'), `game_type` (varchar, default 'REGULAR_SEASON'), `excitement_index` (float8), `projected_excitement` (float8, nullable; pre-game projected $E$), `completed_at` (timestamp). `UNIQUE(season, week, home_team_id, away_team_id)` (constraint `games_season_week_home_away_key`).
 - **`player_stats`**:
   - `id` (PK), `game_id` (FK), `team_id` (FK), `player_name` (varchar), `position` (varchar), `completions`, `pass_attempts`, `pass_yards`, `pass_tds`, `interceptions`, `rush_attempts`, `rush_yards`, `rush_tds`, `receptions`, `rec_yards`, `rec_tds`, `fumb`, `fantasy_points` (numeric(6,2), **generated column**). `UNIQUE(game_id, player_name, position)`.
   - `fantasy_points` is a PostgreSQL `GENERATED ALWAYS ... STORED` column computed from the row's box score with full-PPR scoring: 0.04/pass yd (1 per 25), 4/pass TD, −2/INT, 0.1/rush & rec yd (1 per 10), 6/rush & rec TD, 1/reception, −2/fumble; NULL stats count as 0. It recomputes automatically on every insert or stat correction and is read-only: ingestion and backfill code must **not** insert or update it (Postgres rejects writes). All fantasy surfaces (`vw_fantasy_scores`, `vw_fantasy_defense_vs_position`, game logs, rankings, player popularity) read this column.
@@ -191,7 +197,7 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
 ### 4.1 System & Schedules
 - `GET /api/status`: Returns current league season and week from `league_state`.
 - `GET /api/schedule?season={season}&week={week}`:
-  - Returns matchups for the week, records, kickoff times, home/away TWI (`home_twi`, `away_twi`), combined matchup `watchability`, and normalized `excitement_index`.
+  - Returns matchups for the week, records, kickoff times, home/away TWI (`home_twi`, `away_twi`), combined matchup `watchability`, and `excitement_index` on the 70–100 display scale. That is the final $E$ for completed games and the projection otherwise; `excitement_projected` is true for projections, and the value is null if a game hasn't been projected yet.
 - `GET /api/standings/{season}`:
   - Division and conference standings, wins, losses, win percentage, streak, points for/against, and last 5 games.
 - `GET /api/power_rankings`:
@@ -215,7 +221,7 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
 
 ### 4.4 Fantasy Analytics Endpoints
 - `GET /api/fantasy/dashboard?season={season}&week={week}`:
-  - Hero editorial take and top 3 marquee games (`excitement_games`) sorted by Excitement Index.
+  - Hero editorial take and top 3 marquee games (`excitement_games`). These are ranked by editorial interest: raw (projected) $E$, +3 for a division game, and +2 per team not yet mathematically eliminated (regular season). This is the same `rank_games_by_interest` used for matchup-primer picks. Each game has `score` (display scale), `projected`, and a `note` such as "Week 18 · Projected · Division game · Playoff race".
   - Waiver wire trends, weekly projections, preseason ADP movers, and rest-of-season rank snapshots.
 - `GET /api/fantasy/rankings/weekly?season={season}&week={week}&position={pos}&limit={limit}`:
   - Weekly player projections or final results.
@@ -295,6 +301,7 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
    - Appended to the end of the backfill generator, `engines/game_stat_generator.py` first runs `gotw_engine.batch_evaluate(season, only_missing=True, game_ids=...)` to score the Game Excitement Index ($E$) for newly completed games (those with no `excitement_index`) and any games it just backfilled. Previously scored games are left unchanged. This must precede TWI, which only counts games with a non-null `excitement_index`.
    - It then runs `TWIEngine().backfill_twi()` followed by `PopularityEngine().calculate_popularity()`, sequentially in dependency order, because franchise popularity reads the `watchability_index` that TWI writes. These two used to run in parallel, so popularity could read stale or partially updated TWI.
    - Once franchise metrics are computed, `PlayerPopularityEngine().calculate_popularity()` executes vectorized batch updates using PostgreSQL `executemany` (reducing DB execution time from ~1s to ~0.16s).
+   - Finally, `project_scheduled_games(season)` refreshes `games.projected_excitement` for every still-scheduled game before the assignment brief is compiled.
 4. **The Swarm Trigger & Editorial Commissioning:**
    - The generator dynamically compiles a dual-horizon Weekly Slate Digest:
      - **`recap_slate`**: Completed scoreboard and standout individual performances from `week - 1` for retrospective recaps.
@@ -617,7 +624,7 @@ Rather than waking up a fixed list of writer agents who generate generic article
    - `docs/EDITORIAL_MATRIX.md` is the source of truth for the weekly slate. Every weekly run (`dispatch_weekly_national`) commissions all 10 matrix slots for the week: Hero, Slots 1–8, and Standalone.
    - `article_count` / `target_articles` truncate the slate and are reserved for tests and debugging (`tests/test_wakeups.py --article-count`, `tests/test_editorial_flow.py --count`); production never passes them.
    - The weekly national run does not wake up any extra beat reporters. Slots 6–8 come only from the matrix. Local beat portfolios (`LOCAL_POSTGAME_REPORT_CARD`, `LOCAL_PLAYER_SPOTLIGHT`, `LOCAL_SEASON_PROGRESS_REPORT`, plus team-specific `LOCAL_MATCHUP_PRIMER`) come from on-demand team wakeups (`dispatch_team_local`).
-   - **Slot Targeting (`newsroom/slot_targets.py`):** Before writers are assigned, `commission_weekly_editorial_slate` resolves the subject of every targeted slot per the matrix's *Slot Targeting Rules*. Matchup primers go to the week's most exciting scheduled games, ranked by projected Scheduled Excitement (§2.2) with ties broken by raw Matchup TWI, because scheduled games have no stored Excitement Index (byes excluded, 2-week team rotation in the regular season, covering the side with fewer primers this season), and in Super Bowl week to the AFC and NFC champions. Phase 4 `FRANCHISE_STATE_OF_THE_UNION` goes to a mathematically eliminated team. Week 19 Exit slots go to teams that missed the playoffs, and W20–22 `PLAYOFF_AUTOPSY` slots go to the prior round's losers. All of these are distinct teams, most popular first.
+   - **Slot Targeting (`newsroom/slot_targets.py`):** Before writers are assigned, `commission_weekly_editorial_slate` resolves the subject of every targeted slot per the matrix's *Slot Targeting Rules*. Matchup primers go to the week's most interesting scheduled games, ranked by `rank_games_by_interest`: projected $E$ (§2.1) plus division-game and playoff-race stakes (byes excluded, 2-week team rotation in the regular season, covering the side with fewer primers this season), and in Super Bowl week to the AFC and NFC champions. Phase 4 `FRANCHISE_STATE_OF_THE_UNION` goes to a mathematically eliminated team. Week 19 Exit slots go to teams that missed the playoffs, and W20–22 `PLAYOFF_AUTOPSY` slots go to the prior round's losers. All of these are distinct teams, most popular first.
    - Each primer is written by a beat reporter for its subject team. Every targeted article gets an `EDITORIAL DESK SUBJECT ASSIGNMENT` block in its prompt, which overrides subject-selection instructions, and is saved under the subject's `team_id`. If league data can't be loaded, slots fall back to writer-chosen subjects.
    - **Postseason week numbering:** 19 = Wild Card, 20 = Divisional, 21 = Conference Championships, 22 = Super Bowl bye, 23 = Super Bowl. Historical imports (`pipeline/batch_menus.py`) store the Super Bowl at week 23. `db/migrations/migrate_super_bowl_week.py` moves older week-22 Super Bowl rows to week 23.
 2. **Matrix-Driven Editorial Slate Planning (`docs/EDITORIAL_MATRIX.md`):**

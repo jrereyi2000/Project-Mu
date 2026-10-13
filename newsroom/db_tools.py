@@ -1,6 +1,7 @@
 import psycopg
 from langchain_core.tools import tool
 from db.db_handler import DatabaseHandler
+from engines.gotw_engine import display_excitement
 import json
 
 db = DatabaseHandler()
@@ -63,7 +64,7 @@ def get_game_box_score(game_id: int) -> str:
                 result = {
                     "matchup": f"{game_row[2]} {game_row[3]} @ {game_row[0]} {game_row[1]}",
                     "week": game_row[5],
-                    "excitement_index": float(game_row[4]) if game_row[4] else 0.0,
+                    "excitement_index": display_excitement(game_row[4]) if game_row[4] else None,
                     "key_performances": []
                 }
 
@@ -295,7 +296,7 @@ def get_team_season_schedule(team_identifier: str, season: int = 2035) -> str:
                         "outcome": outcome_str,
                         "margin": margin if status == "COMPLETED" else None,
                         "one_score_game": (margin <= 8) if status == "COMPLETED" else None,
-                        "excitement_index": round(float(r[8]), 2) if status == "COMPLETED" else None,
+                        "excitement_index": display_excitement(r[8]) if status == "COMPLETED" and r[8] else None,
                         "status": status
                     })
 
@@ -407,8 +408,8 @@ def get_advanced_game_analytics(game_id: int) -> str:
                 result = {
                     "game_id": game_id,
                     "offensive_pace_rating": pace,
-                    "single_game_excitement": float(row[2]) if row[2] else 50.0,
-                    "upset_narrative_leverage": "High Variance" if (row[2] and row[2] > 80) else "Standard"
+                    "single_game_excitement": display_excitement(row[2]) if row[2] else None,
+                    "upset_narrative_leverage": "High Variance" if (row[2] and row[2] > 80) else "Standard"  # raw E
                 }
                 return json.dumps(result, indent=2)
     except Exception as e:
@@ -429,12 +430,12 @@ def get_weekly_slate(week: int, season: int = 2035) -> str:
                         ht.name AS home_team, g.home_score,
                         ABS(g.home_score - g.away_score) AS margin,
                         COALESCE(g.excitement_index, 0) as excitement_index,
-                        g.home_team_id, g.away_team_id
+                        g.home_team_id, g.away_team_id, g.status, g.projected_excitement
                     FROM games g
                     JOIN teams ht ON g.home_team_id = ht.id
                     JOIN teams at ON g.away_team_id = at.id
                     WHERE g.season = %s AND g.week = %s
-                    ORDER BY g.excitement_index DESC NULLS LAST;
+                    ORDER BY COALESCE(NULLIF(g.excitement_index, 0), g.projected_excitement) DESC NULLS LAST;
                 """, (s_val, w_val))
                 games = cur.fetchall()
                 if not games:
@@ -450,7 +451,9 @@ def get_weekly_slate(week: int, season: int = 2035) -> str:
                         "away_score": g[2],
                         "home_score": g[4],
                         "margin": g[5],
-                        "excitement_index": round(float(g[6]), 2)
+                        # 70–100 display scale; scheduled games carry the pre-game projection instead
+                        "excitement_index": display_excitement(g[6]) if g[9] == "COMPLETED" and g[6] else None,
+                        "projected_excitement": display_excitement(g[10]) if g[9] != "COMPLETED" else None,
                     })
 
                 result = {

@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS games (
     game_time VARCHAR(50),
     game_type VARCHAR(20) DEFAULT 'REGULAR_SEASON',
     excitement_index DOUBLE PRECISION DEFAULT 0.0,
+    projected_excitement DOUBLE PRECISION,    -- pre-game projected E (raw scale); engines/excitement_projection.py
     CONSTRAINT games_season_week_home_away_key UNIQUE (season, week, home_team_id, away_team_id)
 );
 

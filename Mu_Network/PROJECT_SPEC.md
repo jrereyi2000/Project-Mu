@@ -464,7 +464,7 @@ Fantasy screens use a separate light design system with navy, green, mint, and p
 - Three editorial analysis cards.
 - Signal Stream with three analyst takes.
 - Quick Rankings widget.
-- Highest Watchability game widget.
+- Must-watch games widget ("Excitement Index™"): the week's top 3 games from `/api/fantasy/dashboard` `excitement_games`, ranked by the (projected) Excitement Index plus division-game and playoff-race stakes. Scores use the 70–100 display scale; upcoming games are marked "proj".
 
 #### Interactions
 
@@ -472,7 +472,7 @@ Fantasy screens use a separate light design system with navy, green, mint, and p
 - Quick Rankings metric tabs switch among ADP, ROS Rankings, Weekly, and Projections labels; the displayed player values remain unchanged.
 - Selecting a Quick Rankings player opens the fantasy player modal.
 - “View all projections” opens Weekly Projections.
-- Watchability games open Gridiron game pages.
+- Must-watch games open Gridiron game pages.
 - “View all analysis” points to an unsupported hash and falls back to the Gridiron newsroom.
 
 ### 6.2 Fantasy Rankings Family
@@ -564,7 +564,7 @@ The right rail includes:
 - **Live NFL Widget (`SocialNflWidget`)**:
   - Features the official NFL shield logo (`https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png`).
   - Queries `/api/schedule` for the active week (`systemStatus.week`).
-  - Displays the top 3 most exciting matchups ranked by Excitement Index ($E$).
+  - Displays the top 3 most exciting matchups ranked by Excitement Index ($E$): the final index for completed games, the pre-game projection otherwise (`excitement_index` on the 70–100 display scale; `excitement_projected` marks projections).
   - Shows team logos, win-loss records, and kickoff day/time.
   - Links directly to game pages (`#game-{id}`).
 - “Who to follow” suggestions.

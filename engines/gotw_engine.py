@@ -47,6 +47,21 @@ def excitement_index(c: float, p: float, s: float, u: float) -> float:
     return round(WEIGHTS["C"] * c + WEIGHTS["P"] * p + WEIGHTS["S"] * s + WEIGHTS["U"] * u, 2)
 
 
+# Display scale: raw E (stored, used by TWI/popularity) is shown to readers and writers on 70–100.
+# A dull game (raw 40, ~5th percentile) shows as 70 and a perfect game (raw 100) as 100; below 40 floors at 70.
+DISPLAY_RAW_FLOOR = 40.0
+DISPLAY_MIN = 70.0
+DISPLAY_MAX = 100.0
+
+
+def display_excitement(raw: Optional[float]) -> Optional[float]:
+    """Maps a raw or projected Excitement Index onto the 70–100 display scale (None stays None)."""
+    if raw is None:
+        return None
+    scaled = DISPLAY_MIN + (DISPLAY_MAX - DISPLAY_MIN) * (float(raw) - DISPLAY_RAW_FLOOR) / (100.0 - DISPLAY_RAW_FLOOR)
+    return round(min(DISPLAY_MAX, max(DISPLAY_MIN, scaled)), 1)
+
+
 def fetch_game_player_rows(cur, game_ids: List[int]) -> list:
     """One row per player_stats line: (game_id, team_id, overall_rating, pass_yards, pass_tds,
     rush_yards, rush_tds, rec_yards, rec_tds).

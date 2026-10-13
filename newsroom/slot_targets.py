@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 
 import psycopg
 
+from engines.gotw_engine import display_excitement
+
 PRIMER = "LOCAL_MATCHUP_PRIMER"
 STATE_OF_THE_UNION = "FRANCHISE_STATE_OF_THE_UNION"
 PLAYOFF_AUTOPSY = "PLAYOFF_AUTOPSY"
@@ -23,15 +25,20 @@ PHASE_4_WEEKS = range(15, 19)
 PLAYOFF_TEAMS_PER_CONFERENCE = 7
 PRIMER_ROTATION_WEEKS = 2
 
+# Editorial stakes added to a game's (projected) raw Excitement Index when picking marquee games.
+# These are editorial weights, not part of the Excitement Index itself (which has no standings input).
+DIVISION_GAME_BONUS = 3.0
+PLAYOFF_RACE_BONUS = 2.0   # per team not yet mathematically eliminated (regular season only)
+
 
 @dataclass
 class LeagueSnapshot:
     season: int
     week: int
-    # team_id -> {"name", "conference", "wins", "losses", "popularity"}
+    # team_id -> {"name", "conference", "division", "wins", "losses", "popularity"}
     teams: dict = field(default_factory=dict)
-    # Non-bye games for `week`: {"game_id", "home_team_id", "away_team_id", "excitement", "matchup_twi"}.
-    # "excitement" is the stored index for scored games, else the projected value shown by the API.
+    # Non-bye games for `week`: {"game_id", "home_team_id", "away_team_id", "excitement", "projected"}.
+    # "excitement" is the raw stored E for completed games, else the raw projected E (None if not projected yet).
     week_games: list = field(default_factory=list)
     # Completed games from `week - 1`: {"game_id", "home_team_id", "away_team_id", "home_score", "away_score"}
     prior_week_results: list = field(default_factory=list)
@@ -40,14 +47,6 @@ class LeagueSnapshot:
     # Earlier LOCAL_MATCHUP_PRIMER coverage this season: [(team_id, week), ...]
     primer_history: list = field(default_factory=list)
     teams_with_beat_reporters: set = field(default_factory=set)
-
-
-def projected_excitement(stored_excitement: float, matchup_twi: float) -> float:
-    """Stored Excitement Index when the game has been scored; otherwise the projected Scheduled
-    Excitement used by the API (PROJECT_SPEC §2.2): min(98, max(85, floor(Matchup TWI × 1.45)))."""
-    if stored_excitement and stored_excitement > 0:
-        return stored_excitement
-    return float(min(98, max(85, int(matchup_twi * 1.45))))
 
 
 def _popularity(snap: LeagueSnapshot, team_id: int) -> float:
@@ -94,11 +93,44 @@ def _pick_by_popularity(snap: LeagueSnapshot, candidates, used: set, count: int)
 
 
 # ---------------------------------------------------------------------------
+# Marquee game ranking (excitement + editorial stakes)
+# ---------------------------------------------------------------------------
+
+def is_division_game(snap: LeagueSnapshot, game: dict) -> bool:
+    home = snap.teams.get(game["home_team_id"], {})
+    away = snap.teams.get(game["away_team_id"], {})
+    return bool(home.get("division")) and home.get("division") == away.get("division") and home.get("conference") == away.get("conference")
+
+
+def rank_games_by_interest(snap: LeagueSnapshot) -> list:
+    """Week games ordered by editorial interest: raw (projected) Excitement Index + division-game bonus +
+    playoff-race bonus per team still alive (regular season). Each returned game gains "interest",
+    "division_game" and "teams_in_race". Games without any excitement value rank on stakes alone."""
+    alive = set()
+    if snap.week <= REGULAR_SEASON_FINAL_WEEK:
+        alive = set(snap.teams) - set(mathematically_eliminated_team_ids(snap))
+    ranked = []
+    for game in snap.week_games:
+        division_game = is_division_game(snap, game)
+        in_race = sum(1 for t in (game["home_team_id"], game["away_team_id"]) if t in alive)
+        interest = (game.get("excitement") or 0.0) + (DIVISION_GAME_BONUS if division_game else 0.0) + PLAYOFF_RACE_BONUS * in_race
+        ranked.append({**game, "interest": interest, "division_game": division_game, "teams_in_race": in_race})
+    return sorted(ranked, key=lambda g: (-g["interest"], g["game_id"]))
+
+
+def _excitement_phrase(game: dict) -> str:
+    shown = display_excitement(game.get("excitement"))
+    if shown is None:
+        return "no excitement projection yet"
+    return f"{'projected ' if game.get('projected') else ''}Excitement Index {shown:.0f}/100"
+
+
+# ---------------------------------------------------------------------------
 # Matchup primers
 # ---------------------------------------------------------------------------
 
 def _primer_targets(snap: LeagueSnapshot, count: int, used: set) -> list:
-    """Top games by projected excitement; skip teams primed in the last PRIMER_ROTATION_WEEKS weeks
+    """Top games by editorial interest (rank_games_by_interest); skip teams primed in the last PRIMER_ROTATION_WEEKS weeks
     (regular season only), then cover the side with fewer primers this season (ties: more popular)."""
     season_counts = {}
     recent = set()
@@ -108,8 +140,7 @@ def _primer_targets(snap: LeagueSnapshot, count: int, used: set) -> list:
             recent.add(team_id)
 
     apply_rotation = snap.week <= REGULAR_SEASON_FINAL_WEEK
-    # Projected excitement is clamped to 85–98, so the raw matchup TWI breaks ties.
-    games = sorted(snap.week_games, key=lambda g: (-(g.get("excitement") or 0.0), -(g.get("matchup_twi") or 0.0), g["game_id"]))
+    games = rank_games_by_interest(snap)
 
     def eligible_sides(game, respect_rotation):
         sides = []
@@ -139,7 +170,7 @@ def _primer_targets(snap: LeagueSnapshot, count: int, used: set) -> list:
             note = (
                 f"Preview {_team_label(snap, team_id)} vs. "
                 f"{_team_label(snap, game['away_team_id'] if team_id == game['home_team_id'] else game['home_team_id'])} "
-                f"(game ID {game['game_id']}, projected excitement {game.get('excitement') or 0:.1f}) "
+                f"(game ID {game['game_id']}, {_excitement_phrase(game)}{', division game' if game['division_game'] else ''}) "
                 f"from the {snap.teams.get(team_id, {}).get('name', 'home')} locker room."
             )
             targets.append(_game_target(snap, "MATCHUP_PRIMER", game, team_id, note))
@@ -150,7 +181,7 @@ def _super_bowl_primer_targets(snap: LeagueSnapshot, used: set) -> list:
     """Super Bowl Week: first primer slot = AFC champion, second = NFC champion."""
     if not snap.week_games:
         return []
-    game = max(snap.week_games, key=lambda g: (g.get("excitement") or 0.0, g.get("matchup_twi") or 0.0))
+    game = rank_games_by_interest(snap)[0]
     by_conf = {snap.teams.get(t, {}).get("conference"): t for t in (game["home_team_id"], game["away_team_id"])}
     targets = []
     for conf in ("AFC", "NFC"):
@@ -289,29 +320,26 @@ def load_league_snapshot(db_conn_info: str, season: int, week: int) -> LeagueSna
     with psycopg.connect(db_conn_info) as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT t.id, t.name, t.conference, COALESCE(ts.wins, 0), COALESCE(ts.losses, 0),
+                SELECT t.id, t.name, t.conference, t.division, COALESCE(ts.wins, 0), COALESCE(ts.losses, 0),
                        COALESCE(ts.popularity_index, 0)
                 FROM teams t
                 LEFT JOIN team_seasons ts ON ts.team_id = t.id AND ts.season = %s;
             """, (season,))
-            for tid, name, conf, wins, losses, pop in cur.fetchall():
-                snap.teams[tid] = {"name": name, "conference": conf, "wins": wins, "losses": losses, "popularity": float(pop)}
+            for tid, name, conf, division, wins, losses, pop in cur.fetchall():
+                snap.teams[tid] = {"name": name, "conference": conf, "division": division, "wins": wins, "losses": losses, "popularity": float(pop)}
 
             cur.execute("""
-                SELECT g.id, g.home_team_id, g.away_team_id, COALESCE(g.excitement_index, 0),
-                       COALESCE(th.watchability_index, 50), COALESCE(ta.watchability_index, 50)
-                FROM games g
-                LEFT JOIN team_seasons th ON th.team_id = g.home_team_id AND th.season = g.season
-                LEFT JOIN team_seasons ta ON ta.team_id = g.away_team_id AND ta.season = g.season
-                WHERE g.season = %s AND g.week = %s AND g.status <> 'BYE'
-                  AND g.home_team_id IS NOT NULL AND g.away_team_id IS NOT NULL;
+                SELECT id, home_team_id, away_team_id, status, excitement_index, projected_excitement
+                FROM games
+                WHERE season = %s AND week = %s AND status <> 'BYE'
+                  AND home_team_id IS NOT NULL AND away_team_id IS NOT NULL;
             """, (season, week))
-            for gid, h, a, ex, h_twi, a_twi in cur.fetchall():
-                matchup_twi = (float(h_twi) + float(a_twi)) / 2.0
+            for gid, h, a, status, ex, proj in cur.fetchall():
+                completed = status == "COMPLETED" and ex is not None and ex > 0
+                excitement = float(ex) if completed else (float(proj) if proj is not None else None)
                 snap.week_games.append({
                     "game_id": gid, "home_team_id": h, "away_team_id": a,
-                    "excitement": projected_excitement(float(ex), matchup_twi),
-                    "matchup_twi": matchup_twi,
+                    "excitement": excitement, "projected": not completed and proj is not None,
                 })
 
             cur.execute("""

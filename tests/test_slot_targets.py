@@ -7,7 +7,7 @@ import unittest
 from newsroom.slot_targets import (
     LeagueSnapshot,
     mathematically_eliminated_team_ids,
-    projected_excitement,
+    rank_games_by_interest,
     resolve_slot_targets,
 )
 
@@ -26,8 +26,8 @@ def league(season=2035, week=7, **kwargs):
     return snap
 
 
-def game(gid, home, away, excitement=0.0, matchup_twi=0.0):
-    return {"game_id": gid, "home_team_id": home, "away_team_id": away, "excitement": excitement, "matchup_twi": matchup_twi}
+def game(gid, home, away, excitement=0.0, projected=True):
+    return {"game_id": gid, "home_team_id": home, "away_team_id": away, "excitement": excitement, "projected": projected}
 
 
 def result(gid, home, away, hs, as_):
@@ -39,16 +39,6 @@ class PrimerTargetTests(unittest.TestCase):
         snap = league(week_games=[game(1, 1, 2, 50), game(2, 3, 4, 90), game(3, 5, 6, 70), game(4, 7, 8, 80)])
         targets = resolve_slot_targets(PRIMER_SLOTS, snap)
         self.assertEqual([t["game_id"] for t in targets], [2, 4, 3])
-
-    def test_clamped_excitement_ties_broken_by_matchup_twi(self):
-        snap = league(week_games=[game(1, 1, 2, 98, 70.0), game(2, 3, 4, 98, 81.5), game(3, 5, 6, 85, 40.0)])
-        self.assertEqual([t["game_id"] for t in resolve_slot_targets(PRIMER_SLOTS, snap)], [2, 1, 3])
-
-    def test_projected_excitement_matches_api_formula(self):
-        self.assertEqual(projected_excitement(0, 50.0), 85.0)    # 72.5 clamps up
-        self.assertEqual(projected_excitement(0, 62.0), 89.0)    # floor(89.9)
-        self.assertEqual(projected_excitement(0, 80.0), 98.0)    # 116 clamps down
-        self.assertEqual(projected_excitement(71.3, 80.0), 71.3)  # scored games keep their stored index
 
     def test_side_with_fewer_primers_this_season_wins(self):
         # Team 4 is more popular, but already had 2 primers (outside the rotation window); team 3 had none.
@@ -92,6 +82,42 @@ class PrimerTargetTests(unittest.TestCase):
         afc, nfc = resolve_slot_targets(slots, snap)
         self.assertEqual((afc["team_id"], nfc["team_id"]), (5, 20))
         self.assertEqual(afc["opponent_team_id"], 20)
+
+
+class InterestRankingTests(unittest.TestCase):
+    def test_division_game_bonus(self):
+        snap = league(week_games=[game(1, 1, 2, 60), game(2, 3, 4, 58)])
+        snap.teams[3]["division"] = snap.teams[4]["division"] = "AFC East"
+        ranked = rank_games_by_interest(snap)
+        self.assertEqual([g["game_id"] for g in ranked], [2, 1])  # 58 + 3 beats 60
+        self.assertTrue(ranked[0]["division_game"])
+
+    def test_same_division_name_in_other_conference_is_not_a_division_game(self):
+        snap = league(week_games=[game(1, 1, 20, 60)])
+        snap.teams[1]["division"] = snap.teams[20]["division"] = "East"
+        self.assertFalse(rank_games_by_interest(snap)[0]["division_game"])
+
+    def test_playoff_race_bonus_per_team_alive(self):
+        snap = league(week=16, week_games=[game(1, 9, 10, 60), game(2, 2, 3, 57)])
+        for t in range(1, 8):
+            snap.teams[t]["wins"] = 12
+        # Teams 9 and 10 are eliminated (no remaining games, 7 teams ahead); teams 2 and 3 are alive.
+        ranked = rank_games_by_interest(snap)
+        self.assertEqual([g["game_id"] for g in ranked], [2, 1])  # 57 + 2×2 beats 60
+        self.assertEqual(ranked[0]["teams_in_race"], 2)
+
+    def test_no_race_bonus_in_postseason(self):
+        snap = league(week=20, week_games=[game(1, 1, 2, 60)])
+        self.assertEqual(rank_games_by_interest(snap)[0]["interest"], 60)
+
+    def test_unprojected_games_rank_on_stakes_only(self):
+        snap = league(week_games=[game(1, 1, 2, None), game(2, 3, 4, 50)])
+        self.assertEqual([g["game_id"] for g in rank_games_by_interest(snap)], [2, 1])
+
+    def test_primer_note_uses_display_scale(self):
+        snap = league(week_games=[game(1, 1, 2, 58.2)])
+        note = resolve_slot_targets(PRIMER_SLOTS[:1], snap)[0]["note"]
+        self.assertIn("projected Excitement Index 79/100", note)
 
 
 class ExitTargetTests(unittest.TestCase):

@@ -10,6 +10,8 @@ import datetime
 from typing import Optional
 import re
 
+from engines.gotw_engine import display_excitement
+
 CONN_INFO = "host=localhost dbname=madden user=postgres password=postgres"
 
 db_pool = ConnectionPool(
@@ -76,6 +78,7 @@ def get_schedule(season: int = 2035, week: int = 18):
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT g.id, g.week, g.game_time, g.status, g.home_score, g.away_score, g.excitement_index,
+                       g.projected_excitement,
                        t_home.name AS home_name, t_home.abbreviation AS home_abbr, 
                        ts_home.wins AS home_wins, ts_home.losses AS home_losses,
                        ts_home.watchability_index AS home_twi,
@@ -113,10 +116,11 @@ def get_schedule(season: int = 2035, week: int = 18):
                 g['away_twi'] = a_twi
                 watchability = round((h_twi + a_twi) / 2.0, 2)
                 g['watchability'] = watchability
-                if g.get('status') == 'COMPLETED' and g.get('excitement_index') and float(g['excitement_index']) > 0:
-                    g['excitement_index'] = round(float(g['excitement_index']), 1)
-                else:
-                    g['excitement_index'] = min(98, max(85, int(watchability * 1.45)))
+                # Excitement Index on the 70–100 display scale: the final index once played, else the projection
+                completed = g.get('status') == 'COMPLETED' and g.get('excitement_index') and float(g['excitement_index']) > 0
+                projected = g.pop('projected_excitement', None)
+                g['excitement_index'] = display_excitement(g['excitement_index'] if completed else projected)
+                g['excitement_projected'] = (not completed) and projected is not None
             return sorted(games, key=get_sort_key)
 
 @app.get("/api/team/{abbr}")
@@ -1108,37 +1112,38 @@ def get_team_stats_api(season: int = 2035, category: str = "Passing"):
 def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
-            # 1. Watchability / Excitement games for the requested week
+            # 1. Marquee games for the requested week: (projected) Excitement Index + editorial stakes
+            #    (division games, teams still in the playoff race) — same ranking as matchup-primer picks.
+            from newsroom.slot_targets import load_league_snapshot, rank_games_by_interest
+            ranked = rank_games_by_interest(load_league_snapshot(CONN_INFO, season, week))[:3]
             cur.execute("""
-                SELECT g.id, g.week, g.game_time,
-                       t_home.name as home_name, t_home.abbreviation as home_abbr,
-                       t_away.name as away_name, t_away.abbreviation as away_abbr,
-                       ROUND(((COALESCE(ts_home.watchability_index, 50) + COALESCE(ts_away.watchability_index, 50)) / 2)::numeric, 1) as watch_score
+                SELECT g.id, t_home.name as home_name, t_home.abbreviation as home_abbr,
+                       t_away.name as away_name, t_away.abbreviation as away_abbr
                 FROM games g
                 JOIN teams t_home ON g.home_team_id = t_home.id
                 JOIN teams t_away ON g.away_team_id = t_away.id
-                LEFT JOIN team_seasons ts_home ON ts_home.team_id = t_home.id AND ts_home.season = g.season
-                LEFT JOIN team_seasons ts_away ON ts_away.team_id = t_away.id AND ts_away.season = g.season
-                WHERE g.season = %s AND g.week = %s
-                ORDER BY watch_score DESC
-                LIMIT 3;
-            """, (season, week))
-            games_raw = cur.fetchall()
+                WHERE g.id = ANY(%s);
+            """, ([g["game_id"] for g in ranked],))
+            names = {r['id']: r for r in cur.fetchall()}
             excitement_games = []
-            for r in games_raw:
-                w_score = int(r['watch_score'])
-                # Scale watch score nicely between 86 and 96 for excitement display if lower
-                scaled_score = min(98, max(85, int(w_score * 1.45)))
+            for g in ranked:
+                r = names[g["game_id"]]
+                tags = ["Projected" if g["projected"] else ("Final" if g["excitement"] is not None else "Not yet projected")]
+                if g["division_game"]:
+                    tags.append("Division game")
+                if g["teams_in_race"] == 2:
+                    tags.append("Playoff race")
                 excitement_games.append({
-                    "id": r['id'],
+                    "id": g["game_id"],
                     "away": display_team_abbr(r['away_abbr']).lower(),
                     "home": display_team_abbr(r['home_abbr']).lower(),
                     "away_name": r['away_name'],
                     "home_name": r['home_name'],
                     "away_abbr": display_team_abbr(r['away_abbr']),
                     "home_abbr": display_team_abbr(r['home_abbr']),
-                    "score": scaled_score,
-                    "note": f"Week {week} Matchup · Division Stakes"
+                    "score": display_excitement(g["excitement"]),
+                    "projected": g["projected"],
+                    "note": f"Week {week} · " + " · ".join(tags),
                 })
 
             # Pre-fetch players lookup

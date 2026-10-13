@@ -3152,7 +3152,7 @@ function FantasyDashboard() {
 
             <section className="fantasy-excitement">
               <div className="fantasy-excitement-head">
-                <div><span>EXCITEMENT INDEX™</span><h2>Highest watchability</h2></div>
+                <div><span>EXCITEMENT INDEX™</span><h2>Must-watch games</h2></div>
                 <span>WEEK {systemStatus.week}</span>
               </div>
               {excitementGames.map((game: any, index: number) => (
@@ -3163,10 +3163,10 @@ function FantasyDashboard() {
                     <img src={logo(game.home)} alt="" />
                   </div>
                   <div><strong>{game.away_abbr || game.away.toUpperCase()} <i>@</i> {game.home_abbr || game.home.toUpperCase()}</strong><small>{game.note}</small></div>
-                  <b>{game.score}<small>/100</small></b>
+                  <b>{game.score ?? "—"}<small>{game.projected ? " proj" : "/100"}</small></b>
                 </a>
               ))}
-              <p>Index combines projected points, pace, star power, and game volatility.</p>
+              <p>Excitement Index on a 70–100 scale (70 = dull, 90+ = classic). Upcoming games show a pre-game projection; picks also weigh division and playoff-race stakes.</p>
             </section>
           </aside>
         </div>

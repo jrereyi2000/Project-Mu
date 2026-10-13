@@ -169,6 +169,7 @@ def generate_team_and_player_stats(season_year: int):
         from engines.twi_engine import TWIEngine
         from engines.popularity_engine import PopularityEngine
         from engines.player_popularity_engine import PlayerPopularityEngine
+        from engines.excitement_projection import project_scheduled_games
         from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
 
         # 0. Score Game Excitement (E) for games that have none yet plus the games just backfilled above.
@@ -187,6 +188,10 @@ def generate_team_and_player_stats(season_year: int):
 
         print("-> Running Player Popularity Engine...")
         PlayerPopularityEngine().calculate_popularity(season=season_year)
+
+        # Project E for every still-scheduled game from the season so far (feeds the site, the brief and primer picks)
+        print("-> Projecting Excitement Index for scheduled games...")
+        project_scheduled_games(season_year)
         
         # 2. Compile the Assignment Brief for the AI
         print("-> Compiling AI Assignment Brief (Weekly Slate Digest)...")

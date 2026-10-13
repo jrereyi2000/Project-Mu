@@ -8,6 +8,7 @@ import collections
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
+from engines.gotw_engine import display_excitement
 from newsroom.db_tools import (
     get_game_box_score,
     get_player_season_stats,
@@ -106,6 +107,11 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
             "most_watchable_teams": [],
             "most_popular_teams": []
         },
+        "excitement_scale_note": (
+            "Excitement Index values are on a 70–100 scale: about 70 is a dull game, about 80 is typical, "
+            "90+ is a classic. projected_excitement is a pre-game projection; actual games often land well "
+            "above or below it."
+        ),
         "curatorial_guidance": (
             "CURATORIAL AUTONOMY: You have complete editorial independence to choose which matchups, "
             "teams, or players from this slate to highlight. Do NOT feel obligated to write about "
@@ -143,7 +149,7 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                     "away_score": g[2],
                     "home_score": g[4],
                     "margin": g[5],
-                    "excitement_index": round(float(g[6]), 2)
+                    "excitement_index": display_excitement(g[6]) if g[6] else None
                 }
                 brief["recap_slate"]["all_games"].append(game_dict)
                 # Populate default slate_manifest with completed games
@@ -159,13 +165,13 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                     at.name AS away_team,
                     ht.name AS home_team,
                     COALESCE(g.game_time, 'TBD') as kickoff_time,
-                    COALESCE(g.excitement_index, 0) as excitement_index,
+                    g.projected_excitement,
                     g.home_team_id, g.away_team_id
                 FROM games g
                 JOIN teams ht ON g.home_team_id = ht.id
                 JOIN teams at ON g.away_team_id = at.id
                 WHERE g.season = %s AND g.week = %s AND g.status IN ('SCHEDULED', 'BYE')
-                ORDER BY g.excitement_index DESC NULLS LAST;
+                ORDER BY g.projected_excitement DESC NULLS LAST;
             """, (season, week))
             preview_games = cur.fetchall()
 
@@ -176,7 +182,7 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                     "away_team": f"{pg[1]} (ID: {pg[6]})",
                     "home_team": f"{pg[2]} (ID: {pg[5]})",
                     "kickoff_time": pg[3],
-                    "projected_excitement": round(float(pg[4]), 2)
+                    "projected_excitement": display_excitement(pg[4])
                 })
             brief["preview_slate"]["total_games"] = len(preview_games)
 
