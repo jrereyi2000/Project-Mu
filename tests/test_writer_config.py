@@ -99,6 +99,22 @@ class WriterConfigTests(unittest.TestCase):
         self.assertTrue({"ROUNDTABLE_PANEL", "SKIP_BAYLESS", "LOCAL_BEAT_REPORTER"} <= excluded)
         self.assertNotIn("SKIP_TWEET", excluded)  # Skip still tweets, once, through his tweet account
 
+    def test_no_contract_asks(self):
+        # Contracts aren't modelled; prompts may forbid citing them but must not ask for them.
+        asks = ("contract-year", "analyzing the salary cap", "cap space", "cap investment", "extension value", "to their contract")
+        texts = {f"persona {k}": v for k, v in self.personas.items()}
+        for at_id, info in self.article_types.items():
+            texts[at_id] = " ".join(str(v) for v in info.values())
+        for name, text in texts.items():
+            for phrase in asks:
+                self.assertNotIn(phrase, text.lower(), f"{name} asks about '{phrase}'")
+
+    def test_historical_comparisons_are_optional(self):
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            src = f.read()
+        self.assertIn("HISTORICAL COMPARISONS (OPTIONAL)", src)
+        self.assertNotIn("State the historical comparison explicitly", src)
+
     def test_bayless_columns_use_his_article_persona(self):
         self.assertEqual(self.aliases.get("BAYLESS"), "SKIP_BAYLESS")
         self.assertIn("SKIP_BAYLESS", self.article_types["NATIONAL_OPINION_COLUMN"]["allowed_writers"])

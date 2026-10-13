@@ -265,6 +265,24 @@ def _():
     return f"checked weeks {weeks}"
 
 
+@check("agent memory: tables exist and every kind of agent's memory block builds")
+def _():
+    from newsroom import agent_memory
+    out = {}
+    with psycopg.connect(CONN) as conn, conn.cursor() as cur:
+        assert agent_memory.tables_exist(cur), "memory tables missing (apply db/migrations/2026_10_20_agent_memory.sql)"
+        cur.execute("""SELECT DISTINCT ON (archetype) agent_id, archetype, assigned_team_id FROM agent_memories
+                       WHERE archetype IN ('BARNWELL', 'LOCAL_BEAT_REPORTER', 'DIE_HARD_FAN', 'SKIP_TWEET', 'ROUNDTABLE_PANEL')
+                       ORDER BY archetype, id;""")
+        for agent_id, arch, team in cur.fetchall():
+            out[f"{arch} {agent_id}"] = agent_memory.build_memory_block(cur, agent_id, SEASON, PUB_WEEK, team) or "(no memories yet)"
+        cur.execute("SELECT COUNT(*) FROM agent_memory_entries;"); n_e = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM agent_predictions;"); n_p = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM agent_season_summaries;"); n_s = cur.fetchone()[0]
+    save("60_memory_blocks.json", out)
+    return f"{len(out)} agents built; stored: {n_e} takes, {n_p} predictions, {n_s} summaries"
+
+
 lines = [f"{s:5}  {n}\n       {d}" for s, n, d in results]
 summary = "\n".join(lines)
 save("99_summary.txt", summary)

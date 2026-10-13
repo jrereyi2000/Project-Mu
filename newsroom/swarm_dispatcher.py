@@ -12,6 +12,7 @@ from newsroom.entity_patterns import team_mention_pattern
 from newsroom.run_context import reset_article_context, set_article_context
 from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
 from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings, records_by_team
+from newsroom import agent_memory
 from newsroom.playoff_overrides import find_active_override, normalize_temporal_mode, validate_playoff_overrides
 from newsroom.power_rankings import (
     fix_prompt as power_rankings_fix_prompt,
@@ -749,6 +750,17 @@ class SwarmDispatcher:
 Example Prompt Hook: {article_type_info.get('example_prompt_hook', '')}
 """
 
+        # Evolving memory (newsroom/agent_memory.py): season summary, recent takes, takes about this subject, and
+        # graded predictions, all from before this publication week. Missing tables -> no block.
+        memory_block = ""
+        try:
+            with psycopg.connect(self.db.db_conn_info) as mconn, mconn.cursor() as mcur:
+                subject_team = slot_target["team_id"] if slot_target else assigned_team_id
+                block = agent_memory.build_memory_block(mcur, agent_id, season, week, subject_team)
+                memory_block = f"\n{block}\n" if block else ""
+        except Exception as e:
+            print(f"⚠️  [MEMORY UNAVAILABLE] {agent_id}: {e}")
+
         system_instruction = f"""ROLE & PERSONA:
 {base_archetype_prompt}
 
@@ -759,7 +771,7 @@ IDENTITY & HANDLE:
 
 PERSISTENT WORLDVIEW & MEMORIES:
 {persistent_memory or 'No specific grudges or previous memories recorded.'}
-
+{memory_block}
 AVAILABLE DATABASE REAC/TOOLS:
 You have autonomous access to query the simulation database using these functions:
 {tool_descriptions}
@@ -778,6 +790,7 @@ Assigned Team ID: {assigned_team_id if assigned_team_id is not None else 'Nation
         recap_week = brief.get("recap_week") or (max(1, week - 1) if week > 1 else 1)
 
         temporal_instruction = ""
+        preview_week = (active_playoff_override or {}).get("preview_week") or week
         if temporal_mode == "RETROSPECTIVE":
             temporal_instruction = f"""
 TEMPORAL PUBLISHING CONTEXT (RETROSPECTIVE SLATE REVIEW):
@@ -788,7 +801,6 @@ TEMPORAL PUBLISHING CONTEXT (RETROSPECTIVE SLATE REVIEW):
 """
         elif temporal_mode == "PROSPECTIVE":
             # An override can preview a later week (Week 22, the Super Bowl bye, previews the Week 23 game).
-            preview_week = (active_playoff_override or {}).get("preview_week") or week
             preview_lookup = (
                 f"\n- Week {preview_week} matchups are not in the assignment brief's preview_slate; call `get_weekly_slate` with week={preview_week} to get them."
                 if preview_week != week else ""
@@ -812,7 +824,7 @@ TEMPORAL PUBLISHING CONTEXT (CUMULATIVE / ENTERING WEEK {week}):
         national_writer_guidelines = ""
         if content_type == "ARTICLE" and archetype in national_writers_list:
             national_writer_guidelines = """
-CRITICAL WRITER RESEARCH TOOLS & HISTORICAL COMPARISONS:
+CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 1. DEEP INVESTIGATIVE RESEARCH: Conduct thorough investigations into your subjects. Query division standings, team advanced analytics, season schedules, game box scores, and player context for all contenders, pretenders, or matchup subjects you evaluate. Call whatever tools you need to build an ironclad case with granular facts and box-score details. Once you have gathered sufficient evidence across your subjects, synthesize your findings into the full article.
 
 2. RESEARCH TOOLS: First, analyze the provided JSON ASSIGNMENT BRIEF. You have autonomous database tools to dive into any game, team, box score, season schedule, standings, or player across the league.
@@ -830,11 +842,7 @@ CRITICAL WRITER RESEARCH TOOLS & HISTORICAL COMPARISONS:
 - If you need draft pick trade points (Jimmy Johnson model) and trade package scenarios, call `get_draft_trade_value`.
 - If you need a franchise's rebuild lifecycle stage and draft posture, call `get_franchise_rebuild_status`.
 
-3. HISTORICAL COMPARISONS (1990–2023): Do not invent or hallucinate historical teams. You possess deep knowledge of NFL history. When analyzing the current week's data, you must independently match the team's statistical profile (e.g., their tempo, watchability, or trajectory) to a real-life historical NFL team from 1990–2023.
-- If a team is winning ugly with low tempo but high Win%, compare them to teams like the 2000 Ravens, 2015 Broncos, 2011 Giants or a team with a similar profile.
-- If a team has an explosive scoring pace but loses shootouts, compare them to the 2018 Chiefs, 2020 Cowboys or a team with a similar profile.
-- If a team is suffering from an aging roster and bloated cap, compare them to the late-era Drew Brees Saints or the 2022 Colts or a team with a similar profile.
-State the historical comparison explicitly in your analysis to validate your argument.
+3. HISTORICAL COMPARISONS (OPTIONAL): You may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens your argument (similar record shape, scoring profile, roster age, or trajectory). It is not required: most articles need none, and you should use at most one. Never invent a historical team or season, and don't reach for the most famous examples by default; pick the comparison that actually fits the numbers.
 """
         elif content_type == "ARTICLE" and archetype == "LOCAL_BEAT_REPORTER":
             national_writer_guidelines = """
@@ -967,6 +975,7 @@ If you need specific stats, use your database tools before producing your final 
             "playoff_override": active_playoff_override.get("override_name") if active_playoff_override else None,
             "temporal_mode": temporal_mode,
             "recap_week": recap_week,
+            "preview_week": preview_week,
             "system_instruction": system_instruction,
             "task_instruction": task_instruction,
         }
@@ -1232,6 +1241,9 @@ If you need specific stats, use your database tools before producing your final 
             except Exception as e:
                 print(f"Failed to record news_feed entry for {display}: {e}")
 
+            if article_id:
+                self._record_agent_memory(compiled_prompt, season, week, team_id, article_id, headline, generated_text, model)
+
         return {
             "text": generated_text,
             "headline": headline,
@@ -1241,6 +1253,38 @@ If you need specific stats, use your database tools before producing your final 
             "article_type": at_id,
             "error": failure_reason,
         }
+
+    def _record_agent_memory(self, compiled_prompt: dict, season: int, week: int, team_id, article_id: int,
+                             headline: str, text: str, model: str):
+        """After a saved post: tweets become a take as-is; articles get their score predictions parsed and up to 3
+        takes extracted with one extra model call. Failures are logged and never affect the saved article."""
+        agent_id = compiled_prompt.get("agent_id")
+        display = compiled_prompt.get("display_name") or agent_id
+        try:
+            with psycopg.connect(self.db.db_conn_info) as conn, conn.cursor() as cur:
+                if not agent_memory.tables_exist(cur):
+                    return
+                team_index = load_team_index(cur)
+                if compiled_prompt.get("content_type") == "TWEET":
+                    cur.execute("""INSERT INTO agent_memory_entries (agent_id, season, week, article_id, kind, text, team_id)
+                                   VALUES (%s, %s, %s, %s, 'TAKE', %s, %s);""",
+                                (agent_id, season, week, article_id, text[:agent_memory.TAKE_MAX_CHARS], team_id))
+                    conn.commit()
+                    return
+                n_preds = 0
+                if compiled_prompt.get("temporal_mode") == "PROSPECTIVE":
+                    preds = agent_memory.parse_score_predictions(
+                        text, team_index, panel=compiled_prompt.get("article_type") == "SUPER_BOWL_ROUNDTABLE_CONSENSUS")
+                    n_preds = agent_memory.store_predictions(cur, agent_id, season, compiled_prompt.get("preview_week") or week,
+                                                             article_id, preds)
+                conn.commit()
+                raw = agent_memory.gemini_text(self.api_key, model, agent_memory.takes_extraction_prompt(display, headline, text))
+                n_takes = agent_memory.store_takes(cur, agent_id, season, week, article_id,
+                                                   agent_memory.parse_takes_json(raw), team_index)
+                conn.commit()
+                print(f"🧠 [MEMORY] {display}: {n_takes} takes, {n_preds} predictions from article #{article_id}.")
+        except Exception as e:
+            print(f"⚠️  [MEMORY NOT RECORDED] {display} article #{article_id}: {e}")
 
     def _power_rankings_team_index(self) -> list:
         with psycopg.connect(self.db.db_conn_info) as conn:

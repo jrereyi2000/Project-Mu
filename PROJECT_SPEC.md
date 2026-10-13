@@ -49,6 +49,7 @@ Project Mu/
 │   ├── entity_patterns.py     #   Case-sensitive team-mention patterns for article tagging
 │   ├── local_portfolio.py     #   Plans a team's weekly local beat portfolio across its reporters
 │   ├── season_landscape.py    #   Division standings for the assignment brief's season_landscape
+│   ├── agent_memory.py        #   Evolving agent memory: takes log, prediction track record, weekly summaries (§7.7)
 │   ├── power_rankings.py      #   Parse/validate/store the weekly POWER_RANKINGS article → power_rankings table
 │   ├── weekly_run.py          #   Weekly national run: picks the publication week, skips published weeks, locks
 │   ├── db_tools.py            #   ReAct research tools exposed to writer agents
@@ -62,7 +63,7 @@ Project Mu/
 │   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql,
 │   │                          #   2026_10_15_stored_index_components.sql, 2026_10_16_trajectory_and_efficiency.sql,
 │   │                          #   2026_10_17_playoff_clout_awards_exposure.sql, 2026_10_18_power_rankings.sql,
-│   │                          #   2026_10_19_roundtable_panel_agent.sql (apply SQL ones via
+│   │                          #   2026_10_19_roundtable_panel_agent.sql, 2026_10_20_agent_memory.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -100,7 +101,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Video pipeline | `python3 -m pipeline.main --file data/video/<clip>.mp4 --db` |
 | Stat backfill + culture engines | `python3 -m engines.game_stat_generator` |
 | Publish the weekly newsroom slate | `python3 -m newsroom.weekly_run` (next week; skips if already published). `--week N` for a specific week (Week 1 preseason and Week 23 Super Bowl are manual), `--force` to publish again, `--dry-run` to print prompts with no Gemini calls or writes |
-| Clear generated articles/tweets | `bash db/clear_news_feed.sh` (backs up `news_feed`, tags and `power_rankings` to `db/backups/` first, asks to confirm; `--articles-only` keeps tweets) |
+| Clear generated articles/tweets | `bash db/clear_news_feed.sh` (backs up `news_feed`, tags, `power_rankings` and the agent-memory tables to `db/backups/` first, asks to confirm; deleting articles cascades to their takes and predictions, and agent season summaries are cleared; `--articles-only` keeps tweets) |
 | Re-score Excitement Index (E) | `python3 -m engines.gotw_engine --season 2035` (then refresh the culture indices below) |
 | Refresh culture indices (in this order) | `python3 -m engines.twi_engine` → `python3 -m engines.popularity_engine` → `python3 -m engines.player_popularity_engine` |
 | Opponent-Adjusted Game Credit + Trajectory | `python3 -m engines.game_credit_engine --season 2035` (independent of the culture indices) |
@@ -261,7 +262,10 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 
 ### 3.5 Media & Content Tables
 - **`agent_memories`**:
-  - `id`, `agent_id` (unique), `archetype`, `assigned_team_id`, `persistent_memory`, `handle`, `display_name`, `updated_at`.
+  - `id`, `agent_id` (unique), `archetype`, `assigned_team_id`, `persistent_memory` (the agent's fixed identity line), `handle`, `display_name`, `updated_at`.
+- **`agent_memory_entries`** (§7.7): `id`, `agent_id`, `season`, `week`, `article_id` (FK `news_feed` ON DELETE CASCADE), `kind` ('TAKE'), `text`, `team_id`, `player_id`, `created_at`.
+- **`agent_predictions`** (§7.7): `id`, `agent_id`, `season`, `week` (the predicted game's week), `article_id` (FK `news_feed` ON DELETE CASCADE), `game_id`, `label` (roundtable panellist or ''), `team_a_id`, `score_a`, `team_b_id`, `score_b`, `created_at`; unique `(article_id, game_id, label)`.
+- **`agent_season_summaries`** (§7.7): `agent_id`, `season`, `through_week`, `summary`, `updated_at`; primary key `(agent_id, season, through_week)`.
 - **`media_outputs`**:
   - `id`, `game_id` (FK to `games(id)` ON DELETE CASCADE), `content_type`, `payload_json` (jsonb), `created_at`.
 - **`news_feed`**:
@@ -400,6 +404,7 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
    - The swarm is a separate step from the stats sync. `game_stat_generator.py` only syncs stats and runs the engines; the video pipeline (`pipeline/main.py`, both live and file modes) calls `newsroom.weekly_run.run_weekly_swarm(season)` right after it on the same thread. The admin dashboard's `season_stats` edits and a direct `python3 -m engines.game_stat_generator` run no longer publish anything.
    - **Publication week:** a Week N slate is published before Week N kicks off (recaps Week N−1, previews Week N). `run_weekly_swarm` picks N = the latest *fully completed* week + 1, where fully completed means every non-`BYE` game that week is `COMPLETED`; Week 1 if none. A partly played week doesn't count, so a mid-week Season Stats capture maps to an already-published slate. After Week 21 it publishes Week 22; Week 23 (Super Bowl) and the Week 1 preseason slate must be run by hand with `--week`. Once the Super Bowl week is finished it publishes nothing.
    - **Once per week:** it skips the week if `news_feed` already has a national-slot article for it (`slot` = `Hero Slot`, `Standalone`, or `Slot N`; local wakeups use `Local Beat N` and don't count), unless `--force`. It holds a PostgreSQL advisory lock on (season, week) for the run, so two triggers can't generate the same week at once.
+   - **Memory refresh:** in a live run, before the brief, `agent_memory.refresh_season_summaries` rewrites the "season so far" summary of every agent with at least 3 new takes since its last summary (§7.7).
    - `run_weekly_swarm` compiles a dual-horizon Weekly Slate Digest:
      - **`season` / `calendar_week` / `recap_week`**: labels for the publication week and the week being recapped.
      - **`recap_slate`**: Completed scoreboard from `week - 1` (score, margin, excitement, team IDs), most exciting first, for retrospective recaps. It also picks the teams whose die-hard fans tweet in the weekly run.
@@ -448,11 +453,8 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - *Kimes:* games where efficiency tells a different story than the score, and smart defensive schemes.
   - *Orlovsky:* the most extreme quarterback performances only, good or bad.
   - *Clark:* locker-room dynamics, player sacrifice and leadership under pressure.
-- **Historical Analogy Mapping (1990–2023):** Writers must independently match the statistical profile of a simulation team to real-life historical NFL teams:
-  - *Winning ugly with low Pace & high Win%:* Compare to 2000 Ravens, 2015 Broncos, 2011 Giants.
-  - *Explosive Pace but losing shootouts:* Compare to 2018 Chiefs, 2020 Cowboys.
-  - *Suffering from Purgatory Penalty:* Compare to late-era Drew Brees Saints or 2022 Colts.
-  - All comparisons must be explicitly stated to validate the analytical argument without inventing historical franchises.
+- **Historical Comparisons (optional, 1990–2023):** National writers may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens the argument. It isn't required; the prompt says most articles need none, allows at most one, forbids inventing a historical team, and gives no canned examples (the old ones, e.g. the 2000 Ravens, got reused everywhere). Beat reporters don't receive this instruction.
+- **Invented detail vs. data:** Scores, records, stat lines and rankings must come from the brief or the tools. Writers may invent what happens inside games (specific plays, drives, game script) consistent with the final score and box score, and anonymous sources such as Sando's "NFC executive" quotes. Injuries, betting lines and contract details are never used: the league has no data for them, and the prompts either don't ask for them or forbid them.
 - **Database Context & Research Tools:** Agents have autonomous access to query live simulation context via ReAct AFC tools:
   - `get_weekly_slate`: Returns the complete scoreboard for all games in a given week with final scores, victory margins, excitement indices, and team IDs.
   - `get_season_standings`: Returns full NFL division standings with wins, losses, win %, points scored (PF), points allowed (PA), and point differential.
@@ -629,7 +631,7 @@ To eliminate editorial homogenization and ground long-form journalism in authent
       - *Yates:* one-paragraph setup → `## The Leaderboard` (markdown table from tool results) → `## Pace & Milestones` (5–8 factual bullets with paces computed from games played) → `## Three Things to Know` → one-line close ("That's the list.").
       - *Skip Bayless:* one-sentence take → `## The Indictment`/`The Coronation` (one-score games, late-season games vs. winning teams, playoff history, awards) → `### Exhibit A–C` (one game each, from the subject's schedule) → `## Don't Tell Me About the Numbers` → `### The Final Word`.
       - *Kimes:* pop-culture thesis → `## The Metric Disconnect` → `## The Schematic Chess Match` → `### The Walk-Off`.
-      - The four new formats (Simmons, Acho, Yates, Bayless) end with a grounding rule: every number must come from the brief or tool results, with no invented quotes, injuries, betting lines, contracts or broadcast details. `tests/test_writer_config.py` fails if any writer allowed on a type without its own structure lacks a column format.
+      - The four new formats (Simmons, Acho, Yates, Bayless) end with a grounding rule: every number must come from the brief or tool results; plays, in-game moments and quotes may be invented if they fit the final score and box score; no injuries, betting lines, contract details or broadcast details. `tests/test_writer_config.py` fails if any writer allowed on a type without its own structure lacks a column format.
     - **Prompt Hook:** Isolate the defining cultural narrative or superstar controversy of the week. Challenge mainstream consensus, run a historical parallel, or interrogate fourth-quarter execution.
 
 17. **The Playoff Autopsy** (`PLAYOFF_AUTOPSY`)
@@ -749,7 +751,7 @@ Local Beat Reporters cover their assigned franchise exclusively. Their research 
 
 3. **The Local Player Spotlight** (`LOCAL_PLAYER_SPOTLIGHT`)
    - **Beat Archetype:** Franchise Beat Reporter / Film Analyst.
-   - **Focus:** Single local player's role evolution, developmental leap, contract-year performance, tape & assignment execution, coaching trust, and roster implications.
+   - **Focus:** Single local player's role evolution, developmental leap, tape & assignment execution, coaching trust, and roster implications.
    - **Data Queried:** SpikeIndex, Touch Share & Scrimmage Yard Share (season), Positional Multiplier ($M_{\text{pos}}$), Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production Share ($Y_{\text{prod}}$).
 
 4. **The Local Season-to-Date Progress Report** (`LOCAL_SEASON_PROGRESS_REPORT`)
@@ -858,3 +860,14 @@ The Standalone `POWER_RANKINGS` article is the source of the stored weekly ranki
 2. **Parsing:** each numbered header that names a team (resolved by its unique nickname, or abbreviation) or carries a W-L record is a team entry. Other numbered headers (e.g. "## 2. The Drop-Off") are treated as section breaks. The bold lead-in is the `kicker`; the first paragraph after it is the `blurb` (a horizontal rule or blank line ends it, so the walk-off isn't included).
 3. **Validation:** the article must rank all 32 teams exactly once with ranks 1–32. In a live run, a failing article gets one rewrite in the same chat, with the specific errors (missing/duplicate teams or ranks, unmatched headers).
 4. **Storage:** on save to `news_feed`, a valid article replaces that week's `power_rankings` rows. Only the order, kicker and blurb come from the text. `record` is snapshotted from `team_seasons`, and `previous_rank` / `movement` come from the stored previous week, not the writer's indicators. An article that still fails validation is saved as an article but no ranking is stored (logged as `POWER RANKINGS NOT STORED`).
+
+### 7.7 Evolving Agent Memory (`newsroom/agent_memory.py`)
+Every agent (national writers, beat reporters, pundits and fans) keeps its hand-written identity line in `agent_memories.persistent_memory`, which never changes. Three evolving layers sit on top of it, written by `db/migrations/2026_10_20_agent_memory.sql`'s tables:
+1. **Takes log (`agent_memory_entries`).** After a live post is saved (`SwarmDispatcher._record_agent_memory`): a tweet is stored as a take as-is (no extra call); an article gets one extra model call (`takes_extraction_prompt`) that returns up to 3 first-person stances the writer committed to, each tagged with a team (resolved by nickname) and/or player.
+2. **Prediction track record (`agent_predictions`).** For `PROSPECTIVE` articles, `parse_score_predictions` reads `Projected Final: Team N, Team N` lines (and, for the Super Bowl Roundtable, `Panellist: Team N, Team N` lines, labelled by panellist) and stores each pick against the matching game in the article's preview week (`preview_week` for overrides). Picks are graded when a prompt is built: correct, wrong, push (a predicted or actual tie) or pending.
+3. **Season summaries (`agent_season_summaries`).** At the start of each live weekly run, agents with at least 3 new takes since their last summary get it rewritten through last week (one call each, ≤120 words, first person). Each rewrite is a new row per `through_week`, so older weeks keep the summary they saw.
+
+**In the prompt:** under "PERSISTENT WORLDVIEW & MEMORIES", after the identity line, `build_memory_block` adds the latest summary, the 6 most recent takes ("stay consistent, or say plainly that you've changed your mind"), up to 3 earlier takes about the article's subject team, and the track record: the season's winner-picking record plus the 5 most recent graded picks with the final score, telling the writer to own misses in their own voice. Only memories from before the article's publication week are used, and graded results only count games from earlier weeks, so regenerating an old week can't see the future. If the memory tables don't exist yet, prompts simply have no memory block.
+
+**Failure handling:** memory recording runs after the article is committed and never affects it; failures are logged as `MEMORY NOT RECORDED`. Deleting `news_feed` rows cascades to their takes and predictions; `db/clear_news_feed.sh` also clears the summaries. Tests: `tests/test_agent_memory.py`; `tools/verify_newsroom.py` builds memory blocks for each kind of agent against the live database.
+

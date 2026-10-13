@@ -4,8 +4,9 @@
 #   bash db/clear_news_feed.sh                 # all articles AND tweets
 #   bash db/clear_news_feed.sh --articles-only # articles only, keep tweets
 #
-# Deleting news_feed rows also removes their article_teams / article_players tags and any
-# power_rankings rows parsed from those articles (ON DELETE CASCADE). The backup is written to
+# Deleting news_feed rows also removes their article_teams / article_players tags, any power_rankings rows
+# parsed from those articles, and the agent takes and predictions recorded from them (ON DELETE CASCADE).
+# Agent season summaries are built from those takes, so they are deleted too. The backup is written to
 # db/backups/news_feed_backup_<timestamp>.sql first; restore it with:
 #   docker exec -i madden-db psql -U postgres -d madden < db/backups/news_feed_backup_<timestamp>.sql
 set -euo pipefail
@@ -31,9 +32,11 @@ fi
 
 # Back up every table the delete touches (power_rankings only if its migration has been applied).
 TABLES=(-t news_feed -t article_teams -t article_players)
-if [[ "$("${PSQL[@]}" -c "SELECT to_regclass('public.power_rankings') IS NOT NULL;")" == "t" ]]; then
-  TABLES+=(-t power_rankings)
-fi
+for T in power_rankings agent_memory_entries agent_predictions agent_season_summaries; do
+  if [[ "$("${PSQL[@]}" -c "SELECT to_regclass('public.$T') IS NOT NULL;")" == "t" ]]; then
+    TABLES+=(-t "$T")
+  fi
+done
 BACKUP="$(dirname "$0")/backups/news_feed_backup_$(date +%Y%m%d_%H%M%S).sql"
 mkdir -p "$(dirname "$BACKUP")"
 docker exec "$CONTAINER" pg_dump -U postgres -d madden --data-only "${TABLES[@]}" > "$BACKUP"
@@ -46,4 +49,8 @@ if [[ "$CONFIRM" != "DELETE" ]]; then
 fi
 
 "${PSQL[@]}" -c "DELETE FROM news_feed WHERE $WHERE;" >/dev/null
+if [[ "$("${PSQL[@]}" -c "SELECT to_regclass('public.agent_season_summaries') IS NOT NULL;")" == "t" ]]; then
+  "${PSQL[@]}" -c "DELETE FROM agent_season_summaries;" >/dev/null
+  echo "Cleared agent season summaries."
+fi
 echo "Deleted $TOTAL rows. Remaining in news_feed: $("${PSQL[@]}" -c "SELECT COUNT(*) FROM news_feed;")"

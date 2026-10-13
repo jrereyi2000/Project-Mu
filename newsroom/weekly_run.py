@@ -15,6 +15,7 @@ It is called by the video pipeline after the stats sync (pipeline/main.py) and c
 import argparse
 
 DEFAULT_SEASON = 2035
+DEFAULT_MODEL = "gemini-3.8-flash"  # same default as SwarmDispatcher
 FINAL_WEEK = 23                 # Super Bowl week (see POSTSEASON_EDITORIAL_SLATES)
 NATIONAL_SLOT_FILTER = "(slot IN ('Hero Slot', 'Standalone') OR slot LIKE 'Slot %%')"  # local wakeups use 'Local Beat N'
 ADVISORY_LOCK_NAMESPACE = 470_118  # arbitrary constant for pg_try_advisory_lock(namespace, season*100 + week)
@@ -103,8 +104,13 @@ def run_weekly_swarm(
 
                 print(f"[Newsroom] Publishing Season {season} Week {week} national slate"
                       f"{' (dry run)' if dry_run else ''}...")
-                brief = build_weekly_assignment_brief(conn_info, season=season, week=week)
                 dispatcher = SwarmDispatcher(debug_mode=dry_run)
+                if not dry_run:
+                    # Agents' "season so far" memories, through last week, before any prompt is built
+                    from newsroom.agent_memory import refresh_season_summaries
+                    n = refresh_season_summaries(conn_info, dispatcher.api_key, model or DEFAULT_MODEL, season, week)
+                    print(f"[Newsroom] Refreshed {n} agent season summaries through Week {week - 1}.")
+                brief = build_weekly_assignment_brief(conn_info, season=season, week=week)
                 kwargs = {"model": model} if model else {}
                 dispatcher.dispatch_weekly_national(
                     brief, season=season, week=week,
