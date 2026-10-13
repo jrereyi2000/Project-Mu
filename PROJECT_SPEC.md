@@ -18,6 +18,7 @@ The project root is the Python import root. Every backend folder is a package, a
 ```
 Project Mu/
 ├── PROJECT_SPEC.md            # This document (system-level spec)
+├── CLAUDE.md                  # Claude Code session rules (read this spec first; keep it updated)
 ├── server/                    # FastAPI backend
 │   └── api.py                 #   REST API + /static mount (serves ../static)
 ├── pipeline/                  # Video ingestion & OCR extraction (Section 6, step 1)
