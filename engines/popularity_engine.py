@@ -1,52 +1,6 @@
 import psycopg
 from db.db_handler import DatabaseHandler
-
-# Data sourced directly from base_market_gravity.md and legacy_floor.md
-TEAM_MODELS = {
-    "Cowboys": {"B": 85.85, "S_all_time": 82.3},
-    "Eagles": {"B": 71.00, "S_all_time": 55.1},
-    "49ers": {"B": 70.90, "S_all_time": 78.1},
-    "Packers": {"B": 70.70, "S_all_time": 88.1},
-    "Steelers": {"B": 70.65, "S_all_time": 89.8},
-    "Bears": {"B": 70.50, "S_all_time": 58.4},
-    "Giants": {"B": 69.90, "S_all_time": 74.1},
-    "Chiefs": {"B": 67.70, "S_all_time": 70.0},
-    "Patriots": {"B": 66.30, "S_all_time": 82.3},
-    "Broncos": {"B": 63.00, "S_all_time": 60.6},
-    "Commanders": {"B": 59.65, "S_all_time": 56.6},
-    "Bills": {"B": 56.60, "S_all_time": 34.1},
-    "Raiders": {"B": 53.85, "S_all_time": 60.9},
-    "Seahawks": {"B": 53.80, "S_all_time": 40.3},
-    "Jets": {"B": 53.55, "S_all_time": 24.8},
-    "Vikings": {"B": 53.30, "S_all_time": 45.2},
-    "Lions": {"B": 52.65, "S_all_time": 35.0},
-    "Browns": {"B": 51.35, "S_all_time": 42.4},
-    "Ravens": {"B": 51.10, "S_all_time": 71.5},
-    "Dolphins": {"B": 47.80, "S_all_time": 59.6},
-    "Saints": {"B": 47.20, "S_all_time": 26.2},
-    "Rams": {"B": 44.45, "S_all_time": 63.1},
-    "Falcons": {"B": 43.70, "S_all_time": 17.5},
-    "Texans": {"B": 43.05, "S_all_time": 14.7},
-    "Buccaneers": {"B": 39.30, "S_all_time": 25.9},
-    "Colts": {"B": 39.00, "S_all_time": 52.8},
-    "Bengals": {"B": 38.15, "S_all_time": 23.4},
-    "Chargers": {"B": 36.35, "S_all_time": 31.7},
-    "Cardinals": {"B": 33.00, "S_all_time": 23.6},
-    "Titans": {"B": 32.20, "S_all_time": 34.6},
-    "Panthers": {"B": 31.90, "S_all_time": 25.3},
-    "Jaguars": {"B": 31.90, "S_all_time": 13.9},
-}
-
-# Bonuses based on 5-year trailing (2030-2034) hardware from legacy_floor.md
-RECENT_SUCCESS_BUMPS = {
-    "Ravens": 50,    # 2 SB Wins (2030, 2033)
-    "Titans": 25,    # 1 SB Win (2031)
-    "Cardinals": 25, # 1 SB Win (2032)
-    "Panthers": 25,  # 1 SB Win (2034)
-    "Giants": 20,    # 4 SB Runner-Ups (2027, 2030, 2031, 2033)
-    "Dolphins": 10,  # 2 SB Runner-Ups (2028, 2032)
-    "Jets": 10       # 1 SB Runner-Up (2034)
-}
+from engines.market_constants import market, recent_hardware_bumps
 
 class PopularityEngine:
     def __init__(self):
@@ -68,12 +22,13 @@ class PopularityEngine:
                 """, (season,))
                 
                 teams = cur.fetchall()
+                bumps = recent_hardware_bumps(cur, season)
                 
                 for tid, name, twi, wins, losses in teams:
                     if not twi: twi = 50.0
                     
                     # 1. Base Market Gravity (B)
-                    model = TEAM_MODELS.get(name, {"B": 50, "S_all_time": 50})
+                    model = market(name)
                     B = model["B"]
                     
                     # 2. Historical Equity (H)
@@ -84,7 +39,7 @@ class PopularityEngine:
                     S_recent_base = win_pct * 100
                     
                     # Apply Hardware Bumps
-                    hardware_bump = RECENT_SUCCESS_BUMPS.get(name, 0)
+                    hardware_bump = bumps.get(tid, 0)
                     S_recent = min(100, S_recent_base + hardware_bump)
                     
                     # H Formula

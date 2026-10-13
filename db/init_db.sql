@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS team_seasons (
     opp_adj_credit_recent DOUBLE PRECISION,
     sos_rating DOUBLE PRECISION,
     expected_wins DOUBLE PRECISION,
+    watchability_sigma_top DOUBLE PRECISION,
+    p_draft DOUBLE PRECISION,
+    y_prod DOUBLE PRECISION,
+    purgatory_penalty DOUBLE PRECISION,
     UNIQUE (team_id, season)
 );
 
@@ -77,6 +81,10 @@ CREATE TABLE IF NOT EXISTS player_seasons (
     overall_rating INT,
     popularity_index DOUBLE PRECISION DEFAULT 0.0,
     years_of_experience INT,  -- 0 = rookie, 1 = second-year, ...
+    spike_index DOUBLE PRECISION,
+    r_rating DOUBLE PRECISION,
+    f_platform DOUBLE PRECISION,
+    t_success DOUBLE PRECISION,
     UNIQUE (player_id, season)
 );
 

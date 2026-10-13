@@ -240,10 +240,11 @@ class TWIEngine:
                     })
                     
                     cur.execute("""
-                        UPDATE team_seasons 
-                        SET watchability_index = %s 
+                        UPDATE team_seasons
+                        SET watchability_index = %s, watchability_sigma_top = %s, p_draft = %s,
+                            y_prod = %s, purgatory_penalty = %s
                         WHERE team_id = %s AND season = %s
-                    """, (round(twi, 2), tid, season))
+                    """, (round(twi, 2), round(sig, 2), round(p_dr, 2), round(y_pr, 2), round(pen, 2), tid, season))
                     
                 conn.commit()
                 

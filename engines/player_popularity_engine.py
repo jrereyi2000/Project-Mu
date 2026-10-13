@@ -1,5 +1,6 @@
 import psycopg
 from db.db_handler import DatabaseHandler
+from engines.market_constants import market
 import math
 
 class PlayerPopularityEngine:
@@ -26,19 +27,6 @@ class PlayerPopularityEngine:
                     WHERE ts.season = %s
                 """, (season,))
                 teams = {r[0]: {"name": r[1], "pop": r[2] or 50.0, "wins": r[3], "losses": r[4]} for r in cur.fetchall()}
-                
-                # We need B from previous file, let's just approximate or hardcode top ones if missing
-                # Actually, we can fetch B directly if we had it, but we can just use team POP as a proxy for F to save time,
-                # or rebuild the B dict:
-                TEAM_B = {
-                    "Cowboys": 85.85, "Eagles": 71.0, "49ers": 70.9, "Packers": 70.7, "Steelers": 70.65,
-                    "Bears": 70.5, "Giants": 69.9, "Chiefs": 67.7, "Patriots": 66.3, "Broncos": 63.0,
-                    "Commanders": 59.65, "Bills": 56.6, "Raiders": 53.85, "Seahawks": 53.8, "Jets": 53.55,
-                    "Vikings": 53.3, "Lions": 52.65, "Browns": 51.35, "Ravens": 51.1, "Dolphins": 47.8,
-                    "Saints": 47.2, "Rams": 44.45, "Falcons": 43.7, "Texans": 43.05, "Buccaneers": 39.3,
-                    "Colts": 39.0, "Bengals": 38.15, "Chargers": 36.35, "Cardinals": 33.0, "Titans": 32.2,
-                    "Panthers": 31.9, "Jaguars": 31.9
-                }
                 
                 # 2. Fetch Awards (A)
                 cur.execute("SELECT player_name, award_type FROM awards WHERE season = %s", (season-1,))
@@ -77,7 +65,7 @@ class PlayerPopularityEngine:
                     t_losses = team_ctx["losses"]
                     
                     # --- COMPONENT F: Franchise Platform (15%) ---
-                    B = TEAM_B.get(t_name, 50.0)
+                    B = market(t_name)["B"]
                     F = (0.65 * t_pop) + (0.35 * B)
                     
                     # --- COMPONENT E: Exposure (20%) ---
@@ -136,13 +124,18 @@ class PlayerPopularityEngine:
                     
                     final_results.append({
                         "pid": pid, "name": full_name, "pos": pos, "ovr": ovr, 
-                        "team": t_name, "pop": round(Pop, 2), "M": M_pos
+                        "team": t_name, "pop": round(Pop, 2), "M": M_pos,
+                        "spike": spike_idx, "R": round(R, 2), "F": round(F, 2), "T": round(T, 2)
                     })
 
                 # Batch update all player popularity indices in a single round-trip
                 if final_results:
-                    update_payload = [(r["pop"], r["pid"]) for r in final_results]
-                    cur.executemany("UPDATE player_seasons SET popularity_index = %s WHERE id = %s;", update_payload)
+                    update_payload = [(r["pop"], r["spike"], r["R"], r["F"], r["T"], r["pid"]) for r in final_results]
+                    cur.executemany("""
+                        UPDATE player_seasons
+                        SET popularity_index = %s, spike_index = %s, r_rating = %s, f_platform = %s, t_success = %s
+                        WHERE id = %s;
+                    """, update_payload)
                 conn.commit()
                 
         # Sort and display

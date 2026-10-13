@@ -1,7 +1,9 @@
 import psycopg
 from langchain_core.tools import tool
 from db.db_handler import DatabaseHandler
-from engines.gotw_engine import display_excitement
+from engines.gotw_engine import display_excitement, production_score, upset_score
+from engines.excitement_projection import DEFAULT_MARGIN_SD, DEFAULT_OVR_MARGIN_SLOPE, _normal_cdf as normal_cdf, expected_upset
+from engines.market_constants import market
 from engines.game_credit_engine import compute_game_credit, fetch_completed_games
 import json
 
@@ -84,7 +86,7 @@ def get_game_box_score(game_id: int) -> str:
 
 @tool
 def get_player_season_stats(player_identifier: str) -> str:
-    """Fetch cumulative season stats, Madden OVR, age, experience, awards, and popularity for a specific player. Accepts player name (e.g. 'Drake Maye') or player ID."""
+    """Fetch cumulative season stats, Madden OVR, age, experience, awards, popularity, and popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success) for a specific player. Accepts player name (e.g. 'Drake Maye') or player ID."""
     try:
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -114,7 +116,8 @@ def get_player_season_stats(player_identifier: str) -> str:
                         ss.rush_yards, ss.rush_tds,
                         ss.receptions, ss.rec_yards, ss.rec_tds,
                         fp.adp_rank,
-                        ps.age, ps.years_of_experience, p.height, p.weight
+                        ps.age, ps.years_of_experience, p.height, p.weight,
+                        ps.spike_index, ps.r_rating, ps.f_platform, ps.t_success
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     LEFT JOIN teams t ON ps.team_id = t.id
@@ -148,6 +151,13 @@ def get_player_season_stats(player_identifier: str) -> str:
                     "weight": f"{row[17]} lbs" if row[17] else "N/A",
                     "madden_ovr": row[3],
                     "popularity_index": float(row[4]) if row[4] else 50.0,
+                    "popularity_components": {
+                        "spike_index": row[18],
+                        "baseline_rating_and_pedigree": row[19],
+                        "franchise_platform": row[20],
+                        "team_success": row[21],
+                        "scale_note": "0-100. Spike index = 25 per 24+ PPR game this season (capped at 100).",
+                    },
                     "career_awards": career_awards if career_awards else ["None recorded"],
                     "preseason_adp_rank": row[13] if row[13] else "Undrafted",
                     "season_stats": {
@@ -349,41 +359,56 @@ def get_league_leaderboards() -> str:
         return f"Error: {str(e)}"
 
 @tool
-def get_advanced_team_analytics(team_identifier: str) -> str:
-    """Fetch advanced tactical metrics for a team: Blue-Chip Pedigree (P_draft), Under-25 Production (Y_prod), and Purgatory Status. Accepts team name or team ID."""
+def get_advanced_team_analytics(team_identifier: str, season: int = 2035) -> str:
+    """Fetch a team's stored index components: Team Watchability Index (TWI) and its parts (ceiling/chaos volatility sigma_top, Blue-Chip Draft Pedigree P_draft, Under-25 Production Share Y_prod, Purgatory Penalty), Franchise Popularity, Base Market Gravity (B) with its local/national breakdown where published, Legacy Floor (historical franchise prestige), and starter age. Accepts team name, abbreviation, or team ID."""
     try:
+        s_val = int(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 team_id = _resolve_team_id(cur, team_identifier)
                 if not team_id:
                     return f"Team '{team_identifier}' not found."
 
-                # Calculate Y_prod (Under 25 production share)
                 cur.execute("""
-                    SELECT 
-                        SUM(CASE WHEN ps.age <= 24 THEN ss.rush_yards + ss.rec_yards ELSE 0 END) as youth_yards,
-                        SUM(ss.rush_yards + ss.rec_yards) as total_yards
-                    FROM player_seasons ps
-                    JOIN players p ON ps.player_id = p.id
-                    JOIN season_stats ss ON p.player_name = ss.player_name AND ss.season = ps.season
-                    WHERE ps.team_id = %s AND ps.season = 2035;
-                """, (team_id,))
+                    SELECT t.name, ts.watchability_index, ts.watchability_sigma_top, ts.p_draft, ts.y_prod,
+                           ts.purgatory_penalty, ts.popularity_index
+                    FROM teams t JOIN team_seasons ts ON ts.team_id = t.id AND ts.season = %s
+                    WHERE t.id = %s;
+                """, (s_val, team_id))
                 row = cur.fetchone()
-                y_prod = 0.0
-                if row and row[1] and row[1] > 0:
-                    y_prod = round(float(row[0] or 0) / float(row[1]) * 100, 1)
+                if not row:
+                    return f"No {s_val} season row for team ID {team_id}."
+                name, twi, sigma, p_draft, y_prod, penalty, pop = row
 
-                # Get average age for Purgatory Penalty
-                cur.execute("SELECT AVG(age) FROM player_seasons WHERE team_id = %s AND season = 2035;", (team_id,))
-                avg_age_row = cur.fetchone()
-                avg_age = round(float(avg_age_row[0] or 26.0), 1)
+                # Same starter definition as the Purgatory Penalty: the 22 highest-rated players
+                cur.execute("""
+                    SELECT AVG(age) FROM (
+                        SELECT age FROM player_seasons WHERE team_id = %s AND season = %s
+                        ORDER BY overall_rating DESC LIMIT 22
+                    ) s;
+                """, (team_id, s_val))
+                starter_age = cur.fetchone()[0]
 
+                def num(v):
+                    return round(float(v), 1) if v is not None else None
+
+                m = market(name)
                 result = {
+                    "team": name,
                     "team_id": team_id,
-                    "youth_production_share": f"{y_prod}%",
-                    "roster_average_age": avg_age,
-                    "draft_pedigree_assessment": "High" if y_prod > 35 else "Moderate",
-                    "purgatory_risk": "High (Aging Roster)" if avg_age > 27.5 else "Low"
+                    "season": s_val,
+                    "watchability_index": num(twi),
+                    "watchability_sigma_top": num(sigma),
+                    "blue_chip_draft_pedigree": num(p_draft),
+                    "under_25_production_share_pct": num(y_prod),
+                    "purgatory_penalty": num(penalty),
+                    "starter_average_age": num(starter_age),
+                    "franchise_popularity": num(pop),
+                    "base_market_gravity": m["B"],
+                    "market_breakdown": ({"local_scale": m["L"], "local_fervor": m["D"], "national_reach": m["N"]}
+                                         if m["N"] is not None else "Not published for this franchise"),
+                    "legacy_floor": m["S_all_time"],
+                    "scale_note": "All indices 0-100. Purgatory penalty > 0 only for losing teams whose top-22 players average over 27.5 years old; it is subtracted from TWI. sigma_top above ~12 marks a high-variance, chaotic team.",
                 }
                 return json.dumps(result, indent=2)
     except Exception as e:
@@ -391,27 +416,62 @@ def get_advanced_team_analytics(team_identifier: str) -> str:
 
 @tool
 def get_advanced_game_analytics(game_id: int) -> str:
-    """Fetch advanced schematic metrics for a game: Offensive Pace, Upset Leverage, and Single-Game Excitement."""
+    """Fetch advanced metrics for a game: Offensive Pace & Production (P, 0-100, points plus yards), Upset Leverage (U, 0-100; for scheduled games the projected U and the underdog's win probability), Single-Game Excitement, and each team's Opponent-Adjusted Game Credit for that game."""
     try:
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT home_score, away_score, excitement_index 
-                    FROM games WHERE id = %s;
+                    SELECT g.season, g.week, g.status, g.home_team_id, g.away_team_id, g.home_score, g.away_score,
+                           g.excitement_index, g.projected_excitement, ht.name, at.name,
+                           COALESCE(hts.team_ovr, 80), COALESCE(ats.team_ovr, 80)
+                    FROM games g
+                    JOIN teams ht ON ht.id = g.home_team_id
+                    JOIN teams at ON at.id = g.away_team_id
+                    LEFT JOIN team_seasons hts ON hts.team_id = g.home_team_id AND hts.season = g.season
+                    LEFT JOIN team_seasons ats ON ats.team_id = g.away_team_id AND ats.season = g.season
+                    WHERE g.id = %s;
                 """, (game_id,))
                 row = cur.fetchone()
                 if not row:
                     return f"Game ID {game_id} not found."
+                season, week, status, home_id, away_id, hs, as_, e_raw, e_proj, home, away, home_ovr, away_ovr = row
 
-                total_points = (row[0] or 0) + (row[1] or 0)
-                pace = round((total_points / 70.0) * 100, 1)
+                if home_ovr == away_ovr:
+                    favorite, underdog = "Even matchup (equal OVR)", None
+                else:
+                    favorite, underdog = (home, away) if home_ovr > away_ovr else (away, home)
+                result = {"game_id": game_id, "matchup": f"{away} @ {home}", "week": week, "status": status,
+                          "ovr_favorite": favorite}
 
-                result = {
-                    "game_id": game_id,
-                    "offensive_pace_rating": pace,
-                    "single_game_excitement": display_excitement(row[2]) if row[2] else None,
-                    "upset_narrative_leverage": "High Variance" if (row[2] and row[2] > 80) else "Standard"  # raw E
-                }
+                if status == "COMPLETED":
+                    cur.execute("SELECT COALESCE(SUM(total_offense), 0) FROM team_stats WHERE game_id = %s;", (game_id,))
+                    yards = cur.fetchone()[0]
+                    favorite_won = (hs > as_ and home_ovr >= away_ovr) or (as_ > hs and away_ovr >= home_ovr)
+                    credits, _, _ = compute_game_credit(fetch_completed_games(cur, season))
+                    game_credit = {}
+                    for tid, tname in ((home_id, home), (away_id, away)):
+                        entry = next((g for g in credits[tid].game_log if g["game_id"] == game_id), None) if tid in credits else None
+                        game_credit[tname] = round(entry["game_credit"], 1) if entry else None
+                    result.update({
+                        "final": f"{away} {as_} @ {home} {hs}",
+                        "offensive_pace_production": round(production_score(hs + as_, yards), 1),
+                        "upset_leverage": round(upset_score(home_ovr, away_ovr, favorite_won), 1),
+                        "underdog_won": None if underdog is None else not favorite_won,
+                        "single_game_excitement": display_excitement(e_raw) if e_raw else None,
+                        "opponent_adjusted_game_credit": game_credit,
+                    })
+                else:
+                    mu_home = DEFAULT_OVR_MARGIN_SLOPE * (home_ovr - away_ovr)
+                    p_home = normal_cdf(mu_home / DEFAULT_MARGIN_SD)
+                    result.update({
+                        "projected_upset_leverage": round(expected_upset(home_ovr, away_ovr, mu_home, DEFAULT_MARGIN_SD), 1),
+                        "underdog": underdog,
+                        "underdog_win_probability": None if underdog is None else round(min(p_home, 1 - p_home), 3),
+                        "projected_excitement": display_excitement(e_proj) if e_proj else None,
+                    })
+                result["scale_note"] = ("Upset leverage: ~50 = neutral; higher = the underdog won (or is likely to keep it close), "
+                                        "lower = chalk; 80+ also marks heavyweight clashes. Pace/production: 70 combined points and "
+                                        "850 combined yards = 100.")
                 return json.dumps(result, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"

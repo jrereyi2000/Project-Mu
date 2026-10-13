@@ -34,6 +34,7 @@ Project Mu/
 │   ├── gotw_engine.py         #   Game Excitement Index (E) → games.excitement_index; E components, player matching, 70–100 display scale
 │   ├── excitement_projection.py #  Projected E for scheduled games → games.projected_excitement (+ --backtest)
 │   ├── twi_engine.py, popularity_engine.py, player_popularity_engine.py
+│   ├── market_constants.py    #   B / L / D / N / Legacy Floor per franchise + SB hardware bumps derived from games
 │   ├── game_credit_engine.py  #   Opponent-Adjusted Game Credit (SRS) → team_seasons.opp_adj_credit, sos_rating, expected_wins
 │   ├── fantasy_adp_engine.py  #   Preseason ADP board → fantasy_projections week 1 adp_rank
 │   └── fantasy_projection_engine.py # Weekly PPR projections, matchup stars, pos/ROS ranks → fantasy_projections (+ --backtest)
@@ -47,7 +48,8 @@ Project Mu/
 │   ├── db_handler.py          #   Shared connection / UPSERT layer (DATABASE_URL)
 │   ├── init_db.sql, run_sql.py
 │   ├── backup_db.sh, restore_db.sh   # pg_dump / restore via the madden-db Docker container
-│   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql (apply SQL ones via
+│   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql,
+│   │                          #   2026_10_15_stored_index_components.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -60,7 +62,8 @@ Project Mu/
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md, WAKEUPS.md
-│   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played)
+│   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
+│                              #   proposed_metric_definitions.md = DRAFT definitions for referenced-but-unbuilt metrics
 │   ├── writers/               #   Writer style references (Barnwell, Chadiha, Joyner, Rosenthal, Sando)
 │   ├── reference/             #   Source PDFs
 │   └── sample_articles/       #   Example generated articles
@@ -121,7 +124,7 @@ $$TWI = \min\left(100, 0.40(\mu_{\text{adj}}) + 0.20(\sigma_{\text{top}}) + 0.25
 - Attributed through production share $\alpha$ and opponent baseline correction $\delta_{\text{opp}}$.
 - Exponential recency decay with $\lambda = 0.15$.
 - Ceiling & chaos volatility bonus ($\sigma_{\text{top}}$) from high-entertainment games.
-- Stored permanently in `team_seasons.watchability_index`.
+- Stored permanently in `team_seasons.watchability_index`, along with its components `watchability_sigma_top` ($\sigma_{\text{top}}$), `p_draft`, `y_prod` and `purgatory_penalty` so writer tools read the same values TWI used.
 
 ### 2.3 Fantasy Defensive Matchup Stars & Strength of Schedule (SOS)
 - **Even 5-Tier Quantile Distribution (`NTILE(5)`)**: To eliminate artificial clustering, defensive strength against each offensive position (QB, RB/HB, WR, TE) is ranked across all 32 NFL teams:
@@ -147,6 +150,13 @@ Schedule-adjusted team strength in **points per game relative to a league-averag
 - Written to `team_seasons` by `GameCreditEngine().calculate(season)`. Writer agents read it live (recomputed from `games`, so it is never stale) through `get_opponent_adjusted_credit`.
 - This is distinct from TWI's opponent baseline correction $\delta_{\text{opp}}$, which adjusts *excitement* for how watchable an opponent is, not team strength.
 
+### 2.5 Popularity Indices (`engines/popularity_engine.py`, `engines/player_popularity_engine.py`)
+- **Franchise POP** $= 0.35B + 0.30H + 0.35\,TWI$, with $H = 0.85\,S_{\text{recent}} + 0.15\,S_{\text{all-time}}$ and $S_{\text{recent}} = \min(100,\ 100\cdot\text{Win\%} + \text{hardware bump})$. Written to `team_seasons.popularity_index`.
+  - The hardware bump is +25 per Super Bowl win and +5 per runner-up over the 5 seasons before the current one, derived from `games.game_type = 'SUPER_BOWL'` (`market_constants.recent_hardware_bumps`).
+  - $B$ (Base Market Gravity) and $S_{\text{all-time}}$ (Legacy Floor) are constants in `engines/market_constants.py`, transcribed from `docs/models/base_market_gravity_specification.md` and `docs/models/legacy_floor.md`. The $L$/$D$/$N$ breakdown of $B$ is only published for eight franchises.
+  - `docs/models/legacy_floor.md` lists the Giants as 2031 and 2033 runner-ups; the recorded results (and the Season Recap video) have the Lions and Falcons. The Legacy Floor values were not recomputed.
+- **Player Pop** $= (0.15F + 0.20E + 0.20P + 0.15R + 0.15A + 0.15T)\cdot M_{\text{pos}}$ (`player_seasons.popularity_index`). The components SpikeIndex, $R_{\text{rating}}$, $F_{\text{platform}}$ and $T_{\text{success}}$ are also stored (`spike_index`, `r_rating`, `f_platform`, `t_success`).
+
 ---
 
 ## 3. Database Schema & Architecture (PostgreSQL)
@@ -163,9 +173,9 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 
 ### 3.2 Temporal Snapshot Ledgers
 - **`team_seasons`**:
-  - `id` (PK), `team_id` (FK), `season` (int), `wins` (int), `losses` (int), `team_ovr` (int), `off_ovr` (int), `def_ovr` (int), `pass_off_rank` (int), `rush_off_rank` (int), `pass_rush_rank` (int), `coverage_rank` (int), `watchability_index` (float8), `popularity_index` (float8), `opp_adj_credit`, `opp_adj_credit_recent`, `sos_rating`, `expected_wins` (float8, nullable; see 2.4, added by `db/migrations/2026_10_14_opp_adj_credit.sql`). `UNIQUE(team_id, season)`; `wins`/`losses` are maintained by `trigger_update_team_records` (see 3.6).
+  - `id` (PK), `team_id` (FK), `season` (int), `wins` (int), `losses` (int), `team_ovr` (int), `off_ovr` (int), `def_ovr` (int), `pass_off_rank` (int), `rush_off_rank` (int), `pass_rush_rank` (int), `coverage_rank` (int), `watchability_index` (float8), `popularity_index` (float8), `opp_adj_credit`, `opp_adj_credit_recent`, `sos_rating`, `expected_wins` (float8, nullable; see 2.4, added by `db/migrations/2026_10_14_opp_adj_credit.sql`), `watchability_sigma_top`, `p_draft`, `y_prod`, `purgatory_penalty` (float8, nullable; TWI components, see 2.2, added by `db/migrations/2026_10_15_stored_index_components.sql`). `UNIQUE(team_id, season)`; `wins`/`losses` are maintained by `trigger_update_team_records` (see 3.6).
 - **`player_seasons`**:
-  - `id` (PK), `player_id` (FK), `team_id` (FK), `season` (int), `position` (varchar), `age` (int), `overall_rating` (int), `years_of_experience` (int; 0 = rookie, 1 = second-year), `popularity_index` (float8). `UNIQUE(player_id, season)`.
+  - `id` (PK), `player_id` (FK), `team_id` (FK), `season` (int), `position` (varchar), `age` (int), `overall_rating` (int), `years_of_experience` (int; 0 = rookie, 1 = second-year), `popularity_index` (float8), `spike_index`, `r_rating`, `f_platform`, `t_success` (float8, nullable; player Pop components, see 2.5). `UNIQUE(player_id, season)`.
 
 ### 3.3 Games & Statistics Tables
 - **`games`**:
@@ -379,12 +389,12 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - `get_season_standings`: Returns full NFL division standings with wins, losses, win %, points scored (PF), points allowed (PA), and point differential.
   - `get_top_popular_players`: Returns the top 20 most popular players across the league with Madden OVR, age, experience, and popularity indices.
   - `get_all_team_popularities`: Returns all 32 teams ranked by popularity index, watchability rating, and overall roster quality.
-  - `get_player_context` / `get_player_season_stats`: Resolves player by name or ID; returns age, years of experience, physical measurements (height/weight), career awards list, Madden OVR, and cumulative season stats.
+  - `get_player_context` / `get_player_season_stats`: Resolves player by name or ID; returns age, years of experience, physical measurements (height/weight), career awards list, Madden OVR, cumulative season stats, and stored popularity components (SpikeIndex, $R_{\text{rating}}$, $F_{\text{platform}}$, $T_{\text{success}}$).
   - `get_team_context`: Resolves team by name, abbreviation, or ID; returns win-loss record, watchability, popularity, Madden team ratings, and top 3 players.
   - `get_team_season_schedule`: Returns a team's complete season schedule and game log: week-by-week opponents, scores, win/loss outcomes, victory margins, one-score game breakdown, excitement ratings, and game IDs.
   - `get_game_box_score`: Returns team box score and top individual game contributions.
-  - `get_advanced_team_analytics`: Computes youth production share, average age, and draft pedigree.
-  - `get_advanced_game_analytics`: Computes offensive pace rating and single-game excitement index.
+  - `get_advanced_team_analytics`: Reads the stored TWI components (σ_top, P_draft, Y_prod, Purgatory Penalty), TWI, franchise POP, starter age (top 22 by OVR), and $B$ / $L$ / $D$ / $N$ / Legacy Floor from `market_constants`.
+  - `get_advanced_game_analytics`: Completed games return pace/production ($P$ from `gotw_engine.production_score`), Upset Leverage ($U$), excitement, and both teams' Opponent-Adjusted Game Credit. Scheduled games return projected $U$ (`excitement_projection.expected_upset`) and the underdog's win probability.
   - `get_opponent_adjusted_credit`: Opponent-Adjusted Game Credit (Section 2.4). No team → all 32 ranked with credit, recent-form credit, strength of schedule, raw point differential per game, expected wins and win luck; with a team → that summary plus a game-by-game credit log.
   - `get_league_leaderboards`: Returns top 5 teams by watchability and popularity.
   - `get_team_articles`: Returns recent editorial articles and analysis referencing a specific team (resolves by name, city, abbreviation, or ID).
