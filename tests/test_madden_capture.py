@@ -34,5 +34,34 @@ class WeekLabelTest(unittest.TestCase):
             mc.previous_week("SEASON WEEK 1")
 
 
+class _Frame:
+    """classify() only needs .text and .find(); boxes are irrelevant here."""
+    def __init__(self, *labels):
+        self.items = [(t, (0, 0, 1, 1)) for t in labels]
+        self.text = " | ".join(labels)
+
+    find = mc.Frame.find
+
+
+class ClassifyTest(unittest.TestCase):
+    def test_roster_list_is_not_player_stats(self):
+        # The roster list also shows PLAYER NAME (sort chip) and VIEW PLAYER CARD.
+        f = _Frame("PANTHERS", "ROSTER", "NAME", "PLAYER NAME", "MOR", "SAVINGS", "PENALTY", "VIEW PLAYER CARD")
+        self.assertEqual(mc.classify(f), "ROSTER_LIST")
+
+    def test_roster_list_while_button_bar_redraws(self):
+        f = _Frame("PANTHERS", "ROSTER", "NAME", "PLAYER NAME", "MOR", "SAVINGS", "PENALTY")
+        self.assertEqual(mc.classify(f), "ROSTER_LIST")
+
+    def test_player_stats_still_recognised(self):
+        f = _Frame("NFL", "R2", "PASSING", "PLAYER NAME", "VIEW PLAYER CARD", "YARDS")
+        self.assertEqual(mc.classify(f), "PLAYER_STATS")
+
+    def test_manage_roster_hub(self):
+        f = _Frame("GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "UPGRADE PLAYERS",
+                   "ADJUST LINEUP", "ROSTER", "DEPTH CHART")
+        self.assertEqual(mc.classify(f), "HUB_ROSTER")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -257,12 +257,21 @@ WEEK_RE = re.compile(r"(PRESEASON WEEK ?[0-9TILO]{1,2}\b|SEASON WEEK ?[0-9TILO]{
 HUB_TABS = ["GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "OPTIONS"]
 LEAGUE_MENU = ["NFL STANDINGS", "SCHEDULE", "STATS & AWARDS", "LEAGUE TRANSACTIONS", "LEAGUE HISTORY", "RELOCATE OR REBUILD"]
 SCHED_TILES = ["TEAM SCHEDULE", "LEAGUE SCHEDULE", "PLAYOFF PICTURE"]
+# Manage Roster tab's left-hand menu (mapped Oct 13; TRADE can show a lock icon)
+ROSTER_MENU = ["UPGRADE PLAYERS", "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH CHART", "TEAM SALARY",
+               "INJURY REPORT", "TRADE", "FREE AGENCY", "SCOUTING", "FORMATION SUBS", "AUTO SUBS", "TEAM SCHEMES"]
 
 
 def classify(f):
     t = f.text
     if "WANT TO QUIT" in t:
         return "QUIT"
+    # Manage Roster > Roster (mapped Oct 13): also shows PLAYER NAME (sort chip) and VIEW
+    # PLAYER CARD, so it must be told apart from Player Stats by its own columns. The button
+    # bar blanks for a moment when it changes (rows with a contract action add SPEAK WITH
+    # PLAYER), so don't rely on it.
+    if f.find("SAVINGS") and f.find("PENALTY") and f.find("MOR"):
+        return "ROSTER_LIST"
     if "PLAYER NAME" in t and "VIEW PLAYER CARD" in t:
         return "PLAYER_STATS"
     if "TEAM NAME" in t and "SORT" in t and f.find("R2"):
@@ -272,7 +281,11 @@ def classify(f):
     if "LEAGUE SCHEDULE" in t and "PLAYOFF PICTURE" in t:
         return "SCHED_TILES"
     if f.find("GAMEDAY") and f.find("COACH CENTRAL"):
-        return "HUB_LEAGUE" if f.find("STATS & AWARDS") else "HUB"
+        if f.find("STATS & AWARDS"):
+            return "HUB_LEAGUE"
+        if f.find("ADJUST LINEUP") and f.find("DEPTH CHART"):
+            return "HUB_ROSTER"
+        return "HUB"
     if (WEEK_RE.search(t) or "GAME TIME" in t) and ("FORCE WIN" in t or "SORT" in t or "BACK" in t):
         return "SCHED_LIST"
     return "UNKNOWN"
@@ -369,7 +382,7 @@ def cross_into(screen, expected, timeout=6.0, tries=3):
 def go_hub():
     for _ in range(10):
         f, s = look()
-        if s in ("HUB", "HUB_LEAGUE"):
+        if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER"):
             return f, s
         if s == "QUIT":
             log("Quit prompt is open, choosing NO")
@@ -381,7 +394,7 @@ def go_hub():
                 f, s = look()
                 if s != "UNKNOWN":
                     break
-            if s in ("HUB", "HUB_LEAGUE", "QUIT"):
+            if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER", "QUIT"):
                 continue
         log(f"On {s}, pressing Back")
         press("circle", wait=1.5)
@@ -951,15 +964,15 @@ def run_schedule(out, week=None):
 
 
 def probe_l2(out):
-    """Record how the L2 scope dropdown behaves on Player Stats.
+    """Record how the L2 dropdown behaves on Player Stats (scope) or the roster list (team).
     Holds L2 the whole time, presses Up 3x then Down 3x (net zero movement),
     screenshots after every step, then releases. Saves PNGs + OCR text."""
     import json
     folder = os.path.join(out, "probe")
     os.makedirs(folder, exist_ok=True)
     f, s = look()
-    if s != "PLAYER_STATS":
-        raise Abort(f"Open Player Stats first (currently on {s})")
+    if s not in ("PLAYER_STATS", "ROSTER_LIST"):
+        raise Abort(f"Open Player Stats or the Manage Roster list first (currently on {s})")
     log(f"Before: chips = {chip_labels(f)}")
     notes = {}
 
@@ -1051,7 +1064,7 @@ def main():
         if a.test:
             f, s = look()
             print("Screen:", s)
-            if s in ("HUB", "HUB_LEAGUE"):
+            if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER"):
                 print("Highlighted tab:", f.highlighted(HUB_TABS))
             if s == "HUB_LEAGUE":
                 print("Highlighted menu item:", f.highlighted(LEAGUE_MENU))
