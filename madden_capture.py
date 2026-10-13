@@ -353,6 +353,11 @@ def cross(screen, frame=None):
     if screen == "QUIT":
         if not frame or not frame.bright("NO"):
             raise Abort("Quit prompt open but NO is not highlighted. Stopping. Please choose NO yourself.")
+    elif screen == "HUB_ROSTER":
+        # Manage Roster's menu also holds Trade, Free Agency, Contracts: Cross only on Roster.
+        cur = (frame or Frame()).highlighted(ROSTER_MENU)
+        if cur != "ROSTER":
+            raise Abort(f"Refusing Cross on the Manage Roster menu: {cur} is highlighted, not ROSTER")
     elif screen not in ("HUB_LEAGUE", "SCHED_TILES", "STATS_TILES"):
         raise Abort(f"Refusing to press Cross on screen {screen}")
     press("cross", wait=1.5)
@@ -553,17 +558,18 @@ DIVISION_ENTRIES = {"NFL", "AFC", "NFC", "AFCNORTH", "AFCSOUTH", "AFCEAST", "AFC
                     "NFCNORTH", "NFCSOUTH", "NFCEAST", "NFCWEST"}
 
 
-def dropdown_entries(f):
-    """Text items inside the open dropdown column (left side, below the chips)."""
+def dropdown_entries(f, top=0.35, bottom=0.92):
+    """Text items inside the open dropdown column (left side, below the chips). The roster
+    list's team dropdown sits higher (top entry at ~24% of the height): top=0.20, bottom=0.76."""
     W, H = f.size
     return [(t, box) for t, box in f.items
-            if box[2] < W * 0.21 and H * 0.35 < box[1] < H * 0.92 and re.match(r"^[A-Z0-9 ]+$", t)]
+            if box[2] < W * 0.21 and H * top < box[1] < H * bottom and re.match(r"^[A-Z0-9 ]+$", t)]
 
 
-def dropdown_selected(f):
+def dropdown_selected(f, top=0.35, bottom=0.92):
     """The highlighted entry. The highlight is always the TOP row of the open list,
     drawn as a light box, so take the topmost entry and confirm its background is light."""
-    entries = dropdown_entries(f)
+    entries = dropdown_entries(f, top, bottom)
     if not entries:
         return None
     t, box = min(entries, key=lambda e: e[1][1])
@@ -963,6 +969,392 @@ def run_schedule(out, week=None):
     log(f"Schedule {target}: {n} pages")
 
 
+# --------------------------------------------------------------- roster ----
+# Manage Roster > Roster (mapped Oct 13 with --step / --probe-l2):
+#  * The card on the right shows the highlighted row's player; Down moves the highlight one
+#    row and the card follows within ~0.2 s. The highlight moves down to the 8th visible row,
+#    then the list scrolls under it; at the end it drops to the bottom row and Down does nothing.
+#  * 14 rows show at once, sorted by OVR. DEV is an icon in the list; the card spells it out.
+#  * L2 held opens the team dropdown (same mechanics as the stats scope list, but higher on
+#    screen); the roster behind it reloads as the highlight moves. After VIKINGS comes NFL.
+#  * Down presses get dropped now and then (chiaki's decoder falls behind), so every press is
+#    checked against the card.
+# Card read with Apple Vision on a crop of the card. Vision drops or misreads the digit 1 in
+# this font (31 -> missing, 6'1" -> 6'] or 6'7", 5'11" -> 5'71"), so any card with a missing
+# or implausible value is flagged for extract.py to re-read with Gemini.
+CARD_BOX = (0.740, 0.339, 0.980, 0.561)      # fractions of the window: card text area
+LIST_BOX = (0.015, 0.245, 0.715, 0.830)      # roster table rows
+CARD_FIELDS = ["first", "last", "number", "position", "archetype", "role", "dev",
+               "age", "height", "weight", "experience"]
+DEV_TRAITS = ["SUPERSTAR X-FACTOR", "SUPERSTAR", "STAR", "NORMAL"]
+HT_RE = re.compile(r"^([4-7])'(\d{1,2})\"$")
+VALUE_LABELS = ("AGE", "HT", "WT", "EXP", "MORALE")
+POSITIONS = {"QB", "HB", "FB", "WR", "TE", "LT", "LG", "C", "RG", "RT", "LEDG", "REDG", "DT",
+             "MIKE", "WILL", "SAM", "CB", "FS", "SS", "K", "P", "LS"}
+# value columns: left edge as a fraction of the card crop's width (measured Oct 13)
+CARD_CROP_W = 726
+VALUE_COLUMNS = {"age": 0.060, "height": 0.245, "weight": 0.427, "experience": 0.613}
+# player roles seen on cards (Oct 13); used only when OCR drops the | before the role
+ROLES = ["FRANCHISE QB", "ELITE PLAYER", "IMPACT STARTER", "RISING STAR", "BORDERLINE STARTER",
+         "QUALITY BACKUP", "DEPTH FILLER", "PROJECT PLAYER", "SPECIAL TEAMS STAR"]
+# roster table columns: x centre as a fraction of the window width (header positions, Oct 13)
+LIST_COLUMNS = {"POS": 0.279, "AGE": 0.341, "OVR": 0.403}
+LIST_PAGE_ROWS = 14
+
+
+def grab():
+    """The chiaki-ng window as a CGImage, in-process (~50 ms vs ~450 ms for screencapture)."""
+    cg = Quartz.CGWindowListCreateImage(Quartz.CGRectNull, Quartz.kCGWindowListOptionIncludingWindow,
+                                        WIN_ID, Quartz.kCGWindowImageBoundsIgnoreFraming)
+    if cg is None or Quartz.CGImageGetWidth(cg) < 100:
+        snap()                     # let snap() find the window again / recover a blank stream
+        cg = Quartz.CGWindowListCreateImage(Quartz.CGRectNull, Quartz.kCGWindowListOptionIncludingWindow,
+                                            WIN_ID, Quartz.kCGWindowImageBoundsIgnoreFraming)
+        if cg is None:
+            raise Abort("Can't grab the chiaki-ng window")
+    return cg
+
+
+def crop_cg(cg, frac):
+    W, H = Quartz.CGImageGetWidth(cg), Quartz.CGImageGetHeight(cg)
+    x0, y0, x1, y1 = frac
+    return Quartz.CGImageCreateWithImageInRect(cg, ((W * x0, H * y0), (W * (x1 - x0), H * (y1 - y0))))
+
+
+def ocr_cg(cg):
+    """Like ocr(), on an in-memory CGImage. Boxes are in that image's pixels."""
+    W, H = Quartz.CGImageGetWidth(cg), Quartz.CGImageGetHeight(cg)
+    req = Vision.VNRecognizeTextRequest.alloc().init()
+    req.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
+    req.setUsesLanguageCorrection_(False)
+    Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(cg, None).performRequests_error_([req], None)
+    out = []
+    for obs in req.results() or []:
+        cand = obs.topCandidates_(1)
+        if cand:
+            bb = obs.boundingBox()
+            x0, y0 = bb.origin.x * W, (1 - bb.origin.y - bb.size.height) * H
+            out.append((str(cand[0].string()).upper(), (x0, y0, x0 + bb.size.width * W, y0 + bb.size.height * H)))
+    return out
+
+
+def save_cg(cg, path):
+    dest = Quartz.CGImageDestinationCreateWithURL(NSURL.fileURLWithPath_(path), "public.png", 1, None)
+    Quartz.CGImageDestinationAddImage(dest, cg, None)
+    if not Quartz.CGImageDestinationFinalize(dest):
+        raise Abort(f"Couldn't write {path}")
+
+
+def _rows(items, tol=0.4):
+    """Group OCR items into text lines (by vertical overlap), top to bottom, each left to right."""
+    lines = []
+    for t, b in sorted(items, key=lambda i: i[1][1]):
+        h = b[3] - b[1]
+        for line in lines:
+            lb = line[0][1]
+            if abs((b[1] + b[3]) / 2 - (lb[1] + lb[3]) / 2) < tol * max(h, lb[3] - lb[1]):
+                line.append((t, b))
+                break
+        else:
+            lines.append([(t, b)])
+    return [sorted(l, key=lambda i: i[1][0]) for l in lines]
+
+
+def parse_card(items):
+    """Card OCR items (card-crop pixels) -> dict of CARD_FIELDS (None where unread)."""
+    c = dict.fromkeys(CARD_FIELDS)
+    lines = _rows(items)
+    num_i = next((i for i, l in enumerate(lines) if re.match(r"^#\s?\d", l[0][0])), None)
+    if num_i is not None:
+        text = " | ".join(t for t, _ in lines[num_i])
+        m = re.match(r"^#\s?(\d{1,2})\s*([A-Z@0]{1,4})(?![A-Z])(.*)$", text)
+        if m:
+            c["number"] = int(m.group(1))
+            pos = m.group(2).replace("@", "Q").replace("0", "O")      # "#10 @B" = QB
+            c["position"] = pos if pos in POSITIONS else None
+            # separators come back as |, I, 1 or l ("#54 SAM 1 PASS COVERAGE | DEPTH FILLER")
+            rest = [p.strip() for p in re.split(r"\s*\|\s*|\s+[I1L!]\s+", " " + m.group(3) + " ") if p.strip()]
+            if len(rest) == 1:              # separator not read: split off a known role
+                for role in ROLES:
+                    if rest[0].endswith(" " + role):
+                        rest = [rest[0][: -len(role)].strip(), role]
+                        break
+            if rest:
+                c["archetype"] = rest[0].title()
+            if len(rest) > 1:
+                c["role"] = rest[1].title()
+        above = [l for l in lines[:num_i]]
+        if above:
+            # last name is the tallest text above the number line; first name is the line over it
+            li = max(range(len(above)), key=lambda i: max(b[3] - b[1] for _, b in above[i]))
+            c["last"] = " ".join(t for t, _ in above[li]).title()
+            if li > 0:
+                c["first"] = " ".join(t for t, _ in above[li - 1]).title()
+    # The label row (AGE HT WT EXP MORALE) sits at a fixed place; any one label read is
+    # enough to find it, and each value is found by its column, since labels go unread too.
+    labs = [b for t, b in items if t in VALUE_LABELS]
+    if not labs:
+        return c
+    lab_top, lab_bottom = min(b[1] for b in labs), max(b[3] for b in labs)
+    if num_i is not None:
+        dev_text = " ".join(t for l in lines[num_i + 1:] for t, b in l if b[3] <= lab_top + 5)
+        dev_word = re.split(r"\s*\|\s*", dev_text)[0].replace(" ", "")
+        c["dev"] = next((d.title() for d in DEV_TRAITS if d.replace(" ", "") in dev_word), None)
+    W = max(b[2] for _, b in items)
+    W = CARD_CROP_W if W < CARD_CROP_W else W
+    for key, x in VALUE_COLUMNS.items():
+        cand = [t for t, b in items if t not in VALUE_LABELS and lab_bottom - 10 < b[1] < lab_bottom + 40
+                and abs(b[0] - x * CARD_CROP_W) < 0.06 * CARD_CROP_W]
+        if not cand:
+            continue
+        v = cand[0].replace(" ", "")
+        if key == "height":
+            c[key] = v
+        elif key == "experience" and v == "ROOKIE":
+            c[key] = 0                      # years_of_experience 0 = rookie
+        elif v.isdigit():
+            c[key] = int(v)
+    return c
+
+
+def card_flags(c):
+    """Reasons this card read can't be trusted as-is (empty list = fine)."""
+    flags = [f"missing_{k}" for k in CARD_FIELDS if c.get(k) is None and k != "role"]
+    if c.get("age") is not None and not 20 <= c["age"] <= 45:
+        flags.append("bad_age")
+    if c.get("weight") is not None and not 150 <= c["weight"] <= 420:
+        flags.append("bad_weight")
+    if c.get("experience") is not None and not 0 <= c["experience"] <= 25:
+        flags.append("bad_experience")
+    if c.get("height") is not None:
+        m = HT_RE.match(c["height"])
+        if not m or int(m.group(2)) > 11 or not 66 <= int(m.group(1)) * 12 + int(m.group(2)) <= 84:
+            flags.append("bad_height")
+        elif m.group(1) == "6" and int(m.group(2)) >= 7 and (c.get("weight") or 0) < 280:
+            flags.append("suspect_height")          # 6'1" is often read as 6'7"
+    return flags
+
+
+def list_row_for(lines, card, win_w, list_x0):
+    """In the roster-table OCR lines (_rows of the LIST_BOX crop, starting list_x0 px into a
+    window win_w px wide), the row naming this card's player ("G.CRAWFORD"):
+    {"i": line index, "NAME", "POS", "AGE", "OVR"} as read (a column is absent when OCR
+    skipped it), or None."""
+    if not card or not card.get("last"):
+        return None
+    last = norm(card["last"])
+    first = norm(card["first"] or "")[:1]
+    for i, line in enumerate(lines):
+        name = norm(line[0][0])
+        if name.endswith(last) and (not first or name.startswith(first)):
+            row = {"i": i, "NAME": line[0][0]}
+            for col, x in LIST_COLUMNS.items():
+                for t, b in line[1:]:
+                    if abs((b[0] + b[2]) / 2 + list_x0 - x * win_w) < 0.025 * win_w:
+                        row[col] = t
+            return row
+    return None
+
+
+def read_card(prev_key, timeout=3.0):
+    """Read the card until two reads in a row agree and it shows a different player than
+    prev_key. Values missing in one read are filled from the other. Returns (card, cg) or
+    (None, cg) if the card never moved off prev_key."""
+    end = time.time() + timeout
+    last = None
+    while True:
+        cg = grab()
+        c = parse_card(ocr_cg(crop_cg(cg, CARD_BOX)))
+        key = (c["first"], c["last"], c["number"], c["position"])
+        if last is not None and key == last[0] and key != prev_key and c["last"]:
+            # mid-animation the card shows the new name over the previous player's numbers,
+            # so both reads must also agree on every value they both have
+            if all(c[k] == last[1][k] for k in CARD_FIELDS if c[k] is not None and last[1][k] is not None):
+                merged = {k: (c[k] if c[k] is not None else last[1][k]) for k in CARD_FIELDS}
+                return merged, cg
+        last = (key, c)
+        if time.time() > end:
+            return None, cg
+        time.sleep(0.12)
+
+
+def card_key(c):
+    return (c["first"], c["last"], c["number"], c["position"]) if c else None
+
+
+def roster_dropdown_selected(f):
+    return dropdown_selected(f, top=0.20, bottom=0.76)
+
+
+def roster_team(f):
+    team, view = chip_labels(f)
+    return team
+
+
+def next_roster_team(debug_dir):
+    """Hold L2, move the team list down one team (skipping NFL), release. Returns the team."""
+    os.makedirs(debug_dir, exist_ok=True)
+    key_down("l2")
+    try:
+        t_end = time.time() + 3.0
+        while True:
+            time.sleep(0.35)
+            f = Frame()
+            sel = roster_dropdown_selected(f) if "SELECT" in f.text else None
+            if sel:
+                break
+            if time.time() > t_end:
+                save_debug(f, "team_list_not_open")
+                raise Abort("Team list did not open while holding L2")
+        start = sel
+        for _ in range(8):
+            key_down("down"); time.sleep(0.1); key_up("down")
+            time.sleep(0.5)
+            f = Frame()
+            new = roster_dropdown_selected(f)
+            for _retry in range(3):
+                if new:
+                    break
+                time.sleep(0.3)
+                f = Frame()
+                new = roster_dropdown_selected(f)
+            if new and norm(new) != norm(start) and norm(new) not in DIVISION_ENTRIES:
+                break
+            if new and norm(new) in DIVISION_ENTRIES:
+                start = new                 # passed NFL; keep going to the next team
+        else:
+            raise Abort(f"Couldn't move the team list off {start}")
+        subprocess.run(["cp", f.path, os.path.join(debug_dir, f"{norm(new).lower()}.png")])
+        log(f"{new} highlighted; releasing L2")
+    finally:
+        key_up("l2")
+    time.sleep(1.5)
+    f, _ = wait_for(["ROSTER_LIST"], timeout=10)
+    team = roster_team(f)
+    if not team or norm(team) != norm(new):
+        raise Abort(f"After selecting {new}, the team chip reads {team}")
+    return team
+
+
+def roster_to_top():
+    """Move the highlight to the first row: press Up until it sits on the top visible row
+    and Up changes nothing."""
+    for _ in range(80):
+        cg = grab()
+        c = parse_card(ocr_cg(crop_cg(cg, CARD_BOX)))
+        rows = _rows(ocr_cg(crop_cg(cg, LIST_BOX)))
+        top = norm(rows[0][0][0]) if rows else ""
+        if c["last"] and top.endswith(norm(c["last"])):
+            press("up", hold=0.1, wait=0.4)
+            if card_key(parse_card(ocr_cg(crop_cg(grab(), CARD_BOX)))) == card_key(c):
+                return
+        else:
+            press("up", hold=0.07, wait=0.15, times=5)
+    raise Abort("Couldn't get to the top of the roster list")
+
+
+def open_roster():
+    f, s = look()
+    if s == "ROSTER_LIST":
+        return f
+    f, s = go_hub()
+    if s != "HUB_ROSTER":
+        log("Switching to MANAGE ROSTER tab")
+        move_to(f, HUB_TABS, "MANAGE ROSTER", "l1", "r1", "hub tab")
+        f, s = wait_for(["HUB_ROSTER"])
+    f = move_to(f, ROSTER_MENU, "ROSTER", "up", "down", "Manage Roster menu item")
+    return cross_into("HUB_ROSTER", ["ROSTER_LIST"], timeout=8)[0]
+
+
+def capture_team_roster(out, index, team, writer):
+    """Every row of one team's roster: card read on the Mac (one card crop per row) plus a
+    full screenshot per 14-row list page for Gemini. Returns the number of players."""
+    folder = os.path.join(out, "roster", f"{index:02d}_{norm(team).lower()}")
+    os.makedirs(folder, exist_ok=True)
+    roster_to_top()
+    prev, row, pages, skips = None, 0, 0, 0
+    while True:
+        card, cg = read_card(card_key(prev))
+        if card is None and prev is not None:
+            for attempt in range(3):              # dropped press, or the end of the list
+                press("down", hold=0.1, wait=0.25)
+                card, cg = read_card(card_key(prev))
+                if card:
+                    break
+            if card is None:
+                break                              # end of list
+        if card is None:
+            raise Abort(f"{team}: can't read the first player's card")
+        W = Quartz.CGImageGetWidth(cg)
+        lines = _rows(ocr_cg(crop_cg(cg, LIST_BOX)))
+        list_row = list_row_for(lines, card, W, W * LIST_BOX[0])
+        flags = card_flags(card)
+        # A press that arrives late (chiaki lag) plus the retry press moves two rows. The new
+        # player must be on the line right under the previous one; if not, step back.
+        prev_row = list_row_for(lines, prev, W, W * LIST_BOX[0])
+        if list_row and prev_row and list_row["i"] - prev_row["i"] > 1:
+            log(f"  {team}: skipped {list_row['i'] - prev_row['i'] - 1} row(s) after {prev['last']}; stepping back")
+            press("up", hold=0.1, wait=0.6, times=list_row["i"] - prev_row["i"] - 1)
+            skips += 1
+            if skips > 20:
+                raise Abort(f"{team}: rows keep getting skipped; stopping")
+            continue
+        if prev is not None and not (list_row and prev_row):
+            flags.append("step_unverified")
+        if list_row is None:
+            flags.append("not_in_list")
+        else:
+            if card["position"] and "POS" in list_row and norm(list_row["POS"]) != card["position"]:
+                flags.append("list_position_mismatch")
+            if card["age"] and list_row.get("AGE", "").isdigit() and int(list_row["AGE"]) != card["age"]:
+                flags.append("list_age_mismatch")
+        card_png = os.path.join(folder, f"card_{row:03d}.png")
+        save_cg(crop_cg(cg, CARD_BOX), card_png)
+        # list pages: rows 0-13 at row 0; once the list scrolls the highlight sits on the 8th
+        # visible row, so rows 14-27 show at row 21, 28-41 at row 35, ...
+        if row == 0 or (row >= 21 and (row - 21) % LIST_PAGE_ROWS == 0):
+            pages += 1
+            save_cg(cg, os.path.join(folder, f"list_{pages:02d}.png"))
+        writer.writerow([team, row] + [card[k] if card[k] is not None else "" for k in CARD_FIELDS]
+                        + [";".join(flags), os.path.relpath(card_png, out)])
+        prev, row = card, row + 1
+        press("down", hold=0.1, wait=0.15)
+    # the last page: the list's final 14 rows (highlight on the bottom row)
+    save_cg(grab(), os.path.join(folder, f"list_{pages + 1:02d}.png"))
+    log(f"  {team}: {row} players")
+    if row < 40:
+        log(f"  WARNING {team}: only {row} players; check {folder}")
+    return row
+
+
+def run_roster(out, max_teams=32):
+    import csv
+    log("== Rosters ==")
+    f = open_roster()
+    first = roster_team(f)
+    if not first:
+        raise Abort("Can't read the roster team chip")
+    os.makedirs(os.path.join(out, "roster"), exist_ok=True)
+    seen, total = [], 0
+    with open(os.path.join(out, "roster", "cards.csv"), "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["team", "row"] + CARD_FIELDS + ["flags", "card_png"])
+        team = first
+        while True:
+            log(f"Team: {team}")
+            seen.append(norm(team))
+            total += capture_team_roster(out, len(seen), team, w)
+            fh.flush()
+            if len(seen) >= max_teams:
+                break
+            team = next_roster_team(os.path.join(out, "team_debug"))
+            if norm(team) in seen:
+                break
+    log(f"Captured {len(seen)} teams, {total} players")
+    if max_teams >= 32 and len(seen) != 32:
+        raise Abort(f"Expected 32 teams, captured {len(seen)}: {seen}")
+
+
 def probe_l2(out):
     """Record how the L2 dropdown behaves on Player Stats (scope) or the roster list (team).
     Holds L2 the whole time, presses Up 3x then Down 3x (net zero movement),
@@ -1042,7 +1434,9 @@ def main():
     ap.add_argument("--test", action="store_true", help="classify the current screen, no key presses")
     ap.add_argument("--probe-l2", action="store_true")
     ap.add_argument("--scope-only", action="store_true", help="from Player Stats: just switch scope to NFL")
-    ap.add_argument("--only", choices=["stats", "team", "schedule"])
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster"],
+                    help="roster is never part of the default run")
+    ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
     ap.add_argument("--all-rows", action="store_true", help="don't stop stats lists at all-zero rows")
     ap.add_argument("--foreground", action="store_true", help="bring chiaki-ng to front and send global keys")
@@ -1089,6 +1483,8 @@ def main():
             run_team_stats(out)
         if a.only in (None, "schedule"):
             run_schedule(out, a.week)
+        if a.only == "roster":
+            run_roster(out, a.teams)
         log("Returning to the hub")
         go_hub()
         log(f"Done. Screenshots in {out}")
