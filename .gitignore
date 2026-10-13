@@ -35,3 +35,6 @@ docs/reference/Panthers History.pdf
 
 # Output of tools/verify_session.sh
 verify_output/
+
+# Saved console output of a local weekly run (python3 -m newsroom.weekly_run > WEEKLY_RUN)
+WEEKLY_RUN
