@@ -19,6 +19,7 @@ from newsroom.db_tools import (
     get_advanced_team_analytics,
     get_advanced_game_analytics,
     get_opponent_adjusted_credit,
+    get_team_efficiency_profile,
     get_weekly_slate,
     get_season_standings,
     get_top_popular_players,
@@ -606,6 +607,7 @@ class SwarmDispatcher:
             get_advanced_team_analytics,
             get_advanced_game_analytics,
             get_opponent_adjusted_credit,
+            get_team_efficiency_profile,
             get_weekly_slate,
             get_season_standings,
             get_top_popular_players,
@@ -777,7 +779,8 @@ CRITICAL WRITER RESEARCH TOOLS & HISTORICAL COMPARISONS:
 2. RESEARCH TOOLS: First, analyze the provided JSON ASSIGNMENT BRIEF. You have autonomous database tools to dive into any game, team, box score, season schedule, standings, or player across the league.
 - If you need a team's complete season schedule and game log (scores, margins, one-score game outcomes, game IDs), call `get_team_season_schedule`.
 - If you need full division standings and point differentials, call `get_season_standings`.
-- If you need schedule-adjusted team strength (Opponent-Adjusted Game Credit, strength of schedule, expected wins, and which records are lucky or unlucky), call `get_opponent_adjusted_credit` (no team = all 32 ranked; with a team = game-by-game credit log).
+- If you need schedule-adjusted team strength (Opponent-Adjusted Game Credit, strength of schedule, expected wins, and which records are lucky or unlucky), call `get_opponent_adjusted_credit` (no team = all 32 ranked; with a team = game-by-game credit log). It also gives each team's Trajectory (Surging to Sliding over the last 4 games).
+- If you need Pythagorean wins (what points for/against say the record should be), team pace, or per-game passing/rushing yards and giveaways, call `get_team_efficiency_profile`.
 - If you need all 32 team popularity rankings and watchability indices, call `get_all_team_popularities`.
 - If you need the top popular players in the NFL, call `get_top_popular_players`.
 - If you need a game's detailed player contributions, call `get_game_box_score`.
@@ -854,6 +857,8 @@ Readers must experience this as professional, authentic sports journalism. You m
 - Instead of "Watchability (W)" or "(88.17 W)" -> write "must-see television rating", "entertaining brand of football", or "electric watchability".
 - Instead of "Popularity (POP)" or "(64.84 POP)" -> write "national cultural footprint", "massive national following", or "media gravity".
 - Instead of "Opponent-Adjusted Game Credit" or "+4.7 credit" -> write "schedule-adjusted point margin", "plays like a +5 team against an average opponent", or "résumé once you account for who they played".
+- Instead of "Trajectory Multiplier (T)" or "1.11" -> write "surging", "trending up over the last month", or "fading down the stretch".
+- Instead of "Pythagorean wins" or "pyth luck" -> write "their point differential says they should be closer to 10-6", "winning more close games than the margins justify".
 - Instead of "Upset Leverage (U)" -> write "narrative-shifting upset", "high-leverage shocker".
 - Instead of "Baseline Rating (R_rating)" -> write "baseline roster talent", "roster foundation".
 - Instead of "Legacy Floor (S_all-time)" -> write "historical franchise prestige", "championship pedigree".

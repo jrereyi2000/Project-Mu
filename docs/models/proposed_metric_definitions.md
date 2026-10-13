@@ -1,6 +1,6 @@
 # Proposed Definitions: Referenced-but-Missing Metrics
 
-**Status: DRAFT for review — nothing here is implemented yet.**
+**Status:** approved 2026-10-12 and being implemented in phases. Each heading says whether it's **Implemented**, **Pending** or **Rejected**. Implemented metrics are specified in `PROJECT_SPEC.md` §2, which wins if the two disagree.
 
 Every metric below is named in `newsroom/config/article_types.json` ("Data Queried", which is injected into writer prompts), in persona/curatorial directives, or in `PROJECT_SPEC.md`, but is either not computed anywhere or computed without being visible to writers. Definitions are constrained to data that actually exists:
 
@@ -12,6 +12,7 @@ Every metric below is named in `newsroom/config/article_types.json` ("Data Queri
 - `team_stats`: `score`, `total_offense`, rushing/passing attempts and yards and TDs, `turnovers` are populated; `total_plays`, `first_downs`, third/fourth-down columns are **all 0**.
 - `player_stats` is offensive only (no tackles, sacks, targets, snaps). Madden ratings (`player_seasons.overall_rating`, `team_seasons` OVRs and `pass_off_rank` / `rush_off_rank` / `pass_rush_rank` / `coverage_rank`) are populated for 2035.
 - No data at all for injuries, pressures, snaps, targets, red-zone trips, or coaching/QB tenure.
+- **Per-game box scores for CPU-simmed games are synthetic.** `engines/game_stat_generator.py` splits each player's season totals across games in proportion to each game's combined score. Season totals and final scores are real. Anything that depends on how stats fell game by game (takeaways, yards allowed, TDs vs. points in a game, usage changes between games) is an artifact of that split. Several definitions below were rejected or narrowed for this reason.
 
 Notation: $C_g$ = a team's Opponent-Adjusted Game Credit in game $g$, $R$ = its season credit (PROJECT_SPEC §2.4). "z" = z-score across the 32 teams.
 
@@ -19,7 +20,7 @@ Notation: $C_g$ = a team's Opponent-Adjusted Game Credit in game $g$, $R$ = its 
 
 ## A. New team metrics (computable now)
 
-### A1. Trajectory Multiplier ($T$)
+### A1. Trajectory Multiplier ($T$) — Implemented (§2.4)
 Referenced by: `POWER_RANKINGS`, `PLAYOFF_PREDICTOR`, `SEASON_PROGRESS_AUDIT`, `LOCAL_SEASON_PROGRESS_REPORT`. No formula exists anywhere.
 
 Is the team better or worse lately than its season-long level?
@@ -31,28 +32,30 @@ $$\Delta = \bar C_{\text{last 4}} - R \qquad \Delta_{\text{shrunk}} = \Delta \cd
 - Labels: ≥ 1.08 **Surging**, 1.03–1.08 **Rising**, 0.97–1.03 **Steady**, 0.92–0.97 **Fading**, < 0.92 **Sliding**.
 - It's called a "multiplier" in the prompts. Nothing multiplies by it yet; if Power Rankings ever get a numeric score, $R \cdot T$ (for $R > 0$) is the intended use.
 
-### A2. Pythagorean Win Expectation
+### A2. Pythagorean Win Expectation — Implemented (§2.6)
 Referenced by: `MACRO_SLATE_RECAP`.
 
 $$\text{PythW} = G \cdot \frac{PF^{2.37}}{PF^{2.37} + PA^{2.37}} \qquad \text{Pyth luck} = W - \text{PythW}$$
 
 - 2.37 is the standard NFL exponent. Uses raw points; complements `expected_wins` (schedule-adjusted) from §2.4. When they disagree, the gap is schedule.
 
-### A3. Turnover Margin
+### A3. Turnover Margin — Rejected
 Referenced by: `LOCAL_POSTGAME_REPORT_CARD`.
+
+**Rejected:** takeaways come from opponents' turnovers allocated game by game, which is synthetic (see data notes). Giveaways per game (the team's own, a real season total) are returned by `get_team_efficiency_profile` instead. The original proposal was:
 
 $$\text{TOM} = \sum_g (\text{opp turnovers}_g - \text{own turnovers}_g)$$
 
 Reported as season total and per game, from `team_stats.turnovers` (own giveaways; takeaways are the opponent's row).
 
-### A4. Team Offensive Pace ($P_{\text{team}}$) — unify the two existing versions
+### A4. Team Offensive Pace ($P_{\text{team}}$) — Implemented (§2.6; writer tool uses `production_score`)
 Referenced by ~10 article types. Today the excitement engine's $P$ uses points + yards, while `get_advanced_game_analytics` uses points ÷ 70 only.
 
 - **Game level:** use `gotw_engine.production_score(total_points, combined_yards)` everywhere, including the writer tool.
 - **Team level (new):** $P_{\text{team}} = \min\!\left(100,\ \frac{PF/G}{35}\cdot 60 + \frac{\text{Yds}/G}{425}\cdot 40\right)$ — the same benchmarks halved to one team.
 - True tempo (plays per game) isn't possible until `total_plays` is captured.
 
-### A5. Playoff Clout ($S_{\text{playoff}}$)
+### A5. Playoff Clout ($S_{\text{playoff}}$) — Pending
 Referenced by: `PLAYER_DEEP_PROFILE`, `SUPER_BOWL_CONTENDER_BLUEPRINT`, `POSITIONAL_TOP_10_HIERARCHY`, `SUPER_BOWL_COMPREHENSIVE_PREVIEW`, `QUARTERBACK_DUEL_TAPE_BREAKDOWN`. Not defined anywhere.
 
 **Team:**
@@ -64,7 +67,9 @@ $$S_{\text{playoff}}^{\text{player}} = \min\!\left(100,\ 40\cdot\text{SBMVPs} + 
 - "Played in" means the player has a `player_stats` row in that game, so it's only knowable from 2035 onward; before that only SB MVPs count.
 - Pre-2035 Super Bowl rosters aren't stored, so career clout for veterans is understated. This is a known gap.
 
-### A6. Matchup Edge (replaces "Opponent Matchup Deficiencies")
+### A6. Matchup Edge (replaces "Opponent Matchup Deficiencies") — Pending, revised
+
+**Revised:** "yards allowed" and takeaways are synthetic per-game allocations, so the defensive side uses Madden ratings instead: Pass edge $= z(A\text{ pass yds/g}) + z(B\text{ coverage\_rank})$; Rush edge $= z(A\text{ rush yds/g}) - z(B\text{ def\_ovr})$; Ball-security edge $= z(B\text{ giveaways/g}) - z(A\text{ giveaways/g})$. Ranks run 1 = best. The original proposal was:
 Referenced by: `LOCAL_MATCHUP_PRIMER`, `X_FACTOR_VOLATILITY_SPOTLIGHT`, `QUARTERBACK_DUEL_TAPE_BREAKDOWN`.
 
 For team $A$ facing $B$, per phase, from 2035 `team_stats`:
@@ -78,14 +83,16 @@ For team $A$ facing $B$, per phase, from 2035 `team_stats`:
 - Positive = A's strength meets B's weakness. The largest positive edge is "the deficiency to exploit," and the most negative is A's own vulnerability.
 - Computed both directions for each game.
 
-### A7. Trench Edge (replaces "Defensive Front vs. O-Line Matchup")
+### A7. Trench Edge (replaces "Defensive Front vs. O-Line Matchup") — Pending
 Referenced by: `LOCAL_MATCHUP_PRIMER`. There's no pressure or sack data, so this is ratings-based.
 
 - $OL_A$ = mean OVR of A's top 5 among LT/LG/C/RG/RT.
 - $DF_B$ = mean OVR of B's top 4 among LEDG/REDG/DT.
 - $\text{Trench Edge}_{A\,\text{off}} = OL_A - DF_B$ (OVR points), shown with B's `pass_rush_rank` for context.
 
-### A8. Touchdown Finishing Rate (replaces "Red Zone Conversion Rates" / "Red Zone Efficiency")
+### A8. Touchdown Finishing Rate — Rejected
+
+**Rejected:** per-game TDs don't line up with per-game points (e.g. half the Chargers' games show more TDs × 7 than points scored), so the rate measured the stat split, not finishing. Red-zone metrics will be dropped from the configs. The original proposal was:
 Referenced by: `SINGLE_GAME_SCHEMATIC_AUTOPSY`, `LOCAL_POSTGAME_REPORT_CARD`. Red-zone trips aren't recorded.
 
 $$\text{TD}_{\text{off}} = \sum(\text{rush\_tds} + \text{rec\_tds}) \qquad \widehat{\text{FG}} = \max\!\left(0, \frac{PF - 7\cdot\text{TD}_{\text{off}}}{3}\right) \qquad \text{Finish\%} = \frac{\text{TD}_{\text{off}}}{\text{TD}_{\text{off}} + \widehat{\text{FG}}}$$
@@ -97,7 +104,9 @@ $$\text{TD}_{\text{off}} = \sum(\text{rush\_tds} + \text{rec\_tds}) \qquad \wide
 
 ## B. New player metrics (computable now)
 
-### B1. Touch Share & Usage Delta (replaces "Target/Snap Share Deltas", "Player Snap & Efficiency Shares")
+### B1. Touch Share (replaces "Target/Snap Share Deltas", "Player Snap & Efficiency Shares") — Pending, narrowed
+
+**Narrowed:** season touch share and yard share only. Usage delta is dropped, because synthetic per-game splits give every player nearly the same share each game, so the delta is ~0 by construction. The original proposal was:
 Referenced by: `LOCAL_PLAYER_SPOTLIGHT`, `X_FACTOR_VOLATILITY_SPOTLIGHT`, `PLAYER_PROGRESS_REPORT` (as "Target/Usage Deltas"), `SINGLE_GAME_SCHEMATIC_AUTOPSY`. There are no snaps or targets.
 
 $$\text{Touch share}_{i,g} = \frac{\text{rush\_att}_i + \text{rec}_i}{\sum_{\text{team}}(\text{rush\_att} + \text{rec})} \qquad \text{Yard share}_{i,g} = \frac{\text{rush\_yds}_i + \text{rec\_yds}_i}{\text{team scrimmage yds}}$$
@@ -105,7 +114,7 @@ $$\text{Touch share}_{i,g} = \frac{\text{rush\_att}_i + \text{rec}_i}{\sum_{\tex
 - **Usage Delta** = mean touch share over the last 3 games − season mean (percentage points). Skill positions only.
 - Receptions, not targets, so it understates high-volume, low-catch receivers.
 
-### B2. Exposure ($E_{\text{exposure}}$) — currently hardcoded to 60 for every player
+### B2. Exposure ($E_{\text{exposure}}$) — Pending (currently hardcoded to 60 for every player)
 The spec exists (`nfl_player_popularity_specification.md` §2.2) but needs SnapShare, which we don't have.
 
 $$E_{\text{exposure}} = \frac{\sum_k w_k\, E_k\, a_{i,k}\,(1 + 0.25\cdot\mathbb{I}_{\text{GOTW},k})}{\sum_k w_k\, a_{i,k}} \qquad w_k = e^{-0.12(T-k)}$$
@@ -114,7 +123,7 @@ $$E_{\text{exposure}} = \frac{\sum_k w_k\, E_k\, a_{i,k}\,(1 + 0.25\cdot\mathbb{
 - GOTW = the highest-E game of that week.
 - $E_k$ is raw E. Defaults to 50 for players with no appearances (defensive players included, since no defensive stats exist).
 
-### B3. Awards Equity ($A_{\text{awards}}$, $A_{\text{career}}$) — implemented partially today
+### B3. Awards Equity ($A_{\text{awards}}$, $A_{\text{career}}$) — Pending (implemented partially today)
 The spec exists (§2.5). Code counts only last season, with no decay and no career term.
 
 - Points per award: MVP 50, OPOY/DPOY 35, SBMVP 25, OROY/DROY 18. All-Pro isn't tracked.
@@ -124,7 +133,7 @@ The spec exists (§2.5). Code counts only last season, with no decay and no care
 
 ---
 
-## C. Already exist — just expose (definition unchanged)
+## C. Already exist — just expose (definition unchanged) — Implemented (§2.2, §2.5), except Team Roster Deficiencies (config wording, pending)
 
 | Metric | Where it's computed now | Change |
 |---|---|---|

@@ -4,7 +4,8 @@ from db.db_handler import DatabaseHandler
 from engines.gotw_engine import display_excitement, production_score, upset_score
 from engines.excitement_projection import DEFAULT_MARGIN_SD, DEFAULT_OVR_MARGIN_SLOPE, _normal_cdf as normal_cdf, expected_upset
 from engines.market_constants import market
-from engines.game_credit_engine import compute_game_credit, fetch_completed_games
+from engines.team_efficiency_engine import compute_team_efficiency, fetch_team_game_rows
+from engines.game_credit_engine import compute_game_credit, fetch_completed_games, trajectory_label
 import json
 
 db = DatabaseHandler()
@@ -478,7 +479,7 @@ def get_advanced_game_analytics(game_id: int) -> str:
 
 @tool
 def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 2035) -> str:
-    """Fetch Opponent-Adjusted Game Credit: schedule-adjusted points per game vs. a league-average team (margins capped at 24, home field removed). Without a team, returns all 32 teams ranked with season credit, recent-form credit, strength of schedule, expected wins, and win luck (wins minus expected wins; positive = record flatters them, i.e. paper tiger). With a team name, abbreviation, or ID, returns that team's summary plus a game-by-game credit log."""
+    """Fetch Opponent-Adjusted Game Credit: schedule-adjusted points per game vs. a league-average team (margins capped at 24, home field removed). Without a team, returns all 32 teams ranked with season credit, recent-form credit, strength of schedule, expected wins, and win luck (wins minus expected wins; positive = record flatters them, i.e. paper tiger). Also returns the Trajectory Multiplier (last 4 games vs. season level, 0.80-1.20; 1.00 = steady) with a Surging/Rising/Steady/Fading/Sliding label. With a team name, abbreviation, or ID, returns that team's summary plus a game-by-game credit log."""
     try:
         s_val = int(season)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -502,6 +503,8 @@ def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 2035) 
                         "record": f"{c.wins:g}-{losses:g}",
                         "opp_adj_credit": round(c.rating, 1),
                         "recent_form_credit": round(c.recent, 1),
+                        "trajectory_multiplier": round(c.trajectory, 2),
+                        "trajectory": trajectory_label(c.trajectory),
                         "strength_of_schedule": round(c.sos, 1),
                         "raw_point_diff_per_game": round(c.point_diff / c.games, 1),
                         "expected_wins": round(c.expected_wins, 1),
@@ -531,6 +534,48 @@ def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 2035) 
                     "game_credit": round(g["game_credit"], 1),
                 } for g in c.game_log]
                 return json.dumps({**meta, **summary(c), "game_log": log}, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_team_efficiency_profile(team_identifier: str = "", season: int = 2035) -> str:
+    """Fetch season efficiency from points and yards: Pythagorean wins (the record points for/against predict; pyth_luck = wins minus that, positive = record flatters them), team pace & production (0-100), yards per game passing and rushing, and giveaways per game. Without a team, returns all 32 teams sorted by pyth_luck; with a team name, abbreviation, or ID, returns that team only."""
+    try:
+        s_val = int(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                profiles = compute_team_efficiency(fetch_team_game_rows(cur, s_val))
+                if not profiles:
+                    return f"No completed games for Season {s_val}."
+                cur.execute("SELECT id, name FROM teams;")
+                names = dict(cur.fetchall())
+
+                def fmt(team_id, p):
+                    losses = p["games"] - p["wins"]
+                    return {
+                        "team": names.get(team_id, str(team_id)),
+                        "team_id": team_id,
+                        "record": f"{p['wins']:g}-{losses:g}",
+                        "points_for": p["points_for"],
+                        "points_against": p["points_against"],
+                        "pythagorean_wins": round(p["pythagorean_wins"], 1),
+                        "pyth_luck": round(p["pyth_luck"], 1),
+                        "pace_production": round(p["pace_production"], 1),
+                        "pass_yds_per_game": round(p["pass_yds_per_game"], 1),
+                        "rush_yds_per_game": round(p["rush_yds_per_game"], 1),
+                        "giveaways_per_game": round(p["giveaways_per_game"], 2),
+                    }
+
+                note = ("Pace & production: 35 points and 425 yards per game = 100. Pythagorean wins use raw points; "
+                        "compare with expected_wins from get_opponent_adjusted_credit, which also adjusts for schedule.")
+                if not str(team_identifier).strip():
+                    ranked = sorted(profiles.items(), key=lambda kv: kv[1]["pyth_luck"], reverse=True)
+                    return json.dumps({"season": s_val, "scale_note": note, "teams": [fmt(t, p) for t, p in ranked]}, indent=2)
+
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id or team_id not in profiles:
+                    return f"Team '{team_identifier}' not found or has no completed games."
+                return json.dumps({"season": s_val, "scale_note": note, **fmt(team_id, profiles[team_id])}, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

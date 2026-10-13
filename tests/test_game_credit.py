@@ -4,7 +4,14 @@ Run: python3 -m unittest tests.test_game_credit
 """
 import unittest
 
-from engines.game_credit_engine import MARGIN_CAP, compute_game_credit, fit_home_field
+from engines.game_credit_engine import (
+    MARGIN_CAP,
+    TRAJECTORY_BOUNDS,
+    compute_game_credit,
+    fit_home_field,
+    trajectory_label,
+    trajectory_multiplier,
+)
 
 
 def game(gid, week, home, away, hs, as_, game_type="REGULAR_SEASON"):
@@ -60,6 +67,22 @@ class GameCreditTests(unittest.TestCase):
     def test_ties_count_half(self):
         credits, _, _ = compute_game_credit([game(1, 1, 1, 2, 17, 17)])
         self.assertEqual(credits[1].wins, 0.5)
+
+
+class TrajectoryTests(unittest.TestCase):
+    def test_needs_minimum_games(self):
+        self.assertEqual(trajectory_multiplier([10, 10, 10, 10, 10], 0.0), 1.0)
+
+    def test_direction_and_shrink(self):
+        # Last 4 games average +8 vs a 0 season rating: 1 + 0.5 * 8 / 20 = 1.20
+        self.assertAlmostEqual(trajectory_multiplier([-8, -8, 8, 8, 8, 8], 0.0), 1.20)
+        self.assertAlmostEqual(trajectory_multiplier([4, 4, 0, 0, 0, 0], 2.0), 0.95)
+
+    def test_bounds_and_labels(self):
+        self.assertEqual(trajectory_multiplier([0, 0, 50, 50, 50, 50], 0.0), TRAJECTORY_BOUNDS[1])
+        self.assertEqual(trajectory_multiplier([0, 0, -50, -50, -50, -50], 0.0), TRAJECTORY_BOUNDS[0])
+        self.assertEqual([trajectory_label(t) for t in (1.10, 1.05, 1.0, 0.95, 0.85)],
+                         ["Surging", "Rising", "Steady", "Fading", "Sliding"])
 
 
 if __name__ == "__main__":

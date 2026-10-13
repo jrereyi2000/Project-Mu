@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS team_seasons (
     p_draft DOUBLE PRECISION,
     y_prod DOUBLE PRECISION,
     purgatory_penalty DOUBLE PRECISION,
+    trajectory_multiplier DOUBLE PRECISION,
+    pythagorean_wins DOUBLE PRECISION,
+    pace_production DOUBLE PRECISION,
     UNIQUE (team_id, season)
 );
 

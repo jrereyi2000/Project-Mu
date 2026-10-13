@@ -12,6 +12,9 @@ league-average team. It is a Simple Rating System (SRS) fitted on completed game
   so early-season ratings stay sane. Ratings depend on each other and are solved iteratively, centred on 0.
 - `opp_adj_credit_recent` is the same game credit with TWI's recency decay (λ = 0.15 per week).
 - `sos_rating` is the mean opponent rating faced (positive = harder schedule).
+- `trajectory_multiplier` (T) compares the last TRAJECTORY_GAMES games' mean credit with the season rating:
+  T = clamp(1 + 0.5·Δ / 20, 0.80, 1.20). The 0.5 shrink damps a noisy 4-game mean; T = 1.00 before
+  TRAJECTORY_MIN_GAMES games. Labels: Surging ≥ 1.08, Rising ≥ 1.03, Steady, Fading ≤ 0.97, Sliding < 0.92.
 - `expected_wins` sums each game's win probability Φ((rating − opp rating ± H) / σ), where σ is the spread of
   margins around the fitted ratings. `wins − expected_wins` flags paper tigers (lucky records) and
   unlucky teams.
@@ -38,6 +41,11 @@ RECENCY_LAMBDA = 0.15
 DEFAULT_MARGIN_SD = 14.0
 MIN_GAMES_FOR_SD = 32
 NEUTRAL_GAME_TYPES = {"SUPER_BOWL"}
+TRAJECTORY_GAMES = 4
+TRAJECTORY_MIN_GAMES = 6
+TRAJECTORY_SHRINK = TRAJECTORY_GAMES / (TRAJECTORY_GAMES + 4)
+TRAJECTORY_SCALE = 20.0
+TRAJECTORY_BOUNDS = (0.80, 1.20)
 MAX_ITERATIONS = 500
 TOLERANCE = 1e-6
 
@@ -52,11 +60,34 @@ class TeamCredit:
     recent: float = 0.0         # opp_adj_credit_recent
     sos: float = 0.0
     expected_wins: float = 0.0
+    trajectory: float = 1.0     # trajectory_multiplier (T)
     game_log: list = field(default_factory=list)
 
 
 def _normal_cdf(x: float) -> float:
     return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+
+def trajectory_multiplier(game_credits: list, season_rating: float) -> float:
+    """game_credits in week order. 1.0 until TRAJECTORY_MIN_GAMES games."""
+    if len(game_credits) < TRAJECTORY_MIN_GAMES:
+        return 1.0
+    recent = game_credits[-TRAJECTORY_GAMES:]
+    delta = sum(recent) / len(recent) - season_rating
+    lo, hi = TRAJECTORY_BOUNDS
+    return max(lo, min(hi, 1 + TRAJECTORY_SHRINK * delta / TRAJECTORY_SCALE))
+
+
+def trajectory_label(t: float) -> str:
+    if t >= 1.08:
+        return "Surging"
+    if t >= 1.03:
+        return "Rising"
+    if t > 0.97:
+        return "Steady"
+    if t >= 0.92:
+        return "Fading"
+    return "Sliding"
 
 
 def _site_sign(game: dict, team_id: int) -> int:
@@ -136,6 +167,7 @@ def compute_game_credit(games: list, current_week: int = None) -> tuple:
             tc.expected_wins += _normal_cdf((ratings[t] - opp_rating + r["site"] * hfa) / margin_sd)
             tc.game_log.append({**r, "opponent_rating": opp_rating, "game_credit": credit})
         tc.recent = weighted / weight_total if weight_total else 0.0
+        tc.trajectory = trajectory_multiplier([g["game_credit"] for g in tc.game_log], tc.rating)
         tc.sos /= len(rs)
         results[t] = tc
     return results, hfa, margin_sd
@@ -167,9 +199,11 @@ class GameCreditEngine:
                 credits, hfa, sd = compute_game_credit(games)
                 cur.executemany("""
                     UPDATE team_seasons
-                    SET opp_adj_credit = %s, opp_adj_credit_recent = %s, sos_rating = %s, expected_wins = %s
+                    SET opp_adj_credit = %s, opp_adj_credit_recent = %s, sos_rating = %s, expected_wins = %s,
+                        trajectory_multiplier = %s
                     WHERE team_id = %s AND season = %s
-                """, [(round(c.rating, 2), round(c.recent, 2), round(c.sos, 2), round(c.expected_wins, 2), t, season)
+                """, [(round(c.rating, 2), round(c.recent, 2), round(c.sos, 2), round(c.expected_wins, 2),
+                       round(c.trajectory, 3), t, season)
                       for t, c in credits.items()])
                 cur.execute("SELECT id, name FROM teams")
                 names = dict(cur.fetchall())
@@ -181,7 +215,7 @@ class GameCreditEngine:
         for i, c in enumerate(sorted(credits.values(), key=lambda c: c.rating, reverse=True), start=1):
             luck = c.wins - c.expected_wins
             print(f"{i:>2}. {names.get(c.team_id, c.team_id):<14} | Credit: {c.rating:+6.1f} | Recent: {c.recent:+6.1f} "
-                  f"| SOS: {c.sos:+5.1f} | Raw diff/g: {c.point_diff / c.games:+6.1f} | W: {c.wins:>4.1f} xW: {c.expected_wins:>4.1f} ({luck:+.1f})")
+                  f"| T: {c.trajectory:.2f} | SOS: {c.sos:+5.1f} | Raw diff/g: {c.point_diff / c.games:+6.1f} | W: {c.wins:>4.1f} xW: {c.expected_wins:>4.1f} ({luck:+.1f})")
         return credits
 
 
