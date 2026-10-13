@@ -5,10 +5,13 @@ from engines.gotw_engine import display_excitement, production_score, upset_scor
 from engines.excitement_projection import DEFAULT_MARGIN_SD, DEFAULT_OVR_MARGIN_SLOPE, _normal_cdf as normal_cdf, expected_upset
 from engines.market_constants import market
 from engines.team_efficiency_engine import compute_team_efficiency, fetch_team_game_rows
+from engines.matchup_edges import compute_edges, fetch_ratings, fetch_units
 from engines.game_credit_engine import compute_game_credit, fetch_completed_games, trajectory_label
 import json
 
 db = DatabaseHandler()
+
+SKILL_POSITIONS = ("HB", "FB", "WR", "TE")
 
 def _resolve_team_id(cur, identifier: str) -> int:
     """Helper to resolve a team ID from an int or name/abbreviation string."""
@@ -87,7 +90,7 @@ def get_game_box_score(game_id: int) -> str:
 
 @tool
 def get_player_season_stats(player_identifier: str) -> str:
-    """Fetch cumulative season stats, Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout for a specific player. Accepts player name (e.g. 'Drake Maye') or player ID."""
+    """Fetch cumulative season stats, Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout, and season touch/yard share for skill players. Accepts player name (e.g. 'Drake Maye') or player ID."""
     try:
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -142,6 +145,33 @@ def get_player_season_stats(player_identifier: str) -> str:
                 """, (target_id, f"%{row[0]}%"))
                 career_awards = [f"{a[0]} {a[1]}" for a in cur.fetchall()]
 
+                # Season touch share / yard share of the team's carries + catches (season totals, which are real;
+                # per-game splits for CPU-simmed games are synthetic, so no game-to-game usage deltas)
+                usage = None
+                if row[1] in SKILL_POSITIONS:
+                    cur.execute("""
+                        WITH team AS (
+                            SELECT SUM(COALESCE(rush_attempts, 0) + COALESCE(receptions, 0)) AS touches,
+                                   SUM(COALESCE(rush_yards, 0) + COALESCE(rec_yards, 0)) AS yards
+                            FROM season_stats WHERE season = 2035 AND team_id = (
+                                SELECT team_id FROM player_seasons WHERE player_id = %s AND season = 2035)
+                        )
+                        SELECT COALESCE(ss.rush_attempts, 0) + COALESCE(ss.receptions, 0),
+                               COALESCE(ss.rush_yards, 0) + COALESCE(ss.rec_yards, 0), team.touches, team.yards
+                        FROM players p
+                        JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                        JOIN season_stats ss ON ss.player_name = p.player_name AND ss.season = 2035 AND ss.team_id = ps.team_id
+                        CROSS JOIN team
+                        WHERE p.id = %s LIMIT 1;
+                    """, (target_id, target_id))
+                    u = cur.fetchone()
+                    if u and u[2]:
+                        usage = {
+                            "touch_share_pct": round(100.0 * u[0] / u[2], 1),
+                            "scrimmage_yard_share_pct": round(100.0 * u[1] / u[3], 1) if u[3] else None,
+                            "scale_note": "Share of the team's season carries + receptions and scrimmage yards. Receptions, not targets; snaps aren't recorded.",
+                        }
+
                 result = {
                     "player_id": target_id,
                     "name": row[0],
@@ -168,6 +198,7 @@ def get_player_season_stats(player_identifier: str) -> str:
                     },
                     "career_awards": career_awards if career_awards else ["None recorded"],
                     "preseason_adp_rank": row[13] if row[13] else "Undrafted",
+                    "season_usage": usage or "Not applicable (non-skill position or no season stats)",
                     "season_stats": {
                         "passing": f"{row[5] or 0} yds, {row[6] or 0} TD, {row[7] or 0} INT",
                         "rushing": f"{row[8] or 0} yds, {row[9] or 0} TD",
@@ -584,6 +615,62 @@ def get_team_efficiency_profile(team_identifier: str = "", season: int = 2035) -
                 if not team_id or team_id not in profiles:
                     return f"Team '{team_identifier}' not found or has no completed games."
                 return json.dumps({"season": s_val, "scale_note": note, **fmt(team_id, profiles[team_id])}, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", season: int = 2035) -> str:
+    """Fetch Matchup Edge for a game, in both directions: pass edge (passing offense vs. the opponent's coverage rating), rush edge (rushing offense vs. defensive rating), ball-security edge (who gives the ball away more), and Trench Edge (offensive line OVR vs. the opponent's top pass rushers). Edges are in standard deviations (0 = even, +1 = clear advantage). Without an opponent, uses the team's next scheduled game. Accepts team names, abbreviations, or IDs."""
+    try:
+        s_val = int(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Team '{team_identifier}' not found."
+                if str(opponent_identifier).strip():
+                    opp_id = _resolve_team_id(cur, opponent_identifier)
+                    if not opp_id:
+                        return f"Team '{opponent_identifier}' not found."
+                    context = "Requested matchup"
+                else:
+                    cur.execute("""
+                        SELECT week, CASE WHEN home_team_id = %s THEN away_team_id ELSE home_team_id END
+                        FROM games
+                        WHERE season = %s AND status = 'SCHEDULED' AND (home_team_id = %s OR away_team_id = %s)
+                        ORDER BY week LIMIT 1;
+                    """, (team_id, s_val, team_id, team_id))
+                    nxt = cur.fetchone()
+                    if not nxt:
+                        return f"No scheduled game for team ID {team_id}; pass an opponent."
+                    context, opp_id = f"Week {nxt[0]} matchup", nxt[1]
+
+                profiles = compute_team_efficiency(fetch_team_game_rows(cur, s_val))
+                ratings = fetch_ratings(cur, s_val)
+                units = fetch_units(cur, s_val)
+                cur.execute("SELECT id, name FROM teams;")
+                names = dict(cur.fetchall())
+
+                def side(off, dfn):
+                    e = compute_edges(profiles, ratings, units, off, dfn)
+                    return {
+                        "offense": names.get(off), "defense": names.get(dfn),
+                        "pass_edge": round(e["edges"]["pass"], 2),
+                        "rush_edge": round(e["edges"]["rush"], 2),
+                        "ball_security_edge": round(e["edges"]["ball_security"], 2),
+                        "trench_edge_ovr": round(e["trench_edge"], 1) if e["trench_edge"] is not None else None,
+                        "defense_pass_rush_rank": ratings.get(dfn, {}).get("pass_rush_rank"),
+                        "best_edge": e["best_edge"],
+                        "biggest_vulnerability": e["biggest_vulnerability"],
+                    }
+
+                return json.dumps({
+                    "season": s_val,
+                    "context": context,
+                    f"{names.get(team_id)}_offense": side(team_id, opp_id),
+                    f"{names.get(opp_id)}_offense": side(opp_id, team_id),
+                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best).",
+                }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

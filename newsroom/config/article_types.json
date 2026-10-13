@@ -95,8 +95,7 @@
       "data_queried": [
         "Advanced Game Analytics (Offensive Pace, Single-Game Excitement)",
         "Game Box Scores",
-        "Player Snap & Efficiency Shares",
-        "Red Zone Conversion Rates"
+        "Touch Share & Scrimmage Yard Share (season)"
       ],
       "example_prompt_hook": "Select a single compelling matchup from the slate. Break down the play-level tactical mechanics that decided the outcome: offensive pace, point-of-attack leverage, and individual matchup exploitation.",
       "directive": "ARTICLE TYPE SPECIFICATION: The Single-Game Schematic Autopsy\nGranularity: Single-game play-by-play.\nFocus: Point-of-attack wins, run-pass splits, specific receiver coverage isolations.\nScope: Focus laser-sharp on one specific game's tactical blueprint. Chart why the game unfolded the way it did using evidence-based film charting principles, tactical concepts, and efficiency data rather than narrative or emotion.",
@@ -252,9 +251,8 @@
       "data_queried": [
         "Unit Offensive Pace (P)",
         "Opponent-Adjusted Game Credit",
-        "Turnover Margin",
-        "Red Zone Efficiency",
-        "Pressure Rates"
+        "Giveaways per Game (ball security)",
+        "Pass Rush Rating (Madden rank)"
       ],
       "curatorial_autonomy": "CURATORIAL AUTONOMY (LOCAL POSTGAME FOCUS):\nYou are covering strictly this franchise. Do not compare this game to the broader national slate. Your filter is immediate execution versus expectations. You are isolating which specific positional unit won or lost this game. Prioritize third-down conversion failures, offensive line protection breakdowns, and sudden schematic collapses over broad narrative platitudes.",
       "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an immediate, granular postgame assessment (approx. 700\u2013900 words).\n\n1. The Instant Takeaway:\n- Open with a direct headline using # focused on the central reason for the outcome (e.g., # Report Card: Protection Breakdowns Sink Second-Half Surge).\n- Deliver a 2-paragraph summary of the game's turning point and the overall performance grade.\n\n2. The Unit-by-Unit Grades:\n- Use ## headers to evaluate every core unit:\n  * ## Passing Offense\n  * ## Rushing Attack\n  * ## Front Seven & Run Defense\n  * ## Secondary & Pass Rush\n  * ## Special Teams & Coaching Decisions\n- Assign each unit a letter grade (A+ through F) in bold on the line immediately below the header (e.g., **Grade: B+**).\n- Provide 2\u20133 precise sentences per unit detailing snap execution, blocking assignments, and critical third-down plays.\n\n3. The Final Mark:\n- End with a standalone bold overall team grade (**Composite Grade: [Grade]**) and one direct statement on what must change by Wednesday practice.",
@@ -274,10 +272,9 @@
       "granularity": "Single-game forward-looking / Friday/Saturday preview",
       "focus": "Home-team perspective matchup reality, 3 hyper-specific micro battles, game-plan victory blueprint, and final score prediction.",
       "data_queried": [
-        "Opponent Matchup Deficiencies",
+        "Matchup Edge (pass, rush, ball security)",
         "Upset Leverage (U_projected)",
-        "Injury Report Availability",
-        "Defensive Front vs. O-Line Matchup"
+        "Trench Edge (O-line vs. pass rush ratings)"
       ],
       "curatorial_autonomy": "CURATORIAL AUTONOMY (LOCAL PREVIEW FOCUS):\nYou are looking at the upcoming opponent strictly through the home team's eyes. Do not write a generic preview for both fan bases. Your curation isolates the 2 or 3 micro-battles that determine whether this specific team wins or loses. Focus on cluster injuries, trench advantages, and specific player matchups rather than broad team records.",
       "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a definitive home-team game-plan blueprint (approx. 800\u20131,000 words).\n\n1. The Matchup Reality:\n- Open with an authoritative headline using #.\n- Write 2 paragraphs setting the stakes for the franchise: divisional standings, injury status, and the emotional mood inside the locker room heading into the weekend.\n\n2. Three Matchups That Decide the Game:\n- Use numbered ## headers to highlight 3 hyper-specific player or unit battles (e.g., ## 1. Left Tackle vs. Opponent's Star Edge Rusher).\n- Break down the technique, physical traits, and tactical help (chips, slide protection) required to win each individual clash.\n\n3. The Blueprint to Victory:\n- Use a ## header outlining the home team's exact checklist:\n  * The Scripted Drive: Early offensive tempo requirements.\n  * The Defensive Mandate: Third-down stop percentage target or takeaway requirement.\n\n4. Beat Prediction:\n- End with a concise final prediction detailing game script and scoreline:\nProjected Final: [Team Name] [Score], [Opponent Name] [Score]",
@@ -298,7 +295,7 @@
       "focus": "Single local player's role evolution, developmental leap, contract-year performance, tape & assignment execution, coaching trust, and roster implications.",
       "data_queried": [
         "SpikeIndex",
-        "Target/Snap Share Deltas",
+        "Touch Share & Scrimmage Yard Share (season)",
         "Positional Multiplier (M_pos)",
         "Blue-Chip Pedigree (P_draft)",
         "Under-25 Production Share (Y_prod)"
@@ -382,7 +379,7 @@
         "Awards Equity (A_awards)",
         "Baseline Rating (R_rating)",
         "SpikeIndex",
-        "Target/Usage Deltas",
+        "Touch Share & Scrimmage Yard Share (season)",
         "Offensive Pace (P)"
       ],
       "curatorial_autonomy": "CURATORIAL AUTONOMY (PLAYER PROGRESS SELECTION):\nYou are evaluating the cumulative season-to-date trajectory of a single player at this point in the season. Do not choose an established player performing within baseline expectations. You must identify a player whose season-to-date performance is forcing an immediate recalibration of their trajectory:\n- An aging veteran whose declining efficiency and diminished SpikeIndex indicate their competitive window or starting role is slipping away.\n- A rising talent drastically outpacing their Baseline Rating ($R_{\\text{rating}}$) and expanding their team's offensive efficiency.\n- A high-volume contributor whose raw numbers look strong, but whose lack of down-to-down consistency or declining Awards Equity ($A_{\\text{awards}}$) suggests upcoming regression.\nSelect the single player whose season-to-date arc answers a central narrative question about their role, developmental ceiling, or place in the league hierarchy.",
@@ -575,8 +572,8 @@
       "focus": "Identifying the highly volatile, non-quarterback skill players whose Boom-or-Bust profiles (SpikeIndex) could single-handedly wreck the Super Bowl game script.",
       "data_queried": [
         "SpikeIndex",
-        "Target/Snap Share Deltas",
-        "Opponent Matchup Deficiencies",
+        "Touch Share & Scrimmage Yard Share (season)",
+        "Matchup Edge (pass, rush, ball security)",
         "Offensive Pace (P)",
         "Under-25 Production (Y_prod)"
       ],
@@ -661,7 +658,7 @@
         "Base Market Gravity (B)",
         "Legacy Floor (S_all-time)",
         "Historical Franchise Prestige",
-        "National Penetration (N)"
+        "National Reach (N; published for 8 franchises)"
       ],
       "example_prompt_hook": "Evaluate the historical stakes of the Super Bowl matchup. Analyze what a Lombardi trophy would do for the Legacy Floor of the winning franchise and how it would shift their Base Market Gravity.",
       "directive": "ARTICLE TYPE SPECIFICATION: The Market Gravity & Legacy Floor Audit\nGranularity: Franchise Historical / Macro Narrative.\nFocus: Franchise prestige, Legacy Floor shifts, Market Gravity implications, and historical stakes.\nScope: Step back from the X's and O's of the Super Bowl matchup. Evaluate the macro-level organizational stakes. What does a championship mean for the historical legacy and market power of these two franchises? Translate metrics like Legacy Floor ($S_{\\text{all-time}}$) and Base Market Gravity ($B$) into narrative weight.",
@@ -723,7 +720,7 @@
         "SpikeIndex",
         "Offensive Pace (P)",
         "Playoff Clout (S_playoff)",
-        "Opponent Matchup Deficiencies"
+        "Matchup Edge (pass, rush, ball security)"
       ],
       "example_prompt_hook": "Deconstruct the Super Bowl quarterback duel through the coaching tape. Contrast how both signal-callers process split-safety looks, navigate collapsing pockets, and handle simulated pressures on third down.",
       "directive": "ARTICLE TYPE SPECIFICATION: The Quarterback Duel Tape Breakdown\nGranularity: Single-Game Marquee Matchup / Pre-Kickoff Film Study.\nFocus: Quarterback mechanics, processing versus coverage disguise, pocket navigation, and off-script explosive play creation.\nScope: Step inside the film room to break down the two starting signal-callers head-to-head before kickoff. Do not write a broad team preview or focus on legacy narratives; focus squarely on the quarterback craft\u2014footwork, base platform, eyes against disguised coverage shells, and anticipation versus blitz looks. Translate all internal tracking metrics into authentic film analysis without citing betting odds or contract numbers.",
@@ -748,7 +745,7 @@
       "focus": "Evaluating pre-game press conferences, Opening Night transcripts, locker room temperature, psychological pressure, and narrative control leading into the Super Bowl.",
       "data_queried": [
         "Provided Press Conference Quotes",
-        "Head Coach / Quarterback Tenure",
+        "Quarterback Experience (years)",
         "Legacy Floor (S_all-time)",
         "Awards Equity (MVP Pressure)",
         "Player Popularity Index (Pop_player)",
@@ -828,7 +825,7 @@
         "Blue-Chip Pedigree (P_draft)",
         "Under-25 Production (Y_prod)",
         "Positional Multiplier (M_pos)",
-        "Team Roster Deficiencies"
+        "Team Draft Needs (roster deficiencies)"
       ],
       "example_prompt_hook": "Project the first 24 picks of the NFL Draft. Balance premium positional value against immediate roster holes for eliminated franchises.",
       "directive": "ARTICLE TYPE SPECIFICATION: Offseason Mock Draft\nGranularity: Offseason / Round 1 Projection.\nFocus: Round 1 mock selections, franchise needs, premium positional value, and draft capital.\nScope: Project selections for the locked draft order following the Divisional round (Picks 1\u201324). Do not project speculative trades. Focus strictly on team fit, scheme requirements, and positional value multipliers.",

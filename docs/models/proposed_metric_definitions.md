@@ -1,6 +1,6 @@
-# Proposed Definitions: Referenced-but-Missing Metrics
+# Metric Definitions: Referenced-but-Missing Metrics (Decision Record)
 
-**Status:** approved 2026-10-12 and being implemented in phases. Each heading says whether it's **Implemented**, **Pending** or **Rejected**. Implemented metrics are specified in `PROJECT_SPEC.md` §2, which wins if the two disagree.
+**Status:** approved and implemented 2026-10-12. Each heading says whether it was **Implemented** or **Rejected**. Implemented metrics are specified in `PROJECT_SPEC.md` §2, which wins if the two disagree.
 
 Every metric below is named in `newsroom/config/article_types.json` ("Data Queried", which is injected into writer prompts), in persona/curatorial directives, or in `PROJECT_SPEC.md`, but is either not computed anywhere or computed without being visible to writers. Definitions are constrained to data that actually exists:
 
@@ -67,7 +67,7 @@ $$S_{\text{playoff}}^{\text{player}} = \min\!\left(100,\ 40\cdot\text{SBMVPs} + 
 - "Played in" means the player has a `player_stats` row in that game, so it's only knowable from 2035 onward; before that only SB MVPs count.
 - Pre-2035 Super Bowl rosters aren't stored, so career clout for veterans is understated. This is a known gap.
 
-### A6. Matchup Edge (replaces "Opponent Matchup Deficiencies") — Pending, revised
+### A6. Matchup Edge (replaces "Opponent Matchup Deficiencies") — Implemented, revised (§2.8)
 
 **Revised:** "yards allowed" and takeaways are synthetic per-game allocations, so the defensive side uses Madden ratings instead: Pass edge $= z(A\text{ pass yds/g}) + z(B\text{ coverage\_rank})$; Rush edge $= z(A\text{ rush yds/g}) - z(B\text{ def\_ovr})$; Ball-security edge $= z(B\text{ giveaways/g}) - z(A\text{ giveaways/g})$. Ranks run 1 = best. The original proposal was:
 Referenced by: `LOCAL_MATCHUP_PRIMER`, `X_FACTOR_VOLATILITY_SPOTLIGHT`, `QUARTERBACK_DUEL_TAPE_BREAKDOWN`.
@@ -83,7 +83,7 @@ For team $A$ facing $B$, per phase, from 2035 `team_stats`:
 - Positive = A's strength meets B's weakness. The largest positive edge is "the deficiency to exploit," and the most negative is A's own vulnerability.
 - Computed both directions for each game.
 
-### A7. Trench Edge (replaces "Defensive Front vs. O-Line Matchup") — Pending
+### A7. Trench Edge (replaces "Defensive Front vs. O-Line Matchup") — Implemented (§2.8)
 Referenced by: `LOCAL_MATCHUP_PRIMER`. There's no pressure or sack data, so this is ratings-based.
 
 - $OL_A$ = mean OVR of A's top 5 among LT/LG/C/RG/RT.
@@ -104,7 +104,7 @@ $$\text{TD}_{\text{off}} = \sum(\text{rush\_tds} + \text{rec\_tds}) \qquad \wide
 
 ## B. New player metrics (computable now)
 
-### B1. Touch Share (replaces "Target/Snap Share Deltas", "Player Snap & Efficiency Shares") — Pending, narrowed
+### B1. Touch Share (replaces "Target/Snap Share Deltas", "Player Snap & Efficiency Shares") — Implemented, narrowed (§2.8)
 
 **Narrowed:** season touch share and yard share only. Usage delta is dropped, because synthetic per-game splits give every player nearly the same share each game, so the delta is ~0 by construction. The original proposal was:
 Referenced by: `LOCAL_PLAYER_SPOTLIGHT`, `X_FACTOR_VOLATILITY_SPOTLIGHT`, `PLAYER_PROGRESS_REPORT` (as "Target/Usage Deltas"), `SINGLE_GAME_SCHEMATIC_AUTOPSY`. There are no snaps or targets.
@@ -133,7 +133,7 @@ The spec exists (§2.5). Code counts only last season, with no decay and no care
 
 ---
 
-## C. Already exist — just expose (definition unchanged) — Implemented (§2.2, §2.5), except Team Roster Deficiencies (config wording, pending)
+## C. Already exist — just expose (definition unchanged) — Implemented (§2.2, §2.5), including Team Roster Deficiencies (config now says "Team Draft Needs")
 
 | Metric | Where it's computed now | Change |
 |---|---|---|
@@ -150,11 +150,15 @@ The spec exists (§2.5). Code counts only last season, with no decay and no care
 
 ---
 
-## D. No data — recommend dropping or relabeling in `article_types.json`
+## D. No data — dropped or relabeled in `article_types.json` — Implemented
 
 | Referenced metric | Recommendation |
 |---|---|
 | Pressure Rates | Replace with "Pass Rush Rating (Madden rank)" from `team_seasons.pass_rush_rank`. |
 | Injury Report Availability | Drop (no injury data). |
 | Head Coach / Quarterback Tenure | Relabel to "Quarterback experience" (`years_of_experience`). Coach tenure isn't stored; only COTY winners' names exist. |
-| Red Zone / Snap / Target metrics | Replaced by A8 and B1 above, under their honest names. |
+| Red Zone / Snap / Target metrics | Red-zone metrics dropped (A8 was rejected); snap/target metrics replaced by season touch share (B1). |
+
+**Applied relabels** (`data_queried` lists in `article_types.json`, mirrored in PROJECT_SPEC §7): Target/Snap Share Deltas, Target/Usage Deltas and Player Snap & Efficiency Shares → Touch Share & Scrimmage Yard Share (season). Turnover Margin → Giveaways per Game. Pressure Rates → Pass Rush Rating (Madden rank). Opponent Matchup Deficiencies → Matchup Edge. Defensive Front vs. O-Line Matchup → Trench Edge. National Penetration → National Reach (published for 8 franchises). Head Coach / QB Tenure → Quarterback Experience. Team Roster Deficiencies → Team Draft Needs. Red Zone Conversion Rates, Red Zone Efficiency and Injury Report Availability were removed.
+
+**Not changed:** editorial prose in structure/curatorial directives and `playoff_overrides.json` still asks for red-zone execution, turnover margins and pressure rates in places (e.g. the Super Bowl preview's "Red Zone" section). Writers have no data for those and may improvise.

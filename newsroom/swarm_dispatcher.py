@@ -20,6 +20,7 @@ from newsroom.db_tools import (
     get_advanced_game_analytics,
     get_opponent_adjusted_credit,
     get_team_efficiency_profile,
+    get_matchup_edges,
     get_weekly_slate,
     get_season_standings,
     get_top_popular_players,
@@ -608,6 +609,7 @@ class SwarmDispatcher:
             get_advanced_game_analytics,
             get_opponent_adjusted_credit,
             get_team_efficiency_profile,
+            get_matchup_edges,
             get_weekly_slate,
             get_season_standings,
             get_top_popular_players,
@@ -781,6 +783,7 @@ CRITICAL WRITER RESEARCH TOOLS & HISTORICAL COMPARISONS:
 - If you need full division standings and point differentials, call `get_season_standings`.
 - If you need schedule-adjusted team strength (Opponent-Adjusted Game Credit, strength of schedule, expected wins, and which records are lucky or unlucky), call `get_opponent_adjusted_credit` (no team = all 32 ranked; with a team = game-by-game credit log). It also gives each team's Trajectory (Surging to Sliding over the last 4 games).
 - If you need Pythagorean wins (what points for/against say the record should be), team pace, or per-game passing/rushing yards and giveaways, call `get_team_efficiency_profile`.
+- If you need where one team's offense has the edge over another's defense (passing vs. coverage, rushing vs. defensive rating, ball security, offensive line vs. pass rush), call `get_matchup_edges` (no opponent = their next game).
 - If you need all 32 team popularity rankings and watchability indices, call `get_all_team_popularities`.
 - If you need the top popular players in the NFL, call `get_top_popular_players`.
 - If you need a game's detailed player contributions, call `get_game_box_score`.

@@ -38,6 +38,7 @@ Project Mu/
 │   ├── game_credit_engine.py  #   Opponent-Adjusted Game Credit (SRS) + Trajectory Multiplier → team_seasons.opp_adj_credit, sos_rating, expected_wins, trajectory_multiplier
 │   ├── team_efficiency_engine.py # Pythagorean wins, team pace/production → team_seasons
 │   ├── playoff_clout_engine.py #  Team & player Playoff Clout → team_seasons.s_playoff, player_seasons.s_playoff
+│   ├── matchup_edges.py       #   Matchup Edge / Trench Edge math for writer tools (computed live, not stored)
 │   ├── fantasy_adp_engine.py  #   Preseason ADP board → fantasy_projections week 1 adp_rank
 │   └── fantasy_projection_engine.py # Weekly PPR projections, matchup stars, pos/ROS ranks → fantasy_projections (+ --backtest)
 ├── newsroom/                  # Agent swarm (Section 7)
@@ -66,7 +67,7 @@ Project Mu/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md, WAKEUPS.md
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
-│                              #   proposed_metric_definitions.md = DRAFT definitions for referenced-but-unbuilt metrics
+│                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
 │   ├── writers/               #   Writer style references (Barnwell, Chadiha, Joyner, Rosenthal, Sando)
 │   ├── reference/             #   Source PDFs
 │   └── sample_articles/       #   Example generated articles
@@ -178,6 +179,16 @@ Schedule-adjusted team strength in **points per game relative to a league-averag
 ### 2.7 Playoff Clout (`engines/playoff_clout_engine.py`)
 - **Team** (`team_seasons.s_playoff`): $\min\left(100,\ \sum_{y \le Y} e^{-0.15(Y-y)}\left[100\cdot\text{SB win} + 50\cdot\text{SB loss} + 20\cdot\text{playoff wins}\right]\right)$. Super Bowls are `games.game_type = 'SUPER_BOWL'`; playoff wins are completed wins in any other non-`REGULAR_SEASON` game.
 - **Player** (`player_seasons.s_playoff`): $\min(100,\ 40\cdot\text{SB MVPs} + 25\cdot\text{SB wins played in} + 8\cdot\text{other playoff wins played in})$. "Played in" = a `player_stats` row for the winning team in that game, which only exists from 2035. Before then only SB MVPs (by `awards.player_id`) count, so veterans' clout is understated.
+
+
+### 2.8 Matchup Edge & Trench Edge (`engines/matchup_edges.py`)
+Computed live by `get_matchup_edges`; nothing is stored. For team A's offense against team B's defense, with $z$ = z-score across the 32 teams:
+- **Pass edge** $= z(A\ \text{pass yds/g}) + z(B\ \text{coverage\_rank})$. Madden ranks run 1 = best, so a high rank is a weak secondary.
+- **Rush edge** $= z(A\ \text{rush yds/g}) - z(B\ \text{def\_ovr})$.
+- **Ball-security edge** $= z(B\ \text{giveaways/g}) - z(A\ \text{giveaways/g})$.
+- **Trench edge** = mean OVR of A's top 5 offensive linemen (LT/LG/C/RG/RT) − mean OVR of B's top 4 pass rushers (LEDG/REDG/LE/RE/DT), in OVR points, shown with B's `pass_rush_rank`.
+- The largest positive edge is A's best edge and the most negative is its biggest vulnerability. Defense uses Madden ratings, not yards allowed or takeaways (see the box-score caveat in 2.6).
+- **Season touch share** (in `get_player_season_stats`, RB/FB/WR/TE only): the player's share of the team's season carries + receptions and scrimmage yards, from `season_stats`. Receptions stand in for targets, which aren't recorded.
 
 ---
 
@@ -411,13 +422,14 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - `get_season_standings`: Returns full NFL division standings with wins, losses, win %, points scored (PF), points allowed (PA), and point differential.
   - `get_top_popular_players`: Returns the top 20 most popular players across the league with Madden OVR, age, experience, and popularity indices.
   - `get_all_team_popularities`: Returns all 32 teams ranked by popularity index, watchability rating, and overall roster quality.
-  - `get_player_context` / `get_player_season_stats`: Resolves player by name or ID; returns age, years of experience, physical measurements (height/weight), career awards list, Madden OVR, cumulative season stats, stored popularity components (SpikeIndex, $R_{\text{rating}}$, $F_{\text{platform}}$, $T_{\text{success}}$, $A_{\text{awards}}$, $E_{\text{exposure}}$), and player Playoff Clout.
+  - `get_player_context` / `get_player_season_stats`: Resolves player by name or ID; returns age, years of experience, physical measurements (height/weight), career awards list, Madden OVR, cumulative season stats, stored popularity components (SpikeIndex, $R_{\text{rating}}$, $F_{\text{platform}}$, $T_{\text{success}}$, $A_{\text{awards}}$, $E_{\text{exposure}}$), player Playoff Clout, and season touch/yard share for RB/FB/WR/TE.
   - `get_team_context`: Resolves team by name, abbreviation, or ID; returns win-loss record, watchability, popularity, Madden team ratings, and top 3 players.
   - `get_team_season_schedule`: Returns a team's complete season schedule and game log: week-by-week opponents, scores, win/loss outcomes, victory margins, one-score game breakdown, excitement ratings, and game IDs.
   - `get_game_box_score`: Returns team box score and top individual game contributions.
   - `get_advanced_team_analytics`: Reads the stored TWI components (σ_top, P_draft, Y_prod, Purgatory Penalty), TWI, franchise POP, team Playoff Clout, starter age (top 22 by OVR), and $B$ / $L$ / $D$ / $N$ / Legacy Floor from `market_constants`.
   - `get_advanced_game_analytics`: Completed games return pace/production ($P$ from `gotw_engine.production_score`), Upset Leverage ($U$), excitement, and both teams' Opponent-Adjusted Game Credit. Scheduled games return projected $U$ (`excitement_projection.expected_upset`) and the underdog's win probability.
   - `get_opponent_adjusted_credit`: Opponent-Adjusted Game Credit (Section 2.4). No team → all 32 ranked with credit, recent-form credit, Trajectory Multiplier and label, strength of schedule, raw point differential per game, expected wins and win luck; with a team → that summary plus a game-by-game credit log.
+  - `get_matchup_edges`: Section 2.8. Pass, rush and ball-security edges plus Trench Edge for both offenses in a matchup; with no opponent, uses the team's next scheduled game.
   - `get_team_efficiency_profile`: Section 2.6. Pythagorean wins and pyth luck, pace & production, pass/rush yards and giveaways per game; all 32 sorted by pyth luck, or one team.
   - `get_league_leaderboards`: Returns top 5 teams by watchability and popularity.
   - `get_team_articles`: Returns recent editorial articles and analysis referencing a specific team (resolves by name, city, abbreviation, or ID).
@@ -455,7 +467,7 @@ The sports publication categorizes longform output into four distinct article ty
    - **Allowed Writers / Archetypes:** KC Joyner (Scientific Efficiency), Mina Kimes (Metric-Driven Schematic Breakdown), Dan Orlovsky (QB Film Room / Telestrator) (`JOYNER`, `KIMES`, `ORLOVSKY`, `Film Analysts`).
    - **Granularity:** Single-game play-by-play.
    - **Focus:** Point-of-attack wins, run-pass splits, specific receiver coverage isolations, quarterback processing mechanics.
-   - **Data Queried:** Advanced game analytics, player snap shares, red zone conversion rates, offensive pace ratings, SpikeIndex passing ceiling.
+   - **Data Queried:** Advanced Game Analytics (Offensive Pace, Single-Game Excitement), Game Box Scores, Touch Share & Scrimmage Yard Share (season).
 
 5. **The Power Rankings** (`POWER_RANKINGS`)
    - **Allowed Writers / Archetypes:** Mike Sando (Executive Tiers & Front-Office Context), Gregg Rosenthal (Vibe & Watchability Rankings) (`SANDO`, `ROSENTHAL`, `32-Team Thematic Consensus`).
@@ -524,7 +536,7 @@ The sports publication categorizes longform output into four distinct article ty
     - **Allowed Writers / Archetypes:** Bill Barnwell (Efficiency & Regression), Jeffri Chadiha (Narrative & Legacy), Field Yates (Fantasy Volume & Milestones) (`BARNWELL`, `CHADIHA`, `YATES`, `Player Progress Overview`).
     - **Granularity:** Flexible In-Season / Season-to-Date Arc.
     - **Focus:** Mid-campaign player valuation shifts, usage and snap trajectory, underlying efficiency vs. box-score luck, and rest-of-season sustainability.
-    - **Data Queried:** Player Popularity Index ($Pop_{\text{player}}$), Awards Equity ($A_{\text{awards}}$), Baseline Rating ($R_{\text{rating}}$), SpikeIndex, Target/Usage Deltas, Offensive Pace ($P$).
+    - **Data Queried:** Player Popularity Index ($Pop_{\text{player}}$), Awards Equity ($A_{\text{awards}}$), Baseline Rating ($R_{\text{rating}}$), SpikeIndex, Touch Share & Scrimmage Yard Share (season), Offensive Pace ($P$).
     - **Curatorial Autonomy:** Evaluates the cumulative season-to-date trajectory of a single player. Identifies players whose performance is forcing an immediate recalibration: aging veterans with slipping roles, rising talents drastically outpacing baseline ratings, or high-volume contributors due for regression.
     - **Structure Directive:** 4-part Player Progress Evaluation (`# 1. The Progress Thesis (The Hook)`, `## 2. The Tape vs. The Numbers (Underlying Efficiency)`, `## 3. Roster Gravity & Market Footprint`, `### 4. The Rest-of-Season Outlook`).
     - **Prompt Hook:** Evaluate a player whose season-to-date campaign has radically shifted their trajectory. Contrast their preseason baseline against operational efficiency, diagnose their offensive burden, and project their rest-of-season sustainability.
@@ -578,7 +590,7 @@ The sports publication categorizes longform output into four distinct article ty
     - **Allowed Writers / Archetypes:** Bill Barnwell (Variance & Efficiency Analytics), KC Joyner (Matchup Exploitation), Field Yates (Volume Spikes & Fantasy/Prop Context) (`BARNWELL`, `JOYNER`, `YATES`, `Super Bowl Matchup Spotlight`).
     - **Granularity:** Single-Game Predictive / Super Bowl Arc.
     - **Focus:** Identifying volatile, non-quarterback skill players whose boom-or-bust profiles ($SpikeIndex$) could single-handedly disrupt the Super Bowl game script.
-    - **Data Queried:** SpikeIndex, Target/Snap Share Deltas, Opponent Matchup Deficiencies, Offensive Pace ($P$), Under-25 Production ($Y_{\text{prod}}$).
+    - **Data Queried:** SpikeIndex, Touch Share & Scrimmage Yard Share (season), Matchup Edge (pass, rush, ball security), Offensive Pace ($P$), Under-25 Production ($Y_{\text{prod}}$).
     - **Curatorial Autonomy:** Selects the ultimate non-QB X-factor for the Super Bowl matchup: boom-or-bust deep threat with high $SpikeIndex$, situational pass rusher creating upset leverage, or dynamic rookie with spiked postseason usage.
     - **Structure Directive:** 4-part Predictive X-Factor Breakdown (`# 1. The Game-Breaker Thesis (The Hook)`, `## 2. The Anatomy of the Spike (The Volatility Audit)`, `## 3. The Schematic Mismatch (The Film Room)`, `### 4. The Script Prediction`).
     - **Prompt Hook:** Identify the ultimate Super Bowl X-Factor. Analyze a volatile skill player with a massive SpikeIndex, break down the specific schematic mismatch they can exploit, and predict how they could break the game script.
@@ -605,7 +617,7 @@ The sports publication categorizes longform output into four distinct article ty
     - **Allowed Writers / Archetypes:** Bill Simmons (Historical / Pop Culture / Narrative), Jeffri Chadiha (Championship Clout & Legacy Stakes) (`SIMMONS`, `CHADIHA`, `Championship Legacy Audit`).
     - **Granularity:** Franchise Historical / Macro Narrative.
     - **Focus:** Macro-level column evaluating what a Super Bowl championship would mean for the historical prestige, legacy floor, and market gravity of the two participating franchises.
-    - **Data Queried:** Base Market Gravity ($B$), Legacy Floor ($S_{\text{all-time}}$), Historical Franchise Prestige, National Penetration ($N$).
+    - **Data Queried:** Base Market Gravity ($B$), Legacy Floor ($S_{\text{all-time}}$), Historical Franchise Prestige, National Reach ($N$; published for 8 franchises).
     - **Curatorial Autonomy:** Evaluates the two Super Bowl finalists through a strictly historical and organizational lens without detailing on-field positional matchups. Weighs dynasty solidification vs. market darling elevation, evaluating whether a Lombardi permanently lifts Base Market Gravity ($B$) or protects a historic Legacy Floor ($S_{\text{all-time}}$).
     - **Structure Directive:** 4-part Historical Prestige Column (`# 1. The Historical Weight (The Hook)`, `## 2. The Legacy Floor Analysis (Team A - AFC Champion)`, `## 3. The Market Gravity Analysis (Team B - NFC Champion)`, `### 4. The Existential Verdict`).
     - **Prompt Hook:** Evaluate the historical stakes of the Super Bowl matchup. Analyze what a Lombardi trophy would do for the Legacy Floor of the winning franchise and how it would shift their Base Market Gravity.
@@ -623,7 +635,7 @@ The sports publication categorizes longform output into four distinct article ty
     - **Allowed Writers / Archetypes:** Dan Orlovsky (QB Mechanics & Telestrator Breakdown), Mina Kimes (Metric-Driven Schematic Film Study), KC Joyner (Scientific Efficiency & Matchup Splits) (`ORLOVSKY`, `KIMES`, `JOYNER`, `Film Room Tactical Breakdown`).
     - **Granularity:** Single-Game Marquee Matchup / Pre-Kickoff Film Study.
     - **Focus:** Comprehensive quarterback tape evaluation dissecting pocket mechanics, processing speeds against simulated pressure, middle-of-the-field coverage reads, and high-leverage situational creation.
-    - **Data Queried:** Baseline Rating ($R_{\text{rating}}$), Awards Equity ($A_{\text{awards}}$), SpikeIndex, Offensive Pace ($P$), Playoff Clout ($S_{\text{playoff}}$), Opponent Matchup Deficiencies.
+    - **Data Queried:** Baseline Rating ($R_{\text{rating}}$), Awards Equity ($A_{\text{awards}}$), SpikeIndex, Offensive Pace ($P$), Playoff Clout ($S_{\text{playoff}}$), Matchup Edge (pass, rush, ball security).
     - **Curatorial Autonomy:** Previews marquee matchup strictly through the tape of the two starting signal-callers. Contrasts timing inside structure against off-platform creation, decodes SpikeIndex variance on film, and tests efficiency against two-high shell rotations.
     - **Structure Directive:** 5-part Coaching Tape Breakdown (`# 1. The Film Room Overture`, `## 2. Film Study: [Quarterback A] vs. Opposing Defensive Disguises`, `## 3. Film Study: [Quarterback B] vs. Opposing Defensive Disguises`, `## 4. The High-Leverage Flashpoint: Third-and-Long & The Red Zone`, `### 5. The Tape Room Verdict`).
     - **Prompt Hook:** Deconstruct the Super Bowl quarterback duel through the coaching tape. Contrast how both signal-callers process split-safety looks, navigate collapsing pockets, and handle simulated pressures on third down.
@@ -632,7 +644,7 @@ The sports publication categorizes longform output into four distinct article ty
     - **Allowed Writers / Archetypes:** Jeffri Chadiha (Narrative & Leadership), Bill Simmons (Body Language & Historical Pressure), Ryan Clark (Locker Room Dynamics) (`CHADIHA`, `SIMMONS`, `CLARK`, `Super Bowl Media & Narrative Audit`).
     - **Granularity:** Super Bowl Week / Media Availability & Narrative Arc.
     - **Focus:** Evaluating pre-game press conferences, Opening Night transcripts, locker room temperature, psychological pressure, and narrative control leading into the Super Bowl.
-    - **Data Queried:** Provided Press Conference Quotes, Head Coach / Quarterback Tenure, Legacy Floor ($S_{\text{all-time}}$), Awards Equity (MVP Pressure), Player Popularity Index ($Pop_{\text{player}}$), Base Market Gravity ($B$).
+    - **Data Queried:** Provided Press Conference Quotes, Quarterback Experience (years), Legacy Floor ($S_{\text{all-time}}$), Awards Equity (MVP Pressure), Player Popularity Index ($Pop_{\text{player}}$), Base Market Gravity ($B$).
     - **Curatorial Autonomy:** Evaluates psychological pressure, locker room temperature, and narrative control rather than X's and O's. Analyzes quotes for bulletin-board material, deflection of pressure, subtle signs of anxiety, and coach podium protection.
     - **Structure Directive:** 5-part Psychological & Narrative Audit (`# 1. The Temperature Check (The Hook)`, `## 2. The Defining Quote (The Pivot Point with blockquote)`, `## 3. Quarterback Demeanor & The Weight of the Moment`, `## 4. Bulletin-Board Material & Unforced Errors`, `### 5. The Final Read (The Verdict)`).
     - **Prompt Hook:** Conduct a psychological press audit of Super Bowl week. Dissect the subtext of podium quotes, analyze quarterback body language under the microscope, isolate unforced errors for bulletin-board material, and determine which team won the media week.
@@ -659,7 +671,7 @@ The sports publication categorizes longform output into four distinct article ty
     - **Allowed Writers / Archetypes:** Field Yates (Needs & Value Board), Bill Barnwell (Analytics & Positional Capital) (`YATES`, `BARNWELL`, `Draft & Offseason Horizon`).
     - **Granularity:** Offseason / Round 1 Projection.
     - **Focus:** First-round mock draft projecting selections for locked draft slots (Picks 1–24) based on team needs, positional value, and blue-chip player traits.
-    - **Data Queried:** Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production ($Y_{\text{prod}}$), Positional Multiplier ($M_{\text{pos}}$), Team Roster Deficiencies.
+    - **Data Queried:** Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production ($Y_{\text{prod}}$), Positional Multiplier ($M_{\text{pos}}$), Team Draft Needs (roster deficiencies).
     - **Curatorial Autonomy:** Projects the first 24 picks of the NFL Draft for eliminated teams following the Divisional round. Prioritizes premium positional value (QB, OT, EDGE, CB) over low-impact positions. Evaluates team rosters using Under-25 Production Share ($Y_{\text{prod}}$) to balance immediate foundational needs against developmental high-ceiling prospects without projecting speculative trades.
     - **Structure Directive:** 3-part Authoritative Mock Draft (`# 1. The Board Overview`, `## 2. The First-Round Projections (Picks 1–24 with ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School])`, `### 3. The Draft Floor Watch`).
     - **Prompt Hook:** Project the first 24 picks of the NFL Draft. Balance premium positional value against immediate roster holes for eliminated franchises.
@@ -670,17 +682,17 @@ Local Beat Reporters cover their assigned franchise exclusively. Prompts strictl
 1. **The Postgame Report Card** (`LOCAL_POSTGAME_REPORT_CARD`)
    - **Beat Archetype:** Local Beat Writer / Postgame Columnist (2–4 hours post-whistle).
    - **Focus:** Instant execution vs. expectations, unit-by-unit letter grades (Passing Offense, Rushing Attack, Front Seven & Run Defense, Secondary & Pass Rush, Special Teams & Coaching Decisions), and Composite Team Grade.
-   - **Data Queried:** Unit Offensive Pace ($P$), Opponent-Adjusted Game Credit, Turnover Margin, Red Zone Efficiency, Pressure Rates.
+   - **Data Queried:** Unit Offensive Pace ($P$), Opponent-Adjusted Game Credit, Giveaways per Game (ball security), Pass Rush Rating (Madden rank).
 
 2. **The Local Matchup Primer & Game-Plan Blueprint** (`LOCAL_MATCHUP_PRIMER`)
    - **Beat Archetype:** Senior Beat Reporter (Friday / Saturday morning preview).
    - **Focus:** Matchup reality through home team's eyes, 3 hyper-specific player/unit micro battles (technique, slide protection, chips), victory blueprint checklist, and beat final score prediction.
-   - **Data Queried:** Opponent Matchup Deficiencies, Upset Leverage ($U_{\text{projected}}$), Injury Report Availability, Defensive Front vs. O-Line Matchup.
+   - **Data Queried:** Matchup Edge (pass, rush, ball security), Upset Leverage ($U_{\text{projected}}$), Trench Edge (O-line vs. pass rush ratings).
 
 3. **The Local Player Spotlight** (`LOCAL_PLAYER_SPOTLIGHT`)
    - **Beat Archetype:** Franchise Beat Reporter / Film Analyst.
    - **Focus:** Single local player's role evolution, developmental leap, contract-year status, locker-room standing, film/assignment technique, front-office roster equation, and Sunday matchup test.
-   - **Data Queried:** SpikeIndex, Target/Snap Share Deltas, Positional Multiplier ($M_{\text{pos}}$), Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production Share ($Y_{\text{prod}}$).
+   - **Data Queried:** SpikeIndex, Touch Share & Scrimmage Yard Share (season), Positional Multiplier ($M_{\text{pos}}$), Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production Share ($Y_{\text{prod}}$).
 
 4. **The Local Season-to-Date Progress Report** (`LOCAL_SEASON_PROGRESS_REPORT`)
    - **Beat Archetype:** Senior Beat Columnist (Midseason / Season Audit).
