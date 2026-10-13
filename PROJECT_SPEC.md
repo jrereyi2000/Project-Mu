@@ -117,33 +117,39 @@ $$TWI = \min\left(100, 0.40(\mu_{\text{adj}}) + 0.20(\sigma_{\text{top}}) + 0.25
 
 ## 3. Database Schema & Architecture (PostgreSQL)
 
-The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`):
+The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`). `db/init_db.sql` reproduces the full live schema (tables, constraints, generated columns, views, functions, triggers) on an empty database and is safe to re-run; it does not add columns to existing tables, so schema changes to the live DB ship as migrations under `db/migrations/` and must also be folded into `init_db.sql`.
 
 ### 3.1 Core Entity & State Tables
 - **`teams`**:
-  - `id` (PK, int), `name` (varchar), `city` (varchar), `abbreviation` (varchar, e.g. 'CAR', 'TB', 'KC'), `conference` (varchar), `division` (varchar), `team_color` (varchar hex).
+  - `id` (PK, int), `name` (varchar), `city` (varchar), `abbreviation` (varchar, e.g. 'CAR', 'TB', 'KC'), `conference` (varchar), `division` (varchar), `team_color` (varchar hex), `stadium_name` (varchar). `UNIQUE(name)`.
 - **`players`**:
-  - `id` (PK, int), `full_name` (varchar), `player_name` (varchar, e.g. 'G. Crawford'), `player_number` (int - jersey number), `height` (int inches), `weight` (int lbs).
+  - `id` (PK, int), `full_name` (varchar), `player_name` (varchar, e.g. 'G. Crawford'), `player_number` (int - jersey number, default 0), `height` (varchar), `weight` (int lbs), `espn_id` (int, nullable).
 - **`league_state`**:
-  - `current_season` (int, default 2035), `current_week` (int, default 18).
+  - `id` (PK, int, default 1 — single row), `current_season` (int), `current_week` (int). Column defaults are 2024 / 1; the live league row is currently season 2035, week 18.
 
 ### 3.2 Temporal Snapshot Ledgers
 - **`team_seasons`**:
-  - `id` (PK), `team_id` (FK), `season` (int), `wins` (int), `losses` (int), `team_ovr` (int), `off_ovr` (int), `def_ovr` (int), `pass_off_rank` (int), `rush_off_rank` (int), `pass_rush_rank` (int), `coverage_rank` (int), `watchability_index` (float8), `popularity_index` (float8).
+  - `id` (PK), `team_id` (FK), `season` (int), `wins` (int), `losses` (int), `team_ovr` (int), `off_ovr` (int), `def_ovr` (int), `pass_off_rank` (int), `rush_off_rank` (int), `pass_rush_rank` (int), `coverage_rank` (int), `watchability_index` (float8), `popularity_index` (float8). `UNIQUE(team_id, season)`; `wins`/`losses` are maintained by `trigger_update_team_records` (see 3.6).
 - **`player_seasons`**:
-  - `id` (PK), `player_id` (FK), `team_id` (FK), `season` (int), `position` (varchar), `overall_rating` (int), `years_of_experience` (int), `popularity_index` (float8).
+  - `id` (PK), `player_id` (FK), `team_id` (FK), `season` (int), `position` (varchar), `age` (int), `overall_rating` (int), `years_of_experience` (int; 0 = rookie, 1 = second-year), `popularity_index` (float8). `UNIQUE(player_id, season)`.
 
 ### 3.3 Games & Statistics Tables
 - **`games`**:
-  - `id` (PK), `season` (int), `week` (int), `home_team_id` (FK), `away_team_id` (FK), `home_score` (int), `away_score` (int), `status` (varchar: 'COMPLETED' | 'SCHEDULED' | 'BYE'), `game_time` (varchar, e.g. 'Sun 1:00 PM'), `game_type` (varchar), `excitement_index` (float8).
+  - `id` (PK), `season` (int), `week` (int), `home_team_id` (FK), `away_team_id` (FK), `home_score` (int), `away_score` (int), `status` (varchar: 'COMPLETED' | 'SCHEDULED' | 'BYE'), `game_time` (varchar, e.g. 'Sun 1:00 PM'), `game_type` (varchar, default 'REGULAR_SEASON'), `excitement_index` (float8), `completed_at` (timestamp). `UNIQUE(season, week, home_team_id, away_team_id)` (constraint `games_season_week_home_away_key`).
 - **`player_stats`**:
-  - `id` (PK), `game_id` (FK), `team_id` (FK), `player_name` (varchar), `position` (varchar), `completions`, `pass_attempts`, `pass_yards`, `pass_tds`, `interceptions`, `rush_attempts`, `rush_yards`, `rush_tds`, `receptions`, `rec_yards`, `rec_tds`, `fumb`, `fantasy_points` (numeric PPR).
+  - `id` (PK), `game_id` (FK), `team_id` (FK), `player_name` (varchar), `position` (varchar), `completions`, `pass_attempts`, `pass_yards`, `pass_tds`, `interceptions`, `rush_attempts`, `rush_yards`, `rush_tds`, `receptions`, `rec_yards`, `rec_tds`, `fumb`, `fantasy_points` (numeric(6,2), `GENERATED ALWAYS ... STORED` full-PPR column — read-only, never insert/update it). `UNIQUE(game_id, player_name, position)`.
 - **`team_stats`**:
-  - `id` (PK), `game_id` (FK), `team_name` (varchar), `total_offense`, `pass_yards`, `rush_yards`, `points`.
+  - `id` (PK), `game_id` (FK), `team_name` (varchar), `score`, `first_downs`, `total_offense`, `total_plays`, `rushing_attempts`, `rushing_yards`, `rushing_tds`, `passing_completions`, `passing_attempts`, `passing_yards`, `passing_tds`, `third_down_attempts`, `third_down_conversions`, `fourth_down_attempts`, `fourth_down_conversions`, `turnovers` (all int). `UNIQUE(game_id, team_name)`.
+- **`season_stats`**:
+  - `id` (PK), `season` (int), `player_id` (FK), `player_name` (varchar), `team_id` (FK), `position` (varchar), the same box-score counters as `player_stats`, `total_fantasy_points` (numeric(7,2)), `ppg_fantasy_points` (numeric(5,2)). `UNIQUE(season, player_name, team_id, position)`.
+- **`awards`**:
+  - `id` (PK), `season` (int), `award_type` (varchar), `player_id` (FK), `player_name` (varchar), `team_id` (FK), `coach_name` (varchar), `position` (varchar). `UNIQUE(season, award_type)`.
 
 ### 3.4 Fantasy Analytics & Projections
 - **`fantasy_projections`**:
-  - `id` (PK), `season` (int), `week` (int), `player_id` (FK, int), `player_name` (varchar), `position` (varchar), `team_id` (FK, int), `projected_points` (numeric), `avg_points` (numeric), `matchup_stars` (int 1–5), `pos_rank` (varchar e.g. 'QB1', 'WR1'), `adp_rank` (int), `ros_rank` (varchar), `ros_total_points` (numeric), `delta` (numeric).
+  - `id` (PK), `season` (int), `week` (int), `player_id` (int, players.id — no FK constraint), `player_name` (varchar), `position` (varchar), `team_id` (FK, int), `projected_points` (numeric), `avg_points` (numeric), `matchup_stars` (int 1–5), `pos_rank` (varchar e.g. 'QB1', 'WR1'), `adp_rank` (int), `ros_rank` (varchar), `ros_total_points` (numeric), `delta` (numeric). `UNIQUE(season, week, player_id)`.
+- **`vw_fantasy_scores` (View)**:
+  - `game_id`, `player_name`, `team_id`, `season`, `week`, `ppr_score` (= `player_stats.fantasy_points`).
 - **`vw_fantasy_defense_vs_position` (View)**:
   - Aggregates PPR fantasy points conceded by each defensive team per position across completed games.
   - Dynamically calculates:
@@ -153,13 +159,19 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 
 ### 3.5 Media & Content Tables
 - **`agent_memories`**:
-  - `id`, `agent_id`, `archetype`, `assigned_team_id`, `persistent_memory`, `handle`, `display_name`, `updated_at`.
+  - `id`, `agent_id` (unique), `archetype`, `assigned_team_id`, `persistent_memory`, `handle`, `display_name`, `updated_at`.
+- **`media_outputs`**:
+  - `id`, `game_id` (FK to `games(id)` ON DELETE CASCADE), `content_type`, `payload_json` (jsonb), `created_at`.
 - **`news_feed`**:
-  - `id`, `season`, `week`, `team_id`, `content_type` ('ARTICLE' | 'TWEET'), `persona`, `headline`, `excerpt`, `content`, `created_at`.
+  - `id`, `season`, `week`, `team_id`, `content_type` ('ARTICLE' | 'TWEET'), `persona`, `article_type`, `slot`, `headline`, `excerpt`, `content`, `created_at`.
 - **`article_teams`**:
   - `id` (PK, int), `article_id` (FK to `news_feed(id)` ON DELETE CASCADE), `team_id` (FK to `teams(id)` ON DELETE CASCADE), `mention_type` (varchar: 'PRIMARY' | 'FEATURED' | 'MENTIONED'), `mention_count` (int), `created_at` (timestamp), `UNIQUE(article_id, team_id)`.
 - **`article_players`**:
   - `id` (PK, int), `article_id` (FK to `news_feed(id)` ON DELETE CASCADE), `player_id` (FK to `players(id)` ON DELETE CASCADE), `team_id` (FK to `teams(id)` ON DELETE SET NULL), `mention_type` (varchar: 'PRIMARY' | 'FEATURED' | 'MENTIONED'), `mention_count` (int), `created_at` (timestamp), `UNIQUE(article_id, player_id)`.
+
+### 3.6 Triggers
+- **`trigger_update_team_records`** (`AFTER INSERT OR UPDATE ON games`, function `update_team_records()`): on insert, or when `status`/scores change, recomputes both teams' `wins`/`losses` for that season from completed games and upserts them into `team_seasons`.
+- **`trigger_sync_season_stats_team`** (`AFTER UPDATE OF team_id ON player_seasons`, function `sync_team_to_season_stats()`): when a player's team changes, moves their `season_stats` rows for that season (team NULL or the old team) to the new team, merging counters into an existing new-team row where one exists.
 
 ---
 
