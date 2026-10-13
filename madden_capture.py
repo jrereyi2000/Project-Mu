@@ -21,7 +21,7 @@ Usage
   python3 madden_capture.py --week "SEASON WEEK 12"   # capture a specific schedule week
 
 Key map (chiaki-ng "Keyboard as controller"):
-  Cross=S  Circle=D  L1=2  R1=3  L2=1  R2=4  D-pad=arrow keys
+  Cross=S  Circle=D  L1=2  R1=3  L2=1  R2=4  D-pad=arrow keys  Escape=Esc
 """
 import argparse, datetime, hashlib, os, re, subprocess, sys, time
 
@@ -39,6 +39,7 @@ KEYCODES = {
     "l2": 18,      # 1
     "r2": 21,      # 4
     "up": 126, "down": 125, "left": 123, "right": 124,
+    "escape": 53,  # Esc: closes the PlayStation menu after chiaki-ng connects
 }
 TAP_HOLD = 0.12        # Madden drops instant taps; hold every press a little
 NAV_WAIT = 1.0         # settle time after a menu move
