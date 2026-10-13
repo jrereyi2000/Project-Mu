@@ -167,9 +167,11 @@ def generate_team_and_player_stats(season_year: int):
     try:
         from engines.gotw_engine import batch_evaluate
         from engines.twi_engine import TWIEngine
+        from engines.game_credit_engine import GameCreditEngine
         from engines.popularity_engine import PopularityEngine
         from engines.player_popularity_engine import PlayerPopularityEngine
         from engines.excitement_projection import project_scheduled_games
+        from engines.fantasy_projection_engine import project_upcoming_week
         from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
 
         # 0. Score Game Excitement (E) for games that have none yet plus the games just backfilled above.
@@ -183,6 +185,9 @@ def generate_team_and_player_stats(season_year: int):
         print("-> Running Team Watchability Engine...")
         TWIEngine().backfill_twi(season=season_year)
 
+        print("-> Running Opponent-Adjusted Game Credit Engine...")
+        GameCreditEngine().calculate(season=season_year)
+
         print("-> Running Franchise Popularity Engine...")
         PopularityEngine().calculate_popularity(season=season_year)
 
@@ -192,6 +197,10 @@ def generate_team_and_player_stats(season_year: int):
         # Project E for every still-scheduled game from the season so far (feeds the site, the brief and primer picks)
         print("-> Projecting Excitement Index for scheduled games...")
         project_scheduled_games(season_year)
+
+        # Weekly fantasy projections (fantasy_projections) for the next week with scheduled games
+        print("-> Projecting fantasy points for the upcoming week...")
+        project_upcoming_week(season_year)
         
         # 2. Compile the Assignment Brief for the AI
         print("-> Compiling AI Assignment Brief (Weekly Slate Digest)...")

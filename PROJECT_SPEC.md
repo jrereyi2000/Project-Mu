@@ -34,6 +34,7 @@ Project Mu/
 │   ├── gotw_engine.py         #   Game Excitement Index (E) → games.excitement_index; E components, player matching, 70–100 display scale
 │   ├── excitement_projection.py #  Projected E for scheduled games → games.projected_excitement (+ --backtest)
 │   ├── twi_engine.py, popularity_engine.py, player_popularity_engine.py
+│   ├── game_credit_engine.py  #   Opponent-Adjusted Game Credit (SRS) → team_seasons.opp_adj_credit, sos_rating, expected_wins
 │   └── fantasy_adp_engine.py  #   Preseason ADP board
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
@@ -45,7 +46,7 @@ Project Mu/
 │   ├── db_handler.py          #   Shared connection / UPSERT layer (DATABASE_URL)
 │   ├── init_db.sql, run_sql.py
 │   ├── backup_db.sh, restore_db.sh   # pg_dump / restore via the madden-db Docker container
-│   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql (apply SQL ones via
+│   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -81,6 +82,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Stat backfill + culture engines + swarm | `python3 -m engines.game_stat_generator` |
 | Re-score Excitement Index (E) | `python3 -m engines.gotw_engine --season 2035` (then refresh the culture indices below) |
 | Refresh culture indices (in this order) | `python3 -m engines.twi_engine` → `python3 -m engines.popularity_engine` → `python3 -m engines.player_popularity_engine` |
+| Opponent-Adjusted Game Credit | `python3 -m engines.game_credit_engine --season 2035` (independent of the culture indices) |
 | Project E for scheduled games | `python3 -m engines.excitement_projection --season 2035` (`--backtest` scores accuracy, no writes) |
 | Preseason ADP | `python3 -m engines.fantasy_adp_engine` |
 | Headshot post-processing | `python3 -m headshots.process_headshots` |
@@ -131,6 +133,18 @@ $$TWI = \min\left(100, 0.40(\mu_{\text{adj}}) + 0.20(\sigma_{\text{top}}) + 0.25
   - **Season SOS**: 18-week schedule difficulty bucketed into 1 to 5 stars via `NTILE(5)`.
   - **Playoff SOS**: Fantasy playoff weeks (Weeks 15–17) opponent schedule difficulty bucketed into 1 to 5 stars via `NTILE(5)`.
 
+### 2.4 Opponent-Adjusted Game Credit (`engines/game_credit_engine.py`)
+Schedule-adjusted team strength in **points per game relative to a league-average team** (0 = average), fitted as a Simple Rating System over the season's completed games:
+- **Capped margin** $m$: each game's margin clamped to ±24 (`MARGIN_CAP`).
+- **Home field** $H$: the league's mean capped home margin this season, clamped to $[0, 4]$. `SUPER_BOWL` games are neutral (site sign $s = 0$; home $s = +1$, away $s = -1$).
+- **Game credit** for a team in one game: $c = m - sH + R_{\text{opp}}$, the margin an average team would need at that site against that opponent to match the result.
+- **Rating** (`opp_adj_credit`): $R_i = \dfrac{\sum_{g} c_g}{n_i + 2}$ (shrunk toward 0 by 2 pseudo-games), solved iteratively and re-centred so ratings average 0.
+- **Recent form** (`opp_adj_credit_recent`): recency-weighted mean of $c$ with TWI's decay $w_t = e^{-0.15(T - t)}$.
+- **Strength of schedule** (`sos_rating`): mean $R_{\text{opp}}$ faced; positive means a harder schedule.
+- **Expected wins** (`expected_wins`): $\sum_g \Phi\!\left((R_i - R_{\text{opp}} + sH)/\sigma\right)$, where $\sigma$ is the RMS residual margin (default 14 with fewer than 64 games). `wins − expected_wins` ("win luck") flags paper tigers (positive) and unlucky teams (negative); ties count as half a win.
+- Written to `team_seasons` by `GameCreditEngine().calculate(season)`. Writer agents read it live (recomputed from `games`, so it is never stale) through `get_opponent_adjusted_credit`.
+- This is distinct from TWI's opponent baseline correction $\delta_{\text{opp}}$, which adjusts *excitement* for how watchable an opponent is, not team strength.
+
 ---
 
 ## 3. Database Schema & Architecture (PostgreSQL)
@@ -147,7 +161,7 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 
 ### 3.2 Temporal Snapshot Ledgers
 - **`team_seasons`**:
-  - `id` (PK), `team_id` (FK), `season` (int), `wins` (int), `losses` (int), `team_ovr` (int), `off_ovr` (int), `def_ovr` (int), `pass_off_rank` (int), `rush_off_rank` (int), `pass_rush_rank` (int), `coverage_rank` (int), `watchability_index` (float8), `popularity_index` (float8). `UNIQUE(team_id, season)`; `wins`/`losses` are maintained by `trigger_update_team_records` (see 3.6).
+  - `id` (PK), `team_id` (FK), `season` (int), `wins` (int), `losses` (int), `team_ovr` (int), `off_ovr` (int), `def_ovr` (int), `pass_off_rank` (int), `rush_off_rank` (int), `pass_rush_rank` (int), `coverage_rank` (int), `watchability_index` (float8), `popularity_index` (float8), `opp_adj_credit`, `opp_adj_credit_recent`, `sos_rating`, `expected_wins` (float8, nullable; see 2.4, added by `db/migrations/2026_10_14_opp_adj_credit.sql`). `UNIQUE(team_id, season)`; `wins`/`losses` are maintained by `trigger_update_team_records` (see 3.6).
 - **`player_seasons`**:
   - `id` (PK), `player_id` (FK), `team_id` (FK), `season` (int), `position` (varchar), `age` (int), `overall_rating` (int), `years_of_experience` (int; 0 = rookie, 1 = second-year), `popularity_index` (float8). `UNIQUE(player_id, season)`.
 
@@ -168,6 +182,7 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 ### 3.4 Fantasy Analytics & Projections
 - **`fantasy_projections`**:
   - `id` (PK), `season` (int), `week` (int), `player_id` (int, players.id — no FK constraint), `player_name` (varchar), `position` (varchar), `team_id` (FK, int), `projected_points` (numeric), `avg_points` (numeric), `matchup_stars` (int 1–5), `pos_rank` (varchar e.g. 'QB1', 'WR1'), `adp_rank` (int), `ros_rank` (varchar), `ros_total_points` (numeric), `delta` (numeric). `UNIQUE(season, week, player_id)`.
+  - **Population:** the only writer in the repo is `engines/fantasy_adp_engine.py`, which writes `adp_rank` into week 1 rows. Its `ON CONFLICT (season, week, player_name, team_id)` matches no constraint on the table, so a re-run currently fails, and it doesn't set `player_id`. No checked-in code writes `projected_points`, `avg_points`, `matchup_stars`, `pos_rank`, `ros_rank`, `ros_total_points` or `delta`. The live 2035 rows (weeks 1, 2 and 18) were loaded outside the repo. When a week has no stored rows, the API derives values on the fly (e.g. the player outlook projects season PPR average × a matchup-stars multiplier of 0.85–1.15).
 - **`vw_fantasy_scores` (View)**:
   - `game_id`, `player_name`, `team_id`, `season`, `week`, `ppr_score` (= `player_stats.fantasy_points`).
 - **`vw_fantasy_defense_vs_position` (View)**:
@@ -205,8 +220,7 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
   - Returns matchups for the week, records, kickoff times, home/away TWI (`home_twi`, `away_twi`), combined matchup `watchability`, and `excitement_index` on the 70–100 display scale. That is the final $E$ for completed games and the projection otherwise; `excitement_projected` is true for projections, and the value is null if a game hasn't been projected yet.
 - `GET /api/standings/{season}`:
   - Division and conference standings, wins, losses, win percentage, streak, points for/against, and last 5 games.
-- `GET /api/power_rankings`:
-  - 32-team power rankings ordered by composite rating, win records, and movement trends.
+- Power rankings have no dedicated endpoint. The weekly `POWER_RANKINGS` article is served through `GET /api/news/week/{week}` in the `slotted.standalone` slot. The `#rankings` page in `Mu_Network/src/App.tsx` (`PowerRankingsPage`) and the homepage "Power Index" card currently render hardcoded placeholder data.
 
 ### 4.2 Team & Roster Hubs
 - `GET /api/team/{abbr}`: Team metadata, overall/offensive/defensive ratings, division rank, and team color.
@@ -286,7 +300,7 @@ Navigation uses a lightweight hash router (`window.location.hash`):
 5. **Team Hub Beat Coverage & Article Feed (`TeamPage`)**:
    - Queries `GET /api/team/{abbr}/news?season={season}` to populate the team spotlight hero card and 4-story beat feed with real articles tagged for the franchise (`article_teams`), with seamless fallback to positional template beats.
 6. **Live Newsroom Front Page (`App.tsx`)**:
-   - Fetches `GET /api/news/week/{week}` to bind the Hero Slot story, secondary analysis cards, feature trios, trending local coverage primers, and power rankings directly to autonomous newsroom outputs.
+   - Fetches `GET /api/news/week/{week}` to bind the Hero Slot story, secondary analysis cards, feature trios, and trending local coverage primers directly to autonomous newsroom outputs. The `slotted.standalone` Power Rankings article is not rendered yet.
 7. **Team & League Logos**:
    - Pulls high-resolution official SVG/PNG logos from ESPN's global CDN (`https://a.espncdn.com/i/teamlogos/nfl/500/${abbr}.png`), normalized across all 32 franchises.
 
@@ -305,6 +319,7 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
 3. **Culture Engines (Dependency-Ordered Execution & Batch Updates):**
    - Appended to the end of the backfill generator, `engines/game_stat_generator.py` first runs `gotw_engine.batch_evaluate(season, only_missing=True, game_ids=...)` to score the Game Excitement Index ($E$) for newly completed games (those with no `excitement_index`) and any games it just backfilled. Previously scored games are left unchanged. This must precede TWI, which only counts games with a non-null `excitement_index`.
    - It then runs `TWIEngine().backfill_twi()` followed by `PopularityEngine().calculate_popularity()`, sequentially in dependency order, because franchise popularity reads the `watchability_index` that TWI writes. These two used to run in parallel, so popularity could read stale or partially updated TWI.
+   - Between TWI and franchise popularity it runs `GameCreditEngine().calculate(season)` (Section 2.4). It reads only `games`, so its position is not a dependency.
    - Once franchise metrics are computed, `PlayerPopularityEngine().calculate_popularity()` executes vectorized batch updates using PostgreSQL `executemany` (reducing DB execution time from ~1s to ~0.16s).
    - Finally, `project_scheduled_games(season)` refreshes `games.projected_excitement` for every still-scheduled game before the assignment brief is compiled.
 4. **The Swarm Trigger & Editorial Commissioning:**
@@ -355,6 +370,7 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - `get_game_box_score`: Returns team box score and top individual game contributions.
   - `get_advanced_team_analytics`: Computes youth production share, average age, and draft pedigree.
   - `get_advanced_game_analytics`: Computes offensive pace rating and single-game excitement index.
+  - `get_opponent_adjusted_credit`: Opponent-Adjusted Game Credit (Section 2.4). No team → all 32 ranked with credit, recent-form credit, strength of schedule, raw point differential per game, expected wins and win luck; with a team → that summary plus a game-by-game credit log.
   - `get_league_leaderboards`: Returns top 5 teams by watchability and popularity.
   - `get_team_articles`: Returns recent editorial articles and analysis referencing a specific team (resolves by name, city, abbreviation, or ID).
   - `get_player_articles`: Returns recent editorial articles and profiles referencing a specific player (resolves by name or ID).

@@ -2,6 +2,7 @@ import psycopg
 from langchain_core.tools import tool
 from db.db_handler import DatabaseHandler
 from engines.gotw_engine import display_excitement
+from engines.game_credit_engine import compute_game_credit, fetch_completed_games
 import json
 
 db = DatabaseHandler()
@@ -412,6 +413,64 @@ def get_advanced_game_analytics(game_id: int) -> str:
                     "upset_narrative_leverage": "High Variance" if (row[2] and row[2] > 80) else "Standard"  # raw E
                 }
                 return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 2035) -> str:
+    """Fetch Opponent-Adjusted Game Credit: schedule-adjusted points per game vs. a league-average team (margins capped at 24, home field removed). Without a team, returns all 32 teams ranked with season credit, recent-form credit, strength of schedule, expected wins, and win luck (wins minus expected wins; positive = record flatters them, i.e. paper tiger). With a team name, abbreviation, or ID, returns that team's summary plus a game-by-game credit log."""
+    try:
+        s_val = int(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                games = fetch_completed_games(cur, s_val)
+                if not games:
+                    return f"No completed games for Season {s_val}."
+                credits, hfa, margin_sd = compute_game_credit(games)
+                cur.execute("SELECT id, name FROM teams;")
+                names = dict(cur.fetchall())
+
+                ranked = sorted(credits.values(), key=lambda c: c.rating, reverse=True)
+                ranks = {c.team_id: i for i, c in enumerate(ranked, start=1)}
+
+                def summary(c):
+                    losses = c.games - c.wins
+                    return {
+                        "credit_rank": ranks[c.team_id],
+                        "team": names.get(c.team_id, str(c.team_id)),
+                        "team_id": c.team_id,
+                        "record": f"{c.wins:g}-{losses:g}",
+                        "opp_adj_credit": round(c.rating, 1),
+                        "recent_form_credit": round(c.recent, 1),
+                        "strength_of_schedule": round(c.sos, 1),
+                        "raw_point_diff_per_game": round(c.point_diff / c.games, 1),
+                        "expected_wins": round(c.expected_wins, 1),
+                        "win_luck": round(c.wins - c.expected_wins, 1),
+                    }
+
+                meta = {
+                    "season": s_val,
+                    "games_rated": len(games),
+                    "home_field_advantage_pts": round(hfa, 2),
+                    "scale_note": "Points per game vs. a league-average team (0 = average). Strength of schedule > 0 means tougher opponents.",
+                }
+
+                if not str(team_identifier).strip():
+                    return json.dumps({**meta, "teams": [summary(c) for c in ranked]}, indent=2)
+
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id or team_id not in credits:
+                    return f"Team '{team_identifier}' not found or has no completed games."
+                c = credits[team_id]
+                log = [{
+                    "week": g["week"],
+                    "game_id": g["game_id"],
+                    "opponent": f"{'vs' if g['site'] > 0 else ('@' if g['site'] < 0 else 'neutral')} {names.get(g['opponent_id'], g['opponent_id'])}",
+                    "opponent_credit": round(g["opponent_rating"], 1),
+                    "result": f"{'W' if g['margin'] > 0 else ('L' if g['margin'] < 0 else 'T')} {g['pf']}-{g['pa']}",
+                    "game_credit": round(g["game_credit"], 1),
+                } for g in c.game_log]
+                return json.dumps({**meta, **summary(c), "game_log": log}, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

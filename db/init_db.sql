@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS team_seasons (
     coverage_rank INT,
     watchability_index DOUBLE PRECISION DEFAULT 0.0,
     popularity_index DOUBLE PRECISION DEFAULT 0.0,
+    opp_adj_credit DOUBLE PRECISION,
+    opp_adj_credit_recent DOUBLE PRECISION,
+    sos_rating DOUBLE PRECISION,
+    expected_wins DOUBLE PRECISION,
     UNIQUE (team_id, season)
 );
 
