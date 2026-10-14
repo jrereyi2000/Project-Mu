@@ -95,6 +95,7 @@ Project Mu/
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md
+│   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate (not built yet): fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; not built yet
 │   ├── PIPELINE_MIGRATION.md  #   Agreed plan for moving ingestion to madden_capture.py over chiaki-ng (phases, decisions, verified facts)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
