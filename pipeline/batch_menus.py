@@ -92,6 +92,7 @@ def extract_unique_frames(video_path: str, mse_threshold: float = 1000.0) -> lis
 
 def process_ratings(db, ext: TeamRatingsExtraction):
     print(f"\nSuccessfully extracted {len(ext.teams)} teams! Saving to database...")
+    season = db.get_current_league_state()[0]
     with psycopg.connect(db.db_conn_info) as conn:
         with conn.cursor() as cur:
             for t in ext.teams:
@@ -105,21 +106,21 @@ def process_ratings(db, ext: TeamRatingsExtraction):
                     SET team_ovr = %s, off_ovr = %s, def_ovr = %s,
                         pass_off_rank = %s, rush_off_rank = %s, 
                         pass_rush_rank = %s, coverage_rank = %s
-                    WHERE team_id = %s AND season = 2035
+                    WHERE team_id = %s AND season = %s
                 """, (
                     t.team_ovr, t.off_ovr, t.def_ovr,
                     t.pass_off_rank, t.rush_off_rank, t.pass_rush_rank, t.coverage_rank,
-                    team_id
+                    team_id, season
                 ))
                 
                 if t.prev_wins is not None and t.prev_losses is not None:
-                    cur.execute("SELECT id FROM team_seasons WHERE team_id = %s AND season = 2034", (team_id,))
+                    cur.execute("SELECT id FROM team_seasons WHERE team_id = %s AND season = %s", (team_id, season - 1))
                     if cur.fetchone():
-                        cur.execute("UPDATE team_seasons SET wins = %s, losses = %s WHERE team_id = %s AND season = 2034", (t.prev_wins, t.prev_losses, team_id))
+                        cur.execute("UPDATE team_seasons SET wins = %s, losses = %s WHERE team_id = %s AND season = %s", (t.prev_wins, t.prev_losses, team_id, season - 1))
                     else:
-                        cur.execute("INSERT INTO team_seasons (team_id, season, wins, losses) VALUES (%s, 2034, %s, %s)", (team_id, t.prev_wins, t.prev_losses))
+                        cur.execute("INSERT INTO team_seasons (team_id, season, wins, losses) VALUES (%s, %s, %s, %s)", (team_id, season - 1, t.prev_wins, t.prev_losses))
                         
-                print(f"Updated {t.team_name} (including 2034 record)")
+                print(f"Updated {t.team_name} (including the {season - 1} record)")
         conn.commit()
     print("Database updated!")
 
@@ -221,7 +222,7 @@ def main():
     if args.mode == "ratings":
         prompt = (
             "Analyze these screenshots of Madden NFL team screens. Extract the Team OVR, OFF OVR, DEF OVR, "
-            "their league-wide rankings for Pass Offense, Rush Offense, Pass Rush, and Coverage, and their 2034 (last year's) win-loss record. "
+            "their league-wide rankings for Pass Offense, Rush Offense, Pass Rush, and Coverage, and their last year's win-loss record. "
             "Return the data strictly in the JSON schema provided."
         )
         ext = extractor._call_gemini(prompt, images, TeamRatingsExtraction)

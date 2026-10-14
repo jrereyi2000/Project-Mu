@@ -6,7 +6,9 @@ from pipeline.ocr_extractor import BoxScoreExtractor
 from db.db_handler import DatabaseHandler
 import psycopg
 
-def get_panthers_schedule(db: DatabaseHandler, season: int = 2035) -> list:
+def get_panthers_schedule(db: DatabaseHandler, season: int | None = None) -> list:
+    if season is None:
+        season = db.get_current_league_state()[0]
     with psycopg.connect(db.db_conn_info) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id FROM teams WHERE name ILIKE '%Panthers%' LIMIT 1")
@@ -24,6 +26,7 @@ def run_historical_batch(video_path: str):
     classifier = TemplateClassifier()
     extractor = BoxScoreExtractor()
     db = DatabaseHandler()
+    season = db.get_current_league_state()[0]
     
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -122,10 +125,10 @@ def run_historical_batch(video_path: str):
                                     cur.execute("""
                                         SELECT id, week FROM games 
                                         WHERE ((home_team_id = %s AND away_team_id = %s) OR (home_team_id = %s AND away_team_id = %s))
-                                        AND season = 2035
+                                        AND season = %s
                                         ORDER BY week ASC
                                         LIMIT 1 OFFSET %s
-                                    """, (panthers_id, opponent_id, opponent_id, panthers_id, offset))
+                                    """, (panthers_id, opponent_id, opponent_id, panthers_id, season, offset))
                                     
                                     res = cur.fetchone()
                                     if res:

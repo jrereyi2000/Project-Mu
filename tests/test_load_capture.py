@@ -1,5 +1,5 @@
 """pipeline/load_capture.py helpers that need no database."""
-import unittest
+import json, os, tempfile, unittest
 
 from pipeline import load_capture as L
 
@@ -54,6 +54,45 @@ class MisreadTest(unittest.TestCase):
     def test_counters_exclude_yards_and_rates(self):
         self.assertEqual(L.counters_of(["rush_attempts", "rush_yards", "rush_avg", "rush_tds", "rush_long", "rec_rac"]),
                          ["rush_attempts", "rush_tds"])
+
+
+
+class CurrentWeekTest(unittest.TestCase):
+    def folder(self, labels=None):
+        d = tempfile.mkdtemp()
+        if labels:
+            with open(os.path.join(d, "week.json"), "w") as fh:
+                json.dump(labels, fh)
+        return d
+
+    def test_current_week_from_the_captured_label(self):
+        d = self.folder({"current": "SEASON WEEK 18", "captured": "SEASON WEEK 17"})
+        self.assertEqual(L.next_current_week(d, 17, 17)[0], 18)
+
+    def test_postseason_label(self):
+        d = self.folder({"current": "POST SEASON WILD CARD", "captured": "SEASON WEEK 18"})
+        self.assertEqual(L.next_current_week(d, 18, 18)[0], 19)
+
+    def test_no_week_json_takes_the_next_week(self):
+        week, source = L.next_current_week(self.folder(), 17, 17)
+        self.assertEqual(week, 18)
+        self.assertIn("no week.json", source)
+
+    def test_never_moves_back(self):
+        self.assertEqual(L.next_current_week(self.folder(), 9, 18)[0], 18)
+
+    def test_captured_week_must_be_the_loaded_week(self):
+        d = self.folder({"current": "SEASON WEEK 18", "captured": "SEASON WEEK 16"})
+        with self.assertRaises(L.LoadError):
+            L.next_current_week(d, 17, 17)
+
+    def test_current_week_must_follow_the_loaded_week(self):
+        d = self.folder({"current": "SEASON WEEK 17", "captured": "SEASON WEEK 17"})
+        with self.assertRaises(L.LoadError):
+            L.next_current_week(d, 17, 17)
+        d = self.folder({"current": "PRESEASON WEEK 1", "captured": "SEASON WEEK 17"})
+        with self.assertRaises(L.LoadError):
+            L.next_current_week(d, 17, 17)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,15 @@ from sqlalchemy import create_engine
 DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/madden"
 engine = create_engine(DATABASE_URL)
 
-def generate_team_and_player_stats(season_year: int):
+def current_season() -> int:
+    """league_state.current_season: the season the backfill and the engines run for."""
+    return int(pd.read_sql("SELECT current_season FROM league_state WHERE id = 1", engine).iloc[0, 0])
+
+
+def generate_team_and_player_stats(season_year: int | None = None):
+    if season_year is None:
+        season_year = current_season()
+    print(f"-> Backfill and engines for season {season_year}")
     # 1. Fetch Input Data
     games_df = pd.read_sql(f"SELECT * FROM games WHERE season = {season_year} AND status = 'COMPLETED'", engine)
     existing_player_stats = pd.read_sql("SELECT * FROM player_stats", engine)
@@ -224,4 +232,7 @@ def generate_team_and_player_stats(season_year: int):
 
 if __name__ == "__main__":
     # Stats sync + analytics engines only. Publish the newsroom slate with: python3 -m newsroom.weekly_run
-    generate_team_and_player_stats(season_year=2035)
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--season", type=int, help="default: league_state.current_season")
+    generate_team_and_player_stats(season_year=ap.parse_args().season)

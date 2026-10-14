@@ -24,7 +24,7 @@ Usage
 Key map (chiaki-ng "Keyboard as controller"):
   Cross=S  Circle=D  L1=2  R1=3  L2=1  R2=4  D-pad=arrow keys  Escape=Esc
 """
-import argparse, datetime, glob, hashlib, os, re, shutil, subprocess, sys, time
+import argparse, datetime, glob, hashlib, json, os, re, shutil, subprocess, sys, time
 
 import Quartz
 import Vision
@@ -1251,6 +1251,9 @@ def run_schedule(out, week=None):
         log("Note: this week shows an ACTIONS button; Cross will NOT be pressed here.")
     n = capture_list(os.path.join(out, "schedule"), norm(target).lower(), stop_at_zeros=False)
     log(f"Schedule {target}: {n} pages")
+    # the loader sets league_state.current_week from the week the schedule opened on
+    with open(os.path.join(out, "week.json"), "w") as fh:
+        json.dump({"current": cur, "captured": clean_week(target)}, fh)
 
 
 RESULT_RE = re.compile(r"^([A-Z]{2,3}) ?(\d+) ?- ?(\d+) ?([A-Z]{2,3})$")    # "LAC 34 - 9LV" too

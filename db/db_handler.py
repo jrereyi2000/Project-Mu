@@ -32,33 +32,16 @@ class DatabaseHandler:
         return cur.fetchone()[0]
 
     def get_current_league_state(self) -> tuple[int, int]:
+        """(current_season, current_week) from league_state. The capture loader keeps both current
+        (pipeline/load_capture.py sets current_week from the captured week label); nothing here
+        infers or writes them."""
         with psycopg.connect(self.db_conn_info) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT current_season FROM league_state WHERE id = 1;")
+                cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1;")
                 res = cur.fetchone()
-                season = res[0] if res else 2035
-                
-                # Dynamically infer current week based on games table
-                # The earliest week where 1 or fewer games are COMPLETED
-                cur.execute("""
-                    SELECT week 
-                    FROM games 
-                    WHERE season = %s 
-                    GROUP BY week 
-                    HAVING COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) <= 1 
-                    ORDER BY week ASC 
-                    LIMIT 1
-                """, (season,))
-                
-                week_res = cur.fetchone()
-                
-                # If all weeks have >1 completed games (season over), default to week 18 or 1
-                week = week_res[0] if week_res else 1
-                
-                cur.execute("INSERT INTO league_state (id, current_season, current_week) VALUES (1, %s, %s) ON CONFLICT (id) DO UPDATE SET current_week = EXCLUDED.current_week;", (season, week))
-                conn.commit()
-                
-                return season, week
+                if not res:
+                    raise RuntimeError("league_state has no row: set current_season and current_week first")
+                return res[0], res[1]
 
     def create_active_game(self) -> int:
         season, week = self.get_current_league_state()
@@ -239,7 +222,7 @@ class DatabaseHandler:
             with conn.cursor() as cur:
                 cur.execute("SELECT season FROM games WHERE id = %s", (game_id,))
                 row = cur.fetchone()
-                season = row[0] if row else 2035
+                season = row[0] if row else self.get_current_league_state()[0]
                 
                 for p in player_stats_list:
                     # Ignore empty stat rows

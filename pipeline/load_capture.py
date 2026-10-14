@@ -15,7 +15,7 @@ from datetime import datetime
 
 import psycopg
 
-from pipeline.capture_matching import db_player_name, dec, full_key, match_roster, name_case, name_key, num
+from pipeline.capture_matching import db_player_name, db_week, dec, full_key, match_roster, name_case, name_key, num
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -482,8 +482,13 @@ def load_weekly(cur, folder, season, report):
     weeks = {r["WEEK"] for r in sched}
     if len(weeks) != 1:
         raise LoadError(f"schedule.csv covers {sorted(weeks)}, expected one week")
-    week = int(weeks.pop().split()[-1])
+    label = weeks.pop()
+    week = db_week(label)
+    if week is None:
+        raise LoadError(f"schedule.csv: can't read the week {label!r}")
     report["week"] = week
+    cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+    current, source = next_current_week(folder, week, cur.fetchone()[0])
     cur.execute("SELECT max(week) FROM captures WHERE mode = 'weekly' AND season = %s AND status = 'loaded'", (season,))
     last = cur.fetchone()[0]
     if last is not None and week <= last:
@@ -627,6 +632,8 @@ def load_weekly(cur, folder, season, report):
                     "position = EXCLUDED.position, games_played = EXCLUDED.games_played, downs_played = EXCLUDED.downs_played",
                     (season, pid, g["team"], g["pos"], g["games_played"], g["downs_played"]))
     report["games_completed"], report["season_rows"] = len(scores), len(writes)
+    cur.execute("UPDATE league_state SET current_week = %s WHERE id = 1", (current,))
+    report["current_week"] = f"{current} ({source})"
 
     # stale copies: the old ingestion stored some lines under the wrong player (J. Cabrera WR on the
     # Chiefs, now a linebacker; the line is the Rams' J. Cabrera's). A season_stats row this load
@@ -648,6 +655,28 @@ def load_weekly(cur, folder, season, report):
         cur.execute("DELETE FROM season_stats WHERE id = ANY(%s)", ([r[0] for r in stale],))
     report["stale_copies_removed"] = [f"{r[2]} {r[3]} (player {r[1]})" for r in stale]
     return len(writes)
+
+
+def next_current_week(folder, week, stored):
+    """(league_state.current_week after loading `week`, where it came from). The capture writes
+    week.json with the week the League Schedule opened on ('current', Madden's current week) and
+    the week it captured; captures made before phase 4 have none and get the loaded week + 1.
+    The current week never moves back."""
+    path = os.path.join(folder, "week.json")
+    if not os.path.exists(path):
+        current, source = week + 1, "loaded week + 1, no week.json"
+    else:
+        with open(path) as fh:
+            labels = json.load(fh)
+        if db_week(labels.get("captured")) != week:
+            raise LoadError(f"week.json says {labels.get('captured')!r} was captured, schedule.csv has week {week}")
+        current = db_week(labels.get("current"))
+        if current is None or current <= week:
+            raise LoadError(f"week.json: current week {labels.get('current')!r} doesn't follow the loaded week {week}")
+        source = f"captured label {labels['current']!r}"
+    if stored is not None and current < stored:
+        return stored, f"kept: {source} gives {current}, league_state already has {stored}"
+    return current, source
 
 
 # ------------------------------------------------------------------- games ----

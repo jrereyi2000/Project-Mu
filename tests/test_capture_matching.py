@@ -1,7 +1,7 @@
 """pipeline/capture_matching.py: name keys, number parsing, roster matching, Season Stats history."""
 import unittest
 
-from pipeline.capture_matching import (assign_by_history, db_player_name, dec, full_key, match_roster, name_key,
+from pipeline.capture_matching import (assign_by_history, db_player_name, db_week, dec, full_key, match_roster, name_key,
                                        name_key_from_full, num)
 
 
@@ -85,6 +85,24 @@ class HistoryTest(unittest.TestCase):
     def test_no_history_or_a_tie_is_refused(self):
         self.assertIsNone(assign_by_history([{"fgm": 1}], {1: {}, 2: {"fgm": 0}}, ["fgm"]))
         self.assertIsNone(assign_by_history([{"fgm": 5}, {"fgm": 5}], {1: {"fgm": 1}, 2: {"fgm": 1}}, ["fgm"]))
+
+
+
+class WeekTest(unittest.TestCase):
+    def test_regular_season_labels(self):
+        self.assertEqual(db_week("SEASON WEEK 18"), 18)
+        self.assertEqual(db_week("Week 17"), 17)            # schedule.csv
+        self.assertEqual(db_week("season  week 1"), 1)
+
+    def test_postseason_labels_follow_the_games_table(self):
+        self.assertEqual(db_week("POST SEASON WILD CARD"), 19)
+        self.assertEqual(db_week("POST SEASON DIVISIONAL"), 20)
+        self.assertEqual(db_week("POST SEASON CONFERENCE"), 21)
+        self.assertEqual(db_week("POST SEASON SUPER BOWL"), 23)
+
+    def test_preseason_and_junk_give_none(self):
+        for label in ("PRESEASON WEEK 2", "", None, "WEEK", "SORT"):
+            self.assertIsNone(db_week(label))
 
 
 if __name__ == "__main__":

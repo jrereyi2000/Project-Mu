@@ -11,6 +11,20 @@ import re
 # suffixes: " III", " Jr." - and "Hilljr." where OCR glued Jr./Sr. on (Titans, Oct 14)
 RESULT_RE = re.compile(r"^([A-Z]{2,3}) ?(\d+) ?- ?(\d+) ?([A-Z]{2,3})$")    # "DET 38 - 24 NO"
 
+# games.week of the postseason rounds (docs/EDITORIAL_MATRIX.md: 22 is the Super Bowl bye)
+POST_WEEKS = {"WILDCARD": 19, "DIVISIONAL": 20, "CONFERENCE": 21, "PROBOWL": 22, "SUPERBOWL": 23}
+
+
+def db_week(label):
+    """games.week for a Madden week label: 'SEASON WEEK 17' and the schedule CSV's 'Week 17'
+    give 17, 'POST SEASON WILD CARD' 19 ... 'POST SEASON SUPER BOWL' 23. Preseason and
+    unreadable labels give None."""
+    t = re.sub(r"\s+", " ", (label or "").upper().strip())
+    m = re.match(r"^(?:SEASON )?WEEK (\d{1,2})$", t)
+    if m:
+        return int(m.group(1))
+    return POST_WEEKS.get(re.sub(r"^POST ?SEASON ", "", t).replace(" ", ""))
+
 SUFFIX_RE = re.compile(r"(?:\s+(?:JR\.?|SR\.?|II|III|IV|V)|(?<=[a-z])(?:JR|SR)\.?)$", re.I)
 
 
