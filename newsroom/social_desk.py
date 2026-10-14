@@ -168,15 +168,16 @@ def _display_excitement(raw):
 
 
 def excitement_label(display):
+    """Plain-words description only: posts must never cite the index itself."""
     if display is None:
         return None
     if display >= 90:
-        return f"{display} (a classic)"
+        return "a classic"
     if display >= 82:
-        return f"{display} (an entertaining game)"
+        return "an entertaining game"
     if display >= 76:
-        return f"{display} (a typical game)"
-    return f"{display} (a dull game)"
+        return "a typical game"
+    return "a dull game"
 
 
 def stat_line(l: dict) -> str:
@@ -185,8 +186,9 @@ def stat_line(l: dict) -> str:
         parts.append(f"{l['completions']}/{l['pass_attempts']}, {l['pass_yards']} pass yds, {l['pass_tds']} TD"
                      + (f", {l['interceptions']} INT" if l["interceptions"] else ""))
     if l["rush_attempts"] or l["rush_yards"]:
-        parts.append(f"{l['rush_attempts']} {'rush' if l['rush_attempts'] == 1 else 'rushes'}, {l['rush_yards']} rush yds"
-                     + (f", {l['rush_tds']} rush TD" if l["rush_tds"] else ""))
+        carries = f"{l['rush_attempts']} {'rush' if l['rush_attempts'] == 1 else 'rushes'}, " if l["rush_attempts"] else ""
+        yds = "yd" if abs(l["rush_yards"]) == 1 else "yds"
+        parts.append(f"{carries}{l['rush_yards']} rush {yds}" + (f", {l['rush_tds']} rush TD" if l["rush_tds"] else ""))
     if l["receptions"] or l["rec_yards"]:
         parts.append(f"{l['receptions']} rec, {l['rec_yards']} rec yds" + (f", {l['rec_tds']} rec TD" if l["rec_tds"] else ""))
     return "; ".join(parts) or "no recorded stats"
@@ -282,7 +284,7 @@ class Week:
             "result": (f"{self.team_label(w)} beat the {self.team_label(l)} "
                        f"{max(g['home_score'], g['away_score'])}-{min(g['home_score'], g['away_score'])}")
                       if w else f"Tie, {g['home_score']}-{g['away_score']}",
-            "excitement_index": excitement_label(_display_excitement(g["excitement_index"])),
+            "how_the_game_played": excitement_label(_display_excitement(g["excitement_index"])),
             "records_after_game": {self.team_label(t): self.record(t) for t in (g["away_team_id"], g["home_team_id"])},
             "top_performers": {self.team_label(t): self.leaders(g, t) for t in (g["away_team_id"], g["home_team_id"])},
         }
@@ -298,7 +300,7 @@ class Week:
             "kickoff": g["game_time"],
             "game_type": g["game_type"],
             "records": {self.team_label(t): self.record(t) for t in (g["away_team_id"], g["home_team_id"])},
-            "projected_excitement": excitement_label(_display_excitement(g["projected_excitement"])),
+            "expected_to_be": excitement_label(_display_excitement(g["projected_excitement"])),
             "last_game": {self.team_label(t): self.last_result(t) for t in (g["away_team_id"], g["home_team_id"])},
         }
         if author_team:
