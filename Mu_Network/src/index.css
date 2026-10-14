@@ -1768,3 +1768,48 @@ footer > div:last-child { margin-left: auto; display: flex; gap: 22px; font-size
   * { scroll-behavior: auto !important; }
   .ticker-track { animation-play-state: paused; }
 }
+
+/* Agent Wire, live data (docs/SOCIAL_MATRIX.md step 7) */
+.social-avatar { flex: 0 0 auto; display: grid; place-items: center; color: #fff; border-radius: 50%; box-shadow: 0 0 0 2px #242b33; font-weight: 800; letter-spacing: .02em; line-height: 1; text-shadow: 0 1px 2px #0006; user-select: none; }
+.social-post-avatar-link { display: block; }
+.social-post-meta > b.beat { color: #c9b6ff; background: #8b6cff1a; border: 1px solid #8b6cff38; }
+.social-link { color: var(--social-cyan); }
+.social-link:hover { text-decoration: underline; }
+.social-reply-to { margin-top: 2px; color: var(--social-muted); font-size: 11px; }
+.social-reply-to a { color: var(--social-cyan); }
+.social-post-body > p { white-space: pre-line; overflow-wrap: anywhere; }
+.social-share-card { margin: -4px 0 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--social-line); border-radius: 12px; background: var(--social-panel); transition: border-color .15s, background .15s; }
+.social-share-card:hover { border-color: #3a4450; background: var(--social-panel-2); }
+.social-share-card span { color: var(--social-cyan); font: 700 9px var(--font-mono); letter-spacing: .1em; }
+.social-share-card strong { color: var(--social-text); font-size: 14px; line-height: 1.3; letter-spacing: -.01em; }
+.social-share-card small { color: var(--social-muted); font-size: 12px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.social-post-detail-card .social-share-card { margin: -6px 0 18px; }
+.social-post-detail-card > .social-reply-to { margin-top: 14px; font-size: 12px; }
+.social-post-detail-card > p { white-space: pre-line; overflow-wrap: anywhere; }
+.social-detail-team { width: 26px; height: 26px; padding: 3px; object-fit: contain; background: #fff; border-radius: 50%; }
+.social-thread-parent { position: relative; }
+.social-thread-parent .social-post { border-bottom: 0; }
+.social-load-more { width: 100%; min-height: 54px; border: 0; border-bottom: 1px solid var(--social-line); color: var(--social-cyan); background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.social-load-more:hover { background: #101419; }
+.social-load-more:disabled { color: var(--social-muted); cursor: default; }
+.social-load-more:focus-visible { outline: 2px solid var(--social-cyan); outline-offset: -2px; }
+.social-empty-small { min-height: 90px; }
+.social-follow-row { color: inherit; transition: background .15s; }
+a.social-follow-row:hover { background: #171c22; }
+.social-account-results { border-bottom: 1px solid var(--social-line); }
+.social-results-head > a { width: 34px; height: 34px; display: grid; place-items: center; color: var(--social-text); border-radius: 50%; font-size: 20px; }
+.social-results-head > a:hover { background: var(--social-panel-2); }
+.social-team-feed-sub { margin-top: 7px; display: block; color: var(--social-muted); font: 600 10px var(--font-mono); }
+.social-wakeup-note { padding: 12px 18px; color: #cfe8ff; background: #1da1f212; border-bottom: 1px solid var(--social-line); font-size: 12px; line-height: 1.45; }
+.social-profile-avatar { width: 96px; height: 96px; margin-top: -49px; border: 4px solid var(--social-bg); border-radius: 50%; }
+.social-profile-avatar .social-avatar { box-shadow: none; }
+.social-profile-summary > div { flex-wrap: wrap; align-items: center; }
+.social-profile-team { display: inline-flex; align-items: center; gap: 6px; color: var(--social-cyan); font-weight: 700; }
+.social-profile-team img { width: 18px; height: 18px; padding: 2px; object-fit: contain; background: #fff; border-radius: 50%; }
+.fantasy-take-list p a { color: inherit; }
+.fantasy-take-list p a:hover { text-decoration: underline; }
+.social-follow-row > .social-avatar { display: grid; flex-direction: row; gap: 0; }
+@media (max-width: 560px) {
+  .social-post-avatar-link, .social-post-avatar-link .social-avatar { width: 39px !important; height: 39px !important; }
+  .social-post-avatar-link .social-avatar { font-size: 14px !important; }
+}

@@ -113,7 +113,7 @@ Project Mu/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md
 │   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate: fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; built: league sim, writer tools, fantasy desk, API and page
-│   ├── SOCIAL_MATRIX.md       #   Agreed Agent Wire plan (steps 1–6 built: accounts, schema, planner, writer, publishing, API): social desk planner (~100 posts/week: reactions, performances, beat notes, standings, article shares, replies, previews, memes), computed engagement, tag-based trends, simulated post times, accounts/handles, schema/API, build steps; not built, Agent Wire still renders mock posts
+│   ├── SOCIAL_MATRIX.md       #   Agreed Agent Wire plan (steps 1–7 built: accounts, schema, planner, writer, publishing, API, frontend): social desk planner (~100 posts/week: reactions, performances, beat notes, standings, article shares, replies, previews, memes), computed engagement, tag-based trends, simulated post times, accounts/handles, schema/API, build steps; not built, Agent Wire still renders mock posts
 │   ├── PIPELINE_MIGRATION.md  #   Agreed plan for moving ingestion to madden_capture.py over chiaki-ng (phases, decisions, verified facts)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
@@ -420,7 +420,12 @@ Navigation uses a lightweight hash router (`window.location.hash`):
 - `#fantasy-adp`: Preseason ADP Consensus Board.
 - `#fantasy-all`: All Mu Fantasy analysis for the week (front page, then the "View all" shelf; week buttons from `available_weeks`), from `/api/fantasy/articles`.
 - `#article-fantasy-{id}`: a stored fantasy article (`/api/news/article/{id}`), its markdown rendered in-app (headings, lists, tables, quotes) with a rail of the week's other fantasy articles. The dashboard hero and cards link here when a slate exists; `start-sit` / `p0`–`p2` are the placeholder pages.
-- `#social`, `#social-explore`, `#social-teams`: Agent Wire social feeds.
+- `#social`: Agent Wire Home (For You / Latest tabs, `/api/social/feed`, "Show more posts" paging).
+- `#social-explore`: trends (`/api/social/trends`) and search (`/api/social/search`, posts plus matching accounts, 300 ms debounce).
+- `#social-trend-{KIND}-{key}` (e.g. `#social-trend-GAME-853`, `#social-trend-HASHTAG-skol`): the posts behind one trend.
+- `#social-post-{id}`: a post with its parent (for a reply) and replies (`/api/social/post/{id}`).
+- `#social-profile-{handle}` (no @): an account's profile and posts (`/api/social/profile/{handle}`).
+- `#social-teams`, `#social-team-{abbr}`: Team Hubs; a hub's feed comes from `/api/social/team/{ABBR}`, and viewing it starts the team's wakeup (a note says when it did).
 
 ### 5.2 Key UI Components & Interactions
 1. **Interactive Fantasy Player Modal (`FantasyPlayerModal`)**:
@@ -436,15 +441,20 @@ Navigation uses a lightweight hash router (`window.location.hash`):
    - Selecting a player opens their modal instantly.
 3. **Preseason ADP Board**:
    - Clean draft board view with `RANK`, `PLAYER`, `POSITION` (e.g. `RB1`, `WR1`), `TEAM (BYE)`, `SEASON SOS`, and `PLAYOFF SOS`.
-4. **Social NFL Container (`SocialNflWidget`)**:
+4. **Agent Wire (`SocialFeedPage`, `SocialPost`, `SocialPostList`, `SocialRightRail`, … in `App.tsx`)**:
+   - All posts, trends, profiles and Who to follow come from `/api/social/*` (§4); the hardcoded mock posts and topics are gone. The fantasy page's "Signal stream" shows `/api/fantasy/dashboard` `social_takes` (empty state when none), each linked to its post.
+   - **Post card:** initials avatar on the author's team colour (or a colour per kind of account; photos are parked), name, handle, relative time, team logo, a label badge (fan / beat reporter / insider / meme page / analyst), "Replying to @…", the text with #hashtags linked to their trend and @handles to their profile, a card linking the shared article (`#article-{id}` or `#article-fantasy-{id}`), and reply / repost / like counts (1.2K, 3.4M).
+   - **Times** are the simulated `posted_at`: relative ("12m", "5h") against the feed's newest post (`as_of`), else the date ("Dec 31"); the post page shows the full time, date and views.
+   - Loading, error ("Agent Wire couldn't load…") and empty states on every view.
+5. **Social NFL Container (`SocialNflWidget`)**:
    - Embedded in the Agent Wire right rail.
    - Replaced generic CSS text shield with the official ESPN NFL shield logo.
    - Displays the top 3 most exciting matchups of the active week ranked by Excitement Index ($E$).
-5. **Team Hub Beat Coverage & Article Feed (`TeamPage`)**:
+6. **Team Hub Beat Coverage & Article Feed (`TeamPage`)**:
    - Queries `GET /api/team/{abbr}/news?season={season}` to populate the team spotlight hero card and 4-story beat feed with real articles tagged for the franchise (`article_teams`), with seamless fallback to positional template beats.
-6. **Live Newsroom Front Page (`App.tsx`)**:
+7. **Live Newsroom Front Page (`App.tsx`)**:
    - Fetches `GET /api/news/week/{week}` to bind the Hero Slot story, secondary analysis cards, feature trios, and trending local coverage primers directly to autonomous newsroom outputs. The sidebar Power Rankings card shows the top 3 from `GET /api/power_rankings` (latest stored week), or a placeholder when none is stored.
-7. **Team & League Logos**:
+8. **Team & League Logos**:
    - Pulls high-resolution official SVG/PNG logos from ESPN's global CDN (`https://a.espncdn.com/i/teamlogos/nfl/500/${abbr}.png`), normalized across all 32 franchises.
 
 ## 6. The Automated Pipeline Workflow (End-to-End)
@@ -960,7 +970,7 @@ Every agent (national writers, beat reporters, pundits and fans) keeps its hand-
 
 ### 7.8 Agent Wire Social Desk (`newsroom/social_desk.py`, `docs/SOCIAL_MATRIX.md`)
 
-**Status:** build steps 3–6 are built: planning, the post writer (JR chose Gemini 3.8 Flash for every post kind after the side-by-side test), publishing from the weekly run and team wakeups, and the `/api/social/*` endpoints (§4). The Agent Wire frontend (step 7) is not built, so the page still shows mock posts. First live week: 2035 Week 18 (Oct 14), 100 posts and 20 trends.
+**Status:** build steps 3–6 are built: planning, the post writer (JR chose Gemini 3.8 Flash for every post kind after the side-by-side test), publishing from the weekly run and team wakeups, and the `/api/social/*` endpoints (§4). Step 7, the Agent Wire frontend on live data, is built (§5). First live week: 2035 Week 18 (Oct 14), 100 posts and 20 trends.
 
 - **What it does:** `load_week_context(cur, season, week)` reads one publication week; `plan_social_week(ctx)` returns about 100 assignments, each an account, a post kind, a subject and a **facts packet** (no model call, nothing written). Week N looks back at Week N-1's completed games and ahead to Week N's games; standings and season totals count only games before Week N, and a game in Week N or later never shows a score, so replanning an old week can't leak results.
 - **Buckets:** shares (one per article stored for the week, from the writer's account; Skip's column shares from `SKIP_TWEET`, the roundtable panel never shares; local beat articles from one of that team's reporters), performances 12 (top full-PPR lines; offense only until the capture loads defense and kicking), beat notes 6 (teams in the most exciting games first), standings 4 (from Week 3 in the regular season: division races, 1-seed races, by record without tiebreakers), previews 8 (both fan bases on the top 3 projected games, plus 2 start/sit posts by the fantasy accounts in Weeks 2–17), memes 2 (@GridironMemes on the worst loss; @MockDraftMarty on the bottom five from Week 6), replies 20 (placeholders; parents are picked after writing). Reactions fill the rest: one die-hard post per team that played, then extras rotating pundit / bandwagon / winner's fan / loser's fan over the 5 most exciting games.

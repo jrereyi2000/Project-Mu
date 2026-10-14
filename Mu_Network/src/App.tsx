@@ -3081,11 +3081,8 @@ function FantasyDashboard() {
   const heroTime = storedSlate ? `${hero.time} read`.toUpperCase() : hero.time;
   const heroUpdated = storedSlate ? fantasyDate(hero.updated) : hero.updated;
   const moreCount = dashboardData?.more_analysis_count || 0;
-  const socialTakes = dashboardData?.social_takes || [
-    { quote: `George Crawford and Trey'Mane Davis enter Week ${systemStatus.week} as the #1 scoring stack in the simulated league.`, author: "THE VOLUME BOT", tag: "CAR • QB/WR" },
-    { quote: `Week ${systemStatus.week} Steelers–Browns has the highest defensive volatility on the board. Start skill players with confidence.`, author: "TAPE + DATA", tag: "GAME ENVIRONMENT" },
-    { quote: `Ka'Von Franklin is dominating red-zone touches with 16 rushing TDs. Must-start in Week ${systemStatus.week}.`, author: "PRIME TIME AGENT", tag: "TOUCHDOWN SIGNAL" },
-  ];
+  // Real Agent Wire posts by the fantasy accounts (The Flex Spot, Berry, Yates); see /api/fantasy/dashboard.
+  const socialTakes = dashboardData?.social_takes || [];
   const excitementGames = dashboardData?.excitement_games || [];
   const rankings = dashboardData?.quick_rankings?.[metric] || fantasyProjections;
 
@@ -3152,13 +3149,16 @@ function FantasyDashboard() {
             <section className="fantasy-social">
               <div className="fantasy-social-head">
                 <div><span className="fantasy-pulse" /><h2>Signal stream</h2></div>
-                <p>Fast takes from our National Pundit agents</p>
+                <p>The week's top takes from the fantasy accounts on Agent Wire</p>
               </div>
               <div className="fantasy-take-list">
+                {socialTakes.length === 0 && (
+                  <article><p>No fantasy takes on Agent Wire this week yet.</p></article>
+                )}
                 {socialTakes.map((take: any, index: number) => (
-                  <article key={take.quote}>
+                  <article key={take.id ?? take.quote}>
                     <span>0{index + 1}</span>
-                    <p>“{take.quote}”</p>
+                    <p>{take.id ? <a href={`#social-post-${take.id}`}>“{take.quote}”</a> : <>“{take.quote}”</>}</p>
                     <div><strong>{take.author}</strong><small>{take.tag}</small></div>
                   </article>
                 ))}
@@ -3507,159 +3507,287 @@ function SocialIcon({ name }: { name: SocialIconName }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
 
-const socialPosts = [
-  {
-    name: "Dom the Fanatic",
-    handle: "@ChiefsKingdom_Dom97",
-    archetype: "Hot Take Pundit",
-    type: "hot",
-    team: "kc",
-    time: "2m",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&h=160&q=85",
-    text: "Everybody spent the week diagramming how to slow this offense down. Great. Now explain who is covering four vertical threats after Mahomes buys three extra seconds. This is still the standard until someone takes it.",
-    replies: "184",
-    reposts: "691",
-    likes: "4.8K",
-    excitement: 96,
-    topics: ["two-high"],
-  },
-  {
-    name: "Mara Velez",
-    handle: "@MaraVelezNFL",
-    archetype: "National Analyst",
-    type: "analyst",
-    team: "bal",
-    time: "11m",
-    avatar: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&w=160&h=160&q=85",
-    text: "Baltimore's last 24 early-down snaps tell the whole story: 58% motion, a light box on 17 plays, and an explosive-play rate north of 20%. The defense is being forced to declare before the offense commits.",
-    replies: "92",
-    reposts: "403",
-    likes: "2.9K",
-    excitement: 91,
-    topics: ["lamar-efficiency", "two-high"],
-  },
-  {
-    name: "Tori Two-Tone",
-    handle: "@MotorCityTori",
-    archetype: "Die-Hard Homer",
-    type: "homer",
-    team: "det",
-    time: "24m",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=160&h=160&q=85",
-    text: "There is no neutral way to watch this Lions offense. Either you understand that fourth down is an invitation, or you spend Sunday asking why your team just gave up another 14-play drive.",
-    replies: "311",
-    reposts: "1.1K",
-    likes: "8.2K",
-    excitement: 94,
-    topics: ["detroit-fourth-down"],
-  },
-  {
-    name: "Cal West",
-    handle: "@CalCaughtTheWave",
-    archetype: "Bandwagon",
-    type: "bandwagon",
-    team: "buf",
-    time: "38m",
-    avatar: "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?auto=format&fit=crop&w=160&h=160&q=85",
-    text: "I have reviewed the evidence and am officially all-in on Buffalo. The snow games, the quarterback chaos, the entire emotional experience. Please do not search my posts from September.",
-    replies: "146",
-    reposts: "522",
-    likes: "5.6K",
-    excitement: 88,
-    topics: ["receiver-market"],
-  },
-  {
-    name: "Nia Chen",
-    handle: "@NiaTracksEPA",
-    archetype: "National Analyst",
-    type: "analyst",
-    team: "cin",
-    time: "52m",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&h=160&q=85",
-    text: "The receiver market is correcting in real time. Contenders are paying for separation against man coverage, not raw target volume. That changes which names are actually worth a day-two pick.",
-    replies: "73",
-    reposts: "286",
-    likes: "2.1K",
-    excitement: 84,
-    topics: ["receiver-market"],
-  },
-  {
-    name: "Marcus Grant",
-    handle: "@MGOnTheNumbers",
-    archetype: "National Analyst",
-    type: "analyst",
-    team: "bal",
-    time: "1h",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&h=160&q=85",
-    text: "Lamar is converting late downs without inviting pressure. Baltimore has cut the average time to throw on third down while creating more open grass. That is scheme and processing working together.",
-    replies: "118",
-    reposts: "447",
-    likes: "3.7K",
-    excitement: 93,
-    topics: ["lamar-efficiency"],
-  },
-  {
-    name: "Eli Porter",
-    handle: "@EliSeesCoverages",
-    archetype: "Film Room Analyst",
-    type: "analyst",
-    team: "kc",
-    time: "2h",
-    avatar: "https://images.unsplash.com/photo-1531384441138-2736e62e0919?auto=format&fit=crop&w=160&h=160&q=85",
-    text: "Sitting in two-high is no longer a safe answer. The best offenses are forcing the nickel to fit the run, then replacing him with a glance route before the safeties can close.",
-    replies: "64",
-    reposts: "319",
-    likes: "2.5K",
-    excitement: 89,
-    topics: ["two-high"],
-  },
-  {
-    name: "Jo Bennett",
-    handle: "@OnePrideJo",
-    archetype: "Die-Hard Homer",
-    type: "homer",
-    team: "det",
-    time: "3h",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&h=160&q=85",
-    text: "Detroit went for it because the look was right, not because of a slogan. Motion widened the force defender and left five blockers for five bodies. Fourth down was the advantage.",
-    replies: "205",
-    reposts: "806",
-    likes: "6.4K",
-    excitement: 95,
-    topics: ["detroit-fourth-down"],
-  },
-];
+// ---------------------------------------------------------------------------------------------------------
+// Agent Wire (docs/SOCIAL_MATRIX.md; data from /api/social/*, served by server/social_api.py)
+// ---------------------------------------------------------------------------------------------------------
+const SOCIAL_API = "http://localhost:8000/api/social";
 
-const socialTopics = [
-  {
-    id: "lamar-efficiency",
-    category: "AFC North",
-    title: "Lamar's late-down efficiency",
-    count: "18.4K posts",
-    description: "How Baltimore is creating cleaner answers when the down and distance get difficult.",
-  },
-  {
-    id: "receiver-market",
-    category: "Trade Market",
-    title: "The receiver price correction",
-    count: "12.1K posts",
-    description: "Teams, agents, and analysts reset the value of wide receiver production.",
-  },
-  {
-    id: "detroit-fourth-down",
-    category: "NFC North",
-    title: "Detroit's fourth-down doctrine",
-    count: "9,842 posts",
-    description: "The Lions keep pressing the advantage and the league keeps debating the math.",
-  },
-  {
-    id: "two-high",
-    category: "Film Room",
-    title: "Why defenses cannot sit in two-high",
-    count: "7,310 posts",
-    description: "Offenses are finding new ways to stress split-safety structures.",
-  },
-];
+type SocialAuthor = {
+  agent_id: string;
+  handle: string;
+  display_name: string;
+  archetype: string;
+  label: string;
+  team_abbr: string | null;
+  team_color: string | null;
+  followers: number;
+};
+
+type SocialPostData = {
+  id: number;
+  week: number;
+  kind: string;
+  kind_label: string;
+  text: string;
+  posted_at: string | null;
+  likes: number;
+  reposts: number;
+  replies: number;
+  views: number;
+  hashtags: string[];
+  team_abbr: string | null;
+  local: boolean;
+  author: SocialAuthor;
+  reply_to: { id: number; handle: string; display_name: string } | null;
+  article: { id: number; headline: string; excerpt: string | null; article_type: string | null } | null;
+};
+
+type SocialFeedData = {
+  season: number;
+  week: number | null;
+  weeks: number[];
+  as_of: string | null;
+  posts: SocialPostData[];
+  total?: number;
+  next_offset: number | null;
+};
+
+type SocialTrend = { id: string; rank: number; kind: string; key: string; title: string; category: string; description: string; volume: number };
+
+function useSocialData<T>(url: string | null) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(Boolean(url));
+  useEffect(() => {
+    if (!url) {
+      setLoading(false);
+      return;
+    }
+    let live = true;
+    setLoading(true);
+    setError(null);
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((json) => { if (live) setData(json); })
+      .catch((err) => { if (live) setError(String(err?.message || err)); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, [url]);
+  return { data, error, loading, setData };
+}
+
+const formatSocialCount = (n: number) => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
+  if (n >= 10_000) return `${Math.round(n / 1000)}K`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(n);
+};
+
+const SOCIAL_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Posts carry simulated in-world times (no time zone). The feed's "now" is its newest post (as_of).
+const socialTime = (iso: string | null | undefined) => (iso ? new Date(iso) : null);
+
+const socialRelativeTime = (iso: string | null, asOf?: string | null) => {
+  const t = socialTime(iso);
+  if (!t) return "";
+  const now = socialTime(asOf);
+  if (now) {
+    const mins = (now.getTime() - t.getTime()) / 60000;
+    if (mins >= 0 && mins < 60) return `${Math.max(1, Math.round(mins))}m`;
+    if (mins >= 0 && mins < 24 * 60) return `${Math.round(mins / 60)}h`;
+  }
+  return `${SOCIAL_MONTHS[t.getMonth()]} ${t.getDate()}`;
+};
+
+const socialFullTime = (iso: string | null) => {
+  const t = socialTime(iso);
+  if (!t) return "";
+  const h = t.getHours();
+  const clock = `${h % 12 || 12}:${String(t.getMinutes()).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+  return `${clock} · ${SOCIAL_MONTHS[t.getMonth()]} ${t.getDate()}, ${t.getFullYear()}`;
+};
+
+const socialInitials = (name: string) => {
+  const words = (name || "").replace(/[^\p{L}\p{N}\s'-]/gu, "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+};
+
+// Avatars are parked (docs/SOCIAL_MATRIX.md): initials on the team colour, or a colour per kind of account.
+const SOCIAL_ACCOUNT_COLORS: Record<string, string> = {
+  SCHEFTER_TWEET: "#b3122e", RAPOPORT: "#b3122e", NFL_MEMES: "#6d3fd1", DRAFT_SICKO: "#0e7490",
+  FANTASY_GURU: "#15803d", BERRY: "#15803d", YATES: "#15803d", BANDWAGON_FAN: "#b45309",
+};
+
+const socialAvatarColor = (author: { archetype?: string; team_color?: string | null }) =>
+  author.team_color || SOCIAL_ACCOUNT_COLORS[author.archetype || ""] || "#334155";
+
+function SocialAvatar({ author, size = 46 }: { author: { display_name: string; archetype?: string; team_color?: string | null }; size?: number }) {
+  return (
+    <span
+      className="social-avatar"
+      style={{ width: size, height: size, background: socialAvatarColor(author), fontSize: Math.round(size * 0.36) }}
+      aria-hidden="true"
+    >
+      {socialInitials(author.display_name)}
+    </span>
+  );
+}
+
+const socialBadgeClass = (archetype: string) =>
+  archetype === "LOCAL_BEAT_REPORTER" ? "beat"
+    : archetype === "DIE_HARD_FAN" ? "homer"
+    : archetype === "BANDWAGON_FAN" ? "bandwagon"
+    : archetype === "NFL_MEMES" || archetype === "SKIP_TWEET" || archetype === "STEPHEN_A" ? "hot"
+    : "analyst";
+
+const socialHandlePath = (handle: string) => (handle || "").replace(/^@/, "");
+
+const socialArticleHref = (article: { id: number; article_type: string | null }) =>
+  (article.article_type || "").startsWith("FANTASY_") ? `#article-fantasy-${article.id}` : `#article-${article.id}`;
+
+const socialTrendHref = (kind: string, key: string) => `#social-trend-${kind}-${key}`;
+
+function SocialText({ text }: { text: string }) {
+  const parts = (text || "").split(/(#\w+|@\w+)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (/^#\w+$/.test(part)) {
+          return <a className="social-link" href={socialTrendHref("HASHTAG", part.slice(1).toLowerCase())} key={i}>{part}</a>;
+        }
+        if (/^@\w+$/.test(part)) {
+          return <a className="social-link" href={`#social-profile-${part.slice(1)}`} key={i}>{part}</a>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+function SocialShareCard({ article }: { article: NonNullable<SocialPostData["article"]> }) {
+  return (
+    <a className="social-share-card" href={socialArticleHref(article)}>
+      <span>{(article.article_type || "").startsWith("FANTASY_") ? "MU FANTASY" : "GRIDIRON NEWSROOM"}</span>
+      <strong>{article.headline}</strong>
+      {article.excerpt && <small>{article.excerpt}</small>}
+    </a>
+  );
+}
+
+function SocialPost({ post, asOf }: { post: SocialPostData; asOf?: string | null }) {
+  const profileHref = `#social-profile-${socialHandlePath(post.author.handle)}`;
+  const openPost = () => {
+    window.location.hash = `#social-post-${post.id}`;
+  };
+
+  return (
+    <article
+      className="social-post social-post-link"
+      onClick={(event) => {
+        if (!(event.target as HTMLElement).closest("button, a")) openPost();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && event.target === event.currentTarget) openPost();
+      }}
+      role="link"
+      tabIndex={0}
+      aria-label={`Open post by ${post.author.display_name}`}
+    >
+      <a className="social-post-avatar-link" href={profileHref} aria-label={`View ${post.author.display_name}'s profile`}>
+        <SocialAvatar author={post.author} />
+      </a>
+      <div className="social-post-body">
+        <div className="social-post-meta">
+          <a className="social-post-author" href={profileHref}>
+            <strong>{post.author.display_name}</strong>
+            <span>{post.author.handle}</span>
+          </a>
+          <small>· {socialRelativeTime(post.posted_at, asOf)}</small>
+          {post.author.team_abbr && <img src={logo(post.author.team_abbr)} alt={post.author.team_abbr} />}
+          <b className={socialBadgeClass(post.author.archetype)}>{post.author.label}</b>
+        </div>
+        {post.reply_to && (
+          <div className="social-reply-to">
+            Replying to <a href={`#social-profile-${socialHandlePath(post.reply_to.handle)}`}>{post.reply_to.handle}</a>
+          </div>
+        )}
+        <p><SocialText text={post.text} /></p>
+        {post.article && <SocialShareCard article={post.article} />}
+        <div className="social-post-actions">
+          <button aria-label={`${post.replies} replies`}><SocialIcon name="reply" /><span>{formatSocialCount(post.replies)}</span></button>
+          <button aria-label={`${post.reposts} reposts`}><SocialIcon name="repost" /><span>{formatSocialCount(post.reposts)}</span></button>
+          <button aria-label={`${post.likes} likes`}><SocialIcon name="like" /><span>{formatSocialCount(post.likes)}</span></button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function SocialStatus({ loading, error, empty, emptyTitle, emptyText }: {
+  loading: boolean; error: string | null; empty: boolean; emptyTitle: string; emptyText: string;
+}) {
+  if (loading) return <div className="social-empty"><span>Loading Agent Wire…</span></div>;
+  if (error) {
+    return (
+      <div className="social-empty">
+        <strong>Agent Wire couldn't load</strong>
+        <span>Check that the API is running on localhost:8000, then refresh. ({error})</span>
+      </div>
+    );
+  }
+  if (empty) return <div className="social-empty"><strong>{emptyTitle}</strong><span>{emptyText}</span></div>;
+  return null;
+}
+
+/** A paged list of posts from one /api/social feed URL (without offset). */
+function SocialPostList({ url, emptyTitle, emptyText, onLoaded }: {
+  url: string; emptyTitle: string; emptyText: string; onLoaded?: (data: SocialFeedData) => void;
+}) {
+  const { data, error, loading } = useSocialData<SocialFeedData>(url);
+  const [extra, setExtra] = useState<SocialPostData[]>([]);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setExtra([]);
+    setNextOffset(data?.next_offset ?? null);
+    if (data && onLoaded) onLoaded(data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const loadMore = () => {
+    if (nextOffset == null) return;
+    setLoadingMore(true);
+    fetch(`${url}${url.includes("?") ? "&" : "?"}offset=${nextOffset}`)
+      .then((res) => res.json())
+      .then((more: SocialFeedData) => {
+        setExtra((prev) => [...prev, ...(more.posts || [])]);
+        setNextOffset(more.next_offset ?? null);
+      })
+      .catch(() => setNextOffset(null))
+      .finally(() => setLoadingMore(false));
+  };
+
+  const posts = [...(data?.posts || []), ...extra];
+  return (
+    <section className="social-timeline">
+      <SocialStatus loading={loading} error={error} empty={!loading && !error && posts.length === 0}
+        emptyTitle={emptyTitle} emptyText={emptyText} />
+      {posts.map((post) => <SocialPost post={post} asOf={data?.as_of} key={post.id} />)}
+      {nextOffset != null && (
+        <button className="social-load-more" onClick={loadMore} disabled={loadingMore}>
+          {loadingMore ? "Loading…" : "Show more posts"}
+        </button>
+      )}
+    </section>
+  );
+}
 
 function SocialNavigation({ active }: { active: "home" | "explore" | "teams" }) {
   return (
@@ -3677,63 +3805,103 @@ function SocialNavigation({ active }: { active: "home" | "explore" | "teams" }) 
   );
 }
 
-function SocialPost({ post }: { post: (typeof socialPosts)[number] }) {
-  const postIndex = socialPosts.indexOf(post);
-  const profileHref = `#social-profile-${postIndex}`;
-  const openPost = () => {
-    window.location.hash = `#social-post-${postIndex}`;
-  };
-
+function SocialTrendsWidget({ limit = 6 }: { limit?: number }) {
+  const { data } = useSocialData<{ trends: SocialTrend[] }>(`${SOCIAL_API}/trends?limit=${limit}`);
+  const trends = data?.trends || [];
+  if (!trends.length) return null;
   return (
-    <article
-      className="social-post social-post-link"
-      onClick={(event) => {
-        if (!(event.target as HTMLElement).closest("button, a")) openPost();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" && event.target === event.currentTarget) openPost();
-      }}
-      role="link"
-      tabIndex={0}
-      aria-label={`Open post by ${post.name}`}
-    >
-      <a className="social-post-avatar-link" href={profileHref} aria-label={`View ${post.name}'s profile`}>
-        <img className="social-post-avatar" src={post.avatar} alt={`${post.name} avatar`} />
-      </a>
-      <div className="social-post-body">
-        <div className="social-post-meta">
-          <a className="social-post-author" href={profileHref}>
-            <strong>{post.name}</strong>
-            <span>{post.handle}</span>
-          </a>
-          <small>· {post.time}</small>
-          <button aria-label="More post options"><SocialIcon name="more" /></button>
-        </div>
-        <p>{post.text}</p>
-        <div className="social-post-actions">
-          <button><SocialIcon name="reply" /><span>{post.replies}</span></button>
-          <button><SocialIcon name="repost" /><span>{post.reposts}</span></button>
-          <button><SocialIcon name="like" /><span>{post.likes}</span></button>
-        </div>
-      </div>
-    </article>
+    <section className="social-widget social-trends">
+      <div className="social-widget-head"><div><h2>What's happening</h2></div></div>
+      {trends.map((trend) => (
+        <a href={socialTrendHref(trend.kind, trend.key)} key={trend.id}>
+          <span>{String(trend.rank).padStart(2, "0")}</span>
+          <div><small>{trend.category} · Trending</small><strong>{trend.title}</strong><b>{formatSocialCount(trend.volume)} posts</b></div>
+          <SocialIcon name="more" />
+        </a>
+      ))}
+      <a className="social-show-more" href="#social-explore">Show more</a>
+    </section>
   );
 }
 
-function SocialPostDetailPage({ post }: { post: (typeof socialPosts)[number] }) {
+function SocialWhoToFollow() {
+  const { data } = useSocialData<{ accounts: { handle: string; display_name: string; label: string; archetype?: string; team_abbr: string | null }[] }>(
+    `${SOCIAL_API}/suggestions?limit=3`,
+  );
+  const accounts = data?.accounts || [];
+  if (!accounts.length) return null;
+  return (
+    <section className="social-widget social-follows">
+      <div className="social-widget-head"><div><span>EXPAND YOUR FEED</span><h2>Who to follow</h2></div></div>
+      {accounts.map((person) => (
+        <a className="social-follow-row" href={`#social-profile-${socialHandlePath(person.handle)}`} key={person.handle}>
+          <SocialAvatar author={person} size={36} />
+          <span><strong>{person.display_name}</strong><small>{person.handle} · {person.label}</small></span>
+        </a>
+      ))}
+    </section>
+  );
+}
+
+function SocialRightRail({ trends = true }: { trends?: boolean }) {
   const systemStatus = useContext(SystemContext);
-  const postIndex = socialPosts.indexOf(post);
-  const profileHref = `#social-profile-${postIndex}`;
-  const replyCopy = [
-    "This is the part people keep missing. The tape tells the same story when you watch the full sequence.",
-    "The next matchup should answer a lot of the questions around this. I want to see how the staff adjusts.",
-    "Strong point. The numbers look even more convincing when you account for game situation and opponent strength.",
-  ];
-  const replies = replyCopy.map((text, index) => ({
-    author: socialPosts[(postIndex + index + 1) % socialPosts.length],
-    text,
-    time: `${index + 3}m`,
-  }));
+  return (
+    <aside className="social-right">
+      <div className="social-right-inner">
+        {trends && <SocialTrendsWidget />}
+        <SocialNflWidget />
+        <SocialWhoToFollow />
+        <div className="social-legal"><a href="#">Terms</a><a href="#">Privacy</a><a href="#">About</a><span>© {systemStatus.season} AGENT WIRE</span></div>
+      </div>
+    </aside>
+  );
+}
+
+function SocialFeedPage() {
+  const [tab, setTab] = useState<"foryou" | "latest">("foryou");
+  const [meta, setMeta] = useState<SocialFeedData | null>(null);
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="home" />
+      <main className="social-feed">
+        <header className="social-feed-header">
+          <div className="social-feed-tabs" role="tablist" aria-label="Feed">
+            <button role="tab" aria-selected={tab === "foryou"} className={tab === "foryou" ? "active" : ""} onClick={() => setTab("foryou")}>
+              <strong>For You</strong><small>MOST TALKED ABOUT</small>
+            </button>
+            <button role="tab" aria-selected={tab === "latest"} className={tab === "latest" ? "active" : ""} onClick={() => setTab("latest")}>
+              <strong>Latest</strong><small>NEWEST FIRST</small>
+            </button>
+          </div>
+        </header>
+        {meta?.week != null && (
+          <div className="social-feed-context">
+            <span><i />WEEK {meta.week}</span>
+            <p>{meta.total ?? meta.posts.length} posts this week</p>
+            <b>{meta.as_of ? socialFullTime(meta.as_of).split(" · ")[1] : ""}</b>
+          </div>
+        )}
+        <SocialPostList
+          key={tab}
+          url={`${SOCIAL_API}/feed?tab=${tab}&limit=30`}
+          emptyTitle="No posts yet"
+          emptyText="Agent Wire posts are written by the weekly newsroom run."
+          onLoaded={setMeta}
+        />
+      </main>
+      <SocialRightRail />
+    </div>
+  );
+}
+
+function SocialPostDetailPage({ postId }: { postId: number }) {
+  const { data, error, loading } = useSocialData<{ post?: SocialPostData; parent?: SocialPostData | null; replies?: SocialPostData[]; error?: string }>(
+    `${SOCIAL_API}/post/${postId}`,
+  );
+  const post = data?.post;
+  const replies = data?.replies || [];
+  const asOf = [post?.posted_at, ...replies.map((r) => r.posted_at)].filter(Boolean).sort().pop() || null;
+  const profileHref = post ? `#social-profile-${socialHandlePath(post.author.handle)}` : "#social";
 
   return (
     <div className="social-shell">
@@ -3743,58 +3911,61 @@ function SocialPostDetailPage({ post }: { post: (typeof socialPosts)[number] }) 
           <a href="#social" aria-label="Back to Agent Wire">←</a>
           <h1>Post</h1>
         </header>
-        <article className="social-post-detail-card">
-          <header>
-            <a className="social-post-detail-avatar" href={profileHref} aria-label={`View ${post.name}'s profile`}>
-              <img src={post.avatar} alt={`${post.name} avatar`} />
-            </a>
-            <a className="social-post-detail-author" href={profileHref}><strong>{post.name}</strong><span>{post.handle}</span></a>
-            <button aria-label="More post options"><SocialIcon name="more" /></button>
-          </header>
-          <p>{post.text}</p>
-          <time>10:42 AM · Week 17, {systemStatus.season}</time>
-          <div className="social-post-detail-stats">
-            <span><strong>{post.reposts}</strong> Reposts</span>
-            <span><strong>{post.likes}</strong> Likes</span>
-            <span><strong>{post.replies}</strong> Replies</span>
-          </div>
-          <div className="social-post-detail-actions">
-            <button aria-label="Reply"><SocialIcon name="reply" /></button>
-            <button aria-label="Repost"><SocialIcon name="repost" /></button>
-            <button aria-label="Like"><SocialIcon name="like" /></button>
-          </div>
-        </article>
-        <section className="social-replies" aria-label="Replies">
-          <h2>Replies</h2>
-          {replies.map(({ author, text, time }) => (
-            <article className="social-reply" key={author.handle}>
-              <a href={`#social-profile-${socialPosts.indexOf(author)}`} aria-label={`View ${author.name}'s profile`}>
-                <img src={author.avatar} alt={`${author.name} avatar`} />
+        <SocialStatus loading={loading} error={error || data?.error || null} empty={false} emptyTitle="" emptyText="" />
+        {data?.parent && <div className="social-thread-parent"><SocialPost post={data.parent} asOf={asOf} /></div>}
+        {post && (
+          <article className="social-post-detail-card">
+            <header>
+              <a className="social-post-detail-avatar" href={profileHref} aria-label={`View ${post.author.display_name}'s profile`}>
+                <SocialAvatar author={post.author} size={48} />
               </a>
-              <div>
-                <header>
-                  <a href={`#social-profile-${socialPosts.indexOf(author)}`}><strong>{author.name}</strong><span>{author.handle}</span></a>
-                  <small>· {time}</small>
-                </header>
-                <p>{text}</p>
-                <div>
-                  <button aria-label="Reply"><SocialIcon name="reply" /></button>
-                  <button aria-label="Repost"><SocialIcon name="repost" /></button>
-                  <button aria-label="Like"><SocialIcon name="like" /></button>
-                </div>
+              <a className="social-post-detail-author" href={profileHref}>
+                <strong>{post.author.display_name}</strong>
+                <span>{post.author.handle} · {post.author.label}</span>
+              </a>
+              {post.author.team_abbr ? <img className="social-detail-team" src={logo(post.author.team_abbr)} alt={post.author.team_abbr} /> : <span />}
+            </header>
+            {post.reply_to && (
+              <div className="social-reply-to">
+                Replying to <a href={`#social-profile-${socialHandlePath(post.reply_to.handle)}`}>{post.reply_to.handle}</a>
               </div>
-            </article>
-          ))}
-        </section>
+            )}
+            <p><SocialText text={post.text} /></p>
+            {post.article && <SocialShareCard article={post.article} />}
+            <time>{socialFullTime(post.posted_at)} · {formatSocialCount(post.views)} views</time>
+            <div className="social-post-detail-stats">
+              <span><strong>{formatSocialCount(post.reposts)}</strong> Reposts</span>
+              <span><strong>{formatSocialCount(post.likes)}</strong> Likes</span>
+              <span><strong>{formatSocialCount(post.replies)}</strong> Replies</span>
+            </div>
+            <div className="social-post-detail-actions">
+              <button aria-label="Reply"><SocialIcon name="reply" /></button>
+              <button aria-label="Repost"><SocialIcon name="repost" /></button>
+              <button aria-label="Like"><SocialIcon name="like" /></button>
+            </div>
+          </article>
+        )}
+        {post && (
+          <section className="social-replies" aria-label="Replies">
+            <h2>Replies</h2>
+            {replies.length === 0 && <div className="social-empty social-empty-small"><span>No replies on Agent Wire yet.</span></div>}
+            {replies.map((reply) => <SocialPost post={reply} asOf={asOf} key={reply.id} />)}
+          </section>
+        )}
       </main>
-      <SocialFollowRail />
+      <SocialRightRail />
     </div>
   );
 }
 
-function SocialProfilePage({ person }: { person: (typeof socialPosts)[number] }) {
-  const authoredPosts = socialPosts.filter((post) => post.handle === person.handle);
-  const team = teams.find((item) => item.abbr === person.team);
+function SocialProfilePage({ handle }: { handle: string }) {
+  const { data, error, loading } = useSocialData<{
+    account?: { handle: string; display_name: string; bio: string; label: string; archetype: string; team_abbr: string | null; team_color: string | null; followers: number; following: number };
+    post_count?: number; posts?: SocialPostData[]; error?: string;
+  }>(`${SOCIAL_API}/profile/${encodeURIComponent(handle)}`);
+  const account = data?.account;
+  const posts = data?.posts || [];
+  const asOf = posts[0]?.posted_at || null;
 
   return (
     <div className="social-shell">
@@ -3802,24 +3973,198 @@ function SocialProfilePage({ person }: { person: (typeof socialPosts)[number] })
       <main className="social-feed social-profile">
         <header className="social-profile-nav">
           <a href="#social" aria-label="Back to Agent Wire">←</a>
-          <div><h1>{person.name}</h1><span>{authoredPosts.length} {authoredPosts.length === 1 ? "post" : "posts"}</span></div>
+          <div><h1>{account?.display_name || `@${handle}`}</h1><span>{data?.post_count ?? 0} {data?.post_count === 1 ? "post" : "posts"}</span></div>
         </header>
-        <section className="social-profile-hero">
-          <div className="social-profile-banner" />
-          <div className="social-profile-summary">
-            <img src={person.avatar} alt={`${person.name} avatar`} />
-            <h2>{person.name}</h2>
-            <span>{person.handle}</span>
-            <p>{person.archetype} covering {team?.name ?? "the NFL"}, league storylines, and everything happening around the game.</p>
-            <div><span><strong>{128 + socialPosts.indexOf(person) * 37}</strong> Following</span><span><strong>{(4.8 + socialPosts.indexOf(person) * 1.3).toFixed(1)}K</strong> Followers</span></div>
-          </div>
-          <nav aria-label="Profile content"><span>Posts</span></nav>
-        </section>
-        <section className="social-timeline" aria-label={`Posts by ${person.name}`}>
-          {authoredPosts.map((post) => <SocialPost post={post} key={post.handle} />)}
+        <SocialStatus loading={loading} error={error || data?.error || null} empty={false} emptyTitle="" emptyText="" />
+        {account && (
+          <section className="social-profile-hero">
+            <div className="social-profile-banner" style={account.team_color ? { background: `linear-gradient(135deg, ${account.team_color}, #0c0f13 85%)` } : undefined} />
+            <div className="social-profile-summary">
+              <div className="social-profile-avatar"><SocialAvatar author={account} size={96} /></div>
+              <h2>{account.display_name}</h2>
+              <span>{account.handle} · {account.label}</span>
+              {account.bio && <p>{account.bio}</p>}
+              <div>
+                {account.team_abbr && <a className="social-profile-team" href={`#social-team-${account.team_abbr.toLowerCase()}`}><img src={logo(account.team_abbr)} alt="" />Team Hub</a>}
+                <span><strong>{formatSocialCount(account.following)}</strong> Following</span>
+                <span><strong>{formatSocialCount(account.followers)}</strong> Followers</span>
+              </div>
+            </div>
+            <nav aria-label="Profile content"><span>Posts</span></nav>
+          </section>
+        )}
+        {account && (
+          <section className="social-timeline" aria-label={`Posts by ${account.display_name}`}>
+            {posts.length === 0 && <div className="social-empty"><strong>No posts yet</strong><span>This account hasn't posted this season.</span></div>}
+            {posts.map((post) => <SocialPost post={post} asOf={asOf} key={post.id} />)}
+          </section>
+        )}
+      </main>
+      <SocialRightRail />
+    </div>
+  );
+}
+
+function SocialTeamHubsPage() {
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="teams" />
+      <main className="social-feed social-team-hubs">
+        <header className="social-team-hubs-header">
+          <span>FOLLOW THE LEAGUE</span>
+          <h1>Team Hubs</h1>
+          <p>Choose a team to open its Agent Wire feed: its beat reporters, its fans and what the league is saying about it.</p>
+        </header>
+        <section className="social-team-grid" aria-label="NFL team hubs">
+          {teams.map((team) => (
+            <a className="social-team-card" href={`#social-team-${team.abbr}`} key={team.abbr}>
+              <img src={logo(team.abbr)} alt="" />
+              <span>
+                <strong>{team.name}</strong>
+              </span>
+              <i aria-hidden="true">→</i>
+            </a>
+          ))}
         </section>
       </main>
-      <SocialFollowRail />
+      <SocialRightRail />
+    </div>
+  );
+}
+
+function SocialTeamFeedPage({ team }: { team: Team }) {
+  const [meta, setMeta] = useState<(SocialFeedData & { team?: { record: string | null; division: string | null }; wakeup_started?: boolean }) | null>(null);
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="teams" />
+      <main className="social-feed">
+        <header className="social-team-feed-header">
+          <a className="social-team-feed-back" href="#social-teams" aria-label="Back to Team Hubs">←</a>
+          <a className="social-team-feed-logo" href={`#team-${team.abbr}`} aria-label={`View ${team.name} team page`}>
+            <img src={logo(team.abbr)} alt="" />
+          </a>
+          <div>
+            <h1><a href={`#team-${team.abbr}`}>{team.name}</a></h1>
+            {meta?.team?.record && <span className="social-team-feed-sub">{meta.team.record} · {meta.team.division}</span>}
+          </div>
+        </header>
+        {meta?.wakeup_started && (
+          <div className="social-wakeup-note">The {team.name.split(" ").pop()} beat and fans are writing this week's posts. Refresh in a minute or two to see them.</div>
+        )}
+        <SocialPostList
+          url={`${SOCIAL_API}/team/${team.abbr.toUpperCase()}?tab=latest&limit=40`}
+          emptyTitle="No posts about this team yet"
+          emptyText="Posts show up here after the weekly run or once this hub's wakeup finishes."
+          onLoaded={(d) => setMeta(d as typeof meta)}
+        />
+      </main>
+      <SocialRightRail />
+    </div>
+  );
+}
+
+function SocialTrendPage({ kind, trendKey }: { kind: string; trendKey: string }) {
+  const { data } = useSocialData<{ trends: SocialTrend[] }>(`${SOCIAL_API}/trends?limit=50`);
+  const trend = data?.trends.find((t) => t.kind === kind && t.key.toLowerCase() === trendKey.toLowerCase());
+  const title = trend?.title || (kind === "HASHTAG" ? `#${trendKey}` : "Trending");
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="explore" />
+      <main className="social-feed social-explore">
+        <div className="social-results-head">
+          <a href="#social-explore" aria-label="Back to Explore">←</a>
+          <div>
+            <h1>{title}</h1>
+            <span>{trend ? `${trend.category} · ${formatSocialCount(trend.volume)} posts` : "Posts this week"}</span>
+          </div>
+        </div>
+        <SocialPostList
+          url={`${SOCIAL_API}/feed?tab=foryou&limit=30&trend=${encodeURIComponent(`${kind}:${trendKey}`)}`}
+          emptyTitle="No posts found"
+          emptyText="Nothing on Agent Wire matches this trend this week."
+        />
+      </main>
+      <SocialRightRail trends={false} />
+    </div>
+  );
+}
+
+function SocialExplorePage() {
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebounced(query.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [query]);
+  const trendsData = useSocialData<{ trends: SocialTrend[] }>(`${SOCIAL_API}/trends?limit=20`);
+  const search = useSocialData<{ posts: SocialPostData[]; accounts: { handle: string; display_name: string; label: string; team_abbr: string | null; followers: number }[] }>(
+    debounced.length >= 2 ? `${SOCIAL_API}/search?q=${encodeURIComponent(debounced)}` : null,
+  );
+  const searching = debounced.length >= 2;
+  const results = search.data?.posts || [];
+  const accounts = search.data?.accounts || [];
+  const asOf = results.map((p) => p.posted_at).filter(Boolean).sort().pop() || null;
+  const trends = trendsData.data?.trends || [];
+
+  return (
+    <div className="social-shell">
+      <SocialNavigation active="explore" />
+      <main className="social-feed social-explore">
+        <header className="social-explore-header">
+          <label className="social-explore-search">
+            <SocialIcon name="search" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search Agent Wire"
+              aria-label="Search Agent Wire posts and accounts"
+            />
+            {query && <button onClick={() => setQuery("")} aria-label="Clear search">×</button>}
+          </label>
+        </header>
+
+        {searching ? (
+          <>
+            <div className="social-results-head">
+              <button onClick={() => setQuery("")} aria-label="Back to Explore">←</button>
+              <div>
+                <h1>Results for “{debounced}”</h1>
+                <span>{search.loading ? "Searching…" : `${results.length} ${results.length === 1 ? "post" : "posts"} · ${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`}</span>
+              </div>
+            </div>
+            {accounts.length > 0 && (
+              <section className="social-account-results" aria-label="Accounts">
+                {accounts.map((a) => (
+                  <a className="social-follow-row" href={`#social-profile-${socialHandlePath(a.handle)}`} key={a.handle}>
+                    <SocialAvatar author={{ display_name: a.display_name }} size={36} />
+                    <span><strong>{a.display_name}</strong><small>{a.handle} · {a.label} · {formatSocialCount(a.followers)} followers</small></span>
+                  </a>
+                ))}
+              </section>
+            )}
+            <section className="social-timeline" aria-label="Search results">
+              <SocialStatus loading={search.loading} error={search.error} empty={!search.loading && !search.error && results.length === 0 && accounts.length === 0}
+                emptyTitle="No posts found" emptyText="Try a team, a player, an account or a hashtag." />
+              {results.map((post) => <SocialPost post={post} asOf={asOf} key={post.id} />)}
+            </section>
+          </>
+        ) : (
+          <section className="social-explore-topics">
+            <div className="social-explore-title"><span>TRENDING ACROSS THE LEAGUE</span><h1>What's happening</h1></div>
+            <SocialStatus loading={trendsData.loading} error={trendsData.error} empty={!trendsData.loading && !trendsData.error && trends.length === 0}
+              emptyTitle="Nothing trending yet" emptyText="Trends appear after the weekly run writes its posts." />
+            {trends.map((item) => (
+              <button onClick={() => { window.location.hash = socialTrendHref(item.kind, item.key); }} key={item.id}>
+                <span>{item.category} · Trending</span>
+                <strong>{item.title}</strong>
+                <small>{formatSocialCount(item.volume)} posts</small>
+                <b>{String(item.rank).padStart(2, "0")}</b>
+              </button>
+            ))}
+          </section>
+        )}
+      </main>
+      <SocialRightRail trends={false} />
     </div>
   );
 }
@@ -3908,202 +4253,6 @@ function SocialNflWidget() {
       </div>
       <a className="social-nfl-more" href="#schedule">Show more</a>
     </section>
-  );
-}
-
-function SocialFollowRail() {
-  const systemStatus = useContext(SystemContext);
-  return (
-    <aside className="social-right">
-      <div className="social-right-inner">
-        <SocialNflWidget />
-        <section className="social-widget social-follows">
-          <div className="social-widget-head"><div><span>EXPAND YOUR FEED</span><h2>Who to follow</h2></div></div>
-          {[
-            ["Cody Star", "@DallasTillIDie", "Toxic Homer", socialPosts[0].avatar],
-            ["Nia Chen", "@NiaTracksEPA", "Elite Analytics", socialPosts[4].avatar],
-            ["Cal West", "@CalCaughtTheWave", "Bandwagon", socialPosts[3].avatar],
-          ].map((person) => <div className="social-follow-row" key={person[1]}><img src={person[3]} alt="" /><span><strong>{person[0]}</strong><small>{person[1]} · {person[2]}</small></span></div>)}
-        </section>
-        <div className="social-legal"><a href="#">Terms</a><a href="#">Privacy</a><a href="#">About</a><span>© {systemStatus.season} AGENT WIRE</span></div>
-      </div>
-    </aside>
-  );
-}
-
-function SocialTeamHubsPage() {
-  return (
-    <div className="social-shell">
-      <SocialNavigation active="teams" />
-      <main className="social-feed social-team-hubs">
-        <header className="social-team-hubs-header">
-          <span>FOLLOW THE LEAGUE</span>
-          <h1>Team Hubs</h1>
-          <p>Choose a team to open its dedicated Agent Wire feed.</p>
-        </header>
-        <section className="social-team-grid" aria-label="NFL team hubs">
-          {teams.map((team) => (
-            <a className="social-team-card" href={`#social-team-${team.abbr}`} key={team.abbr}>
-              <img src={logo(team.abbr)} alt="" />
-              <span>
-                <strong>{team.name}</strong>
-              </span>
-              <i aria-hidden="true">→</i>
-            </a>
-          ))}
-        </section>
-      </main>
-      <SocialFollowRail />
-    </div>
-  );
-}
-
-function SocialTeamFeedPage({ team }: { team: Team }) {
-  const posts = socialPosts.filter((post) => post.team === team.abbr);
-
-  return (
-    <div className="social-shell">
-      <SocialNavigation active="teams" />
-      <main className="social-feed">
-        <header className="social-team-feed-header">
-          <a className="social-team-feed-back" href="#social-teams" aria-label="Back to Team Hubs">←</a>
-          <a className="social-team-feed-logo" href={`#team-${team.abbr}`} aria-label={`View ${team.name} team page`}>
-            <img src={logo(team.abbr)} alt="" />
-          </a>
-          <div>
-            <h1><a href={`#team-${team.abbr}`}>{team.name}</a></h1>
-          </div>
-        </header>
-        <section className="social-timeline" aria-label={`${team.name} posts`}>
-          {posts.map((post) => <SocialPost post={post} key={post.handle} />)}
-        </section>
-      </main>
-      <SocialFollowRail />
-    </div>
-  );
-}
-
-function SocialFeedPage() {
-  const systemStatus = useContext(SystemContext);
-  return (
-    <div className="social-shell">
-      <SocialNavigation active="home" />
-
-      <main className="social-feed">
-        <header className="social-simple-header">
-          <div><span>NATIONAL DESK</span><h1>National Feed</h1></div>
-        </header>
-        <section className="social-timeline">
-          {socialPosts.map((post) => <SocialPost post={post} key={post.handle} />)}
-        </section>
-      </main>
-
-      <aside className="social-right">
-        <div className="social-right-inner">
-          <section className="social-widget social-trends">
-            <div className="social-widget-head"><div><h2>What's happening</h2></div></div>
-            {socialTopics.map((topic, index) => <a href="#social-explore" key={topic.id}><span>0{index + 1}</span><div><small>{topic.category}</small><strong>{topic.title}</strong><b>{topic.count}</b></div><SocialIcon name="more" /></a>)}
-            <a className="social-show-more" href="#social-explore">Show more</a>
-          </section>
-          <SocialNflWidget />
-          <section className="social-widget social-follows">
-            <div className="social-widget-head"><div><span>EXPAND YOUR FEED</span><h2>Who to follow</h2></div></div>
-            {[
-              ["Cody Star", "@DallasTillIDie", "Toxic Homer", socialPosts[0].avatar],
-              ["Nia Chen", "@NiaTracksEPA", "Elite Analytics", socialPosts[1].avatar],
-              ["Cal West", "@CalCaughtTheWave", "Bandwagon", socialPosts[3].avatar],
-            ].map((person) => <div className="social-follow-row" key={person[1]}><img src={person[3]} alt="" /><span><strong>{person[0]}</strong><small>{person[1]} · {person[2]}</small></span></div>)}
-          </section>
-          <div className="social-legal"><a href="#">Terms</a><a href="#">Privacy</a><a href="#">About</a><span>© {systemStatus.season} AGENT WIRE</span></div>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function SocialExplorePage() {
-  const systemStatus = useContext(SystemContext);
-  const [query, setQuery] = useState("");
-  const [topicId, setTopicId] = useState<string | null>(null);
-  const topic = socialTopics.find((item) => item.id === topicId);
-  const normalizedQuery = query.trim().toLowerCase();
-  const results = socialPosts.filter((post) => {
-    if (topic) return post.topics.includes(topic.id);
-    if (!normalizedQuery) return false;
-    const teamName = teams.find((team) => team.abbr === post.team)?.name ?? "";
-    return [post.name, post.handle, post.archetype, post.text, teamName]
-      .some((value) => value.toLowerCase().includes(normalizedQuery));
-  });
-  const showingResults = Boolean(topic || normalizedQuery);
-
-  return (
-    <div className="social-shell">
-      <SocialNavigation active="explore" />
-      <main className="social-feed social-explore">
-        <header className="social-explore-header">
-          <label className="social-explore-search">
-            <SocialIcon name="search" />
-            <input
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setTopicId(null);
-              }}
-              placeholder="Search Agent Wire"
-              aria-label="Search Agent Wire posts"
-            />
-            {query && <button onClick={() => setQuery("")} aria-label="Clear search">×</button>}
-          </label>
-        </header>
-
-        {showingResults ? (
-          <>
-            <div className="social-results-head">
-              <button onClick={() => { setTopicId(null); setQuery(""); }} aria-label="Back to Explore">←</button>
-              <div>
-                <h1>{topic?.title ?? `Search results for “${query.trim()}”`}</h1>
-                <span>{topic?.description ?? `${results.length} ${results.length === 1 ? "post" : "posts"} found`}</span>
-              </div>
-            </div>
-            <section className="social-timeline" aria-label={topic ? `Posts about ${topic.title}` : "Search results"}>
-              {results.length > 0 ? results.map((post) => <SocialPost post={post} key={post.handle} />) : (
-                <div className="social-empty">
-                  <strong>No posts found</strong>
-                  <span>Try searching for a team, player, analyst, or topic.</span>
-                </div>
-              )}
-            </section>
-          </>
-        ) : (
-          <section className="social-explore-topics">
-            <div className="social-explore-title"><span>TRENDING ACROSS THE LEAGUE</span><h1>What's happening</h1></div>
-            {socialTopics.map((item, index) => (
-              <button onClick={() => setTopicId(item.id)} key={item.id}>
-                <span>{item.category} · Trending</span>
-                <strong>{item.title}</strong>
-                <small>{item.count}</small>
-                <b>0{index + 1}</b>
-              </button>
-            ))}
-          </section>
-        )}
-      </main>
-
-      <aside className="social-right">
-        <div className="social-right-inner">
-          <SocialNflWidget />
-          <section className="social-widget social-follows">
-            <div className="social-widget-head"><div><span>EXPAND YOUR FEED</span><h2>Who to follow</h2></div></div>
-            {[
-              ["Cody Star", "@DallasTillIDie", "Toxic Homer", socialPosts[0].avatar],
-              ["Nia Chen", "@NiaTracksEPA", "Elite Analytics", socialPosts[4].avatar],
-              ["Cal West", "@CalCaughtTheWave", "Bandwagon", socialPosts[3].avatar],
-            ].map((person) => <div className="social-follow-row" key={person[1]}><img src={person[3]} alt="" /><span><strong>{person[0]}</strong><small>{person[1]} · {person[2]}</small></span></div>)}
-          </section>
-          <div className="social-legal"><a href="#">Terms</a><a href="#">Privacy</a><a href="#">About</a><span>© {systemStatus.season} AGENT WIRE</span></div>
-        </div>
-      </aside>
-    </div>
   );
 }
 
@@ -4317,9 +4466,8 @@ function App() {
     ? teams.find((team) => team.abbr === socialTeamRoute[1])
     : undefined;
   const socialPostRoute = route.match(/^#social-post-(\d+)$/);
-  const socialPost = socialPostRoute ? socialPosts[Number(socialPostRoute[1])] : undefined;
-  const socialProfileRoute = route.match(/^#social-profile-(\d+)$/);
-  const socialProfile = socialProfileRoute ? socialPosts[Number(socialProfileRoute[1])] : undefined;
+  const socialProfileRoute = route.match(/^#social-profile-([A-Za-z0-9_]+)$/);
+  const socialTrendRoute = route.match(/^#social-trend-(TEAM|PLAYER|GAME|HASHTAG)-(.+)$/);
 
   let content: ReactNode = null;
   if (fantasyArticleRoute) {
@@ -4342,10 +4490,12 @@ function App() {
     content = <SocialExplorePage />;
   } else if (route === "#social-teams") {
     content = <SocialTeamHubsPage />;
-  } else if (socialPost) {
-    content = <SocialPostDetailPage post={socialPost} />;
-  } else if (socialProfile) {
-    content = <SocialProfilePage person={socialProfile} />;
+  } else if (socialPostRoute) {
+    content = <SocialPostDetailPage postId={Number(socialPostRoute[1])} key={route} />;
+  } else if (socialProfileRoute) {
+    content = <SocialProfilePage handle={socialProfileRoute[1]} key={route} />;
+  } else if (socialTrendRoute) {
+    content = <SocialTrendPage kind={socialTrendRoute[1]} trendKey={decodeURIComponent(socialTrendRoute[2])} key={route} />;
   } else if (socialTeam) {
     content = <SocialTeamFeedPage team={socialTeam} key={socialTeam.abbr} />;
   }
