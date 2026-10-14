@@ -215,8 +215,15 @@ def restart_stream():
         except Abort:
             ready = False                    # no window yet
         if ready:
-            ensure_window_size()             # a wrong size that can't be fixed stops the run
-            f, s = look()
+            try:
+                ensure_window_size()         # a wrong size that can't be fixed stops the run
+                f, s = look()
+            except Abort as e:
+                # the window is blank gray for a while as the stream reconnects (Oct 14)
+                if "blank" not in str(e) or time.time() > end:
+                    raise
+                log("  still connecting (blank window); waiting")
+                continue
             if s != "UNKNOWN":
                 log(f"Stream is back on {s}")
                 return f, s
@@ -2109,7 +2116,7 @@ def main():
                     help="roster and season-schedule are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
-    ap.add_argument("--resume", metavar="RUN", help="--only roster: continue a stopped run in captures/RUN")
+    ap.add_argument("--resume", metavar="RUN", help="--only roster / games: continue a stopped run in captures/RUN")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
     ap.add_argument("--all-rows", action="store_true", help="don't stop stats lists at all-zero rows")
     ap.add_argument("--foreground", action="store_true", help="bring chiaki-ng to front and send global keys")
