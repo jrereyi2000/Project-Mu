@@ -67,6 +67,7 @@ Project Mu/
 │   ├── matchup_edges.py       #   Matchup Edge / Trench Edge math for writer tools (computed live, not stored)
 │   ├── fantasy_adp_engine.py  #   Preseason value board (draft_score) + runs the simulated drafts → fantasy_projections week 1 adp_rank
 │   ├── fantasy_league_sim.py  #   100 simulated 12-team PPR leagues: strategy drafts → ADP; weekly rostered/start %, standings, 6-team playoffs → fantasy_sim_*
+│   ├── records_engine.py      #   Record book: checks a season against franchise records and the NFL top 10s (§2.9)
 │   └── fantasy_projection_engine.py # Weekly PPR projections, matchup stars, pos/ROS ranks → fantasy_projections (+ --backtest)
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
@@ -99,7 +100,7 @@ Project Mu/
 │   │                          #   2026_10_19_roundtable_panel_agent.sql, 2026_10_20_agent_memory.sql,
 │   │                          #   2026_10_21_fantasy_league_sim.sql, 2026_10_22_agent_wire_social.sql,
 │   │                          #   2026_10_23_capture_loader.sql, 2026_10_24_player_id_keys.py (python3 -m db.migrations.2026_10_24_player_id_keys, after a roster load),
-│   │                          #   2026_10_25_former_players.sql (apply SQL ones via
+│   │                          #   2026_10_25_former_players.sql, 2026_10_26_nfl_records.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -249,6 +250,15 @@ Computed live by `get_matchup_edges`; nothing is stored. For team A's offense ag
 - The largest positive edge is A's best edge and the most negative is its biggest vulnerability. Defense uses Madden ratings, not yards allowed or takeaways (see the box-score caveat in 2.6).
 - **Season touch share** (in `get_player_season_stats`, RB/FB/WR/TE only): the player's share of the team's season carries + receptions and scrimmage yards, from `season_stats`. Receptions stand in for targets, which aren't recorded.
 
+### 2.9 Record Book (`engines/records_engine.py`, `db/migrations/2026_10_26_nfl_records.sql`)
+JR, Oct 14, 2026: a record book the league can be measured against. Not on a screen yet.
+- **What's in it:** 17 categories (`record_categories`). Single season: passing yards and TDs, rushing yards and TDs, receptions, receiving yards and TDs, rushing + receiving TDs (no return TDs), team wins, team points scored and fewest points allowed (seasons of 16+ games). Single game: passing yards and TDs, rushing yards, receiving yards, receptions, rushing + receiving TDs. Offense and team only until defensive stats are loaded; no career records (the database has no careers before 2035).
+- **Seed (real NFL history through 2025, from Pro-Football-Reference, pulled Oct 14, 2026):** every franchise's single-season record holders in all 11 season categories (400 rows, ties included; franchise histories follow Pro-Football-Reference, so the Rams include St. Louis and Cleveland, the Titans the Houston Oilers, the Raiders Oakland and Los Angeles, the Cardinals Chicago and St. Louis, and the Ravens start in 1996), and the NFL's all-time top 10 in the 14 player categories (160 rows). Single-game records exist only as NFL top 10s: Pro-Football-Reference has no franchise single-game lists. Known limits: Pro-Football-Reference's rushing + receiving TD single-game list has a data error at the top and leaves out Ernie Nevers (1929), so that list was set by hand from the NFL record book (6: Nevers, Dub Jones, Alvin Kamara); 38 games are tied at 6 passing TDs, of which the six most recent are kept; and for the oldest franchises the source pages were cut off before their earliest seasons, which were checked by hand only where they could hold a record (the 1963 Giants' 448 points, the 1961 Oilers' 513).
+- **Updating:** `python3 -m engines.records_engine --season 2035` reports the season's records; `--apply` stores them. Season values come from `season_stats` (players) and completed regular-season games (teams); single games from `player_stats` (regular season, names matched through that season's roster). A season is measured against everything before it and against its own other entries: only a team's best of the season can hold its franchise record, and top-10 ranks count the season's other entries. Fewest points allowed waits for a full 17-game season. `--apply` deletes and rewrites that season's `LEAGUE` rows, so it can run every week. Old holders are never deleted: the views pick the best value, so the history of who held each record stays.
+- **League-wide records** are computed (JR): the best franchise record across the 32 teams (`league_records`; single-game categories, which have no franchise records, take the top of the NFL list).
+- **2035 check (Oct 14, through Week 17, on a copy of the live data):** the Panthers' 654 points broke the 2013 Broncos' 606 and their 16-0 tied the 2007 Patriots' 16 wins with a game left; George Crawford's 67 passing TDs broke Peyton Manning's 55 and his 7 in Week 6 tied the single-game record; Trey'Mane Davis's 27 receiving TDs broke Randy Moss's 23; 6 more top-10 seasons or games and 21 franchise records (CAR 8, CHI 4, PIT 4, CLE 2, HOU 2, DET 1).
+- **Tests:** `tests/test_records_engine.py` (franchise and NFL records, ties, the season's best only, top-10 ranks with same-season entries, the full-season rule, single games, the report, the seed covering every team and category).
+
 ---
 
 ## 3. Database Schema & Architecture (PostgreSQL)
@@ -332,6 +342,7 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 - **`news_feed`**:
   - `id`, `season`, `week`, `team_id`, `content_type` ('ARTICLE' | 'TWEET'), `persona`, `article_type`, `slot`, `headline`, `excerpt`, `content`, `created_at`.
   - Agent Wire post columns (`db/migrations/2026_10_22_agent_wire_social.sql`; filled by the social desk, `docs/SOCIAL_MATRIX.md`): `agent_id` (author), `post_kind` (REACTION, PERFORMANCE, BAD_GAME, COMPARISON, TEAM_STORY, PLAYER, BEAT, STANDINGS, SHARE, REPLY, PREVIEW, MEME), `posted_at` (simulated in-world time; `created_at` stays the real generation time), `reply_to_id` (FK `news_feed` ON DELETE CASCADE), `linked_article_id` (FK `news_feed` ON DELETE SET NULL; the article a SHARE links), `subject_game_id`, `subject_player_id`, `likes`, `reposts`, `reply_count`, `views`, `hashtags` (text[]).
+- **Record book** (`db/migrations/2026_10_26_nfl_records.sql`, §2.9): `record_categories` (`category` PK, `label`, `scope` SEASON / GAME, `subject` PLAYER / TEAM, `better` HIGH / LOW, `sort_order`); `franchise_records` (`team_id`, `category`, `value`, `holder` (player name, or "2007 New England Patriots"), `player_id`, `season`, `source` NFL / LEAGUE; unique `(team_id, category, holder, season)`): every holder a franchise record has had; `league_record_entries` (`category`, `value`, `holder`, `team_id` (the franchise under its current name), `player_id`, `season`, `game_date` (NFL single games), `game_id` (league single games), `source`): entries on the NFL's all-time top-10 lists. Views: `franchise_records_current` (current holders, ties included), `league_top10` (`rank` computed, ties share it) and `league_records` (the best franchise record across teams; single-game categories from the top of `league_top10`).
 - **`social_trends`** (`docs/SOCIAL_MATRIX.md` §4): `id`, `season`, `week`, `rank`, `kind` (TEAM / PLAYER / GAME / HASHTAG), `key`, `title`, `category`, `description`, `volume` (simulated post count), `score`; unique `(season, week, kind, key)`. Empty until the social desk is built.
 - **`article_teams`**:
   - `id` (PK, int), `article_id` (FK to `news_feed(id)` ON DELETE CASCADE), `team_id` (FK to `teams(id)` ON DELETE CASCADE), `mention_type` (varchar: 'PRIMARY' | 'FEATURED' | 'MENTIONED'), `mention_count` (int), `created_at` (timestamp), `UNIQUE(article_id, team_id)`.

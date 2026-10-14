@@ -552,6 +552,79 @@ CREATE TABLE IF NOT EXISTS social_trends (
 );
 CREATE INDEX IF NOT EXISTS idx_social_trends_week ON social_trends (season, week, rank);
 
+-- NFL record book (db/migrations/2026_10_26_nfl_records.sql holds the categories and the real-NFL seed; PROJECT_SPEC §2.9).
+CREATE TABLE IF NOT EXISTS record_categories (
+    category VARCHAR(40) PRIMARY KEY,
+    label TEXT NOT NULL,
+    scope VARCHAR(6) NOT NULL CHECK (scope IN ('SEASON', 'GAME')),
+    subject VARCHAR(6) NOT NULL CHECK (subject IN ('PLAYER', 'TEAM')),
+    better VARCHAR(4) NOT NULL DEFAULT 'HIGH' CHECK (better IN ('HIGH', 'LOW')),
+    sort_order INT NOT NULL
+);
+
+-- Every franchise record holder there has been, real (source 'NFL', through 2025) or set in this league ('LEAGUE').
+CREATE TABLE IF NOT EXISTS franchise_records (
+    id SERIAL PRIMARY KEY,
+    team_id INT NOT NULL REFERENCES teams(id),
+    category VARCHAR(40) NOT NULL REFERENCES record_categories(category),
+    value NUMERIC NOT NULL,
+    holder TEXT NOT NULL,                         -- player name, or "2007 New England Patriots" for team records
+    player_id INT REFERENCES players(id) ON DELETE SET NULL,
+    season INT NOT NULL,
+    source VARCHAR(6) NOT NULL CHECK (source IN ('NFL', 'LEAGUE')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (team_id, category, holder, season)
+);
+CREATE INDEX IF NOT EXISTS idx_franchise_records_team ON franchise_records (team_id, category);
+
+-- Entries on the NFL's all-time top-10 lists (players), real or set in this league; ranks are computed (league_top10).
+CREATE TABLE IF NOT EXISTS league_record_entries (
+    id SERIAL PRIMARY KEY,
+    category VARCHAR(40) NOT NULL REFERENCES record_categories(category),
+    value NUMERIC NOT NULL,
+    holder TEXT NOT NULL,
+    team_id INT REFERENCES teams(id),             -- the franchise, under its current name
+    player_id INT REFERENCES players(id) ON DELETE SET NULL,
+    season INT NOT NULL,
+    game_date DATE,                               -- single-game records (real NFL history)
+    game_id INT REFERENCES games(id) ON DELETE CASCADE,   -- single-game records set in this league
+    source VARCHAR(6) NOT NULL CHECK (source IN ('NFL', 'LEAGUE')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_league_record_entries
+    ON league_record_entries (category, holder, season, COALESCE(game_date, DATE '1900-01-01'), COALESCE(game_id, 0));
+
+-- The current holder(s) of each franchise record (ties included).
+CREATE OR REPLACE VIEW franchise_records_current AS
+SELECT fr.*, c.label, c.scope, c.subject, c.better
+FROM franchise_records fr
+JOIN record_categories c ON c.category = fr.category
+WHERE fr.value = (SELECT CASE WHEN c.better = 'LOW' THEN MIN(x.value) ELSE MAX(x.value) END
+                  FROM franchise_records x WHERE x.team_id = fr.team_id AND x.category = fr.category);
+
+-- The NFL's all-time top 10 per category (ties included).
+CREATE OR REPLACE VIEW league_top10 AS
+SELECT * FROM (
+    SELECT e.*, c.label, c.scope, c.better,
+           RANK() OVER (PARTITION BY e.category
+                        ORDER BY CASE WHEN c.better = 'LOW' THEN e.value ELSE -e.value END) AS rank
+    FROM league_record_entries e JOIN record_categories c ON c.category = e.category
+) ranked WHERE rank <= 10;
+
+-- League-wide records: the best franchise record across teams (season categories), or the top of the all-time
+-- list (single-game categories, which have no franchise records).
+CREATE OR REPLACE VIEW league_records AS
+SELECT fr.category, fr.label, fr.scope, fr.subject, fr.value, fr.holder, fr.team_id, fr.player_id, fr.season,
+       NULL::date AS game_date, NULL::int AS game_id, fr.source
+FROM franchise_records_current fr
+WHERE fr.value = (SELECT CASE WHEN fr.better = 'LOW' THEN MIN(x.value) ELSE MAX(x.value) END
+                  FROM franchise_records_current x WHERE x.category = fr.category)
+UNION ALL
+SELECT t.category, t.label, t.scope, 'PLAYER', t.value, t.holder, t.team_id, t.player_id, t.season,
+       t.game_date, t.game_id, t.source
+FROM league_top10 t
+WHERE t.rank = 1 AND t.scope = 'GAME';
+
 -- Weekly Power Rankings parsed from the POWER_RANKINGS article (newsroom/power_rankings.py)
 CREATE TABLE IF NOT EXISTS power_rankings (
     id SERIAL PRIMARY KEY,
