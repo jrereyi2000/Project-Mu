@@ -1,6 +1,10 @@
 """Console-free checks of madden_capture.py (key map, week labels)."""
+import csv
+import os
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 if sys.platform != "darwin":
     raise unittest.SkipTest("madden_capture.py needs macOS (Quartz, Vision)")
@@ -146,6 +150,52 @@ class CardParseTest(unittest.TestCase):
         for ht, flag in (("6']\"", "bad_height"), ("5'71\"", "bad_height"), ("6'7\"", "suspect_height")):
             self.assertIn(flag, mc.card_flags(dict(base, height=ht)), ht)
         self.assertEqual(mc.card_flags(dict(base, height="6'7\"", weight=320)), [])
+
+
+class RosterRecoveryTest(unittest.TestCase):
+    """A frozen stream mid-team: restart, redo that team, nothing partial in cards.csv."""
+
+    def test_frozen_stream_restarts_and_redoes_the_team(self):
+        calls = {"capture": 0, "restart": 0}
+
+        def capture(out, idx, team, rows):
+            calls["capture"] += 1
+            os.makedirs(os.path.join(out, "roster", f"{idx:02d}_{team.lower()}"), exist_ok=True)
+            rows.writerow([team, 0, "Half", "Done"] + [""] * 11)
+            if calls["capture"] == 1:
+                raise mc.Abort("the card stopped changing")
+            rows.writerow([team, 1, "Second", "Row"] + [""] * 11)
+            return 2
+
+        def restart():
+            calls["restart"] += 1
+            return None, "ROSTER_LIST"
+
+        with tempfile.TemporaryDirectory() as out, \
+                mock.patch.object(mc, "capture_team_roster", side_effect=capture), \
+                mock.patch.object(mc, "stream_frozen", return_value=True), \
+                mock.patch.object(mc, "restart_stream", side_effect=restart), \
+                mock.patch.object(mc, "open_roster", return_value=None), \
+                mock.patch.object(mc, "roster_team", return_value="PANTHERS"), \
+                mock.patch.object(mc, "log"):
+            mc.run_roster(out, max_teams=1)
+            rows = list(csv.reader(open(os.path.join(out, "roster", "cards.csv"))))[1:]
+            done = open(os.path.join(out, "roster", "done.txt")).read().split()
+        self.assertEqual(calls, {"capture": 2, "restart": 1})
+        self.assertEqual([r[2] for r in rows], ["Half", "Second"])   # only the second attempt's rows
+        self.assertEqual(done, ["1", "PANTHERS"])
+
+    def test_not_frozen_means_stop(self):
+        with tempfile.TemporaryDirectory() as out, \
+                mock.patch.object(mc, "capture_team_roster", side_effect=mc.Abort("real problem")), \
+                mock.patch.object(mc, "stream_frozen", return_value=False), \
+                mock.patch.object(mc, "restart_stream") as restart, \
+                mock.patch.object(mc, "open_roster", return_value=None), \
+                mock.patch.object(mc, "roster_team", return_value="PANTHERS"), \
+                mock.patch.object(mc, "log"):
+            with self.assertRaises(mc.Abort):
+                mc.run_roster(out, max_teams=1)
+            restart.assert_not_called()
 
 
 if __name__ == "__main__":

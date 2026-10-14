@@ -83,6 +83,91 @@ def activate_app():
     time.sleep(0.4)
 
 
+# ------------------------------------------------------------- stream ----
+# chiaki-ng's stream froze several times on Oct 13 (Wi-Fi packet loss): the window keeps the
+# last picture and no key reaches the PS5. Identical frames don't prove it (the Manage Roster
+# hub is static even when live), so the test is a harmless press that must change the screen.
+# JR asked (Oct 13) for the capture to restart the stream itself before stopping.
+STREAM_RESTARTS = 3          # per run
+
+
+def _env(key, default):
+    v = os.environ.get(key)
+    if v:
+        return v
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(env_path):
+        for line in open(env_path):
+            if line.strip().startswith(key + "="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return default
+
+
+CHIAKI_HOST = _env("CHIAKI_HOST", "PS5-263")             # chiaki-ng console nickname
+CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
+
+
+def stream_frozen():
+    """Press a harmless key and see whether the screen reacts. Roster list: Down (or Up, at
+    the end of the list) must change the card. Hub: R1 then L1 must switch the tab and come
+    back. Other screens aren't probed (False)."""
+    from PIL import ImageChops
+    f, s = look()
+
+    def changed(before, box=None):
+        after = grab()
+        a, b = cg_to_pil(before), cg_to_pil(after)
+        if box:
+            W, H = a.size
+            a, b = (im.crop((int(W * box[0]), int(H * box[1]), int(W * box[2]), int(H * box[3]))) for im in (a, b))
+        return ImageChops.difference(a, b).getbbox() is not None
+
+    if s == "ROSTER_LIST":
+        for key in ("down", "up"):
+            before = grab()
+            press(key, hold=0.1, wait=1.2)
+            if changed(before, CARD_BOX):
+                return False
+        return True
+    if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER"):
+        before = grab()
+        press("r1", wait=1.5)
+        moved = changed(before)
+        press("l1", wait=1.5)
+        return not moved
+    return False
+
+
+def restart_stream():
+    """Force-quit chiaki-ng (what JR does to unfreeze it; a polite quit then relaunch left the
+    console ignoring input on Oct 13), start the stream again and wait for a franchise screen.
+    Presses nothing: if no known screen shows within two minutes, stop."""
+    global WIN_ID, PID
+    log("Restarting the chiaki-ng stream (force quit + relaunch)")
+    subprocess.run(["pkill", "-9", "-f", "chiaki-ng.app/Contents/MacOS/chiaki"])
+    for _ in range(20):
+        if subprocess.run(["pgrep", "-f", "chiaki-ng.app/Contents/MacOS/chiaki"], capture_output=True).returncode:
+            break
+        time.sleep(0.5)
+    time.sleep(3)
+    subprocess.run(["open", "-a", APP_NAME, "--args", "stream", CHIAKI_HOST, CHIAKI_HOST_IP])
+    end = time.time() + 120
+    while True:
+        time.sleep(2)
+        try:
+            WIN_ID, PID = find_window()
+            if window_info(WIN_ID).get("kCGWindowBounds", {}).get("Height", 0) > 400:
+                f, s = look()
+                if s != "UNKNOWN":
+                    log(f"Stream is back on {s}")
+                    return f, s
+        except Abort:
+            pass
+        if time.time() > end:
+            raise Abort("chiaki-ng didn't come back on a franchise screen within two minutes of "
+                        "restarting; check the chiaki-ng window")
+
+
 def _post(code, down):
     ev = Quartz.CGEventCreateKeyboardEvent(None, code, down)
     if FOREGROUND:
@@ -1460,11 +1545,19 @@ def capture_team_roster(out, index, team, writer):
     return row
 
 
+class _Rows(list):
+    """Collects one team's cards.csv rows until the team is complete."""
+    def writerow(self, row):
+        self.append(row)
+
+
 def run_roster(out, max_teams=32, resume=False):
     """All teams, starting at the one the list opens on (the user's team) and following the
-    team dropdown until it comes back round. roster/done.txt lists finished teams; with
-    resume=True, a stopped run continues in the same folder: finished teams are skipped and
-    the team that was cut short is captured again."""
+    team dropdown until it comes back round. A team's rows reach cards.csv only once the team
+    is complete, and roster/done.txt lists finished teams. If a team or a team switch fails
+    while the stream is frozen, the stream is restarted (STREAM_RESTARTS per run) and the
+    team captured again from the top. resume=True continues a stopped run in its folder:
+    finished teams are skipped."""
     import csv, shutil
     log("== Rosters ==")
     rdir = os.path.join(out, "roster")
@@ -1478,40 +1571,67 @@ def run_roster(out, max_teams=32, resume=False):
                 done[t] = int(idx)
         kept = [r for r in csv.reader(open(cards_path))][1:] if os.path.exists(cards_path) else []
         kept = [r for r in kept if norm(r[0]) in done]
-        for d in glob.glob(os.path.join(rdir, "[0-9]*_*")):  # the cut-short team's folder
-            if norm(os.path.basename(d).split("_", 1)[1]) not in done:
-                shutil.rmtree(d)
         log(f"Resuming {out}: {len(done)} teams already done")
     else:
         kept = []
         open(done_path, "w").close()
-    f = open_roster()
-    first = roster_team(f)
+
+    def clear_partial():
+        for d in glob.glob(os.path.join(rdir, "[0-9]*_*")):  # folders of teams cut short
+            if norm(os.path.basename(d).split("_", 1)[1]) not in done:
+                shutil.rmtree(d)
+
+    restarts = [0]
+
+    def recover(e):
+        """Restart the stream if it is frozen; otherwise (or out of restarts) re-raise."""
+        if restarts[0] >= STREAM_RESTARTS or not stream_frozen():
+            raise e
+        restarts[0] += 1
+        log(f"  The stream is frozen ({e}); restart {restarts[0]} of {STREAM_RESTARTS}")
+        restart_stream()
+        clear_partial()
+        return roster_team(open_roster())
+
+    clear_partial()
+    first = roster_team(open_roster())
     if not first:
         raise Abort("Can't read the roster team chip")
-    seen, total = [], len(kept)
+    captured, total = 0, len(kept)
     with open(cards_path, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["team", "row"] + CARD_FIELDS + ["flags", "card_png"])
         w.writerows(kept)
-        team = first
+        team, visited = first, 0
         while True:
-            seen.append(norm(team))
             if norm(team) in done:
                 log(f"Team: {team} (already captured)")
             else:
                 log(f"Team: {team}")
                 idx = max(list(done.values()) + [0]) + 1
-                total += capture_team_roster(out, idx, team, w)
+                rows = _Rows()
+                try:
+                    n = capture_team_roster(out, idx, team, rows)
+                except Abort as e:
+                    team = recover(e)
+                    continue                            # same team again, from the top
+                w.writerows(rows)
                 fh.flush()
+                total += n
+                captured += 1
                 done[norm(team)] = idx
                 with open(done_path, "a") as dh:
                     dh.write(f"{idx} {norm(team)}\n")
-            if len(seen) >= max_teams:
+            visited += 1
+            if captured >= max_teams or len(done) >= 32:
                 break
-            team = next_roster_team(os.path.join(out, "team_debug"), team)
-            if norm(team) in seen:
-                break
+            try:
+                team = next_roster_team(os.path.join(out, "team_debug"), team)
+            except Abort as e:
+                team = recover(e)
+                continue
+            if norm(team) == norm(first) and visited > 1:
+                break                                   # back round to the first team
     log(f"Captured {len(done)} teams, {total} players")
     if max_teams >= 32 and len(done) != 32:
         raise Abort(f"Expected 32 teams, captured {len(done)}: {sorted(done)}")
