@@ -28,6 +28,9 @@ Project Mu/
 │                              #   `--only games [--week ...] [--games N]`: every game of a week (default the previous one): League Schedule → guarded Cross → box score
 │                              #   (box_top.png, box_bottom.png: 17 team-stat rows) → R1 player stats (TEAM column, 10 categories via R2, 6-row page steps; Kicking/Defense
 │                              #   captured at both edges, end judged on the named half) → Back → next game; games/<NN>_<away>_at_<home>/{box_*.png,stats/}, games/games.txt. ~7 min a game (wide tables crossed by holding Left/Right; lists stop at all-zero pages), so it's only for recovering a skipped week
+│                              #   Every mode survives a frozen chiaki-ng stream: on a failure, a harmless test press (Down/Up on lists, Right/Left on tiles, R1/L1 on the hub) that doesn't
+│                              #   change the picture means frozen → force-quit + relaunch (8 restarts per run, shared by all modes) and the mode is redone: stats/team/schedule/season-schedule
+│                              #   from scratch (their folders cleared), games resuming per game (games/<NN>/DONE), rosters resuming per team
 │                              #   `--only season-schedule`: League Schedule weeks 1-18 via the week dropdown (~3 pages a week) → season_schedule/
 │                              #   `--only roster`: Manage Roster > Roster for all 32 teams (team via the held-L2 dropdown, starting at the user's team);
 │                              #   per row the player card is read on the Mac (Apple Vision on an in-process window grab, settled = two agreeing reads,

@@ -24,7 +24,7 @@ Usage
 Key map (chiaki-ng "Keyboard as controller"):
   Cross=S  Circle=D  L1=2  R1=3  L2=1  R2=4  D-pad=arrow keys  Escape=Esc
 """
-import argparse, datetime, glob, hashlib, os, re, subprocess, sys, time
+import argparse, datetime, glob, hashlib, os, re, shutil, subprocess, sys, time
 
 import Quartz
 import Vision
@@ -107,35 +107,62 @@ CHIAKI_HOST = _env("CHIAKI_HOST", "PS5-263")             # chiaki-ng console nic
 CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
 
 
+LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST")
+TILE_SCREENS = ("SCHED_TILES", "STATS_TILES")
+HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER")
+
+
 def stream_frozen():
-    """Press a harmless key and see whether the screen reacts. Roster list: Down (or Up, at
-    the end of the list) must change the card. Hub: R1 then L1 must switch the tab and come
-    back. Other screens aren't probed (False)."""
+    """Press a harmless key and see whether the picture reacts (a frozen stream gives
+    pixel-identical frames; Madden's menus are static too, so only a press tells them apart).
+    Lists: Down, or Up at the end of a list. Tile screens: Right, or Left. Hub: R1 then L1
+    (switches the tab and comes back). Other screens (loading, quit prompt) aren't probed
+    and count as not frozen. The press moves a highlight; callers redo their step anyway."""
     from PIL import ImageChops
     f, s = look()
 
-    def changed(before, box=None):
-        after = grab()
-        a, b = cg_to_pil(before), cg_to_pil(after)
-        if box:
-            W, H = a.size
-            a, b = (im.crop((int(W * box[0]), int(H * box[1]), int(W * box[2]), int(H * box[3]))) for im in (a, b))
-        return ImageChops.difference(a, b).getbbox() is not None
+    def changed(before):
+        return ImageChops.difference(cg_to_pil(before), cg_to_pil(grab())).getbbox() is not None
 
-    if s == "ROSTER_LIST":
-        for key in ("down", "up"):
-            before = grab()
-            press(key, hold=0.1, wait=1.2)
-            if changed(before, CARD_BOX):
-                return False
-        return True
-    if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER"):
+    keys = (("down", "up") if s in LIST_SCREENS else ("right", "left") if s in TILE_SCREENS else ())
+    for key in keys:
+        before = grab()
+        press(key, hold=0.12, wait=1.2)
+        if changed(before):
+            return False
+    if s in HUB_SCREENS:
         before = grab()
         press("r1", wait=1.5)
         moved = changed(before)
         press("l1", wait=1.5)
         return not moved
-    return False
+    return bool(keys)
+
+
+RESTARTS = [0]               # stream restarts used in this run (all modes share STREAM_RESTARTS)
+
+
+def recover_stream(e):
+    """After a failure: if the stream is frozen and restarts are left, restart it (the caller
+    then redoes its step); otherwise re-raise the failure."""
+    if RESTARTS[0] >= STREAM_RESTARTS or not stream_frozen():
+        raise e
+    RESTARTS[0] += 1
+    log(f"  The stream is frozen ({e}); restart {RESTARTS[0]} of {STREAM_RESTARTS}")
+    restart_stream()
+
+
+def run_mode(name, fn, reset=None):
+    """Run one capture mode; when it fails on a frozen stream, restart the stream, call
+    reset() (clears the mode's partial output) and run the mode again."""
+    while True:
+        try:
+            return fn()
+        except Abort as e:
+            recover_stream(e)
+            log(f"Redoing {name} after the stream restart")
+            if reset:
+                reset()
 
 
 WINDOW_PX = (3024, 1888)      # chiaki-ng window in pixels (1512x944 points, Retina); every
@@ -1352,11 +1379,16 @@ def run_games(out, week=None, all_rows=False, max_games=None):
         log(f"Game {len(done) + 1}: {matchup} {result}")
         away, home = [norm(x) for x in matchup.split("@")]
         gdir = os.path.join(out, "games", f"{len(done) + 1:02d}_{away.lower()}_at_{home.lower()}")
-        cross_into("SCHED_LIST", ["BOX_SCORE"], timeout=10)
-        cats = capture_game(gdir, all_rows)
-        log(f"  {len(cats)} categories")
-        press("circle", wait=2.0)
-        f, _ = wait_for(["SCHED_LIST"], timeout=15)
+        if os.path.exists(os.path.join(gdir, "DONE")):
+            log("  already captured (redo after a stream restart)")
+        else:
+            shutil.rmtree(gdir, ignore_errors=True)      # a game cut short by a frozen stream
+            cross_into("SCHED_LIST", ["BOX_SCORE"], timeout=10)
+            cats = capture_game(gdir, all_rows)
+            open(os.path.join(gdir, "DONE"), "w").write(",".join(cats) + "\n")
+            log(f"  {len(cats)} categories")
+            press("circle", wait=2.0)
+            f, _ = wait_for(["SCHED_LIST"], timeout=15)
         done.append(norm(matchup))
         results.append((matchup, result))
         if max_games and len(done) >= max_games:
@@ -1937,15 +1969,9 @@ def run_roster(out, max_teams=32, resume=False):
             if norm(os.path.basename(d).split("_", 1)[1]) not in done:
                 shutil.rmtree(d)
 
-    restarts = [0]
-
     def recover(e):
         """Restart the stream if it is frozen; otherwise (or out of restarts) re-raise."""
-        if restarts[0] >= STREAM_RESTARTS or not stream_frozen():
-            raise e
-        restarts[0] += 1
-        log(f"  The stream is frozen ({e}); restart {restarts[0]} of {STREAM_RESTARTS}")
-        restart_stream()
+        recover_stream(e)
         clear_partial()
         return roster_team(open_roster())
 
@@ -2124,18 +2150,24 @@ def main():
         if a.scope_only:
             set_scope("NFL", debug_dir=os.path.join(out, "scope_debug"))
             return
+        clear = lambda *dirs: (lambda: [shutil.rmtree(os.path.join(out, d), ignore_errors=True) for d in dirs])
         if a.only in (None, "stats"):
-            run_stats(out, a.all_rows)
+            run_mode("Season Stats", lambda: run_stats(out, a.all_rows), clear("stats", "scope_debug"))
         if a.only in (None, "team"):
-            run_team_stats(out)
+            run_mode("Team Stats", lambda: run_team_stats(out), clear("team_stats"))
         if a.only in (None, "schedule"):
-            run_schedule(out, a.week)
+            run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "week_debug"))
         if a.only == "roster":
-            run_roster(out, a.teams, resume=bool(a.resume))
+            tries = [0]
+
+            def rosters():
+                tries[0] += 1                   # after a stream restart, continue the same run
+                return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1)
+            run_mode("the rosters", rosters)
         if a.only == "season-schedule":
-            run_season_schedule(out)
+            run_mode("the season schedule", lambda: run_season_schedule(out), clear("season_schedule"))
         if a.only == "games":
-            run_games(out, a.week, a.all_rows, a.games)
+            run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
         log("Returning to the hub")
         go_hub()
         log(f"Done. Screenshots in {out}")

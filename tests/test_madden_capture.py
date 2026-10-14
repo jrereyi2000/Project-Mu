@@ -230,10 +230,48 @@ class ScheduleCrossRuleTest(unittest.TestCase):
         self.assertFalse(mc.RESULT_RE.match("0"))
 
 
+class RunModeTest(unittest.TestCase):
+    """Every mode: a failure on a frozen stream restarts it, clears the partial output and
+    runs the mode again; a failure on a live stream stops the run."""
+
+    def setUp(self):
+        mc.RESTARTS[0] = 0
+
+    def test_frozen_restarts_and_reruns(self):
+        calls, resets = [], []
+
+        def mode():
+            calls.append(1)
+            if len(calls) == 1:
+                raise mc.Abort("Category stayed on BLOCKING")
+            return "ok"
+
+        with mock.patch.object(mc, "stream_frozen", return_value=True), \
+                mock.patch.object(mc, "restart_stream") as restart, mock.patch.object(mc, "log"):
+            self.assertEqual(mc.run_mode("test", mode, lambda: resets.append(1)), "ok")
+        self.assertEqual((len(calls), len(resets), restart.call_count), (2, 1, 1))
+
+    def test_live_stream_failure_stops(self):
+        with mock.patch.object(mc, "stream_frozen", return_value=False), \
+                mock.patch.object(mc, "restart_stream") as restart, mock.patch.object(mc, "log"):
+            with self.assertRaises(mc.Abort):
+                mc.run_mode("test", mock.Mock(side_effect=mc.Abort("real problem")))
+        restart.assert_not_called()
+
+    def test_restart_budget_is_shared(self):
+        mc.RESTARTS[0] = mc.STREAM_RESTARTS
+        with mock.patch.object(mc, "stream_frozen", return_value=True), \
+                mock.patch.object(mc, "restart_stream") as restart, mock.patch.object(mc, "log"):
+            with self.assertRaises(mc.Abort):
+                mc.run_mode("test", mock.Mock(side_effect=mc.Abort("frozen again")))
+        restart.assert_not_called()
+
+
 class RosterRecoveryTest(unittest.TestCase):
     """A frozen stream mid-team: restart, redo that team, nothing partial in cards.csv."""
 
     def test_frozen_stream_restarts_and_redoes_the_team(self):
+        mc.RESTARTS[0] = 0
         calls = {"capture": 0, "restart": 0}
 
         def capture(out, idx, team, rows):

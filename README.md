@@ -20,7 +20,7 @@ System Settings → Privacy & Security: give **Terminal** both **Screen Recordin
 - Press Ctrl-C at any time to stop. It releases all keys.
 
 ## If something goes wrong
-- **The stream freezes** (picture stuck, keys do nothing): during a roster run the script notices (a harmless press that doesn't change the screen), force-quits chiaki-ng and relaunches the stream (`CHIAKI_HOST` / `CHIAKI_HOST_IP` in `.env`), up to 3 times, then redoes the team it was on. Otherwise force quit chiaki-ng and reopen it yourself, then `python3 madden_capture.py --only roster --resume <folder>`.
+- **The stream freezes** (picture stuck, keys do nothing): in any mode the script notices (a harmless press that doesn't change the screen), force-quits chiaki-ng and relaunches the stream (`CHIAKI_HOST` / `CHIAKI_HOST_IP` in `.env`), up to 8 times a run, then redoes the step it was on (a stats mode from scratch, the game or roster team it was on). Otherwise force quit chiaki-ng and reopen it yourself, then `python3 madden_capture.py --only roster --resume <folder>`.
 - **"STOPPED: ..."**: read the message; it names the screen it expected and what it saw.
 - **Keys don't register:** add `--foreground`. This brings chiaki-ng to the front and sends normal keystrokes.
 - **The NFL scope dropdown fails:** open Player Stats, run `python3 madden_capture.py --probe-l2`, and send me the screenshots in `captures/<folder>/probe/`.
