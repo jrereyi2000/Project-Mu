@@ -607,7 +607,11 @@ class SwarmDispatcher:
         # Load archetype prompts
         personas_path = os.path.join(CONFIG_DIR, "agent_personas.json")
         with open(personas_path, "r") as f:
-            self.personas_data = json.load(f).get("archetypes", {})
+            personas_json = json.load(f)
+            self.personas_data = personas_json.get("archetypes", {})
+            # Long-form voices for writers whose archetype persona is written for tweets (articles only)
+            self.article_personas = {k: v for k, v in personas_json.get("article_personas", {}).items()
+                                     if not k.startswith("_")}
 
         # Load article structure directives
         directives_path = os.path.join(CONFIG_DIR, "article_structure_directives.json")
@@ -738,7 +742,8 @@ class SwarmDispatcher:
         archetype = canonical_writer_archetype(archetype)
         is_fantasy = bool(content_type == "ARTICLE" and article_type and str(article_type).upper().startswith("FANTASY_"))
         fantasy_voice = self.fantasy_writers.get(archetype, {}) if is_fantasy else {}
-        base_archetype_prompt = fantasy_voice.get("persona") or self.personas_data.get(
+        article_persona = self.article_personas.get(archetype) if content_type == "ARTICLE" else None
+        base_archetype_prompt = fantasy_voice.get("persona") or article_persona or self.personas_data.get(
             archetype,
             f"You are an NFL media agent with archetype {archetype}."
         )

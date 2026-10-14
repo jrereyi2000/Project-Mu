@@ -42,6 +42,7 @@ class SlateTests(unittest.TestCase):
         self.assertEqual(fd.CARD3_SCHEDULE[12], "FANTASY_TRADE_DEADLINE_SPECIAL")
         self.assertEqual(fd.CARD3_SCHEDULE[14], "FANTASY_MUST_WIN_WEEK")
         self.assertNotEqual(fd.CARD3_SCHEDULE[2], "FANTASY_DVP_REPORT")   # DvP needs games first
+        self.assertEqual([w for w in range(2, 6) if fd.CARD3_SCHEDULE[w] == "FANTASY_DVP_REPORT"], [3])
 
     def test_playoffs_review_and_offseason(self):
         for week in (15, 16, 17):
@@ -105,7 +106,11 @@ class PromptTests(unittest.TestCase):
                                           2035, 10, "ARTICLE", article_type="POSITIONAL_PLAYER_TIERS")
         self.assertNotIn("get_fantasy_", national["system_instruction"])
         self.assertNotIn("FANTASY DESK RULES", national["task_instruction"])
-        self.assertIn("Your tweets are incredibly structured", national["system_instruction"])
+        self.assertIn("You are writing a column in the style of Field Yates", national["system_instruction"])
+
+        tweet = d.compile_agent_prompt("Field_Yates", "YATES", "", "@FieldYates", "Field Yates", None, brief,
+                                       2035, 10, "TWEET")
+        self.assertIn("Your tweets are incredibly structured", tweet["system_instruction"])
 
 
 if __name__ == "__main__":

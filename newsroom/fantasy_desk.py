@@ -18,11 +18,11 @@ HERO, CARD1, CARD2, CARD3 = "Fantasy Hero", "Fantasy 1", "Fantasy 2", "Fantasy 3
 
 # Card 03 in W2–W14: one rotating feature per week. Fixed so the slate is predictable and reviewable.
 CARD3_SCHEDULE = {
-    # Pool A: early reads
+    # Pool A: early reads (Defense vs. Position once, in Week 3)
     2: "FANTASY_OVERREACTION_CHECK",
     3: "FANTASY_DVP_REPORT",
     4: "FANTASY_OVERREACTION_CHECK",
-    5: "FANTASY_DVP_REPORT",
+    5: "FANTASY_OVERREACTION_CHECK",
     # Pool B: midseason market
     6: "FANTASY_BUY_SELL",
     7: "FANTASY_ADP_CHECKPOINT",
