@@ -68,6 +68,12 @@ class PromptTests(unittest.TestCase):
         _, prompt = build_post_prompt(assignment("BAD_GAME", "player", {"player": "X"}), ACCOUNT, "p", "Chiefs")
         self.assertIn("bad game by his own standard", prompt)
 
+    def test_team_story_prompt(self):
+        a = assignment("TEAM_STORY", "team", {"team": "Carolina Panthers (16-0)", "why_people_are_talking": ["Perfect at 16-0"]})
+        _, prompt = build_post_prompt(a, ACCOUNT, "p", None)
+        self.assertIn("The league is talking about this team", prompt)
+        self.assertIn("Perfect at 16-0", prompt)
+
     def test_kind_keys(self):
         self.assertEqual(kind_key(assignment("PREVIEW", "fantasy")), "FANTASY_PREVIEW")
         self.assertEqual(kind_key(assignment("MEME", "draft")), "DRAFT")

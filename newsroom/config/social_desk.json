@@ -1,5 +1,5 @@
 {
-  "_comment": "Agent Wire social desk settings (docs/SOCIAL_MATRIX.md §5, PROJECT_SPEC §7.8). model_by_kind overrides model for a post kind (REACTION, PERFORMANCE, BAD_GAME, COMPARISON, PLAYER, BEAT, STANDINGS, SHARE, PREVIEW, MEME, REPLY). JR chose Gemini 3.8 Flash for every kind (Oct 14, 2026).",
+  "_comment": "Agent Wire social desk settings (docs/SOCIAL_MATRIX.md §5, PROJECT_SPEC §7.8). model_by_kind overrides model for a post kind (REACTION, PERFORMANCE, BAD_GAME, COMPARISON, TEAM_STORY, PLAYER, BEAT, STANDINGS, SHARE, PREVIEW, MEME, REPLY). JR chose Gemini 3.8 Flash for every kind (Oct 14, 2026).",
   "model": "gemini-3.8-flash",
   "model_by_kind": {},
   "max_workers": 5,
@@ -68,7 +68,8 @@
     "MEME": 1.6,
     "REPLY": 0.25,
     "BAD_GAME": 1.3,
-    "COMPARISON": 1.1
+    "COMPARISON": 1.1,
+    "TEAM_STORY": 1.3
   },
   "share_slot_heat": {
     "Hero Slot": 1.4,
@@ -99,5 +100,10 @@
     "nfltwitter",
     "gameday"
   ],
-  "_comment_trends": "Hashtags in the stoplist, and week tags like #Week17, never trend; hashtags also count half as much as games and players."
+  "_comment_trends": "Hashtags in the stoplist, and week tags like #Week17, never trend; hashtags also count half as much as games and players.",
+  "buzz_heat": {
+    "_comment": "Engagement multiplier for posts about a game or team the league is talking about, by buzz tier (1 = the league is talking, 2 = historic).",
+    "1": 1.5,
+    "2": 2.2
+  }
 }

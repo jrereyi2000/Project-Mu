@@ -22,7 +22,7 @@ ARCHETYPE_LABELS = {
     "BERRY": "Fantasy Analyst",
     "YATES": "Fantasy Analyst",
 }
-KIND_LABELS = {"REACTION": "Reaction", "PERFORMANCE": "Performance", "BAD_GAME": "Bad Game", "COMPARISON": "Comparison",
+KIND_LABELS = {"REACTION": "Reaction", "PERFORMANCE": "Performance", "BAD_GAME": "Bad Game", "COMPARISON": "Comparison", "TEAM_STORY": "Storyline",
                "PLAYER": "Player", "BEAT": "Beat Note",
                "STANDINGS": "Standings", "SHARE": "Article", "PREVIEW": "Preview", "MEME": "Meme", "REPLY": "Reply"}
 

@@ -126,6 +126,8 @@ def _post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.dateti
         return _between(rng, this_thu + dt.timedelta(days=1, hours=8), this_thu + dt.timedelta(days=3, hours=11))
     if kind == "COMPARISON":
         return _between(rng, tue + dt.timedelta(hours=9), this_thu + dt.timedelta(hours=20))
+    if kind == "TEAM_STORY":                              # Monday morning – Wednesday evening
+        return _between(rng, tue - dt.timedelta(hours=15), tue + dt.timedelta(days=1, hours=20))
     if kind == "STANDINGS":
         return _between(rng, tue + dt.timedelta(hours=10), tue + dt.timedelta(hours=22))
     if kind == "PLAYER":
@@ -187,6 +189,8 @@ def subject_heat(ctx: dict, a: dict, cfg: dict) -> float:
         heat = 0.8 + min(100.0, pop) / 150.0
     elif a.get("team_id") in teams:
         heat = 0.75 + teams[a["team_id"]]["popularity"] / 200.0
+    if a.get("buzz_tier"):                                # a game or team the league is talking about
+        heat *= float(cfg.get("buzz_heat", {}).get(str(a["buzz_tier"]), 1.0))
     return heat
 
 

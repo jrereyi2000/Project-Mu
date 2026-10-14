@@ -9,8 +9,8 @@ import unittest
 
 from newsroom.social_desk import PUNDIT_EXCLUDED, plan_replies, plan_social_week, plan_team_wakeup
 from newsroom.social_publish import (GAME_LENGTH, compute_trends, engagement, followers_for, kickoff, load_config,
-                                     post_time, publishable, week_thursday)
-from tests.test_social_desk import league
+                                     post_time, publishable, subject_heat, week_thursday)
+from tests.test_social_desk import dominate, league
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CFG = load_config()
@@ -55,6 +55,19 @@ class CalendarTests(unittest.TestCase):
         reply = {"kind": "REPLY", "agent_id": "x", "subject": {"type": "post", "id": 1}}
         parent = dt.datetime(2035, 11, 1, 12, 0)
         self.assertTrue(parent < post_time(ctx, reply, parent) < parent + dt.timedelta(hours=4, minutes=1))
+
+    def test_storylines_post_monday_to_wednesday_and_draw_more_attention(self):
+        ctx = league(week=12)
+        dominate(ctx, 3)
+        stories = [a for a in plan_social_week(ctx)["assignments"] if a["kind"] == "TEAM_STORY"]
+        self.assertTrue(stories)
+        thu = week_thursday(2035, 12)
+        for a in stories:
+            t = post_time(ctx, a)
+            self.assertTrue(thu - dt.timedelta(days=3, hours=1) < t < thu, t)          # Mon – Wed
+        a = stories[0]
+        plain = {**a, "buzz_tier": None}
+        self.assertGreater(subject_heat(ctx, a, CFG), subject_heat(ctx, plain, CFG))
 
     def test_times_are_stable(self):
         ctx = league(week=9)
@@ -144,7 +157,7 @@ class ReplyAndWakeupTests(unittest.TestCase):
         self.assertEqual({a["kind"] for a in fans}, {"REACTION", "PREVIEW"})
         nationals = [a for a in plan["assignments"] if a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER", "FORMER_PLAYER")]
         self.assertEqual(len(nationals), 3)
-        self.assertTrue(all(a["kind"] in ("PERFORMANCE", "COMPARISON") for a in nationals))   # players, not the game
+        self.assertTrue(all(a["kind"] in ("PERFORMANCE", "COMPARISON", "TEAM_STORY") for a in nationals))   # not the game
         legend = [a for a in plan["assignments"] if a["archetype"] == "FORMER_PLAYER"]
         self.assertEqual(len(legend), 1)                          # team 1's ex-player
         self.assertEqual(legend[0]["slant_team"], "City1 Team1")

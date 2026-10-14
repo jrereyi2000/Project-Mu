@@ -22,6 +22,7 @@
 - **20 ex-player accounts (`FORMER_PLAYER`):** real retired stars plus 2026 NFL Top 50 players who aren't players in the 2035 database (treated as retired before 2035), same "in the style of" convention as the pundits. They work like bandwagon fans, posting about players league-wide, with a soft spot for their old team.
 - **Only die-hards post about a team as a team.** Bandwagon fans and ex-players post about players; bandwagon fans clown players who play badly.
 - **New weekly mix:** die-hard reactions one per team that played, no extras; performances 14; bad games 8; comparisons 10 (who's the best at a position; is our best player better than theirs); shares ≈15 (one per article); replies 10–15; previews 6; beat notes 5; standings 2; memes 2. This replaces the table in §2 (PROJECT_SPEC §7.8 has the details).
+- **What the league is talking about:** big player games (tier 1: 400+ passing yards, 5+ passing TDs, 150+ rushing or receiving yards, 3+ TDs, 40+ PPR; tier 2: 200+ yards, 6+ TDs, 50+ PPR, the season's best game at a position), season milestones and NFL record chases, and team storylines (the Panthers' 16-0 start, winless runs, streaks and how they end, blowouts, upsets, the points record) get several posts from different voices, take slots from ordinary performances, and draw more engagement. Thresholds and numbers: PROJECT_SPEC §7.8.
 
 **Parked**
 - **Avatars:** JR will come back to this. Until then, avatars are monograms in team or brand colours, with no photos of real or stock people.

@@ -31,10 +31,11 @@ SOCIAL_RULES = """AGENT WIRE POSTING RULES (MANDATORY):
 
 KIND_INSTRUCTIONS = {
     "REACTION": "React to this game right after it ended. If FACTS has your_team, you are a fan of that team and it {your_team_result}: react like it. Otherwise react as yourself.",
-    "PERFORMANCE": "Post about this player's performance in the game. Lead with what stood out; use the season context only if it adds something.",
+    "PERFORMANCE": "Post about this player's performance in the game. Lead with what stood out; use the season context only if it adds something. If FACTS has why_people_are_talking, the whole league is talking about this game: that is the story, and how_big says how big.",
     "PLAYER": "Your team's season is over or nearly over. Post about this player, following the angle in FACTS.",
     "BAD_GAME": "This player had a bad game by his own standard (FACTS has his line and his average before it). Bandwagon fans and meme pages: clown him. Analysts and ex-players: call it out bluntly. Go after the performance, never his personal life, injuries or anything outside football.",
-    "COMPARISON": "Make the case in a player debate using FACTS. If FACTS has your_player and their_player, argue your team's guy is better than theirs. If it has a top-five list, say who the best at that position really is (if FACTS has your_old_team_player, you can lean his way). Use only the numbers in FACTS.",
+    "COMPARISON": "Make the case in a player debate using FACTS. If FACTS has your_player and their_player, argue your team's guy is better than theirs. If it has a top-five list, say who the best at that position really is (if FACTS has your_old_team_player, you can lean his way). If FACTS has this_game, say where it ranks among the best games at that position this season. Use only the numbers in FACTS.",
+    "TEAM_STORY": "The league is talking about this team; FACTS.why_people_are_talking says why and how_big says how big. Give your take as yourself, not as a fan of the team: is it real, what it means, what comes next. Any NFL history you cite must come from FACTS.nfl_history_through_2025. Never predict an exact score.",
     "BEAT": "Post a beat reporter's note on your team: what last week's game showed and what to watch next. Sound like a reporter who was there, measured and specific.",
     "STANDINGS": "Post about this race in the standings. Records come from FACTS and are by record only, without tiebreakers, so don't claim clinching scenarios.",
     "PREVIEW": "Preview this upcoming game before kickoff. You don't know the result; don't predict an exact final score unless it fits your voice. If FACTS has your_team, you are a fan of that team.",

@@ -7,7 +7,7 @@ import json
 import re
 import unittest
 
-from newsroom.social_desk import ROLE_CAPS, TARGET_POSTS, Accounts, plan_social_week, tidy_name
+from newsroom.social_desk import ROLE_CAPS, TARGET_POSTS, Accounts, Week, plan_social_week, plan_team_wakeup, tidy_name
 
 PUNDITS = ("STEPHEN_A", "MCAFEE", "SHANNON", "OCHOCINCO", "JJ_WATT", "RG3", "COWHERD", "WINGO", "EISEN", "CLARK", "SKIP_TWEET")
 
@@ -192,6 +192,93 @@ class SocialDeskTests(unittest.TestCase):
         plan = plan_social_week(ctx)
         self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
         self.assertFalse([a for a in by_kind(plan)["PLAYER"] if a["team_id"] in (2, 18)])
+
+
+def dominate(ctx, team, us=40, them=10):
+    """Make `team` win every completed game it played (its opponents lose them)."""
+    for g in ctx["games"]:
+        if team == g["home_team_id"]:
+            g["home_score"], g["away_score"] = us, them
+        elif team == g["away_team_id"]:
+            g["home_score"], g["away_score"] = them, us
+
+
+class BuzzTests(unittest.TestCase):
+    def test_big_game_gets_more_posts(self):
+        ctx = league(week=9)
+        star = next(l for l in ctx["player_lines"] if l["week"] == 8 and l["team_id"] == 20 and l["position"] == "WR")
+        star.update(receptions=12, rec_yards=212, rec_tds=3, fantasy_points=57.2)
+        W = Week(ctx)
+        tier, reasons = W.player_buzz(star)
+        self.assertEqual(tier, 2)
+        self.assertIn("212 receiving yards, the most in a game this season", reasons)
+        plan = plan_social_week(ctx)
+        on_star = [a for a in plan["assignments"] if a["subject"].get("id") == star["player_id"] and a["kind"] == "PERFORMANCE"]
+        self.assertEqual(len(on_star), 4)
+        self.assertEqual(len({a["agent_id"] for a in on_star}), 4)            # four different voices
+        self.assertEqual({a["buzz_tier"] for a in on_star}, {2})
+        self.assertIn("why_people_are_talking", on_star[0]["facts"])
+        self.assertEqual(len({a["angle"] for a in on_star}), 4)
+        ranking = [a for a in by_kind(plan)["COMPARISON"] if a.get("buzz_tier")]
+        self.assertEqual(len(ranking), 1)
+        self.assertIn("best_WR_games_this_season", ranking[0]["facts"])
+        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+
+    def test_ordinary_lines_and_common_milestones_are_not_news(self):
+        ctx = league(week=9)
+        W = Week(ctx)
+        ordinary = next(l for l in ctx["player_lines"] if l["week"] == 8 and l["team_id"] == 4 and l["position"] == "HB")
+        self.assertEqual(W.player_buzz(ordinary), (0, []))
+        self.assertTrue(all(l["fantasy_points"] >= 40 for l, _, _ in W.buzz_lines()))   # only the 40+ PPR lines here
+        qb = next(l for l in ctx["player_lines"] if l["week"] == 8 and l["team_id"] == 4 and l["position"] == "QB")
+        for l in ctx["player_lines"]:                                  # 4,000 yards crossed last week: not news alone
+            if l["player_id"] == qb["player_id"]:
+                l["pass_yards"] = 3990 // 7 if l["week"] < 8 else 120
+        self.assertEqual(Week(ctx).player_buzz(qb)[0], 0)
+
+    def test_season_record_broken(self):
+        ctx = league(week=12)
+        wr = [l for l in ctx["player_lines"] if l["team_id"] == 6 and l["position"] == "WR"]
+        for l in wr:
+            l["rec_tds"] = 2                                           # 20 through Week 10
+        wr[-1]["rec_tds"] = 4                                          # 24 after Week 11: past Moss's 23
+        tier, reasons = Week(ctx).player_buzz(wr[-1])
+        self.assertEqual(tier, 2)
+        self.assertTrue(any("broke the NFL single-season record for receiving TDs" in r and "Randy Moss" in r for r in reasons))
+
+    def test_team_storylines(self):
+        ctx = league(week=12)
+        dominate(ctx, 3)                                               # 11-0; team 19 (its opponent every week) 0-11
+        W = Week(ctx)
+        stories = {s["team_id"]: s for s in W.team_stories()}
+        self.assertEqual(stories[3]["tier"], 2)
+        self.assertTrue(stories[3]["positive"])
+        self.assertEqual(stories[3]["reasons"][0], "Perfect at 11-0")
+        self.assertTrue(stories[3]["history"])
+        self.assertEqual(stories[19]["reasons"][0], "Still winless at 0-11")
+        self.assertFalse(stories[19]["positive"])
+        plan = plan_social_week(ctx)
+        story_posts = by_kind(plan)["TEAM_STORY"]
+        on_three = [a for a in story_posts if a["subject"]["id"] == 3]
+        self.assertEqual(len(on_three), 4)
+        self.assertEqual({a["team_id"] for a in on_three}, {3})          # filed under the team
+        self.assertIn("nfl_history_through_2025", on_three[0]["facts"])
+        self.assertTrue(all(a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER") for a in story_posts))
+        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        wake = plan_team_wakeup(ctx, 3)
+        self.assertEqual([a["kind"] for a in wake["assignments"] if a["kind"] == "TEAM_STORY"], ["TEAM_STORY"])
+
+    def test_first_loss_after_perfect_start(self):
+        ctx = league(week=12)
+        dominate(ctx, 3)
+        last = next(g for g in ctx["recap_games"] if g["home_team_id"] == 3)
+        last["home_score"], last["away_score"] = 17, 24
+        s = next(s for s in Week(ctx).team_stories() if s["team_id"] == 3)
+        self.assertEqual((s["tier"], s["positive"]), (2, False))
+        self.assertTrue(s["reasons"][0].startswith("First loss of the season after a 10-0 start"))
+
+    def test_no_storylines_in_the_postseason_or_preseason(self):
+        self.assertEqual(Week(league(week=1, played_weeks=[])).team_stories(), [])
 
 
 class NameTests(unittest.TestCase):

@@ -39,7 +39,6 @@ BUCKET_SIZES = {
     "REPLY": 15,
 }
 REPLY_RANGE = (10, 15)
-PERFORMANCE_FLOOR = 10   # performances can shrink to this to keep a full week at the target
 
 # Weekly post caps per account role (least-used accounts are picked first).
 ROLE_CAPS = {"pundit": 3, "fantasy": 4, "beat": 2, "fan": 2, "bandwagon": 3, "meme": 3, "draft": 3, "former": 3}
@@ -49,6 +48,74 @@ ROLE_CAPS = {"pundit": 3, "fantasy": 4, "beat": 2, "fan": 2, "bandwagon": 3, "me
 FORMER_TEAM_SLANT = {"OCHOCINCO": "CIN", "SHANNON": "DEN", "JJ_WATT": "HOU", "RG3": "WAS", "CLARK": "PIT", "MCAFEE": "IND"}
 BAD_GAME_SHARE = 0.65   # a flop is at most this share of his earlier average
 OFFENSE_POSITIONS = ("QB", "RB", "WR", "TE")
+BAD_QB_INTERCEPTIONS = 2  # a QB with this many picks in a loss had a bad game (no QB threw 3 in a game in 2035)
+
+# "The league is talking" (agreed with JR on Oct 14; frequencies checked against the 2035 season). A tier-1 game
+# ("big") gets three posts instead of one, a tier-2 game ("historic") four plus a where-does-it-rank comparison.
+# Each entry: stat -> (words, big, historic); per-position overrides by position.
+SINGLE_GAME_BUZZ = {
+    "pass_yards": ("passing yards", 400, None),
+    "pass_tds": ("passing TDs", 5, 6),
+    "rush_yards": ("rushing yards", 150, 200),
+    "rec_yards": ("receiving yards", 150, 200),
+    "total_tds": ("total TDs", 3, 4),
+    "fantasy_points": ("full-PPR points", 40, 50),
+}
+SINGLE_GAME_BUZZ_BY_POSITION = {"TE": {"rec_yards": ("receiving yards", 90, 150)}}
+# Round numbers crossed this week (regular season): (mark, makes news on its own). Common ones (a dozen QBs reach
+# 4,000 yards) are only mentioned when the game is already news.
+SEASON_MILESTONES = {
+    "pass_yards": ("passing yards", ((4000, False), (5000, True))),
+    "pass_tds": ("passing TDs", ((40, False), (50, True))),
+    "rush_yards": ("rushing yards", ((1000, False), (1500, True), (2000, True))),
+    "rec_yards": ("receiving yards", ((1000, False), (1500, True))),
+    "total_tds": ("total TDs", ((15, False), (20, True))),
+}
+# Record chases (on pace for, or already past, a record) make news on their own only in the stretch run;
+# earlier they are context for a game that is already news. Breaking a record is always historic.
+RECORD_CHASE_FROM_WEEK = 12
+# NFL single-season records as of the 2025 season (the league's history before 2035 isn't in the database).
+SEASON_RECORDS = {
+    "pass_yards": ("passing yards", 5477, "Peyton Manning, 2013"),
+    "pass_tds": ("passing TDs", 55, "Peyton Manning, 2013"),
+    "rush_yards": ("rushing yards", 2105, "Eric Dickerson, 1984"),
+    "rush_tds": ("rushing TDs", 28, "LaDainian Tomlinson, 2006"),
+    "receptions": ("receptions", 149, "Michael Thomas, 2019"),
+    "rec_yards": ("receiving yards", 1964, "Calvin Johnson, 2012"),
+    "rec_tds": ("receiving TDs", 23, "Randy Moss, 2007"),
+    "total_tds": ("total TDs", 31, "LaDainian Tomlinson, 2006"),
+}
+TEAM_POINTS_RECORD = (606, "2013 Denver Broncos")
+GAMES_PER_SEASON = 17
+PACE_MIN_GAMES = 6            # season paces count from this many games
+STREAK_MIN = 6                # winning or losing streaks the league notices
+RUN_MIN_GAMES = 5             # unbeaten / winless from this many games
+HISTORIC_RUN_GAMES = 10       # ...historic from this many
+BLOWOUT_MARGIN = 35
+BIG_SCORE = 50
+UPSET_GAP = 0.35              # winning-percentage gap before the game, both teams with RUN_MIN_GAMES games
+TEAM_STORY_MAX = 8            # team storyline posts per week
+# Posts per buzz tier, by role, in order. Player games take these from the performance bucket.
+PLAYER_BUZZ_ROLES = {1: ("pundit", "former", "bandwagon"), 2: ("pundit", "former", "bandwagon", "fantasy")}
+TEAM_STORY_ROLES = {
+    (1, True): ("pundit", "bandwagon"), (2, True): ("pundit", "former", "bandwagon", "pundit"),
+    (1, False): ("meme", "pundit"), (2, False): ("pundit", "meme", "bandwagon", "former"),
+}
+# Angles by (role, good news?); a second post by the same role takes the next angle.
+BUZZ_ANGLES = {
+    ("pundit", True): ("where this ranks around the league this season", "the skeptic's case: what the numbers hide"),
+    ("pundit", False): ("what went wrong and who is to blame", "whether it can be fixed, or what comes next"),
+    ("former", True): ("how it looks to someone who played: what you see in it",),
+    ("former", False): ("how it feels from the inside, as someone who played through it",),
+    ("bandwagon", True): ("pure hype: you are hopping on the bandwagon",),
+    ("bandwagon", False): ("you are hopping off, loudly",),
+    ("fantasy", True): ("what it means for fantasy managers",),
+    ("meme", False): ("roast it",),
+    ("meme", True): ("make a joke out of how lopsided it is",),
+}
+# Bucket floors when a busy week has to trim to stay near TARGET_POSTS (last-added posts go first).
+TRIM_ORDER = (("PERFORMANCE", 10), ("COMPARISON", 7), ("BAD_GAME", 5), ("TEAM_STORY", 4))
+
 # Hot-take voices preferred for calling out bad games.
 HOT_TAKE_PUNDITS = ("STEPHEN_A", "SKIP_TWEET", "COWHERD", "SHANNON", "MCAFEE")
 
@@ -89,6 +156,7 @@ WINDOWS = {
     "PREVIEW": "Thu – Sat, before kickoff",
     "MEME": "any time",
     "PLAYER": "Mon – Sat",
+    "TEAM_STORY": "Mon – Wed",
 }
 
 
@@ -213,6 +281,16 @@ def stat_line(l: dict) -> str:
 def norm_pos(pos):
     p = (pos or "").upper()
     return "RB" if p in ("HB", "FB", "RB") else p
+
+
+def ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def _stat(l, k):
+    if k == "total_tds":
+        return (l.get("rush_tds") or 0) + (l.get("rec_tds") or 0)
+    return l.get(k) or 0
 
 
 def tidy_name(name):
@@ -445,7 +523,7 @@ class Week:
 
     def bad_games(self):
         """Last week's flops: players averaging 12+ full-PPR points in 3+ earlier games who scored at most 65% of
-        that, biggest drop first; then any other QB with 3+ interceptions. Players with no line at all are skipped
+        that, biggest drop first; then any other QB with BAD_QB_INTERCEPTIONS+ interceptions in a loss. Players with no line at all are skipped
         (they may have been hurt or inactive, which is not a flop)."""
         out, seen = [], set()
         for l in self.recap_lines:
@@ -460,11 +538,227 @@ class Week:
         out.sort(key=lambda x: x[0], reverse=True)
         for l in self.recap_lines:
             key = (l["player_id"] or l["short_name"], l["team_id"], l["position"])
-            if key not in seen and norm_pos(l["position"]) == "QB" and (l["interceptions"] or 0) >= 3:
+            if key not in seen and norm_pos(l["position"]) == "QB" and (l["interceptions"] or 0) >= BAD_QB_INTERCEPTIONS \
+                    and self.line_result(l) == "lost":
                 t = self.season_totals.get(key)
                 avg = (t["fantasy_points"] - l["fantasy_points"]) / max(1, t["games"] - 1) if t else 0.0
                 out.append((0, l, avg))
         return [(l, avg) for _, l, avg in out]
+
+    def line_result(self, l):
+        g = next((g for g in self.ctx["recap_games"] if g["id"] == l["game_id"]), None)
+        if not g:
+            return None
+        w, _ = self.winner_loser(g)
+        return "won" if w == l["team_id"] else "lost" if w else "tied"
+
+    # -- buzz: what the league is talking about
+    def _game_rank(self, stat, value, pos=None):
+        """1 + the number of single-game lines this season (through the recap week) that beat `value`."""
+        return 1 + sum(1 for x in self.ctx["player_lines"] if _stat(x, stat) > value
+                       and (pos is None or norm_pos(x["position"]) == pos))
+
+    def player_buzz(self, l):
+        """(tier, reasons) for one recap-week line: 0 = ordinary, 1 = the league is talking, 2 = historic."""
+        tier, reasons = 0, []
+        pos = norm_pos(l["position"])
+        rules = dict(SINGLE_GAME_BUZZ)
+        rules.update(SINGLE_GAME_BUZZ_BY_POSITION.get(pos, {}))
+        for stat, (words, big, historic) in rules.items():
+            v = round(_stat(l, stat), 1) if stat == "fantasy_points" else _stat(l, stat)
+            if v < big:
+                continue
+            t = 2 if historic is not None and v >= historic else 1
+            tier = max(tier, t)
+            # Fantasy points and position-specific thresholds rank within the position; yards and TDs league-wide.
+            rank_pos = pos if stat == "fantasy_points" or stat in SINGLE_GAME_BUZZ_BY_POSITION.get(pos, {}) else None
+            rank = self._game_rank(stat, v, rank_pos)
+            where = f" by a {pos}" if rank_pos else ""
+            text = f"{v:g} {words}"
+            if rank <= 3:
+                text += f", the {'most' if rank == 1 else ordinal(rank) + '-most'}{where} in a game this season"
+            reasons.append((t, text))
+        if tier and self.recap_week >= 4 and self._game_rank("fantasy_points", l["fantasy_points"], pos) == 1 \
+                and not any("most by a" in r for _, r in reasons):
+            tier = 2
+            reasons.append((2, f"the best single game by a {pos} this season (full PPR)"))
+        context = []   # (tier it earns on its own, text)
+        chase = 1 if self.recap_week >= RECORD_CHASE_FROM_WEEK else 0
+        if self.recap_week <= REGULAR_SEASON_FINAL_WEEK:
+            key = (l["player_id"] or l["short_name"], l["team_id"], l["position"])
+            tot = self.season_totals.get(key)
+            if tot:
+                for stat, (words, marks) in SEASON_MILESTONES.items():
+                    after = _stat(tot, stat)
+                    before = after - _stat(l, stat)
+                    for m, alone in marks:
+                        if before < m <= after:
+                            context.append((1 if alone else 0, f"crossed {m:,} {words} for the season ({after:,})"))
+                for stat, (words, mark, holder) in SEASON_RECORDS.items():
+                    after = _stat(tot, stat)
+                    before = after - _stat(l, stat)
+                    if before <= mark < after:
+                        tier = 2
+                        reasons.append((2, f"broke the NFL single-season record for {words}: now {after:,} (old record {mark:,}, {holder})"))
+                    elif before > mark and _stat(l, stat):
+                        context.append((chase, f"{after:,} {words} this season, past the NFL single-season record of {mark:,} ({holder})"))
+                    elif tot["games"] >= PACE_MIN_GAMES and after <= mark:
+                        pace = round(after / tot["games"] * GAMES_PER_SEASON)
+                        if pace > mark:
+                            context.append((chase, f"on pace for {pace:,} {words} ({after:,} in {tot['games']} games); "
+                                                   f"the NFL single-season record is {mark:,} ({holder})"))
+        for t, text in context:
+            tier = max(tier, t)
+        if tier:
+            reasons += context
+        reasons.sort(key=lambda r: -r[0])
+        return tier, [r for _, r in reasons[:3]]
+
+    def buzz_lines(self):
+        """[(line, tier, reasons)] for the recap week's tier 1+ lines, biggest first."""
+        out = []
+        for l in self.recap_lines:
+            if norm_pos(l["position"]) not in OFFENSE_POSITIONS:
+                continue
+            tier, reasons = self.player_buzz(l)
+            if tier:
+                out.append((l, tier, reasons))
+        out.sort(key=lambda x: (x[1], x[0]["fantasy_points"]), reverse=True)
+        return out
+
+    def best_single_games(self, pos, n=5):
+        pos = norm_pos(pos)
+        rows = sorted((x for x in self.ctx["player_lines"] if norm_pos(x["position"]) == pos),
+                      key=lambda x: x["fantasy_points"], reverse=True)[:n]
+        return [f"{x['name']} ({self.teams[x['team_id']]['abbr']}), Week {x['week']}: {stat_line(x)} "
+                f"({x['fantasy_points']:.1f} PPR)" for x in rows]
+
+    def buzz_facts(self, l, tier, reasons):
+        facts = self.performance_facts(l)
+        facts["why_people_are_talking"] = reasons
+        facts["how_big"] = "historic" if tier == 2 else "the league is talking about it"
+        return facts
+
+    def ranking_facts(self, l, reasons):
+        pos = norm_pos(l["position"])
+        return {"question": f"Where does this game rank among the best by a {pos} this season?",
+                "this_game": self.buzz_facts(l, 2, reasons), f"best_{pos}_games_this_season": self.best_single_games(pos)}
+
+    # -- team storylines
+    def team_results(self, tid):
+        """Regular-season results through the recap week, oldest first: [(res, us, them, opp, game)]."""
+        last = min(self.recap_week, REGULAR_SEASON_FINAL_WEEK)
+        out = []
+        for g in self.ctx["games"]:
+            if g["week"] > last or tid not in (g["home_team_id"], g["away_team_id"]) or g["home_score"] is None:
+                continue
+            home = g["home_team_id"] == tid
+            us, them = (g["home_score"], g["away_score"]) if home else (g["away_score"], g["home_score"])
+            out.append(("W" if us > them else "L" if us < them else "T", us, them,
+                        g["away_team_id"] if home else g["home_team_id"], g))
+        return out
+
+    def team_stories(self):
+        """Team storylines from last week's regular-season games: [{team_id, tier, positive, reasons, history}],
+        biggest first. One story per team; its reasons come from every trigger it hit."""
+        if not self.ctx["recap_games"] or self.recap_week > REGULAR_SEASON_FINAL_WEEK:
+            return []
+        stories = []
+        for g in self.ctx["recap_games"]:
+            for tid in (g["away_team_id"], g["home_team_id"]):
+                res = self.team_results(tid)
+                if not res or res[-1][4]["id"] != g["id"]:
+                    continue
+                hits, history = [], []
+                r, us, them, opp, _ = res[-1]
+                n = len(res)
+                wins = sum(1 for x in res if x[0] == "W")
+                losses = sum(1 for x in res if x[0] == "L")
+                ties = n - wins - losses
+                streak = 1
+                while streak < n and res[-1 - streak][0] == r:
+                    streak += 1
+                prior = res[:-1]
+                prior_streak = 0
+                if prior:
+                    p = prior[-1][0]
+                    while prior_streak < len(prior) and prior[-1 - prior_streak][0] == p:
+                        prior_streak += 1
+                rec = self.record(tid)
+                opp_name = self.teams[opp]["name"]
+                if losses == 0 and n >= RUN_MIN_GAMES:
+                    t = 2 if n >= HISTORIC_RUN_GAMES else 1
+                    hits.append((t, True, f"{'Perfect' if not ties else 'Unbeaten'} at {rec}"))
+                    if t == 2:
+                        history.append("The 1972 Dolphins are the only NFL team to finish unbeaten and win the Super Bowl "
+                                       "(17-0, playoffs included); the 2007 Patriots went 16-0 in the regular season and lost the Super Bowl.")
+                elif wins == 0 and n >= RUN_MIN_GAMES:
+                    t = 2 if n >= HISTORIC_RUN_GAMES else 1
+                    hits.append((t, False, f"Still winless at {rec}"))
+                    if t == 2:
+                        history.append("The 2008 Lions and the 2017 Browns went 0-16; no team has gone 0-17.")
+                elif streak >= STREAK_MIN and r in "WL":
+                    hits.append((2 if streak >= HISTORIC_RUN_GAMES else 1, r == "W",
+                                 f"{'Won' if r == 'W' else 'Lost'} {streak} straight"))
+                if r == "L" and prior and prior[-1][0] == "W" and prior_streak >= STREAK_MIN:
+                    if prior_streak == len(prior) and prior_streak >= 8:
+                        hits.append((2, False, f"First loss of the season after a {prior_streak}-0 start: {us}-{them} to the {opp_name}"))
+                    else:
+                        hits.append((1, False, f"Their {prior_streak}-game winning streak ended: {us}-{them} to the {opp_name}"))
+                if r == "W" and wins == 1 and n - 1 >= RUN_MIN_GAMES:
+                    hits.append((1, True, f"First win of the season after an 0-{n - 1} start: {us}-{them} over the {opp_name}"))
+                if r == "W" and us - them >= BLOWOUT_MARGIN:
+                    hits.append((1, True, f"Won by {us - them}: {us}-{them} over the {opp_name}"))
+                if us >= BIG_SCORE:
+                    hits.append((1, True, f"Scored {us} points against the {opp_name}"))
+                if r == "W" and len(prior) >= RUN_MIN_GAMES:
+                    opp_prior = self.team_results(opp)[:-1]
+                    if len(opp_prior) >= RUN_MIN_GAMES:
+                        pct = lambda xs: sum(1 if x[0] == "W" else 0.5 if x[0] == "T" else 0 for x in xs) / len(xs)
+                        if pct(opp_prior) - pct(prior) >= UPSET_GAP:
+                            rec_of = lambda xs: f"{sum(x[0] == 'W' for x in xs)}-{sum(x[0] == 'L' for x in xs)}"
+                            hits.append((1, True, f"Upset the {rec_of(opp_prior)} {opp_name} as a {rec_of(prior)} team, {us}-{them}"))
+                pf = self.records[tid]["pf"]
+                mark, holder = TEAM_POINTS_RECORD
+                if pf - us <= mark < pf:
+                    hits.append((2, True, f"Broke the NFL record for points in a season: {pf} (old record {mark}, {holder})"))
+                elif pf - us > mark:
+                    hits.append((1, True, f"{pf} points this season, past the NFL record of {mark} ({holder})"))
+                elif n >= PACE_MIN_GAMES and pf / n * GAMES_PER_SEASON > mark:
+                    hits.append((1, True, f"On pace for {round(pf / n * GAMES_PER_SEASON)} points ({pf} in {n} games); "
+                                          f"the NFL record is {mark} ({holder})"))
+                if not hits:
+                    continue
+                hits.sort(key=lambda h: -h[0])
+                stories.append({"team_id": tid, "tier": hits[0][0], "positive": hits[0][1],
+                                "reasons": [h[2] for h in hits[:3]], "history": history})
+        stories.sort(key=lambda s: (s["tier"], self.teams[s["team_id"]]["popularity"]), reverse=True)
+        return stories
+
+    def team_story_facts(self, story):
+        tid = story["team_id"]
+        r = self.records[tid]
+        games = r["w"] + r["l"] + r["t"]
+        order = sorted(self.teams, key=lambda t: (self.win_pct(t), self.diff(t)), reverse=True)
+        _, nxt = self.team_games(tid)
+        facts = {
+            "team": self.team_with_record(tid),
+            "why_people_are_talking": story["reasons"],
+            "how_big": "historic" if story["tier"] == 2 else "the league is talking about it",
+            "points_for": r["pf"], "points_against": r["pa"], "point_differential": f"{self.diff(tid):+d}",
+            "league_rank_by_record": ordinal(order.index(tid) + 1),
+            "games_left_in_regular_season": max(0, GAMES_PER_SEASON - games),
+            "last_game": self.last_result(tid),
+            "next_game": (f"Week {nxt['week']}: {self.game_label(nxt)} (opponent "
+                          f"{self.record(nxt['home_team_id'] if nxt['away_team_id'] == tid else nxt['away_team_id'])})")
+                         if nxt else "No game this week.",
+        }
+        best = self.team_best(tid)
+        if best:
+            facts["best_player"] = self.player_summary(best)
+        if story["history"]:
+            facts["nfl_history_through_2025"] = story["history"]
+        return facts
 
     def bad_game_facts(self, l, avg):
         facts = self.performance_facts(l)
@@ -663,7 +957,7 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
     acc = Accounts(ctx["accounts"], seed=f"{season}-{week}")
     notes = []
     plan = collections.OrderedDict((k, []) for k in
-                                   ("SHARE", "REACTION", "PERFORMANCE", "BAD_GAME", "COMPARISON", "PLAYER", "BEAT",
+                                   ("SHARE", "REACTION", "PERFORMANCE", "BAD_GAME", "COMPARISON", "TEAM_STORY", "PLAYER", "BEAT",
                                     "STANDINGS", "PREVIEW", "MEME", "REPLY"))
 
     recap = sorted(ctx["recap_games"], key=lambda g: g["excitement_index"] or 0, reverse=True)
@@ -699,10 +993,60 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
     seen_players = set()
     pattern = ["fantasy", "pundit", "former", "bandwagon", "former", "pundit", "bandwagon"]
 
+    def pick(role, team_id=None, pos=None, avoid=()):
+        """An account for a buzz post by role, never one already posting about the same subject."""
+        for _ in range(4):
+            account = (acc.fantasy() if role == "fantasy" else
+                       acc.former([team_id] if team_id else [], pos) if role == "former" else
+                       acc.bandwagon() if role == "bandwagon" else
+                       acc.archetype("NFL_MEMES") if role == "meme" else None)
+            if account is None:
+                account = acc.pundit(prefer=HOT_TAKE_PUNDITS if role == "meme" else PUNDIT_AFFINITY.get(pos, ()))
+            if account is None or account["agent_id"] not in avoid:
+                return account
+        return None
+
+    def with_angle(a, role, roles, i, good=True):
+        options = BUZZ_ANGLES.get((role, good), ())
+        if options:
+            a["angle"] = options[roles[:i].count(role) % len(options)]
+        return a
+
+    # 2a. Games the league is talking about (tier 1: three posts, tier 2: four plus a ranking comparison).
+    # They come first, so a busy week trims the ordinary performances below them.
+    buzz = W.buzz_lines() if recap else []
+    ranking_posts = []
+    for l, tier, reasons in buzz:
+        roles = PLAYER_BUZZ_ROLES[tier]
+        if len(plan["PERFORMANCE"]) + len(roles) > perf_n:
+            continue
+        key = l["player_id"] or (l["short_name"], l["team_id"])
+        seen_players.add(key)
+        used = set()
+        subject = {"type": "player", "id": l["player_id"], "team_id": l["team_id"],
+                   "label": f"{l['name']} ({l['position']}, {W.teams[l['team_id']]['abbr']})"}
+        for i, role in enumerate(roles):
+            account = pick(role, l["team_id"], l["position"], used)
+            if not account:
+                continue
+            used.add(account["agent_id"])
+            a = _assignment("PERFORMANCE", account, subject, W.buzz_facts(l, tier, reasons))
+            a["buzz_tier"] = tier
+            plan["PERFORMANCE"].append(with_angle(a, role, roles, i))
+        if tier == 2:
+            account = pick("pundit", pos=l["position"], avoid=used)
+            if account:
+                a = _assignment("COMPARISON", account, {**subject, "label": f"Where {l['name']}'s game ranks"},
+                                W.ranking_facts(l, reasons))
+                a["buzz_tier"] = tier
+                ranking_posts.append(a)
+
     def add_performances(limit):
         for l in top_lines:
             if len(plan["PERFORMANCE"]) >= limit:
                 break
+            if norm_pos(l["position"]) not in OFFENSE_POSITIONS:
+                continue
             key = l["player_id"] or (l["short_name"], l["team_id"])
             if key in seen_players:
                 continue
@@ -761,6 +1105,7 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                 plan["COMPARISON"].append(_assignment("COMPARISON", account,
                                                       {"type": "player", "id": mine["player_id"], "team_id": tid, "label": f"{mine['name']} vs {theirs['name']}"},
                                                       W.comparison_facts(mine, theirs, mine["position"]), filed_team=tid))
+        plan["COMPARISON"][:0] = ranking_posts
         positions = ["QB", "WR", "RB", "TE"]
         for i in range(former_n):
             account = acc.former()
@@ -782,6 +1127,24 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             slant = _slant_team_id(account, W)
             plan["COMPARISON"].append(_assignment("COMPARISON", account, {"type": "position", "id": None, "label": f"Best {pos} in the league"},
                                                   W.leaderboard_facts(pos, slant)))
+
+    # 2d. Team storylines: unbeaten and winless runs, streaks and how they end, blowouts, upsets, scoring records.
+    # National voices, the meme page and bandwagon fans; the team's own ex-player if it has one.
+    for story in W.team_stories():
+        roles = TEAM_STORY_ROLES[(story["tier"], story["positive"])]
+        if len(plan["TEAM_STORY"]) + len(roles) > TEAM_STORY_MAX:
+            continue
+        tid = story["team_id"]
+        used = set()
+        for i, role in enumerate(roles):
+            account = pick(role, tid, None, used)
+            if not account:
+                continue
+            used.add(account["agent_id"])
+            a = _assignment("TEAM_STORY", account, {"type": "team", "id": tid, "label": f"{W.team_with_record(tid)}: {story['reasons'][0]}"},
+                            W.team_story_facts(story), filed_team=tid)
+            a["buzz_tier"] = story["tier"]
+            plan["TEAM_STORY"].append(with_angle(a, role, roles, i, story["positive"]))
 
     # 3. Beat notes: teams from the most exciting games, then the most popular teams that played.
     beat_n = BUCKET_SIZES["BEAT"]
@@ -879,13 +1242,15 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
     # 8. Replies: parents are chosen after the rest is written and scored. Their number flexes within
     # REPLY_RANGE to keep the week near TARGET_POSTS.
     so_far = sum(len(v) for v in plan.values())
-    # A full slate with a big article week can push past the target even at the reply floor: trim the newest
-    # (lowest-ranked) performances first, never below PERFORMANCE_FLOOR.
+    # A full slate with a big article week (or a week full of storylines) can push past the target even at the
+    # reply floor: trim the last-added (lowest-ranked) performances, then comparisons, then bad games, each down to
+    # its floor in TRIM_ORDER. Buzz posts sit at the front of their buckets, so they go last.
     over = so_far + REPLY_RANGE[0] - TARGET_POSTS
-    while over > 0 and len(plan["PERFORMANCE"]) > PERFORMANCE_FLOOR:
-        plan["PERFORMANCE"].pop()
-        so_far -= 1
-        over -= 1
+    for bucket, floor in TRIM_ORDER:
+        while over > 0 and len(plan[bucket]) > floor:
+            plan[bucket].pop()
+            so_far -= 1
+            over -= 1
     n_replies = max(REPLY_RANGE[0], min(REPLY_RANGE[1], TARGET_POSTS - so_far))
     for i in range(n_replies):
         plan["REPLY"].append(_assignment("REPLY", None, {"type": "post", "id": None,
@@ -1065,7 +1430,8 @@ def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=
     """Posts for an on-demand team wakeup (team page or Team Hub view), on top of the weekly 100.
 
     Each of the team's beat reporters posts a note; each die-hard fan reacts to last week's game or previews
-    this week's (alternating when both exist); 3 pundits if the team's popularity is above 70, 1 above 55.
+    this week's (alternating when both exist); 3 pundits if the team's popularity is above 70, 1 above 55 (at least
+    one when the league is talking about the team, and that one posts the storyline).
     local_articles: [(article dict, agent_id)] written in this wakeup; each is shared by its reporter.
     already_posted: agent ids that already posted in an earlier wakeup for this team and week.
     """
@@ -1101,10 +1467,21 @@ def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=
     top_lines = sorted((l for l in W.recap_lines if l["team_id"] == team_id), key=lambda l: l["fantasy_points"], reverse=True)
     best = W.team_best(team_id)
     pop = W.teams[team_id]["popularity"]
-    for i in range(3 if pop > 70 else 1 if pop > 55 else 0):
+    story = next((st for st in W.team_stories() if st["team_id"] == team_id), None)
+    n_pundits = 3 if pop > 70 else 1 if pop > 55 else 0
+    if story:
+        n_pundits = max(n_pundits, 1)      # a team the league is talking about always gets a national take
+    for i in range(n_pundits):
         p = acc.pundit()
         if not p:
             break
+        if story and i == 0:
+            a = _assignment("TEAM_STORY", p, {"type": "team", "id": team_id, "label": f"{W.team_with_record(team_id)}: {story['reasons'][0]}"},
+                            W.team_story_facts(story), filed_team=team_id)
+            a["buzz_tier"] = story["tier"]
+            out.append(a)
+            continue
+        i -= 1 if story else 0
         if i < len(top_lines):
             l = top_lines[i]
             out.append(_assignment("PERFORMANCE", p, {"type": "player", "id": l["player_id"], "team_id": team_id, "label": f"{l['name']} ({l['position']}, {W.teams[team_id]['abbr']})"},
