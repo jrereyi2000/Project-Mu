@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from newsroom.social_desk import load_week_context, plan_social_week  # noqa: E402
-from newsroom.social_writer import build_post_prompt, write_post  # noqa: E402
+from newsroom.social_writer import build_post_prompt, load_api_key, write_post  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -26,18 +26,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 QUOTA = [("REACTION", 6), ("PERFORMANCE", 3), ("BEAT", 2), ("STANDINGS", 1), ("PREVIEW", 2),
          ("MEME", 2), ("SHARE", 2)]
 REPLIES = 2
-
-
-def api_key():
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if key:
-        return key
-    env = os.path.join(ROOT, ".env")
-    if os.path.exists(env):
-        for line in open(env):
-            if line.startswith(("GEMINI_API_KEY=", "GOOGLE_API_KEY=")):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
-    return None
 
 
 def sample(plan: dict) -> list:
@@ -94,7 +82,7 @@ def main():
     ap.add_argument("--out", help="output JSON (default: captures/social_compare/<season>_w<week>_<time>.json)")
     args = ap.parse_args()
 
-    key = api_key()
+    key = load_api_key()
     if not key:
         sys.exit("GEMINI_API_KEY is not set (environment or .env).")
 

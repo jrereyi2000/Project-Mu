@@ -307,6 +307,20 @@ class Week:
             facts["your_team"] = self.team_label(author_team)
         return facts
 
+    def team_games(self, tid):
+        """(last week's completed game or None, this week's game or None) for a team."""
+        last = next((g for g in self.ctx["recap_games"] if tid in (g["home_team_id"], g["away_team_id"])), None)
+        nxt = next((g for g in self.ctx["preview_games"] if tid in (g["home_team_id"], g["away_team_id"])), None)
+        return last, nxt
+
+    def beat_facts(self, tid):
+        last, nxt = self.team_games(tid)
+        return {
+            "team": self.team_with_record(tid),
+            "last_game": self.game_facts(last, tid) if last else "Did not play last week.",
+            "next_game": self.preview_facts(nxt, tid) if nxt else "No game this week.",
+        }
+
     def last_result(self, tid):
         for g in reversed(self.ctx["games"]):
             if tid in (g["home_team_id"], g["away_team_id"]):
@@ -408,6 +422,19 @@ class Accounts:
                 None
             )
 
+    def replay(self, assignments):
+        """Count posts already assigned (e.g. the week's plan before the reply pass); shares don't count."""
+        for a in assignments:
+            if a.get("agent_id") and a["kind"] != "SHARE":
+                self.uses[a["agent_id"]] += 1
+        return self
+
+    def block(self, agent_ids):
+        """Accounts that must not be picked again (e.g. already posted in this team's wakeup)."""
+        for aid in agent_ids:
+            self.uses[aid] += 1000
+        return self
+
     def _pick(self, candidates, prefer=(), cap_role=None):
         prefer = set(prefer)
         ok = [a for a in candidates
@@ -499,12 +526,12 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
         notes.append(f"No articles stored for Week {week} yet; planned {len(articles)} placeholder shares "
                      "(one per slate slot). Their accounts are picked when the slates have run.")
     for art in articles:
-        if art["persona"] in NO_SHARE_ARCHETYPES:
+        # The roundtable panel never posts; local beat articles are shared in their team's wakeup instead.
+        if art["persona"] in NO_SHARE_ARCHETYPES or art["persona"] == "LOCAL_BEAT_REPORTER" \
+                or (art.get("slot") or "").startswith("Local Beat"):
             continue
         account = None
-        if art["persona"] == "LOCAL_BEAT_REPORTER":
-            account = acc.beat(art["team_id"])
-        elif art["persona"]:
+        if art["persona"]:
             account = acc.by_archetype_uncapped(SHARE_ACCOUNT_ARCHETYPE.get(art["persona"], art["persona"]))
         plan["SHARE"].append(_assignment("SHARE", account,
                                          {"type": "article", "id": art["id"], "label": art["headline"]},
@@ -544,13 +571,8 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
         account = acc.beat(tid)
         if not account:
             continue
-        last = next((g for g in recap if tid in (g["home_team_id"], g["away_team_id"])), None)
-        nxt = next((g for g in previews if tid in (g["home_team_id"], g["away_team_id"])), None)
-        plan["BEAT"].append(_assignment("BEAT", account, {"type": "team", "id": tid, "label": W.team_label(tid)}, {
-            "team": W.team_with_record(tid),
-            "last_game": W.game_facts(last, tid) if last else "Did not play last week.",
-            "next_game": W.preview_facts(nxt, tid) if nxt else "No game this week.",
-        }, filed_team=tid))
+        plan["BEAT"].append(_assignment("BEAT", account, {"type": "team", "id": tid, "label": W.team_label(tid)},
+                                        W.beat_facts(tid), filed_team=tid))
 
     # 4. Standings and races (from Week 3; regular season only).
     if 3 <= week <= REGULAR_SEASON_FINAL_WEEK:
@@ -730,6 +752,151 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
         notes.append(f"{len(missing)} posts have no account yet (placeholder shares, or a pool that ran out).")
     return {"season": season, "week": week, "recap_week": W.recap_week, "phase": phase,
             "assignments": assignments, "counts": counts, "notes": notes}
+
+
+# ------------------------------------------------------------------------------------------------ replies ---
+# Who answers whom when a pundit's post takes off.
+CONTRARIAN = {
+    "SHANNON": "SKIP_TWEET", "SKIP_TWEET": "SHANNON", "STEPHEN_A": "MCAFEE", "MCAFEE": "STEPHEN_A",
+    "COWHERD": "CLARK", "CLARK": "COWHERD", "RG3": "JJ_WATT", "JJ_WATT": "RG3", "OCHOCINCO": "SHANNON",
+    "FANTASY_GURU": "BERRY", "BERRY": "FANTASY_GURU", "YATES": "BERRY", "HERBSTREIT": "STEPHEN_A",
+    "WINGO": "EISEN", "EISEN": "WINGO", "THE_ATHLETIC": "STEPHEN_A", "SCHEFTER_TWEET": "RAPOPORT",
+    "RAPOPORT": "SCHEFTER_TWEET", "SIMMONS": "COWHERD", "NFL_MEMES": None, "DRAFT_SICKO": None,
+}
+REPLY_SPREAD = (3, 3, 3, 3, 2, 2, 2, 2)  # replies per parent, most engaged parent first
+
+
+def _subject_teams(ctx, a):
+    """Teams a post is about: both teams of its game, else the team it's filed under."""
+    if a["subject"]["type"] == "game":
+        g = next((g for g in ctx["recap_games"] + ctx["preview_games"] if g["id"] == a["subject"]["id"]), None)
+        if g:
+            return [g["away_team_id"], g["home_team_id"]]
+    return [a["team_id"]] if a.get("team_id") else []
+
+
+def plan_replies(ctx: dict, plan: dict, posts: list, total: int = None) -> list:
+    """Reply assignments for the week's most engaged posts (build step 5).
+
+    posts: saved posts [{"id", "assignment", "likes", "agent_id", "handle", "display_name", "text"}].
+    Each reply carries its parent ({"id", "handle", "display_name", "text"}) and the parent's facts.
+    Authors are rivals or natural foils: the other team's fans, a contrarian pundit, the roasted team's fans.
+    """
+    total = BUCKET_SIZES["REPLY"] if total is None else total
+    acc = Accounts(ctx["accounts"], seed=f"{ctx['season']}-{ctx['week']}-replies").replay(plan["assignments"])
+    parents = sorted((p for p in posts if p["assignment"]["kind"] != "REPLY" and p.get("text")),
+                     key=lambda p: p.get("likes") or 0, reverse=True)
+    out = []
+    for parent, n in zip(parents, REPLY_SPREAD):
+        a = parent["assignment"]
+        teams = _subject_teams(ctx, a)
+        author_team = a.get("team_id") if a.get("archetype") == "DIE_HARD_FAN" else None
+        rivals = [t for t in teams if t != author_team]
+        used_here = {parent["agent_id"]}
+
+        def fan_of(tids):
+            pool = [x for x in acc.all() if x["archetype"] == "DIE_HARD_FAN" and x["team_id"] in tids
+                    and x["agent_id"] not in used_here]
+            return acc._pick(pool)
+
+        def foil():
+            arch = CONTRARIAN.get(a.get("archetype"))
+            if arch:
+                pool = [x for x in acc.all() if x["archetype"] == arch and x["agent_id"] not in used_here]
+                return acc._pick(pool, cap_role="pundit")
+            return None
+
+        def pundit():
+            pool = [x for x in acc.all() if acc.role.get(x["agent_id"]) == "pundit" and x["agent_id"] not in used_here]
+            return acc._pick(pool)
+
+        def bandwagon():
+            return acc._pick([x for x in acc.all() if x["archetype"] == "BANDWAGON_FAN" and x["agent_id"] not in used_here])
+
+        if a.get("archetype") == "DIE_HARD_FAN":
+            order = [lambda: fan_of(rivals), lambda: fan_of([author_team]), bandwagon, pundit]
+        elif a["kind"] == "MEME":
+            target = [t for t in teams if t] if a["subject"]["type"] == "game" else []
+            order = [lambda: fan_of(target[:1] or target), lambda: fan_of(target), bandwagon]
+        elif a.get("archetype") == "LOCAL_BEAT_REPORTER":
+            order = [lambda: fan_of(teams), pundit]
+        else:
+            order = [foil, lambda: fan_of(teams), bandwagon, pundit]
+        made = 0
+        tries = 0
+        while made < n and len(out) < total and tries < 3 * n:
+            tries += 1
+            author = None
+            for f in order:
+                author = f()
+                if author:
+                    break
+            if not author:
+                break
+            used_here.add(author["agent_id"])
+            filed = author.get("team_id") or a.get("team_id")
+            out.append(_assignment("REPLY", author,
+                                   {"type": "post", "id": parent["id"], "label": f"reply to {parent['handle']}"},
+                                   a.get("facts") or {}, filed_team=filed))
+            out[-1]["parent"] = {"id": parent["id"], "handle": parent["handle"],
+                                 "display_name": parent["display_name"], "text": parent["text"]}
+            made += 1
+        if len(out) >= total:
+            break
+    return out
+
+
+# ------------------------------------------------------------------------------------------- team wakeup ---
+def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=()) -> dict:
+    """Posts for an on-demand team wakeup (team page or Team Hub view), on top of the weekly 100.
+
+    Each of the team's beat reporters posts a note; each die-hard fan reacts to last week's game or previews
+    this week's (alternating when both exist); 3 pundits if the team's popularity is above 70, 1 above 55.
+    local_articles: [(article dict, agent_id)] written in this wakeup; each is shared by its reporter.
+    already_posted: agent ids that already posted in an earlier wakeup for this team and week.
+    """
+    W = Week(ctx)
+    acc = Accounts(ctx["accounts"], seed=f"{W.season}-{W.week}-team{team_id}").block(already_posted)
+    last, nxt = W.team_games(team_id)
+    out = []
+    for art, agent_id in local_articles:
+        account = acc.by_id.get(agent_id)
+        if account:
+            out.append(_assignment("SHARE", account, {"type": "article", "id": art["id"], "label": art["headline"]},
+                                   {k: art.get(k) for k in ("headline", "excerpt", "article_type", "slot")}, filed_team=team_id))
+    for b in sorted((x for x in acc.all() if x["archetype"] == "LOCAL_BEAT_REPORTER" and x["team_id"] == team_id
+                     and acc.uses[x["agent_id"]] < 1000), key=lambda x: x["agent_id"]):
+        acc.uses[b["agent_id"]] += 1
+        out.append(_assignment("BEAT", b, {"type": "team", "id": team_id, "label": W.team_label(team_id)},
+                               W.beat_facts(team_id), filed_team=team_id))
+    fans = sorted((x for x in acc.all() if x["archetype"] == "DIE_HARD_FAN" and x["team_id"] == team_id
+                   and acc.uses[x["agent_id"]] < 1000), key=lambda x: acc.order[x["agent_id"]])
+    for i, f in enumerate(fans):
+        acc.uses[f["agent_id"]] += 1
+        g = (last if (i % 2 == 0 or not nxt) else nxt) or nxt
+        if not g:
+            break
+        if g is last:
+            out.append(_assignment("REACTION", f, {"type": "game", "id": g["id"], "label": W.game_label(g)},
+                                   W.game_facts(g, team_id), filed_team=team_id))
+        else:
+            out.append(_assignment("PREVIEW", f, {"type": "game", "id": g["id"], "label": W.game_label(g)},
+                                   W.preview_facts(g, team_id), filed_team=team_id))
+    pop = W.teams[team_id]["popularity"]
+    for _ in range(3 if pop > 70 else 1 if pop > 55 else 0):
+        p = acc.pundit()
+        g = last or nxt
+        if not p or not g:
+            break
+        if g is last:
+            out.append(_assignment("REACTION", p, {"type": "game", "id": g["id"], "label": W.game_label(g)},
+                                   W.game_facts(g), filed_team=team_id))
+        else:
+            out.append(_assignment("PREVIEW", p, {"type": "game", "id": g["id"], "label": W.game_label(g)},
+                                   W.preview_facts(g), filed_team=team_id))
+    counts = collections.Counter(a["kind"] for a in out)
+    return {"season": W.season, "week": W.week, "recap_week": W.recap_week, "phase": "team wakeup",
+            "team_id": team_id, "assignments": out, "counts": dict(counts), "notes": []}
 
 
 # ------------------------------------------------------------------------------------------------- CLI ---

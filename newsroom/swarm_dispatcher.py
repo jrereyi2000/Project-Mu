@@ -397,7 +397,7 @@ POSTSEASON_EDITORIAL_SLATES = {
     ],
 }
 
-# Agents never drawn as random "pundits" for reaction tweets: long-form-only writers (their personas are
+# Agents never drawn as random "pundits" for Agent Wire posts (newsroom/social_desk.PUNDIT_EXCLUDED mirrors this list): long-form-only writers (their personas are
 # article voices; SKIP_BAYLESS's tweets come from SKIP_TWEET, so Skip never tweets twice), the roundtable panel,
 # beat reporters, and fans (fans tweet through their own selection rules).
 TWEET_EXCLUDED_ARCHETYPES = (
@@ -1583,50 +1583,10 @@ If you need specific stats, use your database tools before producing your final 
             target_str = f" | Subject: {target['team_name']}" if target else ""
             print(f"   [{idx}] [{slot_name}] {item['article_type_name']} ({item['article_type_id']}) -> {item['display_name']} ({item['archetype']}){target_str}")
 
-        # 2. Wake up reaction agents (National Pundits, Bandwagons, Die-Hards)
-        with psycopg.connect(self.db.db_conn_info) as conn:
-            with conn.cursor() as cur:
-                # Random National Pundits & Bandwagons
-                cur.execute("""
-                    SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
-                    FROM agent_memories 
-                    WHERE NOT (archetype = ANY(%s)) 
-                    ORDER BY RANDOM() LIMIT 4;
-                """, (list(TWEET_EXCLUDED_ARCHETYPES),))
-                pundits = cur.fetchall()
-
-                cur.execute("""
-                    SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
-                    FROM agent_memories 
-                    WHERE archetype = 'BANDWAGON_FAN' 
-                    ORDER BY RANDOM() LIMIT 2;
-                """)
-                bandwagons = cur.fetchall()
-
-                # Die-Hard Homers from exciting games
-                exciting_game_ids = [g["game_id"] for g in brief.get("recap_slate", {}).get("all_games", [])[:5]]
-                homers = []
-                if exciting_game_ids:
-                    cur.execute("""
-                        SELECT home_team_id, away_team_id FROM games WHERE id = ANY(%s)
-                    """, (exciting_game_ids,))
-                    teams_involved = []
-                    for r in cur.fetchall():
-                        teams_involved.extend([r[0], r[1]])
-
-                    if teams_involved:
-                        cur.execute("""
-                            WITH RankedHomers AS (
-                                SELECT *, ROW_NUMBER() OVER(PARTITION BY assigned_team_id ORDER BY RANDOM()) as rn
-                                FROM agent_memories WHERE assigned_team_id = ANY(%s) AND archetype = 'DIE_HARD_FAN'
-                            )
-                            SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
-                            FROM RankedHomers WHERE rn <= 1;
-                        """, (teams_involved,))
-                        homers = cur.fetchall()
+        # Agent Wire posts (reactions, shares, replies) are written after the slates by
+        # newsroom/social_publish.run_social_week, called from newsroom/weekly_run.py.
 
         print(f"\n-> Dispatching: {len(commissioned_articles)} Commissioned Editorial Matrix Articles.")
-        print(f"-> Dispatching: {len(pundits)} Pundit Reactions, {len(bandwagons)} Bandwagon Posts, {len(homers)} Fan Posts.")
 
         # Compile article tasks
         article_tasks = []
@@ -1666,28 +1626,6 @@ If you need specific stats, use your database tools before producing your final 
             for t in article_tasks:
                 _run_article_job(t)
 
-        # Dispatch Tweets
-        tweet_tasks = []
-        for pundit in pundits:
-            p = self.compile_agent_prompt(pundit[0], pundit[1], pundit[2], pundit[3], pundit[4], pundit[5], brief, season, week, "TWEET")
-            tweet_tasks.append((p, pundit[5]))
-
-        for fan in bandwagons + homers:
-            p = self.compile_agent_prompt(fan[0], fan[1], fan[2], fan[3], fan[4], fan[5], brief, season, week, "TWEET")
-            tweet_tasks.append((p, fan[5]))
-
-        if max_workers > 1 and len(tweet_tasks) > 1:
-            print(f"\n⚡ Executing {len(tweet_tasks)} Reaction Tweets in Parallel...")
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [executor.submit(self._execute_agent, t[0], season, week, t[1], live, model, save_to_db) for t in tweet_tasks]
-                for f in as_completed(futures):
-                    try:
-                        f.result()
-                    except Exception as exc:
-                        print(f"❌ Tweet generation exception: {exc}")
-        else:
-            for t in tweet_tasks:
-                self._execute_agent(t[0], season, week, t[1], live=live, model=model, save_to_db=save_to_db)
 
     def commission_fantasy_slate(self, season: int, week: int) -> list[dict]:
         """Fantasy desk: the week's FANTASY_* slots (newsroom/fantasy_desk.py) with a writer for each.
@@ -1782,7 +1720,8 @@ If you need specific stats, use your database tools before producing your final 
         save_to_db: bool = False,
         max_workers: int = 5
     ):
-        """Runs the on-demand local wakeup logic when a team page is viewed."""
+        """Runs the on-demand local wakeup when a team page or Team Hub is viewed: the local beat portfolio, then
+        the team's Agent Wire posts (newsroom/social_publish.run_team_social), which also share the new articles."""
         print(f"\n📍 --- INITIATING LOCAL TEAM WAKEUP (Team {team_id}, Week {week}) ---")
         print(f"-> Concurrency Level: {max_workers} worker threads")
 
@@ -1796,22 +1735,7 @@ If you need specific stats, use your database tools before producing your final 
                 """, (team_id,))
                 local_beats = cur.fetchall()
 
-                # 2. Wake up Die-Hard Homers for this team
-                cur.execute("""
-                    SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
-                    FROM agent_memories 
-                    WHERE assigned_team_id = %s AND archetype = 'DIE_HARD_FAN';
-                """, (team_id,))
-                local_homers = cur.fetchall()
-
-                # 3. Determine how many National Agents care based on POP
-                cur.execute("SELECT popularity_index FROM team_seasons WHERE team_id = %s AND season = %s", (team_id, season))
-                row = cur.fetchone()
-                pop = row[0] if row and row[0] is not None else 50.0
-
-                num_pundits = 3 if pop > 70 else (1 if pop > 55 else 0)
-
-                # 4. Inputs for the local beat portfolio: last week's result, this week's game, and what exists
+                # 2. Inputs for the local beat portfolio: last week's result, this week's game, and what exists
                 cur.execute("""
                     SELECT 1 FROM games
                     WHERE season = %s AND week = %s AND status = 'COMPLETED' AND %s IN (home_team_id, away_team_id)
@@ -1834,18 +1758,7 @@ If you need specific stats, use your database tools before producing your final 
                 """, (season, week, team_id))
                 existing_local_types = {r[0] for r in cur.fetchall()}
 
-                pundits = []
-                if num_pundits > 0:
-                    cur.execute("""
-                        SELECT agent_id, archetype, persistent_memory, handle, display_name, assigned_team_id 
-                        FROM agent_memories 
-                        WHERE NOT (archetype = ANY(%s)) 
-                        ORDER BY RANDOM() LIMIT %s;
-                    """, (list(TWEET_EXCLUDED_ARCHETYPES), num_pundits))
-                    pundits = cur.fetchall()
-
-        print(f"-> Waking up {len(local_beats)} Beat Reporters and {len(local_homers)} Die-Hards.")
-        print(f"-> Team POP is {pop:.1f}. Waking up {len(pundits)} National Pundits to comment.")
+        print(f"-> Waking up {len(local_beats)} Beat Reporters.")
 
         # Full local beat portfolio every wakeup, dealt across the team's reporters (newsroom/local_portfolio.py):
         # postgame report (if they played last week), matchup primer (if they play this week), player spotlight,
@@ -1871,16 +1784,22 @@ If you need specific stats, use your database tools before producing your final 
                 brief, season, week, "ARTICLE", article_type=assigned_local_type,
                 slot_target=primer_target if assigned_local_type == LOCAL_PRIMER else None,
             )
-            article_tasks.append((p, team_id, assigned_local_type, b[4] or b[0], local_slot, assigned_local_type))
+            article_tasks.append((p, team_id, assigned_local_type, b[4] or b[0], local_slot, assigned_local_type, b[0]))
+
+        # Saved local articles, with their reporter, for the Agent Wire shares below
+        written = []
 
         # Helper executor for articles
         def _run_article_job(task):
-            prompt, t_id, art_type, writer_name, slot_name, at_id = task
+            prompt, t_id, art_type, writer_name, slot_name, at_id, agent_id = task
             print(f"🚀 [LOCAL WORKER] Starting [{slot_name}]: {art_type} by {writer_name}")
             res = self._execute_agent(
                 prompt, season, week, t_id, live=live, model=model, save_to_db=save_to_db, slot=slot_name, article_type=at_id
             )
             print(f"✅ [LOCAL WORKER] Completed [{slot_name}]: {art_type} by {writer_name}")
+            if res and res.get("article_id"):
+                written.append(({"id": res["article_id"], "headline": res.get("headline"), "excerpt": res.get("excerpt"),
+                                 "article_type": at_id, "slot": slot_name}, agent_id))
             return res
 
         # Execute Articles (in Parallel if max_workers > 1)
@@ -1897,28 +1816,13 @@ If you need specific stats, use your database tools before producing your final 
             for t in article_tasks:
                 _run_article_job(t)
 
-        # Compile and execute Tweet tasks
-        tweet_tasks = []
-        for h in local_homers:
-            p = self.compile_agent_prompt(h[0], h[1], h[2], h[3], h[4], h[5], brief, season, week, "TWEET")
-            tweet_tasks.append((p, team_id, h[4] or h[0]))
-
-        for pundit in pundits:
-            p = self.compile_agent_prompt(pundit[0], pundit[1], pundit[2], pundit[3], pundit[4], pundit[5], brief, season, week, "TWEET")
-            tweet_tasks.append((p, team_id, pundit[4] or pundit[0]))
-
-        if max_workers > 1 and len(tweet_tasks) > 1:
-            print(f"\n⚡ Executing {len(tweet_tasks)} Local Reactions & Pundit Tweets in Parallel...")
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(self._execute_agent, t[0], season, week, t[1], live, model, save_to_db)
-                    for t in tweet_tasks
-                ]
-                for f in as_completed(futures):
-                    try:
-                        f.result()
-                    except Exception as exc:
-                        print(f"❌ Local Tweet generation exception: {exc}")
+        # Agent Wire: beat notes, fan reactions and previews, pundits by popularity, and shares of the new articles
+        if live and save_to_db:
+            try:
+                from newsroom.social_publish import run_team_social
+                run_team_social(self.db.db_conn_info, season, week, team_id, local_articles=written,
+                                model=model, max_workers=max_workers, tagger=self.entity_tagger)
+            except Exception as exc:
+                print(f"❌ Agent Wire team posts failed: {exc}")
         else:
-            for t in tweet_tasks:
-                self._execute_agent(t[0], season, week, t[1], live=live, model=model, save_to_db=save_to_db)
+            print("-> Agent Wire team posts are only written on live, saved wakeups (newsroom/social_publish.py).")

@@ -12,10 +12,14 @@ It is called by the video pipeline after the stats sync (pipeline/main.py) and c
     python3 -m newsroom.weekly_run --week 7 --force   # publish again even though Week 7 exists
     python3 -m newsroom.weekly_run --dry-run          # print the plan and prompts; no Gemini calls, no writes
     python3 -m newsroom.weekly_run --fantasy-only     # only the Mu Fantasy slate (docs/FANTASY_EDITORIAL_MATRIX.md)
-    python3 -m newsroom.weekly_run --skip-fantasy     # only the national slate
+    python3 -m newsroom.weekly_run --skip-fantasy     # national slate and Agent Wire posts, no fantasy slate
+    python3 -m newsroom.weekly_run --social-only      # only the Agent Wire posts (docs/SOCIAL_MATRIX.md)
+    python3 -m newsroom.weekly_run --skip-social      # national and fantasy slates, no Agent Wire posts
 
 The Mu Fantasy slate (newsroom/fantasy_desk.py) runs after the national slate in the same run, Weeks 1–18,
-with its own already-published check (slots 'Fantasy ...').
+with its own already-published check (slots 'Fantasy ...'). The week's ~100 Agent Wire posts
+(newsroom/social_publish.py) run last, so they can share the week's articles; their check is any post with
+slot 'Agent Wire'.
 """
 import argparse
 
@@ -82,16 +86,19 @@ def run_weekly_swarm(
     max_workers: int = 5,
     national: bool = True,
     fantasy: bool = True,
+    social: bool = True,
 ) -> dict:
-    """Publishes the national slate and then the Mu Fantasy slate for `week` (default: the next week to publish).
+    """Publishes the national slate, the Mu Fantasy slate and then the Agent Wire posts for `week` (default: the
+    next week to publish).
 
     Each slate is skipped when it already exists (unless force). Returns {"season", "week", "status",
-    "national", "fantasy"}: status is "published", "dry_run", "skipped_exists", "skipped_locked" or
-    "season_complete" for the run as a whole; national/fantasy give each slate's own status
+    "national", "fantasy", "social"}: status is "published", "dry_run", "skipped_exists", "skipped_locked" or
+    "season_complete" for the run as a whole; national/fantasy/social give each part's own status
     ("published", "dry_run", "skipped_exists", "not_requested", "no_fantasy_week")."""
     import psycopg
     from db.db_handler import DatabaseHandler
     from newsroom.fantasy_desk import fantasy_phase
+    from newsroom.social_publish import run_social_week, social_slate_exists
     from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
 
     conn_info = db_conn_info or DatabaseHandler().db_conn_info
@@ -106,7 +113,9 @@ def run_weekly_swarm(
             f = "no_fantasy_week"
         else:
             f = "skipped_exists" if not dry_run and not force and fantasy_slate_exists(cur, season, week) else None
-        return {"national": n, "fantasy": f}
+        so = "not_requested" if not social else (
+            "skipped_exists" if not dry_run and not force and social_slate_exists(cur, season, week) else None)
+        return {"national": n, "fantasy": f, "social": so}
 
     # Held for the whole run so a second trigger for the same week can't start while this one writes.
     with psycopg.connect(conn_info, autocommit=True) as lock_conn:
@@ -121,7 +130,7 @@ def run_weekly_swarm(
             todo = plan(cur)
             if all(v is not None for v in todo.values()):
                 print(f"[Newsroom] Season {season} Week {week}: nothing to publish "
-                      f"(national: {todo['national']}, fantasy: {todo['fantasy']}).")
+                      f"(national: {todo['national']}, fantasy: {todo['fantasy']}, social: {todo['social']}).")
                 return {**result, "status": "skipped_exists", **todo}
 
             cur.execute("SELECT pg_try_advisory_lock(%s, %s);", (ADVISORY_LOCK_NAMESPACE, season * 100 + week))
@@ -166,6 +175,15 @@ def run_weekly_swarm(
                     todo["fantasy"] = done
                 else:
                     print(f"[Newsroom] Fantasy slate: {todo['fantasy']}.")
+
+                if todo["social"] is None:
+                    print(f"[Newsroom] Publishing Season {season} Week {week} Agent Wire posts"
+                          f"{' (dry run)' if dry_run else ''}...")
+                    res = run_social_week(conn_info, season, week, model=model, dry_run=dry_run, force=force,
+                                          max_workers=max_workers)
+                    todo["social"] = done if res.get("status") in ("published", "dry_run") else res.get("status")
+                else:
+                    print(f"[Newsroom] Agent Wire posts: {todo['social']}.")
                 return {**result, "status": done, **todo}
             finally:
                 cur.execute("SELECT pg_advisory_unlock(%s, %s);", (ADVISORY_LOCK_NAMESPACE, season * 100 + week))
@@ -180,14 +198,21 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Print the plan and prompts; no Gemini calls, no DB writes")
     parser.add_argument("--model", default=None, help="Override the Gemini model")
     parser.add_argument("--workers", type=int, default=5)
-    parser.add_argument("--skip-fantasy", action="store_true", help="Publish only the national slate")
+    parser.add_argument("--skip-fantasy", action="store_true", help="Skip the Mu Fantasy slate")
     parser.add_argument("--fantasy-only", action="store_true", help="Publish only the Mu Fantasy slate")
+    parser.add_argument("--skip-social", action="store_true", help="Don't write the Agent Wire posts")
+    parser.add_argument("--social-only", action="store_true", help="Write only the Agent Wire posts")
     args = parser.parse_args()
-    if args.skip_fantasy and args.fantasy_only:
-        parser.error("--skip-fantasy and --fantasy-only can't be combined")
+    only = [f for f in ("fantasy_only", "social_only") if getattr(args, f)]
+    if len(only) > 1:
+        parser.error("--fantasy-only and --social-only can't be combined")
+    if args.skip_fantasy and args.fantasy_only or args.skip_social and args.social_only:
+        parser.error("--skip-X and --X-only can't be combined")
     res = run_weekly_swarm(args.season, args.week, force=args.force, dry_run=args.dry_run,
                            model=args.model, max_workers=args.workers,
-                           national=not args.fantasy_only, fantasy=not args.skip_fantasy)
+                           national=not (args.fantasy_only or args.social_only),
+                           fantasy=not (args.skip_fantasy or args.social_only),
+                           social=not (args.skip_social or args.fantasy_only))
     print(f"[Newsroom] Result: {res}")
 
 

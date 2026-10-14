@@ -5,6 +5,7 @@ and cleans the reply into a post. The facts packet is the only source of numbers
 (agent_personas.json "archetypes") sets the voice. Nothing here writes to the database.
 """
 import json
+import os
 import re
 import time
 
@@ -154,3 +155,17 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
         raw, post = raw2, post2
     return {"raw": raw, **post, "usage": usage_total, "cost_usd": cost_usd(model, usage_total),
             "seconds": round(time.time() - start, 2), "calls": calls}
+
+
+def load_api_key():
+    """GEMINI_API_KEY / GOOGLE_API_KEY from the environment, else from the project's .env."""
+    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if key:
+        return key
+    env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.exists(env):
+        with open(env) as f:
+            for line in f:
+                if line.startswith(("GEMINI_API_KEY=", "GOOGLE_API_KEY=")):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return None

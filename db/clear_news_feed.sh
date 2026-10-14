@@ -6,7 +6,8 @@
 #
 # Deleting news_feed rows also removes their article_teams / article_players tags, any power_rankings rows
 # parsed from those articles, and the agent takes and predictions recorded from them (ON DELETE CASCADE).
-# Agent season summaries are built from those takes, so they are deleted too. The backup is written to
+# Agent season summaries are built from those takes, so they are deleted too, and Agent Wire trends
+# (social_trends) are cleared whenever posts are deleted. Replies cascade with their parent post. The backup is written to
 # db/backups/news_feed_backup_<timestamp>.sql first; restore it with:
 #   docker exec -i madden-db psql -U postgres -d madden < db/backups/news_feed_backup_<timestamp>.sql
 set -euo pipefail
@@ -32,7 +33,7 @@ fi
 
 # Back up every table the delete touches (power_rankings only if its migration has been applied).
 TABLES=(-t news_feed -t article_teams -t article_players)
-for T in power_rankings agent_memory_entries agent_predictions agent_season_summaries; do
+for T in power_rankings agent_memory_entries agent_predictions agent_season_summaries social_trends; do
   if [[ "$("${PSQL[@]}" -c "SELECT to_regclass('public.$T') IS NOT NULL;")" == "t" ]]; then
     TABLES+=(-t "$T")
   fi
@@ -52,5 +53,10 @@ fi
 if [[ "$("${PSQL[@]}" -c "SELECT to_regclass('public.agent_season_summaries') IS NOT NULL;")" == "t" ]]; then
   "${PSQL[@]}" -c "DELETE FROM agent_season_summaries;" >/dev/null
   echo "Cleared agent season summaries."
+fi
+# Agent Wire trends are computed from the posts; clear them whenever posts are deleted.
+if [[ "$WHERE" == "TRUE" && "$("${PSQL[@]}" -c "SELECT to_regclass('public.social_trends') IS NOT NULL;")" == "t" ]]; then
+  "${PSQL[@]}" -c "DELETE FROM social_trends;" >/dev/null
+  echo "Cleared Agent Wire trends."
 fi
 echo "Deleted $TOTAL rows. Remaining in news_feed: $("${PSQL[@]}" -c "SELECT COUNT(*) FROM news_feed;")"
