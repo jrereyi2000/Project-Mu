@@ -470,6 +470,10 @@ def classify(f):
         return "GAME_STATS"
     if "PLAYER NAME" in t and "VIEW PLAYER CARD" in t:
         return "PLAYER_STATS"
+    # A wide table scrolled to its right edge hides the PLAYER NAME column (seen Oct 14 after a stream
+    # restart mid-Defense); its button bar still shows VIEW PLAYER CARD, SORT and R2.
+    if "VIEW PLAYER CARD" in t and "SORT" in t and f.find("R2"):
+        return "PLAYER_STATS"
     if "TEAM NAME" in t and "SORT" in t and f.find("R2"):
         return "TEAM_STATS"
     # League Schedule > Cross on a played game (mapped Oct 13): L1 BOX SCORE | PLAYER STATS R1

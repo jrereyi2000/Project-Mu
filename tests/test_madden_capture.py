@@ -66,6 +66,12 @@ class ClassifyTest(unittest.TestCase):
         f = _Frame("NFL", "R2", "PASSING", "PLAYER NAME", "VIEW PLAYER CARD", "YARDS")
         self.assertEqual(mc.classify(f), "PLAYER_STATS")
 
+    def test_player_stats_scrolled_right(self):
+        # Oct 14: after a stream restart mid-Defense the table was at its right edge, PLAYER NAME scrolled away
+        f = _Frame("NFLPA", "SS #21", "NFL", "TFL", "SACK", "VIEW PLAYER CARD", "SORT", "R2", "INT", "BACK",
+                   "DEFENSE", "INTYDS", "FFUMB", "FMBREC", "GP", "DOWNS PLAYED", "DP")
+        self.assertEqual(mc.classify(f), "PLAYER_STATS")
+
     def test_locked_menu_item_still_found(self):
         f = _Frame("TRADE Q", "TEAM STATS")
         self.assertIsNotNone(f.find("TRADE"))
