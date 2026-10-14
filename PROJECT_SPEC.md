@@ -438,7 +438,7 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
 
 ### 4.5 Debug Endpoints (`server/debug_api.py`, the `#debug` page)
 Reads are open like the rest of the API; every write needs header `X-Debug-Token` = `DEBUG_TOKEN` (env or `.env`; 403 when unset, 401 when wrong). The module opens its own connections (`DATABASE_URL`).
-- `GET /api/debug/state`: `league_state`, the database name, the last 10 `captures` rows, `writes_enabled`, `running_job`. `PUT /api/debug/state` `{current_season, current_week}` (week 1–23).
+- `GET /api/debug/state`: `league_state`, the database name, the last 10 `captures` rows, `writes_enabled`, `running_job`, and `resumable`: up to 15 run folders with a `weekly_run.log` that aren't loaded (`folder`, `mode` weekly | games, `stage` capture incomplete | captured | extracted), newest first. `PUT /api/debug/state` `{current_season, current_week}` (week 1–23).
 - `GET /api/debug/tables`: every table and view in `public` (`name`, `kind`, estimated `rows`, `columns`, `pk`).
 - `GET /api/debug/tables/{name}?page&page_size (≤200)&sort&dir&q&filters`: rows plus `columns` (`column`, `type`, `nullable`, `generated`, `pk`), `pk`, `total`. `q` searches every column as text; `filters` is a JSON object `{column: value}`: plain text = case-insensitive contains, `=`, `!=`, `>`, `<`, `>=`, `<=` compare (value cast to the column's type), `null` / `!null`. Default order is the primary key.
 - `PATCH /api/debug/tables/{name}` `{key: {pk columns}, changes: {column: value | null}}`: base tables with a primary key only; generated and key columns refused; values cast to the column type; table triggers fire as usual (e.g. a `games` score edit updates records). Returns the updated row.

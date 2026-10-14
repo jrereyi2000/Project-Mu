@@ -2,7 +2,8 @@
 Debug page backend (/api/debug/*, the frontend's #debug page; JR, Oct 14). Opened from the site's LIVE
 badge, also from a phone on the home network.
 
-- League state: read, and edit (season / week).
+- League state: read, and edit (season / week); recent captures rows and the run folders that can be
+  resumed (weekly_run.log present, not loaded; a run that stopped before its load has no captures row).
 - Tables: every table and view in the public schema, with columns, sorted / filtered / paginated rows,
   and cell edits on base tables by primary key (generated and key columns can't be edited).
 - Endpoints: every route of the FastAPI app. Docs: PROJECT_SPEC.md and the other spec docs as Markdown.
@@ -57,6 +58,24 @@ class StateIn(BaseModel):
     current_week: int
 
 
+def resumable_runs(loaded, limit=15):
+    """Weekly-run folders (captures/<run>/weekly_run.log) not loaded yet, newest first, with how far they
+    got. A run that stopped before its load has no captures row, so the folders are the list."""
+    from pipeline.weekly_capture import CAPTURES, capture_done, extract_done
+    out = []
+    for name in sorted(os.listdir(CAPTURES), reverse=True):
+        folder = os.path.join(CAPTURES, name)
+        if name in loaded or not os.path.exists(os.path.join(folder, "weekly_run.log")):
+            continue
+        mode = "games" if os.path.isdir(os.path.join(folder, "games")) else "weekly"
+        stage = ("extracted" if extract_done(folder, mode) else "captured" if capture_done(folder, mode)
+                 else "capture incomplete")
+        out.append({"folder": name, "mode": mode, "stage": stage})
+        if len(out) >= limit:
+            break
+    return out
+
+
 @router.get("/state")
 def get_state():
     with connect() as conn:
@@ -64,8 +83,9 @@ def get_state():
         captures = conn.execute("""SELECT id, folder, mode, season, week, status, error, captured_at, extracted_at,
                                           loaded_at FROM captures ORDER BY id DESC LIMIT 10""").fetchall()
         db = conn.execute("SELECT current_database() AS name").fetchone()["name"]
+        loaded = {r["folder"] for r in conn.execute("SELECT folder FROM captures WHERE status = 'loaded'").fetchall()}
     return {"state": state, "database": db, "captures": captures, "writes_enabled": bool(env("DEBUG_TOKEN")),
-            "running_job": running_job()}
+            "running_job": running_job(), "resumable": resumable_runs(loaded)}
 
 
 @router.put("/state")

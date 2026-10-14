@@ -12,7 +12,8 @@ type Column = { column: string; type: string; nullable: boolean; generated: bool
 type TableRows = { table: string; kind: string; columns: Column[]; pk: string[]; total: number; page: number; page_size: number; rows: Record<string, unknown>[] };
 type Job = { id: string; kind: string; kind_label: string; status: string; exit_code?: number | null; started_at: string; resume?: string | null; log_tail?: string };
 type Capture = { id: number; folder: string; mode: string; season: number; week: number | null; status: string; error: string | null; loaded_at: string | null };
-type DebugState = { state: { current_season: number; current_week: number }; database: string; captures: Capture[]; writes_enabled: boolean; running_job: Job | null };
+type Resumable = { folder: string; mode: string; stage: string };
+type DebugState = { state: { current_season: number; current_week: number }; database: string; captures: Capture[]; writes_enabled: boolean; running_job: Job | null; resumable: Resumable[] };
 
 function readToken() {
   try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
@@ -110,7 +111,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
     catch (e) { setMessage(`Not stopped: ${(e as Error).message}`); }
   };
 
-  const resumable = (data?.captures || []).filter(c => c.status !== "loaded");
+  const resumable = data?.resumable || [];
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
@@ -138,7 +139,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
           <label className="block mt-4"><span className={label}>Resume a stopped run (optional)</span>
             <select className={input} value={resume} onChange={e => setResume(e.target.value)}>
               <option value="">— new run —</option>
-              {resumable.map(c => <option key={c.id} value={c.folder}>{c.folder} · {c.mode} · {c.status}</option>)}
+              {resumable.map(c => <option key={c.folder} value={c.folder}>{c.folder} · {c.mode} · {c.stage}</option>)}
             </select>
           </label>
           {!token && <p className="text-xs text-[var(--red)] mt-2">Enter the debug token above to start runs or edit.</p>}
