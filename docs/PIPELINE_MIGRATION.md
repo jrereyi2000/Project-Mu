@@ -56,6 +56,10 @@ Claude Code runs on JR's Mac and is expected to **test each phase on the real co
 | `player_seasons.overall_rating` = the roster **list OVR** (morale-boosted, how players perform). The card's base OVR and morale are **not stored** | JR's rule. The card OVR is the base rating; the list OVR includes the morale boost and is how players play. A once-a-season scan would make base OVR and morale stale |
 | After a successful load, screenshots convert to **WebP quality 90, full resolution**; debug folders are deleted; CSVs kept. Failed runs keep their PNGs | Phase 1 folder was 1.3 GB/week; this brings it to ~45 MB |
 | A `captures` table records every run | Duplicate protection, missed-week check, fallback trigger, row-count checks, resuming, token cost |
+| **Hybrid storage** (JR, Oct 14): offense extras as columns on `season_stats` / `player_stats`; every other category in its own season- and game-level tables; views join them | Keeps every reader and the backfill unchanged (no zero rows for defenders), one table per capture category, new data on player ids |
+| **`player_id` keys everywhere** (JR, Oct 14); `player_name` kept as a column and the old keys kept for the backfill, with a trigger filling `player_id` | Stored rows are never ambiguous; readers that join on names keep working |
+| **An ambiguous Season Stats name stops the load** (JR, Oct 14) and asks for a team-scoped capture | No guessing about whose stats a row is |
+| **Gemini token usage goes to a `llm_usage` table** (JR, Oct 14), one row per call, from `extract.py` and the newsroom | Replaces the cost estimates |
 
 ## Verified facts
 
@@ -120,22 +124,60 @@ Scripts: `tools/vision_dump.py` (Apple Vision OCR of a folder of screenshots, wr
 
 Keep the existing safety rules: check the screen before every press, stop on anything unexpected, never press Cross on Advance Week or Force Win.
 
-## Loader rules (`pipeline/load_capture.py`)
+## Phase 3 in detail (agreed with JR, Oct 14)
 
-- Column names for new stats come **from the captured headers above**, prefixed by category for non-offense (`blk_`, `def_`, `kick_`, `punt_`, `kr_`, `pr_`). New columns are nullable. Team tabs go on `team_seasons`. Do not invent columns that aren't on a screen.
-- Matching: resolve through `player_seasons` on normalized name + position (after the roster capture, also full names). Settle duplicates by the candidate whose previous totals are closest to, and not above, the new ones, checked against GP. Box-score rows carry their team.
-- Passing, rushing and receiving must match **100%**; other categories load with unmatched rows listed in the report.
-- Checks before writing: row counts within 10% of last week; no season total goes down; every value parses; the schedule covers all 32 teams minus byes; every game has a box score and two teams' player stats; game lines summed over the season equal Season Stats totals; the week is exactly one later than the last capture (a gap loads but is flagged); a week already loaded is refused.
-- `fantasy_points` on `player_stats` is a generated column: never insert or update it.
-- Roster: `player_seasons.overall_rating` takes the **list OVR**; add nullable columns for dev trait, archetype and experience. Do not store the card's base OVR or morale. Heights stored as `6'1"` like today.
+### What exists today (checked Oct 14)
+- `season_stats` holds offense only (passing, rushing, receiving, fumbles), unique on (season, player_name, team_id, position); it has a `player_id` column that isn't part of the key. 359 rows for 2035.
+- `player_stats` (per game) is the same offense set, unique on (game_id, player_name, position), no `player_id`; `fantasy_points` is generated.
+- The backfill (`engines/game_stat_generator.py`) fills every game that has **no `player_stats` rows for a team** with each player's season total minus what is already stored, inserting with `ON CONFLICT (game_id, player_name, position) DO NOTHING`. So a weekly load only has to write season totals and scores; the backfill fills the new week.
+- `players`: 1,499 rows, `player_number` is 0 for all of them; the roster capture has 1,719 players (~220 new, mostly linemen).
+- `games`: 256 COMPLETED, 16 SCHEDULED for 2035; `league_state` 2035 / 18.
+
+### Storage layout (hybrid)
+- **Offense extras become columns** on `season_stats` and `player_stats` (the captured passing / rushing / receiving columns not stored today: rating, long, sacks, YPA, AVG, broken tackles, YAC, RAC, ...). These rows already exist, so nothing changes for the backfill.
+- **Every other category gets its own tables**, at season and game level: `season_stat_defense` / `game_stat_defense`, `_kicking`, `_punting`, `_kickreturn`, `_puntreturn`, `_blocking`, `_general` (GP / DP). Columns are named after the captured headers. Rows exist only where Madden lists the player; NULL means not listed, 0 means listed as 0.
+- **Views** `season_stat_lines` and `game_stat_lines` join everything into one line per player (season or game).
+- **Team tabs** (conversions, red zone, penalties) become nullable columns on `team_seasons`; the box score's team stats go on `team_stats` (new nullable columns where the box score has more than the table).
+- **Roster**: `player_seasons.overall_rating` takes the **list OVR**; new nullable `dev_trait`, `archetype`, `role` on `player_seasons`; `players` gets full name, height, weight and `player_number` from the cards. The card's base OVR and morale are not stored.
+- Nothing reads the new columns or tables yet (decision above); every existing reader keeps working on the columns it uses today.
+
+### Keys: `player_id` everywhere
+- Every new table is keyed on `player_id` (+ season or game_id).
+- `player_stats` gets a `player_id` column, filled for existing rows from name + team + position (unambiguous there, since those rows carry `team_id`). New unique keys (season, player_id) on `season_stats` and (game_id, player_id) on `player_stats`.
+- `player_name` stays a plain column, because the newsroom tools and the API join on it. The old unique keys stay too, because the backfill's `ON CONFLICT` uses them; a trigger fills `player_id` on rows the backfill inserts (from the matching `season_stats` row), so `game_stat_generator` is not changed.
+- The key keeps stored data unambiguous; working out *who* a captured row is still happens once, at load time:
+  - **Roster load** is the identity source: team + full name + number + position + list name ("J.Delgado") per `players.id`.
+  - **Game player stats** carry TEAM, so team + list name is nearly always unique; a same-team pair (Seahawks S.Lewis LT / HB) is settled by category (a Rushing row is the HB, Blocking the LT).
+  - **Season Stats** has name + position but **no team** (15 of 1,214 phase 1 rows were ambiguous across teams, e.g. two J.Delgado kickers). From the second load on, previous totals settle it (totals only go up; assign rows to the ids whose earlier totals fit, checked against GP). **If history can't settle a name, the load stops and lists them (JR, Oct 14)**: nothing is written and the notice says which names and categories need a team-scoped Season Stats capture (`madden_capture.py --only stats --scope <TEAM> --category <CAT>`, to add in this phase; the scope dropdown already lists every team). That capture is loaded first, its ids are stored, and the week load runs again.
+
+### `captures` and `llm_usage` tables
+- `captures`: one row per run: mode, season, week, folder, status (`captured` / `extracted` / `loaded` / `failed`), row counts per CSV, Gemini token totals, error, timestamps. Used for the duplicate check, the missed-week check, resuming and the row-count check.
+- `llm_usage`: one row per Gemini call: source (`extract` / `newsroom`), agent or file, model, input / cached / output / thinking tokens, time. Written by `extract.py` and `newsroom/swarm_dispatcher.py` `_execute_agent`; the `captures` row keeps the run's total.
+
+### `pipeline/load_capture.py <capture folder>`
+- One transaction per run; any failed check writes nothing, marks the `captures` row `failed` and (phase 5) sends the notice. A run already loaded is refused. `fantasy_points` is never written.
+- **Weekly run** (Season Stats + Team Stats + previous week's schedule): upsert `season_stats` (offense + extras) and the `season_stat_*` tables; set that week's game scores and status COMPLETED; team tabs to `team_seasons`.
+- **Roster run**: update `player_seasons` (team, list OVR, age, experience, position, dev, archetype, role) and `players` (full name, height, weight, number); insert new players. Players missing from the capture are listed, not deleted.
+- **Season schedule**: insert SCHEDULED games only; COMPLETED games are never touched.
+- **Games run (recovery only)**: real lines into `player_stats`, `game_stat_*` and `team_stats`, plus scores. Refused if those games already have backfilled rows, unless `--replace` (which deletes that week's backfilled rows in the same transaction).
+- **Checks before writing**: passing / rushing / receiving rows 100% matched (other categories list unmatched rows); row counts within 10% of the last capture of that mode; no season total goes down; every value parses; the schedule covers all 32 teams minus byes; the week is the last loaded week + 1 (a gap loads but is flagged); a games run has a box score and both teams' player stats for every game, and its scores match the schedule (`QUARTERS_OK = n` games load totals only).
+
+### Order of work (a commit after each)
+1. `./db/backup_db.sh`; restore it into `madden_p3test` in the `madden-db` container; the loader and tests use `DATABASE_URL` pointing there until the live load.
+2. Migration `db/migrations/2026_10_21_capture_loader.sql` + `db/init_db.sql`: new columns, category tables, views, `player_id` keys and trigger, `captures`, `llm_usage`.
+3. Matching module (identity from the roster, Season Stats history assignment, stop-and-list for unsettled names) with unit tests.
+4. Loader per mode: roster, season schedule, weekly, games.
+5. `--scope <TEAM> --category <CAT>` for Season Stats in `madden_capture.py`.
+6. Token logging in `extract.py` and `_execute_agent`.
+7. Run everything on `madden_p3test`, then live (after another backup).
 
 ## Phases
 
 1. **Prove the capture.** Done.
 2. **Capture extensions.** Add the three modes above; on-device OCR for player cards; Escape in the key map. Run each by hand once with JR at the console. *No database writes in this phase*: output is screenshots and CSVs only.
    - Exit: roster covers all 32 teams including linemen; season schedule has 272 games; one week's game capture has a box score and two teams' player stats for every game.
-3. **Schema and loader.** Backup first. Migration in `db/migrations/` plus `db/init_db.sql`: new `season_stats` and `team_seasons` columns, `captures` table. Build `pipeline/load_capture.py` for all modes. Token logging in `extract.py` and `newsroom/swarm_dispatcher.py` `_execute_agent` (input, cached, output, thinking tokens). Test on a restored copy, then live.
-   - Exit: one week's loaded `player_stats` sum to Season Stats totals for every player; a deliberately broken CSV is refused with nothing written; the backfill afterwards fills no games for that week.
+3. **Schema and loader.** See "Phase 3 in detail" above: backup and restored copy, migration (hybrid layout, `player_id` keys, `captures`, `llm_usage`), matching, `pipeline/load_capture.py` for every mode, team-scoped Season Stats capture, token logging. Test on the restored copy, then live.
+   - Exit (revised by JR, Oct 14, since games are captured only to recover a week): on the restored copy, (a) the roster loads (1,719 players, numbers filled) and the season schedule loads with no change to completed games; (b) a weekly capture loads, the backfill runs, and every player's `player_stats` summed over the season equals `season_stats`; (c) the Week 17 games capture loads with `--replace` and its lines match the box scores; (d) a deliberately broken CSV, and an ambiguous Season Stats name, each stop the load with nothing written; (e) the backfill afterwards fills no game already loaded. Then the same loads live.
 4. **Season from `league_state`.** Remove hardcoded 2035 from the backfill and pipeline calls; update `league_state.current_week` from the captured week label.
    - Exit: tests pass; a dry run picks up the right season and week.
 5. **Trigger, connect, notices.** Trigger in `pipeline/main.py`; `pipeline/weekly_capture.py`; ntfy notices; stream-offline retry; fallback on any `MAIN_MENU` comparing the week label with the last capture.
