@@ -7,8 +7,8 @@ trigger in pipeline/main.py --watch, or by hand:
   python3 -m pipeline.weekly_capture --no-articles    # stop after the backfill and engines
 
 Steps (each one's failure stops the week: nothing after it runs, and a notice goes to JR's phone):
-  2. connect   madden_capture.py --connect: start or restart the chiaki-ng stream, close the PlayStation
-               menu, wait up to 2 minutes for a franchise screen. Presses nothing else.
+  2. connect   madden_capture.py --connect: start or restart the chiaki-ng stream and wait up to 2 minutes
+               for a franchise screen (chiaki stream lands on it directly). Presses nothing.
   3. capture   madden_capture.py --out <run>: Season Stats, Team Stats and last week's schedule.
   4. hand back notice: turn the controller back on and restart the broadcast (the script doesn't disconnect).
   5. extract   extract.py captures/<run>.
@@ -106,8 +106,7 @@ def captured_week(folder):
 def step_connect(log_path):
     code, last = run_cmd([sys.executable, "madden_capture.py", "--connect"], log_path, CONNECT_TIMEOUT)
     if code != 0:
-        raise WeekStopped(f"Couldn't reach Madden's franchise menus over chiaki-ng: {last}. Nothing was pressed "
-                          "but Escape on the PlayStation menu.")
+        raise WeekStopped(f"Couldn't reach Madden's franchise menus over chiaki-ng: {last}. Nothing was pressed.")
 
 
 def step_capture(folder, log_path):

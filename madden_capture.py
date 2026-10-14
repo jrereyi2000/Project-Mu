@@ -15,7 +15,7 @@ Run extract.py afterwards to turn them into CSVs.
 
 Usage
   python3 madden_capture.py --test        # read the current screen only, no key presses
-  python3 madden_capture.py --connect     # start the chiaki-ng stream, close the PS menu, wait for a franchise screen
+  python3 madden_capture.py --connect     # start the chiaki-ng stream and wait for a franchise screen (no presses)
   python3 madden_capture.py --probe-l2    # record how the L2 dropdown behaves (from Player Stats)
   python3 madden_capture.py               # full run: stats + schedule
   python3 madden_capture.py --only stats  # or: --only team, --only schedule
@@ -41,7 +41,7 @@ KEYCODES = {
     "l2": 18,      # 1
     "r2": 21,      # 4
     "up": 126, "down": 125, "left": 123, "right": 124,
-    "escape": 53,  # Esc: closes the PlayStation menu after chiaki-ng connects
+    "escape": 53,  # Esc: closes the PlayStation menu (only shown on a manual connect; never pressed by a run)
 }
 TAP_HOLD = 0.12        # Madden drops instant taps; hold every press a little
 NAV_WAIT = 1.0         # settle time after a menu move
@@ -196,17 +196,6 @@ def ensure_window_size():
 
 CHIAKI_PROC = "chiaki-ng.app/Contents/MacOS/chiaki"
 
-# The PlayStation menu chiaki-ng can show right after it connects; one Escape closes it (JR, Oct 13).
-# Recognized by labels only that overlay has (mapped on the console, phase 5); with none mapped,
-# nothing is ever pressed for it and the connect waits, then stops.
-PS_MENU_TEXT = ()
-PS_MENU_ESCAPES = 2          # first press + one retry
-
-
-def is_ps_menu(f):
-    return bool(PS_MENU_TEXT) and sum(1 for m in PS_MENU_TEXT if m in f.text) >= min(2, len(PS_MENU_TEXT))
-
-
 def chiaki_running():
     return subprocess.run(["pgrep", "-f", CHIAKI_PROC], capture_output=True).returncode == 0
 
@@ -216,11 +205,11 @@ def start_stream():
 
 
 def wait_for_franchise(timeout=120.0, what="connecting"):
-    """Wait until chiaki-ng shows one of Madden's screens. Presses only Escape, and only on the
-    recognized PlayStation menu (at most PS_MENU_ESCAPES times); stops after `timeout` seconds."""
+    """Wait until chiaki-ng shows one of Madden's screens; presses nothing. `chiaki stream` connects
+    straight to the franchise screen (the PlayStation menu only shows on a manual connect, JR Oct 14).
+    Stops after `timeout` seconds."""
     global WIN_ID, PID
     end = time.time() + timeout
-    escapes = 0
     while True:
         time.sleep(2)
         try:
@@ -241,11 +230,6 @@ def wait_for_franchise(timeout=120.0, what="connecting"):
             if s != "UNKNOWN":
                 log(f"Stream is on {s}")
                 return f, s
-            if is_ps_menu(f) and escapes < PS_MENU_ESCAPES:
-                escapes += 1
-                log(f"  PlayStation menu is showing; pressing Escape ({escapes} of {PS_MENU_ESCAPES})")
-                press("escape", wait=2.0)
-                continue
         if time.time() > end:
             raise Abort(f"chiaki-ng didn't show a franchise screen within {timeout:.0f} seconds of "
                         f"{what}; check the chiaki-ng window")
@@ -254,7 +238,7 @@ def wait_for_franchise(timeout=120.0, what="connecting"):
 def connect(timeout=120.0):
     """Weekly run, step 2 (phase 5): get chiaki-ng streaming Madden's franchise menus. Starts the
     stream when chiaki-ng isn't running; when it is running but shows no franchise screen in time,
-    force-quits and relaunches it once. Never presses anything but Escape on the PlayStation menu."""
+    force-quits and relaunches it once. Presses nothing."""
     if not chiaki_running():
         log(f"Starting the chiaki-ng stream ({CHIAKI_HOST}, {CHIAKI_HOST_IP})")
         start_stream()
@@ -269,8 +253,7 @@ def connect(timeout=120.0):
 def restart_stream(timeout=120.0):
     """Force-quit chiaki-ng (what JR does to unfreeze it; a polite quit then relaunch left the
     console ignoring input on Oct 13), start the stream again and wait for a franchise screen.
-    Presses nothing but Escape on the PlayStation menu: if no known screen shows within two
-    minutes, stop."""
+    Presses nothing: if no known screen shows within two minutes, stop."""
     log("Restarting the chiaki-ng stream (force quit + relaunch)")
     subprocess.run(["pkill", "-9", "-f", CHIAKI_PROC])
     for _ in range(20):
@@ -2214,7 +2197,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--test", action="store_true", help="classify the current screen, no key presses")
     ap.add_argument("--connect", action="store_true", help="start (or restart) the chiaki-ng stream and wait for a "
-                    "franchise screen; presses only Escape, on the PlayStation menu (weekly run, phase 5)")
+                    "franchise screen; presses nothing (weekly run, phase 5)")
     ap.add_argument("--out", metavar="RUN", help="write into captures/RUN (created) instead of a new timestamped folder")
     ap.add_argument("--probe-l2", action="store_true")
     ap.add_argument("--scope-only", action="store_true", help="from Player Stats: just switch scope to NFL")
