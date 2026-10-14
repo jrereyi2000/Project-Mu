@@ -9,6 +9,8 @@ name separately. Everything is compared through name_key().
 import re
 
 # suffixes: " III", " Jr." - and "Hilljr." where OCR glued Jr./Sr. on (Titans, Oct 14)
+RESULT_RE = re.compile(r"^([A-Z]{2,3}) ?(\d+) ?- ?(\d+) ?([A-Z]{2,3})$")    # "DET 38 - 24 NO"
+
 SUFFIX_RE = re.compile(r"(?:\s+(?:JR\.?|SR\.?|II|III|IV|V)|(?<=[a-z])(?:JR|SR)\.?)$", re.I)
 
 
