@@ -15,7 +15,7 @@ from datetime import datetime
 
 import psycopg
 
-from pipeline.capture_matching import db_player_name, db_week, dec, full_key, match_roster, name_case, name_key, num
+from pipeline.capture_matching import all_caps, db_player_name, db_week, dec, full_key, match_roster, name_case, name_key, num
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -149,12 +149,13 @@ def load_roster(cur, folder, season, report):
 
     def write(pid, p):
         # keep a stored spelling that names the same person ("S. LaPorta" beats the card's OCR "Laporta");
-        # the stats tables and the backfill match players by this text
+        # the stats tables and the backfill match players by this text. An all-caps stored spelling (the old
+        # video scanner's "JERRY RAYFORD") loses to the card's casing.
         pname, fname = db_player_name(p["first"], p["last"]), f"{p['first']} {p['last']}"
         old_pn, old_fn = stored_names.get(pid, (None, None))
-        if old_pn and same_text(old_pn, pname):
+        if old_pn and same_text(old_pn, pname) and not all_caps(old_pn):
             pname = old_pn
-        if old_fn and same_text(old_fn, fname):
+        if old_fn and same_text(old_fn, fname) and not all_caps(old_fn):
             fname = old_fn
         cur.execute("""UPDATE players SET player_name = %s, full_name = %s, height = %s, weight = %s, player_number = %s
                        WHERE id = %s""",

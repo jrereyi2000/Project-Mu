@@ -1,10 +1,13 @@
+import os
+
 import pandas as pd
 import numpy as np
+import psycopg2
 from sqlalchemy import create_engine
 
-# Database Connection
-DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/madden"
-engine = create_engine(DATABASE_URL)
+# Database Connection: DATABASE_URL (a libpq URL or key=value string), else the local live database
+DATABASE_URL = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
+engine = create_engine("postgresql+psycopg2://", creator=lambda: psycopg2.connect(DATABASE_URL))
 
 def current_season() -> int:
     """league_state.current_season: the season the backfill and the engines run for."""
@@ -17,10 +20,13 @@ def generate_team_and_player_stats(season_year: int | None = None):
     print(f"-> Backfill and engines for season {season_year}")
     # 1. Fetch Input Data
     games_df = pd.read_sql(f"SELECT * FROM games WHERE season = {season_year} AND status = 'COMPLETED'", engine)
-    existing_player_stats = pd.read_sql("SELECT * FROM player_stats", engine)
-    
+    # Real (or already backfilled) lines for this season's games only
+    existing_player_stats = pd.read_sql(f"""
+        SELECT ps.* FROM player_stats ps JOIN games g ON g.id = ps.game_id WHERE g.season = {season_year}
+    """, engine)
+
     season_p_df = pd.read_sql(f"""
-        SELECT player_name, team_id, position,
+        SELECT player_id, player_name, team_id, position,
                SUM(completions) as completions, SUM(pass_attempts) as pass_attempts,
                SUM(pass_yards) as pass_yards, SUM(pass_tds) as pass_tds,
                SUM(interceptions) as interceptions, SUM(rush_attempts) as rush_attempts,
@@ -29,7 +35,7 @@ def generate_team_and_player_stats(season_year: int | None = None):
                SUM(rec_tds) as rec_tds, SUM(fumb) as fumb
         FROM season_stats
         WHERE season = {season_year}
-        GROUP BY player_name, team_id, position
+        GROUP BY player_id, player_name, team_id, position
     """, engine)
 
     team_stats_rows = []
@@ -65,25 +71,35 @@ def generate_team_and_player_stats(season_year: int | None = None):
         weight_sum = sum(game_weights)
         
         players_list = list(zip(team_players['player_name'], team_players['position']))
+        player_ids = {(r['player_name'], r['position']): (int(r['player_id']) if pd.notnull(r['player_id']) else None)
+                      for _, r in team_players.iterrows()}
         player_game_stats = {}
         
         # 1. Distribute stats for each player proportionally
         for _, p_row in team_players.iterrows():
             p_tup = (p_row['player_name'], p_row['position'])
-            
+
+            # The player's lines already stored this season (any team, so a traded player's old-team games
+            # count), matched by player_id; teammates who share a list name (T. Davis WR / CB) stay apart.
+            # A season row without a player_id falls back to name + team + position.
+            if existing_player_stats.empty:
+                p_existing = existing_player_stats
+            elif player_ids[p_tup] is not None:
+                p_existing = existing_player_stats[existing_player_stats['player_id'] == player_ids[p_tup]]
+            else:
+                p_existing = existing_player_stats[
+                    (existing_player_stats['player_name'] == p_tup[0]) &
+                    (existing_player_stats['team_id'] == team_id) &
+                    (existing_player_stats['position'] == p_tup[1])
+                ]
+
             allocs = {m: [] for m in metrics}
             for m in metrics:
                 target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
                 
-                # If this player already has real game stats in the DB, deduct them so we only distribute the remainder!
-                if not existing_player_stats.empty:
-                    # Filter to this specific player
-                    p_existing = existing_player_stats[
-                        (existing_player_stats['player_name'] == p_tup[0]) & 
-                        (existing_player_stats['team_id'] == team_id)
-                    ]
-                    if not p_existing.empty:
-                        target -= int(p_existing[m].sum())
+                # Deduct the lines already stored so only the remainder is distributed
+                if not p_existing.empty:
+                    target -= int(p_existing[m].fillna(0).sum())
                         
                 remaining_target = max(0, target)
                 remaining_weight = weight_sum
@@ -113,6 +129,7 @@ def generate_team_and_player_stats(season_year: int | None = None):
                 p_stats = player_game_stats[(p_tup, g_id)]
                 player_stats_rows.append({
                     'game_id': g_id,
+                    'player_id': player_ids[p_tup],
                     'player_name': p_tup[0],
                     'team_id': team_id,
                     'position': p_tup[1],
@@ -164,7 +181,7 @@ def generate_team_and_player_stats(season_year: int | None = None):
             if player_stats_rows:
                 ps_cols = list(player_stats_rows[0].keys())
                 placeholders = ', '.join(['%s'] * len(ps_cols))
-                ps_query = f"INSERT INTO player_stats ({','.join(ps_cols)}) VALUES ({placeholders}) ON CONFLICT (game_id, player_name, position) DO NOTHING"
+                ps_query = f"INSERT INTO player_stats ({','.join(ps_cols)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"  # either unique key: (game_id, player_name, position) or (game_id, player_id)
                 ps_vals = [[row[c] for c in ps_cols] for row in player_stats_rows]
                 cur.executemany(ps_query, ps_vals)
         conn.commit()

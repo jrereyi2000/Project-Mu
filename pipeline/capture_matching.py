@@ -47,6 +47,13 @@ def full_key(name):
     return re.sub(r"[^A-Z]", "", SUFFIX_RE.sub("", (name or "").strip()).upper())
 
 
+def all_caps(name):
+    """True for a spelling with no lower-case letters ('JERRY RAYFORD', 'O. COOPER JR.'): the old video
+    scanner's OCR, which the roster load replaces with the card's casing."""
+    letters = re.sub(r"[^A-Za-z]", "", name or "")
+    return len(letters) >= 4 and letters.isupper()
+
+
 def name_case(name):
     """Fix title-casing from OCR: 'Nolen Iii' -> 'Nolen III', 'Hill Jr' -> 'Hill Jr.', 'Cj' -> 'C.J.'
     when the capture lost the dots (two-letter all-consonant first names), 'Mccain' -> 'McCain'."""

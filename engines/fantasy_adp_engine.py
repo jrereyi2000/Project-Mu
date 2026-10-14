@@ -92,10 +92,12 @@ def load_draft_board(cur, season: int) -> list:
     return sorted(players, key=lambda p: (-p["draft_score"], p["player_id"]))
 
 
-def generate_preseason_adp(season: int = 2035, redraft: bool = False, conn_info: Optional[str] = None) -> None:
+def generate_preseason_adp(season: Optional[int] = None, redraft: bool = False, conn_info: Optional[str] = None) -> None:
     """Run the simulated drafts (if not already run) and write the week 1 ADP board from their results."""
     from engines import fantasy_league_sim as sim
 
+    if season is None:
+        season = DatabaseHandler(conn_info).get_current_league_state()[0]
     print(f"🏈 Generating Preseason ADP Board for {season}...")
     with psycopg.connect(conn_info or DatabaseHandler().db_conn_info) as conn:
         with conn.cursor() as cur:

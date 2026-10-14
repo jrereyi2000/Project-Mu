@@ -6,7 +6,9 @@ class PopularityEngine:
     def __init__(self):
         self.db = DatabaseHandler()
         
-    def calculate_popularity(self, season: int = 2035):
+    def calculate_popularity(self, season: int | None = None):
+        if season is None:
+            season = self.db.get_current_league_state()[0]
         print(f"--- Calculating Franchise Popularity Index (POP) for Season {season} ---")
         
         final_results = []

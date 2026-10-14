@@ -7,7 +7,9 @@ class TWIEngine:
     def __init__(self):
         self.db = DatabaseHandler()
         
-    def backfill_twi(self, season: int = 2035, current_week: int = 18):
+    def backfill_twi(self, season: int | None = None, current_week: int = 18):
+        if season is None:
+            season = self.db.get_current_league_state()[0]
         print(f"--- Calculating Team Watchability Index (TWI) for Season {season} ---")
         
         team_games = {}
@@ -169,9 +171,8 @@ class TWIEngine:
                 # Formula: Y_prod = 100 * (Scrimmage Yards by Skill Players Aged <= 24 / Total Scrimmage Yards)
                 cur.execute("""
                     WITH player_ages AS (
-                        SELECT p.player_name, ps.team_id, ps.age
-                        FROM players p
-                        JOIN player_seasons ps ON p.id = ps.player_id
+                        SELECT ps.player_id, ps.age
+                        FROM player_seasons ps
                         WHERE ps.season = %s
                     ),
                     team_scrimmage AS (
@@ -182,7 +183,7 @@ class TWIEngine:
                         FROM teams t
                         JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id) AND g.season = %s AND g.status = 'COMPLETED'
                         LEFT JOIN player_stats pst ON pst.game_id = g.id AND pst.team_id = t.id
-                        LEFT JOIN player_ages pa ON pst.player_name = pa.player_name AND pa.team_id = t.id
+                        LEFT JOIN player_ages pa ON pa.player_id = pst.player_id
                         GROUP BY t.id
                     )
                     SELECT team_id, 

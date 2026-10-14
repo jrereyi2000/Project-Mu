@@ -51,7 +51,9 @@ class PlayerPopularityEngine:
             'LT': 0.50, 'RT': 0.50, 'LG': 0.50, 'RG': 0.50, 'C': 0.50, 'DT': 0.50, 'K': 0.50, 'P': 0.50
         }
         
-    def calculate_popularity(self, season: int = 2035):
+    def calculate_popularity(self, season: int | None = None):
+        if season is None:
+            season = self.db.get_current_league_state()[0]
         print(f"--- Calculating Player Popularity Index for Season {season} ---")
         
         with psycopg.connect(self.db.db_conn_info) as conn:

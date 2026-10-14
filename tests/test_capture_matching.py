@@ -1,7 +1,7 @@
 """pipeline/capture_matching.py: name keys, number parsing, roster matching, Season Stats history."""
 import unittest
 
-from pipeline.capture_matching import (assign_by_history, db_player_name, db_week, dec, full_key, match_roster, name_key,
+from pipeline.capture_matching import (all_caps, assign_by_history, db_player_name, db_week, dec, full_key, match_roster, name_key,
                                        name_key_from_full, num)
 
 
@@ -24,6 +24,12 @@ class NameTest(unittest.TestCase):
         self.assertEqual(name_case("Mccain"), "McCain")
         self.assertEqual(name_case("Thomas Jr"), "Thomas Jr.")
         self.assertEqual(name_case("Ivy"), "Ivy")
+
+    def test_all_caps(self):
+        for name in ("JERRY RAYFORD", "OMAR COOPER JR.", "C.J. STROUD"):
+            self.assertTrue(all_caps(name), name)
+        for name in ("Jerry Rayford", "J. Rayford", "C.J. Lee", "T. Ho", "", None):
+            self.assertFalse(all_caps(name), name)
 
     def test_db_name(self):
         self.assertEqual(db_player_name("George", "Crawford"), "G. Crawford")

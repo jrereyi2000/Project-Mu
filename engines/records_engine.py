@@ -109,18 +109,13 @@ def team_seasons(cur, season):
 
 def game_player_values(cur, season):
     """[(category, team_id, player_id, holder, value, game_id, week)] for regular-season games. Player names in
-    player_stats are abbreviated; the full name comes from that season's roster (same name, team and position)."""
+    player_stats are abbreviated; the full name comes from the line's player_id."""
     cols = ", ".join(f"{expr} AS {cat}" for cat, expr in GAME_PLAYER_CATEGORIES.items())
     cur.execute(f"""
-        SELECT ps.team_id, m.player_id, COALESCE(m.full_name, ps.player_name), ps.game_id, g.week, {cols}
+        SELECT ps.team_id, ps.player_id, COALESCE(m.full_name, ps.player_name), ps.game_id, g.week, {cols}
         FROM player_stats ps
         JOIN games g ON g.id = ps.game_id
-        LEFT JOIN LATERAL (
-            SELECT p.id AS player_id, p.full_name
-            FROM players p JOIN player_seasons pse ON pse.player_id = p.id AND pse.season = g.season AND pse.team_id = ps.team_id
-            WHERE p.player_name = ps.player_name
-            ORDER BY (pse.position = ps.position) DESC, p.id LIMIT 1
-        ) m ON TRUE
+        LEFT JOIN players m ON m.id = ps.player_id
         WHERE g.season = %s AND g.status = 'COMPLETED' AND g.week <= %s
           AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
     """, (season, REGULAR_SEASON_FINAL_WEEK))

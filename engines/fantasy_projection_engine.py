@@ -87,20 +87,11 @@ def load_season(cur, season: int) -> SeasonData:
 
     data = SeasonData(season, opponent, completed, roster)
 
-    # player_stats only stores abbreviated names, so match each line to the player with that name on the same
-    # team in the season (position breaks the rare same-team tie), as engines/gotw_engine.py does.
+    # each line's player is its stored player_id (abbreviated names collide across players)
     cur.execute("""
-        SELECT m.pid, st.team_id, st.position, g.week, st.fantasy_points::float
+        SELECT st.player_id, st.team_id, st.position, g.week, st.fantasy_points::float
         FROM player_stats st
         JOIN games g ON g.id = st.game_id
-        LEFT JOIN LATERAL (
-            SELECT p.id AS pid
-            FROM players p
-            JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = g.season AND ps.team_id = st.team_id
-            WHERE p.player_name = st.player_name
-            ORDER BY (ps.position = st.position) DESC, p.id
-            LIMIT 1
-        ) m ON TRUE
         WHERE g.season = %s AND g.status = 'COMPLETED' AND st.position = ANY(%s)
     """, (season, list(POS_GROUP)))
     for pid, team_id, pos, week, pts in cur.fetchall():

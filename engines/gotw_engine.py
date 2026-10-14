@@ -66,23 +66,15 @@ def fetch_game_player_rows(cur, game_ids: List[int]) -> list:
     """One row per player_stats line: (game_id, team_id, overall_rating, pass_yards, pass_tds,
     rush_yards, rush_tds, rec_yards, rec_tds).
 
-    player_stats only stores abbreviated names (e.g. 'A. Wright'), which collide across players, so a
-    line is matched to the player with that name on the same team in the game's season (position
-    breaks the rare same-team tie). Lines with no such player are skipped.
+    Each line's player is its stored player_id (abbreviated names like 'A. Wright' collide across
+    players); OVR is that player's rating in the game's season. Lines with no rating that season are skipped.
     """
     cur.execute("""
         SELECT pstat.game_id, pstat.team_id, rated.overall_rating,
                pstat.pass_yards, pstat.pass_tds, pstat.rush_yards, pstat.rush_tds, pstat.rec_yards, pstat.rec_tds
         FROM player_stats pstat
         JOIN games g ON g.id = pstat.game_id
-        JOIN LATERAL (
-            SELECT ps.overall_rating
-            FROM players p
-            JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = g.season AND ps.team_id = pstat.team_id
-            WHERE p.player_name = pstat.player_name
-            ORDER BY (ps.position = pstat.position) DESC, p.id
-            LIMIT 1
-        ) rated ON TRUE
+        JOIN player_seasons rated ON rated.player_id = pstat.player_id AND rated.season = g.season
         WHERE pstat.game_id = ANY(%s)
     """, (list(game_ids),))
     return cur.fetchall()

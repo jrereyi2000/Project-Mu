@@ -68,8 +68,7 @@ def fetch_player_counts(cur, season: int) -> dict:
         FROM games g
         JOIN player_stats st ON st.game_id = g.id
             AND st.team_id = CASE WHEN g.home_score > g.away_score THEN g.home_team_id ELSE g.away_team_id END
-        JOIN players p ON p.player_name = st.player_name
-        JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = g.season AND ps.team_id = st.team_id
+        JOIN player_seasons ps ON ps.player_id = st.player_id AND ps.season = g.season
         WHERE g.status = 'COMPLETED' AND g.game_type <> 'REGULAR_SEASON' AND g.season <= %s AND g.home_score <> g.away_score
     """, (season,))
     for pid, game_type in cur.fetchall():
@@ -81,7 +80,9 @@ class PlayoffCloutEngine:
     def __init__(self):
         self.db = DatabaseHandler()
 
-    def calculate(self, season: int = 2035):
+    def calculate(self, season: int | None = None):
+        if season is None:
+            season = self.db.get_current_league_state()[0]
         print(f"--- Calculating Playoff Clout for Season {season} ---")
         with psycopg.connect(self.db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -107,5 +108,5 @@ class PlayoffCloutEngine:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--season", type=int, default=2035)
+    parser.add_argument("--season", type=int, help="default: league_state.current_season")
     PlayoffCloutEngine().calculate(season=parser.parse_args().season)

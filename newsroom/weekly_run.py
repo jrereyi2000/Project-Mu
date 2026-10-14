@@ -23,7 +23,6 @@ slot 'Agent Wire'.
 """
 import argparse
 
-DEFAULT_SEASON = 2035
 DEFAULT_MODEL = "gemini-3.8-flash"  # same default as SwarmDispatcher
 FINAL_WEEK = 23                 # Super Bowl week (see POSTSEASON_EDITORIAL_SLATES)
 NATIONAL_SLOT_FILTER = "(slot IN ('Hero Slot', 'Standalone') OR slot LIKE 'Slot %%')"  # local wakeups use 'Local Beat N'
@@ -77,7 +76,7 @@ def fantasy_slate_exists(cur, season: int, week: int) -> bool:
 
 
 def run_weekly_swarm(
-    season: int = DEFAULT_SEASON,
+    season: int = None,
     week: int = None,
     force: bool = False,
     dry_run: bool = False,
@@ -102,6 +101,8 @@ def run_weekly_swarm(
     from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
 
     conn_info = db_conn_info or DatabaseHandler().db_conn_info
+    if season is None:
+        season = DatabaseHandler(conn_info).get_current_league_state()[0]
 
     def plan(cur):
         """Which slates still need writing: {'national': status-or-None, 'fantasy': status-or-None}."""
@@ -191,7 +192,7 @@ def run_weekly_swarm(
 
 def main():
     parser = argparse.ArgumentParser(description="Publish the weekly national newsroom slate and the Mu Fantasy slate.")
-    parser.add_argument("--season", type=int, default=DEFAULT_SEASON)
+    parser.add_argument("--season", type=int, default=None, help="default: league_state.current_season")
     parser.add_argument("--week", type=int, default=None,
                         help="Slate week to publish (default: latest fully completed week + 1)")
     parser.add_argument("--force", action="store_true", help="Publish even if the week already has a slate")

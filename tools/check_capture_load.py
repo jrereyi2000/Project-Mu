@@ -5,10 +5,9 @@ that every player's per-game player_stats add up to season_stats.
 
   python3 tools/check_capture_load.py --db <test copy> --season 2035 [--backfill]
 
---backfill runs engines.game_stat_generator's stats sync against --db first. That function has its
-database hard-coded and then runs the analytics engines (which write to the live database), so the
-check points its connection at --db and blocks the engine imports: the sync runs, the analytics
-step fails harmlessly ("ANALYTICS PIPELINE FAILED"). Read-only otherwise.
+--backfill runs engines.game_stat_generator's stats sync against --db first, with the engine imports
+blocked so only the sync runs (the analytics step fails harmlessly: "ANALYTICS PIPELINE FAILED").
+Read-only otherwise.
 """
 import argparse, os, sys
 

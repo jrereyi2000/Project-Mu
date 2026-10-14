@@ -188,7 +188,9 @@ class GameCreditEngine:
     def __init__(self):
         self.db = DatabaseHandler()
 
-    def calculate(self, season: int = 2035):
+    def calculate(self, season: int | None = None):
+        if season is None:
+            season = self.db.get_current_league_state()[0]
         print(f"--- Calculating Opponent-Adjusted Game Credit for Season {season} ---")
         with psycopg.connect(self.db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -221,5 +223,5 @@ class GameCreditEngine:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--season", type=int, default=2035)
+    parser.add_argument("--season", type=int, help="default: league_state.current_season")
     GameCreditEngine().calculate(season=parser.parse_args().season)

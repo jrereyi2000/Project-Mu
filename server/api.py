@@ -13,7 +13,7 @@ import re
 from engines.gotw_engine import display_excitement
 from server import social_api
 
-CONN_INFO = "host=localhost dbname=madden user=postgres password=postgres"
+CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
 db_pool = ConnectionPool(
     conninfo=CONN_INFO,
@@ -22,6 +22,18 @@ db_pool = ConnectionPool(
     kwargs={"row_factory": dict_row},
     open=True
 )
+
+
+def season_week(season: Optional[int], week: Optional[int] = None) -> tuple[int, int]:
+    """Fills a missing season / week from league_state: the current season, and for it the current week
+    (another season's default week is 18, its last regular-season week)."""
+    if season is not None and week is not None:
+        return season, week
+    with db_pool.connection() as conn:
+        row = conn.execute("SELECT current_season, current_week FROM league_state WHERE id = 1").fetchone()
+    cur_season, cur_week = (row["current_season"], row["current_week"]) if row else (2035, 18)
+    season = cur_season if season is None else season
+    return season, (week if week is not None else (cur_week if season == cur_season else 18))
 
 # --- On-demand local beat wakeups (team news pages) ---
 # A team page view starts the local beat swarm in a background thread so the request never waits on Gemini.
@@ -135,7 +147,8 @@ def get_status():
             return {"season": 2035, "week": 18}
 
 @app.get("/api/schedule")
-def get_schedule(season: int = 2035, week: int = 18):
+def get_schedule(season: Optional[int] = None, week: Optional[int] = None):
+    season, week = season_week(season, week)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -186,7 +199,8 @@ def get_schedule(season: int = 2035, week: int = 18):
             return sorted(games, key=get_sort_key)
 
 @app.get("/api/team/{abbr}")
-def get_team(abbr: str, season: int = datetime.datetime.now().year):
+def get_team(abbr: str, season: Optional[int] = None):
+    season, _ = season_week(season)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get Team Info
@@ -258,7 +272,8 @@ def get_team_season_stats(id: int, season: int):
             }
 
 @app.get("/api/team/{abbr}/schedule")
-def get_team_schedule(abbr: str, season: int = datetime.datetime.now().year):
+def get_team_schedule(abbr: str, season: Optional[int] = None):
+    season, _ = season_week(season)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get Team ID
@@ -432,10 +447,9 @@ def get_game(game_id: int):
                 return {"error": "Game not found"}
             
             cur.execute("""
-                SELECT DISTINCT ON (ps.id) ps.*, t.abbreviation as team_abbr, p.id as player_id
+                SELECT ps.*, t.abbreviation as team_abbr
                 FROM player_stats ps
                 JOIN teams t ON ps.team_id = t.id
-                LEFT JOIN players p ON ps.player_name = p.player_name OR ps.player_name = p.full_name
                 WHERE ps.game_id = %s
                 ORDER BY ps.id
             """, (game_id,))
@@ -667,21 +681,13 @@ def get_player_api(id: int, season: Optional[int] = None):
             if not player:
                 return {"error": "Player not found"}
 
-            full_name = player['name']
-            parts = full_name.split(" ")
-            if len(parts) >= 2:
-                madden_name = f"{parts[0][0]}. {' '.join(parts[1:])}"
-            else:
-                madden_name = full_name
-
             cur.execute("""
                 WITH weekly_ranks AS (
-                    SELECT g.season, g.week, st.team_id, st.player_name, ps.position,
+                    SELECT g.season, g.week, st.player_id, ps.position,
                            (ps.position || DENSE_RANK() OVER (PARTITION BY g.season, g.week, ps.position ORDER BY st.fantasy_points DESC)) as weekly_pos_rank
                     FROM games g
                     JOIN player_stats st ON st.game_id = g.id
-                    JOIN player_seasons ps ON ps.season = g.season AND ps.team_id = st.team_id AND ps.position = st.position
-                    JOIN players p ON p.id = ps.player_id AND (st.player_name = p.player_name OR st.player_name = p.full_name)
+                    JOIN player_seasons ps ON ps.season = g.season AND ps.player_id = st.player_id
                     WHERE g.season = %s AND g.status = 'COMPLETED'
                 )
                 SELECT g.week, g.status, g.home_team_id, g.away_team_id, g.home_score, g.away_score,
@@ -693,13 +699,13 @@ def get_player_api(id: int, season: Optional[int] = None):
                        st.rush_attempts, st.rush_yards, st.rush_tds,
                        st.receptions, st.rec_yards, st.rec_tds, st.fumb
                 FROM games g
-                LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_name = %s AND st.team_id = %s
-                LEFT JOIN weekly_ranks wr ON wr.season = g.season AND wr.week = g.week AND wr.team_id = st.team_id AND wr.player_name = st.player_name
+                LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_id = %s
+                LEFT JOIN weekly_ranks wr ON wr.season = g.season AND wr.week = g.week AND wr.player_id = st.player_id
                 JOIN teams t_home ON t_home.id = g.home_team_id
                 JOIN teams t_away ON t_away.id = g.away_team_id
                 WHERE g.season = %s AND (g.home_team_id = %s OR g.away_team_id = %s)
                 ORDER BY g.week
-            """, (season, madden_name, player['team_id'], season, player['team_id'], player['team_id']))
+            """, (season, id, season, player['team_id'], player['team_id']))
             raw_games = cur.fetchall()
 
             # Build all 18 weeks, inserting BYE week if team had a bye
@@ -744,7 +750,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                     FROM player_seasons ps
                     JOIN players p ON p.id = ps.player_id
                     JOIN games g ON g.season = ps.season AND (g.home_team_id = ps.team_id OR g.away_team_id = ps.team_id)
-                    JOIN player_stats st ON st.game_id = g.id AND st.team_id = ps.team_id AND st.position = ps.position AND (st.player_name = p.player_name OR st.player_name = p.full_name)
+                    JOIN player_stats st ON st.game_id = g.id AND st.team_id = ps.team_id AND st.player_id = ps.player_id
                     WHERE g.status = 'COMPLETED'
                     GROUP BY ps.season, ps.player_id
                 )
@@ -760,11 +766,11 @@ def get_player_api(id: int, season: Optional[int] = None):
                 JOIN teams t ON t.id = ps.team_id
                 LEFT JOIN season_overall_ranks sor ON sor.season = ps.season AND sor.player_id = ps.player_id
                 LEFT JOIN games g ON g.season = ps.season AND (g.home_team_id = ps.team_id OR g.away_team_id = ps.team_id)
-                LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_name = %s AND st.team_id = ps.team_id
+                LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_id = ps.player_id AND st.team_id = ps.team_id
                 WHERE ps.player_id = %s
                 GROUP BY ps.season, t.name, t.abbreviation, sor.total_fpts, sor.overall_rank
                 ORDER BY ps.season DESC
-            """, (madden_name, id))
+            """, (id,))
             career = cur.fetchall()
 
             # Weekly matchup & opponent quality intelligence
@@ -905,7 +911,8 @@ def calculate_passer_rating(completions, attempts, yards, touchdowns, intercepti
     return round(rating, 1)
 
 @app.get("/api/stats/player")
-def get_player_stats_api(season: int = 2035, category: str = "Passing"):
+def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"):
+    season, _ = season_week(season)
     cat = category.lower()
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
@@ -923,13 +930,7 @@ def get_player_stats_api(season: int = 2035, category: str = "Passing"):
                     FROM players p
                     JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     JOIN teams t ON t.id = ps.team_id
-                    JOIN player_stats st ON st.team_id = ps.team_id AND st.player_name = (
-                        CASE 
-                            WHEN position(' ' IN p.full_name) > 0 
-                            THEN substring(p.full_name from 1 for 1) || '. ' || substring(p.full_name from position(' ' IN p.full_name) + 1)
-                            ELSE p.full_name
-                        END
-                    )
+                    JOIN player_stats st ON st.player_id = p.id
                     JOIN games g ON g.id = st.game_id AND g.season = %s
                     GROUP BY p.id, p.full_name, p.player_number, ps.position, t.name, t.abbreviation
                     HAVING SUM(COALESCE(st.pass_attempts, 0)) > 0
@@ -979,13 +980,7 @@ def get_player_stats_api(season: int = 2035, category: str = "Passing"):
                     FROM players p
                     JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     JOIN teams t ON t.id = ps.team_id
-                    JOIN player_stats st ON st.team_id = ps.team_id AND st.player_name = (
-                        CASE 
-                            WHEN position(' ' IN p.full_name) > 0 
-                            THEN substring(p.full_name from 1 for 1) || '. ' || substring(p.full_name from position(' ' IN p.full_name) + 1)
-                            ELSE p.full_name
-                        END
-                    )
+                    JOIN player_stats st ON st.player_id = p.id
                     JOIN games g ON g.id = st.game_id AND g.season = %s
                     GROUP BY p.id, p.full_name, p.player_number, ps.position, t.name, t.abbreviation
                     HAVING SUM(COALESCE(st.rush_attempts, 0)) > 0
@@ -1028,13 +1023,7 @@ def get_player_stats_api(season: int = 2035, category: str = "Passing"):
                     FROM players p
                     JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     JOIN teams t ON t.id = ps.team_id
-                    JOIN player_stats st ON st.team_id = ps.team_id AND st.player_name = (
-                        CASE 
-                            WHEN position(' ' IN p.full_name) > 0 
-                            THEN substring(p.full_name from 1 for 1) || '. ' || substring(p.full_name from position(' ' IN p.full_name) + 1)
-                            ELSE p.full_name
-                        END
-                    )
+                    JOIN player_stats st ON st.player_id = p.id
                     JOIN games g ON g.id = st.game_id AND g.season = %s
                     GROUP BY p.id, p.full_name, p.player_number, ps.position, t.name, t.abbreviation
                     HAVING SUM(COALESCE(st.receptions, 0)) > 0
@@ -1076,13 +1065,7 @@ def get_player_stats_api(season: int = 2035, category: str = "Passing"):
                     FROM players p
                     JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     JOIN teams t ON t.id = ps.team_id
-                    JOIN player_stats st ON st.team_id = ps.team_id AND st.player_name = (
-                        CASE 
-                            WHEN position(' ' IN p.full_name) > 0 
-                            THEN substring(p.full_name from 1 for 1) || '. ' || substring(p.full_name from position(' ' IN p.full_name) + 1)
-                            ELSE p.full_name
-                        END
-                    )
+                    JOIN player_stats st ON st.player_id = p.id
                     JOIN games g ON g.id = st.game_id AND g.season = %s
                     GROUP BY p.id, p.full_name, p.player_number, ps.position, t.name, t.abbreviation
                     HAVING (SUM(COALESCE(st.pass_tds, 0)) + SUM(COALESCE(st.rush_tds, 0)) + SUM(COALESCE(st.rec_tds, 0))) > 0
@@ -1114,7 +1097,8 @@ def get_player_stats_api(season: int = 2035, category: str = "Passing"):
             return []
 
 @app.get("/api/stats/team")
-def get_team_stats_api(season: int = 2035, category: str = "Passing"):
+def get_team_stats_api(season: Optional[int] = None, category: str = "Passing"):
+    season, _ = season_week(season)
     cat = category.lower()
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
@@ -1300,9 +1284,10 @@ def fantasy_articles(cur, season: int, week: int) -> list:
 
 
 @app.get("/api/fantasy/articles")
-def get_fantasy_articles_api(season: int = 2035, week: int = 18):
+def get_fantasy_articles_api(season: Optional[int] = None, week: Optional[int] = None):
     """Every Mu Fantasy article for a week ("View all analysis"): front page first, then the shelf.
     Weeks after 18 show the Week 18 slate; a week with no slate shows the latest earlier one."""
+    season, week = season_week(season, week)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             shown = fantasy_article_week(cur, season, week)
@@ -1323,7 +1308,8 @@ def get_fantasy_articles_api(season: int = 2035, week: int = 18):
 
 
 @app.get("/api/fantasy/dashboard")
-def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
+def get_fantasy_dashboard_api(season: Optional[int] = None, week: Optional[int] = None):
+    season, week = season_week(season, week)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # 1. Marquee games for the requested week: (projected) Excitement Index + editorial stakes
@@ -1384,7 +1370,7 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
                     FROM players p
                     JOIN player_seasons ps ON ps.player_id = p.id
                     JOIN games g ON g.season = ps.season AND (g.home_team_id = ps.team_id OR g.away_team_id = ps.team_id)
-                    JOIN player_stats st ON st.game_id = g.id AND st.team_id = ps.team_id AND st.position = ps.position AND (st.player_name = p.player_name OR st.player_name = p.full_name)
+                    JOIN player_stats st ON st.game_id = g.id AND st.player_id = p.id
                     WHERE ps.season = %s AND g.week = %s AND g.status = 'COMPLETED'
                 )
                 SELECT fp.player_id, fp.player_name, fp.position, t.abbreviation as team_abbr,
@@ -1430,7 +1416,7 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
             prev_season = season - 1
             cur.execute("""
                 WITH prev_adp AS (
-                    SELECT player_name, team_id, adp_rank as prev_rank
+                    SELECT player_id, adp_rank as prev_rank
                     FROM fantasy_projections
                     WHERE season = %s AND week = 1 AND adp_rank IS NOT NULL
                 )
@@ -1441,7 +1427,7 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
                 FROM fantasy_projections fp
                 JOIN teams t ON fp.team_id = t.id
                 LEFT JOIN players p ON p.id = fp.player_id
-                LEFT JOIN prev_adp pa ON pa.player_name = fp.player_name AND pa.team_id = fp.team_id
+                LEFT JOIN prev_adp pa ON pa.player_id = fp.player_id
                 WHERE fp.season = %s AND fp.week = 1 AND fp.adp_rank IS NOT NULL AND fp.player_id IS NOT NULL
                 ORDER BY fp.adp_rank ASC
                 LIMIT 8;
@@ -1618,8 +1604,8 @@ def _weekly_finishes(cur, season: int, week: int) -> dict:
                ) AS pos_rank_num
         FROM games g
         JOIN player_stats st ON st.game_id = g.id
-        JOIN player_seasons ps ON ps.season = g.season AND ps.team_id = st.team_id AND ps.position = st.position
-        JOIN players p ON p.id = ps.player_id AND (st.player_name = p.player_name OR st.player_name = p.full_name)
+        JOIN player_seasons ps ON ps.season = g.season AND ps.player_id = st.player_id
+        JOIN players p ON p.id = ps.player_id
         JOIN teams t ON t.id = ps.team_id
         WHERE g.season = %s AND g.week = %s AND g.status = 'COMPLETED'
           AND ps.position IN ('QB','HB','FB','WR','TE')
@@ -1634,7 +1620,8 @@ def _weekly_finishes(cur, season: int, week: int) -> dict:
 
 
 @app.get("/api/fantasy/rankings/weekly")
-def get_weekly_fantasy_rankings(season: int = 2035, week: int = 18, position: str = "FLEX", limit: int = 150):
+def get_weekly_fantasy_rankings(season: Optional[int] = None, week: Optional[int] = None, position: str = "FLEX", limit: int = 150):
+    season, week = season_week(season, week)
     position = position.upper()
     # FLEX = RB/WR/TE only (no QBs)
     allowed = UI_POSITION_MAP.get(position, FLEX_POSITIONS)
@@ -1765,7 +1752,8 @@ def get_weekly_fantasy_rankings(season: int = 2035, week: int = 18, position: st
 
 
 @app.get("/api/fantasy/rankings/ros")
-def get_ros_fantasy_rankings(season: int = 2035, week: int = 18, position: str = "FLEX", limit: int = 150):
+def get_ros_fantasy_rankings(season: Optional[int] = None, week: Optional[int] = None, position: str = "FLEX", limit: int = 150):
+    season, week = season_week(season, week)
     position = position.upper()
     # FLEX = RB/WR/TE only (no QBs)
     allowed = UI_POSITION_MAP.get(position, FLEX_POSITIONS)
@@ -1864,7 +1852,8 @@ def get_ros_fantasy_rankings(season: int = 2035, week: int = 18, position: str =
 
 
 @app.get("/api/fantasy/rankings/adp")
-def get_adp_fantasy_rankings(season: int = 2035, position: str = "ALL", limit: int = 500):
+def get_adp_fantasy_rankings(season: Optional[int] = None, position: str = "ALL", limit: int = 500):
+    season, _ = season_week(season)
     pos_upper = (position or "ALL").upper()
     if pos_upper in ("ALL", "CONSENSUS", "OVERALL"):
         allowed = ["QB", "HB", "WR", "TE"]
@@ -1965,7 +1954,8 @@ def get_adp_fantasy_rankings(season: int = 2035, position: str = "ALL", limit: i
 
 
 @app.get("/api/fantasy/players")
-def get_fantasy_search_players(season: int = 2035, min_points: float = 1.0, q: Optional[str] = None):
+def get_fantasy_search_players(season: Optional[int] = None, min_points: float = 1.0, q: Optional[str] = None):
+    season, _ = season_week(season)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -1978,8 +1968,8 @@ def get_fantasy_search_players(season: int = 2035, min_points: float = 1.0, q: O
                        ROUND(SUM(st.fantasy_points), 1) AS total_fpts
                 FROM games g
                 JOIN player_stats st ON st.game_id = g.id
-                JOIN player_seasons ps ON ps.season = g.season AND ps.team_id = st.team_id AND ps.position = st.position
-                JOIN players p ON p.id = ps.player_id AND (st.player_name = p.player_name OR st.player_name = p.full_name)
+                JOIN player_seasons ps ON ps.season = g.season AND ps.player_id = st.player_id
+                JOIN players p ON p.id = ps.player_id
                 JOIN teams t ON t.id = ps.team_id
                 WHERE g.season = %s AND g.status = 'COMPLETED'
                   AND ps.position IN ('QB', 'HB', 'FB', 'WR', 'TE')
@@ -2015,7 +2005,7 @@ def get_fantasy_search_players(season: int = 2035, min_points: float = 1.0, q: O
 
 
 @app.get("/api/news/week/{week}")
-def get_weekly_news(week: int, season: int = 2035):
+def get_weekly_news(week: int, season: Optional[int] = None):
     """
     Returns all commissioned articles for a given week with their assigned editorial slots:
     - Hero Slot (top story)
@@ -2026,6 +2016,7 @@ def get_weekly_news(week: int, season: int = 2035):
     - Other (anything else, e.g. unslotted articles)
     Team-page beat coverage (slot 'Local Beat N') is excluded; it is served by /api/team/{abbr}/news.
     """
+    season, week = season_week(season, week)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -2229,7 +2220,7 @@ def get_article_detail(article_id: int):
             }
 
 @app.post("/api/news/team/{team_id}/wakeup")
-def trigger_team_wakeup(team_id: int, season: int = 2035, week: int = 18, live: bool = False, max_workers: int = 5):
+def trigger_team_wakeup(team_id: int, season: Optional[int] = None, week: Optional[int] = None, live: bool = False, max_workers: int = 5):
     """
     Triggers the on-demand local swarm wakeup for a specific franchise page:
     - Wakes up all beat reporters for the team to write localized articles.
@@ -2238,6 +2229,7 @@ def trigger_team_wakeup(team_id: int, season: int = 2035, week: int = 18, live: 
     Runs in parallel across max_workers threads. Only live=true calls Gemini and saves; live=false is a dry run
     (prompts are compiled, nothing is written to news_feed).
     """
+    season, week = season_week(season, week)
     from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
     sd = SwarmDispatcher(debug_mode=False)
     brief = build_weekly_assignment_brief(CONN_INFO, season=season, week=week)
