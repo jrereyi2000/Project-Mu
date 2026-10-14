@@ -1036,15 +1036,10 @@ def select_week(target, debug_dir=None):
     return wait_for(["SCHED_LIST"], timeout=10)[0]
 
 
-def run_schedule(out, week=None):
-    log("== Schedule ==")
-    f = open_league_schedule()
-    cur = week_label(f)
-    if not cur:
-        raise Abort("Can't read the schedule week label")
-    target = clean_week(week) if week else previous_week(cur)
-    log(f"Current week: {cur}. Target: {target}")
-    if week_index(cur) != week_index(target):
+def go_to_week(f, target, out):
+    """On the League Schedule list, switch to `target` (held-L2 week list; falls back to
+    tapping L2, which steps one week forward and wraps). Returns the frame."""
+    if week_index(week_label(f) or "") != week_index(target):
         try:
             f = select_week(target, debug_dir=os.path.join(out, "week_debug"))
         except Abort as e:
@@ -1057,11 +1052,38 @@ def run_schedule(out, week=None):
             f, _ = wait_for(["SCHED_LIST"], timeout=10)
         else:
             raise Abort(f"Could not reach {target}")
+    return f
+
+
+def run_schedule(out, week=None):
+    log("== Schedule ==")
+    f = open_league_schedule()
+    cur = week_label(f)
+    if not cur:
+        raise Abort("Can't read the schedule week label")
+    target = clean_week(week) if week else previous_week(cur)
+    log(f"Current week: {cur}. Target: {target}")
+    f = go_to_week(f, target, out)
     log(f"On {week_label(f)}")
     if "FORCE WIN" in f.text and "ACTIONS" in f.text:
         log("Note: this week shows an ACTIONS button; Cross will NOT be pressed here.")
     n = capture_list(os.path.join(out, "schedule"), norm(target).lower(), stop_at_zeros=False)
     log(f"Schedule {target}: {n} pages")
+
+
+def run_season_schedule(out, weeks=18):
+    """League Schedule weeks 1-18 (start of season: every game as scheduled). Each week's
+    pages go to season_schedule/season_week_N_NNN.png. Presses nothing but L2 and Down."""
+    log("== Season schedule ==")
+    f = open_league_schedule()
+    folder = os.path.join(out, "season_schedule")
+    for n in range(1, weeks + 1):
+        target = f"SEASON WEEK {n}"
+        f = go_to_week(f, target, out)
+        log(f"On {week_label(f)}")
+        pages = capture_list(folder, f"season_week_{n:02d}", stop_at_zeros=False)
+        log(f"  {target}: {pages} pages")
+        f, _ = wait_for(["SCHED_LIST"], timeout=10)
 
 
 # --------------------------------------------------------------- roster ----
@@ -1743,8 +1765,8 @@ def main():
     ap.add_argument("--test", action="store_true", help="classify the current screen, no key presses")
     ap.add_argument("--probe-l2", action="store_true")
     ap.add_argument("--scope-only", action="store_true", help="from Player Stats: just switch scope to NFL")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster"],
-                    help="roster is never part of the default run")
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule"],
+                    help="roster and season-schedule are never part of the default run")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--resume", metavar="RUN", help="--only roster: continue a stopped run in captures/RUN")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
@@ -1797,6 +1819,8 @@ def main():
             run_schedule(out, a.week)
         if a.only == "roster":
             run_roster(out, a.teams, resume=bool(a.resume))
+        if a.only == "season-schedule":
+            run_season_schedule(out)
         log("Returning to the hub")
         go_hub()
         log(f"Done. Screenshots in {out}")

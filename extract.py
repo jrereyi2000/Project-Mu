@@ -14,13 +14,14 @@ Writes, inside that capture folder:
                          Passing/Defense/Kicking: each left page paired with its right page, rows joined by position)
   team_<tab>.csv         team_conversions, team_redzoneefficiency, team_penalties (32 teams each)
   schedule.csv           the captured week's games and results
+  season_schedule.csv    --only season-schedule: every week 1-18 (same columns as schedule.csv)
   roster_list.csv        --only roster list pages: TEAM + NAME, POS, AGE, OVR, MOR, ... (icons blank)
   roster_cards.csv       roster/cards.csv (Apple Vision) with AGE/HT/WT/EXP re-read by Gemini from
                          the card crops, 20 per request; vision_* keep Vision's values and
                          vision_disagrees names the fields where the two differ
 """
 import csv, glob, io, os, sys, threading, time
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from google import genai
@@ -370,7 +371,8 @@ def main():
     root = sys.argv[1]
     prefetch(sorted(glob.glob(os.path.join(root, "stats", "*.png")) +
                     glob.glob(os.path.join(root, "team_stats", "*.png")) +
-                    glob.glob(os.path.join(root, "schedule", "*.png"))))
+                    glob.glob(os.path.join(root, "schedule", "*.png")) +
+                    glob.glob(os.path.join(root, "season_schedule", "*.png"))))
     groups = {}
     for p in glob.glob(os.path.join(root, "stats", "*.png")):
         key = os.path.basename(p).rsplit("_", 1)[0]          # e.g. 01_passing
@@ -395,6 +397,11 @@ def main():
     if sched:
         cols, rows = merge(sched, "schedule")
         write_csv(os.path.join(root, "schedule.csv"), cols, rows)
+
+    season = glob.glob(os.path.join(root, "season_schedule", "*.png"))
+    if season:
+        cols, rows = merge(season, "season schedule")      # rows carry their WEEK column
+        write_csv(os.path.join(root, "season_schedule.csv"), cols, rows)
 
     extract_roster(root)
     print("Done.")
