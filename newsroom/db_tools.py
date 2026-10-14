@@ -841,6 +841,54 @@ def get_season_standings(season: int = 0) -> str:
         return f"Error: {str(e)}"
 
 @tool
+def get_top_rated_players(limit: int = 200, season: int = 0) -> str:
+    """Fetch the league's highest-rated players by Madden OVR (ties broken by popularity), every position, one compact line each: rank, player ID, name, position, team, OVR, age, years of experience, and season passing/rushing/receiving totals. Use this, not the popularity list, to build league-wide player rankings such as a Top 100. Long snappers are excluded. limit is capped at 300."""
+    try:
+        lim = max(1, min(int(limit), 300))
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT p.id, COALESCE(p.full_name, p.player_name), ps.position, t.city || ' ' || t.name,
+                           ps.overall_rating, ps.age, ps.years_of_experience,
+                           ss.pass_yards, ss.pass_tds, ss.interceptions, ss.rush_yards, ss.rush_tds,
+                           ss.receptions, ss.rec_yards, ss.rec_tds
+                    FROM player_seasons ps
+                    JOIN players p ON ps.player_id = p.id
+                    JOIN teams t ON ps.team_id = t.id
+                    LEFT JOIN season_stats ss ON ss.player_name = p.player_name AND ss.season = ps.season
+                                             AND ss.team_id = ps.team_id
+                    WHERE ps.season = %s AND ps.overall_rating IS NOT NULL AND ps.position <> 'LS'
+                    ORDER BY ps.overall_rating DESC, ps.popularity_index DESC NULLS LAST, p.id
+                    LIMIT %s;
+                """, (s_val, lim))
+                rows = cur.fetchall()
+                if not rows:
+                    return f"No player ratings found for Season {s_val}."
+
+                lines = []
+                for i, r in enumerate(rows, 1):
+                    pid, name, pos, team, ovr, age, exp, py, ptd, ints, ry, rtd, rec, rcy, rctd = r
+                    stats = []
+                    if py:
+                        stats.append(f"{py} pass yds, {ptd or 0} TD, {ints or 0} INT")
+                    if ry:
+                        stats.append(f"{ry} rush yds, {rtd or 0} TD")
+                    if rcy:
+                        stats.append(f"{rec or 0} rec, {rcy} yds, {rctd or 0} TD")
+                    lines.append(f"{i}. {name} (ID {pid}) | {pos} | {team} | OVR {ovr} | age {age} | exp {exp}"
+                                 + (f" | {'; '.join(stats)}" if stats else ""))
+                return json.dumps({
+                    "season": s_val,
+                    "count": len(lines),
+                    "note": "Ordered by Madden OVR. Stats are season totals so far (passing, rushing and receiving only; "
+                            "none for linemen or defenders). Use get_player_season_stats for a player's full profile.",
+                    "players": lines,
+                }, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
 def get_top_popular_players(limit: int = 20, season: int = 0) -> str:
     """Fetch the top most popular players across the NFL for a season, ordered by popularity index, including player ID, name, position, team, Madden OVR, age, experience, and popularity rating."""
     try:

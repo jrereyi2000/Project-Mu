@@ -37,6 +37,7 @@ from newsroom.db_tools import (
     get_weekly_slate,
     get_season_standings,
     get_top_popular_players,
+    get_top_rated_players,
     get_all_team_popularities,
     get_draft_order,
     get_team_draft_needs,
@@ -649,6 +650,7 @@ class SwarmDispatcher:
             get_weekly_slate,
             get_season_standings,
             get_top_popular_players,
+            get_top_rated_players,
             get_all_team_popularities,
             get_draft_order,
             get_team_draft_needs,
@@ -835,6 +837,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need where one team's offense has the edge over another's defense (passing vs. coverage, rushing vs. defensive rating, ball security, offensive line vs. pass rush), call `get_matchup_edges` (no opponent = their next game).
 - If you need all 32 team popularity rankings and watchability indices, call `get_all_team_popularities`.
 - If you need the top popular players in the NFL, call `get_top_popular_players`.
+- If you need the highest-rated players at every position (for league-wide player rankings), call `get_top_rated_players`.
 - If you need a game's detailed player contributions, call `get_game_box_score`.
 - If you need the official Round 1 selection order (Picks 1-32), call `get_draft_order`.
 - If you need a team's primary roster needs ranked by urgency, call `get_team_draft_needs`.

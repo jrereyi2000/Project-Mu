@@ -123,6 +123,13 @@ class WriterConfigTests(unittest.TestCase):
         self.assertNotIn("### the snub", text)
         self.assertNotIn("dissect controversial snubs", text)
 
+    def test_top_100_pool_is_rated_not_popular(self):
+        cur = self.article_types["NFL_TOP_100_HIERARCHY"]["curatorial_autonomy"]
+        self.assertIn("get_top_rated_players", cur)
+        self.assertNotIn("get_top_popular_players", cur)
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            self.assertIn("            get_top_rated_players,", f.read())  # registered as a writer tool
+
     def test_bayless_columns_use_his_article_persona(self):
         self.assertEqual(self.aliases.get("BAYLESS"), "SKIP_BAYLESS")
         self.assertIn("SKIP_BAYLESS", self.article_types["NATIONAL_OPINION_COLUMN"]["allowed_writers"])

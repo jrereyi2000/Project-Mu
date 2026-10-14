@@ -145,9 +145,13 @@ def _():
         outs["player_stats"] = tool(db_tools.get_player_season_stats)("1")
         outs["team_context"] = tool(db_tools.get_team_context)(str(TEAM_ID))
         outs["leaderboards"] = tool(db_tools.get_league_leaderboards)()
+        outs["top_rated"] = tool(db_tools.get_top_rated_players)()
     save("13_tools.json", outs)
     errors = {k: v[:300] for k, v in outs.items() if str(v).startswith("Error")}
     assert not errors, f"tool errors: {errors}"
+    top = json.loads(outs["top_rated"])
+    assert top["count"] == 200, f"get_top_rated_players returned {top['count']} players"
+    assert not any(" | LS | " in line for line in top["players"]), "long snapper in the rated pool"
     sched = json.loads(outs["schedule"])
     leaked = [g for g in sched["season_schedule"] if g["week"] >= LAST_DONE and g["status"] == "COMPLETED"]
     assert not leaked, f"schedule shows {len(leaked)} games from week >= {LAST_DONE} as completed"
