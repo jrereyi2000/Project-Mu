@@ -746,6 +746,40 @@ AFTER UPDATE OF team_id ON player_seasons
 FOR EACH ROW
 EXECUTE FUNCTION sync_team_to_season_stats();
 
+-- player_id keys and the trigger that fills player_id on name-only inserts (old ingestion,
+-- backfill); added on existing databases by db/migrations/2026_10_24_player_id_keys.py after the roster load
+
+CREATE OR REPLACE FUNCTION fill_player_id_from_roster() RETURNS trigger AS $$
+DECLARE
+    yr INT;
+BEGIN
+    IF NEW.player_id IS NOT NULL THEN
+        RETURN NEW;
+    END IF;
+    IF TG_TABLE_NAME = 'player_stats' THEN
+        SELECT season INTO yr FROM games WHERE id = NEW.game_id;
+    ELSE
+        yr := NEW.season;
+    END IF;
+    -- the player on that team and position whose list name matches; one match only
+    SELECT p.id INTO NEW.player_id
+    FROM players p JOIN player_seasons s ON s.player_id = p.id AND s.season = yr
+    WHERE s.team_id = NEW.team_id AND s.position = NEW.position
+      AND regexp_replace(upper(p.player_name), '[^A-Z]', '', 'g') = regexp_replace(upper(NEW.player_name), '[^A-Z]', '', 'g')
+    GROUP BY p.id HAVING count(*) = 1 LIMIT 1;
+    RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS season_stats_fill_player_id ON season_stats;
+CREATE TRIGGER season_stats_fill_player_id BEFORE INSERT ON season_stats
+    FOR EACH ROW EXECUTE FUNCTION fill_player_id_from_roster();
+DROP TRIGGER IF EXISTS player_stats_fill_player_id ON player_stats;
+CREATE TRIGGER player_stats_fill_player_id BEFORE INSERT ON player_stats
+    FOR EACH ROW EXECUTE FUNCTION fill_player_id_from_roster();
+
+CREATE UNIQUE INDEX IF NOT EXISTS season_stats_season_player_id ON season_stats (season, player_id) WHERE player_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS player_stats_game_player_id ON player_stats (game_id, player_id) WHERE player_id IS NOT NULL;
+
 -- Views over the capture loader tables (2026_10_23)
 -- 8. One line per player: season (every category) and game (every category).
 CREATE OR REPLACE VIEW season_stat_lines AS

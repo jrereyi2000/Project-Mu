@@ -162,6 +162,12 @@ def load_roster(cur, folder, season, report):
     missing = [e for e in existing if e["team_id"] is not None and e["id"] not in seen]
     report["not_on_any_roster"] = len(missing)
     report["not_on_any_roster_sample"] = [e["id"] for e in missing[:20]]
+    # a full 32-team capture is the whole league: anyone it didn't find is on no team this season
+    # (JR, Oct 14: clear the team, delete nothing; stats and history stay)
+    if missing and len(per_team) == 32:
+        cur.execute("UPDATE player_seasons SET team_id = NULL WHERE season = %s AND player_id = ANY(%s)",
+                    (season, [e["id"] for e in missing]))
+        report["team_cleared"] = len(missing)
     return len(parsed)
 
 
