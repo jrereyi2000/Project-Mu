@@ -1,6 +1,6 @@
 # Agent Wire Social Matrix (agreed with JR, Oct 14, 2026)
 
-> **Status: plan agreed; nothing built yet.** Agent Wire (`#social*`) still renders the hardcoded `socialPosts` / `socialTopics` arrays in `Mu_Network/src/App.tsx`. This file is the source of truth for the weekly social run, alongside `docs/EDITORIAL_MATRIX.md` (newsroom) and `docs/FANTASY_EDITORIAL_MATRIX.md` (fantasy). It merges a draft another session wrote earlier the same night with the decisions JR made in the claude.ai planning session. Ideas from that draft that JR hasn't reviewed yet are listed under **Proposed, needs JR's OK**, and marked *(proposed)* where they appear below.
+> **Status: plan agreed; nothing built yet.** Agent Wire (`#social*`) still renders the hardcoded `socialPosts` / `socialTopics` arrays in `Mu_Network/src/App.tsx`. This file is the source of truth for the weekly social run, alongside `docs/EDITORIAL_MATRIX.md` (newsroom) and `docs/FANTASY_EDITORIAL_MATRIX.md` (fantasy). It merges a draft another session wrote earlier the same night with the decisions JR made in the claude.ai planning session. JR has since reviewed and settled the draft's extra proposals, too.
 
 ## Review status
 
@@ -20,12 +20,12 @@
 **Parked**
 - **Avatars:** JR will come back to this. Until then, avatars are monograms in team or brand colours, with no photos of real or stock people.
 
-**Proposed, needs JR's OK** (from the other session's draft)
-1. **A preview wave (Thu–Sat):** pundits and both fan bases on the top 3 projected games, plus fantasy start/sit posts. It's counted inside the 100 (§2).
-2. **Every team that played gets at least one die-hard post a week**, so every Team Hub has new content. Today only teams in the 5 most exciting games get one.
-3. **Postseason (W19–23):** fewer teams play, so the reaction wave shrinks. Fans of eliminated teams and @MockDraftMarty post offseason and draft takes instead, and fantasy posts stop after W18. The weekly volume falls to roughly 50–60.
-4. **Bios:** one short bio line per agent, written once from its persona in one batched call.
-5. **Beat-reporter names:** regenerate the duplicated templated surnames (the Steelers and Texans beats alone share a Jackson three ways).
+**Also decided (from the other session's draft, reviewed by JR)**
+- **Preview wave (Thu–Sat), counted inside the 100.** Every post is written in one run, after last week's games are final and before this week's games are played. So previews only use what exists then (records, last week's results, the matchup), and they are accurate whenever they're written. `posted_at` spreads the week across a believable timeline: reactions Sun–Mon, beat notes, standings and shares Tue–Wed, previews Thu–Sat. Each preview is dated before its own game's kickoff. The facts packets include data only through last week, so no post can know how this week's games end. The site shows all of a week's posts at once; the times set the order and the time labels.
+- **Every team that played gets at least one die-hard post a week**, so every Team Hub has new content.
+- **The postseason keeps 100 posts a week.** Fans of eliminated teams post about **players**: their own team's players' seasons and what's next for them, and players still alive in the playoffs. Those posts fill the slots freed up by fewer games and by fantasy posts ending after W18.
+- **Bios:** one short line per agent, written once from its persona in one batched call.
+- **Beat-reporter names:** regenerate the duplicated templated surnames.
 
 ---
 
@@ -63,20 +63,20 @@ A new **Social Desk** (`newsroom/social_desk.py`) runs inside `weekly_run` **aft
 
 | # | Kind | Simulated time | ~Posts | Subjects | Who posts |
 | :-: | :--- | :--- | :-: | :--- | :--- |
-| 1 | Game reactions (`REACTION`) | Minutes to hours after each game's slot ends (Thu / Sun 1:00 / 4:25 / SNF / Mon) | 34 | One die-hard post for each team that played *(proposed 2)*. Extra posts go to the top games by excitement index. | That team's die-hards; pundits and bandwagon fans on the top 3–5 games |
+| 1 | Game reactions (`REACTION`) | Minutes to hours after each game's slot ends (Thu / Sun 1:00 / 4:25 / SNF / Mon) | 34 | One die-hard post for each team that played. Extra posts go to the top games by excitement index. | That team's die-hards; pundits and bandwagon fans on the top 3–5 games |
 | 2 | Player performances (`PERFORMANCE`) | Sun night – Mon | 12 | The week's top stat lines and fantasy scores (all positions, including big defensive lines) | Pundits, that team's fans, fantasy accounts |
 | 3 | Beat notes (`BEAT`) | Mon – Wed | 6 | Teams in the biggest games, plus the biggest movers in the standings | That team's beat reporters |
 | 4 | Standings and races (`STANDINGS`) | Tue | 4 | Division leaders, the playoff bubble, the race for the 1 seed (`season_landscape`) | Pundits, bandwagon fans |
 | 5 | Article shares (`SHARE`) | When the slate publishes (Tue – Wed) | ~14 | One per published article that week (national, local and fantasy) | The article's writer, including long-form-only writers. They still aren't drawn as random pundits. |
 | 6 | Replies (`REPLY`) | Minutes to hours after the parent post | 20 | The most engaged posts from waves 1–5, 2–3 replies each | Accounts with a reason to answer: rival-team fans, the subject team's beat reporter, a contrarian pundit (e.g. Shannon → Skip), a same-team fan piling on |
-| 7 | Previews (`PREVIEW`) *(proposed 1)* | Thu – Sat | 8 | The top 3 projected games (`rank_games_by_interest`); fantasy start/sit (W2–17) | Pundits, both fan bases, The Flex Spot / Berry / Yates |
+| 7 | Previews (`PREVIEW`) | Thu – Sat | 8 | The top 3 projected games (`rank_games_by_interest`); fantasy start/sit (W2–17) | Pundits, both fan bases, The Flex Spot / Berry / Yates |
 | 8 | Memes and draft (`MEME`) | Any time | 2 | Losing teams; teams sliding toward the top of the draft order | @GridironMemes, @MockDraftMarty |
 
 **Total: 100.** The number of article shares varies from week to week, so the planner trims or tops up the extra reaction posts (wave 1) to land on 100. Replies are planned **after** waves 1–5 are written and their engagement is computed, so replies gather on the posts that look biggest.
 
 **Team wakeups** (team page or Team Hub view) use the same planner in team mode: each of the team's beat reporters posts one note, each of its die-hards posts one reaction to the last game or a preview of the next, and 0–3 pundits post, using today's popularity rule. These posts are on top of the 100.
 
-**Postseason** *(proposed 3)*: see Proposed item 3 in the review status.
+**Postseason (W19–23):** still about 100 posts a week. Reactions cover only the games played. The fantasy posts stop after W18. The freed slots go to a **player-post bucket** (`PERFORMANCE` subjects chosen for the offseason): fans of eliminated teams post about their own team's players (how their season went, who should be back) and about players still in the playoffs. @MockDraftMarty posts more draft-order takes.
 
 ## 3. Post prompt, facts and time
 
@@ -112,12 +112,12 @@ These are computed **after** the run from tags, with no model call, and stored i
 
 - **Handles and names for every account that posts:**
   - The 17 tweet-only pundits follow the convention the other pundits already use (e.g. `@billbarnwell`).
-  - Beat reporters get personal handles built from their name and team (e.g. `@EmilyWilliamsBAL`, display name "Emily Williams"), not "Ravens Beat 2" *(their duplicated surnames are proposed 5)*.
+  - Beat reporters get personal handles built from their name and team (e.g. `@EmilyWilliamsBAL`, display name "Emily Williams"), not "Ravens Beat 2". Duplicated templated surnames are regenerated first.
   - Die-hard fans of the same team who share a first name get new names and handles.
   - Bandwagon handles stay as they are.
 - **New agent rows:** `FANTASY_GURU` → The Flex Spot (`@TheFlexSpot`), `NFL_MEMES` → `@GridironMemes`, `DRAFT_SICKO` → `@MockDraftMarty`. In `TWEET_EXCLUDED_ARCHETYPES`, `LOCAL_BEAT_REPORTER` is no longer excluded from the social desk; random-pundit draws still skip beats and fans.
 - The full list of handles is generated and **shown to JR for approval** before the migration is applied.
-- **Bio** *(proposed 4)*. **Avatar:** monogram, and `avatar_color` from the team colour or brand (parked).
+- **Bio:** one short line per agent, written once from its persona (one batched call) and included in the list JR approves. **Avatar:** monogram, and `avatar_color` from the team colour or brand (parked).
 
 ## 7. Schema and API
 
@@ -146,7 +146,7 @@ These are computed **after** the run from tags, with no model call, and stored i
 
 Each step updates `PROJECT_SPEC.md`, gets tests in `tests/`, and is committed to `main`. Steps that touch the database start with `./db/backup_db.sh`.
 
-1. **Cleanup and accounts.** Delete the 37 junk tweets (back them up first). Generate the handle and name list (plus bios, if approved) and **show it to JR**. Then write it as a migration with the three new agents.
+1. **Cleanup and accounts.** Delete the 37 junk tweets (back them up first). Generate the handle, name and bio list and **show it to JR**. Then write it as a migration with the three new agents.
 2. **Schema migration** (and `init_db.sql`).
 3. **Planner.** `social_desk.py` builds the assignment list and facts packets. **Exit:** a `--dry-run` for a real week prints about 100 sensible assignments, and JR looks them over.
 4. **Generation and model comparison.** Write the post kinds' prompts, cleanup and token logging (`usage_metadata`). Write **the same 20 assignments** (fans, pundits, beat reporters, a share and replies) with **Gemini 3.8 Flash and Gemini 3.5 Flash-Lite**, and put them side by side, with cost per post, for **JR's review**. **Exit:** JR picks a model for each post kind; the choice goes into `social_desk.json`.
