@@ -69,8 +69,10 @@ Project Mu/
 │   ├── weekly_run.py          #   Weekly national run: picks the publication week, skips published weeks, locks
 │   ├── db_tools.py            #   ReAct research tools exposed to writer agents
 │   ├── fantasy_tools.py       #   Fantasy research tools (FANTASY_TOOLS), given only to FANTASY_* article types
+│   ├── fantasy_desk.py        #   Fantasy Editorial Matrix: weekly fantasy slots, Card 03 schedule, fantasy calendar + desk rules
 │   └── config/                #   agent_personas.json, article_types.json, article_structure_directives.json,
-│                              #   curatorial_autonomy_directives.json, playoff_overrides.json
+│                              #   curatorial_autonomy_directives.json, playoff_overrides.json,
+│                              #   fantasy_writers.json (fantasy article voices + selection filters)
 ├── db/                        # PostgreSQL access & maintenance
 │   ├── db_handler.py          #   Shared connection / UPSERT layer (DATABASE_URL)
 │   ├── init_db.sql, run_sql.py
@@ -121,7 +123,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Frontend | `cd Mu_Network && npm run dev` (Vite on port 8443) |
 | Video pipeline | `python3 -m pipeline.main --file data/video/<clip>.mp4 --db` |
 | Stat backfill + culture engines | `python3 -m engines.game_stat_generator` |
-| Publish the weekly newsroom slate | `python3 -m newsroom.weekly_run` (next week; skips if already published). `--week N` for a specific week (Week 1 preseason and Week 23 Super Bowl are manual), `--force` to publish again, `--dry-run` to print prompts with no Gemini calls or writes |
+| Publish the weekly newsroom slate | `python3 -m newsroom.weekly_run` (next week; skips if already published). `--week N` for a specific week (Week 1 preseason and Week 23 Super Bowl are manual), `--force` to publish again, `--dry-run` to print prompts with no Gemini calls or writes. The Mu Fantasy slate runs in the same call after the national slate (W1–18, own already-published check); `--fantasy-only` / `--skip-fantasy` |
 | Clear generated articles/tweets | `bash db/clear_news_feed.sh` (backs up `news_feed`, tags, `power_rankings` and the agent-memory tables to `db/backups/` first, asks to confirm; deleting articles cascades to their takes and predictions, and agent season summaries are cleared; `--articles-only` keeps tweets) |
 | Re-score Excitement Index (E) | `python3 -m engines.gotw_engine --season 2035` (then refresh the culture indices below) |
 | Refresh culture indices (in this order) | `python3 -m engines.twi_engine` → `python3 -m engines.popularity_engine` → `python3 -m engines.player_popularity_engine` |
@@ -523,6 +525,8 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - `get_fantasy_player_profile(player_identifier)`: weekly log (opponent, PPR, projection, stat line, rostered/started %), scoring range (mean, best, worst, SD, 20+ boom and sub-8 bust weeks), touches/g, ADP with range, current ROS rank.
   - `get_fantasy_draft_board(position, limit, rookies_only, strategy)`: simulated ADP board with range and draft %, OVR, age, experience, depth slot and team offense ranks; optional ADP among one strategy's managers; once games are visible, season PPR and positional finish so far.
   - `get_fantasy_mock_draft(league, rounds)`: one simulated league's draft pick by pick with each team's strategy.
+  - `get_fantasy_season_leaders(position, first_week, last_week, limit)`: PPR leaders over a week range (1–17 season, 15–17 playoffs) with games, per-game, positional finish, ADP and draft %.
+  - `get_fantasy_projection_accuracy()`: projection MAE, correlation and guess-the-average MAE for projected starters (weekly top 12 QB/TE, 30 RB/WR), by position, plus the biggest over- and under-projections.
 - **Season & week scope of the research tools (`newsroom/run_context.py`):** `_execute_agent` sets the article's season and publication week for its thread before calling Gemini (automatic function calling runs the tools on that thread) and clears it afterwards.
   - **Season:** tools take `season: int = 0`, meaning "current": the article's season inside a run, otherwise `league_state.current_season`, otherwise the latest season in `games` (`db_tools.resolve_season`). No tool hardcodes a season.
   - **Week cutoff:** a Week N article can't see results from Week N onward. `get_game_box_score` refuses those games; `get_advanced_game_analytics`, `get_team_season_schedule` and `get_weekly_slate` show them as scheduled with no score; `get_season_standings` counts the record and points from earlier games only; `get_opponent_adjusted_credit`, `get_team_efficiency_profile`, `get_matchup_edges` and the credit inside game analytics use earlier games only (`fetch_team_game_rows(..., before_week=)`); `get_team_articles` / `get_player_articles` return only articles from earlier weeks, which also hides the article's own week. Earlier seasons are fully visible.
@@ -826,6 +830,16 @@ Rather than waking up a fixed list of writer agents who generate generic article
    - **Writer records:** every writer name in `allowed_writers` and the columnist pools is an archetype key in `agent_personas.json`. `get_agent_record` loads the `agent_memories` row whose `archetype` matches exactly (oldest first); old shorthand names are mapped first by `WRITER_ARCHETYPE_ALIASES` (`BAYLESS` → `SKIP_BAYLESS`). Tweet-only accounts such as `SKIP_TWEET` are separate agents and are never used for articles. `tests/test_writer_config.py` checks that every article writer has a persona, every opinion columnist has a curatorial directive, and no columnist pool or article type uses an alias.
    - Binds each writer to their specific commissioned `article_type`, ensuring prompt injection of custom curatorial lenses, structure directives, and analytical parameters.
 
+### 7.3.1 The Mu Fantasy Desk (`newsroom/fantasy_desk.py`, `docs/FANTASY_EDITORIAL_MATRIX.md`)
+- **When:** `weekly_run` calls `dispatch_weekly_fantasy(season, week)` after the national slate, Weeks 1–18 (W19–23: no slate; the page keeps W18). A week is skipped when it already has `Fantasy …` slots (unless `--force`).
+- **Slots** (`fantasy_slate(week)`): `Fantasy Hero`, `Fantasy 1`–`3` (front page) and `Fantasy Shelf N` ("View all analysis").
+  - W1: `FANTASY_DRAFT_TIERS` ×4 (WR, RB, QB, TE, position given as a desk note) + Sleepers & Busts, Mock Draft, Rookie Rankings.
+  - W2–14: Start/Sit, Waiver Wire, Weekly Reactions, Card 03 from `CARD3_SCHEDULE` (W2 Overreaction, W3 DvP, W4 Overreaction, W5 DvP, W6 Buy/Sell, W7 ADP Checkpoint, W8 ROS Tiers, W9 DvP, W10 Buy/Sell, W11 ROS Tiers, W12 Trade Deadline Special, W13 Playoff Schedule Planner, W14 Must-Win Week); shelf: Rankings & Tiers, Box Score & Usage, 10 Things, Matchup Exploits (W3+).
+  - W15–17: Start/Sit (playoff/championship editions), Streamers, Reactions, Playoff Schedule Planner (W15) / Ceiling Plays; W18: Season in Review, Awards (with All-Fantasy Team), Draft Retro, Projection Report Card, Dynasty Early Look.
+  - K/D/ST (`FANTASY_STREAMING_DST_K`) is gated by `KDST_ENABLED = False` until migration phase 3.
+- **Writers:** 26 `FANTASY_*` types in `article_types.json`, written by BERRY, YATES, BARNWELL and JOYNER (spread by least-used, like the national desk). For `FANTASY_*` articles `compile_agent_prompt` swaps in the writer's fantasy voice and selection filter from `newsroom/config/fantasy_writers.json` (tweet personas and national directives are untouched), uses `FANTASY_DESK_GUIDELINES` instead of the national research-tools block (full PPR, all numbers from tools, "rostered in X% of leagues" with no mention of simulations, no injuries, clear verdicts, never invent past calls), a fantasy-calendar temporal block (`temporal_mode = "FANTASY"`), the fantasy tools, and the desk note as an `EDITORIAL DESK ASSIGNMENT (MANDATORY)` block. Fantasy articles are saved with `team_id` NULL.
+- **Brief:** a small fantasy brief (season, publication week, fantasy phase, week label, results-through week, scoring), not the national assignment brief.
+
 ### 7.4 Playoff-Specific Dynamic Overrides Architecture (`newsroom/config/playoff_overrides.json`)
 During the single-elimination tournament and Super Bowl run (Weeks 19–23), standard regular-season directives are dynamically superseded by targeted postseason overrides. The orchestrator inspects `target_weeks` at compile time and overrides the baseline article directive, curatorial autonomy filter, and structure specification without mutating baseline schemas:
 
@@ -896,6 +910,7 @@ To support seamless frontend newsroom consumption, longform editorial content is
        - **`standalone`**: Standalone Power Rankings 32-team hierarchy.
        - **`other`**: Any other article that week (e.g. unslotted); the frontend shows these with the main stories.
      - Team-page beat coverage (slot `Local Beat N`, from on-demand team wakeups) is excluded; it appears only via `GET /api/team/{abbr}/news`.
+     - Mu Fantasy articles (`article_type` `FANTASY_*`, slots `Fantasy …`) are excluded; they belong to the fantasy page.
      - Includes resolved author objects (`display_name`, `handle`, `archetype`) and attached entity tags (`tagged_teams`, `tagged_players`).
    - **`GET /api/news/article/{article_id}`**:
      - Returns full article text, headline, teaser excerpt, assigned slot, author metadata, and all tagged entities for reading view rendering.

@@ -1941,6 +1941,7 @@ def get_weekly_news(week: int, season: int = 2035):
                 WHERE n.season = %s AND n.week = %s AND n.content_type = 'ARTICLE'
                   -- Team-page beat coverage ('Local Beat N') belongs on team pages, not the weekly slate
                   AND (n.slot IS NULL OR n.slot NOT LIKE 'Local Beat%%')
+                  AND (n.article_type IS NULL OR n.article_type NOT LIKE 'FANTASY%%')  -- Mu Fantasy has its own page
                 ORDER BY n.id ASC, am.id ASC;
             """, (season, week))
             articles = cur.fetchall()

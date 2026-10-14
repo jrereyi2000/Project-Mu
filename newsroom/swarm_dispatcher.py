@@ -48,6 +48,13 @@ from newsroom.db_tools import (
     get_player_articles,
 )
 from newsroom.fantasy_tools import FANTASY_TOOLS
+from newsroom.fantasy_desk import (
+    FANTASY_DESK_GUIDELINES,
+    fantasy_phase,
+    fantasy_slate,
+    fantasy_temporal_instruction,
+    fantasy_week_label,
+)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
@@ -610,6 +617,14 @@ class SwarmDispatcher:
         else:
             self.article_structure_directives = {}
 
+        # Fantasy desk voices (FANTASY_* articles only; see newsroom/config/fantasy_writers.json)
+        fantasy_writers_path = os.path.join(CONFIG_DIR, "fantasy_writers.json")
+        if os.path.exists(fantasy_writers_path):
+            with open(fantasy_writers_path, "r") as f:
+                self.fantasy_writers = json.load(f).get("writers", {})
+        else:
+            self.fantasy_writers = {}
+
         # Load curatorial autonomy directives
         curatorial_path = os.path.join(CONFIG_DIR, "curatorial_autonomy_directives.json")
         if os.path.exists(curatorial_path):
@@ -714,12 +729,16 @@ class SwarmDispatcher:
         content_type: str,
         article_type: str = None,
         slot_target: dict = None,
+        desk_note: str = None,
     ) -> dict:
         """Assembles the exact persona, memory, assignment brief, and tools prompt for an agent.
 
-        slot_target (from newsroom.slot_targets) pins the article's subject chosen by the Editorial Desk."""
+        slot_target (from newsroom.slot_targets) pins the article's subject chosen by the Editorial Desk.
+        desk_note is a plain-text assignment from the desk (the fantasy desk uses it, e.g. a draft-tier position)."""
         archetype = canonical_writer_archetype(archetype)
-        base_archetype_prompt = self.personas_data.get(
+        is_fantasy = bool(content_type == "ARTICLE" and article_type and str(article_type).upper().startswith("FANTASY_"))
+        fantasy_voice = self.fantasy_writers.get(archetype, {}) if is_fantasy else {}
+        base_archetype_prompt = fantasy_voice.get("persona") or self.personas_data.get(
             archetype,
             f"You are an NFL media agent with archetype {archetype}."
         )
@@ -829,6 +848,10 @@ TEMPORAL PUBLISHING CONTEXT (CUMULATIVE / ENTERING WEEK {week}):
 - Week {week} games have not taken place yet.
 """
 
+        if is_fantasy:
+            temporal_mode = "FANTASY"
+            temporal_instruction = fantasy_temporal_instruction(week)
+
         national_writers_list = ("BARNWELL", "SANDO", "JOYNER", "ROSENTHAL", "CHADIHA", "YATES", "SIMMONS", "ACHO", "THE_ATHLETIC", "ROUNDTABLE_PANEL", "SKIP_BAYLESS", "KIMES", "ORLOVSKY", "CLARK")
 
         national_writer_guidelines = ""
@@ -855,6 +878,8 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 
 3. HISTORICAL COMPARISONS (OPTIONAL): You may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens your argument (similar record shape, scoring profile, roster age, or trajectory). It is not required: most articles need none, and you should use at most one. Never invent a historical team or season, and don't reach for the most famous examples by default; pick the comparison that actually fits the numbers.
 """
+        if is_fantasy:
+            national_writer_guidelines = FANTASY_DESK_GUIDELINES
         elif content_type == "ARTICLE" and archetype == "LOCAL_BEAT_REPORTER":
             national_writer_guidelines = """
 CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
@@ -872,7 +897,8 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
             article_curatorial = active_playoff_override["curatorial_autonomy_override"].strip()
         else:
             article_curatorial = (article_type_info.get("curatorial_autonomy") if article_type_info else "").strip()
-        writer_curatorial = self.curatorial_autonomy_directives.get(archetype, "").strip()
+        writer_curatorial = (fantasy_voice.get("selection") if is_fantasy
+                             else self.curatorial_autonomy_directives.get(archetype, "")).strip()
 
         if article_curatorial and writer_curatorial:
             curatorial_directive = f"""
@@ -950,6 +976,12 @@ EDITORIAL DESK SUBJECT ASSIGNMENT (MANDATORY — SUPERSEDES ANY SUBJECT-SELECTIO
 - Subject: {subject}
 - Assignment: {slot_target['note']}
 - The Editorial Desk has already chosen this subject. Do not substitute a different team or game; any instruction to select your own team, game, or franchise applies only to choosing angles within this subject.
+"""
+
+        if desk_note:
+            slot_target_directive += f"""
+EDITORIAL DESK ASSIGNMENT (MANDATORY):
+- {desk_note}
 """
 
         power_rankings_directive = ""
@@ -1057,7 +1089,7 @@ If you need specific stats, use your database tools before producing your final 
                     # Prepare raw functions with logging wrappers for Gemini AFC (preserving parameter signatures)
                     tool_call_counts = collections.defaultdict(int)
                     tools_for_gemini = []
-                    for t in self.tools_for(article_type):
+                    for t in self.tools_for(at_id):  # same tool set the prompt listed
                         fn = getattr(t, "func", t)
                         def make_wrapper(inner_fn):
                             @functools.wraps(inner_fn)
@@ -1324,6 +1356,7 @@ If you need specific stats, use your database tools before producing your final 
             "KIMES": "Mina Kimes",
             "ORLOVSKY": "Dan Orlovsky",
             "CLARK": "Ryan Clark",
+            "BERRY": "Matthew Berry",
         }
 
         with psycopg.connect(self.db.db_conn_info) as conn:
@@ -1650,6 +1683,88 @@ If you need specific stats, use your database tools before producing your final 
         else:
             for t in tweet_tasks:
                 self._execute_agent(t[0], season, week, t[1], live=live, model=model, save_to_db=save_to_db)
+
+    def commission_fantasy_slate(self, season: int, week: int) -> list[dict]:
+        """Fantasy desk: the week's FANTASY_* slots (newsroom/fantasy_desk.py) with a writer for each.
+        Writers are spread across each type's allowed_writers (fewest assignments this week first)."""
+        counts = collections.defaultdict(int)
+        slate = []
+        for item in fantasy_slate(week):
+            at_info = self.article_types_data.get(item["article_type"])
+            if not at_info or not at_info.get("allowed_writers"):
+                print(f"⚠️ Fantasy slot {item['slot']}: article type {item['article_type']} is not configured; skipped.")
+                continue
+            allowed = at_info["allowed_writers"]
+            fewest = min(counts[w] for w in allowed)
+            archetype = canonical_writer_archetype(random.choice([w for w in allowed if counts[w] == fewest]))
+            counts[archetype] += 1
+            agent_rec = self.get_agent_record(archetype)
+            slate.append({
+                "slot": item["slot"],
+                "article_type_id": item["article_type"],
+                "article_type_name": at_info.get("name", item["article_type"]),
+                "archetype": archetype,
+                "agent_id": agent_rec[0],
+                "display_name": agent_rec[4] or agent_rec[0],
+                "agent_record": agent_rec,
+                "desk_note": item.get("note") or None,
+            })
+        return slate
+
+    def dispatch_weekly_fantasy(
+        self,
+        season: int,
+        week: int,
+        live: bool = False,
+        model: str = "gemini-3.8-flash",
+        save_to_db: bool = False,
+        max_workers: int = 5,
+    ) -> list:
+        """Writes the week's Mu Fantasy slate (docs/FANTASY_EDITORIAL_MATRIX.md). No slate in Weeks 19–23."""
+        phase = fantasy_phase(week)
+        if phase is None:
+            print(f"[Fantasy] Week {week}: offseason, no fantasy slate (the page keeps the Week 18 slate).")
+            return []
+        slate = self.commission_fantasy_slate(season, week)
+        print(f"\n🏈 --- FANTASY DESK (Season {season}, Week {week}: {phase}, {len(slate)} articles) ---")
+        for idx, item in enumerate(slate, 1):
+            print(f"   [{idx}] [{item['slot']}] {item['article_type_name']} ({item['article_type_id']}) -> "
+                  f"{item['display_name']} ({item['archetype']})" + (f" | {item['desk_note']}" if item["desk_note"] else ""))
+
+        brief = {
+            "desk": "Mu Fantasy",
+            "season": season,
+            "publication_week": week,
+            "fantasy_phase": phase,
+            "this_week": fantasy_week_label(week) if week > 1 else "preseason draft prep",
+            "results_available_through_week": week - 1,
+            "scoring": "full PPR",
+        }
+
+        def run(item):
+            agent = item["agent_record"]
+            prompt = self.compile_agent_prompt(
+                agent[0], agent[1], agent[2], agent[3], agent[4], None, brief, season, week, "ARTICLE",
+                article_type=item["article_type_id"], desk_note=item["desk_note"],
+            )
+            print(f"🚀 [FANTASY] Starting [{item['slot']}]: {item['article_type_name']} by {item['display_name']}")
+            res = self._execute_agent(prompt, season, week, None, live=live, model=model, save_to_db=save_to_db,
+                                      slot=item["slot"], article_type=item["article_type_id"])
+            print(f"✅ [FANTASY] Completed [{item['slot']}]: {item['article_type_name']}")
+            return res
+
+        results = []
+        if max_workers > 1 and len(slate) > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(run, item) for item in slate]
+                for f in as_completed(futures):
+                    try:
+                        results.append(f.result())
+                    except Exception as exc:
+                        print(f"❌ Fantasy article generation raised an exception: {exc}")
+        else:
+            results = [run(item) for item in slate]
+        return results
 
     def dispatch_team_local(
         self,

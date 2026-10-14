@@ -1,6 +1,6 @@
 # Fantasy Editorial Matrix (agreed with JR Oct 13, 2026)
 
-> **Status: review complete (Oct 13, 2026). Built so far: the simulated league engine (§7 step 2) and the fantasy writer tools (§7 step 4).** The fantasy page (`#fantasy`) still shows hardcoded placeholder articles, and `newsroom/config/article_types.json` has no fantasy article types. This is the source of truth for the fantasy slate, alongside `docs/EDITORIAL_MATRIX.md` for the main newsroom.
+> **Status: review complete (Oct 13, 2026). Built so far: §7 steps 2–5 (league sim, writer tools, article types and writers, publishing). Left: API and page (steps 6–7), K/D/ST (step 2b).** The fantasy page (`#fantasy`) still shows hardcoded placeholder articles, and `newsroom/config/article_types.json` has no fantasy article types. This is the source of truth for the fantasy slate, alongside `docs/EDITORIAL_MATRIX.md` for the main newsroom.
 
 This matrix sets the weekly article slate for **Mu Fantasy** (`#fantasy`). It follows the **fantasy calendar**, not the NFL regular season and playoffs.
 
@@ -80,6 +80,10 @@ Articles are stored in `news_feed` with a `FANTASY_*` `article_type` and the slo
 
 ✅ = decided. † = from W3 (W2 has one game of defensive data); subject to the 2036 matchup audit (§6). * = only after migration phase 3, and only from W3 on (the first W2 has one game of data; it can run from W2 if JR prefers). Rows W15 and W16 follow the decided W2–W17 pattern but haven't been reviewed slot by slot.
 
+### Card 03 schedule as built (`newsroom/fantasy_desk.py` `CARD3_SCHEDULE`)
+
+W2 Overreaction Check · W3 DvP Report · W4 Overreaction Check · W5 DvP Report · W6 Buy/Sell · W7 ADP Checkpoint · W8 ROS Tiers · W9 DvP Report · W10 Buy/Sell · W11 ROS Tiers · W12 Trade Deadline Special · W13 Playoff Schedule Planner · W14 Must-Win Week. A fixed schedule replaces random rotation so the slate is predictable.
+
 ### Rotating Card 03 pools (W2–W14; one per week, no repeats within a phase until the pool runs out)
 
 **Pool A: Early Reads (W2–W5)**
@@ -106,7 +110,7 @@ The Mu fantasy **trade deadline is before Week 12 kickoff** (decided). It's edit
 
 | Article type | Content | Main data | Suggested writers |
 | :--- | :--- | :--- | :--- |
-| `FANTASY_DRAFT_TIERS` | One position per article (slot target: WR/RB/QB/TE). Tiered draft rankings with tier breaks and positional runs | simulated ADP (avg/earliest/latest pick, ADP by strategy), OVR, depth chart, dev trait, archetype, age, experience | YATES |
+| `FANTASY_DRAFT_TIERS` | One position per article (slot target: WR/RB/QB/TE). Tiered draft rankings with tier breaks and positional runs | simulated ADP (avg/earliest/latest pick, ADP by strategy), OVR, depth chart, dev trait, archetype, age, experience | YATES, BERRY, BARNWELL, JOYNER (one position each) |
 | `FANTASY_SLEEPERS_BUSTS` | ADP compared with depth-chart role and dev trait | ADP vs depth slot, dev trait | BERRY, BARNWELL |
 | `FANTASY_MOCK_DRAFT` | One of the 100 simulated drafts, written up with a pick-by-pick rationale | a simulated draft (§5.1) | YATES |
 | `FANTASY_ROOKIE_RANKINGS` | Rookies only (`years_of_experience = 0`) | roster, ADP, dev trait | YATES |
@@ -132,7 +136,7 @@ The Mu fantasy **trade deadline is before Week 12 kickoff** (decided). It's edit
 | `FANTASY_ALL_FANTASY_TEAM` | Best possible lineup of the season (QB/2RB/2WR/TE/FLEX), plus a playoff-weeks edition | season and wk 15–17 scores | YATES |
 | `FANTASY_DRAFT_RETRO` | Draft hits and misses only (simulated ADP vs final rank); no individual awards, no strategy results | wk 1 `adp_rank` vs final PPR rank | BARNWELL |
 | `FANTASY_AWARDS` | Fantasy MVP, Bust of the Year, Waiver Gem, Playoff Hero, plus the All-Fantasy Team (best QB/2RB/2WR/TE/FLEX of the season and of wk 15–17) | season and wk 15–17 scores, ADP, rostered % | BERRY |
-| `FANTASY_PROJECTION_REPORT_CARD` | How the Mu model did: MAE, biggest misses | `fantasy_projection_engine --backtest` | BARNWELL |
+| `FANTASY_PROJECTION_REPORT_CARD` | How the Mu model did: MAE, biggest misses | `get_fantasy_projection_accuracy` | BARNWELL |
 | `FANTASY_DYNASTY_EARLY_LOOK` | Early ranks for next season, weighted toward age and second-year players | age, `years_of_experience`, dev trait, season PPR | YATES |
 
 Writers are set (see Review status): FANTASY_GURU is not on the fantasy desk.
@@ -229,8 +233,8 @@ Each of the 100 leagues also plays its season:
 1. **Calendar**: a `fantasy_phase(week)` helper: W1 / W2–5 / W6–10 / W11–14 / W15 / W16 / W17 / W18 / W19–23 → frozen.
 2. ✅ **Built (Oct 13):** `engines/fantasy_league_sim.py` + `db/migrations/2026_10_21_fantasy_league_sim.sql` (details in PROJECT_SPEC §3.4). Managers value players over replacement from `draft_score` (QB/TE damped) before strategy adjustments. **Simulated league engine** (§5): 100 seeded leagues with drafting strategies, weekly matchups and playoffs → week 1 ADP (`adp_rank` + average/earliest/latest pick, draft %) and per-player, per-week rostered % and start %, plus league results by strategy. It reads `draft_score` from `fantasy_adp_engine` as the value board.
 2b. **K and D/ST scoring + projections** (after migration phase 3) → K and D/ST rows in the rankings and `fantasy_projections`.
-3. **Article types and writers**: add the catalog to `article_types.json`, a Berry article persona plus directives, and fantasy sections in the Yates/Barnwell/Joyner directives, plus a `FANTASY_MATRIX` and Card 03 pool rotation in the dispatcher. W1 tiers use a position slot target.
+3. ✅ **Built (Oct 13):** 26 `FANTASY_*` types in `article_types.json`, `newsroom/config/fantasy_writers.json` (fantasy voices for Berry, Yates, Barnwell, Joyner), `newsroom/fantasy_desk.py` (slots, Card 03 schedule, calendar, desk rules), `dispatch_weekly_fantasy`. Draft Tiers are spread across all four writers (one position each). Originally: **Article types and writers**: add the catalog to `article_types.json`, a Berry article persona plus directives, and fantasy sections in the Yates/Barnwell/Joyner directives, plus a `FANTASY_MATRIX` and Card 03 pool rotation in the dispatcher. W1 tiers use a position slot target.
 4. ✅ **Built (Oct 13):** `newsroom/fantasy_tools.py`, 8 tools, given only to `FANTASY_*` article types (list in PROJECT_SPEC §7). K/D/ST tools come with phase 3. Originally planned as **Writer tools** (`newsroom/db_tools.py`): weekly projections, last week's fantasy scores against projections, defense vs. position, Playoff SOS, ADP vs. ROS/final rank, byes, per-player PPR range, rostered %, positional ADP tiers with roster attributes.
-5. **Publishing**: `weekly_run` commissions the fantasy slate (alongside the national slate or behind a `--fantasy` flag), and skips W19–W23.
+5. ✅ **Built (Oct 13):** `weekly_run` publishes the fantasy slate after the national one (W1–18), `--fantasy-only` / `--skip-fantasy`. Originally: **Publishing**: `weekly_run` commissions the fantasy slate (alongside the national slate or behind a `--fantasy` flag), and skips W19–W23.
 6. **API**: `/api/fantasy/dashboard` reads hero and cards from `news_feed` by `FANTASY_*` slot (falling back to the current placeholders), clamps weeks ≥ 19 to 18, and gets a list endpoint for "View all".
 7. **Frontend**: a `#fantasy-all` list route. Card blurbs and the article page body come from the stored article.

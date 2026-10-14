@@ -662,6 +662,108 @@ def get_fantasy_mock_draft(league: int = 1, rounds: int = 15, season: int = 0) -
         return _err(e)
 
 
+@tool
+def get_fantasy_season_leaders(position: str = "ALL", first_week: int = 1, last_week: int = 17, limit: int = 25,
+                               season: int = 0) -> str:
+    """Fantasy points leaders (full PPR) over a range of weeks: total and per-game PPR, games, positional finish,
+    preseason ADP and % of simulated leagues that drafted him. Weeks 1–17 = the fantasy season; 15–17 = the fantasy
+    playoffs. Use for Awards, the All-Fantasy Team, Season in Review, Draft Retro and Dynasty pieces."""
+    try:
+        group = _group_filter(position)
+        s = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn, conn.cursor() as cur:
+            last = _last_visible_week(cur, s)
+            hi = min(int(last_week), last)
+            lo = max(1, int(first_week))
+            if hi < lo:
+                return f"No completed weeks between Week {first_week} and Week {last_week} that this article may see."
+            roster, adp = _roster(cur, s), _adp(cur, s)
+            lines = [l for l in _lines(cur, s, hi) if l["week"] >= lo]
+        tot, games = defaultdict(float), defaultdict(int)
+        for l in lines:
+            if l["pid"] in roster and l["team_id"] == roster[l["pid"]]["team_id"]:
+                tot[l["pid"]] += l["ppr"]
+                games[l["pid"]] += 1
+        finish = {}
+        for g in GROUPS:
+            ranked = sorted((p for p in tot if roster[p]["group"] == g), key=lambda p: -tot[p])
+            finish.update({p: f"{g}{i}" for i, p in enumerate(ranked, start=1)})
+        rows = sorted((p for p in tot if group is None or roster[p]["group"] == group), key=lambda p: (-tot[p], p))
+        out = []
+        for i, pid in enumerate(rows[:max(1, min(int(limit), 100))], start=1):
+            r, a = roster[pid], adp.get(pid)
+            draft = (f"ADP {a['adp']:.1f}, drafted in {a['draft_pct']:.0f}% of leagues" if a and a["draft_pct"]
+                     else "undrafted in every league")
+            out.append(f"{i}. {r['name']} (ID {pid}) | {r['position']} {r['team']} | {tot[pid]:.1f} PPR in "
+                       f"{games[pid]} games ({tot[pid] / games[pid]:.1f}/g) | finished {finish[pid]} | {draft}")
+        return json.dumps({"season": s, "weeks": f"{lo}–{hi}", "position": group or "ALL",
+                           "note": "Undrafted players were available on waivers after the draft.", "players": out},
+                          indent=2)
+    except Exception as e:
+        return _err(e)
+
+
+@tool
+def get_fantasy_projection_accuracy(season: int = 0) -> str:
+    """How accurate the Mu fantasy projections were this season: mean absolute error and correlation against
+    actual PPR for projected starters (each week's top 12 QB/TE, 30 RB/WR), the error of simply guessing the
+    average, accuracy by position, and the biggest over- and under-projections. Use for the Projection Report Card."""
+    try:
+        s = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn, conn.cursor() as cur:
+            last = _last_visible_week(cur, s)
+            if last < 2:
+                return "Projections start in Week 2; no projected week has been played yet."
+            roster = _roster(cur, s)
+            lines = _lines(cur, s, last)
+            cur.execute("""
+                SELECT week, player_id, projected_points::float, pos_rank FROM fantasy_projections
+                WHERE season = %s AND week BETWEEN 2 AND %s AND player_id IS NOT NULL AND pos_rank IS NOT NULL
+            """, (s, last))
+            proj = cur.fetchall()
+            opp = _opponents(cur, s)
+        actual = defaultdict(float)
+        for l in lines:
+            if l["pid"] in roster and l["team_id"] == roster[l["pid"]]["team_id"]:
+                actual[(l["pid"], l["week"])] += l["ppr"]
+        cutoff = {"QB": 12, "RB": 30, "WR": 30, "TE": 12}
+        pairs = []
+        for week, pid, p, rank in proj:
+            if pid not in roster or (roster[pid]["team_id"], week) not in opp:
+                continue
+            g = rank.rstrip("0123456789")
+            if int(rank[len(g):]) <= cutoff.get(g, 0):
+                pairs.append((week, pid, g, p, actual.get((pid, week), 0.0)))
+        if not pairs:
+            return "No projected starters with results yet."
+
+        def stats(rows):
+            n = len(rows)
+            mae = sum(abs(p - a) for *_, p, a in rows) / n
+            mp, ma = sum(r[3] for r in rows) / n, sum(r[4] for r in rows) / n
+            cov = sum((r[3] - mp) * (r[4] - ma) for r in rows)
+            vp, va = sum((r[3] - mp) ** 2 for r in rows), sum((r[4] - ma) ** 2 for r in rows)
+            corr = cov / math.sqrt(vp * va) if vp and va else 0.0
+            naive = sum(abs(ma - r[4]) for r in rows) / n
+            return {"player_weeks": n, "mae": round(mae, 2), "guess_average_mae": round(naive, 2),
+                    "correlation": round(corr, 3)}
+
+        def fmt(r):
+            week, pid, _, p, a = r
+            x = roster[pid]
+            return f"W{week} {x['name']} (ID {pid}, {x['position']} {x['team']}): projected {p:.1f}, scored {a:.1f} ({a - p:+.1f})"
+
+        return json.dumps({
+            "season": s, "weeks": f"2–{last}", "overall": stats(pairs),
+            "by_position": {g: stats([r for r in pairs if r[2] == g]) for g in GROUPS if any(r[2] == g for r in pairs)},
+            "biggest_underprojections": [fmt(r) for r in sorted(pairs, key=lambda r: r[3] - r[4])[:8]],
+            "biggest_overprojections": [fmt(r) for r in sorted(pairs, key=lambda r: r[4] - r[3])[:8]],
+            "note": "Error is in PPR points per player-week. Projections were made before each week's games.",
+        }, indent=2)
+    except Exception as e:
+        return _err(e)
+
+
 FANTASY_TOOLS = [
     get_fantasy_rankings,
     get_fantasy_week_results,
@@ -671,4 +773,6 @@ FANTASY_TOOLS = [
     get_fantasy_player_profile,
     get_fantasy_draft_board,
     get_fantasy_mock_draft,
+    get_fantasy_season_leaders,
+    get_fantasy_projection_accuracy,
 ]
