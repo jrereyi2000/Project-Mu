@@ -1214,6 +1214,102 @@ def get_team_stats_api(season: int = 2035, category: str = "Passing"):
             return results
 
 
+# ─── Mu Fantasy articles (newsroom/fantasy_desk.py writes them; docs/FANTASY_EDITORIAL_MATRIX.md) ───
+_NEWSROOM_CONFIG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "newsroom", "config")
+
+
+def _load_config(name, key):
+    try:
+        import json
+        with open(os.path.join(_NEWSROOM_CONFIG, name)) as f:
+            return json.load(f).get(key, {})
+    except Exception:
+        return {}
+
+
+FANTASY_TYPE_NAMES = {k: v.get("name", k) for k, v in _load_config("article_types.json", "article_types").items()
+                      if k.startswith("FANTASY_")}
+FANTASY_WRITER_NAMES = {k: v.get("display_name", k) for k, v in _load_config("fantasy_writers.json", "writers").items()}
+FANTASY_LAST_SLATE_WEEK = 18   # W19–W23 keep showing the Week 18 slate
+FANTASY_FRONT_SLOTS = ("Fantasy Hero", "Fantasy 1", "Fantasy 2", "Fantasy 3")
+
+
+def _fantasy_slot_order(slot: str) -> tuple:
+    if slot in FANTASY_FRONT_SLOTS:
+        return (0, FANTASY_FRONT_SLOTS.index(slot))
+    m = re.match(r"Fantasy Shelf (\d+)$", slot or "")
+    return (1, int(m.group(1))) if m else (2, 0)
+
+
+def fantasy_article_week(cur, season: int, week: int):
+    """The fantasy slate shown for `week`: that week's slate (weeks after 18 show Week 18), or the latest earlier
+    week that has one. None if the season has no fantasy articles up to then."""
+    cur.execute("""
+        SELECT MAX(week) AS week FROM news_feed
+        WHERE season = %s AND week <= %s AND content_type = 'ARTICLE' AND article_type LIKE 'FANTASY%%'
+    """, (season, min(week, FANTASY_LAST_SLATE_WEEK)))
+    row = cur.fetchone()
+    return row["week"] if row else None
+
+
+def fantasy_articles(cur, season: int, week: int) -> list:
+    """Fantasy articles of one week in display order (front page, then shelf), as card dicts."""
+    cur.execute("""
+        SELECT DISTINCT ON (n.id) n.id, n.week, n.slot, n.article_type, n.headline, n.excerpt, n.persona,
+               n.created_at, array_length(regexp_split_to_array(trim(n.content), '\\s+'), 1) AS words,
+               am.display_name,
+               (SELECT t.abbreviation FROM article_teams at JOIN teams t ON t.id = at.team_id
+                WHERE at.article_id = n.id ORDER BY at.mention_count DESC NULLS LAST, at.team_id LIMIT 1) AS team_abbr
+        FROM news_feed n
+        LEFT JOIN agent_memories am ON am.assigned_team_id IS NULL AND UPPER(am.archetype) = UPPER(n.persona)
+        WHERE n.season = %s AND n.week = %s AND n.content_type = 'ARTICLE' AND n.article_type LIKE 'FANTASY%%'
+        ORDER BY n.id, am.id
+    """, (season, week))
+    rows = sorted(cur.fetchall(), key=lambda r: (_fantasy_slot_order(r["slot"]), r["id"]))
+    out = []
+    for r in rows:
+        author = r["display_name"] or FANTASY_WRITER_NAMES.get((r["persona"] or "").upper()) or r["persona"]
+        minutes = max(1, round((r["words"] or 0) / 230))
+        out.append({
+            "id": r["id"],
+            "week": r["week"],
+            "slot": r["slot"],
+            "front_page": r["slot"] in FANTASY_FRONT_SLOTS,
+            "article_type": r["article_type"],
+            "label": FANTASY_TYPE_NAMES.get(r["article_type"], (r["article_type"] or "").replace("_", " ").title()),
+            "title": r["headline"],
+            "excerpt": r["excerpt"],
+            "author": author,
+            "time": f"{minutes} min",
+            "updated": r["created_at"].isoformat() if r["created_at"] else None,
+            "team": display_team_abbr(r["team_abbr"]).lower() if r["team_abbr"] else None,
+        })
+    return out
+
+
+@app.get("/api/fantasy/articles")
+def get_fantasy_articles_api(season: int = 2035, week: int = 18):
+    """Every Mu Fantasy article for a week ("View all analysis"): front page first, then the shelf.
+    Weeks after 18 show the Week 18 slate; a week with no slate shows the latest earlier one."""
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            shown = fantasy_article_week(cur, season, week)
+            articles = fantasy_articles(cur, season, shown) if shown else []
+            cur.execute("""
+                SELECT DISTINCT week FROM news_feed
+                WHERE season = %s AND content_type = 'ARTICLE' AND article_type LIKE 'FANTASY%%' ORDER BY week
+            """, (season,))
+            weeks = [r["week"] for r in cur.fetchall()]
+    return {
+        "season": season,
+        "requested_week": week,
+        "week": shown,
+        "available_weeks": weeks,
+        "front_page": [a for a in articles if a["front_page"]],
+        "more_analysis": [a for a in articles if not a["front_page"]],
+    }
+
+
 @app.get("/api/fantasy/dashboard")
 def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
     with db_pool.connection() as conn:
@@ -1436,11 +1532,11 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
                     "change": delta_str
                 })
 
-            # Articles and takes referencing current week
-            return {
-                "week": week,
-                "season": season,
-                "hero": {
+            # Mu Fantasy articles: the stored slate for this week (W19+ show W18), else placeholders
+            shown_week = fantasy_article_week(cur, season, week)
+            stored = fantasy_articles(cur, season, shown_week) if shown_week else []
+            front = [a for a in stored if a["front_page"]]
+            placeholder_hero = {
                     "label": f"WEEK {week} LINEUP ADVICE",
                     "title": f"Start 'Em, Sit 'Em: Week {week} Matchups to Exploit",
                     "excerpt": f"Six lineup decisions where opportunity, playoff stakes, and defensive tendencies point in the same direction for Week {week}.",
@@ -1448,8 +1544,8 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
                     "confidence": "94%",
                     "time": "11 MIN READ",
                     "updated": "TODAY · 9:42 AM ET"
-                },
-                "articles": [
+                }
+            placeholder_articles = [
                     {
                         "label": "Trade & Roster Lab",
                         "title": f"Week {week} League Winners: High-Ceiling Plays for the Regular Season Finale",
@@ -1471,7 +1567,15 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
                         "time": "5 min",
                         "team": "cle"
                     }
-                ],
+                ]
+            return {
+                "week": week,
+                "season": season,
+                "articles_week": shown_week,
+                "articles_source": "newsroom" if front else "placeholder",
+                "hero": front[0] if front else placeholder_hero,
+                "articles": front[1:4] if front else placeholder_articles,
+                "more_analysis_count": len(stored) - len(front),
                 "social_takes": [
                     {
                         "quote": f"George Crawford and Trey'Mane Davis enter Week {week} as the #1 scoring stack in the simulated league.",
