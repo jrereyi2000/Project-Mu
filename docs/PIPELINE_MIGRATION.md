@@ -164,7 +164,7 @@ Keep the existing safety rules: check the screen before every press, stop on any
 
 ### Order of work (a commit after each)
 1. `./db/backup_db.sh`; restore it into `madden_p3test` in the `madden-db` container; the loader and tests use `DATABASE_URL` pointing there until the live load.
-2. Migration `db/migrations/2026_10_21_capture_loader.sql` + `db/init_db.sql`: new columns, category tables, views, `player_id` keys and trigger, `captures`, `llm_usage`.
+2. Migration `db/migrations/2026_10_23_capture_loader.sql` + `db/init_db.sql`: new columns, category tables, views, `captures`, `llm_usage` (no keys). The `player_id` keys and trigger come in `2026_10_24_player_id_keys.sql`, **after the roster load** (JR, Oct 14): existing rows had two different M. Santos on one id, 7 `season_stats` rows linked to the wrong player and 364 `player_stats` rows (25 names) that don't resolve to one player, mostly because ~220 players were missing from `player_seasons`. That migration re-links `player_id` from the refreshed roster, lists anything still unresolved, then adds the keys.
 3. Matching module (identity from the roster, Season Stats history assignment, stop-and-list for unsettled names) with unit tests.
 4. Loader per mode: roster, season schedule, weekly, games.
 5. `--scope <TEAM> --category <CAT>` for Season Stats in `madden_capture.py`.

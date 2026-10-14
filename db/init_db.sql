@@ -72,6 +72,13 @@ CREATE TABLE IF NOT EXISTS team_seasons (
     pythagorean_wins DOUBLE PRECISION,
     pace_production DOUBLE PRECISION,
     s_playoff DOUBLE PRECISION,
+    -- Team Stats tabs (capture loader, 2026_10_23): conversions, red zone, penalties
+    third_down_conv INT, third_down_att INT, third_down_pct NUMERIC(5, 1),
+    fourth_down_conv INT, fourth_down_att INT, fourth_down_pct NUMERIC(5, 1),
+    two_point_conv INT, two_point_att INT, two_point_pct NUMERIC(5, 1),
+    red_zone_att INT, red_zone_td INT, red_zone_fg INT, red_zone_pct NUMERIC(5, 1),
+    red_zone_def_att INT, red_zone_def_td INT, red_zone_def_fg INT, red_zone_def_pct NUMERIC(5, 1),
+    penalties INT, penalty_yards INT,
     UNIQUE (team_id, season)
 );
 
@@ -92,6 +99,10 @@ CREATE TABLE IF NOT EXISTS player_seasons (
     s_playoff DOUBLE PRECISION,
     a_awards DOUBLE PRECISION,
     e_exposure DOUBLE PRECISION,
+    -- Roster card (capture loader, 2026_10_23); overall_rating = the roster list OVR
+    dev_trait VARCHAR(32),
+    archetype VARCHAR(64),
+    role VARCHAR(64),
     UNIQUE (player_id, season)
 );
 
@@ -136,6 +147,10 @@ CREATE TABLE IF NOT EXISTS team_stats (
     fourth_down_attempts INT DEFAULT 0,
     fourth_down_conversions INT DEFAULT 0,
     turnovers INT DEFAULT 0,
+    -- Box score (capture loader, 2026_10_23); quarters NULL when unreadable
+    q1 INT, q2 INT, q3 INT, q4 INT, ot INT,
+    punt_return_yards INT, kick_return_yards INT, total_yards_gained INT, two_point_conversions INT,
+    red_zone_pct NUMERIC(5, 1), red_zone_tds INT, red_zone_fgs INT, penalty_yards INT, time_of_possession_s INT,
     UNIQUE (game_id, team_name)
 );
 
@@ -157,6 +172,11 @@ CREATE TABLE IF NOT EXISTS player_stats (
     team_id INT REFERENCES teams(id),
     fumb INT DEFAULT 0,
     position VARCHAR(10),
+    -- Capture loader (2026_10_23): player id (keyed in 2026_10_24) and offense extras
+    player_id INT REFERENCES players(id),
+    pass_comp_pct NUMERIC(5, 1), pass_rating NUMERIC(5, 1), pass_ypa NUMERIC(5, 1), pass_long INT, pass_sacks INT,
+    rush_avg NUMERIC(5, 1), rush_btk INT, rush_yac INT, rush_long INT,
+    rec_avg NUMERIC(5, 1), rec_rac INT, rec_rac_avg NUMERIC(5, 1), rec_long INT,
     -- Full-PPR fantasy points, always derived from the box score above (read-only; never insert/update it).
     fantasy_points NUMERIC(6, 2) GENERATED ALWAYS AS (
         ROUND(
@@ -195,8 +215,114 @@ CREATE TABLE IF NOT EXISTS season_stats (
     player_id INT REFERENCES players(id),
     total_fantasy_points NUMERIC(7, 2),
     ppg_fantasy_points NUMERIC(5, 2),
+    -- Capture loader (2026_10_23): offense extras
+    pass_comp_pct NUMERIC(5, 1), pass_ypg NUMERIC(6, 1), pass_rating NUMERIC(5, 1), pass_ypa NUMERIC(5, 1), pass_long INT, pass_sacks INT,
+    rush_avg NUMERIC(5, 1), rush_ypg NUMERIC(6, 1), rush_btk INT, rush_yac INT, rush_long INT,
+    rec_avg NUMERIC(5, 1), rec_ypg NUMERIC(6, 1), rec_rac INT, rec_rac_avg NUMERIC(5, 1), rec_long INT,
     UNIQUE (season, player_name, team_id, position)
 );
+
+
+-- ---------------------------------------------------------------------------
+-- Capture loader (db/migrations/2026_10_23_capture_loader.sql): every other stat
+-- category, the captures run log and Gemini token usage
+-- ---------------------------------------------------------------------------
+
+-- 2. Every other category: one season-level and one game-level table each, keyed on player_id.
+--    A row exists only where Madden lists the player; NULL = not listed, 0 = listed as 0.
+CREATE TABLE IF NOT EXISTS season_stat_defense (       -- SOLO,ASSISTS,TAK,TFL,SACK,INT,INT YDS,INT AVG,INT LG,DEFL,FFUMB,FMBREC,FMBYDS,BLOCK,SFTY,TD
+    season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    solo INT, assists INT, tackles INT, tfl INT, sacks NUMERIC(5, 1), ints INT, int_yds INT, int_avg NUMERIC(5, 1),
+    int_long INT, deflections INT, forced_fumbles INT, fumble_recoveries INT, fumble_yds INT, blocks INT, safeties INT, tds INT,
+    PRIMARY KEY (season, player_id));
+CREATE TABLE IF NOT EXISTS game_stat_defense (
+    game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    solo INT, assists INT, tackles INT, tfl INT, sacks NUMERIC(5, 1), ints INT, int_yds INT, int_avg NUMERIC(5, 1),
+    int_long INT, deflections INT, forced_fumbles INT, fumble_recoveries INT, fumble_yds INT, blocks INT, safeties INT, tds INT,
+    PRIMARY KEY (game_id, player_id));
+
+CREATE TABLE IF NOT EXISTS season_stat_kicking (       -- FGM,FGA,FG%,FG LNG,FG BLK,XPM,XPA,XP%,XPB,FGM29..FGA50,KO,TB
+    season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    fgm INT, fga INT, fg_pct NUMERIC(5, 1), fg_long INT, fg_blocked INT, xpm INT, xpa INT, xp_pct NUMERIC(5, 1), xp_blocked INT,
+    fgm_29 INT, fga_29 INT, fgm_39 INT, fga_39 INT, fgm_49 INT, fga_49 INT, fgm_50 INT, fga_50 INT, kickoffs INT, touchbacks INT,
+    PRIMARY KEY (season, player_id));
+CREATE TABLE IF NOT EXISTS game_stat_kicking (
+    game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    fgm INT, fga INT, fg_pct NUMERIC(5, 1), fg_long INT, fg_blocked INT, xpm INT, xpa INT, xp_pct NUMERIC(5, 1), xp_blocked INT,
+    fgm_29 INT, fga_29 INT, fgm_39 INT, fga_39 INT, fgm_49 INT, fga_49 INT, fgm_50 INT, fga_50 INT, kickoffs INT, touchbacks INT,
+    PRIMARY KEY (game_id, player_id));
+
+CREATE TABLE IF NOT EXISTS season_stat_punting (       -- PUNTS,YARDS,AVG,NET YDS,NET AVG,BLOCK,IN20,TB,LONG
+    season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    punts INT, yards INT, average NUMERIC(5, 1), net_yards INT, net_average NUMERIC(5, 1), blocked INT, inside_20 INT, touchbacks INT, longest INT,
+    PRIMARY KEY (season, player_id));
+CREATE TABLE IF NOT EXISTS game_stat_punting (
+    game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    punts INT, yards INT, average NUMERIC(5, 1), net_yards INT, net_average NUMERIC(5, 1), blocked INT, inside_20 INT, touchbacks INT, longest INT,
+    PRIMARY KEY (game_id, player_id));
+
+CREATE TABLE IF NOT EXISTS season_stat_kickreturn (    -- KR,YARDS,AVG,TD,LONG
+    season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    returns INT, yards INT, average NUMERIC(5, 1), tds INT, longest INT,
+    PRIMARY KEY (season, player_id));
+CREATE TABLE IF NOT EXISTS game_stat_kickreturn (
+    game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    returns INT, yards INT, average NUMERIC(5, 1), tds INT, longest INT,
+    PRIMARY KEY (game_id, player_id));
+
+CREATE TABLE IF NOT EXISTS season_stat_puntreturn (    -- PR,YARDS,AVG,TD,LONG
+    season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    returns INT, yards INT, average NUMERIC(5, 1), tds INT, longest INT,
+    PRIMARY KEY (season, player_id));
+CREATE TABLE IF NOT EXISTS game_stat_puntreturn (
+    game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    returns INT, yards INT, average NUMERIC(5, 1), tds INT, longest INT,
+    PRIMARY KEY (game_id, player_id));
+
+CREATE TABLE IF NOT EXISTS season_stat_blocking (      -- SACK (sacks allowed)
+    season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    sacks_allowed INT,
+    PRIMARY KEY (season, player_id));
+CREATE TABLE IF NOT EXISTS game_stat_blocking (
+    game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    sacks_allowed INT,
+    PRIMARY KEY (game_id, player_id));
+
+-- GP / DP: every Season Stats category repeats them (stored once per player); a game has DP only (General tab).
+CREATE TABLE IF NOT EXISTS season_stat_general (
+    season INT NOT NULL, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    games_played INT, downs_played INT,
+    PRIMARY KEY (season, player_id));
+CREATE TABLE IF NOT EXISTS game_stat_general (
+    game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE, player_id INT NOT NULL REFERENCES players(id), team_id INT REFERENCES teams(id), position VARCHAR(10),
+    downs_played INT,
+    PRIMARY KEY (game_id, player_id));
+
+-- 6. One row per capture run (duplicate / missed-week / row-count checks, resuming, token totals).
+CREATE TABLE IF NOT EXISTS captures (
+    id SERIAL PRIMARY KEY,
+    folder VARCHAR(255) NOT NULL UNIQUE,              -- captures/<run> name, e.g. 2026-10-14_0146
+    mode VARCHAR(32) NOT NULL,                        -- weekly | roster | season_schedule | games
+    season INT, week INT,
+    status VARCHAR(16) NOT NULL DEFAULT 'captured',   -- captured | extracted | loaded | failed
+    row_counts JSONB,                                 -- {csv name: rows}
+    input_tokens BIGINT, cached_tokens BIGINT, output_tokens BIGINT, thinking_tokens BIGINT,
+    error TEXT,
+    captured_at TIMESTAMP, extracted_at TIMESTAMP, loaded_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS captures_mode_season_week ON captures (mode, season, week);
+
+-- 7. One row per Gemini call (extract.py and the newsroom), replacing the cost estimates.
+CREATE TABLE IF NOT EXISTS llm_usage (
+    id BIGSERIAL PRIMARY KEY,
+    source VARCHAR(16) NOT NULL,                      -- extract | newsroom
+    capture_id INT REFERENCES captures(id) ON DELETE SET NULL,
+    label VARCHAR(255),                               -- screenshot file, or agent / article type
+    model VARCHAR(64),
+    input_tokens INT, cached_tokens INT, output_tokens INT, thinking_tokens INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS llm_usage_source_created ON llm_usage (source, created_at);
+
 
 -- ---------------------------------------------------------------------------
 -- Fantasy analytics & projections
@@ -619,3 +745,83 @@ CREATE TRIGGER trigger_sync_season_stats_team
 AFTER UPDATE OF team_id ON player_seasons
 FOR EACH ROW
 EXECUTE FUNCTION sync_team_to_season_stats();
+
+-- Views over the capture loader tables (2026_10_23)
+-- 8. One line per player: season (every category) and game (every category).
+CREATE OR REPLACE VIEW season_stat_lines AS
+SELECT ps.season, ps.player_id, pl.player_name, pl.full_name, ps.team_id, ps.position,
+       g.games_played, g.downs_played,
+       ss.completions, ss.pass_attempts, ss.pass_yards, ss.pass_tds, ss.interceptions, ss.pass_comp_pct, ss.pass_ypg,
+       ss.pass_rating, ss.pass_ypa, ss.pass_long, ss.pass_sacks,
+       ss.rush_attempts, ss.rush_yards, ss.rush_tds, ss.fumb, ss.rush_avg, ss.rush_ypg, ss.rush_btk, ss.rush_yac, ss.rush_long,
+       ss.receptions, ss.rec_yards, ss.rec_tds, ss.rec_avg, ss.rec_ypg, ss.rec_rac, ss.rec_rac_avg, ss.rec_long,
+       b.sacks_allowed AS blk_sacks_allowed,
+       d.solo AS def_solo, d.assists AS def_assists, d.tackles AS def_tackles, d.tfl AS def_tfl, d.sacks AS def_sacks,
+       d.ints AS def_ints, d.int_yds AS def_int_yds, d.int_avg AS def_int_avg, d.int_long AS def_int_long,
+       d.deflections AS def_deflections, d.forced_fumbles AS def_forced_fumbles, d.fumble_recoveries AS def_fumble_recoveries,
+       d.fumble_yds AS def_fumble_yds, d.blocks AS def_blocks, d.safeties AS def_safeties, d.tds AS def_tds,
+       k.fgm AS kick_fgm, k.fga AS kick_fga, k.fg_pct AS kick_fg_pct, k.fg_long AS kick_fg_long, k.fg_blocked AS kick_fg_blocked,
+       k.xpm AS kick_xpm, k.xpa AS kick_xpa, k.xp_pct AS kick_xp_pct, k.xp_blocked AS kick_xp_blocked,
+       k.fgm_29 AS kick_fgm_29, k.fga_29 AS kick_fga_29, k.fgm_39 AS kick_fgm_39, k.fga_39 AS kick_fga_39,
+       k.fgm_49 AS kick_fgm_49, k.fga_49 AS kick_fga_49, k.fgm_50 AS kick_fgm_50, k.fga_50 AS kick_fga_50,
+       k.kickoffs AS kick_kickoffs, k.touchbacks AS kick_touchbacks,
+       p.punts AS punt_punts, p.yards AS punt_yards, p.average AS punt_average, p.net_yards AS punt_net_yards,
+       p.net_average AS punt_net_average, p.blocked AS punt_blocked, p.inside_20 AS punt_inside_20,
+       p.touchbacks AS punt_touchbacks, p.longest AS punt_longest,
+       kr.returns AS kr_returns, kr.yards AS kr_yards, kr.average AS kr_average, kr.tds AS kr_tds, kr.longest AS kr_longest,
+       pr.returns AS pr_returns, pr.yards AS pr_yards, pr.average AS pr_average, pr.tds AS pr_tds, pr.longest AS pr_longest
+FROM player_seasons ps
+JOIN players pl ON pl.id = ps.player_id
+LEFT JOIN season_stats ss            ON ss.season = ps.season AND ss.player_id = ps.player_id
+LEFT JOIN season_stat_general g      ON g.season = ps.season AND g.player_id = ps.player_id
+LEFT JOIN season_stat_blocking b     ON b.season = ps.season AND b.player_id = ps.player_id
+LEFT JOIN season_stat_defense d      ON d.season = ps.season AND d.player_id = ps.player_id
+LEFT JOIN season_stat_kicking k      ON k.season = ps.season AND k.player_id = ps.player_id
+LEFT JOIN season_stat_punting p      ON p.season = ps.season AND p.player_id = ps.player_id
+LEFT JOIN season_stat_kickreturn kr  ON kr.season = ps.season AND kr.player_id = ps.player_id
+LEFT JOIN season_stat_puntreturn pr  ON pr.season = ps.season AND pr.player_id = ps.player_id;
+
+CREATE OR REPLACE VIEW game_stat_lines AS
+WITH ids AS (
+    SELECT game_id, player_id FROM player_stats WHERE player_id IS NOT NULL
+    UNION SELECT game_id, player_id FROM game_stat_general
+    UNION SELECT game_id, player_id FROM game_stat_blocking
+    UNION SELECT game_id, player_id FROM game_stat_defense
+    UNION SELECT game_id, player_id FROM game_stat_kicking
+    UNION SELECT game_id, player_id FROM game_stat_punting
+    UNION SELECT game_id, player_id FROM game_stat_kickreturn
+    UNION SELECT game_id, player_id FROM game_stat_puntreturn)
+SELECT ids.game_id, gm.season, gm.week, ids.player_id, pl.player_name, pl.full_name,
+       COALESCE(s.team_id, g.team_id, d.team_id, k.team_id, p.team_id, kr.team_id, pr.team_id, b.team_id) AS team_id,
+       g.downs_played,
+       s.completions, s.pass_attempts, s.pass_yards, s.pass_tds, s.interceptions, s.pass_comp_pct, s.pass_rating,
+       s.pass_ypa, s.pass_long, s.pass_sacks,
+       s.rush_attempts, s.rush_yards, s.rush_tds, s.fumb, s.rush_avg, s.rush_btk, s.rush_yac, s.rush_long,
+       s.receptions, s.rec_yards, s.rec_tds, s.rec_avg, s.rec_rac, s.rec_rac_avg, s.rec_long, s.fantasy_points,
+       b.sacks_allowed AS blk_sacks_allowed,
+       d.solo AS def_solo, d.assists AS def_assists, d.tackles AS def_tackles, d.tfl AS def_tfl, d.sacks AS def_sacks,
+       d.ints AS def_ints, d.int_yds AS def_int_yds, d.int_avg AS def_int_avg, d.int_long AS def_int_long,
+       d.deflections AS def_deflections, d.forced_fumbles AS def_forced_fumbles, d.fumble_recoveries AS def_fumble_recoveries,
+       d.fumble_yds AS def_fumble_yds, d.blocks AS def_blocks, d.safeties AS def_safeties, d.tds AS def_tds,
+       k.fgm AS kick_fgm, k.fga AS kick_fga, k.fg_pct AS kick_fg_pct, k.fg_long AS kick_fg_long, k.fg_blocked AS kick_fg_blocked,
+       k.xpm AS kick_xpm, k.xpa AS kick_xpa, k.xp_pct AS kick_xp_pct, k.xp_blocked AS kick_xp_blocked,
+       k.fgm_29 AS kick_fgm_29, k.fga_29 AS kick_fga_29, k.fgm_39 AS kick_fgm_39, k.fga_39 AS kick_fga_39,
+       k.fgm_49 AS kick_fgm_49, k.fga_49 AS kick_fga_49, k.fgm_50 AS kick_fgm_50, k.fga_50 AS kick_fga_50,
+       k.kickoffs AS kick_kickoffs, k.touchbacks AS kick_touchbacks,
+       p.punts AS punt_punts, p.yards AS punt_yards, p.average AS punt_average, p.net_yards AS punt_net_yards,
+       p.net_average AS punt_net_average, p.blocked AS punt_blocked, p.inside_20 AS punt_inside_20,
+       p.touchbacks AS punt_touchbacks, p.longest AS punt_longest,
+       kr.returns AS kr_returns, kr.yards AS kr_yards, kr.average AS kr_average, kr.tds AS kr_tds, kr.longest AS kr_longest,
+       pr.returns AS pr_returns, pr.yards AS pr_yards, pr.average AS pr_average, pr.tds AS pr_tds, pr.longest AS pr_longest
+FROM ids
+JOIN games gm ON gm.id = ids.game_id
+JOIN players pl ON pl.id = ids.player_id
+LEFT JOIN player_stats s           ON s.game_id = ids.game_id AND s.player_id = ids.player_id
+LEFT JOIN game_stat_general g      ON g.game_id = ids.game_id AND g.player_id = ids.player_id
+LEFT JOIN game_stat_blocking b     ON b.game_id = ids.game_id AND b.player_id = ids.player_id
+LEFT JOIN game_stat_defense d      ON d.game_id = ids.game_id AND d.player_id = ids.player_id
+LEFT JOIN game_stat_kicking k      ON k.game_id = ids.game_id AND k.player_id = ids.player_id
+LEFT JOIN game_stat_punting p      ON p.game_id = ids.game_id AND p.player_id = ids.player_id
+LEFT JOIN game_stat_kickreturn kr  ON kr.game_id = ids.game_id AND kr.player_id = ids.player_id
+LEFT JOIN game_stat_puntreturn pr  ON pr.game_id = ids.game_id AND pr.player_id = ids.player_id;
+
