@@ -465,6 +465,8 @@ if __name__ == "__main__":
     parser.add_argument("--watch", action="store_true",
                         help="weekly trigger (pipeline/trigger.py): watch the broadcast (--stream, default BROADCAST_URL "
                              "in .env) and start pipeline.weekly_capture after Advance Week")
+    parser.add_argument("--dry-run", action="store_true", help="--watch: log WOULD FIRE instead of starting the run")
+    parser.add_argument("--record", metavar="DIR", help="--watch: save classified frames and hub label crops to DIR")
     args = parser.parse_args()
     
     if args.watch:
@@ -474,7 +476,7 @@ if __name__ == "__main__":
         if not url:
             sys.exit("--watch needs --stream <url> or BROADCAST_URL in .env")
         try:
-            watch(url)
+            watch(url, dry_run=args.dry_run, record=args.record)
         except KeyboardInterrupt:
             print("\nTrigger stopped.")
     elif args.stream:

@@ -18,6 +18,12 @@ played.
   failed week is resumed by hand (pipeline.weekly_capture --resume).
 - When the broadcast is offline (between Remote Play and JR restarting it), the URL is retried every
   OFFLINE_RETRY seconds and watching resumes.
+
+Testing (python3 -m pipeline.main --watch --dry-run --record <dir>):
+- --dry-run logs WOULD FIRE instead of starting the run; attempts are remembered in memory only
+  (captures/trigger_state.json is untouched), so each week can fire once per session.
+- --record saves the frames it classifies to <dir>: every change of screen, the hub label crop on
+  each hub visit, and one frame every RECORD_EVERY seconds otherwise (for cutting new templates).
 """
 import datetime, json, os, re, subprocess, sys, tempfile, time
 
@@ -26,6 +32,7 @@ STATE_PATH = os.path.join(ROOT, "captures", "trigger_state.json")
 FIRE_AFTER = 30.0          # seconds the Weekly Hub must stay on screen (JR, Oct 14)
 MISS_FRAMES = 3            # this many frames in a row off the hub restart the hub timer
 OFFLINE_RETRY = 60.0
+RECORD_EVERY = 5.0         # --record: seconds between frames when the screen doesn't change
 FRAME_SIZE = (1920, 1080)  # the templates were cut from the 1080p broadcast
 LABEL_BOX = (60, 120, 760, 215)   # hub week label + matchup line at 1920x1080 (x0, y0, x1, y1)
 
@@ -111,8 +118,9 @@ def league_state():
         return conn.execute("SELECT current_season, current_week FROM league_state WHERE id = 1").fetchone()
 
 
-def read_hub_label(frame):
-    """(season, week) from a 1920x1080 BGR hub frame, via Apple Vision on the label area."""
+def read_hub_label(frame, keep=None):
+    """(season, week) from a 1920x1080 BGR hub frame, via Apple Vision on the label area. keep: also
+    save the crop there (--record). Returns (label, OCR text)."""
     import cv2
     from madden_capture import ocr
     x0, y0, x1, y1 = LABEL_BOX
@@ -121,7 +129,10 @@ def read_hub_label(frame):
     try:
         crop = cv2.resize(frame[y0:y1, x0:x1], None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
         cv2.imwrite(path, crop)
-        return parse_hub_label(" ".join(t for t, _ in ocr(path)))
+        if keep:
+            cv2.imwrite(keep, crop)
+        text = " ".join(t for t, _ in ocr(path))
+        return parse_hub_label(text), text
     finally:
         os.remove(path)
 
@@ -178,15 +189,38 @@ def fire(label, reason):
                title="Mu: week stopped", priority="urgent", tags=("warning",))
 
 
-def watch(url, fire_after=FIRE_AFTER):
+class Recorder:
+    """--record: frames on a change of screen and every RECORD_EVERY seconds otherwise."""
+
+    def __init__(self, folder):
+        self.folder = folder
+        os.makedirs(folder, exist_ok=True)
+        self.n, self.prev, self.last = 0, None, 0.0
+
+    def path(self, tag):
+        self.n += 1
+        return os.path.join(self.folder, f"{self.n:05d}_{datetime.datetime.now():%H%M%S}_{tag}")
+
+    def frame(self, frame, state, score, t):
+        import cv2
+        if state != self.prev or t - self.last >= RECORD_EVERY:
+            cv2.imwrite(self.path(f"{state}_{score:.2f}") + ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            self.prev, self.last = state, t
+
+
+def watch(url, fire_after=FIRE_AFTER, dry_run=False, record=None):
     import cv2
     from pipeline.main import VideoCaptureThread
     from pipeline.notify import notify
     cls = classifier()
     trig = Trigger(fire_after)
+    rec = Recorder(record) if record else None
+    dry_state = {}                              # --dry-run: attempts remembered in memory only
+    states = (lambda: dry_state) if dry_run else load_state
     warned_season = None
     offline_logged = False
-    log(f"Watching {url} (fires {fire_after:.0f}s after the Weekly Hub settles following Advance Week)")
+    log(f"Watching {url} (fires {fire_after:.0f}s after the Weekly Hub settles following Advance Week)"
+        + (" [DRY RUN: nothing is started]" if dry_run else "") + (f" [recording to {record}]" if record else ""))
     while True:
         raw = resolve(url)
         if not raw:
@@ -213,16 +247,19 @@ def watch(url, fire_after=FIRE_AFTER):
                     continue
                 if (frame.shape[1], frame.shape[0]) != FRAME_SIZE:
                     frame = cv2.resize(frame, FRAME_SIZE, interpolation=cv2.INTER_AREA)
-                state, _ = cls.detect_ui_state(frame)
-                go = trig.update(state, time.monotonic())
+                state, score = cls.detect_ui_state(frame)
+                now = time.monotonic()
+                if rec:
+                    rec.frame(frame, state, score, now)
+                go = trig.update(state, now)
                 if state == "MAIN_MENU" and not trig.label_read:
                     trig.label_read = True
                     try:
-                        label = read_hub_label(frame)
-                        ok, why = due(label, league_state(), load_state())
+                        label, text = read_hub_label(frame, rec.path("label") + ".png" if rec else None)
+                        ok, why = due(label, league_state(), states())
                     except Exception as e:
-                        label, ok, why = None, False, f"label check failed: {e}"
-                    log(f"Weekly Hub: label {label}; {why}")
+                        label, text, ok, why = None, "", False, f"label check failed: {e}"
+                    log(f"Weekly Hub: label {label} (read {text!r}); {why}")
                     trig.fallback = ok
                     if label and not ok and why.startswith("season") and warned_season != label[0]:
                         warned_season = label[0]
@@ -231,14 +268,19 @@ def watch(url, fire_after=FIRE_AFTER):
                                title="Mu: new season?", priority="high", tags=("warning",))
                 if not go:
                     continue
-                ok, why = due(label, league_state(), load_state()) if label else (trig.armed, "label not read")
+                ok, why = due(label, league_state(), states()) if label else (trig.armed, "label not read")
                 if label and not ok:
                     log(f"Not firing: {why}")
                     trig.fired()
                     continue
                 reason = "Advance Week, then the Weekly Hub" if trig.armed else f"fallback: {why}"
-                video.stop()
                 trig.fired()
+                if dry_run:
+                    log(f"WOULD FIRE the weekly run ({reason}); dry run, nothing started")
+                    if label:
+                        dry_state["attempted"] = {"season": label[0], "week": label[1]}
+                    continue
+                video.stop()
                 fire(label, reason)
                 break                              # the broadcast ended with Remote Play; resolve again
         finally:
