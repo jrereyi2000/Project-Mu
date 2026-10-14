@@ -1085,11 +1085,14 @@ If you need specific stats, use your database tools before producing your final 
                 generated_text = f"[{ctype}] Gemini execution skipped: Missing GEMINI_API_KEY."
             else:
                 print(f"\n🚀 Sending prompt to Gemini ({model}) with Autonomous Database Tools...")
+                usage = None
                 try:
                     from google import genai
                     from google.genai import types
+                    from db.llm_usage import UsageMeter
 
                     client = genai.Client(api_key=self.api_key)
+                    usage = UsageMeter(client)          # every call, the tool loop's included -> llm_usage
 
                     # Prepare raw functions with logging wrappers for Gemini AFC (preserving parameter signatures)
                     tool_call_counts = collections.defaultdict(int)
@@ -1186,6 +1189,9 @@ If you need specific stats, use your database tools before producing your final 
                     traceback.print_exc()
                     failure_reason = f"Gemini error: {e}"
                     generated_text = f"Error calling Gemini: {e}"
+                finally:
+                    if usage is not None:
+                        usage.record("newsroom", label=f"{handle} {at_id or ctype}", model=model)
         else:
             t_mode = compiled_prompt.get("temporal_mode")
             r_week = compiled_prompt.get("recap_week") or (max(1, week - 1) if week > 1 else 1)

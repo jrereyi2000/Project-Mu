@@ -24,9 +24,17 @@ class LoadError(Exception):
     """A check failed: nothing is written."""
 
 
+def _header(h):
+    """Column name without Madden's sort mark: the sorted column reads '▼YARDS' (or '*YARDS',
+    'Y YARDS' through OCR) on the page Gemini read; without this a sorted column's values went
+    missing (receiving yards, Oct 14)."""
+    h = (h or "").strip()
+    return h.lstrip("▼▲*").strip() if h[:1] in "▼▲*" else h
+
+
 def read_csv(path):
     with open(path, newline="") as fh:
-        return list(csv.DictReader(fh))
+        return [{_header(k): v for k, v in row.items()} for row in csv.DictReader(fh)]
 
 
 def detect_mode(folder):
@@ -263,8 +271,13 @@ CATEGORY_POSITIONS = {
 }
 
 
-def parse_row(row, cmap, where):
+def parse_row(row, cmap, where, required=True):
+    """Captured cells -> {column: value}. Every header the map names must be in the CSV (a missing
+    one is a renamed or misread header, which would otherwise leave that stat out silently)."""
     out = {}
+    missing = [h for h in cmap if h not in row]
+    if missing and required:
+        raise LoadError(f"{where}: columns {missing} not in the CSV (headers: {sorted(row)})")
     for header, (col, parse) in cmap.items():
         if header in row:
             try:
@@ -328,10 +341,46 @@ def load_season_schedule(cur, folder, season, report):
 
 
 # ------------------------------------------------------------------ weekly ----
-def resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, unmatched):
+def scoped_rows(folder, team_ids):
+    """stats_scope_<team>_<category>.csv (a team-scoped Season Stats capture) -> {category: {team_id: [row]}}."""
+    import glob as _glob
+    out = {}
+    for path in _glob.glob(os.path.join(folder, "stats_scope_*.csv")):
+        team, cat = os.path.basename(path)[len("stats_scope_"):-4].split("_", 1)
+        tid = team_ids.get(team.upper())
+        if tid is not None:
+            out.setdefault(cat, {})[tid] = read_csv(path)
+    return out
+
+
+def assign_by_scope(rs, cands, scoped, cmap):
+    """Settle same-name rows with team-scoped captures. A row whose numbers appear under the same
+    name and position on one candidate team's own list is that team's player; a captured team
+    whose list lacks the row is ruled out for it. Every row must end with exactly one player, each
+    a different one; else None. (So one team's list settles a pair.)"""
+    def on_list(t, r):
+        return any(x["NAME"] == r["NAME"] and x["POS"] == r["POS"] and all(x.get(h) == r.get(h) for h in cmap)
+                   for x in scoped.get(t, []))
+    options = []
+    for r in rs:
+        sure = [pid for pid, t in cands if t in scoped and on_list(t, r)]
+        options.append(sure if sure else [pid for pid, t in cands if t not in scoped])
+    got, used = {}, set()
+    for _ in range(len(rs)):                 # settle rows with one option, then what that leaves
+        for i, opts in enumerate(options):
+            left = [o for o in opts if o not in used]
+            if i not in got and len(left) == 1:
+                got[i] = left[0]
+                used.add(left[0])
+    return got if len(got) == len(rs) else None
+
+
+def resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, unmatched, scoped=None,
+                        team_names=None, folder=""):
     """Season Stats rows (NAME, POS, no team) -> {player_id: (row, values)}. Shared names are
     settled by history (totals only go up); without history the load stops (JR, Oct 14)."""
     from pipeline.capture_matching import assign_by_history
+    scoped, team_names = scoped or {}, team_names or {}
     by_key = {}
     for pid, key, team, pos, pn in players:
         by_key.setdefault((key, pos), []).append((pid, team))
@@ -368,18 +417,34 @@ def resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, 
         for row in cur.fetchall():
             hist[row[0]] = dict(zip(counters, row[1:]))
         got = assign_by_history(values, hist, counters)
+        by_scope = False
         if got is None:
+            got = assign_by_scope(rs, cands, scoped.get(cat, {}), cmap)
+            by_scope = got is not None
+        if got is None:
+            teams = sorted({team_names[t] for _, t in cands})
+            need = teams[:len(cands) - 1]             # n-1 teams' own lists settle n players
             problems.append(f"{cat}: {len(rs)} row(s) {rs[0]['NAME']} {pos} fit {len(cands)} players "
-                            f"({', '.join(str(i) for i in ids)}) and their earlier totals can't tell them apart: "
-                            f"capture {cat.title()} with --scope <TEAM> for those teams")
+                            f"({', '.join(teams)}) and their earlier totals can't tell them apart. Capture: "
+                            + "; ".join(f"madden_capture.py --only stats --scope {t.upper()} --category {cat.upper()} "
+                                        f"--resume {os.path.basename(os.path.normpath(folder))}" for t in need))
             continue
         team_of = dict(cands)
         for i, pid in got.items():
             out[pid] = (rs[i], values[i], team_of[pid])
+            if by_scope:
+                SCOPE_SETTLED.add((table, pid))
     return out
 
 
+# (table, player id) whose row a team-scoped capture settled: the team's own list is direct
+# evidence, so a total going down there corrects earlier data (the old ingestion had given Billy
+# Thompson's 86 catches to Brenen Thompson) and is reported, not refused
+SCOPE_SETTLED = set()
+
+
 def load_weekly(cur, folder, season, report):
+    SCOPE_SETTLED.clear()
     by_name, by_abbr = team_index(cur)
     problems, unmatched = [], []
 
@@ -439,6 +504,9 @@ def load_weekly(cur, folder, season, report):
 
     # 3. Season Stats -> season_stats (offense) and the category tables
     players = roster(cur, season)
+    scoped = scoped_rows(folder, by_name)
+    cur.execute("SELECT id, name FROM teams")
+    team_names = dict(cur.fetchall())
     general, writes = {}, []
     for cat in list(SEASON_OFFENSE) + list(CATEGORY):
         path = os.path.join(folder, f"stats_{cat}.csv")
@@ -450,7 +518,8 @@ def load_weekly(cur, folder, season, report):
         table = "season_stats" if cat in SEASON_OFFENSE else f"season_stat_{cat}"
         before = len(unmatched)
         try:
-            got = resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, unmatched)
+            got = resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, unmatched, scoped,
+                                      team_names, folder)
         except LoadError as e:
             problems.append(str(e))
             continue
@@ -480,7 +549,9 @@ def load_weekly(cur, folder, season, report):
         if old:
             down = [f"{c} {o} -> {vals[c]}" for c, o in zip(counters, old) if o is not None and vals[c] is not None
                     and vals[c] < o]
-            if down:
+            if down and (table, pid) in SCOPE_SETTLED:
+                report.setdefault("corrected_by_scope", []).append(f"{table} player {pid}: {', '.join(down)}")
+            elif down:
                 problems.append(f"{table} player {pid}: totals went down ({', '.join(down)})")
 
     # row counts within 10% of the last weekly capture

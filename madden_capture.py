@@ -811,8 +811,9 @@ def set_scope(target="NFL", debug_dir=None):
             raise Abort("Scope list did not open while holding L2")
         # 2. move the highlight onto the target, verifying every press
         stuck = 0
+        scan, turned = ["up"], [False]         # team targets: teams come before NFL in the list
         last = None
-        for _ in range(70):
+        for _ in range(90):
             sel = dropdown_selected(f)
             for _retry in range(3):          # OCR occasionally misses one frame
                 if sel is not None:
@@ -825,7 +826,16 @@ def set_scope(target="NFL", debug_dir=None):
             if sel is None:
                 raise Abort("Lost track of the scope list (can't read the highlighted entry)")
             visible = [norm(t) for t, _ in dropdown_entries(f)]
-            if norm(sel) in DIVISION_ENTRIES and tnorm in DIVISION_ENTRIES:
+            if tnorm not in DIVISION_ENTRIES:
+                # a team (team-scoped Season Stats): head for it by its place on screen once it shows;
+                # until then scan one way, and turn round when the list stops moving
+                ent = {norm(t): b for t, b in dropdown_entries(f)}
+                sb = ent.get(norm(sel))
+                if tnorm in ent and sb:
+                    direction = "down" if ent[tnorm][1] > sb[1] else "up"
+                else:
+                    direction = scan[0]
+            elif norm(sel) in DIVISION_ENTRIES and tnorm in DIVISION_ENTRIES:
                 order = ["NFL", "AFC", "NFC"]
                 direction = "up" if norm(sel) not in order or (tnorm in order and order.index(tnorm) < order.index(norm(sel))) else "down"
             elif tnorm in visible or norm(sel) not in DIVISION_ENTRIES:
@@ -837,6 +847,9 @@ def set_scope(target="NFL", debug_dir=None):
             f = frame()
             new = dropdown_selected(f)
             stuck = stuck + 1 if new == sel else 0
+            if stuck >= 2 and tnorm not in DIVISION_ENTRIES and not turned[0]:
+                scan[0] = "down" if scan[0] == "up" else "up"      # end of the list: scan the other way
+                turned[0], stuck = True, 0
             if stuck >= 4:
                 raise Abort(f"Up/Down presses aren't registering in the scope list (stuck on {sel})")
             last = sel
@@ -1067,6 +1080,37 @@ def run_stats(out, all_rows):
         if norm(cat) == norm(first):
             break
     log(f"Captured {len(seen)} categories: {', '.join(seen)}")
+
+
+def run_scoped_stats(out, team, categories, all_rows):
+    """Season Stats for one team's scope, only the given categories, into stats_scope/
+    (<team>_<category>_NNN.png). Used when Season Stats lists two players with the same name and
+    position on different teams and their earlier totals can't tell them apart (JR, Oct 14): the
+    team's own list says which one is whose. Category names as on the R2 chip (KICKING, RUSHING...)."""
+    team, wanted = norm(team), {norm(c) for c in categories}
+    log(f"== Season stats, {team} only: {', '.join(sorted(wanted))} ==")
+    open_player_stats()
+    set_scope(team, debug_dir=os.path.join(out, "scope_debug"))
+    f, _ = look()
+    _, first = chip_labels(f)
+    if not first:
+        raise Abort("Can't read the stats category chip")
+    folder, cat, done = os.path.join(out, "stats_scope"), first, set()
+    for _ in range(15):
+        if norm(cat) in wanted and norm(cat) not in done:
+            log(f"Category: {cat}")
+            base = f"{team.lower()}_{norm(cat).lower()}"
+            if norm(cat) in WIDE_CATEGORIES:
+                capture_wide_list(folder, base)
+            else:
+                capture_list(folder, base, stop_at_zeros=not all_rows)
+            done.add(norm(cat))
+            if done == wanted:
+                break
+        cat = next_category(cat, "PLAYER_STATS")
+        if norm(cat) == norm(first) and done != wanted:
+            raise Abort(f"Never found categories {sorted(wanted - done)}")
+    log(f"Captured {team}: {', '.join(sorted(done))}")
 
 
 # Team Stats tabs (R2 cycle, verified Oct 13): OFFENSE, DEFENSE, CONVERSIONS,
@@ -2118,11 +2162,15 @@ def main():
     ap.add_argument("--test", action="store_true", help="classify the current screen, no key presses")
     ap.add_argument("--probe-l2", action="store_true")
     ap.add_argument("--scope-only", action="store_true", help="from Player Stats: just switch scope to NFL")
+    ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
+    ap.add_argument("--category", action="append", metavar="CAT",
+                    help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
     ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games"],
                     help="roster and season-schedule are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
-    ap.add_argument("--resume", metavar="RUN", help="--only roster / games: continue a stopped run in captures/RUN")
+    ap.add_argument("--resume", metavar="RUN", help="--only roster / games: continue a stopped run in captures/RUN; "
+                    "--scope: write into that (weekly) run's folder")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
     ap.add_argument("--all-rows", action="store_true", help="don't stop stats lists at all-zero rows")
     ap.add_argument("--foreground", action="store_true", help="bring chiaki-ng to front and send global keys")
@@ -2171,6 +2219,18 @@ def main():
             set_scope("NFL", debug_dir=os.path.join(out, "scope_debug"))
             return
         clear = lambda *dirs: (lambda: [shutil.rmtree(os.path.join(out, d), ignore_errors=True) for d in dirs])
+        if a.scope:
+            if a.only != "stats" or not a.category:
+                sys.exit("--scope needs --only stats and at least one --category")
+            def clear_team():                  # a retry redoes this team only; other teams' files stay
+                for p in glob.glob(os.path.join(out, "stats_scope", f"{norm(a.scope).lower()}_*")):
+                    os.remove(p)
+            run_mode(f"{a.scope} Season Stats", lambda: run_scoped_stats(out, a.scope, a.category, a.all_rows),
+                     clear_team)
+            log("Returning to the hub")
+            go_hub()
+            log(f"Done. Screenshots in {out}")
+            return
         if a.only in (None, "stats"):
             run_mode("Season Stats", lambda: run_stats(out, a.all_rows), clear("stats", "scope_debug"))
         if a.only in (None, "team"):

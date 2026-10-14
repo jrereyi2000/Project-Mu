@@ -103,12 +103,22 @@ _client_lock = threading.Lock()
 _cache = {}          # path -> parsed table, filled by prefetch()
 
 
+METER = None          # db.llm_usage.UsageMeter on the client: every Gemini call's tokens (llm_usage)
+
+
 def _get_client():
-    global _client
+    global _client, METER
     with _client_lock:
         if _client is None:
+            from db.llm_usage import UsageMeter
             _client = genai.Client(api_key=_api_key())
+            METER = UsageMeter(_client)
     return _client
+
+
+def _labelled(label):
+    _get_client()
+    return METER.labelled(label)
 
 
 TABLE_BOX = (0, 0.27, 1, 0.89)          # fractions of the screenshot
@@ -136,15 +146,16 @@ def _generate(contents, schema, label, retries=4):
     client = _get_client()
     for attempt in range(1, retries + 1):
         try:
-            resp = client.models.generate_content(
-                model=MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=schema,
-                    temperature=0.1,
-                ),
-            )
+            with _labelled(label):
+                resp = client.models.generate_content(
+                    model=MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=schema,
+                        temperature=0.1,
+                    ),
+                )
             return schema.model_validate_json(resp.text)
         except Exception as e:
             if attempt == retries:
@@ -177,15 +188,16 @@ def _read_table_remote(path, retries=4):
     part = prepare_image(path)
     for attempt in range(1, retries + 1):
         try:
-            resp = client.models.generate_content(
-                model=MODEL,
-                contents=[PROMPT, part],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=Table,
-                    temperature=0.1,
-                ),
-            )
+            with _labelled(os.path.basename(path)):
+                resp = client.models.generate_content(
+                    model=MODEL,
+                    contents=[PROMPT, part],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=Table,
+                        temperature=0.1,
+                    ),
+                )
             t = Table.model_validate_json(resp.text)
             return {"title": t.title, "columns": t.columns, "rows": [r.cells for r in t.rows]}
         except Exception as e:
@@ -689,6 +701,15 @@ def main():
 
     extract_roster(root)
     extract_games(root)
+    if METER is not None:
+        try:
+            from pipeline.load_capture import detect_mode
+            mode = detect_mode(root)
+        except Exception:
+            mode = None
+        t = METER.record("extract", model=MODEL, capture_folder=os.path.basename(os.path.normpath(root)), mode=mode)
+        print(f"Gemini: {t['calls']} calls, {t['input_tokens']:,} input ({t['cached_tokens']:,} cached), "
+              f"{t['output_tokens']:,} output, {t['thinking_tokens']:,} thinking tokens")
     print("Done.")
 
 
