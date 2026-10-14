@@ -102,7 +102,7 @@ Project Mu/
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md
-│   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate: fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; built so far: the league sim and fantasy writer tools
+│   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate: fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; built: league sim, writer tools, fantasy desk, API and page
 │   ├── PIPELINE_MIGRATION.md  #   Agreed plan for moving ingestion to madden_capture.py over chiaki-ng (phases, decisions, verified facts)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
@@ -395,6 +395,8 @@ Navigation uses a lightweight hash router (`window.location.hash`):
 - `#fantasy-rankings`: Weekly Fantasy Rankings board.
 - `#fantasy-ros`: Rest of Season Rankings board.
 - `#fantasy-adp`: Preseason ADP Consensus Board.
+- `#fantasy-all`: All Mu Fantasy analysis for the week (front page, then the "View all" shelf; week buttons from `available_weeks`), from `/api/fantasy/articles`.
+- `#article-fantasy-{id}`: a stored fantasy article (`/api/news/article/{id}`), its markdown rendered in-app (headings, lists, tables, quotes) with a rail of the week's other fantasy articles. The dashboard hero and cards link here when a slate exists; `start-sit` / `p0`–`p2` are the placeholder pages.
 - `#social`, `#social-explore`, `#social-teams`: Agent Wire social feeds.
 
 ### 5.2 Key UI Components & Interactions
