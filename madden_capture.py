@@ -1305,11 +1305,17 @@ def list_row_for(lines, card, win_w, list_x0):
         return None
     last = norm(card["last"])
     first = norm(card["first"] or "")[:1]
-    found = []
+    found, by_last = [], []
     for i, line in enumerate(lines):
         name = norm(line[0][0])
-        if name.endswith(last) and (not first or name.startswith(first)):
-            found.append(line_cells(lines, i, win_w, list_x0))
+        if name[:1] in "01":                  # "0.CAMPBELL" is O.Campbell (Steelers, Oct 13)
+            name = "OI"[int(name[0])] + name[1:]
+        if name.endswith(last):
+            by_last.append(i)
+            if not first or name.startswith(first):
+                found.append(line_cells(lines, i, win_w, list_x0))
+    if not found and len(by_last) == 1:       # initial misread, but only one row has the name
+        found = [line_cells(lines, by_last[0], win_w, list_x0)]
     # the same list name can repeat (Seahawks: S.Lewis LT and S.Lewis HB on adjacent rows)
     if len(found) > 1:
         same_pos = [r for r in found if card.get("position") and norm(r.get("POS", "")) == card["position"]]

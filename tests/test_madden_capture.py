@@ -149,6 +149,16 @@ class CardParseTest(unittest.TestCase):
         self.assertEqual(mc.check_step(lines, callaway, dict(byrne, first=None, last=None), W, x0), ("ok", 0))
         self.assertEqual(mc.check_step(lines, callaway, dict(lewis, first=None, last=None), W, x0), ("unknown", 0))
 
+    def test_step_check_with_misread_initial(self):
+        # Steelers, Oct 13: "0.CAMPBELL" on the list, POS not read
+        W, x0 = 3024, 3024 * mc.LIST_BOX[0]
+        lines = [[("C.HANSEN", (0, 0, 100, 30)), ("WR", (770, 0, 800, 30))],
+                 [("0.CAMPBELL", (0, 50, 100, 80)), ("28", (955, 50, 985, 80))],
+                 [("E.ORTIZ", (0, 100, 100, 130)), ("RT", (770, 100, 800, 130))]]
+        campbell = {"first": "Omar", "last": "Campbell", "position": "QB", "age": 28}
+        ortiz = {"first": "Enrique", "last": "Ortiz", "position": "RT", "age": 24}
+        self.assertEqual(mc.check_step(lines, campbell, ortiz, W, x0), ("ok", 0))
+
     def test_height_checks(self):
         base = {k: 1 for k in mc.CARD_FIELDS}
         base.update(age=24, weight=200, experience=2)
