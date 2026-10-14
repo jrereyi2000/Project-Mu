@@ -597,6 +597,26 @@ def load_weekly(cur, folder, season, report):
                     "position = EXCLUDED.position, games_played = EXCLUDED.games_played, downs_played = EXCLUDED.downs_played",
                     (season, pid, g["team"], g["pos"], g["games_played"], g["downs_played"]))
     report["games_completed"], report["season_rows"] = len(scores), len(writes)
+
+    # stale copies: the old ingestion stored some lines under the wrong player (J. Cabrera WR on the
+    # Chiefs, now a linebacker; the line is the Rams' J. Cabrera's). A season_stats row this load
+    # didn't write that has the same list name, position and offense numbers as one it did write,
+    # under another player, is that copy: remove it so the line isn't counted twice (JR, Oct 14)
+    written = {pid for table, pid, *_ in writes if table == "season_stats"}
+    offense = ["completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions", "rush_attempts",
+               "rush_yards", "rush_tds", "receptions", "rec_yards", "rec_tds", "fumb"]
+    cur.execute(f"SELECT id, player_id, player_name, position, {', '.join(offense)} FROM season_stats WHERE season = %s",
+                (season,))
+    rows = cur.fetchall()
+    fresh = {}
+    for r in rows:
+        if r[1] in written:
+            fresh.setdefault((name_key(r[2]), r[3], tuple(r[4:])), []).append(r[1])
+    stale = [r for r in rows if r[1] not in written and any(
+        p != r[1] for p in fresh.get((name_key(r[2]), r[3], tuple(r[4:])), []))]
+    if stale:
+        cur.execute("DELETE FROM season_stats WHERE id = ANY(%s)", ([r[0] for r in stale],))
+    report["stale_copies_removed"] = [f"{r[2]} {r[3]} (player {r[1]})" for r in stale]
     return len(writes)
 
 
@@ -644,7 +664,7 @@ def load_games(cur, folder, season, report, replace=False):
         return hits
 
     lines = {}            # (game id, player id) -> {"team", "pos", "name", table: {col: v}}
-    unmatched = []
+    unmatched, later = [], []
     for path in sorted(os.listdir(folder)):
         if not (path.startswith("game_stats_") and path.endswith(".csv")):
             continue
@@ -662,6 +682,9 @@ def load_games(cur, folder, season, report, replace=False):
                 problems.append(f"{r['GAME']} {cat}: {r['NAME']} on {r['TEAM']}, not in this game")
                 continue
             hits = who(cat, team, r["NAME"])
+            if len(hits) > 1 and cat == "general":
+                later.append((g, team, r, hits))   # settled below by who has other lines in that game
+                continue
             if len(hits) != 1:
                 (problems if cat in OFFENSE_MUST_MATCH and hits else unmatched).append(
                     f"{r['GAME']} {cat}: {r['TEAM']} {r['NAME']} ({len(hits)} players)")
@@ -674,6 +697,17 @@ def load_games(cur, folder, season, report, replace=False):
                 continue                       # an all-zero line: nothing to store
             line = lines.setdefault((g["id"], pid), {"team": team, "pos": pos, "name": pn})
             line.setdefault(table, {}).update(vals)
+    # downs played (General) has no category to tell same-name teammates apart: the one with other
+    # lines in that game is the one who played (two TB D.Davis, the Seahawks' S.Lewis pair)
+    for g, team, r, hits in later:
+        played = [h for h in hits if (g["id"], h[0]) in lines]
+        if len(played) != 1:
+            unmatched.append(f"{r['GAME']} general: {r['TEAM']} {r['NAME']} ({len(hits)} players)")
+            continue
+        pid, pos, pn = played[0]
+        vals = parse_row(r, {"DP": ("downs_played", I)}, f"{r['GAME']} general {r['NAME']}")
+        if any(vals.values()):
+            lines[(g["id"], pid)].setdefault("game_stat_general", {}).update(vals)
     if problems:
         raise LoadError("games checks failed:\n  " + "\n  ".join(problems))
     report["unmatched_lines"] = unmatched

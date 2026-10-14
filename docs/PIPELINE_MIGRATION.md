@@ -60,6 +60,7 @@ Claude Code runs on JR's Mac and is expected to **test each phase on the real co
 | **`player_id` keys everywhere** (JR, Oct 14); `player_name` kept as a column and the old keys kept for the backfill, with a trigger filling `player_id` | Stored rows are never ambiguous; readers that join on names keep working |
 | **An ambiguous Season Stats name stops the load** (JR, Oct 14) and asks for a team-scoped capture | No guessing about whose stats a row is |
 | **Gemini token usage goes to a `llm_usage` table** (JR, Oct 14), one row per call, from `extract.py` and the newsroom | Replaces the cost estimates |
+| **Rebuild 2035's backfilled lines once, keeping every Panthers game** (JR, Oct 14): `tools/rebuild_backfill.py` after the first weekly load | The old ingestion had put lines under the wrong players and the backfill had shared those totals over weeks 1-16; Panthers games' lines are real (JR's games) |
 
 ## Verified facts
 

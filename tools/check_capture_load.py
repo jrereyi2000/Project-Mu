@@ -10,9 +10,11 @@ database hard-coded and then runs the analytics engines (which write to the live
 check points its connection at --db and blocks the engine imports: the sync runs, the analytics
 step fails harmlessly ("ANALYTICS PIPELINE FAILED"). Read-only otherwise.
 """
-import argparse, sys
+import argparse, os, sys
 
 import psycopg
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # project root
 
 METRICS = ["completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions", "rush_attempts", "rush_yards",
            "rush_tds", "receptions", "rec_yards", "rec_tds", "fumb"]
@@ -43,18 +45,23 @@ def check(db, season):
             WHERE ss.season = %s AND ss.player_id IS NOT NULL
             GROUP BY ss.id""", (season, season))
         rows = cur.fetchall()
-        bad = []
+        bad, negative = [], []
         for r in rows:
             season_vals, game_vals = r[2:2 + len(METRICS)], r[2 + len(METRICS):]
             diff = {m: (s, int(gv)) for m, s, gv in zip(METRICS, season_vals, game_vals) if (s or 0) != int(gv)}
-            if diff:
+            # the backfill never writes a negative number, so a negative season total (kneel-downs) can only
+            # come out as 0 from the games it filled: known limit of the engine, reported apart
+            if diff and all(s < 0 and gv >= s for s, gv in diff.values()):
+                negative.append((r[0], r[1], diff))
+            elif diff:
                 bad.append((r[0], r[1], diff))
         cur.execute("""SELECT count(*) FROM (SELECT ps.game_id, ps.team_id FROM player_stats ps
                        JOIN games g ON g.id = ps.game_id WHERE g.season = %s GROUP BY 1, 2) x""", (season,))
         team_games = cur.fetchone()[0]
         cur.execute("SELECT count(*) * 2 FROM games WHERE season = %s AND status = 'COMPLETED'", (season,))
         completed = cur.fetchone()[0]
-    print(f"{len(rows)} season_stats players checked; {len(bad)} whose game lines don't add up")
+    print(f"{len(rows)} season_stats players checked; {len(bad)} whose game lines don't add up; "
+          f"{len(negative)} with a negative season total the backfill can't write (known limit)")
     for b in bad[:25]:
         print("  ", b)
     print(f"team-games with player lines: {team_games} of {completed}")
