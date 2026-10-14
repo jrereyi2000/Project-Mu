@@ -87,7 +87,7 @@ Project Mu/
 │   │                          #   2026_10_15_stored_index_components.sql, 2026_10_16_trajectory_and_efficiency.sql,
 │   │                          #   2026_10_17_playoff_clout_awards_exposure.sql, 2026_10_18_power_rankings.sql,
 │   │                          #   2026_10_19_roundtable_panel_agent.sql, 2026_10_20_agent_memory.sql,
-│   │                          #   2026_10_21_fantasy_league_sim.sql (apply SQL ones via
+│   │                          #   2026_10_21_fantasy_league_sim.sql, 2026_10_22_agent_wire_social.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -106,7 +106,7 @@ Project Mu/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md
 │   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate: fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; built: league sim, writer tools, fantasy desk, API and page
-│   ├── SOCIAL_MATRIX.md       #   Agreed Agent Wire plan: social desk planner (~100 posts/week: reactions, performances, beat notes, standings, article shares, replies, previews, memes), computed engagement, tag-based trends, simulated post times, accounts/handles, schema/API, build steps; not built, Agent Wire still renders mock posts
+│   ├── SOCIAL_MATRIX.md       #   Agreed Agent Wire plan (steps 1–2 built: accounts and schema): social desk planner (~100 posts/week: reactions, performances, beat notes, standings, article shares, replies, previews, memes), computed engagement, tag-based trends, simulated post times, accounts/handles, schema/API, build steps; not built, Agent Wire still renders mock posts
 │   ├── PIPELINE_MIGRATION.md  #   Agreed plan for moving ingestion to madden_capture.py over chiaki-ng (phases, decisions, verified facts)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
@@ -305,7 +305,8 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 
 ### 3.5 Media & Content Tables
 - **`agent_memories`**:
-  - `id`, `agent_id` (unique), `archetype`, `assigned_team_id`, `persistent_memory` (the agent's fixed identity line), `handle`, `display_name`, `updated_at`.
+  - `id`, `agent_id` (unique), `archetype`, `assigned_team_id`, `persistent_memory` (the agent's fixed identity line), `handle`, `display_name`, `updated_at`, `bio` (Agent Wire profile line), `followers` (simulated, set once by the social desk; NULL until it runs), `avatar_color` (unused until avatars are decided).
+  - `db/migrations/2026_10_22_agent_wire_social.sql` gave every agent that posts a non-generic handle, display name and bio (approved by JR), renamed beat reporters whose templated surnames repeated (43) and same-team die-hards / bandwagon fans who shared a first name, and added the social accounts `The_Flex_Spot` (`FANTASY_GURU`, @TheFlexSpot), `Gridiron_Memes` (`NFL_MEMES`, @GridironMemes) and `Mock_Draft_Marty` (`DRAFT_SICKO`, @MockDraftMarty). `Skip_Bayless_National` (article byline) and `Skip_Bayless` (`SKIP_TWEET`) share @RealSkipBayless; Agent Wire shows them as one profile.
 - **`agent_memory_entries`** (§7.7): `id`, `agent_id`, `season`, `week`, `article_id` (FK `news_feed` ON DELETE CASCADE), `kind` ('TAKE'), `text`, `team_id`, `player_id`, `created_at`.
 - **`agent_predictions`** (§7.7): `id`, `agent_id`, `season`, `week` (the predicted game's week), `article_id` (FK `news_feed` ON DELETE CASCADE), `game_id`, `label` (roundtable panellist or ''), `team_a_id`, `score_a`, `team_b_id`, `score_b`, `created_at`; unique `(article_id, game_id, label)`.
 - **`agent_season_summaries`** (§7.7): `agent_id`, `season`, `through_week`, `summary`, `updated_at`; primary key `(agent_id, season, through_week)`.
@@ -313,6 +314,8 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
   - `id`, `game_id` (FK to `games(id)` ON DELETE CASCADE), `content_type`, `payload_json` (jsonb), `created_at`.
 - **`news_feed`**:
   - `id`, `season`, `week`, `team_id`, `content_type` ('ARTICLE' | 'TWEET'), `persona`, `article_type`, `slot`, `headline`, `excerpt`, `content`, `created_at`.
+  - Agent Wire post columns (`db/migrations/2026_10_22_agent_wire_social.sql`; filled by the social desk, `docs/SOCIAL_MATRIX.md`, not built yet): `agent_id` (author), `post_kind` (REACTION, PERFORMANCE, BEAT, STANDINGS, SHARE, REPLY, PREVIEW, MEME), `posted_at` (simulated in-world time; `created_at` stays the real generation time), `reply_to_id` (FK `news_feed` ON DELETE CASCADE), `linked_article_id` (FK `news_feed` ON DELETE SET NULL; the article a SHARE links), `subject_game_id`, `subject_player_id`, `likes`, `reposts`, `reply_count`, `views`, `hashtags` (text[]).
+- **`social_trends`** (`docs/SOCIAL_MATRIX.md` §4): `id`, `season`, `week`, `rank`, `kind` (TEAM / PLAYER / GAME / HASHTAG), `key`, `title`, `category`, `description`, `volume` (simulated post count), `score`; unique `(season, week, kind, key)`. Empty until the social desk is built.
 - **`article_teams`**:
   - `id` (PK, int), `article_id` (FK to `news_feed(id)` ON DELETE CASCADE), `team_id` (FK to `teams(id)` ON DELETE CASCADE), `mention_type` (varchar: 'PRIMARY' | 'FEATURED' | 'MENTIONED'), `mention_count` (int), `created_at` (timestamp), `UNIQUE(article_id, team_id)`.
 - **`power_rankings`**:
@@ -933,7 +936,7 @@ The Standalone `POWER_RANKINGS` article is the source of the stored weekly ranki
 4. **Storage:** on save to `news_feed`, a valid article replaces that week's `power_rankings` rows. Only the order, kicker and blurb come from the text. `record` is snapshotted from `team_seasons`, and `previous_rank` / `movement` come from the stored previous week, not the writer's indicators. An article that still fails validation is saved as an article but no ranking is stored (logged as `POWER RANKINGS NOT STORED`).
 
 ### 7.7 Evolving Agent Memory (`newsroom/agent_memory.py`)
-Every agent (national writers, beat reporters, pundits and fans) keeps its hand-written identity line in `agent_memories.persistent_memory`, which never changes. Three evolving layers sit on top of it, written by `db/migrations/2026_10_20_agent_memory.sql`'s tables:
+Every agent (national writers, beat reporters, pundits and fans) keeps its hand-written identity line in `agent_memories.persistent_memory`, which never changes (the one exception: `2026_10_22_agent_wire_social.sql` swapped the name inside the line for agents it renamed). Three evolving layers sit on top of it, written by `db/migrations/2026_10_20_agent_memory.sql`'s tables:
 1. **Takes log (`agent_memory_entries`).** After a live post is saved (`SwarmDispatcher._record_agent_memory`): a tweet is stored as a take as-is (no extra call); an article gets one extra model call (`takes_extraction_prompt`) that returns up to 3 first-person stances the writer committed to, each tagged with a team (resolved by nickname) and/or player.
 2. **Prediction track record (`agent_predictions`).** For `PROSPECTIVE` articles, `parse_score_predictions` reads `Projected Final: Team N, Team N` lines (and, for the Super Bowl Roundtable, `Panellist: Team N, Team N` lines, labelled by panellist) and stores each pick against the matching game in the article's preview week (`preview_week` for overrides). Picks are graded when a prompt is built: correct, wrong, push (a predicted or actual tie) or pending.
 3. **Season summaries (`agent_season_summaries`).** At the start of each live weekly run, agents with at least 3 new takes since their last summary get it rewritten through last week (one call each, ≤120 words, first person). Each rewrite is a new row per `through_week`, so older weeks keep the summary they saw.

@@ -372,7 +372,10 @@ CREATE TABLE IF NOT EXISTS agent_memories (
     persistent_memory TEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     handle VARCHAR(100),
-    display_name VARCHAR(100)
+    display_name VARCHAR(100),
+    bio VARCHAR(200),           -- Agent Wire profile line (db/migrations/2026_10_22_agent_wire_social.sql)
+    followers INT,              -- simulated follower count, set once by the social desk
+    avatar_color VARCHAR(10)
 );
 
 CREATE TABLE IF NOT EXISTS news_feed (
@@ -387,8 +390,41 @@ CREATE TABLE IF NOT EXISTS news_feed (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     excerpt TEXT,
     article_type VARCHAR(64),
-    slot VARCHAR(32)
+    slot VARCHAR(32),
+    -- Agent Wire posts (db/migrations/2026_10_22_agent_wire_social.sql; docs/SOCIAL_MATRIX.md)
+    agent_id VARCHAR(100),      -- agent_memories.agent_id of the author
+    post_kind VARCHAR(32),      -- REACTION | PERFORMANCE | BEAT | STANDINGS | SHARE | REPLY | PREVIEW | MEME
+    posted_at TIMESTAMP,        -- simulated in-world posting time (created_at = real generation time)
+    reply_to_id INT REFERENCES news_feed(id) ON DELETE CASCADE,
+    linked_article_id INT REFERENCES news_feed(id) ON DELETE SET NULL,
+    subject_game_id INT,
+    subject_player_id INT,
+    likes INT,
+    reposts INT,
+    reply_count INT,
+    views INT,
+    hashtags TEXT[]
 );
+CREATE INDEX IF NOT EXISTS idx_news_feed_social_week ON news_feed (season, week, content_type, posted_at);
+CREATE INDEX IF NOT EXISTS idx_news_feed_agent ON news_feed (agent_id);
+CREATE INDEX IF NOT EXISTS idx_news_feed_reply_to ON news_feed (reply_to_id);
+
+-- Agent Wire weekly trends, computed from post tags and hashtags (docs/SOCIAL_MATRIX.md §4)
+CREATE TABLE IF NOT EXISTS social_trends (
+    id SERIAL PRIMARY KEY,
+    season INT NOT NULL,
+    week INT NOT NULL,
+    rank INT NOT NULL,
+    kind VARCHAR(16) NOT NULL,          -- TEAM | PLAYER | GAME | HASHTAG
+    key VARCHAR(64) NOT NULL,
+    title VARCHAR(120) NOT NULL,
+    category VARCHAR(64),
+    description TEXT,
+    volume INT,
+    score DOUBLE PRECISION,
+    UNIQUE (season, week, kind, key)
+);
+CREATE INDEX IF NOT EXISTS idx_social_trends_week ON social_trends (season, week, rank);
 
 -- Weekly Power Rankings parsed from the POWER_RANKINGS article (newsroom/power_rankings.py)
 CREATE TABLE IF NOT EXISTS power_rankings (
