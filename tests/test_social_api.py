@@ -44,6 +44,7 @@ class ShapeTests(unittest.TestCase):
         self.assertEqual(archetype_label({"archetype": "LOCAL_BEAT_REPORTER", "author_team_name": "Bears"}), "Bears Beat Reporter")
         self.assertEqual(archetype_label({"archetype": "SCHEFTER_TWEET"}), "NFL Insider")
         self.assertEqual(archetype_label({"archetype": "NFL_MEMES"}), "Meme Page")
+        self.assertEqual(archetype_label({"archetype": "FORMER_PLAYER", "author_team_name": "Chiefs"}), "Former Chiefs")
 
 
 class ForYouTests(unittest.TestCase):

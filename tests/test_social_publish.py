@@ -121,7 +121,7 @@ class ReplyAndWakeupTests(unittest.TestCase):
         plan = plan_social_week(ctx)
         posts = saved_posts(ctx, plan)
         replies = plan_replies(ctx, plan, posts)
-        self.assertEqual(len(replies), 20)
+        self.assertEqual(len(replies), len([a for a in plan["assignments"] if a["kind"] == "REPLY"]))
         top = posts[0]
         self.assertEqual(replies[0]["parent"]["id"], top["id"])
         for r in replies:
@@ -142,11 +142,16 @@ class ReplyAndWakeupTests(unittest.TestCase):
         self.assertEqual(kinds.count("BEAT"), 1)
         fans = [a for a in plan["assignments"] if a["archetype"] == "DIE_HARD_FAN"]
         self.assertEqual({a["kind"] for a in fans}, {"REACTION", "PREVIEW"})
-        self.assertEqual(len([a for a in plan["assignments"] if a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER")]), 3)
+        nationals = [a for a in plan["assignments"] if a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER", "FORMER_PLAYER")]
+        self.assertEqual(len(nationals), 3)
+        self.assertTrue(all(a["kind"] in ("PERFORMANCE", "COMPARISON") for a in nationals))   # players, not the game
+        legend = [a for a in plan["assignments"] if a["archetype"] == "FORMER_PLAYER"]
+        self.assertEqual(len(legend), 1)                          # team 1's ex-player
+        self.assertEqual(legend[0]["slant_team"], "City1 Team1")
         again = plan_team_wakeup(ctx, team, already_posted={a["agent_id"] for a in plan["assignments"]})
         self.assertFalse([a for a in again["assignments"] if a["archetype"] in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER")])
         quiet = plan_team_wakeup(ctx, 32)                         # popularity 68 -> 1 pundit
-        self.assertEqual(len([a for a in quiet["assignments"] if a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER")]), 1)
+        self.assertEqual(len([a for a in quiet["assignments"] if a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER", "FORMER_PLAYER")]), 1)
 
     def test_sibling_replies_take_different_stances_and_fans_get_angles(self):
         ctx = league(week=9)

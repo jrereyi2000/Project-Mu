@@ -22,7 +22,8 @@ ARCHETYPE_LABELS = {
     "BERRY": "Fantasy Analyst",
     "YATES": "Fantasy Analyst",
 }
-KIND_LABELS = {"REACTION": "Reaction", "PERFORMANCE": "Performance", "PLAYER": "Player", "BEAT": "Beat Note",
+KIND_LABELS = {"REACTION": "Reaction", "PERFORMANCE": "Performance", "BAD_GAME": "Bad Game", "COMPARISON": "Comparison",
+               "PLAYER": "Player", "BEAT": "Beat Note",
                "STANDINGS": "Standings", "SHARE": "Article", "PREVIEW": "Preview", "MEME": "Meme", "REPLY": "Reply"}
 
 POST_SELECT = """
@@ -57,6 +58,8 @@ def archetype_label(row) -> str:
         return f"{row['author_team_name']} Beat Reporter"
     if arch == "DIE_HARD_FAN" and row.get("author_team_name"):
         return f"{row['author_team_name']} Fan"
+    if arch == "FORMER_PLAYER":
+        return f"Former {row['author_team_name']}" if row.get("author_team_name") else "Former Player"
     return ARCHETYPE_LABELS.get(arch, "Analyst")
 
 

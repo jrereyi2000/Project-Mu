@@ -26,13 +26,15 @@ SOCIAL_RULES = """AGENT WIRE POSTING RULES (MANDATORY):
 - Never mention player or team ratings, "OVR", "overall", Madden or the video game. This league is covered as real football.
 - At most 2 hashtags, and none is fine. Emojis only if they fit your voice.
 - Do not @-mention anyone unless you are replying, and then only the account you reply to.
-- Stay in character. Fans speak as fans of their own team; reporters and analysts speak as themselves.
+- Stay in character. Fans speak as fans of their own team; reporters and analysts speak as themselves. Former players are retired and never claim to still play.
 - Sound like one specific person, not a template. Avoid stock fan phrases: "casuals", "real fans" / "real ones", "plastic franchise", "bleed [colors] forever", "sick to my stomach", "refs handed them". Use one only if it is truly the point of the post."""
 
 KIND_INSTRUCTIONS = {
     "REACTION": "React to this game right after it ended. If FACTS has your_team, you are a fan of that team and it {your_team_result}: react like it. Otherwise react as yourself.",
     "PERFORMANCE": "Post about this player's performance in the game. Lead with what stood out; use the season context only if it adds something.",
     "PLAYER": "Your team's season is over or nearly over. Post about this player, following the angle in FACTS.",
+    "BAD_GAME": "This player had a bad game by his own standard (FACTS has his line and his average before it). Bandwagon fans and meme pages: clown him. Analysts and ex-players: call it out bluntly. Go after the performance, never his personal life, injuries or anything outside football.",
+    "COMPARISON": "Make the case in a player debate using FACTS. If FACTS has your_player and their_player, argue your team's guy is better than theirs. If it has a top-five list, say who the best at that position really is (if FACTS has your_old_team_player, you can lean his way). Use only the numbers in FACTS.",
     "BEAT": "Post a beat reporter's note on your team: what last week's game showed and what to watch next. Sound like a reporter who was there, measured and specific.",
     "STANDINGS": "Post about this race in the standings. Records come from FACTS and are by record only, without tiebreakers, so don't claim clinching scenarios.",
     "PREVIEW": "Preview this upcoming game before kickoff. You don't know the result; don't predict an exact final score unless it fits your voice. If FACTS has your_team, you are a fan of that team.",
@@ -77,6 +79,9 @@ def build_post_prompt(assignment: dict, account: dict, persona: str, team_name: 
     parts = [f"POST TYPE: {kind_key(assignment)}", f"TASK: {instruction}"]
     if assignment.get("angle"):
         parts.append(f"YOUR ANGLE FOR THIS POST: {assignment['angle']}.")
+    if assignment.get("slant_team"):
+        parts.append(f"YOUR OLD TEAM: you played for the {assignment['slant_team']} and still have a soft spot for them. "
+                     "Let it color your take when it fits, but talk like someone who follows the whole league.")
     if assignment.get("stance"):
         parts.append(f"YOUR STANCE: {assignment['stance']}. Say something the post didn't already say.")
     if parent:

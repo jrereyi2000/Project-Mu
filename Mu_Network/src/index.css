@@ -1773,6 +1773,7 @@ footer > div:last-child { margin-left: auto; display: flex; gap: 22px; font-size
 .social-avatar { flex: 0 0 auto; display: grid; place-items: center; color: #fff; border-radius: 50%; box-shadow: 0 0 0 2px #242b33; font-weight: 800; letter-spacing: .02em; line-height: 1; text-shadow: 0 1px 2px #0006; user-select: none; }
 .social-post-avatar-link { display: block; }
 .social-post-meta > b.beat { color: #c9b6ff; background: #8b6cff1a; border: 1px solid #8b6cff38; }
+.social-post-meta > b.legend { color: #ffb36b; background: #ff8a1f17; border: 1px solid #ff8a1f38; }
 .social-link { color: var(--social-cyan); }
 .social-link:hover { text-decoration: underline; }
 .social-reply-to { margin-top: 2px; color: var(--social-muted); font-size: 11px; }

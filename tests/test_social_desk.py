@@ -7,7 +7,9 @@ import json
 import re
 import unittest
 
-from newsroom.social_desk import ROLE_CAPS, TARGET_POSTS, Accounts, plan_social_week
+from newsroom.social_desk import ROLE_CAPS, TARGET_POSTS, Accounts, plan_social_week, tidy_name
+
+PUNDITS = ("STEPHEN_A", "MCAFEE", "SHANNON", "OCHOCINCO", "JJ_WATT", "RG3", "COWHERD", "WINGO", "EISEN", "CLARK", "SKIP_TWEET")
 
 DIVS = [f"{c} {d}" for c in ("AFC", "NFC") for d in ("East", "North", "South", "West")]
 
@@ -24,6 +26,9 @@ def league(season=2035, week=9, played_weeks=None, playoff=None, articles=None, 
         accounts.append({"agent_id": f"beat_{t}", "archetype": "LOCAL_BEAT_REPORTER", "team_id": t, "handle": f"@beat{t}", "display_name": "x"})
     for n in range(6):
         accounts.append({"agent_id": f"bw_{n}", "archetype": "BANDWAGON_FAN", "team_id": None, "handle": f"@bw{n}", "display_name": "x"})
+    for i, (name, tid, pos) in enumerate((("Old Qb", 1, "QB"), ("Old Wr", 17, "WR"), ("Old Rb", 5, "RB"), ("Old Lb", 9, "LB"))):
+        accounts.append({"agent_id": f"former_{i}", "archetype": "FORMER_PLAYER", "team_id": tid, "handle": f"@former{i}",
+                         "display_name": name, "persistent_memory": f"I am {name}. I played {pos} for the City{tid} Team{tid} and retired before 2035."})
     for arch in ("STEPHEN_A", "MCAFEE", "SHANNON", "OCHOCINCO", "JJ_WATT", "RG3", "COWHERD", "WINGO", "EISEN", "CLARK",
                  "SKIP_TWEET", "BERRY", "YATES", "FANTASY_GURU", "NFL_MEMES", "DRAFT_SICKO", "SKIP_BAYLESS", "BARNWELL",
                  "ROUNDTABLE_PANEL"):
@@ -60,6 +65,8 @@ def league(season=2035, week=9, played_weeks=None, playoff=None, articles=None, 
                               "rush_attempts": 15 if pos == "HB" else 0, "rush_yards": 60 + team if pos == "HB" else 0, "rush_tds": 1 if pos == "HB" else 0,
                               "receptions": 6 if pos == "WR" else 0, "rec_yards": 70 + g["id"] % 50 if pos == "WR" else 0, "rec_tds": 1 if pos == "WR" else 0,
                               "fantasy_points": float(10 + team + g["id"] % 7)})
+                if team == 2 and pos == "WR" and g["week"] == week - 1:   # a star WR's flop last week
+                    lines[-1].update(receptions=1, rec_yards=8, rec_tds=0, fantasy_points=1.8)
     ctx = {"season": season, "week": week, "recap_week": week - 1, "teams": teams, "accounts": accounts,
            "games": [g for g in games if g["week"] < week and g["status"] == "COMPLETED"],
            "recap_games": [g for g in games if g["week"] == week - 1 and g["status"] == "COMPLETED"],
@@ -84,11 +91,46 @@ class SocialDeskTests(unittest.TestCase):
         reacting_teams = {a["team_id"] for a in by_kind(plan)["REACTION"] if a["archetype"] == "DIE_HARD_FAN"}
         self.assertEqual(reacting_teams, set(range(1, 33)))
 
-    def test_extra_reactions_go_to_the_most_exciting_games(self):
+    def test_only_die_hards_react_to_games(self):
         plan = plan_social_week(league(week=9))
-        per_game = collections.Counter(a["subject"]["id"] for a in by_kind(plan)["REACTION"])
-        top = max(league(week=9)["recap_games"], key=lambda g: g["excitement_index"])["id"]
-        self.assertEqual(per_game.most_common(1)[0][0], top)
+        self.assertEqual({a["archetype"] for a in by_kind(plan)["REACTION"]}, {"DIE_HARD_FAN"})
+        self.assertEqual(len(by_kind(plan)["REACTION"]), 32)
+
+    def test_player_first_mix(self):
+        plan = plan_social_week(league(week=9))
+        kinds = by_kind(plan)
+        self.assertGreaterEqual(len(kinds["PERFORMANCE"]), 14)
+        self.assertNotIn("DIE_HARD_FAN", {a["archetype"] for a in kinds["PERFORMANCE"]})
+        self.assertIn("BANDWAGON_FAN", {a["archetype"] for a in kinds["PERFORMANCE"]})
+        self.assertIn("FORMER_PLAYER", {a["archetype"] for a in kinds["PERFORMANCE"]})
+        self.assertEqual(len(kinds["COMPARISON"]), 10)
+        self.assertTrue(10 <= len(kinds["REPLY"]) <= 15)
+
+    def test_bad_games_clown_the_flop(self):
+        plan = plan_social_week(league(week=9))
+        bad = by_kind(plan)["BAD_GAME"]
+        self.assertTrue(bad)
+        self.assertEqual(bad[0]["subject"]["label"], "Player 2WR (WR, T02)")
+        self.assertIn(bad[0]["archetype"], ("BANDWAGON_FAN", "NFL_MEMES") + tuple(PUNDITS))
+        self.assertGreater(bad[0]["facts"]["season_average_before_this_game_ppr"], bad[0]["facts"]["fantasy_points_ppr"])
+
+    def test_comparisons(self):
+        comps = by_kind(plan_social_week(league(week=9)))["COMPARISON"]
+        fans = [a for a in comps if a["archetype"] == "DIE_HARD_FAN"]
+        self.assertEqual(len(fans), 5)
+        for a in fans:
+            self.assertEqual(a["facts"]["your_player"]["player"].split("(")[1].split(",")[0],
+                             a["facts"]["their_player"]["player"].split("(")[1].split(",")[0])   # same position
+            self.assertIn(f"City{a['team_id']} Team{a['team_id']}", a["facts"]["your_player"]["player"])
+        legends = [a for a in comps if a["archetype"] == "FORMER_PLAYER"]
+        self.assertEqual(len(legends), 3)
+        for a in legends:
+            self.assertTrue(a["slant_team"].startswith("City"))
+            self.assertIn("top_five_this_season", a["facts"])
+
+    def test_ex_players_are_not_filed_under_their_old_team(self):
+        plan = plan_social_week(league(week=9))
+        self.assertFalse([a for a in plan["assignments"] if a["archetype"] == "FORMER_PLAYER" and a["team_id"]])
 
     def test_shares_reduce_reactions_and_keep_the_total(self):
         arts = [{"id": i, "persona": p, "team_id": None, "headline": f"A{i}", "excerpt": "e", "slot": f"Slot {i}",
@@ -150,6 +192,13 @@ class SocialDeskTests(unittest.TestCase):
         plan = plan_social_week(ctx)
         self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
         self.assertFalse([a for a in by_kind(plan)["PLAYER"] if a["team_id"] in (2, 18)])
+
+
+class NameTests(unittest.TestCase):
+    def test_tidy_name(self):
+        self.assertEqual(tidy_name("OMAR COOPER JR."), "Omar Cooper Jr.")
+        self.assertEqual(tidy_name("D'ANDRE SMITH III"), "D'Andre Smith III")
+        self.assertEqual(tidy_name("Ka'Von Franklin"), "Ka'Von Franklin")
 
 
 if __name__ == "__main__":

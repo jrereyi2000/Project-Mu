@@ -75,8 +75,9 @@ def _find_game(ctx, a):
     games = {g["id"]: g for g in ctx["recap_games"] + ctx["preview_games"]}
     if a["subject"]["type"] == "game":
         return games.get(a["subject"]["id"])
-    if a["kind"] in ("PERFORMANCE",) and a.get("team_id"):
-        return next((g for g in ctx["recap_games"] if a["team_id"] in (g["home_team_id"], g["away_team_id"])), None)
+    team = a["subject"].get("team_id") or a.get("team_id")
+    if a["kind"] in ("PERFORMANCE", "BAD_GAME") and team:
+        return next((g for g in ctx["recap_games"] if team in (g["home_team_id"], g["away_team_id"])), None)
     return None
 
 
@@ -114,7 +115,7 @@ def _post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.dateti
     if kind in ("REACTION", "MEME") and game and game["week"] < week:
         end = kickoff(season, game) + GAME_LENGTH
         return end + dt.timedelta(minutes=rng.uniform(5, 90) if kind == "REACTION" else rng.uniform(30, 600))
-    if kind == "PERFORMANCE" and game:
+    if kind in ("PERFORMANCE", "BAD_GAME") and game:
         end = kickoff(season, game) + GAME_LENGTH
         return _between(rng, end + dt.timedelta(minutes=20), max(end + dt.timedelta(hours=1), tue - dt.timedelta(hours=8)))
     if kind == "PREVIEW":
@@ -123,6 +124,8 @@ def _post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.dateti
             start = max(this_thu + dt.timedelta(hours=8), ko - dt.timedelta(days=2))
             return _between(rng, min(start, ko - dt.timedelta(hours=3)), ko - dt.timedelta(hours=1))
         return _between(rng, this_thu + dt.timedelta(days=1, hours=8), this_thu + dt.timedelta(days=3, hours=11))
+    if kind == "COMPARISON":
+        return _between(rng, tue + dt.timedelta(hours=9), this_thu + dt.timedelta(hours=20))
     if kind == "STANDINGS":
         return _between(rng, tue + dt.timedelta(hours=10), tue + dt.timedelta(hours=22))
     if kind == "PLAYER":
@@ -146,6 +149,8 @@ def account_role(account: dict, cfg: dict) -> str:
         return "meme"
     if arch == "DRAFT_SICKO":
         return "draft"
+    if arch == "FORMER_PLAYER":
+        return "former"
     if arch in cfg.get("insider_archetypes", ()):
         return "insider"
     return "national"
@@ -338,7 +343,7 @@ def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=No
     if subj["type"] == "player" and subj["id"]:
         cur.execute("""INSERT INTO article_players (article_id, player_id, team_id, mention_type, mention_count, created_at)
                        VALUES (%s, %s, %s, 'PRIMARY', 1, NOW()) ON CONFLICT (article_id, player_id) DO NOTHING""",
-                    (post_id, subj["id"], a.get("team_id")))
+                    (post_id, subj["id"], subj.get("team_id") or a.get("team_id")))
     if a["kind"] != "SHARE":
         try:
             from newsroom import agent_memory

@@ -3643,6 +3643,7 @@ const socialBadgeClass = (archetype: string) =>
   archetype === "LOCAL_BEAT_REPORTER" ? "beat"
     : archetype === "DIE_HARD_FAN" ? "homer"
     : archetype === "BANDWAGON_FAN" ? "bandwagon"
+    : archetype === "FORMER_PLAYER" ? "legend"
     : archetype === "NFL_MEMES" || archetype === "SKIP_TWEET" || archetype === "STEPHEN_A" ? "hot"
     : "analyst";
 

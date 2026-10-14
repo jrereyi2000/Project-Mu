@@ -55,6 +55,19 @@ class PromptTests(unittest.TestCase):
         self.assertIn("BLASPHEMOUS!", prompt)
         self.assertIn("@stephenasmith", prompt)
 
+    def test_slant_and_new_kinds(self):
+        a = assignment("COMPARISON", "position", {"position": "QB", "top_five_this_season": []})
+        a["slant_team"] = "Kansas City Chiefs"
+        legend = {"agent_id": "Former_Patrick_Mahomes", "archetype": "FORMER_PLAYER", "handle": "@PatrickMahomes",
+                  "display_name": "Patrick Mahomes", "persistent_memory": "I am Patrick Mahomes. I played QB for the Kansas City Chiefs."}
+        system, prompt = build_post_prompt(a, legend, "You are a retired star.", "Chiefs")
+        self.assertIn("YOUR OLD TEAM: you played for the Kansas City Chiefs", prompt)
+        self.assertIn("player debate", prompt)
+        self.assertIn("never claim to still play", system)
+        self.assertNotIn("Your team is the Chiefs.", system)          # only fans and beat reporters have a team
+        _, prompt = build_post_prompt(assignment("BAD_GAME", "player", {"player": "X"}), ACCOUNT, "p", "Chiefs")
+        self.assertIn("bad game by his own standard", prompt)
+
     def test_kind_keys(self):
         self.assertEqual(kind_key(assignment("PREVIEW", "fantasy")), "FANTASY_PREVIEW")
         self.assertEqual(kind_key(assignment("MEME", "draft")), "DRAFT")

@@ -25,19 +25,32 @@ from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standi
 
 TARGET_POSTS = 100
 
-# Fixed bucket sizes (docs/SOCIAL_MATRIX.md §2). Reactions absorb the difference to TARGET_POSTS; shares are
-# one per published article, so their count varies week to week.
+# Bucket sizes (docs/SOCIAL_MATRIX.md §2, player-first mix agreed with JR on Oct 14). Die-hard reactions are one
+# per team that played; shares are one per published article; replies flex between REPLY_RANGE to keep the week
+# near TARGET_POSTS.
 BUCKET_SIZES = {
-    "PERFORMANCE": 12,
-    "BEAT": 6,
-    "STANDINGS": 4,
-    "PREVIEW": 8,
+    "PERFORMANCE": 14,
+    "BAD_GAME": 8,
+    "COMPARISON": 10,
+    "BEAT": 5,
+    "STANDINGS": 2,
+    "PREVIEW": 6,
     "MEME": 2,
-    "REPLY": 20,
+    "REPLY": 15,
 }
+REPLY_RANGE = (10, 15)
+PERFORMANCE_FLOOR = 10   # performances can shrink to this to keep a full week at the target
 
 # Weekly post caps per account role (least-used accounts are picked first).
-ROLE_CAPS = {"pundit": 3, "fantasy": 4, "beat": 2, "fan": 2, "bandwagon": 2, "meme": 3, "draft": 3}
+ROLE_CAPS = {"pundit": 3, "fantasy": 4, "beat": 2, "fan": 2, "bandwagon": 3, "meme": 3, "draft": 3, "former": 3}
+
+# Ex-player pundits keep their national voice but lean toward their old team (agreed with JR on Oct 14).
+# FORMER_PLAYER accounts get the same slant from their agent_memories.assigned_team_id.
+FORMER_TEAM_SLANT = {"OCHOCINCO": "CIN", "SHANNON": "DEN", "JJ_WATT": "HOU", "RG3": "WAS", "CLARK": "PIT", "MCAFEE": "IND"}
+BAD_GAME_SHARE = 0.65   # a flop is at most this share of his earlier average
+OFFENSE_POSITIONS = ("QB", "RB", "WR", "TE")
+# Hot-take voices preferred for calling out bad games.
+HOT_TAKE_PUNDITS = ("STEPHEN_A", "SKIP_TWEET", "COWHERD", "SHANNON", "MCAFEE")
 
 # Archetypes that never post as a random pundit. Mirrors swarm_dispatcher.TWEET_EXCLUDED_ARCHETYPES (the
 # long-form-only writers, SKIP_BAYLESS, the roundtable panel), plus roles the desk assigns on purpose.
@@ -45,7 +58,7 @@ PUNDIT_EXCLUDED = {
     "BARNWELL", "SANDO", "JOYNER", "ROSENTHAL", "CHADIHA", "KIMES", "ORLOVSKY",
     "SKIP_BAYLESS", "ROUNDTABLE_PANEL",
     "LOCAL_BEAT_REPORTER", "DIE_HARD_FAN", "BANDWAGON_FAN",
-    "FANTASY_GURU", "NFL_MEMES", "DRAFT_SICKO",
+    "FANTASY_GURU", "NFL_MEMES", "DRAFT_SICKO", "FORMER_PLAYER",
 }
 FANTASY_ARCHETYPES = ("FANTASY_GURU", "BERRY", "YATES")
 
@@ -67,6 +80,8 @@ NO_SHARE_ARCHETYPES = {"ROUNDTABLE_PANEL"}
 WINDOWS = {
     "REACTION": "after its game ends",
     "PERFORMANCE": "Sun night – Mon",
+    "BAD_GAME": "Sun night – Tue",
+    "COMPARISON": "Tue – Thu",
     "BEAT": "Mon – Wed",
     "STANDINGS": "Tue",
     "SHARE": "when the slate publishes (Tue – Wed)",
@@ -91,10 +106,10 @@ def load_week_context(cur, season: int, week: int) -> dict:
                            "division": r[5], "popularity": float(r[6] or 0)} for r in cur.fetchall()}
 
     cur.execute("""
-        SELECT agent_id, archetype, assigned_team_id, handle, display_name
+        SELECT agent_id, archetype, assigned_team_id, handle, display_name, persistent_memory
         FROM agent_memories WHERE handle IS NOT NULL ORDER BY agent_id
     """)
-    ctx["accounts"] = [dict(zip(("agent_id", "archetype", "team_id", "handle", "display_name"), r))
+    ctx["accounts"] = [dict(zip(("agent_id", "archetype", "team_id", "handle", "display_name", "persistent_memory"), r))
                        for r in cur.fetchall()]
 
     game_cols = ("id", "week", "home_team_id", "away_team_id", "home_score", "away_score", "status",
@@ -138,6 +153,7 @@ def load_week_context(cur, season: int, week: int) -> dict:
         d = dict(zip(line_cols, r))
         d["fantasy_points"] = float(d["fantasy_points"] or 0)
         d["popularity"] = float(d["popularity"] or 0)
+        d["name"] = tidy_name(d["name"])
         lines.append(d)
     ctx["player_lines"] = lines
 
@@ -192,6 +208,28 @@ def stat_line(l: dict) -> str:
     if l["receptions"] or l["rec_yards"]:
         parts.append(f"{l['receptions']} rec, {l['rec_yards']} rec yds" + (f", {l['rec_tds']} rec TD" if l["rec_tds"] else ""))
     return "; ".join(parts) or "no recorded stats"
+
+
+def norm_pos(pos):
+    p = (pos or "").upper()
+    return "RB" if p in ("HB", "FB", "RB") else p
+
+
+def tidy_name(name):
+    """Some imported rosters store names in capitals ("JERRY RAYFORD"); post them in normal case."""
+    if not name or not name.isupper():
+        return name
+    def word(w):
+        if w.rstrip(".") in ("II", "III", "IV", "V"):
+            return w
+        return "-".join("'".join(x[:1].upper() + x[1:].lower() for x in part.split("'")) for part in w.split("-"))
+    return " ".join(word(w) for w in name.split())
+
+
+def former_position(account) -> str:
+    """An ex-player's position, from his identity line ("I played WR for the ...")."""
+    m = re.search(r"I played (\w+) for", account.get("persistent_memory") or "")
+    return norm_pos(m.group(1)) if m else ""
 
 
 class Week:
@@ -369,7 +407,7 @@ class Week:
         same_pos = sorted((v for v in self.season_totals.values() if v["position"] == t["position"]),
                           key=lambda v: v["fantasy_points"], reverse=True)
         rank = next(i for i, v in enumerate(same_pos, 1) if v is t)
-        return f"{t['games']} games: {stat_line(t)}", f"{t['position']}{rank} in full-PPR points ({t['fantasy_points']:.1f})"
+        return f"{t['games']} games: {stat_line(t)}", f"{norm_pos(t['position'])}{rank} in full-PPR points ({t['fantasy_points']:.1f})"
 
     def performance_facts(self, l):
         g = next(g for g in self.ctx["recap_games"] if g["id"] == l["game_id"])
@@ -387,6 +425,65 @@ class Week:
             "season_so_far": season,
             "season_rank": rank,
         }
+
+    def position_leaders(self, pos, n=5):
+        pos = norm_pos(pos)
+        rows = sorted((t for t in self.season_totals.values() if norm_pos(t["position"]) == pos),
+                      key=lambda t: t["fantasy_points"], reverse=True)
+        return rows[:n]
+
+    def team_best(self, tid, pos=None):
+        rows = [t for t in self.season_totals.values() if t["team_id"] == tid
+                and (norm_pos(t["position"]) == norm_pos(pos) if pos else norm_pos(t["position"]) in OFFENSE_POSITIONS)]
+        return max(rows, key=lambda t: t["fantasy_points"]) if rows else None
+
+    def player_summary(self, t):
+        line = {"player_id": t["player_id"], "short_name": None, "team_id": t["team_id"], "position": t["position"]}
+        season, rank = self.season_line(line)
+        return {"player": f"{t['name']} ({norm_pos(t['position'])}, {self.team_label(t['team_id'])})",
+                "season_so_far": season, "season_rank": rank}
+
+    def bad_games(self):
+        """Last week's flops: players averaging 12+ full-PPR points in 3+ earlier games who scored at most 65% of
+        that, biggest drop first; then any other QB with 3+ interceptions. Players with no line at all are skipped
+        (they may have been hurt or inactive, which is not a flop)."""
+        out, seen = [], set()
+        for l in self.recap_lines:
+            key = (l["player_id"] or l["short_name"], l["team_id"], l["position"])
+            t = self.season_totals.get(key)
+            if not t or t["games"] < 4:
+                continue
+            avg = (t["fantasy_points"] - l["fantasy_points"]) / (t["games"] - 1)
+            if avg >= 12 and l["fantasy_points"] <= BAD_GAME_SHARE * avg:
+                out.append((avg - l["fantasy_points"], l, avg))
+                seen.add(key)
+        out.sort(key=lambda x: x[0], reverse=True)
+        for l in self.recap_lines:
+            key = (l["player_id"] or l["short_name"], l["team_id"], l["position"])
+            if key not in seen and norm_pos(l["position"]) == "QB" and (l["interceptions"] or 0) >= 3:
+                t = self.season_totals.get(key)
+                avg = (t["fantasy_points"] - l["fantasy_points"]) / max(1, t["games"] - 1) if t else 0.0
+                out.append((0, l, avg))
+        return [(l, avg) for _, l, avg in out]
+
+    def bad_game_facts(self, l, avg):
+        facts = self.performance_facts(l)
+        facts["season_average_before_this_game_ppr"] = round(avg, 1)
+        facts["note"] = "A bad game by his standard."
+        return facts
+
+    def comparison_facts(self, a, b, pos):
+        return {"position": norm_pos(pos), "your_player": self.player_summary(a), "their_player": self.player_summary(b),
+                "records": {self.team_label(a["team_id"]): self.record(a["team_id"]),
+                            self.team_label(b["team_id"]): self.record(b["team_id"])}}
+
+    def leaderboard_facts(self, pos, slant_tid=None):
+        facts = {"position": norm_pos(pos), "top_five_this_season": [self.player_summary(t) for t in self.position_leaders(pos)]}
+        if slant_tid:
+            best = self.team_best(slant_tid, pos)
+            if best:
+                facts["your_old_team_player"] = self.player_summary(best)
+        return facts
 
     def season_player_facts(self, t):
         line = {"player_id": t["player_id"], "short_name": None, "team_id": t["team_id"], "position": t["position"]}
@@ -418,6 +515,7 @@ class Accounts:
                 "meme" if arch == "NFL_MEMES" else
                 "draft" if arch == "DRAFT_SICKO" else
                 "fantasy" if arch == "FANTASY_GURU" else
+                "former" if arch == "FORMER_PLAYER" else
                 "pundit" if arch not in PUNDIT_EXCLUDED else
                 None
             )
@@ -464,6 +562,17 @@ class Accounts:
         return self._pick([a for a in self.all() if a["archetype"] in FANTASY_ARCHETYPES], cap_role="fantasy",
                           prefer=("FANTASY_GURU",))
 
+    def former(self, teams=(), pos=None):
+        """An ex-player, preferring one whose old team is in `teams`, then one who played `pos`."""
+        teams, pos = set(teams), norm_pos(pos)
+        ok = [a for a in self.all() if a["archetype"] == "FORMER_PLAYER" and self.uses[a["agent_id"]] < ROLE_CAPS["former"]]
+        if not ok:
+            return None
+        best = min(ok, key=lambda a: (self.uses[a["agent_id"]], a["team_id"] not in teams,
+                                      former_position(a) != pos, self.order[a["agent_id"]]))
+        self.uses[best["agent_id"]] += 1
+        return best
+
     def archetype(self, arch):
         return self._pick([a for a in self.all() if a["archetype"] == arch], cap_role="meme")
 
@@ -494,7 +603,7 @@ REPLY_STANCES = ("push back on it", "agree and add a point of your own", "make a
 
 def _assignment(kind, account, subject, facts, filed_team=None):
     angle = None
-    if account and account.get("archetype") in FAN_ARCHETYPES and kind not in ("SHARE", "REPLY"):
+    if account and account.get("archetype") == "DIE_HARD_FAN" and kind in ("REACTION", "PREVIEW"):
         seed = sum(ord(c) for c in f"{account['agent_id']}|{kind}|{subject.get('id')}")
         angle = FAN_ANGLES[seed % len(FAN_ANGLES)]
     return {
@@ -503,11 +612,33 @@ def _assignment(kind, account, subject, facts, filed_team=None):
         "agent_id": account["agent_id"] if account else None,
         "handle": account["handle"] if account else None,
         "archetype": account["archetype"] if account else None,
-        "team_id": filed_team if filed_team is not None else (account or {}).get("team_id"),
+        "team_id": filed_team if filed_team is not None else (
+            (account or {}).get("team_id") if (account or {}).get("archetype") in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER") else None),
         "subject": subject,
         "window": WINDOWS.get(kind, ""),
         "facts": facts,
     }
+
+
+def _slant_team_id(account, W):
+    """The old team an ex-player (or ex-player pundit) leans toward, as a team id, else None."""
+    if not account:
+        return None
+    if account.get("archetype") == "FORMER_PLAYER":
+        return account.get("team_id")
+    abbr = FORMER_TEAM_SLANT.get(account.get("archetype"))
+    if abbr:
+        return next((t for t, v in W.teams.items() if v["abbr"] == abbr), None)
+    return None
+
+
+def _add_slants(assignments, acc, W):
+    for a in assignments:
+        tid = _slant_team_id(acc.by_id.get(a.get("agent_id")), W)
+        if tid in W.teams:
+            a["slant_team"] = W.team_label(tid)
+            if a["archetype"] == "FORMER_PLAYER":
+                a["former_position"] = former_position(acc.by_id[a["agent_id"]])
 
 
 def expected_articles(week: int) -> list:
@@ -532,7 +663,8 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
     acc = Accounts(ctx["accounts"], seed=f"{season}-{week}")
     notes = []
     plan = collections.OrderedDict((k, []) for k in
-                                   ("SHARE", "REACTION", "PERFORMANCE", "PLAYER", "BEAT", "STANDINGS", "PREVIEW", "MEME", "REPLY"))
+                                   ("SHARE", "REACTION", "PERFORMANCE", "BAD_GAME", "COMPARISON", "PLAYER", "BEAT",
+                                    "STANDINGS", "PREVIEW", "MEME", "REPLY"))
 
     recap = sorted(ctx["recap_games"], key=lambda g: g["excitement_index"] or 0, reverse=True)
     previews = sorted(ctx["preview_games"], key=lambda g: g["projected_excitement"] or 0, reverse=True)
@@ -560,25 +692,96 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                                          filed_team=art["team_id"]))
 
     # 2. Player performances from the recap week (offense only until the capture loads defense/kicking).
+    # League-wide voices only: pundits, ex-players (leaning to their old team, then their position), bandwagon
+    # fans and the fantasy accounts. Die-hards talk about their own team in reactions and comparisons.
     perf_n = BUCKET_SIZES["PERFORMANCE"] if recap else 0
     top_lines = sorted(W.recap_lines, key=lambda l: (l["fantasy_points"], l["popularity"]), reverse=True)
     seen_players = set()
-    pattern = ["fantasy", "pundit", "fan", "pundit", "fan", "fantasy"]
-    for l in top_lines:
-        if len(plan["PERFORMANCE"]) >= perf_n:
-            break
-        key = l["player_id"] or (l["short_name"], l["team_id"])
-        if key in seen_players:
-            continue
-        seen_players.add(key)
-        who = pattern[len(plan["PERFORMANCE"]) % len(pattern)]
-        account = (acc.fantasy() if who == "fantasy" else
-                   acc.fan(l["team_id"]) if who == "fan" else None)
-        if account is None:
-            account = acc.pundit(prefer=PUNDIT_AFFINITY.get(l["position"], ()))
-        plan["PERFORMANCE"].append(_assignment("PERFORMANCE", account,
-                                               {"type": "player", "id": l["player_id"], "label": f"{l['name']} ({l['position']}, {W.teams[l['team_id']]['abbr']})"},
-                                               W.performance_facts(l), filed_team=l["team_id"]))
+    pattern = ["fantasy", "pundit", "former", "bandwagon", "former", "pundit", "bandwagon"]
+
+    def add_performances(limit):
+        for l in top_lines:
+            if len(plan["PERFORMANCE"]) >= limit:
+                break
+            key = l["player_id"] or (l["short_name"], l["team_id"])
+            if key in seen_players:
+                continue
+            seen_players.add(key)
+            who = pattern[len(plan["PERFORMANCE"]) % len(pattern)]
+            account = (acc.fantasy() if who == "fantasy" else
+                       acc.former([l["team_id"]], l["position"]) if who == "former" else
+                       acc.bandwagon() if who == "bandwagon" else None)
+            if account is None:
+                account = acc.pundit(prefer=PUNDIT_AFFINITY.get(l["position"], ()))
+            if account is None:
+                continue
+            plan["PERFORMANCE"].append(_assignment("PERFORMANCE", account,
+                                                   {"type": "player", "id": l["player_id"], "team_id": l["team_id"], "label": f"{l['name']} ({l['position']}, {W.teams[l['team_id']]['abbr']})"},
+                                                   W.performance_facts(l)))
+
+    add_performances(perf_n)
+
+    # 2b. Bad games: stars who flopped against their own average. Bandwagon fans and the meme page clown them,
+    # hot-take pundits call them out, and an ex-player weighs in.
+    if recap:
+        bad_pattern = ["bandwagon", "bandwagon", "pundit", "meme", "bandwagon", "former", "pundit", "bandwagon"]
+        for i, (l, avg) in enumerate(W.bad_games()[:BUCKET_SIZES["BAD_GAME"]]):
+            who = bad_pattern[i % len(bad_pattern)]
+            account = (acc.bandwagon() if who == "bandwagon" else
+                       acc.archetype("NFL_MEMES") if who == "meme" else
+                       acc.former([], l["position"]) if who == "former" else None)
+            if account is None:
+                account = acc.pundit(prefer=HOT_TAKE_PUNDITS)
+            if account:
+                plan["BAD_GAME"].append(_assignment("BAD_GAME", account,
+                                                    {"type": "player", "id": l["player_id"], "team_id": l["team_id"], "label": f"{l['name']} ({l['position']}, {W.teams[l['team_id']]['abbr']})"},
+                                                    W.bad_game_facts(l, avg)))
+
+    # 2c. Player comparisons: die-hards put their team's best player against a rival's at the same position,
+    # ex-players argue for their old team's guy against the league's best, pundits rank a position.
+    if W.season_totals:
+        comp_n = BUCKET_SIZES["COMPARISON"]
+        fan_n, former_n = comp_n // 2, (comp_n * 3) // 10
+        fan_teams = []
+        for t in played + sorted(W.teams, key=lambda t: W.teams[t]["popularity"], reverse=True):
+            if t not in fan_teams:
+                fan_teams.append(t)
+        for tid in fan_teams:
+            if len(plan["COMPARISON"]) >= fan_n:
+                break
+            mine = W.team_best(tid)
+            if not mine:
+                continue
+            last, nxt = W.team_games(tid)
+            g = last or nxt
+            rival = (g["away_team_id"] if g["home_team_id"] == tid else g["home_team_id"]) if g else None
+            theirs = W.team_best(rival, mine["position"]) if rival else None
+            account = acc.fan(tid) if theirs else None
+            if account:
+                plan["COMPARISON"].append(_assignment("COMPARISON", account,
+                                                      {"type": "player", "id": mine["player_id"], "team_id": tid, "label": f"{mine['name']} vs {theirs['name']}"},
+                                                      W.comparison_facts(mine, theirs, mine["position"]), filed_team=tid))
+        positions = ["QB", "WR", "RB", "TE"]
+        for i in range(former_n):
+            account = acc.former()
+            if not account:
+                break
+            pos = former_position(account)
+            if pos not in OFFENSE_POSITIONS:
+                best = W.team_best(account["team_id"])
+                pos = norm_pos(best["position"]) if best else positions[i % len(positions)]
+            plan["COMPARISON"].append(_assignment("COMPARISON", account, {"type": "position", "id": None, "label": f"Best {pos} in the league"},
+                                                  W.leaderboard_facts(pos, account["team_id"])))
+        i = 0
+        while len(plan["COMPARISON"]) < comp_n and i < 8:
+            pos = positions[(week + i) % len(positions)]
+            i += 1
+            account = acc.pundit(prefer=PUNDIT_AFFINITY.get(pos, ()))
+            if not account:
+                break
+            slant = _slant_team_id(account, W)
+            plan["COMPARISON"].append(_assignment("COMPARISON", account, {"type": "position", "id": None, "label": f"Best {pos} in the league"},
+                                                  W.leaderboard_facts(pos, slant)))
 
     # 3. Beat notes: teams from the most exciting games, then the most popular teams that played.
     beat_n = BUCKET_SIZES["BEAT"]
@@ -611,13 +814,13 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
         # Interleave so both conferences and a division race appear in the first 4.
         order = [subjects[4], subjects[0], subjects[2], subjects[5], subjects[1], subjects[3]]
         for i, (title, scope, facts) in enumerate(order[:BUCKET_SIZES["STANDINGS"]]):
-            account = acc.bandwagon() if i == 3 else acc.pundit()
+            account = acc.bandwagon() if i == 1 else acc.pundit()
             plan["STANDINGS"].append(_assignment("STANDINGS", account, {"type": "standings", "id": None, "label": f"{title}: {scope}"},
                                                  {"topic": title, **facts, "through_week": min(week - 1, REGULAR_SEASON_FINAL_WEEK)}))
 
     # 5. Previews: both fan bases on the top 3 projected games, plus fantasy start/sit (in-season fantasy weeks).
     fantasy_previews = 2 if fantasy_phase(week) and 2 <= week <= 17 and ctx["projections"] else 0
-    for g in previews[:3]:
+    for g in previews[:(BUCKET_SIZES["PREVIEW"] - fantasy_previews + 1) // 2]:
         for tid in (g["away_team_id"], g["home_team_id"]):
             if len(plan["PREVIEW"]) >= BUCKET_SIZES["PREVIEW"] - fantasy_previews:
                 break
@@ -664,48 +867,29 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             plan["MEME"].append(_assignment("MEME", acc.archetype("NFL_MEMES"), {"type": "game", "id": g["id"], "label": W.game_label(g)},
                                             {**W.game_facts(g), "target": W.team_label(loser) if loser else None}))
 
-    # 7. Replies: parents are chosen after waves 1–5 are written and scored (build step 5).
-    for i in range(BUCKET_SIZES["REPLY"]):
-        plan["REPLY"].append(_assignment("REPLY", None, {"type": "post", "id": None,
-                                                         "label": "parent chosen from the most engaged posts after writing"}, {}))
-
-    # 8. Reactions fill the week: at least one die-hard post per team that played; extras go to the top games.
-    fixed = sum(len(v) for k, v in plan.items() if k != "REACTION")
-    budget = TARGET_POSTS - fixed
+    # 7. Reactions: one die-hard post for each team that played. Nobody else reacts to games; league-wide voices
+    # post about players (performances, bad games, comparisons).
     for g in recap:
         for tid in (g["away_team_id"], g["home_team_id"]):
             account = acc.fan(tid)
             if account:
                 plan["REACTION"].append(_assignment("REACTION", account, {"type": "game", "id": g["id"], "label": W.game_label(g)},
                                                     W.game_facts(g, tid), filed_team=tid))
-    floor = len(plan["REACTION"])
-    extra_room = budget - floor
-    if postseason and recap:
-        # Postseason: a few extra reactions on the top games, the rest are eliminated fans' player posts.
-        reaction_extras = min(extra_room, 2 * len(recap))
-    else:
-        reaction_extras = extra_room if recap else 0
-    rotation = ["pundit", "bandwagon", "fan_winner", "pundit", "fan_loser"]
-    i = 0
-    top = recap[:5]
-    while reaction_extras > 0 and top and i < 200:
-        g = top[i % len(top)]
-        who = rotation[(i // len(top)) % len(rotation)]
-        w, l = W.winner_loser(g)
-        tid = None
-        if who == "pundit":
-            account = acc.pundit()
-        elif who == "bandwagon":
-            account = acc.bandwagon()
-        else:
-            tid = w if who == "fan_winner" else l
-            account = acc.fan(tid) if tid else None
-        i += 1
-        if not account:
-            continue
-        plan["REACTION"].append(_assignment("REACTION", account, {"type": "game", "id": g["id"], "label": W.game_label(g)},
-                                            W.game_facts(g, tid), filed_team=tid))
-        reaction_extras -= 1
+
+    # 8. Replies: parents are chosen after the rest is written and scored. Their number flexes within
+    # REPLY_RANGE to keep the week near TARGET_POSTS.
+    so_far = sum(len(v) for v in plan.values())
+    # A full slate with a big article week can push past the target even at the reply floor: trim the newest
+    # (lowest-ranked) performances first, never below PERFORMANCE_FLOOR.
+    over = so_far + REPLY_RANGE[0] - TARGET_POSTS
+    while over > 0 and len(plan["PERFORMANCE"]) > PERFORMANCE_FLOOR:
+        plan["PERFORMANCE"].pop()
+        so_far -= 1
+        over -= 1
+    n_replies = max(REPLY_RANGE[0], min(REPLY_RANGE[1], TARGET_POSTS - so_far))
+    for i in range(n_replies):
+        plan["REPLY"].append(_assignment("REPLY", None, {"type": "post", "id": None,
+                                                         "label": "parent chosen from the most engaged posts after writing"}, {}))
 
     # Whatever room is left goes to player posts (postseason: eliminated fans) or previews (preseason).
     room = TARGET_POSTS - sum(len(v) for v in plan.values())
@@ -742,6 +926,9 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                                                                   "label": f"{subj['name']} ({subj['position']}, {W.teams[subj['team_id']]['abbr']})"},
                                               {"angle": angle, **W.season_player_facts(subj)}, filed_team=tid))
             room -= 1
+    elif room > 0 and recap:
+        # Regular season: any room left goes to more player performances.
+        add_performances(len(plan["PERFORMANCE"]) + room)
     elif room > 0 and not recap and previews:
         # Preseason: every team's fans preview their opener, then pundits on the top games.
         for g in previews:
@@ -762,12 +949,13 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             room -= 1
 
     assignments = [a for v in plan.values() for a in v]
+    _add_slants(assignments, acc, W)
     counts = {k: len(v) for k, v in plan.items() if v}
     if not recap:
         notes.append("No completed games last week: no reactions, performances or memes; the room goes to previews.")
     if sum(counts.values()) != TARGET_POSTS:
-        notes.append(f"Planned {sum(counts.values())} posts (target {TARGET_POSTS}): the one-post-per-team floor "
-                     "or a short slate moved the total.")
+        notes.append(f"Planned {sum(counts.values())} posts (target {TARGET_POSTS}): the week's article count and "
+                     "the one-reaction-per-team floor move the total; replies flex between 10 and 15.")
     missing = [a for a in assignments if a["kind"] != "REPLY" and a["agent_id"] is None]
     if missing:
         notes.append(f"{len(missing)} posts have no account yet (placeholder shares, or a pool that ran out).")
@@ -868,6 +1056,7 @@ def plan_replies(ctx: dict, plan: dict, posts: list, total: int = None) -> list:
             made += 1
         if len(out) >= total:
             break
+    _add_slants(out, acc, Week(ctx))
     return out
 
 
@@ -907,18 +1096,31 @@ def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=
         else:
             out.append(_assignment("PREVIEW", f, {"type": "game", "id": g["id"], "label": W.game_label(g)},
                                    W.preview_facts(g, team_id), filed_team=team_id))
+    # National voices talk about the team's players, not the game: 3 pundits if the team's popularity is above
+    # 70, 1 above 55; plus the team's ex-player, if it has one.
+    top_lines = sorted((l for l in W.recap_lines if l["team_id"] == team_id), key=lambda l: l["fantasy_points"], reverse=True)
+    best = W.team_best(team_id)
     pop = W.teams[team_id]["popularity"]
-    for _ in range(3 if pop > 70 else 1 if pop > 55 else 0):
+    for i in range(3 if pop > 70 else 1 if pop > 55 else 0):
         p = acc.pundit()
-        g = last or nxt
-        if not p or not g:
+        if not p:
             break
-        if g is last:
-            out.append(_assignment("REACTION", p, {"type": "game", "id": g["id"], "label": W.game_label(g)},
-                                   W.game_facts(g), filed_team=team_id))
-        else:
-            out.append(_assignment("PREVIEW", p, {"type": "game", "id": g["id"], "label": W.game_label(g)},
-                                   W.preview_facts(g), filed_team=team_id))
+        if i < len(top_lines):
+            l = top_lines[i]
+            out.append(_assignment("PERFORMANCE", p, {"type": "player", "id": l["player_id"], "team_id": team_id, "label": f"{l['name']} ({l['position']}, {W.teams[team_id]['abbr']})"},
+                                   W.performance_facts(l), filed_team=team_id))
+        elif best:
+            out.append(_assignment("COMPARISON", p, {"type": "position", "id": None, "label": f"Best {norm_pos(best['position'])} in the league"},
+                                   W.leaderboard_facts(best["position"], team_id), filed_team=team_id))
+    legend = next((a for a in acc.all() if a["archetype"] == "FORMER_PLAYER" and a["team_id"] == team_id
+                   and acc.uses[a["agent_id"]] < 1000), None)
+    if legend and best:
+        acc.uses[legend["agent_id"]] += 1
+        pos = former_position(legend)
+        pos = pos if pos in OFFENSE_POSITIONS and W.team_best(team_id, pos) else best["position"]
+        out.append(_assignment("COMPARISON", legend, {"type": "position", "id": None, "label": f"Best {norm_pos(pos)} in the league"},
+                               W.leaderboard_facts(pos, team_id), filed_team=team_id))
+    _add_slants(out, acc, W)
     counts = collections.Counter(a["kind"] for a in out)
     return {"season": W.season, "week": W.week, "recap_week": W.recap_week, "phase": "team wakeup",
             "team_id": team_id, "assignments": out, "counts": dict(counts), "notes": []}
