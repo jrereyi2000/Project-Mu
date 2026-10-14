@@ -15,6 +15,8 @@ Writes, inside that capture folder:
   team_<tab>.csv         team_conversions, team_redzoneefficiency, team_penalties (32 teams each)
   schedule.csv           the captured week's games and results
   season_schedule.csv    --only season-schedule: every week 1-18 (same columns as schedule.csv)
+  games/<NN>_.../box_score.csv, stats_<category>.csv   --only games, per game
+  game_scores.csv, game_stats_<category>.csv           --only games, the whole week (GAME column)
   roster_list.csv        --only roster list pages: TEAM + NAME, POS, AGE, OVR, MOR, ... (icons blank)
   roster_cards.csv       roster/cards.csv (Apple Vision) with AGE/HT/WT/EXP re-read by Gemini from
                          the card crops, 20 per request; vision_* keep Vision's values and
@@ -154,6 +156,10 @@ def _generate(contents, schema, label, retries=4):
 
 def _read_table_remote(path, retries=4):
     """One screenshot -> {"title", "columns", "rows": [[cell, ...], ...]}."""
+    if _is_game(path):
+        t = _generate([PROMPT + GAME_NOTE, prepare_image(path, GAME_TABLE_BOX)], Table,
+                      os.path.basename(path), retries)
+        return {"title": t.title, "columns": t.columns, "rows": [r.cells for r in t.rows]}
     if _is_roster(path):
         # A roster page shows 14 rows; Gemini sometimes returns fewer (Ravens, Oct 13: 31 of
         # 52 over 5 pages), so a short page is read again and the fullest reading kept.
@@ -230,38 +236,57 @@ def merge(paths, label, key_cols=None):
     return columns, [list(r) for r in rows.values()] if key_cols else list(rows)
 
 
+def _col(c):
+    """Column name without sort marks ("▼TAK", "*YARDS")."""
+    return c.strip().lstrip("*▼▲Yv ").upper() if c.strip()[:1] in "*▼▲" else c.strip().upper()
+
+
 def merge_wide(left_paths, right_paths, label):
     """Wide tables: NAME/POS scroll away, so each right-hand page was captured at the same
-    scroll position as its left-hand page. Pair pages by number and rows by position."""
+    scroll position as its left-hand page. Pair pages by number and rows by position. Each
+    page is read through its own headers: a column half-visible at a page edge (a game's
+    Defense FMB, Oct 14) is listed on some pages and not others, so one header list for all
+    pages would shift values. Columns in both halves keep the non-empty value and must agree."""
     rights = {os.path.basename(p).rsplit("_", 1)[1]: p for p in right_paths}
-    columns, rows = None, OrderedDict()
+    columns, rows = [], OrderedDict()
     for lp in sorted(left_paths):
         num = os.path.basename(lp).rsplit("_", 1)[1]
         lt = read_table(lp)
         rt = read_table(rights[num]) if num in rights else {"columns": [], "rows": []}
-        lcols = lt["columns"]
-        keep = [i for i, c in enumerate(rt["columns"]) if c.upper() not in {x.upper() for x in lcols}]
-        if columns is None:
-            columns = list(lcols) + [rt["columns"][i] for i in keep]
+        lcols, rcols = [_col(c) for c in lt["columns"]], [_col(c) for c in rt["columns"]]
+        # a column cut off at the left page's right edge reads as the start of its name
+        # ("FMB", "FM" for FMBREC): it is that right-page column
+        lcols = [next((r for r in rcols if r != c and r.replace(" ", "").startswith(c.replace(" ", ""))
+                       and c not in rcols), c) for c in lcols]
+        for c in lcols + rcols:
+            if c not in columns:
+                columns.append(c)
         if len(lt["rows"]) != len(rt["rows"]):
             print(f"  WARNING {os.path.basename(lp)}: {len(lt['rows'])} left rows vs "
                   f"{len(rt['rows'])} right rows; pairing the first {min(len(lt['rows']), len(rt['rows']))}")
-        # Columns visible in both halves (e.g. SACK, XPA) must agree row by row; if they
-        # don't, the two screenshots weren't taken at the same scroll position.
-        lup = [c.upper() for c in lcols]
-        shared = [(lup.index(c.upper()), j) for j, c in enumerate(rt["columns"]) if c.upper() in lup]
         bad = 0
         for i, lr in enumerate(lt["rows"]):
             rr = rt["rows"][i] if i < len(rt["rows"]) else []
-            if rr and any(li < len(lr) and rj < len(rr) and lr[li] != rr[rj] for li, rj in shared):
-                bad += 1
-            rows.setdefault(tuple(lr) + tuple(rr[j] if j < len(rr) else "" for j in keep), None)
+            row = {c: v for c, v in zip(lcols, lr)}
+            for c, v in zip(rcols, rr):
+                if row.get(c, "") == "":
+                    row[c] = v
+                elif v != "" and row[c] != v:
+                    bad += 1               # the two screenshots weren't at the same scroll position
+            rows.setdefault(tuple(row.get(c, "") for c in columns), row)
         if bad:
-            print(f"  WARNING {os.path.basename(lp)}: {bad} rows disagree on shared columns "
-                  f"{[rt['columns'][j] for _, j in shared]}; check this page pair")
+            print(f"  WARNING {os.path.basename(lp)}: {bad} cells disagree between the left and right "
+                  "halves; check this page pair")
         print(f"  {os.path.basename(lp)} + right: {len(lt['rows'])} rows")
-    print(f"{label}: {len(rows)} unique rows")
-    return columns, list(rows)
+    # rows found before a later page added a column: re-key on the final header, de-duplicate
+    # a half-visible header can also come back as a fragment no column starts with ("FR"):
+    # such a column is empty on every row, so drop columns no row has a value for
+    columns = [c for c in columns if any(row.get(c, "") != "" for row in rows.values())]
+    final = OrderedDict()
+    for row in rows.values():
+        final.setdefault(tuple(row.get(c, "") for c in columns), None)
+    print(f"{label}: {len(final)} unique rows")
+    return columns, list(final)
 
 
 def card_sheet(paths, first_index):
@@ -358,6 +383,94 @@ def extract_roster(root):
     print(f"roster_cards.csv: {len(out)} cards; Gemini and Vision disagree on {n_dis}")
 
 
+# ---------------------------------------------------------------- games ----
+GAME_TABLE_BOX = (0, 0.37, 1, 0.88)       # a game's player stats: chips + table, not the player banner
+BOX_SCORE_BOX = (0.05, 0.18, 0.95, 0.83)  # scoreboard + team-stat rows
+
+
+class BoxRow(BaseModel):
+    label: str
+    away: str
+    home: str
+
+
+class BoxScore(BaseModel):
+    away_team: str              # abbreviation on the left of the scoreboard, e.g. DET
+    home_team: str
+    away_quarters: list[str]    # 1ST 2ND 3RD 4TH OT, as shown
+    home_quarters: list[str]
+    away_total: str
+    home_total: str
+    rows: list[BoxRow]
+
+
+BOX_PROMPT = """This is a Madden NFL box score. The scoreboard at the top shows two teams: the left
+team (away) and the right team (home), each with points per quarter (1ST, 2ND, 3RD, 4TH, OT) and
+a TOTAL. Below it, each row is a team stat: the left number is the left team's, the label is in
+the middle, the right number is the right team's. Return the two team abbreviations, the
+quarter scores and totals, and every visible stat row exactly as shown (e.g. "37:45")."""
+
+GAME_NOTE = """
+This is one game's player stats; the TEAM column shows each player's team abbreviation. Ignore
+the player photo/banner above the table."""
+
+
+def _is_game(path):
+    return f"{os.sep}games{os.sep}" in path
+
+
+def read_box(path):
+    if path not in _cache:
+        b = _generate([BOX_PROMPT, prepare_image(path, BOX_SCORE_BOX)], BoxScore, os.path.basename(path))
+        _cache[path] = b.model_dump()
+    return _cache[path]
+
+
+def extract_games(root):
+    """games/<NN>_<away>_at_<home>/: box_top/box_bottom -> box_score.csv (label, away, home);
+    stats/*.png -> stats_<category>.csv. Week-level: game_scores.csv (one row a game) and
+    game_stats_<category>.csv (GAME column + the category's columns)."""
+    game_dirs = sorted(glob.glob(os.path.join(root, "games", "[0-9]*_*")))
+    if not game_dirs:
+        return
+    prefetch(sorted(p for d in game_dirs for p in glob.glob(os.path.join(d, "stats", "*.png"))))
+    scores, week = [], {}
+    for d in game_dirs:
+        game = os.path.basename(d)
+        rows, b = OrderedDict(), None
+        for name in ("box_top.png", "box_bottom.png"):
+            if os.path.exists(os.path.join(d, name)):
+                b = read_box(os.path.join(d, name))
+                for r in b["rows"]:
+                    rows.setdefault(r["label"].upper(), (r["away"], r["home"]))
+        if b:
+            write_csv(os.path.join(d, "box_score.csv"), ["LABEL", b["away_team"], b["home_team"]],
+                      [[k, a, h] for k, (a, h) in rows.items()])
+            q = lambda xs: (xs + [""] * 5)[:5]
+            scores.append([game, b["away_team"], *q(b["away_quarters"]), b["away_total"],
+                           b["home_team"], *q(b["home_quarters"]), b["home_total"]])
+            print(f"{game}: {b['away_team']} {b['away_total']} - {b['home_total']} {b['home_team']}, {len(rows)} box rows")
+        groups = {}
+        for p in glob.glob(os.path.join(d, "stats", "*.png")):
+            groups.setdefault(os.path.basename(p).rsplit("_", 1)[0], []).append(p)
+        for key, paths in sorted(groups.items()):
+            if key.endswith("_right"):
+                continue
+            if key + "_right" in groups:
+                cols, trows = merge_wide(paths, groups[key + "_right"], f"{game} {key}")
+            else:
+                cols, trows = merge(paths, f"{game} {key}")
+            cat = key.split("_", 1)[1]
+            write_csv(os.path.join(d, f"stats_{cat}.csv"), cols, trows)
+            wc, wr = week.setdefault(cat, [None, []])
+            week[cat][0] = wc or cols
+            week[cat][1] += [[game] + list(r) for r in trows]
+    hdr = ["GAME", "AWAY", "A1", "A2", "A3", "A4", "AOT", "ATOTAL", "HOME", "H1", "H2", "H3", "H4", "HOT", "HTOTAL"]
+    write_csv(os.path.join(root, "game_scores.csv"), hdr, scores)
+    for cat, (cols, rows) in sorted(week.items()):
+        write_csv(os.path.join(root, f"game_stats_{cat}.csv"), ["GAME"] + list(cols), rows)
+
+
 def write_csv(path, columns, rows):
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
@@ -404,6 +517,7 @@ def main():
         write_csv(os.path.join(root, "season_schedule.csv"), cols, rows)
 
     extract_roster(root)
+    extract_games(root)
     print("Done.")
 
 

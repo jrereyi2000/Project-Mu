@@ -37,5 +37,23 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(rows[1][3], "79")          # first copy kept
 
 
+class MergeWideTest(unittest.TestCase):
+    def test_half_visible_column_does_not_shift_values(self):
+        # Defense, Oct 14: FMBREC is cut off at the left page's edge ("FMB"), listed on page 0 only
+        extract._cache.update({
+            "w_000.png": {"title": "", "columns": ["TEAM", "NAME", "TAK", "FMB"], "rows": [["NO", "J.Campbell", "14", ""]]},
+            "w_right_000.png": {"title": "", "columns": ["TAK", "FMBREC", "TD"], "rows": [["14", "1", "0"]]},
+            "w_001.png": {"title": "", "columns": ["TEAM", "NAME", "TAK"], "rows": [["DET", "O.Aragon", "6"]]},
+            "w_right_001.png": {"title": "", "columns": ["TAK", "FMBREC", "TD", "FR"], "rows": [["6", "0", "1", ""]]},
+        })
+        try:
+            cols, rows = extract.merge_wide(["w_000.png", "w_001.png"], ["w_right_000.png", "w_right_001.png"], "t")
+        finally:
+            for k in ("w_000.png", "w_right_000.png", "w_001.png", "w_right_001.png"):
+                extract._cache.pop(k)
+        self.assertEqual(cols, ["TEAM", "NAME", "TAK", "FMBREC", "TD"])
+        self.assertEqual(rows, [("NO", "J.Campbell", "14", "1", "0"), ("DET", "O.Aragon", "6", "0", "1")])
+
+
 if __name__ == "__main__":
     unittest.main()
