@@ -1401,8 +1401,14 @@ def run_games(out, week=None, all_rows=False, max_games=None):
             cats = capture_game(gdir, all_rows)
             open(os.path.join(gdir, "DONE"), "w").write(",".join(cats) + "\n")
             log(f"  {len(cats)} categories")
-            press("circle", wait=2.0)
-            f, _ = wait_for(["SCHED_LIST"], timeout=15)
+            for attempt in range(3):            # Back is sometimes dropped (game 16, Oct 14)
+                press("circle", wait=2.0)
+                f, s = wait_for(["SCHED_LIST", "GAME_STATS"], timeout=15)
+                if s == "SCHED_LIST":
+                    break
+                log(f"  Back didn't register (attempt {attempt + 1}), pressing again")
+            else:
+                raise Abort("Back never returned to the League Schedule")
         done.append(norm(matchup))
         results.append((matchup, result))
         if max_games and len(done) >= max_games:
