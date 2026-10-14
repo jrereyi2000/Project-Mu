@@ -318,10 +318,15 @@ class Frame:
         self.size = Image.open(self.path).size
 
     def find(self, label):
-        """Exact (normalized) match. Returns box or None."""
+        """Exact (normalized) match, else the label followed by at most 2 stray characters
+        (the lock icon after TRADE reads as "TRADE Q"). Returns box or None."""
         n = norm(label)
         for t, box in self.items:
             if norm(t) == n:
+                return box
+        for t, box in self.items:
+            nt = norm(t)
+            if nt.startswith(n) and len(nt) - len(n) <= 2 and len(n) >= 4:
                 return box
         return None
 

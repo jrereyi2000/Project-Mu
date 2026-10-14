@@ -66,6 +66,11 @@ class ClassifyTest(unittest.TestCase):
         f = _Frame("NFL", "R2", "PASSING", "PLAYER NAME", "VIEW PLAYER CARD", "YARDS")
         self.assertEqual(mc.classify(f), "PLAYER_STATS")
 
+    def test_locked_menu_item_still_found(self):
+        f = _Frame("TRADE Q", "TEAM STATS")
+        self.assertIsNotNone(f.find("TRADE"))
+        self.assertIsNone(f.find("TEAM"))            # a real different label isn't a match
+
     def test_manage_roster_hub(self):
         f = _Frame("GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "UPGRADE PLAYERS",
                    "ADJUST LINEUP", "ROSTER", "DEPTH CHART")
