@@ -10,7 +10,7 @@ any failed check writes nothing, records the run as failed in `captures` and exi
 Uses DATABASE_URL (default: the local madden database); point it at the restored test copy
 (dbname=madden_p3test) until a mode has passed there.
 """
-import argparse, csv, json, os, sys
+import argparse, csv, json, os, re, sys
 from datetime import datetime
 
 import psycopg
@@ -140,11 +140,25 @@ def load_roster(cur, folder, season, report):
     report["matched"] = hows
     report["new_players"] = len(new)
 
+    stored = {e["id"]: e for e in existing}
+    cur.execute("SELECT id, player_name, full_name FROM players")
+    stored_names = {i: (pn, fn) for i, pn, fn in cur.fetchall()}
+
+    def same_text(a, b):
+        return re.sub(r"[^A-Z]", "", (a or "").upper()) == re.sub(r"[^A-Z]", "", (b or "").upper())
+
     def write(pid, p):
+        # keep a stored spelling that names the same person ("S. LaPorta" beats the card's OCR "Laporta");
+        # the stats tables and the backfill match players by this text
+        pname, fname = db_player_name(p["first"], p["last"]), f"{p['first']} {p['last']}"
+        old_pn, old_fn = stored_names.get(pid, (None, None))
+        if old_pn and same_text(old_pn, pname):
+            pname = old_pn
+        if old_fn and same_text(old_fn, fname):
+            fname = old_fn
         cur.execute("""UPDATE players SET player_name = %s, full_name = %s, height = %s, weight = %s, player_number = %s
                        WHERE id = %s""",
-                    (db_player_name(p["first"], p["last"]), f"{p['first']} {p['last']}", p["height"], p["weight"],
-                     p["number"], pid))
+                    (pname, fname, p["height"], p["weight"], p["number"], pid))
         cur.execute("""INSERT INTO player_seasons (player_id, season, team_id, position, age, overall_rating,
                            years_of_experience, dev_trait, archetype, role)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -583,7 +597,8 @@ def load_weekly(cur, folder, season, report):
             cur.execute(f"INSERT INTO season_stats (season, player_id, player_name, team_id, position, {', '.join(cols)}) "
                         f"VALUES (%s, %s, %s, %s, %s, {', '.join(['%s'] * len(cols))}) "
                         f"ON CONFLICT (season, player_id) WHERE player_id IS NOT NULL DO UPDATE SET team_id = EXCLUDED.team_id, "
-                        f"position = EXCLUDED.position, " + ", ".join(f"{c} = EXCLUDED.{c}" for c in cols),
+                        f"position = EXCLUDED.position, player_name = EXCLUDED.player_name, "
+                        + ", ".join(f"{c} = EXCLUDED.{c}" for c in cols),
                         (season, pid, names[pid], team, pos, *[vals[c] for c in cols]))
         else:
             cur.execute(f"INSERT INTO {table} (season, player_id, team_id, position, {', '.join(cols)}) "

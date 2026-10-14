@@ -9,7 +9,8 @@ One-time rebuild of a season's backfilled game lines from corrected season total
 The old ingestion left season_stats lines under the wrong players, and the backfill had already
 shared those totals out over weeks 1-16; the backfill only ever fills games with no lines, so it
 can't correct them. This deletes the season's player_stats and team_stats rows for every completed
-game the kept team (default Panthers: JR's games, their lines are real) didn't play, then runs the
+game the kept team (default Panthers: JR's games, their lines are real) didn't play and that wasn't
+loaded from a games capture (also real), then runs the
 backfill (engines.game_stat_generator) so every other game is filled from the corrected totals.
 On a database other than the live one the analytics engines are blocked (they write to the live
 database); on the live one they run, as after any weekly load.
@@ -38,8 +39,13 @@ def main():
         keep = cur.fetchone()
         if not keep:
             sys.exit(f"No team {a.keep_team!r}")
-        cur.execute("""SELECT id FROM games WHERE season = %s AND status = 'COMPLETED'
-                       AND %s NOT IN (home_team_id, away_team_id)""", (a.season, keep[0]))
+        # kept: the kept team's games, and games whose lines came from a games capture (their box
+        # score was loaded: team_stats.q1 / total_yards_gained set), since those lines are real too
+        cur.execute("""SELECT id FROM games g WHERE season = %s AND status = 'COMPLETED'
+                       AND %s NOT IN (home_team_id, away_team_id)
+                       AND NOT EXISTS (SELECT 1 FROM team_stats ts WHERE ts.game_id = g.id
+                                       AND (ts.q1 IS NOT NULL OR ts.total_yards_gained IS NOT NULL))""",
+                    (a.season, keep[0]))
         ids = [r[0] for r in cur.fetchall()]
         cur.execute("DELETE FROM player_stats WHERE game_id = ANY(%s)", (ids,))
         n_ps = cur.rowcount
@@ -47,7 +53,7 @@ def main():
         n_ts = cur.rowcount
         conn.commit()
     print(f"Cleared {n_ps} player_stats and {n_ts} team_stats rows from {len(ids)} games "
-          f"(kept every {a.keep_team} game); running the backfill")
+          f"(kept every {a.keep_team} game and every game loaded from a games capture); running the backfill")
     if not live:
         for name in ENGINES:
             sys.modules[name] = None             # analytics would write to the live database
