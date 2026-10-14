@@ -559,7 +559,10 @@ CREATE TABLE IF NOT EXISTS record_categories (
     scope VARCHAR(6) NOT NULL CHECK (scope IN ('SEASON', 'GAME')),
     subject VARCHAR(6) NOT NULL CHECK (subject IN ('PLAYER', 'TEAM')),
     better VARCHAR(4) NOT NULL DEFAULT 'HIGH' CHECK (better IN ('HIGH', 'LOW')),
-    sort_order INT NOT NULL
+    sort_order INT NOT NULL,
+    -- FULL: every franchise's season record and the NFL top 10 through 2025 are seeded; BOOK: only what the league's
+    -- record book lists (2026 on). 2026_10_28_league_record_book.sql.
+    coverage VARCHAR(4) NOT NULL DEFAULT 'FULL' CHECK (coverage IN ('FULL', 'BOOK'))
 );
 
 -- Every franchise record holder there has been, real (source 'NFL', through 2025) or set in this league ('LEAGUE').
@@ -571,7 +574,7 @@ CREATE TABLE IF NOT EXISTS franchise_records (
     holder TEXT NOT NULL,                         -- player name, or "2007 New England Patriots" for team records
     player_id INT REFERENCES players(id) ON DELETE SET NULL,
     season INT NOT NULL,
-    source VARCHAR(6) NOT NULL CHECK (source IN ('NFL', 'LEAGUE')),
+    source VARCHAR(6) NOT NULL CHECK (source IN ('NFL', 'BOOK', 'LEAGUE')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (team_id, category, holder, season)
 );
@@ -588,7 +591,7 @@ CREATE TABLE IF NOT EXISTS league_record_entries (
     season INT NOT NULL,
     game_date DATE,                               -- single-game records (real NFL history)
     game_id INT REFERENCES games(id) ON DELETE CASCADE,   -- single-game records set in this league
-    source VARCHAR(6) NOT NULL CHECK (source IN ('NFL', 'LEAGUE')),
+    source VARCHAR(6) NOT NULL CHECK (source IN ('NFL', 'BOOK', 'LEAGUE')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_league_record_entries
@@ -611,19 +614,25 @@ SELECT * FROM (
     FROM league_record_entries e JOIN record_categories c ON c.category = e.category
 ) ranked WHERE rank <= 10;
 
--- League-wide records: the best franchise record across teams (season categories), or the top of the all-time
--- list (single-game categories, which have no franchise records).
-CREATE OR REPLACE VIEW league_records AS
-SELECT fr.category, fr.label, fr.scope, fr.subject, fr.value, fr.holder, fr.team_id, fr.player_id, fr.season,
-       NULL::date AS game_date, NULL::int AS game_id, fr.source
-FROM franchise_records_current fr
-WHERE fr.value = (SELECT CASE WHEN fr.better = 'LOW' THEN MIN(x.value) ELSE MAX(x.value) END
-                  FROM franchise_records_current x WHERE x.category = fr.category)
-UNION ALL
-SELECT t.category, t.label, t.scope, 'PLAYER', t.value, t.holder, t.team_id, t.player_id, t.season,
-       t.game_date, t.game_id, t.source
-FROM league_top10 t
-WHERE t.rank = 1 AND t.scope = 'GAME';
+CREATE VIEW league_records AS
+WITH cands AS (
+    SELECT fr.category, fr.value, fr.holder, fr.team_id, fr.player_id, fr.season, NULL::date AS game_date, NULL::int AS game_id, fr.source
+    FROM franchise_records_current fr JOIN record_categories c ON c.category = fr.category
+    WHERE c.scope = 'SEASON' AND c.coverage = 'FULL'
+    UNION
+    SELECT t.category, t.value, t.holder, t.team_id, t.player_id, t.season, t.game_date, t.game_id, t.source
+    FROM league_top10 t WHERE t.rank = 1
+), best AS (
+    SELECT c.category, CASE WHEN rc.better = 'LOW' THEN MIN(c.value) ELSE MAX(c.value) END AS value
+    FROM cands c JOIN record_categories rc ON rc.category = c.category GROUP BY c.category, rc.better
+)
+SELECT DISTINCT ON (c.category, c.holder, c.season)
+       c.category, rc.label, rc.scope, rc.subject, c.value, c.holder, c.team_id, c.player_id, c.season,
+       c.game_date, c.game_id, c.source
+FROM cands c
+JOIN best b ON b.category = c.category AND b.value = c.value
+JOIN record_categories rc ON rc.category = c.category
+ORDER BY c.category, c.holder, c.season, c.game_date NULLS LAST;
 
 -- Weekly Power Rankings parsed from the POWER_RANKINGS article (newsroom/power_rankings.py)
 CREATE TABLE IF NOT EXISTS power_rankings (

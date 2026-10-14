@@ -19,7 +19,7 @@ CATS = {
 }
 
 
-def book():
+def book(book_rows=(), book_categories=("season_rec_tds",)):
     franchise = collections.defaultdict(list)
     franchise[(11, "season_rec_tds")] = [(16.0, "Muhsin Muhammad", 2004)]
     franchise[(1, "season_rec_tds")] = [(23.0, "Randy Moss", 2007)]
@@ -35,11 +35,12 @@ def book():
         "game_receptions": [(21.0, "Brandon Marshall", 2009), (20.0, "Terrell Owens", 2000)] + [(16.0, f"R{i}", 2010 + i) for i in range(9)],
     }
     return {"categories": CATS, "franchise": franchise, "entries": entries,
-            "teams": {11: {"abbr": "CAR", "name": "Carolina Panthers"}, 1: {"abbr": "NE", "name": "New England Patriots"}}}
+            "teams": {11: {"abbr": "CAR", "name": "Carolina Panthers"}, 1: {"abbr": "NE", "name": "New England Patriots"}},
+            "book_rows": list(book_rows), "book_entries": [], "book_categories": set(book_categories)}
 
 
-def run(players=(), teams=None, games=()):
-    with mock.patch.object(R, "load_book", return_value=book()), \
+def run(players=(), teams=None, games=(), book_rows=()):
+    with mock.patch.object(R, "load_book", return_value=book(book_rows)), \
             mock.patch.object(R, "season_player_values", return_value=list(players)), \
             mock.patch.object(R, "team_seasons", return_value=teams or {}), \
             mock.patch.object(R, "game_player_values", return_value=list(games)):
@@ -96,6 +97,32 @@ class EvaluateTests(unittest.TestCase):
     def test_helpers(self):
         self.assertEqual(R.tidy_name("OMAR COOPER JR."), "Omar Cooper Jr.")
         self.assertEqual(R.ordinal(22), "22nd")
+
+
+class RecordBookTests(unittest.TestCase):
+    DAVIS = {"team_id": 11, "category": "season_rec_tds", "value": 27.0, "holder": "Trey'Mane Davis"}
+
+    def test_book_confirms_the_stats(self):
+        r = run(players=[("season_rec_tds", 11, 7, "Trey'Mane Davis", 27.0)], book_rows=[self.DAVIS])
+        self.assertTrue(find(r, type="franchise_record")[0]["in_book"])
+        self.assertEqual((r["book_only"], r["stats_only"]), ([], []))
+        self.assertIn("entries and the stats agree", R.format_report(r))
+
+    def test_disagreements(self):
+        r = run(players=[("season_rec_tds", 11, 7, "Trey'Mane Davis", 15.0)], book_rows=[self.DAVIS])   # stats fall short
+        self.assertEqual([b["holder"] for b in r["book_only"]], ["Trey'Mane Davis"])
+        other = {"team_id": 1, "category": "season_team_wins", "value": 16.0, "holder": "x"}
+        r = run(players=[("season_rec_tds", 11, 7, "A", 20.0)],
+                teams={11: {"games": 17, "wins": 16, "losses": 1, "ties": 0, "pf": 400, "pa": 300}}, book_rows=[other])
+        self.assertEqual([e["holder"] for e in r["stats_only"]], ["A"])          # the book tracks receiving TDs, not team wins
+        self.assertIn("In the stats, not in the record book", R.format_report(r))
+
+    def test_apply_leaves_book_rows_alone(self):
+        r = run(players=[("season_rec_tds", 11, 7, "Trey'Mane Davis", 27.0)], book_rows=[self.DAVIS])
+        cur = mock.MagicMock()
+        stored = R.apply(cur, 2035, r)
+        self.assertEqual(stored["franchise_rows"], 0)
+        self.assertEqual(stored["top10_rows"], 1)
 
 
 class SeedTests(unittest.TestCase):

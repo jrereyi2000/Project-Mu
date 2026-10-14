@@ -1,15 +1,17 @@
 """Records engine: checks a season of this league against the record book (PROJECT_SPEC §2.9).
 
-The record book (db/migrations/2026_10_26_nfl_records.sql) starts with real NFL history through 2025: each franchise's
-single-season record holders and the NFL's all-time top-10 lists. This engine compares a league season with it:
+The record book starts with real NFL history through 2025 (db/migrations/2026_10_26_nfl_records.sql: each franchise's
+single-season record holders and the NFL's all-time top-10 lists), then the league's own record book for 2026–2035
+(2026_10_28_league_record_book.sql, source 'BOOK'). This engine compares a league season with everything before it:
 
   - franchise records: a player's season (season_stats) or a team's season (regular-season games) that beats or ties
     its franchise's record;
   - NFL records and the all-time top 10: a season or a single game (player_stats) that would rank in the top 10.
 
 `evaluate` only reads. `apply` stores the season's record rows with source 'LEAGUE' (it first deletes that season's
-LEAGUE rows, so it can run after every week and the season's totals simply replace themselves). Old holders are never
-removed; the views pick the best value.
+LEAGUE rows, so it can run after every week and the season's totals simply replace themselves). The record book is the
+authority for its seasons: where a BOOK row exists for the same team, category and season, nothing is added, and the
+report lists where the stats and the record book disagree. Old holders are never removed; the views pick the best value.
 
   python3 -m engines.records_engine --season 2035            # report only
   python3 -m engines.records_engine --season 2035 --apply    # report and store
@@ -32,6 +34,7 @@ GAME_PLAYER_CATEGORIES = {
     "game_pass_yards": "ps.pass_yards", "game_pass_tds": "ps.pass_tds", "game_rush_yards": "ps.rush_yards",
     "game_rec_yards": "ps.rec_yards", "game_receptions": "ps.receptions",
     "game_scrimmage_tds": "COALESCE(ps.rush_tds, 0) + COALESCE(ps.rec_tds, 0)",
+    "game_rush_tds": "ps.rush_tds", "game_rec_tds": "ps.rec_tds",
 }
 TEAM_CATEGORIES = ("season_team_wins", "season_team_points", "season_team_fewest_points_allowed")
 
@@ -54,23 +57,30 @@ def ordinal(n: int) -> str:
 
 # ------------------------------------------------------------------------------------------------- reading ---
 def load_book(cur, season):
-    """Categories, franchise records and top-10 entries, leaving out this season's LEAGUE rows (the baseline the
-    season is measured against)."""
+    """Categories, franchise records and top-10 entries from before this season (the baseline the season is measured
+    against), plus the record book's rows for this season (BOOK), which are the authority for it."""
     cur.execute("SELECT category, label, scope, subject, better FROM record_categories ORDER BY sort_order")
     cats = {r[0]: {"label": r[1], "scope": r[2], "subject": r[3], "better": r[4]} for r in cur.fetchall()}
-    cur.execute("""SELECT team_id, category, value, holder, season FROM franchise_records
-                   WHERE NOT (source = 'LEAGUE' AND season = %s)""", (season,))
-    franchise = collections.defaultdict(list)
-    for team_id, cat, value, holder, s in cur.fetchall():
-        franchise[(team_id, cat)].append((float(value), holder, s))
-    cur.execute("""SELECT category, value, holder, season FROM league_record_entries
-                   WHERE NOT (source = 'LEAGUE' AND season = %s)""", (season,))
-    entries = collections.defaultdict(list)
-    for cat, value, holder, s in cur.fetchall():
-        entries[cat].append((float(value), holder, s))
+    cur.execute("SELECT team_id, category, value, holder, season, source FROM franchise_records WHERE season <= %s", (season,))
+    franchise, book_rows = collections.defaultdict(list), []
+    for team_id, cat, value, holder, s, source in cur.fetchall():
+        if s < season:
+            franchise[(team_id, cat)].append((float(value), holder, s))
+        elif source == "BOOK":
+            book_rows.append({"team_id": team_id, "category": cat, "value": float(value), "holder": holder})
+    cur.execute("SELECT category, value, holder, season, team_id, source FROM league_record_entries WHERE season <= %s", (season,))
+    entries, book_entries = collections.defaultdict(list), []
+    for cat, value, holder, s, team_id, source in cur.fetchall():
+        if s < season:
+            entries[cat].append((float(value), holder, s))
+        elif source == "BOOK":
+            book_entries.append({"team_id": team_id, "category": cat, "value": float(value), "holder": holder})
+    cur.execute("SELECT DISTINCT category FROM franchise_records WHERE source = 'BOOK'")
+    book_categories = {r[0] for r in cur.fetchall()}
     cur.execute("SELECT id, abbreviation, city, name FROM teams")
     teams = {r[0]: {"abbr": r[1], "name": f"{r[2]} {r[3]}"} for r in cur.fetchall()}
-    return {"categories": cats, "franchise": franchise, "entries": entries, "teams": teams}
+    return {"categories": cats, "franchise": franchise, "entries": entries, "teams": teams,
+            "book_rows": book_rows, "book_entries": book_entries, "book_categories": book_categories}
 
 
 def season_player_values(cur, season):
@@ -220,27 +230,49 @@ def evaluate(cur, season):
                     events.append({"type": "nfl_record", "result": "broke" if top != best else "tied", **base(c),
                                    "old_value": _num(best), "old_holders": holders_text(rows, best)})
 
+    # The record book is the authority for its seasons: mark the events it confirms and list what it has that the
+    # stats here don't (different data, or a category the engine doesn't compute).
+    book_rows, book_entries = book["book_rows"], book["book_entries"]
+    found = {(e["team_id"], e["category"]) for e in events if e["type"] == "franchise_record"}
+    for e in events:
+        if e["type"] == "franchise_record":
+            e["in_book"] = any(b["team_id"] == e["team_id"] and b["category"] == e["category"] for b in book_rows)
+    # Only real disagreements: a book record the engine could have found (a category it computes, with an earlier
+    # record to beat), and a broken record in a category the book tracks (the book lists records broken, not ties,
+    # and has no team or combined-TD records).
+    computed = set(SEASON_PLAYER_CATEGORIES) | set(GAME_PLAYER_CATEGORIES) | set(TEAM_CATEGORIES)
+    book_only = [{**b, "team": teams[b["team_id"]]["name"], "label": cats[b["category"]]["label"], "value": _num(b["value"])}
+                 for b in book_rows if (b["team_id"], b["category"]) not in found
+                 and b["category"] in computed and (b["team_id"], b["category"]) in book["franchise"]]
+    stats_only = [e for e in events if e["type"] == "franchise_record" and book_rows and not e["in_book"]
+                  and e["result"] == "broke" and e["category"] in book.get("book_categories", set())]
+
     order = {"nfl_record": 0, "top10": 1, "franchise_record": 2}
     events.sort(key=lambda e: (order[e["type"]], e.get("rank", 0), list(cats).index(e["category"]), -float(e["value"])))
     return {"season": season, "complete": complete, "games_played": {teams[t]["abbr"]: r["games"] for t, r in records.items()},
-            "events": events}
+            "events": events, "book_only": book_only, "stats_only": stats_only, "book_checked": bool(book_rows),
+            "book_keys": {"franchise": sorted({(b["team_id"], b["category"]) for b in book_rows}),
+                          "entries": sorted({(b["team_id"], b["category"]) for b in book_entries})}}
 
 
 def apply(cur, season, result):
-    """Stores the season's record rows (source 'LEAGUE'), replacing any stored earlier for the same season."""
+    """Stores the season's record rows (source 'LEAGUE'), replacing any stored earlier for the same season. Where the
+    record book (BOOK) already has the season's row for that team and category, the book's row stands."""
+    book_f = {tuple(k) for k in result["book_keys"]["franchise"]}
+    book_e = {tuple(k) for k in result["book_keys"]["entries"]}
     cur.execute("DELETE FROM franchise_records WHERE source = 'LEAGUE' AND season = %s", (season,))
     cur.execute("DELETE FROM league_record_entries WHERE source = 'LEAGUE' AND season = %s", (season,))
     n_f = n_l = 0
     for e in result["events"]:
-        if e["type"] == "franchise_record":
+        if e["type"] == "franchise_record" and (e["team_id"], e["category"]) not in book_f:
             cur.execute("""INSERT INTO franchise_records (team_id, category, value, holder, player_id, season, source)
                            VALUES (%s, %s, %s, %s, %s, %s, 'LEAGUE') ON CONFLICT (team_id, category, holder, season) DO UPDATE
                            SET value = EXCLUDED.value, player_id = EXCLUDED.player_id""",
                         (e["team_id"], e["category"], e["value"], e["holder"], e["player_id"], season))
             n_f += 1
-        elif e["type"] == "top10":
+        elif e["type"] == "top10" and (e["team_id"], e["category"]) not in book_e:
             cur.execute("""INSERT INTO league_record_entries (category, value, holder, team_id, player_id, season, game_id, source)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, 'LEAGUE')""",
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, 'LEAGUE') ON CONFLICT DO NOTHING""",
                         (e["category"], e["value"], e["holder"], e["team_id"], e["player_id"], season, e.get("game_id")))
             n_l += 1
     return {"franchise_rows": n_f, "top10_rows": n_l}
@@ -281,6 +313,15 @@ def format_report(result) -> str:
                 for e in by_team[team]]
     if not by_team:
         out.append("  none")
+    if result.get("book_checked") and not (result.get("book_only") or result.get("stats_only")):
+        out.append(f"\nThe record book's {result['season']} entries and the stats agree.")
+    if result.get("book_only") or result.get("stats_only"):
+        out.append("\nWhere the record book and the stats disagree:")
+        out += [f"  In the record book, not in the stats: {b['team']}, {b['label']}: {b['holder']}, {num(b['value'])}"
+                for b in result.get("book_only", [])]
+        out += [f"  In the stats, not in the record book: {e['team']}, {e['label']}: "
+                + (e["record"] if e["holder"][:4].isdigit() else e["holder"]) + f", {num(e['value'])}"
+                for e in result.get("stats_only", [])]
     return "\n".join(out)
 
 
