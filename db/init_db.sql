@@ -142,15 +142,18 @@ CREATE TABLE IF NOT EXISTS team_stats (
     passing_attempts INT DEFAULT 0,
     passing_yards INT DEFAULT 0,
     passing_tds INT DEFAULT 0,
-    third_down_attempts INT DEFAULT 0,
-    third_down_conversions INT DEFAULT 0,
-    fourth_down_attempts INT DEFAULT 0,
-    fourth_down_conversions INT DEFAULT 0,
+    third_down_attempts INT,          -- NULL = unknown; engines/team_box_estimator.py fills them (2026_10_29)
+    third_down_conversions INT,
+    fourth_down_attempts INT,
+    fourth_down_conversions INT,
     turnovers INT DEFAULT 0,
     -- Box score (capture loader, 2026_10_23); quarters NULL when unreadable
     q1 INT, q2 INT, q3 INT, q4 INT, ot INT,
     punt_return_yards INT, kick_return_yards INT, total_yards_gained INT, two_point_conversions INT,
     red_zone_pct NUMERIC(5, 1), red_zone_tds INT, red_zone_fgs INT, penalty_yards INT, time_of_possession_s INT,
+    -- 2026_10_29: estimated per game from season totals where no box score was captured
+    red_zone_attempts INT, two_point_attempts INT, penalties INT,
+    estimated_fields TEXT[] NOT NULL DEFAULT '{}',   -- the columns engines/team_box_estimator.py filled
     UNIQUE (game_id, team_name)
 );
 

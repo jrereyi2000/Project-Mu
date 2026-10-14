@@ -165,10 +165,11 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
                 'rushing_tds': t_stats['rush_tds'],
                 'first_downs': 0,
                 'total_plays': 0,
-                'third_down_attempts': 0,
-                'third_down_conversions': 0,
-                'fourth_down_attempts': 0,
-                'fourth_down_conversions': 0
+                # Unknown until engines/team_box_estimator.py splits the season totals (below)
+                'third_down_attempts': None,
+                'third_down_conversions': None,
+                'fourth_down_attempts': None,
+                'fourth_down_conversions': None
             })
 
     import psycopg
@@ -189,6 +190,17 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
                 cur.executemany(ps_query, ps_vals)
         conn.commit()
     print(f"Database sync complete: Tried to insert {len(team_stats_rows)} team rows and {len(player_stats_rows)} player rows.")
+
+    # Per-game conversions, red zone and penalties: the season totals' remainder into every still-empty
+    # team_stats cell (one new game per team in a weekly run, so exactly that week's change)
+    try:
+        from engines.team_box_estimator import run as estimate_team_box
+        print("-> Estimating per-game team conversions, red zone and penalties...")
+        estimate_team_box(season_year, conn_info=DATABASE_URL)
+    except Exception as e:
+        print(f"❌ Team box estimate failed: {e}")
+        if strict:
+            raise
     
     # --- 🏈 PHASE 2: POST-WEEK ANALYTICS ---
     # The newsroom swarm is not run here: it is a separate step (newsroom/weekly_run.py) that the
