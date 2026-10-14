@@ -178,7 +178,13 @@ def ensure_window_size():
         size = (Quartz.CGImageGetWidth(cg), Quartz.CGImageGetHeight(cg))
         if size == WINDOW_PX:
             return
-        log(f"  chiaki-ng window is {size[0]}x{size[1]}, not {WINDOW_PX[0]}x{WINDOW_PX[1]}; resizing it")
+        # JR's Mac has two displays; on the external (non-Retina) one the same window is captured
+        # at half the pixels, so move the window to the built-in display, then size it
+        log(f"  chiaki-ng window is {size[0]}x{size[1]}, not {WINDOW_PX[0]}x{WINDOW_PX[1]}; "
+            "moving it to the main display and resizing it")
+        subprocess.run(["osascript", "-e", f'tell application "System Events" to tell process "{APP_NAME}" '
+                        f'to set position of window 1 to {{0, 38}}'], capture_output=True)
+        time.sleep(0.5)
         subprocess.run(["osascript", "-e", f'tell application "System Events" to tell process "{APP_NAME}" '
                         f'to set size of window 1 to {{{WINDOW_PT[0]}, {WINDOW_PT[1]}}}'], capture_output=True)
         time.sleep(1.5)
@@ -205,14 +211,15 @@ def restart_stream():
         time.sleep(2)
         try:
             WIN_ID, PID = find_window()
-            if window_info(WIN_ID).get("kCGWindowBounds", {}).get("Height", 0) > 400:
-                ensure_window_size()
-                f, s = look()
-                if s != "UNKNOWN":
-                    log(f"Stream is back on {s}")
-                    return f, s
+            ready = window_info(WIN_ID).get("kCGWindowBounds", {}).get("Height", 0) > 400
         except Abort:
-            pass
+            ready = False                    # no window yet
+        if ready:
+            ensure_window_size()             # a wrong size that can't be fixed stops the run
+            f, s = look()
+            if s != "UNKNOWN":
+                log(f"Stream is back on {s}")
+                return f, s
         if time.time() > end:
             raise Abort("chiaki-ng didn't come back on a franchise screen within two minutes of "
                         "restarting; check the chiaki-ng window")
