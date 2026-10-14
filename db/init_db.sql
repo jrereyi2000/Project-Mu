@@ -469,6 +469,44 @@ JOIN league_pos_benchmarks lpb ON tpt.season = lpb.season AND tpt.position = lpb
 -- Awards
 -- ---------------------------------------------------------------------------
 
+-- Head coaches (2026_10_30_coaches.sql)
+CREATE TABLE IF NOT EXISTS coaches (
+    id SERIAL PRIMARY KEY,
+    coach_name VARCHAR(255) UNIQUE NOT NULL,
+    archetype VARCHAR(64),
+    offensive_scheme VARCHAR(64),
+    defensive_scheme VARCHAR(64)
+);
+
+-- Who coached which team, and when. end_season NULL = still there.
+CREATE TABLE IF NOT EXISTS coach_tenures (
+    id SERIAL PRIMARY KEY,
+    coach_id INT NOT NULL REFERENCES coaches(id) ON DELETE CASCADE,
+    team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    start_season INT NOT NULL,
+    end_season INT,
+    UNIQUE (coach_id, team_id, start_season),
+    CHECK (end_season IS NULL OR end_season >= start_season)
+);
+
+-- Career counters as the coach screen shows them at the end of each season (they include
+-- pre-franchise NFL careers, so they are stored, not rebuilt from games).
+CREATE TABLE IF NOT EXISTS coach_seasons (
+    id SERIAL PRIMARY KEY,
+    coach_id INT NOT NULL REFERENCES coaches(id) ON DELETE CASCADE,
+    team_id INT REFERENCES teams(id) ON DELETE CASCADE,
+    season INT NOT NULL,
+    career_wins INT,
+    career_losses INT,
+    career_ties INT,
+    winning_seasons INT,
+    playoff_wins INT,
+    playoff_losses INT,
+    super_bowl_wins INT,
+    super_bowl_losses INT,
+    UNIQUE (coach_id, season)
+);
+
 CREATE TABLE IF NOT EXISTS awards (
     id SERIAL PRIMARY KEY,
     season INT NOT NULL,
@@ -476,6 +514,7 @@ CREATE TABLE IF NOT EXISTS awards (
     player_id INT REFERENCES players(id),
     team_id INT REFERENCES teams(id),
     coach_name VARCHAR(255),
+    coach_id INT REFERENCES coaches(id),
     player_name VARCHAR(255),
     position VARCHAR(10),
     UNIQUE (season, award_type)

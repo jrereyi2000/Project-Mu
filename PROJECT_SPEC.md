@@ -108,7 +108,7 @@ Project Mu/
 │   │                          #   2026_10_23_capture_loader.sql, 2026_10_24_player_id_keys.py (python3 -m db.migrations.2026_10_24_player_id_keys, after a roster load),
 │   │                          #   2026_10_25_former_players.sql, 2026_10_26_nfl_records.sql, 2026_10_27_name_casing.py (re-cases all-caps full names
 │   │                          #   from the loaded roster capture's cards; python3 -m db.migrations.2026_10_27_name_casing),
-│   │                          #   2026_10_28_league_record_book.sql, 2026_10_29_team_box_estimates.sql (apply SQL ones via
+│   │                          #   2026_10_28_league_record_book.sql, 2026_10_29_team_box_estimates.sql, 2026_10_30_coaches.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -310,7 +310,13 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 - **`captures`**: one row per capture run: `folder` (unique), `mode` (weekly | roster | season_schedule | games), `season`, `week`, `status` (captured | extracted | loaded | failed), `row_counts` (jsonb), Gemini token totals, `error`, `captured_at` / `extracted_at` / `loaded_at`.
 - **`llm_usage`**: one row per Gemini call: `source` (extract | newsroom), `capture_id` (FK, nullable), `label`, `model`, `input_tokens`, `cached_tokens`, `output_tokens`, `thinking_tokens`, `created_at`.
 - **`awards`**:
-  - `id` (PK), `season` (int), `award_type` (varchar), `player_id` (FK), `player_name` (varchar), `team_id` (FK), `coach_name` (varchar), `position` (varchar). `UNIQUE(season, award_type)`.
+  - `id` (PK), `season` (int), `award_type` (varchar), `player_id` (FK), `player_name` (varchar), `team_id` (FK), `coach_name` (varchar), `coach_id` (FK `coaches`, COTY rows; `2026_10_30_coaches.sql`), `position` (varchar). `UNIQUE(season, award_type)`. The historical import (`pipeline/batch_menus.py`) writes COTY with both `coach_name` and `coach_id`, creating the `coaches` row if the name is new.
+
+### 3.3a Coaches (`db/migrations/2026_10_30_coaches.sql`)
+Head coaches only. Nothing reads these tables yet.
+- **`coaches`**: `id` (PK), `coach_name` (varchar, unique), `archetype`, `offensive_scheme`, `defensive_scheme` (varchar, nullable; not filled yet).
+- **`coach_tenures`**: `coach_id` (FK), `team_id` (FK), `start_season`, `end_season` (NULL = current). `UNIQUE(coach_id, team_id, start_season)`. A coach's per-season record in the franchise comes from joining this to `team_seasons`. Every coach except Marcus Whitfield has coached the same team since 2026 (the franchise's first season). Carolina: Dave Canales 2026–2033, Marcus Whitfield from 2034. The migration seeded those two and the Coach of the Year winners (tenure from 2026 with the award's team). Other coaches have no rows yet.
+- **`coach_seasons`**: `coach_id` (FK), `team_id` (FK), `season`, and the Madden coach screen's career counters as of that season: `career_wins`, `career_losses`, `career_ties`, `winning_seasons`, `playoff_wins`, `playoff_losses`, `super_bowl_wins`, `super_bowl_losses`. `UNIQUE(coach_id, season)`. These totals include pre-franchise NFL careers, so they are stored as shown rather than rebuilt from `games`. Empty until the coach data is loaded.
 
 ### 3.4 Fantasy Analytics & Projections
 - **`fantasy_projections`**:

@@ -165,13 +165,22 @@ def process_awards(db, ext: AwardsExtraction):
                     team_id = db._get_or_create_team(cur, a.team_name) if a.team_name else None
                     
                     if a.award_type.upper() == "COTY":
+                        coach_id = None
+                        if a.player_name:
+                            cur.execute("""
+                                INSERT INTO coaches (coach_name) VALUES (%s)
+                                ON CONFLICT (coach_name) DO UPDATE SET coach_name = EXCLUDED.coach_name
+                                RETURNING id
+                            """, (a.player_name,))
+                            coach_id = cur.fetchone()[0]
                         cur.execute("""
-                            INSERT INTO awards (season, award_type, coach_name, team_id)
-                            VALUES (%s, 'COTY', %s, %s)
+                            INSERT INTO awards (season, award_type, coach_name, coach_id, team_id)
+                            VALUES (%s, 'COTY', %s, %s, %s)
                             ON CONFLICT (season, award_type) DO UPDATE SET
                                 coach_name = EXCLUDED.coach_name,
+                                coach_id = EXCLUDED.coach_id,
                                 team_id = EXCLUDED.team_id;
-                        """, (season, a.player_name, team_id))
+                        """, (season, a.player_name, coach_id, team_id))
                         print(f"Saved COTY: {a.player_name} ({a.team_name})")
                     else:
                         player_id = None
