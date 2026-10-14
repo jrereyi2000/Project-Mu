@@ -449,8 +449,17 @@ def extract_games(root):
             write_csv(os.path.join(d, "box_score.csv"), ["LABEL", b["away_team"], b["home_team"]],
                       [[k, a, h] for k, (a, h) in rows.items()])
             q = lambda xs: (xs + [""] * 5)[:5]
+
+            def adds_up(qs, total):
+                try:
+                    return sum(int(x or 0) for x in qs) == int(total)
+                except ValueError:
+                    return False
+            # a light team colour can wash out quarter digits (Raiders silver, Oct 14): the total
+            # stays right, so flag the quarters instead of guessing them
+            ok = adds_up(b["away_quarters"], b["away_total"]) and adds_up(b["home_quarters"], b["home_total"])
             scores.append([game, b["away_team"], *q(b["away_quarters"]), b["away_total"],
-                           b["home_team"], *q(b["home_quarters"]), b["home_total"]])
+                           b["home_team"], *q(b["home_quarters"]), b["home_total"], "y" if ok else "n"])
             print(f"{game}: {b['away_team']} {b['away_total']} - {b['home_total']} {b['home_team']}, {len(rows)} box rows")
         groups = {}
         for p in glob.glob(os.path.join(d, "stats", "*.png")):
@@ -467,7 +476,8 @@ def extract_games(root):
             wc, wr = week.setdefault(cat, [None, []])
             week[cat][0] = wc or cols
             week[cat][1] += [[game] + list(r) for r in trows]
-    hdr = ["GAME", "AWAY", "A1", "A2", "A3", "A4", "AOT", "ATOTAL", "HOME", "H1", "H2", "H3", "H4", "HOT", "HTOTAL"]
+    hdr = ["GAME", "AWAY", "A1", "A2", "A3", "A4", "AOT", "ATOTAL", "HOME", "H1", "H2", "H3", "H4", "HOT", "HTOTAL",
+           "QUARTERS_OK"]
     write_csv(os.path.join(root, "game_scores.csv"), hdr, scores)
     for cat, (cols, rows) in sorted(week.items()):
         write_csv(os.path.join(root, f"game_stats_{cat}.csv"), ["GAME"] + list(cols), rows)
