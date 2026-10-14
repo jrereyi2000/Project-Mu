@@ -37,7 +37,7 @@ Unknown hashes fall through to the Gridiron newsroom home screen.
 
 ### Data model & Backend Synchronization
 
-The app integrates with the canonical PostgreSQL database via RESTful JSON endpoints:
+The app integrates with the canonical PostgreSQL database via RESTful JSON endpoints. Every call goes to `API_BASE` (`src/api.ts`): `http://<the host the page was opened from>:8000`, so the site also works from a phone on the home network (where `localhost` would be the phone):
 
 - All 32 NFL teams with full names, abbreviations, conference/division metadata, and dynamic primary brand colors (`team_color`).
 - High-resolution team logos from ESPN's global CDN mapped via the `logo(abbr)` helper.
@@ -71,6 +71,7 @@ The app integrates with the canonical PostgreSQL database via RESTful JSON endpo
 | `#social` | Agent Wire national feed | Social posts + `/api/schedule` |
 | `#social-explore` | Agent Wire Explore | Social topics & trends |
 | `#social-teams` | Agent Wire team hubs | 32-team directory |
+| `#debug` | Debug page (`src/DebugPage.tsx`) | League state, table browser/editor, API endpoints, spec docs, run buttons; opened from the header's LIVE badge |
 | `#social-team-{abbr}` | Agent Wire team feed | Team-specific persona posts |
 | `#social-post-{index}` | Agent Wire post detail | Post thread detail |
 | `#social-profile-{index}` | Agent Wire author profile | Author persona bio & feed |
@@ -819,3 +820,15 @@ Fantasy article hashes are accepted by the general article route but currently r
 - Remote images are loaded from ESPN and Unsplash.
 - There are no loading, retry, offline, or API error states.
 - All screens are generated from the data and logic in `src/App.tsx`.
+
+## 9. Debug Page (`#debug`, `src/DebugPage.tsx`)
+
+Reached from the header's **LIVE** badge (now a link), or directly at `http://<Mac's IP>:8443/#debug` from a phone. Backend: `server/debug_api.py` (root PROJECT_SPEC.md §4.5). A password field takes `DEBUG_TOKEN` (stored in `localStorage` as `mu_debug_token`); without it the page is read-only (run buttons, Save and cell edits disabled). The header line shows the database, season and current week (refreshed every 10 s) and any running job. Four tabs (last one remembered in `localStorage`):
+
+- **Control:** League state (season and current week inputs + Save). Runs: **Scan week**, **Backfill previous week**, **Game scan**, each with a one-line description and a confirm dialog (Remote Play takes the console), disabled while a job runs; an optional **Resume a stopped run** picker lists `captures` rows not loaded. The run panel shows the latest (or running) job's status pill, start time, **Stop** and its log (dark, auto-scrolling, polled every 3 s); Run history lists recent jobs (tap one to see its log); Recent captures lists the last 10 `captures` rows with errors.
+- **Tables:** table picker (tables and views with estimated row counts; last choice remembered), search across all columns, rows per page (25/50/100/200), prev/next with page and row count. Header click sorts (▲/▼), a filter box under each header (contains; `=`, `!=`, `>`, `>=`, `<`, `<=`; `null` / `!null`), primary keys marked 🔑, NULL shown as ∅. With the token, cells of base tables with a primary key are editable in place (Enter saves, Esc cancels, empty = NULL); generated and key columns and views are read-only. Typing is debounced 250 ms.
+- **Endpoints:** every API route with method badges, query params and docstring line, filterable by path; GET routes without path params open in a new tab.
+- **Docs:** the root spec, the pipeline migration plan and this frontend spec, rendered by the page's own Markdown renderer (headings, fenced code, tables, lists, inline code/bold).
+
+Layout: one column on a phone, two on wide screens (Control); the table scrolls inside its own box with a sticky header.
+

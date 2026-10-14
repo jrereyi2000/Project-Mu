@@ -462,24 +462,9 @@ if __name__ == "__main__":
     parser.add_argument("--stream", type=str, help="Live Twitch/YouTube URL to process (e.g. https://twitch.tv/username)")
     parser.add_argument("--db", action="store_true", help="Attempt to insert results into PostgreSQL")
     parser.add_argument("--workers", type=int, default=3, help="Number of concurrent API extraction workers (default: 3)")
-    parser.add_argument("--watch", action="store_true",
-                        help="weekly trigger (pipeline/trigger.py): watch the broadcast (--stream, default BROADCAST_URL "
-                             "in .env) and start pipeline.weekly_capture after Advance Week")
-    parser.add_argument("--dry-run", action="store_true", help="--watch: log WOULD FIRE instead of starting the run")
-    parser.add_argument("--record", metavar="DIR", help="--watch: save classified frames and hub label crops to DIR")
     args = parser.parse_args()
     
-    if args.watch:
-        from pipeline.notify import env
-        from pipeline.trigger import watch
-        url = args.stream or env("BROADCAST_URL")
-        if not url:
-            sys.exit("--watch needs --stream <url> or BROADCAST_URL in .env")
-        try:
-            watch(url, dry_run=args.dry_run, record=args.record)
-        except KeyboardInterrupt:
-            print("\nTrigger stopped.")
-    elif args.stream:
+    if args.stream:
         raw_url = resolve_stream_url(args.stream)
         run_pipeline(raw_url, is_live=True, use_db=args.db, num_workers=args.workers)
     elif args.file:

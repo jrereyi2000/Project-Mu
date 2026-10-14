@@ -35,19 +35,23 @@ class RunTest(unittest.TestCase):
         os.makedirs(os.path.join(self.tmp, name))
         return wc.run(name)
 
-    def fake_capture(self, folder, log_path):
+    def fake_capture(self, folder, log_path, mode="weekly"):
         self.calls.append("capture")
         os.makedirs(os.path.join(folder, "stats"), exist_ok=True)
         Image.new("RGB", (40, 20), "red").save(os.path.join(folder, "stats", "01_passing_000.png"))
         os.makedirs(os.path.join(folder, "stop_debug"), exist_ok=True)
         json.dump({"current": "SEASON WEEK 19", "captured": "SEASON WEEK 18"}, open(os.path.join(folder, "week.json"), "w"))
+        open(os.path.join(folder, ".capture_done"), "w").close()
 
-    def fake_extract(self, folder, log_path):
+    def fake_extract(self, folder, log_path, mode="weekly"):
         self.calls.append("extract")
+        if mode == "games":
+            open(os.path.join(folder, "game_scores.csv"), "w").write("x\n")
         for f in ("schedule.csv", "stats_passing.csv"):
             open(os.path.join(folder, f), "w").write("x\n")
 
-    def fake_load(self, folder):
+    def fake_load(self, folder, replace=False):
+        self.replace = replace
         self.calls.append("load")
         if self.load_error:
             raise wc.WeekStopped(self.load_error)
@@ -63,6 +67,14 @@ class RunTest(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(folder, "schedule.csv")))
         titles = [t for t, _ in self.notices]
         self.assertEqual(titles, ["Mu: capture starting", "Mu: your turn", "Mu: week done"])
+
+    def test_game_scan_replaces_and_never_writes_articles(self):
+        os.makedirs(os.path.join(self.tmp, "g1"))
+        self.assertEqual(wc.run("g1", articles=True, mode="games"), 0)
+        self.assertEqual(self.calls, ["connect", "capture", "extract", "load", "engines 2035"])
+        self.assertTrue(self.replace)
+        self.assertEqual(self.notices[0][0], "Mu: capture starting")
+        self.assertIn("Game scan", self.notices[0][1])
 
     def test_failed_load_stops_the_week(self):
         self.load_error = "Load stopped, nothing written: bad CSV"

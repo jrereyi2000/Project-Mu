@@ -1,0 +1,493 @@
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { API_BASE } from "./api";
+
+// #debug (reached from the header's LIVE badge; also from a phone on the home network): league state,
+// every table (sortable, filterable, paginated, cells editable), the API's endpoints, the spec docs, and
+// buttons that start the weekly runs. Backend: server/debug_api.py. Writes need the DEBUG_TOKEN from .env.
+
+const DEBUG_API = `${API_BASE}/api/debug`;
+const TOKEN_KEY = "mu_debug_token";
+
+type Column = { column: string; type: string; nullable: boolean; generated: boolean; pk: boolean };
+type TableRows = { table: string; kind: string; columns: Column[]; pk: string[]; total: number; page: number; page_size: number; rows: Record<string, unknown>[] };
+type Job = { id: string; kind: string; kind_label: string; status: string; exit_code?: number | null; started_at: string; resume?: string | null; log_tail?: string };
+type Capture = { id: number; folder: string; mode: string; season: number; week: number | null; status: string; error: string | null; loaded_at: string | null };
+type DebugState = { state: { current_season: number; current_week: number }; database: string; captures: Capture[]; writes_enabled: boolean; running_job: Job | null };
+
+function readToken() {
+  try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
+}
+
+async function call<T>(path: string, init?: RequestInit, token?: string): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["X-Debug-Token"] = token;
+  const r = await fetch(`${DEBUG_API}${path}`, { ...init, headers: { ...headers, ...(init?.headers as Record<string, string> || {}) } });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body?.detail ? String(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)) : `HTTP ${r.status}`);
+  return body as T;
+}
+
+function show(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+const btn = "px-3 py-1.5 text-xs font-bold uppercase tracking-wider border-2 border-[var(--ink)] bg-white hover:bg-[var(--ink)] hover:text-white disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-[var(--ink)]";
+const btnRed = "px-3 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[var(--red)] border-2 border-[var(--red)] hover:bg-[var(--ink)] hover:border-[var(--ink)] disabled:opacity-40";
+const card = "bg-white border-t-4 border-[var(--ink)] p-4";
+const label = "block text-[10px] font-bold uppercase tracking-widest text-[var(--gray-500)] mb-1";
+const input = "border border-[var(--gray-300)] px-2 py-1 text-sm bg-white w-full";
+
+// ------------------------------------------------------------- control ----
+const RUNS: { kind: string; title: string; note: string }[] = [
+  { kind: "scan_week", title: "Scan week", note: "Full weekly run: capture Season Stats, Team Stats and last week's schedule, extract, load, engines, articles." },
+  { kind: "backfill_week", title: "Backfill previous week", note: "The same capture, extract, load and engines. No articles." },
+  { kind: "game_scan", title: "Game scan", note: "Every game of last week: box scores and both teams' player stats (~7 min a game), loaded over the backfill's lines. No articles." },
+];
+
+function StatusPill({ status }: { status: string }) {
+  const color = status === "running" ? "bg-amber-400 text-black" : status === "done" ? "bg-emerald-600 text-white" : status === "stopped" ? "bg-[var(--gray-500)] text-white" : "bg-[var(--red)] text-white";
+  return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${color}`}>{status}</span>;
+}
+
+function Control({ token, data, reload }: { token: string; data: DebugState | null; reload: () => void }) {
+  const [season, setSeason] = useState("");
+  const [week, setWeek] = useState("");
+  const [resume, setResume] = useState("");
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [log, setLog] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const logRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (data) { setSeason(String(data.state.current_season)); setWeek(String(data.state.current_week)); }
+  }, [data?.state.current_season, data?.state.current_week]);
+
+  const loadJobs = useCallback(() => {
+    call<Job[]>("/jobs").then(js => {
+      setJobs(js);
+      const current = js.find(j => j.status === "running") || js[0];
+      if (current) call<{ log: string }>(`/jobs/${current.id}/log?lines=300`).then(r => setLog(r.log)).catch(() => {});
+    }).catch(e => setMessage(String(e.message || e)));
+  }, []);
+
+  useEffect(() => {
+    loadJobs();
+    const t = window.setInterval(loadJobs, 3000);
+    return () => window.clearInterval(t);
+  }, [loadJobs]);
+
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
+
+  const running = jobs.find(j => j.status === "running");
+  const latest = running || jobs[0];
+
+  const saveState = async () => {
+    setBusy(true); setMessage("");
+    try {
+      await call("/state", { method: "PUT", body: JSON.stringify({ current_season: Number(season), current_week: Number(week) }) }, token);
+      setMessage("League state saved."); reload();
+    } catch (e) { setMessage(`Not saved: ${(e as Error).message}`); }
+    setBusy(false);
+  };
+
+  const start = async (kind: string, title: string) => {
+    const what = resume ? `${title}, resuming ${resume}` : title;
+    if (!window.confirm(`${what}?\n\nRemote Play takes over the console and your controller disconnects. Your phone gets a notice when it's your turn again.`)) return;
+    setBusy(true); setMessage("");
+    try {
+      await call("/jobs", { method: "POST", body: JSON.stringify({ kind, resume: resume || null }) }, token);
+      setMessage(`${what} started.`); setResume(""); loadJobs(); reload();
+    } catch (e) { setMessage(`Not started: ${(e as Error).message}`); }
+    setBusy(false);
+  };
+
+  const stop = async (id: string) => {
+    if (!window.confirm("Stop this run? The capture stops where it is (every key is released); resume it later from its folder.")) return;
+    try { await call(`/jobs/${id}/stop`, { method: "POST" }, token); setMessage("Stopping…"); loadJobs(); }
+    catch (e) { setMessage(`Not stopped: ${(e as Error).message}`); }
+  };
+
+  const resumable = (data?.captures || []).filter(c => c.status !== "loaded");
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+      <div className="grid gap-4 content-start">
+        <section className={card}>
+          <h3 className="font-black uppercase tracking-wide mb-3">League state</h3>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <label><span className={label}>Season</span><input className={input} inputMode="numeric" value={season} onChange={e => setSeason(e.target.value)} /></label>
+            <label><span className={label}>Current week</span><input className={input} inputMode="numeric" value={week} onChange={e => setWeek(e.target.value)} /></label>
+          </div>
+          <button className={btn} disabled={busy || !token} onClick={saveState}>Save</button>
+          <p className="text-xs text-[var(--gray-500)] mt-2">Current week = Madden's next unplayed week (19–23 = postseason). The weekly load sets it; edit it only to fix it.</p>
+        </section>
+
+        <section className={card}>
+          <h3 className="font-black uppercase tracking-wide mb-3">Runs</h3>
+          <div className="grid gap-3">
+            {RUNS.map(r => (
+              <div key={r.kind} className="flex flex-col gap-1">
+                <button className={btnRed} disabled={busy || !token || !!running} onClick={() => start(r.kind, r.title)}>{r.title}</button>
+                <span className="text-xs text-[var(--gray-500)]">{r.note}</span>
+              </div>
+            ))}
+          </div>
+          <label className="block mt-4"><span className={label}>Resume a stopped run (optional)</span>
+            <select className={input} value={resume} onChange={e => setResume(e.target.value)}>
+              <option value="">— new run —</option>
+              {resumable.map(c => <option key={c.id} value={c.folder}>{c.folder} · {c.mode} · {c.status}</option>)}
+            </select>
+          </label>
+          {!token && <p className="text-xs text-[var(--red)] mt-2">Enter the debug token above to start runs or edit.</p>}
+          {running && <p className="text-xs mt-2">A run is in progress; one at a time.</p>}
+        </section>
+
+        <section className={card}>
+          <h3 className="font-black uppercase tracking-wide mb-3">Recent captures</h3>
+          <div className="grid gap-2 text-xs">
+            {(data?.captures || []).map(c => (
+              <div key={c.id} className="flex flex-wrap gap-2 items-center border-b border-[var(--gray-100)] pb-1">
+                <StatusPill status={c.status === "loaded" ? "done" : c.status === "failed" ? "failed" : c.status} />
+                <b className="font-mono">{c.folder}</b><span>{c.mode}</span>{c.week !== null && <span>wk {c.week}</span>}
+                {c.error && <span className="w-full text-[var(--red)] break-words">{c.error}</span>}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="grid gap-4 content-start">
+        <section className={card}>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <h3 className="font-black uppercase tracking-wide mr-auto">{latest ? `${latest.kind_label}` : "No runs yet"}</h3>
+            {latest && <StatusPill status={latest.status} />}
+            {latest && <span className="text-xs font-mono">{latest.started_at.replace("T", " ")}</span>}
+            {running && <button className={btn} disabled={!token} onClick={() => stop(running.id)}>Stop</button>}
+          </div>
+          <pre ref={logRef} className="bg-[#07080a] text-[#d8d8d8] text-[11px] leading-snug p-3 h-[420px] overflow-auto whitespace-pre-wrap break-words font-mono">{log || "Logs appear here when a run starts."}</pre>
+        </section>
+        <section className={card}>
+          <h3 className="font-black uppercase tracking-wide mb-3">Run history</h3>
+          <div className="grid gap-1 text-xs">
+            {jobs.map(j => (
+              <button key={j.id} className="flex flex-wrap gap-2 items-center text-left hover:bg-[var(--paper)] py-1"
+                onClick={() => call<{ log: string }>(`/jobs/${j.id}/log?lines=300`).then(r => setLog(r.log))}>
+                <StatusPill status={j.status} /><span className="font-mono">{j.id}</span><span>{j.kind_label}</span>
+                {j.resume && <span className="text-[var(--gray-500)]">resume {j.resume}</span>}
+                {j.exit_code !== undefined && j.exit_code !== null && <span className="text-[var(--gray-500)]">exit {j.exit_code}</span>}
+              </button>
+            ))}
+            {!jobs.length && <span className="text-[var(--gray-500)]">None yet.</span>}
+          </div>
+        </section>
+        {message && <p className="text-sm font-bold">{message}</p>}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------- tables ----
+function Tables({ token }: { token: string }) {
+  const [tables, setTables] = useState<{ name: string; kind: string; rows: number | null }[]>([]);
+  const [table, setTable] = useState(() => { try { return localStorage.getItem("mu_debug_table") || "league_state"; } catch { return "league_state"; } });
+  const [data, setData] = useState<TableRows | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [sort, setSort] = useState<{ col: string; dir: "asc" | "desc" } | null>(null);
+  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<{ row: number; col: string; value: string } | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { call<typeof tables>("/tables").then(setTables).catch(e => setError(String(e.message))); }, []);
+
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (sort) { params.set("sort", sort.col); params.set("dir", sort.dir); }
+  if (q) params.set("q", q);
+  const activeFilters = Object.fromEntries(Object.entries(filters).filter(([, v]) => v.trim() !== ""));
+  if (Object.keys(activeFilters).length) params.set("filters", JSON.stringify(activeFilters));
+  const query = params.toString();
+
+  const load = useCallback(() => {
+    setLoading(true);
+    call<TableRows>(`/tables/${encodeURIComponent(table)}?${query}`)
+      .then(d => { setData(d); setError(""); })
+      .catch(e => setError(String(e.message)))
+      .finally(() => setLoading(false));
+  }, [table, query]);
+
+  useEffect(() => {
+    const t = window.setTimeout(load, 250);           // debounce typing in the search and filter boxes
+    return () => window.clearTimeout(t);
+  }, [load]);
+
+  const pick = (name: string) => {
+    setTable(name); setPage(1); setSort(null); setQ(""); setFilters({}); setEditing(null); setData(null);
+    try { localStorage.setItem("mu_debug_table", name); } catch { /* ignore */ }
+  };
+
+  const editable = (c: Column) => !!data && data.kind === "table" && data.pk.length > 0 && !c.generated && !c.pk && !!token;
+
+  const save = async () => {
+    if (!data || !editing) return;
+    const row = data.rows[editing.row];
+    const key = Object.fromEntries(data.pk.map(k => [k, row[k]]));
+    const value = editing.value === "" ? null : editing.value;
+    try {
+      const r = await call<{ row: Record<string, unknown> }>(`/tables/${encodeURIComponent(data.table)}`,
+        { method: "PATCH", body: JSON.stringify({ key, changes: { [editing.col]: value } }) }, token);
+      setData({ ...data, rows: data.rows.map((x, i) => (i === editing.row ? r.row : x)) });
+      setEditing(null); setError("");
+    } catch (e) { setError(`Not saved: ${(e as Error).message}`); }
+  };
+
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1;
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap gap-3 items-end">
+        <label className="min-w-[220px]"><span className={label}>Table</span>
+          <select className={input} value={table} onChange={e => pick(e.target.value)}>
+            {tables.map(t => <option key={t.name} value={t.name}>{t.name}{t.kind === "view" ? " (view)" : ""}{t.rows !== null ? ` · ~${t.rows.toLocaleString()}` : ""}</option>)}
+          </select>
+        </label>
+        <label className="flex-1 min-w-[180px]"><span className={label}>Search all columns</span>
+          <input className={input} value={q} onChange={e => { setQ(e.target.value); setPage(1); }} placeholder="text…" />
+        </label>
+        <label><span className={label}>Rows</span>
+          <select className={input} value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}>
+            {[25, 50, 100, 200].map(n => <option key={n}>{n}</option>)}
+          </select>
+        </label>
+        <div className="flex items-center gap-2">
+          <button className={btn} disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button>
+          <span className="text-xs font-mono whitespace-nowrap">{page} / {pages}{data ? ` · ${data.total.toLocaleString()} rows` : ""}</span>
+          <button className={btn} disabled={page >= pages} onClick={() => setPage(page + 1)}>›</button>
+        </div>
+      </div>
+      <p className="text-[11px] text-[var(--gray-500)]">
+        Click a header to sort. Filter boxes: text = contains; <code>=5</code>, <code>!=5</code>, <code>&gt;=300</code>, <code>&lt;10</code> compare; <code>null</code> / <code>!null</code>.
+        {data && data.kind === "table" && data.pk.length > 0 ? (token ? " Tap a cell to edit (Enter saves, Esc cancels, empty = NULL)." : " Enter the debug token to edit cells.") : data ? " Views and tables without a primary key are read-only." : ""}
+      </p>
+      {error && <p className="text-sm text-[var(--red)] font-bold">{error}</p>}
+      <div className={`overflow-auto max-h-[70vh] bg-white border-t-4 border-[var(--ink)] ${loading ? "opacity-60" : ""}`}>
+        {data && (
+          <table className="text-xs border-collapse min-w-full">
+            <thead className="sticky top-0 bg-[var(--gray-100)] z-10">
+              <tr>
+                {data.columns.map(c => (
+                  <th key={c.column} className="text-left px-2 py-1 font-bold whitespace-nowrap cursor-pointer select-none border-b border-[var(--gray-300)]"
+                    title={`${c.type}${c.pk ? " · primary key" : ""}${c.generated ? " · generated" : ""}`}
+                    onClick={() => { setSort(sort?.col === c.column ? { col: c.column, dir: sort.dir === "asc" ? "desc" : "asc" } : { col: c.column, dir: "asc" }); setPage(1); }}>
+                    {c.column}{c.pk ? " 🔑" : ""}{sort?.col === c.column ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {data.columns.map(c => (
+                  <th key={c.column} className="px-1 py-1 border-b border-[var(--gray-300)]">
+                    <input className="w-full min-w-[64px] border border-[var(--gray-300)] px-1 py-0.5 text-[11px] font-normal bg-white"
+                      value={filters[c.column] || ""} placeholder="filter"
+                      onChange={e => { setFilters({ ...filters, [c.column]: e.target.value }); setPage(1); }} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map((row, i) => (
+                <tr key={i} className="odd:bg-[var(--paper)]">
+                  {data.columns.map(c => {
+                    const isEditing = editing?.row === i && editing.col === c.column;
+                    const v = row[c.column];
+                    return (
+                      <td key={c.column} className={`px-2 py-1 align-top border-b border-[var(--gray-100)] ${editable(c) ? "cursor-text hover:bg-amber-50" : ""}`}
+                        onClick={() => { if (editable(c) && !isEditing) setEditing({ row: i, col: c.column, value: show(v) }); }}>
+                        {isEditing ? (
+                          <input autoFocus className="border border-[var(--red)] px-1 py-0.5 text-xs w-full min-w-[120px]"
+                            value={editing.value} onChange={e => setEditing({ ...editing, value: e.target.value })}
+                            onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(null); }}
+                            onBlur={() => setEditing(null)} />
+                        ) : v === null || v === undefined ? (
+                          <span className="text-[var(--gray-300)]">∅</span>
+                        ) : (
+                          <span className="block max-w-[360px] truncate" title={show(v)}>{show(v)}</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- endpoints ----
+function Endpoints() {
+  const [eps, setEps] = useState<{ path: string; methods: string[]; doc: string; path_params: string[]; query_params: string[] }[]>([]);
+  const [q, setQ] = useState("");
+  useEffect(() => { call<typeof eps>("/endpoints").then(setEps).catch(() => setEps([])); }, []);
+  const shown = eps.filter(e => !q || e.path.toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div className="grid gap-3">
+      <input className={`${input} max-w-sm`} placeholder="Filter paths…" value={q} onChange={e => setQ(e.target.value)} />
+      <div className="bg-white border-t-4 border-[var(--ink)]">
+        {shown.map(e => (
+          <div key={e.path + e.methods.join()} className="flex flex-wrap gap-x-3 gap-y-1 items-baseline px-3 py-2 border-b border-[var(--gray-100)] text-sm">
+            {e.methods.map(m => <span key={m} className={`text-[10px] font-bold px-1.5 py-0.5 ${m === "GET" ? "bg-emerald-600" : m === "DELETE" ? "bg-[var(--red)]" : "bg-[var(--ink)]"} text-white`}>{m}</span>)}
+            {e.methods.includes("GET") && !e.path_params.length
+              ? <a className="font-mono underline" href={`${API_BASE}${e.path}`} target="_blank" rel="noreferrer">{e.path}</a>
+              : <span className="font-mono">{e.path}</span>}
+            {e.query_params.length > 0 && <span className="text-xs text-[var(--gray-500)]">?{e.query_params.join("&")}</span>}
+            {e.doc && <span className="w-full text-xs text-[var(--gray-500)]">{e.doc}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- docs ----
+function inline(text: string): ReactNode[] {
+  // `code`, **bold**, *italic*; links show their text
+  return text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g).map((part, i) => {
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 1) return <code key={i} className="font-mono text-[0.85em] bg-[var(--gray-100)] px-1">{part.slice(1, -1)}</code>;
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 3) return <b key={i}>{part.slice(2, -2)}</b>;
+    if (part.startsWith("*") && part.endsWith("*") && part.length > 2) return <i key={i}>{part.slice(1, -1)}</i>;
+    return part;
+  });
+}
+
+function DocMarkdown({ content }: { content: string }) {
+  const lines = content.replace(/\r/g, "").split("\n");
+  const out: ReactNode[] = [];
+  let i = 0;
+  const sizes = ["text-3xl", "text-2xl", "text-xl", "text-base", "text-sm", "text-sm"];
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith("```")) {
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) code.push(lines[i++]);
+      i++;
+      out.push(<pre key={out.length} className="bg-[#07080a] text-[#d8d8d8] text-[11px] leading-snug p-3 overflow-x-auto my-3 font-mono">{code.join("\n")}</pre>);
+      continue;
+    }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      out.push(<div key={out.length} className={`${sizes[h[1].length - 1]} font-black uppercase tracking-wide mt-6 mb-2 ${h[1].length <= 2 ? "border-b-2 border-[var(--ink)] pb-1" : ""}`}>{inline(h[2])}</div>);
+      i++; continue;
+    }
+    if (line.trim().startsWith("|")) {
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const cells = lines[i].trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, "|"));
+        if (!cells.every(c => /^:?-{2,}:?$/.test(c))) rows.push(cells);
+        i++;
+      }
+      out.push(
+        <div key={out.length} className="overflow-x-auto my-3">
+          <table className="text-xs border-collapse">
+            <tbody>{rows.map((r, ri) => <tr key={ri} className={ri === 0 ? "bg-[var(--gray-100)] font-bold" : "border-t border-[var(--gray-100)]"}>{r.map((c, ci) => <td key={ci} className="px-2 py-1 align-top">{inline(c)}</td>)}</tr>)}</tbody>
+          </table>
+        </div>);
+      continue;
+    }
+    const li = line.match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
+    if (li) {
+      out.push(<div key={out.length} className="text-sm leading-relaxed flex gap-2" style={{ paddingLeft: `${li[1].length * 8}px` }}><span className="text-[var(--gray-500)]">{/\d/.test(li[2]) ? li[2] : "•"}</span><span>{inline(li[3])}</span></div>);
+      i++; continue;
+    }
+    if (line.trim() === "") { i++; continue; }
+    const para: string[] = [];
+    while (i < lines.length && lines[i].trim() !== "" && !/^(#|```|\s*\||\s*([-*]|\d+\.)\s)/.test(lines[i])) para.push(lines[i++]);
+    if (!para.length) para.push(lines[i++]);
+    out.push(<p key={out.length} className="text-sm leading-relaxed my-2">{inline(para.join(" "))}</p>);
+  }
+  return <>{out}</>;
+}
+
+const DOCS: { key: string; title: string }[] = [
+  { key: "spec", title: "Project spec" },
+  { key: "migration", title: "Pipeline migration" },
+  { key: "frontend", title: "Frontend spec" },
+];
+
+function Docs() {
+  const [doc, setDoc] = useState("spec");
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setText("");
+    call<{ markdown: string }>(`/docs/${doc}`).then(r => { setText(r.markdown); setError(""); }).catch(e => setError(String(e.message)));
+  }, [doc]);
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap gap-2">
+        {DOCS.map(d => <button key={d.key} className={`${btn} ${doc === d.key ? "!bg-[var(--ink)] !text-white" : ""}`} onClick={() => setDoc(d.key)}>{d.title}</button>)}
+      </div>
+      {error && <p className="text-sm text-[var(--red)]">{error}</p>}
+      <article className="bg-white border-t-4 border-[var(--ink)] p-4 md:p-8 overflow-x-auto debug-doc">
+        {text ? <DocMarkdown content={text} /> : !error && <p className="text-sm text-[var(--gray-500)]">Loading…</p>}
+      </article>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- page ----
+const TABS = ["Control", "Tables", "Endpoints", "Docs"] as const;
+
+export default function DebugPage() {
+  const [tab, setTab] = useState<(typeof TABS)[number]>(() => {
+    try { return (localStorage.getItem("mu_debug_tab") as (typeof TABS)[number]) || "Control"; } catch { return "Control"; }
+  });
+  const [token, setToken] = useState(readToken);
+  const [data, setData] = useState<DebugState | null>(null);
+  const [error, setError] = useState("");
+
+  const reload = useCallback(() => {
+    call<DebugState>("/state").then(d => { setData(d); setError(""); }).catch(e => setError(String(e.message || e)));
+  }, []);
+  useEffect(() => { reload(); const t = window.setInterval(reload, 10000); return () => window.clearInterval(t); }, [reload]);
+
+  const choose = (t: (typeof TABS)[number]) => { setTab(t); try { localStorage.setItem("mu_debug_tab", t); } catch { /* ignore */ } };
+  const saveToken = (v: string) => { setToken(v); try { localStorage.setItem(TOKEN_KEY, v); } catch { /* ignore */ } };
+
+  return (
+    <main className="max-w-[1400px] mx-auto px-4 py-6 md:py-10">
+      <div className="flex flex-wrap items-end gap-4 border-b-2 border-[var(--ink)] pb-4 mb-4">
+        <div className="mr-auto">
+          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[var(--red)]">Debug</p>
+          <h1 className="text-3xl md:text-4xl font-black uppercase leading-none">League control</h1>
+          {data && (
+            <p className="text-xs font-mono mt-2">
+              {data.database} · season {data.state.current_season} · current week {data.state.current_week}
+              {data.running_job ? ` · running: ${data.running_job.kind}` : ""}
+            </p>
+          )}
+          {error && <p className="text-xs text-[var(--red)] mt-2">API not reachable ({error}). Is it running on {API_BASE}?</p>}
+        </div>
+        <label className="w-full sm:w-64"><span className={label}>Debug token {token ? "✓" : "(needed for edits and runs)"}</span>
+          <input className={input} type="password" value={token} onChange={e => saveToken(e.target.value)} placeholder="DEBUG_TOKEN from .env" />
+        </label>
+      </div>
+      <nav className="flex gap-1 mb-4 overflow-x-auto">
+        {TABS.map(t => (
+          <button key={t} onClick={() => choose(t)}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-4 ${tab === t ? "border-[var(--red)]" : "border-transparent text-[var(--gray-500)]"}`}>{t}</button>
+        ))}
+      </nav>
+      {tab === "Control" && <Control token={token} data={data} reload={reload} />}
+      {tab === "Tables" && <Tables token={token} />}
+      {tab === "Endpoints" && <Endpoints />}
+      {tab === "Docs" && <Docs />}
+    </main>
+  );
+}

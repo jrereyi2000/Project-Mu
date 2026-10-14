@@ -11,7 +11,7 @@ from typing import Optional
 import re
 
 from engines.gotw_engine import display_excitement
-from server import social_api
+from server import debug_api, social_api
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -117,6 +117,8 @@ class RevalidatedStaticFiles(StaticFiles):
         response = super().file_response(*args, **kwargs)
         response.headers["Cache-Control"] = "no-cache"
         return response
+
+app.include_router(debug_api.router)   # /api/debug/*: the #debug page (state, tables, endpoints, docs, run jobs)
 
 app.mount("/static", RevalidatedStaticFiles(directory=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")), name="static")
 

@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
+import { API_BASE } from "./api";
+import DebugPage from "./DebugPage";
 export const SystemContext = createContext({ season: 2035, week: 18, availableSeasons: [2035] });
 
 type Team = { name: string; abbr: string };
@@ -61,7 +63,7 @@ const getHeadshotCandidates = (player: HeadshotPlayer) => {
     urls.push(`https://a.espncdn.com/i/headshots/college-football/players/full/${player.espn_id}.png`);
   }
   if (player?.id != null && /^\d+$/.test(String(player.id))) {
-    urls.push(`http://localhost:8000/static/players/${player.id}.webp?v=${HEADSHOT_VERSION}`);
+    urls.push(`${API_BASE}/static/players/${player.id}.webp?v=${HEADSHOT_VERSION}`);
   }
   urls.push(DEFAULT_AVATAR);
   return urls;
@@ -246,28 +248,28 @@ function TeamPage({ team }: { team: Team }) {
   const [teamNews, setTeamNews] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/team/${team.abbr}?season=${systemStatus.season}`)
+    fetch(`${API_BASE}/api/team/${team.abbr}?season=${systemStatus.season}`)
       .then(res => res.json())
       .then(data => {
         setTeamData(data);
         if (data && !data.error && data.team) {
-          fetch(`http://localhost:8000/api/team/${data.team.id}/season_stats/${systemStatus.season}`)
+          fetch(`${API_BASE}/api/team/${data.team.id}/season_stats/${systemStatus.season}`)
             .then(res => res.json())
             .then(stats => setSeasonStats(stats));
         }
       });
       
-    fetch(`http://localhost:8000/api/standings/${systemStatus.season}`)
+    fetch(`${API_BASE}/api/standings/${systemStatus.season}`)
       .then((res) => res.json())
       .then((data) => setStandings(data));
 
-    fetch(`http://localhost:8000/api/team/${team.abbr}/schedule?season=${systemStatus.season}`)
+    fetch(`${API_BASE}/api/team/${team.abbr}/schedule?season=${systemStatus.season}`)
       .then((res) => res.json())
       .then((data) => {
         if (!data.error) setSchedule(data);
       });
 
-    fetch(`http://localhost:8000/api/team/${team.abbr}/news?season=${systemStatus.season}`)
+    fetch(`${API_BASE}/api/team/${team.abbr}/news?season=${systemStatus.season}`)
       .then((res) => res.json())
       .then((data) => {
         if (data && Array.isArray(data.articles)) {
@@ -543,7 +545,7 @@ function SchedulePage() {
   const [matchups, setMatchups] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/schedule?season=${selectedSeason}&week=${selectedWeek}`)
+    fetch(`${API_BASE}/api/schedule?season=${selectedSeason}&week=${selectedWeek}`)
       .then(res => res.json())
       .then(data => {
         // Map the API data back to the format the UI expects
@@ -704,7 +706,7 @@ function TeamSchedulePage({ team }: { team: Team }) {
 
   useEffect(() => {
     // Fetch schedule
-    fetch(`http://localhost:8000/api/team/${team.abbr}/schedule?season=${season}`)
+    fetch(`${API_BASE}/api/team/${team.abbr}/schedule?season=${season}`)
       .then(res => res.json())
       .then(data => {
         if (!data.error) {
@@ -738,7 +740,7 @@ function TeamSchedulePage({ team }: { team: Team }) {
       });
       
     // Fetch team info for record
-    fetch(`http://localhost:8000/api/team/${team.abbr}?season=${season}`)
+    fetch(`${API_BASE}/api/team/${team.abbr}?season=${season}`)
       .then(res => res.json())
       .then(data => setTeamData(data));
   }, [team.abbr, season]);
@@ -835,7 +837,7 @@ function GamePage({ gameId }: { gameId: number }) {
   const [gameData, setGameData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/game/${gameId}`)
+    fetch(`${API_BASE}/api/game/${gameId}`)
       .then(res => res.json())
       .then(data => setGameData(data));
   }, [gameId]);
@@ -1025,7 +1027,7 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
   const [playerData, setPlayerData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/player/${playerId}?season=${systemStatus.season}`)
+    fetch(`${API_BASE}/api/player/${playerId}?season=${systemStatus.season}`)
       .then(res => res.json())
       .then(data => setPlayerData(data));
   }, [playerId, systemStatus.season]);
@@ -1289,7 +1291,7 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`http://localhost:8000/api/stats/${mode}?season=${season}&category=${category}`)
+    fetch(`${API_BASE}/api/stats/${mode}?season=${season}&category=${category}`)
       .then(res => res.json())
       .then(data => {
         setStatsData(Array.isArray(data) ? data : []);
@@ -1533,7 +1535,7 @@ function StandingsPage() {
   const [standingsData, setStandingsData] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/standings/${year}`)
+    fetch(`${API_BASE}/api/standings/${year}`)
       .then(r => r.json())
       .then(data => setStandingsData(data));
   }, [year]);
@@ -1777,7 +1779,7 @@ function usePowerRankings(week?: number | null) {
   useEffect(() => {
     setLoading(true);
     const weekParam = week ? `&week=${week}` : "";
-    fetch(`http://localhost:8000/api/power_rankings?season=${systemStatus.season}${weekParam}`)
+    fetch(`${API_BASE}/api/power_rankings?season=${systemStatus.season}${weekParam}`)
       .then((res) => res.json())
       .then((json) => setData(json))
       .catch(() => setData(null))
@@ -1882,7 +1884,7 @@ function ArticlePage({ articleId }: { articleId: string }) {
 
   useEffect(() => {
     if (isDbArticle) {
-      fetch(`http://localhost:8000/api/news/article/${articleId}`)
+      fetch(`${API_BASE}/api/news/article/${articleId}`)
         .then(res => res.json())
         .then(data => {
           if (!data.error) setDbArticle(data);
@@ -2118,7 +2120,7 @@ function FantasyPlayerModal({ player: p, close }: { player: FantasyPlayer; close
   const [playerData, setPlayerData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/player/${playerId}?season=${systemStatus.season}`)
+    fetch(`${API_BASE}/api/player/${playerId}?season=${systemStatus.season}`)
       .then(res => res.json())
       .then(data => setPlayerData(data));
   }, [playerId, systemStatus.season]);
@@ -2733,7 +2735,7 @@ function FantasyHeader({ active }: { active: "news" | "rankings" }) {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/fantasy/players?season=${systemStatus.season || 2035}`)
+    fetch(`${API_BASE}/api/fantasy/players?season=${systemStatus.season || 2035}`)
       .then((res) => res.json())
       .then((data) => setAllPlayers(data.players || []))
       .catch(() => setAllPlayers([]));
@@ -2837,7 +2839,7 @@ function FantasyRankingsPage({ view }: { view: FantasyRankingsView }) {
     setVisibleCount(50);
     const endpoint = isWeekly ? "weekly" : isRos ? "ros" : "adp";
     const posParam = isAdp ? "ALL" : position;
-    fetch(`http://localhost:8000/api/fantasy/rankings/${endpoint}?season=${systemStatus.season}&week=${week}&position=${posParam}&limit=500`)
+    fetch(`${API_BASE}/api/fantasy/rankings/${endpoint}?season=${systemStatus.season}&week=${week}&position=${posParam}&limit=500`)
       .then((res) => res.json())
       .then((data) => setDbData(data))
       .catch(() => setDbData(null))
@@ -3059,7 +3061,7 @@ function FantasyDashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/fantasy/dashboard?season=${systemStatus.season}&week=${systemStatus.week}`)
+    fetch(`${API_BASE}/api/fantasy/dashboard?season=${systemStatus.season}&week=${systemStatus.week}`)
       .then(res => res.json())
       .then(d => setDashboardData(d))
       .catch(() => {});
@@ -3351,7 +3353,7 @@ function FantasyArticlePage({ slug }: { slug: string }) {
 
   useEffect(() => {
     if (!isStored) return;
-    fetch(`http://localhost:8000/api/news/article/${slug}`)
+    fetch(`${API_BASE}/api/news/article/${slug}`)
       .then((res) => res.json())
       .then((data) => { if (!data.error) setStored(data); })
       .catch(() => {});
@@ -3359,7 +3361,7 @@ function FantasyArticlePage({ slug }: { slug: string }) {
 
   useEffect(() => {
     const week = stored?.week ?? systemStatus.week;
-    fetch(`http://localhost:8000/api/fantasy/articles?season=${systemStatus.season}&week=${week}`)
+    fetch(`${API_BASE}/api/fantasy/articles?season=${systemStatus.season}&week=${week}`)
       .then((res) => res.json())
       .then(setWeekArticles)
       .catch(() => {});
@@ -3367,7 +3369,7 @@ function FantasyArticlePage({ slug }: { slug: string }) {
 
   useEffect(() => {
     if (isStored) return;
-    fetch(`http://localhost:8000/api/fantasy/dashboard?season=${systemStatus.season}&week=${systemStatus.week}`)
+    fetch(`${API_BASE}/api/fantasy/dashboard?season=${systemStatus.season}&week=${systemStatus.week}`)
       .then((res) => res.json())
       .then(setDashboardData)
       .catch(() => {});
@@ -3437,7 +3439,7 @@ function FantasyAllPage() {
 
   useEffect(() => { setRequestedWeek(systemStatus.week); }, [systemStatus.week]);
   useEffect(() => {
-    fetch(`http://localhost:8000/api/fantasy/articles?season=${systemStatus.season}&week=${requestedWeek}`)
+    fetch(`${API_BASE}/api/fantasy/articles?season=${systemStatus.season}&week=${requestedWeek}`)
       .then((res) => res.json())
       .then(setData)
       .catch(() => {});
@@ -3510,7 +3512,7 @@ function SocialIcon({ name }: { name: SocialIconName }) {
 // ---------------------------------------------------------------------------------------------------------
 // Agent Wire (docs/SOCIAL_MATRIX.md; data from /api/social/*, served by server/social_api.py)
 // ---------------------------------------------------------------------------------------------------------
-const SOCIAL_API = "http://localhost:8000/api/social";
+const SOCIAL_API = `${API_BASE}/api/social`;
 
 type SocialAuthor = {
   agent_id: string;
@@ -4175,7 +4177,7 @@ function SocialNflWidget() {
   const [games, setGames] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/schedule?season=${systemStatus.season}&week=${systemStatus.week}`)
+    fetch(`${API_BASE}/api/schedule?season=${systemStatus.season}&week=${systemStatus.week}`)
       .then((res) => res.json())
       .then((data: any[]) => {
         if (!Array.isArray(data)) return;
@@ -4272,7 +4274,7 @@ function ScoreTicker() {
   const prevWeek = week > 1 ? week - 1 : 1;
   
   useEffect(() => {
-    fetch(`http://localhost:8000/api/schedule?season=${season}&week=${prevWeek}`)
+    fetch(`${API_BASE}/api/schedule?season=${season}&week=${prevWeek}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -4316,7 +4318,7 @@ function MegaMenu({
   const [highlightedGames, setHighlightedGames] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/schedule?season=${systemStatus.season}&week=${week}`)
+    fetch(`${API_BASE}/api/schedule?season=${systemStatus.season}&week=${week}`)
       .then(res => res.json())
       .then(data => {
         if (!data.error) {
@@ -4414,18 +4416,18 @@ function App() {
 
   useEffect(() => {
     Promise.all([
-      fetch("http://localhost:8000/api/status").then(r => r.json()),
-      fetch("http://localhost:8000/api/seasons").then(r => r.json())
+      fetch(`${API_BASE}/api/status`).then(r => r.json()),
+      fetch(`${API_BASE}/api/seasons`).then(r => r.json())
     ]).then(([statusData, seasonsData]) => {
       setSystemStatus({ ...statusData, availableSeasons: Array.isArray(seasonsData) ? seasonsData : [statusData.season] });
       setWeek(statusData.week);
 
-      fetch(`http://localhost:8000/api/news/week/${statusData.week}?season=${statusData.season}`)
+      fetch(`${API_BASE}/api/news/week/${statusData.week}?season=${statusData.season}`)
         .then(r => r.json())
         .then(news => setNewsData(news))
         .catch(err => console.error("Error fetching news:", err));
 
-      fetch(`http://localhost:8000/api/power_rankings?season=${statusData.season}`)
+      fetch(`${API_BASE}/api/power_rankings?season=${statusData.season}`)
         .then(r => r.json())
         .then(rankings => setPowerRankings(rankings))
         .catch(err => console.error("Error fetching power rankings:", err));
@@ -4535,14 +4537,16 @@ function App() {
             <button aria-label="Search">
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
             </button>
-            <span className="live-dot">LIVE</span>
+            <a className="live-dot" href="#debug" title="Debug: league state, tables, runs">LIVE</a>
           </div>
         </nav>
         {menuOpen && <MegaMenu week={week} setWeek={setWeek} close={() => setMenuOpen(false)} />}
         {statsOpen && <StatsDropdown close={() => setStatsOpen(false)} />}
       </header>
 
-      {articleRoute ? (
+      {route === "#debug" ? (
+        <DebugPage />
+      ) : articleRoute ? (
         <ArticlePage articleId={articleRoute[1]} key={route} />
       ) : playerRoute ? (
         <PlayerPage category="any" playerId={Number(playerRoute[1])} key={route} />
