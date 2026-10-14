@@ -392,15 +392,16 @@ def classify(f):
         return "ROSTER_LIST"
     # Box score > R1 (mapped Oct 13): one game's player stats, TEAM column, L2 BOTH / R2 category.
     # It also shows TEAM NAME, SORT and R2, so it must come before TEAM_STATS.
-    if f.find("BOX SCORE") and f.find("PLAYER STATS") and f.find("TEAM") and "OFF YARDS GAINED" not in t:
+    if f.find("BOX SCORE") and f.find("PLAYER STATS") and f.find("TEAM") and "TOTAL YARDS GAINED" not in t:
         return "GAME_STATS"
     if "PLAYER NAME" in t and "VIEW PLAYER CARD" in t:
         return "PLAYER_STATS"
     if "TEAM NAME" in t and "SORT" in t and f.find("R2"):
         return "TEAM_STATS"
     # League Schedule > Cross on a played game (mapped Oct 13): L1 BOX SCORE | PLAYER STATS R1
-    if f.find("BOX SCORE") and f.find("PLAYER STATS") and "OFF YARDS GAINED" in t:
-        return "BOX_SCORE"
+    if f.find("BOX SCORE") and f.find("PLAYER STATS") and any(
+            lab in t for lab in ("OFF YARDS GAINED", "TOTAL YARDS GAINED", "TIME OF POSSESSION", "TURNOVERS")):
+        return "BOX_SCORE"                     # top or scrolled to the bottom
     if "PLAYER STATS" in t and "LEGACY LEADERBOARD" in t:
         return "STATS_TILES"
     if "LEAGUE SCHEDULE" in t and "PLAYOFF PICTURE" in t:
@@ -832,11 +833,12 @@ ZERO_RE = re.compile(r"^-?0+(\.0+)?%?$")
 NUM_RE = re.compile(r"^-?[\d,]+(\.\d+)?%?$")
 
 
-def all_zero_rows(f, top=0.45):
-    """True when every numeric cell in the lower part of the table is zero."""
+def all_zero_rows(f, top=0.45, min_nums=20):
+    """True when every numeric cell in the lower part of the table is zero. Game tables can
+    have a single number column (General: DP), so they use a lower min_nums."""
     H = f.size[1]
     nums = [t for t, b in f.items if b[1] > H * top and NUM_RE.match(t.replace(" ", ""))]
-    return len(nums) >= 20 and all(ZERO_RE.match(n.replace(",", "")) for n in nums)
+    return len(nums) >= min_nums and all(ZERO_RE.match(n.replace(",", "")) for n in nums)
 
 
 def wait_table_loaded(timeout=8.0):
@@ -865,7 +867,7 @@ def table_text(path, top=0.48, bottom=0.90):
 
 
 def capture_list(folder, prefix, rows_per_page=10, max_pages=250, stop_at_zeros=True, direction="down",
-                 text_end=False):
+                 text_end=False, zero_min=20):
     os.makedirs(folder, exist_ok=True)
     wait_table_loaded()
     prev, prev_text = None, None
@@ -882,7 +884,7 @@ def capture_list(folder, prefix, rows_per_page=10, max_pages=250, stop_at_zeros=
         if stop_at_zeros:
             f = Frame.__new__(Frame)
             f.path, f.items, f.size = path, ocr(path), Image.open(path).size
-            if all_zero_rows(f):
+            if all_zero_rows(f, min_nums=zero_min):
                 log(f"  {prefix}: rest of list is zeros, stopping at page {page + 1}")
                 return page + 1
         press(direction, hold=0.07, wait=LIST_WAIT, times=rows_per_page)
@@ -920,7 +922,7 @@ def traverse(direction, burst=6, max_rounds=12):
 
 
 def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=traverse, text_end=False,
-                      end_on_left=False):
+                      end_on_left=False, stop_at_zeros=False):
     """Wide tables: NAME/POS are NOT pinned when the table scrolls right, so every page is
     captured at both edges at the same row position. Row N of {base}_NNN.png is row N of
     {base}_right_NNN.png. Zig-zags (left, right, down, right, left, down...) so each page
@@ -962,6 +964,15 @@ def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=tr
             os.remove(second)
             log(f"  {base}: end of list after {page} pages")
             return page
+        if stop_at_zeros:
+            left = path("left", page)
+            fl = Frame.__new__(Frame)
+            fl.path, fl.items, fl.size = left, ocr(left), Image.open(left).size
+            if all_zero_rows(fl, top=0.48):
+                log(f"  {base}: rest of list is zeros, stopping at page {page + 1}")
+                if side == "left":              # we ended this page on the right edge
+                    traverse("left")
+                return page + 1
         side = other
         press("down", hold=0.07, wait=LIST_WAIT, times=rows_per_page)
     log(f"  {base}: hit max pages")
@@ -1227,24 +1238,34 @@ def game_header(f):
     return [t for t, b in sorted(f.items, key=lambda i: i[1][0]) if H * 0.44 < b[1] < H * 0.48]
 
 
-def traverse_game(direction, burst=6, max_rounds=14):
-    """Left/Right on a game's player stats until the edge. Right first moves a column highlight
-    (~12 presses on Kicking) before the table scrolls, so a header that stops changing isn't
-    enough: at the right edge TEAM/NAME have scrolled away, at the left edge NAME shows."""
+def traverse_game(direction, chunk=1.5, max_chunks=8):
+    """Left/Right across a game's player-stats table by holding the key (Madden auto-repeats:
+    ~4 s of held Right crosses Defense, vs ~20 s of single presses). Right first moves a column
+    highlight before the table scrolls, so a stable header isn't enough: at the right edge
+    TEAM/NAME have scrolled away, at the left edge NAME shows."""
     prev = None
 
     def at(h):
         return ("NAME" in h) if direction == "left" else ("NAME" not in h and "TEAM" not in h)
 
-    for _ in range(max_rounds):
+    def key(h):
+        # OCR varies between reads ("INT YDS"/"INTYDS", sort marks "Y TAK"/"*TAK"), so compare the
+        # normalised labels at the edge being looked for
+        n = [re.sub(r"^[YV*4]", "", norm(x)) for x in h]
+        return tuple(n[-2:] if direction == "right" else n[:2])
+
+    for _ in range(max_chunks):
         f = Frame()
         h = game_header(f)
-        if h and h == prev and at(h):
+        if h and prev is not None and key(h) == key(prev) and at(h):
             return f
         prev = h
-        press(direction, hold=0.1, wait=0.5, times=burst)
+        key_down(direction)
+        time.sleep(chunk)
+        key_up(direction)
+        time.sleep(0.5)
     f = Frame()
-    if game_header(f) == prev and at(prev):
+    if prev and key(game_header(f)) == key(prev) and at(prev):
         return f
     path = save_debug(f, f"game_never_reached_{direction}_edge")
     raise Abort(f"Never reached the {direction} edge of the game stats table (frame: {path})")
@@ -1262,9 +1283,10 @@ def capture_game_category(folder, base, cat, all_rows):
     wait_table_loaded()
     if norm(cat) in GAME_WIDE_CATEGORIES:
         capture_wide_list(folder, base, rows_per_page=GAME_PAGE_STEP, traverse=traverse_game, text_end=True,
-                          end_on_left=True)
+                          end_on_left=True, stop_at_zeros=not all_rows)
     else:
-        capture_list(folder, base, rows_per_page=GAME_PAGE_STEP, stop_at_zeros=not all_rows, text_end=True)
+        capture_list(folder, base, rows_per_page=GAME_PAGE_STEP, stop_at_zeros=not all_rows, text_end=True,
+                     zero_min=6)
 
 
 def box_score_bottom():
@@ -1287,8 +1309,14 @@ def capture_game(gdir, all_rows):
     snap(os.path.join(gdir, "box_top.png"))
     f = box_score_bottom()
     subprocess.run(["cp", f.path, os.path.join(gdir, "box_bottom.png")])
-    press("r1", wait=2.0)
-    f, _ = wait_for(["GAME_STATS"], timeout=15)
+    for attempt in range(3):                 # R1 is sometimes dropped
+        press("r1", wait=2.0)
+        f, s = wait_for(["GAME_STATS", "BOX_SCORE"], timeout=15)
+        if s == "GAME_STATS":
+            break
+        log(f"  R1 didn't register (attempt {attempt + 1}), pressing again")
+    else:
+        raise Abort("R1 never opened the game's player stats")
     _, first = game_chips(f)
     if not first:
         raise Abort("Can't read the game stats category chip")

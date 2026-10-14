@@ -45,7 +45,7 @@ Claude Code runs on JR's Mac and is expected to **test each phase on the real co
 | --- | --- |
 | Keep the live stream (`pipeline/main.py`) only as a **trigger**: see `ADVANCE_WEEK`, then fire on the next `MAIN_MENU` | Games (CPU and user) are only final after Advance Week. Polling chiaki-ng would disconnect the player |
 | All stats come from `madden_capture.py` + `extract.py` over chiaki-ng, not from stream frames | The stream only records what the user scrolls; the capture gets every page for the whole league |
-| Capture **every game's box score and both teams' player stats every week** | CPU-simmed games have box scores. This replaces the score-weighted backfill split with real lines; the backfill stays only as a fallback for games the capture missed |
+| ~~Capture every game's box score and both teams' player stats every week~~ **Changed by JR (Oct 14):** the weekly capture stays Season Stats + Team Stats + the previous week's schedule (~20 min). `--only games` (box score + both teams' player stats) is used **only to recover a skipped week** | Measured Oct 14: ~7 min a game, ~1 h 50 min a week, against ~20 min for the season/team/schedule capture. The score-weighted backfill stays the normal way per-game lines are filled |
 | Season Stats is still captured weekly, as a **cross-check** | Each player's game lines summed over the season must equal his Season Stats total |
 | Every stat the capture finds gets a **database column**, ignored by everything for now | JR wants the data kept; consumers come later |
 | A failed load **stops the pipeline for that week**: nothing written, no backfill, no engines, no articles | Bad data must not reach articles |
@@ -102,7 +102,7 @@ Scripts: `tools/vision_dump.py` (Apple Vision OCR of a folder of screenshots, wr
 
 1. **Detect**: `pipeline/main.py` reads the stream at 1 FPS; `TemplateClassifier` matches only `ADVANCE_WEEK` and `MAIN_MENU`. Advance Week arms; the next main menu fires once. When the broadcast is offline, keep retrying the stream URL and resume.
 2. **Connect**: `pipeline/weekly_capture.py` runs the chiaki `stream` command, presses Escape once the PlayStation menu is recognized by OCR (retry once) to close it, then waits up to 2 minutes for `madden_capture.py --test` to see a franchise menu. Otherwise: notice, press nothing else.
-3. **Capture**: Season Stats (NFL, every category), Team Stats (3 tabs), the previous week's League Schedule, and every game of that week (box score + both teams' player stats).
+3. **Capture**: Season Stats (NFL, every category), Team Stats (3 tabs) and the previous week's League Schedule. (`--only games` for a week's box scores + player stats is run by hand only when a week was skipped; JR, Oct 14.)
 4. **Hand back**: notice to JR's phone; the script does not disconnect.
 5. **Extract**: `extract.py` → CSVs.
 6. **Validate and load**: `pipeline/load_capture.py`, one transaction. Any failed check: nothing written, the week stops, notice sent. Re-running by hand resumes.
@@ -114,7 +114,7 @@ Scripts: `tools/vision_dump.py` (Apple Vision OCR of a folder of screenshots, wr
 
 | Mode | When | What | Writes |
 | --- | --- | --- | --- |
-| `--only games [--week "SEASON WEEK 9"]` | Every week (default previous week); by hand to recover a skipped week | Per game: League Schedule → highlight the game → Cross; box score screenshot at the top and at the bottom; R1 → player stats, captured like Season Stats (every category, every page); both teams are shown by default | `games` scores, `team_stats`, `player_stats` |
+| `--only games [--week "SEASON WEEK 9"]` | Only by hand, to recover a skipped week (JR, Oct 14; ~7 min a game) | Per game: League Schedule → highlight the game → Cross; box score screenshot at the top and at the bottom; R1 → player stats, captured like Season Stats (every category, every page); both teams are shown by default | `games` scores, `team_stats`, `player_stats` |
 | `--only roster` | Start of season, after trades/signings, when a load reports unmatched players; draft classes | Manage Roster → Roster tile; per team via the L2 dropdown: press down one row at a time and screenshot each row once the card has settled (card read on the Mac: full name, number, archetype, dev trait, age, height, weight, experience); also one screenshot per list page for Gemini (POS, AGE, OVR, DEV) (~1,700 players, ~40–45 min) | `players`, `player_seasons` |
 | `--only season-schedule` | Start of season | League Schedule weeks 1–18 via the week dropdown (~50 screenshots) | `games` as SCHEDULED (272 games) |
 

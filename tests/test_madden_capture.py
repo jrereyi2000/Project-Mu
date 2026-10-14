@@ -83,6 +83,10 @@ class ClassifyTest(unittest.TestCase):
         f = _Frame("L1", "BOX SCORE", "PLAYER STATS", "BACK", "DET", "OFF YARDS GAINED", "OFF RUSH YARDS")
         self.assertEqual(mc.classify(f), "BOX_SCORE")
 
+    def test_box_score_scrolled_to_bottom(self):
+        f = _Frame("L1", "BOX SCORE", "PLAYER STATS", "R1", "TOTAL YARDS GAINED", "TIME OF POSSESSION")
+        self.assertEqual(mc.classify(f), "BOX_SCORE")
+
     def test_game_player_stats(self):
         # also shows TEAM NAME / SORT / R2 like Team Stats; the BOX SCORE | PLAYER STATS tabs decide
         f = _Frame("L1", "BOX SCORE", "PLAYER STATS", "R1", "BOTH", "PASSING", "TEAM", "NAME", "TEAM NAME", "SORT")
