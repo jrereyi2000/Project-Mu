@@ -13,6 +13,10 @@ played.
 - Fallback: on every hub visit the hub's week label ("2035: WEEK 18") is read with Apple Vision. A
   week later than league_state.current_week that no run has been started for fires too (after the
   same 30 seconds), so a missed Advance Week frame doesn't lose the week.
+- A bye week's hub shows only "BYE WEEK"; it counts as the week after the last numbered week seen
+  (kept in captures/trigger_state.json as last_seen), and two byes in a row can't be told apart, so
+  then only Advance Week fires.
+- Each time the broadcast comes back, the hub visit starts over (label re-read, 30 s count restarted).
 - A label whose season isn't league_state.current_season never fires (a new season is set by hand);
   JR gets one notice. A week already attempted (captures/trigger_state.json) never fires twice; a
   failed week is resumed by hand (pipeline.weekly_capture --resume).
@@ -42,6 +46,24 @@ LABEL_RE = re.compile(r"\b(20\d\d)\s*[:;.]?\s*(PRE\s*SEASON\s*)?(WEEK\s*\d{1,2}|
 
 def log(msg):
     print(f"[{datetime.datetime.now():%H:%M:%S}] [trigger] {msg}", flush=True)
+
+
+BYE_RE = re.compile(r"\bBYE\s*WEEK\b")
+
+
+def is_bye_label(text):
+    """A bye week's hub shows only 'BYE WEEK': no season or week number (seen Oct 14, test franchise)."""
+    return bool(BYE_RE.search((text or "").upper())) and not LABEL_RE.search((text or "").upper())
+
+
+def infer_label(label, text, last_seen):
+    """The hub's (season, week): the parsed label, or on a bye week's hub ('BYE WEEK') the week after
+    the last numbered week seen (last_seen = [season, week, bye?]); None when it can't be told."""
+    if label:
+        return label
+    if is_bye_label(text) and last_seen and not last_seen[2]:
+        return (last_seen[0], last_seen[1] + 1)
+    return None
 
 
 def parse_hub_label(text):
@@ -239,6 +261,7 @@ def watch(url, fire_after=FIRE_AFTER, dry_run=False, record=None):
             continue
         video.start()
         label = None
+        trig.leave_hub()                           # a reconnect is a new hub visit (armed is kept)
         try:
             while video.running:
                 time.sleep(1.0)
@@ -256,7 +279,16 @@ def watch(url, fire_after=FIRE_AFTER, dry_run=False, record=None):
                     trig.label_read = True
                     try:
                         label, text = read_hub_label(frame, rec.path("label") + ".png" if rec else None)
-                        ok, why = due(label, league_state(), states())
+                        st = states()
+                        last = st.get("last_seen")
+                        label = infer_label(label, text, last)
+                        if label:
+                            st["last_seen"] = [label[0], label[1], is_bye_label(text)]
+                            if not dry_run:
+                                save_state(st)
+                        ok, why = due(label, league_state(), st)
+                        if label and is_bye_label(text):
+                            why = f"bye week, taken as week {label[1]} (after week {last[1]}); {why}"
                     except Exception as e:
                         label, text, ok, why = None, "", False, f"label check failed: {e}"
                     log(f"Weekly Hub: label {label} (read {text!r}); {why}")
@@ -278,7 +310,7 @@ def watch(url, fire_after=FIRE_AFTER, dry_run=False, record=None):
                 if dry_run:
                     log(f"WOULD FIRE the weekly run ({reason}); dry run, nothing started")
                     if label:
-                        dry_state["attempted"] = {"season": label[0], "week": label[1]}
+                        dry_state["attempted"] = {"season": label[0], "week": label[1], "at": "dry run"}
                     continue
                 video.stop()
                 fire(label, reason)

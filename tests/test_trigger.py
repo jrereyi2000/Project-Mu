@@ -1,7 +1,7 @@
 """pipeline/trigger.py: hub label parsing, the fire timing, and when a hub week is due."""
 import unittest
 
-from pipeline.trigger import Trigger, due, parse_hub_label
+from pipeline.trigger import Trigger, due, infer_label, is_bye_label, parse_hub_label
 
 
 class LabelTest(unittest.TestCase):
@@ -14,6 +14,16 @@ class LabelTest(unittest.TestCase):
     def test_unreadable_preseason_and_pro_bowl(self):
         for text in ("", "WEEK 2", "2035: PRESEASON WEEK 1", "2035: PRO BOWL", "@ BUCCANEERS"):
             self.assertIsNone(parse_hub_label(text), text)
+
+
+class ByeTest(unittest.TestCase):
+    def test_bye_week_is_the_week_after_the_last_numbered_one(self):
+        self.assertTrue(is_bye_label("BYE WEEK"))
+        self.assertFalse(is_bye_label("2027: WEEK3 VS PACKERS"))
+        self.assertEqual(infer_label(None, "BYE WEEK", [2027, 3, False]), (2027, 4))
+        self.assertIsNone(infer_label(None, "BYE WEEK", [2027, 4, True]))      # two byes in a row: unknown
+        self.assertIsNone(infer_label(None, "BYE WEEK", None))
+        self.assertEqual(infer_label((2027, 5), "2027: WEEK5", [2027, 4, True]), (2027, 5))
 
 
 class TimingTest(unittest.TestCase):
