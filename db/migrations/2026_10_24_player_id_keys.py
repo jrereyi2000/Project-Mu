@@ -77,15 +77,24 @@ def merge_rows(cur, table, where, args):
 
 def roster_index(cur):
     """{(season, team_id, name key): [(position, player_id), ...]} from players + player_seasons."""
-    cur.execute("SELECT s.season, s.team_id, s.position, p.id, p.player_name FROM players p "
-                "JOIN player_seasons s ON s.player_id = p.id")
+    cur.execute("SELECT s.season, s.team_id, s.position, p.id, p.player_name, "
+                "(s.archetype IS NOT NULL OR s.role IS NOT NULL OR s.dev_trait IS NOT NULL) "
+                "FROM players p JOIN player_seasons s ON s.player_id = p.id")
     idx = {}
-    for season, team, pos, pid, pname in cur.fetchall():
-        if team is None:                     # on no roster this season (cleared by the roster load)
+    for season, team, pos, pid, pname, confirmed in cur.fetchall():
+        if team is None:                     # no team this season (team-less rows are skipped)
             continue
+        if confirmed:
+            CONFIRMED.add(pid)
         idx.setdefault((season, team, name_key(pname)), []).append((pos, pid))
         idx.setdefault((season, None, name_key(pname)), []).append((pos, pid, team))
     return idx
+
+
+# players the roster load wrote this season (card fields set): when an old duplicate row still shares
+# a player's name, team and position (the old scanner's "B. Thomas Jr" next to Brian Thomas Jr.),
+# the confirmed one is the player
+CONFIRMED = set()
 
 
 def resolve(idx, season, team, pos, pname):
@@ -99,6 +108,8 @@ def resolve(idx, season, team, pos, pname):
         return None, ("ambiguous" if hits else "no team, no match")
     hits = idx.get((season, team, name_key(pname)), [])
     exact = [pid for p, pid in hits if p == pos]
+    if len(exact) > 1 and len([pid for pid in exact if pid in CONFIRMED]) == 1:
+        exact = [pid for pid in exact if pid in CONFIRMED]
     if len(exact) == 1:
         return exact[0], "name + team + position"
     if len(set(pid for _, pid in hits)) == 1:

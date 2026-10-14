@@ -184,12 +184,27 @@ def load_roster(cur, folder, season, report):
     missing = [e for e in existing if e["team_id"] is not None and e["id"] not in seen]
     report["not_on_any_roster"] = len(missing)
     report["not_on_any_roster_sample"] = [e["id"] for e in missing[:20]]
-    # a full 32-team capture is the whole league: anyone it didn't find is on no team this season
-    # (JR, Oct 14: clear the team, delete nothing; stats and history stay)
+    # A full 32-team capture is the whole league. Anyone it didn't find who holds no real data (no
+    # stats, awards, article tags or agent memories; on Oct 14 these were the old video scanner's
+    # misreads and duplicates) is deleted with their generated fantasy rows. Anyone with real data
+    # keeps their team and is listed (JR, Oct 14: clearing the team broke the engines, which
+    # assume every player_seasons row has one).
     if missing and len(per_team) == 32:
-        cur.execute("UPDATE player_seasons SET team_id = NULL WHERE season = %s AND player_id = ANY(%s)",
-                    (season, [e["id"] for e in missing]))
-        report["team_cleared"] = len(missing)
+        ids = [e["id"] for e in missing]
+        cur.execute("""SELECT p.id FROM unnest(%s::int[]) AS p(id) WHERE
+                       EXISTS (SELECT 1 FROM season_stats x WHERE x.player_id = p.id) OR
+                       EXISTS (SELECT 1 FROM player_stats x WHERE x.player_id = p.id) OR
+                       EXISTS (SELECT 1 FROM awards x WHERE x.player_id = p.id) OR
+                       EXISTS (SELECT 1 FROM article_players x WHERE x.player_id = p.id) OR
+                       EXISTS (SELECT 1 FROM agent_memory_entries x WHERE x.player_id = p.id)""", (ids,))
+        keep = {r[0] for r in cur.fetchall()}
+        drop = [i for i in ids if i not in keep]
+        if drop:
+            for t in ("fantasy_projections", "fantasy_sim_adp", "fantasy_sim_picks", "fantasy_sim_player_weeks"):
+                cur.execute(f"DELETE FROM {t} WHERE player_id = ANY(%s)", (drop,))
+            cur.execute("DELETE FROM players WHERE id = ANY(%s)", (drop,))      # player_seasons cascade
+        report["deleted_not_on_any_roster"] = len(drop)
+        report["kept_not_on_any_roster"] = sorted(keep)
     return len(parsed)
 
 
