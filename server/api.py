@@ -11,6 +11,7 @@ from typing import Optional
 import re
 
 from engines.gotw_engine import display_excitement
+from server import social_api
 
 CONN_INFO = "host=localhost dbname=madden user=postgres password=postgres"
 
@@ -59,6 +60,28 @@ def start_local_wakeup(team_id: int, season: int, week: int, label: str = "") ->
 
     threading.Thread(target=run, name=f"local-wakeup-{team_id}-{season}-{week}", daemon=True).start()
     return True
+
+
+def maybe_start_team_wakeup(cur, team_id: int, season: int, label: str = "") -> bool:
+    """Starts the team's local wakeup (beat portfolio + Agent Wire posts) if this is the current season and the team
+    has no 'Local Beat N' article for the current week yet. Used by the team news page and the Agent Wire Team Hub."""
+    cur.execute("SELECT current_season, current_week FROM league_state LIMIT 1;")
+    st = cur.fetchone()
+    curr_season = st["current_season"] if st else 2035
+    curr_week = st["current_week"] if st else 18
+    if season != curr_season or not AUTO_LOCAL_WAKEUP:
+        return False
+    cur.execute("""
+        SELECT COUNT(*) AS cnt
+        FROM news_feed n
+        WHERE n.season = %s AND n.week = %s AND n.content_type = 'ARTICLE'
+          AND n.team_id = %s AND n.slot LIKE 'Local Beat%%';
+    """, (season, curr_week, team_id))
+    cnt_row = cur.fetchone()
+    if cnt_row and cnt_row["cnt"] > 0:
+        return False
+    # Runs in the background; the new coverage shows up on a later page load.
+    return start_local_wakeup(team_id, season, curr_week, label=label)
 
 
 @asynccontextmanager
@@ -288,20 +311,9 @@ def get_team_news(abbr: str, season: Optional[int] = None, limit: int = 10):
             if season is None:
                 season = curr_season
 
-            # 2. Check if the team's local beat has already been woken for the active week. Local wakeups
-            # file every article under the team with slot 'Local Beat N' (national primers use 'Slot 6-8').
-            target_week = curr_week if season == curr_season else None
-            if target_week is not None:
-                cur.execute("""
-                    SELECT COUNT(*) AS cnt
-                    FROM news_feed n
-                    WHERE n.season = %s AND n.week = %s AND n.content_type = 'ARTICLE'
-                      AND n.team_id = %s AND n.slot LIKE 'Local Beat%%';
-                """, (season, target_week, team_id))
-                cnt_row = cur.fetchone()
-                if (not cnt_row or cnt_row["cnt"] == 0) and AUTO_LOCAL_WAKEUP:
-                    # Runs in the background; the new beat coverage shows up on a later page load.
-                    start_local_wakeup(team_id, season, target_week, label=abbr)
+            # 2. Wake the team's local beat for the active week if it hasn't been (see maybe_start_team_wakeup).
+            # Local wakeups file every article under the team with slot 'Local Beat N' (national primers use 'Slot 6-8').
+            maybe_start_team_wakeup(cur, team_id, season, label=abbr)
 
             # 3. Query articles tagged with this team via article_teams OR news_feed.team_id
             cur.execute("""
@@ -1576,23 +1588,7 @@ def get_fantasy_dashboard_api(season: int = 2035, week: int = 18):
                 "hero": front[0] if front else placeholder_hero,
                 "articles": front[1:4] if front else placeholder_articles,
                 "more_analysis_count": len(stored) - len(front),
-                "social_takes": [
-                    {
-                        "quote": f"George Crawford and Trey'Mane Davis enter Week {week} as the #1 scoring stack in the simulated league.",
-                        "author": "THE VOLUME BOT",
-                        "tag": "CAR • QB/WR"
-                    },
-                    {
-                        "quote": f"Week {week} Steelers–Browns has the highest defensive volatility on the board. Start skill players with confidence.",
-                        "author": "TAPE + DATA",
-                        "tag": "GAME ENVIRONMENT"
-                    },
-                    {
-                        "quote": f"Ka'Von Franklin is dominating red-zone touches with 16 rushing TDs. Must-start in Week {week}.",
-                        "author": "PRIME TIME AGENT",
-                        "tag": "TOUCHDOWN SIGNAL"
-                    }
-                ],
+                "social_takes": social_api.fantasy_takes(cur, season, week),
                 "excitement_games": excitement_games,
                 "quick_rankings": {
                     "Weekly": weekly_players,
@@ -2264,6 +2260,68 @@ def trigger_team_wakeup(team_id: int, season: int = 2035, week: int = 18, live: 
             if live else f"Team #{team_id} dry run: prompts compiled, nothing saved (pass live=true to generate)."
         ),
     }
+
+# --- Agent Wire (docs/SOCIAL_MATRIX.md §7; queries in server/social_api.py) ---
+@app.get("/api/social/feed")
+def social_feed(season: Optional[int] = None, week: Optional[int] = None, tab: str = "foryou",
+                team: Optional[str] = None, trend: Optional[str] = None, limit: int = 30, offset: int = 0):
+    """Home feed for a week (default: the latest week with posts): top-level posts, For You (engagement with a mild
+    recency weight) or Latest. team=ABBR and trend=KIND:KEY filter it."""
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            return social_api.feed(cur, season, week, tab, team, trend, limit, offset)
+
+
+@app.get("/api/social/post/{post_id}")
+def social_post(post_id: int):
+    """One post with its parent (for a reply) and its replies, oldest first."""
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            return social_api.post_detail(cur, post_id)
+
+
+@app.get("/api/social/profile/{handle}")
+def social_profile(handle: str, season: Optional[int] = None, limit: int = 40, offset: int = 0):
+    """An account (by handle, with or without @) and its posts this season, newest first."""
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            return social_api.profile(cur, handle, season, limit, offset)
+
+
+@app.get("/api/social/trends")
+def social_trends(season: Optional[int] = None, week: Optional[int] = None, limit: int = 20):
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            return social_api.trends(cur, season, week, limit)
+
+
+@app.get("/api/social/search")
+def social_search(q: str = "", season: Optional[int] = None, limit: int = 40):
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            return social_api.search(cur, q, season, limit)
+
+
+@app.get("/api/social/suggestions")
+def social_suggestions(season: Optional[int] = None, week: Optional[int] = None, limit: int = 3):
+    """Who to follow: the accounts whose posts drew the most likes this week."""
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            return social_api.suggestions(cur, season, week, limit)
+
+
+@app.get("/api/social/team/{abbr}")
+def social_team(abbr: str, season: Optional[int] = None, week: Optional[int] = None, tab: str = "latest",
+                limit: int = 40, offset: int = 0):
+    """A Team Hub feed. Viewing it starts the team's local wakeup, like the team page does."""
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            data = social_api.team_hub(cur, abbr, season, week, tab, limit, offset)
+            if "team" in data:
+                data["wakeup_started"] = maybe_start_team_wakeup(
+                    cur, data["team"]["id"], data["season"], label=data["team"]["abbr"])
+            return data
+
 
 if __name__ == "__main__":
     import uvicorn

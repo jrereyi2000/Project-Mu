@@ -148,6 +148,23 @@ class ReplyAndWakeupTests(unittest.TestCase):
         quiet = plan_team_wakeup(ctx, 32)                         # popularity 68 -> 1 pundit
         self.assertEqual(len([a for a in quiet["assignments"] if a["archetype"] not in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER")]), 1)
 
+    def test_sibling_replies_take_different_stances_and_fans_get_angles(self):
+        ctx = league(week=9)
+        plan = plan_social_week(ctx)
+        replies = plan_replies(ctx, plan, saved_posts(ctx, plan))
+        first = [r for r in replies if r["parent"]["id"] == replies[0]["parent"]["id"]]
+        self.assertEqual(len({r["stance"] for r in first}), len(first))
+        fans = [a for a in plan["assignments"] if a["archetype"] == "DIE_HARD_FAN" and a["kind"] == "REACTION"]
+        self.assertTrue(all(a["angle"] for a in fans))
+        self.assertGreater(len({a["angle"] for a in fans}), 4)
+        self.assertFalse([a for a in plan["assignments"] if a["kind"] == "BEAT" and a["angle"]])
+
+    def test_planned_posts_land_in_waking_hours(self):
+        ctx = league(week=9)
+        for a in plan_social_week(ctx)["assignments"]:
+            if a["agent_id"] and a["kind"] not in ("REACTION", "REPLY") and not (a["kind"] == "MEME" and a["subject"]["type"] == "game"):
+                self.assertFalse(1 <= post_time(ctx, a).hour < 7, a["kind"])
+
     def test_pundit_pool_matches_the_dispatcher(self):
         with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
             tree = ast.parse(f.read())

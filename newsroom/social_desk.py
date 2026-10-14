@@ -476,8 +476,29 @@ class Accounts:
 
 
 # --------------------------------------------------------------------------------------------- planner ---
+# Fan posts each get one angle so a team's fans don't all write the same post (docs/SOCIAL_MATRIX.md §3).
+FAN_ANGLES = (
+    "one specific player from the facts",
+    "the turning point of the game as you remember it (no invented stats)",
+    "what this result means for the rest of the season",
+    "trash talk aimed at the other team's fans",
+    "the coaching and play-calling",
+    "the atmosphere in the stadium or at your watch party",
+    "one number from the facts that tells the story",
+    "looking ahead to next week's game",
+)
+FAN_ARCHETYPES = ("DIE_HARD_FAN", "BANDWAGON_FAN")
+# Replies to the same post take different stances, in this order.
+REPLY_STANCES = ("push back on it", "agree and add a point of your own", "make a joke about it")
+
+
 def _assignment(kind, account, subject, facts, filed_team=None):
+    angle = None
+    if account and account.get("archetype") in FAN_ARCHETYPES and kind not in ("SHARE", "REPLY"):
+        seed = sum(ord(c) for c in f"{account['agent_id']}|{kind}|{subject.get('id')}")
+        angle = FAN_ANGLES[seed % len(FAN_ANGLES)]
     return {
+        "angle": angle,
         "kind": kind,
         "agent_id": account["agent_id"] if account else None,
         "handle": account["handle"] if account else None,
@@ -762,6 +783,9 @@ CONTRARIAN = {
     "FANTASY_GURU": "BERRY", "BERRY": "FANTASY_GURU", "YATES": "BERRY", "HERBSTREIT": "STEPHEN_A",
     "WINGO": "EISEN", "EISEN": "WINGO", "THE_ATHLETIC": "STEPHEN_A", "SCHEFTER_TWEET": "RAPOPORT",
     "RAPOPORT": "SCHEFTER_TWEET", "SIMMONS": "COWHERD", "NFL_MEMES": None, "DRAFT_SICKO": None,
+    # national writers (their article shares draw replies too)
+    "BARNWELL": "SKIP_TWEET", "SANDO": "COWHERD", "ROSENTHAL": "STEPHEN_A", "JOYNER": "MCAFEE",
+    "CHADIHA": "CLARK", "ACHO": "SHANNON", "KIMES": "STEPHEN_A", "ORLOVSKY": "RG3",
 }
 REPLY_SPREAD = (3, 3, 3, 3, 2, 2, 2, 2)  # replies per parent, most engaged parent first
 
@@ -840,6 +864,7 @@ def plan_replies(ctx: dict, plan: dict, posts: list, total: int = None) -> list:
                                    a.get("facts") or {}, filed_team=filed))
             out[-1]["parent"] = {"id": parent["id"], "handle": parent["handle"],
                                  "display_name": parent["display_name"], "text": parent["text"]}
+            out[-1]["stance"] = REPLY_STANCES[made % len(REPLY_STANCES)]
             made += 1
         if len(out) >= total:
             break

@@ -26,7 +26,8 @@ SOCIAL_RULES = """AGENT WIRE POSTING RULES (MANDATORY):
 - Never mention player or team ratings, "OVR", "overall", Madden or the video game. This league is covered as real football.
 - At most 2 hashtags, and none is fine. Emojis only if they fit your voice.
 - Do not @-mention anyone unless you are replying, and then only the account you reply to.
-- Stay in character. Fans speak as fans of their own team; reporters and analysts speak as themselves."""
+- Stay in character. Fans speak as fans of their own team; reporters and analysts speak as themselves.
+- Sound like one specific person, not a template. Avoid stock fan phrases: "casuals", "real fans" / "real ones", "plastic franchise", "bleed [colors] forever", "sick to my stomach", "refs handed them". Use one only if it is truly the point of the post."""
 
 KIND_INSTRUCTIONS = {
     "REACTION": "React to this game right after it ended. If FACTS has your_team, you are a fan of that team and it {your_team_result}: react like it. Otherwise react as yourself.",
@@ -74,6 +75,10 @@ def build_post_prompt(assignment: dict, account: dict, persona: str, team_name: 
     instruction = KIND_INSTRUCTIONS[kind_key(assignment)]
     instruction = instruction.replace("{your_team_result}", str(facts.get("your_team_result", "played")))
     parts = [f"POST TYPE: {kind_key(assignment)}", f"TASK: {instruction}"]
+    if assignment.get("angle"):
+        parts.append(f"YOUR ANGLE FOR THIS POST: {assignment['angle']}.")
+    if assignment.get("stance"):
+        parts.append(f"YOUR STANCE: {assignment['stance']}. Say something the post didn't already say.")
     if parent:
         parts.append(f"POST YOU ARE REPLYING TO ({parent['display_name']}, {parent['handle']}):\n{parent['text']}")
     parts.append("FACTS:\n" + json.dumps(facts, indent=1, ensure_ascii=False, default=str))

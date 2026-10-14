@@ -80,7 +80,24 @@ def _find_game(ctx, a):
     return None
 
 
+def _awake(t: dt.datetime, rng) -> dt.datetime:
+    """Moves a time between 1:00 and 6:59 to that morning between 7:00 and 9:59."""
+    if 1 <= t.hour < 7:
+        return t.replace(hour=7 + rng.randrange(3), minute=rng.randrange(60))
+    return t
+
+
 def post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.datetime:
+    """Simulated posting time; see _post_time. Planned posts (not reactions, game memes or replies) are kept to
+    waking hours."""
+    t = _post_time(ctx, a, parent_time)
+    if a["kind"] in ("REACTION", "REPLY") or (a["kind"] == "MEME" and a["subject"].get("type") == "game"):
+        return t
+    rng = _rng("awake", ctx["season"], ctx["week"], a.get("agent_id"), a["kind"], a["subject"].get("id"))
+    return _awake(t, rng)
+
+
+def _post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.datetime:
     """Simulated posting time (docs/SOCIAL_MATRIX.md §3). Publication week N looks back at Week N-1's games
     (Thu–Mon) and is published Tue–Wed; previews run Thu–Sat of Week N before kickoff."""
     season, week = ctx["season"], ctx["week"]
