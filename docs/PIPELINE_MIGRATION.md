@@ -4,7 +4,7 @@ Plan agreed with JR on Oct 13, 2026 in a claude.ai planning session. The full pl
 
 ## Current state (Oct 14, 2026)
 
-- **Phases 1–4 are done**; phase 3 ran live on Oct 14 (backup `db/backups/madden_backup_20261014_093457.sql`), phase 4 on Oct 14 (code only, no live writes; backup `madden_backup_20261014_095107.sql`). **Next: phase 5**, not started until JR says so.
+- **Phases 1–4 are done**; phase 3 ran live on Oct 14 (backup `db/backups/madden_backup_20261014_093457.sql`), phase 4 on Oct 14 (code only, no live writes; backup `madden_backup_20261014_095107.sql`). **Phase 5 started Oct 14 (JR): code built and unit-tested; the console and end-to-end exit runs are still to do** (see "Phase 5 status" below).
 - Phase 4: the backfill (`generate_team_and_player_stats()`, `python3 -m engines.game_stat_generator [--season N]`), `pipeline/main.py`'s trigger, `db/db_handler.py` and the old `batch_historical` / `batch_menus` tools take the season from `league_state.current_season`. `madden_capture.py`'s schedule step writes `week.json` (`current` = the week the schedule opened on, `captured`); the weekly load sets `league_state.current_week` from it in the same transaction (postseason: 19 Wild Card, 20 Divisional, 21 Conference, 22 Super Bowl bye, 23 Super Bowl; no `week.json` = loaded week + 1; never moves back; stops if the labels don't fit schedule.csv). `get_current_league_state()` no longer infers the week from `games` or writes it. `current_season` is still set by hand at a new season. Left as is: `pipeline/ocr_extractor.py`'s 2035 schema default (retired in phase 6). The engines', `newsroom/weekly_run.py`'s and the API's 2035 defaults were changed afterwards (see the engines and API follow-up below).
 - Phase 4 test (copy `madden_p4test`, dropped afterwards): the Week 17 weekly capture with `week.json` (`SEASON WEEK 18`) dry-ran with season 2035 / week 17 / current week 17 → 18 and nothing written; loaded for real it set 18; a `week.json` naming week 16 stopped the load with nothing written. Console run (Oct 14, `captures/2026-10-14_1000`, `--only schedule`, not loaded since Week 17 already is): the schedule opened on SEASON WEEK 18, captured Week 17 in 3 pages, wrote `week.json` `{"current": "SEASON WEEK 18", "captured": "SEASON WEEK 17"}`; all 3 screenshots match the extracted CSV and its 16 scores match `games`.
 - **Open (JR, Oct 14):** the off-season / new-season architecture (when and how `current_season` changes) is JR's to decide; until then it is set by hand.
@@ -74,6 +74,7 @@ Claude Code runs on JR's Mac and is expected to **test each phase on the real co
 | **Stats tables stay on Gemini** (`extract.py`). Roster: the **list pages go to Gemini**, the **player card is read with Apple Vision on the Mac**, except **AGE/HT/WT/EXP, which Gemini reads from the card crops** (20 per request) | Tested Oct 13 (see "OCR test results"): Apple Vision skips short values (1–2 characters) in tables, so it can't read tables alone; it reads card text well. On console screenshots it drops or misreads the digit 1 and misreads heights silently (Hahn 6'3" read as 6'8"), so JR moved those four values to Gemini (Oct 13, phase 2) |
 | `player_seasons.overall_rating` = the roster **list OVR** (morale-boosted, how players perform). The card's base OVR and morale are **not stored** | JR's rule. The card OVR is the base rating; the list OVR includes the morale boost and is how players play. A once-a-season scan would make base OVR and morale stale |
 | After a successful load, screenshots convert to **WebP quality 90, full resolution**; debug folders are deleted; CSVs kept. Failed runs keep their PNGs | Phase 1 folder was 1.3 GB/week; this brings it to ~45 MB |
+| Phase 5 settings (JR, Oct 14): the trigger watches **`https://twitch.tv/jrereyi`** (`BROADCAST_URL` in `.env`); it fires **30 seconds** after the Weekly Hub settles following Advance Week; notices go to a generated private ntfy.sh topic (`NTFY_TOPIC` in `.env`); the **shrink** step is part of phase 5 | JR's answers when phase 5 started |
 | A `captures` table records every run | Duplicate protection, missed-week check, fallback trigger, row-count checks, resuming, token cost |
 | **Hybrid storage** (JR, Oct 14): offense extras as columns on `season_stats` / `player_stats`; every other category in its own season- and game-level tables; views join them | Keeps every reader and the backfill unchanged (no zero rows for defenders), one table per capture category, new data on player ids |
 | **`player_id` keys everywhere** (JR, Oct 14); `player_name` kept as a column and the old keys kept for the backfill, with a trigger filling `player_id` | Stored rows are never ambiguous; readers that join on names keep working |
@@ -191,6 +192,17 @@ Keep the existing safety rules: check the screen before every press, stop on any
 6. Token logging in `extract.py` and `_execute_agent`.
 7. Run everything on `madden_p3test`, then live (after another backup). Done Oct 14: both passed exits (a)–(e); see "Current state".
 
+## Phase 5 status (Oct 14)
+
+Built (PROJECT_SPEC.md §6.0): `pipeline/trigger.py` + `python3 -m pipeline.main --watch`; `pipeline/weekly_capture.py` (steps 2–9, stop + notice on any failed step, `--resume`, shrink); `pipeline/notify.py` (ntfy; a test notice was sent Oct 14); `madden_capture.py --connect` / `--out`; `generate_team_and_player_stats(strict=True)` so an engine error stops the week. Unit tests: `tests/test_trigger.py`, `tests/test_weekly_capture.py`.
+
+Checked offline: the MAIN_MENU template matches JR's recorded broadcast hub frames (score 1.0) and the hub label reads `2026: WEEK 2` → (2026, 2); shrink took a copy of `2026-10-13_1413` from 1,696 MB to 46 MB; streamlink resolves the channel (offline at the time).
+
+Still to do, with JR at the console:
+1. **Map the PlayStation menu**: `PS_MENU_TEXT` in `madden_capture.py` is empty, so `--connect` never presses Escape yet. Connect chiaki-ng, `madden_capture.py --step none` on the PS menu, add two or more labels only it shows, then test `--connect` from chiaki-ng closed.
+2. **Check the ADVANCE_WEEK template on the live broadcast** (no recorded frame of that screen exists yet), and the hub label in the 2035 franchise.
+3. **Exit runs**: three weeks in a row from Advance Week, including a bye week and a forced failure (bad CSV) that stops the week, publishes nothing and reaches JR's phone.
+
 ## Phases
 
 1. **Prove the capture.** Done.
@@ -200,7 +212,7 @@ Keep the existing safety rules: check the screen before every press, stop on any
    - Exit (revised by JR, Oct 14, since games are captured only to recover a week): on the restored copy, (a) the roster loads (1,719 players, numbers filled) and the season schedule loads with no change to completed games; (b) a weekly capture loads, the backfill runs, and every player's `player_stats` summed over the season equals `season_stats`; (c) the Week 17 games capture loads with `--replace` and its lines match the box scores; (d) a deliberately broken CSV, and an ambiguous Season Stats name, each stop the load with nothing written; (e) the backfill afterwards fills no game already loaded. Then the same loads live.
 4. **Season from `league_state`.** Done (Oct 14). Remove hardcoded 2035 from the backfill and pipeline calls; update `league_state.current_week` from the captured week label.
    - Exit: tests pass; a dry run picks up the right season and week.
-5. **Trigger, connect, notices.** Next. Trigger in `pipeline/main.py`; `pipeline/weekly_capture.py`; ntfy notices; stream-offline retry; fallback on any `MAIN_MENU` comparing the week label with the last capture.
+5. **Trigger, connect, notices.** In progress (built; console and exit runs to do). Trigger in `pipeline/main.py`; `pipeline/weekly_capture.py`; ntfy notices; stream-offline retry; fallback on any `MAIN_MENU` comparing the week label with the last capture.
    - Exit: three weeks in a row run end to end from Advance Week with JR's only step being the controller and broadcast restart, including a bye week and a forced failure (bad CSV) that stops the week, publishes nothing and reaches JR's phone.
 6. **Retire the stream extraction.** Remove post-game parsing and the worker pool from `pipeline/main.py`; move `pipeline/ocr_extractor.py` and unused templates to `archive/`; stop calling `upsert_player_stats`, `update_game_meta`, `upsert_team_stats`; rewrite `PROJECT_SPEC.md` Section 6. Until this phase, the old post-game flow keeps working.
    - Exit: no imports of retired code; the spec describes only the new flow.

@@ -15,6 +15,7 @@ Run extract.py afterwards to turn them into CSVs.
 
 Usage
   python3 madden_capture.py --test        # read the current screen only, no key presses
+  python3 madden_capture.py --connect     # start the chiaki-ng stream, close the PS menu, wait for a franchise screen
   python3 madden_capture.py --probe-l2    # record how the L2 dropdown behaves (from Player Stats)
   python3 madden_capture.py               # full run: stats + schedule
   python3 madden_capture.py --only stats  # or: --only team, --only schedule
@@ -193,20 +194,33 @@ def ensure_window_size():
                 f"{WINDOW_PX[0]}x{WINDOW_PX[1]}; set it back to {WINDOW_PT[0]}x{WINDOW_PT[1]} points")
 
 
-def restart_stream():
-    """Force-quit chiaki-ng (what JR does to unfreeze it; a polite quit then relaunch left the
-    console ignoring input on Oct 13), start the stream again and wait for a franchise screen.
-    Presses nothing: if no known screen shows within two minutes, stop."""
-    global WIN_ID, PID
-    log("Restarting the chiaki-ng stream (force quit + relaunch)")
-    subprocess.run(["pkill", "-9", "-f", "chiaki-ng.app/Contents/MacOS/chiaki"])
-    for _ in range(20):
-        if subprocess.run(["pgrep", "-f", "chiaki-ng.app/Contents/MacOS/chiaki"], capture_output=True).returncode:
-            break
-        time.sleep(0.5)
-    time.sleep(3)
+CHIAKI_PROC = "chiaki-ng.app/Contents/MacOS/chiaki"
+
+# The PlayStation menu chiaki-ng can show right after it connects; one Escape closes it (JR, Oct 13).
+# Recognized by labels only that overlay has (mapped on the console, phase 5); with none mapped,
+# nothing is ever pressed for it and the connect waits, then stops.
+PS_MENU_TEXT = ()
+PS_MENU_ESCAPES = 2          # first press + one retry
+
+
+def is_ps_menu(f):
+    return bool(PS_MENU_TEXT) and sum(1 for m in PS_MENU_TEXT if m in f.text) >= min(2, len(PS_MENU_TEXT))
+
+
+def chiaki_running():
+    return subprocess.run(["pgrep", "-f", CHIAKI_PROC], capture_output=True).returncode == 0
+
+
+def start_stream():
     subprocess.run(["open", "-a", APP_NAME, "--args", "stream", CHIAKI_HOST, CHIAKI_HOST_IP])
-    end = time.time() + 120
+
+
+def wait_for_franchise(timeout=120.0, what="connecting"):
+    """Wait until chiaki-ng shows one of Madden's screens. Presses only Escape, and only on the
+    recognized PlayStation menu (at most PS_MENU_ESCAPES times); stops after `timeout` seconds."""
+    global WIN_ID, PID
+    end = time.time() + timeout
+    escapes = 0
     while True:
         time.sleep(2)
         try:
@@ -222,14 +236,50 @@ def restart_stream():
                 # the window is blank gray for a while as the stream reconnects (Oct 14)
                 if "blank" not in str(e) or time.time() > end:
                     raise
-                log("  still connecting (blank window); waiting")
+                log(f"  still {what} (blank window); waiting")
                 continue
             if s != "UNKNOWN":
-                log(f"Stream is back on {s}")
+                log(f"Stream is on {s}")
                 return f, s
+            if is_ps_menu(f) and escapes < PS_MENU_ESCAPES:
+                escapes += 1
+                log(f"  PlayStation menu is showing; pressing Escape ({escapes} of {PS_MENU_ESCAPES})")
+                press("escape", wait=2.0)
+                continue
         if time.time() > end:
-            raise Abort("chiaki-ng didn't come back on a franchise screen within two minutes of "
-                        "restarting; check the chiaki-ng window")
+            raise Abort(f"chiaki-ng didn't show a franchise screen within {timeout:.0f} seconds of "
+                        f"{what}; check the chiaki-ng window")
+
+
+def connect(timeout=120.0):
+    """Weekly run, step 2 (phase 5): get chiaki-ng streaming Madden's franchise menus. Starts the
+    stream when chiaki-ng isn't running; when it is running but shows no franchise screen in time,
+    force-quits and relaunches it once. Never presses anything but Escape on the PlayStation menu."""
+    if not chiaki_running():
+        log(f"Starting the chiaki-ng stream ({CHIAKI_HOST}, {CHIAKI_HOST_IP})")
+        start_stream()
+        return wait_for_franchise(timeout)
+    try:
+        return wait_for_franchise(min(timeout, 30.0), "checking the open stream")
+    except Abort as e:
+        log(f"  chiaki-ng is open but not on a franchise screen ({e})")
+        return restart_stream(timeout)
+
+
+def restart_stream(timeout=120.0):
+    """Force-quit chiaki-ng (what JR does to unfreeze it; a polite quit then relaunch left the
+    console ignoring input on Oct 13), start the stream again and wait for a franchise screen.
+    Presses nothing but Escape on the PlayStation menu: if no known screen shows within two
+    minutes, stop."""
+    log("Restarting the chiaki-ng stream (force quit + relaunch)")
+    subprocess.run(["pkill", "-9", "-f", CHIAKI_PROC])
+    for _ in range(20):
+        if not chiaki_running():
+            break
+        time.sleep(0.5)
+    time.sleep(3)
+    start_stream()
+    return wait_for_franchise(timeout, "restarting")
 
 
 def _post(code, down):
@@ -2163,6 +2213,9 @@ def main():
     global WIN_ID, PID, FOREGROUND
     ap = argparse.ArgumentParser()
     ap.add_argument("--test", action="store_true", help="classify the current screen, no key presses")
+    ap.add_argument("--connect", action="store_true", help="start (or restart) the chiaki-ng stream and wait for a "
+                    "franchise screen; presses only Escape, on the PlayStation menu (weekly run, phase 5)")
+    ap.add_argument("--out", metavar="RUN", help="write into captures/RUN (created) instead of a new timestamped folder")
     ap.add_argument("--probe-l2", action="store_true")
     ap.add_argument("--scope-only", action="store_true", help="from Player Stats: just switch scope to NFL")
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
@@ -2183,6 +2236,14 @@ def main():
     ap.add_argument("--allow-cross", action="store_true", help="--step cross: JR has OK'd Cross on this screen")
     a = ap.parse_args()
 
+    if a.connect:
+        try:
+            f, s = connect()
+        except Abort as e:
+            log(f"STOPPED: {e}")
+            sys.exit(1)
+        print("Screen:", s)
+        return
     WIN_ID, PID = find_window()
     FOREGROUND = a.foreground
     if not a.test:
@@ -2193,7 +2254,7 @@ def main():
     if FOREGROUND:
         activate_app()
     global DEBUG_DIR
-    out = os.path.join(OUT_ROOT, a.resume or datetime.datetime.now().strftime("%Y-%m-%d_%H%M"))
+    out = os.path.join(OUT_ROOT, a.resume or a.out or datetime.datetime.now().strftime("%Y-%m-%d_%H%M"))
     if a.resume and not os.path.isdir(out):
         sys.exit(f"No capture folder {out}")
     DEBUG_DIR = os.path.join(out, "stop_debug")

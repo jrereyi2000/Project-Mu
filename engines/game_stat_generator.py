@@ -14,7 +14,10 @@ def current_season() -> int:
     return int(pd.read_sql("SELECT current_season FROM league_state WHERE id = 1", engine).iloc[0, 0])
 
 
-def generate_team_and_player_stats(season_year: int | None = None):
+def generate_team_and_player_stats(season_year: int | None = None, strict: bool = False):
+    """Backfill the season's missing game lines, then run the analytics engines. strict=True (the weekly
+    run, pipeline/weekly_capture.py) re-raises an engine failure so the week stops before any articles;
+    otherwise the failure is printed and the run carries on."""
     if season_year is None:
         season_year = current_season()
     print(f"-> Backfill and engines for season {season_year}")
@@ -246,6 +249,8 @@ def generate_team_and_player_stats(season_year: int | None = None):
         import traceback
         print(f"\n❌ ANALYTICS PIPELINE FAILED: {e}")
         traceback.print_exc()
+        if strict:
+            raise
 
 if __name__ == "__main__":
     # Stats sync + analytics engines only. Publish the newsroom slate with: python3 -m newsroom.weekly_run
