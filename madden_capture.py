@@ -371,6 +371,9 @@ def classify(f):
         return "PLAYER_STATS"
     if "TEAM NAME" in t and "SORT" in t and f.find("R2"):
         return "TEAM_STATS"
+    # League Schedule > Cross on a played game (mapped Oct 13): L1 BOX SCORE | PLAYER STATS R1
+    if f.find("BOX SCORE") and f.find("PLAYER STATS") and "OFF YARDS GAINED" in t:
+        return "BOX_SCORE"
     if "PLAYER STATS" in t and "LEGACY LEADERBOARD" in t:
         return "STATS_TILES"
     if "LEAGUE SCHEDULE" in t and "PLAYOFF PICTURE" in t:
@@ -453,6 +456,12 @@ def cross(screen, frame=None):
         cur = (frame or Frame()).highlighted(ROSTER_MENU)
         if cur != "ROSTER":
             raise Abort(f"Refusing Cross on the Manage Roster menu: {cur} is highlighted, not ROSTER")
+    elif screen == "SCHED_LIST":
+        # Only to open a played game's box score (JR's rule, Oct 13); an unplayed week's list
+        # offers ACTIONS / Force Win instead.
+        why = schedule_cross_ok(frame or Frame(), CURRENT_WEEK)
+        if why:
+            raise Abort(f"Refusing Cross on the League Schedule: {why}")
     elif screen not in ("HUB_LEAGUE", "SCHED_TILES", "STATS_TILES"):
         raise Abort(f"Refusing to press Cross on screen {screen}")
     press("cross", wait=1.5)
@@ -567,12 +576,18 @@ def open_team_stats():
     return cross_into("STATS_TILES", ["TEAM_STATS"])[0]
 
 
+CURRENT_WEEK = None    # the week the League Schedule opens on (set by open_league_schedule)
+
+
 def open_league_schedule():
+    global CURRENT_WEEK
     f = to_league_tab()
     f = move_to(f, LEAGUE_MENU, "SCHEDULE", "up", "down", "League menu item")
     f, _ = cross_into("HUB_LEAGUE", ["SCHED_TILES"])
     move_to(f, SCHED_TILES, "LEAGUE SCHEDULE", "left", "right", "schedule tile")
-    return cross_into("SCHED_TILES", ["SCHED_LIST"], timeout=10)[0]
+    f = cross_into("SCHED_TILES", ["SCHED_LIST"], timeout=10)[0]
+    CURRENT_WEEK = week_label(f)
+    return f
 
 
 # ---------------------------------------------------------------- chips ----
@@ -1069,6 +1084,59 @@ def run_schedule(out, week=None):
         log("Note: this week shows an ACTIONS button; Cross will NOT be pressed here.")
     n = capture_list(os.path.join(out, "schedule"), norm(target).lower(), stop_at_zeros=False)
     log(f"Schedule {target}: {n} pages")
+
+
+RESULT_RE = re.compile(r"^([A-Z]{2,3}) ?(\d+) ?- ?(\d+) ?([A-Z]{2,3})$")    # "LAC 34 - 9LV" too
+
+
+def highlight_band(path, top=0.40, bottom=0.88, x0=0.15, x1=0.80):
+    """(y_top, y_bottom) of the white outline around the highlighted list row, or None.
+    The outline is a pair of bright horizontal lines about one row apart (mapped on the
+    League Schedule list, Oct 13: outline ~190, everything else ~50)."""
+    img = Image.open(path).convert("L")
+    W, H = img.size
+    strip = img.crop((int(W * x0), int(H * top), int(W * x1), int(H * bottom)))
+    lines, prev = [], -10
+    for y in range(strip.height):
+        if ImageStat.Stat(strip.crop((0, y, strip.width, y + 1))).mean[0] > 150:
+            if y - prev > 3:
+                lines.append(y)
+            prev = y
+    for a, b in zip(lines, lines[1:]):
+        if 0.025 * H < b - a < 0.06 * H:
+            return a + int(H * top), b + int(H * top)
+    return None
+
+
+def highlighted_schedule_row(f):
+    """Texts of the highlighted League Schedule row (inside the outline), left to right."""
+    band = highlight_band(f.path)
+    if not band:
+        return None
+    return [t for t, b in sorted(f.items, key=lambda i: i[1][0]) if band[0] < (b[1] + b[3]) / 2 < band[1]]
+
+
+def schedule_cross_ok(f, current_week):
+    """JR's rule (Oct 13) for opening a box score with Cross on the League Schedule list:
+    the week is earlier than the current week, the button bar shows BOX SCORE, ACTIONS
+    appears nowhere, FORCE WIN appears only as the column header, and the highlighted row has
+    a final score. Returns None if allowed, else the reason."""
+    W, H = f.size
+    wk = week_label(f)
+    if not wk or not current_week or week_index(wk) is None or week_index(wk) >= week_index(current_week):
+        return f"week {wk} is not before the current week {current_week}"
+    if not any(norm(t) == "BOXSCORE" and b[1] > H * 0.9 for t, b in f.items):
+        return "no BOX SCORE button"
+    if any("ACTION" in t for t, _ in f.items):
+        return "ACTIONS is on screen"
+    header = f.find("MATCHUP")
+    for t, b in f.items:
+        if "FORCE" in t and not (header and abs(b[1] - header[1]) < H * 0.02):
+            return "FORCE WIN appears outside the column header"
+    row = highlighted_schedule_row(f)
+    if not row or not any(RESULT_RE.match(t) for t in row):
+        return f"the highlighted row has no final score ({row})"
+    return None
 
 
 def run_season_schedule(out, weeks=18):

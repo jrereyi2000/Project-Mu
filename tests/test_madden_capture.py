@@ -79,6 +79,10 @@ class ClassifyTest(unittest.TestCase):
         with mock.patch.object(mc, "Frame", return_value=f), mock.patch.object(mc.time, "sleep"):
             self.assertIsNone(mc.roster_team(f))
 
+    def test_box_score(self):
+        f = _Frame("L1", "BOX SCORE", "PLAYER STATS", "BACK", "DET", "OFF YARDS GAINED", "OFF RUSH YARDS")
+        self.assertEqual(mc.classify(f), "BOX_SCORE")
+
     def test_manage_roster_hub(self):
         f = _Frame("GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "UPGRADE PLAYERS",
                    "ADJUST LINEUP", "ROSTER", "DEPTH CHART")
@@ -185,6 +189,36 @@ class CardParseTest(unittest.TestCase):
         for ht, flag in (("6']\"", "bad_height"), ("5'71\"", "bad_height"), ("6'7\"", "suspect_height")):
             self.assertIn(flag, mc.card_flags(dict(base, height=ht)), ht)
         self.assertEqual(mc.card_flags(dict(base, height="6'7\"", weight=320)), [])
+
+
+class ScheduleCrossRuleTest(unittest.TestCase):
+    """Cross on the League Schedule list only opens a played game's box score."""
+
+    def frame(self, week, bar, extra=()):
+        f = _Frame(f"SEASON WEEK {week}", "MATCHUP", "FORCE WIN", "SEA 22 - 17 DAL", bar, *extra)
+        f.size = (3024, 1888)
+        f.path = "unused.png"
+        f.items = [(t, (0, 1800 if t in (bar,) + tuple(extra) else 700, 10, 1810 if t in (bar,) + tuple(extra) else 710))
+                   for t in f.text.split(" | ")]
+        return f
+
+    def test_played_week_allowed(self):
+        with mock.patch.object(mc, "highlighted_schedule_row", return_value=["SEAHAWKS @ COWBOYS", "SEA 22 - 17 DAL"]):
+            self.assertIsNone(mc.schedule_cross_ok(self.frame(17, "BOX SCORE"), "SEASON WEEK 18"))
+
+    def test_refusals(self):
+        played = ["SEAHAWKS @ COWBOYS", "SEA 22 - 17 DAL"]
+        with mock.patch.object(mc, "highlighted_schedule_row", return_value=played):
+            self.assertIn("not before", mc.schedule_cross_ok(self.frame(18, "BOX SCORE"), "SEASON WEEK 18"))
+            self.assertIn("BOX SCORE", mc.schedule_cross_ok(self.frame(17, "SORT"), "SEASON WEEK 18"))
+            self.assertIn("ACTIONS", mc.schedule_cross_ok(self.frame(17, "BOX SCORE", ("ACTIONS",)), "SEASON WEEK 18"))
+            self.assertIn("FORCE WIN", mc.schedule_cross_ok(self.frame(17, "BOX SCORE", ("FORCE WIN",)), "SEASON WEEK 18"))
+        with mock.patch.object(mc, "highlighted_schedule_row", return_value=["PACKERS @ LIONS", "0", "NONE"]):
+            self.assertIn("final score", mc.schedule_cross_ok(self.frame(17, "BOX SCORE"), "SEASON WEEK 18"))
+
+    def test_result_pattern(self):
+        self.assertTrue(mc.RESULT_RE.match("LAC 34 - 9LV"))
+        self.assertFalse(mc.RESULT_RE.match("0"))
 
 
 class RosterRecoveryTest(unittest.TestCase):

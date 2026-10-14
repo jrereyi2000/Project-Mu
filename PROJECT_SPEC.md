@@ -24,6 +24,7 @@ Project Mu/
 │                              #   Madden lists the top ~270 per category; Passing/Defense/Kicking: each page also captured scrolled right at the same row position, *_right_NNN.png)
 │                              #   Team Stats tabs Conversions / Red Zone Efficiency / Penalties (NFL scope, 32 teams),
 │                              #   and the previous week's League Schedule (week picked via the held-L2 dropdown) → captures/<YYYY-MM-DD_HHMM>/{stats,team_stats,schedule}/
+│                              #   Cross on the League Schedule list only opens a played game's box score (week before the current one, BOX SCORE button, no ACTIONS, FORCE WIN only as the column header, highlighted row has a final score)
 │                              #   `--only season-schedule`: League Schedule weeks 1-18 via the week dropdown (~3 pages a week) → season_schedule/
 │                              #   `--only roster`: Manage Roster > Roster for all 32 teams (team via the held-L2 dropdown, starting at the user's team);
 │                              #   per row the player card is read on the Mac (Apple Vision on an in-process window grab, settled = two agreeing reads,
