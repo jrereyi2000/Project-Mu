@@ -1168,6 +1168,43 @@ def card_flags(c):
     return flags
 
 
+def line_cells(lines, i, win_w, list_x0):
+    """{"i", "NAME", "POS", "AGE", "OVR"} of roster-table line i, by column position."""
+    line = lines[i]
+    row = {"i": i, "NAME": line[0][0]}
+    for col, x in LIST_COLUMNS.items():
+        for t, b in line[1:]:
+            if abs((b[0] + b[2]) / 2 + list_x0 - x * win_w) < 0.025 * win_w:
+                row[col] = t
+    return row
+
+
+def _matches(cells, card):
+    """A table line agrees with a card: same position, and same age where both were read."""
+    if not card.get("position") or norm(cells.get("POS", "")) != card["position"]:
+        return False
+    age = cells.get("AGE", "")
+    return not (card.get("age") and age.isdigit() and int(age) != card["age"])
+
+
+def check_step(lines, prev, card, win_w, list_x0):
+    """Did the highlight move exactly one row from prev to card? Returns ("ok", 0),
+    ("skipped", n) or ("unknown", 0). Uses names where OCR read them, otherwise the line
+    next to the one player that was found, matched by position and age."""
+    p = list_row_for(lines, prev, win_w, list_x0)
+    c = list_row_for(lines, card, win_w, list_x0)
+    p = None if p and p.get("ambiguous") else p
+    c = None if c and c.get("ambiguous") else c
+    if p and c:
+        d = c["i"] - p["i"]
+        return ("ok", 0) if d == 1 else (("skipped", d - 1) if d > 1 else ("unknown", 0))
+    if p and p["i"] + 1 < len(lines) and _matches(line_cells(lines, p["i"] + 1, win_w, list_x0), card):
+        return "ok", 0
+    if c and c["i"] > 0 and _matches(line_cells(lines, c["i"] - 1, win_w, list_x0), prev):
+        return "ok", 0
+    return "unknown", 0
+
+
 def list_row_for(lines, card, win_w, list_x0):
     """In the roster-table OCR lines (_rows of the LIST_BOX crop, starting list_x0 px into a
     window win_w px wide), the row naming this card's player ("G.CRAWFORD"):
@@ -1182,12 +1219,7 @@ def list_row_for(lines, card, win_w, list_x0):
     for i, line in enumerate(lines):
         name = norm(line[0][0])
         if name.endswith(last) and (not first or name.startswith(first)):
-            row = {"i": i, "NAME": line[0][0]}
-            for col, x in LIST_COLUMNS.items():
-                for t, b in line[1:]:
-                    if abs((b[0] + b[2]) / 2 + list_x0 - x * win_w) < 0.025 * win_w:
-                        row[col] = t
-            found.append(row)
+            found.append(line_cells(lines, i, win_w, list_x0))
     # the same list name can repeat (Seahawks: S.Lewis LT and S.Lewis HB on adjacent rows)
     if len(found) > 1:
         same_pos = [r for r in found if card.get("position") and norm(r.get("POS", "")) == card["position"]]
@@ -1377,20 +1409,31 @@ def capture_team_roster(out, index, team, writer):
         flags = card_flags(card)
         if card.pop("_unreadable", False):
             flags.append("unreadable_card")
-        # A press that arrives late (chiaki lag) plus the retry press moves two rows. The new
-        # player must be on the line right under the previous one; if not, step back.
-        prev_row = list_row_for(lines, prev, W, W * LIST_BOX[0])
-        if list_row and prev_row and list_row["i"] - prev_row["i"] > 1 \
-                and not (list_row.get("ambiguous") or prev_row.get("ambiguous")):
-            log(f"  {team}: skipped {list_row['i'] - prev_row['i'] - 1} row(s) after {prev['last']}; stepping back")
-            press("up", hold=0.1, wait=0.6, times=list_row["i"] - prev_row["i"] - 1)
-            skips += 1
-            if skips > 20:
-                raise Abort(f"{team}: rows keep getting skipped; stopping")
-            continue
-        if prev is not None and (not (list_row and prev_row)
-                                 or list_row.get("ambiguous") or prev_row.get("ambiguous")):
-            flags.append("step_unverified")
+        # The new player must be on the line right under the previous one. A late press plus
+        # the retry moves two rows; a late key-up reads as Down held and scrolls many rows
+        # (Seahawks, Oct 13: 18 rows). Step back when the gap is known; stop when the step
+        # can't be checked at all, rather than record a roster with holes.
+        if prev is not None:
+            verdict, n = check_step(lines, prev, card, W, W * LIST_BOX[0])
+            for _retry in range(3):               # OCR misses: read the list again
+                if verdict != "unknown":
+                    break
+                time.sleep(0.3)
+                cg = grab()
+                lines = _rows(ocr_cg(crop_cg(cg, LIST_BOX)))
+                verdict, n = check_step(lines, prev, card, W, W * LIST_BOX[0])
+            if verdict == "skipped":
+                log(f"  {team}: skipped {n} row(s) after {prev['last']}; stepping back")
+                press("up", hold=0.1, wait=0.6, times=n)
+                skips += 1
+                if skips > 20:
+                    raise Abort(f"{team}: rows keep getting skipped; stopping")
+                continue
+            if verdict == "unknown":
+                save_debug(types_frame_cg(cg), f"{norm(team).lower()}_unverified_step")
+                raise Abort(f"{team}: can't confirm the step from {prev['last']} to "
+                            f"{card.get('last')} on the list; stopping (--resume redoes this team)")
+            list_row = list_row_for(lines, card, W, W * LIST_BOX[0])
         if list_row is None:
             flags.append("not_in_list")
         else:

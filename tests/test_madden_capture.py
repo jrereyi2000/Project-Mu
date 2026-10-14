@@ -124,6 +124,22 @@ class CardParseTest(unittest.TestCase):
         self.assertEqual(mc.list_row_for(lines, {"first": "Shaq", "last": "Lewis", "position": "LT"}, W, x0)["i"], 0)
         self.assertTrue(mc.list_row_for(lines, {"first": "Shaq", "last": "Lewis", "position": "QB"}, W, x0)["ambiguous"])
 
+    def test_step_check(self):
+        W, x0 = 3024, 3024 * mc.LIST_BOX[0]
+        row = lambda name, pos, age, y: [(name, (0, y, 100, y + 30)), (pos, (770, y, 800, y + 30)),
+                                         (age, (955, y, 985, y + 30))]
+        lines = [row("J.GREEN", "WR", "23", 0), row("C.CALLAWAY", "LT", "29", 50),
+                 row("C.BYRNE", "LS", "28", 100), row("J.LEWIS", "RT", "24", 150)]
+        green = {"first": "Josh", "last": "Green", "position": "WR", "age": 23}
+        callaway = {"first": "Cole", "last": "Callaway", "position": "LT", "age": 29}
+        byrne = {"first": "Chuck", "last": "Byrne", "position": "LS", "age": 28}
+        lewis = {"first": "Jake", "last": "Lewis", "position": "RT", "age": 24}
+        self.assertEqual(mc.check_step(lines, green, callaway, W, x0), ("ok", 0))
+        self.assertEqual(mc.check_step(lines, callaway, lewis, W, x0), ("skipped", 1))
+        # new card's name unread: the line under the previous player must match it by position
+        self.assertEqual(mc.check_step(lines, callaway, dict(byrne, first=None, last=None), W, x0), ("ok", 0))
+        self.assertEqual(mc.check_step(lines, callaway, dict(lewis, first=None, last=None), W, x0), ("unknown", 0))
+
     def test_height_checks(self):
         base = {k: 1 for k in mc.CARD_FIELDS}
         base.update(age=24, weight=200, experience=2)
