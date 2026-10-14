@@ -55,5 +55,21 @@ class MergeWideTest(unittest.TestCase):
         self.assertEqual(rows, [("NO", "J.Campbell", "14", "1", "0"), ("DET", "O.Aragon", "6", "0", "1")])
 
 
+class MergeWidePrefixTest(unittest.TestCase):
+    def test_full_columns_are_not_renamed(self):
+        # Season Stats Kicking: FGM / FGA are whole columns, not cut-off FGM29 / FGA29
+        extract._cache.update({
+            "k_000.png": {"title": "", "columns": ["NAME", "POS", "FGM", "FGA", "XPB"], "rows": [["J.Sierra", "K", "30", "33", "0"]]},
+            "k_right_000.png": {"title": "", "columns": ["XPB", "FGM29", "FGA29", "DP"], "rows": [["0", "5", "5", "0"]]},
+        })
+        try:
+            cols, rows = extract.merge_wide(["k_000.png"], ["k_right_000.png"], "t")
+        finally:
+            for k in ("k_000.png", "k_right_000.png"):
+                extract._cache.pop(k)
+        self.assertEqual(cols, ["NAME", "POS", "FGM", "FGA", "XPB", "FGM29", "FGA29", "DP"])
+        self.assertEqual(rows, [("J.Sierra", "K", "30", "33", "0", "5", "5", "0")])
+
+
 if __name__ == "__main__":
     unittest.main()

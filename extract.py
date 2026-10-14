@@ -254,10 +254,12 @@ def merge_wide(left_paths, right_paths, label):
         lt = read_table(lp)
         rt = read_table(rights[num]) if num in rights else {"columns": [], "rows": []}
         lcols, rcols = [_col(c) for c in lt["columns"]], [_col(c) for c in rt["columns"]]
-        # a column cut off at the left page's right edge reads as the start of its name
-        # ("FMB", "FM" for FMBREC): it is that right-page column
-        lcols = [next((r for r in rcols if r != c and r.replace(" ", "").startswith(c.replace(" ", ""))
-                       and c not in rcols), c) for c in lcols]
+        # only the LAST left column can be cut off at the screen edge; it then reads as the
+        # start of its name ("FMB", "FM" for FMBREC) and is that right-page column. (Applying this
+        # to every column turned Season Stats' FGM into FGM29.)
+        if lcols and lcols[-1] not in rcols:
+            c = lcols[-1].replace(" ", "")
+            lcols[-1] = next((r for r in rcols if r.replace(" ", "").startswith(c)), lcols[-1])
         for c in lcols + rcols:
             if c not in columns:
                 columns.append(c)
