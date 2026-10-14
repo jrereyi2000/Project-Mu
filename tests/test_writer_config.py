@@ -45,6 +45,16 @@ class WriterConfigTests(unittest.TestCase):
             for writer in info.get("allowed_writers", []):
                 self.assertIn(writer, self.personas, f"{at_id} allows {writer}, which has no persona")
 
+    def test_tweet_personas_have_an_article_voice(self):
+        """A national writer whose persona is written for tweets needs an article_personas entry
+        (FANTASY_* articles use fantasy_writers.json instead)."""
+        article_personas = load("agent_personas.json", "article_personas")
+        writers = {w for at_id, info in self.article_types.items() if not at_id.startswith("FANTASY_")
+                   for w in info.get("allowed_writers", [])} | self.columnists()
+        for w in sorted(writers):
+            if "Your tweets" in self.personas.get(w, ""):
+                self.assertIn(w, article_personas, f"{w} writes articles but only has a tweet persona")
+
     def test_every_rotating_columnist_has_a_persona_and_curatorial_directive(self):
         for writer in self.columnists():
             self.assertIn(writer, self.personas, f"columnist {writer} has no persona")
