@@ -65,6 +65,7 @@ bottom only if all its cells are readable. Keep numbers as displayed (commas, %,
 minus signs). Use "" for an empty cell. Each row must have one cell per column.
 Ignore the player/team banner at the top and the button hints at the bottom."""
 
+ROSTER_PAGE_ROWS = 14
 ROSTER_NOTE = """
 This is a team roster (the team is on the left chip, e.g. PANTHERS). The CONV and DEV columns
 show icons, not text: return "" for them. The small green arrow next to some OVR values is an
@@ -153,9 +154,17 @@ def _generate(contents, schema, label, retries=4):
 def _read_table_remote(path, retries=4):
     """One screenshot -> {"title", "columns", "rows": [[cell, ...], ...]}."""
     if _is_roster(path):
-        t = _generate([PROMPT + ROSTER_NOTE, prepare_image(path, ROSTER_LIST_BOX)], Table,
-                      os.path.basename(path), retries)
-        return {"title": t.title, "columns": t.columns, "rows": [r.cells for r in t.rows]}
+        # A roster page shows 14 rows; Gemini sometimes returns fewer (Ravens, Oct 13: 31 of
+        # 52 over 5 pages), so a short page is read again and the fullest reading kept.
+        best = None
+        for attempt in range(3):
+            t = _generate([PROMPT + ROSTER_NOTE, prepare_image(path, ROSTER_LIST_BOX)], Table,
+                          os.path.basename(path), retries)
+            if best is None or len(t.rows) > len(best.rows):
+                best = t
+            if len(best.rows) >= ROSTER_PAGE_ROWS:
+                break
+        return {"title": best.title, "columns": best.columns, "rows": [r.cells for r in best.rows]}
     client = _get_client()
     part = prepare_image(path)
     for attempt in range(1, retries + 1):
@@ -199,16 +208,25 @@ def read_table(path):
     return _cache[path]
 
 
-def merge(paths, label):
+def merge(paths, label, key_cols=None):
+    """Rows of overlapping pages, first copy kept. key_cols (column names) de-duplicates on
+    those columns only, for tables where a repeated row can be read slightly differently."""
     columns, rows = None, OrderedDict()
     for p in sorted(paths):
         t = read_table(p)
         columns = columns or t["columns"]
+        idx = [columns.index(c) for c in key_cols if c in columns] if key_cols else None
         for r in t["rows"]:
-            rows.setdefault(tuple(r), None)   # pages overlap; keep first copy
+            k = tuple(r[i] if i < len(r) else "" for i in idx) if idx else tuple(r)
+            if k not in rows:                 # pages overlap; keep first copy
+                rows[k] = r
+            elif key_cols and list(rows[k]) != list(r):
+                # the same row read two ways on overlapping pages: say so, the values differ
+                diff = [f"{c} {a!r}/{b!r}" for c, a, b in zip(columns, rows[k], r) if a != b]
+                print(f"  CONFLICT {label} {' '.join(k)}: {', '.join(diff)} (kept the first)")
         print(f"  {os.path.basename(p)}: {len(t['rows'])} rows")
     print(f"{label}: {len(rows)} unique rows")
-    return columns, list(rows)
+    return columns, [list(r) for r in rows.values()] if key_cols else list(rows)
 
 
 def merge_wide(left_paths, right_paths, label):
@@ -302,13 +320,17 @@ def extract_roster(root):
     columns, rows = None, []
     for d in team_dirs:
         team = os.path.basename(d).split("_", 1)[1].upper()
-        cols, trows = merge(glob.glob(os.path.join(d, "list_*.png")), team)
+        cols, trows = merge(glob.glob(os.path.join(d, "list_*.png")), team, key_cols=["NAME", "POS"])
         columns = columns or cols
         rows += [[team] + list(r) for r in trows]
     write_csv(os.path.join(root, "roster_list.csv"), ["TEAM"] + list(columns), rows)
 
     with open(os.path.join(root, "roster", "cards.csv"), newline="") as fh:
         cards = list(csv.DictReader(fh))
+    per_list, per_card = Counter(r[0] for r in rows), Counter(c["team"] for c in cards)
+    for team in sorted(per_card):
+        if per_list[team] != per_card[team]:
+            print(f"  WARNING roster_list.csv has {per_list[team]} {team} rows, cards.csv {per_card[team]}")
     values = read_card_values(root, cards)
     keys = ["age", "height", "weight", "experience"]
     out_cols = list(cards[0].keys()) + ["vision_" + k for k in keys] + ["vision_disagrees"]

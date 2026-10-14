@@ -21,5 +21,21 @@ class RosterPathTest(unittest.TestCase):
         self.assertFalse(extract._is_roster(os.path.join("captures", "x", "stats", "01_passing_000.png")))
 
 
+class MergeTest(unittest.TestCase):
+    def test_roster_rows_deduplicated_on_name_and_pos(self):
+        cols = ["NAME", "POS", "AGE", "OVR"]
+        extract._cache.update({
+            "p1.png": {"title": "", "columns": cols, "rows": [["B.McGrath", "QB", "24", "80"], ["T.Ramos", "LEDG", "26", "79"]]},
+            "p2.png": {"title": "", "columns": cols, "rows": [["T.Ramos", "LEDG", "26", "78"], ["V.Amaya", "FS", "25", "77"]]},
+        })
+        try:
+            columns, rows = extract.merge(["p1.png", "p2.png"], "test", key_cols=["NAME", "POS"])
+        finally:
+            for k in ("p1.png", "p2.png"):
+                extract._cache.pop(k)
+        self.assertEqual([r[0] for r in rows], ["B.McGrath", "T.Ramos", "V.Amaya"])
+        self.assertEqual(rows[1][3], "79")          # first copy kept
+
+
 if __name__ == "__main__":
     unittest.main()
