@@ -83,6 +83,11 @@ class ClassifyTest(unittest.TestCase):
         f = _Frame("L1", "BOX SCORE", "PLAYER STATS", "BACK", "DET", "OFF YARDS GAINED", "OFF RUSH YARDS")
         self.assertEqual(mc.classify(f), "BOX_SCORE")
 
+    def test_game_player_stats(self):
+        # also shows TEAM NAME / SORT / R2 like Team Stats; the BOX SCORE | PLAYER STATS tabs decide
+        f = _Frame("L1", "BOX SCORE", "PLAYER STATS", "R1", "BOTH", "PASSING", "TEAM", "NAME", "TEAM NAME", "SORT")
+        self.assertEqual(mc.classify(f), "GAME_STATS")
+
     def test_manage_roster_hub(self):
         f = _Frame("GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "UPGRADE PLAYERS",
                    "ADJUST LINEUP", "ROSTER", "DEPTH CHART")

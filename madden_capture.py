@@ -138,6 +138,28 @@ def stream_frozen():
     return False
 
 
+WINDOW_PX = (3024, 1888)      # chiaki-ng window in pixels (1512x944 points, Retina); every
+WINDOW_PT = (1512, 944)       # screen box and the card-value columns were mapped at this size
+
+
+def ensure_window_size():
+    """After a relaunch chiaki-ng once came back at 2560x1415 (Oct 13). Set it back to
+    WINDOW_PT and check; stop if it won't take the size."""
+    global WIN_ID, PID
+    for attempt in range(3):
+        cg = grab()
+        size = (Quartz.CGImageGetWidth(cg), Quartz.CGImageGetHeight(cg))
+        if size == WINDOW_PX:
+            return
+        log(f"  chiaki-ng window is {size[0]}x{size[1]}, not {WINDOW_PX[0]}x{WINDOW_PX[1]}; resizing it")
+        subprocess.run(["osascript", "-e", f'tell application "System Events" to tell process "{APP_NAME}" '
+                        f'to set size of window 1 to {{{WINDOW_PT[0]}, {WINDOW_PT[1]}}}'], capture_output=True)
+        time.sleep(1.5)
+        WIN_ID, PID = find_window()
+    raise Abort(f"chiaki-ng's window is {size[0]}x{size[1]} and won't resize to "
+                f"{WINDOW_PX[0]}x{WINDOW_PX[1]}; set it back to {WINDOW_PT[0]}x{WINDOW_PT[1]} points")
+
+
 def restart_stream():
     """Force-quit chiaki-ng (what JR does to unfreeze it; a polite quit then relaunch left the
     console ignoring input on Oct 13), start the stream again and wait for a franchise screen.
@@ -157,6 +179,7 @@ def restart_stream():
         try:
             WIN_ID, PID = find_window()
             if window_info(WIN_ID).get("kCGWindowBounds", {}).get("Height", 0) > 400:
+                ensure_window_size()
                 f, s = look()
                 if s != "UNKNOWN":
                     log(f"Stream is back on {s}")
@@ -367,6 +390,10 @@ def classify(f):
     # PLAYER), so don't rely on it.
     if f.find("SAVINGS") and f.find("PENALTY") and f.find("MOR"):
         return "ROSTER_LIST"
+    # Box score > R1 (mapped Oct 13): one game's player stats, TEAM column, L2 BOTH / R2 category.
+    # It also shows TEAM NAME, SORT and R2, so it must come before TEAM_STATS.
+    if f.find("BOX SCORE") and f.find("PLAYER STATS") and f.find("TEAM") and "OFF YARDS GAINED" not in t:
+        return "GAME_STATS"
     if "PLAYER NAME" in t and "VIEW PLAYER CARD" in t:
         return "PLAYER_STATS"
     if "TEAM NAME" in t and "SORT" in t and f.find("R2"):
@@ -607,6 +634,26 @@ def chip_labels(f):
     return (min(left)[1] if left else None), (min(right)[1] if right else None)
 
 
+def game_chips(f, tries=4):
+    """(scope, category) on a game's player stats (GAME_STATS). chip_labels() needs the R2 icon,
+    which OCR often misses here, so fall back to position: both chips sit ~41% down, scope
+    left of ~17% of the width, category between 17% and 31% (mapped Oct 13)."""
+    for attempt in range(tries):
+        scope, cat = chip_labels(f)
+        if scope and cat:
+            return scope, cat
+        W, H = f.size
+        row = sorted((b[0], t) for t, b in f.items if H * 0.38 < b[1] < H * 0.44 and b[0] < W * 0.31
+                     and norm(t) not in ("L2", "R2") and re.match(r"^[A-Z &]{3,}$", t))
+        left = [t for x, t in row if x < W * 0.17]
+        right = [t for x, t in row if x >= W * 0.17]
+        if left and right:
+            return left[0], right[0]
+        time.sleep(0.5)
+        f = Frame()
+    return None, None
+
+
 def week_label(f):
     m = WEEK_RE.search(f.text)
     if not m:
@@ -808,19 +855,30 @@ def wait_table_loaded(timeout=8.0):
         time.sleep(1.0)
 
 
-def capture_list(folder, prefix, rows_per_page=10, max_pages=250, stop_at_zeros=True, direction="down"):
+def table_text(path, top=0.48, bottom=0.90):
+    """The table's cell texts in reading order. Game player-stats tables show only a few rows
+    over an animated background, which can move the pixel test past its threshold (Oct 13:
+    0.69% on a 2-row Kick Return page), so those lists also end when the text repeats."""
+    H = Image.open(path).size[1]
+    return [t for t, b in sorted(ocr(path), key=lambda i: (round(i[1][1] / 20), i[1][0]))
+            if H * top < b[1] < H * bottom]
+
+
+def capture_list(folder, prefix, rows_per_page=10, max_pages=250, stop_at_zeros=True, direction="down",
+                 text_end=False):
     os.makedirs(folder, exist_ok=True)
     wait_table_loaded()
-    prev = None
+    prev, prev_text = None, None
     for page in range(max_pages):
         path = os.path.join(folder, f"{prefix}_{page:03d}.png")
         snap(path)
         sig = table_sig(path)
-        if prev is not None and same_table(prev, sig):
+        text = table_text(path) if text_end else None
+        if prev is not None and (same_table(prev, sig) or (text_end and text and text == prev_text)):
             os.remove(path)
             log(f"  {prefix}: end of list after {page} pages")
             return page
-        prev = sig
+        prev, prev_text = sig, text
         if stop_at_zeros:
             f = Frame.__new__(Frame)
             f.path, f.items, f.size = path, ocr(path), Image.open(path).size
@@ -861,36 +919,49 @@ def traverse(direction, burst=6, max_rounds=12):
     raise Abort(f"Never reached the {direction} edge of the table (frame: {path})")
 
 
-def capture_wide_list(folder, base, rows_per_page=10, max_pages=250):
+def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=traverse, text_end=False,
+                      end_on_left=False):
     """Wide tables: NAME/POS are NOT pinned when the table scrolls right, so every page is
     captured at both edges at the same row position. Row N of {base}_NNN.png is row N of
     {base}_right_NNN.png. Zig-zags (left, right, down, right, left, down...) so each page
-    needs one trip across the columns."""
+    needs one trip across the columns. end_on_left: judge the end of the list only by the
+    left (named) half; a game's right-hand pages are often all zeros and look alike (Oct 13)."""
     os.makedirs(folder, exist_ok=True)
     wait_table_loaded()
     traverse("left")                     # the column highlight can be left anywhere; start at the left edge
     side = "left"
     prev = {"left": None, "right": None}
+    prev_text = {"left": None, "right": None}
 
     def path(s, page):
         return os.path.join(folder, f"{base}_{page:03d}.png" if s == "left" else f"{base}_right_{page:03d}.png")
+
+    def repeats(s, file):
+        sig = table_sig(file)
+        text = table_text(file) if text_end else None
+        same = prev[s] is not None and (same_table(prev[s], sig) or (text_end and text and text == prev_text[s]))
+        prev[s], prev_text[s] = sig, text
+        return same and (s == "left" or not end_on_left)
 
     for page in range(max_pages):
         first = path(side, page)
         f = traverse(side)                      # confirm we're still at this side's edge
         subprocess.run(["cp", f.path, first])
-        sig = table_sig(first)
-        if prev[side] is not None and same_table(prev[side], sig):
+        if repeats(side, first):
             os.remove(first)
             log(f"  {base}: end of list after {page} pages")
             if side == "right":
                 traverse("left")                # leave the table at its left edge
             return page
-        prev[side] = sig
         other = "right" if side == "left" else "left"
         f = traverse(other)
-        subprocess.run(["cp", f.path, path(other, page)])
-        prev[other] = table_sig(path(other, page))
+        second = path(other, page)
+        subprocess.run(["cp", f.path, second])
+        if repeats(other, second) and end_on_left:   # Season Stats: only the first half ends it
+            os.remove(first)
+            os.remove(second)
+            log(f"  {base}: end of list after {page} pages")
+            return page
         side = other
         press("down", hold=0.07, wait=LIST_WAIT, times=rows_per_page)
     log(f"  {base}: hit max pages")
@@ -913,7 +984,7 @@ def next_category(prev_cat, screen):
     cat = None
     for attempt in range(6):               # the new category may still be loading
         f, _ = wait_for([screen])
-        _, cat = chip_labels(f)
+        _, cat = game_chips(f) if screen == "GAME_STATS" else chip_labels(f)
         if cat and norm(cat) != norm(prev_cat):
             return cat
         if attempt == 2:                   # still the old category: R2 was dropped
@@ -1137,6 +1208,146 @@ def schedule_cross_ok(f, current_week):
     if not row or not any(RESULT_RE.match(t) for t in row):
         return f"the highlighted row has no final score ({row})"
     return None
+
+
+# ---------------------------------------------------------------- games ----
+# League Schedule > Cross on a played game > box score (mapped Oct 13): 17 team-stat rows
+# under the scoreboard, 14 visible, the highlight moves down before the list scrolls (Time of
+# Possession is last). R1 = that game's player stats: TEAM column, L2 BOTH, R2 cycles 10
+# categories (Kicking, Punting, Kick Return, Punt Return, General, Passing, Rushing,
+# Receiving, Blocking, Defense), 8 rows shown. Kicking and Defense are wider than the screen:
+# Right moves a column highlight, then scrolls; TEAM/NAME scroll away. Back returns to the
+# schedule list with the same game highlighted.
+BOX_LAST_ROW = "TIME OF POSSESSION"
+
+
+def game_header(f):
+    """Column labels of the game player-stats table, left to right (header ~46% down)."""
+    W, H = f.size
+    return [t for t, b in sorted(f.items, key=lambda i: i[1][0]) if H * 0.44 < b[1] < H * 0.48]
+
+
+def traverse_game(direction, burst=6, max_rounds=14):
+    """Left/Right on a game's player stats until the edge. Right first moves a column highlight
+    (~12 presses on Kicking) before the table scrolls, so a header that stops changing isn't
+    enough: at the right edge TEAM/NAME have scrolled away, at the left edge NAME shows."""
+    prev = None
+
+    def at(h):
+        return ("NAME" in h) if direction == "left" else ("NAME" not in h and "TEAM" not in h)
+
+    for _ in range(max_rounds):
+        f = Frame()
+        h = game_header(f)
+        if h and h == prev and at(h):
+            return f
+        prev = h
+        press(direction, hold=0.1, wait=0.5, times=burst)
+    f = Frame()
+    if game_header(f) == prev and at(prev):
+        return f
+    path = save_debug(f, f"game_never_reached_{direction}_edge")
+    raise Abort(f"Never reached the {direction} edge of the game stats table (frame: {path})")
+
+
+# Game categories wider than the screen (mapped Oct 13: horizontal scrollbar, Right scrolls).
+GAME_WIDE_CATEGORIES = {"KICKING", "DEFENSE"}
+GAME_PAGE_STEP = 6   # Down presses per page: 8 rows show, so pages overlap by 2 (a dropped press can't leave a gap)
+
+
+def capture_game_category(folder, base, cat, all_rows):
+    """One category of a game's player stats; wide tables at both edges, like Season Stats.
+    (Testing every category's width cost ~35 s each, so the wide ones are listed.)"""
+    os.makedirs(folder, exist_ok=True)
+    wait_table_loaded()
+    if norm(cat) in GAME_WIDE_CATEGORIES:
+        capture_wide_list(folder, base, rows_per_page=GAME_PAGE_STEP, traverse=traverse_game, text_end=True,
+                          end_on_left=True)
+    else:
+        capture_list(folder, base, rows_per_page=GAME_PAGE_STEP, stop_at_zeros=not all_rows, text_end=True)
+
+
+def box_score_bottom():
+    """Step the box score's highlight down until Time of Possession is highlighted."""
+    for _ in range(25):
+        f = Frame()
+        W, H = f.size
+        lab = max(((brightness(f.path, b, pad=0), t) for t, b in f.items
+                   if 0.4 * W < b[0] < 0.6 * W and b[1] > 0.3 * H and len(t) > 4), default=(0, None))[1]
+        if lab and norm(lab) == norm(BOX_LAST_ROW):
+            return f
+        press("down", hold=0.12, wait=0.5)
+    raise Abort("Couldn't reach the bottom of the box score")
+
+
+def capture_game(gdir, all_rows):
+    """From the box score: top and bottom screenshots, then every player-stats category."""
+    os.makedirs(gdir, exist_ok=True)
+    wait_for(["BOX_SCORE"], timeout=10)
+    snap(os.path.join(gdir, "box_top.png"))
+    f = box_score_bottom()
+    subprocess.run(["cp", f.path, os.path.join(gdir, "box_bottom.png")])
+    press("r1", wait=2.0)
+    f, _ = wait_for(["GAME_STATS"], timeout=15)
+    _, first = game_chips(f)
+    if not first:
+        raise Abort("Can't read the game stats category chip")
+    seen, cat = [], first
+    for _ in range(12):
+        seen.append(cat)
+        capture_game_category(os.path.join(gdir, "stats"), f"{len(seen):02d}_{norm(cat).lower()}", cat, all_rows)
+        cat = next_category(cat, "GAME_STATS")
+        if norm(cat) == norm(first):
+            break
+    return seen
+
+
+def run_games(out, week=None, all_rows=False, max_games=None):
+    """Every game of one week (default: the previous week): box score + both teams' player
+    stats, into games/<NN>_<away>_at_<home>/. Cross only through cross("SCHED_LIST"), which
+    checks JR's box-score rule."""
+    log("== Games ==")
+    f = open_league_schedule()
+    target = clean_week(week) if week else previous_week(CURRENT_WEEK)
+    log(f"Current week: {CURRENT_WEEK}. Games of: {target}")
+    f = go_to_week(f, target, out)
+    if week_index(week_label(f) or "") != week_index(target):
+        raise Abort(f"Not on {target}")
+    done, results = [], []
+    while True:
+        f, s = wait_for(["SCHED_LIST"], timeout=10)
+        row = highlighted_schedule_row(f)
+        matchup = next((t for t in row or [] if "@" in t), None)
+        result = next((t for t in row or [] if RESULT_RE.match(t)), None)
+        if not matchup:
+            raise Abort(f"Can't read the highlighted game: {row}")
+        log(f"Game {len(done) + 1}: {matchup} {result}")
+        away, home = [norm(x) for x in matchup.split("@")]
+        gdir = os.path.join(out, "games", f"{len(done) + 1:02d}_{away.lower()}_at_{home.lower()}")
+        cross_into("SCHED_LIST", ["BOX_SCORE"], timeout=10)
+        cats = capture_game(gdir, all_rows)
+        log(f"  {len(cats)} categories")
+        press("circle", wait=2.0)
+        f, _ = wait_for(["SCHED_LIST"], timeout=15)
+        done.append(norm(matchup))
+        results.append((matchup, result))
+        if max_games and len(done) >= max_games:
+            break
+        # next game: Down until the highlighted matchup changes (the end of the list: it doesn't)
+        moved = False
+        for attempt in range(4):
+            press("down", hold=0.12, wait=0.8)
+            f = Frame()
+            nxt = next((t for t in highlighted_schedule_row(f) or [] if "@" in t), None)
+            if nxt and norm(nxt) not in done:
+                moved = True
+                break
+        if not moved:
+            break
+    with open(os.path.join(out, "games", "games.txt"), "w") as fh:
+        for i, (mu, res) in enumerate(results, 1):
+            fh.write(f"{i:02d}\t{target}\t{mu}\t{res}\n")
+    log(f"Captured {len(done)} games of {target}")
 
 
 def run_season_schedule(out, weeks=18):
@@ -1833,8 +2044,9 @@ def main():
     ap.add_argument("--test", action="store_true", help="classify the current screen, no key presses")
     ap.add_argument("--probe-l2", action="store_true")
     ap.add_argument("--scope-only", action="store_true", help="from Player Stats: just switch scope to NFL")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule"],
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games"],
                     help="roster and season-schedule are never part of the default run")
+    ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--resume", metavar="RUN", help="--only roster: continue a stopped run in captures/RUN")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
@@ -1848,6 +2060,11 @@ def main():
 
     WIN_ID, PID = find_window()
     FOREGROUND = a.foreground
+    if not a.test:
+        try:
+            ensure_window_size()
+        except Abort as e:
+            sys.exit(f"STOPPED: {e}")
     if FOREGROUND:
         activate_app()
     global DEBUG_DIR
@@ -1889,6 +2106,8 @@ def main():
             run_roster(out, a.teams, resume=bool(a.resume))
         if a.only == "season-schedule":
             run_season_schedule(out)
+        if a.only == "games":
+            run_games(out, a.week, a.all_rows, a.games)
         log("Returning to the hub")
         go_hub()
         log(f"Done. Screenshots in {out}")
