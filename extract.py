@@ -17,6 +17,7 @@ Writes, inside that capture folder:
   season_schedule.csv    --only season-schedule: every week 1-18 (same columns as schedule.csv)
   games/<NN>_.../box_score.csv, stats_<category>.csv   --only games, per game
   game_scores.csv, game_stats_<category>.csv           --only games, the whole week (GAME column)
+  stats_scope_<team>_<category>.csv   --only stats --scope TEAM (Season Stats for one team)
   roster_list.csv        --only roster list pages: TEAM + NAME, POS, AGE, OVR, MOR, ... (icons blank)
   roster_cards.csv       roster/cards.csv (Apple Vision) with AGE/HT/WT/EXP re-read by Gemini from
                          the card crops, 20 per request; vision_* keep Vision's values and
@@ -223,8 +224,9 @@ def merge(paths, label, key_cols=None):
         t = read_table(p)
         columns = columns or t["columns"]
         idx = [columns.index(c) for c in key_cols if c in columns] if key_cols else None
-        for r in t["rows"]:
+        for n, r in enumerate(t["rows"]):
             k = tuple(r[i] if i < len(r) else "" for i in idx) if idx else tuple(r)
+            _seen_at(label, tuple(r), len(t["rows"]) - 1 - n)
             if k not in rows:                 # pages overlap; keep first copy
                 rows[k] = r
             elif key_cols and list(rows[k]) != list(r):
@@ -249,6 +251,7 @@ def merge_wide(left_paths, right_paths, label):
     pages would shift values. Columns in both halves keep the non-empty value and must agree."""
     rights = {os.path.basename(p).rsplit("_", 1)[1]: p for p in right_paths}
     columns, rows = [], OrderedDict()
+    wide_seen = []
     for lp in sorted(left_paths):
         num = os.path.basename(lp).rsplit("_", 1)[1]
         lt = read_table(lp)
@@ -267,8 +270,11 @@ def merge_wide(left_paths, right_paths, label):
             print(f"  WARNING {os.path.basename(lp)}: {len(lt['rows'])} left rows vs "
                   f"{len(rt['rows'])} right rows; pairing the first {min(len(lt['rows']), len(rt['rows']))}")
         bad = 0
+        n_rows = min(len(lt["rows"]), len(rt["rows"])) or len(lt["rows"])
+        from_bottom = {}
         for i, lr in enumerate(lt["rows"]):
             rr = rt["rows"][i] if i < len(rt["rows"]) else []
+            from_bottom[i] = n_rows - 1 - i
             row = {c: v for c, v in zip(lcols, lr)}
             for c, v in zip(rcols, rr):
                 if row.get(c, "") == "":
@@ -276,6 +282,7 @@ def merge_wide(left_paths, right_paths, label):
                 elif v != "" and row[c] != v:
                     bad += 1               # the two screenshots weren't at the same scroll position
             rows.setdefault(tuple(row.get(c, "") for c in columns), row)
+            wide_seen.append((row, from_bottom[i]))
         if bad:
             print(f"  WARNING {os.path.basename(lp)}: {bad} cells disagree between the left and right "
                   "halves; check this page pair")
@@ -287,8 +294,103 @@ def merge_wide(left_paths, right_paths, label):
     final = OrderedDict()
     for row in rows.values():
         final.setdefault(tuple(row.get(c, "") for c in columns), None)
+    for row, fb in wide_seen:
+        _seen_at(label, tuple(row.get(c, "") for c in columns), fb)
     print(f"{label}: {len(final)} unique rows")
     return columns, list(final)
+
+
+def _close(a, b):
+    """Names one OCR slip apart: same length and at most one different letter ("I.Salas" /
+    "L.Salas", "M.Livingston" / "M.Levingston"), or the same once dots and spaces are dropped."""
+    a, b = a.upper(), b.upper()
+    if a.replace(".", "").replace(" ", "") == b.replace(".", "").replace(" ", ""):
+        return True
+    return len(a) == len(b) and sum(x != y for x, y in zip(a, b)) <= 1
+
+
+def misread_groups(columns, rows, key_cols):
+    """Groups of rows that look like one row read two ways on overlapping pages: same key
+    (NAME + POS, or TEAM + NAME) differing in at most 2 cells, or every number equal under names
+    one slip apart. Returns lists of row indexes."""
+    ki = [columns.index(c) for c in key_cols if c in columns]
+    ni = columns.index("NAME") if "NAME" in columns else None
+    groups, used = [], set()
+    for i, a in enumerate(rows):
+        if i in used:
+            continue
+        g = [i]
+        for j in range(i + 1, len(rows)):
+            if j in used:
+                continue
+            b = rows[j]
+            diff = [c for c in range(len(columns)) if (a[c] if c < len(a) else "") != (b[c] if c < len(b) else "")]
+            same_key = all(a[k] == b[k] for k in ki)
+            if (same_key and 0 < len(diff) <= 2) or (
+                    ni is not None and diff == [ni] and _close(a[ni], b[ni])):
+                g.append(j)
+        if len(g) > 1:
+            groups.append(g)
+            used.update(g)
+    return groups
+
+
+# For each (label, row): the most rows it was ever seen above its page's bottom edge. Rows near the
+# bottom are drawn faded or caught mid-scroll and get misread the same way on every read (Oct 14:
+# "I.Salas" for L.Salas on a last row; C.Matias' GP blurred between 15 and 16 three rows up); an
+# overlapping page shows them higher and clear.
+FROM_BOTTOM = {}
+
+
+def _seen_at(label, row, rows_from_bottom):
+    k = (label, row)
+    FROM_BOTTOM[k] = max(FROM_BOTTOM.get(k, -1), rows_from_bottom)
+
+
+def vote_misreads(label, merge_fn, paths, key_cols):
+    """merge_fn() -> (columns, rows). If the merged rows hold a row read two ways, read the
+    pages twice more and keep, for each such group, the version most reads agree on: one row
+    (a misread) or two rows (two players who share a name). Cells are voted on."""
+    columns, rows = merge_fn()
+    groups = misread_groups(columns, rows, key_cols)
+    if not groups:
+        return columns, rows
+    # first: the copy seen highest above a page's bottom edge beats the others
+    drop = set()
+    for g in groups:
+        height = {i: FROM_BOTTOM.get((label, tuple(rows[i])), -1) for i in g}
+        best = max(height.values())
+        top = [i for i in g if height[i] == best]
+        if len(top) == 1:
+            print(f"    {rows[g[0]][0]}: kept the copy seen {best} rows above a page's bottom {tuple(rows[top[0]])}")
+            drop.update(i for i in g if i != top[0])
+    rows = [r for i, r in enumerate(rows) if i not in drop]
+    groups = misread_groups(columns, rows, key_cols)
+    if not groups:
+        return columns, rows
+    print(f"  {label}: {len(groups)} row(s) read two ways; reading the pages twice more to vote")
+    versions = []
+    for _ in range(2):
+        for p in paths:
+            _cache.pop(p, None)
+        versions.append(merge_fn())
+    out, drop = list(rows), set()
+    for g in groups:
+        first = rows[g[0]]
+        def belongs(r, cols):
+            if len(r) != len(columns) or cols != columns:
+                return False
+            return misread_groups(columns, [first, r], key_cols) != [] or list(r) == list(first)
+        counts = [len(g)] + [sum(1 for r in vrows if belongs(r, vcols)) for vcols, vrows in versions]
+        cands = [rows[i] for i in g] + [r for vcols, vrows in versions for r in vrows if belongs(r, vcols)]
+        if sorted(counts)[1] == 1:            # most reads see one row: vote it cell by cell
+            voted = tuple(Counter(r[c] for r in cands).most_common(1)[0][0] for c in range(len(columns)))
+            print(f"    {first[0] if first else ''}: one row, voted -> {voted}")
+            out[g[0]] = voted
+            drop.update(g[1:])
+        else:
+            print(f"    {first[0] if first else ''}: {counts} rows in the reads; kept as separate players")
+    return columns, [r for i, r in enumerate(out) if i not in drop]
 
 
 def card_sheet(paths, first_index):
@@ -538,7 +640,8 @@ def main():
     prefetch(sorted(glob.glob(os.path.join(root, "stats", "*.png")) +
                     glob.glob(os.path.join(root, "team_stats", "*.png")) +
                     glob.glob(os.path.join(root, "schedule", "*.png")) +
-                    glob.glob(os.path.join(root, "season_schedule", "*.png"))))
+                    glob.glob(os.path.join(root, "season_schedule", "*.png")) +
+                    glob.glob(os.path.join(root, "stats_scope", "*.png"))))
     groups = {}
     for p in glob.glob(os.path.join(root, "stats", "*.png")):
         key = os.path.basename(p).rsplit("_", 1)[0]          # e.g. 01_passing
@@ -547,10 +650,25 @@ def main():
         if key.endswith("_right"):
             continue
         if key + "_right" in groups:
-            cols, rows = merge_wide(paths, groups[key + "_right"], key)
+            both = paths + groups[key + "_right"]
+            cols, rows = vote_misreads(key, lambda: merge_wide(paths, groups[key + "_right"], key), both, ["NAME", "POS"])
         else:
-            cols, rows = merge(paths, key)
+            cols, rows = vote_misreads(key, lambda: merge(paths, key), paths, ["NAME", "POS"])
         write_csv(os.path.join(root, f"stats_{key.split('_', 1)[1]}.csv"), cols, rows)
+
+    # team-scoped Season Stats (--only stats --scope TEAM): stats_scope/<team>_<category>_NNN.png
+    scoped = {}
+    for p in glob.glob(os.path.join(root, "stats_scope", "*.png")):
+        scoped.setdefault(os.path.basename(p).rsplit("_", 1)[0], []).append(p)
+    for key, paths in sorted(scoped.items()):
+        if key.endswith("_right"):
+            continue
+        if key + "_right" in scoped:
+            both = paths + scoped[key + "_right"]
+            cols, rows = vote_misreads(key, lambda: merge_wide(paths, scoped[key + "_right"], key), both, ["NAME", "POS"])
+        else:
+            cols, rows = vote_misreads(key, lambda: merge(paths, key), paths, ["NAME", "POS"])
+        write_csv(os.path.join(root, f"stats_scope_{key}.csv"), cols, rows)
 
     team = {}
     for p in glob.glob(os.path.join(root, "team_stats", "*.png")):
