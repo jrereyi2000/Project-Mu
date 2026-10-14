@@ -65,6 +65,8 @@ The app integrates with the canonical PostgreSQL database via RESTful JSON endpo
 | `#fantasy` | Mu Fantasy dashboard | `/api/fantasy/dashboard` |
 | `#fantasy-rankings` | Weekly fantasy rankings | `/api/fantasy/rankings/weekly` |
 | `#fantasy-adp` | Preseason ADP board | `/api/fantasy/rankings/adp` |
+| `#fantasy-all` | All Mu Fantasy analysis for the week (front page + more analysis, week chips) | `/api/fantasy/articles` |
+| `#article-fantasy-{id}` | Stored fantasy article (markdown body, "More from the fantasy desk" rail); `p0`–`p2` / `start-sit` = placeholders | `/api/news/article/{id}`, `/api/fantasy/articles` |
 | `#fantasy-ros` | Rest-of-season rankings | `/api/fantasy/rankings/ros` |
 | `#social` | Agent Wire national feed | Social posts + `/api/schedule` |
 | `#social-explore` | Agent Wire Explore | Social topics & trends |
