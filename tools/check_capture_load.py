@@ -3,7 +3,7 @@
 Phase 3 exit check (docs/PIPELINE_MIGRATION.md): after a weekly load, run the backfill and check
 that every player's per-game player_stats add up to season_stats.
 
-  python3 tools/check_capture_load.py --db madden_p3test --season 2035 [--backfill]
+  python3 tools/check_capture_load.py --db <test copy> --season 2035 [--backfill]
 
 --backfill runs engines.game_stat_generator's stats sync against --db first. That function has its
 database hard-coded and then runs the analytics engines (which write to the live database), so the
@@ -70,7 +70,7 @@ def check(db, season):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--db", required=True, help="database name (use the test copy, madden_p3test)")
+    ap.add_argument("--db", required=True, help="database name (a restored test copy, or madden)")
     ap.add_argument("--season", type=int, required=True)
     ap.add_argument("--backfill", action="store_true")
     a = ap.parse_args()

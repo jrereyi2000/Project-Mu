@@ -7,8 +7,8 @@ The mode is read from the folder: roster/ (roster), season_schedule/ (season sch
 (games, recovery only), else stats/ + team_stats/ + schedule/ (weekly). One transaction per run:
 any failed check writes nothing, records the run as failed in `captures` and exits non-zero.
 --dry-run runs every check and prints what would change, then rolls back.
-Uses DATABASE_URL (default: the local madden database); point it at the restored test copy
-(dbname=madden_p3test) until a mode has passed there.
+Uses DATABASE_URL (default: the local madden database); point it at a restored test copy
+to try a load before running it live.
 """
 import argparse, csv, json, os, re, sys
 from datetime import datetime

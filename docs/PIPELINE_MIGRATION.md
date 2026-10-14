@@ -2,6 +2,16 @@
 
 Plan agreed with JR on Oct 13, 2026 in a claude.ai planning session. The full plan also lives in the claude.ai doc "Project Mu Pipeline Migration Plan"; this file is the copy Claude Code works from. If this file and the code disagree, trust the code and say so. If this file seems wrong or underspecified, ask JR before improvising.
 
+## Current state (Oct 14, 2026)
+
+- **Phases 1–3 are done**; phase 3 ran live on Oct 14 (backup `db/backups/madden_backup_20261014_093457.sql`). **Next: phase 4**, not started until JR says so.
+- Live database: 1,719 players (1,698 with a number; the other 21 wear #0), all on a team; 362 `season_stats` rows for 2035 keyed on `player_id`; 256 games COMPLETED through Week 17, Week 18's 16 SCHEDULED; `league_state` 2035 / 18.
+- `captures` holds 4 loaded runs: roster, season schedule, Week 17 weekly, Week 17 games (`--replace`). Every other 2035 game was refilled by the backfill from the corrected totals (`tools/rebuild_backfill.py`); the Panthers' games and the Week 17 games capture are real lines and were kept.
+- Live check (`tools/check_capture_load.py --db madden --season 2035`): 340 of 362 players' game lines add up to `season_stats`. The 18 that don't are known: real game lines for players outside the Season Stats top lists, old stream lines in Panthers games (G. Crawford, K. Franklin, R. Tucker), J. Randolph. 4 more are negative season totals the backfill can't write. Team-games with lines: 512 of 512.
+- `llm_usage` is still empty on live: token logging was added after these captures were extracted, so the first live numbers come with the next weekly extract (on the test copy, thinking was about 40% of Gemini's extraction output).
+- The phase 3 test copy `madden_p3test` was dropped on Oct 14. A later phase that needs one restores a fresh backup into a new test database (never with `db/restore_db.sh`, which drops the live `madden` database).
+- Known limits carried forward: the backfill never writes negatives; Season Stats only lists each category's top players, so lines for the rest come from game captures only; a shared Season Stats name that history can't settle needs a team-scoped capture (`--scope <TEAM> --category <CAT>`) before the weekly load.
+
 ## How to work through it
 
 - Do **one phase at a time**, in order. Stop when the phase's exit criteria are met and report back; do not start the next phase unprompted.
@@ -127,7 +137,7 @@ Keep the existing safety rules: check the screen before every press, stop on any
 
 ## Phase 3 in detail (agreed with JR, Oct 14)
 
-### What exists today (checked Oct 14)
+### What existed before phase 3 (checked Oct 14; see "Current state" for now)
 - `season_stats` holds offense only (passing, rushing, receiving, fumbles), unique on (season, player_name, team_id, position); it has a `player_id` column that isn't part of the key. 359 rows for 2035.
 - `player_stats` (per game) is the same offense set, unique on (game_id, player_name, position), no `player_id`; `fantasy_points` is generated.
 - The backfill (`engines/game_stat_generator.py`) fills every game that has **no `player_stats` rows for a team** with each player's season total minus what is already stored, inserting with `ON CONFLICT (game_id, player_name, position) DO NOTHING`. So a weekly load only has to write season totals and scores; the backfill fills the new week.
@@ -158,28 +168,28 @@ Keep the existing safety rules: check the screen before every press, stop on any
 ### `pipeline/load_capture.py <capture folder>`
 - One transaction per run; any failed check writes nothing, marks the `captures` row `failed` and (phase 5) sends the notice. A run already loaded is refused. `fantasy_points` is never written.
 - **Weekly run** (Season Stats + Team Stats + previous week's schedule): upsert `season_stats` (offense + extras) and the `season_stat_*` tables; set that week's game scores and status COMPLETED; team tabs to `team_seasons`.
-- **Roster run**: update `player_seasons` (team, list OVR, age, experience, position, dev, archetype, role) and `players` (full name, height, weight, number); insert new players. Players missing from the capture are listed, not deleted.
+- **Roster run**: update `player_seasons` (team, list OVR, age, experience, position, dev, archetype, role) and `players` (full name, height, weight, number); insert new players. On a full 32-team capture, players it didn't find are deleted when they hold no real data (stats, awards, article tags, agent memories), else kept on their team and listed (JR, Oct 14).
 - **Season schedule**: insert SCHEDULED games only; COMPLETED games are never touched.
 - **Games run (recovery only)**: real lines into `player_stats`, `game_stat_*` and `team_stats`, plus scores. Refused if those games already have backfilled rows, unless `--replace` (which deletes that week's backfilled rows in the same transaction).
 - **Checks before writing**: passing / rushing / receiving rows 100% matched (other categories list unmatched rows); row counts within 10% of the last capture of that mode; no season total goes down; every value parses; the schedule covers all 32 teams minus byes; the week is the last loaded week + 1 (a gap loads but is flagged); a games run has a box score and both teams' player stats for every game, and its scores match the schedule (`QUARTERS_OK = n` games load totals only).
 
 ### Order of work (a commit after each)
-1. `./db/backup_db.sh`; restore it into `madden_p3test` in the `madden-db` container; the loader and tests use `DATABASE_URL` pointing there until the live load.
+1. `./db/backup_db.sh`; restore it into `madden_p3test` in the `madden-db` container; the loader and tests use `DATABASE_URL` pointing there until the live load. (Dropped after the live run.)
 2. Migration `db/migrations/2026_10_23_capture_loader.sql` + `db/init_db.sql`: new columns, category tables, views, `captures`, `llm_usage` (no keys). The `player_id` keys and trigger come in `2026_10_24_player_id_keys.sql`, **after the roster load** (JR, Oct 14): existing rows had two different M. Santos on one id, 7 `season_stats` rows linked to the wrong player and 364 `player_stats` rows (25 names) that don't resolve to one player, mostly because ~220 players were missing from `player_seasons`. That migration re-links `player_id` from the refreshed roster, lists anything still unresolved, then adds the keys. Built as `db/migrations/2026_10_24_player_id_keys.py` (Python: it needs the name keys). JR's rules (Oct 14): a player's duplicate stats rows are merged (larger value per stat; Brian Thomas Jr. had "B. Thomas Jr" and "B. Thomas Jr." rows), and players a full roster capture didn't find are deleted when they hold no real data, else kept on their team and listed (JR, Oct 14; clearing their team first broke the TWI engine, which assumes every player_seasons row has a team; the 9 found on Oct 14 were the old video scanner's misreads and duplicates and were deleted on live). Rows without a team are matched on name + position across the league when one player fits, and get that team.
 3. Matching module (identity from the roster, Season Stats history assignment, stop-and-list for unsettled names) with unit tests.
 4. Loader per mode: roster, season schedule, weekly, games.
 5. `--scope <TEAM> --category <CAT>` for Season Stats in `madden_capture.py`.
 6. Token logging in `extract.py` and `_execute_agent`.
-7. Run everything on `madden_p3test`, then live (after another backup).
+7. Run everything on `madden_p3test`, then live (after another backup). Done Oct 14: both passed exits (a)–(e); see "Current state".
 
 ## Phases
 
 1. **Prove the capture.** Done.
-2. **Capture extensions.** Add the three modes above; on-device OCR for player cards; Escape in the key map. Run each by hand once with JR at the console. *No database writes in this phase*: output is screenshots and CSVs only.
+2. **Capture extensions.** Done (Oct 14). Add the three modes above; on-device OCR for player cards; Escape in the key map. Run each by hand once with JR at the console. *No database writes in this phase*: output is screenshots and CSVs only.
    - Exit: roster covers all 32 teams including linemen; season schedule has 272 games; one week's game capture has a box score and two teams' player stats for every game.
-3. **Schema and loader.** See "Phase 3 in detail" above: backup and restored copy, migration (hybrid layout, `player_id` keys, `captures`, `llm_usage`), matching, `pipeline/load_capture.py` for every mode, team-scoped Season Stats capture, token logging. Test on the restored copy, then live.
+3. **Schema and loader.** Done (Oct 14, live). See "Phase 3 in detail" above: backup and restored copy, migration (hybrid layout, `player_id` keys, `captures`, `llm_usage`), matching, `pipeline/load_capture.py` for every mode, team-scoped Season Stats capture, token logging. Test on the restored copy, then live.
    - Exit (revised by JR, Oct 14, since games are captured only to recover a week): on the restored copy, (a) the roster loads (1,719 players, numbers filled) and the season schedule loads with no change to completed games; (b) a weekly capture loads, the backfill runs, and every player's `player_stats` summed over the season equals `season_stats`; (c) the Week 17 games capture loads with `--replace` and its lines match the box scores; (d) a deliberately broken CSV, and an ambiguous Season Stats name, each stop the load with nothing written; (e) the backfill afterwards fills no game already loaded. Then the same loads live.
-4. **Season from `league_state`.** Remove hardcoded 2035 from the backfill and pipeline calls; update `league_state.current_week` from the captured week label.
+4. **Season from `league_state`.** Next. Remove hardcoded 2035 from the backfill and pipeline calls; update `league_state.current_week` from the captured week label.
    - Exit: tests pass; a dry run picks up the right season and week.
 5. **Trigger, connect, notices.** Trigger in `pipeline/main.py`; `pipeline/weekly_capture.py`; ntfy notices; stream-offline retry; fallback on any `MAIN_MENU` comparing the week label with the last capture.
    - Exit: three weeks in a row run end to end from Advance Week with JR's only step being the controller and broadcast restart, including a bye week and a forced failure (bad CSV) that stops the week, publishes nothing and reaches JR's phone.
@@ -188,4 +198,4 @@ Keep the existing safety rules: check the screen before every press, stop on any
 
 ## Cost reference
 
-`gemini-3.8-flash` introductory pricing through Dec 31, 2026: $0.75 / 1M input, $3.75 / 1M output (thinking included), $0.135 / 1M cached. Estimated capture cost ~$0.50–2/week; the weekly article run is an estimated $1.50–2.50 and is unchanged. Token logging (phase 3) replaces these estimates.
+`gemini-3.8-flash` introductory pricing through Dec 31, 2026: $0.75 / 1M input, $3.75 / 1M output (thinking included), $0.135 / 1M cached. Estimated capture cost ~$0.50–2/week; the weekly article run is an estimated $1.50–2.50 and is unchanged. Token logging (phase 3) replaces these estimates once live weekly runs fill `llm_usage` (empty as of Oct 14).

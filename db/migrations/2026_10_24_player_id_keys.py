@@ -4,7 +4,7 @@ player_stats. Run after the roster load (pipeline/load_capture.py on a roster ca
 the existing links were wrong in places (two M. Santos on one id, season_stats rows linked to
 another player, player_stats rows whose name matched nobody on the team).
 
-  DATABASE_URL="dbname=madden_p3test ..." python3 -m db.migrations.2026_10_24_player_id_keys [--dry-run]
+  DATABASE_URL="dbname=<test copy> ..." python3 -m db.migrations.2026_10_24_player_id_keys [--dry-run]
 
 1. Re-link every season_stats and player_stats row to a player: list-name key + team + position
    through player_seasons of that season, else list-name key + team.
