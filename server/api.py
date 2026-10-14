@@ -2316,10 +2316,13 @@ def social_team(abbr: str, season: Optional[int] = None, week: Optional[int] = N
                     cur, data["team"]["id"], data["season"], label=data["team"]["abbr"])
             return data
 
+# The built site (Mu_Network/dist, `npm run build`) at /, so a phone on the home network can open
+# http://<Mac's IP>:8000/#debug through the API's port (the macOS firewall allows Python, not node).
+# Mounted last so it never shadows an /api or /static route.
+_SITE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Mu_Network", "dist")
+if os.path.isdir(_SITE_DIR):
+    app.mount("/", StaticFiles(directory=_SITE_DIR, html=True), name="site")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-

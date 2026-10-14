@@ -15,7 +15,7 @@ System Settings → Privacy & Security: give **Terminal** both **Screen Recordin
 
 ## Weekly run from the debug page (phase 5)
 1. Subscribe to the ntfy topic in `.env` (`NTFY_TOPIC`) in the ntfy phone app. `python3 -m pipeline.notify "hello"` sends a test.
-2. Keep the API (`python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload`) and the site (`cd Mu_Network && npm run dev`) running. Open the site's **LIVE** badge, or on your phone `http://<Mac's IP>:8443/#debug`. Enter `DEBUG_TOKEN` from `.env` once.
+2. Keep the API (`python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload`) and the site (`cd Mu_Network && npm run dev`) running. Open the site's **LIVE** badge, or on your phone `http://<Mac's IP>:8000/#debug` (the API serves the built site; run `cd Mu_Network && npm run build` after frontend changes). Enter `DEBUG_TOKEN` from `.env` once.
 3. After **Advance Week**, tap **Scan week** (or **Backfill previous week** for no articles, **Game scan** for last week's box scores). Remote Play takes the console and your controller disconnects. The page shows the log.
 4. When your phone says **"your turn"** (~20 min), turn the controller back on. Extract, load, engines and articles carry on without you, and a last notice says the week is done.
 5. If a notice says **"week stopped"**, nothing after the failed step ran (a failed load publishes nothing). Fix it, then pick the run's folder under **Resume a stopped run** and tap the same button (or `python3 -m pipeline.weekly_capture --resume <folder>`).
