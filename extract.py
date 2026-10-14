@@ -331,6 +331,46 @@ def read_card_values(root, cards):
     return out
 
 
+class CardName(BaseModel):
+    first: str
+    last: str
+    number: str
+    position: str
+
+
+CARD_NAME_PROMPT = """This is the top of a Madden NFL player card: the first name (small) above the last
+name (large), then a line like "#64 DT | Nose Tackle | Elite Player". Return the first name, the
+last name (with any suffix such as Jr. or III, exactly as shown), the jersey number without the #,
+and the position abbreviation."""
+CARD_NAME_BOX = (0, 30, 726, 200)       # pixels in the card crop: names + number line
+NAME_FLAGS = ("missing_first", "missing_last", "missing_number", "missing_position")
+
+
+def fill_card_names(root, cards):
+    """Apple Vision sometimes leaves a card's first name, last name, number or position blank (a
+    handful in 1,719 cards on Oct 13-14). Those cards' name area goes to Gemini, one request each;
+    the row gets name_from_gemini in its flags. Changes cards in place, returns how many."""
+    todo = [c for c in cards if any(f in c["flags"].split(";") for f in NAME_FLAGS)]
+    if not todo:
+        return 0
+    print(f"Reading {len(todo)} card names Apple Vision missed...")
+
+    def one(c):
+        img = Image.open(os.path.join(root, c["card_png"])).convert("RGB").crop(CARD_NAME_BOX)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        part = types.Part.from_bytes(data=buf.getvalue(), mime_type="image/png")
+        return c, _generate([CARD_NAME_PROMPT, part], CardName, c["card_png"])
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for c, n in pool.map(one, todo):
+            for key, val in (("first", n.first), ("last", n.last), ("number", n.number), ("position", n.position)):
+                if not c[key].strip() and val.strip():
+                    c[key] = val.strip().title() if key in ("first", "last") else val.strip().upper()
+            c["flags"] = ";".join(filter(None, [c["flags"], "name_from_gemini"]))
+    return len(todo)
+
+
 def _card_value(key, v):
     v = v.strip().replace("’", "'").replace("”", '"').replace("''", '"')
     if key == "experience" and v.upper() == "ROOKIE":
@@ -355,6 +395,7 @@ def extract_roster(root):
 
     with open(os.path.join(root, "roster", "cards.csv"), newline="") as fh:
         cards = list(csv.DictReader(fh))
+    fill_card_names(root, cards)
     per_list, per_card = Counter(r[0] for r in rows), Counter(c["team"] for c in cards)
     for team in sorted(per_card):
         if per_list[team] != per_card[team]:

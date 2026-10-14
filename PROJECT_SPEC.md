@@ -47,6 +47,9 @@ Project Mu/
 ├── pipeline/                  # Video ingestion & OCR extraction (Section 6, step 1)
 │   ├── main.py                #   End-to-end pipeline entrypoint (--file / --stream, --db, --workers)
 │   ├── ocr_extractor.py       #   Gemini box-score extraction + Pydantic stat models
+│   ├── load_capture.py        #   Loads an extracted captures/<run> into the DB, one transaction, checks first (mode from the folder; roster built so far)
+│   ├── capture_matching.py    #   Name keys, roster matching in passes (list name first; rows whose full_name belongs to another player don't count),
+│   │                          #   Season Stats history assignment for shared names
 │   ├── template_classifier.py #   Screen-state classifier (TEMPLATE_DIR = pipeline/templates/)
 │   ├── templates/             #   Reference screenshots for each Madden UI state
 │   ├── ingest_stream.py, sort_video.py, batch_historical.py, batch_menus.py
@@ -150,6 +153,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Weekly fantasy projections | `python3 -m engines.fantasy_projection_engine --season 2035 --week 18` (no `--week`: league_state current week; `--all-weeks` backfills 2–18; `--backtest` scores accuracy, no writes) |
 | Capture Season Stats, Team Stats (conversions, red zone, penalties) + last week's schedule over Remote Play | `python3 madden_capture.py` (chiaki-ng streaming, anywhere in franchise menus). `--only stats\|team\|schedule\|roster\|season-schedule\|games` (`--games N` stops after N games for testing) (roster, season-schedule and games are not in the default run yet; season-schedule = League Schedule weeks 1-18 → season_schedule/season_week_NN_NNN.png; `--teams N` stops after N teams for testing; `--resume <run>` continues a stopped roster or games run in captures/<run>, skipping the teams in roster/done.txt or the games with a games/<NN>/DONE marker), `--week "SEASON WEEK 12"`, `--test` (read screen only), `--scope-only`, `--probe-l2` (records the held-L2 dropdown from Player Stats or the Manage Roster list), `--all-rows`, `--foreground`. Mapping tool: `--step <key>\|none` presses one key and saves the screenshot, OCR text (with boxes and brightness) and `classify()` result to `captures/<date>_explore/explore/NN_<key>.png/.txt`; `--wait` sets the settle time; Cross needs `--allow-cross` and is always refused on a screen showing ADVANCE WEEK or FORCE WIN |
 | Screenshots → CSVs | `python3 extract.py captures/<run>` (Gemini, 8 parallel requests on table-cropped half-size images; `GEMINI_API_KEY` from env or root `.env`; `MADDEN_EXTRACT_MODEL` / `MADDEN_EXTRACT_WORKERS` override model and parallelism) |
+| Load a capture | `python3 -m pipeline.load_capture captures/<run>` (`--dry-run`: checks + report, writes nothing). `DATABASE_URL` picks the database (`dbname=madden_p3test` = the phase 3 test copy). Roster: matches every card to a player (list name + team + position first), stops with nothing written on any unreadable or ambiguous card, updates `players` (full name, height, weight, number) and `player_seasons` (team, position, age, list OVR, experience, dev, archetype, role), adds new players, lists players on no roster |
 | Headshot post-processing | `python3 -m headshots.process_headshots` |
 | Dashboards | `streamlit run dashboards/admin_dashboard.py` |
 | DB backup / restore | `db/backup_db.sh` / `db/restore_db.sh db/backups/<file>.sql` |
