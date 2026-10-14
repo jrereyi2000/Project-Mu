@@ -1,6 +1,6 @@
-# Fantasy Editorial Matrix (agreed with JR Oct 13, 2026; not built yet)
+# Fantasy Editorial Matrix (agreed with JR Oct 13, 2026)
 
-> **Status: review complete (Oct 13, 2026). Nothing is built yet.** The fantasy page (`#fantasy`) still shows hardcoded placeholder articles, and `newsroom/config/article_types.json` has no fantasy article types. This is the source of truth for the fantasy slate, alongside `docs/EDITORIAL_MATRIX.md` for the main newsroom.
+> **Status: review complete (Oct 13, 2026). Built so far: the simulated league engine (§7 step 2).** The fantasy page (`#fantasy`) still shows hardcoded placeholder articles, and `newsroom/config/article_types.json` has no fantasy article types. This is the source of truth for the fantasy slate, alongside `docs/EDITORIAL_MATRIX.md` for the main newsroom.
 
 This matrix sets the weekly article slate for **Mu Fantasy** (`#fantasy`). It follows the **fantasy calendar**, not the NFL regular season and playoffs.
 
@@ -227,7 +227,7 @@ Each of the 100 leagues also plays its season:
 ## 7. What It Takes to Build (not done yet)
 
 1. **Calendar**: a `fantasy_phase(week)` helper: W1 / W2–5 / W6–10 / W11–14 / W15 / W16 / W17 / W18 / W19–23 → frozen.
-2. **Simulated league engine** (§5): 100 seeded leagues with drafting strategies, weekly matchups and playoffs → week 1 ADP (`adp_rank` + average/earliest/latest pick, draft %) and per-player, per-week rostered % and start %, plus league results by strategy. It reads `draft_score` from `fantasy_adp_engine` as the value board.
+2. ✅ **Built (Oct 13):** `engines/fantasy_league_sim.py` + `db/migrations/2026_10_21_fantasy_league_sim.sql` (details in PROJECT_SPEC §3.4). Managers value players over replacement from `draft_score` (QB/TE damped) before strategy adjustments. **Simulated league engine** (§5): 100 seeded leagues with drafting strategies, weekly matchups and playoffs → week 1 ADP (`adp_rank` + average/earliest/latest pick, draft %) and per-player, per-week rostered % and start %, plus league results by strategy. It reads `draft_score` from `fantasy_adp_engine` as the value board.
 2b. **K and D/ST scoring + projections** (after migration phase 3) → K and D/ST rows in the rankings and `fantasy_projections`.
 3. **Article types and writers**: add the catalog to `article_types.json`, a Berry article persona plus directives, and fantasy sections in the Yates/Barnwell/Joyner directives, plus a `FANTASY_MATRIX` and Card 03 pool rotation in the dispatcher. W1 tiers use a position slot target.
 4. **Writer tools** (`newsroom/db_tools.py`): weekly projections, last week's fantasy scores against projections, defense vs. position, Playoff SOS, ADP vs. ROS/final rank, byes, per-player PPR range, rostered %, positional ADP tiers with roster attributes.

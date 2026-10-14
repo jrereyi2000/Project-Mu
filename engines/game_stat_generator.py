@@ -176,6 +176,7 @@ def generate_team_and_player_stats(season_year: int):
         from engines.player_popularity_engine import PlayerPopularityEngine
         from engines.excitement_projection import project_scheduled_games
         from engines.fantasy_projection_engine import project_upcoming_week
+        from engines.fantasy_league_sim import simulate_season
 
         # 0. Score Game Excitement (E) for games that have none yet plus the games just backfilled above.
         #    Must run before TWI, which only counts games whose excitement_index is set.
@@ -210,6 +211,10 @@ def generate_team_and_player_stats(season_year: int):
         # Weekly fantasy projections (fantasy_projections) for the next week with scheduled games
         print("-> Projecting fantasy points for the upcoming week...")
         project_upcoming_week(season_year)
+
+        # Simulated fantasy leagues (rostered %, start %, standings); reads the projections just written
+        print("-> Simulating fantasy leagues through the upcoming week...")
+        simulate_season(season_year)
         print("\n✅ Stats sync and analytics engines complete.")
 
     except Exception as e:

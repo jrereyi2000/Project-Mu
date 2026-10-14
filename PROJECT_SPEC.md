@@ -53,7 +53,8 @@ Project Mu/
 │   ├── team_efficiency_engine.py # Pythagorean wins, team pace/production → team_seasons
 │   ├── playoff_clout_engine.py #  Team & player Playoff Clout → team_seasons.s_playoff, player_seasons.s_playoff
 │   ├── matchup_edges.py       #   Matchup Edge / Trench Edge math for writer tools (computed live, not stored)
-│   ├── fantasy_adp_engine.py  #   Preseason ADP board → fantasy_projections week 1 adp_rank
+│   ├── fantasy_adp_engine.py  #   Preseason value board (draft_score) + runs the simulated drafts → fantasy_projections week 1 adp_rank
+│   ├── fantasy_league_sim.py  #   100 simulated 12-team PPR leagues: strategy drafts → ADP; weekly rostered/start %, standings, 6-team playoffs → fantasy_sim_*
 │   └── fantasy_projection_engine.py # Weekly PPR projections, matchup stars, pos/ROS ranks → fantasy_projections (+ --backtest)
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
@@ -77,7 +78,8 @@ Project Mu/
 │   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql,
 │   │                          #   2026_10_15_stored_index_components.sql, 2026_10_16_trajectory_and_efficiency.sql,
 │   │                          #   2026_10_17_playoff_clout_awards_exposure.sql, 2026_10_18_power_rankings.sql,
-│   │                          #   2026_10_19_roundtable_panel_agent.sql, 2026_10_20_agent_memory.sql (apply SQL ones via
+│   │                          #   2026_10_19_roundtable_panel_agent.sql, 2026_10_20_agent_memory.sql,
+│   │                          #   2026_10_21_fantasy_league_sim.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -95,7 +97,7 @@ Project Mu/
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md
-│   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate (not built yet): fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; not built yet
+│   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate: fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; built so far: the league sim
 │   ├── PIPELINE_MIGRATION.md  #   Agreed plan for moving ingestion to madden_capture.py over chiaki-ng (phases, decisions, verified facts)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
@@ -126,7 +128,8 @@ All Python commands run **from the project root** (relative data paths such as `
 | Team efficiency profile | `python3 -m engines.team_efficiency_engine --season 2035` |
 | Playoff Clout | `python3 -m engines.playoff_clout_engine --season 2035` |
 | Project E for scheduled games | `python3 -m engines.excitement_projection --season 2035` (`--backtest` scores accuracy, no writes) |
-| Preseason ADP | `python3 -m engines.fantasy_adp_engine` |
+| Preseason ADP (runs the 100 simulated drafts once per season) | `python3 -m engines.fantasy_adp_engine --season 2035` (`--redraft` replaces a stored draft) |
+| Simulated fantasy leagues (rostered %, start %, standings) | `python3 -m engines.fantasy_league_sim --season 2035` (re-simulates from the stored draft through the next unplayed fantasy week; `--summary` prints results, no writes) |
 | Weekly fantasy projections | `python3 -m engines.fantasy_projection_engine --season 2035 --week 18` (no `--week`: league_state current week; `--all-weeks` backfills 2–18; `--backtest` scores accuracy, no writes) |
 | Capture Season Stats, Team Stats (conversions, red zone, penalties) + last week's schedule over Remote Play | `python3 madden_capture.py` (chiaki-ng streaming, anywhere in franchise menus). `--only stats\|team\|schedule\|roster` (roster is never in the default run; `--teams N` stops after N teams for testing; `--resume <run>` continues a stopped roster run in captures/<run>, skipping the teams in roster/done.txt), `--week "SEASON WEEK 12"`, `--test` (read screen only), `--scope-only`, `--probe-l2` (records the held-L2 dropdown from Player Stats or the Manage Roster list), `--all-rows`, `--foreground`. Mapping tool: `--step <key>\|none` presses one key and saves the screenshot, OCR text (with boxes and brightness) and `classify()` result to `captures/<date>_explore/explore/NN_<key>.png/.txt`; `--wait` sets the settle time; Cross needs `--allow-cross` and is always refused on a screen showing ADVANCE WEEK or FORCE WIN |
 | Screenshots → CSVs | `python3 extract.py captures/<run>` (Gemini, 8 parallel requests on table-cropped half-size images; `GEMINI_API_KEY` from env or root `.env`; `MADDEN_EXTRACT_MODEL` / `MADDEN_EXTRACT_WORKERS` override model and parallelism) |
@@ -261,7 +264,8 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 ### 3.4 Fantasy Analytics & Projections
 - **`fantasy_projections`**:
   - `id` (PK), `season` (int), `week` (int), `player_id` (int, players.id — no FK constraint), `player_name` (varchar), `position` (varchar), `team_id` (FK, int), `projected_points` (numeric), `avg_points` (numeric), `matchup_stars` (int 1–5), `pos_rank` (varchar e.g. 'QB1', 'WR1'), `adp_rank` (int), `ros_rank` (varchar), `ros_total_points` (numeric), `delta` (numeric). `UNIQUE(season, week, player_id)`.
-  - **Week 1 = preseason ADP board**, written by `engines/fantasy_adp_engine.py` (`adp_rank`, upserted on `(season, week, player_id)`). Some older week 1 rows have no `player_id`; every reader ignores those.
+  - **Week 1 = preseason ADP board**, written by `engines/fantasy_adp_engine.py`: the top 300 players by simulated ADP (`fantasy_sim_adp.adp`, ties by `draft_score`), `adp_rank` = that order, upserted on `(season, week, player_id)`. Writing it also refreshes `adp_rank` on the season's weeks 2–18 rows. Some older week 1 rows have no `player_id`; every reader ignores those.
+    - `draft_score` (not stored) is the consensus value board: OVR × positional scarcity (HB 1.35, WR 1.30, TE 1.15, QB 0.9–1.10 by OVR tier), + team pass/rush offense rank bump, + last season's MVP/OPOY/SBMVP/OROY bumps, + up to 3 for popularity, × 0.7 under OVR 80.
   - **Weeks 2–18 = weekly projections**, written by `engines/fantasy_projection_engine.py`: one row per rostered QB/HB/FB/WR/TE (≈456 in 2035), using only games completed before that week, so past weeks show what was projected before kickoff. Re-running a week replaces its rows (rows for players no longer projected are deleted). Week 1 is never projected (no earlier games; there is no prior-season data yet).
     - `projected_points` = baseline × matchup factor. Baseline is the player's PPR per team game to date (team games with no stat line count as 0), shrunk toward a depth-chart prior by 0.25 pseudo-games; the prior is the league's PPR per team game for that depth slot (rank by OVR within team and group, capped at QB2/RB3/WR4/TE2). Matchup factor = (opponent's PPR allowed to the group, shrunk toward the league average by 16 pseudo-games, ÷ league average)^0.5.
     - `avg_points` = PPR per appearance to date; `delta` = `projected_points − avg_points`.
@@ -271,6 +275,16 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
     - `adp_rank` is copied from the season's week 1 row so ROS `TREND` (`adp_rank − overall_ros_rank`) works.
     - **Accuracy (2035 backtest, weeks 2–17, depth-chart starters QB1/RB1–2/WR1–3/TE1):** MAE 3.29 PPR vs. 6.18 for guessing the league average; correlation 0.79. Almost all of it comes from the per-game average. Production here is very stable week to week; the matchup factor adds little, and recency weighting was tested and dropped. Check with `--backtest`.
   - When a player has no stored row for the week, the player outlook (`GET /api/player/{id}`, §4.3) falls back to a rough estimate with no ranks.
+- **Simulated fantasy leagues** (`engines/fantasy_league_sim.py`, `db/migrations/2026_10_21_fantasy_league_sim.sql`; design in `docs/FANTASY_EDITORIAL_MATRIX.md` §5). 100 leagues × 12 teams, full PPR, 15 rounds, lineup QB/2 RB/2 WR/TE/FLEX:
+  - **Draft** (once per season, from `fantasy_adp_engine`; stored, so in-season OVR changes don't redraft): snake order. Each manager reads `draft_score` with personal noise (sd 1.2%) and values players over replacement (the 12th QB/TE, 30th RB/WR; QB value × 0.4, TE × 0.8), minus backup penalties (6 per QB, 10 per TE already rostered; RB/WR past five fade) and caps (QB/TE 2, RB/WR 7); late picks are forced to fill an empty starting slot. Strategy adjustments: `BPA` none; `HERO_RB` one RB in rounds 1–2 then none through round 5; `ZERO_RB` no RB before round 5; `RB_HEAVY` 2–3 RBs in rounds 1–4; `EARLY_QB` / `EARLY_TE` one in rounds 1–3. Seats draw strategies independently from the season mix.
+  - **Strategy mix:** first season `DEFAULT_MIX` (BPA 35%, Hero RB 15%, Zero RB 15%, RB Heavy 15%, Early QB 10%, Early TE 10%). Later seasons: lift = title share ÷ manager share; new ∝ old × lift^0.5, blended 50/50 with the old mix, floor 5%.
+  - **Season** (re-simulated from the stored draft on every run, seeded per season/league/week): lineups start the highest `projected_points` (week 1: best ADP); scores are actual PPR (`player_stats.fantasy_points`); 12-team round robin weeks 1–14; seeds by wins then points for; 6-team playoffs (seeds 1–2 bye in week 15, semifinals week 16, final week 17; ties to the higher seed). Before each week, managers in reverse-standings order make up to 2 add/drops (each with probability = `activity`, 0.2–1.0) when a free agent's value beats the drop's by 15% + 1 point: value = `ros_total_points` scaled to the fantasy weeks left (playoff weeks: next game × weeks left), × (1 + `reactivity` (0–0.5) × last week's PPR vs. his average, clamped −0.5..1). They also stream a QB/RB/WR/TE when no rostered player at a starting position plays that week.
+  - **`fantasy_sim_picks`**: `season`, `league`, `pick` (1–180), `round`, `team` (1–12 = draft slot), `player_id`. PK `(season, league, pick)`.
+  - **`fantasy_sim_adp`**: `season`, `player_id`, `adp` (mean pick over 100 drafts; undrafted = pick 181), `min_pick`/`max_pick` (drafted leagues only; NULL if never drafted), `draft_pct`. Every board player (QB/HB/WR/TE) has a row.
+  - **`fantasy_sim_player_weeks`**: `season`, `week` (rosters/lineups going into that week), `player_id`, `rostered_pct`, `started_pct` (NULL for a week without projections). Only players on at least one roster. Rewritten on every run.
+  - **`fantasy_sim_teams`**: per league seat: `strategy`, `activity`, `reactivity`, `wins`/`losses`/`ties`, `points_for`/`points_against`, `seed` (after week 14), `playoff_finish` (`CHAMPION`, `RUNNER_UP`, `SEMIFINAL`, `QUARTERFINAL`, `MISSED`), `final_rank` (1–12 once week 17 is final).
+  - **`fantasy_sim_strategy_mix`**: per season and strategy: `share` (target mix), `managers` (seats drawn), and once week 17 is final `titles`, `playoff_teams`, `avg_points_for` (regular season). Feeds the next season's mix; not published in articles.
+  - 2035 (first run, drafted from end-of-season ratings): ADP 1 Trey'Mane Davis 1.8 (range 1–6); titles BPA 33, Zero RB 24, Early QB 20, Hero RB 14, RB Heavy 8, Early TE 1. A full season simulates in about 3 seconds.
 - **`vw_fantasy_scores` (View)**:
   - `game_id`, `player_name`, `team_id`, `season`, `week`, `ppr_score` (= `player_stats.fantasy_points`).
 - **`vw_fantasy_defense_vs_position` (View)**:
@@ -419,7 +433,8 @@ The entire intelligence apparatus is triggered autonomously via an optimized, co
    - Between TWI and franchise popularity it runs `GameCreditEngine().calculate(season)` (Section 2.4) `TeamEfficiencyEngine().calculate(season)` (Section 2.6) and `PlayoffCloutEngine().calculate(season)` (Section 2.7). They read only `games` / `team_stats` / `player_stats` / `awards`, so their position is not a dependency.
    - Once franchise metrics are computed, `PlayerPopularityEngine().calculate_popularity()` executes vectorized batch updates using PostgreSQL `executemany` (reducing DB execution time from ~1s to ~0.16s).
    - Then `project_scheduled_games(season)` refreshes `games.projected_excitement` for every still-scheduled game, so the next assignment brief and primer picks see current projections.
-   - Finally, `project_upcoming_week(season)` (`engines/fantasy_projection_engine.py`) writes fantasy projections for the first week that still has scheduled games. It reads only `games`, `player_seasons` and `player_stats`, so it has no dependency on the culture engines.
+   - Then `project_upcoming_week(season)` (`engines/fantasy_projection_engine.py`) writes fantasy projections for the first week that still has scheduled games. It reads only `games`, `player_seasons` and `player_stats`, so it has no dependency on the culture engines.
+   - Finally, `simulate_season(season)` (`engines/fantasy_league_sim.py`) re-simulates the 100 fantasy leagues through that week (rostered %, start %, standings). It needs the season's stored draft (from `fantasy_adp_engine`) and skips with a message if there is none.
 4. **The Swarm Trigger & Editorial Commissioning:**
    - The swarm is a separate step from the stats sync. `game_stat_generator.py` only syncs stats and runs the engines; the video pipeline (`pipeline/main.py`, both live and file modes) calls `newsroom.weekly_run.run_weekly_swarm(season)` right after it on the same thread. The admin dashboard's `season_stats` edits and a direct `python3 -m engines.game_stat_generator` run no longer publish anything.
    - **Publication week:** a Week N slate is published before Week N kicks off (recaps Week N−1, previews Week N). `run_weekly_swarm` picks N = the latest *fully completed* week + 1, where fully completed means every non-`BYE` game that week is `COMPLETED`; Week 1 if none. A partly played week doesn't count, so a mid-week Season Stats capture maps to an already-published slate. After Week 21 it publishes Week 22; Week 23 (Super Bowl) and the Week 1 preseason slate must be run by hand with `--week`. Once the Super Bowl week is finished it publishes nothing.
