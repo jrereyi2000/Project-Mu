@@ -200,7 +200,7 @@ Checked offline: the MAIN_MENU template matches JR's recorded broadcast hub fram
 
 Still to do, with JR at the console:
 1. **Test `--connect`** from chiaki-ng closed (no mapping needed: JR, Oct 14, `chiaki stream` connects straight to the franchise page; the PlayStation menu only shows on a manual connect, so nothing is pressed).
-2. **Check the ADVANCE_WEEK template on the live broadcast** (no recorded frame of that screen exists yet), and the hub label in the 2035 franchise.
+2. **Trigger dry run (Stage 1, test franchise 2027, test DB `madden_p5test`, Oct 14)**: broadcast picked up, hub label read `2027: WEEK1` → (2027, 1) and not due; the old ADVANCE_WEEK template (COACH PROGRESS tab) armed on Advance Week; the hub label then read (2027, 2) and WOULD FIRE came exactly 30 s after the hub settled; a second read saw week 2 already attempted. JR replaced the template with the "ADVANCING TO NEXT WEEK" loading-screen text (it matched only its own frame of 294 recorded, best other score 0.40); to confirm on the next advance. Found: the test franchise is in the preseason but the hub label reads `2027: WEEK 1` with no PRESEASON, so a preseason week would be taken for a regular one (guard not built yet).
 3. **Exit runs**: three weeks in a row from Advance Week, including a bye week and a forced failure (bad CSV) that stops the week, publishes nothing and reaches JR's phone.
 
 ## Phases

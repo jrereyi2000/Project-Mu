@@ -5,8 +5,8 @@ played.
 
   python3 -m pipeline.main --watch [--stream https://twitch.tv/jrereyi]     # BROADCAST_URL in .env
 
-- Only two screens are matched (pipeline/templates): ADVANCE_WEEK (the Advance Week screen's COACH
-  PROGRESS button) and MAIN_MENU (the franchise hub's highlighted WEEKLY HUB tab), on frames scaled to
+- Only two screens are matched (pipeline/templates): ADVANCE_WEEK (the "ADVANCING TO NEXT WEEK" text
+  on the loading screen shown only while a week advances; cut from the test franchise, Oct 14) and MAIN_MENU (the franchise hub's highlighted WEEKLY HUB tab), on frames scaled to
   1920x1080.
 - Advance Week arms the trigger. Once the Weekly Hub has stayed on screen for FIRE_AFTER seconds
   (30, JR Oct 14) it fires: Remote Play takes the console, which ends the broadcast.
