@@ -47,6 +47,7 @@ from newsroom.db_tools import (
     get_team_articles,
     get_player_articles,
 )
+from newsroom.fantasy_tools import FANTASY_TOOLS
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
@@ -663,6 +664,13 @@ class SwarmDispatcher:
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)
 
+    def tools_for(self, article_type: str = None) -> list:
+        """Research tools for an article: the base set, plus the fantasy tools (newsroom/fantasy_tools.py) for
+        FANTASY_* article types only, so other prompts don't carry their descriptions."""
+        if article_type and str(article_type).upper().startswith("FANTASY_"):
+            return self.tools + FANTASY_TOOLS
+        return self.tools
+
     def get_article_type_for_writer(self, archetype: str, requested_type: str = None) -> dict:
         """Finds the article type configuration assigned to a writer archetype or requested type."""
         if requested_type:
@@ -726,7 +734,7 @@ class SwarmDispatcher:
             except Exception:
                 pass
 
-        tool_descriptions = "\n".join([f"- `{t.name}`: {t.description}" for t in self.tools])
+        tool_descriptions = "\n".join([f"- `{t.name}`: {t.description}" for t in self.tools_for(article_type)])
 
         article_type_info = None
         article_type_directive = ""
@@ -1049,7 +1057,7 @@ If you need specific stats, use your database tools before producing your final 
                     # Prepare raw functions with logging wrappers for Gemini AFC (preserving parameter signatures)
                     tool_call_counts = collections.defaultdict(int)
                     tools_for_gemini = []
-                    for t in self.tools:
+                    for t in self.tools_for(article_type):
                         fn = getattr(t, "func", t)
                         def make_wrapper(inner_fn):
                             @functools.wraps(inner_fn)

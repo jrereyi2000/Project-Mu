@@ -68,6 +68,7 @@ Project Mu/
 │   ├── power_rankings.py      #   Parse/validate/store the weekly POWER_RANKINGS article → power_rankings table
 │   ├── weekly_run.py          #   Weekly national run: picks the publication week, skips published weeks, locks
 │   ├── db_tools.py            #   ReAct research tools exposed to writer agents
+│   ├── fantasy_tools.py       #   Fantasy research tools (FANTASY_TOOLS), given only to FANTASY_* article types
 │   └── config/                #   agent_personas.json, article_types.json, article_structure_directives.json,
 │                              #   curatorial_autonomy_directives.json, playoff_overrides.json
 ├── db/                        # PostgreSQL access & maintenance
@@ -97,7 +98,7 @@ Project Mu/
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── EDITORIAL_MATRIX.md
-│   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate: fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; built so far: the league sim
+│   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate: fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; built so far: the league sim and fantasy writer tools
 │   ├── PIPELINE_MIGRATION.md  #   Agreed plan for moving ingestion to madden_capture.py over chiaki-ng (phases, decisions, verified facts)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
@@ -513,6 +514,15 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - `get_franchise_rebuild_status`: A franchise's lifecycle stage (Championship Window, Youth Ascent, Roster Purgatory, Ground-Up Rebuild) and recommended draft posture.
   - `get_team_articles`: Returns recent editorial articles and analysis referencing a specific team (resolves by name, city, abbreviation, or ID).
   - `get_player_articles`: Returns recent editorial articles and profiles referencing a specific player (resolves by name or ID).
+- **Fantasy research tools** (`newsroom/fantasy_tools.py`, `FANTASY_TOOLS`): given **only to `FANTASY_*` article types** (`SwarmDispatcher.tools_for(article_type)`), so other prompts don't carry their descriptions. Full PPR, RB = HB + FB. Same week rule as the other tools: a Week N article sees box scores from weeks before N only; projections (`fantasy_projections`) and simulated-league rosters (`fantasy_sim_player_weeks`) up to and including week N are visible (a later week is refused). Depth slots are OVR order within the team's position group.
+  - `get_fantasy_rankings(position, week, sort, limit)`: a week's (default: the article's) projections with opponent, matchup stars, PPR/g, ROS rank and points, ADP rank, rostered/started %, and teams on bye; `sort='ros'` for rest of season. Weeks 2–18 only.
+  - `get_fantasy_week_results(week, position, limit)`: a completed week's (default: latest visible) top scorers, biggest beats and biggest misses (projected 8+) vs. the pre-game projection, with stat line, positional finish and rostered %.
+  - `get_fantasy_usage(team_identifier, recent_weeks, limit)`: carries, receptions and touches per game with team shares, last N games vs. the rest of the season; no team = league-wide touch risers and fallers (3+ games). Receptions stand in for targets (not tracked).
+  - `get_fantasy_waiver_wire(week, position, max_rostered_pct, limit)`: players rostered in ≤ X% of simulated leagues ordered by ROS projection, with rostered % change, recent PPR and touches, plus most added / most dropped.
+  - `get_fantasy_defense_vs_position(position, view)`: PPR allowed per game to each position, season and last 4 games, rank 1 = most generous; `view='playoff_schedule'` = each offense's Weeks 15–17 opponents and average opponent rank.
+  - `get_fantasy_player_profile(player_identifier)`: weekly log (opponent, PPR, projection, stat line, rostered/started %), scoring range (mean, best, worst, SD, 20+ boom and sub-8 bust weeks), touches/g, ADP with range, current ROS rank.
+  - `get_fantasy_draft_board(position, limit, rookies_only, strategy)`: simulated ADP board with range and draft %, OVR, age, experience, depth slot and team offense ranks; optional ADP among one strategy's managers; once games are visible, season PPR and positional finish so far.
+  - `get_fantasy_mock_draft(league, rounds)`: one simulated league's draft pick by pick with each team's strategy.
 - **Season & week scope of the research tools (`newsroom/run_context.py`):** `_execute_agent` sets the article's season and publication week for its thread before calling Gemini (automatic function calling runs the tools on that thread) and clears it afterwards.
   - **Season:** tools take `season: int = 0`, meaning "current": the article's season inside a run, otherwise `league_state.current_season`, otherwise the latest season in `games` (`db_tools.resolve_season`). No tool hardcodes a season.
   - **Week cutoff:** a Week N article can't see results from Week N onward. `get_game_box_score` refuses those games; `get_advanced_game_analytics`, `get_team_season_schedule` and `get_weekly_slate` show them as scheduled with no score; `get_season_standings` counts the record and points from earlier games only; `get_opponent_adjusted_credit`, `get_team_efficiency_profile`, `get_matchup_edges` and the credit inside game analytics use earlier games only (`fetch_team_game_rows(..., before_week=)`); `get_team_articles` / `get_player_articles` return only articles from earlier weeks, which also hides the article's own week. Earlier seasons are fully visible.
