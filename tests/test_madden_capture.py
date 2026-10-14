@@ -71,6 +71,14 @@ class ClassifyTest(unittest.TestCase):
         self.assertIsNotNone(f.find("TRADE"))
         self.assertIsNone(f.find("TEAM"))            # a real different label isn't a match
 
+    def test_team_chip_must_be_a_team(self):
+        self.assertEqual(len(mc.TEAMS), 32)
+        f = _Frame("NAME")
+        f.size = (3024, 1888)
+        f.items = [("NAME", (100, 400, 200, 430))]
+        with mock.patch.object(mc, "Frame", return_value=f), mock.patch.object(mc.time, "sleep"):
+            self.assertIsNone(mc.roster_team(f))
+
     def test_manage_roster_hub(self):
         f = _Frame("GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "UPGRADE PLAYERS",
                    "ADJUST LINEUP", "ROSTER", "DEPTH CHART")
@@ -158,6 +166,18 @@ class CardParseTest(unittest.TestCase):
         campbell = {"first": "Omar", "last": "Campbell", "position": "QB", "age": 28}
         ortiz = {"first": "Enrique", "last": "Ortiz", "position": "RT", "age": 24}
         self.assertEqual(mc.check_step(lines, campbell, ortiz, W, x0), ("ok", 0))
+
+    def test_name_suffix_read_differently(self):
+        # Cardinals, Oct 13: card "Nolen Iii", list "W.NOLEN IIL"
+        W, x0 = 3024, 3024 * mc.LIST_BOX[0]
+        lines = [[("W.NOLEN IIL", (0, 0, 100, 30)), ("31", (955, 0, 985, 30))],
+                 [("F.MENDOZA", (0, 50, 100, 80)), ("QB", (770, 50, 800, 80))]]
+        nolen = {"first": "Walter", "last": "Nolen Iii", "position": "DT", "age": 31}
+        mendoza = {"first": "Fernando", "last": "Mendoza", "position": "QB", "age": 32}
+        self.assertEqual(mc.check_step(lines, nolen, mendoza, W, x0), ("ok", 0))
+        self.assertEqual(mc._strip_suffix("T.Zuhn III"), "T.Zuhn")
+        self.assertEqual(mc._strip_suffix("Brian Thomas Jr"), "Brian Thomas")
+        self.assertEqual(mc._strip_suffix("Ivy"), "Ivy")
 
     def test_height_checks(self):
         base = {k: 1 for k in mc.CARD_FIELDS}

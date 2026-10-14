@@ -88,7 +88,7 @@ def activate_app():
 # last picture and no key reaches the PS5. Identical frames don't prove it (the Manage Roster
 # hub is static even when live), so the test is a harmless press that must change the screen.
 # JR asked (Oct 13) for the capture to restart the stream itself before stopping.
-STREAM_RESTARTS = 3          # per run
+STREAM_RESTARTS = 8          # per run (Oct 13 evening: 3 freezes in 7 minutes)
 
 
 def _env(key, default):
@@ -1258,6 +1258,14 @@ def card_flags(c):
     return flags
 
 
+SUFFIX_RE = re.compile(r"\s+(?:[IL1]{2,3}|IV|V|JR\.?|SR\.?)$", re.I)
+
+
+def _strip_suffix(name):
+    """Drop a name suffix, OCR variants included: "W.NOLEN IIL" / "Nolen Iii" -> "...NOLEN"."""
+    return SUFFIX_RE.sub("", name.strip())
+
+
 def line_cells(lines, i, win_w, list_x0):
     """{"i", "NAME", "POS", "AGE", "OVR"} of roster-table line i, by column position."""
     line = lines[i]
@@ -1303,11 +1311,11 @@ def list_row_for(lines, card, win_w, list_x0):
     row comes back with "ambiguous": True."""
     if not card or not card.get("last"):
         return None
-    last = norm(card["last"])
+    last = norm(_strip_suffix(card["last"]))
     first = norm(card["first"] or "")[:1]
     found, by_last = [], []
     for i, line in enumerate(lines):
-        name = norm(line[0][0])
+        name = norm(_strip_suffix(line[0][0]))
         if name[:1] in "01":                  # "0.CAMPBELL" is O.Campbell (Steelers, Oct 13)
             name = "OI"[int(name[0])] + name[1:]
         if name.endswith(last):
@@ -1355,19 +1363,27 @@ def roster_dropdown_selected(f):
     return dropdown_selected(f, top=0.20, bottom=0.76)
 
 
+# Team nicknames as the roster's team dropdown shows them (all 32 seen on Oct 13)
+TEAMS = {"49ERS", "BEARS", "BENGALS", "BILLS", "BRONCOS", "BROWNS", "BUCCANEERS", "CARDINALS",
+         "CHARGERS", "CHIEFS", "COLTS", "COMMANDERS", "COWBOYS", "DOLPHINS", "EAGLES", "FALCONS",
+         "GIANTS", "JAGUARS", "JETS", "LIONS", "PACKERS", "PANTHERS", "PATRIOTS", "RAIDERS",
+         "RAMS", "RAVENS", "SAINTS", "SEAHAWKS", "STEELERS", "TEXANS", "TITANS", "VIKINGS"}
+
+
 def roster_team(f):
-    """The team chip (left of R2). OCR sometimes misses the R2 icon chip_labels() anchors on,
-    so fall back to the chip's position: top-left, ~18% down (mapped Oct 13)."""
-    for attempt in range(3):
+    """The team chip (left of R2), always one of TEAMS. OCR sometimes misses the R2 icon
+    chip_labels() anchors on, so fall back to the chip's position (top-left, ~18% down);
+    anything else (once "NAME", the column header, right after a stream restart) is re-read."""
+    for attempt in range(6):
         team, view = chip_labels(f)
-        if team:
-            return team
+        if team and norm(team) in TEAMS:
+            return norm(team)
         W, H = f.size
-        chip = [(b[0], t) for t, b in f.items
-                if b[0] < W * 0.15 and H * 0.15 < b[1] < H * 0.21 and re.match(r"^[A-Z0-9 ]{3,}$", t)]
+        chip = [norm(t) for t, b in f.items if b[0] < W * 0.15 and H * 0.15 < b[1] < H * 0.21]
+        chip = [t for t in chip if t in TEAMS]
         if chip:
-            return min(chip)[1]
-        time.sleep(0.5)
+            return chip[0]
+        time.sleep(0.7)
         f = Frame()
     return None
 
@@ -1419,7 +1435,7 @@ def _move_team_list(f, start, debug_dir):
             time.sleep(0.3)
             f = Frame()
             new = roster_dropdown_selected(f)
-        if new and norm(new) != norm(start) and norm(new) not in DIVISION_ENTRIES:
+        if new and norm(new) != norm(start) and norm(new) in TEAMS:
             break
         if new and norm(new) in DIVISION_ENTRIES:
             start = new                 # passed NFL; keep going to the next team
