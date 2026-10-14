@@ -140,6 +140,23 @@ class WriterConfigTests(unittest.TestCase):
         with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
             self.assertIn("            get_top_rated_players,", f.read())  # registered as a writer tool
 
+    def test_week19_directives_use_defense_data_not_untracked_metrics(self):
+        """Defense and special-teams stats are captured, but pressures, snaps and targets aren't (JR, Oct 14)."""
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            src = f.read()
+        self.assertIn("            get_defense_special_teams_leaders,", src)  # registered as a writer tool
+        self.assertIn("DEFENSIVE DATA", src)
+        overrides = load("playoff_overrides.json", "playoff_overrides")
+        texts = {
+            "ALL_PRO": self.article_types["OFFICIAL_AP_ALL_PRO_ROSTER"]["curatorial_autonomy"],
+            "PRIMER": self.article_types["LOCAL_MATCHUP_PRIMER"]["curatorial_autonomy"],
+            "LOOKAHEAD": overrides["SLATE_LOOKAHEAD_PREDICTIONS"][0]["curatorial_autonomy_override"],
+        }
+        for name, text in texts.items():
+            self.assertIn("get_defense_special_teams_leaders", text, name)
+        self.assertNotIn("Third-down stop percentage", self.article_types["LOCAL_MATCHUP_PRIMER"]["structure_directive"])
+        self.assertNotIn("2026 AP All-Pro", self.article_types["OFFICIAL_AP_ALL_PRO_ROSTER"]["structure_directive"])
+
     def test_bayless_columns_use_his_article_persona(self):
         self.assertEqual(self.aliases.get("BAYLESS"), "SKIP_BAYLESS")
         self.assertIn("SKIP_BAYLESS", self.article_types["NATIONAL_OPINION_COLUMN"]["allowed_writers"])

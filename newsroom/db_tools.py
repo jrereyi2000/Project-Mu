@@ -47,6 +47,77 @@ def _visible_completed_games(cur, season: int) -> list:
     return [g for g in fetch_completed_games(cur, season) if is_visible_week(season, g["week"])]
 
 SKILL_POSITIONS = ("HB", "FB", "WR", "TE")
+DEFENSIVE_POSITIONS = ("LEDG", "REDG", "DT", "MIKE", "WILL", "SAM", "CB", "FS", "SS")
+
+# Madden's Season Stats lists only its leaders in each category (defense is sorted by tackles, roughly the top
+# 250 defenders), so a player with no line has unknown numbers, not zeros.
+NO_LINE_NOTE = ("Not among the league leaders Madden lists for this category, so these numbers are unknown, "
+                "not zero. Don't cite a stat for this player in this category.")
+
+
+def _num(v):
+    """Stat value for prose: whole numbers without a trailing .0 (sacks come in halves)."""
+    if v is None:
+        return 0
+    f = float(v)
+    return int(f) if f.is_integer() else round(f, 1)
+
+
+def defense_line(tackles, sacks, tfl, ints, deflections, forced_fumbles, fumble_recoveries, tds, safeties=0) -> str:
+    """One defender's line, e.g. '68 tkl, 14.5 sacks, 9 TFL, 2 INT, 6 PD, 3 FF'; zero categories are left out."""
+    parts = [f"{_num(tackles)} tkl"]
+    for val, label in ((sacks, "sacks"), (tfl, "TFL"), (ints, "INT"), (deflections, "PD"),
+                       (forced_fumbles, "FF"), (fumble_recoveries, "FR"), (tds, "def TD"), (safeties, "safety")):
+        if val:
+            parts.append(f"{_num(val)} {'sack' if label == 'sacks' and _num(val) == 1 else label}")
+    return ", ".join(parts)
+
+
+def kicking_line(fgm, fga, fg_long, xpm, xpa, fgm_50=None, fga_50=None) -> str:
+    line = f"{_num(fgm)}/{_num(fga)} FG"
+    if fg_long:
+        line += f" (long {_num(fg_long)})"
+    if fga_50:
+        line += f", {_num(fgm_50)}/{_num(fga_50)} from 50+"
+    if xpa:
+        line += f", {_num(xpm)}/{_num(xpa)} XP"
+    return line
+
+
+def defense_and_special_teams(cur, season: int, player_id: int) -> dict:
+    """A player's season defense, kicking, punting, return and pass-protection lines from the Season Stats
+    capture (season_stat_lines), only the categories Madden lists him in."""
+    cur.execute("""
+        SELECT games_played, def_tackles, def_sacks, def_tfl, def_ints, def_int_yds, def_deflections,
+               def_forced_fumbles, def_fumble_recoveries, def_tds, def_safeties, def_solo, def_assists,
+               kick_fgm, kick_fga, kick_fg_long, kick_xpm, kick_xpa, kick_fgm_50, kick_fga_50,
+               punt_punts, punt_average, punt_net_average, punt_inside_20, punt_longest,
+               kr_returns, kr_yards, kr_average, kr_tds, kr_longest,
+               pr_returns, pr_yards, pr_average, pr_tds, pr_longest,
+               blk_sacks_allowed
+        FROM season_stat_lines WHERE season = %s AND player_id = %s LIMIT 1;
+    """, (season, player_id))
+    r = cur.fetchone()
+    if not r:
+        return {}
+    out = {}
+    if r[0] is not None:
+        out["games_played"] = r[0]
+    if r[1] is not None:
+        out["defense"] = defense_line(r[1], r[2], r[3], r[4], r[6], r[7], r[8], r[9], r[10]) \
+            + (f"; {_num(r[5])} INT return yds" if r[4] else "") + f" ({_num(r[11])} solo, {_num(r[12])} assisted)"
+    if r[14]:
+        out["kicking"] = kicking_line(r[13], r[14], r[15], r[16], r[17], r[18], r[19])
+    if r[20]:
+        out["punting"] = (f"{_num(r[20])} punts, {_num(r[21])} avg, {_num(r[22])} net avg, "
+                          f"{_num(r[23])} inside the 20, long {_num(r[24])}")
+    if r[25]:
+        out["kick_returns"] = f"{_num(r[25])} ret, {_num(r[26])} yds ({_num(r[27])} avg), {_num(r[28])} TD, long {_num(r[29])}"
+    if r[30]:
+        out["punt_returns"] = f"{_num(r[30])} ret, {_num(r[31])} yds ({_num(r[32])} avg), {_num(r[33])} TD, long {_num(r[34])}"
+    if r[35] is not None:
+        out["pass_protection"] = f"{_num(r[35])} sacks allowed"
+    return out
 
 def _resolve_team_id(cur, identifier: str) -> int:
     """Helper to resolve a team ID from an int or name/abbreviation string."""
@@ -70,7 +141,7 @@ def _resolve_team_id(cur, identifier: str) -> int:
 
 @tool
 def get_game_box_score(game_id: int) -> str:
-    """Fetch the full box score, excitement index, and top player performances for a specific game."""
+    """Fetch the full box score, excitement index, and top player performances for a specific game: passing, rushing and receiving, plus defensive playmakers (tackles, sacks, TFL, INT, pass deflections, forced fumbles, defensive TDs) and kickers when the game's player stats were captured."""
     try:
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -121,13 +192,43 @@ def get_game_box_score(game_id: int) -> str:
                         if s[9]: perf += f"{s[8]} rec, {s[9]} rec yds, {s[10]} TD. "
                         result["key_performances"].append(perf)
 
+                # Defense and kicking from the game's player-stats capture (real Madden box scores; only games
+                # the capture covered have them)
+                cur.execute("""
+                    SELECT COALESCE(l.full_name, l.player_name), t.name, ps.position,
+                           l.def_tackles, l.def_sacks, l.def_tfl, l.def_ints, l.def_deflections,
+                           l.def_forced_fumbles, l.def_fumble_recoveries, l.def_tds, l.def_safeties,
+                           l.kick_fgm, l.kick_fga, l.kick_fg_long, l.kick_xpm, l.kick_xpa
+                    FROM game_stat_lines l
+                    LEFT JOIN teams t ON t.id = l.team_id
+                    LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
+                    WHERE l.game_id = %s AND (l.def_tackles IS NOT NULL OR l.kick_fga IS NOT NULL OR l.kick_xpa IS NOT NULL)
+                    ORDER BY COALESCE(l.def_sacks, 0) + COALESCE(l.def_ints, 0) + COALESCE(l.def_forced_fumbles, 0)
+                             + COALESCE(l.def_tds, 0) DESC, COALESCE(l.def_tackles, 0) DESC;
+                """, (game_id,))
+                d_rows = cur.fetchall()
+                if d_rows:
+                    defense, kicking = [], []
+                    for d in d_rows:
+                        who = f"{d[0]} ({d[2] or '?'}, {d[1] or 'Unknown'})"
+                        if d[3] is not None and (d[4] or d[6] or d[8] or d[9] or d[10] or d[11]
+                                                 or (d[3] or 0) >= 7 or (d[5] or 0) >= 2):
+                            defense.append(f"{who}: " + defense_line(d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11]))
+                        if d[13] or d[16]:
+                            kicking.append(f"{who}: " + kicking_line(d[12], d[13], d[14], d[15], d[16]))
+                    result["defensive_performances"] = defense
+                    result["kicking"] = kicking
+                else:
+                    result["defense_note"] = ("No defensive or special-teams lines were captured for this game; "
+                                              "don't cite individual tackles, sacks or interceptions from it.")
+
                 return json.dumps(result, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 
 @tool
 def get_player_season_stats(player_identifier: str) -> str:
-    """Fetch cumulative season stats, Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout, and season touch/yard share for skill players. Accepts player name (e.g. 'Drake Maye') or player ID."""
+    """Fetch cumulative season stats (passing, rushing, receiving, and where listed defense, kicking, punting, returns and sacks allowed), Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout, and season touch/yard share for skill players. Accepts player name (e.g. 'Drake Maye') or player ID."""
     try:
         s_val = resolve_season()
         with psycopg.connect(db.db_conn_info) as conn:
@@ -160,7 +261,7 @@ def get_player_season_stats(player_identifier: str) -> str:
                         fp.adp_rank,
                         ps.age, ps.years_of_experience, p.height, p.weight,
                         ps.spike_index, ps.r_rating, ps.f_platform, ps.t_success,
-                        ps.a_awards, ps.e_exposure, ps.s_playoff
+                        ps.a_awards, ps.e_exposure, ps.s_playoff, ss.pass_sacks
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     LEFT JOIN teams t ON ps.team_id = t.id
@@ -238,11 +339,22 @@ def get_player_season_stats(player_identifier: str) -> str:
                     "preseason_adp_rank": row[13] if row[13] else "Undrafted",
                     "season_usage": usage or "Not applicable (non-skill position or no season stats)",
                     "season_stats": {
-                        "passing": f"{row[5] or 0} yds, {row[6] or 0} TD, {row[7] or 0} INT",
+                        "passing": f"{row[5] or 0} yds, {row[6] or 0} TD, {row[7] or 0} INT"
+                                   + (f", {row[25]} sacks taken" if row[25] is not None and row[5] else ""),
                         "rushing": f"{row[8] or 0} yds, {row[9] or 0} TD",
                         "receiving": f"{row[10] or 0} rec, {row[11] or 0} yds, {row[12] or 0} TD"
                     }
                 }
+                extra = defense_and_special_teams(cur, s_val, target_id)
+                if row[1] in DEFENSIVE_POSITIONS + ("K", "P") and not any(row[5:13]):
+                    result["season_stats"] = {}
+                result["season_stats"].update({k: v for k, v in extra.items() if k != "games_played"})
+                if "games_played" in extra:
+                    result["games_played"] = extra["games_played"]
+                if row[1] in DEFENSIVE_POSITIONS and "defense" not in extra:
+                    result["season_stats"]["defense"] = NO_LINE_NOTE
+                elif (row[1] == "K" and "kicking" not in extra) or (row[1] == "P" and "punting" not in extra):
+                    result["season_stats"]["special_teams"] = NO_LINE_NOTE
                 return json.dumps(result, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
@@ -842,7 +954,7 @@ def get_season_standings(season: int = 0) -> str:
 
 @tool
 def get_top_rated_players(limit: int = 200, season: int = 0) -> str:
-    """Fetch the league's highest-rated players by Madden OVR (ties broken by popularity), every position, one compact line each: rank, player ID, name, position, team, OVR, age, years of experience, and season passing/rushing/receiving totals. Use this, not the popularity list, to build league-wide player rankings such as a Top 100. Long snappers are excluded. limit is capped at 300."""
+    """Fetch the league's highest-rated players by Madden OVR (ties broken by popularity), every position, one compact line each: rank, player ID, name, position, team, OVR, age, years of experience, and season totals (passing/rushing/receiving; tackles/sacks/INT/forced fumbles for listed defenders; FG for kickers; net average for punters). Use this, not the popularity list, to build league-wide player rankings such as a Top 100. Long snappers are excluded. limit is capped at 300."""
     try:
         lim = max(1, min(int(limit), 300))
         s_val = resolve_season(season)
@@ -852,12 +964,15 @@ def get_top_rated_players(limit: int = 200, season: int = 0) -> str:
                     SELECT p.id, COALESCE(p.full_name, p.player_name), ps.position, t.city || ' ' || t.name,
                            ps.overall_rating, ps.age, ps.years_of_experience,
                            ss.pass_yards, ss.pass_tds, ss.interceptions, ss.rush_yards, ss.rush_tds,
-                           ss.receptions, ss.rec_yards, ss.rec_tds
+                           ss.receptions, ss.rec_yards, ss.rec_tds,
+                           l.def_tackles, l.def_sacks, l.def_ints, l.def_forced_fumbles,
+                           l.kick_fgm, l.kick_fga, l.punt_net_average
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     JOIN teams t ON ps.team_id = t.id
                     LEFT JOIN season_stats ss ON ss.player_name = p.player_name AND ss.season = ps.season
                                              AND ss.team_id = ps.team_id
+                    LEFT JOIN season_stat_lines l ON l.season = ps.season AND l.player_id = ps.player_id
                     WHERE ps.season = %s AND ps.overall_rating IS NOT NULL AND ps.position <> 'LS'
                     ORDER BY ps.overall_rating DESC, ps.popularity_index DESC NULLS LAST, p.id
                     LIMIT %s;
@@ -868,7 +983,8 @@ def get_top_rated_players(limit: int = 200, season: int = 0) -> str:
 
                 lines = []
                 for i, r in enumerate(rows, 1):
-                    pid, name, pos, team, ovr, age, exp, py, ptd, ints, ry, rtd, rec, rcy, rctd = r
+                    (pid, name, pos, team, ovr, age, exp, py, ptd, ints, ry, rtd, rec, rcy, rctd,
+                     tkl, sacks, d_ints, ff, fgm, fga, net_avg) = r
                     stats = []
                     if py:
                         stats.append(f"{py} pass yds, {ptd or 0} TD, {ints or 0} INT")
@@ -876,17 +992,110 @@ def get_top_rated_players(limit: int = 200, season: int = 0) -> str:
                         stats.append(f"{ry} rush yds, {rtd or 0} TD")
                     if rcy:
                         stats.append(f"{rec or 0} rec, {rcy} yds, {rctd or 0} TD")
+                    if tkl is not None:
+                        stats.append(f"{_num(tkl)} tkl, {_num(sacks)} sacks, {_num(d_ints)} INT, {_num(ff)} FF")
+                    if fga:
+                        stats.append(f"{_num(fgm)}/{_num(fga)} FG")
+                    if net_avg is not None:
+                        stats.append(f"{_num(net_avg)} net punt avg")
                     lines.append(f"{i}. {name} (ID {pid}) | {pos} | {team} | OVR {ovr} | age {age} | exp {exp}"
                                  + (f" | {'; '.join(stats)}" if stats else ""))
                 return json.dumps({
                     "season": s_val,
                     "count": len(lines),
-                    "note": "Ordered by Madden OVR. Stats are season totals so far (passing, rushing and receiving only; "
-                            "none for linemen or defenders). Use get_player_season_stats for a player's full profile.",
+                    "note": "Ordered by Madden OVR. Stats are season totals so far: passing, rushing, receiving, and for "
+                            "defenders tackles/sacks/INT/forced fumbles, kickers FG, punters net average. Madden lists only "
+                            "the leaders in each category, so a defender with no stats shown has unknown numbers, not zeros; "
+                            "offensive linemen have none. Use get_player_season_stats for a player's full profile.",
                     "players": lines,
                 }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
+
+LEADER_CATEGORIES = {
+    # category: (ORDER BY expression, row filter, label)
+    "sacks": ("l.def_sacks", "l.def_tackles IS NOT NULL", "sacks"),
+    "interceptions": ("l.def_ints", "l.def_tackles IS NOT NULL", "interceptions"),
+    "tackles": ("l.def_tackles", "l.def_tackles IS NOT NULL", "tackles"),
+    "tackles_for_loss": ("l.def_tfl", "l.def_tackles IS NOT NULL", "tackles for loss"),
+    "pass_deflections": ("l.def_deflections", "l.def_tackles IS NOT NULL", "pass deflections"),
+    "forced_fumbles": ("l.def_forced_fumbles", "l.def_tackles IS NOT NULL", "forced fumbles"),
+    "takeaways": ("COALESCE(l.def_ints, 0) + COALESCE(l.def_fumble_recoveries, 0)", "l.def_tackles IS NOT NULL",
+                  "interceptions + fumble recoveries"),
+    "defensive_tds": ("l.def_tds", "l.def_tackles IS NOT NULL", "defensive TDs"),
+    "field_goals": ("l.kick_fgm", "l.kick_fga > 0", "field goals made"),
+    "punting": ("l.punt_net_average", "l.punt_punts > 0", "net punting average"),
+    "kick_returns": ("l.kr_yards", "l.kr_returns > 0", "kick return yards"),
+    "punt_returns": ("l.pr_yards", "l.pr_returns > 0", "punt return yards"),
+    "sacks_allowed": ("-l.blk_sacks_allowed", "l.blk_sacks_allowed IS NOT NULL", "fewest sacks allowed"),
+}
+
+
+@tool
+def get_defense_special_teams_leaders(category: str = "sacks", team_identifier: str = "", limit: int = 15,
+                                      season: int = 0) -> str:
+    """Season leaders in a defensive or special-teams category, league-wide or for one team (team name or abbreviation): each player's full defensive line (tackles, sacks, TFL, INT, pass deflections, forced fumbles, fumble recoveries, defensive TDs) or kicking/punting/return line. category: sacks, interceptions, tackles, tackles_for_loss, pass_deflections, forced_fumbles, takeaways, defensive_tds, field_goals, punting, kick_returns, punt_returns, sacks_allowed (offensive linemen). Use it for a team's defensive playmakers, an opponent's pass rushers or ball hawks, All-Pro defense and special teams, and award races. limit is capped at 50."""
+    try:
+        cat = str(category or "sacks").strip().lower().replace(" ", "_")
+        if cat not in LEADER_CATEGORIES:
+            return f"Unknown category '{category}'. Use one of: {', '.join(LEADER_CATEGORIES)}."
+        order_expr, row_filter, label = LEADER_CATEGORIES[cat]
+        lim = max(1, min(int(limit), 50))
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = None
+                if str(team_identifier or "").strip():
+                    team_id = _resolve_team_id(cur, team_identifier)
+                    if not team_id:
+                        return f"Team '{team_identifier}' not found."
+                cur.execute(f"""
+                    SELECT l.player_id, COALESCE(l.full_name, l.player_name), COALESCE(ps.position, l.position),
+                           t.city || ' ' || t.name, l.games_played,
+                           l.def_tackles, l.def_sacks, l.def_tfl, l.def_ints, l.def_deflections,
+                           l.def_forced_fumbles, l.def_fumble_recoveries, l.def_tds, l.def_safeties,
+                           l.kick_fgm, l.kick_fga, l.kick_fg_long, l.kick_xpm, l.kick_xpa, l.kick_fgm_50, l.kick_fga_50,
+                           l.punt_punts, l.punt_average, l.punt_net_average, l.punt_inside_20,
+                           l.kr_returns, l.kr_yards, l.kr_average, l.kr_tds,
+                           l.pr_returns, l.pr_yards, l.pr_average, l.pr_tds, l.blk_sacks_allowed
+                    FROM season_stat_lines l
+                    LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
+                    LEFT JOIN teams t ON t.id = COALESCE(ps.team_id, l.team_id)
+                    WHERE l.season = %s AND {row_filter} AND (%s::int IS NULL OR COALESCE(ps.team_id, l.team_id) = %s::int)
+                    ORDER BY {order_expr} DESC NULLS LAST, l.def_tackles DESC NULLS LAST, l.player_id
+                    LIMIT %s;
+                """, (s_val, team_id, team_id, lim))
+                rows = cur.fetchall()
+                lines = []
+                for i, r in enumerate(rows, 1):
+                    head = f"{i}. {r[1]} (ID {r[0]}) | {r[2]} | {r[3] or 'Free Agent'}" + (f" | {r[4]} G" if r[4] else "")
+                    if cat == "field_goals":
+                        body = kicking_line(r[14], r[15], r[16], r[17], r[18], r[19], r[20])
+                    elif cat == "punting":
+                        body = f"{_num(r[21])} punts, {_num(r[22])} avg, {_num(r[23])} net avg, {_num(r[24])} inside the 20"
+                    elif cat == "kick_returns":
+                        body = f"{_num(r[25])} ret, {_num(r[26])} yds ({_num(r[27])} avg), {_num(r[28])} TD"
+                    elif cat == "punt_returns":
+                        body = f"{_num(r[29])} ret, {_num(r[30])} yds ({_num(r[31])} avg), {_num(r[32])} TD"
+                    elif cat == "sacks_allowed":
+                        body = f"{_num(r[33])} sacks allowed"
+                    else:
+                        body = defense_line(r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13])
+                    lines.append(f"{head} | {body}")
+                return json.dumps({
+                    "season": s_val,
+                    "category": label,
+                    "team": team_identifier or "League-wide",
+                    "leaders": lines or ["No listed players in this category."],
+                    "note": "Season totals from Madden's Season Stats, which lists only the leaders in each category "
+                            "(defenders are listed by tackles, roughly the top 250). A player missing here has unknown "
+                            "numbers, not zeros, and a team's listed defenders don't add up to its full team total, so "
+                            "don't sum them into team sacks or takeaways. Pressures, snaps, targets allowed and "
+                            "coverage alignments aren't recorded.",
+                }, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
 
 @tool
 def get_top_popular_players(limit: int = 20, season: int = 0) -> str:

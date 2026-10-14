@@ -38,6 +38,7 @@ from newsroom.db_tools import (
     get_season_standings,
     get_top_popular_players,
     get_top_rated_players,
+    get_defense_special_teams_leaders,
     get_all_team_popularities,
     get_draft_order,
     get_team_draft_needs,
@@ -671,6 +672,7 @@ class SwarmDispatcher:
             get_season_standings,
             get_top_popular_players,
             get_top_rated_players,
+            get_defense_special_teams_leaders,
             get_all_team_popularities,
             get_draft_order,
             get_team_draft_needs,
@@ -874,6 +876,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need all 32 team popularity rankings and watchability indices, call `get_all_team_popularities`.
 - If you need the top popular players in the NFL, call `get_top_popular_players`.
 - If you need the highest-rated players at every position (for league-wide player rankings), call `get_top_rated_players`.
+- If you need defensive or special-teams production (sack, interception, tackle, tackles-for-loss, pass-deflection, forced-fumble, field-goal, punting or return leaders), league-wide or for one team, call `get_defense_special_teams_leaders`. `get_player_season_stats` gives any one player's full line, and `get_game_box_score` lists a game's defensive playmakers and kickers when that game's stats were captured.
 - If you need a game's detailed player contributions, call `get_game_box_score`.
 - If you need the official Round 1 selection order (Picks 1-32), call `get_draft_order`.
 - If you need a team's primary roster needs ranked by urgency, call `get_team_draft_needs`.
@@ -881,7 +884,9 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need draft pick trade points (Jimmy Johnson model) and trade package scenarios, call `get_draft_trade_value`.
 - If you need a franchise's rebuild lifecycle stage and draft posture, call `get_franchise_rebuild_status`.
 
-3. HISTORICAL COMPARISONS (OPTIONAL): You may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens your argument (similar record shape, scoring profile, roster age, or trajectory). It is not required: most articles need none, and you should use at most one. Never invent a historical team or season, and don't reach for the most famous examples by default; pick the comparison that actually fits the numbers.
+3. DEFENSIVE DATA: Defense and special teams now have real season numbers: tackles, sacks, tackles for loss, interceptions, pass deflections, forced fumbles and recoveries, defensive TDs, kicking, punting and returns, plus sacks allowed for linemen and sacks taken for quarterbacks. Use them to back defensive claims with named players. The limits: Madden lists only its leaders in each category, so a player with no line has unknown numbers (not zeros); listed defenders don't add up to a team total, so never sum them into team sacks or takeaways; and pressures, blitzes, coverage percentages, snap counts and targets aren't recorded, so never cite them. Scheme talk (coverage shells, fronts, blitz looks) is your read of the numbers, not charted data.
+
+4. HISTORICAL COMPARISONS (OPTIONAL): You may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens your argument (similar record shape, scoring profile, roster age, or trajectory). It is not required: most articles need none, and you should use at most one. Never invent a historical team or season, and don't reach for the most famous examples by default; pick the comparison that actually fits the numbers.
 """
         if is_fantasy:
             national_writer_guidelines = FANTASY_DESK_GUIDELINES
@@ -894,6 +899,7 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 - Query your team's complete game schedule, results, and margins with `get_team_season_schedule`.
 - Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`. There is no injury data in this league: do not mention injuries or injury reports.
 - Query team baseline ratings and top stars with `get_team_context`.
+- Query your team's and the opponent's defensive and special-teams leaders (sacks, interceptions, tackles for loss, forced fumbles, kicking, returns) with `get_defense_special_teams_leaders` and the team name. Madden lists only its leaders, so a player with no line has unknown numbers, not zeros; don't add them up into team totals, and never cite pressures, snap counts or targets, which aren't recorded.
 3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the locker room. Quote coaching staff sentiment, cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
 """
 
