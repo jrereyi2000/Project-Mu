@@ -475,7 +475,12 @@ CREATE TABLE IF NOT EXISTS coaches (
     id SERIAL PRIMARY KEY,
     coach_name VARCHAR(255) UNIQUE NOT NULL,
     offensive_scheme VARCHAR(64),
-    defensive_scheme VARCHAR(64)
+    defensive_scheme VARCHAR(64),
+    -- 2026 tendencies, Low / Medium / High (2026_11_05_coach_tendencies.sql)
+    pass_lean VARCHAR(6) CHECK (pass_lean IN ('Low', 'Medium', 'High')),
+    fourth_down_aggressiveness VARCHAR(6) CHECK (fourth_down_aggressiveness IN ('Low', 'Medium', 'High')),
+    blitz_rate VARCHAR(6) CHECK (blitz_rate IN ('Low', 'Medium', 'High')),
+    man_coverage VARCHAR(6) CHECK (man_coverage IN ('Low', 'Medium', 'High'))
 );
 
 -- Who coached which team, and when. end_season NULL = still there.
