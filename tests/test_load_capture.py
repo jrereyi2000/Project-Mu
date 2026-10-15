@@ -31,6 +31,22 @@ class ScopeTest(unittest.TestCase):
         self.assertIsNone(L.assign_by_scope(rs, [(747, 29), (1090, 5)], {}, self.cmap))
 
 
+class TeamLineTotalsTest(unittest.TestCase):
+    def test_team_row_gets_attempts_and_tds_from_player_lines(self):
+        """A captured box score has yards but no attempts or TDs; the team row sums its player lines."""
+        class Cur:
+            def execute(self, sql, params):
+                self.sql, self.params = sql, params
+            def fetchone(self):
+                return (25, 38, 2, 31, 1)
+        cur = Cur()
+        totals = L.team_line_totals(cur, 7001, 12)
+        self.assertEqual(totals, {"passing_completions": 25, "passing_attempts": 38, "passing_tds": 2,
+                                  "rushing_attempts": 31, "rushing_tds": 1})
+        self.assertIn("FROM player_stats", cur.sql)
+        self.assertEqual(cur.params, (7001, 12))
+
+
 class HeaderTest(unittest.TestCase):
     def test_sort_mark_stripped(self):
         self.assertEqual(L._header("▼YARDS"), "YARDS")

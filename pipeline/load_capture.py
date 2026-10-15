@@ -849,6 +849,18 @@ def next_current_week(folder, week, stored):
 
 
 # ------------------------------------------------------------------- games ----
+# team_stats columns the box score screen doesn't show, summed from the team's player lines loaded for the game
+TEAM_LINE_SUMS = {"passing_completions": "completions", "passing_attempts": "pass_attempts",
+                  "passing_tds": "pass_tds", "rushing_attempts": "rush_attempts", "rushing_tds": "rush_tds"}
+
+
+def team_line_totals(cur, game_id, team_id):
+    """Attempts, completions and TDs for a captured game's team row, from its player_stats lines."""
+    cur.execute(f"SELECT {', '.join(f'COALESCE(SUM({src}), 0)' for src in TEAM_LINE_SUMS.values())} "
+                f"FROM player_stats WHERE game_id = %s AND team_id = %s", (game_id, team_id))
+    return dict(zip(TEAM_LINE_SUMS, cur.fetchone()))
+
+
 def load_games(cur, folder, season, report, replace=False):
     """A recovery capture of one week's games: box scores -> team_stats, player lines -> player_stats
     (offense) and game_stat_* (other categories), scores -> games."""
@@ -990,6 +1002,7 @@ def load_games(cur, folder, season, report, replace=False):
             scored = (vals.get("red_zone_tds") or 0) + (vals.get("red_zone_fgs") or 0)
             if vals.get("red_zone_pct") and scored:   # trips follow from the percentage (no trips column)
                 vals["red_zone_attempts"] = round(scored * 100 / float(vals["red_zone_pct"]))
+            vals.update(team_line_totals(cur, g["id"], tid))
             cols = list(vals)
             cur.execute(f"INSERT INTO team_stats (game_id, team_name, {', '.join(cols)}) VALUES (%s, %s, "
                         f"{', '.join(['%s'] * len(cols))})", (g["id"], tname[tid], *[vals[c] for c in cols]))
