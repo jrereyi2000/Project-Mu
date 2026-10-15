@@ -135,7 +135,8 @@ class WriterConfigTests(unittest.TestCase):
         self.assertNotIn("Scheme talk (coverage shells, fronts, blitz looks) is your read of the numbers", src)
         for name in ("PLAYOFF_AUTOPSY", "FRANCHISE_STATE_OF_THE_UNION", "LOCAL_SEASON_PROGRESS_REPORT",
                      "SINGLE_GAME_SCHEMATIC_AUTOPSY", "QUARTERBACK_DUEL_TAPE_BREAKDOWN",
-                     "SUPER_BOWL_COMPREHENSIVE_PREVIEW", "SLATE_LOOKAHEAD_PREDICTIONS", "LOCAL_MATCHUP_PRIMER"):
+                     "SUPER_BOWL_COMPREHENSIVE_PREVIEW", "SLATE_LOOKAHEAD_PREDICTIONS", "LOCAL_MATCHUP_PRIMER",
+                     "SUPER_BOWL_HISTORICAL_STAKES"):
             text = self.article_types[name]["curatorial_autonomy"]
             self.assertIn("COACHING DATA:", text, name)
             self.assertIn("never turn them into percentages", text, name)
@@ -282,6 +283,33 @@ class WriterConfigTests(unittest.TestCase):
         self.assertNotIn("1\u201332", mock_config["structure_directive"])
         self.assertIn("## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School]", mock_config["structure_directive"])
         self.assertNotIn("get_draft_prospects", json.dumps(self.article_types))
+
+    def test_super_bowl_historical_stakes_config(self):
+        """Week 22 Slot 8 legacy column: HC + QB joint historical stakes (CHADIHA & SIMMONS)."""
+        self.assertIn("SUPER_BOWL_HISTORICAL_STAKES", self.article_types)
+        info = self.article_types["SUPER_BOWL_HISTORICAL_STAKES"]
+        self.assertEqual(sorted(info["allowed_writers"]), ["CHADIHA", "SIMMONS"])
+        for metric in (
+            "Quarterback Playoff Clout (S_playoff)",
+            "Awards Equity (A_awards)",
+            "Head-Coach Profile (get_coach_profile)",
+            "Legacy Floor (S_all-time)",
+        ):
+            self.assertIn(metric, info["data_queried"])
+
+        st = info["structure_directive"]
+        self.assertIn("# 1. The Historical Crucible", st)
+        self.assertIn("## 2. Tandem A: [Coach] & [QB] (Dynasty vs. Validation)", st)
+        self.assertIn("## 3. Tandem B: [Coach] & [QB] (The Breakthrough)", st)
+        self.assertIn("### 4. Hall of Fame & Canton Implications", st)
+
+        self.assertIn("get_coach_profile", info["curatorial_autonomy"])
+        self.assertIn("COACHING DATA:", info["curatorial_autonomy"])
+        self.assertIn("never turn them into percentages", info["curatorial_autonomy"])
+
+        postseason_slates = dispatcher_literal("POSTSEASON_EDITORIAL_SLATES")
+        w22_slots = dict(postseason_slates[22])
+        self.assertEqual(w22_slots["Slot 8"], "SUPER_BOWL_HISTORICAL_STAKES")
 
 
 if __name__ == "__main__":
