@@ -8,11 +8,18 @@ from the debug page (#debug, server/debug_api.py: Scan week / Backfill previous 
                                                       # with --replace over the backfill's lines; never articles
   python3 -m pipeline.weekly_capture --resume <run>   # continue captures/<run> from the step it stopped on
 
+Postseason (league_state.current_week 19+: the week a run captures is the one the last load left current,
+so from the Wild Card round on it is a playoff round): the run is a playoff run on its own (or --mode playoff). Season Stats and Team Stats are regular season only and don't change, so it
+captures last round's schedule (and the coming round's matchups) and every game's box score and lines
+(madden_capture.py --only playoff), loads them in one transaction, then runs the engines and articles.
+The Week 18 run is a normal weekly run; it also records the Wild Card matchups (schedule_next/).
+
 Steps (each one's failure stops the week: nothing after it runs, and a notice goes to JR's phone):
   2. connect   madden_capture.py --connect: start or restart the chiaki-ng stream and wait up to 2 minutes
                for a franchise screen (chiaki stream lands on it directly). Presses nothing.
   3. capture   madden_capture.py --out <run>: Season Stats, Team Stats and last week's schedule
-               (games mode: --only games, ~7 min a game, resuming per game).
+               (games mode: --only games, ~7 min a game, resuming per game; playoff mode: --only playoff,
+               the schedule then every game, resuming the games with --only games --resume).
   4. hand back notice: turn the controller back on and restart the broadcast (the script doesn't disconnect).
   5. extract   extract.py captures/<run>.
   6. load      pipeline.load_capture, one transaction; a failed check writes nothing.
@@ -37,7 +44,8 @@ DEBUG_DIRS = ("stop_debug", "scope_debug", "week_debug", "team_debug", "probe", 
 CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice when it has to relaunch
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
-MODES = ("weekly", "games")
+MODES = ("weekly", "games", "playoff")
+FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
 
 
 class WeekStopped(Exception):
@@ -73,6 +81,13 @@ def run_cmd(args, log_path, timeout):
 
 
 # --------------------------------------------------------------- state ----
+def folder_mode(folder):
+    """A run folder's mode from what it holds: schedule and games screenshots = playoff, games only = games."""
+    if os.path.isdir(os.path.join(folder, "games")):
+        return "playoff" if os.path.isdir(os.path.join(folder, "schedule")) else "games"
+    return "weekly"
+
+
 def capture_done(folder, mode="weekly"):
     if os.path.exists(os.path.join(folder, ".capture_done")):
         return True
@@ -82,6 +97,8 @@ def capture_done(folder, mode="weekly"):
 def extract_done(folder, mode="weekly"):
     if mode == "games":
         return os.path.exists(os.path.join(folder, "game_scores.csv"))
+    if mode == "playoff":
+        return all(os.path.exists(os.path.join(folder, f)) for f in ("game_scores.csv", "schedule.csv"))
     return (os.path.exists(os.path.join(folder, "schedule.csv"))
             and bool(glob.glob(os.path.join(folder, "stats_*.csv"))))
 
@@ -112,6 +129,19 @@ def captured_week(folder):
         return None
 
 
+def playoff_or_weekly(resume=None):
+    """'playoff' when the week this run captures is a playoff round (league_state.current_week 19+, which the
+    last load set to the week Madden then had current) or a resumed folder is a playoff run, else 'weekly'."""
+    if resume and os.path.isdir(os.path.join(CAPTURES, resume)):
+        if folder_mode(os.path.join(CAPTURES, resume)) == "playoff":
+            return "playoff"
+    try:
+        _, current = league_state()
+    except Exception:
+        return "weekly"
+    return "playoff" if current and current >= FIRST_PLAYOFF_WEEK else "weekly"
+
+
 # --------------------------------------------------------------- steps ----
 def step_connect(log_path):
     code, last = run_cmd([sys.executable, "madden_capture.py", "--connect"], log_path, CONNECT_TIMEOUT)
@@ -124,6 +154,12 @@ def step_capture(folder, log_path, mode="weekly"):
     if mode == "games":                        # resumes per game (games/<NN>/DONE)
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "games")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "games", *where], GAMES_TIMEOUT
+    elif mode == "playoff":                    # schedule (+ next round), then the games; a stop in the games resumes them
+        if os.path.isdir(os.path.join(folder, "games")) and os.path.exists(os.path.join(folder, "week.json")):
+            args = [sys.executable, "madden_capture.py", "--only", "games", "--resume", name]
+        else:
+            args = [sys.executable, "madden_capture.py", "--only", "playoff", "--out", name]
+        timeout = GAMES_TIMEOUT
     else:
         for d in CAPTURE_DIRS:                 # a re-capture starts the three modes clean
             shutil.rmtree(os.path.join(folder, d), ignore_errors=True)
@@ -131,7 +167,7 @@ def step_capture(folder, log_path, mode="weekly"):
             os.remove(os.path.join(folder, "week.json"))
         args, timeout = [sys.executable, "madden_capture.py", "--out", name], CAPTURE_TIMEOUT
     code, last = run_cmd(args, log_path, timeout)
-    if code != 0 or (mode == "weekly" and not os.path.exists(os.path.join(folder, "week.json"))):
+    if code != 0 or (mode in ("weekly", "playoff") and not os.path.exists(os.path.join(folder, "week.json"))):
         raise WeekStopped(f"Capture stopped: {last}. The console is left where it stopped; frames in "
                           f"{os.path.relpath(folder, ROOT)}/stop_debug.")
     open(os.path.join(folder, ".capture_done"), "w").close()
@@ -194,12 +230,14 @@ def shrink(folder):
 
 # ----------------------------------------------------------------- run ----
 def run(resume=None, articles=True, connect=True, mode="weekly"):
-    """One weekly run (mode 'weekly', or 'games' for every game of last week, never with articles).
-    Returns 0 when the week went through, 1 when it stopped (notice sent)."""
+    """One weekly run (mode 'weekly'; 'playoff' for a postseason week, chosen automatically; or 'games' for
+    every game of last week, never with articles). Returns 0 when the week went through, 1 when it stopped."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
-    articles = articles and mode == "weekly"
-    what = "Game scan" if mode == "games" else "Weekly capture"
+    if mode == "weekly":
+        mode = playoff_or_weekly(resume)
+    articles = articles and mode in ("weekly", "playoff")
+    what = {"games": "Game scan", "playoff": "Playoff capture"}.get(mode, "Weekly capture")
     os.makedirs(CAPTURES, exist_ok=True)
     lock = open(LOCK_PATH, "w")
     try:
@@ -271,7 +309,8 @@ def main():
     ap.add_argument("--resume", metavar="RUN", help="continue captures/RUN from the step it stopped on")
     ap.add_argument("--no-articles", action="store_true", help="stop after the backfill and engines")
     ap.add_argument("--mode", choices=MODES, default="weekly",
-                    help="games: every game of last week (box scores + player stats), loaded with --replace")
+                    help="games: every game of last week (box scores + player stats), loaded with --replace; "
+                         "playoff: a postseason week (chosen automatically from league current week 19 on)")
     ap.add_argument("--no-connect", action="store_true",
                     help="skip the connect step (chiaki-ng is already streaming the franchise menus)")
     a = ap.parse_args()

@@ -43,7 +43,8 @@ def detect_mode(folder):
     if os.path.exists(os.path.join(folder, "season_schedule.csv")):
         return "season_schedule"
     if os.path.exists(os.path.join(folder, "game_scores.csv")):
-        return "games"
+        # a postseason run: last round's schedule (+ next round) and its box scores, no Season Stats
+        return "playoff" if os.path.exists(os.path.join(folder, "schedule.csv")) else "games"
     if os.path.exists(os.path.join(folder, "stats_passing.csv")):
         return "weekly"
     raise LoadError(f"{folder}: no extracted CSVs found (run extract.py first)")
@@ -276,6 +277,9 @@ def misread_copies(rows, cmap):
     diff = [h for h in cmap if a.get(h) != b.get(h)] + [h for h in ("GP", "DP") if a.get(h) != b.get(h)]
     return diff if len(diff) <= 2 else None
 OFFENSE_MUST_MATCH = ("passing", "rushing", "receiving")
+# Postseason weeks (capture_matching.db_week) -> games.game_type. Playoff games aren't in the season schedule:
+# the weekly load creates them from the captured schedule. Week 22 (Pro Bowl) has no games.
+PLAYOFF_GAME_TYPES = {19: "WILD_CARD", 20: "DIVISIONAL", 21: "CONFERENCE", 23: "SUPER_BOWL"}
 TEAM_TABS = {
     "team_conversions": {"3DC": "third_down_conv", "3DA": "third_down_att", "3D%": "third_down_pct",
                          "4DC": "fourth_down_conv", "4DA": "fourth_down_att", "4D%": "fourth_down_pct",
@@ -473,7 +477,9 @@ def resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, 
 SCOPE_SETTLED = set()
 
 
-def load_weekly(cur, folder, season, report):
+def load_weekly(cur, folder, season, report, season_stats=True):
+    """Last week's schedule (scores) and, with season_stats, Season Stats and Team Stats. A postseason run
+    passes season_stats=False: those screens are regular season only and don't change in the playoffs."""
     SCOPE_SETTLED.clear()
     by_name, by_abbr = team_index(cur)
     problems, unmatched = [], []
@@ -490,12 +496,15 @@ def load_weekly(cur, folder, season, report):
     report["week"] = week
     cur.execute("SELECT current_week FROM league_state WHERE id = 1")
     current, source = next_current_week(folder, week, cur.fetchone()[0])
-    cur.execute("SELECT max(week) FROM captures WHERE mode = 'weekly' AND season = %s AND status = 'loaded'", (season,))
+    cur.execute("SELECT max(week) FROM captures WHERE mode IN ('weekly', 'playoff') AND season = %s AND status = 'loaded'",
+                (season,))
     last = cur.fetchone()[0]
     if last is not None and week <= last:
         raise LoadError(f"week {week} is already loaded (last loaded week {last})")
     if last is not None and week != last + 1:
         report["gap"] = f"week {week} follows week {last}"
+    if week in PLAYOFF_GAME_TYPES:
+        report["playoff_games_added"] = add_playoff_games(cur, sched, season, week, by_name)
     cur.execute("SELECT id, home_team_id, away_team_id, status FROM games WHERE season = %s AND week = %s", (season, week))
     db_games = {(h, a): (gid, st) for gid, h, a, st in cur.fetchall()}
     scores = []
@@ -519,9 +528,12 @@ def load_weekly(cur, folder, season, report):
     if len(scores) != len(db_games):
         problems.append(f"schedule: {len(scores)} games captured, the games table has {len(db_games)} for week {week}")
 
+    # 1b. postseason: the coming round's games (schedule_next.csv), created SCHEDULED
+    report["next_round"] = load_next_round(cur, folder, season, current, by_name, problems)
+
     # 2. team tabs -> team_seasons
     team_rows = {}
-    for f, cmap in TEAM_TABS.items():
+    for f, cmap in (TEAM_TABS.items() if season_stats else ()):
         for r in read_csv(os.path.join(folder, f + ".csv")):
             tid = by_name.get(r["TEAM"].strip().upper())
             if tid is None:
@@ -534,7 +546,7 @@ def load_weekly(cur, folder, season, report):
                 except ValueError as e:
                     problems.append(f"{f} {r['TEAM']}: {h} {e}")
             team_rows.setdefault(tid, {}).update(vals)
-    if len(team_rows) != 32:
+    if season_stats and len(team_rows) != 32:
         problems.append(f"team tabs cover {len(team_rows)} teams, not 32")
 
     # 3. Season Stats -> season_stats (offense) and the category tables
@@ -543,7 +555,7 @@ def load_weekly(cur, folder, season, report):
     cur.execute("SELECT id, name FROM teams")
     team_names = dict(cur.fetchall())
     general, writes = {}, []
-    for cat in list(SEASON_OFFENSE) + list(CATEGORY):
+    for cat in (list(SEASON_OFFENSE) + list(CATEGORY) if season_stats else ()):
         path = os.path.join(folder, f"stats_{cat}.csv")
         if not os.path.exists(path):
             problems.append(f"stats_{cat}.csv is missing")
@@ -593,7 +605,7 @@ def load_weekly(cur, folder, season, report):
     cur.execute("SELECT row_counts FROM captures WHERE mode = 'weekly' AND season = %s AND status = 'loaded' "
                 "ORDER BY week DESC LIMIT 1", (season,))
     prev = cur.fetchone()
-    if prev and prev[0]:
+    if season_stats and prev and prev[0]:
         now = row_counts(folder)
         for f, n in prev[0].items():
             if f.startswith("stats_") and f in now and n and abs(now[f] - n) > 0.1 * n:
@@ -636,6 +648,9 @@ def load_weekly(cur, folder, season, report):
     cur.execute("UPDATE league_state SET current_week = %s WHERE id = 1", (current,))
     report["current_week"] = f"{current} ({source})"
 
+    if not season_stats:
+        return len(scores)
+
     # stale copies: the old ingestion stored some lines under the wrong player (J. Cabrera WR on the
     # Chiefs, now a linebacker; the line is the Rams' J. Cabrera's). A season_stats row this load
     # didn't write that has the same list name, position and offense numbers as one it did write,
@@ -656,6 +671,57 @@ def load_weekly(cur, folder, season, report):
         cur.execute("DELETE FROM season_stats WHERE id = ANY(%s)", ([r[0] for r in stale],))
     report["stale_copies_removed"] = [f"{r[2]} {r[3]} (player {r[1]})" for r in stale]
     return len(writes)
+
+
+def add_playoff_games(cur, sched, season, week, by_name):
+    """Create the playoff games a schedule capture lists (matchup and kickoff time; the load's score update
+    completes them). Games already stored are left alone; unknown teams are reported by the schedule check."""
+    added = 0
+    for r in sched:
+        try:
+            away, home = [by_name[x.strip().upper()] for x in r["MATCHUP"].split("@")]
+        except (KeyError, ValueError):
+            continue
+        cur.execute("INSERT INTO games (season, week, home_team_id, away_team_id, status, game_time, game_type) "
+                    "VALUES (%s, %s, %s, %s, 'SCHEDULED', %s, %s) ON CONFLICT (season, week, home_team_id, away_team_id) "
+                    "DO NOTHING RETURNING id",
+                    (season, week, home, away, (r.get("GAME TIME") or "").strip() or None, PLAYOFF_GAME_TYPES[week]))
+        added += cur.fetchone() is not None
+    return added
+
+
+def load_next_round(cur, folder, season, current, by_name, problems):
+    """schedule_next.csv (postseason: the round the League Schedule opened on) -> its games, SCHEDULED.
+    The round must be the week league_state moves to. Returns a short report, or None without the file."""
+    path = os.path.join(folder, "schedule_next.csv")
+    if not os.path.exists(path):
+        return None
+    rows = read_csv(path)
+    weeks = {db_week(r["WEEK"]) for r in rows}
+    if len(weeks) != 1:
+        problems.append(f"schedule_next.csv: weeks {sorted(map(str, weeks))}, expected one")
+        return None
+    week = weeks.pop()
+    if week not in PLAYOFF_GAME_TYPES or week != current:
+        problems.append(f"schedule_next.csv: week {week} isn't the coming playoff round (current week {current})")
+        return None
+    for r in rows:
+        if any(x.strip().upper() not in by_name for x in r["MATCHUP"].split("@")):
+            problems.append(f"schedule_next.csv: unknown team in {r['MATCHUP']}")
+    added = add_playoff_games(cur, rows, season, week, by_name)
+    cur.execute("SELECT count(*) FROM games WHERE season = %s AND week = %s", (season, week))
+    return {"week": week, "games": cur.fetchone()[0], "added": added}
+
+
+def load_playoff(cur, folder, season, report):
+    """A postseason weekly run: last round's schedule (scores, next round) and every game's box score and lines,
+    in one transaction. Season Stats and Team Stats aren't captured (regular season only)."""
+    load_weekly(cur, folder, season, report, season_stats=False)
+    week = report["week"]
+    n = load_games(cur, folder, season, report)
+    if report.get("week") != week:
+        raise LoadError(f"box scores are from week {report.get('week')}, the schedule from week {week}")
+    return n
 
 
 def next_current_week(folder, week, stored):
@@ -687,6 +753,7 @@ def load_games(cur, folder, season, report, replace=False):
     by_name, by_abbr = team_index(cur)
     players = roster(cur, season)
     problems = []
+    round_week = report.get("week")          # set when a playoff run loaded the round's schedule first
     scores = read_csv(os.path.join(folder, "game_scores.csv"))
     games = {}
     for r in scores:
@@ -694,6 +761,12 @@ def load_games(cur, folder, season, report, replace=False):
         cur.execute("SELECT id, week FROM games WHERE season = %s AND away_team_id = %s AND home_team_id = %s",
                     (season, away, home))
         hits = cur.fetchall()
+        if len(hits) > 1 and round_week is not None:   # a playoff run knows its round
+            hits = [h for h in hits if h[1] == round_week]
+        if len(hits) > 1:      # a playoff rematch with the same home team: the game whose stored score matches
+            cur.execute("SELECT id, week FROM games WHERE id = ANY(%s) AND status = 'COMPLETED' AND away_score = %s "
+                        "AND home_score = %s", ([h[0] for h in hits], num(r["ATOTAL"]), num(r["HTOTAL"])))
+            hits = cur.fetchall()
         if len(hits) != 1:
             problems.append(f"{r['GAME']}: {len(hits)} games {r['AWAY']} @ {r['HOME']} in {season}")
             continue
@@ -812,11 +885,16 @@ def load_games(cur, folder, season, report, replace=False):
             for q, h in (("q1", "1"), ("q2", "2"), ("q3", "3"), ("q4", "4"), ("ot", "OT")):
                 vals[q] = num(r[pre + h]) if ok else None
             vals["score"] = num(r[pre + "TOTAL"])
+            scored = (vals.get("red_zone_tds") or 0) + (vals.get("red_zone_fgs") or 0)
+            if vals.get("red_zone_pct") and scored:   # trips follow from the percentage (no trips column)
+                vals["red_zone_attempts"] = round(scored * 100 / float(vals["red_zone_pct"]))
             cols = list(vals)
             cur.execute(f"INSERT INTO team_stats (game_id, team_name, {', '.join(cols)}) VALUES (%s, %s, "
                         f"{', '.join(['%s'] * len(cols))})", (g["id"], tname[tid], *[vals[c] for c in cols]))
-        cur.execute("UPDATE games SET away_score = %s, home_score = %s, status = 'COMPLETED' WHERE id = %s",
-                    (num(r["ATOTAL"]), num(r["HTOTAL"]), g["id"]))
+        # excitement_index NULL: the engines' only_missing pass re-scores the game from the captured box score
+        # (a playoff game was scored at its result load, before it had any lines)
+        cur.execute("UPDATE games SET away_score = %s, home_score = %s, status = 'COMPLETED', excitement_index = NULL "
+                    "WHERE id = %s", (num(r["ATOTAL"]), num(r["HTOTAL"]), g["id"]))
     report["games"], report["lines"] = len(games), n
     return n
 
@@ -850,7 +928,7 @@ def row_counts(folder):
     return out
 
 
-LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly,
+LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly, "playoff": load_playoff,
            "games": load_games}
 
 

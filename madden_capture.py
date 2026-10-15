@@ -8,7 +8,8 @@ screenshots of:
   * Season Stats  (League > Stats & Awards > Player Stats, scope = NFL, every category)
   * Team Stats    (League > Stats & Awards > Team Stats, scope = NFL: Conversions,
                    Red Zone Efficiency, Penalties)
-  * Schedule      (League > Schedule > League Schedule, the PREVIOUS week only)
+  * Schedule      (League > Schedule > League Schedule, the PREVIOUS week; when the schedule opens on a
+                   postseason week, that week's list too, into schedule_next/: the coming round's matchups)
 
 Screenshots land in captures/<YYYY-MM-DD_HHMM>/{stats,team_stats,schedule}/.
 Run extract.py afterwards to turn them into CSVs.
@@ -19,6 +20,8 @@ Usage
   python3 madden_capture.py --probe-l2    # record how the L2 dropdown behaves (from Player Stats)
   python3 madden_capture.py               # full run: stats + schedule
   python3 madden_capture.py --only stats  # or: --only team, --only schedule
+  python3 madden_capture.py --only playoff  # postseason week: schedule (+ next round) and every game of last
+                                            # round; Season Stats / Team Stats are regular season only, so skipped
   python3 madden_capture.py --week "SEASON WEEK 12"   # capture a specific schedule week
   python3 madden_capture.py --step down   # mapping: press one key, save screenshot + OCR (--step none: capture only)
 
@@ -1282,6 +1285,12 @@ def run_schedule(out, week=None):
         raise Abort("Can't read the schedule week label")
     target = clean_week(week) if week else previous_week(cur)
     log(f"Current week: {cur}. Target: {target}")
+    labels = {"current": cur, "captured": clean_week(target)}
+    if clean_week(cur) in WEEK_ORDER_POST and week_index(cur) != week_index(target):
+        # the coming playoff round isn't in the season schedule: record its matchups and kickoff times
+        n = capture_list(os.path.join(out, "schedule_next"), "next", stop_at_zeros=False)
+        log(f"Next round {cur}: {n} pages")
+        labels["next"] = clean_week(cur)
     f = go_to_week(f, target, out)
     log(f"On {week_label(f)}")
     if "FORCE WIN" in f.text and "ACTIONS" in f.text:
@@ -1290,7 +1299,7 @@ def run_schedule(out, week=None):
     log(f"Schedule {target}: {n} pages")
     # the loader sets league_state.current_week from the week the schedule opened on
     with open(os.path.join(out, "week.json"), "w") as fh:
-        json.dump({"current": cur, "captured": clean_week(target)}, fh)
+        json.dump(labels, fh)
 
 
 RESULT_RE = re.compile(r"^([A-Z]{2,3}) ?(\d+) ?- ?(\d+) ?([A-Z]{2,3})$")    # "LAC 34 - 9LV" too
@@ -2208,7 +2217,7 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games"],
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff"],
                     help="roster and season-schedule are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
@@ -2287,7 +2296,10 @@ def main():
         if a.only in (None, "team"):
             run_mode("Team Stats", lambda: run_team_stats(out), clear("team_stats"))
         if a.only in (None, "schedule"):
-            run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "week_debug"))
+            run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
+        if a.only == "playoff":               # postseason week: no Season Stats / Team Stats (regular season only)
+            run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
+            run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
         if a.only == "roster":
             tries = [0]
 

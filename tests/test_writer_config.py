@@ -95,11 +95,21 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("## [Rank]. [City] [Team] ([W-L]) (Previous: N | Change: ±N)", st)
         self.assertNotIn("Rise:", st)
 
-    def test_awards_tracker_is_oroy_not_defense(self):
+    def test_awards_cover_offensive_and_defensive_races(self):
+        """MVP, OPOY, OROY, DPOY and DROY in the weekly tracker and both postseason overrides (JR, Oct 14)."""
         info = self.article_types["AWARDS_TRACKER"]
-        text = (info["structure_directive"] + info["focus"] + info["example_prompt_hook"]).lower()
-        self.assertIn("rookie", text)
-        self.assertNotIn("defensive", text)
+        overrides = {o["override_name"]: o for o in load("playoff_overrides.json", "playoff_overrides")["AWARDS_TRACKER"]}
+        texts = {"TRACKER": info["structure_directive"] + info["curatorial_autonomy"],
+                 "FINALISTS": overrides["AWARDS_FINALISTS"]["structure_directive_override"]
+                              + overrides["AWARDS_FINALISTS"]["curatorial_autonomy_override"],
+                 "WINNERS": overrides["AWARDS_WINNERS"]["structure_directive_override"]
+                            + overrides["AWARDS_WINNERS"]["curatorial_autonomy_override"]}
+        for name, text in texts.items():
+            for phrase in ("Offensive Rookie", "Defensive Player of the Year", "Defensive Rookie",
+                           "get_defense_special_teams_leaders", "rookies_only=True", "not zeros"):
+                self.assertIn(phrase, text, f"{name}: {phrase}")
+        self.assertNotIn("after the defensive breakdown", info["structure_directive"])  # the old contradiction
+        self.assertIn("five winners", overrides["AWARDS_WINNERS"]["structure_directive_override"])
 
     def test_roundtable_is_always_the_panel(self):
         self.assertEqual(self.article_types["SUPER_BOWL_ROUNDTABLE_CONSENSUS"]["allowed_writers"], ["ROUNDTABLE_PANEL"])
@@ -175,6 +185,13 @@ class WriterConfigTests(unittest.TestCase):
             self.assertIn("get_team_efficiency_profile", text, name)
         self.assertNotIn("conversion rates against blitz packages",
                          self.article_types["QUARTERBACK_DUEL_TAPE_BREAKDOWN"]["structure_directive"])
+
+    def test_research_blocks_keep_playoff_stats_out_of_season_totals(self):
+        """Season Stats are regular season only (JR, Oct 14): playoff numbers come from playoff box scores."""
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            src = f.read()
+        self.assertEqual(src.count("cover the regular season only; playoff numbers come only from playoff box scores"), 2)
+        self.assertIn("postseason_stats", src)
 
     def test_player_selection_directives_include_defense(self):
         """Spotlight, progress report and X-Factor can pick defenders and specialists from recorded stats (JR, Oct 14)."""

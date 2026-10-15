@@ -97,3 +97,77 @@ class CurrentWeekTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlayoffGamesTest(unittest.TestCase):
+    """add_playoff_games: playoff games come from the captured schedule (they aren't in the season schedule)."""
+
+    class Cur:
+        def __init__(self, existing=()):
+            self.rows, self.existing, self._last = [], set(existing), None
+
+        def execute(self, sql, params):
+            if not sql.startswith("INSERT"):
+                self._last = (len(self.rows),)
+                return
+            season, week, home, away, game_time, game_type = params
+            new = (season, week, home, away) not in self.existing
+            if new:
+                self.existing.add((season, week, home, away))
+                self.rows.append(params)
+            self._last = (1,) if new else None
+
+        def fetchone(self):
+            return self._last
+
+    sched = [{"WEEK": "Wild Card", "GAME TIME": "Sat 4:30 PM", "MATCHUP": "Steelers @ Ravens", "RESULT": "PIT 17 - 24 BAL"},
+             {"WEEK": "Wild Card", "GAME TIME": "", "MATCHUP": "Packers @ Eagles", "RESULT": "GB 10 - 21 PHI"},
+             {"WEEK": "Wild Card", "GAME TIME": "Sun 1:00 PM", "MATCHUP": "Nobody @ Eagles", "RESULT": "?"}]
+    by_name = {"STEELERS": 1, "RAVENS": 2, "PACKERS": 3, "EAGLES": 4}
+
+    def test_creates_typed_games_and_skips_unknown_teams(self):
+        cur = self.Cur()
+        self.assertEqual(L.add_playoff_games(cur, self.sched, 2035, 19, self.by_name), 2)
+        self.assertEqual(cur.rows, [(2035, 19, 2, 1, "Sat 4:30 PM", "WILD_CARD"), (2035, 19, 4, 3, None, "WILD_CARD")])
+
+    def test_existing_games_are_left_alone(self):
+        cur = self.Cur(existing={(2035, 19, 2, 1)})
+        self.assertEqual(L.add_playoff_games(cur, self.sched, 2035, 19, self.by_name), 1)
+
+    def test_week_types(self):
+        self.assertEqual(L.PLAYOFF_GAME_TYPES, {19: "WILD_CARD", 20: "DIVISIONAL", 21: "CONFERENCE", 23: "SUPER_BOWL"})
+
+
+class NextRoundTest(unittest.TestCase):
+    """load_next_round: schedule_next.csv (the coming playoff round) -> SCHEDULED games."""
+
+    def folder(self, week_label):
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, "schedule_next.csv"), "w") as fh:
+            fh.write("WEEK,GAME TIME,MATCHUP,RESULT,PLAYED,FORCE WIN\n")
+            fh.write(f"{week_label},Sat 4:30 PM,Steelers @ Ravens,,0,None\n")
+        return d
+
+    def cur(self):
+        return PlayoffGamesTest.Cur()
+
+    def test_wild_card_round_after_week_18(self):
+        problems = []
+        got = L.load_next_round(self.cur(), self.folder("Wild Card"), 2035, 19, {"STEELERS": 1, "RAVENS": 2}, problems)
+        self.assertEqual(problems, [])
+        self.assertEqual(got, {"week": 19, "games": 1, "added": 1})
+
+    def test_round_must_be_the_coming_week(self):
+        problems = []
+        L.load_next_round(self.cur(), self.folder("Divisional"), 2035, 19, {"STEELERS": 1, "RAVENS": 2}, problems)
+        self.assertTrue(problems)
+
+    def test_no_file_no_round(self):
+        self.assertIsNone(L.load_next_round(self.cur(), tempfile.mkdtemp(), 2035, 19, {}, []))
+
+    def test_playoff_folder_mode(self):
+        d = tempfile.mkdtemp()
+        open(os.path.join(d, "game_scores.csv"), "w").close()
+        self.assertEqual(L.detect_mode(d), "games")
+        open(os.path.join(d, "schedule.csv"), "w").close()
+        self.assertEqual(L.detect_mode(d), "playoff")

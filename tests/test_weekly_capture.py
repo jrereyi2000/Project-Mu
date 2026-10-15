@@ -21,7 +21,7 @@ class RunTest(unittest.TestCase):
             step_extract=self.fake_extract,
             load_status=lambda folder: self.status,
             step_load=self.fake_load,
-            league_state=lambda: (2035, 19),
+            league_state=lambda: (2035, 18),   # the run captures Week 18 (regular season)
             step_engines=lambda season: self.calls.append(f"engines {season}"),
             step_articles=lambda season: (self.calls.append("articles"), {"status": "published", "week": 19})[1],
         )
@@ -37,6 +37,7 @@ class RunTest(unittest.TestCase):
 
     def fake_capture(self, folder, log_path, mode="weekly"):
         self.calls.append("capture")
+        self.capture_mode = mode
         os.makedirs(os.path.join(folder, "stats"), exist_ok=True)
         Image.new("RGB", (40, 20), "red").save(os.path.join(folder, "stats", "01_passing_000.png"))
         os.makedirs(os.path.join(folder, "stop_debug"), exist_ok=True)
@@ -45,7 +46,7 @@ class RunTest(unittest.TestCase):
 
     def fake_extract(self, folder, log_path, mode="weekly"):
         self.calls.append("extract")
-        if mode == "games":
+        if mode in ("games", "playoff"):
             open(os.path.join(folder, "game_scores.csv"), "w").write("x\n")
         for f in ("schedule.csv", "stats_passing.csv"):
             open(os.path.join(folder, f), "w").write("x\n")
@@ -59,6 +60,7 @@ class RunTest(unittest.TestCase):
 
     def test_full_run_in_order_and_shrunk(self):
         self.assertEqual(self.start("r1"), 0)
+        self.assertEqual(self.capture_mode, "weekly")
         self.assertEqual(self.calls, ["connect", "capture", "extract", "load", "engines 2035", "articles"])
         folder = os.path.join(self.tmp, "r1")
         self.assertTrue(os.path.exists(os.path.join(folder, "stats", "01_passing_000.webp")))
@@ -75,6 +77,37 @@ class RunTest(unittest.TestCase):
         self.assertTrue(self.replace)
         self.assertEqual(self.notices[0][0], "Mu: capture starting")
         self.assertIn("Game scan", self.notices[0][1])
+
+    def test_postseason_week_is_a_playoff_run_with_articles(self):
+        """League current week 19+: the round this run captures is a playoff round, so no Season Stats."""
+        with mock.patch.object(wc, "league_state", lambda: (2035, 19)):
+            self.assertEqual(self.start("p1"), 0)
+        self.assertEqual(self.capture_mode, "playoff")
+        self.assertEqual(self.calls, ["connect", "capture", "extract", "load", "engines 2035", "articles"])
+        self.assertFalse(self.replace)
+        self.assertIn("Playoff capture", self.notices[0][1])
+
+    def test_week_18_results_run_is_a_weekly_run(self):
+        with mock.patch.object(wc, "league_state", lambda: (2035, 18)):   # the run captures Week 18
+            self.start("w18")
+        self.assertEqual(self.capture_mode, "weekly")
+
+    def test_folder_modes(self):
+        f = os.path.join(self.tmp, "m")
+        os.makedirs(os.path.join(f, "games"))
+        self.assertEqual(wc.folder_mode(f), "games")
+        os.makedirs(os.path.join(f, "schedule"))
+        self.assertEqual(wc.folder_mode(f), "playoff")
+        for name in ("game_scores.csv", "schedule.csv"):
+            self.assertFalse(wc.extract_done(f, "playoff"))
+            open(os.path.join(f, name), "w").close()
+        self.assertTrue(wc.extract_done(f, "playoff"))
+
+    def test_resumed_playoff_folder_stays_a_playoff_run(self):
+        f = os.path.join(self.tmp, "p2")
+        os.makedirs(os.path.join(f, "games"))
+        os.makedirs(os.path.join(f, "schedule"))
+        self.assertEqual(wc.playoff_or_weekly("p2"), "playoff")
 
     def test_failed_load_stops_the_week(self):
         self.load_error = "Load stopped, nothing written: bad CSV"
