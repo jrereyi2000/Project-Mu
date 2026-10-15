@@ -342,6 +342,24 @@ class WriterConfigTests(unittest.TestCase):
             self.assertIn("first-time participant", sec)
             self.assertIn("Super Bowl media circus", sec)
 
+    def test_franchise_state_of_the_union_rookie_coach_alignment(self):
+        """FRANCHISE_STATE_OF_THE_UNION includes draft order and mock draft tools in data_queried and Coach-Rookie Alignment Test."""
+        config = self.article_types["FRANCHISE_STATE_OF_THE_UNION"]
+        queried = " ".join(config["data_queried"])
+        self.assertIn("Round 1 Draft Order (get_draft_order)", config["data_queried"])
+        self.assertIn("Round 1 Mock Draft Simulation (get_mock_draft)", config["data_queried"])
+        self.assertIn("get_draft_order", queried)
+        self.assertIn("get_mock_draft", queried)
+
+        curatorial = config["curatorial_autonomy"]
+        self.assertIn("Coach-Rookie Alignment Test", curatorial)
+        self.assertIn("get_draft_order", curatorial)
+        self.assertIn("get_mock_draft", curatorial)
+        self.assertIn("get_team_draft_needs", curatorial)
+        self.assertIn("get_coach_profile", curatorial)
+        self.assertIn("When analyzing early-lottery teams (Picks 1–5)", curatorial)
+        self.assertIn("clean coaching break", curatorial)
+
 
 if __name__ == "__main__":
     unittest.main()
