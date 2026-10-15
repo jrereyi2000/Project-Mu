@@ -215,6 +215,7 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         from engines.game_credit_engine import GameCreditEngine
         from engines.team_efficiency_engine import TeamEfficiencyEngine
         from engines.coty_engine import CotyEngine
+        from engines.tendency_engine import TendencyEngine
         from engines.playoff_clout_engine import PlayoffCloutEngine
         from engines.popularity_engine import PopularityEngine
         from engines.player_popularity_engine import PlayerPopularityEngine
@@ -239,6 +240,9 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
 
         print("-> Running Team Efficiency Engine...")
         TeamEfficiencyEngine().calculate(season=season_year)
+
+        print("-> Running Observed Tendency Engine...")
+        TendencyEngine().calculate(season=season_year)
 
         print("-> Running Coach of the Year Engine...")
         CotyEngine().calculate(season=season_year)

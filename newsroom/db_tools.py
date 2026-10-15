@@ -8,7 +8,7 @@ from engines.team_efficiency_engine import compute_team_efficiency, fetch_team_g
 from engines.matchup_edges import compute_edges, fetch_ratings, fetch_units
 from engines.game_credit_engine import compute_game_credit, fetch_completed_games, trajectory_label
 from engines.coty_engine import compute_coty, fetch_inputs as fetch_coty_inputs
-from engines.coach_profile import coach_profile, fetch_team_coach, staff_matchup
+from engines.coach_profile import coach_profile, fetch_team_coach, fetch_team_staff, staff_matchup
 import json
 
 from newsroom.run_context import context_season, cutoff_week, is_visible_week
@@ -1054,7 +1054,7 @@ def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", seaso
                         "biggest_vulnerability": e["biggest_vulnerability"],
                     }
 
-                coaches = {t: fetch_team_coach(cur, t, s_val) for t in (team_id, opp_id)}
+                coaches = {t: fetch_team_staff(cur, t, s_val) for t in (team_id, opp_id)}
                 return json.dumps({
                     "season": s_val,
                     "context": context,
@@ -1064,7 +1064,7 @@ def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", seaso
                         f"{names.get(team_id)}_offense_vs_{names.get(opp_id)}_defense": staff_matchup(coaches[team_id], coaches[opp_id]),
                         f"{names.get(opp_id)}_offense_vs_{names.get(team_id)}_defense": staff_matchup(coaches[opp_id], coaches[team_id]),
                     },
-                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best). Coaching tendencies are Low/Medium/High staff tendencies, not charted rates: describe them, never turn them into percentages.",
+                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best). Coaching tendencies are Low/Medium/High: pass lean and fourth down are measured in this league (allowing for the score), blitz and coverage are the staff's real-world philosophy; describe them, never turn them into percentages.",
                 }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"

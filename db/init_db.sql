@@ -79,6 +79,11 @@ CREATE TABLE IF NOT EXISTS team_seasons (
     red_zone_att INT, red_zone_td INT, red_zone_fg INT, red_zone_pct NUMERIC(5, 1),
     red_zone_def_att INT, red_zone_def_td INT, red_zone_def_fg INT, red_zone_def_pct NUMERIC(5, 1),
     penalties INT, penalty_yards INT,
+    -- Observed offensive tendencies (engines/tendency_engine.py, 2026_11_13_observed_tendencies.sql)
+    pass_rate_oe DOUBLE PRECISION, fourth_down_oe DOUBLE PRECISION,
+    observed_pass_lean VARCHAR(6) CHECK (observed_pass_lean IN ('Low', 'Medium', 'High')),
+    observed_fourth_down VARCHAR(6) CHECK (observed_fourth_down IN ('Low', 'Medium', 'High')),
+    tendency_games INT,
     UNIQUE (team_id, season)
 );
 

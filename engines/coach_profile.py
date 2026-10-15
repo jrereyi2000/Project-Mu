@@ -10,12 +10,12 @@ coach per team per season). This mirrors the `coach_records` view, but only coun
 TIERS = ("Low", "Medium", "High")
 
 TENDENCY_WORDS = {
-    "pass_lean": {"High": "pass-heavy: throws more than the situation calls for",
+    "pass_lean": {"High": "pass-heavy: throws more than the score calls for",
                   "Medium": "balanced run/pass mix",
-                  "Low": "run-heavy: runs more than the situation calls for"},
-    "fourth_down_aggressiveness": {"High": "aggressive: goes for it on fourth-and-short more than most",
-                                   "Medium": "middle of the pack on fourth-and-short",
-                                   "Low": "conservative: kicks on fourth-and-short more than most"},
+                  "Low": "run-heavy: runs more than the score calls for"},
+    "fourth_down_aggressiveness": {"High": "aggressive: goes for it on fourth down more than the score calls for",
+                                   "Medium": "middle of the pack on fourth down",
+                                   "Low": "conservative: goes for it on fourth down less than the score calls for"},
     "blitz_rate": {"High": "blitz-heavy: sends five or more rushers more than most",
                    "Medium": "blitzes about as often as the league",
                    "Low": "rarely blitzes: wins with a four-man rush"},
@@ -24,18 +24,40 @@ TENDENCY_WORDS = {
                      "Low": "zone-first coverage"},
 }
 
-TENDENCY_NOTE = ("Tendencies are the staff's real-world 2026 tendencies (the playbooks haven't changed since), ranked "
-                 "against the league as Low / Medium / High. Describe them as tendencies (\"a blitz-heavy defense\"); "
-                 "never turn them into percentages or claim how often anything happened in a specific game.")
+TENDENCY_NOTE = ("Tendencies are Low / Medium / High against the league. Pass lean and fourth down are measured from "
+                 "this league's results, allowing for the score; blitz rate and man coverage are the staff's real-world "
+                 "philosophy and aren't measured here, so present them as reputation, not as what the defense has done. "
+                 "Describe tendencies in words (\"a blitz-heavy defense\"); never turn them into percentages or claim "
+                 "how often anything happened in a specific game.")
+
+MEASURED = ("pass_lean", "fourth_down_aggressiveness")
+OBSERVED_COLS = {"pass_lean": "observed_pass_lean", "fourth_down_aggressiveness": "observed_fourth_down"}
+REAL_WORLD_SOURCE = "real-world 2026 staff tendency; not yet measured in this league"
+PHILOSOPHY_SOURCE = "real-world staff philosophy; not measured in this league"
 
 REGULAR = "REGULAR_SEASON"
 FULL_SEASON_GAMES = 17
 
 
+def effective_tendencies(coach: dict) -> dict:
+    """{key: (tier, source)} for the four tendencies, or None where there is no tier. Pass lean and fourth down use
+    coach['observed'] ({key: (tier, source)} from fetch_observed) when present, else the coach's real-world tier."""
+    observed = coach.get("observed") or {}
+    out = {}
+    for k in TENDENCY_WORDS:
+        if k in MEASURED and observed.get(k):
+            out[k] = observed[k]
+        elif coach.get(k) in TIERS:
+            out[k] = (coach[k], REAL_WORLD_SOURCE if k in MEASURED else PHILOSOPHY_SOURCE)
+        else:
+            out[k] = None
+    return out
+
+
 def describe_tendencies(coach: dict) -> dict:
-    """{'pass_lean': 'High (pass-heavy: ...)', ...}; None where the coach has no rating."""
-    return {k: (f"{coach[k]} ({TENDENCY_WORDS[k][coach[k]]})" if coach.get(k) in TIERS else None)
-            for k in TENDENCY_WORDS}
+    """{'pass_lean': 'High (pass-heavy: ...); measured in this league: ...', ...}; None where there is no tier."""
+    return {k: (f"{v[0]} ({TENDENCY_WORDS[k][v[0]]}); {v[1]}" if v else None)
+            for k, v in effective_tendencies(coach).items()}
 
 
 def _result(game: dict, team_id: int):
@@ -129,6 +151,35 @@ def fetch_team_coach(cur, team_id: int, season: int) -> dict | None:
     return dict(zip(COACH_COLS + ("start_season",), row)) if row else None
 
 
+def fetch_observed(cur, team_id: int, season: int, coach_id: int) -> dict:
+    """Measured pass lean and fourth down for the team (team_seasons, engines/tendency_engine.py): this season's tier,
+    else last season's when the same coach ran the team, as {key: (tier, source)}."""
+    cur.execute("""
+        SELECT ts.season, ts.observed_pass_lean, ts.observed_fourth_down, ts.tendency_games
+        FROM team_seasons ts
+        WHERE ts.team_id = %s AND ts.season IN (%s, %s)
+          AND EXISTS (SELECT 1 FROM coach_tenures ct WHERE ct.coach_id = %s AND ct.team_id = ts.team_id
+                      AND ct.start_season <= ts.season AND COALESCE(ct.end_season, 9999) >= ts.season)
+        ORDER BY ts.season DESC
+    """, (team_id, season, season - 1, coach_id))
+    out = {}
+    for s, pass_lean, fourth, games in cur.fetchall():
+        source = (f"measured in this league: {games} games this season" if s == season
+                  else "measured in this league last season")
+        for k, tier in (("pass_lean", pass_lean), ("fourth_down_aggressiveness", fourth)):
+            if tier and k not in out:
+                out[k] = (tier, source)
+    return out
+
+
+def fetch_team_staff(cur, team_id: int, season: int) -> dict | None:
+    """fetch_team_coach plus the team's measured tendencies under 'observed'."""
+    coach = fetch_team_coach(cur, team_id, season)
+    if coach:
+        coach["observed"] = fetch_observed(cur, team_id, season, coach["id"])
+    return coach
+
+
 def fetch_previous_coach(cur, team_id: int, start_season: int):
     cur.execute("""
         SELECT c.coach_name, ct.start_season, ct.end_season
@@ -171,7 +222,7 @@ def fetch_games(cur, team_ids, first_season: int, last_season: int, visible) -> 
 def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool) -> dict | None:
     """Everything a writer needs about the team's head coach in `season`. `awards_visible`: whether this season's
     awards (decided after the season) may be shown."""
-    coach = fetch_team_coach(cur, team_id, season)
+    coach = fetch_team_staff(cur, team_id, season)
     if not coach:
         return None
     tenures = fetch_tenures(cur, coach["id"])
@@ -222,10 +273,18 @@ def staff_matchup(off_coach: dict | None, def_coach: dict | None) -> dict | None
     """One offense-vs-defense coaching line for get_matchup_edges."""
     if not off_coach or not def_coach:
         return None
-    o, d = describe_tendencies(off_coach), describe_tendencies(def_coach)
+    o, d = effective_tendencies(off_coach), effective_tendencies(def_coach)
+
+    def short(key, v):
+        if not v:
+            return "n/a"
+        label = TENDENCY_WORDS[key][v[0]].split(":")[0]
+        return f"{v[0]} ({label}; {'measured' if v[1].startswith('measured') else 'reputation'})"
+
     return {
-        "offense": f"{off_coach['coach_name']}: {off_coach['offensive_scheme']}, pass lean {o['pass_lean']}, "
-                   f"fourth down {o['fourth_down_aggressiveness']}",
-        "defense": f"{def_coach['coach_name']}: {def_coach['defensive_scheme']} front, blitz {d['blitz_rate']}, "
-                   f"coverage {d['man_coverage']}",
+        "offense": f"{off_coach['coach_name']}: {off_coach['offensive_scheme']}, pass lean "
+                   f"{short('pass_lean', o['pass_lean'])}, fourth down "
+                   f"{short('fourth_down_aggressiveness', o['fourth_down_aggressiveness'])}",
+        "defense": f"{def_coach['coach_name']}: {def_coach['defensive_scheme']} front, blitz "
+                   f"{short('blitz_rate', d['blitz_rate'])}, coverage {short('man_coverage', d['man_coverage'])}",
     }

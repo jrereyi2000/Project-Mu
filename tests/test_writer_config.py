@@ -128,7 +128,9 @@ class WriterConfigTests(unittest.TestCase):
             src = f.read()
         self.assertGreaterEqual(src.count("get_coach_profile"), 5)  # import, tool list, both research blocks
         self.assertEqual(src.count("COACHING TENDENCIES:"), 2)       # national and beat research blocks
-        self.assertIn("never turn a tier into a percentage", src)
+        self.assertIn("Never turn a tier into a percentage", src)
+        self.assertEqual(src.count("Blitz rate and man coverage are the staff's real-world philosophy"), 2)
+        self.assertIn("measured from this league's results", src)
         self.assertNotIn("Scheme talk (coverage shells, fronts, blitz looks) is your read of the numbers", src)
         for name in ("PLAYOFF_AUTOPSY", "FRANCHISE_STATE_OF_THE_UNION", "LOCAL_SEASON_PROGRESS_REPORT",
                      "SINGLE_GAME_SCHEMATIC_AUTOPSY", "QUARTERBACK_DUEL_TAPE_BREAKDOWN",
