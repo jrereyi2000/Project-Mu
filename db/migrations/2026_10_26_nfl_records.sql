@@ -74,7 +74,12 @@ SELECT * FROM (
 
 -- League-wide records: the best franchise record across teams (season categories), or the top of the all-time
 -- list (single-game categories, which have no franchise records).
-CREATE OR REPLACE VIEW league_records AS
+-- Created only if missing: 2026_10_28_league_record_book.sql replaces it, and re-running this file must not undo that.
+DO $mig$
+BEGIN
+    IF to_regclass('league_records') IS NULL THEN
+        EXECUTE $view$
+CREATE VIEW league_records AS
 SELECT fr.category, fr.label, fr.scope, fr.subject, fr.value, fr.holder, fr.team_id, fr.player_id, fr.season,
        NULL::date AS game_date, NULL::int AS game_id, fr.source
 FROM franchise_records_current fr
@@ -84,7 +89,10 @@ UNION ALL
 SELECT t.category, t.label, t.scope, 'PLAYER', t.value, t.holder, t.team_id, t.player_id, t.season,
        t.game_date, t.game_id, t.source
 FROM league_top10 t
-WHERE t.rank = 1 AND t.scope = 'GAME';
+WHERE t.rank = 1 AND t.scope = 'GAME'
+$view$;
+    END IF;
+END $mig$;
 
 INSERT INTO record_categories (category, label, scope, subject, better, sort_order) VALUES
     ('season_pass_yards', 'Passing yards in a season', 'SEASON', 'PLAYER', 'HIGH', 1),
