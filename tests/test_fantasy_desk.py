@@ -117,9 +117,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("FANTASY REGULAR SEASON", fd.fantasy_temporal_instruction(10))
         self.assertIn("FANTASY SEASON IN REVIEW", fd.fantasy_temporal_instruction(18))
         for w in range(19, 24):
-            instr = fd.fantasy_temporal_instruction(w)
-            self.assertIn("FANTASY OFFSEASON", instr)
-            self.assertIn(f"WEEK {w}", instr)
+            with self.assertRaises(ValueError):
+                fd.fantasy_temporal_instruction(w)
 
 
 if __name__ == "__main__":

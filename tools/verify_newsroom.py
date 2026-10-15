@@ -236,9 +236,11 @@ def _():
 def _():
     problems = []
     for at_id, info in SD.article_types_data.items():
+        is_fantasy = at_id.startswith("FANTASY_")
+        # Fantasy slates only run in Weeks 1–18; playoff overrides (Weeks 19–23) only apply to national types.
+        weeks = [1, PUB_WEEK] if is_fantasy else ([PUB_WEEK] + [w for w in range(19, 24)])
         for writer in info["allowed_writers"]:
             rec = SD.get_agent_record(writer)
-            weeks = [PUB_WEEK] + [w for w in range(19, 24)]
             for wk in weeks:
                 p = SD.compile_agent_prompt(rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], BRIEF, SEASON, wk,
                                             "ARTICLE", article_type=at_id)

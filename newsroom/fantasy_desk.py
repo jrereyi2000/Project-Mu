@@ -123,17 +123,15 @@ def fantasy_slate(week: int) -> list:
 def fantasy_temporal_instruction(week: int) -> str:
     """The fantasy calendar block for a fantasy article's prompt."""
     phase = fantasy_phase(week)
+    if not phase:
+        raise ValueError(
+            f"No fantasy articles are generated in week {week} (fantasy calendar ends at Week {LAST_FANTASY_SLATE_WEEK})"
+        )
     if week == 1:
         return """
 TEMPORAL PUBLISHING CONTEXT (FANTASY DRAFT PREP, BEFORE WEEK 1):
 - No games have been played this season. There are no weekly projections, box scores, matchup ratings or rostered percentages yet.
 - Your evidence is the preseason draft board (ADP and its range), each player's role on his depth chart, age, experience and his offense's strength.
-"""
-    if not phase:
-        return f"""
-TEMPORAL PUBLISHING CONTEXT (FANTASY OFFSEASON, ENTERING WEEK {week}):
-- The fantasy season is over: Week 17 was the championship and Week 18 was the season in review. No new fantasy games or slates run during the NFL postseason (Weeks 19–23).
-- Box scores are available through Week {week - 1}.
 """
     when = {
         15: "Week 15 opens the fantasy playoffs (round 1 / quarterfinals; the top two seeds have a bye).",
