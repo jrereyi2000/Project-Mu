@@ -748,7 +748,7 @@ SELECT * FROM (
     FROM league_record_entries e JOIN record_categories c ON c.category = e.category
 ) ranked WHERE rank <= 10;
 
-CREATE VIEW league_records AS
+CREATE OR REPLACE VIEW league_records AS
 WITH cands AS (
     SELECT fr.category, fr.value, fr.holder, fr.team_id, fr.player_id, fr.season, NULL::date AS game_date, NULL::int AS game_id, fr.source
     FROM franchise_records_current fr JOIN record_categories c ON c.category = fr.category
