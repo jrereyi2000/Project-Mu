@@ -188,5 +188,21 @@ class EliminationTests(unittest.TestCase):
         self.assertEqual(resolve_slot_targets([("Slot 3", "FRANCHISE_STATE_OF_THE_UNION")], snap), [None])
 
 
+class Week22SlotTargetTests(unittest.TestCase):
+    def test_week_22_slot_8_is_super_bowl_historical_stakes(self):
+        """Week 22 Slot 8 is configured as SUPER_BOWL_HISTORICAL_STAKES and is untargeted."""
+        from newsroom.swarm_dispatcher import POSTSEASON_EDITORIAL_SLATES
+        w22_slots = POSTSEASON_EDITORIAL_SLATES[22]
+        slot_map = dict(w22_slots)
+        self.assertEqual(slot_map["Slot 8"], "SUPER_BOWL_HISTORICAL_STAKES")
+
+        snap = league(week=22, prior_week_results=[result(1, 1, 2, 24, 21), result(2, 17, 18, 30, 10)])
+        targets = resolve_slot_targets(w22_slots, snap)
+        slot_target_map = {slot[0]: t for slot, t in zip(w22_slots, targets)}
+        self.assertIsNone(slot_target_map["Slot 8"])
+        self.assertIsNotNone(slot_target_map["Slot 6"])
+        self.assertIsNotNone(slot_target_map["Slot 7"])
+
+
 if __name__ == "__main__":
     unittest.main()

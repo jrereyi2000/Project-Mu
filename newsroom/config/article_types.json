@@ -864,6 +864,31 @@
       "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as an authoritative Mock Draft (approx. 1,500–1,800 words).\n\n1. The Board Overview:\nOpen with a headline using # (e.g., # 2036 NFL Mock Draft 1.0: First-Round Projections for Picks 1–24).\nWrite a 2-paragraph introduction identifying the strengths of this draft class and the run on premium positions.\n\n2. The First-Round Projections (Picks 1–24):\nUse numbered ## headers for each selection formatted strictly as: ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School] (e.g., ## 1. Philadelphia Eagles: Dave Vogel, LEDG, Georgia), taking the name, position and school exactly from the board.\nUnder each pick, give the prospect's height, weight and scouted OVR from the board, then exactly 2 to 3 sentences on the team need, the player's physical traits, and how they fit the scheme.\n\n3. The Draft Floor Watch / Sleeper:\nConclude with a ### header naming the steal of picks 1–24 or the eliminated franchise under the most pressure to hit on its pick.",
       "structure_source": "article"
     },
+    "SUPER_BOWL_HISTORICAL_STAKES": {
+      "name": "The Super Bowl Historical Stakes (The Coach & QB Legacy Column)",
+      "allowed_writers": [
+        "CHADIHA",
+        "SIMMONS"
+      ],
+      "writer_display_names": [
+        "Jeffri Chadiha (Championship Clout & Legacy Stakes)",
+        "Bill Simmons (Historical / Pop Culture / Narrative)"
+      ],
+      "writing_archetype_category": "Championship Legacy Audit",
+      "granularity": "Super Bowl Bye / Historical Legacy",
+      "focus": "Joint Head Coach + Quarterback historical legacy breakdown in Week 22 (Super Bowl Bye). Compare the QB-HC tandems fighting for the Lombardi Trophy.",
+      "data_queried": [
+        "Quarterback Playoff Clout (S_playoff)",
+        "Awards Equity (A_awards)",
+        "Head-Coach Profile (get_coach_profile)",
+        "Legacy Floor (S_all-time)"
+      ],
+      "example_prompt_hook": "Compare the head coach and quarterback tandems fighting for the Lombardi Trophy. Contrast dynasty validation against breakthrough pursuit, ground their postseason records in coach profiles and quarterback playoff clout, and project their Canton implications.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Super Bowl Historical Stakes\nGranularity: Super Bowl Bye / Historical Legacy.\nFocus: Joint Head Coach + Quarterback historical legacy breakdown in Week 22 (Super Bowl Bye). Compare the QB-HC tandems fighting for the Lombardi Trophy.\nScope: You are anchoring Week 22 (Super Bowl Bye) with the definitive historical legacy column. Conduct an exhaustive joint audit of the head coach and starting quarterback tandems fighting for the Lombardi Trophy. Step beyond generic match previews: evaluate how each signal-caller's Playoff Clout ($S_{\\text{playoff}}$) and Awards Equity ($A_{\\text{awards}}$) intertwine with their head coach's career postseason ledger and coaching profile (`get_coach_profile`). Contrast dynasty validation against the quest for a breakthrough title, and analyze what a championship or defeat means for both tandems' Hall of Fame and Canton trajectories.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (SUPER_BOWL_HISTORICAL_STAKES):\nYou are conducting a joint Head Coach + Quarterback historical legacy breakdown in Week 22 (Super Bowl Bye). Compare the QB-HC tandems fighting for the Lombardi Trophy:\n- For each tandem, evaluate how their coaching tenure, playoff record, and quarterback clout interlock. Call `get_coach_profile` for both head coaches to ground their postseason records, Super Bowl appearances, and tenure context.\n- Weigh Quarterback Playoff Clout ($S_{\\text{playoff}}$) and career Awards Equity ($A_{\\text{awards}}$) against the franchise's historical Legacy Floor ($S_{\\text{all-time}}$).\n- Contrast the two sides: does Tandem A represent an established dynasty seeking ultimate validation, while Tandem B represents an ascending breakthrough?\n- Frame the Canton and Hall of Fame trajectories: whose legacy is permanently transformed by winning or losing this Lombardi Trophy?\n\nCOACHING DATA: Call `get_coach_profile` for both head coaches (playoff and Super Bowl records, tenure, schemes, tendencies). Tendencies are Low / Medium / High staff tendencies: describe them, never turn them into percentages or per-game counts.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as a 4-part joint audit (approx. 1,200–1,600 words).\n\n# 1. The Historical Crucible\nOpen with an authoritative headline using # (e.g., # The Historical Crucible: Coach-QB Tandems on the Brink of Super Bowl Immortality).\nWrite a rich 2-to-3 paragraph overview establishing the monumental legacy stakes of the Super Bowl matchup, introducing the head coach and quarterback tandems fighting for the Lombardi Trophy.\n\n## 2. Tandem A: [Coach] & [QB] (Dynasty vs. Validation)\nUse a ## header naming the first tandem (e.g., ## Tandem A: [Coach Name] & [QB Name] (Dynasty vs. Validation)).\nDissect the partnership between the head coach and quarterback. Analyze their postseason pedigree, Playoff Clout ($S_{\\text{playoff}}$), and coach profile context (`get_coach_profile`). Evaluate what a Lombardi would mean for their shared historical stature.\n\n## 3. Tandem B: [Coach] & [QB] (The Breakthrough)\nUse a ## header naming the opposing tandem (e.g., ## Tandem B: [Coach Name] & [QB Name] (The Breakthrough)).\nDissect the opposing tandem's journey. Contrast their regular-season efficiency and postseason rise against past heartbreaks or fresh contention. Evaluate how their offensive scheme and coaching leadership elevate the quarterback on the grandest stage.\n\n### 4. Hall of Fame & Canton Implications\nConclude with a ### header examining the long-term historical reverberations.\nEvaluate the Canton trajectories for both coaches and quarterbacks. Determine whose Hall of Fame resume is permanently solidified with a ring, who faces the harshest historical scrutiny with a defeat, and deliver the final verdict on the legacy defining this championship clash.",
+      "structure_source": "article"
+    },
     "FANTASY_DRAFT_TIERS": {
       "name": "Fantasy Draft Tiers",
       "allowed_writers": [

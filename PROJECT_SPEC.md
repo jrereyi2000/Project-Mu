@@ -761,7 +761,7 @@ To eliminate editorial homogenization and ground long-form journalism in authent
 - **Prohibited Internal Symbols:** Strict prompt directive banning internal mathematical symbols (`$P$`, `Y_prod`, `(88.17 W)`, `(64.84 POP)`) in favor of natural sports journalism prose.
 
 ### 7.1 Article Taxonomy & Writer Archetype Alignments (`newsroom/config/article_types.json`)
-`article_types.json` defines 31 article types: the 27 national types below and the 4 local beat types in §7.2. Each maps to its allowed writer archetypes and a writing category. A type either carries its own structure directive or, where noted, uses the writer's column format from `article_structure_directives.json`:
+`article_types.json` defines 32 article types: the 28 national types below and the 4 local beat types in §7.2. Each maps to its allowed writer archetypes and a writing category. A type either carries its own structure directive or, where noted, uses the writer's column format from `article_structure_directives.json`:
 
 1. **The Macro Slate Recap** (`MACRO_SLATE_RECAP`)
    - **Allowed Writers / Archetypes:** Barnwell, Rosenthal (`BARNWELL`, `ROSENTHAL`, `Weekly Recaps`).
@@ -1023,6 +1023,15 @@ To eliminate editorial homogenization and ground long-form journalism in authent
     - **Structure Directive:** 3-part Authoritative Mock Draft (approx. 1,500–1,800 words): `# 1. The Board Overview`, `## 2. The First-Round Projections (Picks 1–24 with ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School], then the prospect's height, weight and scouted OVR from the board)`, `### 3. The Draft Floor Watch / Sleeper`.
     - **Prompt Hook:** Project the first 24 picks of the NFL Draft. Balance premium positional value against immediate roster holes for eliminated franchises.
 
+28. **The Super Bowl Historical Stakes** (`SUPER_BOWL_HISTORICAL_STAKES`, Week 22 Slot 8)
+    - **Allowed Writers / Archetypes:** Jeffri Chadiha (Championship Clout & Legacy Stakes), Bill Simmons (Historical / Pop Culture / Narrative) (`CHADIHA`, `SIMMONS`, `Championship Legacy Audit`).
+    - **Granularity:** Super Bowl Bye / Historical Legacy.
+    - **Focus:** Joint Head Coach + Quarterback historical legacy breakdown in Week 22 (Super Bowl Bye), comparing the QB-HC tandems fighting for the Lombardi Trophy.
+    - **Data Queried:** Quarterback Playoff Clout ($S_{\text{playoff}}$), Awards Equity ($A_{\text{awards}}$), Head-Coach Profile (`get_coach_profile`), Legacy Floor ($S_{\text{all-time}}$).
+    - **Curatorial Autonomy:** Evaluates the two Super Bowl finalist franchises through their interlocking head coach and starting quarterback tandems. Calls `get_coach_profile` for both head coaches to ground their postseason records, Super Bowl appearances, and tenure context. Weighs Quarterback Playoff Clout ($S_{\text{playoff}}$) and career Awards Equity ($A_{\text{awards}}$) against the franchise's historical Legacy Floor ($S_{\text{all-time}}$). Contrasts dynasty validation against breakthrough pursuit, and frames the Canton and Hall of Fame implications for both tandems.
+    - **Structure Directive:** 4-part joint audit (approx. 1,200–1,600 words): `# 1. The Historical Crucible`, `## 2. Tandem A: [Coach] & [QB] (Dynasty vs. Validation)`, `## 3. Tandem B: [Coach] & [QB] (The Breakthrough)`, `### 4. Hall of Fame & Canton Implications`.
+    - **Prompt Hook:** Compare the head coach and quarterback tandems fighting for the Lombardi Trophy. Contrast dynasty validation against breakthrough pursuit, ground their postseason records in coach profiles and quarterback playoff clout, and project their Canton implications.
+
 ### 7.2 Local Beat Reporting Taxonomy (`LOCAL_BEAT_REPORTER`)
 Local Beat Reporters cover their assigned franchise exclusively. Their research directive keeps them on their own team's games, and they don't receive the national writers' historical-comparison instruction. The beat research directive points them at `get_defense_special_teams_leaders` for defensive/special-teams leaders and `get_team_injury_report` for active roster injuries. Starting injuries are injected directly into the beat assignment brief (`team_injury_report`). The `BEAT INJURY REPORTING RULE` requires beat reporters to cover all injured starters across offense, defense, and specialists, framing them through tactical fallout ("next man up", protection shifts, scheme adjustments) while barring speculation on non-starters or unverified medical returns.
 
@@ -1064,7 +1073,7 @@ Rather than waking up a fixed list of writer agents who generate generic article
 2. **Matrix-Driven Editorial Slate Planning (`docs/EDITORIAL_MATRIX.md`):**
    - Implements the definitive **18-Week Regular Season & 5-Week Postseason Editorial Matrix** to commission a structured portfolio of article types per week:
      - **Regular Season (Weeks 1–18):** Fixed Hero Slot (`PRE_SEASON_ROSTER_TIERS` in W1, `MACRO_SLATE_RECAP` in W2–18), Slot 1 (`SLATE_LOOKAHEAD_PREDICTIONS`), Slot 2 (`NFL_TOP_100_HIERARCHY` in W1, `SINGLE_GAME_SCHEMATIC_AUTOPSY` in W2–18), Slots 3–5 (Feature Trio selected dynamically from 4 distinct seasonal phase pools), Slots 6–8 (3x `LOCAL_MATCHUP_PRIMER`), and Standalone (`POWER_RANKINGS`).
-     - **Postseason (Weeks 19–23):** Custom 10-slot boards tailored for Wild Card Eve (W19), Divisional Eve (W20), Championship Eve (W21), Super Bowl Bye (W22), and Super Bowl Week (W23).
+     - **Postseason (Weeks 19–23):** Custom 10-slot boards tailored for Wild Card Eve (W19), Divisional Eve (W20), Championship Eve (W21), Super Bowl Bye (W22; Slot 8 features the joint HC-QB legacy column `SUPER_BOWL_HISTORICAL_STAKES`), and Super Bowl Week (W23).
    - Dynamically rotates national columnists (`SIMMONS`, `KIMES`, `ACHO`, `SKIP_BAYLESS`, `YATES`) into `NATIONAL_OPINION_COLUMN` slots during regular-season feature trios.
 3. **Qualified Writer Matching & Load Balancing:**
    - For each commissioned article type, the Editorial Desk queries `allowed_writers` from the taxonomy (`newsroom/config/article_types.json`).
@@ -1118,6 +1127,8 @@ During the single-elimination tournament and Super Bowl run (Weeks 19–23), sta
 4. **`SUPER_BOWL_CONTENDER_BLUEPRINT` Playoff Overrides** (both `CUMULATIVE`; only teams playing that week's playoff games are in scope, judged on the regular season plus their playoff games so far):
    - **Week 20 (`DIVISIONAL_ROUND_CONTENDER_AUDIT`):** the eight divisional-round teams, three wins from a title. Structure: `# The Championship Standard`, `##` heavyweights (2–3 teams), `## The Vulnerable Favorite`, `### The Dangerous Underdog`.
    - **Week 21 (`FINAL_FOUR_CONTENDER_AUDIT`):** the four conference finalists ranked 1–4 by title chances. Structure: `#` hook, four numbered `## [Rank]. [City] [Team] ([W-L])` sections (path, case, fatal flaw), `### The Verdict` naming the champion.
+
+*(Note: Week 22 Slot 8 commissions `SUPER_BOWL_HISTORICAL_STAKES` directly from `POSTSEASON_EDITORIAL_SLATES` (§7.1, #28) as the dedicated HC-QB legacy column rather than via a dynamic override.)*
 
 ### 7.5 Database Schema & Newsroom REST API Specifications
 To support seamless frontend newsroom consumption, longform editorial content is persisted with full metadata and relational tagging:
