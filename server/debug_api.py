@@ -35,6 +35,7 @@ JOB_KINDS = {
     "scan_week": ("Scan week", []),
     "backfill_week": ("Backfill previous week (no articles)", ["--no-articles"]),
     "game_scan": ("Game scan (last week's games)", ["--mode", "games"]),
+    "roster_scan": ("Roster & prospect scan", ["--mode", "roster", "--no-articles"]),
 }
 
 router = APIRouter(prefix="/api/debug")

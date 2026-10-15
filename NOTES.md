@@ -83,6 +83,23 @@ Apple Vision OCR achieves near-instantaneous parsing, but Madden's custom game f
 - **`get_draft_prospects(position, top_n, file_path)`**: ReAct research tool providing consensus draft prospects from the scouted draft board (default 32), with position/group filtering.
 - **Mel Kiper Jr. Persona (`MEL_KIPER`)**: Added to `newsroom/config/agent_personas.json` (both archetypes and article personas) and assigned as the primary writer for `OFFSEASON_MOCK_DRAFT` in `newsroom/config/article_types.json`. Generates authoritative 1,500–1,800 word columns evaluating all 32 Round 1 selections with 100% personal ownership ("Todd! Listen to me!", Big Board, trench warriors, signature Steal/Sleeper Watch).
 
+### 3.7 Season Cadence Integration (Roster & Prospects Scan)
+- **Console Navigation (`madden_capture.py`):**
+  - Added `DRAFT_BOARD` screen classification based on table headers (`ALL ROUNDS`, `ROUND 1`, `Round 1, Pick`) and card markers (`PICK`, `NAME`).
+  - Implemented `open_prospects()` navigating from franchise hub (`HUB` / `HUB_ROSTER`) $\to$ `HUB_TABS: "MANAGE ROSTER"` $\to$ `ROSTER_MENU: "SCOUTING"` $\to$ `DRAFT_BOARD`.
+  - Linked prospect scanning to the season cadence: running `madden_capture.py --only roster` automatically executes both `run_roster()` (all 32 NFL team rosters) and `run_prospects()` (the draft board prospects), with `--no-prospects` available to skip.
+- **Extraction Synchronization (`extract.py`):**
+  - Added `_sync_prospects_board()` to automatically copy extracted `prospects.csv` into canonical storage (`data/draft/{draft_season}_prospects.csv`) where `draft_season = season + 1`.
+- **Pipeline Loader (`pipeline/load_capture.py`):**
+  - Added `prospects` mode detection in `detect_mode(folder)`.
+  - In `load_roster()`: validates `prospects.csv` when present using `pipeline.ingest_prospects.load_prospects_from_csv` as part of transaction checks, copying to `data/draft/{season+1}_prospects.csv` and reporting prospect counts.
+  - Added standalone `load_prospects()` in `LOADERS` for folders holding only prospect boards. Both honor `dry_run` mode.
+- **Orchestration (`pipeline/weekly_capture.py`):**
+  - Added `roster` to `MODES`.
+  - When `mode == "roster"`: runs `step_capture` (`madden_capture.py --only roster`), `step_extract` (`extract.py`), and `step_load` (`pipeline.load_capture`), then shrinks screenshots and sends completion notification (`"Roster & draft prospects loaded for Season {season}."`), skipping weekly game-stat backfill and articles.
+- **Debug API & UI (`server/debug_api.py`, `Mu_Network/src/DebugPage.tsx`):**
+  - Added `roster_scan` (`"Roster & prospect scan"`, `["--mode", "roster", "--no-articles"]`) to `JOB_KINDS` and frontend `RUNS` array.
+
 ---
 
 ## 4. Verification & Benchmarks
@@ -102,11 +119,13 @@ Apple Vision OCR achieves near-instantaneous parsing, but Madden's custom game f
 - `tests/test_mock_draft_engine.py`: 7 unit tests covering order generation, team needs scoring, positional premiums, mock simulation uniqueness, and CLI execution.
 - `tests/test_mock_draft_tools.py`: 4 unit tests covering `get_mock_draft`, `get_draft_prospects` position filtering, and tool registration in `SwarmDispatcher`.
 - `tests/test_writer_config.py`: 25 tests verifying writer personas, canonical archetypes, and Mel Kiper Jr.'s configuration for `OFFSEASON_MOCK_DRAFT`.
+- `tests/test_load_capture.py`: 29 tests covering detection of `prospects` and combined `roster`+`prospects` modes, validation, and syncing to `data/draft/{season+1}_prospects.csv`.
+- `tests/test_weekly_capture.py`: 16 tests verifying `roster` mode execution, capture args, extract detection, and skipping weekly game engines/articles.
+- `tests/test_debug_api.py`: 6 tests verifying `roster_scan` job dispatching, logging, and status.
 - **Live LLM Verification:** End-to-end live Gemini 3.8 Flash test via `tests.test_editorial_flow --article-type OFFSEASON_MOCK_DRAFT --writer MEL_KIPER --live` verified autonomous tool invocation (`get_mock_draft` + `get_draft_prospects`) and generation of the complete 32-pick column with signature Kiper voice.
 
 ---
 
 ## 5. Next Steps
-1. **Draft Board Menu Navigation:** Once console menu routing is added by other sessions, wire up automatic entry into the draft board from the franchise hub (e.g. `League > Scouting / Draft Board`).
-2. **Database Schema Integration:** Once parallel schema work concludes, create a dedicated `draft_prospects` table and `mock_draft_picks` ledger to persist draft classes and historical mock simulations across seasons.
-3. **Multi-Round Simulation:** Extend `mock_draft_engine.py` from 32 picks (Round 1) to full 7-round mock drafts (256+ picks) using the 236+ extracted prospect boards.
+1. **Database Schema Integration:** Once parallel schema work concludes, create a dedicated `draft_prospects` table and `mock_draft_picks` ledger to persist draft classes and historical mock simulations across seasons.
+2. **Multi-Round Simulation:** Extend `mock_draft_engine.py` from 32 picks (Round 1) to full 7-round mock drafts (256+ picks) using the 236+ extracted prospect boards.

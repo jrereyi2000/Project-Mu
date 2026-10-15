@@ -211,3 +211,47 @@ class SeasonEndTest(unittest.TestCase):
         got = L.load_next_round(PlayoffGamesTest.Cur(), d, 2035, 22, {"STEELERS": 1, "RAVENS": 2}, problems)
         self.assertEqual(problems, [])
         self.assertEqual(got["week"], 23)
+
+
+class ProspectsLoadTest(unittest.TestCase):
+    def test_detect_mode_prospects(self):
+        d = tempfile.mkdtemp()
+        open(os.path.join(d, "prospects.csv"), "w").close()
+        self.assertEqual(L.detect_mode(d), "prospects")
+
+    def test_detect_mode_combined_roster_and_prospects(self):
+        d = tempfile.mkdtemp()
+        open(os.path.join(d, "roster_cards.csv"), "w").close()
+        open(os.path.join(d, "prospects.csv"), "w").close()
+        self.assertEqual(L.detect_mode(d), "roster")
+
+    def test_load_prospects_syncs_file(self):
+        d = tempfile.mkdtemp()
+        p_csv = os.path.join(d, "prospects.csv")
+        with open(p_csv, "w") as f:
+            f.write("PICK,NAME,POS,COLLEGE,HEIGHT,WEIGHT,AGE,OVR\n")
+            f.write("1,Caleb Williams,QB,USC,6-1,215,22,81\n")
+            f.write("2,Marvin Harrison Jr,WR,Ohio State,6-4,205,21,80\n")
+
+        dest_dir = tempfile.mkdtemp()
+        report = {}
+        target_csv = os.path.join(dest_dir, "2036_prospects.csv")
+        from unittest import mock
+        orig_join = os.path.join
+        with mock.patch("os.path.join", side_effect=lambda *args: target_csv if "data" in args and "draft" in args else orig_join(*args)):
+            count = L.load_prospects(None, d, 2035, report)
+        self.assertEqual(count, 2)
+        self.assertEqual(report["prospects_loaded"], 2)
+        self.assertEqual(report["draft_season"], 2036)
+        self.assertTrue(os.path.exists(target_csv))
+
+    def test_load_prospects_invalid_raises_load_error(self):
+        d = tempfile.mkdtemp()
+        p_csv = os.path.join(d, "prospects.csv")
+        with open(p_csv, "w") as f:
+            f.write("PICK,NAME,POS,COLLEGE,HEIGHT,WEIGHT,AGE,OVR\n")
+            f.write("1,Caleb Williams,UNKNOWN_POS,USC,6-1,215,22,81\n")
+
+        report = {}
+        with self.assertRaises(L.LoadError):
+            L.load_prospects(None, d, 2035, report)

@@ -52,6 +52,13 @@ class JobsTest(unittest.TestCase):
         listed = self.client.get("/api/debug/jobs").json()
         self.assertEqual(listed[0]["kind_label"], "Backfill previous week (no articles)")
 
+    def test_roster_scan_job(self):
+        job_id = self.start(kind="roster_scan")
+        job = wait_for(self.client, job_id, "done")
+        self.assertEqual(job["exit_code"], 0)
+        listed = self.client.get("/api/debug/jobs").json()
+        self.assertEqual(listed[0]["kind_label"], "Roster & prospect scan")
+
     def test_failure_and_one_at_a_time(self):
         self.script = "import time, sys; time.sleep(1.5); sys.exit(3)"
         job_id = self.start()

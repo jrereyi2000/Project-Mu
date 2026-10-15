@@ -49,6 +49,8 @@ def detect_mode(folder):
         return "weekly"
     if os.path.exists(os.path.join(folder, "injuries.csv")):
         return "injuries"
+    if os.path.exists(os.path.join(folder, "prospects.csv")):
+        return "prospects"
     raise LoadError(f"{folder}: no extracted CSVs found (run extract.py first)")
 
 
@@ -115,6 +117,14 @@ def load_roster(cur, folder, season, report):
             problems.append(f"{team}: {n} players (expected {ROSTER_TEAMS_MIN}-{ROSTER_TEAMS_MAX})")
     if len(per_team) != 32:
         problems.append(f"{len(per_team)} teams in the capture, not 32")
+    prospects_csv = os.path.join(folder, "prospects.csv")
+    prospects = None
+    if os.path.exists(prospects_csv):
+        try:
+            from pipeline.ingest_prospects import load_prospects_from_csv
+            prospects = load_prospects_from_csv(prospects_csv)
+        except Exception as e:
+            problems.append(f"prospects validation failed: {e}")
     if problems:
         raise LoadError("roster checks failed:\n  " + "\n  ".join(problems))
 
@@ -209,6 +219,16 @@ def load_roster(cur, folder, season, report):
             cur.execute("DELETE FROM players WHERE id = ANY(%s)", (drop,))      # player_seasons cascade
         report["deleted_not_on_any_roster"] = len(drop)
         report["kept_not_on_any_roster"] = sorted(keep)
+    if prospects is not None:
+        draft_season = season + 1
+        dest = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        if not report.get("dry_run") and os.path.abspath(prospects_csv) != os.path.abspath(dest):
+            import shutil
+            shutil.copyfile(prospects_csv, dest)
+        report["prospects_loaded"] = len(prospects)
+        report["draft_season"] = draft_season
+        report["prospects_path"] = dest
     return len(parsed)
 
 
@@ -1043,8 +1063,34 @@ def row_counts(folder):
     return out
 
 
+def load_prospects(cur, folder, season, report):
+    """Validate extracted prospects.csv and sync to data/draft/{season+1}_prospects.csv."""
+    import shutil
+    from pipeline.ingest_prospects import load_prospects_from_csv
+
+    prospects_path = os.path.join(folder, "prospects.csv")
+    if not os.path.exists(prospects_path):
+        raise LoadError(f"{folder}: prospects.csv not found")
+
+    try:
+        prospects = load_prospects_from_csv(prospects_path)
+    except Exception as e:
+        raise LoadError(f"prospects validation failed: {e}")
+
+    draft_season = season + 1
+    dest = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    if not report.get("dry_run") and os.path.abspath(prospects_path) != os.path.abspath(dest):
+        shutil.copyfile(prospects_path, dest)
+
+    report["prospects_loaded"] = len(prospects)
+    report["draft_season"] = draft_season
+    report["canonical_path"] = dest
+    return len(prospects)
+
+
 LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly, "playoff": load_playoff,
-           "games": load_games, "injuries": load_injuries_standalone}
+           "games": load_games, "injuries": load_injuries_standalone, "prospects": load_prospects}
 
 
 def load(folder, dry_run=False, replace=False):
@@ -1052,13 +1098,13 @@ def load(folder, dry_run=False, replace=False):
     mode = detect_mode(folder)
     if mode not in LOADERS:
         raise LoadError(f"mode {mode} isn't built yet")
-    report = {"folder": folder, "mode": mode}
+    report = {"folder": folder, "mode": mode, "dry_run": dry_run}
     with psycopg.connect(DSN) as conn:
         cur = conn.cursor()
         cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
         season, week = cur.fetchone()
         report["season"] = season
-        cid = capture_row(cur, folder, mode, season, None if mode == "roster" else week, dry_run)
+        cid = capture_row(cur, folder, mode, season, None if mode in ("roster", "prospects", "season_schedule") else week, dry_run)
         conn.commit()                        # the run is recorded even if the load fails
         try:
             if mode == "games":

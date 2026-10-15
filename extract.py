@@ -585,6 +585,7 @@ def extract_prospects(root):
         if HAS_APPLE_VISION:
             csv_path = extract_prospects_ocr(root)
             if csv_path and os.path.exists(csv_path):
+                _sync_prospects_board(csv_path)
                 return
     except Exception as e:
         print(f"  OCR extraction skipped or failed ({e}); falling back to Gemini vision...")
@@ -619,6 +620,27 @@ def extract_prospects(root):
     out_path = os.path.join(root, "prospects.csv")
     write_csv(out_path, out_cols, out_rows)
     print(f"Wrote {len(out_rows)} prospects to {out_path}")
+    _sync_prospects_board(out_path)
+
+
+def _sync_prospects_board(csv_path):
+    """Synchronize extracted prospects.csv with canonical draft board storage."""
+    if not csv_path or not os.path.exists(csv_path):
+        return
+    import shutil
+    try:
+        from db.db_handler import DatabaseHandler
+        db = DatabaseHandler()
+        season, _ = db.get_current_league_state()
+        draft_season = season + 1
+    except Exception:
+        draft_season = 2036
+
+    dest_draft = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
+    os.makedirs(os.path.dirname(dest_draft), exist_ok=True)
+    if os.path.abspath(csv_path) != os.path.abspath(dest_draft):
+        shutil.copyfile(csv_path, dest_draft)
+        print(f"Synced {csv_path} -> {dest_draft}")
 
 
 # ---------------------------------------------------------------- games ----
@@ -801,7 +823,9 @@ def main():
         prosp = glob.glob(os.path.join(root, "prospects", "*.png"))
         if prosp:
             cols, rows = merge(prosp, "prospects")
-            write_csv(os.path.join(root, "prospects.csv"), cols, rows)
+            p_out = os.path.join(root, "prospects.csv")
+            write_csv(p_out, cols, rows)
+            _sync_prospects_board(p_out)
 
     extract_roster(root)
     extract_games(root)
