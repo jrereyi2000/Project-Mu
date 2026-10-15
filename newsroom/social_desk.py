@@ -282,6 +282,76 @@ def load_week_context(cur, season: int, week: int) -> dict:
     for p in ctx["projections"]:
         p["projected_points"] = float(p["projected_points"] or 0)
     ctx["record_book"] = load_record_book(cur, season)
+
+    # Weekly ground-truth injuries for publication week
+    cur.execute("""
+        SELECT DISTINCT week FROM injuries
+        WHERE season = %s AND week <= %s
+        ORDER BY week DESC LIMIT 1;
+    """, (season, week))
+    w_row = cur.fetchone()
+    q_week = w_row[0] if w_row else week
+
+    cur.execute("""
+        WITH ranked_roster AS (
+            SELECT 
+                player_id,
+                position,
+                overall_rating,
+                ROW_NUMBER() OVER (PARTITION BY team_id, position ORDER BY overall_rating DESC) as pos_rank
+            FROM player_seasons
+            WHERE season = %s
+        )
+        SELECT 
+            i.team_id,
+            COALESCE(p.full_name, p.player_name, i.player_name) as player_name,
+            COALESCE(ps.position, i.position) as position,
+            COALESCE(ps.overall_rating, i.ovr) as ovr,
+            COALESCE(ps.popularity_index, 0.0) as pop,
+            i.injury_type,
+            i.duration,
+            i.weeks_remaining,
+            i.is_ir,
+            (rr.pos_rank = 1 AND COALESCE(ps.position, i.position) = 'QB') as is_qb_star,
+            (
+                (COALESCE(ps.overall_rating, i.ovr) >= 88)
+                OR (COALESCE(ps.popularity_index, 0.0) >= 50.0)
+                OR (rr.pos_rank = 1 AND COALESCE(ps.position, i.position) = 'QB')
+            ) as is_key_injury,
+            (
+                (COALESCE(ps.position, i.position) IN ('QB', 'TE', 'LT', 'LG', 'C', 'RG', 'RT', 'FS', 'SS', 'K', 'P', 'FB') AND rr.pos_rank = 1)
+                OR (COALESCE(ps.position, i.position) IN ('HB', 'DT', 'LEDG', 'REDG', 'LE', 'RE') AND rr.pos_rank <= 2)
+                OR (COALESCE(ps.position, i.position) IN ('WR', 'CB', 'MIKE', 'SAM', 'WILL', 'MLB', 'LOLB', 'ROLB') AND rr.pos_rank <= 3)
+            ) as is_starter
+        FROM injuries i
+        JOIN teams t ON t.id = i.team_id
+        LEFT JOIN players p ON p.id = i.player_id
+        LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
+        LEFT JOIN ranked_roster rr ON rr.player_id = i.player_id
+        WHERE i.season = %s AND i.week = %s
+        ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
+    """, (season, season, q_week))
+    injs = []
+    injs_by_team = collections.defaultdict(list)
+    for tid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir, is_qb_star, is_key, is_star in cur.fetchall():
+        item = {
+            "team_id": tid,
+            "player_name": tidy_name(pname),
+            "position": pos,
+            "overall_rating": int(ovr or 0),
+            "popularity": round(float(pop or 0.0), 1),
+            "injury_type": inj_type,
+            "duration": dur,
+            "weeks_remaining": int(w_rem or 0),
+            "is_ir": bool(is_ir),
+            "is_starting_qb": bool(is_qb_star),
+            "is_key_injury": bool(is_key),
+            "is_starter": bool(is_star),
+        }
+        injs.append(item)
+        injs_by_team[tid].append(item)
+    ctx["injuries"] = injs
+    ctx["injuries_by_team"] = injs_by_team
     return ctx
 
 
@@ -541,6 +611,35 @@ class Week:
             "team": self.team_with_record(tid),
             "last_game": self.game_facts(last, tid) if last else "Did not play last week.",
             "next_game": self.preview_facts(nxt, tid) if nxt else "No game this week.",
+        }
+
+    def team_injuries(self, tid):
+        return self.ctx.get("injuries_by_team", {}).get(tid, [])
+
+    def beat_injury_facts(self, tid, inj):
+        status = "Placed on Injured Reserve (IR)" if inj["is_ir"] else f"Ruled out / {inj['duration']} ({inj['injury_type']})"
+        return {
+            "team": self.team_with_record(tid),
+            "player_name": inj["player_name"],
+            "position": inj["position"],
+            "injury_type": inj["injury_type"],
+            "duration": inj["duration"],
+            "weeks_remaining": inj["weeks_remaining"],
+            "is_ir": inj["is_ir"],
+            "is_starter": inj["is_starter"],
+            "status_update": status
+        }
+
+    def injury_shock_facts(self, tid, inj):
+        return {
+            "team": self.team_with_record(tid),
+            "superstar_name": inj["player_name"],
+            "position": inj["position"],
+            "injury_type": inj["injury_type"],
+            "duration": inj["duration"],
+            "is_ir": inj["is_ir"],
+            "is_starting_qb": inj.get("is_starting_qb", False),
+            "headline": f"Devastating injury news: {inj['player_name']} ({inj['position']}) {inj['duration']} with {inj['injury_type']}"
         }
 
     def last_result(self, tid):
@@ -1427,8 +1526,14 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
         account = acc.beat(tid)
         if not account:
             continue
-        plan["BEAT"].append(_assignment("BEAT", account, {"type": "team", "id": tid, "label": W.team_label(tid)},
-                                        W.beat_facts(tid), filed_team=tid))
+        team_starter_injuries = [inj for inj in W.team_injuries(tid) if inj.get("is_starter")]
+        if team_starter_injuries:
+            top_inj = team_starter_injuries[0]
+            plan["BEAT"].append(_assignment("BEAT_INJURY", account, {"type": "team", "id": tid, "label": f"{W.team_label(tid)}: {top_inj['player_name']} Injury"},
+                                            W.beat_injury_facts(tid, top_inj), filed_team=tid))
+        else:
+            plan["BEAT"].append(_assignment("BEAT", account, {"type": "team", "id": tid, "label": W.team_label(tid)},
+                                            W.beat_facts(tid), filed_team=tid))
 
     # 4. Standings and races (from Week 3; regular season only).
     if 3 <= week <= REGULAR_SEASON_FINAL_WEEK:
@@ -1507,6 +1612,16 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             if account:
                 plan["REACTION"].append(_assignment("REACTION", account, {"type": "game", "id": g["id"], "label": W.game_label(g)},
                                                     W.game_facts(g, tid), filed_team=tid))
+
+    # 7b. Key injury shock reactions: die-hard fan reactions for marquee injuries (OVR 88+, Pop 50+, or starting QB)
+    key_injuries = [inj for inj in ctx.get("injuries", []) if inj.get("is_key_injury")]
+    for inj in key_injuries[:2]:
+        tid = inj["team_id"]
+        account = acc.fan(tid)
+        if account:
+            plan["REACTION"].append(_assignment("INJURY_SHOCK", account,
+                                                {"type": "team", "id": tid, "label": f"{W.team_label(tid)}: {inj['player_name']} Injury Shock"},
+                                                W.injury_shock_facts(tid, inj), filed_team=tid))
 
     # 8. Replies: parents are chosen after the rest is written and scored. Their number flexes within
     # REPLY_RANGE to keep the week near TARGET_POSTS.
@@ -1713,15 +1828,27 @@ def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=
         if account:
             out.append(_assignment("SHARE", account, {"type": "article", "id": art["id"], "label": art["headline"]},
                                    {k: art.get(k) for k in ("headline", "excerpt", "article_type", "slot")}, filed_team=team_id))
-    for b in sorted((x for x in acc.all() if x["archetype"] == "LOCAL_BEAT_REPORTER" and x["team_id"] == team_id
-                     and acc.uses[x["agent_id"]] < 1000), key=lambda x: x["agent_id"]):
+    starter_injuries = [inj for inj in W.team_injuries(team_id) if inj.get("is_starter")]
+    for idx, b in enumerate(sorted((x for x in acc.all() if x["archetype"] == "LOCAL_BEAT_REPORTER" and x["team_id"] == team_id
+                                   and acc.uses[x["agent_id"]] < 1000), key=lambda x: x["agent_id"])):
         acc.uses[b["agent_id"]] += 1
-        out.append(_assignment("BEAT", b, {"type": "team", "id": team_id, "label": W.team_label(team_id)},
-                               W.beat_facts(team_id), filed_team=team_id))
+        if idx == 0 and starter_injuries:
+            top_inj = starter_injuries[0]
+            out.append(_assignment("BEAT_INJURY", b, {"type": "team", "id": team_id, "label": f"{W.team_label(team_id)}: {top_inj['player_name']} Injury"},
+                                   W.beat_injury_facts(team_id, top_inj), filed_team=team_id))
+        else:
+            out.append(_assignment("BEAT", b, {"type": "team", "id": team_id, "label": W.team_label(team_id)},
+                                   W.beat_facts(team_id), filed_team=team_id))
     fans = sorted((x for x in acc.all() if x["archetype"] == "DIE_HARD_FAN" and x["team_id"] == team_id
                    and acc.uses[x["agent_id"]] < 1000), key=lambda x: acc.order[x["agent_id"]])
+    key_injuries = [inj for inj in starter_injuries if inj.get("is_key_injury")]
     for i, f in enumerate(fans):
         acc.uses[f["agent_id"]] += 1
+        if i == 0 and key_injuries:
+            kinj = key_injuries[0]
+            out.append(_assignment("INJURY_SHOCK", f, {"type": "team", "id": team_id, "label": f"{W.team_label(team_id)}: {kinj['player_name']} Injury"},
+                                   W.injury_shock_facts(team_id, kinj), filed_team=team_id))
+            continue
         g = (last if (i % 2 == 0 or not nxt) else nxt) or nxt
         if not g:
             break

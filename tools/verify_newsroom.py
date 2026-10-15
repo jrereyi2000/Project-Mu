@@ -32,12 +32,11 @@ def check(name):
     return wrap
 
 
-NEGATION_RE = re.compile(r"\b(do not|don't|never|no injury data|not mention|without)\b", re.I)
+NEGATION_RE = re.compile(r"\b(do not|don't|never|no injury data|not mention|without|key_injuries|team_injury_report|starter_injuries|starter_injuries_count|injury_type|get_team_injury_report|get_fantasy_injuries|reporting_guidance|official injury report|INJURY REPORTING RULE|BEAT INJURY REPORTING RULE|FANTASY INJURY|restricted to marquee key injuries|Remember national coverage|injured starters)\b", re.I)
 
 
 def injury_asks(text: str) -> list:
-    """Sentences that mention injuries without forbidding them. Prohibitions ("Do not invent injuries",
-    "There is no injury data") are fine; anything else asks the writer for data the league doesn't have."""
+    """Sentences that mention injuries without forbidding them or without sourcing from official tools/briefs."""
     sentences = re.split(r"(?<=[.!?])\s+|\n", text or "")
     return [x.strip() for x in sentences if re.search(r"injur", x, re.I) and not NEGATION_RE.search(x)]
 

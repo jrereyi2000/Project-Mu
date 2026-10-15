@@ -764,6 +764,129 @@ def get_fantasy_projection_accuracy(season: int = 0) -> str:
         return _err(e)
 
 
+@tool
+def get_fantasy_injuries(week: int = 0, position: str = "ALL", season: int = 0) -> str:
+    """Skill-position injury report for fantasy football (QB, RB, WR, TE). Lists injured players with their
+    depth chart role (e.g. RB1, WR2), injury type, weeks remaining, IR status, and the immediate backup /
+    beneficiary who gains volume or touches. position = QB, RB, WR, TE or ALL; week defaults to this
+    article's week. Use for Start/Sit, Waiver Wire, and Rankings to identify vacated volume and handcuffs."""
+    try:
+        group_filter = _group_filter(position)
+        s = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn, conn.cursor() as cur:
+            w = int(week) or _publication_week(cur, s)
+            err = _check_forward_week(cur, s, w)
+            if err:
+                return err
+
+            roster = _roster(cur, s)
+            opponents = _opponents(cur, s)
+
+            cur.execute("""
+                SELECT DISTINCT week FROM injuries
+                WHERE season = %s AND week <= %s
+                ORDER BY week DESC LIMIT 1;
+            """, (s, w))
+            w_row = cur.fetchone()
+            query_week = w_row[0] if w_row else w
+
+            cur.execute("""
+                SELECT 
+                    i.player_id,
+                    COALESCE(p.full_name, p.player_name, i.player_name) as player_name,
+                    COALESCE(ps.position, i.position) as position,
+                    COALESCE(ps.overall_rating, i.ovr) as ovr,
+                    i.injury_type,
+                    i.duration,
+                    i.weeks_remaining,
+                    i.is_ir,
+                    i.team_id,
+                    t.abbreviation as team_abbr
+                FROM injuries i
+                JOIN teams t ON t.id = i.team_id
+                LEFT JOIN players p ON p.id = i.player_id
+                LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
+                WHERE i.season = %s AND i.week = %s
+                  AND COALESCE(ps.position, i.position) IN ('QB', 'HB', 'FB', 'WR', 'TE')
+                ORDER BY t.abbreviation, COALESCE(ps.overall_rating, i.ovr) DESC;
+            """, (s, query_week))
+            rows = cur.fetchall()
+
+            by_slot = defaultdict(list)
+            for pid, pdata in roster.items():
+                by_slot[(pdata["team_id"], pdata["group"])].append((-(pdata["ovr"] or 0), pid))
+            for k in by_slot:
+                by_slot[k].sort()
+
+            injured_list = []
+            for pid, pname, pos, ovr, inj_type, dur, w_rem, is_ir, team_id, team_abbr in rows:
+                g = GROUP.get(pos)
+                if group_filter and g != group_filter:
+                    continue
+
+                r_entry = roster.get(pid, {})
+                depth = r_entry.get("depth", pos)
+                opp = opponents.get((team_id, w), "BYE")
+
+                slot_players = [p for _, p in by_slot.get((team_id, g), [])]
+                beneficiary = None
+                if pid in slot_players:
+                    idx = slot_players.index(pid)
+                    for next_pid in slot_players[idx + 1:]:
+                        b_entry = roster[next_pid]
+                        beneficiary = {
+                            "player_id": next_pid,
+                            "name": b_entry["name"],
+                            "position": b_entry["position"],
+                            "depth": b_entry.get("depth"),
+                            "ovr": b_entry.get("ovr"),
+                        }
+                        break
+
+                impact_desc = "Out / on IR"
+                if depth in ("RB1", "WR1", "TE1", "QB1"):
+                    if beneficiary:
+                        impact_desc = f"Vacates starting {depth} role; {beneficiary['name']} ({beneficiary['depth']}) elevates to primary option."
+                    else:
+                        impact_desc = f"Vacates starting {depth} role."
+                elif depth in ("RB2", "WR2", "WR3"):
+                    if beneficiary:
+                        impact_desc = f"Key rotational {depth} out; elevates {beneficiary['name']} into rotation."
+                    else:
+                        impact_desc = f"Key rotational {depth} out."
+
+                injured_list.append({
+                    "player_id": pid,
+                    "player_name": pname,
+                    "team": team_abbr,
+                    "position": pos,
+                    "fantasy_group": g,
+                    "depth_role": depth,
+                    "opponent": opp,
+                    "injury_type": inj_type,
+                    "duration": dur,
+                    "weeks_remaining": int(w_rem or 0),
+                    "is_ir": bool(is_ir),
+                    "handcuff_beneficiary": beneficiary,
+                    "fantasy_impact": impact_desc,
+                })
+
+            return json.dumps({
+                "season": s,
+                "week": query_week,
+                "position_filter": position,
+                "count": len(injured_list),
+                "injuries": injured_list,
+                "editorial_guidance": (
+                    "Starters ruled OUT or on IR create immediate fantasy opportunity. "
+                    "Highlight backup running backs and targeted receivers stepping into high-volume roles. "
+                    "Note players who are OUT/IR to explain why they drop out of rankings or must be benched."
+                )
+            }, indent=2)
+    except Exception as e:
+        return _err(e)
+
+
 FANTASY_TOOLS = [
     get_fantasy_rankings,
     get_fantasy_week_results,
@@ -775,4 +898,5 @@ FANTASY_TOOLS = [
     get_fantasy_mock_draft,
     get_fantasy_season_leaders,
     get_fantasy_projection_accuracy,
+    get_fantasy_injuries,
 ]

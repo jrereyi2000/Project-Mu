@@ -2092,3 +2092,138 @@ def get_player_articles(player_identifier: str, limit: int = 5) -> str:
         return f"Error: {str(e)}"
 
 
+@tool
+def get_team_injury_report(team_identifier: str, week: int = 0, season: int = 0) -> str:
+    """Fetch a team's official weekly injury report, including player name, position, overall rating,
+    popularity, injury diagnosis, duration, weeks remaining, IR status, starter status, and key injury flag.
+    Accepts team name, city, abbreviation, or team ID."""
+    try:
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Error: Team '{team_identifier}' not found."
+
+                cur.execute("SELECT name, abbreviation, city FROM teams WHERE id = %s;", (team_id,))
+                t_row = cur.fetchone()
+                team_name = t_row[0] if t_row else str(team_id)
+                team_abbr = t_row[1] if t_row else "NFL"
+                team_city = t_row[2] if t_row else ""
+
+                w_val = week
+                if not w_val or w_val <= 0:
+                    cut = cutoff_week(s_val)
+                    if cut is not None and context_season() == s_val:
+                        w_val = cut
+                    else:
+                        cur.execute("SELECT current_week FROM league_state WHERE id = 1;")
+                        ls_row = cur.fetchone()
+                        w_val = ls_row[0] if ls_row and ls_row[0] else 1
+
+                # If no injuries for exact week, check if a recent prior week exists for this team/season
+                cur.execute("""
+                    SELECT DISTINCT week FROM injuries
+                    WHERE team_id = %s AND season = %s AND week <= %s
+                    ORDER BY week DESC LIMIT 1;
+                """, (team_id, s_val, w_val))
+                w_row = cur.fetchone()
+                query_week = w_row[0] if w_row else w_val
+
+                # Query starters for this team and season to determine is_starter
+                cur.execute("""
+                    WITH ranked_roster AS (
+                        SELECT 
+                            player_id,
+                            position,
+                            overall_rating,
+                            ROW_NUMBER() OVER (PARTITION BY position ORDER BY overall_rating DESC) as pos_rank
+                        FROM player_seasons
+                        WHERE team_id = %s AND season = %s
+                    )
+                    SELECT player_id, position, pos_rank FROM ranked_roster;
+                """, (team_id, s_val))
+                starter_ranks = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+
+                def check_starter(pid, pos):
+                    if pid in starter_ranks:
+                        p, rank = starter_ranks[pid]
+                    else:
+                        return False
+                    if p in ("QB", "TE", "LT", "LG", "C", "RG", "RT", "FS", "SS", "K", "P", "FB"):
+                        return rank == 1
+                    if p in ("HB", "DT", "LEDG", "REDG", "LE", "RE"):
+                        return rank <= 2
+                    if p in ("WR", "CB", "MIKE", "SAM", "WILL", "MLB", "LOLB", "ROLB"):
+                        return rank <= 3
+                    return rank == 1
+
+                cur.execute("""
+                    SELECT 
+                        i.player_id,
+                        COALESCE(p.full_name, p.player_name, i.player_name) as player_name,
+                        COALESCE(ps.position, i.position) as position,
+                        COALESCE(ps.overall_rating, i.ovr) as ovr,
+                        COALESCE(ps.popularity_index, 0.0) as pop,
+                        i.injury_type,
+                        i.duration,
+                        i.weeks_remaining,
+                        i.is_ir
+                    FROM injuries i
+                    LEFT JOIN players p ON p.id = i.player_id
+                    LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
+                    WHERE i.team_id = %s AND i.season = %s AND i.week = %s
+                    ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC, COALESCE(ps.popularity_index, 0.0) DESC;
+                """, (team_id, s_val, query_week))
+                rows = cur.fetchall()
+
+                if not rows:
+                    return json.dumps({
+                        "team": f"{team_city} {team_name}".strip(),
+                        "team_abbr": team_abbr,
+                        "season": s_val,
+                        "week": query_week,
+                        "total_injured": 0,
+                        "key_injuries_count": 0,
+                        "injuries": [],
+                        "status_note": "No injuries reported on official report. Healthy active roster."
+                    }, indent=2)
+
+                injuries = []
+                key_count = 0
+                for pid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir in rows:
+                    ovr_val = int(ovr or 0)
+                    pop_val = round(float(pop or 0.0), 1)
+                    is_starter = check_starter(pid, pos)
+                    # National Key Injury: OVR >= 88 OR Pop >= 50 OR (QB and starter)
+                    is_key = (ovr_val >= 88) or (pop_val >= 50.0) or (pos == "QB" and is_starter)
+                    if is_key:
+                        key_count += 1
+
+                    injuries.append({
+                        "player_name": pname,
+                        "position": pos,
+                        "overall_rating": ovr_val,
+                        "popularity_index": pop_val,
+                        "is_starter": is_starter,
+                        "is_key_injury": is_key,
+                        "injury_type": inj_type,
+                        "duration": dur,
+                        "weeks_remaining": int(w_rem or 0),
+                        "is_ir": bool(is_ir),
+                    })
+
+                return json.dumps({
+                    "team": f"{team_city} {team_name}".strip(),
+                    "team_abbr": team_abbr,
+                    "season": s_val,
+                    "week": query_week,
+                    "total_injured": len(injuries),
+                    "key_injuries_count": key_count,
+                    "injuries": injuries,
+                    "coverage_guidance": "National writers: only cite key injuries (OVR >= 88, Pop >= 50, or starting QBs). Beat writers: report on any injured starters across offense, defense, and specialists."
+                }, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
