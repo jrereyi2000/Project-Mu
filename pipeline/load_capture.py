@@ -47,6 +47,8 @@ def detect_mode(folder):
         return "playoff" if os.path.exists(os.path.join(folder, "schedule.csv")) else "games"
     if os.path.exists(os.path.join(folder, "stats_passing.csv")):
         return "weekly"
+    if os.path.exists(os.path.join(folder, "injuries.csv")):
+        return "injuries"
     raise LoadError(f"{folder}: no extracted CSVs found (run extract.py first)")
 
 
@@ -646,6 +648,7 @@ def load_weekly(cur, folder, season, report, season_stats=True):
                     "position = EXCLUDED.position, games_played = EXCLUDED.games_played, downs_played = EXCLUDED.downs_played",
                     (season, pid, g["team"], g["pos"], g["games_played"], g["downs_played"]))
     report["games_completed"], report["season_rows"] = len(scores), len(writes)
+    report["injuries"] = load_injuries(cur, folder, season, current or week, by_name, problems)
     cur.execute("UPDATE league_state SET current_week = %s WHERE id = 1", (current,))
     report["current_week"] = f"{current} ({source})"
 
@@ -672,6 +675,101 @@ def load_weekly(cur, folder, season, report, season_stats=True):
         cur.execute("DELETE FROM season_stats WHERE id = ANY(%s)", ([r[0] for r in stale],))
     report["stale_copies_removed"] = [f"{r[2]} {r[3]} (player {r[1]})" for r in stale]
     return len(writes)
+
+
+def load_injuries(cur, folder, season, week, by_name, problems):
+    """Load captures/<run>/injuries.csv into the injuries table.
+    Matches players by (team_id, name_key) against player_seasons and players."""
+    path = os.path.join(folder, "injuries.csv")
+    if not os.path.exists(path):
+        return 0
+    rows = read_csv(path)
+    if not rows:
+        return 0
+
+    # Look up players in this season by (team_id, name_key)
+    cur.execute("""
+        SELECT ps.player_id, ps.team_id, p.player_name, p.full_name, ps.position, ps.overall_rating
+        FROM player_seasons ps
+        JOIN players p ON p.id = ps.player_id
+        WHERE ps.season = %s
+    """, (season,))
+    roster_rows = cur.fetchall()
+
+    by_team_name = {}
+    for pid, tid, pname, fname, pos, ovr in roster_rows:
+        by_team_name.setdefault((tid, name_key(pname)), []).append((pid, pos, ovr, pname))
+        if fname:
+            by_team_name.setdefault((tid, name_key(fname)), []).append((pid, pos, ovr, pname))
+
+    loaded = 0
+    for r in rows:
+        team_str = r.get("TEAM", "").strip().upper()
+        tid = by_name.get(team_str)
+        if tid is None:
+            problems.append(f"injuries: unknown team {team_str!r}")
+            continue
+
+        raw_name = r.get("PLAYER_NAME", "").strip()
+        nk = name_key(raw_name)
+        pos = r.get("POSITION", "").strip()
+        raw_ovr = r.get("OVR", "").strip()
+        ovr = int(raw_ovr) if raw_ovr.isdigit() else 0
+        injury_type = r.get("INJURY_TYPE", "").strip()
+        duration = r.get("DURATION", "").strip()
+        weeks_rem = int(r.get("WEEKS_REMAINING", 0)) if str(r.get("WEEKS_REMAINING", "")).isdigit() else 0
+        is_ir = str(r.get("IS_IR", "")).lower() in ("true", "1", "yes")
+
+        candidates = by_team_name.get((tid, nk), [])
+        pid = None
+        if len(candidates) == 1:
+            pid = candidates[0][0]
+            if not pos:
+                pos = candidates[0][1]
+            if not ovr:
+                ovr = candidates[0][2]
+        elif len(candidates) > 1:
+            same_pos = [c for c in candidates if c[1] == pos]
+            if len(same_pos) == 1:
+                pid = same_pos[0][0]
+                if not ovr:
+                    ovr = same_pos[0][2]
+            else:
+                pid = candidates[0][0]
+
+        cur.execute("""
+            INSERT INTO injuries (
+                season, week, team_id, player_id, player_name,
+                position, ovr, injury_type, duration, weeks_remaining, is_ir
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (season, week, team_id, player_name) DO UPDATE SET
+                player_id = EXCLUDED.player_id,
+                position = EXCLUDED.position,
+                ovr = EXCLUDED.ovr,
+                injury_type = EXCLUDED.injury_type,
+                duration = EXCLUDED.duration,
+                weeks_remaining = EXCLUDED.weeks_remaining,
+                is_ir = EXCLUDED.is_ir,
+                captured_at = NOW()
+        """, (season, week, tid, pid, raw_name, pos, ovr, injury_type, duration, weeks_rem, is_ir))
+        loaded += 1
+
+    return loaded
+
+
+def load_injuries_standalone(cur, folder, season, report):
+    """Standalone loader for --only injuries runs."""
+    cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+    week = cur.fetchone()[0]
+    report["week"] = week
+    cur.execute("SELECT id, name, abbreviation FROM teams")
+    by_name = {n.upper(): tid for tid, n, _ in cur.fetchall()}
+    problems = []
+    loaded = load_injuries(cur, folder, season, week, by_name, problems)
+    if problems:
+        raise LoadError("injuries checks failed:\n  " + "\n  ".join(problems))
+    report["injuries"] = loaded
+    return loaded
 
 
 def add_playoff_games(cur, sched, season, week, by_name):
@@ -933,7 +1031,7 @@ def row_counts(folder):
 
 
 LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly, "playoff": load_playoff,
-           "games": load_games}
+           "games": load_games, "injuries": load_injuries_standalone}
 
 
 def load(folder, dry_run=False, replace=False):

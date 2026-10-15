@@ -58,6 +58,7 @@ class SeasonData:
     roster: dict                      # player_id -> {name, team_id, position, group, depth}
     points: dict = field(default_factory=lambda: defaultdict(dict))   # player_id -> {week: PPR}
     allowed: dict = field(default_factory=lambda: defaultdict(float)) # (def_team, group, week) -> PPR allowed
+    injuries: dict = field(default_factory=dict)                      # (player_id, week) -> {weeks_remaining, is_ir}
 
 
 def load_season(cur, season: int) -> SeasonData:
@@ -86,6 +87,17 @@ def load_season(cur, season: int) -> SeasonData:
             roster[pid]["depth"] = depth
 
     data = SeasonData(season, opponent, completed, roster)
+
+    cur.execute("""
+        SELECT player_id, week, weeks_remaining, is_ir
+        FROM injuries
+        WHERE season = %s AND player_id IS NOT NULL
+    """, (season,))
+    for pid, wk, w_rem, is_ir in cur.fetchall():
+        data.injuries[(pid, wk)] = {
+            "weeks_remaining": int(w_rem or 0),
+            "is_ir": bool(is_ir),
+        }
 
     # each line's player is its stored player_id (abbreviated names collide across players)
     cur.execute("""
@@ -116,6 +128,22 @@ def _ntile5_ascending(values: dict) -> dict:
             out[key] = bucket + 1
         i += size
     return out
+
+
+def get_player_injury(data: SeasonData, pid: int, week: int) -> Optional[dict]:
+    """Return injury status dict for player at target week: {'weeks_remaining': int, 'is_ir': bool} or None."""
+    if (pid, week) in data.injuries:
+        return data.injuries[(pid, week)]
+    priors = [w for (p, w) in data.injuries if p == pid and w < week]
+    if priors:
+        latest = max(priors)
+        info = data.injuries[(pid, latest)]
+        rem = info["weeks_remaining"] - (week - latest)
+        if info["is_ir"]:
+            return {"weeks_remaining": max(0, rem), "is_ir": True}
+        if rem > 0:
+            return {"weeks_remaining": rem, "is_ir": False}
+    return None
 
 
 def project_week(data: SeasonData, week: int) -> list:
@@ -169,11 +197,26 @@ def project_week(data: SeasonData, week: int) -> list:
         avg_points = sum(appearances) / len(appearances) if appearances else None
 
         opp = data.opponent.get((team, week))
-        projected = baseline * factor.get((opp, g), 1.0) if opp is not None else 0.0
-        ros_total = sum(
-            baseline * factor.get((data.opponent[(team, w)], g), 1.0)
-            for w in range(week, SEASON_WEEKS + 1) if (team, w) in data.opponent
-        )
+        inj = get_player_injury(data, pid, week)
+        is_ir = inj["is_ir"] if inj else False
+        weeks_rem = inj["weeks_remaining"] if inj else 0
+        is_out = is_ir or (weeks_rem > 0)
+
+        if is_out or opp is None:
+            projected = 0.0
+        else:
+            projected = baseline * factor.get((opp, g), 1.0)
+
+        ros_total = 0.0
+        for w in range(week, SEASON_WEEKS + 1):
+            if (team, w) not in data.opponent:
+                continue
+            if is_ir and weeks_rem == 0:
+                continue
+            if (w - week) < weeks_rem:
+                continue
+            ros_total += baseline * factor.get((data.opponent[(team, w)], g), 1.0)
+
         rows.append({
             "player_id": pid,
             "player_name": p["name"],
@@ -181,16 +224,17 @@ def project_week(data: SeasonData, week: int) -> list:
             "group": g,
             "team_id": team,
             "on_bye": opp is None,
+            "is_out": is_out,
             "projected_points": round(projected, 2),
             "avg_points": round(avg_points, 2) if avg_points is not None else None,
-            "delta": round(projected - avg_points, 2) if avg_points is not None and opp is not None else None,
-            "matchup_stars": stars[g].get(opp, 3) if opp is not None else None,
+            "delta": round(projected - avg_points, 2) if avg_points is not None and opp is not None and not is_out else None,
+            "matchup_stars": stars[g].get(opp, 3) if opp is not None and not is_out else None,
             "ros_total_points": round(ros_total, 2),
         })
 
     for g in GROUPS:
         group_rows = [r for r in rows if r["group"] == g]
-        playing = sorted((r for r in group_rows if not r["on_bye"]),
+        playing = sorted((r for r in group_rows if not r["on_bye"] and not r["is_out"]),
                          key=lambda r: (-r["projected_points"], -r["ros_total_points"], r["player_id"]))
         for i, r in enumerate(playing, start=1):
             r["pos_rank"] = f"{g}{i}"

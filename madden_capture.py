@@ -111,7 +111,7 @@ CHIAKI_HOST = _env("CHIAKI_HOST", "PS5-263")             # chiaki-ng console nic
 CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
 
 
-LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST")
+LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST", "INJURY_REPORT")
 TILE_SCREENS = ("SCHED_TILES", "STATS_TILES")
 HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER")
 
@@ -455,6 +455,11 @@ SCHED_TILES = ["TEAM SCHEDULE", "LEAGUE SCHEDULE", "PLAYOFF PICTURE"]
 # Manage Roster tab's left-hand menu (mapped Oct 13; TRADE can show a lock icon)
 ROSTER_MENU = ["UPGRADE PLAYERS", "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH CHART", "TEAM SALARY",
                "INJURY REPORT", "TRADE", "FREE AGENCY", "SCOUTING", "FORMATION SUBS", "AUTO SUBS", "TEAM SCHEMES"]
+# 32 NFL team nicknames as shown in chips/headers
+TEAMS = {"49ERS", "BEARS", "BENGALS", "BILLS", "BRONCOS", "BROWNS", "BUCCANEERS", "CARDINALS",
+         "CHARGERS", "CHIEFS", "COLTS", "COMMANDERS", "COWBOYS", "DOLPHINS", "EAGLES", "FALCONS",
+         "GIANTS", "JAGUARS", "JETS", "LIONS", "PACKERS", "PANTHERS", "PATRIOTS", "RAIDERS",
+         "RAMS", "RAVENS", "SAINTS", "SEAHAWKS", "STEELERS", "TEXANS", "TITANS", "VIKINGS"}
 
 
 def classify(f):
@@ -471,6 +476,9 @@ def classify(f):
     # It also shows TEAM NAME, SORT and R2, so it must come before TEAM_STATS.
     if f.find("BOX SCORE") and f.find("PLAYER STATS") and f.find("TEAM") and "TOTAL YARDS GAINED" not in t:
         return "GAME_STATS"
+    # Manage Roster > Injury Report: table with INJURY, IR, and player card
+    if f.find("INJURY") and f.find("IR"):
+        return "INJURY_REPORT"
     if "PLAYER NAME" in t and "VIEW PLAYER CARD" in t:
         return "PLAYER_STATS"
     # A wide table scrolled to its right edge hides the PLAYER NAME column (seen Oct 14 after a stream
@@ -561,10 +569,10 @@ def cross(screen, frame=None):
         if not frame or not frame.bright("NO"):
             raise Abort("Quit prompt open but NO is not highlighted. Stopping. Please choose NO yourself.")
     elif screen == "HUB_ROSTER":
-        # Manage Roster's menu also holds Trade, Free Agency, Contracts: Cross only on Roster.
+        # Manage Roster's menu also holds Trade, Free Agency, Contracts: Cross only on Roster or Injury Report.
         cur = (frame or Frame()).highlighted(ROSTER_MENU)
-        if cur != "ROSTER":
-            raise Abort(f"Refusing Cross on the Manage Roster menu: {cur} is highlighted, not ROSTER")
+        if cur not in ("ROSTER", "INJURY REPORT"):
+            raise Abort(f"Refusing Cross on the Manage Roster menu: {cur} is highlighted, not ROSTER or INJURY REPORT")
     elif screen == "SCHED_LIST":
         # Only to open a played game's box score (JR's rule, Oct 13); an unplayed week's list
         # offers ACTIONS / Force Win instead.
@@ -1560,6 +1568,143 @@ def run_season_schedule(out, weeks=18):
         f, _ = wait_for(["SCHED_LIST"], timeout=10)
 
 
+def run_prospects(out, max_prospects=32):
+    """Capture the College Prospects / Draft Board screen line by line, because the full name,
+    height, and weight are only displayed on the currently highlighted row.
+    Captures one screenshot per row into prospects/prospect_NNN.png."""
+    pdir = os.path.join(out, "prospects")
+    os.makedirs(pdir, exist_ok=True)
+    log("== Draft Board Prospects (Line by Line) ==")
+    log("Assuming console is already on the Draft Board / College Prospects screen (highlight on Pick #1)")
+
+    prev_sig = None
+    row = 0
+    limit = max_prospects if (max_prospects and max_prospects > 0) else 9999
+
+    while row < limit:
+        path = os.path.join(pdir, f"prospect_{row:03d}.png")
+        snap(path)
+        sig = table_sig(path)
+
+        if prev_sig is not None and same_table(prev_sig, sig):
+            # Screen didn't change: could be a dropped press or end of board. Retry once.
+            press("down", hold=0.1, wait=0.3)
+            snap(path)
+            sig = table_sig(path)
+            if same_table(prev_sig, sig):
+                os.remove(path)
+                log(f"  Reached end of draft board after {row} prospects")
+                break
+
+        prev_sig = sig
+        row += 1
+        press("down", hold=0.1, wait=0.25)
+
+    log(f"Captured {row} prospect row(s) into {pdir}")
+    return row
+
+
+# ------------------------------------------------------------- injuries ----
+def open_injury_report():
+    f, s = look()
+    if s == "INJURY_REPORT":
+        return f
+    f, s = go_hub()
+    if s != "HUB_ROSTER":
+        log("Switching to MANAGE ROSTER tab")
+        move_to(f, HUB_TABS, "MANAGE ROSTER", "l1", "r1", "hub tab")
+        f, s = wait_for(["HUB_ROSTER"])
+    f = move_to(f, ROSTER_MENU, "INJURY REPORT", "up", "down", "Manage Roster menu item")
+    return cross_into("HUB_ROSTER", ["INJURY_REPORT"], timeout=8)[0]
+
+
+def injury_team(f):
+    """The team nickname on the Injury Report screen (top-left, ~15-20% down).
+    Matches against TEAMS."""
+    W, H = f.size
+    for t, b in f.items:
+        if b[0] < W * 0.20 and H * 0.12 < b[1] < H * 0.22:
+            if norm(t) in TEAMS:
+                return norm(t)
+    for t, b in f.items:
+        if b[1] < H * 0.30 and norm(t) in TEAMS:
+            return norm(t)
+    return None
+
+
+def run_injuries(out):
+    """Capture every NFL team's Injury Report screen (Manage Roster > Injury Report).
+    Teams are cycled with single L2 presses; all 32 teams fit on one page each."""
+    log("== Injury Report ==")
+    folder = os.path.join(out, "injuries")
+    os.makedirs(folder, exist_ok=True)
+    f = open_injury_report()
+    cur_team = injury_team(f)
+    if not cur_team:
+        raise Abort("Can't read the team on the Injury Report screen")
+
+    first_team = cur_team
+    seen = {}
+
+    # Seed seen teams from folder in case of resume
+    for p in glob.glob(os.path.join(folder, "*.png")):
+        base = os.path.basename(p)
+        m = re.match(r"^\d+_([a-z0-9]+)\.png$", base)
+        if m and m.group(1).upper() in TEAMS:
+            seen[m.group(1).upper()] = p
+
+    if len(seen) == 32:
+        log(f"All 32 teams already captured in {folder}")
+        return 32
+
+    log(f"Starting injury report capture at {cur_team}")
+    idx = len(seen)
+
+    while True:
+        if cur_team not in seen:
+            idx += 1
+            path = os.path.join(folder, f"{idx:02d}_{cur_team.lower()}.png")
+            snap(path)
+            seen[cur_team] = path
+            log(f"  [{len(seen)}/32] Captured {cur_team}")
+
+        if len(seen) == 32:
+            log("All 32 teams captured!")
+            break
+
+        # Advance to next team via L2
+        next_team = None
+        for attempt in range(1, 4):
+            press("l2", hold=0.15, wait=1.2)
+            f = Frame()
+            t = injury_team(f)
+            if t and t != cur_team:
+                next_team = t
+                break
+            log(f"  L2 didn't advance team (attempt {attempt}/3, still on {cur_team})")
+            time.sleep(0.5)
+
+        if not next_team:
+            if stream_frozen():
+                log("Stream appears frozen after 3 failed L2 presses; recovering...")
+                recover_stream(Abort("Stream frozen on Injury Report"))
+                f = open_injury_report()
+                cur_team = injury_team(f)
+                if not cur_team:
+                    raise Abort("After stream recovery, can't read team on Injury Report")
+                continue
+            else:
+                raise Abort(f"Could not advance team from {cur_team} after 3 tries (stream is not frozen)")
+
+        cur_team = next_team
+        if cur_team == first_team and len(seen) < 32:
+            missing = TEAMS - set(seen.keys())
+            raise Abort(f"Wrapped back to {first_team} but only captured {len(seen)}/32 teams. Missing: {sorted(missing)}")
+
+    log(f"Captured injury report for all {len(seen)} teams.")
+    return len(seen)
+
+
 # --------------------------------------------------------------- roster ----
 # Manage Roster > Roster (mapped Oct 13 with --step / --probe-l2):
 #  * The card on the right shows the highlighted row's player; Down moves the highlight one
@@ -2239,10 +2384,12 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff"],
-                    help="roster and season-schedule are never part of the default run")
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries"],
+                    help="roster, season-schedule and prospects are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
-    ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
+    ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
+    ap.add_argument("--all-prospects", action="store_true", help="--only prospects: capture the entire draft board until the end")
+    ap.add_argument("--prospect-pages", type=int, help="--only prospects: stop after this many pages")
     ap.add_argument("--resume", metavar="RUN", help="--only roster / games: continue a stopped run in captures/RUN; "
                     "--scope: write into that (weekly) run's folder")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
@@ -2319,6 +2466,8 @@ def main():
             run_mode("Team Stats", lambda: run_team_stats(out), clear("team_stats"))
         if a.only in (None, "schedule"):
             run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
+        if a.only in (None, "injuries"):
+            run_mode("the injury report", lambda: run_injuries(out), clear("injuries"))
         if a.only == "playoff":               # postseason week: no Season Stats / Team Stats (regular season only)
             run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
@@ -2333,8 +2482,12 @@ def main():
             run_mode("the season schedule", lambda: run_season_schedule(out), clear("season_schedule"))
         if a.only == "games":
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
-        log("Returning to the hub")
-        go_hub()
+        if a.only == "prospects":
+            n_prospects = 0 if a.all_prospects else a.prospects
+            run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
+        if a.only != "prospects":
+            log("Returning to the hub")
+            go_hub()
         log(f"Done. Screenshots in {out}")
     except Abort as e:
         log(f"STOPPED: {e}")

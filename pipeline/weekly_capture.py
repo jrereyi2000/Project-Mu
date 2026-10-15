@@ -44,7 +44,7 @@ import argparse, datetime, fcntl, glob, os, shutil, subprocess, sys, time, trace
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CAPTURES = os.path.join(ROOT, "captures")
 LOCK_PATH = os.path.join(CAPTURES, ".weekly_run.lock")
-CAPTURE_DIRS = ("stats", "team_stats", "schedule", "stop_debug", "scope_debug", "week_debug")
+CAPTURE_DIRS = ("stats", "team_stats", "schedule", "injuries", "stop_debug", "scope_debug", "week_debug")
 DEBUG_DIRS = ("stop_debug", "scope_debug", "week_debug", "team_debug", "probe", "explore")
 CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice when it has to relaunch
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
@@ -106,8 +106,11 @@ def extract_done(folder, mode="weekly"):
         return os.path.exists(os.path.join(folder, "game_scores.csv"))
     if mode == "playoff":
         return all(os.path.exists(os.path.join(folder, f)) for f in ("game_scores.csv", "schedule.csv"))
-    return (os.path.exists(os.path.join(folder, "schedule.csv"))
-            and bool(glob.glob(os.path.join(folder, "stats_*.csv"))))
+    weekly_ok = (os.path.exists(os.path.join(folder, "schedule.csv"))
+                 and bool(glob.glob(os.path.join(folder, "stats_*.csv"))))
+    if os.path.isdir(os.path.join(folder, "injuries")):
+        weekly_ok = weekly_ok and os.path.exists(os.path.join(folder, "injuries.csv"))
+    return weekly_ok
 
 
 def load_status(folder):

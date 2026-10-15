@@ -23,6 +23,7 @@ Writes, inside that capture folder:
   roster_cards.csv       roster/cards.csv (Apple Vision) with AGE/HT/WT/EXP re-read by Gemini from
                          the card crops, 20 per request; vision_* keep Vision's values and
                          vision_disagrees names the fields where the two differ
+  injuries.csv           the captured week's injury report across all 32 teams (Apple Vision OCR)
 """
 import csv, glob, io, os, sys, threading, time
 from collections import Counter, OrderedDict
@@ -541,6 +542,85 @@ def extract_roster(root):
     print(f"roster_cards.csv: {len(out)} cards; Gemini and Vision disagree on {n_dis}")
 
 
+# ------------------------------------------------------------ prospects ----
+class HighlightedProspect(BaseModel):
+    projected_pick: str
+    full_name: str
+    position: str
+    college: str
+    height: str
+    weight: str
+    age: str
+    overall_rating: str
+    archetype: str = ""
+    notes: str = ""
+
+
+PROSPECT_PROMPT = """This is a screenshot from the Madden NFL Draft Board / College Prospects screen.
+Find the single HIGHLIGHTED / SELECTED prospect row (the row with the active highlight bar/cursor, which displays the player's full name, height, and weight).
+Return the highlighted prospect's details:
+- projected_pick: projected pick rank or draft slot number (e.g. "1")
+- full_name: player's full name as shown on the highlighted row/card (e.g. "Dante Moore")
+- position: position abbreviation (e.g. "QB", "OT", "CB")
+- college: college or university name (e.g. "Oregon")
+- height: height (e.g. "6'3\"")
+- weight: weight in lbs (e.g. "210")
+- age: age in years (e.g. "21")
+- overall_rating: scouted overall rating, grade, or talent (e.g. "83")
+- archetype: archetype or player style if shown, else ""
+- notes: scouting notes or traits if visible, else ""
+"""
+
+
+def extract_prospects(root):
+    """prospects/prospect_*.png -> prospects.csv (reads highlighted row via Apple Vision OCR with Gemini fallback)."""
+    from pipeline.extract_prospects_ocr import find_prospect_frames
+    paths = find_prospect_frames(root)
+    if not paths:
+        return
+
+    # Try local Apple Vision OCR first
+    try:
+        from pipeline.extract_prospects_ocr import extract_prospects_ocr, HAS_APPLE_VISION
+        if HAS_APPLE_VISION:
+            csv_path = extract_prospects_ocr(root)
+            if csv_path and os.path.exists(csv_path):
+                return
+    except Exception as e:
+        print(f"  OCR extraction skipped or failed ({e}); falling back to Gemini vision...")
+
+    print(f"Extracting {len(paths)} highlighted prospect rows via Gemini...")
+    prefetch(paths)
+
+    def read_one(path):
+        return path, _generate([PROSPECT_PROMPT, prepare_image(path)], HighlightedProspect, os.path.basename(path))
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        futures = [pool.submit(read_one, p) for p in paths]
+        for fut in as_completed(futures):
+            try:
+                p, res = fut.result()
+                results[p] = res
+            except Exception as e:
+                print(f"  ERROR extracting prospect: {e}")
+
+    out_cols = ["PROJECTED_PICK", "FULL_NAME", "POSITION", "COLLEGE", "HEIGHT", "WEIGHT", "AGE", "OVR", "ARCHETYPE", "NOTES"]
+    out_rows = []
+    for p in paths:
+        r = results.get(p)
+        if r:
+            out_rows.append([
+                r.projected_pick, r.full_name, r.position, r.college,
+                r.height, r.weight, r.age, r.overall_rating,
+                r.archetype, r.notes
+            ])
+
+    out_path = os.path.join(root, "prospects.csv")
+    write_csv(out_path, out_cols, out_rows)
+    print(f"Wrote {len(out_rows)} prospects to {out_path}")
+
+
 # ---------------------------------------------------------------- games ----
 GAME_TABLE_BOX = (0, 0.37, 1, 0.88)       # a game's player stats: chips + table, not the player banner
 BOX_SCORE_BOX = (0.05, 0.18, 0.95, 0.83)  # scoreboard + team-stat rows
@@ -650,11 +730,21 @@ def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     root = sys.argv[1]
+    try:
+        from pipeline.extract_prospects_ocr import find_prospect_frames
+        has_prosp_lines = bool(find_prospect_frames(root))
+    except ImportError:
+        has_prosp_lines = False
+    legacy_prosp = []
+    if not has_prosp_lines:
+        legacy_prosp = [p for p in glob.glob(os.path.join(root, "prospects", "*.png"))
+                        if not os.path.basename(p).startswith("prospect_")]
     prefetch(sorted(glob.glob(os.path.join(root, "stats", "*.png")) +
                     glob.glob(os.path.join(root, "team_stats", "*.png")) +
                     glob.glob(os.path.join(root, "schedule", "*.png")) +
                     glob.glob(os.path.join(root, "schedule_next", "*.png")) +
                     glob.glob(os.path.join(root, "season_schedule", "*.png")) +
+                    legacy_prosp +
                     glob.glob(os.path.join(root, "stats_scope", "*.png"))))
     groups = {}
     for p in glob.glob(os.path.join(root, "stats", "*.png")):
@@ -705,8 +795,22 @@ def main():
         cols, rows = merge(season, "season schedule")      # rows carry their WEEK column
         write_csv(os.path.join(root, "season_schedule.csv"), cols, rows)
 
+    if has_prosp_lines:
+        extract_prospects(root)
+    else:
+        prosp = glob.glob(os.path.join(root, "prospects", "*.png"))
+        if prosp:
+            cols, rows = merge(prosp, "prospects")
+            write_csv(os.path.join(root, "prospects.csv"), cols, rows)
+
     extract_roster(root)
     extract_games(root)
+    if os.path.isdir(os.path.join(root, "injuries")):
+        try:
+            from pipeline.extract_injuries_ocr import extract_injuries_ocr
+            extract_injuries_ocr(root)
+        except Exception as e:
+            print(f"Error extracting injuries via Apple Vision: {e}")
     if METER is not None:
         try:
             from pipeline.load_capture import detect_mode
