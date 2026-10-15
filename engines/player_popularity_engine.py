@@ -15,6 +15,58 @@ EXPOSURE_DECAY = 0.12
 GOTW_BONUS = 0.25
 EXPOSURE_DEFAULT = 50.0
 
+# Performance (P) for defenders (JR, Oct 14): fantasy points only cover offense, so defenders listed in Madden's
+# Season Stats are scored on splash-weighted defensive points per game instead. DEF_SCALE puts the 10th-best
+# defender at about the 10th-best skill player's 74 (2035: 25th 66 vs 62, 50th 56 vs 56).
+DEFENSIVE_POSITIONS = {"LEDG", "REDG", "DT", "MIKE", "WILL", "SAM", "CB", "FS", "SS"}
+DEF_WEIGHTS = {"def_tackles": 0.25, "def_tfl": 1.0, "def_sacks": 4.0, "def_ints": 6.0, "def_deflections": 1.5,
+               "def_forced_fumbles": 3.0, "def_fumble_recoveries": 2.0, "def_tds": 6.0, "def_safeties": 2.0}
+DEF_SCALE = 12.5
+OFF_SCALE = 3.5          # avg PPR per game × 3.5
+SPIKE_PPR = 24.0         # an offensive spike game: 24+ PPR
+SPLASH_FIELDS = ("def_sacks", "def_ints", "def_forced_fumbles", "def_fumble_recoveries")
+SPIKE_SPLASH = 2         # a defensive spike game: 2+ splash plays (sacks, INT, forced fumbles, recoveries) or a defensive TD
+
+
+def _v(line: dict, key: str) -> float:
+    return float(line.get(key) or 0)
+
+
+def defensive_points(line: dict) -> float:
+    return sum(w * _v(line, k) for k, w in DEF_WEIGHTS.items())
+
+
+def splash_plays(line: dict) -> float:
+    return sum(_v(line, k) for k in SPLASH_FIELDS)
+
+
+def _poisson_at_least(lam: float, k: int) -> float:
+    if lam <= 0:
+        return 0.0
+    return 1.0 - sum(math.exp(-lam) * lam ** i / math.factorial(i) for i in range(k))
+
+
+def defensive_performance(season_line: dict, game_lines: list) -> tuple:
+    """(production 0-100, spike games) from a defender's season line and whatever game lines exist.
+    Spike games: counted from game lines where they exist; for the season's other games, estimated from the
+    remaining season totals (Poisson chance of 2+ splash plays per game, plus each remaining defensive TD)."""
+    games = max(1, int(_v(season_line, "games_played")) or 1)
+    production = min(100.0, DEF_SCALE * defensive_points(season_line) / games)
+    spikes = sum(1 for g in game_lines if splash_plays(g) >= SPIKE_SPLASH or _v(g, "def_tds") > 0)
+    rest = games - len(game_lines)
+    if rest > 0:
+        splash_left = max(0.0, splash_plays(season_line) - sum(splash_plays(g) for g in game_lines))
+        tds_left = max(0.0, _v(season_line, "def_tds") - sum(_v(g, "def_tds") for g in game_lines))
+        spikes += tds_left + rest * _poisson_at_least(splash_left / rest, SPIKE_SPLASH)
+    return production, spikes
+
+
+def performance(production: float, spikes: float, win_pct: float) -> tuple:
+    """P = (0.60 production + 0.40 SpikeIndex) × 0.85 on a sub-.350 team; SpikeIndex = min(100, 25 per spike game)."""
+    spike_idx = round(min(100.0, 25 * spikes), 1)
+    discount = 1.0 if win_pct > 0.350 else 0.85
+    return (0.60 * production + 0.40 * spike_idx) * discount, spike_idx
+
 
 def awards_equity(player_awards: list, season: int) -> float:
     """player_awards: [(award_season, award_type)]. Counts seasons before `season`:
@@ -47,8 +99,9 @@ class PlayerPopularityEngine:
             'QB': 1.15,
             'WR': 1.05, 'HB': 1.05,
             'LE': 0.90, 'RE': 0.90, 'LOLB': 0.90, 'ROLB': 0.90, 'CB': 0.90,
-            'TE': 0.75, 'MLB': 0.75, 'FS': 0.75, 'SS': 0.75,
-            'LT': 0.50, 'RT': 0.50, 'LG': 0.50, 'RG': 0.50, 'C': 0.50, 'DT': 0.50, 'K': 0.50, 'P': 0.50
+            'LEDG': 0.90, 'REDG': 0.90, 'SAM': 0.90, 'WILL': 0.90,   # the roster's codes for LE/RE/LOLB/ROLB
+            'TE': 0.75, 'MLB': 0.75, 'MIKE': 0.75, 'FS': 0.75, 'SS': 0.75,
+            'LT': 0.50, 'RT': 0.50, 'LG': 0.50, 'RG': 0.50, 'C': 0.50, 'DT': 0.50, 'K': 0.50, 'P': 0.50, 'LS': 0.50
         }
         
     def calculate_popularity(self, season: int | None = None):
@@ -91,17 +144,31 @@ class PlayerPopularityEngine:
                     current_week = max(current_week, week)
 
 
-                # 3. Fetch Spike Games (P)
+                # 3. Performance inputs (P). Offense: each game's PPR by player_id (matching on the abbreviated
+                #    name gave defenders the fantasy games of offensive players who share it, e.g. "T. Davis").
                 cur.execute("""
-                    SELECT player_name, ppr_score
-                    FROM vw_fantasy_scores
-                    WHERE season = %s
+                    SELECT st.player_id, st.fantasy_points
+                    FROM player_stats st JOIN games g ON g.id = st.game_id
+                    WHERE g.season = %s AND st.player_id IS NOT NULL AND st.fantasy_points IS NOT NULL
                 """, (season,))
-                f_scores = {}
-                for pname, score in cur.fetchall():
-                    if pname not in f_scores: f_scores[pname] = []
-                    f_scores[pname].append(float(score))
-                    
+                f_scores = defaultdict(list)
+                for player_id, score in cur.fetchall():
+                    f_scores[player_id].append(float(score))
+                #    Defense: the season line Madden lists, plus the game lines captured so far
+                def_cols = ["games_played"] + list(DEF_WEIGHTS)
+                cur.execute(f"""
+                    SELECT player_id, {', '.join(def_cols)} FROM season_stat_lines
+                    WHERE season = %s AND def_tackles IS NOT NULL
+                """, (season,))
+                def_season = {r[0]: dict(zip(def_cols, r[1:])) for r in cur.fetchall()}
+                cur.execute(f"""
+                    SELECT player_id, {', '.join(DEF_WEIGHTS)} FROM game_stat_lines
+                    WHERE season = %s AND def_tackles IS NOT NULL
+                """, (season,))
+                def_games = defaultdict(list)
+                for r in cur.fetchall():
+                    def_games[r[0]].append(dict(zip(DEF_WEIGHTS, r[1:])))
+
                 # 4. Fetch All Players
                 cur.execute("""
                     SELECT ps.id, p.full_name, ps.position, ps.overall_rating, ps.age, ps.team_id, p.player_name, ps.years_of_experience, p.id
@@ -132,19 +199,22 @@ class PlayerPopularityEngine:
                     E = exposure(appearances.get((pname, tid), []), current_week)
                     
                     # --- COMPONENT P: Performance (20%) ---
-                    # We look at their fantasy scores this season
-                    my_scores = f_scores.get(pname, [])
-                    avg_prod = sum(my_scores)/len(my_scores) if my_scores else (ovr / 100.0 * 15.0) # Baseline projection
-                    avg_prod = min(100, avg_prod * 3.5) # Scale to 100
-                    
-                    spikes = len([s for s in my_scores if s >= 24.0]) # A 24+ pt game is a spike
-                    spike_idx = min(100, 25 * spikes)
-                    
+                    # Offense: average PPR (× 3.5) and 24+ PPR spike games. Listed defenders: splash-weighted defensive
+                    # points per game and 2+ splash-play games. A two-way player keeps the better of the two. No line
+                    # at all (an unlisted defender, a lineman): the OVR baseline, no spikes.
                     win_pct = t_wins / (t_wins + t_losses) if (t_wins + t_losses) > 0 else 0.5
-                    discount = 1.0 if win_pct > 0.350 else 0.85
-                    
-                    P = ((0.60 * avg_prod) + (0.40 * spike_idx)) * discount
-                    
+                    my_scores = f_scores.get(player_id, [])
+                    if my_scores:
+                        off_prod = min(100.0, OFF_SCALE * sum(my_scores) / len(my_scores))
+                        P, spike_idx = performance(off_prod, len([x for x in my_scores if x >= SPIKE_PPR]), win_pct)
+                    else:
+                        P, spike_idx = performance(min(100.0, OFF_SCALE * ovr / 100.0 * 15.0), 0, win_pct)
+                    if pos in DEFENSIVE_POSITIONS and player_id in def_season:
+                        P_def, spike_def = performance(*defensive_performance(def_season[player_id],
+                                                                              def_games.get(player_id, [])), win_pct)
+                        if not my_scores or P_def > P:
+                            P, spike_idx = P_def, spike_def
+
                     # --- COMPONENT R: Rating & Pedigree (15%) ---
                     # Spec Section 2.4: R = max(0, 100 * (ovr - 65) / 34.0) + Delta_rookie
                     # Delta_rookie = 0.15 * V_pick(k) * w_year(Y)

@@ -396,7 +396,7 @@ def get_player_season_stats(player_identifier: str) -> str:
                         "team_success": row[21],
                         "awards_equity": row[22],
                         "exposure": row[23],
-                        "scale_note": "0-100. Spike index = 25 per 24+ PPR game this season (capped at 100). Awards equity weights the last 3 seasons' awards with decay plus 25% of career award points. Exposure = recency-weighted excitement of the games they played in, +25% for each week's top game.",
+                        "scale_note": "0-100. Spike index = 25 per big game this season (capped at 100): a 24+ PPR game for offense; for a listed defender, a game with 2+ splash plays (sacks, INTs, forced fumbles, recoveries) or a defensive TD, counted from captured game lines and estimated from season totals for the other games, so a defender's can be fractional. Awards equity weights the last 3 seasons' awards with decay plus 25% of career award points. Exposure = recency-weighted excitement of the games they played in, +25% for each week's top game.",
                     },
                     "playoff_clout": {
                         "score": row[24],
