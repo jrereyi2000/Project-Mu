@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 METRICS = ["completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions", "rush_attempts", "rush_yards",
            "rush_tds", "receptions", "rec_yards", "rec_tds", "fumb"]
 ENGINES = ["engines.gotw_engine", "engines.twi_engine", "engines.game_credit_engine", "engines.team_efficiency_engine",
-           "engines.playoff_clout_engine", "engines.popularity_engine", "engines.player_popularity_engine",
+           "engines.coty_engine", "engines.playoff_clout_engine", "engines.popularity_engine", "engines.player_popularity_engine",
            "engines.excitement_projection", "engines.fantasy_projection_engine", "engines.fantasy_league_sim"]
 
 

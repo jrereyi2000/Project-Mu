@@ -101,6 +101,22 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("rookie", text)
         self.assertNotIn("defensive", text)
 
+    def test_awards_tracker_covers_coach_of_the_year(self):
+        info = self.article_types["AWARDS_TRACKER"]
+        for key in ("focus", "structure_directive", "curatorial_autonomy", "directive", "example_prompt_hook"):
+            self.assertIn("Coach of the Year", info[key], key)
+        self.assertIn("get_coach_of_the_year_race", info["structure_directive"])
+        overrides = {o["override_name"]: o for o in load("playoff_overrides.json", "playoff_overrides")["AWARDS_TRACKER"]}
+        for name in ("AWARDS_FINALISTS", "AWARDS_WINNERS"):
+            o = overrides[name]
+            for key in ("directive_override", "curatorial_autonomy_override", "structure_directive_override"):
+                self.assertIn("Coach of the Year", o[key], f"{name} {key}")
+            self.assertIn("get_coach_of_the_year_race", o["curatorial_autonomy_override"], name)
+
+    def test_coach_of_the_year_tool_is_registered(self):
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            self.assertGreaterEqual(f.read().count("get_coach_of_the_year_race"), 3)  # import, tool list, guideline
+
     def test_roundtable_is_always_the_panel(self):
         self.assertEqual(self.article_types["SUPER_BOWL_ROUNDTABLE_CONSENSUS"]["allowed_writers"], ["ROUNDTABLE_PANEL"])
 

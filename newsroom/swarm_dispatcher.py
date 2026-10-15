@@ -32,6 +32,7 @@ from newsroom.db_tools import (
     get_advanced_team_analytics,
     get_advanced_game_analytics,
     get_opponent_adjusted_credit,
+    get_coach_of_the_year_race,
     get_team_efficiency_profile,
     get_matchup_edges,
     get_weekly_slate,
@@ -666,6 +667,7 @@ class SwarmDispatcher:
             get_advanced_team_analytics,
             get_advanced_game_analytics,
             get_opponent_adjusted_credit,
+            get_coach_of_the_year_race,
             get_team_efficiency_profile,
             get_matchup_edges,
             get_weekly_slate,
@@ -871,6 +873,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need a team's complete season schedule and game log (scores, margins, one-score game outcomes, game IDs), call `get_team_season_schedule`.
 - If you need full division standings and point differentials, call `get_season_standings`.
 - If you need schedule-adjusted team strength (Opponent-Adjusted Game Credit, strength of schedule, expected wins, and which records are lucky or unlucky), call `get_opponent_adjusted_credit` (no team = all 32 ranked; with a team = game-by-game credit log). It also gives each team's Trajectory (Surging to Sliding over the last 4 games).
+- If you need the Coach of the Year race (head coaches ranked by COTY score with record, wins above expectation, roster outperformance and improvement over last season), call `get_coach_of_the_year_race`.
 - If you need Pythagorean wins (what points for/against say the record should be), team pace, per-game passing/rushing yards and giveaways, or situational football (third- and fourth-down conversion rates, red-zone TD rate on offense and allowed on defense, penalties per game, each with a league rank), call `get_team_efficiency_profile`.
 - If you need where one team's offense has the edge over another's defense (passing vs. coverage, rushing vs. defensive rating, ball security, offensive line vs. pass rush), call `get_matchup_edges` (no opponent = their next game).
 - If you need all 32 team popularity rankings and watchability indices, call `get_all_team_popularities`.
