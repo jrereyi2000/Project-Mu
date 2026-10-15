@@ -174,6 +174,47 @@ class DraftRouteTest(unittest.TestCase):
         with mock.patch.object(mc, "brightness", side_effect=lambda p, b: lit.get(b[1], 55)):
             self.assertEqual(mc.prompt_option(f), "EDIT DRAFT CLASS")
 
+    # Back on the board: the prompt is drawn over the board, whose text still reads
+    EXIT_PROMPT = _Frame(*BOARD.text.split(" | "), "DRAFT CLASS EDITED", "EXPORT LOCAL FILE",
+                         "UPLOAD TO DOWNLOAD CENTER", "SAVE AND EXIT", "SELECT")
+
+    def test_exit_prompt_over_the_board(self):
+        self.assertEqual(mc.classify(self.EXIT_PROMPT), "EXIT_CLASS_PROMPT")
+
+    def test_exit_cross_only_on_save_and_exit(self):
+        for cur, allowed in (("EXPORT LOCAL FILE", False), ("UPLOAD TO DOWNLOAD CENTER", False), ("SAVE AND EXIT", True)):
+            with mock.patch.object(mc, "prompt_option", return_value=cur), mock.patch.object(mc, "press") as press:
+                if allowed:
+                    mc.cross("EXIT_CLASS_PROMPT", self.EXIT_PROMPT)
+                else:
+                    with self.assertRaises(mc.Abort):
+                        mc.cross("EXIT_CLASS_PROMPT", self.EXIT_PROMPT)
+            self.assertEqual(press.called, allowed, cur)
+
+    def test_close_draft_board(self):
+        # Back opens the prompt on EXPORT LOCAL FILE; two Downs reach SAVE AND EXIT
+        screens = iter([(self.BOARD, "DRAFT_BOARD"), (self.EXIT_PROMPT, "EXIT_CLASS_PROMPT"),
+                        (self.EXIT_PROMPT, "EXIT_CLASS_PROMPT")])
+        with mock.patch.object(mc, "look", side_effect=lambda: next(screens)), \
+                mock.patch.object(mc, "wait_for", return_value=(self.EXIT_PROMPT, "EXIT_CLASS_PROMPT")), \
+                mock.patch.object(mc, "prompt_option",
+                                  side_effect=["EXPORT LOCAL FILE", "UPLOAD TO DOWNLOAD CENTER", "SAVE AND EXIT"]), \
+                mock.patch.object(mc, "press") as press, mock.patch.object(mc, "log"), \
+                mock.patch.object(mc, "cross_into", return_value=(self.SCOUTING, "SCOUTING")) as cross_into:
+            self.assertEqual(mc.close_draft_board(), (self.SCOUTING, "SCOUTING"))
+        self.assertEqual([c.args[0] for c in press.call_args_list], ["circle", "down", "down"])
+        cross_into.assert_called_once_with("EXIT_CLASS_PROMPT", ["SCOUTING"], timeout=10)
+
+    def test_go_hub_leaves_the_board_through_its_prompt(self):
+        hub = _Frame("GAMEDAY", "COACH CENTRAL")
+        screens = iter([(self.BOARD, "DRAFT_BOARD"), (hub, "HUB")])
+        with mock.patch.object(mc, "look", side_effect=lambda: next(screens)), \
+                mock.patch.object(mc, "close_draft_board") as close, \
+                mock.patch.object(mc, "press") as press:
+            self.assertEqual(mc.go_hub(), (hub, "HUB"))
+        close.assert_called_once()
+        press.assert_not_called()                  # no bare Back on the board
+
     def test_open_prospects_from_the_prospects_list(self):
         # look(): the Prospects list, then the prompt again after the Down press
         screens = iter([(self.PROSPECTS, "SCOUT_PROSPECTS"), (self.PROMPT, "EDIT_CLASS_PROMPT")])

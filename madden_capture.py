@@ -459,6 +459,7 @@ ROSTER_MENU = ["UPGRADE PLAYERS", "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH
 # Manage Roster > Scouting's left-hand menu, and the Edit Draft Class prompt's buttons (mapped Oct 15)
 SCOUTING_MENU = ["PROSPECTS", "SCOUTS", "REGION BREAKDOWN", "MOCK DRAFTS"]
 CLASS_PROMPT_OPTIONS = ["DOWNLOAD FROM DOWNLOAD CENTER", "EDIT DRAFT CLASS", "IMPORT LOCAL FILE"]
+EXIT_PROMPT_OPTIONS = ["EXPORT LOCAL FILE", "UPLOAD TO DOWNLOAD CENTER", "SAVE AND EXIT"]
 # 32 NFL team nicknames as shown in chips/headers
 TEAMS = {"49ERS", "BEARS", "BENGALS", "BILLS", "BRONCOS", "BROWNS", "BUCCANEERS", "CARDINALS",
          "CHARGERS", "CHIEFS", "COLTS", "COMMANDERS", "COWBOYS", "DOLPHINS", "EAGLES", "FALCONS",
@@ -485,7 +486,10 @@ def classify(f):
         return "INJURY_REPORT"
     # Draft route (mapped Oct 15): Manage Roster > Scouting > Prospects > L3 > Edit Draft Class > Draft Board.
     # The Draft Board's L2 chip reads ALL ROUNDS and its button bar ADJUST ORDER. The Prospects list
-    # shows "Round 1" in its PROJ column, so ROUND 1 alone isn't enough.
+    # shows "Round 1" in its PROJ column, so ROUND 1 alone isn't enough. Back on the board opens the
+    # Draft Class Edited prompt over it, so that is checked first.
+    if "DRAFT CLASS EDITED" in t and "SAVE AND EXIT" in t:
+        return "EXIT_CLASS_PROMPT"
     if (f.find("ALL ROUNDS") or "ADJUST ORDER" in t) and ("PICK" in t or "NAME" in t):
         return "DRAFT_BOARD"
     if "EDIT DRAFT CLASS" in t and "IMPORT LOCAL FILE" in t:
@@ -598,6 +602,11 @@ def cross(screen, frame=None):
         cur = prompt_option(frame or Frame())
         if cur != "EDIT DRAFT CLASS":
             raise Abort(f"Refusing Cross on the Edit Draft Class prompt: {cur} is highlighted, not EDIT DRAFT CLASS")
+    elif screen == "EXIT_CLASS_PROMPT":
+        # Back on the Draft Board asks to export / upload the class; only SAVE AND EXIT (JR, Oct 15) leaves.
+        cur = prompt_option(frame or Frame(), EXIT_PROMPT_OPTIONS)
+        if cur != "SAVE AND EXIT":
+            raise Abort(f"Refusing Cross on the Draft Class Edited prompt: {cur} is highlighted, not SAVE AND EXIT")
     elif screen == "SCHED_LIST":
         # Only to open a played game's box score (JR's rule, Oct 13); an unplayed week's list
         # offers ACTIONS / Force Win instead.
@@ -638,6 +647,9 @@ def go_hub():
         if s == "QUIT":
             log("Quit prompt is open, choosing NO")
             cross(s, f)
+            continue
+        if s in ("DRAFT_BOARD", "EXIT_CLASS_PROMPT"):
+            close_draft_board()
             continue
         if s == "UNKNOWN":                     # don't press Back on a loading screen
             for _ in range(6):
@@ -1593,11 +1605,11 @@ def run_season_schedule(out, weeks=18):
         f, _ = wait_for(["SCHED_LIST"], timeout=10)
 
 
-def prompt_option(f):
-    """Which Edit Draft Class button is highlighted. The prompt's title also reads EDIT DRAFT
-    CLASS (mid-screen, ~53% down), so only the buttons below 65% count."""
+def prompt_option(f, options=CLASS_PROMPT_OPTIONS):
+    """Which of a draft class prompt's buttons is highlighted. The Edit Draft Class prompt's title
+    also reads EDIT DRAFT CLASS (mid-screen, ~53% down), so only the buttons below 65% count."""
     W, H = f.size
-    labels = {norm(lab): lab for lab in CLASS_PROMPT_OPTIONS}
+    labels = {norm(lab): lab for lab in options}
     best, best_b = None, -1
     for t, box in f.items:
         lab = labels.get(norm(t))
@@ -1606,6 +1618,34 @@ def prompt_option(f):
             if b > best_b:
                 best, best_b = lab, b
     return best if best_b > 120 else None
+
+
+def choose_prompt_option(f, options, target):
+    """Move a draft class prompt's highlight onto `target` (Up/Down only)."""
+    for _ in range(len(options) + 1):
+        cur = prompt_option(f, options)
+        if cur == target:
+            return f
+        if cur is None:
+            save_debug(f, "class_prompt_no_highlight")
+            raise Abort(f"Can't tell which prompt button is highlighted (want {target})")
+        press("down" if options.index(target) > options.index(cur) else "up")
+        f, _ = look()
+    raise Abort(f"Could not highlight {target}")
+
+
+def close_draft_board():
+    """Leave the Draft Board (JR, Oct 15): Back opens the Draft Class Edited prompt, which opens on
+    EXPORT LOCAL FILE; SAVE AND EXIT returns to the Scouting screen."""
+    f, s = look()
+    if s == "DRAFT_BOARD":
+        log("Leaving the Draft Board (Back, then SAVE AND EXIT)")
+        press("circle", wait=1.5)
+        f, s = wait_for(["EXIT_CLASS_PROMPT", "SCOUTING"])
+    if s == "EXIT_CLASS_PROMPT":
+        f = choose_prompt_option(f, EXIT_PROMPT_OPTIONS, "SAVE AND EXIT")
+        f, s = cross_into("EXIT_CLASS_PROMPT", ["SCOUTING"], timeout=10)
+    return f, s
 
 
 def press_into(key, screen, expected, timeout=8.0, tries=3):
@@ -1631,17 +1671,10 @@ def open_prospects():
         if s == "DRAFT_BOARD":
             return f
         if s == "EDIT_CLASS_PROMPT":
-            for _ in range(4):
-                cur = prompt_option(f)
-                if cur == "EDIT DRAFT CLASS":
-                    break
-                if cur is None:
-                    save_debug(f, "class_prompt_no_highlight")
-                    raise Abort("Can't tell which Edit Draft Class button is highlighted")
-                delta = CLASS_PROMPT_OPTIONS.index("EDIT DRAFT CLASS") - CLASS_PROMPT_OPTIONS.index(cur)
-                press("down" if delta > 0 else "up")
-                f, s = look()
+            choose_prompt_option(f, CLASS_PROMPT_OPTIONS, "EDIT DRAFT CLASS")
             f, s = cross_into("EDIT_CLASS_PROMPT", ["DRAFT_BOARD"], timeout=10)
+        elif s == "EXIT_CLASS_PROMPT":           # a half-finished exit: finish it, then re-enter from Scouting
+            f, s = close_draft_board()
         elif s == "SCOUT_PROSPECTS":
             f, s = press_into("l3", "SCOUT_PROSPECTS", ["EDIT_CLASS_PROMPT", "DRAFT_BOARD"])
         elif s == "SCOUTING":
@@ -1697,6 +1730,7 @@ def run_prospects(out, max_prospects=32):
         press("down", hold=0.1, wait=0.25)
 
     log(f"Captured {row} prospect row(s) into {pdir}")
+    close_draft_board()
     return row
 
 

@@ -4,7 +4,7 @@
 **Status:** Feature Complete — Draft Board navigation automated (verified live Oct 15)  
 **Active Branch:** `feat/draft-kiper-mock`  
 **Active Worktree:** `/Users/jrereyi/Downloads/Project Mu/.claude/worktrees/draft-kiper-mock`  
-**Test Suite Status:** 120/120 tests passing (`python3 -m unittest tests/test_madden_capture.py tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
+**Test Suite Status:** 124/124 tests passing (`python3 -m unittest tests/test_madden_capture.py tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
 
 > [!IMPORTANT]
 > **DO NOT MERGE INTO `main` YET.**  
@@ -94,14 +94,21 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
 | 4 | `EDIT_CLASS_PROMPT` (EDIT DRAFT CLASS, IMPORT LOCAL FILE) | Opens on **DOWNLOAD FROM DOWNLOAD CENTER**. Press Down to `EDIT DRAFT CLASS`, then Cross. JR approved this; Madden posts a notice to the league transaction log. |
 | 5 | `DRAFT_BOARD` (ALL ROUNDS, ADJUST ORDER) | Opens with Round 1, Pick 1 highlighted |
 
+### Leaving the Board (`close_draft_board()`)
+A bare Back does not leave the board. Back opens a **Draft Class Edited** prompt (`EXIT_CLASS_PROMPT`) drawn over the board. It opens on EXPORT LOCAL FILE, so press Down twice to **SAVE AND EXIT**, then Cross. That lands on the `SCOUTING` screen. `run_prospects()` closes the board after every capture, and `go_hub()` calls `close_draft_board()` whenever it finds the board or the prompt, never a bare Back. If `open_prospects()` finds the prompt already open, it finishes the exit and re-enters from Scouting.
+
 ### Safety & Classification
 - `DRAFT_BOARD` now needs `ALL ROUNDS` or `ADJUST ORDER`. The Prospects list's PROJ column reads "Round 1", which the old check took for the board.
-- `cross()` allows Cross only on: `SCOUTING` in the Manage Roster menu, `PROSPECTS` in the Scouting menu, and `EDIT DRAFT CLASS` on the prompt. `prompt_option()` only counts buttons below 65% of the screen height, because the prompt's title also reads EDIT DRAFT CLASS. Cross is never pressed on the Draft Board, where it means EDIT PLAYER.
+- `cross()` allows Cross only on: `SCOUTING` in the Manage Roster menu, `PROSPECTS` in the Scouting menu, `EDIT DRAFT CLASS` on the entry prompt, and `SAVE AND EXIT` on the exit prompt. `prompt_option()` only counts buttons below 65% of the screen height, because the prompt's title also reads EDIT DRAFT CLASS. Cross is never pressed on the Draft Board, where it means EDIT PLAYER.
 - `press_into()` retries L3 if Madden drops the press.
 - Tests: `DraftRouteTest` in `tests/test_madden_capture.py`. Mapping frames: `captures/2026-10-15_explore/explore/` (gitignored).
 
+### Live Checks (Oct 15)
+- `madden_capture.py --only prospects --prospects 3`, starting from the hub: navigated in, captured picks 1–3 (Vogel, Capps, Reynolds), left via SAVE AND EXIT, and `go_hub()` returned to the Manage Roster hub.
+- Each entry posts an "edit draft class" notice to the league transaction log.
+
 ### Not Yet Done
-- A full `python3 -m pipeline.weekly_capture --mode prospects` run, end to end, using the new navigation.
+- A full `python3 -m pipeline.weekly_capture --mode prospects` run (`--all-prospects`), end to end.
 
 ---
 
@@ -119,7 +126,7 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
 Run these commands inside the worktree to verify the environment:
 
 ```bash
-# 1. Run all unit and integration test suites (120 tests)
+# 1. Run all unit and integration test suites (124 tests)
 python3 -m unittest \
   tests/test_madden_capture.py \
   tests/test_writer_config.py \
