@@ -336,6 +336,56 @@ class DefensePerformanceTests(unittest.TestCase):
         self.assertNotIn(9001, offense_only)
 
 
+def book(franchise=None, league=None, full=()):
+    import collections as _c
+    b = {"franchise": _c.defaultdict(list), "league": _c.defaultdict(list), "full": set(full)}
+    for k, rows in (franchise or {}).items():
+        b["franchise"][k] = list(rows)
+        b["league"][k[1]] += list(rows)
+    for k, rows in (league or {}).items():
+        b["league"][k] += list(rows)
+    return b
+
+
+class RecordBookTests(unittest.TestCase):
+    def test_franchise_season_record_broken_this_week(self):
+        ctx = league(week=12)
+        ctx["record_book"] = book(franchise={(6, "season_rec_tds"): [(10.0, "Old Guy", 2010)]},
+                                  league={"season_rec_tds": [(23.0, "Randy Moss", 2007)]}, full=("season_rec_tds",))
+        wr = next(l for l in ctx["player_lines"] if l["week"] == 11 and l["team_id"] == 6 and l["position"] == "WR")
+        tier, reasons = Week(ctx).player_buzz(wr)
+        self.assertGreaterEqual(tier, 1)
+        self.assertIn("the most receiving TDs in a season in Team6 history: 11 (old record 10, Old Guy, 2010)", reasons)
+
+    def test_nfl_records_come_from_the_book(self):
+        ctx = league(week=12)
+        ctx["record_book"] = book(league={"season_pass_tds": [(20.0, "Someone", 2030)]}, full=("season_pass_tds",))
+        self.assertEqual(Week(ctx).season_record_marks()["pass_tds"], ("passing TDs", 20, "Someone, 2030"))
+        self.assertEqual(Week(league(week=12)).season_record_marks()["pass_tds"][1], 55)     # no book: the constants
+
+    def test_single_game_record_tie_and_partial_categories(self):
+        ctx = league(week=12)
+        ctx["record_book"] = book(league={"game_pass_tds": [(7.0, "Drew Brees", 2015), (7.0, "Nick Foles", 2013),
+                                                            (7.0, "Peyton Manning", 2013)],
+                                          "game_rec_tds": [(5.0, "B. Book", 2029)]},
+                                  full=("game_pass_tds",))
+        qb = next(l for l in ctx["player_lines"] if l["week"] == 11 and l["team_id"] == 4 and l["position"] == "QB")
+        qb["pass_tds"] = 7
+        tier, reasons = Week(ctx).player_buzz(qb)
+        self.assertEqual(tier, 2)
+        self.assertIn("tied the NFL single-game record for passing TDs: 7, shared with 3 players, most recently Drew Brees, 2015", reasons)
+        wr = next(l for l in ctx["player_lines"] if l["week"] == 11 and l["team_id"] == 4 and l["position"] == "WR")
+        self.assertFalse([r for r in Week(ctx).player_buzz(wr)[1] if "NFL history" in r])   # BOOK-only list: no NFL rank
+
+    def test_team_franchise_wins_record(self):
+        ctx = league(week=12)
+        dominate(ctx, 3)
+        ctx["record_book"] = book(franchise={(3, "season_team_wins"): [(10.0, "2010 City3 Team3", 2010)]})
+        story = next(st for st in Week(ctx).team_stories() if st["team_id"] == 3)
+        self.assertTrue(any(r.startswith("Most wins in a season in Team3 history: 11 (old record 10, the 2010 City3 Team3)")
+                            for r in story["reasons"]), story)
+
+
 class NameTests(unittest.TestCase):
     def test_tidy_name(self):
         self.assertEqual(tidy_name("OMAR COOPER JR."), "Omar Cooper Jr.")

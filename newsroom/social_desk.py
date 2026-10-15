@@ -80,7 +80,9 @@ SEASON_MILESTONES = {
 # Record chases (on pace for, or already past, a record) make news on their own only in the stretch run;
 # earlier they are context for a game that is already news. Breaking a record is always historic.
 RECORD_CHASE_FROM_WEEK = 12
-# NFL single-season records as of the 2025 season (the league's history before 2035 isn't in the database).
+# NFL single-season records as of the 2025 season. Fallback only: when the record book is in the database
+# (engines/records_engine.py, PROJECT_SPEC §2.9) the desk reads the records from it, including the league's own
+# 2026–2034 seasons and each franchise's records.
 SEASON_RECORDS = {
     "pass_yards": ("passing yards", 5477, "Peyton Manning, 2013"),
     "pass_tds": ("passing TDs", 55, "Peyton Manning, 2013"),
@@ -92,6 +94,13 @@ SEASON_RECORDS = {
     "total_tds": ("total TDs", 31, "LaDainian Tomlinson, 2006"),
 }
 TEAM_POINTS_RECORD = (606, "2013 Denver Broncos")
+# Record-book categories behind the desk's stats (season totals use season_*, single games game_*).
+RECORD_STATS = {
+    "pass_yards": "passing yards", "pass_tds": "passing TDs", "rush_yards": "rushing yards", "rush_tds": "rushing TDs",
+    "receptions": "receptions", "rec_yards": "receiving yards", "rec_tds": "receiving TDs", "total_tds": "total TDs",
+}
+RECORD_CATEGORY = {"total_tds": "scrimmage_tds"}
+GAME_RECORD_STATS = ("pass_yards", "pass_tds", "rush_yards", "rec_yards", "receptions", "total_tds", "rush_tds", "rec_tds")
 GAMES_PER_SEASON = 17
 PACE_MIN_GAMES = 6            # season paces count from this many games
 STREAK_MIN = 6                # winning or losing streaks the league notices
@@ -272,7 +281,30 @@ def load_week_context(cur, season: int, week: int) -> dict:
                           for r in cur.fetchall()]
     for p in ctx["projections"]:
         p["projected_points"] = float(p["projected_points"] or 0)
+    ctx["record_book"] = load_record_book(cur, season)
     return ctx
+
+
+def load_record_book(cur, season: int):
+    """The record book as it stood before `season` (engines/records_engine.py): franchise records by (team, category)
+    and all-time entries by category, each [(value, holder, season)]. None when the record tables don't exist yet."""
+    cur.execute("SELECT to_regclass('franchise_records') IS NOT NULL AND to_regclass('league_record_entries') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return None
+    book = {"franchise": collections.defaultdict(list), "league": collections.defaultdict(list), "full": set()}
+    # Only categories with the real NFL history behind them (coverage FULL) have league-wide records and top 10s;
+    # the record book's own categories (BOOK) hold just what it lists, so they give franchise records only.
+    cur.execute("SELECT category FROM record_categories WHERE coverage = 'FULL'")
+    book["full"] = {r[0] for r in cur.fetchall()}
+    cur.execute("SELECT team_id, category, value, holder, season FROM franchise_records WHERE season < %s", (season,))
+    for team_id, cat, value, holder, s in cur.fetchall():
+        book["franchise"][(team_id, cat)].append((float(value), holder, s))
+        book["league"][cat].append((float(value), holder, s))     # a franchise record is also a league entry
+    cur.execute("SELECT category, value, holder, season FROM league_record_entries WHERE season < %s", (season,))
+    for cat, value, holder, s in cur.fetchall():
+        if (float(value), holder, s) not in book["league"][cat]:
+            book["league"][cat].append((float(value), holder, s))
+    return book
 
 
 # ------------------------------------------------------------------------------------------------ facts ---
@@ -647,6 +679,113 @@ class Week:
         w, _ = self.winner_loser(g)
         return "won" if w == l["team_id"] else "lost" if w else "tied"
 
+    # -- record book (franchise and NFL records before this season; None without the record tables)
+    @staticmethod
+    def _holders(rows, best):
+        """Who holds a record: "Peyton Manning, 2013", "the 2013 Denver Broncos", two names joined with "and", or for a
+        bigger tie "9 players, most recently Sam Darnold, 2029"."""
+        held = sorted({(s, h) for v, h, s in rows if v == best}, reverse=True)
+        name = lambda s, h: f"the {h}" if str(h)[:4].isdigit() else f"{h}, {s}"
+        if len(held) > 2:
+            return f"{len(held)} {'teams' if str(held[0][1])[:4].isdigit() else 'players'}, most recently {name(*held[0])}"
+        return " and ".join(name(s, h) for s, h in held)
+
+    def franchise_record(self, team_id, category, extra=()):
+        """(value, holders) of a franchise's record before this season, counting `extra` [(value, holder, season)]
+        from this season too; None if the book has no record for it."""
+        book = self.ctx.get("record_book")
+        rows = list((book or {}).get("franchise", {}).get((team_id, category), [])) + list(extra)
+        if not book or not (book["franchise"].get((team_id, category))):
+            return None
+        best = max(v for v, _, _ in rows)
+        return best, self._holders(rows, best)
+
+    def league_record(self, category, extra=()):
+        """(value, holders, all values) of the league-wide record before this season plus `extra`; None if unknown."""
+        book = self.ctx.get("record_book")
+        if not book or category not in book.get("full", ()) or not book["league"].get(category):
+            return None
+        rows = list(book["league"][category]) + list(extra)
+        best = max(v for v, _, _ in rows)
+        return best, self._holders(rows, best), [v for v, _, _ in rows]
+
+    def season_record_marks(self):
+        """{stat: (words, mark, holders)}: the NFL single-season records, from the record book when it is loaded."""
+        out = {}
+        for stat, (words, mark, holder) in SEASON_RECORDS.items():
+            rec = self.league_record(f"season_{RECORD_CATEGORY.get(stat, stat)}")
+            out[stat] = (words, int(rec[0]), rec[1]) if rec else (words, mark, holder)
+        return out
+
+    def _earlier_lines(self, l):
+        """This season's earlier single games (before the line's week), as record-book rows for each stat."""
+        return [x for x in self.ctx["player_lines"] if x["week"] < l["week"]]
+
+    def game_record_reasons(self, l):
+        """[(tier, text)] for single-game records: NFL (tier 2 if tied or broken, tier 1 for the all-time top 10) and
+        the player's franchise (tier 1), counting this season's earlier games."""
+        out = []
+        team = self.teams[l["team_id"]]["name"]
+        earlier = self._earlier_lines(l)
+        for stat in GAME_RECORD_STATS:
+            v = _stat(l, stat)
+            if not v:
+                continue
+            words = RECORD_STATS[stat]
+            cat = f"game_{RECORD_CATEGORY.get(stat, stat)}"
+            same_season = [(float(_stat(x, stat)), x["name"], self.season) for x in earlier if _stat(x, stat)]
+            nfl = self.league_record(cat, same_season)
+            if nfl:
+                best, holders, values = nfl
+                if v >= best:
+                    out.append((2, f"broke the NFL single-game record for {words}: {v:g} (old record {best:g}, {holders})"
+                                   if v > best else f"tied the NFL single-game record for {words}: {v:g}, shared with {holders}"))
+                    continue
+                rank = 1 + sum(1 for x in values if x > v)
+                if rank <= 10:
+                    out.append((1, f"{v:g} {words}, the {ordinal(rank)}-most in a game in NFL history"))
+            same_team = [(float(_stat(x, stat)), x["name"], self.season) for x in earlier
+                         if _stat(x, stat) and x["team_id"] == l["team_id"]]
+            fr = self.franchise_record(l["team_id"], cat, same_team)
+            if fr and v >= fr[0]:
+                out.append((1, f"a {team} single-game record for {words}: {v:g} (old record {fr[0]:g}, {fr[1]})"
+                               if v > fr[0] else f"tied the {team} single-game record for {words}: {v:g}, shared with {fr[1]}"))
+        return out
+
+    def season_record_reasons(self, l, tot, chase, key=None):
+        """[(tier, text)] for season totals against the record book: the player's franchise record broken this week
+        (tier 1) or already his (context), and the NFL all-time top 10 (context; tier 1 from the stretch run for a
+        top-3 season)."""
+        out = []
+        team = self.teams[l["team_id"]]["name"]
+        for stat, words in RECORD_STATS.items():
+            after = _stat(tot, stat)
+            gained = _stat(l, stat)
+            if not after:
+                continue
+            before = after - gained
+            cat = f"season_{RECORD_CATEGORY.get(stat, stat)}"
+            # This season's other players count too (a teammate may already have passed the old record).
+            rivals = [t for k, t in self.season_totals.items() if k != key and _stat(t, stat)]
+            row = lambda t: (float(_stat(t, stat)), t["name"], self.season)
+            fr = self.franchise_record(l["team_id"], cat, [row(t) for t in rivals if t["team_id"] == l["team_id"]])
+            nfl = self.league_record(cat, [row(t) for t in rivals])
+            if nfl and after > nfl[0]:
+                continue                       # the NFL record line already says it
+            if nfl and after == nfl[0] and before < nfl[0]:
+                out.append((2, f"tied the NFL single-season record for {words}: {after:,}, shared with {nfl[1]}"))
+                continue
+            if fr and before <= fr[0] < after:
+                out.append((1, f"the most {words} in a season in {team} history: {after:,} (old record {fr[0]:,.0f}, {fr[1]})"))
+            elif fr and before > fr[0] and gained:
+                out.append((0, f"already the most {words} in a season in {team} history ({after:,}; old record {fr[0]:,.0f})"))
+            if nfl:
+                rank = 1 + sum(1 for x in nfl[2] if x > after)
+                was = 1 + sum(1 for x in nfl[2] if x > before)
+                if 1 < rank <= 10 and gained and rank < was:
+                    out.append((chase if rank <= 3 else 0, f"{after:,} {words}, already {ordinal(rank)} in a season in NFL history"))
+        return out
+
     # -- buzz: what the league is talking about
     def _game_rank(self, stat, value, pos=None):
         """1 + the number of single-game lines this season (through the recap week) that beat `value`."""
@@ -677,6 +816,9 @@ class Week:
                 and not any("most by a" in r for _, r in reasons):
             tier = 2
             reasons.append((2, f"the best single game by a {pos} this season (full PPR)"))
+        for t, text in self.game_record_reasons(l):
+            tier = max(tier, t)
+            reasons.append((t, text))
         context = []   # (tier it earns on its own, text)
         chase = 1 if self.recap_week >= RECORD_CHASE_FROM_WEEK else 0
         if self.recap_week <= REGULAR_SEASON_FINAL_WEEK:
@@ -689,7 +831,7 @@ class Week:
                     for m, alone in marks:
                         if before < m <= after:
                             context.append((1 if alone else 0, f"crossed {m:,} {words} for the season ({after:,})"))
-                for stat, (words, mark, holder) in SEASON_RECORDS.items():
+                for stat, (words, mark, holder) in self.season_record_marks().items():
                     after = _stat(tot, stat)
                     before = after - _stat(l, stat)
                     if before <= mark < after:
@@ -702,6 +844,12 @@ class Week:
                         if pace > mark:
                             context.append((chase, f"on pace for {pace:,} {words} ({after:,} in {tot['games']} games); "
                                                    f"the NFL single-season record is {mark:,} ({holder})"))
+                for t, text in self.season_record_reasons(l, tot, chase, key):
+                    if t and text.startswith(("the most", "tied the")):
+                        tier = max(tier, t)
+                        reasons.append((t, text))
+                    else:
+                        context.append((t, text))
         for t, text in context:
             tier = max(tier, t)
         if tier:
@@ -815,6 +963,16 @@ class Week:
                             hits.append((1, True, f"Upset the {rec_of(opp_prior)} {opp_name} as a {rec_of(prior)} team, {us}-{them}"))
                 pf = self.records[tid]["pf"]
                 mark, holder = TEAM_POINTS_RECORD
+                book_points = self.league_record("season_team_points")
+                if book_points:
+                    mark, holder = int(book_points[0]), book_points[1].removeprefix("the ")
+                team_name = self.teams[tid]["name"]
+                for cat, now, prev, words in (("season_team_wins", wins, wins - (r == "W"), "wins"),
+                                              ("season_team_points", pf, pf - us, "points")):
+                    fr = self.franchise_record(tid, cat)
+                    if fr and prev <= fr[0] < now and not (cat == "season_team_points" and prev <= mark < now):
+                        hits.append((1, True, f"Most {words} in a season in {team_name} history: {now} "
+                                              f"(old record {fr[0]:.0f}, {fr[1]})"))
                 if pf - us <= mark < pf:
                     hits.append((2, True, f"Broke the NFL record for points in a season: {pf} (old record {mark}, {holder})"))
                 elif pf - us > mark:
