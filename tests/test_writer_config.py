@@ -319,6 +319,29 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("top 3 positional needs", structure)
         self.assertIn("3–4 Featured Franchises", structure)
 
+    def test_super_bowl_media_interview_audit_coach_milestones(self):
+        """SUPER_BOWL_MEDIA_INTERVIEW_AUDIT queries get_coach_profile, mandates it in curatorial autonomy,
+        and contrasts dynasty validation vs first-time participant pressure in structure Sections 1 & 2."""
+        info = self.article_types["SUPER_BOWL_MEDIA_INTERVIEW_AUDIT"]
+        queried = " ".join(info.get("data_queried", []))
+        self.assertIn("Career Postseason & Super Bowl Coaching Records (get_coach_profile)", queried)
+        self.assertIn("get_coach_profile", queried)
+
+        curatorial = info.get("curatorial_autonomy", "")
+        self.assertIn("get_coach_profile", curatorial)
+        for phrase in ("both head coaches", "career postseason records", "Super Bowl wins/losses", "tenure length"):
+            self.assertIn(phrase.lower(), curatorial.lower())
+
+        structure = info.get("structure_directive", "")
+        sections = structure.split("\n\n")
+        sec1 = [s for s in sections if s.strip().startswith("1.")][0]
+        sec2 = [s for s in sections if s.strip().startswith("2.")][0]
+
+        for sec in (sec1, sec2):
+            self.assertIn("dynasty validation", sec)
+            self.assertIn("first-time participant", sec)
+            self.assertIn("Super Bowl media circus", sec)
+
 
 if __name__ == "__main__":
     unittest.main()
