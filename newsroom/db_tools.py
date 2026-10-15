@@ -9,6 +9,7 @@ from engines.matchup_edges import compute_edges, fetch_ratings, fetch_units
 from engines.game_credit_engine import compute_game_credit, fetch_completed_games, trajectory_label
 from engines.coty_engine import compute_coty, fetch_inputs as fetch_coty_inputs
 from engines.coach_profile import coach_profile, fetch_team_coach, fetch_team_staff, staff_matchup
+from engines.game_script_engine import get_script, render_script
 from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_splits, defense_groups,
                                    player_lines, stat_group, STATS as SPLIT_STATS)
 import json
@@ -178,7 +179,7 @@ def _resolve_team_id(cur, identifier: str) -> int:
 
 @tool
 def get_game_box_score(game_id: int) -> str:
-    """Fetch the full box score, excitement index, and top player performances for a specific game: passing, rushing and receiving, plus defensive playmakers (tackles, sacks, TFL, INT, pass deflections, forced fumbles, defensive TDs) and kickers when the game's player stats were captured, and each team's third/fourth-down and two-point conversions, red zone, penalties, quarter-by-quarter scoring and time of possession where they were recorded for this game."""
+    """Fetch the full box score, excitement index, and top player performances for a specific game: passing, rushing and receiving, plus defensive playmakers (tackles, sacks, TFL, INT, pass deflections, forced fumbles, defensive TDs) and kickers when the game's player stats were captured, and each team's third/fourth-down and two-point conversions, red zone, penalties, quarter-by-quarter scoring and time of possession where they were recorded for this game. It ends with the game_script: the game's official story shared by every writer (quarter scores, every scoring play in order with scorer, yardage, drive and clock, lead changes, the winning score, key moments, adjustments and defensive standouts), which you must not contradict."""
     try:
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -293,7 +294,11 @@ def get_game_box_score(game_id: int) -> str:
                     result["defense_note"] = ("No defensive or special-teams lines were captured for this game; "
                                               "don't cite individual tackles, sacks or interceptions from it.")
 
-                return json.dumps(result, indent=2)
+            # The game's canonical story (§2.14), shared by every writer
+            script = get_script(db.db_conn_info, game_id)
+            if script:
+                result["game_script"] = render_script(script).split("\n")
+            return json.dumps(result, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

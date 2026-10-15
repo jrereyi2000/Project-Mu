@@ -20,6 +20,7 @@ import json
 import random
 import re
 
+from engines.game_script_engine import script_summary
 from newsroom.fantasy_desk import fantasy_phase
 from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings
 
@@ -352,6 +353,13 @@ def load_week_context(cur, season: int, week: int) -> dict:
         injs_by_team[tid].append(item)
     ctx["injuries"] = injs
     ctx["injuries_by_team"] = injs_by_team
+    # Each recap game's canonical story (engines/game_script_engine.py, §2.14), read or built here
+    from engines.game_script_engine import ensure_script
+    ctx["game_scripts"] = {}
+    for g in ctx["recap_games"]:
+        script, _ = ensure_script(cur, g["id"])
+        if script:
+            ctx["game_scripts"][g["id"]] = script
     return ctx
 
 
@@ -580,6 +588,9 @@ class Week:
             "records_after_game": {self.team_label(t): self.record(t) for t in (g["away_team_id"], g["home_team_id"])},
             "top_performers": {self.team_label(t): self.leaders(g, t) for t in (g["away_team_id"], g["home_team_id"])},
         }
+        script = self.ctx.get("game_scripts", {}).get(g["id"])
+        if script:
+            facts["how_it_happened"] = script_summary(script)
         if author_team:
             facts["your_team"] = self.team_label(author_team)
             facts["your_team_result"] = "won" if author_team == w else "lost" if w else "tied"

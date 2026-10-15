@@ -233,6 +233,12 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         print("-> Running Game Excitement Engine (E)...")
         batch_evaluate(season=season_year, only_missing=True, game_ids=backfilled_game_ids)
 
+        # Game scripts (§2.14): each completed game's canonical story, after E (its drama follows E). Games whose
+        # recorded facts haven't changed keep their script, so a published story stays the same story.
+        print("-> Writing game scripts...")
+        from engines.game_script_engine import run as write_game_scripts
+        write_game_scripts(season_year, conn_info=DATABASE_URL)
+
         # 1. Run Mathematical Culture Indices in dependency order:
         #    E -> TWI (watchability_index) -> Franchise POP (reads TWI) -> Player POP (reads Franchise POP)
         print("-> Running Team Watchability Engine...")

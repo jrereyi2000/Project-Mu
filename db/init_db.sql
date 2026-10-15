@@ -331,6 +331,18 @@ CREATE INDEX IF NOT EXISTS idx_injuries_team ON injuries(team_id);
 CREATE INDEX IF NOT EXISTS idx_injuries_player ON injuries(player_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_injuries_unique_player ON injuries(season, week, player_id) WHERE player_id IS NOT NULL;
 
+-- 5c. Game scripts (engines/game_script_engine.py, 2026_11_18_game_scripts.sql): one canonical story per completed game.
+CREATE TABLE IF NOT EXISTS game_scripts (
+    game_id INTEGER PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+    season INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    facts_hash TEXT NOT NULL,
+    script JSONB NOT NULL,
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_game_scripts_season_week ON game_scripts(season, week);
+
 -- 6. One row per capture run (duplicate / missed-week / row-count checks, resuming, token totals).
 CREATE TABLE IF NOT EXISTS captures (
     id SERIAL PRIMARY KEY,
