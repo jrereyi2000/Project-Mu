@@ -360,6 +360,32 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("When analyzing early-lottery teams (Picks 1–5)", curatorial)
         self.assertIn("clean coaching break", curatorial)
 
+    def test_super_bowl_comprehensive_preview_coaching_and_efficiency(self):
+        """SUPER_BOWL_COMPREHENSIVE_PREVIEW mandates coaching matchup tendencies and situational efficiency."""
+        sb_config = self.article_types["SUPER_BOWL_COMPREHENSIVE_PREVIEW"]
+        queried = " ".join(sb_config["data_queried"])
+        self.assertIn("get_matchup_edges", queried)
+        self.assertIn("get_team_efficiency_profile", queried)
+
+        curatorial = sb_config["curatorial_autonomy"]
+        self.assertIn("coaching_matchup", curatorial)
+        self.assertIn("get_matchup_edges", curatorial)
+        self.assertIn("pass lean", curatorial)
+        self.assertIn("fourth-down aggressiveness", curatorial)
+        self.assertIn("defensive front", curatorial)
+        self.assertIn("coverage tendency", curatorial)
+        self.assertIn("get_team_efficiency_profile", curatorial)
+
+        structure = sb_config["structure_directive"]
+        self.assertIn("4. The Chess Match: Coordinators and Scheme Exploitation:", structure)
+        self.assertIn("pass lean", structure)
+        self.assertIn("fourth-down aggressiveness", structure)
+        self.assertIn("defensive front", structure)
+        self.assertIn("coverage philosophy", structure)
+        self.assertIn("red-zone touchdown conversion rates", structure)
+        self.assertIn("third-down ranks", structure)
+        self.assertIn("get_team_efficiency_profile", structure)
+
 
 if __name__ == "__main__":
     unittest.main()
