@@ -45,7 +45,8 @@ const RUNS: { kind: string; title: string; note: string }[] = [
   { kind: "scan_week", title: "Scan week", note: "Full weekly run: capture Season Stats, Team Stats and last week's schedule, extract, load, engines, articles. Playoffs (week 19 on): last round's schedule, next round's matchups and every game's box score (~7 min a game) instead of Season Stats. Week 22 (Pro Bowl week): no console, just the Super Bowl week's articles." },
   { kind: "backfill_week", title: "Backfill previous week", note: "The same capture, extract, load and engines. No articles." },
   { kind: "game_scan", title: "Game scan", note: "Every game of last week: box scores and both teams' player stats (~7 min a game), loaded over the backfill's lines. No articles." },
-  { kind: "roster_scan", title: "Roster & prospect scan", note: "Season cadence run: captures all 32 team rosters and the scouting draft board, extracts cards and prospects, loads players and draft board." },
+  { kind: "roster_scan", title: "Roster scan", note: "Season cadence run: captures all 32 team rosters, extracts player cards, and updates players/seasons in the database. No articles." },
+  { kind: "draft_scan", title: "Draft prospect scan", note: "Scans the scouting draft board line-by-line, extracts prospects via Apple Vision OCR, and syncs data/draft/ prospects board. No articles." },
 ];
 
 function StatusPill({ status }: { status: string }) {

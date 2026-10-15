@@ -54,6 +54,8 @@ class RunTest(unittest.TestCase):
         elif mode == "roster":
             open(os.path.join(folder, "roster_cards.csv"), "w").write("x\n")
             open(os.path.join(folder, "roster_list.csv"), "w").write("x\n")
+        elif mode == "prospects":
+            open(os.path.join(folder, "prospects.csv"), "w").write("x\n")
         for f in ("schedule.csv", "stats_passing.csv"):
             open(os.path.join(folder, f), "w").write("x\n")
 
@@ -82,9 +84,19 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.calls, ["connect", "capture", "extract", "load"])
         self.assertEqual(self.capture_mode, "roster")
         self.assertEqual(self.notices[0][0], "Mu: capture starting")
-        self.assertIn("Roster & prospect scan", self.notices[0][1])
+        self.assertIn("Roster scan", self.notices[0][1])
         self.assertEqual(self.notices[-1][0], "Mu: roster scan done")
-        self.assertIn("Roster & draft prospects loaded for Season 2035", self.notices[-1][1])
+        self.assertIn("Rosters loaded for Season 2035", self.notices[-1][1])
+
+    def test_prospects_scan_runs_capture_extract_load_and_skips_articles(self):
+        os.makedirs(os.path.join(self.tmp, "prosp1"))
+        self.assertEqual(wc.run("prosp1", articles=True, mode="prospects"), 0)
+        self.assertEqual(self.calls, ["connect", "capture", "extract", "load"])
+        self.assertEqual(self.capture_mode, "prospects")
+        self.assertEqual(self.notices[0][0], "Mu: capture starting")
+        self.assertIn("Draft prospect scan", self.notices[0][1])
+        self.assertEqual(self.notices[-1][0], "Mu: prospects scan done")
+        self.assertIn("Draft prospects loaded for Season 2035", self.notices[-1][1])
 
     def test_game_scan_replaces_and_never_writes_articles(self):
         os.makedirs(os.path.join(self.tmp, "g1"))

@@ -49,7 +49,7 @@ DEBUG_DIRS = ("stop_debug", "scope_debug", "week_debug", "team_debug", "probe", 
 CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice when it has to relaunch
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
-MODES = ("weekly", "games", "playoff", "roster")
+MODES = ("weekly", "games", "playoff", "roster", "prospects")
 FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
 PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
 SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the last capture: Madden is in the offseason by then
@@ -89,7 +89,9 @@ def run_cmd(args, log_path, timeout):
 
 # --------------------------------------------------------------- state ----
 def folder_mode(folder):
-    """A run folder's mode from what it holds: roster = roster, schedule and games screenshots = playoff, games only = games."""
+    """A run folder's mode from what it holds."""
+    if os.path.isdir(os.path.join(folder, "prospects")):
+        return "prospects"
     if os.path.isdir(os.path.join(folder, "roster")):
         return "roster"
     if os.path.isdir(os.path.join(folder, "games")):
@@ -109,10 +111,9 @@ def extract_done(folder, mode="weekly"):
     if mode == "playoff":
         return all(os.path.exists(os.path.join(folder, f)) for f in ("game_scores.csv", "schedule.csv"))
     if mode == "roster":
-        roster_ok = all(os.path.exists(os.path.join(folder, f)) for f in ("roster_cards.csv", "roster_list.csv"))
-        if os.path.isdir(os.path.join(folder, "prospects")):
-            roster_ok = roster_ok and os.path.exists(os.path.join(folder, "prospects.csv"))
-        return roster_ok
+        return all(os.path.exists(os.path.join(folder, f)) for f in ("roster_cards.csv", "roster_list.csv"))
+    if mode == "prospects":
+        return os.path.exists(os.path.join(folder, "prospects.csv"))
     weekly_ok = (os.path.exists(os.path.join(folder, "schedule.csv"))
                  and bool(glob.glob(os.path.join(folder, "stats_*.csv"))))
     if os.path.isdir(os.path.join(folder, "injuries")):
@@ -181,6 +182,8 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
     elif mode == "roster":
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "roster")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "roster", *where], CAPTURE_TIMEOUT
+    elif mode == "prospects":
+        args, timeout = [sys.executable, "madden_capture.py", "--only", "prospects", "--all-prospects", "--out", name], CAPTURE_TIMEOUT
     else:
         for d in CAPTURE_DIRS:                 # a re-capture starts the three modes clean
             shutil.rmtree(os.path.join(folder, d), ignore_errors=True)
@@ -298,7 +301,7 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
         mode = playoff_or_weekly(resume)
     articles = articles and mode in ("weekly", "playoff")
     week_label = SUPER_BOWL_LABEL if mode == "playoff" and current is not None and current >= FINAL_WEEK else None
-    what = {"games": "Game scan", "playoff": "Playoff capture", "roster": "Roster & prospect scan"}.get(mode, "Weekly capture")
+    what = {"games": "Game scan", "playoff": "Playoff capture", "roster": "Roster scan", "prospects": "Draft prospect scan"}.get(mode, "Weekly capture")
     os.makedirs(CAPTURES, exist_ok=True)
     lock = open(LOCK_PATH, "w")
     try:
@@ -345,14 +348,15 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
             log(f"Loaded: {report.get('mode')} week {report.get('week')}")
         else:
             log("Already loaded; skipping the load")
-        if mode == "roster":
+        if mode in ("roster", "prospects"):
             season, _ = league_state()
-            log("Roster and draft prospects loaded. Skipping weekly engines and articles.")
+            what_done = "Rosters" if mode == "roster" else "Draft prospects"
+            log(f"{what_done} loaded. Skipping weekly engines and articles.")
             log("Step 9: shrink")
             before, after = shrink(folder)
             log(f"Capture folder {before / 1e6:.0f} MB -> {after / 1e6:.0f} MB")
-            notify(f"Roster & draft prospects loaded for Season {season}.",
-                   title="Mu: roster scan done", tags=("white_check_mark",))
+            notify(f"{what_done} loaded for Season {season}.",
+                   title=f"Mu: {mode} scan done", tags=("white_check_mark",))
             return 0
         season, current_week = league_state()
         log(f"Step 7: backfill + engines (season {season})")
@@ -387,7 +391,8 @@ def main():
     ap.add_argument("--mode", choices=MODES, default="weekly",
                     help="games: every game of last week (box scores + player stats), loaded with --replace; "
                          "playoff: a postseason week (chosen automatically from league current week 19 on); "
-                         "roster: season cadence scan of all 32 team rosters and the scouting draft board")
+                         "roster: season cadence scan of all 32 team rosters; "
+                         "prospects: draft board scan of college prospects")
     ap.add_argument("--no-connect", action="store_true",
                     help="skip the connect step (chiaki-ng is already streaming the franchise menus)")
     a = ap.parse_args()

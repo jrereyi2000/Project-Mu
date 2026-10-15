@@ -1571,19 +1571,6 @@ def run_season_schedule(out, weeks=18):
         f, _ = wait_for(["SCHED_LIST"], timeout=10)
 
 
-def open_prospects():
-    f, s = look()
-    if s == "DRAFT_BOARD":
-        return f
-    f, s = go_hub()
-    if s != "HUB_ROSTER":
-        log("Switching to MANAGE ROSTER tab")
-        move_to(f, HUB_TABS, "MANAGE ROSTER", "l1", "r1", "hub tab")
-        f, s = wait_for(["HUB_ROSTER"])
-    f = move_to(f, ROSTER_MENU, "SCOUTING", "up", "down", "Manage Roster menu item")
-    return cross_into("HUB_ROSTER", ["DRAFT_BOARD"], timeout=8)[0]
-
-
 def run_prospects(out, max_prospects=32):
     """Capture the College Prospects / Draft Board screen line by line, because the full name,
     height, and weight are only displayed on the currently highlighted row.
@@ -1591,12 +1578,7 @@ def run_prospects(out, max_prospects=32):
     pdir = os.path.join(out, "prospects")
     os.makedirs(pdir, exist_ok=True)
     log("== Draft Board Prospects (Line by Line) ==")
-    try:
-        f, s = look()
-        if s != "DRAFT_BOARD":
-            open_prospects()
-    except Exception as e:
-        log(f"Navigation to Draft Board: {e} (proceeding from active screen)")
+    log("Assuming console is already on the Draft Board / College Prospects screen (highlight on Pick #1)")
 
     prev_sig = None
     row = 0
@@ -2409,7 +2391,6 @@ def main():
                     help="roster, season-schedule and prospects are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
-    ap.add_argument("--no-prospects", action="store_true", help="--only roster: skip capturing draft prospects")
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
     ap.add_argument("--all-prospects", action="store_true", help="--only prospects: capture the entire draft board until the end")
     ap.add_argument("--prospect-pages", type=int, help="--only prospects: stop after this many pages")
@@ -2501,9 +2482,6 @@ def main():
                 tries[0] += 1                   # after a stream restart, continue the same run
                 return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1)
             run_mode("the rosters", rosters)
-            if not a.no_prospects:
-                n_prospects = 0 if a.all_prospects else a.prospects
-                run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
         if a.only == "season-schedule":
             run_mode("the season schedule", lambda: run_season_schedule(out), clear("season_schedule"))
         if a.only == "games":
