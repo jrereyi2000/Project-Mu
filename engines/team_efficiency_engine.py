@@ -69,14 +69,17 @@ def compute_team_efficiency(rows: list) -> dict:
 
 
 def fetch_team_game_rows(cur, season: int, before_week: int = None) -> list:
-    """One row per team per completed game. before_week (optional) keeps only games from earlier weeks."""
+    """One row per team per completed regular-season game (the profile sits next to the regular-season record;
+    playoff games stay out). before_week (optional) keeps only games from earlier weeks."""
     cur.execute("""
         WITH tg AS (
             SELECT g.id AS game_id, g.home_team_id AS team_id, g.home_score AS pf, g.away_score AS pa
             FROM games g WHERE g.season = %(s)s AND g.status = 'COMPLETED' AND (%(w)s::int IS NULL OR g.week < %(w)s::int)
+              AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
             UNION ALL
             SELECT g.id, g.away_team_id, g.away_score, g.home_score
             FROM games g WHERE g.season = %(s)s AND g.status = 'COMPLETED' AND (%(w)s::int IS NULL OR g.week < %(w)s::int)
+              AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
         )
         SELECT tg.team_id, tg.pf, tg.pa, ts.total_offense, ts.passing_yards, ts.rushing_yards, ts.turnovers
         FROM tg

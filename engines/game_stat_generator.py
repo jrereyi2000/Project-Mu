@@ -22,10 +22,13 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         season_year = current_season()
     print(f"-> Backfill and engines for season {season_year}")
     # 1. Fetch Input Data
-    games_df = pd.read_sql(f"SELECT * FROM games WHERE season = {season_year} AND status = 'COMPLETED'", engine)
+    # Regular season only: Season Stats stop at Week 18, so playoff games get lines only from a games capture
+    games_df = pd.read_sql(f"SELECT * FROM games WHERE season = {season_year} AND status = 'COMPLETED' "
+                           f"AND COALESCE(game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'", engine)
     # Real (or already backfilled) lines for this season's games only
     existing_player_stats = pd.read_sql(f"""
         SELECT ps.* FROM player_stats ps JOIN games g ON g.id = ps.game_id WHERE g.season = {season_year}
+          AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
     """, engine)
 
     season_p_df = pd.read_sql(f"""

@@ -14,6 +14,7 @@ Writes, inside that capture folder:
                          Passing/Defense/Kicking: each left page paired with its right page, rows joined by position)
   team_<tab>.csv         team_conversions, team_redzoneefficiency, team_penalties (32 teams each)
   schedule.csv           the captured week's games and results
+  schedule_next.csv      postseason: the coming round's matchups and kickoff times (same columns)
   season_schedule.csv    --only season-schedule: every week 1-18 (same columns as schedule.csv)
   games/<NN>_.../box_score.csv, stats_<category>.csv   --only games, per game
   game_scores.csv, game_stats_<category>.csv           --only games, the whole week (GAME column)
@@ -652,6 +653,7 @@ def main():
     prefetch(sorted(glob.glob(os.path.join(root, "stats", "*.png")) +
                     glob.glob(os.path.join(root, "team_stats", "*.png")) +
                     glob.glob(os.path.join(root, "schedule", "*.png")) +
+                    glob.glob(os.path.join(root, "schedule_next", "*.png")) +
                     glob.glob(os.path.join(root, "season_schedule", "*.png")) +
                     glob.glob(os.path.join(root, "stats_scope", "*.png"))))
     groups = {}
@@ -693,6 +695,10 @@ def main():
     if sched:
         cols, rows = merge(sched, "schedule")
         write_csv(os.path.join(root, "schedule.csv"), cols, rows)
+    nxt = glob.glob(os.path.join(root, "schedule_next", "*.png"))
+    if nxt:
+        cols, rows = merge(nxt, "next round")
+        write_csv(os.path.join(root, "schedule_next.csv"), cols, rows)
 
     season = glob.glob(os.path.join(root, "season_schedule", "*.png"))
     if season:

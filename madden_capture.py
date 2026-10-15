@@ -8,7 +8,8 @@ screenshots of:
   * Season Stats  (League > Stats & Awards > Player Stats, scope = NFL, every category)
   * Team Stats    (League > Stats & Awards > Team Stats, scope = NFL: Conversions,
                    Red Zone Efficiency, Penalties)
-  * Schedule      (League > Schedule > League Schedule, the PREVIOUS week only)
+  * Schedule      (League > Schedule > League Schedule, the PREVIOUS week; when the schedule opens on a
+                   postseason week, that week's list too, into schedule_next/: the coming round's matchups)
 
 Screenshots land in captures/<YYYY-MM-DD_HHMM>/{stats,team_stats,schedule}/.
 Run extract.py afterwards to turn them into CSVs.
@@ -19,6 +20,8 @@ Usage
   python3 madden_capture.py --probe-l2    # record how the L2 dropdown behaves (from Player Stats)
   python3 madden_capture.py               # full run: stats + schedule
   python3 madden_capture.py --only stats  # or: --only team, --only schedule
+  python3 madden_capture.py --only playoff  # postseason week: schedule (+ next round) and every game of last
+                                            # round; Season Stats / Team Stats are regular season only, so skipped
   python3 madden_capture.py --week "SEASON WEEK 12"   # capture a specific schedule week
   python3 madden_capture.py --step down   # mapping: press one key, save screenshot + OCR (--step none: capture only)
 
@@ -445,7 +448,7 @@ class Frame:
 
 
 # -------------------------------------------------------------- screens ----
-WEEK_RE = re.compile(r"(PRESEASON WEEK ?[0-9TILO]{1,2}\b|SEASON WEEK ?[0-9TILO]{1,2}\b|POST SEASON (?:WILD ?CARD|DIVISIONAL|CONFERENCE|SUPER ?BOWL))")
+WEEK_RE = re.compile(r"(PRESEASON WEEK ?[0-9TILO]{1,2}\b|SEASON WEEK ?[0-9TILO]{1,2}\b|POST SEASON (?:WILD ?CARD|DIVISIONAL|CONFERENCE|PRO ?BOWL|SUPER ?BOWL))")
 HUB_TABS = ["GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "OPTIONS"]
 LEAGUE_MENU = ["NFL STANDINGS", "SCHEDULE", "STATS & AWARDS", "LEAGUE TRANSACTIONS", "LEAGUE HISTORY", "RELOCATE OR REBUILD"]
 SCHED_TILES = ["TEAM SCHEDULE", "LEAGUE SCHEDULE", "PLAYOFF PICTURE"]
@@ -743,7 +746,7 @@ def week_label(f):
 def clean_week(label):
     """Normalize OCR'd week labels: 'SEASON WEEKT' -> 'SEASON WEEK 1', 'WEEK1' -> 'WEEK 1'."""
     label = re.sub(r"\s+", " ", label.upper().strip())
-    label = label.replace("WILDCARD", "WILD CARD").replace("SUPERBOWL", "SUPER BOWL")
+    label = label.replace("WILDCARD", "WILD CARD").replace("SUPERBOWL", "SUPER BOWL").replace("PROBOWL", "PRO BOWL")
     m = re.match(r"^(PRESEASON|SEASON) WEEK ?([0-9TILO]{1,2})$", label)
     if m:
         digits = m.group(2).translate(str.maketrans("TILO", "1110"))
@@ -765,11 +768,25 @@ def week_index(label):
     return None
 
 
-WEEK_ORDER_POST = ["POST SEASON WILD CARD", "POST SEASON DIVISIONAL", "POST SEASON CONFERENCE", "POST SEASON SUPER BOWL"]
+# Madden's postseason weeks in order; index + 19 is games.week (the Pro Bowl week, no games of ours, is 22)
+WEEK_ORDER_POST = ["POST SEASON WILD CARD", "POST SEASON DIVISIONAL", "POST SEASON CONFERENCE", "POST SEASON PRO BOWL",
+                   "POST SEASON SUPER BOWL"]
+PRO_BOWL, SUPER_BOWL = "POST SEASON PRO BOWL", "POST SEASON SUPER BOWL"
+
+
+def next_round(cur, target):
+    """The coming playoff round to record before stepping back to `target`, or None. On Pro Bowl week (no games
+    of ours) it is the Super Bowl; after the Super Bowl Madden is in the offseason (no readable week)."""
+    cur = clean_week(cur) if cur else None
+    if cur == PRO_BOWL:
+        return SUPER_BOWL
+    if cur in WEEK_ORDER_POST and week_index(cur) != week_index(target):
+        return cur
+    return None
 
 
 def previous_week(label):
-    label = label.replace("WILDCARD", "WILD CARD").replace("SUPERBOWL", "SUPER BOWL")
+    label = label.replace("WILDCARD", "WILD CARD").replace("SUPERBOWL", "SUPER BOWL").replace("PROBOWL", "PRO BOWL")
     m = re.match(r"SEASON WEEK (\d+)", label)
     if m:
         n = int(m.group(1))
@@ -1278,10 +1295,21 @@ def run_schedule(out, week=None):
     log("== Schedule ==")
     f = open_league_schedule()
     cur = week_label(f)
-    if not cur:
+    if not cur and not week:
         raise Abort("Can't read the schedule week label")
+    if not cur:      # after the Super Bowl Madden is in the offseason: the run names the week (--week)
+        log(f"No week label on the schedule (offseason?); capturing {clean_week(week)} as asked")
     target = clean_week(week) if week else previous_week(cur)
     log(f"Current week: {cur}. Target: {target}")
+    labels = {"current": cur, "captured": clean_week(target)}
+    nxt = next_round(cur, target)
+    if nxt:
+        # the coming playoff round isn't in the season schedule: record its matchups and kickoff times
+        if week_index(nxt) != week_index(cur):
+            f = go_to_week(f, nxt, out)              # Pro Bowl week: the Super Bowl comes after it
+        n = capture_list(os.path.join(out, "schedule_next"), "next", stop_at_zeros=False)
+        log(f"Next round {nxt}: {n} pages")
+        labels["next"] = nxt
     f = go_to_week(f, target, out)
     log(f"On {week_label(f)}")
     if "FORCE WIN" in f.text and "ACTIONS" in f.text:
@@ -1290,7 +1318,7 @@ def run_schedule(out, week=None):
     log(f"Schedule {target}: {n} pages")
     # the loader sets league_state.current_week from the week the schedule opened on
     with open(os.path.join(out, "week.json"), "w") as fh:
-        json.dump({"current": cur, "captured": clean_week(target)}, fh)
+        json.dump(labels, fh)
 
 
 RESULT_RE = re.compile(r"^([A-Z]{2,3}) ?(\d+) ?- ?(\d+) ?([A-Z]{2,3})$")    # "LAC 34 - 9LV" too
@@ -1327,10 +1355,13 @@ def schedule_cross_ok(f, current_week):
     """JR's rule (Oct 13) for opening a box score with Cross on the League Schedule list:
     the week is earlier than the current week, the button bar shows BOX SCORE, ACTIONS
     appears nowhere, FORCE WIN appears only as the column header, and the highlighted row has
-    a final score. Returns None if allowed, else the reason."""
+    a final score. Returns None if allowed, else the reason. After the Super Bowl Madden is in the offseason
+    and shows no current week: the Super Bowl week then counts as before it (every other check still applies)."""
     W, H = f.size
     wk = week_label(f)
-    if not wk or not current_week or week_index(wk) is None or week_index(wk) >= week_index(current_week):
+    offseason_sb = not current_week and wk and clean_week(wk) == SUPER_BOWL
+    if not offseason_sb and (not wk or not current_week or week_index(wk) is None
+                             or week_index(wk) >= week_index(current_week)):
         return f"week {wk} is not before the current week {current_week}"
     if not any(norm(t) == "BOXSCORE" and b[1] > H * 0.9 for t, b in f.items):
         return "no BOX SCORE button"
@@ -2208,7 +2239,7 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games"],
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff"],
                     help="roster and season-schedule are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
@@ -2287,7 +2318,10 @@ def main():
         if a.only in (None, "team"):
             run_mode("Team Stats", lambda: run_team_stats(out), clear("team_stats"))
         if a.only in (None, "schedule"):
-            run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "week_debug"))
+            run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
+        if a.only == "playoff":               # postseason week: no Season Stats / Team Stats (regular season only)
+            run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
+            run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
         if a.only == "roster":
             tries = [0]
 

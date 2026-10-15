@@ -174,10 +174,13 @@ def compute_game_credit(games: list, current_week: int = None) -> tuple:
 
 
 def fetch_completed_games(cur, season: int) -> list:
+    """The season's completed regular-season games: credit, expected wins and luck sit next to the regular-season
+    record in team_seasons, so playoff games stay out (a playoff game shows no game credit)."""
     cur.execute("""
         SELECT id, week, home_team_id, away_team_id, home_score, away_score, game_type
         FROM games
         WHERE season = %s AND status = 'COMPLETED' AND home_score IS NOT NULL AND away_score IS NOT NULL
+          AND COALESCE(game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
         ORDER BY week, id
     """, (season,))
     cols = ["id", "week", "home_team_id", "away_team_id", "home_score", "away_score", "game_type"]

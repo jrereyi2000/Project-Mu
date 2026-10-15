@@ -85,6 +85,39 @@ def kicking_line(fgm, fga, fg_long, xpm, xpa, fgm_50=None, fga_50=None) -> str:
     return line
 
 
+def postseason_line(cur, season: int, player_id: int) -> dict:
+    """A player's playoff production, summed from the captured box scores of the season's playoff games the
+    current article may see (Season Stats are regular season only). Empty when he has no captured playoff line."""
+    cut = cutoff_week(season)
+    cur.execute("""
+        SELECT COUNT(DISTINCT l.game_id),
+               SUM(l.completions), SUM(l.pass_attempts), SUM(l.pass_yards), SUM(l.pass_tds), SUM(l.interceptions),
+               SUM(l.rush_attempts), SUM(l.rush_yards), SUM(l.rush_tds), SUM(l.receptions), SUM(l.rec_yards), SUM(l.rec_tds),
+               SUM(l.def_tackles), SUM(l.def_sacks), SUM(l.def_tfl), SUM(l.def_ints), SUM(l.def_deflections),
+               SUM(l.def_forced_fumbles), SUM(l.def_fumble_recoveries), SUM(l.def_tds), SUM(l.def_safeties),
+               SUM(l.kick_fgm), SUM(l.kick_fga), MAX(l.kick_fg_long), SUM(l.kick_xpm), SUM(l.kick_xpa),
+               COUNT(l.def_tackles), COUNT(l.kick_fga)
+        FROM game_stat_lines l JOIN games g ON g.id = l.game_id
+        WHERE l.player_id = %s AND g.season = %s AND COALESCE(g.game_type, 'REGULAR_SEASON') <> 'REGULAR_SEASON'
+          AND g.status = 'COMPLETED' AND (%s::int IS NULL OR g.week < %s::int)
+    """, (player_id, season, cut, cut))
+    r = cur.fetchone()
+    if not r or not r[0]:
+        return {}
+    out = {"games": r[0]}
+    if r[3]:
+        out["passing"] = f"{r[1] or 0}/{r[2] or 0}, {r[3]} yds, {r[4] or 0} TD, {r[5] or 0} INT"
+    if r[7]:
+        out["rushing"] = f"{r[6] or 0} car, {r[7]} yds, {r[8] or 0} TD"
+    if r[10]:
+        out["receiving"] = f"{r[9] or 0} rec, {r[10]} yds, {r[11] or 0} TD"
+    if r[26]:
+        out["defense"] = defense_line(r[12], r[13], r[14], r[15], r[16], r[17], r[18], r[19], r[20])
+    if r[27] and (r[22] or r[25]):
+        out["kicking"] = kicking_line(r[21], r[22], r[23], r[24], r[25])
+    return out
+
+
 def defense_and_special_teams(cur, season: int, player_id: int) -> dict:
     """A player's season defense, kicking, punting, return and pass-protection lines from the Season Stats
     capture (season_stat_lines), only the categories Madden lists him in."""
@@ -263,7 +296,7 @@ def get_game_box_score(game_id: int) -> str:
 
 @tool
 def get_player_season_stats(player_identifier: str) -> str:
-    """Fetch cumulative season stats (passing, rushing, receiving, and where listed defense, kicking, punting, returns and sacks allowed), Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout, and season touch/yard share for skill players. Accepts player name (e.g. 'Drake Maye') or player ID."""
+    """Fetch cumulative regular-season stats (passing, rushing, receiving, and where listed defense, kicking, punting, returns and sacks allowed), a separate postseason line from captured playoff box scores when he has one, Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout, and season touch/yard share for skill players. Accepts player name (e.g. 'Drake Maye') or player ID."""
     try:
         s_val = resolve_season()
         with psycopg.connect(db.db_conn_info) as conn:
@@ -364,7 +397,7 @@ def get_player_season_stats(player_identifier: str) -> str:
                         "team_success": row[21],
                         "awards_equity": row[22],
                         "exposure": row[23],
-                        "scale_note": "0-100. Spike index = 25 per 24+ PPR game this season (capped at 100). Awards equity weights the last 3 seasons' awards with decay plus 25% of career award points. Exposure = recency-weighted excitement of the games they played in, +25% for each week's top game.",
+                        "scale_note": "0-100. Spike index = 25 per big game this season (capped at 100): a 24+ PPR game for offense; for a listed defender, a game with 2+ splash plays (sacks, INTs, forced fumbles, recoveries) or a defensive TD, counted from captured game lines and estimated from season totals for the other games, so a defender's can be fractional. Awards equity weights the last 3 seasons' awards with decay plus 25% of career award points. Exposure = recency-weighted excitement of the games they played in, +25% for each week's top game.",
                     },
                     "playoff_clout": {
                         "score": row[24],
@@ -390,6 +423,11 @@ def get_player_season_stats(player_identifier: str) -> str:
                     result["season_stats"]["defense"] = NO_LINE_NOTE
                 elif (row[1] == "K" and "kicking" not in extra) or (row[1] == "P" and "punting" not in extra):
                     result["season_stats"]["special_teams"] = NO_LINE_NOTE
+                post = postseason_line(cur, s_val, target_id)
+                if post:
+                    result["postseason_stats"] = post
+                    result["postseason_note"] = ("season_stats are the regular season only; postseason_stats are this "
+                                                 "season's playoff games from their box scores. Keep them separate.")
                 return json.dumps(result, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
@@ -1061,7 +1099,7 @@ def get_weekly_slate(week: int, season: int = 0) -> str:
 
 @tool
 def get_season_standings(season: int = 0) -> str:
-    """Fetch the complete NFL standings for a season, grouped by division, including wins, losses, win percentage, points scored (PF), points allowed (PA), and point differential."""
+    """Fetch the complete NFL standings for a season (regular-season games only), grouped by division, including wins, losses, win percentage, points scored (PF), points allowed (PA), and point differential."""
     try:
         # Inside an article run, results from its publication week onward are excluded and the record is
         # counted from games; otherwise the stored team_seasons record is used.
@@ -1081,6 +1119,7 @@ def get_season_standings(season: int = 0) -> str:
                     FROM teams t
                     JOIN team_seasons ts ON t.id = ts.team_id AND ts.season = %s
                     LEFT JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id) AND g.season = %s AND g.status = 'COMPLETED'
+                         AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
                          AND (%s::int IS NULL OR g.week < %s::int)
                     GROUP BY t.id, t.name, t.conference, t.division, ts.wins, ts.losses
                     ORDER BY t.conference, t.division, win_pct DESC, (SUM(CASE WHEN g.home_team_id = t.id THEN g.home_score ELSE g.away_score END) - SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score ELSE g.home_score END)) DESC;
@@ -1205,8 +1244,8 @@ LEADER_CATEGORIES = {
 
 @tool
 def get_defense_special_teams_leaders(category: str = "sacks", team_identifier: str = "", limit: int = 15,
-                                      season: int = 0) -> str:
-    """Season leaders in a defensive or special-teams category, league-wide or for one team (team name or abbreviation): each player's full defensive line (tackles, sacks, TFL, INT, pass deflections, forced fumbles, fumble recoveries, defensive TDs) or kicking/punting/return line. category: sacks, interceptions, tackles, tackles_for_loss, pass_deflections, forced_fumbles, takeaways, defensive_tds, field_goals, punting, kick_returns, punt_returns, sacks_allowed (offensive linemen). Use it for a team's defensive playmakers, an opponent's pass rushers or ball hawks, All-Pro defense and special teams, and award races. limit is capped at 50."""
+                                      season: int = 0, rookies_only: bool = False) -> str:
+    """Season leaders in a defensive or special-teams category, league-wide or for one team (team name or abbreviation): each player's full defensive line (tackles, sacks, TFL, INT, pass deflections, forced fumbles, fumble recoveries, defensive TDs) or kicking/punting/return line. category: sacks, interceptions, tackles, tackles_for_loss, pass_deflections, forced_fumbles, takeaways, defensive_tds, field_goals, punting, kick_returns, punt_returns, sacks_allowed (offensive linemen). Each line shows the player's years of experience (rookie = first season). rookies_only=True lists rookies only (for Defensive Rookie of the Year). Use it for a team's defensive playmakers, an opponent's pass rushers or ball hawks, All-Pro defense and special teams, and award races. limit is capped at 50."""
     try:
         cat = str(category or "sacks").strip().lower().replace(" ", "_")
         if cat not in LEADER_CATEGORIES:
@@ -1229,18 +1268,20 @@ def get_defense_special_teams_leaders(category: str = "sacks", team_identifier: 
                            l.kick_fgm, l.kick_fga, l.kick_fg_long, l.kick_xpm, l.kick_xpa, l.kick_fgm_50, l.kick_fga_50,
                            l.punt_punts, l.punt_average, l.punt_net_average, l.punt_inside_20,
                            l.kr_returns, l.kr_yards, l.kr_average, l.kr_tds,
-                           l.pr_returns, l.pr_yards, l.pr_average, l.pr_tds, l.blk_sacks_allowed
+                           l.pr_returns, l.pr_yards, l.pr_average, l.pr_tds, l.blk_sacks_allowed, ps.years_of_experience
                     FROM season_stat_lines l
                     LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
                     LEFT JOIN teams t ON t.id = COALESCE(ps.team_id, l.team_id)
                     WHERE l.season = %s AND {row_filter} AND (%s::int IS NULL OR COALESCE(ps.team_id, l.team_id) = %s::int)
+                      AND (NOT %s OR ps.years_of_experience = 0)
                     ORDER BY {order_expr} DESC NULLS LAST, l.def_tackles DESC NULLS LAST, l.player_id
                     LIMIT %s;
-                """, (s_val, team_id, team_id, lim))
+                """, (s_val, team_id, team_id, bool(rookies_only), lim))
                 rows = cur.fetchall()
                 lines = []
                 for i, r in enumerate(rows, 1):
-                    head = f"{i}. {r[1]} (ID {r[0]}) | {r[2]} | {r[3] or 'Free Agent'}" + (f" | {r[4]} G" if r[4] else "")
+                    head = f"{i}. {r[1]} (ID {r[0]}) | {r[2]} | {r[3] or 'Free Agent'}" + (f" | {r[4]} G" if r[4] else "") \
+                        + (" | rookie" if r[34] == 0 else (f" | exp {r[34]}" if r[34] is not None else ""))
                     if cat == "field_goals":
                         body = kicking_line(r[14], r[15], r[16], r[17], r[18], r[19], r[20])
                     elif cat == "punting":
@@ -1258,6 +1299,7 @@ def get_defense_special_teams_leaders(category: str = "sacks", team_identifier: 
                     "season": s_val,
                     "category": label,
                     "team": team_identifier or "League-wide",
+                    "rookies_only": bool(rookies_only),
                     "leaders": lines or ["No listed players in this category."],
                     "note": "Season totals from Madden's Season Stats, which lists only the leaders in each category "
                             "(defenders are listed by tackles, roughly the top 250). A player missing here has unknown "

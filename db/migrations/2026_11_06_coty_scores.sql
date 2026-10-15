@@ -1,4 +1,4 @@
--- Coach of the Year race (PROJECT_SPEC §2.10): one row per head coach per season, rewritten by
+-- Coach of the Year race (PROJECT_SPEC §2.11): one row per head coach per season, rewritten by
 -- python3 -m engines.coty_engine [--season N]. Inputs the coach didn't have (no previous regular season,
 -- no team_ovr) are NULL. Run once: psql -f db/migrations/2026_11_06_coty_scores.sql
 BEGIN;

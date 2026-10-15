@@ -1,8 +1,8 @@
-"""Coach of the Year race (PROJECT_SPEC §2.10): scores every head coach of a season from the regular season.
+"""Coach of the Year race (PROJECT_SPEC §2.11): scores every head coach of a season from the regular season.
 
 Inputs, each a z-score across the season's coaches who have it:
 - win%                    (ties count half)
-- wins above expectation  wins − expected wins, from Opponent-Adjusted Game Credit (§2.4) refit on regular-season games
+- wins above expectation  wins − expected wins, from Opponent-Adjusted Game Credit (§2.4) on regular-season games
 - roster outperformance   team_ovr rank − win% rank (positive = winning more than the roster's rating says)
 - improvement             win% − the team's previous regular-season win%, from `games`
 
@@ -58,7 +58,8 @@ def zscores(values: dict) -> dict:
 
 
 def regular_season(games: list) -> list:
-    return [g for g in games if g.get("game_type") == "REGULAR_SEASON"]
+    """A NULL game_type counts as regular season, as in game_credit_engine.fetch_completed_games."""
+    return [g for g in games if (g.get("game_type") or "REGULAR_SEASON") == "REGULAR_SEASON"]
 
 
 def win_pcts(games: list) -> dict:

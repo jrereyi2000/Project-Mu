@@ -42,7 +42,7 @@ const input = "border border-[var(--gray-300)] px-2 py-1 text-sm bg-white w-full
 
 // ------------------------------------------------------------- control ----
 const RUNS: { kind: string; title: string; note: string }[] = [
-  { kind: "scan_week", title: "Scan week", note: "Full weekly run: capture Season Stats, Team Stats and last week's schedule, extract, load, engines, articles." },
+  { kind: "scan_week", title: "Scan week", note: "Full weekly run: capture Season Stats, Team Stats and last week's schedule, extract, load, engines, articles. Playoffs (week 19 on): last round's schedule, next round's matchups and every game's box score (~7 min a game) instead of Season Stats. Week 22 (Pro Bowl week): no console, just the Super Bowl week's articles." },
   { kind: "backfill_week", title: "Backfill previous week", note: "The same capture, extract, load and engines. No articles." },
   { kind: "game_scan", title: "Game scan", note: "Every game of last week: box scores and both teams' player stats (~7 min a game), loaded over the backfill's lines. No articles." },
 ];

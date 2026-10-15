@@ -1019,6 +1019,58 @@ function GamePage({ gameId }: { gameId: number }) {
   );
 }
 
+const POSITION_LABELS: Record<string, string> = {
+  QB: "Quarterback", HB: "Halfback", FB: "Fullback", WR: "Wide Receiver", TE: "Tight End",
+  LT: "Left Tackle", LG: "Left Guard", C: "Center", RG: "Right Guard", RT: "Right Tackle",
+  LEDG: "Edge Rusher", REDG: "Edge Rusher", DT: "Defensive Tackle", MIKE: "Middle Linebacker",
+  WILL: "Weakside Linebacker", SAM: "Strongside Linebacker", CB: "Cornerback", FS: "Free Safety",
+  SS: "Strong Safety", K: "Kicker", P: "Punter", LS: "Long Snapper",
+};
+
+// Player-page columns for units without offensive box-score lines (from the Season Stats capture, which lists
+// only the leaders in each category; "—" = not listed, not zero).
+type StatCol = { label: string; value: (row: any) => any };
+const dash = (v: any) => (v === null || v === undefined ? "—" : v);
+const ratio = (made: any, att: any) => (att === null || att === undefined ? "—" : `${made ?? 0}/${att}`);
+const unitGameColumns: Record<string, StatCol[]> = {
+  defense: [
+    { label: "TKL", value: (g) => dash(g.def_tackles) }, { label: "SCK", value: (g) => dash(g.def_sacks) },
+    { label: "TFL", value: (g) => dash(g.def_tfl) }, { label: "INT", value: (g) => dash(g.def_ints) },
+    { label: "PD", value: (g) => dash(g.def_deflections) }, { label: "FF", value: (g) => dash(g.def_forced_fumbles) },
+    { label: "TD", value: (g) => dash(g.def_tds) },
+  ],
+  kicking: [
+    { label: "FG", value: (g) => ratio(g.kick_fgm, g.kick_fga) }, { label: "LNG", value: (g) => dash(g.kick_fg_long) },
+    { label: "XP", value: (g) => ratio(g.kick_xpm, g.kick_xpa) },
+  ],
+  punting: [
+    { label: "PUNTS", value: (g) => dash(g.punt_punts) }, { label: "AVG", value: (g) => dash(g.punt_average) },
+    { label: "NET", value: (g) => dash(g.punt_net_average) }, { label: "IN 20", value: (g) => dash(g.punt_inside_20) },
+  ],
+  blocking: [{ label: "SACKS ALLOWED", value: (g) => dash(g.blk_sacks_allowed) }],
+};
+const unitCareerColumns: Record<string, StatCol[]> = {
+  defense: [
+    { label: "TKL", value: (s) => dash(s.def_tackles) }, { label: "SOLO", value: (s) => dash(s.def_solo) },
+    { label: "SCK", value: (s) => dash(s.def_sacks) }, { label: "TFL", value: (s) => dash(s.def_tfl) },
+    { label: "INT", value: (s) => dash(s.def_ints) }, { label: "PD", value: (s) => dash(s.def_deflections) },
+    { label: "FF", value: (s) => dash(s.def_forced_fumbles) }, { label: "FR", value: (s) => dash(s.def_fumble_recoveries) },
+    { label: "TD", value: (s) => dash(s.def_tds) },
+  ],
+  kicking: [
+    { label: "FG", value: (s) => ratio(s.kick_fgm, s.kick_fga) },
+    { label: "FG%", value: (s) => (s.kick_fga ? (100 * s.kick_fgm / s.kick_fga).toFixed(1) : "—") },
+    { label: "LNG", value: (s) => dash(s.kick_fg_long) }, { label: "50+", value: (s) => ratio(s.kick_fgm_50, s.kick_fga_50) },
+    { label: "XP", value: (s) => ratio(s.kick_xpm, s.kick_xpa) },
+  ],
+  punting: [
+    { label: "PUNTS", value: (s) => dash(s.punt_punts) }, { label: "YDS", value: (s) => dash(s.punt_yards) },
+    { label: "AVG", value: (s) => dash(s.punt_average) }, { label: "NET", value: (s) => dash(s.punt_net_average) },
+    { label: "IN 20", value: (s) => dash(s.punt_inside_20) }, { label: "LNG", value: (s) => dash(s.punt_longest) },
+  ],
+  blocking: [{ label: "SACKS ALLOWED", value: (s) => dash(s.blk_sacks_allowed) }],
+};
+
 function PlayerPage({ category, playerId }: { category: string; playerId: number }) {
   const systemStatus = useContext(SystemContext);
   const [showAllGames, setShowAllGames] = useState(false);
@@ -1040,11 +1092,29 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
   
   const visibleGames = showAllGames ? game_log : game_log.slice(-5);
   const isQuarterback = player.position === "QB";
-  const positionLabel = player.position === "QB" ? "Quarterback" : player.position === "HB" ? "Halfback" : player.position === "FB" ? "Fullback" : player.position === "WR" ? "Wide Receiver" : "Tight End";
+  const positionLabel = POSITION_LABELS[player.position] ?? player.position;
+  // Defenders, kickers, punters and linemen get their own columns (null = offensive skill player)
+  const unitGroup: string | null = unitGameColumns[playerData.stat_group] ? playerData.stat_group : null;
+  const gameCols = unitGroup ? unitGameColumns[unitGroup] : [];
+  const careerCols = unitGroup ? unitCareerColumns[unitGroup] : [];
+  const missingGameLines = unitGroup !== null && visibleGames.some((g: any) => g.status === "COMPLETED" && !g.has_capture_line);
   
   // Calculate season highlights from career_stats for the current season
   const currentSeasonStats = career_stats.find((s: any) => s.season === systemStatus.season) || {};
-  const seasonHighlight = isQuarterback
+  const listed = currentSeasonStats.has_capture_line;
+  const seasonHighlight = unitGroup === "defense"
+    ? ["CB", "FS", "SS"].includes(player.position)
+      ? { yards: listed ? currentSeasonStats.def_ints ?? 0 : "—", yardsLabel: "INTERCEPTIONS", touchdowns: listed ? currentSeasonStats.def_tackles ?? 0 : "—", touchdownLabel: "TACKLES" }
+      : ["LEDG", "REDG", "DT"].includes(player.position)
+        ? { yards: listed ? currentSeasonStats.def_sacks ?? 0 : "—", yardsLabel: "SACKS", touchdowns: listed ? currentSeasonStats.def_tfl ?? 0 : "—", touchdownLabel: "TACKLES FOR LOSS" }
+        : { yards: listed ? currentSeasonStats.def_tackles ?? 0 : "—", yardsLabel: "TACKLES", touchdowns: listed ? currentSeasonStats.def_sacks ?? 0 : "—", touchdownLabel: "SACKS" }
+    : unitGroup === "kicking"
+      ? { yards: listed ? `${currentSeasonStats.kick_fgm ?? 0}/${currentSeasonStats.kick_fga ?? 0}` : "—", yardsLabel: "FIELD GOALS", touchdowns: listed ? currentSeasonStats.kick_fg_long ?? 0 : "—", touchdownLabel: "LONG" }
+      : unitGroup === "punting"
+        ? { yards: listed ? currentSeasonStats.punt_net_average ?? "—" : "—", yardsLabel: "NET PUNT AVERAGE", touchdowns: listed ? currentSeasonStats.punt_inside_20 ?? 0 : "—", touchdownLabel: "INSIDE THE 20" }
+        : unitGroup === "blocking"
+          ? { yards: currentSeasonStats.gp || 0, yardsLabel: "GAMES PLAYED", touchdowns: listed ? currentSeasonStats.blk_sacks_allowed ?? 0 : "—", touchdownLabel: "SACKS ALLOWED" }
+          : isQuarterback
     ? { yards: currentSeasonStats.pass_yards || 0, yardsLabel: "PASSING YARDS", touchdowns: currentSeasonStats.pass_tds || 0, touchdownLabel: "PASSING TD" }
     : ["HB", "FB"].includes(player.position)
       ? { yards: currentSeasonStats.rush_yards || 0, yardsLabel: "RUSHING YARDS", touchdowns: currentSeasonStats.rush_tds || 0, touchdownLabel: "RUSHING TD" }
@@ -1145,7 +1215,9 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
               <thead>
                 <tr>
                   <th>WK</th><th>OPPONENT</th><th>RESULT</th>
-                  {isQuarterback
+                  {unitGroup
+                    ? gameCols.map((col) => <th key={col.label}>{col.label}</th>)
+                    : isQuarterback
                     ? <><th>CMP/ATT</th><th>PASS YDS</th><th>PASS TD</th><th>INT</th><th>CAR</th><th>RUSH YDS</th><th>RUSH TD</th></>
                     : <><th>CAR</th><th>RUSH YDS</th><th>RUSH TD</th><th>REC</th><th>REC YDS</th><th>REC TD</th></>}
                 </tr>
@@ -1165,7 +1237,9 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
                       <td>{game.week}</td>
                       <td><a href={`#team-${opponent_abbr}`}><img src={logo(opponent_abbr)} alt="" /><span>{location} {opponent_name}</span></a></td>
                       <td>{game.status === 'COMPLETED' ? <><b className={isWin ? "win" : "loss"}>{isWin ? "W" : "L"}</b> {Math.max(teamScore, oppScore)}–{Math.min(teamScore, oppScore)}</> : "-"}</td>
-                      {isQuarterback ? (
+                      {unitGroup ? (
+                        gameCols.map((col) => <td key={col.label}>{game.status === "COMPLETED" ? col.value(game) : "—"}</td>)
+                      ) : isQuarterback ? (
                         <>
                           <td>{game.completions || 0}/{game.pass_attempts || 0}</td>
                           <td>{game.pass_yards || 0}</td>
@@ -1191,6 +1265,9 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
               </tbody>
             </table>
           </div>
+          {missingGameLines && (
+            <p className="player-log-note">— means no line was recorded for that game. Season totals are in Career Stats.</p>
+          )}
         </section>
 
         <section className="player-career-section">
@@ -1200,7 +1277,9 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
               <thead>
                 <tr>
                   <th>SEASON</th><th>TEAM</th><th>GP</th>
-                  {isQuarterback
+                  {unitGroup
+                    ? careerCols.map((col) => <th key={col.label}>{col.label}</th>)
+                    : isQuarterback
                     ? <><th>CMP/ATT</th><th>PASS YDS</th><th>PASS TD</th><th>RUSH YDS</th><th>RUSH TD</th></>
                     : <><th>CAR</th><th>RUSH YDS</th><th>RUSH TD</th><th>REC</th><th>REC YDS</th><th>REC TD</th></>}
                 </tr>
@@ -1211,7 +1290,9 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
                     <td><strong>{s.season}</strong></td>
                     <td><a href={`#team-${s.team_abbr.toLowerCase()}`}><img src={logo(s.team_abbr.toLowerCase())} alt="" /><span>{s.team_name}</span></a></td>
                     <td>{s.gp || 0}</td>
-                    {isQuarterback ? (
+                    {unitGroup ? (
+                      careerCols.map((col) => <td key={col.label}>{col.value(s)}</td>)
+                    ) : isQuarterback ? (
                       <>
                         <td>{s.completions || 0}/{s.pass_attempts || 0}</td>
                         <td>{s.pass_yards || 0}</td>
@@ -1261,6 +1342,32 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
 
 const offensiveStatCategories = ["Passing", "Rushing", "Receiving", "Scoring"];
 
+// Stats page tabs by unit. Defense and special teams come from the Season Stats capture, which lists only the
+// leaders in each category (defenders by tackles).
+const statCategoryGroups: Record<"team" | "player", { unit: string; categories: string[] }[]> = {
+  player: [
+    { unit: "Offense", categories: offensiveStatCategories },
+    { unit: "Defense", categories: ["Tackles", "Sacks", "Interceptions"] },
+    { unit: "Special Teams", categories: ["Kicking", "Punting", "Kick Returns", "Punt Returns"] },
+  ],
+  team: [
+    { unit: "Offense", categories: [...offensiveStatCategories, "Downs"] },
+    { unit: "Defense", categories: ["Red Zone Defense"] },
+  ],
+};
+
+const unitStatColumns: Record<string, string[]> = {
+  Tackles: ["TOT", "SOLO", "AST", "TFL", "SCK", "FF", "FR"],
+  Sacks: ["SCK", "TFL", "TOT", "FF", "FR", "SFTY"],
+  Interceptions: ["INT", "YDS", "AVG", "LNG", "TD", "PD"],
+  Kicking: ["FGM", "FGA", "FG%", "LNG", "50+", "XPM", "XPA", "PTS"],
+  Punting: ["PUNTS", "YDS", "AVG", "NET", "LNG", "IN 20", "TB"],
+  "Kick Returns": ["RET", "YDS", "AVG", "LNG", "TD"],
+  "Punt Returns": ["RET", "YDS", "AVG", "LNG", "TD"],
+  Downs: ["3D CONV", "3D ATT", "3D%", "4D CONV", "4D ATT", "4D%", "2PT", "RZ ATT", "RZ TD", "RZ TD%", "PEN", "PEN YDS"],
+  "Red Zone Defense": ["PA", "PA/G", "RZ ATT", "RZ TD", "RZ FG", "RZ TD%", "RZ SCORE%"],
+};
+
 const statColumns: Record<string, string[]> = {
   Passing: ["ATT", "CMP", "CMP %", "YDS/ATT", "PASS YDS", "TD", "INT", "RATE", "1ST", "1ST%", "20+", "40+", "LNG", "SCK"],
   Rushing: ["ATT", "YDS", "AVG", "LNG", "TD", "1ST", "1ST%", "20+", "FUM"],
@@ -1303,7 +1410,11 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
       });
   }, [mode, season, category]);
 
-  const columns = mode === "player" && category === "Scoring"
+  const unit = statCategoryGroups[mode].find((group) => group.categories.includes(category))?.unit ?? "Offense";
+  const listedLeadersOnly = mode === "player" && unit !== "Offense";
+  const columns = unitStatColumns[category]
+    ? unitStatColumns[category]
+    : mode === "player" && category === "Scoring"
     ? ["PASSING TD", "RUSHING TD", "RECEIVING TD", "TOTAL TD"]
     : category === "Passing"
       ? ["ATT", "CMP", "CMP %", "YDS/ATT", "PASS YDS", "TD", "INT", "RATE"]
@@ -1369,13 +1480,18 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
 
       <section className="stats-workspace">
         <div className="stats-heading">
-          <span>{season} {mode.toUpperCase()} STATS · OFFENSE</span>
+          <span>{season} {mode.toUpperCase()} STATS · {unit.toUpperCase()}</span>
           <h2>{category}</h2>
         </div>
 
         <div className="stat-category-tabs">
-          {offensiveStatCategories.map((item) => (
-            <button className={category === item ? "active" : ""} onClick={() => { setCategory(item); setPage(1); setSort({ key: "rank", direction: "asc" }); }} key={item}>{item}</button>
+          {statCategoryGroups[mode].map((group) => (
+            <div className="stat-category-group" key={group.unit}>
+              <small>{group.unit}</small>
+              {group.categories.map((item) => (
+                <button className={category === item ? "active" : ""} onClick={() => { setCategory(item); setPage(1); setSort({ key: "rank", direction: "asc" }); }} key={item}>{item}</button>
+              ))}
+            </div>
           ))}
         </div>
 
@@ -1424,7 +1540,7 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
 
       <section className="stats-table-section">
         <div className="stats-table-meta">
-          <span>{mode === "team" ? "32 TEAMS" : "QUALIFIED PLAYERS"}</span>
+          <span>{mode === "team" ? "32 TEAMS" : listedLeadersOnly ? "LEAGUE LEADERS (PLAYERS THE LEAGUE LISTS)" : "QUALIFIED PLAYERS"}</span>
           <span>REGULAR SEASON</span>
         </div>
         <div className="stats-table-scroll">
