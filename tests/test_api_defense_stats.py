@@ -14,10 +14,10 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def frontend_columns() -> dict:
+def frontend_columns(name: str = "unitStatColumns") -> dict:
     with open(os.path.join(ROOT, "Mu_Network", "src", "App.tsx")) as f:
         src = f.read()
-    block = src[src.index("const unitStatColumns"):]
+    block = src[src.index(f"const {name}"):]
     block = block[:block.index("};")]
     return {m.group(1) or m.group(2): re.findall(r'"([^"]+)"', m.group(3))
             for m in re.finditer(r'(?:"([^"]+)"|(\w+)):\s*\[([^\]]*)\]', block)}
@@ -94,13 +94,31 @@ class DefenseStatsApiTests(unittest.TestCase):
     def test_season_type_filters_offense_and_blanks_capture_tables(self):
         regular = client.get("/api/stats/player", params={"category": "Passing", "season": 2035}).json()
         self.assertTrue(regular)
-        post = {cat: client.get("/api/stats/player", params={"category": cat, "season": 2035,
-                                                           "season_type": "postseason"}).json()
-                for cat in ("Passing", "Sacks")}
-        self.assertEqual(post["Sacks"], [])   # Season Stats is regular season only
-        self.assertLessEqual(len(post["Passing"]), len(regular))
-        self.assertEqual(client.get("/api/stats/team", params={"category": "Downs", "season": 2035,
-                                                               "season_type": "postseason"}).json(), [])
+        post = client.get("/api/stats/player", params={"category": "Passing", "season": 2035,
+                                                        "season_type": "postseason"}).json()
+        self.assertLessEqual(len(post), len(regular))
+
+    def test_postseason_tables_from_captured_box_scores(self):
+        """Postseason defense/special teams and team tables sum the playoff box scores. Week 17's captured games
+        stand in for playoff games, which 2035 doesn't have yet."""
+        import psycopg
+        from psycopg.rows import dict_row
+        from server import api
+        cols = frontend_columns()
+        with psycopg.connect(api.CONN_INFO, row_factory=dict_row) as conn:
+            cur = conn.cursor()
+            for cat in ("tackles", "sacks", "kicking", "punting"):
+                rows = api.player_st_leaders(cur, 2035, cat, postseason=True, games="g.week = 17")
+                self.assertTrue(rows, cat)
+                self.assertEqual(list(rows[0]["stats"]), cols[cat.title()], cat)
+            downs = api.team_situational_postseason(cur, 2035, "downs", games="g.week = 17")
+            self.assertEqual(len(downs), 32)
+            # box scores have conversions but no attempts: attempt columns are left out, the rest are real
+            self.assertEqual(list(downs[0]["stats"]), frontend_columns("postseasonStatColumns")["Downs"])
+            self.assertTrue(set(downs[0]["stats"]) <= set(cols["Downs"]))
+            self.assertIsNotNone(downs[0]["stats"]["3D CONV"])
+            rzd = api.team_situational_postseason(cur, 2035, "red zone defense", games="g.week = 17")
+            self.assertEqual(list(rzd[0]["stats"]), cols["Red Zone Defense"])
 
     def test_status_reports_last_load(self):
         self.assertIn("last_updated", client.get("/api/status").json())

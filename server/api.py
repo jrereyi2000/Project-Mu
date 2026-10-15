@@ -1068,24 +1068,94 @@ def season_type_filter(season_type: str) -> str:
     return "COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'"
 
 
-def player_st_leaders(cur, season: int, cat: str) -> list:
-    """Defense and special-teams player leaderboards from the Season Stats capture."""
+# A season's playoff box-score lines summed per player, with the same columns as season_stat_lines
+_SUMS = ("def_solo", "def_assists", "def_tackles", "def_tfl", "def_sacks", "def_ints", "def_int_yds", "def_deflections",
+         "def_forced_fumbles", "def_fumble_recoveries", "def_safeties", "def_tds", "kick_fgm", "kick_fga", "kick_xpm",
+         "kick_xpa", "kick_fgm_50", "kick_fga_50", "punt_punts", "punt_yards", "punt_net_yards", "punt_inside_20",
+         "punt_touchbacks", "kr_returns", "kr_yards", "kr_tds", "pr_returns", "pr_yards", "pr_tds")
+_LONGS = ("def_int_long", "kick_fg_long", "punt_longest", "kr_longest", "pr_longest")
+PLAYOFF_GAMES = "COALESCE(g.game_type, 'REGULAR_SEASON') <> 'REGULAR_SEASON'"
+POSTSEASON_LINES = f"""
+    SELECT gl.player_id, MAX(gl.player_name) AS player_name, gl.season,
+           (ARRAY_AGG(gl.team_id ORDER BY gl.week DESC))[1] AS team_id, NULL::text AS position,
+           {", ".join(f"SUM(gl.{c}) AS {c}" for c in _SUMS)},
+           {", ".join(f"MAX(gl.{c}) AS {c}" for c in _LONGS)},
+           ROUND(SUM(gl.def_int_yds)::numeric / NULLIF(SUM(gl.def_ints), 0), 1) AS def_int_avg,
+           ROUND(SUM(gl.kick_fgm)::numeric * 100 / NULLIF(SUM(gl.kick_fga), 0), 1) AS kick_fg_pct,
+           ROUND(SUM(gl.punt_yards)::numeric / NULLIF(SUM(gl.punt_punts), 0), 1) AS punt_average,
+           ROUND(SUM(gl.punt_net_average * gl.punt_punts)::numeric / NULLIF(SUM(gl.punt_punts), 0), 1) AS punt_net_average,
+           ROUND(SUM(gl.kr_yards)::numeric / NULLIF(SUM(gl.kr_returns), 0), 1) AS kr_average,
+           ROUND(SUM(gl.pr_yards)::numeric / NULLIF(SUM(gl.pr_returns), 0), 1) AS pr_average
+    FROM game_stat_lines gl JOIN games g ON g.id = gl.game_id
+    WHERE gl.season = %s AND g.status = 'COMPLETED' AND {{games}}
+    GROUP BY gl.player_id, gl.season"""
+
+
+def player_st_leaders(cur, season: int, cat: str, postseason: bool = False, games: str = PLAYOFF_GAMES) -> list:
+    """Defense and special-teams player leaderboards: the Season Stats capture for the regular season, the
+    season's captured playoff box scores for the postseason."""
     row_filter, order_by, build = PLAYER_ST_CATEGORIES[cat]
+    source = f"({POSTSEASON_LINES.format(games=games)}) l" if postseason else "season_stat_lines l"
     cur.execute(f"""
         SELECT l.*, p.id AS pid, p.full_name AS display_name, p.player_number,
                COALESCE(ps.position, l.position) AS pos, t.name AS t_name, t.abbreviation AS t_abbr
-        FROM season_stat_lines l
+        FROM {source}
         JOIN players p ON p.id = l.player_id
         LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
         JOIN teams t ON t.id = COALESCE(ps.team_id, l.team_id)
         WHERE l.season = %s AND {row_filter}
         ORDER BY {order_by} NULLS LAST, p.id
-    """, (season,))
+    """, (season, season) if postseason else (season,))
     return [{
         "id": r["pid"], "name": r["display_name"] or r["player_name"], "player_number": r["player_number"] or 0,
         "position": r["pos"], "team_name": r["t_name"], "team_abbr": display_team_abbr(r["t_abbr"]),
         "stats": build(r),
     } for r in cur.fetchall()]
+
+
+def team_situational_postseason(cur, season: int, cat: str, games: str = PLAYOFF_GAMES) -> list:
+    """Postseason 'downs' and 'red zone defense' from the playoff games' captured team box scores. A box score has
+    conversions but no attempts, red-zone TDs/FGs (trips from its percentage) and penalty yards but no count,
+    so only those columns are returned (null where the box score didn't record a game's value)."""
+    real = lambda col: (f"CASE WHEN {{t}}.{col} IS NOT NULL AND (NOT ('{col}' = ANY({{t}}.estimated_fields)) "
+                        f"OR '{col}' = ANY({{t}}.exact_fields)) THEN {{t}}.{col} END")
+    def total(t, col):   # NULL when any game is missing the value
+        expr = real(col).format(t=t)
+        return f"CASE WHEN COUNT({expr}) = COUNT(*) THEN SUM({expr}) END"
+    cur.execute(f"""
+        SELECT tm.id, tm.name AS team_name, tm.abbreviation AS team_abbr, COUNT(*) AS gp, SUM(opp.score) AS pa,
+               {total('ts', 'third_down_conversions')} AS c3, {total('ts', 'fourth_down_conversions')} AS c4,
+               {total('ts', 'two_point_conversions')} AS c2, {total('ts', 'red_zone_attempts')} AS rza,
+               {total('ts', 'red_zone_tds')} AS rztd, {total('ts', 'penalty_yards')} AS peny,
+               {total('opp', 'red_zone_attempts')} AS drza, {total('opp', 'red_zone_tds')} AS drztd,
+               {total('opp', 'red_zone_fgs')} AS drzfg
+        FROM games g
+        JOIN teams tm ON tm.id IN (g.home_team_id, g.away_team_id)
+        JOIN team_stats ts ON ts.game_id = g.id AND ts.team_name = tm.name
+        JOIN team_stats opp ON opp.game_id = g.id AND opp.team_name <> tm.name
+        WHERE g.season = %s AND g.status = 'COMPLETED' AND {games}
+        GROUP BY tm.id, tm.name, tm.abbreviation
+    """, (season,))
+    out = []
+    for r in cur.fetchall():
+        if cat == "downs":
+            stats = {"3D CONV": r["c3"], "4D CONV": r["c4"], "2PT": r["c2"], "RZ ATT": r["rza"], "RZ TD": r["rztd"],
+                     "RZ TD%": _pct_str(r["rztd"], r["rza"]) if r["rza"] is not None and r["rztd"] is not None else None,
+                     "PEN YDS": r["peny"]}
+            order = (r["c3"] or 0) / (r["gp"] or 1)
+        else:
+            stats = {"PA": r["pa"] or 0, "PA/G": f"{(r['pa'] or 0) / r['gp']:.1f}" if r["gp"] else "0.0",
+                     "RZ ATT": r["drza"], "RZ TD": r["drztd"], "RZ FG": r["drzfg"],
+                     "RZ TD%": _pct_str(r["drztd"], r["drza"]) if r["drza"] is not None and r["drztd"] is not None else None,
+                     "RZ SCORE%": (_pct_str((r["drztd"] or 0) + (r["drzfg"] or 0), r["drza"])
+                                   if None not in (r["drza"], r["drztd"], r["drzfg"]) else None)}
+            order = -((r["pa"] or 0) / (r["gp"] or 1))
+        out.append({"id": r["id"], "team_name": r["team_name"], "team_abbr": display_team_abbr(r["team_abbr"]),
+                    "stats": stats, "_order": order})
+    out.sort(key=lambda x: x["_order"], reverse=True)
+    for x in out:
+        del x["_order"]
+    return out
 
 
 def team_situational_table(cur, season: int, cat: str) -> list:
@@ -1321,8 +1391,8 @@ def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"
                 return results
 
             elif cat in PLAYER_ST_CATEGORIES:
-                # Season Stats covers the regular season only; postseason defense/special teams aren't recorded
-                return [] if postseason else player_st_leaders(cur, season, cat)
+                # Regular season: the Season Stats capture; postseason: the captured playoff box scores
+                return player_st_leaders(cur, season, cat, postseason)
 
             return []
 
@@ -1334,8 +1404,10 @@ def get_team_stats_api(season: Optional[int] = None, category: str = "Passing", 
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             if cat in ("downs", "red zone defense"):
-                # Team Stats covers the regular season only
-                return [] if games_filter.endswith("<> 'REGULAR_SEASON'") else team_situational_table(cur, season, cat)
+                # Regular season: the Team Stats capture; postseason: the playoff games' captured box scores
+                if games_filter.endswith("<> 'REGULAR_SEASON'"):
+                    return team_situational_postseason(cur, season, cat)
+                return team_situational_table(cur, season, cat)
             cur.execute("""
                 SELECT 
                     t.id, t.name as team_name, t.abbreviation as team_abbr,

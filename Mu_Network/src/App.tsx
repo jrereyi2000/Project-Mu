@@ -1433,6 +1433,12 @@ const unitStatColumns: Record<string, string[]> = {
   "Red Zone Defense": ["PA", "PA/G", "RZ ATT", "RZ TD", "RZ FG", "RZ TD%", "RZ SCORE%"],
 };
 
+// Postseason tables come from playoff box scores, which record conversions but not attempts and penalty yards
+// but not the count (server/api.py team_situational_postseason)
+const postseasonStatColumns: Record<string, string[]> = {
+  Downs: ["3D CONV", "4D CONV", "2PT", "RZ ATT", "RZ TD", "RZ TD%", "PEN YDS"],
+};
+
 const statColumns: Record<string, string[]> = {
   Passing: ["ATT", "CMP", "CMP %", "YDS/ATT", "PASS YDS", "TD", "INT", "RATE", "1ST", "1ST%", "20+", "40+", "LNG", "SCK"],
   Rushing: ["ATT", "YDS", "AVG", "LNG", "TD", "1ST", "1ST%", "20+", "FUM"],
@@ -1477,10 +1483,8 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
 
   const unit = statCategoryGroups[mode].find((group) => group.categories.includes(category))?.unit ?? "Offense";
   const listedLeadersOnly = mode === "player" && unit !== "Offense";
-  // Defense, special teams, Downs and Red Zone Defense come from Madden's season screens: regular season only
-  const regularSeasonOnly = Boolean(unitStatColumns[category]);
   const updated = formatUpdated(systemStatus.last_updated);
-  const columns = unitStatColumns[category]
+  const allColumns = unitStatColumns[category]
     ? unitStatColumns[category]
     : mode === "player" && category === "Scoring"
     ? ["PASSING TD", "RUSHING TD", "RECEIVING TD", "TOTAL TD"]
@@ -1491,6 +1495,11 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
         : category === "Receiving"
           ? ["REC", "YDS", "AVG", "TD"]
           : ["PTS", "TOTAL TD", "PASS TD", "RUSH TD"];
+  // Postseason: only the fields playoff box scores record (and of those, the ones the API returned)
+  const returned = statsData[0]?.stats;
+  const postseasonColumns = postseasonStatColumns[category] ?? allColumns;
+  const columns = seasonType !== "Postseason" ? allColumns
+    : returned ? postseasonColumns.filter((column) => column in returned) : postseasonColumns;
 
   const sortedRows = [...statsData].sort((a, b) => {
     let first: any;
@@ -1646,11 +1655,9 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
               ) : visibleRows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length + (mode === "player" ? 4 : 2)} style={{ textAlign: "center", padding: "3rem", color: "var(--gray-500)" }}>
-                    {seasonType === "Postseason" && regularSeasonOnly
-                      ? `Postseason ${category} stats aren't recorded: this table comes from the league's regular-season stats screens.`
-                      : seasonType === "Postseason"
-                        ? `No postseason games played in ${season} yet.`
-                        : `No statistics found for ${category} in ${season}.`}
+                    {seasonType === "Postseason"
+                      ? `No postseason ${category} stats recorded for ${season} yet.`
+                      : `No statistics found for ${category} in ${season}.`}
                   </td>
                 </tr>
               ) : (
