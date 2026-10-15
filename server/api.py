@@ -144,9 +144,13 @@ def get_status():
         with conn.cursor() as cur:
             cur.execute("SELECT current_season, current_week FROM league_state LIMIT 1;")
             state = cur.fetchone()
+            # When stats were last loaded: the latest capture load (the Stats page's "Updated" time)
+            cur.execute("SELECT MAX(loaded_at) AS loaded_at FROM captures WHERE status = 'loaded'")
+            loaded = cur.fetchone()
+            last_updated = loaded["loaded_at"].isoformat() if loaded and loaded["loaded_at"] else None
             if state:
-                return {"season": state['current_season'], "week": state['current_week']}
-            return {"season": 2035, "week": 18}
+                return {"season": state['current_season'], "week": state['current_week'], "last_updated": last_updated}
+            return {"season": 2035, "week": 18, "last_updated": last_updated}
 
 @app.get("/api/schedule")
 def get_schedule(season: Optional[int] = None, week: Optional[int] = None):
@@ -957,6 +961,29 @@ def get_player_api(id: int, season: Optional[int] = None):
                 g['away_abbr'] = display_team_abbr(g['away_abbr'])
             for c in career:
                 c['team_abbr'] = display_team_abbr(c['team_abbr'])
+            # The player's coverage: newsroom articles tagged with him (article_players), newest first
+            cur.execute("""
+                SELECT DISTINCT ON (nf.id) nf.id, nf.season, nf.week, nf.article_type, nf.headline, nf.excerpt,
+                       nf.persona, nf.created_at, ap.mention_type, ap.mention_count, am.display_name
+                FROM article_players ap
+                JOIN news_feed nf ON nf.id = ap.article_id AND nf.content_type = 'ARTICLE'
+                LEFT JOIN agent_memories am ON UPPER(am.archetype) = UPPER(nf.persona)
+                WHERE ap.player_id = %s
+                ORDER BY nf.id, am.assigned_team_id NULLS FIRST, am.id
+            """, (id,))
+            arts = sorted(cur.fetchall(), key=lambda a: (a["season"], a["week"], a["mention_type"] == "PRIMARY",
+                                                         a["mention_count"] or 0, a["id"]), reverse=True)[:6]
+            # Short labels: "The Weekly Slate Lookahead (ESPN ...)" -> "Weekly Slate Lookahead"
+            type_names = {k: re.sub(r"^The\s+|\s*\(.*\)\s*$", "", v.get("name", k))
+                          for k, v in _load_config("article_types.json", "article_types").items()}
+            articles = [{
+                "id": a["id"], "season": a["season"], "week": a["week"], "headline": a["headline"],
+                "excerpt": a["excerpt"],
+                "label": type_names.get(a["article_type"], (a["article_type"] or "Article").replace("_", " ").title()),
+                "author": a["display_name"] or (a["persona"] or "").replace("_", " ").title(),
+                "mention": a["mention_type"],
+            } for a in arts]
+
             pos = player["position"]
             stat_group = ("passing" if pos == "QB" else "rushing" if pos in ("HB", "FB") else
                           "receiving" if pos in ("WR", "TE") else "kicking" if pos == "K" else
@@ -965,6 +992,7 @@ def get_player_api(id: int, season: Optional[int] = None):
             return {
                 "player": player,
                 "stat_group": stat_group,
+                "articles": articles,
                 "game_log": games,
                 "career_stats": career,
                 "weekly_outlook": weekly_outlook
@@ -1031,6 +1059,13 @@ PLAYER_ST_CATEGORIES = {
                      lambda l: {"RET": _n(l["pr_returns"]), "YDS": _n(l["pr_yards"]), "AVG": _n(l["pr_average"]),
                                 "LNG": _n(l["pr_longest"]), "TD": _n(l["pr_tds"])}),
 }
+
+
+def season_type_filter(season_type: str) -> str:
+    """SQL condition on games g: regular season (default) or postseason."""
+    if str(season_type or "").lower().startswith("post"):
+        return "COALESCE(g.game_type, 'REGULAR_SEASON') <> 'REGULAR_SEASON'"
+    return "COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'"
 
 
 def player_st_leaders(cur, season: int, cat: str) -> list:
@@ -1100,9 +1135,11 @@ def team_situational_table(cur, season: int, cat: str) -> list:
 
 
 @app.get("/api/stats/player")
-def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"):
+def get_player_stats_api(season: Optional[int] = None, category: str = "Passing", season_type: str = "regular"):
     season, _ = season_week(season)
     cat = category.lower()
+    games_filter = season_type_filter(season_type)
+    postseason = games_filter.endswith("<> 'REGULAR_SEASON'")
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             if cat == "passing":
@@ -1120,7 +1157,7 @@ def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"
                     JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     JOIN teams t ON t.id = ps.team_id
                     JOIN player_stats st ON st.player_id = p.id
-                    JOIN games g ON g.id = st.game_id AND g.season = %s
+                    JOIN games g ON g.id = st.game_id AND g.season = %s AND """ + games_filter + """
                     GROUP BY p.id, p.full_name, p.player_number, ps.position, t.name, t.abbreviation
                     HAVING SUM(COALESCE(st.pass_attempts, 0)) > 0
                     ORDER BY pass_yds DESC;
@@ -1170,7 +1207,7 @@ def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"
                     JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     JOIN teams t ON t.id = ps.team_id
                     JOIN player_stats st ON st.player_id = p.id
-                    JOIN games g ON g.id = st.game_id AND g.season = %s
+                    JOIN games g ON g.id = st.game_id AND g.season = %s AND """ + games_filter + """
                     GROUP BY p.id, p.full_name, p.player_number, ps.position, t.name, t.abbreviation
                     HAVING SUM(COALESCE(st.rush_attempts, 0)) > 0
                     ORDER BY yds DESC;
@@ -1213,7 +1250,7 @@ def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"
                     JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     JOIN teams t ON t.id = ps.team_id
                     JOIN player_stats st ON st.player_id = p.id
-                    JOIN games g ON g.id = st.game_id AND g.season = %s
+                    JOIN games g ON g.id = st.game_id AND g.season = %s AND """ + games_filter + """
                     GROUP BY p.id, p.full_name, p.player_number, ps.position, t.name, t.abbreviation
                     HAVING SUM(COALESCE(st.receptions, 0)) > 0
                     ORDER BY yds DESC;
@@ -1255,7 +1292,7 @@ def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"
                     JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     JOIN teams t ON t.id = ps.team_id
                     JOIN player_stats st ON st.player_id = p.id
-                    JOIN games g ON g.id = st.game_id AND g.season = %s
+                    JOIN games g ON g.id = st.game_id AND g.season = %s AND """ + games_filter + """
                     GROUP BY p.id, p.full_name, p.player_number, ps.position, t.name, t.abbreviation
                     HAVING (SUM(COALESCE(st.pass_tds, 0)) + SUM(COALESCE(st.rush_tds, 0)) + SUM(COALESCE(st.rec_tds, 0))) > 0
                     ORDER BY total_td DESC;
@@ -1284,18 +1321,21 @@ def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"
                 return results
 
             elif cat in PLAYER_ST_CATEGORIES:
-                return player_st_leaders(cur, season, cat)
+                # Season Stats covers the regular season only; postseason defense/special teams aren't recorded
+                return [] if postseason else player_st_leaders(cur, season, cat)
 
             return []
 
 @app.get("/api/stats/team")
-def get_team_stats_api(season: Optional[int] = None, category: str = "Passing"):
+def get_team_stats_api(season: Optional[int] = None, category: str = "Passing", season_type: str = "regular"):
     season, _ = season_week(season)
     cat = category.lower()
+    games_filter = season_type_filter(season_type)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             if cat in ("downs", "red zone defense"):
-                return team_situational_table(cur, season, cat)
+                # Team Stats covers the regular season only
+                return [] if games_filter.endswith("<> 'REGULAR_SEASON'") else team_situational_table(cur, season, cat)
             cur.execute("""
                 SELECT 
                     t.id, t.name as team_name, t.abbreviation as team_abbr,
@@ -1310,7 +1350,7 @@ def get_team_stats_api(season: Optional[int] = None, category: str = "Passing"):
                 FROM team_stats ts
                 JOIN teams t ON t.name LIKE '%%' || ts.team_name
                 JOIN games g ON g.id = ts.game_id
-                WHERE g.season = %s AND g.status = 'COMPLETED'
+                WHERE g.season = %s AND g.status = 'COMPLETED' AND """ + games_filter + """
                 GROUP BY t.id, t.name, t.abbreviation
             """, (season,))
             team_rows = cur.fetchall()
@@ -1319,7 +1359,7 @@ def get_team_stats_api(season: Optional[int] = None, category: str = "Passing"):
                 SELECT ps.team_id, SUM(ps.interceptions) as ints, SUM(ps.fumb) as fums
                 FROM player_stats ps
                 JOIN games g ON g.id = ps.game_id
-                WHERE g.season = %s
+                WHERE g.season = %s AND """ + games_filter + """
                 GROUP BY ps.team_id
             """, (season,))
             extra_map = {r['team_id']: r for r in cur.fetchall()}

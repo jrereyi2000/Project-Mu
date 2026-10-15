@@ -2,7 +2,15 @@ import { createContext, useContext, useEffect, useRef, useState, type CSSPropert
 
 import { API_BASE } from "./api";
 import DebugPage from "./DebugPage";
-export const SystemContext = createContext({ season: 2035, week: 18, availableSeasons: [2035] });
+export const SystemContext = createContext<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
+
+/** "Oct 15 · 8:03 AM" for the Stats page's Updated stamp (the latest capture load). */
+function formatUpdated(iso?: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+}
 
 type Team = { name: string; abbr: string };
 
@@ -1181,14 +1189,8 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
       ? { yards: currentSeasonStats.rush_yards || 0, yardsLabel: "RUSHING YARDS", touchdowns: currentSeasonStats.rush_tds || 0, touchdownLabel: "RUSHING TD" }
       : { yards: currentSeasonStats.rec_yards || 0, yardsLabel: "RECEIVING YARDS", touchdowns: currentSeasonStats.rec_tds || 0, touchdownLabel: "RECEIVING TD" };
 
-  const playerStories = [
-    { tag: "Film Study", title: `How ${player.name} is changing the geometry of the ${player.team_name} offense`, excerpt: "A detailed look at the alignments, reads and timing behind a career-defining stretch.", byline: "Jordan Ellis", time: "2h ago" },
-    { tag: "Player Spotlight", title: `${player.name}'s preparation is becoming the standard inside the building`, excerpt: "Teammates and coaches explain the habits powering one of the season's most consistent performers.", byline: "Maya Brooks", time: "Yesterday" },
-    { tag: "Matchup Preview", title: `The matchup that could decide ${player.name}'s Week 17 impact`, excerpt: "One personnel battle sits at the center of this week's game plan—and both sides know it.", byline: "Daniel Cho", time: "2d ago" },
-    { tag: "Numbers Game", title: `What the advanced metrics reveal about ${player.name}'s breakout`, excerpt: "Efficiency, explosiveness and hidden value: the numbers explain why the production is sustainable.", byline: "Seth Walder", time: "3d ago" },
-    { tag: "Locker Room", title: `${player.name} on leadership, pressure and the postseason chase`, excerpt: "A candid conversation about the moments that have shaped this season and what still lies ahead.", byline: "Jordan Ellis", time: "5d ago" },
-    { tag: "League Intel", title: `Where ${player.name} ranks among the league's best at ${player.position}`, excerpt: "Scouts weigh the complete profile, from weekly consistency to game-changing upside.", byline: "Mina Kimes", time: "1w ago" },
-  ];
+  // Newsroom articles tagged with this player (GET /api/player/{id} `articles`, newest first)
+  const playerStories: any[] = Array.isArray(playerData.articles) ? playerData.articles : [];
 
   return (
     <main className="player-page" style={{ "--team-color": player.team_color || "#e31837" } as React.CSSProperties}>
@@ -1378,24 +1380,26 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
           </div>
         </section>
 
+        {playerStories.length > 0 && (
         <section className="player-stories-section">
           <div className="team-section-title"><h2>Player Coverage</h2></div>
           <div className="player-story-list">
-            {playerStories.map((story, index) => (
-              <article className="player-story-card" key={story.title}>
+            {playerStories.map((story: any, index: number) => (
+              <article className="player-story-card" key={story.id}>
                 <div className="player-story-index">{String(index + 1).padStart(2, "0")}</div>
                 <div className="player-story-team"><img src={logo(player.team_abbr.toLowerCase())} alt="" /><span>#{player.player_number}</span></div>
                 <div className="player-story-copy">
-                  <span>{story.tag}</span>
-                  <a href={`#article-player-${playerId}-${index}`}><h3>{story.title}</h3></a>
-                  <p>{story.excerpt}</p>
-                  <small>By {story.byline} · {story.time}</small>
+                  <span>{story.label}</span>
+                  <a href={`#article-${story.id}`}><h3>{story.headline}</h3></a>
+                  {story.excerpt && <p>{story.excerpt}</p>}
+                  <small>By {story.author} · {story.season} Week {story.week}</small>
                 </div>
-                <a className="player-story-arrow" href={`#article-player-${playerId}-${index}`} aria-label={`Read ${story.title}`}>→</a>
+                <a className="player-story-arrow" href={`#article-${story.id}`} aria-label={`Read ${story.headline}`}>→</a>
               </article>
             ))}
           </div>
         </section>
+        )}
       </div>
     </main>
   );
@@ -1459,7 +1463,7 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${API_BASE}/api/stats/${mode}?season=${season}&category=${category}`)
+    fetch(`${API_BASE}/api/stats/${mode}?season=${season}&category=${encodeURIComponent(category)}&season_type=${seasonType === "Postseason" ? "postseason" : "regular"}`)
       .then(res => res.json())
       .then(data => {
         setStatsData(Array.isArray(data) ? data : []);
@@ -1469,10 +1473,13 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
         setStatsData([]);
         setLoading(false);
       });
-  }, [mode, season, category]);
+  }, [mode, season, category, seasonType]);
 
   const unit = statCategoryGroups[mode].find((group) => group.categories.includes(category))?.unit ?? "Offense";
   const listedLeadersOnly = mode === "player" && unit !== "Offense";
+  // Defense, special teams, Downs and Red Zone Defense come from Madden's season screens: regular season only
+  const regularSeasonOnly = Boolean(unitStatColumns[category]);
+  const updated = formatUpdated(systemStatus.last_updated);
   const columns = unitStatColumns[category]
     ? unitStatColumns[category]
     : mode === "player" && category === "Scoring"
@@ -1575,34 +1582,32 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
                 </div>
               )}
             </div>
-            {mode === "player" && (
-              <div className="standings-filter-dropdown stats-season-type" onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setStatsSeasonOpen(false);
-              }}>
-                <span>Season</span>
-                <button className={statsSeasonOpen ? "open" : ""} onClick={() => { setStatsSeasonOpen(!statsSeasonOpen); setStatsYearOpen(false); }} aria-expanded={statsSeasonOpen}>
-                  <strong>{seasonType}</strong><Chevron />
-                </button>
-                {statsSeasonOpen && (
-                  <div className="standings-filter-menu">
-                    {["Regular Season", "Postseason"].map((item) => (
-                      <button className={seasonType === item ? "selected" : ""} onClick={() => { setSeasonType(item); setPage(1); setStatsSeasonOpen(false); }} key={item}>
-                        <span>{item}</span><small>{item === "Regular Season" ? "Weeks 1–18" : "Playoffs"}</small>{seasonType === item && <i>✓</i>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="standings-filter-dropdown stats-season-type" onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setStatsSeasonOpen(false);
+            }}>
+              <span>Season</span>
+              <button className={statsSeasonOpen ? "open" : ""} onClick={() => { setStatsSeasonOpen(!statsSeasonOpen); setStatsYearOpen(false); }} aria-expanded={statsSeasonOpen}>
+                <strong>{seasonType}</strong><Chevron />
+              </button>
+              {statsSeasonOpen && (
+                <div className="standings-filter-menu">
+                  {["Regular Season", "Postseason"].map((item) => (
+                    <button className={seasonType === item ? "selected" : ""} onClick={() => { setSeasonType(item); setPage(1); setStatsSeasonOpen(false); }} key={item}>
+                      <span>{item}</span><small>{item === "Regular Season" ? "Weeks 1–18" : "Playoffs"}</small>{seasonType === item && <i>✓</i>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="stats-updated"><span>Updated</span><strong>Today · 9:42 AM ET</strong></div>
+          {updated && <div className="stats-updated"><span>Updated</span><strong>{updated}</strong></div>}
         </div>
       </section>
 
       <section className="stats-table-section">
         <div className="stats-table-meta">
           <span>{mode === "team" ? "32 TEAMS" : listedLeadersOnly ? "LEAGUE LEADERS (PLAYERS THE LEAGUE LISTS)" : "QUALIFIED PLAYERS"}</span>
-          <span>REGULAR SEASON</span>
+          <span>{seasonType.toUpperCase()}</span>
         </div>
         <div className="stats-table-scroll">
           <table className="league-stats-table">
@@ -1641,7 +1646,11 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
               ) : visibleRows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length + (mode === "player" ? 4 : 2)} style={{ textAlign: "center", padding: "3rem", color: "var(--gray-500)" }}>
-                    No statistics found for {category} in {season}.
+                    {seasonType === "Postseason" && regularSeasonOnly
+                      ? `Postseason ${category} stats aren't recorded: this table comes from the league's regular-season stats screens.`
+                      : seasonType === "Postseason"
+                        ? `No postseason games played in ${season} yet.`
+                        : `No statistics found for ${category} in ${season}.`}
                   </td>
                 </tr>
               ) : (
@@ -4585,7 +4594,7 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [showAllStories, setShowAllStories] = useState(false);
-  const [systemStatus, setSystemStatus] = useState({ season: 2035, week: 18, availableSeasons: [2035] });
+  const [systemStatus, setSystemStatus] = useState<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
   const [week, setWeek] = useState(18);
   const [newsData, setNewsData] = useState<any>(null);
   const [powerRankings, setPowerRankings] = useState<PowerRankingsResponse | null>(null);

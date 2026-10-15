@@ -91,6 +91,36 @@ class DefenseStatsApiTests(unittest.TestCase):
             if not t["box_score_captured"]:
                 self.assertIsNone(t["first_downs"])
 
+    def test_season_type_filters_offense_and_blanks_capture_tables(self):
+        regular = client.get("/api/stats/player", params={"category": "Passing", "season": 2035}).json()
+        self.assertTrue(regular)
+        post = {cat: client.get("/api/stats/player", params={"category": cat, "season": 2035,
+                                                           "season_type": "postseason"}).json()
+                for cat in ("Passing", "Sacks")}
+        self.assertEqual(post["Sacks"], [])   # Season Stats is regular season only
+        self.assertLessEqual(len(post["Passing"]), len(regular))
+        self.assertEqual(client.get("/api/stats/team", params={"category": "Downs", "season": 2035,
+                                                               "season_type": "postseason"}).json(), [])
+
+    def test_status_reports_last_load(self):
+        self.assertIn("last_updated", client.get("/api/status").json())
+
+    def test_player_page_articles_are_tagged_mentions(self):
+        import psycopg
+        from server.api import CONN_INFO
+        with psycopg.connect(CONN_INFO) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT player_id, COUNT(*) FROM article_players GROUP BY 1 ORDER BY 2 DESC LIMIT 1")
+            row = cur.fetchone()
+        if not row:
+            self.skipTest("no tagged articles")
+        data = client.get(f"/api/player/{row[0]}").json()
+        self.assertTrue(data["articles"])
+        self.assertLessEqual(len(data["articles"]), 6)
+        for a in data["articles"]:
+            self.assertTrue(a["headline"])
+            self.assertNotIn("(", a["label"])
+
     def test_player_page_stat_groups(self):
         leaders = {cat: client.get("/api/stats/player", params={"category": cat, "season": 2035}).json()[0]["id"]
                    for cat in ("Sacks", "Kicking", "Punting")}
