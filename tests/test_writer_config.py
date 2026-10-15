@@ -283,6 +283,27 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School]", mock_config["structure_directive"])
         self.assertNotIn("get_draft_prospects", json.dumps(self.article_types))
 
+    def test_draft_blueprint_uses_locked_picks_needs_and_the_scouted_board(self):
+        """Week 21's roster audit cites locked picks 1-28, top needs and only real prospects (handoff, Agent 4)."""
+        blueprint = self.article_types["DRAFT_BLUEPRINT_ROSTER_AUDIT"]
+        queried = " ".join(blueprint["data_queried"])
+        autonomy = blueprint["curatorial_autonomy"]
+        for tool in ("get_draft_order", "get_team_draft_needs", "get_scouted_draft_board"):
+            self.assertIn(tool, queried)
+            self.assertIn(tool, autonomy)
+        self.assertIn("picks 1–28", autonomy)
+        for field in ("`locked`", "`selection_status`", "`position` filter"):
+            self.assertIn(field, autonomy)
+        self.assertIn("0.35", autonomy)
+        self.assertIn("Purgatory Penalty", autonomy)
+        self.assertIn("picks 12–20", autonomy)
+        self.assertIn("Never invent a prospect", autonomy)
+        self.assertIn("null", autonomy)
+        structure = blueprint["structure_directive"]
+        self.assertIn("exact locked pick number", structure)
+        self.assertIn("top 3 positional needs", structure)
+        self.assertIn("3–4 Featured Franchises", structure)
+
 
 if __name__ == "__main__":
     unittest.main()

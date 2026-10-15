@@ -1000,9 +1000,13 @@ To eliminate editorial homogenization and ground long-form journalism in authent
     - **Allowed Writers / Archetypes:** Mike Sando (Front-Office Mandates), Bill Barnwell (Roster Core Diagnostics) (`SANDO`, `BARNWELL`, `Draft & Offseason Horizon`).
     - **Granularity:** Offseason / Multi-Year Core Audit.
     - **Focus:** Diagnostic audit of eliminated teams with locked draft picks (1–28), analyzing roster age curves, foundational core needs, and draft-capital mandates.
-    - **Data Queried:** Under-25 Production ($Y_{\text{prod}}$), Blue-Chip Pedigree ($P_{\text{draft}}$), Purgatory Penalty, Base Market Gravity ($B$).
-    - **Curatorial Autonomy:** Evaluates the 28 eliminated franchises holding locked first-round draft capital. Groups franchises by structural health (high youth production needing single cornerstone vs. aging rosters in purgatory penalty requiring hard reset). Highlights 3 to 4 urgent franchise blueprints in depth.
-    - **Structure Directive:** 4-part Executive Roster Blueprint (`# 1. The Offseason Landscape`, `## 2. The Core Audits (3–4 Featured Franchises)`, `## 3. Macro Positional Scarcity`, `### 4. The Mandate`).
+    - **Data Queried:** Under-25 Production ($Y_{\text{prod}}$), Blue-Chip Pedigree ($P_{\text{draft}}$), Purgatory Penalty, Base Market Gravity ($B$), Round 1 Draft Order (`get_draft_order`), Team Draft Needs (`get_team_draft_needs`), Scouted Prospect Board (`get_scouted_draft_board`).
+    - **Curatorial Autonomy:** Evaluates the 28 eliminated franchises holding locked first-round draft capital (Week 21, after the Divisional round).
+      - `get_draft_order` for picks 1–28, citing only picks marked `locked` (each also carries `selection_status`); picks 29–32 aren't projected.
+      - Two core diagnostics: ascending youth cores ($Y_{\text{prod}} \ge 0.35$) with high picks needing an immediate cornerstone, vs. Purgatory Penalty rosters stuck at picks 12–20 needing a total identity reset.
+      - Highlights 3 to 4 urgent franchise blueprints in depth.
+      - May name one or two real prospects per featured franchise at its top need (`get_scouted_draft_board` with its `position` filter). Never an invented prospect, and never a value the board leaves null.
+    - **Structure Directive:** 4-part Executive Roster Blueprint (`# 1. The Offseason Landscape`, `## 2. The Core Audits (3–4 Featured Franchises, each with its exact locked pick number and top 3 positional needs)`, `## 3. Macro Positional Scarcity`, `### 4. The Mandate`).
     - **Prompt Hook:** Audit the roster cores of eliminated playoff teams and lottery franchises. Define their primary draft mandate and diagnose which units require total overhauls.
 
 27. **Offseason Mock Draft 1.0 (Picks 1–24 Locked)** (`OFFSEASON_MOCK_DRAFT`, Week 20 Slot 4)
