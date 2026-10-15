@@ -3,6 +3,7 @@
 Run: python3 -m unittest tests.test_records_engine
 """
 import collections
+import importlib.util
 import os
 import re
 import unittest
@@ -147,6 +148,7 @@ class RecordBookTests(unittest.TestCase):
         self.assertEqual(stored["franchise_rows"], 0)
         self.assertEqual(stored["top10_rows"], 1)
 
+    @unittest.skipUnless(R.psycopg is not None and importlib.util.find_spec("redis"), "needs psycopg and redis (db.db_handler)")
     @mock.patch("engines.records_engine.psycopg.connect")
     @mock.patch("db.db_handler.DatabaseHandler")
     def test_records_engine_class_calculate(self, mock_db_cls, mock_connect):
@@ -189,7 +191,6 @@ class SeedTests(unittest.TestCase):
             sql = f.read()
         cats = set(re.findall(r"^\s+\('((?:season|game)_[a-z_]+)', \d+, '", sql, re.M))
         self.assertEqual(len(cats), 14)
-
 
 
 if __name__ == "__main__":

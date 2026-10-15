@@ -20,9 +20,11 @@ report lists where the stats and the record book disagree. Old holders are never
 import argparse
 import collections
 import json
-import psycopg
 
-from db.db_handler import DatabaseHandler
+try:                     # imported lazily so the module (and its tests) load without a database driver
+    import psycopg
+except ImportError:      # pragma: no cover
+    psycopg = None
 
 REGULAR_SEASON_FINAL_WEEK = 18
 GAMES_PER_SEASON = 17
@@ -360,6 +362,7 @@ def run(season: int | None = None, apply_changes: bool = True, conn_info: str | 
     Evaluates the season against the record book and, if apply_changes=True, stores
     any new franchise records and all-time top-10 rows (source 'LEAGUE').
     """
+    from db.db_handler import DatabaseHandler
     db = DatabaseHandler(db_conn_info=conn_info)
     if season is None:
         season = db.get_current_league_state()[0]
@@ -395,6 +398,7 @@ def main():
     ap.add_argument("--json", help="also write the events to this file")
     args = ap.parse_args()
 
+    from db.db_handler import DatabaseHandler
     with psycopg.connect(DatabaseHandler().db_conn_info) as conn:
         with conn.cursor() as cur:
             result = evaluate(cur, args.season)
@@ -409,4 +413,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

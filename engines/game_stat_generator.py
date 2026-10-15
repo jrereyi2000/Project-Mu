@@ -258,7 +258,10 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
 
         # Update franchise records and NFL top-10 lists for the season
         print("-> Running Records Engine...")
-        RecordsEngine().calculate(season=season_year)
+        try:
+            RecordsEngine().calculate(season=season_year)
+        except Exception as e:   # the record book is optional: a missing migration must not stop the week's sync
+            print(f"   [WARN] Records Engine skipped: {e}")
 
         # Project E for every still-scheduled game from the season so far (feeds the site, the brief and primer picks)
         print("-> Projecting Excitement Index for scheduled games...")
