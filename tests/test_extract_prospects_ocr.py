@@ -40,7 +40,8 @@ def test_parse_prospect_frame_mock():
     ]
 
     with patch("pipeline.extract_prospects_ocr.ocr_tokens", return_value=mock_tokens), \
-         patch("PIL.Image.open") as mock_open:
+         patch("PIL.Image.open") as mock_open, \
+         patch("pipeline.extract_prospects_ocr.read_ht_wt", return_value=("", "")):   # Vision's reading
         mock_open.return_value.size = (3840, 2160)
         rec = parse_prospect_frame("fake_path.png", 1)
 
@@ -68,7 +69,8 @@ def test_font_fixes_mock():
     ]
 
     with patch("pipeline.extract_prospects_ocr.ocr_tokens", return_value=mock_tokens), \
-         patch("PIL.Image.open") as mock_open:
+         patch("PIL.Image.open") as mock_open, \
+         patch("pipeline.extract_prospects_ocr.read_ht_wt", return_value=("", "")):   # Vision's reading
         mock_open.return_value.size = (3840, 2160)
         rec = parse_prospect_frame("fake_path.png", 3)
 
@@ -88,7 +90,8 @@ def test_digit_letter_fixups_mock():
         (", 3U2 LBS", (1125, 360, 1256, 400)),       # 3U2 -> 302
     ]
     with patch("pipeline.extract_prospects_ocr.ocr_tokens", return_value=mock_tokens), \
-         patch("PIL.Image.open") as mock_open:
+         patch("PIL.Image.open") as mock_open, \
+         patch("pipeline.extract_prospects_ocr.read_ht_wt", return_value=("", "")):   # Vision's reading
         mock_open.return_value.size = (3024, 1888)
         rec = parse_prospect_frame("fake_path.png", 1)
     assert rec["HEIGHT"] == "5'11\""
@@ -127,7 +130,8 @@ def test_highlighted_row_prefers_initial_and_full_last_name():
         ("23", (1182, 1167, 1230, 1208)),
     ]
     with patch("pipeline.extract_prospects_ocr.ocr_tokens", return_value=mock_tokens), \
-         patch("PIL.Image.open") as mock_open:
+         patch("PIL.Image.open") as mock_open, \
+         patch("pipeline.extract_prospects_ocr.read_ht_wt", return_value=("", "")):   # Vision's reading
         mock_open.return_value.size = (3024, 1888)
         rec = parse_prospect_frame("fake_path.png", 1)
     assert rec["AGE"] == "23"
@@ -172,7 +176,12 @@ def test_real_capture_extraction_if_present(tmp_path):
             os.path.exists(os.path.join(test_dir, "prospects", "prospect_000.png"))):
         pytest.skip("Test prospect frames not found")
 
-    csv_path = extract_prospects_ocr(test_dir)
+    # extract from a temporary folder that links to the frames: extract_prospects_ocr writes
+    # prospects.csv next to them, and must not overwrite a capture's own CSV
+    frames = os.path.join(test_dir, "prospects") if os.path.isdir(os.path.join(test_dir, "prospects")) else test_dir
+    os.symlink(os.path.abspath(frames), tmp_path / "prospects")
+    csv_path = extract_prospects_ocr(str(tmp_path))
+    assert os.path.dirname(csv_path) == str(tmp_path)
     assert csv_path is not None
     assert os.path.exists(csv_path)
 
@@ -183,3 +192,91 @@ def test_real_capture_extraction_if_present(tmp_path):
     assert prospects[0].overall_rating == 75
     assert prospects[4].full_name == "C.J. BUCHANAN"
     assert prospects[4].age == 23
+
+
+# ---- Oct 15: digit glyphs, PICK sequence, name reads -------------------------------------------
+from pipeline.extract_prospects_ocr import (_digit_by_loops, _fills_in, edit_distance, fix_pick_sequence,
+                                            read_ht_wt)
+
+
+def _ring(h=31, w=14, holes=((4, 12),)):
+    """A white glyph block with black holes at the given row ranges."""
+    import numpy as np
+    on = np.ones((h, w), bool)
+    for y0, y1 in holes:
+        on[y0:y1, 4:w - 4] = False
+    return on
+
+
+def test_digits_told_apart_by_loops():
+    # Oct 15: 208 / 308 / 288 read as 206 / 309 / 289 by pixel distance alone
+    assert _digit_by_loops(_ring(holes=((4, 12), (18, 27)))) == "8"
+    assert _digit_by_loops(_ring(holes=((17, 27),))) == "6"
+    assert _digit_by_loops(_ring(holes=((4, 13),))) == "9"
+    assert _digit_by_loops(_ring(holes=((4, 27),))) == "0"
+    assert _digit_by_loops(_ring(holes=())) == "3"
+
+
+FRAME_000 = "captures/prospects/prospect_000.png"
+
+
+@pytest.mark.skipif(not os.path.exists(FRAME_000), reason="Oct 15 board capture not present")
+def test_glyph_reader_on_a_real_card():
+    from PIL import Image
+    assert read_ht_wt(Image.open(FRAME_000)) == ("6'5\"", "280")      # Dave Vogel
+
+
+def test_glyph_reader_needs_the_mapped_window_size():
+    from PIL import Image
+    assert read_ht_wt(Image.new("L", (3840, 2160))) == ("", "")
+
+
+def _picks(seq):
+    return [_rec(chr(65 + i), *(p.split("/") if p else ("", ""))) for i, p in enumerate(seq)]
+
+
+def _after(recs):
+    return [f"{r['PROJECTED_ROUND']}/{r['ROUND_PICK']}" for r in recs]
+
+
+def test_pick_sequence_mends_misread_cells():
+    # Oct 15 board: Round 4, Pick 3 read as Pick 8; Round 5, Pick 1 read as Round 6
+    recs = _picks(["1/1", "1/2", "1/8", "1/4"])
+    assert fix_pick_sequence(recs) == (1, []) and _after(recs) == ["1/1", "1/2", "1/3", "1/4"]
+    recs = _picks(["1/1", "1/2", "3/1", "2/2"])                     # a round boundary
+    assert fix_pick_sequence(recs) == (1, []) and _after(recs)[2] == "2/1"
+    recs = _picks(["1/1", "", "1/3"])                               # unreadable cell
+    assert fix_pick_sequence(recs) == (1, []) and _after(recs)[1] == "1/2"
+
+
+def test_pick_sequence_leaves_a_real_gap():
+    # a skipped row (Oct 15: Round 2, Pick 29 missing) is reported, not papered over
+    recs = _picks(["1/1", "1/2", "1/4", "1/5"])
+    assert fix_pick_sequence(recs) == (0, [((1, 2), (1, 4))])
+    assert _after(recs) == ["1/1", "1/2", "1/4", "1/5"]
+
+
+def test_band_first_name_fills_in_letters():
+    for short, full in (("JAM", "JAMAL"), ("SAIA", "ISAIAH"), ("LVIN", "CALVIN"), ("AMIF", "AMIR"), ("BOBB", "BOBBY")):
+        assert _fills_in(short, full)
+    for short, full in (("DON", "NOD"), ("HUGH", "HONH")):                     # band read backwards
+        assert not _fills_in(short, full)
+    assert edit_distance("SAMUEI", "SAMUEL") == 1
+
+
+def test_badge_without_bar_or_with_split_number():
+    for badge, pos, ovr in (("CB #17 OVR 57", "CB", "57"), ("TE #1 1 OVR61", "TE", "61")):
+        tokens = [("NATHAN", (970, 180, 1220, 240)), ("CROSBY", (960, 230, 1250, 320)), (badge, (123, 500, 347, 539))]
+        with patch("pipeline.extract_prospects_ocr.ocr_tokens", return_value=tokens), \
+             patch("PIL.Image.open") as mock_open, \
+             patch("pipeline.extract_prospects_ocr.read_ht_wt", return_value=("", "")), \
+             patch("pipeline.extract_prospects_ocr.read_name_band", return_value=""):
+            mock_open.return_value.size = (3024, 1888)
+            rec = parse_prospect_frame("fake_path.png", 1)
+        assert (rec["POSITION"], rec["OVR"]) == (pos, ovr)
+
+
+def test_highlighted_row_tolerates_one_misread_letter():
+    from pipeline.extract_prospects_ocr import find_highlighted_row
+    items = [("K.Nance", (747, 1014, 852, 1057)), ("N.Croshy", (725, 1167, 848, 1212))]
+    assert find_highlighted_row(items, "NATHAN", "CROSBY", "", "") == 1189

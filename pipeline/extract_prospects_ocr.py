@@ -6,8 +6,8 @@ extracts the highlighted prospect's measurables and details using local Apple Vi
 - Full Name (top card first + last name, with diacritic & homoglyph normalization)
 - Position (top card badge, e.g. LEDG, SAM, CB, QB)
 - College (top card COLLEGE line)
-- Height (top card HT/WT line with font fixup: 6'T" -> 6'1", 5'1" -> 6'1" on heavyweights)
-- Weight (top card HT/WT line with lineman OCR fixup: 827 -> 327)
+- Height and Weight (top card HT/WT line, read glyph by glyph against digit templates; Vision's
+  reading with font fixups as the fallback: 6'T" -> 6'1", 5'1" -> 5'11", 827 -> 327)
 - Age (highlighted table row AGE column)
 - OVR (top card badge OVR and table OVR column)
 """
@@ -89,6 +89,188 @@ def ocr_tokens(path: str) -> List[Tuple[str, Tuple[int, int, int, int]]]:
     return out
 
 
+# ------------------------------------------------------------ HT/WT digits ----
+# Vision misreads the card's condensed digits differently from run to run (1<->7, 3<->8, 5'11" as
+# 5'1"). The HT/WT value always sits at the same spot in one font, so it is read glyph by glyph
+# instead: split the band into characters, match each digit against templates, and settle
+# 0/3/6/8/9 by their loops. Templates: assets/prospect_htwt_digits.png, digits 0-9, each 18x34,
+# the median of ~3,700 glyphs from the Oct 15 board captures (31 cards checked by eye).
+HTWT_BOX = (1075, 352, 1420, 400)     # value after "HT/WT:" on a 3024x1888 frame
+GLYPH_THR = 170                       # white text on the dark card
+GLYPH_W, GLYPH_H = 18, 34
+GLYPH_SHIFT = 2                       # stream frames land a pixel or two apart
+DIGIT_TEMPLATES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "prospect_htwt_digits.png")
+_DIGIT_TEMPLATES = None
+HTWT_RE = re.compile(r"^(\d)'(\d{1,2})'+,?(\d{3})")   # glyph text, e.g. 5'11'',214 (the comma can be covered)
+
+
+def _digit_templates():
+    global _DIGIT_TEMPLATES
+    if _DIGIT_TEMPLATES is None:
+        import numpy as np
+        strip = np.asarray(Image.open(DIGIT_TEMPLATES_PATH).convert("L"), dtype=np.float32) / 255.0
+        _DIGIT_TEMPLATES = [strip[:, i * GLYPH_W:(i + 1) * GLYPH_W] for i in range(10)]
+    return _DIGIT_TEMPLATES
+
+
+def _glyph_columns(on):
+    """Runs of columns with ink: [(x0, x1, y0, y1)]."""
+    import numpy as np
+    cols = on.sum(0) >= 2
+    out, x = [], 0
+    while x < len(cols):
+        if cols[x]:
+            s = x
+            while x < len(cols) and cols[x]:
+                x += 1
+            ys = np.where(on[:, s:x].any(1))[0]
+            out.append((s, x, int(ys.min()), int(ys.max()) + 1))
+        else:
+            x += 1
+    return out
+
+
+def _glyph_distance(c, t):
+    """L1 distance between a glyph and a template, best over small shifts."""
+    import numpy as np
+    s = GLYPH_SHIFT
+    pc = np.pad(c, s)
+    return min(float(np.abs(pc[s + dy:s + dy + GLYPH_H, s + dx:s + dx + GLYPH_W] - t).sum())
+               for dy in range(-s, s + 1) for dx in range(-s, s + 1))
+
+
+def _holes(on) -> List[Tuple[float, float]]:
+    """Enclosed background regions of a binarized glyph: [(centre y, height)] as fractions of its height."""
+    import numpy as np
+    h, w = on.shape
+    seen = np.zeros_like(on, bool)
+    out = []
+    for sy in range(h):
+        for sx in range(w):
+            if on[sy, sx] or seen[sy, sx]:
+                continue
+            stack, ys, border = [(sy, sx)], [], False
+            seen[sy, sx] = True
+            while stack:
+                y, x = stack.pop()
+                ys.append(y)
+                border = border or y in (0, h - 1) or x in (0, w - 1)
+                for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                    if 0 <= ny < h and 0 <= nx < w and not on[ny, nx] and not seen[ny, nx]:
+                        seen[ny, nx] = True
+                        stack.append((ny, nx))
+            if not border and len(ys) >= 4:
+                out.append(((min(ys) + max(ys)) / 2 / h, (max(ys) - min(ys) + 1) / h))
+    return out
+
+
+def _digit_by_loops(on) -> str:
+    """0/3/6/8/9 differ mostly by their loops, which pixel distance underweights: 8 has two, 3 none,
+    0 one tall one, 6 one low, 9 one high."""
+    hs = _holes(on)
+    if len(hs) >= 2:
+        return "8"
+    if not hs:
+        return "3"
+    cy, ht = hs[0]
+    if ht > 0.5:
+        return "0"
+    return "6" if cy > 0.5 else "9"
+
+
+def glyph_text(img) -> str:
+    """The HT/WT value as glyph text: digits, ' for a mark at the top, , for one at the bottom;
+    letters (LBS) read as digits too and are ignored by the caller."""
+    import numpy as np
+    g = np.asarray(img.convert("L").crop(HTWT_BOX), dtype=np.float32)
+    on = g > GLYPH_THR
+    templates = _digit_templates()
+    out = []
+    for x0, x1, y0, y1 in _glyph_columns(on):
+        if y1 - y0 < 25:                       # quote marks sit at the top, the comma at the bottom
+            out.append("," if y0 > 20 else "'")
+            continue
+        while x1 - x0 > 1 and not on[y0 + 14:y1, x1 - 1].any():
+            x1 -= 1                            # a quote mark glued to the digit's right edge
+        c = np.zeros((GLYPH_H, GLYPH_W), np.float32)
+        piece = g[y0:y0 + GLYPH_H, x0:x1][:, :GLYPH_W] / 255.0
+        c[:piece.shape[0], :piece.shape[1]] = piece
+        d = int(np.argmin([_glyph_distance(c, t) for t in templates]))
+        digit = str(d)
+        if digit in "03689":
+            digit = _digit_by_loops(on[y0:y1, x0:x1])
+        out.append(digit)
+    return "".join(out)
+
+
+def read_ht_wt(img) -> Tuple[str, str]:
+    """(height, weight) read glyph by glyph, or ("", "") when the band isn't the expected
+    shape or the values are implausible (the caller then uses Vision's reading)."""
+    if img.size != (3024, 1888):               # boxes and templates were mapped at this window size
+        return "", ""
+    m = HTWT_RE.match(glyph_text(img))
+    if not m:
+        return "", ""
+    feet, inches, weight = m.group(1), int(m.group(2)), int(m.group(3))
+    if feet not in "56" or inches > 11 or not 140 <= weight <= 420:
+        return "", ""
+    return f"{feet}'{inches}\"", str(weight)
+
+
+FIRST_NAME_BAND = (950, 160, 1700, 245)    # card first name (wide-tracked; CHRISTOPHER reaches x 1650)
+LAST_NAME_BAND = (950, 237, 1700, 348)     # card last name (tall; ink spans y 239-342)
+NAME_RE = re.compile(r"^[A-Z][A-Z.'\- ]*[A-Z.]$")
+
+
+def read_name_band(img, box) -> str:
+    """One card name line read from its band alone, at 2x (then 1x if that isn't a clean name).
+    Returns "" when neither read is a clean upper-case name (the caller keeps the full-frame read)."""
+    import tempfile
+    band = img.crop(box)
+    for scale in (2, 1):
+        im = band.resize((band.width * scale, band.height * scale), Image.LANCZOS) if scale != 1 else band
+        fd, tmp = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        try:
+            im.save(tmp)
+            toks = ocr_tokens(tmp)
+        finally:
+            os.remove(tmp)
+        lines, garbled = join_name_lines([((y0 + y1) // 2, x0, x1, clean_unicode(t))
+                                          for t, (x0, y0, x1, y1) in toks])
+        text = ""
+        # the band can catch the edge of the line above or below: keep its tallest line
+        if lines and not garbled:
+            text = max(lines, key=lambda ln: _line_height(toks, ln[0]))[1].upper()
+        if NAME_RE.match(text):
+            return text
+    return ""
+
+
+def edit_distance(a: str, b: str) -> int:
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _fills_in(short: str, full: str) -> bool:
+    """`full` could be `short` with letters restored: all of short's letters in order (JAM -> JAMAL,
+    SAIA -> ISAIAH), or the same length one letter off (AMIF -> AMIR). A band read backwards
+    (NOD for DON) is neither."""
+    if len(short) == len(full):
+        return edit_distance(short, full) <= 1
+    it = iter(full)
+    return all(c in it for c in short)
+
+
+def _line_height(toks, cy) -> int:
+    return max((y1 - y0 for _, (x0, y0, x1, y1) in toks if abs((y0 + y1) // 2 - cy) < 25), default=0)
+
+
 def clean_unicode(s: str) -> str:
     """Decompose combining accents (e.g. Ư -> U)."""
     s = unicodedata.normalize("NFKD", s)
@@ -161,6 +343,12 @@ def find_highlighted_row(items, first_name: str, last_name: str,
         for clean_t, cy in names:
             if clean_ln in clean_t or clean_t.endswith(clean_ln[-4:]):
                 return cy
+        # one letter misread in the table ("N.Croshy" for CROSBY): initial + last name one edit off
+        close = [cy for clean_t, cy in names
+                 if clean_fi and clean_t[:1] == clean_fi and len(clean_ln) >= 4
+                 and edit_distance(clean_t[1:], clean_ln) <= 1]
+        if len(close) == 1:
+            return close[0]
     if badge_pos and badge_ovr:
         rows = {}
         for t, (x0, y0, x1, y1) in items:
@@ -190,31 +378,27 @@ def parse_prospect_frame(path: str, pick_index: int) -> Dict[str, str]:
     for t, (x0, y0, x1, y1) in items:
         if 850 <= x0 <= 1500 and 150 <= y0 < 335:
             up = t.upper()
-            if not any(up.startswith(k) for k in ["HT/WT", "COLLEGE", "EXP", "ROOKIE"]):
+            # the HT/WT line can come back as Cyrillic look-alikes ("нт/wT: Б1\", 235LBS")
+            if not any(up.startswith(k) for k in ["HT/WT", "COLLEGE", "EXP", "ROOKIE"]) \
+                    and "/W" not in up and "LBS" not in up:
                 card_tokens.append(((y0 + y1) // 2, x0, x1, clean_unicode(t)))
     card_name_parts, garbled = join_name_lines(card_tokens)
 
-    # Only the last name detected, or the wide-tracked first name came back split into
-    # overlapping pieces (RC + ONALD for RONALD): re-read the first-name band on its own
-    if len(card_name_parts) == 1 or (garbled and len(card_name_parts) == 2):
-        c_img = img.crop((950, 160, 1500, 245))
-        tmp_path = f"/tmp/fn_crop_{pick_index}.png"
-        c_img.save(tmp_path)
-        try:
-            c_items = ocr_tokens(tmp_path)
-            c_lines, c_garbled = join_name_lines(
-                [((y0 + y1) // 2, x0, x1, clean_unicode(t)) for t, (x0, y0, x1, y1) in c_items])
-            fn = c_lines[0][1] if c_lines and not c_garbled else ""
-            if fn and fn != card_name_parts[-1][1]:
-                card_name_parts = [(180, fn), card_name_parts[-1]]
-        finally:
-            if os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except OSError:
-                    pass
+    # The wide-tracked first name reads better from its band alone than from the whole frame,
+    # which drops or doubles its letters (JAM for JAMAL, SAIA for ISAIAH). It only stands in for a
+    # close full-frame read (a few letters off), never a different name. (The last name reads worse
+    # from its band: Vision drops the narrow I there, e.g. WHTLOCK.)
+    first = read_name_band(img, FIRST_NAME_BAND)
+    frame_last = card_name_parts[-1][1].upper() if card_name_parts else ""
+    frame_first = card_name_parts[0][1].upper() if len(card_name_parts) > 1 else ""
+    # a garbled frame read (overlapping pieces, RC + ONALD) has nothing worth keeping
+    if first and first != frame_last and (not frame_first or garbled or _fills_in(frame_first, first)):
+        frame_first = first
+    card_name_parts = [(180, n) for n in (frame_first, frame_last) if n]
 
     full_name = " ".join(t for _, t in card_name_parts)
+    full_name = re.sub(r"\.{2,}", ".", full_name)                  # P.J.. -> P.J.
+    full_name = re.sub(r"^([A-Z]{2,})\. ", r"\1 ", full_name)       # PAT. DENT -> PAT DENT (C.J. stays)
     full_name = full_name.replace("SHAOUILLE", "SHAQUILLE")
     full_name = full_name.replace("BOBB'", "BOBBY")
 
@@ -232,9 +416,9 @@ def parse_prospect_frame(path: str, pick_index: int) -> Dict[str, str]:
         feet = ht_m.group(1).translate(FEET_FIXUPS)
         inch_str = ht_m.group(2).replace("T", "1").replace("I", "1").replace("l", "1")
         inches = inch_str
-        # Madden OCR font dropped digit: 5'1" on heavy prospect is 6'1"
+        # Vision drops one 1 of 5'11" (every 5'1" checked on Oct 15's boards was 5'11")
         if feet == "5" and inches == "1":
-            feet = "6"
+            inches = "11"
         height = f"{feet}'{inches}\""
 
     # Weight parsing
@@ -247,6 +431,10 @@ def parse_prospect_frame(path: str, pick_index: int) -> Dict[str, str]:
         if w_val > 500:
             w_val = w_val - 500
         weight = str(w_val)
+
+    # The glyph reader is right where Vision flips digits; Vision stays the fallback
+    g_height, g_weight = read_ht_wt(img)
+    height, weight = g_height or height, g_weight or weight
 
     # 3. College
     college = ""
@@ -261,7 +449,8 @@ def parse_prospect_frame(path: str, pick_index: int) -> Dict[str, str]:
     badge_pos, badge_ovr = "", ""
     for t, (x0, y0, x1, y1) in items:
         if 80 <= x0 <= 450 and 480 <= y0 <= 560:
-            m = re.search(r"\b([A-Z]{1,4})\s*#\d+\s*\|\s*[O0]VR\s*(\d{2})", t.upper())
+            # "LEDG #72 | OVR75"; the bar can drop out and the number split ("TE #1 1 OVR61")
+            m = re.search(r"\b([A-Z]{1,4})\s*#\s*[\dIL ]+\s*\|?\s*[O0]VR\s*(\d{2})", t.upper())
             if m:
                 badge_pos = m.group(1)
                 badge_ovr = m.group(2)
@@ -276,6 +465,7 @@ def parse_prospect_frame(path: str, pick_index: int) -> Dict[str, str]:
     table_pos = ""
     table_ovr = ""
     pick_label = ""
+    table_name = ""
     if matched_y is not None:
         for t, (x0, y0, x1, y1) in items:
             cy = (y0 + y1) // 2
@@ -288,6 +478,22 @@ def parse_prospect_frame(path: str, pick_index: int) -> Dict[str, str]:
                     table_ovr = t
                 if x0 < 450 and not pick_label:
                     pick_label = t
+                if 650 <= x0 <= 900 and not table_name:
+                    table_name = t
+
+    # Last name by vote: the full-frame card read stands unless the card's last-name band read
+    # and the table's short name ("J.Samuel") agree on something else (SAMUEI -> SAMUEL,
+    # RUTSON -> HUTSON). Alone, each misreads its own letters (WHTLOCK, MeMillan).
+    if table_name and last_name:
+        table_last = re.sub(r"^[^.]*\.\s*", "", table_name).upper()
+        band_last = read_name_band(img, LAST_NAME_BAND)
+        if last_name.upper().replace(" ", "") == table_last.replace(" ", "") and last_name.upper() != table_last:
+            # Vision splits a wide last name at a letter gap ("THO MAS"); the table spaces it right
+            full_name = full_name[:len(full_name) - len(last_name)] + table_last
+        elif band_last and band_last.replace(" ", "") == table_last.replace(" ", "") \
+                and edit_distance(table_last.replace(" ", ""), last_name.upper().replace(" ", "")) in (1, 2):
+            # letters by vote, spacing from the table (the band can split a name too)
+            full_name = full_name[:len(full_name) - len(last_name)] + table_last
 
     pos = badge_pos or table_pos
     ovr = badge_ovr or table_ovr
@@ -320,6 +526,50 @@ def _same_prospect(a: Dict[str, str], b: Dict[str, str]) -> bool:
     return all(a[k] and a[k] == b[k] for k in keys)
 
 
+def _pick_key(rec: Dict[str, str]) -> Optional[Tuple[int, int]]:
+    rnd, pk = rec["PROJECTED_ROUND"], rec["ROUND_PICK"]
+    if rnd and rnd != UNDRAFTED and pk:
+        return int(rnd), int(pk)
+    return None
+
+
+def _next_picks(key: Tuple[int, int]) -> List[Tuple[int, int]]:
+    """The picks that can follow `key` on the board: the next in the round, or the next round's first."""
+    return [(key[0], key[1] + 1), (key[0] + 1, 1)]
+
+
+def fix_pick_sequence(records: List[Dict[str, str]]) -> Tuple[int, List[Tuple[Tuple[int, int], Tuple[int, int]]]]:
+    """The capture steps one row per frame, so the drafted picks run consecutively. A PICK cell that
+    breaks the run (Vision reads 3<->8, 5<->6) or is unreadable is set to the one pick that fits both
+    the row before and the row after. A break no single pick mends is a real gap (a skipped row) and is
+    left alone. Returns (cells corrected, gaps as (before, after))."""
+    fixed, gaps = 0, []
+    prev = (1, 0)                                   # before Round 1, Pick 1
+    for i, rec in enumerate(records):
+        if rec["PROJECTED_ROUND"] == UNDRAFTED:
+            break
+        cur = _pick_key(rec)
+        if cur in _next_picks(prev):
+            prev = cur
+            continue
+        nxt = next((records[j] for j in range(i + 1, min(i + 2, len(records)))), None)
+        nxt_key = _pick_key(nxt) if nxt else None
+        if nxt_key is not None:
+            fits = [c for c in _next_picks(prev) if nxt_key in _next_picks(c)]
+        elif nxt is None or nxt["PROJECTED_ROUND"] == UNDRAFTED:
+            fits = [] if cur else [(prev[0], prev[1] + 1)]   # the board's last drafted pick
+        else:
+            fits = []
+        if len(fits) == 1:
+            rec["PROJECTED_ROUND"], rec["ROUND_PICK"] = str(fits[0][0]), str(fits[0][1])
+            fixed += 1
+            prev = fits[0]
+        elif cur is not None:
+            gaps.append((prev, cur))
+            prev = cur
+    return fixed, gaps
+
+
 def order_by_screen_pick(records: List[Dict[str, str]]) -> List[Dict[str, str]]:
     """Order prospects by the on-screen projected pick and number them overall.
 
@@ -338,6 +588,12 @@ def order_by_screen_pick(records: List[Dict[str, str]]) -> List[Dict[str, str]]:
         elif sum(bool(v) for v in rec.values()) > sum(bool(v) for v in dup.values()):
             unique[unique.index(dup)] = rec
     dropped = len(records) - len(unique)
+    fixed, gaps = fix_pick_sequence(unique)
+    if fixed:
+        print(f"  prospects: {fixed} PICK cells set from the rows around them")
+    for before, after in gaps:
+        print(f"  WARNING: the board jumps from Round {before[0]}, Pick {before[1]} to "
+              f"Round {after[0]}, Pick {after[1]}; a row may have been skipped")
 
     keyed = []
     prev = (0, 0)

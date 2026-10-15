@@ -4,7 +4,7 @@
 **Status:** Feature Complete — Draft Board navigation automated (verified live Oct 15)  
 **Active Branch:** `feat/draft-kiper-mock`  
 **Active Worktree:** `/Users/jrereyi/Downloads/Project Mu/.claude/worktrees/draft-kiper-mock`  
-**Test Suite Status:** 127/127 tests passing (`python3 -m unittest tests/test_madden_capture.py tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
+**Test Suite Status:** 156/156 tests passing (`python3 -m pytest -q tests/test_madden_capture.py tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
 
 > [!IMPORTANT]
 > **DO NOT MERGE INTO `main` YET.**  
@@ -37,6 +37,11 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
   - Lineman weight correction: $827 \text{ LBS} \to 327 \text{ LBS}$ (weights $> 500$ normalized by subtracting 500).
   - Diacritics and character substitutions cleaned (`BƯCHANAN` $\to$ `BUCHANAN`, `SHAOUILLE` $\to$ `SHAQUILLE`).
 - **Board Order from Screen:** Frames sort by numeric frame number. The highlighted row's `PICK` cell fills `PROJECTED_ROUND` (1–7 or `UDFA`) and `ROUND_PICK`. Overall pick is computed from round and pick-in-round (1–224 for drafted, 225+ for undrafted).
+- **Digit & Name Reliability (Oct 15):** Vision misread digits differently on each run (1↔7, 3↔8, 5'11" read as 5'1"). The old `5'1"` → `6'1"` rule was wrong: every case checked was 5'11".
+  - **Height/weight** are now read glyph by glyph: `read_ht_wt` matches digit templates in `pipeline/assets/prospect_htwt_digits.png` and settles 0/3/6/8/9 by their loops. Vision stays the fallback.
+  - **PICK cells** are mended from the consecutive board sequence (`fix_pick_sequence`); a real gap is reported instead.
+  - **First names** are re-read from their band alone. **Last names** go by vote: card, band and the table's short name.
+  - **Result:** both full captures (`captures/prospects`, `captures/2026-10-15_full_board3`) extract to identical CSVs, 389/389 rows and no blank cells. 31 + 54 + 15 changed cards were checked by eye.
 - **Benchmark:** Parsed all 389 unique prospects (224 drafted + 165 UDFAs) from `captures/prospects` in ~75s with zero Gemini calls and 100% field completeness.
 - **Syncing:** `extract.py` automatically synchronizes extracted `prospects.csv` to canonical storage `data/draft/{draft_season}_prospects.csv` where `draft_season = season + 1`.
 
@@ -113,12 +118,11 @@ A bare Back does not leave the board. Back opens a **Draft Class Edited** prompt
 - Each entry posts an "edit draft class" notice to the league transaction log.
 
 - Full board (`--only prospects --all-prospects`, `captures/2026-10-15_full_board3`): 389 frames, 224 drafted + 163 UDFA + 2 unreadable PICK cells. All 389 players match `captures/prospects/prospects.csv`.
-  - The remaining differences are OCR digit misreads, inconsistent between runs: 1↔7 in heights (18 rows), 3↔8 in weights (14 rows), 3↔8 / 5↔6 in 3 PICK cells, 15 first-name spellings (e.g. PAT FIOWERS / PAT FLOWERS), and a few blank cells.
-  - Spot check: Mitch Williams's card reads 6'1" (the reference is right; the new OCR said 6'7").
+  - The OCR differences that remained (1↔7, 3↔8, PICK cells, first names) are fixed by the extractor changes above.
 
 ### Not Yet Done
 - A full `python3 -m pipeline.weekly_capture --mode prospects` run (extract + load), end to end.
-- OCR digit stability in `pipeline/extract_prospects_ocr.py`. Possible approaches: a second read of the HT/WT band, or a Gemini check on rows where two reads disagree.
+- The glyph templates were mapped at the 3024×1888 chiaki-ng window. At any other size `read_ht_wt` returns nothing and Vision's reading is used.
 
 ---
 
@@ -136,8 +140,8 @@ A bare Back does not leave the board. Back opens a **Draft Class Edited** prompt
 Run these commands inside the worktree to verify the environment:
 
 ```bash
-# 1. Run all unit and integration test suites (127 tests)
-python3 -m unittest \
+# 1. Run all unit and integration test suites (156 tests; the real-capture OCR test takes ~4 min)
+python3 -m pytest -q \
   tests/test_madden_capture.py \
   tests/test_writer_config.py \
   tests/test_mock_draft_tools.py \
