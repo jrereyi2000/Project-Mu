@@ -154,6 +154,7 @@ CREATE TABLE IF NOT EXISTS team_stats (
     -- 2026_10_29: estimated per game from season totals where no box score was captured
     red_zone_attempts INT, two_point_attempts INT, penalties INT,
     estimated_fields TEXT[] NOT NULL DEFAULT '{}',   -- the columns engines/team_box_estimator.py filled
+    exact_fields TEXT[] NOT NULL DEFAULT '{}',       -- 2026_10_31: of those, the ones that are exact (a single-game remainder)
     UNIQUE (game_id, team_name)
 );
 

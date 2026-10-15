@@ -11,7 +11,7 @@ from engines.team_box_estimator import GAME_FIELDS, TOTAL_OF, apportion, check, 
 
 def game_row(rid, week, team, opp, pts, opp_pts, **known):
     row = {"id": rid, "game_id": rid // 2, "week": week, "team": team, "opp": opp, "pts": pts, "opp_pts": opp_pts,
-           "estimated": []}
+           "estimated": [], "exact": []}
     row.update({f: None for f in GAME_FIELDS})
     row.update(known)
     return row
@@ -70,6 +70,7 @@ class EstimateTests(unittest.TestCase):
             self.assertLessEqual(r["two_point_attempts"], score_split(r["pts"], 0.6)[0] + 1)
             self.assertLessEqual(r["red_zone_tds"] + r["red_zone_fgs"], r["red_zone_attempts"])
             self.assertIn("third_down_attempts", r["estimated"])
+            self.assertEqual(r["exact"], [])   # a multi-game split is an estimate
         # a 6-point game can't hold a red-zone field goal plus a TD's worth of trips that scored
         six = next(r for r in rows if r["pts"] == 6)
         self.assertLessEqual(six["red_zone_tds"] * 6 + six["red_zone_fgs"] * 3, 6)
@@ -104,6 +105,8 @@ class EstimateTests(unittest.TestCase):
         self.assertEqual((t1["third_down_conversions"], t1["third_down_attempts"]), (6, 13))
         self.assertEqual((t1["penalties"], t1["penalty_yards"]), (6, 50))
         self.assertEqual((t1["red_zone_tds"], t1["red_zone_fgs"], t1["red_zone_attempts"]), (2, 1, 3))
+        self.assertEqual(sorted(t1["exact"]), sorted(t1["estimated"]))   # the week's change is exact
+        self.assertIn("red_zone_pct", t1["exact"])
 
 
 if __name__ == "__main__":

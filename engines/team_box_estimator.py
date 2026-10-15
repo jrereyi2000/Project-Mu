@@ -21,7 +21,9 @@ team, so the remainder is exactly that week's change; the first run spreads a wh
 - Penalties: count follows the captured penalty yards when known, else the game's combined score (more
   snaps, more flags); yards follow the count.
 
-Filled columns are listed in team_stats.estimated_fields. Stored cells (captured or estimated earlier) are
+Filled columns are listed in team_stats.estimated_fields. A cell that was the only one its team needed for that
+column is exact, not an estimate (the season total's change since the cells already stored), and is also
+listed in team_stats.exact_fields; a cell from a multi-game split (the first run's backlog) is not. Stored cells (captured or estimated earlier) are
 never changed, so earlier weeks don't shift when a new week is added. Regular-season games only, and only
 weeks the latest loaded weekly capture covers (its season totals include them).
 """
@@ -132,7 +134,7 @@ def load(cur, season):
         SELECT ts.id, g.id, g.week, t.id, CASE WHEN g.home_team_id = t.id THEN g.away_team_id ELSE g.home_team_id END,
                CASE WHEN g.home_team_id = t.id THEN g.home_score ELSE g.away_score END,
                CASE WHEN g.home_team_id = t.id THEN g.away_score ELSE g.home_score END,
-               ts.estimated_fields, {', '.join('ts.' + f for f in GAME_FIELDS)}
+               ts.estimated_fields, ts.exact_fields, {', '.join('ts.' + f for f in GAME_FIELDS)}
         FROM team_stats ts
         JOIN games g ON g.id = ts.game_id
         JOIN teams t ON t.name = ts.team_name
@@ -143,8 +145,9 @@ def load(cur, season):
     rows = []
     for r in cur.fetchall():
         row = {"id": r[0], "game_id": r[1], "week": r[2], "team": r[3], "opp": r[4],
-               "pts": r[5] or 0, "opp_pts": r[6] or 0, "estimated": list(r[7] or [])}
-        row.update(dict(zip(GAME_FIELDS, r[8:])))
+               "pts": r[5] or 0, "opp_pts": r[6] or 0, "estimated": list(r[7] or []),
+               "exact": list(r[8] or [])}
+        row.update(dict(zip(GAME_FIELDS, r[9:])))
         rows.append(row)
     return covered, totals, rows
 
@@ -170,10 +173,15 @@ def estimate(rows, totals):
             r["td_g"], r["fg_g"] = score_split(r["pts"], share)
             r["rel"] = r["pts"] / team_avg_pts[t]
 
-    def fill(r, field, value):
+    clamped = set()   # (team, column) whose stored cells exceed the season total: the remainder isn't exact
+
+    def fill(r, field, value, cells=()):
+        """Store an estimated cell; it is exact when it was the team's only missing cell for the column."""
         r[field] = int(value)
         if field not in r["estimated"]:
             r["estimated"].append(field)
+        if len(cells) == 1 and (r["team"], field) not in clamped and field not in r["exact"]:
+            r["exact"].append(field)
 
     def remainder(t, rs, total_key, field):
         total = totals.get(t, {}).get(total_key)
@@ -182,6 +190,7 @@ def estimate(rows, totals):
         rem = total - sum(r[field] for r in rs if r[field] is not None)
         if rem < 0:
             warnings.append(f"team {t}: stored {field} exceed the season total by {-rem}")
+            clamped.add((t, field))
         return max(0, rem)
 
     def conv_and_att(t, rs, conv, att, conv_key, att_key, conv_w, fail_w, cap=None):
@@ -194,7 +203,7 @@ def estimate(rows, totals):
             if spilled:
                 warnings.append(f"team {t}: {spilled} {conv} placed over the per-game cap")
             for r, v in zip(cells, vals):
-                fill(r, conv, v)
+                fill(r, conv, v, cells)
         cells = [r for r in rs if r[att] is None and r[conv] is not None]
         rem = remainder(t, rs, att_key, att)
         if cells and rem is not None:
@@ -204,7 +213,7 @@ def estimate(rows, totals):
             caps = [max(0, cap(r) - r[conv]) for r in cells] if cap else None
             vals, _ = apportion(max(0, fails_total), [fail_w(r) for r in cells], caps)
             for r, v in zip(cells, vals):
-                fill(r, att, r[conv] + v)
+                fill(r, att, r[conv] + v, cells)
 
     for t, rs in by_team.items():
         # Third downs: scoring offenses convert, stalled ones fail.
@@ -228,13 +237,13 @@ def estimate(rows, totals):
             vals, _ = apportion(rem, [r["penalty_yards"] / ypp if r["penalty_yards"] is not None else 6 * r["plays"]
                                       for r in cells])
             for r, v in zip(cells, vals):
-                fill(r, "penalties", v)
+                fill(r, "penalties", v, cells)
         cells = [r for r in rs if r["penalty_yards"] is None and r["penalties"] is not None]
         rem = remainder(t, rs, "penalty_yards", "penalty_yards")
         if cells and rem is not None:
             vals, _ = apportion(rem, [r["penalties"] for r in cells])
             for r, v in zip(cells, vals):
-                fill(r, "penalty_yards", v)
+                fill(r, "penalty_yards", v, cells)
 
     # Red zone, balanced across offense and defense: TDs, FGs and empty trips separately.
     for key, off_key, def_key, field in (("td", "red_zone_td", "red_zone_def_td", "red_zone_tds"),
@@ -259,7 +268,7 @@ def estimate(rows, totals):
             if spilled:
                 warnings.append(f"team {t}: {spilled} {field} more than the scores explain")
             for r, v in zip(tc, vals):
-                fill(r, field, v)
+                fill(r, field, v, tc)
     cells = [r for r in rows if r["red_zone_attempts"] is None and r["red_zone_tds"] is not None
              and r["red_zone_fgs"] is not None]
     if cells:
@@ -288,11 +297,14 @@ def estimate(rows, totals):
                 continue
             vals, _ = apportion(row_t[t], [fitted[r["id"]] for r in tc])
             for r, v in zip(tc, vals):
-                fill(r, "red_zone_attempts", r["red_zone_tds"] + r["red_zone_fgs"] + v)
+                fill(r, "red_zone_attempts", r["red_zone_tds"] + r["red_zone_fgs"] + v, tc)
     for r in rows:
         if r["red_zone_pct"] is None and r["red_zone_attempts"] is not None and r["red_zone_tds"] is not None:
             r["red_zone_pct"] = round(100.0 * r["red_zone_tds"] / r["red_zone_attempts"], 1) if r["red_zone_attempts"] else 0.0
             r["estimated"].append("red_zone_pct")
+            known = lambda f: f not in r["estimated"] or f in r["exact"]
+            if known("red_zone_tds") and known("red_zone_attempts"):
+                r["exact"].append("red_zone_pct")
     return warnings
 
 
@@ -333,8 +345,8 @@ def run(season=None, dry_run=False, conn_info=DATABASE_URL, quiet=False):
             changed = [r for r in rows if r["estimated"] != before[r["id"]]]
             for r in changed:
                 cur.execute(f"UPDATE team_stats SET {', '.join(f'{f} = %s' for f in GAME_FIELDS)}, "
-                            f"estimated_fields = %s WHERE id = %s",
-                            [r[f] for f in GAME_FIELDS] + [r["estimated"], r["id"]])
+                            f"estimated_fields = %s, exact_fields = %s WHERE id = %s",
+                            [r[f] for f in GAME_FIELDS] + [r["estimated"], r["exact"], r["id"]])
             diffs, def_off = check(rows, totals)
             report = {"season": season, "through_week": covered, "rows": len(rows), "filled_rows": len(changed),
                       "warnings": warnings, "offense_mismatches": diffs, "red_zone_defense_off_by": def_off}
