@@ -502,7 +502,7 @@ def get_team_context(team_identifier: str) -> str:
 
 @tool
 def get_coach_profile(team_identifier: str, season: int = 0) -> str:
-    """Fetch a team's head coach: tenure (season with the team, who he replaced), offensive scheme and defensive front, coaching tendencies (pass lean, fourth-down aggressiveness, blitz rate, man coverage as Low/Medium/High with plain-language meaning), this season's record, record with the team, career record (regular season, winning seasons, playoffs, Super Bowls), Super Bowls with the team and Coach of the Year awards. Accepts team name, abbreviation, or team ID."""
+    """Fetch a team's head coach: tenure (season with the team, who he replaced), offensive scheme and defensive front, coaching tendencies (pass lean and fourth-down aggressiveness measured in this league, man coverage as the staff's real-world philosophy; Low/Medium/High with plain-language meaning), this season's record, record with the team, career record (regular season, winning seasons, playoffs, Super Bowls), Super Bowls with the team and Coach of the Year awards. Accepts team name, abbreviation, or team ID."""
     try:
         s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -1121,7 +1121,7 @@ def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", seaso
                         f"{names.get(team_id)}_offense_vs_{names.get(opp_id)}_defense": staff_matchup(coaches[team_id], coaches[opp_id]),
                         f"{names.get(opp_id)}_offense_vs_{names.get(team_id)}_defense": staff_matchup(coaches[opp_id], coaches[team_id]),
                     },
-                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best). Coaching tendencies are Low/Medium/High: pass lean and fourth down are measured in this league (allowing for the score), blitz and coverage are the staff's real-world philosophy; describe them, never turn them into percentages.",
+                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best). Coaching tendencies are Low/Medium/High: pass lean and fourth down are measured in this league (allowing for the score), man coverage is the staff's real-world philosophy (there is no blitz data); describe them, never turn them into percentages.",
                 }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"

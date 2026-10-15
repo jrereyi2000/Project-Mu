@@ -16,18 +16,15 @@ TENDENCY_WORDS = {
     "fourth_down_aggressiveness": {"High": "aggressive: goes for it on fourth down more than the score calls for",
                                    "Medium": "middle of the pack on fourth down",
                                    "Low": "conservative: goes for it on fourth down less than the score calls for"},
-    "blitz_rate": {"High": "blitz-heavy: sends five or more rushers more than most",
-                   "Medium": "blitzes about as often as the league",
-                   "Low": "rarely blitzes: wins with a four-man rush"},
     "man_coverage": {"High": "man-heavy coverage",
                      "Medium": "mixes man and zone",
                      "Low": "zone-first coverage"},
 }
 
 TENDENCY_NOTE = ("Tendencies are Low / Medium / High against the league. Pass lean and fourth down are measured from "
-                 "this league's results, allowing for the score; blitz rate and man coverage are the staff's real-world "
-                 "philosophy and aren't measured here, so present them as reputation, not as what the defense has done. "
-                 "Describe tendencies in words (\"a blitz-heavy defense\"); never turn them into percentages or claim "
+                 "this league's results, allowing for the score; man coverage is the staff's real-world philosophy and isn't "
+                 "measured here, so present it as reputation, not as what the defense has done. There is no blitz data. "
+                 "Describe tendencies in words (\"a zone-first defense\"); never turn them into percentages or claim "
                  "how often anything happened in a specific game.")
 
 MEASURED = ("pass_lean", "fourth_down_aggressiveness")
@@ -40,7 +37,7 @@ FULL_SEASON_GAMES = 17
 
 
 def effective_tendencies(coach: dict) -> dict:
-    """{key: (tier, source)} for the four tendencies, or None where there is no tier. Pass lean and fourth down use
+    """{key: (tier, source)} for the three tendencies, or None where there is no tier. Pass lean and fourth down use
     coach['observed'] ({key: (tier, source)} from fetch_observed) when present, else the coach's real-world tier."""
     observed = coach.get("observed") or {}
     out = {}
@@ -285,6 +282,6 @@ def staff_matchup(off_coach: dict | None, def_coach: dict | None) -> dict | None
         "offense": f"{off_coach['coach_name']}: {off_coach['offensive_scheme']}, pass lean "
                    f"{short('pass_lean', o['pass_lean'])}, fourth down "
                    f"{short('fourth_down_aggressiveness', o['fourth_down_aggressiveness'])}",
-        "defense": f"{def_coach['coach_name']}: {def_coach['defensive_scheme']} front, blitz "
-                   f"{short('blitz_rate', d['blitz_rate'])}, coverage {short('man_coverage', d['man_coverage'])}",
+        "defense": f"{def_coach['coach_name']}: {def_coach['defensive_scheme']} front, "
+                   f"coverage {short('man_coverage', d['man_coverage'])}",
     }

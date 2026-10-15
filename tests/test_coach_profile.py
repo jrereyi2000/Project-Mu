@@ -63,7 +63,7 @@ class CoachProfileTests(unittest.TestCase):
         d = describe_tendencies(coach)
         self.assertTrue(d["pass_lean"].startswith("High (pass-heavy"))
         self.assertIn("not yet measured", d["pass_lean"])          # no measurement: the real-world tier
-        self.assertIn("real-world staff philosophy", d["blitz_rate"])
+        self.assertNotIn("blitz_rate", d)                             # no blitz data: never shown
         self.assertIsNone(d["man_coverage"])
         self.assertNotIn("%", "".join(v for v in d.values() if v))
 
@@ -74,10 +74,11 @@ class CoachProfileTests(unittest.TestCase):
         eff = effective_tendencies(coach)
         self.assertEqual(eff["pass_lean"][0], "Low")
         self.assertEqual(eff["fourth_down_aggressiveness"][0], "Low")   # not measured: real-world fallback
-        self.assertEqual(eff["blitz_rate"][0], "High")                  # never measured
+        self.assertIn("real-world staff philosophy", eff["man_coverage"][1])   # never measured
+        self.assertNotIn("blitz_rate", eff)
         line = staff_matchup(coach, dict(coach, coach_name="Y"))
         self.assertIn("X: Spread, pass lean Low (run-heavy; measured)", line["offense"])
-        self.assertIn("blitz High (blitz-heavy; reputation)", line["defense"])
+        self.assertEqual(line["defense"], "Y: 3-4 front, coverage Low (zone-first coverage; reputation)")
         self.assertIn("zone-first coverage; reputation", line["defense"])
         self.assertIsNone(staff_matchup(None, coach))
 
