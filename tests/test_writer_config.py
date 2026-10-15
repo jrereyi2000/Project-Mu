@@ -123,6 +123,24 @@ class WriterConfigTests(unittest.TestCase):
                 self.assertIn("Coach of the Year", o[key], f"{name} {key}")
             self.assertIn("get_coach_of_the_year_race", o["curatorial_autonomy_override"], name)
 
+    def test_coach_profile_is_registered_and_hooked_up(self):
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            src = f.read()
+        self.assertGreaterEqual(src.count("get_coach_profile"), 5)  # import, tool list, both research blocks
+        self.assertEqual(src.count("COACHING TENDENCIES:"), 2)       # national and beat research blocks
+        self.assertIn("never turn a tier into a percentage", src)
+        self.assertNotIn("Scheme talk (coverage shells, fronts, blitz looks) is your read of the numbers", src)
+        for name in ("PLAYOFF_AUTOPSY", "FRANCHISE_STATE_OF_THE_UNION", "LOCAL_SEASON_PROGRESS_REPORT",
+                     "SINGLE_GAME_SCHEMATIC_AUTOPSY", "QUARTERBACK_DUEL_TAPE_BREAKDOWN",
+                     "SUPER_BOWL_COMPREHENSIVE_PREVIEW", "SLATE_LOOKAHEAD_PREDICTIONS", "LOCAL_MATCHUP_PRIMER"):
+            text = self.article_types[name]["curatorial_autonomy"]
+            self.assertIn("COACHING DATA:", text, name)
+            self.assertIn("never turn them into percentages", text, name)
+        overrides = load("playoff_overrides.json", "playoff_overrides")
+        for name in ("SINGLE_GAME_SCHEMATIC_AUTOPSY", "SLATE_LOOKAHEAD_PREDICTIONS"):
+            for o in overrides[name]:
+                self.assertIn("coaching_matchup", o["curatorial_autonomy_override"], o["override_name"])
+
     def test_coach_of_the_year_tool_is_registered(self):
         with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
             self.assertGreaterEqual(f.read().count("get_coach_of_the_year_race"), 3)  # import, tool list, guideline

@@ -8,6 +8,7 @@ from engines.team_efficiency_engine import compute_team_efficiency, fetch_team_g
 from engines.matchup_edges import compute_edges, fetch_ratings, fetch_units
 from engines.game_credit_engine import compute_game_credit, fetch_completed_games, trajectory_label
 from engines.coty_engine import compute_coty, fetch_inputs as fetch_coty_inputs
+from engines.coach_profile import coach_profile, fetch_team_coach, staff_matchup
 import json
 
 from newsroom.run_context import context_season, cutoff_week, is_visible_week
@@ -473,6 +474,7 @@ def get_team_context(team_identifier: str) -> str:
                 """, (team_id, s_val))
 
                 top_players = [f"{r[0]} ({r[1]} - {r[2]} OVR)" for r in cur.fetchall()]
+                coach = fetch_team_coach(cur, team_id, s_val)
 
                 result = {
                     "team": team_row[0],
@@ -487,9 +489,30 @@ def get_team_context(team_identifier: str) -> str:
                         "off_ovr": team_row[6],
                         "def_ovr": team_row[7]
                     },
-                    "top_3_players": top_players
+                    "top_3_players": top_players,
+                    "head_coach": (f"{coach['coach_name']} (season {s_val - coach['start_season'] + 1} with the team; "
+                                   f"{coach['offensive_scheme']} offense, {coach['defensive_scheme']} front). "
+                                   "Call get_coach_profile for records, tendencies and hardware.") if coach else None,
                 }
                 return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_coach_profile(team_identifier: str, season: int = 0) -> str:
+    """Fetch a team's head coach: tenure (season with the team, who he replaced), offensive scheme and defensive front, coaching tendencies (pass lean, fourth-down aggressiveness, blitz rate, man coverage as Low/Medium/High with plain-language meaning), this season's record, record with the team, career record (regular season, winning seasons, playoffs, Super Bowls), Super Bowls with the team and Coach of the Year awards. Accepts team name, abbreviation, or team ID."""
+    try:
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Team '{team_identifier}' not found."
+                profile = coach_profile(cur, team_id, s_val, is_visible_week, awards_visible=cutoff_week(s_val) is None)
+                if not profile:
+                    return f"No head coach recorded for team ID {team_id} in {s_val}."
+                cur.execute("SELECT name FROM teams WHERE id = %s", (team_id,))
+                return json.dumps({"season": s_val, "team": cur.fetchone()[0], **profile}, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -1031,12 +1054,17 @@ def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", seaso
                         "biggest_vulnerability": e["biggest_vulnerability"],
                     }
 
+                coaches = {t: fetch_team_coach(cur, t, s_val) for t in (team_id, opp_id)}
                 return json.dumps({
                     "season": s_val,
                     "context": context,
                     f"{names.get(team_id)}_offense": side(team_id, opp_id),
                     f"{names.get(opp_id)}_offense": side(opp_id, team_id),
-                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best).",
+                    "coaching_matchup": {
+                        f"{names.get(team_id)}_offense_vs_{names.get(opp_id)}_defense": staff_matchup(coaches[team_id], coaches[opp_id]),
+                        f"{names.get(opp_id)}_offense_vs_{names.get(team_id)}_defense": staff_matchup(coaches[opp_id], coaches[team_id]),
+                    },
+                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best). Coaching tendencies are Low/Medium/High staff tendencies, not charted rates: describe them, never turn them into percentages.",
                 }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
