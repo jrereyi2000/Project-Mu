@@ -5,6 +5,7 @@ import psycopg
 import functools
 import random
 import collections
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
@@ -49,6 +50,7 @@ from newsroom.db_tools import (
     get_franchise_rebuild_status,
     get_team_articles,
     get_player_articles,
+    get_team_injury_report,
 )
 from newsroom.fantasy_tools import FANTASY_TOOLS
 from newsroom.fantasy_desk import (
@@ -203,15 +205,81 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
             """, (season, week))
             preview_games = cur.fetchall()
 
+            # Query key injuries for upcoming matchup previews (threshold: OVR >= 88 OR Pop >= 50 OR starting QB)
+            cur.execute("""
+                SELECT DISTINCT week FROM injuries
+                WHERE season = %s AND week <= %s
+                ORDER BY week DESC LIMIT 1;
+            """, (season, week))
+            w_row = cur.fetchone()
+            q_week = w_row[0] if w_row else week
+
+            cur.execute("""
+                WITH ranked_roster AS (
+                    SELECT 
+                        player_id,
+                        position,
+                        overall_rating,
+                        ROW_NUMBER() OVER (PARTITION BY team_id, position ORDER BY overall_rating DESC) as pos_rank
+                    FROM player_seasons
+                    WHERE season = %s
+                )
+                SELECT 
+                    i.team_id,
+                    COALESCE(p.full_name, p.player_name, i.player_name) as player_name,
+                    COALESCE(ps.position, i.position) as position,
+                    COALESCE(ps.overall_rating, i.ovr) as ovr,
+                    COALESCE(ps.popularity_index, 0.0) as pop,
+                    i.injury_type,
+                    i.duration,
+                    i.weeks_remaining,
+                    i.is_ir,
+                    (rr.pos_rank = 1 AND COALESCE(ps.position, i.position) = 'QB') as is_qb_star
+                FROM injuries i
+                JOIN teams t ON t.id = i.team_id
+                LEFT JOIN players p ON p.id = i.player_id
+                LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
+                LEFT JOIN ranked_roster rr ON rr.player_id = i.player_id
+                WHERE i.season = %s AND i.week = %s
+                  AND (
+                      COALESCE(ps.overall_rating, i.ovr) >= 88
+                      OR COALESCE(ps.popularity_index, 0.0) >= 50.0
+                      OR (rr.pos_rank = 1 AND COALESCE(ps.position, i.position) = 'QB')
+                  )
+                ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
+            """, (season, season, q_week))
+            key_injuries_by_team = defaultdict(list)
+            for tid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir, is_qb_star in cur.fetchall():
+                key_injuries_by_team[tid].append({
+                    "player_name": pname,
+                    "position": pos,
+                    "overall_rating": int(ovr or 0),
+                    "popularity_index": round(float(pop or 0.0), 1),
+                    "injury_type": inj_type,
+                    "duration": dur,
+                    "weeks_remaining": int(w_rem or 0),
+                    "is_ir": bool(is_ir),
+                    "is_starting_qb": bool(is_qb_star),
+                })
+
             for pg in preview_games:
-                brief["preview_slate"]["all_games"].append({
+                home_tid, away_tid = pg[5], pg[6]
+                game_dict = {
                     "game_id": pg[0],
                     "matchup": f"{pg[1]} @ {pg[2]}",
-                    "away_team": f"{pg[1]} (ID: {pg[6]})",
-                    "home_team": f"{pg[2]} (ID: {pg[5]})",
+                    "away_team": f"{pg[1]} (ID: {away_tid})",
+                    "home_team": f"{pg[2]} (ID: {home_tid})",
                     "kickoff_time": pg[3],
                     "projected_excitement": display_excitement(pg[4])
-                })
+                }
+                away_injs = key_injuries_by_team.get(away_tid, [])
+                home_injs = key_injuries_by_team.get(home_tid, [])
+                if away_injs or home_injs:
+                    game_dict["key_injuries"] = {
+                        "away": away_injs,
+                        "home": home_injs
+                    }
+                brief["preview_slate"]["all_games"].append(game_dict)
             brief["preview_slate"]["total_games"] = len(preview_games)
 
             # 3. Fetch standout player stat lines from the completed recap week
@@ -685,6 +753,7 @@ class SwarmDispatcher:
             get_franchise_rebuild_status,
             get_team_articles,
             get_player_articles,
+            get_team_injury_report,
         ]
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)
@@ -849,7 +918,8 @@ TEMPORAL PUBLISHING CONTEXT (RETROSPECTIVE SLATE REVIEW):
 TEMPORAL PUBLISHING CONTEXT (PROSPECTIVE MATCHUP PREVIEW):
 - You are publishing during Week {week}, ahead of the Week {preview_week} games.
 - Focus strictly on previewing the upcoming scheduled matchups for Week {preview_week}; they have not been played yet.
-- Analyze team records, head-to-head match-ups, and tactical blueprints for the games taking place in Week {preview_week}. There is no injury data in this league: do not mention injuries or injury reports.{preview_lookup}
+- Analyze team records, head-to-head match-ups, and tactical blueprints for the games taking place in Week {preview_week}.
+- INJURY REPORTING RULE (THRESHOLD 88 OVR / 50 POP / STARTING QB): You may cite official injuries from your injury tool or the Assignment Brief, but ONLY for marquee players (OVR 88+, Popularity 50+, or starting Quarterbacks). Do not discuss minor injuries to role players or backups. Never invent injuries, timelines, or diagnoses not present in the official data.{preview_lookup}
 """
         elif temporal_mode == "CUMULATIVE":
             temporal_instruction = f"""
@@ -883,6 +953,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need the top popular players in the NFL, call `get_top_popular_players`.
 - If you need the highest-rated players at every position (for league-wide player rankings), call `get_top_rated_players`.
 - If you need defensive or special-teams production (sack, interception, tackle, tackles-for-loss, pass-deflection, forced-fumble, field-goal, punting or return leaders), league-wide or for one team, call `get_defense_special_teams_leaders`. `get_player_season_stats` gives any one player's full line, and `get_game_box_score` lists a game's defensive playmakers and kickers when that game's stats were captured.
+- If you need a team's official weekly injury report (player status, injury type, duration, IR status, and whether an injury is a key injury), call `get_team_injury_report`. Remember national coverage is strictly restricted to marquee key injuries (OVR 88+, Popularity 50+, or starting QBs).
 - If you need a game's detailed player contributions, call `get_game_box_score`.
 - If you need the official Round 1 selection order (Picks 1-32), call `get_draft_order`.
 - If you need a team's primary roster needs ranked by urgency, call `get_team_draft_needs`.
@@ -903,7 +974,8 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 2. RESEARCH TOOLS:
 - Query your team's most recent box score and player performances with `get_game_box_score`.
 - Query your team's complete game schedule, results, and margins with `get_team_season_schedule`.
-- Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`. There is no injury data in this league: do not mention injuries or injury reports.
+- Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`.
+- BEAT INJURY REPORTING RULE: Check your team's injury status in the Assignment Brief or query `get_team_injury_report`. Report on any injured starters across offense, defense, and specialists. Detail who steps into the starting lineup ('next man up') and how the coordinator must adjust the gameplan. Never invent injuries not on the report.
 - Query team baseline ratings and top stars with `get_team_context`.
 - Query your head coach (tenure, schemes, tendencies, records, hardware) with `get_coach_profile`, and the opponent's coach before a game. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and four tendencies (pass lean, fourth-down aggressiveness, blitz rate, man coverage) as Low / Medium / High against the league. Use them to frame scheme talk ("a blitz-heavy, man-heavy defense", "a coach who goes for it on fourth-and-short"), but they are staff tendencies, not charted game data: never turn a tier into a percentage, and never claim how often a team blitzed or played man in a specific game.
 - Query your team's and the opponent's third-down, red-zone and penalty rates with league ranks with `get_team_efficiency_profile`; a single game's come only from its box score's `team_situational` line, so don't invent them for a game without one.
@@ -1013,8 +1085,85 @@ EDITORIAL DESK ASSIGNMENT (MANDATORY):
             except Exception as e:
                 print(f"⚠️  Could not load previous Power Rankings: {e}")
 
+        brief_for_agent = brief
+        if archetype == "LOCAL_BEAT_REPORTER" and assigned_team_id:
+            try:
+                with psycopg.connect(self.db.db_conn_info) as bconn, bconn.cursor() as bcur:
+                    bcur.execute("""
+                        SELECT DISTINCT week FROM injuries
+                        WHERE team_id = %s AND season = %s AND week <= %s
+                        ORDER BY week DESC LIMIT 1;
+                    """, (assigned_team_id, season, week))
+                    bw_row = bcur.fetchone()
+                    bq_week = bw_row[0] if bw_row else week
+
+                    bcur.execute("""
+                        WITH ranked_roster AS (
+                            SELECT 
+                                player_id,
+                                position,
+                                overall_rating,
+                                ROW_NUMBER() OVER (PARTITION BY position ORDER BY overall_rating DESC) as pos_rank
+                            FROM player_seasons
+                            WHERE team_id = %s AND season = %s
+                        )
+                        SELECT 
+                            i.player_id,
+                            COALESCE(p.full_name, p.player_name, i.player_name) as player_name,
+                            COALESCE(ps.position, i.position) as position,
+                            COALESCE(ps.overall_rating, i.ovr) as ovr,
+                            COALESCE(ps.popularity_index, 0.0) as pop,
+                            i.injury_type,
+                            i.duration,
+                            i.weeks_remaining,
+                            i.is_ir,
+                            rr.pos_rank
+                        FROM injuries i
+                        LEFT JOIN players p ON p.id = i.player_id
+                        LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
+                        LEFT JOIN ranked_roster rr ON rr.player_id = i.player_id
+                        WHERE i.team_id = %s AND i.season = %s AND i.week = %s
+                        ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
+                    """, (assigned_team_id, season, assigned_team_id, season, bq_week))
+                    beat_rows = bcur.fetchall()
+
+                    def is_starter_rank(pos, rank):
+                        if not rank:
+                            return False
+                        if pos in ("QB", "TE", "LT", "LG", "C", "RG", "RT", "FS", "SS", "K", "P", "FB"):
+                            return rank == 1
+                        if pos in ("HB", "DT", "LEDG", "REDG", "LE", "RE"):
+                            return rank <= 2
+                        if pos in ("WR", "CB", "MIKE", "SAM", "WILL", "MLB", "LOLB", "ROLB"):
+                            return rank <= 3
+                        return rank == 1
+
+                    starter_injuries = []
+                    for pid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir, pos_rank in beat_rows:
+                        if is_starter_rank(pos, pos_rank):
+                            starter_injuries.append({
+                                "player_name": pname,
+                                "position": pos,
+                                "overall_rating": int(ovr or 0),
+                                "injury_type": inj_type,
+                                "duration": dur,
+                                "weeks_remaining": int(w_rem or 0),
+                                "is_ir": bool(is_ir),
+                                "depth_starter": True
+                            })
+                    brief_for_agent = dict(brief)
+                    brief_for_agent["team_injury_report"] = {
+                        "team_id": assigned_team_id,
+                        "week": bq_week,
+                        "starter_injuries_count": len(starter_injuries),
+                        "starter_injuries": starter_injuries,
+                        "reporting_guidance": "Report on any injured starters across offense, defense, and specialists. Detail who steps into the starting lineup ('next man up') and how the gameplan must adjust."
+                    }
+            except Exception as e:
+                print(f"⚠️  Could not load beat injury report for team {assigned_team_id}: {e}")
+
         task_instruction = f"""ASSIGNMENT BRIEF:
-{json.dumps(brief, indent=2)}
+{json.dumps(brief_for_agent, indent=2)}
 
 TASK:
 You must analyze the action through your specific analytical lens.

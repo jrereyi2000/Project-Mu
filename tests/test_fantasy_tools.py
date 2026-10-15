@@ -42,7 +42,8 @@ class WeekRuleTests(unittest.TestCase):
 
     def test_tools_registered(self):
         names = {t.name for t in ft.FANTASY_TOOLS}
-        self.assertEqual(len(names), 10)
+        self.assertEqual(len(names), 11)
+        self.assertIn("get_fantasy_injuries", names)
         self.assertTrue(all(n.startswith("get_fantasy_") for n in names))
 
 

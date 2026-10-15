@@ -62,6 +62,8 @@
     "PERFORMANCE": 1.1,
     "PLAYER": 0.7,
     "BEAT": 0.8,
+    "BEAT_INJURY": 1.2,
+    "INJURY_SHOCK": 1.5,
     "STANDINGS": 0.8,
     "SHARE": 0.7,
     "PREVIEW": 0.9,
