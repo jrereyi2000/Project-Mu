@@ -429,6 +429,21 @@ def get_team_news(abbr: str, season: Optional[int] = None, limit: int = 10):
             }
 
 
+def real_team_stats(row: dict) -> dict:
+    """A team_stats row with its estimated values blanked: a field the estimator filled (estimated_fields) is shown
+    only when it is exact (exact_fields), the same rule as the writers' box score (newsroom/db_tools.py)."""
+    est, exact = set(row.pop("estimated_fields", None) or []), set(row.pop("exact_fields", None) or [])
+    for field in est - exact:
+        row[field] = None
+    # Red-zone TDs are written only by a captured box score (or the estimator); without one, first downs and plays
+    # are backfill placeholders (0), not values
+    row["box_score_captured"] = row.get("red_zone_tds") is not None and "red_zone_tds" not in est
+    if not row["box_score_captured"]:
+        row["first_downs"] = None
+    row["total_plays"] = None   # never captured
+    return row
+
+
 @app.get("/api/game/{game_id}")
 def get_game(game_id: int):
     with db_pool.connection() as conn:
@@ -463,12 +478,36 @@ def get_game(game_id: int):
                 JOIN teams t ON t.name LIKE '%%' || ts.team_name
                 WHERE ts.game_id = %s
             """, (game_id,))
-            team_stats = cur.fetchall()
-            
+            team_stats = [real_team_stats(r) for r in cur.fetchall()]
+
+            # Defenders, kickers and punters from the game's player-stats capture (games it covered)
+            cur.execute("""
+                SELECT l.player_id, COALESCE(l.full_name, l.player_name) AS player_name,
+                       COALESCE(ps.position, '') AS position, t.abbreviation AS team_abbr,
+                       l.def_tackles, l.def_sacks, l.def_tfl, l.def_ints, l.def_deflections, l.def_forced_fumbles,
+                       l.def_fumble_recoveries, l.def_tds, l.kick_fgm, l.kick_fga, l.kick_fg_long, l.kick_xpm,
+                       l.kick_xpa, l.punt_punts, l.punt_average, l.punt_net_average, l.punt_inside_20
+                FROM game_stat_lines l
+                JOIN teams t ON t.id = l.team_id
+                LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
+                WHERE l.game_id = %s
+                  AND (l.def_tackles IS NOT NULL OR l.kick_fga > 0 OR l.kick_xpa > 0 OR l.punt_punts > 0)
+            """, (game_id,))
+            lines = [{k: (_n(v) if k.startswith(("def_", "kick_", "punt_")) else v) for k, v in r.items()}
+                     for r in cur.fetchall()]
+            defense = sorted((r for r in lines if r["def_tackles"] is not None),
+                             key=lambda r: (-((r["def_sacks"] or 0) + (r["def_ints"] or 0) + (r["def_forced_fumbles"] or 0)
+                                              + (r["def_tds"] or 0)), -(r["def_tackles"] or 0)))
+            kicking = [r for r in lines if (r["kick_fga"] or 0) > 0 or (r["kick_xpa"] or 0) > 0]
+            punting = [r for r in lines if (r["punt_punts"] or 0) > 0]
+
             return {
                 "game": game,
                 "stats": stats,
-                "team_stats": team_stats
+                "team_stats": team_stats,
+                "defense": defense,
+                "kicking": kicking,
+                "punting": punting,
             }
 
 @app.get("/api/seasons")

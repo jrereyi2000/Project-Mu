@@ -382,6 +382,13 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 42px 80px; }
 .comparison-row > strong.leader { color: var(--team-color, var(--red)); }
 .comparison-row > span { color: var(--gray-500); font-size: 9px; font-weight: 700; text-align: center; text-transform: uppercase; }
 .comparison-row > i { --away-share: 50%; --away-color: var(--team-color, var(--red)); --home-color: var(--gray-300); position: absolute; left: 25%; right: 25%; bottom: 9px; height: 2px; background: linear-gradient(90deg, var(--away-color) 0 var(--away-share), var(--home-color) var(--away-share) 100%); }
+.comparison-subhead { padding: 14px 25px 8px; color: var(--gray-500); background: #f4f3f0; font: 700 7px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.game-line-score { width: 100%; margin-bottom: 18px; border-collapse: collapse; background: var(--white); border-top: 3px solid var(--ink); font-family: var(--font-mono); }
+.game-line-score th { height: 34px; color: var(--gray-500); background: #ebeae7; font-size: 7px; letter-spacing: .06em; text-align: center; }
+.game-line-score th:first-child, .game-line-score td:first-child { padding-left: 20px; text-align: left; }
+.game-line-score td { height: 46px; border-top: 1px solid var(--gray-100); font-size: 12px; font-weight: 700; text-align: center; }
+.game-line-score td:first-child { display: flex; align-items: center; gap: 9px; }
+.game-line-score img { width: 24px; height: 24px; object-fit: contain; }
 .player-stat-groups { display: grid; gap: 18px; }
 .player-stat-card { background: var(--white); border-top: 3px solid var(--ink); }
 .player-stat-card h3 { margin: 0; padding: 17px 20px; font-size: 15px; text-transform: uppercase; }

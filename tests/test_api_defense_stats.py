@@ -2,6 +2,9 @@
 columns the Stats page shows (Mu_Network/src/App.tsx unitStatColumns), and /api/player/{id} gives defenders,
 kickers and punters their own stat group. Reads the live database (skipped when it isn't reachable).
 
+The game page (/api/game/{id}) returns only real team_stats values (estimated ones blanked, exact ones kept) and
+the game's defenders, kickers and punters where they were captured.
+
 Run: python3 -m unittest tests.test_api_defense_stats
 """
 import os
@@ -47,6 +50,46 @@ class DefenseStatsApiTests(unittest.TestCase):
             rows = client.get("/api/stats/team", params={"category": cat, "season": 2035}).json()
             self.assertEqual(len(rows), 32, cat)
             self.assertEqual(list(rows[0]["stats"]), cols[cat], cat)
+
+    def test_real_team_stats_blanks_estimates(self):
+        from server.api import real_team_stats
+        row = real_team_stats({"third_down_conversions": 5, "third_down_attempts": 13, "red_zone_tds": 2,
+                               "first_downs": 0, "total_plays": 0,
+                               "estimated_fields": ["third_down_conversions", "third_down_attempts", "red_zone_tds"],
+                               "exact_fields": ["third_down_attempts"]})
+        self.assertIsNone(row["third_down_conversions"])
+        self.assertEqual(row["third_down_attempts"], 13)        # exact weekly fill: real
+        self.assertIsNone(row["red_zone_tds"])
+        self.assertFalse(row["box_score_captured"])
+        self.assertIsNone(row["first_downs"])                    # backfill placeholder, not a value
+        self.assertNotIn("estimated_fields", row)
+        captured = real_team_stats({"red_zone_tds": 1, "first_downs": 14, "third_down_conversions": 4,
+                                    "third_down_attempts": 12, "estimated_fields": ["third_down_attempts"],
+                                    "exact_fields": []})
+        self.assertTrue(captured["box_score_captured"])
+        self.assertEqual((captured["first_downs"], captured["third_down_conversions"]), (14, 4))
+        self.assertIsNone(captured["third_down_attempts"])
+
+    def test_game_page_lines(self):
+        import psycopg
+        from server.api import CONN_INFO
+        with psycopg.connect(CONN_INFO) as conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT g.id FROM games g WHERE g.season = 2035 AND g.status = 'COMPLETED' AND EXISTS
+                           (SELECT 1 FROM game_stat_defense d WHERE d.game_id = g.id) ORDER BY g.id LIMIT 1""")
+            captured_id = cur.fetchone()[0]
+            cur.execute("""SELECT g.id FROM games g WHERE g.season = 2035 AND g.status = 'COMPLETED' AND NOT EXISTS
+                           (SELECT 1 FROM game_stat_defense d WHERE d.game_id = g.id) ORDER BY g.id LIMIT 1""")
+            plain_id = cur.fetchone()[0]
+        captured = client.get(f"/api/game/{captured_id}").json()
+        self.assertTrue(captured["defense"])
+        self.assertTrue(any(t["box_score_captured"] for t in captured["team_stats"]))
+        plain = client.get(f"/api/game/{plain_id}").json()
+        self.assertEqual((plain["defense"], plain["kicking"], plain["punting"]), ([], [], []))
+        for t in plain["team_stats"]:
+            self.assertNotIn("estimated_fields", t)
+            if not t["box_score_captured"]:
+                self.assertIsNone(t["first_downs"])
 
     def test_player_page_stat_groups(self):
         leaders = {cat: client.get("/api/stats/player", params={"category": cat, "season": 2035}).json()[0]["id"]
