@@ -783,8 +783,8 @@ To eliminate editorial homogenization and ground long-form journalism in authent
    - **Allowed Writers / Archetypes:** Sando (`SANDO`, `Front-Office Columnists`).
    - **Granularity:** 3-to-5 year franchise trajectory.
    - **Focus:** General Manager job security, roster demographic distributions, draft hit rates, rebuilding vs. purgatory.
-   - **Data Queried:** $P_{\text{draft}}$, $Y_{\text{prod}}$, Purgatory Penalty, Base Market Gravity ($B$), Roster Age.
-   - **Curatorial Autonomy:** Evaluates multi-year franchise data, demographic distributions, and standing trends. Identifies a franchise at an existential fork in the road: aging roster in purgatory, high-gravity giant collapsing, or young rebuilding core on the verge of contention.
+   - **Data Queried:** $P_{\text{draft}}$, $Y_{\text{prod}}$, Purgatory Penalty, Base Market Gravity ($B$), Roster Age, Head-Coach Profile (`get_coach_profile`), Round 1 Draft Order (`get_draft_order`), Round 1 Mock Draft Simulation (`get_mock_draft`).
+   - **Curatorial Autonomy:** Evaluates multi-year franchise data, demographic distributions, and standing trends. Identifies a franchise at an existential fork in the road: aging roster in purgatory, high-gravity giant collapsing, or young rebuilding core on the verge of contention. Evaluates coaching hierarchy via `get_coach_profile`. Includes the Coach-Rookie Alignment Test: for early-lottery teams (Picks 1–5), cross-references draft slot (`get_draft_order`) and primary positional need (`get_team_draft_needs`) against the head coach's tenure, scheme, pass lean, and career win percentage (`get_coach_profile`) to interrogate whether to trust the incumbent staff to groom an incoming franchise QB or foundational tackle or if drafting a blue-chip asset necessitates a clean coaching break; may name the projected prospect from `get_mock_draft`.
    - **Structure Source:** Writer format (Mike Sando's Pick Six with anonymous executive quotes).
    - **Prompt Hook:** Analyze a franchise in transition. Ignore the single-game box score. Evaluate their front office's 3-to-5 year trajectory using the Purgatory Penalty, aging roster constraints, and draft equity.
 
