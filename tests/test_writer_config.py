@@ -176,6 +176,21 @@ class WriterConfigTests(unittest.TestCase):
         self.assertNotIn("conversion rates against blitz packages",
                          self.article_types["QUARTERBACK_DUEL_TAPE_BREAKDOWN"]["structure_directive"])
 
+    def test_player_selection_directives_include_defense(self):
+        """Spotlight, progress report and X-Factor can pick defenders and specialists from recorded stats (JR, Oct 14)."""
+        for key in ("LOCAL_PLAYER_SPOTLIGHT", "PLAYER_PROGRESS_REPORT", "X_FACTOR_VOLATILITY_SPOTLIGHT"):
+            info = self.article_types[key]
+            text = info["curatorial_autonomy"] + info["structure_directive"]
+            self.assertIn("get_defense_special_teams_leaders", info["curatorial_autonomy"], key)
+            self.assertIn("not zeros", info["curatorial_autonomy"], key)
+            for untracked in ("pressure rate creates", "target volume", "snap rate", "situational snap counts"):
+                self.assertNotIn(untracked, text, f"{key}: {untracked}")
+        curatorial = load("curatorial_autonomy_directives.json")
+        structure = load("article_structure_directives.json")
+        for writer in ("KIMES", "ACHO", "JOYNER"):
+            self.assertIn("get_defense_special_teams_leaders", curatorial[writer], writer)
+        self.assertIn("get_defense_special_teams_leaders", structure["ACHO"])
+
     def test_bayless_columns_use_his_article_persona(self):
         self.assertEqual(self.aliases.get("BAYLESS"), "SKIP_BAYLESS")
         self.assertIn("SKIP_BAYLESS", self.article_types["NATIONAL_OPINION_COLUMN"]["allowed_writers"])

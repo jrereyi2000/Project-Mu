@@ -582,15 +582,15 @@ To eliminate editorial homogenization and ground long-form journalism in authent
 - **Curatorial Autonomy & Slate Digest (`newsroom/config/curatorial_autonomy_directives.json`):** Writers are fed both full scoreboards (last week's results and this week's schedule) and the division standings in the brief's `season_landscape`, rather than a narrow pre-filtered Top 5 list. Subject selection is layered: the article type's own curatorial autonomy block (`article_types.json`, or a playoff override's) comes first, and the writer's directive from `curatorial_autonomy_directives.json` is appended as "YOUR SPECIFIC WRITER SELECTION FILTER". If only one exists, it is used alone. An Editorial Desk subject assignment (§7.3) overrides both. Thirteen writers have a directive:
   - *Barnwell:* regression candidates: lucky one-score winners, poor point differentials, favorites exposed by upsets.
   - *Sando:* front-office pressure: aging, mediocre rosters (GM job security) or young blue-chip rosters (coaching development).
-  - *Joyner:* schematic complexity and play-level efficiency: extreme tempo, boom-or-bust performances, tactical mismatches.
+  - *Joyner:* schematic complexity and play-level efficiency: extreme tempo, boom-or-bust performances, tactical mismatches, or a defense that did the breaking (sacks, tackles for loss, takeaways from the box score's defensive lines and `get_defense_special_teams_leaders`; his data table charts a defense's recorded numbers, never pressure rates, snaps or targets).
   - *Rosenthal:* entertainment and vibes: high-tempo, high-excitement chaos and electric young quarterbacks.
   - *Chadiha:* the human element and historical stakes: aging stars, adversity, historic franchises under pressure.
   - *Yates:* statistical anomalies, milestones and fantasy volume that support factual lists.
   - *Simmons:* the "wonkiest" game: upsets, bad beats, historic franchises over- or under-achieving the eye test.
-  - *Acho:* exposed flaws and public overreactions: popular favorites that lost, high-tempo offenses shut down.
+  - *Acho:* exposed flaws and public overreactions: popular favorites that lost, high-tempo offenses shut down (shown in the box score's defensive lines and the defenders' season numbers; his column format names those plus `get_team_efficiency_profile` as the defensive and situational evidence).
   - *The Athletic:* process, scheme and roster trajectory; young-core surges and schedule-adjusted winners; avoids garbage-time inflation.
   - *Skip Bayless:* superstar drama and the "clutch gene": prime-time chokes or game-winning drives by marquee players.
-  - *Kimes:* games where efficiency tells a different story than the score, and smart defensive schemes.
+  - *Kimes:* games where efficiency tells a different story than the score, and smart defensive schemes, evidenced by the box score's defensive lines and `get_defense_special_teams_leaders` (coverage rotations and pressures are her read of them; her column format credits unheralded defenders with their recorded numbers).
   - *Orlovsky:* the most extreme quarterback performances only, good or bad.
   - *Clark:* locker-room dynamics, player sacrifice and leadership under pressure.
 - **Historical Comparisons (optional, 1990–2023):** National writers may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens the argument. It isn't required; the prompt says most articles need none, allows at most one, forbids inventing a historical team, and gives no canned examples (the old ones, e.g. the 2000 Ravens, got reused everywhere). Beat reporters don't receive this instruction.
@@ -743,7 +743,8 @@ To eliminate editorial homogenization and ground long-form journalism in authent
     - **Allowed Writers / Archetypes:** Bill Barnwell (Efficiency & Regression), Jeffri Chadiha (Narrative & Legacy), Field Yates (Fantasy Volume & Milestones) (`BARNWELL`, `CHADIHA`, `YATES`, `Player Progress Overview`).
     - **Granularity:** Flexible In-Season / Season-to-Date Arc.
     - **Focus:** Mid-campaign player valuation shifts, usage and snap trajectory, underlying efficiency vs. box-score luck, and rest-of-season sustainability.
-    - **Data Queried:** Player Popularity Index ($Pop_{\text{player}}$), Awards Equity ($A_{\text{awards}}$), Baseline Rating ($R_{\text{rating}}$), SpikeIndex, Touch Share & Scrimmage Yard Share (season), Offensive Pace ($P$).
+    - **Data Queried:** Player Popularity Index ($Pop_{\text{player}}$), Awards Equity ($A_{\text{awards}}$), Baseline Rating ($R_{\text{rating}}$), SpikeIndex, Touch Share & Scrimmage Yard Share (season), Offensive Pace ($P$), defense & special-teams lines.
+    - **Defense:** Defenders and specialists are eligible: the curatorial block points at `get_defense_special_teams_leaders` and `get_player_season_stats`, with the unknown-not-zero, no-team-sums and no pressure/snap/target rules (JR, Oct 14). A defender whose sacks, tackles for loss or takeaways are rewriting his standing qualifies, and the efficiency section covers how a defender wins.
     - **Curatorial Autonomy:** Evaluates the cumulative season-to-date trajectory of a single player. Identifies players whose performance is forcing an immediate recalibration: aging veterans with slipping roles, rising talents drastically outpacing baseline ratings, or high-volume contributors due for regression.
     - **Structure Directive:** 4-part Player Progress Evaluation (`# 1. The Progress Thesis (The Hook)`, `## 2. The Tape vs. The Numbers (Underlying Efficiency)`, `## 3. Roster Gravity & Market Footprint`, `### 4. The Rest-of-Season Outlook`).
     - **Prompt Hook:** Evaluate a player whose season-to-date campaign has radically shifted their trajectory. Contrast their preseason baseline against operational efficiency, diagnose their offensive burden, and project their rest-of-season sustainability.
@@ -804,7 +805,7 @@ To eliminate editorial homogenization and ground long-form journalism in authent
     - **Granularity:** Single-Game Predictive / Super Bowl Arc.
     - **Focus:** Identifying the highly volatile, non-quarterback skill players whose Boom-or-Bust profiles (SpikeIndex) could single-handedly wreck the Super Bowl game script.
     - **Data Queried:** SpikeIndex, Touch Share & Scrimmage Yard Share (season), Matchup Edge (pass, rush, ball security), Offensive Pace ($P$), Under-25 Production ($Y_{\text{prod}}$).
-    - **Curatorial Autonomy:** Selects the ultimate non-QB X-factor for the Super Bowl matchup: boom-or-bust deep threat with high $SpikeIndex$, situational pass rusher creating upset leverage, or dynamic rookie with spiked postseason usage.
+    - **Curatorial Autonomy:** Selects the ultimate non-QB X-factor for the Super Bowl matchup: boom-or-bust deep threat with high $SpikeIndex$, a pass rusher or ball hawk whose sack, tackle-for-loss, interception or forced-fumble totals make a game-wrecking play likely (the untracked "pressure rate" is gone), a returner or kicker who can flip the field, or dynamic rookie with spiked postseason usage. Defenders and specialists are eligible: the curatorial block points at `get_defense_special_teams_leaders` and `get_player_season_stats`, with the unknown-not-zero, no-team-sums and no pressure/snap/target rules (JR, Oct 14). The volatility section cites recorded numbers (no targets, routes or snap counts).
     - **Structure Directive:** 4-part Predictive X-Factor Breakdown (`# 1. The Game-Breaker Thesis (The Hook)`, `## 2. The Anatomy of the Spike (The Volatility Audit)`, `## 3. The Schematic Mismatch (The Film Room)`, `### 4. The Script Prediction`).
     - **Prompt Hook:** Identify the ultimate Super Bowl X-Factor. Analyze a volatile skill player with a massive SpikeIndex, break down the specific schematic mismatch they can exploit, and predict how they could break the game script.
 
@@ -909,7 +910,8 @@ Local Beat Reporters cover their assigned franchise exclusively. Their research 
 3. **The Local Player Spotlight** (`LOCAL_PLAYER_SPOTLIGHT`)
    - **Beat Archetype:** Franchise Beat Reporter / Film Analyst.
    - **Focus:** Single local player's role evolution, developmental leap, tape & assignment execution, coaching trust, and roster implications.
-   - **Data Queried:** SpikeIndex, Touch Share & Scrimmage Yard Share (season), Positional Multiplier ($M_{\text{pos}}$), Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production Share ($Y_{\text{prod}}$).
+   - **Data Queried:** SpikeIndex, Touch Share & Scrimmage Yard Share (season), Positional Multiplier ($M_{\text{pos}}$), Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production Share ($Y_{\text{prod}}$), defense & special-teams lines.
+   - **Defense:** Defenders and specialists are eligible: the curatorial block points at `get_defense_special_teams_leaders` and `get_player_season_stats`, with the unknown-not-zero, no-team-sums and no pressure/snap/target rules (JR, Oct 14). The whole roster is in play (a pass rusher piling up sacks, a ball-hawking corner, a kicker or returner), and usage is described from recorded numbers rather than target volume or snap rate.
 
 4. **The Local Season-to-Date Progress Report** (`LOCAL_SEASON_PROGRESS_REPORT`)
    - **Beat Archetype:** Senior Beat Columnist (Midseason / Season Audit).
