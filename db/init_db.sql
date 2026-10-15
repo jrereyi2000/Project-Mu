@@ -474,7 +474,6 @@ JOIN league_pos_benchmarks lpb ON tpt.season = lpb.season AND tpt.position = lpb
 CREATE TABLE IF NOT EXISTS coaches (
     id SERIAL PRIMARY KEY,
     coach_name VARCHAR(255) UNIQUE NOT NULL,
-    archetype VARCHAR(64),
     offensive_scheme VARCHAR(64),
     defensive_scheme VARCHAR(64)
 );
