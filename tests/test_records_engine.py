@@ -193,5 +193,21 @@ class SeedTests(unittest.TestCase):
         self.assertEqual(len(cats), 14)
 
 
+
+class DefenseKickingSeedTests(unittest.TestCase):
+    PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "migrations",
+                        "2026_11_15_defense_kicking_history.sql")
+
+    def test_every_team_has_sack_interception_and_field_goal_records(self):
+        with open(self.PATH) as f:
+            sql = f.read()
+        rows = re.findall(r"^\s+\('([A-Z]{2,3})', '(season_[a-z_]+)', ", sql, re.M)
+        by_cat = collections.defaultdict(set)
+        for abbr, cat in rows:
+            by_cat[cat].add(abbr)
+        for cat in ("season_sacks", "season_def_interceptions", "season_fgm"):
+            self.assertEqual(len(by_cat[cat]), 32, cat)
+        self.assertIn("UPDATE record_categories SET coverage = 'FULL'", sql)
+
 if __name__ == "__main__":
     unittest.main()
