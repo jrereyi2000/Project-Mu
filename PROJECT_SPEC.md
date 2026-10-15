@@ -108,7 +108,8 @@ Project Mu/
 │   │                          #   2026_10_23_capture_loader.sql, 2026_10_24_player_id_keys.py (python3 -m db.migrations.2026_10_24_player_id_keys, after a roster load),
 │   │                          #   2026_10_25_former_players.sql, 2026_10_26_nfl_records.sql, 2026_10_27_name_casing.py (re-cases all-caps full names
 │   │                          #   from the loaded roster capture's cards; python3 -m db.migrations.2026_10_27_name_casing),
-│   │                          #   2026_10_28_league_record_book.sql, 2026_10_29_team_box_estimates.sql, 2026_10_30_coaches.sql (apply SQL ones via
+│   │                          #   2026_10_28_league_record_book.sql, 2026_10_29_team_box_estimates.sql, 2026_10_30_coaches.sql,
+│   │                          #   2026_10_31_coach_baseline.sql (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -312,11 +313,11 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 - **`awards`**:
   - `id` (PK), `season` (int), `award_type` (varchar), `player_id` (FK), `player_name` (varchar), `team_id` (FK), `coach_name` (varchar), `coach_id` (FK `coaches`, COTY rows; `2026_10_30_coaches.sql`), `position` (varchar). `UNIQUE(season, award_type)`. The historical import (`pipeline/batch_menus.py`) writes COTY with both `coach_name` and `coach_id`, creating the `coaches` row if the name is new.
 
-### 3.3a Coaches (`db/migrations/2026_10_30_coaches.sql`)
+### 3.3a Coaches (`db/migrations/2026_10_30_coaches.sql`, `2026_10_31_coach_baseline.sql`)
 Head coaches only. Nothing reads these tables yet.
 - **`coaches`**: `id` (PK), `coach_name` (varchar, unique), `archetype`, `offensive_scheme`, `defensive_scheme` (varchar, nullable; not filled yet).
-- **`coach_tenures`**: `coach_id` (FK), `team_id` (FK), `start_season`, `end_season` (NULL = current). `UNIQUE(coach_id, team_id, start_season)`. A coach's per-season record in the franchise comes from joining this to `team_seasons`. Every coach except Marcus Whitfield has coached the same team since 2026 (the franchise's first season). Carolina: Dave Canales 2026–2033, Marcus Whitfield from 2034. The migration seeded those two and the Coach of the Year winners (tenure from 2026 with the award's team). Other coaches have no rows yet.
-- **`coach_seasons`**: `coach_id` (FK), `team_id` (FK), `season`, and the Madden coach screen's career counters as of that season: `career_wins`, `career_losses`, `career_ties`, `winning_seasons`, `playoff_wins`, `playoff_losses`, `super_bowl_wins`, `super_bowl_losses`. `UNIQUE(coach_id, season)`. These totals include pre-franchise NFL careers, so they are stored as shown rather than rebuilt from `games`. Empty until the coach data is loaded.
+- **`coach_tenures`**: `coach_id` (FK), `team_id` (FK), `start_season`, `end_season` (NULL = current). `UNIQUE(coach_id, team_id, start_season)`. A coach's per-season record in the franchise comes from joining this to `team_seasons`. Every coach except Marcus Whitfield has coached the same team since 2026 (the franchise's first season). Carolina: Dave Canales 2026–2033, Marcus Whitfield from 2034. All 33 coaches have rows: the 32 head coaches of 2026 (tenure from 2026; Canales's ends 2033) and Whitfield. `2026_10_30_coaches.sql` seeded Carolina and the Coach of the Year winners, and `2026_10_31_coach_baseline.sql` added the rest. That migration fails unless every team has exactly one 2026 head coach.
+- **`coach_seasons`**: `coach_id` (FK), `team_id` (FK), `season`, and the Madden coach screen's career counters as of that season: `career_wins`, `career_losses`, `career_ties`, `winning_seasons`, `playoff_wins`, `playoff_losses`, `super_bowl_wins`, `super_bowl_losses`. `UNIQUE(coach_id, season)`. These totals include pre-franchise NFL careers, so they are stored as shown rather than rebuilt from `games`. **Baseline row:** season 2025 with `team_id` NULL holds each 2026 coach's real NFL head-coaching career through 2025, the starting point of the franchise (`2026_10_31_coach_baseline.sql`; source: Wikipedia's current-coaches list as of 2026-07-12, plus each coach's year-by-year record for winning seasons (W > L, partial and interim seasons included) and Super Bowl results). Whitfield has no baseline row, and there are no franchise-season rows (2026–2035) yet.
 
 ### 3.4 Fantasy Analytics & Projections
 - **`fantasy_projections`**:
