@@ -123,6 +123,10 @@ def fantasy_slate(week: int) -> list:
 def fantasy_temporal_instruction(week: int) -> str:
     """The fantasy calendar block for a fantasy article's prompt."""
     phase = fantasy_phase(week)
+    if not phase:
+        raise ValueError(
+            f"No fantasy articles are generated in week {week} (fantasy calendar ends at Week {LAST_FANTASY_SLATE_WEEK})"
+        )
     if week == 1:
         return """
 TEMPORAL PUBLISHING CONTEXT (FANTASY DRAFT PREP, BEFORE WEEK 1):
@@ -152,7 +156,7 @@ FANTASY DESK RULES (MU FANTASY):
 - ADP: "an ADP of 14.3" or "a third-round pick on average"; give the range when it matters ("went as early as pick 8 and as late as 22").
 - Projections are the Mu projection: "we project him for 17.8 points," "the Mu projection has him as the RB3 this week."
 - Matchup ratings: describe them in words ("the softest matchup a receiver can get," "a top-five defense against tight ends"), not as star counts.
-4. NO INJURIES: This league has no injury data. Never mention injuries, injury reports, questionable tags or players being out.
+4. FANTASY INJURY & OPPORTUNITY RULE: Use `get_fantasy_injuries` to identify skill-position players (QB, RB, WR, TE) ruled OUT or on IR. Starters missing time create immediate opportunity: highlight backup running backs and targeted receivers stepping into high-volume roles (handcuffs/beneficiaries). Note players who are OUT/IR to explain why they drop out of this week's rankings or need to be benched. Never invent injuries or timelines not on the official report.
 5. MAKE CALLS: Readers want decisions. Give clear verdicts (start, sit, add, drop, buy, sell, draft, avoid) and a reason built on the numbers.
 6. YOUR OWN TRACK RECORD: Only mention your earlier columns, picks or calls if they appear under YOUR RECENT TAKES or YOUR PREDICTION TRACK RECORD above. Never invent a past call.
 """

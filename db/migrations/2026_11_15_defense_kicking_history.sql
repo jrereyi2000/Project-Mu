@@ -1,0 +1,240 @@
+-- Real NFL history for the defense and kicking season records (JR, Oct 15, 2026; PROJECT_SPEC §2.9).
+-- Seeds every franchise's record and the NFL's all-time top 10 for sacks, interceptions and field goals made, and the
+-- top 10 plus the franchises with a 61+ yard kick for the longest field goal, then marks those four categories FULL
+-- (real history behind them). Tackles and defensive TDs stay BOOK: tackles aren't an official NFL stat and there is no
+-- season list of defensive TDs. Sources (pulled Oct 15, 2026): Pro-Football-Reference's single-season leader lists for
+-- sacks (official sacks only, 1982 on, so Myles Garrett's 23 in 2025 is the record and Al Baker's unofficial 23 in 1978
+-- is left out), interceptions and field goals made, which reach deep enough that every franchise's best is on them
+-- (the Texans', Jaguars' and Panthers' interception records were checked on StatMuse); Wikipedia's list of the
+-- longest NFL field goals (Cam Little's 68 in 2025 is the record). Franchises follow Pro-Football-Reference's histories
+-- (the Titans include the Houston Oilers, the Colts Baltimore, the Cardinals Chicago and St. Louis). Spec Sanders (1950
+-- New York Yanks, a defunct team) is on the interceptions list with no franchise.
+-- The record book's Arvell Reese (2029, 23 sacks) ties Garrett: he is added to the sacks list as a BOOK entry.
+--
+-- Run ./db/backup_db.sh first, after 2026_11_12_defense_kicking_records.sql. Idempotent. Apply with:
+--   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < db/migrations/2026_11_15_defense_kicking_history.sql
+
+BEGIN;
+
+-- Franchise records through 2025 (144 rows).
+INSERT INTO franchise_records (team_id, category, value, holder, season, source)
+SELECT t.id, v.category, v.value, v.holder, v.season, 'NFL'
+FROM (VALUES
+    ('ATL', 'season_sacks', 16.5, 'John Abraham', 2008),
+    ('AZ', 'season_sacks', 19, 'Chandler Jones', 2019),
+    ('BAL', 'season_sacks', 17, 'Elvis Dumervil', 2014),
+    ('BUF', 'season_sacks', 19, 'Bruce Smith', 1990),
+    ('CAR', 'season_sacks', 15, 'Kevin Greene', 1998),
+    ('CAR', 'season_sacks', 15, 'Greg Hardy', 2013),
+    ('CHI', 'season_sacks', 18.5, 'Robert Quinn', 2021),
+    ('CIN', 'season_sacks', 17.5, 'Trey Hendrickson', 2023),
+    ('CIN', 'season_sacks', 17.5, 'Trey Hendrickson', 2024),
+    ('CLE', 'season_sacks', 23, 'Myles Garrett', 2025),
+    ('DAL', 'season_sacks', 20, 'DeMarcus Ware', 2008),
+    ('DEN', 'season_sacks', 18.5, 'Von Miller', 2012),
+    ('DET', 'season_sacks', 15, 'Robert Porcher', 1999),
+    ('GB', 'season_sacks', 19.5, 'Tim Harris', 1989),
+    ('HOU', 'season_sacks', 20.5, 'J.J. Watt', 2012),
+    ('HOU', 'season_sacks', 20.5, 'J.J. Watt', 2014),
+    ('IND', 'season_sacks', 19.5, 'Robert Mathis', 2013),
+    ('JAX', 'season_sacks', 17.5, 'Josh Hines-Allen', 2023),
+    ('KC', 'season_sacks', 22, 'Justin Houston', 2014),
+    ('LAC', 'season_sacks', 17, 'Leslie O''Neal', 1992),
+    ('LAC', 'season_sacks', 17, 'Shawne Merriman', 2006),
+    ('LAC', 'season_sacks', 17, 'Khalil Mack', 2023),
+    ('LAR', 'season_sacks', 20.5, 'Aaron Donald', 2018),
+    ('LV', 'season_sacks', 16, 'Derrick Burgess', 2005),
+    ('MIA', 'season_sacks', 18.5, 'Jason Taylor', 2002),
+    ('MIN', 'season_sacks', 22, 'Jared Allen', 2011),
+    ('NE', 'season_sacks', 18.5, 'Andre Tippett', 1984),
+    ('NO', 'season_sacks', 17, 'Pat Swilling', 1991),
+    ('NO', 'season_sacks', 17, 'La''Roi Glover', 2000),
+    ('NYG', 'season_sacks', 22.5, 'Michael Strahan', 2001),
+    ('NYJ', 'season_sacks', 22, 'Mark Gastineau', 1984),
+    ('PHI', 'season_sacks', 21, 'Reggie White', 1987),
+    ('PIT', 'season_sacks', 22.5, 'T.J. Watt', 2021),
+    ('SEA', 'season_sacks', 16.5, 'Michael Sinclair', 1998),
+    ('SF', 'season_sacks', 19.5, 'Aldon Smith', 2012),
+    ('TB', 'season_sacks', 19.5, 'Shaquil Barrett', 2019),
+    ('TEN', 'season_sacks', 15, 'William Fuller', 1991),
+    ('WAS', 'season_sacks', 18.5, 'Dexter Manley', 1986),
+    ('ATL', 'season_def_interceptions', 10, 'Scott Case', 1988),
+    ('AZ', 'season_def_interceptions', 12, 'Bob Nussbaumer', 1949),
+    ('BAL', 'season_def_interceptions', 9, 'Ed Reed', 2004),
+    ('BAL', 'season_def_interceptions', 9, 'Ed Reed', 2008),
+    ('BUF', 'season_def_interceptions', 10, 'Billy Atkins', 1961),
+    ('BUF', 'season_def_interceptions', 10, 'Tom Janik', 1967),
+    ('CAR', 'season_def_interceptions', 8, 'Doug Evans', 2001),
+    ('CHI', 'season_def_interceptions', 10, 'Mark Carrier', 1990),
+    ('CIN', 'season_def_interceptions', 10, 'Deltha O''Neal', 2005),
+    ('CLE', 'season_def_interceptions', 10, 'Tom Colella', 1946),
+    ('CLE', 'season_def_interceptions', 10, 'Thom Darden', 1978),
+    ('CLE', 'season_def_interceptions', 10, 'Anthony Henry', 2001),
+    ('DAL', 'season_def_interceptions', 11, 'Everson Walls', 1981),
+    ('DAL', 'season_def_interceptions', 11, 'Trevon Diggs', 2021),
+    ('DEN', 'season_def_interceptions', 11, 'Goose Gonsoulin', 1960),
+    ('DET', 'season_def_interceptions', 12, 'Don Doll', 1950),
+    ('DET', 'season_def_interceptions', 12, 'Jack Christiansen', 1953),
+    ('GB', 'season_def_interceptions', 10, 'Irv Comp', 1943),
+    ('HOU', 'season_def_interceptions', 7, 'Marcus Coleman', 2003),
+    ('IND', 'season_def_interceptions', 11, 'Tom Keane', 1953),
+    ('JAX', 'season_def_interceptions', 8, 'Rashean Mathis', 2006),
+    ('KC', 'season_def_interceptions', 12, 'Emmitt Thomas', 1974),
+    ('LAC', 'season_def_interceptions', 10, 'Antonio Cromartie', 2007),
+    ('LAR', 'season_def_interceptions', 14, 'Night Train Lane', 1952),
+    ('LV', 'season_def_interceptions', 13, 'Lester Hayes', 1980),
+    ('MIA', 'season_def_interceptions', 10, 'Dick Westmoreland', 1967),
+    ('MIA', 'season_def_interceptions', 10, 'Xavien Howard', 2020),
+    ('MIN', 'season_def_interceptions', 10, 'Paul Krause', 1975),
+    ('NE', 'season_def_interceptions', 11, 'Ron Hall', 1964),
+    ('NO', 'season_def_interceptions', 10, 'Dave Whitsell', 1967),
+    ('NYG', 'season_def_interceptions', 11, 'Otto Schnellbacher', 1951),
+    ('NYG', 'season_def_interceptions', 11, 'Jimmy Patton', 1958),
+    ('NYJ', 'season_def_interceptions', 12, 'Dainard Paulson', 1964),
+    ('PHI', 'season_def_interceptions', 11, 'Bill Bradley', 1971),
+    ('PIT', 'season_def_interceptions', 11, 'Mel Blount', 1975),
+    ('SEA', 'season_def_interceptions', 10, 'John Harris', 1981),
+    ('SEA', 'season_def_interceptions', 10, 'Kenny Easley', 1984),
+    ('SF', 'season_def_interceptions', 10, 'Dave Baker', 1960),
+    ('SF', 'season_def_interceptions', 10, 'Ronnie Lott', 1986),
+    ('TB', 'season_def_interceptions', 10, 'Ronde Barber', 2001),
+    ('TEN', 'season_def_interceptions', 12, 'Fred Glick', 1963),
+    ('TEN', 'season_def_interceptions', 12, 'Mike Reinfeldt', 1979),
+    ('WAS', 'season_def_interceptions', 13, 'Dan Sandifer', 1948),
+    ('AZ', 'season_fgm', 40, 'Neil Rackers', 2005),
+    ('ATL', 'season_fgm', 37, 'Younghoe Koo', 2020),
+    ('BAL', 'season_fgm', 38, 'Justin Tucker', 2013),
+    ('BAL', 'season_fgm', 38, 'Justin Tucker', 2016),
+    ('BUF', 'season_fgm', 34, 'Dan Carpenter', 2014),
+    ('CAR', 'season_fgm', 37, 'John Kasay', 1996),
+    ('CHI', 'season_fgm', 35, 'Cairo Santos', 2023),
+    ('CIN', 'season_fgm', 33, 'Mike Nugent', 2011),
+    ('CLE', 'season_fgm', 33, 'Dustin Hopkins', 2023),
+    ('DAL', 'season_fgm', 40, 'Brandon Aubrey', 2024),
+    ('DEN', 'season_fgm', 31, 'Jason Elam', 1995),
+    ('DEN', 'season_fgm', 31, 'Jason Elam', 2001),
+    ('DEN', 'season_fgm', 31, 'Wil Lutz', 2024),
+    ('DET', 'season_fgm', 34, 'Jason Hanson', 1993),
+    ('GB', 'season_fgm', 33, 'Chester Marcol', 1972),
+    ('GB', 'season_fgm', 33, 'Ryan Longwell', 2000),
+    ('GB', 'season_fgm', 33, 'Mason Crosby', 2013),
+    ('HOU', 'season_fgm', 44, 'Ka''imi Fairbairn', 2025),
+    ('IND', 'season_fgm', 37, 'Mike Vanderjagt', 2003),
+    ('JAX', 'season_fgm', 33, 'Josh Lambo', 2019),
+    ('KC', 'season_fgm', 38, 'Harrison Butker', 2017),
+    ('LAC', 'season_fgm', 39, 'Cameron Dicker', 2024),
+    ('LAR', 'season_fgm', 39, 'Jeff Wilkins', 2003),
+    ('LV', 'season_fgm', 40, 'Daniel Carlson', 2021),
+    ('MIA', 'season_fgm', 39, 'Olindo Mare', 1999),
+    ('MIN', 'season_fgm', 35, 'Gary Anderson', 1998),
+    ('MIN', 'season_fgm', 35, 'Blair Walsh', 2012),
+    ('NE', 'season_fgm', 38, 'Stephen Gostkowski', 2013),
+    ('NO', 'season_fgm', 32, 'Wil Lutz', 2019),
+    ('NYG', 'season_fgm', 35, 'Ali Haji-Sheikh', 1983),
+    ('NYG', 'season_fgm', 35, 'Jay Feely', 2005),
+    ('NYG', 'season_fgm', 35, 'John Carney', 2008),
+    ('NYJ', 'season_fgm', 35, 'Greg Zuerlein', 2023),
+    ('PHI', 'season_fgm', 35, 'Caleb Sturgis', 2016),
+    ('PIT', 'season_fgm', 41, 'Chris Boswell', 2024),
+    ('SEA', 'season_fgm', 41, 'Jason Myers', 2025),
+    ('SF', 'season_fgm', 44, 'David Akers', 2011),
+    ('TB', 'season_fgm', 32, 'Matt Bryant', 2008),
+    ('TB', 'season_fgm', 32, 'Chase McLaughlin', 2025),
+    ('TEN', 'season_fgm', 36, 'Al Del Greco', 1998),
+    ('WAS', 'season_fgm', 34, 'Dustin Hopkins', 2016),
+    ('AZ', 'season_fg_long', 62, 'Matt Prater', 2021),
+    ('AZ', 'season_fg_long', 62, 'Matt Prater', 2023),
+    ('BAL', 'season_fg_long', 66, 'Justin Tucker', 2021),
+    ('BUF', 'season_fg_long', 61, 'Tyler Bass', 2024),
+    ('CAR', 'season_fg_long', 63, 'Graham Gano', 2018),
+    ('CIN', 'season_fg_long', 63, 'Evan McPherson', 2025),
+    ('DAL', 'season_fg_long', 65, 'Brandon Aubrey', 2024),
+    ('DEN', 'season_fg_long', 64, 'Matt Prater', 2013),
+    ('GB', 'season_fg_long', 61, 'Lucas Havrisik', 2025),
+    ('HOU', 'season_fg_long', 61, 'Ka''imi Fairbairn', 2021),
+    ('JAX', 'season_fg_long', 68, 'Cam Little', 2025),
+    ('KC', 'season_fg_long', 62, 'Harrison Butker', 2022),
+    ('LV', 'season_fg_long', 63, 'Sebastian Janikowski', 2011),
+    ('LAR', 'season_fg_long', 61, 'Greg Zuerlein', 2015),
+    ('MIN', 'season_fg_long', 62, 'Will Reichard', 2025),
+    ('NE', 'season_fg_long', 63, 'Joey Slye', 2024),
+    ('NO', 'season_fg_long', 63, 'Tom Dempsey', 1970),
+    ('PHI', 'season_fg_long', 61, 'Jake Elliott', 2017),
+    ('SF', 'season_fg_long', 63, 'David Akers', 2012),
+    ('SEA', 'season_fg_long', 61, 'Jason Myers', 2020),
+    ('TB', 'season_fg_long', 65, 'Chase McLaughlin', 2025),
+    ('WAS', 'season_fg_long', 61, 'Joey Slye', 2023)
+) AS v (abbr, category, value, holder, season)
+JOIN teams t ON t.abbreviation = v.abbr
+ON CONFLICT (team_id, category, holder, season) DO NOTHING;
+
+-- NFL all-time top 10 entries (51 rows, ties at the cutoff included).
+INSERT INTO league_record_entries (category, value, holder, team_id, season, source)
+SELECT v.category, v.value, v.holder, t.id, v.season, v.source
+FROM (VALUES
+    ('season_sacks', 23, 'Myles Garrett', 'CLE', 2025, 'NFL'),
+    ('season_sacks', 22.5, 'Michael Strahan', 'NYG', 2001, 'NFL'),
+    ('season_sacks', 22.5, 'T.J. Watt', 'PIT', 2021, 'NFL'),
+    ('season_sacks', 22, 'Jared Allen', 'MIN', 2011, 'NFL'),
+    ('season_sacks', 22, 'Mark Gastineau', 'NYJ', 1984, 'NFL'),
+    ('season_sacks', 22, 'Justin Houston', 'KC', 2014, 'NFL'),
+    ('season_sacks', 21, 'Chris Doleman', 'MIN', 1989, 'NFL'),
+    ('season_sacks', 21, 'Reggie White', 'PHI', 1987, 'NFL'),
+    ('season_sacks', 20.5, 'Aaron Donald', 'LAR', 2018, 'NFL'),
+    ('season_sacks', 20.5, 'Lawrence Taylor', 'NYG', 1986, 'NFL'),
+    ('season_sacks', 20.5, 'J.J. Watt', 'HOU', 2012, 'NFL'),
+    ('season_sacks', 20.5, 'J.J. Watt', 'HOU', 2014, 'NFL'),
+    ('season_def_interceptions', 14, 'Night Train Lane', 'LAR', 1952, 'NFL'),
+    ('season_def_interceptions', 13, 'Lester Hayes', 'LV', 1980, 'NFL'),
+    ('season_def_interceptions', 13, 'Dan Sandifer', 'WAS', 1948, 'NFL'),
+    ('season_def_interceptions', 13, 'Spec Sanders', NULL, 1950, 'NFL'),
+    ('season_def_interceptions', 12, 'Jack Christiansen', 'DET', 1953, 'NFL'),
+    ('season_def_interceptions', 12, 'Don Doll', 'DET', 1950, 'NFL'),
+    ('season_def_interceptions', 12, 'Fred Glick', 'TEN', 1963, 'NFL'),
+    ('season_def_interceptions', 12, 'Paul Krause', 'WAS', 1964, 'NFL'),
+    ('season_def_interceptions', 12, 'Woodley Lewis', 'LAR', 1950, 'NFL'),
+    ('season_def_interceptions', 12, 'Bob Nussbaumer', 'AZ', 1949, 'NFL'),
+    ('season_def_interceptions', 12, 'Dainard Paulson', 'NYJ', 1964, 'NFL'),
+    ('season_def_interceptions', 12, 'Mike Reinfeldt', 'TEN', 1979, 'NFL'),
+    ('season_def_interceptions', 12, 'Emmitt Thomas', 'KC', 1974, 'NFL'),
+    ('season_fgm', 44, 'David Akers', 'SF', 2011, 'NFL'),
+    ('season_fgm', 44, 'Ka''imi Fairbairn', 'HOU', 2025, 'NFL'),
+    ('season_fgm', 41, 'Chris Boswell', 'PIT', 2024, 'NFL'),
+    ('season_fgm', 41, 'Jason Myers', 'SEA', 2025, 'NFL'),
+    ('season_fgm', 40, 'Brandon Aubrey', 'DAL', 2024, 'NFL'),
+    ('season_fgm', 40, 'Daniel Carlson', 'LV', 2021, 'NFL'),
+    ('season_fgm', 40, 'Neil Rackers', 'AZ', 2005, 'NFL'),
+    ('season_fgm', 39, 'Cameron Dicker', 'LAC', 2024, 'NFL'),
+    ('season_fgm', 39, 'Robbie Gould', 'SF', 2017, 'NFL'),
+    ('season_fgm', 39, 'Olindo Mare', 'MIA', 1999, 'NFL'),
+    ('season_fgm', 39, 'Jeff Wilkins', 'LAR', 2003, 'NFL'),
+    ('season_fg_long', 68, 'Cam Little', 'JAX', 2025, 'NFL'),
+    ('season_fg_long', 66, 'Justin Tucker', 'BAL', 2021, 'NFL'),
+    ('season_fg_long', 65, 'Brandon Aubrey', 'DAL', 2024, 'NFL'),
+    ('season_fg_long', 65, 'Chase McLaughlin', 'TB', 2025, 'NFL'),
+    ('season_fg_long', 64, 'Matt Prater', 'DEN', 2013, 'NFL'),
+    ('season_fg_long', 64, 'Brandon Aubrey', 'DAL', 2025, 'NFL'),
+    ('season_fg_long', 63, 'Tom Dempsey', 'NO', 1970, 'NFL'),
+    ('season_fg_long', 63, 'Jason Elam', 'DEN', 1998, 'NFL'),
+    ('season_fg_long', 63, 'Sebastian Janikowski', 'LV', 2011, 'NFL'),
+    ('season_fg_long', 63, 'David Akers', 'SF', 2012, 'NFL'),
+    ('season_fg_long', 63, 'Graham Gano', 'CAR', 2018, 'NFL'),
+    ('season_fg_long', 63, 'Brett Maher', 'DAL', 2019, 'NFL'),
+    ('season_fg_long', 63, 'Joey Slye', 'NE', 2024, 'NFL'),
+    ('season_fg_long', 63, 'Evan McPherson', 'CIN', 2025, 'NFL'),
+    ('season_sacks', 23, 'Arvell Reese', 'NYG', 2029, 'BOOK')
+) AS v (category, value, holder, abbr, season, source)
+LEFT JOIN teams t ON t.abbreviation = v.abbr
+ON CONFLICT DO NOTHING;
+
+UPDATE record_categories SET coverage = 'FULL'
+WHERE category IN ('season_sacks', 'season_def_interceptions', 'season_fgm', 'season_fg_long');
+
+DO $$
+BEGIN
+    IF (SELECT COUNT(DISTINCT team_id) FROM franchise_records WHERE category = 'season_sacks' AND source = 'NFL') < 32 THEN
+        RAISE EXCEPTION 'sack records missing for some teams (check teams.abbreviation)';
+    END IF;
+END $$;
+
+COMMIT;

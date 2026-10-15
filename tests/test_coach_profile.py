@@ -4,7 +4,8 @@ Run: python3 -m unittest tests.test_coach_profile
 """
 import unittest
 
-from engines.coach_profile import accumulate, describe_tendencies, record_line, season_record, staff_matchup
+from engines.coach_profile import (accumulate, describe_tendencies, effective_tendencies, record_line,
+                                   season_record, staff_matchup)
 
 SNAP = {"season": 2034, "career_wins": 13, "career_losses": 4, "career_ties": 0, "winning_seasons": 1,
         "playoff_wins": 3, "playoff_losses": 0, "super_bowl_wins": 1, "super_bowl_losses": 0}
@@ -56,16 +57,29 @@ class CoachProfileTests(unittest.TestCase):
         self.assertEqual(line["regular_season"], "13-4-1")
         self.assertEqual(line["super_bowls"], "1-0")
 
-    def test_tendencies_are_words_not_numbers(self):
+    def test_tendencies_are_words_with_their_source(self):
         coach = {"coach_name": "X", "offensive_scheme": "Spread", "defensive_scheme": "3-4", "pass_lean": "High",
                  "fourth_down_aggressiveness": "Low", "blitz_rate": "Medium", "man_coverage": None}
         d = describe_tendencies(coach)
         self.assertTrue(d["pass_lean"].startswith("High (pass-heavy"))
+        self.assertIn("not yet measured", d["pass_lean"])          # no measurement: the real-world tier
+        self.assertNotIn("blitz_rate", d)                             # no blitz data: never shown
         self.assertIsNone(d["man_coverage"])
-        self.assertFalse(any(ch.isdigit() for v in d.values() if v for ch in v))
-        line = staff_matchup(coach, dict(coach, coach_name="Y", man_coverage="Low"))
-        self.assertIn("X: Spread", line["offense"])
-        self.assertIn("zone-first", line["defense"])
+        self.assertNotIn("%", "".join(v for v in d.values() if v))
+
+    def test_measured_tiers_replace_the_real_world_ones(self):
+        coach = {"coach_name": "X", "offensive_scheme": "Spread", "defensive_scheme": "3-4", "pass_lean": "High",
+                 "fourth_down_aggressiveness": "Low", "blitz_rate": "High", "man_coverage": "Low",
+                 "observed": {"pass_lean": ("Low", "measured in this league: 16 games this season")}}
+        eff = effective_tendencies(coach)
+        self.assertEqual(eff["pass_lean"][0], "Low")
+        self.assertEqual(eff["fourth_down_aggressiveness"][0], "Low")   # not measured: real-world fallback
+        self.assertIn("real-world staff philosophy", eff["man_coverage"][1])   # never measured
+        self.assertNotIn("blitz_rate", eff)
+        line = staff_matchup(coach, dict(coach, coach_name="Y"))
+        self.assertIn("X: Spread, pass lean Low (run-heavy; measured)", line["offense"])
+        self.assertEqual(line["defense"], "Y: 3-4 front, coverage Low (zone-first coverage; reputation)")
+        self.assertIn("zone-first coverage; reputation", line["defense"])
         self.assertIsNone(staff_matchup(None, coach))
 
 

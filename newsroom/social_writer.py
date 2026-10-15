@@ -21,7 +21,8 @@ MAX_HASHTAGS = 2
 
 SOCIAL_RULES = """AGENT WIRE POSTING RULES (MANDATORY):
 - Write ONE social post, at most 280 characters. Output only the post text: no quotes around it, no label, no markdown, no links, no explanations.
-- Every number (scores, records, stats, ranks) must come from the FACTS below. Never invent a stat, score, record, injury, contract, trade or betting line. You may describe how a play or moment felt without inventing numbers.
+- Every number (scores, records, stats, ranks) must come from the FACTS below. Never invent an injury, a contract figure or a betting line, and never state a trade or signing as fact. If FACTS has how_it_happened, that is how the game went: never contradict it.
+- Everything else is yours to make up, the way real people post: what you saw from the stands or the couch, a play you can't stop thinking about, a sideline moment, a hot take, an overreaction, a joke, a rumor you heard (framed as a rumor), a grudge with another fan base. Fans can be wrong in their opinions, never about the score.
 - You have no tools for this post. If your persona tells you to query an index or metric, ignore that: use only the FACTS, and never name internal metrics (popularity index, watchability, market gravity, excitement index and the like) or their symbols.
 - Never mention player or team ratings, "OVR", "overall", Madden or the video game. This league is covered as real football.
 - At most 2 hashtags, and none is fine. Emojis only if they fit your voice.
@@ -37,6 +38,8 @@ KIND_INSTRUCTIONS = {
     "COMPARISON": "Make the case in a player debate using FACTS. If FACTS has your_player and their_player, argue your team's guy is better than theirs. If it has a top-five list, say who the best at that position really is (if FACTS has your_old_team_player, you can lean his way). If FACTS has this_game, say where it ranks among the best games at that position this season. Use only the numbers in FACTS.",
     "TEAM_STORY": "The league is talking about this team; FACTS.why_people_are_talking says why and how_big says how big. Give your take as yourself, not as a fan of the team: is it real, what it means, what comes next. Any NFL history you cite must come from FACTS.nfl_history_through_2025. Never predict an exact score.",
     "BEAT": "Post a beat reporter's note on your team: what last week's game showed and what to watch next. Sound like a reporter who was there, measured and specific.",
+    "BEAT_INJURY": "Report an official roster or injury update for your team based on FACTS. Be concise, factual, and measured like an NFL beat reporter breaking injury news (status, injury diagnosis, timeline or IR designation). Never speculate on unlisted timelines.",
+    "INJURY_SHOCK": "React to the major superstar injury in FACTS. If you are a fan of this team: react with pure heartbreak, devastation, or cynical dark humor about your franchise's luck. If you are an analyst or former player: react to what this loss means for the team's season or playoff hopes.",
     "STANDINGS": "Post about this race in the standings. Records come from FACTS and are by record only, without tiebreakers, so don't claim clinching scenarios.",
     "PREVIEW": "Preview this upcoming game before kickoff. You don't know the result; don't predict an exact final score unless it fits your voice. If FACTS has your_team, you are a fan of that team.",
     "FANTASY_PREVIEW": "Post this week's start/sit calls for full-PPR fantasy using the projections in FACTS. Name specific players and make clear calls.",

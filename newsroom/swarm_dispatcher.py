@@ -5,6 +5,7 @@ import psycopg
 import functools
 import random
 import collections
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
@@ -22,6 +23,7 @@ from newsroom.power_rankings import (
     store_power_rankings,
 )
 from engines.gotw_engine import display_excitement
+from engines.game_script_engine import get_scripts, script_summary
 from newsroom.db_tools import (
     get_game_box_score,
     get_player_season_stats,
@@ -33,7 +35,9 @@ from newsroom.db_tools import (
     get_advanced_game_analytics,
     get_opponent_adjusted_credit,
     get_coach_of_the_year_race,
+    get_clutch_profile,
     get_coach_profile,
+    get_player_scheme_splits,
     get_team_efficiency_profile,
     get_matchup_edges,
     get_weekly_slate,
@@ -51,6 +55,7 @@ from newsroom.db_tools import (
     get_draft_prospects,
     get_team_articles,
     get_player_articles,
+    get_team_injury_report,
 )
 from newsroom.fantasy_tools import FANTASY_TOOLS
 from newsroom.fantasy_desk import (
@@ -187,6 +192,12 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                 brief["recap_slate"]["all_games"].append(game_dict)
 
             brief["recap_slate"]["total_games"] = len(recap_games)
+            if recap_games and week > 1:
+                # Each game's canonical story (§2.14); the full script is in get_game_box_score
+                scripts = get_scripts(db_conn_info, [g[0] for g in recap_games])
+                for game_dict in brief["recap_slate"]["all_games"]:
+                    if game_dict["game_id"] in scripts:
+                        game_dict["game_story"] = script_summary(scripts[game_dict["game_id"]], moments=2)
 
             # 2. Fetch upcoming scheduled games for the PREVIEW slate (week)
             cur.execute("""
@@ -205,15 +216,81 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
             """, (season, week))
             preview_games = cur.fetchall()
 
+            # Query key injuries for upcoming matchup previews (threshold: OVR >= 88 OR Pop >= 50 OR starting QB)
+            cur.execute("""
+                SELECT DISTINCT week FROM injuries
+                WHERE season = %s AND week <= %s
+                ORDER BY week DESC LIMIT 1;
+            """, (season, week))
+            w_row = cur.fetchone()
+            q_week = w_row[0] if w_row else week
+
+            cur.execute("""
+                WITH ranked_roster AS (
+                    SELECT 
+                        player_id,
+                        position,
+                        overall_rating,
+                        ROW_NUMBER() OVER (PARTITION BY team_id, position ORDER BY overall_rating DESC) as pos_rank
+                    FROM player_seasons
+                    WHERE season = %s
+                )
+                SELECT 
+                    i.team_id,
+                    COALESCE(p.full_name, p.player_name, i.player_name) as player_name,
+                    COALESCE(ps.position, i.position) as position,
+                    COALESCE(ps.overall_rating, i.ovr) as ovr,
+                    COALESCE(ps.popularity_index, 0.0) as pop,
+                    i.injury_type,
+                    i.duration,
+                    i.weeks_remaining,
+                    i.is_ir,
+                    (rr.pos_rank = 1 AND COALESCE(ps.position, i.position) = 'QB') as is_qb_star
+                FROM injuries i
+                JOIN teams t ON t.id = i.team_id
+                LEFT JOIN players p ON p.id = i.player_id
+                LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
+                LEFT JOIN ranked_roster rr ON rr.player_id = i.player_id
+                WHERE i.season = %s AND i.week = %s
+                  AND (
+                      COALESCE(ps.overall_rating, i.ovr) >= 88
+                      OR COALESCE(ps.popularity_index, 0.0) >= 50.0
+                      OR (rr.pos_rank = 1 AND COALESCE(ps.position, i.position) = 'QB')
+                  )
+                ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
+            """, (season, season, q_week))
+            key_injuries_by_team = defaultdict(list)
+            for tid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir, is_qb_star in cur.fetchall():
+                key_injuries_by_team[tid].append({
+                    "player_name": pname,
+                    "position": pos,
+                    "overall_rating": int(ovr or 0),
+                    "popularity_index": round(float(pop or 0.0), 1),
+                    "injury_type": inj_type,
+                    "duration": dur,
+                    "weeks_remaining": int(w_rem or 0),
+                    "is_ir": bool(is_ir),
+                    "is_starting_qb": bool(is_qb_star),
+                })
+
             for pg in preview_games:
-                brief["preview_slate"]["all_games"].append({
+                home_tid, away_tid = pg[5], pg[6]
+                game_dict = {
                     "game_id": pg[0],
                     "matchup": f"{pg[1]} @ {pg[2]}",
-                    "away_team": f"{pg[1]} (ID: {pg[6]})",
-                    "home_team": f"{pg[2]} (ID: {pg[5]})",
+                    "away_team": f"{pg[1]} (ID: {away_tid})",
+                    "home_team": f"{pg[2]} (ID: {home_tid})",
                     "kickoff_time": pg[3],
                     "projected_excitement": display_excitement(pg[4])
-                })
+                }
+                away_injs = key_injuries_by_team.get(away_tid, [])
+                home_injs = key_injuries_by_team.get(home_tid, [])
+                if away_injs or home_injs:
+                    game_dict["key_injuries"] = {
+                        "away": away_injs,
+                        "home": home_injs
+                    }
+                brief["preview_slate"]["all_games"].append(game_dict)
             brief["preview_slate"]["total_games"] = len(preview_games)
 
             # 3. Fetch standout player stat lines from the completed recap week
@@ -671,7 +748,9 @@ class SwarmDispatcher:
             get_advanced_game_analytics,
             get_opponent_adjusted_credit,
             get_coach_of_the_year_race,
+            get_clutch_profile,
             get_coach_profile,
+            get_player_scheme_splits,
             get_team_efficiency_profile,
             get_matchup_edges,
             get_weekly_slate,
@@ -689,6 +768,7 @@ class SwarmDispatcher:
             get_draft_prospects,
             get_team_articles,
             get_player_articles,
+            get_team_injury_report,
         ]
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)
@@ -853,7 +933,8 @@ TEMPORAL PUBLISHING CONTEXT (RETROSPECTIVE SLATE REVIEW):
 TEMPORAL PUBLISHING CONTEXT (PROSPECTIVE MATCHUP PREVIEW):
 - You are publishing during Week {week}, ahead of the Week {preview_week} games.
 - Focus strictly on previewing the upcoming scheduled matchups for Week {preview_week}; they have not been played yet.
-- Analyze team records, head-to-head match-ups, and tactical blueprints for the games taking place in Week {preview_week}. There is no injury data in this league: do not mention injuries or injury reports.{preview_lookup}
+- Analyze team records, head-to-head match-ups, and tactical blueprints for the games taking place in Week {preview_week}.
+- INJURY REPORTING RULE (THRESHOLD 88 OVR / 50 POP / STARTING QB): You may cite official injuries from your injury tool or the Assignment Brief, but ONLY for marquee players (OVR 88+, Popularity 50+, or starting Quarterbacks). Do not discuss minor injuries to role players or backups. Never invent injuries, timelines, or diagnoses not present in the official data.{preview_lookup}
 """
         elif temporal_mode == "CUMULATIVE":
             temporal_instruction = f"""
@@ -880,13 +961,16 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need full division standings and point differentials, call `get_season_standings`.
 - If you need schedule-adjusted team strength (Opponent-Adjusted Game Credit, strength of schedule, expected wins, and which records are lucky or unlucky), call `get_opponent_adjusted_credit` (no team = all 32 ranked; with a team = game-by-game credit log). It also gives each team's Trajectory (Surging to Sliding over the last 4 games).
 - If you need the Coach of the Year race (head coaches ranked by COTY score with record, wins above expectation, roster outperformance and improvement over last season), call `get_coach_of_the_year_race`.
+- If you need who wins and loses late (fourth-quarter comebacks, game-winning drives, blown leads, records when trailing at halftime) for a team or a quarterback, or the league leaders in those, call `get_clutch_profile`.
 - If you need a team's head coach (tenure, who he replaced, offensive scheme and defensive front, tendencies, this season's and career records, Super Bowls and Coach of the Year awards), call `get_coach_profile`.
+- If you need how a player produces against different kinds of defenses, call `get_player_scheme_splits`. `get_player_scheme_splits` shows how a QB, back or receiver produces against Strong / Average / Weak scoring defenses, pass rushes and coverages (this season and last, real game lines only). Cite a split with its game count as a tendency ("in five games against top-11 pass rushes"); if its `verdict` says there aren't enough real games, don't cite splits for that player.
 - If you need Pythagorean wins (what points for/against say the record should be), team pace, per-game passing/rushing yards and giveaways, or situational football (third- and fourth-down conversion rates, red-zone TD rate on offense and allowed on defense, penalties per game, each with a league rank), call `get_team_efficiency_profile`.
 - If you need where one team's offense has the edge over another's defense (passing vs. coverage, rushing vs. defensive rating, ball security, offensive line vs. pass rush), call `get_matchup_edges` (no opponent = their next game).
 - If you need all 32 team popularity rankings and watchability indices, call `get_all_team_popularities`.
 - If you need the top popular players in the NFL, call `get_top_popular_players`.
 - If you need the highest-rated players at every position (for league-wide player rankings), call `get_top_rated_players`.
 - If you need defensive or special-teams production (sack, interception, tackle, tackles-for-loss, pass-deflection, forced-fumble, field-goal, punting or return leaders), league-wide or for one team, call `get_defense_special_teams_leaders`. `get_player_season_stats` gives any one player's full line, and `get_game_box_score` lists a game's defensive playmakers and kickers when that game's stats were captured.
+- If you need a team's official weekly injury report (player status, injury type, duration, IR status, and whether an injury is a key injury), call `get_team_injury_report`. Remember national coverage is strictly restricted to marquee key injuries (OVR 88+, Popularity 50+, or starting QBs).
 - If you need a game's detailed player contributions, call `get_game_box_score`.
 - If you need the official Round 1 selection order (Picks 1-32), call `get_draft_order`.
 - If you need a team's primary roster needs ranked by urgency, call `get_team_draft_needs`.
@@ -894,7 +978,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need draft pick trade points (Jimmy Johnson model) and trade package scenarios, call `get_draft_trade_value`.
 - If you need a franchise's rebuild lifecycle stage and draft posture, call `get_franchise_rebuild_status`.
 
-3. DEFENSIVE DATA: Defense and special teams now have real season numbers: tackles, sacks, tackles for loss, interceptions, pass deflections, forced fumbles and recoveries, defensive TDs, kicking, punting and returns, plus sacks allowed for linemen and sacks taken for quarterbacks. Use them to back defensive claims with named players. The limits: Madden lists only its leaders in each category, so a player with no line has unknown numbers (not zeros); listed defenders don't add up to a team total, so never sum them into team sacks or takeaways; and pressures, per-game blitz and coverage counts, snap counts and targets aren't recorded, so never cite them. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and four tendencies (pass lean, fourth-down aggressiveness, blitz rate, man coverage) as Low / Medium / High against the league. Use them to frame scheme talk ("a blitz-heavy, man-heavy defense", "a coach who goes for it on fourth-and-short"), but they are staff tendencies, not charted game data: never turn a tier into a percentage, and never claim how often a team blitzed or played man in a specific game. Team situational numbers work the same way: season third-down, red-zone and penalty rates come from `get_team_efficiency_profile`, and a single game's come only from its box score's `team_situational` line. If a game has no such line, don't invent its third-down or red-zone totals. Third-down defense has no season total, so never cite a season third-down rate allowed beyond what the tool shows, and down-and-distance splits (third-and-short, third-and-long) aren't recorded. Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
+3. DEFENSIVE DATA: Defense and special teams now have real season numbers: tackles, sacks, tackles for loss, interceptions, pass deflections, forced fumbles and recoveries, defensive TDs, kicking, punting and returns, plus sacks allowed for linemen and sacks taken for quarterbacks. Use them to back defensive claims with named players. The limits: Madden lists only its leaders in each category, so a player with no line has unknown numbers (not zeros); listed defenders don't add up to a team total, so never sum them into team sacks or takeaways; and pressures, blitzes, coverage, snap counts and targets aren't recorded, so never give them as numbers or rates. Describing them in words is fine when it fits the box score and the game script: a pass rush that lived in the backfield, a corner who blanketed his man, a defense that brought more heat after halftime. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and three tendencies (pass lean, fourth-down aggressiveness, man coverage) as Low / Medium / High against the league. Pass lean and fourth-down aggressiveness are measured from this league's results (allowing for the score), so you can state them as what the team does ("one of the league's most aggressive fourth-down teams"). Man coverage is the staff's real-world philosophy, not measured here: present it as reputation ("a staff known for zone"), never as what the defense has done this season. There is no blitz data, so never put a number on how often a defense blitzes or call it a season-long habit. Never turn a tier into a percentage, and never put a count or rate on how often a team blitzed or played man in a specific game; describing in words what a defense did in one game is fine when it fits the game script. Team situational numbers work the same way: season third-down, red-zone and penalty rates come from `get_team_efficiency_profile`, and a single game's come only from its box score's `team_situational` line. If a game has no such line, don't invent its third-down or red-zone totals. Third-down defense has no season total, so never cite a season third-down rate allowed beyond what the tool shows, and down-and-distance splits (third-and-short, third-and-long) aren't recorded. Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
 
 4. HISTORICAL COMPARISONS (OPTIONAL): You may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens your argument (similar record shape, scoring profile, roster age, or trajectory). It is not required: most articles need none, and you should use at most one. Never invent a historical team or season, and don't reach for the most famous examples by default; pick the comparison that actually fits the numbers.
 """
@@ -907,12 +991,15 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 2. RESEARCH TOOLS:
 - Query your team's most recent box score and player performances with `get_game_box_score`.
 - Query your team's complete game schedule, results, and margins with `get_team_season_schedule`.
-- Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`. There is no injury data in this league: do not mention injuries or injury reports.
+- Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`.
+- BEAT INJURY REPORTING RULE: Check your team's injury status in the Assignment Brief or query `get_team_injury_report`. Report on any injured starters across offense, defense, and specialists. Detail who steps into the starting lineup ('next man up') and how the coordinator must adjust the gameplan. Never invent injuries not on the report.
 - Query team baseline ratings and top stars with `get_team_context`.
-- Query your head coach (tenure, schemes, tendencies, records, hardware) with `get_coach_profile`, and the opponent's coach before a game. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and four tendencies (pass lean, fourth-down aggressiveness, blitz rate, man coverage) as Low / Medium / High against the league. Use them to frame scheme talk ("a blitz-heavy, man-heavy defense", "a coach who goes for it on fourth-and-short"), but they are staff tendencies, not charted game data: never turn a tier into a percentage, and never claim how often a team blitzed or played man in a specific game.
+- Query how your players (and the opponent's) produce against different kinds of defenses with `get_player_scheme_splits`. `get_player_scheme_splits` shows how a QB, back or receiver produces against Strong / Average / Weak scoring defenses, pass rushes and coverages (this season and last, real game lines only). Cite a split with its game count as a tendency ("in five games against top-11 pass rushes"); if its `verdict` says there aren't enough real games, don't cite splits for that player.
+- Query your head coach (tenure, schemes, tendencies, records, hardware) with `get_coach_profile`, and the opponent's coach before a game. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and three tendencies (pass lean, fourth-down aggressiveness, man coverage) as Low / Medium / High against the league. Pass lean and fourth-down aggressiveness are measured from this league's results (allowing for the score), so you can state them as what the team does ("one of the league's most aggressive fourth-down teams"). Man coverage is the staff's real-world philosophy, not measured here: present it as reputation ("a staff known for zone"), never as what the defense has done this season. There is no blitz data, so never put a number on how often a defense blitzes or call it a season-long habit. Never turn a tier into a percentage, and never put a count or rate on how often a team blitzed or played man in a specific game; describing in words what a defense did in one game is fine when it fits the game script.
+- Query your team's and quarterback's late-game record (fourth-quarter comebacks, game-winning drives, blown leads, record when trailing at halftime) with `get_clutch_profile`.
 - Query your team's and the opponent's third-down, red-zone and penalty rates with league ranks with `get_team_efficiency_profile`; a single game's come only from its box score's `team_situational` line, so don't invent them for a game without one.
 - Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
-- Query your team's and the opponent's defensive and special-teams leaders (sacks, interceptions, tackles for loss, forced fumbles, kicking, returns) with `get_defense_special_teams_leaders` and the team name. Madden lists only its leaders, so a player with no line has unknown numbers, not zeros; don't add them up into team totals, and never cite pressures, snap counts, targets or per-game blitz and coverage counts, which aren't recorded.
+- Query your team's and the opponent's defensive and special-teams leaders (sacks, interceptions, tackles for loss, forced fumbles, kicking, returns) with `get_defense_special_teams_leaders` and the team name. Madden lists only its leaders, so a player with no line has unknown numbers, not zeros; don't add them up into team totals. Pressures, snap counts, targets and blitz or coverage rates aren't recorded, so never give them as numbers; in words, consistent with the game script, they're fine.
 3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the locker room. Quote coaching staff sentiment, cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
 """
 
@@ -974,6 +1061,9 @@ Readers must experience this as professional, authentic sports journalism. You m
 - Instead of "SpikeIndex" -> write "explosive ceiling", "boom-or-bust volatility", "single-game scoring explosion".
 Strict Rule: No raw algebraic symbols, formula notation, or LaTeX math equations ($...$) may appear in your final text.
 
+GAME SCRIPTS ARE CANON (WHAT YOU MAY AND MAY NOT INVENT):
+Every completed game has a game script: the `game_script` at the end of `get_game_box_score`, summarized as `game_story` in the brief's recap slate. Its quarter scores, scoring plays (who scored, how, from how far, on what drive, at what point on the clock), lead changes, the score that won it, key moments, adjustments and defensive standouts are the official account every writer shares. When you describe how a game unfolded, follow it and never contradict it. Beyond it, invent the texture no data records: the snaps between the scores, play calls, pressure and coverage, a block, a drop, a sideline scene, the crowd, quotes. Keep it consistent with the script and the box score. Never invent anything the data records (scores, stats, records, standings, injuries), and a defender with no recorded line for a game gets praise in words, not numbers.
+
 NO MADDEN RATINGS IN PUBLISHED TEXT:
 Player and team ratings (OVR, overall, team/offense/defense overall, depth-chart tiers built from them) are for your own judgment of talent only. Never cite a rating number or refer to ratings in your text: no "92 OVR", "a 92 overall", "rated 85", "the league's highest-rated QB", "a 78-overall starter", "team OVR", and never mention Madden, the video game, or game ratings. This league is covered as real football. Show talent through production, role, age and results instead, e.g. "an All-Pro-caliber left tackle", "the best cover corner in the conference", "a starter-quality backup", "a roster built on elite trench play".
 """
@@ -1017,8 +1107,85 @@ EDITORIAL DESK ASSIGNMENT (MANDATORY):
             except Exception as e:
                 print(f"⚠️  Could not load previous Power Rankings: {e}")
 
+        brief_for_agent = brief
+        if archetype == "LOCAL_BEAT_REPORTER" and assigned_team_id:
+            try:
+                with psycopg.connect(self.db.db_conn_info) as bconn, bconn.cursor() as bcur:
+                    bcur.execute("""
+                        SELECT DISTINCT week FROM injuries
+                        WHERE team_id = %s AND season = %s AND week <= %s
+                        ORDER BY week DESC LIMIT 1;
+                    """, (assigned_team_id, season, week))
+                    bw_row = bcur.fetchone()
+                    bq_week = bw_row[0] if bw_row else week
+
+                    bcur.execute("""
+                        WITH ranked_roster AS (
+                            SELECT 
+                                player_id,
+                                position,
+                                overall_rating,
+                                ROW_NUMBER() OVER (PARTITION BY position ORDER BY overall_rating DESC) as pos_rank
+                            FROM player_seasons
+                            WHERE team_id = %s AND season = %s
+                        )
+                        SELECT 
+                            i.player_id,
+                            COALESCE(p.full_name, p.player_name, i.player_name) as player_name,
+                            COALESCE(ps.position, i.position) as position,
+                            COALESCE(ps.overall_rating, i.ovr) as ovr,
+                            COALESCE(ps.popularity_index, 0.0) as pop,
+                            i.injury_type,
+                            i.duration,
+                            i.weeks_remaining,
+                            i.is_ir,
+                            rr.pos_rank
+                        FROM injuries i
+                        LEFT JOIN players p ON p.id = i.player_id
+                        LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
+                        LEFT JOIN ranked_roster rr ON rr.player_id = i.player_id
+                        WHERE i.team_id = %s AND i.season = %s AND i.week = %s
+                        ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
+                    """, (assigned_team_id, season, assigned_team_id, season, bq_week))
+                    beat_rows = bcur.fetchall()
+
+                    def is_starter_rank(pos, rank):
+                        if not rank:
+                            return False
+                        if pos in ("QB", "TE", "LT", "LG", "C", "RG", "RT", "FS", "SS", "K", "P", "FB"):
+                            return rank == 1
+                        if pos in ("HB", "DT", "LEDG", "REDG", "LE", "RE"):
+                            return rank <= 2
+                        if pos in ("WR", "CB", "MIKE", "SAM", "WILL", "MLB", "LOLB", "ROLB"):
+                            return rank <= 3
+                        return rank == 1
+
+                    starter_injuries = []
+                    for pid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir, pos_rank in beat_rows:
+                        if is_starter_rank(pos, pos_rank):
+                            starter_injuries.append({
+                                "player_name": pname,
+                                "position": pos,
+                                "overall_rating": int(ovr or 0),
+                                "injury_type": inj_type,
+                                "duration": dur,
+                                "weeks_remaining": int(w_rem or 0),
+                                "is_ir": bool(is_ir),
+                                "depth_starter": True
+                            })
+                    brief_for_agent = dict(brief)
+                    brief_for_agent["team_injury_report"] = {
+                        "team_id": assigned_team_id,
+                        "week": bq_week,
+                        "starter_injuries_count": len(starter_injuries),
+                        "starter_injuries": starter_injuries,
+                        "reporting_guidance": "Report on any injured starters across offense, defense, and specialists. Detail who steps into the starting lineup ('next man up') and how the gameplan must adjust."
+                    }
+            except Exception as e:
+                print(f"⚠️  Could not load beat injury report for team {assigned_team_id}: {e}")
+
         task_instruction = f"""ASSIGNMENT BRIEF:
-{json.dumps(brief, indent=2)}
+{json.dumps(brief_for_agent, indent=2)}
 
 TASK:
 You must analyze the action through your specific analytical lens.

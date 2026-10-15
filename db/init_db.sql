@@ -79,6 +79,11 @@ CREATE TABLE IF NOT EXISTS team_seasons (
     red_zone_att INT, red_zone_td INT, red_zone_fg INT, red_zone_pct NUMERIC(5, 1),
     red_zone_def_att INT, red_zone_def_td INT, red_zone_def_fg INT, red_zone_def_pct NUMERIC(5, 1),
     penalties INT, penalty_yards INT,
+    -- Observed offensive tendencies (engines/tendency_engine.py, 2026_11_13_observed_tendencies.sql)
+    pass_rate_oe DOUBLE PRECISION, fourth_down_oe DOUBLE PRECISION,
+    observed_pass_lean VARCHAR(6) CHECK (observed_pass_lean IN ('Low', 'Medium', 'High')),
+    observed_fourth_down VARCHAR(6) CHECK (observed_fourth_down IN ('Low', 'Medium', 'High')),
+    tendency_games INT,
     UNIQUE (team_id, season)
 );
 
@@ -181,6 +186,8 @@ CREATE TABLE IF NOT EXISTS player_stats (
     pass_comp_pct NUMERIC(5, 1), pass_rating NUMERIC(5, 1), pass_ypa NUMERIC(5, 1), pass_long INT, pass_sacks INT,
     rush_avg NUMERIC(5, 1), rush_btk INT, rush_yac INT, rush_long INT,
     rec_avg NUMERIC(5, 1), rec_rac INT, rec_rac_avg NUMERIC(5, 1), rec_long INT,
+    -- CAPTURED box score | WEEKLY = exact one-game backfill | DISTRIBUTED = synthetic (2026_11_14_player_stats_line_source.sql)
+    line_source VARCHAR(12) CHECK (line_source IN ('CAPTURED', 'WEEKLY', 'DISTRIBUTED')),
     -- Full-PPR fantasy points, always derived from the box score above (read-only; never insert/update it).
     fantasy_points NUMERIC(6, 2) GENERATED ALWAYS AS (
         ROUND(
@@ -323,6 +330,18 @@ CREATE INDEX IF NOT EXISTS idx_injuries_season_week ON injuries(season, week);
 CREATE INDEX IF NOT EXISTS idx_injuries_team ON injuries(team_id);
 CREATE INDEX IF NOT EXISTS idx_injuries_player ON injuries(player_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_injuries_unique_player ON injuries(season, week, player_id) WHERE player_id IS NOT NULL;
+
+-- 5c. Game scripts (engines/game_script_engine.py, 2026_11_18_game_scripts.sql): one canonical story per completed game.
+CREATE TABLE IF NOT EXISTS game_scripts (
+    game_id INTEGER PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+    season INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    facts_hash TEXT NOT NULL,
+    script JSONB NOT NULL,
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_game_scripts_season_week ON game_scripts(season, week);
 
 -- 6. One row per capture run (duplicate / missed-week / row-count checks, resuming, token totals).
 CREATE TABLE IF NOT EXISTS captures (

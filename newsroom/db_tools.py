@@ -8,7 +8,11 @@ from engines.team_efficiency_engine import compute_team_efficiency, fetch_team_g
 from engines.matchup_edges import compute_edges, fetch_ratings, fetch_units
 from engines.game_credit_engine import compute_game_credit, fetch_completed_games, trajectory_label
 from engines.coty_engine import compute_coty, fetch_inputs as fetch_coty_inputs
-from engines.coach_profile import coach_profile, fetch_team_coach, staff_matchup
+from engines.coach_profile import coach_profile, fetch_team_coach, fetch_team_staff, staff_matchup
+from engines.game_script_engine import get_script, render_script
+from engines import clutch_engine as clutch
+from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_splits, defense_groups,
+                                   player_lines, stat_group, STATS as SPLIT_STATS)
 import json
 import os
 
@@ -177,7 +181,7 @@ def _resolve_team_id(cur, identifier: str) -> int:
 
 @tool
 def get_game_box_score(game_id: int) -> str:
-    """Fetch the full box score, excitement index, and top player performances for a specific game: passing, rushing and receiving, plus defensive playmakers (tackles, sacks, TFL, INT, pass deflections, forced fumbles, defensive TDs) and kickers when the game's player stats were captured, and each team's third/fourth-down and two-point conversions, red zone, penalties, quarter-by-quarter scoring and time of possession where they were recorded for this game."""
+    """Fetch the full box score, excitement index, and top player performances for a specific game: passing, rushing and receiving, plus defensive playmakers (tackles, sacks, TFL, INT, pass deflections, forced fumbles, defensive TDs) and kickers when the game's player stats were captured, and each team's third/fourth-down and two-point conversions, red zone, penalties, quarter-by-quarter scoring and time of possession where they were recorded for this game. It ends with the game_script: the game's official story shared by every writer (quarter scores, every scoring play in order with scorer, yardage, drive and clock, lead changes, the winning score, key moments, adjustments and defensive standouts), which you must not contradict."""
     try:
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -292,7 +296,49 @@ def get_game_box_score(game_id: int) -> str:
                     result["defense_note"] = ("No defensive or special-teams lines were captured for this game; "
                                               "don't cite individual tackles, sacks or interceptions from it.")
 
-                return json.dumps(result, indent=2)
+            # The game's canonical story (§2.14), shared by every writer
+            script = get_script(db.db_conn_info, game_id)
+            if script:
+                result["game_script"] = render_script(script).split("\n")
+            return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_clutch_profile(team_identifier: str = "", quarterback: str = "", season: int = 0) -> str:
+    """Late-game records from the league's game scripts (the official account of how each game unfolded): fourth-quarter comebacks, game-winning drives, blown double-digit and fourth-quarter leads, records when leading or trailing at halftime and after three quarters, overtime record, points per game by quarter, the biggest comeback win and lead lost, and the games behind each count. Give a team (name or abbreviation) or a quarterback (credited with the games he started); give neither for the league leaders (quarterbacks by comebacks and game-winning drives, teams by blown leads and wins after trailing at halftime). Regular season and postseason are separate."""
+    try:
+        s_val = resolve_season(season)
+        before = cutoff_week(s_val)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                rows = clutch.fetch_rows(cur, s_val)
+                if not rows:
+                    return f"No game scripts for season {s_val}."
+                note = ("From the league's game scripts: cite these as fact; they are the same for every writer. "
+                        "A quarterback is credited with the games he started. Regular season and postseason are "
+                        "separate; never add them together or compare them with real-NFL career totals.")
+                if quarterback:
+                    cur.execute("""
+                        SELECT p.id, COALESCE(p.full_name, p.player_name) FROM players p
+                        JOIN player_seasons pse ON pse.player_id = p.id AND pse.season = %s AND pse.position = 'QB'
+                        WHERE p.full_name ILIKE %s OR p.player_name ILIKE %s
+                        ORDER BY pse.overall_rating DESC NULLS LAST LIMIT 1
+                    """, (s_val, f"%{quarterback.strip()}%", f"%{quarterback.strip()}%"))
+                    row = cur.fetchone()
+                    if not row:
+                        return f"Quarterback '{quarterback}' not found for season {s_val}."
+                    prof = clutch.qb_profile(rows, row[0], before)
+                    return json.dumps({"quarterback": row[1], "season": s_val, **prof, "note": note}, indent=2)
+                if team_identifier:
+                    tid = _resolve_team_id(cur, team_identifier)
+                    if not tid:
+                        return f"Team '{team_identifier}' not found."
+                    cur.execute("SELECT name FROM teams WHERE id = %s", (tid,))
+                    prof = clutch.team_profile(rows, tid, before)
+                    return json.dumps({"team": cur.fetchone()[0], "season": s_val, **prof, "note": note}, indent=2)
+                return json.dumps({"season": s_val, "regular_season_leaders": clutch.league_leaders(rows, before),
+                                   "note": note}, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -501,7 +547,7 @@ def get_team_context(team_identifier: str) -> str:
 
 @tool
 def get_coach_profile(team_identifier: str, season: int = 0) -> str:
-    """Fetch a team's head coach: tenure (season with the team, who he replaced), offensive scheme and defensive front, coaching tendencies (pass lean, fourth-down aggressiveness, blitz rate, man coverage as Low/Medium/High with plain-language meaning), this season's record, record with the team, career record (regular season, winning seasons, playoffs, Super Bowls), Super Bowls with the team and Coach of the Year awards. Accepts team name, abbreviation, or team ID."""
+    """Fetch a team's head coach: tenure (season with the team, who he replaced), offensive scheme and defensive front, coaching tendencies (pass lean and fourth-down aggressiveness measured in this league, man coverage as the staff's real-world philosophy; Low/Medium/High with plain-language meaning), this season's record, record with the team, career record (regular season, winning seasons, playoffs, Super Bowls), Super Bowls with the team and Coach of the Year awards. Accepts team name, abbreviation, or team ID."""
     try:
         s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -514,6 +560,61 @@ def get_coach_profile(team_identifier: str, season: int = 0) -> str:
                     return f"No head coach recorded for team ID {team_id} in {s_val}."
                 cur.execute("SELECT name FROM teams WHERE id = %s", (team_id,))
                 return json.dumps({"season": s_val, "team": cur.fetchone()[0], **profile}, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_player_scheme_splits(player_identifier: str, seasons: int = 2) -> str:
+    """Fetch how a QB, running back, receiver or tight end produces against different kinds of defenses over the last `seasons` seasons (default 2: this one and last): per-game averages and the change from his own average against Strong / Average / Weak scoring defenses (points allowed), pass rushes and coverages (Madden ranks). Only real game lines count. Accepts player name or player ID."""
+    try:
+        s_val = resolve_season()
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                ident = str(player_identifier).strip()
+                if ident.isdigit():
+                    target_id = int(ident)
+                else:
+                    cur.execute("""
+                        SELECT id FROM players WHERE player_name ILIKE %s OR full_name ILIKE %s
+                        ORDER BY LENGTH(player_name) ASC LIMIT 1
+                    """, (f"%{ident}%", f"%{ident}%"))
+                    row = cur.fetchone()
+                    target_id = row[0] if row else None
+                if not target_id:
+                    return f"Player '{player_identifier}' not found in database."
+                cur.execute("""
+                    SELECT COALESCE(p.full_name, p.player_name), ps.position, t.name
+                    FROM players p
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                    LEFT JOIN teams t ON t.id = ps.team_id
+                    WHERE p.id = %s
+                """, (s_val, target_id))
+                name, position, team = cur.fetchone()
+                group = stat_group(position)
+                if not group:
+                    return f"{name} ({position}): splits cover quarterbacks, running backs, receivers and tight ends only."
+                span = [s_val - i for i in range(max(1, int(seasons)))]
+                lines, skipped = player_lines(cur, target_id, span, is_visible_week)
+                opp = {}
+                for season in span:
+                    for t, groups in defense_groups(cur, season, is_visible_week).items():
+                        opp[(season, t)] = groups
+                splits = compute_splits(lines, opp, SPLIT_STATS[group])
+                return json.dumps({
+                    "player": name, "position": position, "team": team, "seasons": sorted(span),
+                    "real_games": splits["games"], "synthetic_games_skipped": skipped,
+                    "overall_per_game": splits["overall_per_game"],
+                    "verdict": (None if any("per_game" in g for d in splits["dimensions"].values() for g in d.values())
+                                else f"Not enough real games yet for any split (each group needs {MIN_GAMES}); "
+                                     "don't cite splits for this player."),
+                    "splits_by_opponent": {f"{dim} ({DIMENSIONS[dim]})": v for dim, v in splits["dimensions"].items()},
+                    "note": (f"Only real game lines count (captured box scores and exact weekly lines); synthetic lines "
+                             f"spread over several games are skipped. Strong = the best 11 of 32 defenses that season, "
+                             f"Average the next 10, Weak the rest. A group needs {MIN_GAMES} real games, and its averages "
+                             f"are blended toward his overall average by {BLEND_GAMES} games, so small samples lean to his "
+                             f"norm. Cite a split as a tendency with its game count (\"in 5 games against top pass "
+                             f"rushes\"); with few games, don't build an argument on it."),
+                }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -1055,7 +1156,7 @@ def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", seaso
                         "biggest_vulnerability": e["biggest_vulnerability"],
                     }
 
-                coaches = {t: fetch_team_coach(cur, t, s_val) for t in (team_id, opp_id)}
+                coaches = {t: fetch_team_staff(cur, t, s_val) for t in (team_id, opp_id)}
                 return json.dumps({
                     "season": s_val,
                     "context": context,
@@ -1065,7 +1166,7 @@ def get_matchup_edges(team_identifier: str, opponent_identifier: str = "", seaso
                         f"{names.get(team_id)}_offense_vs_{names.get(opp_id)}_defense": staff_matchup(coaches[team_id], coaches[opp_id]),
                         f"{names.get(opp_id)}_offense_vs_{names.get(team_id)}_defense": staff_matchup(coaches[opp_id], coaches[team_id]),
                     },
-                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best). Coaching tendencies are Low/Medium/High staff tendencies, not charted rates: describe them, never turn them into percentages.",
+                    "scale_note": "Pass/rush/ball-security edges are in standard deviations across the league (0 = even). Trench edge is offensive-line OVR minus the defense's top-4 pass-rusher OVR. Defensive strength comes from Madden ratings (coverage rank 1 = best). Coaching tendencies are Low/Medium/High: pass lean and fourth down are measured in this league (allowing for the score), man coverage is the staff's real-world philosophy (there is no blitz data); describe them, never turn them into percentages.",
                 }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
@@ -2128,6 +2229,141 @@ def get_player_articles(player_identifier: str, limit: int = 5) -> str:
                     "current_team": team_desc,
                     "articles_found": len(results),
                     "articles": results
+                }, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@tool
+def get_team_injury_report(team_identifier: str, week: int = 0, season: int = 0) -> str:
+    """Fetch a team's official weekly injury report, including player name, position, overall rating,
+    popularity, injury diagnosis, duration, weeks remaining, IR status, starter status, and key injury flag.
+    Accepts team name, city, abbreviation, or team ID."""
+    try:
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Error: Team '{team_identifier}' not found."
+
+                cur.execute("SELECT name, abbreviation, city FROM teams WHERE id = %s;", (team_id,))
+                t_row = cur.fetchone()
+                team_name = t_row[0] if t_row else str(team_id)
+                team_abbr = t_row[1] if t_row else "NFL"
+                team_city = t_row[2] if t_row else ""
+
+                w_val = week
+                if not w_val or w_val <= 0:
+                    cut = cutoff_week(s_val)
+                    if cut is not None and context_season() == s_val:
+                        w_val = cut
+                    else:
+                        cur.execute("SELECT current_week FROM league_state WHERE id = 1;")
+                        ls_row = cur.fetchone()
+                        w_val = ls_row[0] if ls_row and ls_row[0] else 1
+
+                # If no injuries for exact week, check if a recent prior week exists for this team/season
+                cur.execute("""
+                    SELECT DISTINCT week FROM injuries
+                    WHERE team_id = %s AND season = %s AND week <= %s
+                    ORDER BY week DESC LIMIT 1;
+                """, (team_id, s_val, w_val))
+                w_row = cur.fetchone()
+                query_week = w_row[0] if w_row else w_val
+
+                # Query starters for this team and season to determine is_starter
+                cur.execute("""
+                    WITH ranked_roster AS (
+                        SELECT 
+                            player_id,
+                            position,
+                            overall_rating,
+                            ROW_NUMBER() OVER (PARTITION BY position ORDER BY overall_rating DESC) as pos_rank
+                        FROM player_seasons
+                        WHERE team_id = %s AND season = %s
+                    )
+                    SELECT player_id, position, pos_rank FROM ranked_roster;
+                """, (team_id, s_val))
+                starter_ranks = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+
+                def check_starter(pid, pos):
+                    if pid in starter_ranks:
+                        p, rank = starter_ranks[pid]
+                    else:
+                        return False
+                    if p in ("QB", "TE", "LT", "LG", "C", "RG", "RT", "FS", "SS", "K", "P", "FB"):
+                        return rank == 1
+                    if p in ("HB", "DT", "LEDG", "REDG", "LE", "RE"):
+                        return rank <= 2
+                    if p in ("WR", "CB", "MIKE", "SAM", "WILL", "MLB", "LOLB", "ROLB"):
+                        return rank <= 3
+                    return rank == 1
+
+                cur.execute("""
+                    SELECT 
+                        i.player_id,
+                        COALESCE(p.full_name, p.player_name, i.player_name) as player_name,
+                        COALESCE(ps.position, i.position) as position,
+                        COALESCE(ps.overall_rating, i.ovr) as ovr,
+                        COALESCE(ps.popularity_index, 0.0) as pop,
+                        i.injury_type,
+                        i.duration,
+                        i.weeks_remaining,
+                        i.is_ir
+                    FROM injuries i
+                    LEFT JOIN players p ON p.id = i.player_id
+                    LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
+                    WHERE i.team_id = %s AND i.season = %s AND i.week = %s
+                    ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC, COALESCE(ps.popularity_index, 0.0) DESC;
+                """, (team_id, s_val, query_week))
+                rows = cur.fetchall()
+
+                if not rows:
+                    return json.dumps({
+                        "team": f"{team_city} {team_name}".strip(),
+                        "team_abbr": team_abbr,
+                        "season": s_val,
+                        "week": query_week,
+                        "total_injured": 0,
+                        "key_injuries_count": 0,
+                        "injuries": [],
+                        "status_note": "No injuries reported on official report. Healthy active roster."
+                    }, indent=2)
+
+                injuries = []
+                key_count = 0
+                for pid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir in rows:
+                    ovr_val = int(ovr or 0)
+                    pop_val = round(float(pop or 0.0), 1)
+                    is_starter = check_starter(pid, pos)
+                    # National Key Injury: OVR >= 88 OR Pop >= 50 OR (QB and starter)
+                    is_key = (ovr_val >= 88) or (pop_val >= 50.0) or (pos == "QB" and is_starter)
+                    if is_key:
+                        key_count += 1
+
+                    injuries.append({
+                        "player_name": pname,
+                        "position": pos,
+                        "overall_rating": ovr_val,
+                        "popularity_index": pop_val,
+                        "is_starter": is_starter,
+                        "is_key_injury": is_key,
+                        "injury_type": inj_type,
+                        "duration": dur,
+                        "weeks_remaining": int(w_rem or 0),
+                        "is_ir": bool(is_ir),
+                    })
+
+                return json.dumps({
+                    "team": f"{team_city} {team_name}".strip(),
+                    "team_abbr": team_abbr,
+                    "season": s_val,
+                    "week": query_week,
+                    "total_injured": len(injuries),
+                    "key_injuries_count": key_count,
+                    "injuries": injuries,
+                    "coverage_guidance": "National writers: only cite key injuries (OVR >= 88, Pop >= 50, or starting QBs). Beat writers: report on any injured starters across offense, defense, and specialists."
                 }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"

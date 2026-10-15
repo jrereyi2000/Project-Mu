@@ -21,6 +21,11 @@ import argparse
 import collections
 import json
 
+try:                     # imported lazily so the module (and its tests) load without a database driver
+    import psycopg
+except ImportError:      # pragma: no cover
+    psycopg = None
+
 REGULAR_SEASON_FINAL_WEEK = 18
 GAMES_PER_SEASON = 17
 
@@ -352,6 +357,40 @@ def format_report(result) -> str:
     return "\n".join(out)
 
 
+def run(season: int | None = None, apply_changes: bool = True, conn_info: str | None = None) -> dict:
+    """Run the records engine for `season` (default: league_state.current_season).
+    Evaluates the season against the record book and, if apply_changes=True, stores
+    any new franchise records and all-time top-10 rows (source 'LEAGUE').
+    """
+    from db.db_handler import DatabaseHandler
+    db = DatabaseHandler(db_conn_info=conn_info)
+    if season is None:
+        season = db.get_current_league_state()[0]
+
+    with psycopg.connect(db.db_conn_info) as conn:
+        with conn.cursor() as cur:
+            result = evaluate(cur, season)
+            if apply_changes:
+                stored = apply(cur, season, result)
+                conn.commit()
+                result["stored"] = stored
+    return result
+
+
+class RecordsEngine:
+    def __init__(self, db_conn_info: str | None = None):
+        self.db_conn_info = db_conn_info
+
+    def calculate(self, season: int | None = None, apply_changes: bool = True) -> dict:
+        result = run(season=season, apply_changes=apply_changes, conn_info=self.db_conn_info)
+        stored_info = ""
+        if apply_changes and "stored" in result:
+            stored = result["stored"]
+            stored_info = f" ({stored['franchise_rows']} franchise rows, {stored['top10_rows']} top-10 rows stored)"
+        print(f"Records evaluated for {result['season']}: {len(result['events'])} events{stored_info}")
+        return result
+
+
 def main():
     ap = argparse.ArgumentParser(description="Check a league season against the record book.")
     ap.add_argument("--season", type=int, required=True)
@@ -359,7 +398,6 @@ def main():
     ap.add_argument("--json", help="also write the events to this file")
     args = ap.parse_args()
 
-    import psycopg
     from db.db_handler import DatabaseHandler
     with psycopg.connect(DatabaseHandler().db_conn_info) as conn:
         with conn.cursor() as cur:

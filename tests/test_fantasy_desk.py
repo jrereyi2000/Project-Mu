@@ -112,6 +112,15 @@ class PromptTests(unittest.TestCase):
                                        2035, 10, "TWEET")
         self.assertIn("Your tweets are incredibly structured", tweet["system_instruction"])
 
+    def test_fantasy_temporal_instruction_handles_postseason(self):
+        self.assertIn("FANTASY DRAFT PREP", fd.fantasy_temporal_instruction(1))
+        self.assertIn("FANTASY REGULAR SEASON", fd.fantasy_temporal_instruction(10))
+        self.assertIn("FANTASY SEASON IN REVIEW", fd.fantasy_temporal_instruction(18))
+        for w in range(19, 24):
+            with self.assertRaises(ValueError):
+                fd.fantasy_temporal_instruction(w)
+
 
 if __name__ == "__main__":
     unittest.main()
+

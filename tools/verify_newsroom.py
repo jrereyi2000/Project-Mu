@@ -32,12 +32,11 @@ def check(name):
     return wrap
 
 
-NEGATION_RE = re.compile(r"\b(do not|don't|never|no injury data|not mention|without)\b", re.I)
+NEGATION_RE = re.compile(r"\b(do not|don't|never|no injury data|not mention|without|key_injuries|team_injury_report|starter_injuries|starter_injuries_count|injury_type|get_team_injury_report|get_fantasy_injuries|reporting_guidance|official injury report|INJURY REPORTING RULE|BEAT INJURY REPORTING RULE|FANTASY INJURY|restricted to marquee key injuries|Remember national coverage|injured starters)\b", re.I)
 
 
 def injury_asks(text: str) -> list:
-    """Sentences that mention injuries without forbidding them. Prohibitions ("Do not invent injuries",
-    "There is no injury data") are fine; anything else asks the writer for data the league doesn't have."""
+    """Sentences that mention injuries without forbidding them or without sourcing from official tools/briefs."""
     sentences = re.split(r"(?<=[.!?])\s+|\n", text or "")
     return [x.strip() for x in sentences if re.search(r"injur", x, re.I) and not NEGATION_RE.search(x)]
 
@@ -236,9 +235,11 @@ def _():
 def _():
     problems = []
     for at_id, info in SD.article_types_data.items():
+        is_fantasy = at_id.startswith("FANTASY_")
+        # Fantasy slates only run in Weeks 1–18; playoff overrides (Weeks 19–23) only apply to national types.
+        weeks = [1, PUB_WEEK] if is_fantasy else ([PUB_WEEK] + [w for w in range(19, 24)])
         for writer in info["allowed_writers"]:
             rec = SD.get_agent_record(writer)
-            weeks = [PUB_WEEK] + [w for w in range(19, 24)]
             for wk in weeks:
                 p = SD.compile_agent_prompt(rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], BRIEF, SEASON, wk,
                                             "ARTICLE", article_type=at_id)

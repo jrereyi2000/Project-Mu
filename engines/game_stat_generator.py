@@ -139,6 +139,9 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
                     'player_name': p_tup[0],
                     'team_id': team_id,
                     'position': p_tup[1],
+                    # One missing game: the line is that week's exact change in the season totals. Several: the
+                    # remainder is spread by score, so the line is synthetic (player splits skip it).
+                    'line_source': 'WEEKLY' if num_games == 1 else 'DISTRIBUTED',
                     **p_stats
                 })
                 
@@ -215,9 +218,11 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         from engines.game_credit_engine import GameCreditEngine
         from engines.team_efficiency_engine import TeamEfficiencyEngine
         from engines.coty_engine import CotyEngine
+        from engines.tendency_engine import TendencyEngine
         from engines.playoff_clout_engine import PlayoffCloutEngine
         from engines.popularity_engine import PopularityEngine
         from engines.player_popularity_engine import PlayerPopularityEngine
+        from engines.records_engine import RecordsEngine
         from engines.excitement_projection import project_scheduled_games
         from engines.fantasy_projection_engine import project_upcoming_week
         from engines.fantasy_league_sim import simulate_season
@@ -227,6 +232,12 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         backfilled_game_ids = sorted({int(r['game_id']) for r in player_stats_rows + team_stats_rows})
         print("-> Running Game Excitement Engine (E)...")
         batch_evaluate(season=season_year, only_missing=True, game_ids=backfilled_game_ids)
+
+        # Game scripts (§2.14): each completed game's canonical story, after E (its drama follows E). Games whose
+        # recorded facts haven't changed keep their script, so a published story stays the same story.
+        print("-> Writing game scripts...")
+        from engines.game_script_engine import run as write_game_scripts
+        write_game_scripts(season_year, conn_info=DATABASE_URL)
 
         # 1. Run Mathematical Culture Indices in dependency order:
         #    E -> TWI (watchability_index) -> Franchise POP (reads TWI) -> Player POP (reads Franchise POP)
@@ -239,6 +250,9 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         print("-> Running Team Efficiency Engine...")
         TeamEfficiencyEngine().calculate(season=season_year)
 
+        print("-> Running Observed Tendency Engine...")
+        TendencyEngine().calculate(season=season_year)
+
         print("-> Running Coach of the Year Engine...")
         CotyEngine().calculate(season=season_year)
 
@@ -250,6 +264,13 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
 
         print("-> Running Player Popularity Engine...")
         PlayerPopularityEngine().calculate_popularity(season=season_year)
+
+        # Update franchise records and NFL top-10 lists for the season
+        print("-> Running Records Engine...")
+        try:
+            RecordsEngine().calculate(season=season_year)
+        except Exception as e:   # the record book is optional: a missing migration must not stop the week's sync
+            print(f"   [WARN] Records Engine skipped: {e}")
 
         # Project E for every still-scheduled game from the season so far (feeds the site, the brief and primer picks)
         print("-> Projecting Excitement Index for scheduled games...")
