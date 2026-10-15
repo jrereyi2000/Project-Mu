@@ -2534,8 +2534,8 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries"],
-                    help="roster, season-schedule and prospects are never part of the default run")
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season"],
+                    help="roster, season-schedule, prospects and season are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
@@ -2622,18 +2622,24 @@ def main():
         if a.only == "playoff":               # postseason week: no Season Stats / Team Stats (regular season only)
             run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
-        if a.only == "roster":
+        if a.only in ("season", "season-schedule"):
+            run_mode("the season schedule", lambda: run_season_schedule(out), clear("season_schedule"))
+            if a.only == "season":
+                log("Returning to the hub before rosters")
+                go_hub()
+        if a.only in ("season", "roster"):
             tries = [0]
 
             def rosters():
                 tries[0] += 1                   # after a stream restart, continue the same run
                 return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1)
             run_mode("the rosters", rosters)
-        if a.only == "season-schedule":
-            run_mode("the season schedule", lambda: run_season_schedule(out), clear("season_schedule"))
+            if a.only == "season":
+                log("Returning to the hub before draft prospects")
+                go_hub()
         if a.only == "games":
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
-        if a.only == "prospects":
+        if a.only in ("season", "prospects"):
             n_prospects = 0 if a.all_prospects else a.prospects
             run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
         if a.only != "prospects":

@@ -98,6 +98,16 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.notices[-1][0], "Mu: prospects scan done")
         self.assertIn("Draft prospects loaded for Season 2035", self.notices[-1][1])
 
+    def test_season_scan_runs_capture_extract_load_and_skips_articles(self):
+        os.makedirs(os.path.join(self.tmp, "seas1"))
+        self.assertEqual(wc.run("seas1", articles=True, mode="season"), 0)
+        self.assertEqual(self.calls, ["connect", "capture", "extract", "load"])
+        self.assertEqual(self.capture_mode, "season")
+        self.assertEqual(self.notices[0][0], "Mu: capture starting")
+        self.assertIn("Season scan", self.notices[0][1])
+        self.assertEqual(self.notices[-1][0], "Mu: season scan done")
+        self.assertIn("Season setup (schedule, rosters, draft prospects) loaded for Season 2035", self.notices[-1][1])
+
     def test_game_scan_replaces_and_never_writes_articles(self):
         os.makedirs(os.path.join(self.tmp, "g1"))
         self.assertEqual(wc.run("g1", articles=True, mode="games"), 0)

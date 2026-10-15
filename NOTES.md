@@ -19,8 +19,7 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
 1. **Zero Gemini Cost for Extraction:** Replaced multimodal LLM vision calls with on-device macOS Apple Vision OCR (`pipeline/extract_prospects_ocr.py`), with targeted Gemini vision remaining only as an automatic fallback.
 2. **Board and Mock Draft in the Database:** `draft_prospects` holds the scouted board per draft class, and `mock_draft_picks` holds each week's saved Round 1 mock (`db/migrations/2026_11_19_draft_board.sql`, `pipeline/draft_board.py`). The CSVs are extraction output and an export copy only. Tools and tests never read `data/draft/` (on Oct 15 that held a hand-made 32-row stub that tests had come to depend on).
 5. **Lenient Board Loads (JR, Oct 15):** a board with a blank or implausible cell still loads. The cell is stored as NULL and listed as a warning; next season's roster scan has the real values once the prospect is a rookie, and links him (`draft_prospects.player_id`).
-3. **Line-by-Line Capture Mechanics:** Madden's Draft Board / College Prospects screen displays full legal names, heights, and weights only on the active highlighted row/card, requiring row-by-row keypresses (`madden_capture.py --only prospects`).
-4. **Decoupled Scan Cadence:** The draft board scan (`--mode prospects` / `draft_scan`) is completely separate from the roster scan (`--mode roster` / `roster_scan`).
+4. **Start-of-Season Scan Cadence (JR, Oct 15):** The draft board scan is conducted once per season at the same time as the season schedule and roster scans, executed after both (`--mode season` / `season_scan`). Running after the roster scan guarantees that incoming rookies (`years_of_experience = 0`) are linked to their prior class draft prospect row (`draft_prospects.player_id`) before the new draft class ($season + 1$) is ingested. Standalone runs remain available (`--mode prospects` / `draft_scan`).
 
 ---
 
@@ -92,12 +91,13 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
   - `load_prospects()` loads `prospects.csv` leniently into `draft_prospects` for class season + 1, replacing an earlier scan of that class. Warnings go in `report["prospect_warnings"]`, and an export copy goes to `data/draft/` unless it's a `--dry-run`.
   - A roster load links this season's rookies to their prospect rows. A roster folder with a `prospects.csv` loads the board too, and a bad board no longer fails the roster.
 - **`pipeline/weekly_capture.py`:**
-  - Added `"roster"` and `"prospects"` to `MODES`.
+  - Added `"roster"`, `"prospects"`, and `"season"` to `MODES`.
+  - `python3 -m pipeline.weekly_capture --mode season`: start-of-season cadence run capturing the 18-week schedule, all 32 team rosters, and the draft board line-by-line, in that exact order with prospects after both; extracts, loads schedule, players, and prospects, shrinks media, notifies (`"Season setup (schedule, rosters, draft prospects) loaded for Season {season}."`), skipping weekly game engines and articles.
   - `python3 -m pipeline.weekly_capture --mode roster`: captures rosters, extracts cards, loads players/seasons, shrinks media, notifies (`"Rosters loaded for Season {season}."`), skipping weekly game engines and articles.
   - `python3 -m pipeline.weekly_capture --mode prospects`: captures draft board, extracts via Apple Vision OCR, loads it into `draft_prospects`, shrinks media, notifies (`"Draft prospects loaded for Season {season}."`), skipping weekly game engines and articles.
 - **Debug API & UI (`server/debug_api.py`, `Mu_Network/src/DebugPage.tsx`):**
-  - Separate jobs: `roster_scan` ("Roster scan") and `draft_scan` ("Draft prospect scan").
-  - The `#debug` page UI provides separate **Roster scan** and **Draft prospect scan** buttons.
+  - Jobs: `season_scan` ("Season scan (schedule, rosters, draft board)"), `roster_scan` ("Roster scan") and `draft_scan` ("Draft prospect scan").
+  - The `#debug` page UI provides **Season scan**, **Roster scan**, and **Draft prospect scan** buttons.
 
 ---
 

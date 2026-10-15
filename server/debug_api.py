@@ -35,6 +35,7 @@ JOB_KINDS = {
     "scan_week": ("Scan week", []),
     "backfill_week": ("Backfill previous week (no articles)", ["--no-articles"]),
     "game_scan": ("Game scan (last week's games)", ["--mode", "games"]),
+    "season_scan": ("Season scan (schedule, rosters, draft board)", ["--mode", "season", "--no-articles"]),
     "roster_scan": ("Roster scan", ["--mode", "roster", "--no-articles"]),
     "draft_scan": ("Draft prospect scan", ["--mode", "prospects", "--no-articles"]),
 }

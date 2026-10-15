@@ -38,9 +38,14 @@ def read_csv(path):
 
 
 def detect_mode(folder):
-    if os.path.exists(os.path.join(folder, "roster_cards.csv")):
+    has_roster = os.path.exists(os.path.join(folder, "roster_cards.csv"))
+    has_sched = os.path.exists(os.path.join(folder, "season_schedule.csv"))
+    has_prosp = os.path.exists(os.path.join(folder, "prospects.csv"))
+    if has_sched and has_roster:
+        return "season"
+    if has_roster:
         return "roster"
-    if os.path.exists(os.path.join(folder, "season_schedule.csv")):
+    if has_sched:
         return "season_schedule"
     if os.path.exists(os.path.join(folder, "game_scores.csv")):
         # a postseason run: last round's schedule (+ next round) and its box scores, no Season Stats
@@ -49,7 +54,7 @@ def detect_mode(folder):
         return "weekly"
     if os.path.exists(os.path.join(folder, "injuries.csv")):
         return "injuries"
-    if os.path.exists(os.path.join(folder, "prospects.csv")):
+    if has_prosp:
         return "prospects"
     raise LoadError(f"{folder}: no extracted CSVs found (run extract.py first)")
 
@@ -1084,8 +1089,20 @@ def load_prospects(cur, folder, season, report):
     return len(prospects)
 
 
+def load_season(cur, folder, season, report):
+    """Full start-of-season setup: schedule, rosters + rookie linking, then draft prospects board (after both)."""
+    rows = 0
+    if os.path.exists(os.path.join(folder, "season_schedule.csv")):
+        rows += load_season_schedule(cur, folder, season, report)
+    if os.path.exists(os.path.join(folder, "roster_cards.csv")):
+        rows += load_roster(cur, folder, season, report)
+    elif os.path.exists(os.path.join(folder, "prospects.csv")):
+        rows += load_prospects(cur, folder, season, report)
+    return rows
+
+
 LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly, "playoff": load_playoff,
-           "games": load_games, "injuries": load_injuries_standalone, "prospects": load_prospects}
+           "games": load_games, "injuries": load_injuries_standalone, "prospects": load_prospects, "season": load_season}
 
 
 def load(folder, dry_run=False, replace=False):
@@ -1099,7 +1116,7 @@ def load(folder, dry_run=False, replace=False):
         cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
         season, week = cur.fetchone()
         report["season"] = season
-        cid = capture_row(cur, folder, mode, season, None if mode in ("roster", "prospects", "season_schedule") else week, dry_run)
+        cid = capture_row(cur, folder, mode, season, None if mode in ("roster", "prospects", "season_schedule", "season") else week, dry_run)
         conn.commit()                        # the run is recorded even if the load fails
         try:
             if mode == "games":

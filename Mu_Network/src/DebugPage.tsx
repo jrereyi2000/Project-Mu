@@ -45,8 +45,9 @@ const RUNS: { kind: string; title: string; note: string }[] = [
   { kind: "scan_week", title: "Scan week", note: "Full weekly run: capture Season Stats, Team Stats and last week's schedule, extract, load, engines, articles. Playoffs (week 19 on): last round's schedule, next round's matchups and every game's box score (~7 min a game) instead of Season Stats. Week 22 (Pro Bowl week): no console, just the Super Bowl week's articles." },
   { kind: "backfill_week", title: "Backfill previous week", note: "The same capture, extract, load and engines. No articles." },
   { kind: "game_scan", title: "Game scan", note: "Every game of last week: box scores and both teams' player stats (~7 min a game), loaded over the backfill's lines. No articles." },
-  { kind: "roster_scan", title: "Roster scan", note: "Season cadence run: captures all 32 team rosters, extracts player cards, and updates players/seasons in the database. No articles." },
-  { kind: "draft_scan", title: "Draft prospect scan", note: "Scans the scouting draft board line-by-line, extracts prospects via Apple Vision OCR, and syncs data/draft/ prospects board. No articles." },
+  { kind: "season_scan", title: "Season scan", note: "Annual start-of-season cadence: captures the 18-week schedule, all 32 team rosters, and the draft prospect board (in that order; prospects after both). No articles." },
+  { kind: "roster_scan", title: "Roster scan", note: "Captures all 32 team rosters, extracts player cards, and updates players/seasons in the database (normally run once a season with schedule and draft board). No articles." },
+  { kind: "draft_scan", title: "Draft prospect scan", note: "Scans the scouting draft board line-by-line, extracts prospects via Apple Vision OCR, and syncs data/draft/ prospects board (normally run once a season with schedule and roster scans, after both). No articles." },
 ];
 
 function StatusPill({ status }: { status: string }) {
