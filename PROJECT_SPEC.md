@@ -411,16 +411,18 @@ The backend operates on Python 3.11+ using FastAPI, `uvicorn`, and `psycopg` (co
 - `GET /api/player/{id}?season={season}`:
   - Player personal information and ratings.
   - Full 18-week `game_log` (accounting for bye weeks and completed game fantasy statistics).
-  - Multi-season `career_stats` with games played, yards, touchdowns, and overall fantasy rank.
+  - Multi-season `career_stats` with games played, yards, touchdowns, and overall fantasy rank, plus each season's `season_stat_lines` defense (`def_*`), kicking (`kick_*`), punting (`punt_*`), returns (`kr_*`, `pr_*`) and `blk_sacks_allowed` with `has_capture_line` (false = not among Madden's listed leaders; GP falls back to the capture's `games_played`). Each `game_log` week also carries the `game_stat_lines` columns and `has_capture_line` for that game.
+  - `stat_group`: `passing` (QB), `rushing` (HB/FB), `receiving` (WR/TE), `blocking` (OL), `kicking` (K), `punting` (P, LS) or `defense`. The player page (`PlayerPage`) uses it for its season card, game-log and career columns (defenders: tackles, sacks, TFL, INT, PD, FF, TD; kickers: FG, long, 50+, XP; punters: punts, average, net, inside the 20; linemen: sacks allowed), shows "—" for a game or season with no recorded line, and names every position (`POSITION_LABELS`).
   - `weekly_outlook` for the league's current week (`league_state.current_week`): opponent, home/away, kickoff, `projection`, `pos_rank`/`ecr_rank`, `ros_rank` and 1–5 `stars`, all from that week's `fantasy_projections` row (`projected: true`).
     - **Bye:** if the league plays that week but the player's team doesn't, it returns `bye: true`, `projection` "0.0", the stored `ros_rank`, and null ranks/stars (no opponent fields). The modal shows a "BYE WEEK" card.
     - **No stored row** (e.g. week 1): `projection` is a rough estimate (season PPR average × 0.85–1.15 by matchup stars), `projected: false`, and the ranks are null. The modal shows "—" rather than a rank.
     - If the season has no games in the current week (e.g. viewing a past season), it uses the team's last game of that season and that week's projection row.
 - `GET /api/stats/player?season={season}&category={category}`:
-  - Passing, Rushing, Receiving and Scoring player leaderboards (no defense), summed from the player's `player_stats` game lines by `player_id` (a traded player's lines for every team), shown under the season's team.
+  - Passing, Rushing, Receiving and Scoring player leaderboards, summed from the player's `player_stats` game lines by `player_id` (a traded player's lines for every team), shown under the season's team.
+  - Defense (Tackles, Sacks, Interceptions) and special teams (Kicking, Punting, Kick Returns, Punt Returns) from `season_stat_lines` (`PLAYER_ST_CATEGORIES` / `player_st_leaders` in `server/api.py`): Madden's listed leaders only, shown under the season's team.
 - **Season and week defaults:** every endpoint whose `season` / `week` is omitted uses `league_state` (`season_week()` in `server/api.py`): the current season, and for it the current week; another season's default week is 18. Players on the game page (`GET /api/game/{id}`), the player page's game log and career, and the fantasy rankings, search and dashboard finishes are joined on `player_stats.player_id`, never by name.
 - `GET /api/stats/team?season={season}&category={category}`:
-  - Team leaderboards for the same four categories, summed from `team_stats` over completed games.
+  - Team leaderboards for the same four categories, summed from `team_stats` over completed games, plus `Downs` (third/fourth-down conversions and rates, two-point tries, red-zone trips/TDs/TD rate, penalties and yards) and `Red Zone Defense` (points allowed and per game, red-zone trips/TDs/FGs allowed, TD and scoring rate allowed) from the `team_seasons` Team Stats totals (`team_situational_table`).
 
 ### 4.4 Fantasy Analytics Endpoints
 - `GET /api/fantasy/dashboard?season={season}&week={week}`:
@@ -476,7 +478,7 @@ Navigation uses a lightweight hash router (`window.location.hash`):
 - `#team-{abbr}`: Team hub with dynamic team colors, division rank, upcoming schedule, roster, and team stats.
 - `#schedule`: Full interactive 18-week league schedule.
 - `#game-{id}`: Comprehensive game view with box scores, drive summaries, and scoring logs.
-- `#stats-team` & `#stats-player`: League statistical leaderboards.
+- `#stats-team` & `#stats-player`: League statistical leaderboards. Tabs are grouped by unit (`statCategoryGroups`): players get Offense, Defense and Special Teams; teams get Offense (with Downs) and Defense (Red Zone Defense). Unit columns are in `unitStatColumns` (`tests/test_api_defense_stats.py` checks they match the API), and defense/special-teams tables are labelled as the league's listed leaders.
 - `#standings` & `#rankings`: Division standings and power rankings. `PowerRankingsPage` reads `GET /api/power_rankings`: one button per stored week, each team's rank, logo, record, last-week rank and movement ("NEW" when there is no previous week), kicker and blurb, with an empty state when nothing is stored.
 - `#fantasy`: Mu Fantasy Analytics Command Center.
 - `#fantasy-rankings`: Weekly Fantasy Rankings board.

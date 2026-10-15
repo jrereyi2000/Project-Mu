@@ -405,8 +405,12 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 42px 80px; }
 .stats-heading span { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .09em; }
 .stats-heading h2 { margin: 9px 0 0; font-size: 38px; line-height: 1; letter-spacing: -.045em; text-transform: uppercase; }
 .stat-category-tabs { min-height: 48px; padding: 0 30px; display: flex; align-items: flex-end; gap: 38px; border-bottom: 1px solid var(--gray-300); }
-.stat-category-tabs button { height: 48px; padding: 0; border: 0; border-bottom: 3px solid transparent; color: var(--gray-500); background: none; font-size: 11px; font-weight: 700; cursor: pointer; }
+.stat-category-tabs button { height: 48px; padding: 0; border: 0; border-bottom: 3px solid transparent; color: var(--gray-500); background: none; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .stat-category-tabs button.active, .stat-category-tabs button:hover { color: var(--ink); border-color: var(--team-color, var(--red)); }
+.player-log-note { margin: 10px 2px 0; color: var(--gray-500); font: 600 8px var(--font-mono); line-height: 1.6; }
+.stat-category-group { display: flex; align-items: flex-end; gap: 38px; }
+.stat-category-group + .stat-category-group { padding-left: 38px; border-left: 1px solid var(--gray-300); }
+.stat-category-group small { height: 48px; display: flex; align-items: center; color: var(--gray-500); font: 700 7px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .stats-filter-bar { min-height: 105px; padding: 20px 30px; display: flex; align-items: flex-end; justify-content: space-between; background: #f4f3f0; }
 .stats-filter-controls { display: flex; align-items: flex-end; gap: 9px; }
 .stats-filter-controls .stats-year-dropdown { width: 145px; }
@@ -1703,6 +1707,8 @@ footer > div:last-child { margin-left: auto; display: flex; gap: 22px; font-size
   .stats-heading h2 { font-size: 31px; }
   .stat-category-tabs { padding: 0 18px; gap: 24px; overflow-x: auto; }
   .stat-category-tabs button { flex: 0 0 auto; }
+  .stat-category-group { gap: 24px; flex: 0 0 auto; }
+  .stat-category-group + .stat-category-group { padding-left: 24px; }
   .stats-filter-bar { padding: 18px; }
   .stats-filter-bar { align-items: stretch; }
   .stats-filter-controls { width: 100%; align-items: stretch; flex-direction: column; }

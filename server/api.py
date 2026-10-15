@@ -699,15 +699,21 @@ def get_player_api(id: int, season: Optional[int] = None):
                        wr.weekly_pos_rank,
                        st.completions, st.pass_attempts, st.pass_yards, st.pass_tds, st.interceptions,
                        st.rush_attempts, st.rush_yards, st.rush_tds,
-                       st.receptions, st.rec_yards, st.rec_tds, st.fumb
+                       st.receptions, st.rec_yards, st.rec_tds, st.fumb,
+                       gl.def_tackles, gl.def_sacks, gl.def_tfl, gl.def_ints, gl.def_deflections, gl.def_forced_fumbles,
+                       gl.def_fumble_recoveries, gl.def_tds, gl.kick_fgm, gl.kick_fga, gl.kick_fg_long, gl.kick_xpm,
+                       gl.kick_xpa, gl.punt_punts, gl.punt_average, gl.punt_net_average, gl.punt_inside_20,
+                       gl.kr_returns, gl.kr_yards, gl.pr_returns, gl.pr_yards, gl.blk_sacks_allowed,
+                       (gl.player_id IS NOT NULL) AS has_capture_line
                 FROM games g
                 LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_id = %s
+                LEFT JOIN game_stat_lines gl ON gl.game_id = g.id AND gl.player_id = %s
                 LEFT JOIN weekly_ranks wr ON wr.season = g.season AND wr.week = g.week AND wr.player_id = st.player_id
                 JOIN teams t_home ON t_home.id = g.home_team_id
                 JOIN teams t_away ON t_away.id = g.away_team_id
                 WHERE g.season = %s AND (g.home_team_id = %s OR g.away_team_id = %s)
                 ORDER BY g.week
-            """, (season, id, season, player['team_id'], player['team_id']))
+            """, (season, id, id, season, player['team_id'], player['team_id']))
             raw_games = cur.fetchall()
 
             # Build all 18 weeks, inserting BYE week if team had a bye
@@ -774,6 +780,30 @@ def get_player_api(id: int, season: Optional[int] = None):
                 ORDER BY ps.season DESC
             """, (id,))
             career = cur.fetchall()
+
+            # Defense, kicking, punting, returns and pass protection from the Season Stats capture (listed players only)
+            cur.execute("""
+                SELECT season, games_played, def_tackles, def_solo, def_assists, def_sacks, def_tfl, def_ints,
+                       def_int_yds, def_deflections, def_forced_fumbles, def_fumble_recoveries, def_tds, def_safeties,
+                       kick_fgm, kick_fga, kick_fg_long, kick_xpm, kick_xpa, kick_fgm_50, kick_fga_50,
+                       punt_punts, punt_yards, punt_average, punt_net_average, punt_inside_20, punt_longest,
+                       kr_returns, kr_yards, kr_average, kr_tds, pr_returns, pr_yards, pr_average, pr_tds,
+                       blk_sacks_allowed
+                FROM season_stat_lines WHERE player_id = %s
+            """, (id,))
+            lines = {r["season"]: r for r in cur.fetchall()}
+            for c in career:
+                line = lines.get(c["season"])
+                c["has_capture_line"] = line is not None
+                if line:
+                    for k, v in line.items():
+                        if k != "season":
+                            c[k] = _n(v) if k != "games_played" else v
+                    if not c.get("gp") and line.get("games_played"):
+                        c["gp"] = line["games_played"]
+            for g in games:
+                for k in [k for k in g if k.startswith(("def_", "kick_", "punt_", "kr_", "pr_", "blk_"))]:
+                    g[k] = _n(g[k])
 
             # Weekly matchup & opponent quality intelligence
             cur.execute("SELECT current_week FROM league_state LIMIT 1;")
@@ -888,8 +918,14 @@ def get_player_api(id: int, season: Optional[int] = None):
                 g['away_abbr'] = display_team_abbr(g['away_abbr'])
             for c in career:
                 c['team_abbr'] = display_team_abbr(c['team_abbr'])
+            pos = player["position"]
+            stat_group = ("passing" if pos == "QB" else "rushing" if pos in ("HB", "FB") else
+                          "receiving" if pos in ("WR", "TE") else "kicking" if pos == "K" else
+                          "punting" if pos in ("P", "LS") else "blocking" if pos in ("LT", "LG", "C", "RG", "RT")
+                          else "defense")
             return {
                 "player": player,
+                "stat_group": stat_group,
                 "game_log": games,
                 "career_stats": career,
                 "weekly_outlook": weekly_outlook
@@ -911,6 +947,118 @@ def calculate_passer_rating(completions, attempts, yards, touchdowns, intercepti
     
     rating = ((a + b + c + d) / 6) * 100
     return round(rating, 1)
+
+# ─── Defense & special teams (Season Stats capture: season_stat_lines / game_stat_lines) ───
+# Madden lists only its leaders in each category (defenders by tackles), so these tables rank listed players.
+def _n(v):
+    """Display number: whole numbers without .0 (sacks come in halves)."""
+    if v is None:
+        return None
+    f = float(v)
+    return int(f) if f.is_integer() else round(f, 1)
+
+
+def _pct_str(made, att):
+    return f"{100.0 * made / att:.1f}" if att else "0.0"
+
+
+PLAYER_ST_CATEGORIES = {
+    # category: (row filter, ORDER BY, stats builder)
+    "tackles": ("l.def_tackles IS NOT NULL", "l.def_tackles DESC, l.def_sacks DESC",
+                lambda l: {"TOT": _n(l["def_tackles"]), "SOLO": _n(l["def_solo"]), "AST": _n(l["def_assists"]),
+                           "TFL": _n(l["def_tfl"]), "SCK": _n(l["def_sacks"]), "FF": _n(l["def_forced_fumbles"]),
+                           "FR": _n(l["def_fumble_recoveries"])}),
+    "sacks": ("l.def_tackles IS NOT NULL AND l.def_sacks > 0", "l.def_sacks DESC, l.def_tfl DESC",
+              lambda l: {"SCK": _n(l["def_sacks"]), "TFL": _n(l["def_tfl"]), "TOT": _n(l["def_tackles"]),
+                         "FF": _n(l["def_forced_fumbles"]), "FR": _n(l["def_fumble_recoveries"]),
+                         "SFTY": _n(l["def_safeties"])}),
+    "interceptions": ("l.def_tackles IS NOT NULL AND (l.def_ints > 0 OR l.def_deflections > 0)",
+                      "l.def_ints DESC, l.def_deflections DESC",
+                      lambda l: {"INT": _n(l["def_ints"]), "YDS": _n(l["def_int_yds"]), "AVG": _n(l["def_int_avg"]),
+                                 "LNG": _n(l["def_int_long"]), "TD": _n(l["def_tds"]), "PD": _n(l["def_deflections"])}),
+    "kicking": ("l.kick_fga > 0", "l.kick_fgm DESC, l.kick_fg_pct DESC",
+                lambda l: {"FGM": _n(l["kick_fgm"]), "FGA": _n(l["kick_fga"]), "FG%": _pct_str(l["kick_fgm"], l["kick_fga"]),
+                           "LNG": _n(l["kick_fg_long"]), "50+": f"{_n(l['kick_fgm_50']) or 0}/{_n(l['kick_fga_50']) or 0}",
+                           "XPM": _n(l["kick_xpm"]), "XPA": _n(l["kick_xpa"]),
+                           "PTS": _n(3 * (l["kick_fgm"] or 0) + (l["kick_xpm"] or 0))}),
+    "punting": ("l.punt_punts > 0", "l.punt_net_average DESC",
+                lambda l: {"PUNTS": _n(l["punt_punts"]), "YDS": _n(l["punt_yards"]), "AVG": _n(l["punt_average"]),
+                           "NET": _n(l["punt_net_average"]), "LNG": _n(l["punt_longest"]), "IN 20": _n(l["punt_inside_20"]),
+                           "TB": _n(l["punt_touchbacks"])}),
+    "kick returns": ("l.kr_returns > 0", "l.kr_yards DESC",
+                     lambda l: {"RET": _n(l["kr_returns"]), "YDS": _n(l["kr_yards"]), "AVG": _n(l["kr_average"]),
+                                "LNG": _n(l["kr_longest"]), "TD": _n(l["kr_tds"])}),
+    "punt returns": ("l.pr_returns > 0", "l.pr_yards DESC",
+                     lambda l: {"RET": _n(l["pr_returns"]), "YDS": _n(l["pr_yards"]), "AVG": _n(l["pr_average"]),
+                                "LNG": _n(l["pr_longest"]), "TD": _n(l["pr_tds"])}),
+}
+
+
+def player_st_leaders(cur, season: int, cat: str) -> list:
+    """Defense and special-teams player leaderboards from the Season Stats capture."""
+    row_filter, order_by, build = PLAYER_ST_CATEGORIES[cat]
+    cur.execute(f"""
+        SELECT l.*, p.id AS pid, p.full_name AS display_name, p.player_number,
+               COALESCE(ps.position, l.position) AS pos, t.name AS t_name, t.abbreviation AS t_abbr
+        FROM season_stat_lines l
+        JOIN players p ON p.id = l.player_id
+        LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
+        JOIN teams t ON t.id = COALESCE(ps.team_id, l.team_id)
+        WHERE l.season = %s AND {row_filter}
+        ORDER BY {order_by} NULLS LAST, p.id
+    """, (season,))
+    return [{
+        "id": r["pid"], "name": r["display_name"] or r["player_name"], "player_number": r["player_number"] or 0,
+        "position": r["pos"], "team_name": r["t_name"], "team_abbr": display_team_abbr(r["t_abbr"]),
+        "stats": build(r),
+    } for r in cur.fetchall()]
+
+
+def team_situational_table(cur, season: int, cat: str) -> list:
+    """Team 'downs' (third/fourth-down, two-point, red zone, penalties) and 'red zone defense' tables from the
+    Team Stats capture (team_seasons)."""
+    cur.execute("""
+        SELECT t.id, t.name AS team_name, t.abbreviation AS team_abbr, ts.third_down_conv, ts.third_down_att,
+               ts.fourth_down_conv, ts.fourth_down_att, ts.two_point_conv, ts.two_point_att,
+               ts.red_zone_att, ts.red_zone_td, ts.red_zone_fg, ts.red_zone_def_att, ts.red_zone_def_td,
+               ts.red_zone_def_fg, ts.penalties, ts.penalty_yards,
+               (SELECT COUNT(*) FROM games g WHERE g.season = ts.season AND g.status = 'COMPLETED'
+                  AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+                  AND t.id IN (g.home_team_id, g.away_team_id)) AS gp,
+               (SELECT SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score ELSE g.home_score END) FROM games g
+                WHERE g.season = ts.season AND g.status = 'COMPLETED'
+                  AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+                  AND t.id IN (g.home_team_id, g.away_team_id)) AS pa
+        FROM team_seasons ts JOIN teams t ON t.id = ts.team_id
+        WHERE ts.season = %s AND ts.third_down_att IS NOT NULL
+    """, (season,))
+    out = []
+    for r in cur.fetchall():
+        gp = r["gp"] or 0
+        if cat == "downs":
+            stats = {"3D CONV": r["third_down_conv"], "3D ATT": r["third_down_att"],
+                     "3D%": _pct_str(r["third_down_conv"], r["third_down_att"]),
+                     "4D CONV": r["fourth_down_conv"], "4D ATT": r["fourth_down_att"],
+                     "4D%": _pct_str(r["fourth_down_conv"], r["fourth_down_att"]),
+                     "2PT": f"{r['two_point_conv']}/{r['two_point_att']}",
+                     "RZ ATT": r["red_zone_att"], "RZ TD": r["red_zone_td"],
+                     "RZ TD%": _pct_str(r["red_zone_td"], r["red_zone_att"]),
+                     "PEN": r["penalties"], "PEN YDS": r["penalty_yards"]}
+            order = (r["third_down_conv"] or 0) / (r["third_down_att"] or 1)
+        else:
+            stats = {"PA": r["pa"] or 0, "PA/G": f"{(r['pa'] or 0) / gp:.1f}" if gp else "0.0",
+                     "RZ ATT": r["red_zone_def_att"], "RZ TD": r["red_zone_def_td"], "RZ FG": r["red_zone_def_fg"],
+                     "RZ TD%": _pct_str(r["red_zone_def_td"], r["red_zone_def_att"]),
+                     "RZ SCORE%": _pct_str((r["red_zone_def_td"] or 0) + (r["red_zone_def_fg"] or 0),
+                                           r["red_zone_def_att"])}
+            order = -((r["red_zone_def_td"] or 0) / (r["red_zone_def_att"] or 1))
+        out.append({"id": r["id"], "team_name": r["team_name"], "team_abbr": display_team_abbr(r["team_abbr"]),
+                    "stats": stats, "_order": order})
+    out.sort(key=lambda x: x["_order"], reverse=True)
+    for x in out:
+        del x["_order"]
+    return out
+
 
 @app.get("/api/stats/player")
 def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"):
@@ -1096,6 +1244,9 @@ def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"
                     })
                 return results
 
+            elif cat in PLAYER_ST_CATEGORIES:
+                return player_st_leaders(cur, season, cat)
+
             return []
 
 @app.get("/api/stats/team")
@@ -1104,6 +1255,8 @@ def get_team_stats_api(season: Optional[int] = None, category: str = "Passing"):
     cat = category.lower()
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
+            if cat in ("downs", "red zone defense"):
+                return team_situational_table(cur, season, cat)
             cur.execute("""
                 SELECT 
                     t.id, t.name as team_name, t.abbreviation as team_abbr,
