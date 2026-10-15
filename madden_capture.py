@@ -515,7 +515,7 @@ def classify(f):
         return "STATS_TILES"
     if "LEAGUE SCHEDULE" in t and "PLAYOFF PICTURE" in t:
         return "SCHED_TILES"
-    if f.find("GAMEDAY") and f.find("COACH CENTRAL"):
+    if f.find("GAMEDAY") and (f.find("COACH CENTRAL") or "COACH CENTRAL" in t or f.find("OPTIONS") or f.find("MANAGE ROSTER")):
         if f.find("STATS & AWARDS"):
             return "HUB_LEAGUE"
         if f.find("ADJUST LINEUP") and f.find("DEPTH CHART"):

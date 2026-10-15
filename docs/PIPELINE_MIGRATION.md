@@ -201,7 +201,7 @@ History: a broadcast trigger (`pipeline/trigger.py`, `pipeline.main --watch`) wa
 Checked: shrink took a copy of `2026-10-13_1413` from 1,696 MB to 46 MB; the debug API and page were tried against `madden_p5test` and read-only against live.
 
 Still to do, with JR at the console:
-1. **Test `--connect`** from chiaki-ng closed (`chiaki stream` connects straight to the franchise page; nothing is pressed).
+1. **Test `--connect`** from chiaki-ng closed: **Tested and verified Oct 15** with JR (`python3 madden_capture.py --connect` launched `chiaki-ng` from closed, established the stream to `PS5-263`, ensured window geometry, and recognized `HUB` in ~5s; `classify()` was updated so merged tab strings like `LEAGUE COACH CENTRAL` on the unselected hub tabs still classify cleanly as `HUB`).
 2. **Exit runs** from the debug page: three weeks in a row (Advance Week, then Scan week), including a bye week and a forced failure (bad CSV) that stops the week, publishes nothing and reaches JR's phone; one Game scan.
 
 ## Phases
