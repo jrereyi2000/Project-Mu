@@ -10,6 +10,7 @@ from engines.game_credit_engine import compute_game_credit, fetch_completed_game
 from engines.coty_engine import compute_coty, fetch_inputs as fetch_coty_inputs
 from engines.coach_profile import coach_profile, fetch_team_coach, fetch_team_staff, staff_matchup
 from engines.game_script_engine import get_script, render_script
+from engines import clutch_engine as clutch
 from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_splits, defense_groups,
                                    player_lines, stat_group, STATS as SPLIT_STATS)
 import json
@@ -299,6 +300,44 @@ def get_game_box_score(game_id: int) -> str:
             if script:
                 result["game_script"] = render_script(script).split("\n")
             return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_clutch_profile(team_identifier: str = "", quarterback: str = "", season: int = 0) -> str:
+    """Late-game records from the league's game scripts (the official account of how each game unfolded): fourth-quarter comebacks, game-winning drives, blown double-digit and fourth-quarter leads, records when leading or trailing at halftime and after three quarters, overtime record, points per game by quarter, the biggest comeback win and lead lost, and the games behind each count. Give a team (name or abbreviation) or a quarterback (credited with the games he started); give neither for the league leaders (quarterbacks by comebacks and game-winning drives, teams by blown leads and wins after trailing at halftime). Regular season and postseason are separate."""
+    try:
+        s_val = resolve_season(season)
+        before = cutoff_week(s_val)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                rows = clutch.fetch_rows(cur, s_val)
+                if not rows:
+                    return f"No game scripts for season {s_val}."
+                note = ("From the league's game scripts: cite these as fact; they are the same for every writer. "
+                        "A quarterback is credited with the games he started. Regular season and postseason are "
+                        "separate; never add them together or compare them with real-NFL career totals.")
+                if quarterback:
+                    cur.execute("""
+                        SELECT p.id, COALESCE(p.full_name, p.player_name) FROM players p
+                        JOIN player_seasons pse ON pse.player_id = p.id AND pse.season = %s AND pse.position = 'QB'
+                        WHERE p.full_name ILIKE %s OR p.player_name ILIKE %s
+                        ORDER BY pse.overall_rating DESC NULLS LAST LIMIT 1
+                    """, (s_val, f"%{quarterback.strip()}%", f"%{quarterback.strip()}%"))
+                    row = cur.fetchone()
+                    if not row:
+                        return f"Quarterback '{quarterback}' not found for season {s_val}."
+                    prof = clutch.qb_profile(rows, row[0], before)
+                    return json.dumps({"quarterback": row[1], "season": s_val, **prof, "note": note}, indent=2)
+                if team_identifier:
+                    tid = _resolve_team_id(cur, team_identifier)
+                    if not tid:
+                        return f"Team '{team_identifier}' not found."
+                    cur.execute("SELECT name FROM teams WHERE id = %s", (tid,))
+                    prof = clutch.team_profile(rows, tid, before)
+                    return json.dumps({"team": cur.fetchone()[0], "season": s_val, **prof, "note": note}, indent=2)
+                return json.dumps({"season": s_val, "regular_season_leaders": clutch.league_leaders(rows, before),
+                                   "note": note}, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

@@ -10,9 +10,10 @@ rerun gives the same story. How dramatic the story is follows the game's Excitem
 orderings that fit the data, the one at the game's excitement percentile is kept.
 
 Scripts are stored in `game_scripts` (one row per game) and only rebuilt when the game's recorded facts change
-(`facts_hash`) or with --force, so a story published once stays the same story.
+(`facts_hash`) or with --force, which skips scripts that something published after them may cite unless
+--unlock-published is given, so a story published once stays the same story.
 
-    python3 -m engines.game_script_engine [--season N] [--week N] [--game ID] [--force] [--print]
+    python3 -m engines.game_script_engine [--season N] [--week N] [--game ID] [--force [--unlock-published]] [--print]
 """
 import argparse
 import hashlib
@@ -1021,17 +1022,29 @@ def fetch_context(cur, game: dict) -> None:
         team["coach"] = {"name": c[0], "defensive_scheme": c[1], "man_coverage": c[2]} if c else None
 
 
-def ensure_script(cur, game_id: int, force: bool = False) -> tuple:
+def published_since(cur, game: dict, generated_at) -> bool:
+    """True when an article or post went out after this game's script existed, so writers may have cited it."""
+    cur.execute("SELECT 1 FROM news_feed WHERE season = %s AND week > %s AND created_at > %s LIMIT 1",
+                (game["season"], game["week"], generated_at))
+    return cur.fetchone() is not None
+
+
+def ensure_script(cur, game_id: int, force: bool = False, unlock: bool = False) -> tuple:
     """(script, status) for one game, building and storing it when missing or when its facts changed.
-    status: 'kept', 'built', 'rebuilt', or 'not completed'."""
+    status: 'kept', 'built', 'rebuilt', 'locked' (force refused: the script has been published from, and
+    unlock wasn't given) or 'not completed'. A change in the recorded facts always rebuilds: the story must
+    follow a corrected box score."""
     game = fetch_inputs(cur, game_id)
     if not game:
         return None, "not completed"
     h = facts_hash(game)
-    cur.execute("SELECT facts_hash, script FROM game_scripts WHERE game_id = %s", (game_id,))
+    cur.execute("SELECT facts_hash, script, generated_at FROM game_scripts WHERE game_id = %s", (game_id,))
     row = cur.fetchone()
-    if row and row[0] == h and not force:
-        return row[1], "kept"
+    if row and row[0] == h:
+        if not force:
+            return row[1], "kept"
+        if not unlock and published_since(cur, game, row[2]):
+            return row[1], "locked"
     fetch_context(cur, game)
     script = build_script(game)
     cur.execute("""
@@ -1065,9 +1078,9 @@ def get_scripts(conn_info: str, game_ids) -> dict:
 
 
 def run(season: int | None = None, week: int | None = None, game_id: int | None = None, force: bool = False,
-        conn_info: str = DATABASE_URL, verbose: bool = True) -> dict:
+        conn_info: str = DATABASE_URL, verbose: bool = True, unlock: bool = False) -> dict:
     """Build every completed game's script for the season (or one week / one game) that is missing or stale."""
-    counts = {"kept": 0, "built": 0, "rebuilt": 0}
+    counts = {"kept": 0, "built": 0, "rebuilt": 0, "locked": 0}
     with psycopg.connect(conn_info) as conn:
         with conn.cursor() as cur:
             if game_id is not None:
@@ -1080,14 +1093,16 @@ def run(season: int | None = None, week: int | None = None, game_id: int | None 
                             "ORDER BY week, id", (season, week, week))
                 ids = [r[0] for r in cur.fetchall()]
             for gid in ids:
-                _, status = ensure_script(cur, gid, force=force)
+                _, status = ensure_script(cur, gid, force=force, unlock=unlock)
                 if status in counts:
                     counts[status] += 1
                 if status == "rebuilt" and verbose and not force:
                     print(f"   game {gid}: recorded facts changed, script rebuilt")
         conn.commit()
     if verbose:
-        print(f"   game scripts: {counts['built']} built, {counts['rebuilt']} rebuilt, {counts['kept']} unchanged")
+        print(f"   game scripts: {counts['built']} built, {counts['rebuilt']} rebuilt, {counts['kept']} unchanged"
+              + (f", {counts['locked']} locked (published from; --unlock-published to rebuild anyway)"
+                 if counts["locked"] else ""))
     return counts
 
 
@@ -1097,9 +1112,11 @@ if __name__ == "__main__":
     ap.add_argument("--week", type=int)
     ap.add_argument("--game", type=int)
     ap.add_argument("--force", action="store_true", help="rebuild even when the recorded facts haven't changed")
+    ap.add_argument("--unlock-published", action="store_true",
+                    help="with --force, also rebuild scripts that articles or posts published after them may cite")
     ap.add_argument("--print", action="store_true", help="print each script (with --game or --week)")
     a = ap.parse_args()
-    run(a.season, a.week, a.game, force=a.force)
+    run(a.season, a.week, a.game, force=a.force, unlock=a.unlock_published)
     if a.print:
         with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cur:
             if a.game is not None:
