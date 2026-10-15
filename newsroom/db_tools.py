@@ -806,7 +806,7 @@ def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 0) -> 
 
 @tool
 def get_coach_of_the_year_race(limit: int = 10, season: int = 0) -> str:
-    """Fetch the Coach of the Year race: head coaches ranked by COTY score (50 = league average, about 10 points per standard deviation), built from the regular season only. Each candidate shows record and win%, wins above expectation (wins minus expected wins from opponent-adjusted credit), roster outperformance (team OVR rank minus win% rank; positive = winning more than the roster's rating says), improvement over last season's win% (null when last season's results aren't recorded), and whether it is the coach's first season with the team."""
+    """Fetch the Coach of the Year race: head coaches ranked by COTY score (50 = league average, about 10 points per standard deviation), built from the regular season only. Each candidate shows record and win%, wins above expectation (wins minus expected wins from opponent-adjusted credit), roster outperformance (team OVR rank minus win% rank; positive = winning more than the roster's rating says), improvement over last season's win% (null unless the team's full 17-game regular season last year is recorded), and whether it is the coach's first season with the team."""
     try:
         s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -841,7 +841,7 @@ def get_coach_of_the_year_race(limit: int = 10, season: int = 0) -> str:
                 "over last season (30%), each relative to the league; a missing input is skipped and the rest "
                 "re-weighted. +3 for a coach's first season with the team. Ranks: 1 = best; tied ranks are averaged.")
         if all(r["win_pct_change"] is None for r in race):
-            note += f" Season {s_val - 1}'s regular season isn't recorded, so improvement is left out this year."
+            note += f" No team has a full {s_val - 1} regular season recorded, so improvement is left out this year."
         return json.dumps({"season": s_val, "games_through_cutoff": sum(r["games"] for r in race) // 2,
                            "scale_note": note, "candidates": candidates}, indent=2)
     except Exception as e:

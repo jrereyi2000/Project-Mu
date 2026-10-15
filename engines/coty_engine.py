@@ -4,10 +4,11 @@ Inputs, each a z-score across the season's coaches who have it:
 - win%                    (ties count half)
 - wins above expectation  wins − expected wins, from Opponent-Adjusted Game Credit (§2.4) on regular-season games
 - roster outperformance   team_ovr rank − win% rank (positive = winning more than the roster's rating says)
-- improvement             win% − the team's previous regular-season win%, from `games`
+- improvement             win% − the team's previous regular-season win%, from `games`; only a full previous
+                          season (FULL_SEASON_GAMES regular-season games) counts
 
 COTY score = 50 + 10 · Σ wᵢ zᵢ / Σ wᵢ over the inputs the coach has, + 3 in a coach's first season with the team.
-An input that is missing (no previous regular season in `games`, no team_ovr) is skipped for that coach and the
+An input that is missing (no full previous regular season in `games`, no team_ovr) is skipped for that coach and the
 remaining weights are rescaled. The coach is the one whose `coach_tenures` row covers the season.
 
 CLI:
@@ -29,6 +30,7 @@ WEIGHTS = {
     "win_pct_change": 0.30,
 }
 FIRST_YEAR_BONUS = 3.0
+FULL_SEASON_GAMES = 17   # a team's regular season; fewer previous-season games = improvement skipped
 BASE, SCALE = 50.0, 10.0
 
 
@@ -71,6 +73,16 @@ def win_pcts(games: list) -> dict:
             w, n = tally.get(team, (0.0, 0))
             tally[team] = (w + (1.0 if pf > pa else 0.5 if pf == pa else 0.0), n + 1)
     return {t: w / n for t, (w, n) in tally.items()}
+
+
+def full_season_win_pcts(games: list, min_games: int = FULL_SEASON_GAMES) -> dict:
+    """win_pcts for the teams that played at least `min_games` regular-season games, so a partly loaded season
+    (a few backlog weeks, or a season still in progress) never stands in for last season's record."""
+    played = {}
+    for g in regular_season(games):
+        for team in (g["home_team_id"], g["away_team_id"]):
+            played[team] = played.get(team, 0) + 1
+    return {t: pct for t, pct in win_pcts(games).items() if played[t] >= min_games}
 
 
 def compute_coty(season: int, games: list, coaches: dict, team_ovr: dict, prev_win_pct: dict) -> list:
@@ -148,7 +160,7 @@ def fetch_team_ovr(cur, season: int) -> dict:
 def fetch_inputs(cur, season: int) -> tuple:
     """(coaches, team_ovr, prev_win_pct) for `season`. The season's games are fetched by the caller, which may
     apply a week cutoff; the previous season is complete history and is read whole."""
-    prev = win_pcts(fetch_completed_games(cur, season - 1))
+    prev = full_season_win_pcts(fetch_completed_games(cur, season - 1))
     return fetch_coaches(cur, season), fetch_team_ovr(cur, season), prev
 
 
@@ -181,7 +193,7 @@ class CotyEngine:
             print("No completed regular-season games; nothing to score.")
             return race
         if not any(r["win_pct_change"] is not None for r in race):
-            print(f"No {season - 1} regular season in games: improvement skipped, other inputs re-weighted.")
+            print(f"No full {season - 1} regular season in games: improvement skipped, other inputs re-weighted.")
         print("\n🏆 COACH OF THE YEAR RACE")
         print("=" * 100)
         for r in race:

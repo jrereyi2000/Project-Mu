@@ -5,7 +5,8 @@ Run: python3 -m unittest tests.test_coty_engine
 import itertools
 import unittest
 
-from engines.coty_engine import (FIRST_YEAR_BONUS, WEIGHTS, average_ranks, compute_coty, win_pcts, zscores)
+from engines.coty_engine import (FIRST_YEAR_BONUS, FULL_SEASON_GAMES, WEIGHTS, average_ranks, compute_coty,
+                                 full_season_win_pcts, win_pcts, zscores)
 
 
 def game(gid, week, home, away, hs, as_, game_type="REGULAR_SEASON"):
@@ -45,6 +46,17 @@ class RankAndZTests(unittest.TestCase):
                         game(3, 23, 2, 1, 40, 0, game_type="SUPER_BOWL")])
         self.assertEqual(pct, {1: 0.75, 2: 0.25})
 
+
+    def test_previous_season_counts_only_when_full(self):
+        # Team 1 plays 17 regular-season games (and a Super Bowl), team 3 plays 14, team 2 only 3.
+        games = [game(i, i, 1, 3, 24, 10) for i in range(1, 15)]
+        games += [game(100 + i, 14 + i, 1, 2, 10, 24) for i in range(1, 4)]
+        games.append(game(200, 23, 1, 3, 30, 0, game_type="SUPER_BOWL"))
+        self.assertEqual(FULL_SEASON_GAMES, 17)
+        full = full_season_win_pcts(games)
+        self.assertEqual(set(full), {1})
+        self.assertAlmostEqual(full[1], 14 / 17)
+        self.assertEqual(set(full_season_win_pcts(games, min_games=14)), {1, 3})
 
 class CotyScoreTests(unittest.TestCase):
     def setUp(self):
