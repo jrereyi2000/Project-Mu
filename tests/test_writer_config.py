@@ -144,6 +144,21 @@ class WriterConfigTests(unittest.TestCase):
             for o in overrides[name]:
                 self.assertIn("coaching_matchup", o["curatorial_autonomy_override"], o["override_name"])
 
+    def test_playoff_autopsy_audits_the_coaching_staff(self):
+        """Section 4 is a coaching-staff accountability audit with a concrete verdict (Agent 2)."""
+        entry = self.article_types["PLAYOFF_AUTOPSY"]
+        autonomy = entry["curatorial_autonomy"]
+        for phrase in ("get_coach_profile", "Tenure:", "Playoff record with the team:", "Game management:"):
+            self.assertIn(phrase, autonomy)
+        structure = entry["structure_directive"]
+        self.assertIn("4. Coaching Staff Accountability & Seat Temperature:\n"
+                      "Use a ## header (e.g., ## The Hot Seat & Coordinator Cross-Examination).", structure)
+        section4 = structure.split("4. Coaching Staff Accountability")[1].split("5. The Spring Mandate")[0]
+        for phrase in ("ultimatum", "red-zone", "fourth-down", "third-down", "get_team_efficiency_profile",
+                       "dismissal, coordinator overhaul, or ascending foundation patience"):
+            self.assertIn(phrase, section4)
+        self.assertNotIn("Front Office & Coaching Seat Temperature", structure)
+
     def test_player_splits_are_registered_and_hooked_up(self):
         with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
             src = f.read()
