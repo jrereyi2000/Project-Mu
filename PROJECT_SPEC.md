@@ -677,6 +677,8 @@ To eliminate editorial homogenization and ground long-form journalism in authent
   - `get_team_roster_depth_chart`: A team's full depth chart by position group (QB, RB, WR, TE, OT, IOL, EDGE, DT, LB, CB, S) with ratings, age tiers and roster demographics.
   - `get_draft_trade_value`: Jimmy Johnson trade-chart points and typical trade packages for any pick (1–260).
   - `get_franchise_rebuild_status`: A franchise's lifecycle stage (Championship Window, Youth Ascent, Roster Purgatory, Ground-Up Rebuild) and recommended draft posture.
+  - `get_mock_draft(season, file_path)`: Simulates the analytical 32-pick Round 1 Mock Draft using the official draft order, team roster deficiencies, and scouted prospect board, returning pick-by-pick selections, team fit context, and analytical rationales (§2.10).
+  - `get_draft_prospects(position, top_n, file_path)`: Returns top consensus draft prospects from the scouted draft board (default 32), with optional position/group filtering (QB, OT, EDGE, CB, etc.).
   - `get_team_articles`: Returns recent editorial articles and analysis referencing a specific team (resolves by name, city, abbreviation, or ID).
   - `get_player_articles`: Returns recent editorial articles and profiles referencing a specific player (resolves by name or ID).
 - **Fantasy research tools** (`newsroom/fantasy_tools.py`, `FANTASY_TOOLS`): given **only to `FANTASY_*` article types** (`SwarmDispatcher.tools_for(article_type)`), so other prompts don't carry their descriptions. Full PPR, RB = HB + FB. Same week rule as the other tools: a Week N article sees box scores from weeks before N only; projections (`fantasy_projections`) and simulated-league rosters (`fantasy_sim_player_weeks`) up to and including week N are visible (a later week is refused). Depth slots are OVR order within the team's position group.
@@ -942,13 +944,13 @@ To eliminate editorial homogenization and ground long-form journalism in authent
     - **Prompt Hook:** Audit the roster cores of eliminated playoff teams and lottery franchises. Define their primary draft mandate and diagnose which units require total overhauls.
 
 27. **Offseason Mock Draft 1.0** (`OFFSEASON_MOCK_DRAFT`)
-    - **Allowed Writers / Archetypes:** Field Yates (Needs & Value Board), Bill Barnwell (Analytics & Positional Capital) (`YATES`, `BARNWELL`, `Draft & Offseason Horizon`).
+    - **Allowed Writers / Archetypes:** Mel Kiper Jr. (Big Board & Film Evaluation), Field Yates (Needs & Value Board), Bill Barnwell (Analytics & Positional Capital) (`MEL_KIPER`, `YATES`, `BARNWELL`, `Draft & Offseason Horizon`).
     - **Granularity:** Offseason / Round 1 Projection.
-    - **Focus:** First-round mock draft projecting selections for locked draft slots based on team needs, positional value, and blue-chip player traits.
-    - **Data Queried:** Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production ($Y_{\text{prod}}$), Positional Multiplier ($M_{\text{pos}}$), Team Draft Needs (roster deficiencies).
-    - **Curatorial Autonomy:** Projects the first 24 picks of the NFL Draft for eliminated teams following the Divisional round. Prioritizes premium positional value (QB, OT, EDGE, CB) over low-impact positions. Evaluates team rosters using Under-25 Production Share ($Y_{\text{prod}}$) to balance immediate foundational needs against developmental high-ceiling prospects without projecting speculative trades.
-    - **Structure Directive:** 3-part Authoritative Mock Draft (`# 1. The Board Overview`, `## 2. The First-Round Projections (Picks 1–24 with ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School])`, `### 3. The Draft Floor Watch`).
-    - **Prompt Hook:** Project the first 24 picks of the NFL Draft. Balance premium positional value against immediate roster holes for eliminated franchises.
+    - **Focus:** First-round mock draft projecting selections for draft slots based on team needs, positional value, and blue-chip player traits.
+    - **Data Queried:** Round 1 Mock Draft Simulation (`get_mock_draft`), Consensus Draft Prospects (`get_draft_prospects`), Blue-Chip Pedigree ($P_{\text{draft}}$), Under-25 Production ($Y_{\text{prod}}$), Positional Multiplier ($M_{\text{pos}}$), Team Draft Needs (roster deficiencies).
+    - **Curatorial Autonomy:** Projects Round 1 of the NFL Draft (Picks 1–32). Queries `get_mock_draft` to obtain algorithmic selections and team deficiencies. Prioritizes premium positional value (QB, OT, EDGE, CB) over low-impact positions. Evaluates team rosters using Under-25 Production Share ($Y_{\text{prod}}$) and starter deficiencies to balance immediate foundational needs against developmental high-ceiling weapons.
+    - **Structure Directive:** 3-part Authoritative Mock Draft (approx. 1,500–1,800 words): `# 1. The Board Overview`, `## 2. The First-Round Projections (Picks 1–32 with ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School])`, `### 3. The Draft Floor Watch / Sleeper`.
+    - **Prompt Hook:** Project Round 1 picks of the NFL Draft. Balance premium positional value against immediate roster holes for franchises.
 
 ### 7.2 Local Beat Reporting Taxonomy (`LOCAL_BEAT_REPORTER`)
 Local Beat Reporters cover their assigned franchise exclusively. Their research directive keeps them on their own team's games, and they don't receive the national writers' historical-comparison instruction. The beat research directive also points them at `get_defense_special_teams_leaders` for their team's and the opponent's defensive and special-teams leaders. There is no injury data in the league, so the beat directive, the shared preview framing and the matchup preview templates tell writers not to mention injuries.

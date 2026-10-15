@@ -78,6 +78,13 @@ Apple Vision OCR achieves near-instantaneous parsing, but Madden's custom game f
 
 ---
 
+### 3.6 Newsroom & ReAct Tools Integration (`newsroom/db_tools.py`, `newsroom/swarm_dispatcher.py`)
+- **`get_mock_draft(season, file_path)`**: ReAct research tool that simulates the 32-pick Round 1 Mock Draft using the official draft order, team roster deficiencies, and scouted prospect board, returning pick-by-pick selections, team fit context, and analytical rationales.
+- **`get_draft_prospects(position, top_n, file_path)`**: ReAct research tool providing consensus draft prospects from the scouted draft board (default 32), with position/group filtering.
+- **Mel Kiper Jr. Persona (`MEL_KIPER`)**: Added to `newsroom/config/agent_personas.json` (both archetypes and article personas) and assigned as the primary writer for `OFFSEASON_MOCK_DRAFT` in `newsroom/config/article_types.json`. Generates authoritative 1,500–1,800 word columns evaluating all 32 Round 1 selections with 100% personal ownership ("Todd! Listen to me!", Big Board, trench warriors, signature Steal/Sleeper Watch).
+
+---
+
 ## 4. Verification & Benchmarks
 
 ### 4.1 Real Capture Tests
@@ -93,7 +100,9 @@ Apple Vision OCR achieves near-instantaneous parsing, but Madden's custom game f
 ### 4.2 Unit & Integration Tests
 - `tests/test_extract_prospects_ocr.py`: 10 tests covering Unicode cleaning, frame parsing mocks, font and digit fixups, name-line joining, PICK labels, highlighted-row matching, numeric frame order, on-screen pick ordering, and real-capture end-to-end integration (~2 min: it OCRs every frame in `captures/prospects`).
 - `tests/test_mock_draft_engine.py`: 7 unit tests covering order generation, team needs scoring, positional premiums, mock simulation uniqueness, and CLI execution.
-- Full test suite: **365 tests passing in ~16 seconds**.
+- `tests/test_mock_draft_tools.py`: 4 unit tests covering `get_mock_draft`, `get_draft_prospects` position filtering, and tool registration in `SwarmDispatcher`.
+- `tests/test_writer_config.py`: 25 tests verifying writer personas, canonical archetypes, and Mel Kiper Jr.'s configuration for `OFFSEASON_MOCK_DRAFT`.
+- **Live LLM Verification:** End-to-end live Gemini 3.8 Flash test via `tests.test_editorial_flow --article-type OFFSEASON_MOCK_DRAFT --writer MEL_KIPER --live` verified autonomous tool invocation (`get_mock_draft` + `get_draft_prospects`) and generation of the complete 32-pick column with signature Kiper voice.
 
 ---
 

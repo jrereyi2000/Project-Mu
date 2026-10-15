@@ -246,6 +246,16 @@ class WriterConfigTests(unittest.TestCase):
         self.assertEqual(self.aliases.get("BAYLESS"), "SKIP_BAYLESS")
         self.assertIn("SKIP_BAYLESS", self.article_types["NATIONAL_OPINION_COLUMN"]["allowed_writers"])
 
+    def test_mel_kiper_mock_draft_config(self):
+        """Mel Kiper Jr. is configured for OFFSEASON_MOCK_DRAFT with archetype and article persona."""
+        self.assertIn("MEL_KIPER", self.personas)
+        article_personas = load("agent_personas.json", "article_personas")
+        self.assertIn("MEL_KIPER", article_personas)
+        mock_config = self.article_types["OFFSEASON_MOCK_DRAFT"]
+        self.assertIn("MEL_KIPER", mock_config["allowed_writers"])
+        self.assertIn("Round 1", mock_config["directive"])
+        self.assertIn("get_mock_draft", mock_config["directive"])
+
 
 if __name__ == "__main__":
     unittest.main()

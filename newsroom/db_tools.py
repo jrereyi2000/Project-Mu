@@ -10,6 +10,7 @@ from engines.game_credit_engine import compute_game_credit, fetch_completed_game
 from engines.coty_engine import compute_coty, fetch_inputs as fetch_coty_inputs
 from engines.coach_profile import coach_profile, fetch_team_coach, staff_matchup
 import json
+import os
 
 from newsroom.run_context import context_season, cutoff_week, is_visible_week
 
@@ -1873,6 +1874,103 @@ def get_franchise_rebuild_status(team_identifier: str, season: int = 0) -> str:
                     "recommended_draft_posture": draft_philosophy
                 }
                 return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_mock_draft(season: int = 0, file_path: str = "") -> str:
+    """Fetch the analytical 32-pick Round 1 NFL Mock Draft projection.
+    
+    Simulates all 32 selections based on draft order, team roster deficiencies/needs,
+    positional premium value (QB/OT/EDGE/CB), and scouted prospect grades.
+    Returns the pick-by-pick selections with team need context, prospect scouting profiles,
+    and fit rationales.
+    
+    Args:
+        season: Evaluation season for team needs and draft order (default: current season).
+        file_path: Optional custom path to prospect board CSV. Defaults to captures/prospects/prospects.csv
+                   or data/draft/{draft_season}_prospects.csv.
+    """
+    try:
+        from engines.mock_draft_engine import MockDraftEngine
+        s_val = resolve_season(season)
+        draft_season = s_val + 1
+
+        path_to_use = None
+        if file_path and os.path.exists(file_path):
+            path_to_use = file_path
+        elif os.path.exists(os.path.join("captures", "prospects", "prospects.csv")):
+            path_to_use = os.path.join("captures", "prospects", "prospects.csv")
+        elif os.path.exists(os.path.join("data", "draft", f"{draft_season}_prospects.csv")):
+            path_to_use = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
+
+        engine = MockDraftEngine(season=s_val, prospects_path=path_to_use)
+        selections = engine.run_mock()
+
+        result = {
+            "evaluation_season": s_val,
+            "draft_class_season": draft_season,
+            "prospects_source": engine.prospects_path,
+            "total_picks": len(selections),
+            "round_1_mock_draft": selections
+        }
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_draft_prospects(position: str = "", top_n: int = 32, file_path: str = "") -> str:
+    """Fetch top consensus NFL draft prospects from the scouted draft board, ordered by projected pick rank.
+    
+    Args:
+        position: Optional filter by position (e.g. 'QB', 'OT', 'CB', 'EDGE', 'LEDG', 'WR', 'TE')
+                  or position group. If empty, returns top prospects regardless of position.
+        top_n: Number of prospects to return (default: 32).
+        file_path: Optional custom path to prospects CSV.
+    """
+    try:
+        from pipeline.ingest_prospects import load_prospects_from_csv
+
+        path_to_use = None
+        if file_path and os.path.exists(file_path):
+            path_to_use = file_path
+        elif os.path.exists(os.path.join("captures", "prospects", "prospects.csv")):
+            path_to_use = os.path.join("captures", "prospects", "prospects.csv")
+        else:
+            s_val = resolve_season(0)
+            draft_season = s_val + 1
+            cand = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
+            if os.path.exists(cand):
+                path_to_use = cand
+            else:
+                path_to_use = os.path.join("data", "draft", "2036_prospects.csv")
+
+        if not path_to_use or not os.path.exists(path_to_use):
+            return "Error: No prospect board CSV found."
+
+        prospects = load_prospects_from_csv(path_to_use)
+
+        if position and str(position).strip():
+            pos_clean = str(position).strip().upper()
+            filtered = []
+            for p in prospects:
+                grp = POSITION_GROUP_MAP.get(p.position, p.position)
+                if p.position.upper() == pos_clean or grp.upper() == pos_clean:
+                    filtered.append(p)
+        else:
+            filtered = prospects
+
+        count = max(1, int(top_n))
+        results = filtered[:count]
+
+        result = {
+            "prospects_source": path_to_use,
+            "filter_position": position if position else "ALL",
+            "total_matching": len(filtered),
+            "returned_count": len(results),
+            "prospects": [p.to_dict() for p in results]
+        }
+        return json.dumps(result, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

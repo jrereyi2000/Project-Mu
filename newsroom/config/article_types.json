@@ -825,28 +825,32 @@
       "structure_source": "article"
     },
     "OFFSEASON_MOCK_DRAFT": {
-      "name": "Offseason Mock Draft 1.0 (Picks 1\u201324 Locked)",
+      "name": "Offseason Mock Draft 1.0 (Round 1 Projections)",
       "allowed_writers": [
+        "MEL_KIPER",
         "YATES",
         "BARNWELL"
       ],
       "writer_display_names": [
+        "Mel Kiper Jr. (Big Board & Film Evaluation)",
         "Field Yates (Needs & Value Board)",
         "Bill Barnwell (Analytics & Positional Capital)"
       ],
       "writing_archetype_category": "Draft & Offseason Horizon",
       "granularity": "Offseason / Round 1 Projection",
-      "focus": "First-round mock draft projecting selections for locked draft slots based on team needs, positional value, and blue-chip player traits.",
+      "focus": "First-round mock draft projecting selections for draft slots based on team needs, positional value, and blue-chip player traits.",
       "data_queried": [
+        "Round 1 Mock Draft Simulation (get_mock_draft)",
+        "Consensus Draft Prospects (get_draft_prospects)",
         "Blue-Chip Pedigree (P_draft)",
         "Under-25 Production (Y_prod)",
         "Positional Multiplier (M_pos)",
         "Team Draft Needs (roster deficiencies)"
       ],
-      "example_prompt_hook": "Project the first 24 picks of the NFL Draft. Balance premium positional value against immediate roster holes for eliminated franchises.",
-      "directive": "ARTICLE TYPE SPECIFICATION: Offseason Mock Draft\nGranularity: Offseason / Round 1 Projection.\nFocus: Round 1 mock selections, franchise needs, premium positional value, and draft capital.\nScope: Project selections for the locked draft order following the Divisional round (Picks 1\u201324). Do not project speculative trades. Focus strictly on team fit, scheme requirements, and positional value multipliers.",
-      "curatorial_autonomy": "CURATORIAL AUTONOMY (MOCK_DRAFT):\nYou are projecting the first 24 picks of the NFL Draft for eliminated teams. Prioritize premium positional value (QB, OT, EDGE, CB) over low-impact positions. Evaluate team rosters using their Under-25 Production Share ($Y_{\\text{prod}}$) to determine whether an organization needs an immediate foundational starter or can afford a developmental high-ceiling prospect.",
-      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as an authoritative Mock Draft (approx. 1,500\u20131,800 words).\n\n1. The Board Overview:\nOpen with a headline using # (e.g., # 2027 NFL Mock Draft 1.0: First-Round Projections for Picks 1\u201324).\nWrite a 2-paragraph introduction identifying the strengths of this draft class and the run on premium positions.\n\n2. The First-Round Projections (Picks 1\u201324):\nUse numbered ## headers for each selection formatted as: ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School] (e.g., ## 1. Carolina Panthers: James Pearce Jr., EDGE, Tennessee).\nUnder each pick, provide exactly 2 to 3 sentences explaining the team need, the player's physical traits, and how they fit the scheme.\n\n3. The Draft Floor Watch:\nConclude with a ### header analyzing which eliminated team has the highest pressure to hit on their pick to escape roster purgatory.",
+      "example_prompt_hook": "Project the Round 1 picks of the NFL Draft. Balance premium positional value against immediate roster holes for franchises.",
+      "directive": "ARTICLE TYPE SPECIFICATION: Offseason Mock Draft\nGranularity: Offseason / Round 1 Projection.\nFocus: Round 1 mock selections, franchise needs, premium positional value, and draft capital.\nScope: Project selections for the Round 1 draft order (Picks 1–32). Query get_mock_draft to obtain the algorithmic draft selections and team deficiencies, and present each pick with authoritative analysis. Focus strictly on team fit, physical traits, and scheme requirements.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (MOCK_DRAFT):\nYou are projecting Round 1 of the NFL Draft. Query get_mock_draft to inspect the selections. Prioritize premium positional value (QB, OT, EDGE, CB) over low-impact positions. Evaluate team rosters using their Under-25 Production Share ($Y_{\\text{prod}}$) and starter deficiencies to explain whether an organization needs an immediate foundational starter or a high-ceiling developmental weapon.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as an authoritative Mock Draft (approx. 1,500–1,800 words).\n\n1. The Board Overview:\nOpen with a headline using # (e.g., # 2036 NFL Mock Draft 1.0: First-Round Projections for Picks 1–32).\nWrite a 2-paragraph introduction identifying the strengths of this draft class and the run on premium positions.\n\n2. The First-Round Projections (Picks 1–32):\nUse numbered ## headers for each selection formatted as: ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School] (e.g., ## 1. Philadelphia Eagles: Dave Vogel, LEDG, Georgia).\nUnder each pick, provide exactly 2 to 3 sentences explaining the team need, the player's physical traits, and how they fit the scheme.\n\n3. The Draft Floor Watch / Sleeper:\nConclude with a ### header analyzing which team got the draft steal of Round 1 or which eliminated franchise has the highest pressure to hit on their pick.",
       "structure_source": "article"
     },
     "FANTASY_DRAFT_TIERS": {

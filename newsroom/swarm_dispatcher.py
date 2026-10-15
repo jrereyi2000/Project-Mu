@@ -47,6 +47,8 @@ from newsroom.db_tools import (
     get_team_roster_depth_chart,
     get_draft_trade_value,
     get_franchise_rebuild_status,
+    get_mock_draft,
+    get_draft_prospects,
     get_team_articles,
     get_player_articles,
 )
@@ -683,6 +685,8 @@ class SwarmDispatcher:
             get_team_roster_depth_chart,
             get_draft_trade_value,
             get_franchise_rebuild_status,
+            get_mock_draft,
+            get_draft_prospects,
             get_team_articles,
             get_player_articles,
         ]

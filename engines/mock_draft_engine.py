@@ -53,12 +53,16 @@ POSITIONAL_PREMIUM = {
     "SPECIALISTS": 0.20
 }
 
-
 class MockDraftEngine:
     def __init__(self, season: Optional[int] = None, prospects_path: Optional[str] = None):
         self.season = season or self._resolve_current_season()
         self.draft_season = self.season + 1
-        self.prospects_path = prospects_path or os.path.join("data", "draft", f"{self.draft_season}_prospects.csv")
+        if prospects_path:
+            self.prospects_path = prospects_path
+        elif os.path.exists(os.path.join("captures", "prospects", "prospects.csv")):
+            self.prospects_path = os.path.join("captures", "prospects", "prospects.csv")
+        else:
+            self.prospects_path = os.path.join("data", "draft", f"{self.draft_season}_prospects.csv")
 
     def _resolve_current_season(self) -> int:
         try:
