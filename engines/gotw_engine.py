@@ -28,6 +28,20 @@ def player_outlier_points(pass_yards, pass_tds, rush_yards, rush_tds, rec_yards,
     return pts
 
 
+def defensive_outlier_points(sacks, ints, def_tds, safeties, forced_fumbles, return_tds, fg_long) -> int:
+    """Defensive and special-teams milestones for one player's captured game line, on the offensive scale:
+    a 3-sack or 2-interception game is worth a 150-yard day, a defensive or return TD a 2-TD day."""
+    pts = 0
+    if (sacks or 0) >= 3: pts += 12
+    if (ints or 0) >= 2: pts += 12
+    pts += 10 * int(def_tds or 0)
+    pts += 10 * int(return_tds or 0)
+    if (safeties or 0) >= 1: pts += 6
+    if (forced_fumbles or 0) >= 2: pts += 6
+    if (fg_long or 0) >= 55: pts += 6
+    return pts
+
+
 def star_score(mean_top3_home: float, mean_top3_away: float, outlier_points: float) -> float:
     """S: half star power (mean top-3 OVR of both teams), half milestone outliers (capped at 100)."""
     s_stars = (mean_top3_home + mean_top3_away) / 2
@@ -76,6 +90,20 @@ def fetch_game_player_rows(cur, game_ids: List[int]) -> list:
         JOIN games g ON g.id = pstat.game_id
         JOIN player_seasons rated ON rated.player_id = pstat.player_id AND rated.season = g.season
         WHERE pstat.game_id = ANY(%s)
+    """, (list(game_ids),))
+    return cur.fetchall()
+
+
+def fetch_game_defense_rows(cur, game_ids: List[int]) -> list:
+    """One row per captured defensive / kicking / return game line (game_stat_lines; captured games only, Week 17
+    onward in 2035): (game_id, team_id, sacks, ints, def_tds, safeties, forced_fumbles, return_tds, fg_long).
+    Games with no captured lines return nothing, so their outliers stay offense-only."""
+    cur.execute("""
+        SELECT game_id, team_id, def_sacks, def_ints, def_tds, def_safeties, def_forced_fumbles,
+               COALESCE(kr_tds, 0) + COALESCE(pr_tds, 0), kick_fg_long
+        FROM game_stat_lines
+        WHERE game_id = ANY(%s)
+          AND (def_tackles IS NOT NULL OR kick_fga IS NOT NULL OR kr_returns IS NOT NULL OR pr_returns IS NOT NULL)
     """, (list(game_ids),))
     return cur.fetchall()
 
@@ -132,7 +160,8 @@ class GotWEngine:
                 top3_away_ovr = sorted([p[2] for p in players if p[1] == away_team_id], reverse=True)[:3]
                 mean_top3_home = sum(top3_home_ovr)/3 if top3_home_ovr else 80
                 mean_top3_away = sum(top3_away_ovr)/3 if top3_away_ovr else 80
-                s_outliers = sum(player_outlier_points(*p[3:9]) for p in players)
+                s_outliers = sum(player_outlier_points(*p[3:9]) for p in players) \
+                    + sum(defensive_outlier_points(*d[2:9]) for d in fetch_game_defense_rows(cur, [game_id]))
                 s_score = star_score(mean_top3_home, mean_top3_away, s_outliers)
 
                 favorite_won = (home_score > away_score and home_ovr >= away_ovr) or (away_score > home_score and away_ovr >= home_ovr)

@@ -33,6 +33,8 @@ from db.db_handler import DatabaseHandler
 from engines.gotw_engine import (
     competitiveness_score,
     excitement_index,
+    defensive_outlier_points,
+    fetch_game_defense_rows,
     fetch_game_player_rows,
     player_outlier_points,
     production_score,
@@ -193,6 +195,8 @@ def load_team_games(cur, season: int, before_week: Optional[int] = None) -> list
     for gid, tid, ovr, *stats in fetch_game_player_rows(cur, ids):
         ovrs[(gid, tid)].append(ovr or 0)
         outliers[(gid, tid)] += player_outlier_points(*stats)
+    for gid, tid, *stats in fetch_game_defense_rows(cur, ids):
+        outliers[(gid, tid)] += defensive_outlier_points(*stats)
 
     rows = []
     for gid, (_, week, home, away, hs, as_, stored_e) in games.items():

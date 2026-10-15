@@ -17,7 +17,7 @@ from engines.excitement_projection import (
     fit_margin_model,
     project_matchup,
 )
-from engines.gotw_engine import display_excitement, upset_score
+from engines.gotw_engine import defensive_outlier_points, display_excitement, player_outlier_points, star_score, upset_score
 
 
 def row(team_id, opponent_id, pf, pa, is_home=True, yds=350, top3=85.0, outliers=10):
@@ -39,6 +39,26 @@ class DisplayScaleTests(unittest.TestCase):
         values = [display_excitement(r) for r in (41, 55, 58.2, 72.5, 83.65)]
         self.assertEqual(values, sorted(values))
         self.assertEqual(display_excitement(58.2), 79.1)
+
+
+class DefensiveOutlierTests(unittest.TestCase):
+    """Defensive and special-teams milestones (captured game lines only), on the offensive outlier scale."""
+
+    def test_quiet_line_scores_nothing(self):
+        self.assertEqual(defensive_outlier_points(2.5, 1, 0, 0, 1, 0, 54), 0)
+        self.assertEqual(defensive_outlier_points(None, None, None, None, None, 0, None), 0)
+
+    def test_milestones(self):
+        self.assertEqual(defensive_outlier_points(3, 0, 0, 0, 0, 0, None), 12)          # 3-sack game
+        self.assertEqual(defensive_outlier_points(0, 2, 1, 0, 0, 0, None), 22)          # 2 INT, one returned
+        self.assertEqual(defensive_outlier_points(0, 0, 0, 0, 0, 2, None), 20)          # two return TDs
+        self.assertEqual(defensive_outlier_points(0, 0, 0, 1, 2, 0, 56), 18)            # safety, 2 FF, 56-yd FG
+
+    def test_same_scale_as_offense(self):
+        # a 3-sack game is worth a 150-yard day; a defensive TD more than a 2-TD day
+        self.assertEqual(defensive_outlier_points(3, 0, 0, 0, 0, 0, None), player_outlier_points(0, 0, 150, 0, 0, 0))
+        self.assertGreater(defensive_outlier_points(0, 0, 1, 0, 0, 0, None), player_outlier_points(0, 0, 0, 2, 0, 0))
+        self.assertGreater(star_score(85, 85, 12), star_score(85, 85, 0))
 
 
 class ProjectionMathTests(unittest.TestCase):
