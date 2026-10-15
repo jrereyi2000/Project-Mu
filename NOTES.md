@@ -1,131 +1,134 @@
 # Project Mu: Draft Prospects & Mock Draft Integration Notes
 
-**Date:** October 14, 2026  
-**Status:** Complete & Verified  
+**Date:** October 15, 2026  
+**Status:** Feature Complete — Ready for Console Navigation Mapping  
+**Active Branch:** `feat/draft-kiper-mock`  
+**Active Worktree:** `/Users/jrereyi/Downloads/Project Mu/.claude/worktrees/draft-kiper-mock`  
+**Current Commit:** `a9bb069`  
+**Test Suite Status:** 78/78 tests passing (`python3 -m unittest tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
+
+> [!IMPORTANT]
+> **DO NOT MERGE INTO `main` YET.**  
+> Keep all work strictly on `feat/draft-kiper-mock` inside the `.claude/worktrees/draft-kiper-mock` worktree. Parallel sessions are actively running with uncommitted edits on `main` (`db/init_db.sql`, `engines/records_engine.py`, etc.).
 
 ---
 
-## 1. Overview & Objective
-Designed and implemented an automated pipeline for NFL draft prospect ingestion, local Apple Vision OCR extraction from Madden console captures, and a 32-pick Round 1 Mock Draft simulation engine.
+## 1. Executive Summary & Architecture
 
-Key architectural requirements:
-- **No Schema Conflicts:** Database schema changes (`db/init_db.sql` and migrations) are deferred until ongoing parallel sessions merge. All prospect data currently ingests directly from structured CSV boards (`pipeline/ingest_prospects.py`).
-- **Zero Gemini Cost:** Replaced multimodal LLM vision calls with high-speed, local macOS Apple Vision OCR (`pipeline/extract_prospects_ocr.py`), with targeted Gemini vision remaining only as an automatic fallback.
-- **Line-by-Line Capture:** Madden's Draft Board / College Prospects screen only displays a player's full legal name, height, and weight on the active highlighted row/card, requiring row-by-row navigation (`madden_capture.py --only prospects`).
+Designed and implemented an automated pipeline for NFL draft prospect ingestion, high-speed local Apple Vision OCR extraction from Madden console screenshots, an analytical 32-pick Round 1 Mock Draft simulation engine, a Mel Kiper Jr. newsroom persona, and decoupled pipeline/debug jobs.
 
----
-
-## 2. Screen Anatomy & OCR Mechanics
-
-### 2.1 Madden Draft Board Screen Layout
-- **Top-Left Player Card:**
-  - **Player Name:** First and last names appear stacked (`850 <= x <= 1500`, `150 <= y < 335`). In rare cases where only the last name is detected (e.g. large single text blocks like `BUCHANAN`), the upper first-name band (`950 <= x <= 1300`, `160 <= y <= 245`) is cropped and OCR'd independently (yielding `C.J.`).
-  - **Player Badge:** Position, jersey number, and scouted baseline OVR appear below the card portrait (`80 <= x <= 450`, `480 <= y <= 560`), e.g. `LEDG #72 | OVR75` or `QB #18 | 0VR65`.
-  - **Measurables (`HT/WT`):** Displayed on a single horizontal band (`335 <= y <= 410`), e.g. `HT/WT: 6'5", 280 LBS`.
-  - **College Program:** Parsed from `COLLEGE: <NAME>` (`390 <= y <= 460`).
-- **Table Highlighted Row:**
-  - Table columns include: `PICK` (Round & Pick), `NAME` (`D.Vogel`), `POS`, `AGE`, `OVR`, and physical traits (`SPD`, `ACC`, `AGI`, `COD`, `STR`, `AWR`, `CAR`).
-  - `AGE` is not visible on the top-left player card; it is extracted exclusively by matching the card player's last name against the table's `NAME` column (`650 <= x <= 900`, `750 <= y <= 1650`) and reading the corresponding row's `AGE` cell (`1150 <= x <= 1250`).
-  - The matched row's `POS` and `OVR` columns also serve as automatic cross-checks if the top badge is ever obscured.
-
-### 2.2 OCR Normalization Heuristics
-Apple Vision OCR achieves near-instantaneous parsing, but Madden's custom game font introduces specific misread patterns handled by `pipeline/extract_prospects_ocr.py`:
-1. **Font Glitches on Height:**
-   - Numbers `1` read as `T`, `I`, or `l` (e.g. `6'T"` $\to$ `6'1"`).
-   - Inch quotes `"` read as asterisks `*` (e.g. `6'4*`, `5'10*` $\to$ `6'4"`, `5'10"`).
-   - Dropped apostrophes (e.g. `67 ,332 LBS` on offensive/defensive tackles $\to$ `6'7"`).
-   - Dropped digits on heavyweights: `5'1"` for players $\ge 215$ lbs or non-DBs is normalized to `6'1"`.
-2. **Lineman Weight Correction:**
-   - Apple Vision occasionally misreads `3` as `8` on 300+ lb linemen (e.g. `827 LBS` on an offensive tackle $\to$ `327 LBS`). Weights $> 500$ lbs are automatically normalized by subtracting 500.
-3. **Diacritics & Homoglyphs:**
-   - Combines unicode normalization (`NFKD`) to strip stray combining accents (e.g. `BƯCHANAN` $\to$ `BUCHANAN`).
-   - Cleans character substitutions (e.g. `SHAOUILLE` $\to$ `SHAQUILLE`, `BOBB'` $\to$ `BOBBY`, `0VR` $\to$ `OVR`).
-   - Normalizes spacing in university names (e.g. `TEXASA&M` $\to$ `TEXAS A&M`).
+### Key Decisions
+1. **Zero Gemini Cost for Extraction:** Replaced multimodal LLM vision calls with on-device macOS Apple Vision OCR (`pipeline/extract_prospects_ocr.py`), with targeted Gemini vision remaining only as an automatic fallback.
+2. **No Schema Conflicts (Deferred DB Migration):** Prospect boards and mock draft results read/write directly from structured CSV boards (`data/draft/{draft_season}_prospects.csv` and `captures/prospects/prospects.csv`). Database table additions (`draft_prospects`, `mock_draft_picks`) are deferred until parallel sessions merge.
+3. **Line-by-Line Capture Mechanics:** Madden's Draft Board / College Prospects screen displays full legal names, heights, and weights only on the active highlighted row/card, requiring row-by-row keypresses (`madden_capture.py --only prospects`).
+4. **Decoupled Scan Cadence:** The draft board scan (`--mode prospects` / `draft_scan`) is completely separate from the roster scan (`--mode roster` / `roster_scan`).
 
 ---
 
-## 3. Implemented Modules
+## 2. Implemented & Verified Capabilities
 
-### 3.1 [`pipeline/extract_prospects_ocr.py`](file:///Users/jrereyi/Downloads/Project%20Mu/pipeline/extract_prospects_ocr.py)
-- **`find_prospect_frames(root)`**: Locates active row-by-row sequence frames (`prospect_\d{3,4}\.png`) in either `<root>/prospects/` or `<root>/` directly, filtering out legacy multi-run prefixes (`p1_...`, `p2_...`).
-- **`parse_prospect_frame(path, pick_index)`**: Executes local Apple Vision OCR (`VNRecognizeTextRequest`) on a single frame, extracts all card and table attributes, applies normalization heuristics, and cross-references table age.
-- **`extract_prospects_ocr(root)`**: Batch processes all frames in sequence and writes `prospects.csv`.
-- **Board order from the screen (Oct 15):** frames sort by number (the folder holds resumed runs numbered 000–235, 1000–1074, 2000–2068, 3000–3011; sorting the names as text interleaved them, so CSV order didn't match the draft board). The highlighted row's PICK cell (`Round N, Pick M` / `Undrafted`) is read into `PROJECTED_ROUND` / `ROUND_PICK`; repeated frames at run boundaries are dropped, rows are sorted by (round, pick), and `PROJECTED_PICK` is the overall pick (undrafted numbered on from 225). The highlighted row is matched by first initial + last name first, which fixed ages taken from a neighbouring row (BOBBY WHITE had matched `T.Whitehead`).
+### 2.1 Apple Vision OCR Extractor (`pipeline/extract_prospects_ocr.py`, `extract.py`)
+- **Screen Parsing:**
+  - Card Name: First and last names stacked (`850 <= x <= 1500`, `150 <= y < 335`). Wide-tracked first names joined by position; overlapping pieces re-read from a crop.
+  - Card Badge: Position, number, baseline scouted OVR (`LEDG #72 | OVR75`).
+  - Card Measurables: Height and weight on `HT/WT` band (`6'5", 280 LBS`).
+  - Table Highlighted Row: Matches player card to table row by initial + last name (`D.Vogel`), extracting table-only `AGE` (`1150 <= x <= 1250`).
+- **Font & Glyph Normalizations:**
+  - Font glitches on height: `6'T"` $\to$ `6'1"`, `5'1"` on $\ge 215$ lb players $\to$ `6'1"`, asterisks `*` $\to$ `"`, dropped apostrophes restored.
+  - Lineman weight correction: $827 \text{ LBS} \to 327 \text{ LBS}$ (weights $> 500$ normalized by subtracting 500).
+  - Diacritics and character substitutions cleaned (`BƯCHANAN` $\to$ `BUCHANAN`, `SHAOUILLE` $\to$ `SHAQUILLE`).
+- **Board Order from Screen:** Frames sort by numeric frame number. The highlighted row's `PICK` cell fills `PROJECTED_ROUND` (1–7 or `UDFA`) and `ROUND_PICK`. Overall pick is computed from round and pick-in-round (1–224 for drafted, 225+ for undrafted).
+- **Benchmark:** Parsed all 389 unique prospects (224 drafted + 165 UDFAs) from `captures/prospects` in ~75s with zero Gemini calls and 100% field completeness.
+- **Syncing:** `extract.py` automatically synchronizes extracted `prospects.csv` to canonical storage `data/draft/{draft_season}_prospects.csv` where `draft_season = season + 1`.
 
-### 3.2 [`extract.py`](file:///Users/jrereyi/Downloads/Project%20Mu/extract.py)
-- Updated `extract_prospects(root)` to run local Apple Vision OCR first.
-- Bypasses Gemini generic table prefetching for prospect line captures.
-- Preserves targeted Gemini vision fallback only if OCR is unavailable or fields are missing.
+### 2.2 Prospect Ingestion & Validation (`pipeline/ingest_prospects.py`)
+- Standardizes heights (`6'2"`), weights (140–420 lbs), ages (18–30), baseline ratings (50–99), and canonical position mappings (`LEDG`/`REDG` $\to$ `EDGE`, `SAM`/`MIKE`/`WILL` $\to$ `LB`, `LT`/`RT` $\to$ `OT`, `RG`/`LG` $\to$ `OG`, `HB` $\to$ `RB`).
+- `load_prospects_from_csv(csv_path)` validates pick uniqueness and returns sorted `List[Prospect]`.
 
-### 3.3 [`madden_capture.py`](file:///Users/jrereyi/Downloads/Project%20Mu/madden_capture.py)
-- Added `--only prospects` capture mode with support for custom limits (`--prospects 32`) or full draft classes (`--all-prospects` / `--prospects 0`).
-- Steps row-by-row with `Down` keypresses, checking `same_table(prev_sig, sig)` to automatically detect the bottom of the draft board.
-- Avoids returning to the franchise hub on exit to allow inspecting or resuming draft board state.
+### 2.3 Round 1 Mock Draft Engine (`engines/mock_draft_engine.py`)
+- Evaluates 32 Round 1 selections using live league data:
+  1. **Draft Order:** Reverse standings, point-differential tiebreakers, and playoff progression via `get_draft_order(season)`.
+  2. **Team Needs:** Baseline rating deficits, age cliffs (starters aged 30+ without under-25 developmental backups), and phase ranks via `get_team_draft_needs(team, season)`.
+  3. **Scoring Function:**
+     $$\text{FitScore} = 0.45 \cdot (\text{NeedScore} \cdot 1.5) + 0.40 \cdot (\text{BPA}) + 10.0 \cdot (M_{\text{pos}} - 1.0)$$
+     where BPA is centered on scouted OVR with slot value delta $((i - \text{projected\_pick}) \cdot 0.5)$, and positional premium $M_{\text{pos}}$ prioritizes QB (1.25), OT/EDGE (1.12), and CB (1.10). A team already set at QB receives a severe penalty.
+- Produces 32 unique picks without duplicates and generates franchise-specific analytical rationales.
+- CLI: `python3 -m engines.mock_draft_engine [--season N] [--file path/to/prospects.csv] [--json]`.
 
-### 3.4 [`pipeline/ingest_prospects.py`](file:///Users/jrereyi/Downloads/Project%20Mu/pipeline/ingest_prospects.py)
-- Parses, validates, and normalizes prospect boards from CSV.
-- Canonical position mapping: `LEDG`/`REDG` $\to$ `EDGE`, `SAM`/`MIKE`/`WILL` $\to$ `LB`, `LT`/`RT` $\to$ `OT`, `RG`/`LG` $\to$ `OG`, `HB` $\to$ `RB`.
-- Enforces strict constraints on pick numbers, weights (140–420 lbs), ages (18–30), and baseline ratings (50–99).
+### 2.4 Mel Kiper Jr. Persona & ReAct Tools
+- **ReAct Research Tools (`newsroom/db_tools.py`):**
+  - `get_mock_draft(season, file_path)`: executes the Round 1 simulation engine and returns pick-by-pick selections, team fit, and analytical rationales.
+  - `get_draft_prospects(position, top_n, file_path)`: queries consensus draft prospects with position filtering.
+  - Registered in `newsroom/swarm_dispatcher.py` (`self.tools`).
+- **Writer Persona (`newsroom/config/agent_personas.json`, `article_types.json`):**
+  - Defined `MEL_KIPER` persona with signature voice ("Todd! Listen to me!", Big Board, trench warriors, signature Steals/Sleepers).
+  - Assigned as primary writer for `OFFSEASON_MOCK_DRAFT`.
+  - Verified via live test (`tests.test_editorial_flow --article-type OFFSEASON_MOCK_DRAFT --writer MEL_KIPER --live`) generating a full ~1,600-word Kiper column.
 
-### 3.5 [`engines/mock_draft_engine.py`](file:///Users/jrereyi/Downloads/Project%20Mu/engines/mock_draft_engine.py)
-- Simulates a 32-pick Round 1 Mock Draft using three live inputs:
-  1. **Draft Order:** Live reverse standings, point differentials, and playoff finishes (`get_draft_order(season)`).
-  2. **Team Needs:** Starter quality deficits, age cliffs (age 30+ without developmental backups), and phase rankings (`get_team_draft_needs(team, season)`).
-  3. **Draft Board:** Consensus prospect class from CSV.
-- **Scoring Function:**
-  $$\text{FitScore} = 0.45 \cdot (\text{NeedScore} \cdot 1.5) + 0.40 \cdot (\text{BPA}) + 10.0 \cdot (M_{\text{pos}} - 1.0)$$
-  where BPA balances scouted OVR against slot value delta $((i - \text{projected\_pick}) \cdot 0.5)$, and positional premium $M_{\text{pos}}$ prioritizes QB (1.25), OT/EDGE (1.12), and CB (1.10).
-
----
-
-### 3.6 Newsroom & ReAct Tools Integration (`newsroom/db_tools.py`, `newsroom/swarm_dispatcher.py`)
-- **`get_mock_draft(season, file_path)`**: ReAct research tool that simulates the 32-pick Round 1 Mock Draft using the official draft order, team roster deficiencies, and scouted prospect board, returning pick-by-pick selections, team fit context, and analytical rationales.
-- **`get_draft_prospects(position, top_n, file_path)`**: ReAct research tool providing consensus draft prospects from the scouted draft board (default 32), with position/group filtering.
-- **Mel Kiper Jr. Persona (`MEL_KIPER`)**: Added to `newsroom/config/agent_personas.json` (both archetypes and article personas) and assigned as the primary writer for `OFFSEASON_MOCK_DRAFT` in `newsroom/config/article_types.json`. Generates authoritative 1,500–1,800 word columns evaluating all 32 Round 1 selections with 100% personal ownership ("Todd! Listen to me!", Big Board, trench warriors, signature Steal/Sleeper Watch).
-
-### 3.7 Separate Roster and Draft Prospects Scan Options
-- **Console Capture (`madden_capture.py`):**
-  - `--only roster`: dedicated capture of all 32 NFL team rosters (`run_roster()`), decoupled from draft prospects.
-  - `--only prospects`: dedicated draft board prospect scan (`run_prospects()`). Assumes console is already on the Draft Board / College Prospects screen (automated menu navigation deferred to a future session).
-- **Extraction Synchronization (`extract.py`):**
-  - Extracted `prospects.csv` automatically synchronizes to canonical storage (`data/draft/{draft_season}_prospects.csv`) where `draft_season = season + 1` via `_sync_prospects_board()`.
-- **Pipeline Loader (`pipeline/load_capture.py`):**
-  - `detect_mode(folder)` recognizes standalone prospect captures as mode `"prospects"`.
-  - `load_prospects()` in `LOADERS` validates using `pipeline.ingest_prospects.load_prospects_from_csv` and copies to `data/draft/{season+1}_prospects.csv` (respecting `dry_run`).
-- **Orchestration (`pipeline/weekly_capture.py`):**
+### 2.5 Separate Pipeline Orchestration & Debug UI
+- **`madden_capture.py`:**
+  - `--only roster`: strictly captures 32 team rosters (`run_roster()`).
+  - `--only prospects [--prospects N | --all-prospects]`: captures draft board prospects line-by-line. Currently assumes console is sitting on the Draft Board screen with Pick #1 highlighted.
+- **`pipeline/load_capture.py`:**
+  - `detect_mode(folder)` recognizes mode `"prospects"` when `prospects.csv` is present.
+  - `load_prospects()` validates via `load_prospects_from_csv` and copies to `data/draft/{season+1}_prospects.csv` (respecting `dry_run`).
+- **`pipeline/weekly_capture.py`:**
   - Added `"roster"` and `"prospects"` to `MODES`.
-  - When `mode == "roster"`: captures rosters (`--only roster`), extracts cards, loads player seasons, and sends notification (`"Rosters loaded for Season {season}."`), skipping weekly game engines and articles.
-  - When `mode == "prospects"`: captures draft board (`--only prospects --all-prospects`), extracts prospects via Apple Vision OCR, loads and syncs `data/draft/{season+1}_prospects.csv`, and sends notification (`"Draft prospects loaded for Season {season}."`), skipping weekly game engines and articles.
+  - `python3 -m pipeline.weekly_capture --mode roster`: captures rosters, extracts cards, loads players/seasons, shrinks media, notifies (`"Rosters loaded for Season {season}."`), skipping weekly game engines and articles.
+  - `python3 -m pipeline.weekly_capture --mode prospects`: captures draft board, extracts via Apple Vision OCR, loads/validates, syncs to `data/draft/{season+1}_prospects.csv`, shrinks media, notifies (`"Draft prospects loaded for Season {season}."`), skipping weekly game engines and articles.
 - **Debug API & UI (`server/debug_api.py`, `Mu_Network/src/DebugPage.tsx`):**
-  - Added separate `roster_scan` (`"Roster scan"`, `["--mode", "roster", "--no-articles"]`) and `draft_scan` (`"Draft prospect scan"`, `["--mode", "prospects", "--no-articles"]`) to `JOB_KINDS` and frontend `RUNS` array.
+  - Separate jobs: `roster_scan` ("Roster scan") and `draft_scan` ("Draft prospect scan").
+  - The `#debug` page UI provides separate **Roster scan** and **Draft prospect scan** buttons.
 
 ---
 
-## 4. Verification & Benchmarks
+## 3. The Remaining Task: Console Navigation Routing
 
-### 4.1 Real Capture Tests
-1. **Round 1 Test Set (`captures/test_prospects`, 32 frames):**
-   - Extracted in ~10 seconds with 0 Gemini calls.
-   - 100% field extraction across all 32 players.
-2. **Full Draft Class Run (`captures/prospects`, 392 frames over 4 runs, Oct 15):** 389 unique prospects: 224 drafted (7 rounds × 32, every PICK cell read) + 165 undrafted. Every row has all fields after the HT/WT letter-for-digit fixups (`3U2 LBS` → 302 for JOSH WRIGHT, `E'11"` → 5'11" for IMMANUEL PERKINS); the board loads and the Round 1 mock draft runs on it. Vision reads the wide-tracked first names differently from run to run, so card name pieces are joined by position (MAL+ACHI → MALACHI) and overlapping pieces (RC+ONALD) are re-read from a crop. Remaining known misreads are fine to be spot checked by the user.
-3. **Earlier run (236 frames, Oct 14):**
-   - Extracted 236 prospects across Rounds 1–7 into `captures/prospects/prospects.csv` in ~75 seconds.
-   - **Completeness:** 236/236 names, 236/236 positions, 236/236 heights, 236/236 weights, 236/236 ages, 236/236 colleges, 236/236 OVRs (0 missing fields).
-   - Validated cleanly via `pipeline/ingest_prospects.py`.
+Automating menu navigation to the Draft Board from the franchise hub is the **only remaining piece** for full end-to-end automation:
 
-### 4.2 Unit & Integration Tests
-- `tests/test_extract_prospects_ocr.py`: 10 tests covering Unicode cleaning, frame parsing mocks, font and digit fixups, name-line joining, PICK labels, highlighted-row matching, numeric frame order, on-screen pick ordering, and real-capture end-to-end integration (~2 min: it OCRs every frame in `captures/prospects`).
-- `tests/test_mock_draft_engine.py`: 7 unit tests covering order generation, team needs scoring, positional premiums, mock simulation uniqueness, and CLI execution.
-- `tests/test_mock_draft_tools.py`: 4 unit tests covering `get_mock_draft`, `get_draft_prospects` position filtering, and tool registration in `SwarmDispatcher`.
-- `tests/test_writer_config.py`: 25 tests verifying writer personas, canonical archetypes, and Mel Kiper Jr.'s configuration for `OFFSEASON_MOCK_DRAFT`.
-- `tests/test_load_capture.py`: 29 tests covering detection of `prospects` and combined `roster`+`prospects` modes, validation, and syncing to `data/draft/{season+1}_prospects.csv`.
-- `tests/test_weekly_capture.py`: 17 tests verifying `roster` and `prospects` modes execution, capture args, extract detection, and skipping weekly game engines/articles.
-- `tests/test_debug_api.py`: 7 tests verifying `roster_scan` and `draft_scan` job dispatching, logging, and status.
-- **Live LLM Verification:** End-to-end live Gemini 3.8 Flash test via `tests.test_editorial_flow --article-type OFFSEASON_MOCK_DRAFT --writer MEL_KIPER --live` verified autonomous tool invocation (`get_mock_draft` + `get_draft_prospects`) and generation of the complete 32-pick column with signature Kiper voice.
+### Current Behavior
+`madden_capture.py --only prospects` (and the debug page `draft_scan` job) currently assumes the console is already left on the Draft Board / College Prospects screen with Pick #1 highlighted. From there, it successfully handles all row-by-row scrolling, frame capture, and completion detection.
+
+### Next Session Goal: Automated Menu Navigation
+1. **Map the Exact Menu Route:**
+   - In Madden franchise menus, identify the exact tab and menu item path to reach the Draft Board / College Prospects screen (e.g. from `HUB` $\to$ `HUB_LEAGUE` or `HUB_ROSTER` $\to$ scouting / college prospects submenu).
+2. **Implement in `madden_capture.py`:**
+   - Add a robust `classify(f)` check for the Draft Board screen.
+   - Implement `open_prospects()` using `go_hub()`, `move_to()`, and `cross_into()`.
+   - Call `open_prospects()` at the start of `run_prospects()` if `s != "DRAFT_BOARD"`.
 
 ---
 
-## 5. Next Steps
-1. **Draft Board Menu Navigation:** Fix console menu routing to the draft board in a future session.
-2. **Database Schema Integration:** Once parallel schema work concludes, create a dedicated `draft_prospects` table and `mock_draft_picks` ledger to persist draft classes and historical mock simulations across seasons.
-3. **Multi-Round Simulation:** Extend `mock_draft_engine.py` from 32 picks (Round 1) to full 7-round mock drafts (256+ picks) using the 236+ extracted prospect boards.
+## 4. Deferred Future Tasks (After Parallel Sessions Merge)
+
+1. **Database Schema Integration:**
+   - Add `draft_prospects` table and `mock_draft_picks` ledger in `db/init_db.sql` / migration once parallel sessions touch DB schema.
+2. **Multi-Round Simulation:**
+   - Extend `engines/mock_draft_engine.py` from 32 picks (Round 1) to full 7-round mock drafts (256+ picks) using the 389 extracted prospects.
+
+---
+
+## 5. Verification Commands
+
+Run these commands inside the worktree to verify the environment:
+
+```bash
+# 1. Run all unit and integration test suites (78 tests)
+python3 -m unittest \
+  tests/test_writer_config.py \
+  tests/test_mock_draft_tools.py \
+  tests/test_mock_draft_engine.py \
+  tests/test_extract_prospects_ocr.py \
+  tests/test_load_capture.py \
+  tests/test_weekly_capture.py \
+  tests/test_debug_api.py
+
+# 2. Run Mock Draft Engine directly
+python3 -m engines.mock_draft_engine --season 2035 --file data/draft/2036_prospects.csv
+
+# 3. Dry-run load of prospects board
+python3 -m pipeline.load_capture captures/prospects --dry-run
+
+# 4. Verify frontend build
+cd Mu_Network && npm run build
+```
