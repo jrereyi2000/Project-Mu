@@ -534,6 +534,55 @@ CREATE TABLE IF NOT EXISTS coach_seasons (
     UNIQUE (coach_id, season)
 );
 
+-- Each coach's current career totals: the latest stored snapshot (coach_seasons, totals at the end of that season)
+-- plus every completed game his team played in later seasons while he held the job (coach_tenures; one head coach
+-- per team per season). A winning season counts once the team's 17-game regular season is complete.
+CREATE OR REPLACE VIEW coach_records AS
+WITH snap AS (
+    SELECT DISTINCT ON (coach_id) * FROM coach_seasons ORDER BY coach_id, season DESC
+), team_games AS (
+    SELECT g.season, g.game_type, t.team_id,
+           CASE WHEN t.score > t.opp THEN 1 ELSE 0 END AS win,
+           CASE WHEN t.score < t.opp THEN 1 ELSE 0 END AS loss,
+           CASE WHEN t.score = t.opp THEN 1 ELSE 0 END AS tie
+    FROM games g
+    CROSS JOIN LATERAL (VALUES (g.home_team_id, g.home_score, g.away_score),
+                               (g.away_team_id, g.away_score, g.home_score)) AS t(team_id, score, opp)
+    WHERE g.status = 'COMPLETED'
+), coached AS (
+    SELECT s.coach_id, tg.*
+    FROM snap s
+    JOIN coach_tenures ct ON ct.coach_id = s.coach_id
+    JOIN team_games tg ON tg.team_id = ct.team_id AND tg.season > s.season
+                      AND tg.season >= ct.start_season AND tg.season <= coalesce(ct.end_season, 9999)
+), reg AS (
+    SELECT coach_id, season, sum(win) AS w, sum(loss) AS l, sum(tie) AS t, count(*) AS games
+    FROM coached WHERE game_type = 'REGULAR_SEASON' GROUP BY coach_id, season
+), add AS (
+    SELECT c.coach_id,
+           sum(win) FILTER (WHERE game_type = 'REGULAR_SEASON') AS w,
+           sum(loss) FILTER (WHERE game_type = 'REGULAR_SEASON') AS l,
+           sum(tie) FILTER (WHERE game_type = 'REGULAR_SEASON') AS t,
+           sum(win) FILTER (WHERE game_type <> 'REGULAR_SEASON') AS pw,
+           sum(loss) FILTER (WHERE game_type <> 'REGULAR_SEASON') AS pl,
+           sum(win) FILTER (WHERE game_type = 'SUPER_BOWL') AS sbw,
+           sum(loss) FILTER (WHERE game_type = 'SUPER_BOWL') AS sbl
+    FROM coached c GROUP BY c.coach_id
+)
+SELECT c.id AS coach_id, c.coach_name, s.season AS snapshot_season,
+       s.career_wins + coalesce(a.w, 0) AS career_wins,
+       s.career_losses + coalesce(a.l, 0) AS career_losses,
+       s.career_ties + coalesce(a.t, 0) AS career_ties,
+       s.winning_seasons + (SELECT count(*) FROM reg r WHERE r.coach_id = c.id AND r.games >= 17 AND r.w > r.l)
+           AS winning_seasons,
+       s.playoff_wins + coalesce(a.pw, 0) AS playoff_wins,
+       s.playoff_losses + coalesce(a.pl, 0) AS playoff_losses,
+       s.super_bowl_wins + coalesce(a.sbw, 0) AS super_bowl_wins,
+       s.super_bowl_losses + coalesce(a.sbl, 0) AS super_bowl_losses
+FROM coaches c
+JOIN snap s ON s.coach_id = c.id
+LEFT JOIN add a ON a.coach_id = c.id;
+
 -- Coach of the Year race, rewritten per season by engines/coty_engine.py (2026_11_06_coty_scores.sql)
 CREATE TABLE IF NOT EXISTS coty_scores (
     id SERIAL PRIMARY KEY,
