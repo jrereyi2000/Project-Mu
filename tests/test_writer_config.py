@@ -157,6 +157,25 @@ class WriterConfigTests(unittest.TestCase):
         self.assertNotIn("Third-down stop percentage", self.article_types["LOCAL_MATCHUP_PRIMER"]["structure_directive"])
         self.assertNotIn("2026 AP All-Pro", self.article_types["OFFICIAL_AP_ALL_PRO_ROSTER"]["structure_directive"])
 
+    def test_situational_directives_use_recorded_team_stats(self):
+        """Third downs, red zone and penalties come from the team stats; no down-and-distance or blitz splits."""
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            self.assertIn("team_situational", f.read())
+        overrides = load("playoff_overrides.json", "playoff_overrides")
+        texts = {k: self.article_types[k]["structure_directive"] for k in
+                 ("SLATE_LOOKAHEAD_PREDICTIONS", "LOCAL_SEASON_PROGRESS_REPORT", "SUPER_BOWL_CONTENDER_BLUEPRINT",
+                  "PLAYOFF_AUTOPSY", "QUARTERBACK_DUEL_TAPE_BREAKDOWN", "SUPER_BOWL_COMPREHENSIVE_PREVIEW")}
+        texts["POSTGAME"] = self.article_types["LOCAL_POSTGAME_REPORT_CARD"]["curatorial_autonomy"]
+        texts["AUTOPSY"] = self.article_types["SINGLE_GAME_SCHEMATIC_AUTOPSY"]["curatorial_autonomy"]
+        texts["PRIMER"] = self.article_types["LOCAL_MATCHUP_PRIMER"]["curatorial_autonomy"]
+        for key, i in (("SINGLE_GAME_SCHEMATIC_AUTOPSY", 0), ("SINGLE_GAME_SCHEMATIC_AUTOPSY", 1),
+                       ("SLATE_LOOKAHEAD_PREDICTIONS", 0), ("SLATE_LOOKAHEAD_PREDICTIONS", 1)):
+            texts[f"{key}[{i}]"] = overrides[key][i]["structure_directive_override"]
+        for name, text in texts.items():
+            self.assertIn("get_team_efficiency_profile", text, name)
+        self.assertNotIn("conversion rates against blitz packages",
+                         self.article_types["QUARTERBACK_DUEL_TAPE_BREAKDOWN"]["structure_directive"])
+
     def test_bayless_columns_use_his_article_persona(self):
         self.assertEqual(self.aliases.get("BAYLESS"), "SKIP_BAYLESS")
         self.assertIn("SKIP_BAYLESS", self.article_types["NATIONAL_OPINION_COLUMN"]["allowed_writers"])

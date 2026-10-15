@@ -141,7 +141,7 @@ def _resolve_team_id(cur, identifier: str) -> int:
 
 @tool
 def get_game_box_score(game_id: int) -> str:
-    """Fetch the full box score, excitement index, and top player performances for a specific game: passing, rushing and receiving, plus defensive playmakers (tackles, sacks, TFL, INT, pass deflections, forced fumbles, defensive TDs) and kickers when the game's player stats were captured."""
+    """Fetch the full box score, excitement index, and top player performances for a specific game: passing, rushing and receiving, plus defensive playmakers (tackles, sacks, TFL, INT, pass deflections, forced fumbles, defensive TDs) and kickers when the game's player stats were captured, and each team's third/fourth-down and two-point conversions, red zone, penalties, quarter-by-quarter scoring and time of possession where they were recorded for this game."""
     try:
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -191,6 +191,40 @@ def get_game_box_score(game_id: int) -> str:
                         if s[6]: perf += f"{s[6]} rush yds, {s[7]} TD. "
                         if s[9]: perf += f"{s[8]} rec, {s[9]} rec yds, {s[10]} TD. "
                         result["key_performances"].append(perf)
+
+                # Team situational lines: only values that are real (a captured box score, or an exact weekly fill)
+                cur.execute("""
+                    SELECT team_name, estimated_fields, exact_fields, third_down_conversions, third_down_attempts,
+                           fourth_down_conversions, fourth_down_attempts, two_point_conversions, two_point_attempts,
+                           red_zone_tds, red_zone_fgs, red_zone_attempts, penalties, penalty_yards,
+                           q1, q2, q3, q4, ot, time_of_possession_s, first_downs
+                    FROM team_stats WHERE game_id = %s ORDER BY team_name;
+                """, (game_id,))
+                team_lines = {}
+                for (tname, est, exact, c3, a3, c4, a4, c2, a2, rztd, rzfg, rza, pen, peny,
+                     q1, q2, q3, q4, ot, top, fd) in cur.fetchall():
+                    est, exact = set(est or []), set(exact or [])
+                    real = lambda f, v: v is not None and (f not in est or f in exact)
+                    line = {}
+                    for label, cf, cv, af, av in (("third_down", "third_down_conversions", c3, "third_down_attempts", a3),
+                                                  ("fourth_down", "fourth_down_conversions", c4, "fourth_down_attempts", a4),
+                                                  ("two_point", "two_point_conversions", c2, "two_point_attempts", a2)):
+                        if real(cf, cv):
+                            line[label] = f"{cv}/{av}" if real(af, av) else f"{cv} converted"
+                    if real("red_zone_tds", rztd) and real("red_zone_fgs", rzfg):
+                        line["red_zone"] = f"{rztd} TD, {rzfg} FG" + (f" on {rza} trips" if real("red_zone_attempts", rza) else "")
+                    if real("penalty_yards", peny):
+                        line["penalties"] = (f"{pen} for {peny} yds" if real("penalties", pen) else f"{peny} penalty yds")
+                    if q1 is not None:
+                        line["by_quarter"] = f"{q1}-{q2}-{q3}-{q4}" + (f", OT {ot}" if ot else "")
+                        if fd:
+                            line["first_downs"] = fd
+                    if top:
+                        line["time_of_possession"] = f"{top // 60}:{top % 60:02d}"
+                    if line:
+                        team_lines[tname] = line
+                if team_lines:
+                    result["team_situational"] = team_lines
 
                 # Defense and kicking from the game's player-stats capture (real Madden box scores; only games
                 # the capture covered have them)
@@ -731,9 +765,97 @@ def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 0) -> 
     except Exception as e:
         return f"Error: {str(e)}"
 
+def _pct(made, att):
+    return round(100.0 * made / att, 1) if att else None
+
+
+def _rank(values: dict, best_high: bool) -> dict:
+    """1 = best among teams with a value."""
+    order = sorted((v, t) for t, v in values.items() if v is not None)
+    if best_high:
+        order.reverse()
+    return {t: i for i, (_, t) in enumerate(order, 1)}
+
+
+def situational_profiles(cur, season: int) -> dict:
+    """Per team: season third/fourth-down and two-point conversions, red zone on offense and defense, penalties
+    (team_seasons, Madden's Team Stats screens), league ranks, and third downs allowed from the games where the
+    opponent's row is real (captured or an exact weekly fill in team_stats.exact_fields)."""
+    cur.execute("SELECT MAX(week) FROM captures WHERE mode = 'weekly' AND status = 'loaded' AND season = %s", (season,))
+    covered = (cur.fetchone() or [None])[0]
+    cur.execute("""
+        SELECT team_id, third_down_conv, third_down_att, fourth_down_conv, fourth_down_att, two_point_conv, two_point_att,
+               red_zone_att, red_zone_td, red_zone_fg, red_zone_def_att, red_zone_def_td, red_zone_def_fg,
+               penalties, penalty_yards
+        FROM team_seasons WHERE season = %s AND third_down_att IS NOT NULL
+    """, (season,))
+    rows = cur.fetchall()
+    if not rows or not covered:
+        return {}
+    cur.execute("""
+        SELECT t.id, COUNT(*) FROM games g JOIN teams t ON t.id IN (g.home_team_id, g.away_team_id)
+        WHERE g.season = %s AND g.status = 'COMPLETED' AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+          AND g.week <= %s GROUP BY t.id
+    """, (season, covered))
+    games = dict(cur.fetchall())
+    # Third downs allowed: the opponent's offensive row, only where it is real
+    cur.execute("""
+        SELECT t.id,
+               SUM(o.third_down_conversions) FILTER (WHERE NOT ('third_down_conversions' = ANY(o.estimated_fields))
+                                                     OR 'third_down_conversions' = ANY(o.exact_fields)),
+               COUNT(*) FILTER (WHERE (NOT ('third_down_conversions' = ANY(o.estimated_fields))
+                                       OR 'third_down_conversions' = ANY(o.exact_fields))
+                                      AND o.third_down_conversions IS NOT NULL),
+               SUM(o.third_down_conversions) FILTER (WHERE 'third_down_attempts' = ANY(o.exact_fields)
+                                                     AND (NOT ('third_down_conversions' = ANY(o.estimated_fields))
+                                                          OR 'third_down_conversions' = ANY(o.exact_fields))),
+               SUM(o.third_down_attempts) FILTER (WHERE 'third_down_attempts' = ANY(o.exact_fields)
+                                                  AND (NOT ('third_down_conversions' = ANY(o.estimated_fields))
+                                                       OR 'third_down_conversions' = ANY(o.exact_fields))),
+               COUNT(*) FILTER (WHERE 'third_down_attempts' = ANY(o.exact_fields)
+                                AND (NOT ('third_down_conversions' = ANY(o.estimated_fields))
+                                     OR 'third_down_conversions' = ANY(o.exact_fields)))
+        FROM games g
+        JOIN teams t ON t.id IN (g.home_team_id, g.away_team_id)
+        JOIN team_stats o ON o.game_id = g.id AND o.team_name <> t.name
+        WHERE g.season = %s AND g.status = 'COMPLETED' AND g.week <= %s
+        GROUP BY t.id
+    """, (season, covered))
+    allowed = {r[0]: r[1:] for r in cur.fetchall()}
+    out = {}
+    for (tid, c3, a3, c4, a4, c2, a2, rza, rztd, rzfg, drza, drztd, drzfg, pen, peny) in rows:
+        g = games.get(tid) or 0
+        out[tid] = {
+            "through_week": covered,
+            "games": g,
+            "third_down": f"{c3}/{a3}", "third_down_pct": _pct(c3, a3),
+            "fourth_down": f"{c4}/{a4}", "fourth_down_pct": _pct(c4, a4),
+            "two_point": f"{c2}/{a2}",
+            "red_zone_trips": rza, "red_zone_trips_per_game": round(rza / g, 2) if g and rza is not None else None,
+            "red_zone_td_pct": _pct(rztd, rza), "red_zone_scoring_pct": _pct((rztd or 0) + (rzfg or 0), rza),
+            "red_zone_td_fg": f"{rztd} TD, {rzfg} FG",
+            "red_zone_trips_allowed": drza, "red_zone_td_pct_allowed": _pct(drztd, drza),
+            "red_zone_td_fg_allowed": f"{drztd} TD, {drzfg} FG",
+            "penalties_per_game": round(pen / g, 1) if g and pen is not None else None,
+            "penalty_yards_per_game": round(peny / g, 1) if g and peny is not None else None,
+        }
+        a = allowed.get(tid)
+        if a and a[1]:
+            out[tid]["third_down_conversions_allowed"] = f"{a[0]} in {a[1]} game(s) with a recorded opponent line"
+        if a and a[4]:
+            out[tid]["third_down_pct_allowed"] = f"{_pct(a[2], a[3])}% ({a[2]}/{a[3]} in {a[4]} game(s))"
+    for key, rank_key, best_high in (("third_down_pct", "third_down_rank", True), ("fourth_down_pct", "fourth_down_rank", True),
+                                     ("red_zone_td_pct", "red_zone_rank", True),
+                                     ("red_zone_td_pct_allowed", "red_zone_defense_rank", False),
+                                     ("penalties_per_game", "discipline_rank", False)):
+        for t, r in _rank({t: v[key] for t, v in out.items()}, best_high).items():
+            out[t][rank_key] = r
+    return out
+
+
 @tool
 def get_team_efficiency_profile(team_identifier: str = "", season: int = 0) -> str:
-    """Fetch season efficiency from points and yards: Pythagorean wins (the record points for/against predict; pyth_luck = wins minus that, positive = record flatters them), team pace & production (0-100), yards per game passing and rushing, and giveaways per game. Without a team, returns all 32 teams sorted by pyth_luck; with a team name, abbreviation, or ID, returns that team only."""
+    """Fetch season efficiency from points and yards: Pythagorean wins (the record points for/against predict; pyth_luck = wins minus that, positive = record flatters them), team pace & production (0-100), yards per game passing and rushing, and giveaways per game; plus situational football: third- and fourth-down conversion rates, two-point tries, red-zone trips and TD rate on offense and allowed on defense, penalties and penalty yards per game, each with a league rank (1 = best). Without a team, returns all 32 teams sorted by pyth_luck; with a team name, abbreviation, or ID, returns that team only."""
     try:
         s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -743,6 +865,7 @@ def get_team_efficiency_profile(team_identifier: str = "", season: int = 0) -> s
                     return f"No completed games for Season {s_val}."
                 cur.execute("SELECT id, name FROM teams;")
                 names = dict(cur.fetchall())
+                situational = situational_profiles(cur, s_val)
 
                 def fmt(team_id, p):
                     losses = p["games"] - p["wins"]
@@ -758,10 +881,15 @@ def get_team_efficiency_profile(team_identifier: str = "", season: int = 0) -> s
                         "pass_yds_per_game": round(p["pass_yds_per_game"], 1),
                         "rush_yds_per_game": round(p["rush_yds_per_game"], 1),
                         "giveaways_per_game": round(p["giveaways_per_game"], 2),
+                        "situational": situational.get(team_id, "Not captured for this season"),
                     }
 
                 note = ("Pace & production: 35 points and 425 yards per game = 100. Pythagorean wins use raw points; "
-                        "compare with expected_wins from get_opponent_adjusted_credit, which also adjusts for schedule.")
+                        "compare with expected_wins from get_opponent_adjusted_credit, which also adjusts for schedule. "
+                        "Situational numbers are season totals from the team stats through the week shown; ranks are 1-32, "
+                        "1 = best (fewest penalties, lowest red-zone TD rate allowed). Third-down defense isn't recorded as a "
+                        "season total: third downs allowed appear only for games where the opponent's line is recorded, so "
+                        "don't cite a season third-down defense rate beyond them.")
                 if not str(team_identifier).strip():
                     ranked = sorted(profiles.items(), key=lambda kv: kv[1]["pyth_luck"], reverse=True)
                     return json.dumps({"season": s_val, "scale_note": note, "teams": [fmt(t, p) for t, p in ranked]}, indent=2)
