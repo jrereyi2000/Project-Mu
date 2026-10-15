@@ -120,7 +120,9 @@ class RevalidatedStaticFiles(StaticFiles):
 
 app.include_router(debug_api.router)   # /api/debug/*: the #debug page (state, tables, endpoints, docs, run jobs)
 
-app.mount("/static", RevalidatedStaticFiles(directory=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")), name="static")
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+os.makedirs(_STATIC_DIR, exist_ok=True)
+app.mount("/static", RevalidatedStaticFiles(directory=_STATIC_DIR), name="static")
 
 def normalize_team_abbr(abbr: str) -> str:
     clean = (abbr or "").upper().strip()
