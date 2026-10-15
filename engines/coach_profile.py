@@ -116,6 +116,24 @@ def season_record(games: list, team_id: int, season: int) -> dict:
             "playoffs": "-".join(map(str, post[:2])) if any(post) else None}
 
 
+def tenure_record(games: list, team_id: int, start_season: int, season: int) -> tuple:
+    """(regular-season record, playoff record) for team_id over seasons start_season..season from the given (visible)
+    games, as 'W-L' / 'W-L-T' and 'W-L' strings. Both are None unless every finished season of the tenure before
+    `season` has its full regular season on record (coach_seasons snapshots are career totals, not per team, so they
+    can't fill a gap). A tenure with no playoff games reads '0-0'."""
+    tenure_games = [g for g in games if start_season <= g["season"] <= season
+                    and team_id in (g["home_team_id"], g["away_team_id"])]
+    reg = {s: sum(1 for g in tenure_games if g["season"] == s and (g["game_type"] or REGULAR) == REGULAR)
+           for s in range(start_season, season)}
+    if not all(n >= FULL_SEASON_GAMES for n in reg.values()):
+        return None, None
+    tally, post = [0, 0, 0], [0, 0, 0]
+    for g in tenure_games:
+        rec = tally if (g["game_type"] or REGULAR) == REGULAR else post
+        rec["WLT".index(_result(g, team_id))] += 1
+    return "-".join(map(str, tally if tally[2] else tally[:2])), f"{post[0]}-{post[1]}"
+
+
 def record_line(t: dict | None) -> dict | None:
     if t is None:
         return None
@@ -228,19 +246,10 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
     games = fetch_games(cur, {t["team_id"] for t in tenures}, first, season, visible)
     career = accumulate(snapshot, tenures, games, season)
 
-    # With this team: every season of this tenure, when each finished season's regular season is on record.
     start = coach["start_season"]
-    tenure_games = [g for g in games if start <= g["season"] <= season and team_id in (g["home_team_id"], g["away_team_id"])]
-    reg = {s: sum(1 for g in tenure_games if g["season"] == s and (g["game_type"] or REGULAR) == REGULAR)
-           for s in range(start, season)}
-    with_team = None
-    if all(n >= FULL_SEASON_GAMES for n in reg.values()):
-        tally = [0, 0, 0]
-        for g in tenure_games:
-            if (g["game_type"] or REGULAR) == REGULAR:
-                tally["WLT".index(_result(g, team_id))] += 1
-        with_team = "-".join(map(str, tally if tally[2] else tally[:2]))
-    sb = [g for g in tenure_games if g["game_type"] == "SUPER_BOWL"]
+    with_team, playoffs_with_team = tenure_record(games, team_id, start, season)
+    sb = [g for g in games if start <= g["season"] <= season and g["game_type"] == "SUPER_BOWL"
+          and team_id in (g["home_team_id"], g["away_team_id"])]
 
     cur.execute("""
         SELECT season FROM awards WHERE award_type = 'COTY' AND coach_id = %s AND (season < %s OR %s)
@@ -257,12 +266,16 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
         "tendencies": describe_tendencies(coach),
         "this_season": season_record(games, team_id, season),
         "record_with_team": with_team,
+        "playoff_record_with_team": playoffs_with_team,
         "career": record_line(career),
         "super_bowls_with_team": [f"{g['season']} {'won' if _result(g, team_id) == 'W' else 'lost'}" for g in
                                   sorted(sb, key=lambda g: g["season"])],
         "coach_of_the_year": coty,
-        "note": TENDENCY_NOTE + (" record_with_team is null when an earlier season of this tenure isn't on record."
-                                 if with_team is None else ""),
+        "note": TENDENCY_NOTE + (" record_with_team is the regular season only; playoff_record_with_team is his "
+                                 "postseason wins and losses with this team over the same tenure (Super Bowls "
+                                 "included)." if with_team is not None else
+                                 " record_with_team and playoff_record_with_team are null when an earlier season of "
+                                 "this tenure isn't on record."),
     }
 
 
