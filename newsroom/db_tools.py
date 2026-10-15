@@ -9,6 +9,8 @@ from engines.matchup_edges import compute_edges, fetch_ratings, fetch_units
 from engines.game_credit_engine import compute_game_credit, fetch_completed_games, trajectory_label
 from engines.coty_engine import compute_coty, fetch_inputs as fetch_coty_inputs
 from engines.coach_profile import coach_profile, fetch_team_coach, fetch_team_staff, staff_matchup
+from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_splits, defense_groups,
+                                   player_lines, stat_group, STATS as SPLIT_STATS)
 import json
 
 from newsroom.run_context import context_season, cutoff_week, is_visible_week
@@ -513,6 +515,61 @@ def get_coach_profile(team_identifier: str, season: int = 0) -> str:
                     return f"No head coach recorded for team ID {team_id} in {s_val}."
                 cur.execute("SELECT name FROM teams WHERE id = %s", (team_id,))
                 return json.dumps({"season": s_val, "team": cur.fetchone()[0], **profile}, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@tool
+def get_player_scheme_splits(player_identifier: str, seasons: int = 2) -> str:
+    """Fetch how a QB, running back, receiver or tight end produces against different kinds of defenses over the last `seasons` seasons (default 2: this one and last): per-game averages and the change from his own average against Strong / Average / Weak scoring defenses (points allowed), pass rushes and coverages (Madden ranks). Only real game lines count. Accepts player name or player ID."""
+    try:
+        s_val = resolve_season()
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                ident = str(player_identifier).strip()
+                if ident.isdigit():
+                    target_id = int(ident)
+                else:
+                    cur.execute("""
+                        SELECT id FROM players WHERE player_name ILIKE %s OR full_name ILIKE %s
+                        ORDER BY LENGTH(player_name) ASC LIMIT 1
+                    """, (f"%{ident}%", f"%{ident}%"))
+                    row = cur.fetchone()
+                    target_id = row[0] if row else None
+                if not target_id:
+                    return f"Player '{player_identifier}' not found in database."
+                cur.execute("""
+                    SELECT COALESCE(p.full_name, p.player_name), ps.position, t.name
+                    FROM players p
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                    LEFT JOIN teams t ON t.id = ps.team_id
+                    WHERE p.id = %s
+                """, (s_val, target_id))
+                name, position, team = cur.fetchone()
+                group = stat_group(position)
+                if not group:
+                    return f"{name} ({position}): splits cover quarterbacks, running backs, receivers and tight ends only."
+                span = [s_val - i for i in range(max(1, int(seasons)))]
+                lines, skipped = player_lines(cur, target_id, span, is_visible_week)
+                opp = {}
+                for season in span:
+                    for t, groups in defense_groups(cur, season, is_visible_week).items():
+                        opp[(season, t)] = groups
+                splits = compute_splits(lines, opp, SPLIT_STATS[group])
+                return json.dumps({
+                    "player": name, "position": position, "team": team, "seasons": sorted(span),
+                    "real_games": splits["games"], "synthetic_games_skipped": skipped,
+                    "overall_per_game": splits["overall_per_game"],
+                    "verdict": (None if any("per_game" in g for d in splits["dimensions"].values() for g in d.values())
+                                else f"Not enough real games yet for any split (each group needs {MIN_GAMES}); "
+                                     "don't cite splits for this player."),
+                    "splits_by_opponent": {f"{dim} ({DIMENSIONS[dim]})": v for dim, v in splits["dimensions"].items()},
+                    "note": (f"Only real game lines count (captured box scores and exact weekly lines); synthetic lines "
+                             f"spread over several games are skipped. Strong = the best 11 of 32 defenses that season, "
+                             f"Average the next 10, Weak the rest. A group needs {MIN_GAMES} real games, and its averages "
+                             f"are blended toward his overall average by {BLEND_GAMES} games, so small samples lean to his "
+                             f"norm. Cite a split as a tendency with its game count (\"in 5 games against top pass "
+                             f"rushes\"); with few games, don't build an argument on it."),
+                }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

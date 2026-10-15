@@ -139,6 +139,9 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
                     'player_name': p_tup[0],
                     'team_id': team_id,
                     'position': p_tup[1],
+                    # One missing game: the line is that week's exact change in the season totals. Several: the
+                    # remainder is spread by score, so the line is synthetic (player splits skip it).
+                    'line_source': 'WEEKLY' if num_games == 1 else 'DISTRIBUTED',
                     **p_stats
                 })
                 

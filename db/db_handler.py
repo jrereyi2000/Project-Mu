@@ -292,11 +292,12 @@ class DatabaseHandler:
                             game_id, player_name, team_id, position,
                             completions, pass_attempts, pass_yards, pass_tds, interceptions,
                             rush_attempts, rush_yards, rush_tds,
-                            receptions, rec_yards, rec_tds, fumb
+                            receptions, rec_yards, rec_tds, fumb, line_source
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'CAPTURED')
                         ON CONFLICT (game_id, player_name, position) 
                         DO UPDATE SET 
+                            line_source = 'CAPTURED',
                             team_id = COALESCE(EXCLUDED.team_id, player_stats.team_id),
                             completions = GREATEST(player_stats.completions, EXCLUDED.completions),
                             pass_attempts = GREATEST(player_stats.pass_attempts, EXCLUDED.pass_attempts),

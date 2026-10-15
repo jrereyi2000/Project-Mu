@@ -186,6 +186,8 @@ CREATE TABLE IF NOT EXISTS player_stats (
     pass_comp_pct NUMERIC(5, 1), pass_rating NUMERIC(5, 1), pass_ypa NUMERIC(5, 1), pass_long INT, pass_sacks INT,
     rush_avg NUMERIC(5, 1), rush_btk INT, rush_yac INT, rush_long INT,
     rec_avg NUMERIC(5, 1), rec_rac INT, rec_rac_avg NUMERIC(5, 1), rec_long INT,
+    -- CAPTURED box score | WEEKLY = exact one-game backfill | DISTRIBUTED = synthetic (2026_11_14_player_stats_line_source.sql)
+    line_source VARCHAR(12) CHECK (line_source IN ('CAPTURED', 'WEEKLY', 'DISTRIBUTED')),
     -- Full-PPR fantasy points, always derived from the box score above (read-only; never insert/update it).
     fantasy_points NUMERIC(6, 2) GENERATED ALWAYS AS (
         ROUND(

@@ -973,8 +973,8 @@ def load_games(cur, folder, season, report, replace=False):
                 continue
             cols = list(vals)
             if table == "player_stats":
-                cur.execute(f"INSERT INTO player_stats (game_id, player_id, player_name, team_id, position, {', '.join(cols)}) "
-                            f"VALUES (%s, %s, %s, %s, %s, {', '.join(['%s'] * len(cols))})",
+                cur.execute(f"INSERT INTO player_stats (game_id, player_id, player_name, team_id, position, line_source, {', '.join(cols)}) "
+                            f"VALUES (%s, %s, %s, %s, %s, 'CAPTURED', {', '.join(['%s'] * len(cols))})",
                             (gid, pid, line["name"], line["team"], line["pos"], *[vals[c] for c in cols]))
             else:
                 cur.execute(f"INSERT INTO {table} (game_id, player_id, team_id, position, {', '.join(cols)}) "

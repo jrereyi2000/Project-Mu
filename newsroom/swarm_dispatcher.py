@@ -34,6 +34,7 @@ from newsroom.db_tools import (
     get_opponent_adjusted_credit,
     get_coach_of_the_year_race,
     get_coach_profile,
+    get_player_scheme_splits,
     get_team_efficiency_profile,
     get_matchup_edges,
     get_weekly_slate,
@@ -670,6 +671,7 @@ class SwarmDispatcher:
             get_opponent_adjusted_credit,
             get_coach_of_the_year_race,
             get_coach_profile,
+            get_player_scheme_splits,
             get_team_efficiency_profile,
             get_matchup_edges,
             get_weekly_slate,
@@ -877,6 +879,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need schedule-adjusted team strength (Opponent-Adjusted Game Credit, strength of schedule, expected wins, and which records are lucky or unlucky), call `get_opponent_adjusted_credit` (no team = all 32 ranked; with a team = game-by-game credit log). It also gives each team's Trajectory (Surging to Sliding over the last 4 games).
 - If you need the Coach of the Year race (head coaches ranked by COTY score with record, wins above expectation, roster outperformance and improvement over last season), call `get_coach_of_the_year_race`.
 - If you need a team's head coach (tenure, who he replaced, offensive scheme and defensive front, tendencies, this season's and career records, Super Bowls and Coach of the Year awards), call `get_coach_profile`.
+- If you need how a player produces against different kinds of defenses, call `get_player_scheme_splits`. `get_player_scheme_splits` shows how a QB, back or receiver produces against Strong / Average / Weak scoring defenses, pass rushes and coverages (this season and last, real game lines only). Cite a split with its game count as a tendency ("in five games against top-11 pass rushes"); if its `verdict` says there aren't enough real games, don't cite splits for that player.
 - If you need Pythagorean wins (what points for/against say the record should be), team pace, per-game passing/rushing yards and giveaways, or situational football (third- and fourth-down conversion rates, red-zone TD rate on offense and allowed on defense, penalties per game, each with a league rank), call `get_team_efficiency_profile`.
 - If you need where one team's offense has the edge over another's defense (passing vs. coverage, rushing vs. defensive rating, ball security, offensive line vs. pass rush), call `get_matchup_edges` (no opponent = their next game).
 - If you need all 32 team popularity rankings and watchability indices, call `get_all_team_popularities`.
@@ -905,6 +908,7 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 - Query your team's complete game schedule, results, and margins with `get_team_season_schedule`.
 - Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`. There is no injury data in this league: do not mention injuries or injury reports.
 - Query team baseline ratings and top stars with `get_team_context`.
+- Query how your players (and the opponent's) produce against different kinds of defenses with `get_player_scheme_splits`. `get_player_scheme_splits` shows how a QB, back or receiver produces against Strong / Average / Weak scoring defenses, pass rushes and coverages (this season and last, real game lines only). Cite a split with its game count as a tendency ("in five games against top-11 pass rushes"); if its `verdict` says there aren't enough real games, don't cite splits for that player.
 - Query your head coach (tenure, schemes, tendencies, records, hardware) with `get_coach_profile`, and the opponent's coach before a game. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and four tendencies (pass lean, fourth-down aggressiveness, blitz rate, man coverage) as Low / Medium / High against the league. Pass lean and fourth-down aggressiveness are measured from this league's results (allowing for the score), so you can state them as what the team does ("one of the league's most aggressive fourth-down teams"). Blitz rate and man coverage are the staff's real-world philosophy, not measured here: present them as reputation ("a staff known for pressure"), never as what the defense has done this season. Never turn a tier into a percentage, and never claim how often a team blitzed or played man in a specific game.
 - Query your team's and the opponent's third-down, red-zone and penalty rates with league ranks with `get_team_efficiency_profile`; a single game's come only from its box score's `team_situational` line, so don't invent them for a game without one.
 - Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.

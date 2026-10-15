@@ -143,6 +143,17 @@ class WriterConfigTests(unittest.TestCase):
             for o in overrides[name]:
                 self.assertIn("coaching_matchup", o["curatorial_autonomy_override"], o["override_name"])
 
+    def test_player_splits_are_registered_and_hooked_up(self):
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            src = f.read()
+        self.assertGreaterEqual(src.count("get_player_scheme_splits"), 4)  # import, tool list, both research blocks
+        self.assertEqual(src.count("don't cite splits for that player"), 2)
+        for name in ("LOCAL_PLAYER_SPOTLIGHT", "PLAYER_PROGRESS_REPORT", "QUARTERBACK_DUEL_TAPE_BREAKDOWN",
+                     "LOCAL_MATCHUP_PRIMER", "FANTASY_START_SIT", "FANTASY_MATCHUP_EXPLOITS", "FANTASY_PLAYOFF_STREAMERS"):
+            text = self.article_types[name]["curatorial_autonomy"]
+            self.assertIn("SPLITS DATA:", text, name)
+            self.assertIn("get_player_scheme_splits", text, name)
+
     def test_coach_of_the_year_tool_is_registered(self):
         with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
             self.assertGreaterEqual(f.read().count("get_coach_of_the_year_race"), 3)  # import, tool list, guideline
