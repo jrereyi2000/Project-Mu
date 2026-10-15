@@ -112,7 +112,8 @@ CHIAKI_HOST = _env("CHIAKI_HOST", "PS5-263")             # chiaki-ng console nic
 CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
 
 
-LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST", "INJURY_REPORT")
+LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST", "INJURY_REPORT",
+                "DRAFT_BOARD")
 TILE_SCREENS = ("SCHED_TILES", "STATS_TILES")
 HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER")
 
@@ -1692,6 +1693,9 @@ def open_prospects():
     raise Abort(f"Could not reach the Draft Board (stuck on {s})")
 
 
+PROSPECT_RETRIES = 3   # extra Down presses before a still Draft Board counts as stopped
+
+
 def run_prospects(out, max_prospects=32):
     """Capture the College Prospects / Draft Board screen line by line, because the full name,
     height, and weight are only displayed on the currently highlighted row.
@@ -1700,11 +1704,12 @@ def run_prospects(out, max_prospects=32):
     os.makedirs(pdir, exist_ok=True)
     log("== Draft Board Prospects (Line by Line) ==")
     f, s = look()
-    if s != "DRAFT_BOARD":
-        log("Opening the Draft Board (Manage Roster > Scouting > Prospects > Edit Draft Class)")
-        open_prospects()
-    else:
-        log("Already on the Draft Board; assuming Round 1, Pick 1 is highlighted")
+    if s in ("DRAFT_BOARD", "EXIT_CLASS_PROMPT"):
+        # the highlight may be anywhere (e.g. a redo after a stream restart); the board reopens on Pick 1
+        log("Already on the Draft Board; leaving and reopening it so Round 1, Pick 1 is highlighted")
+        close_draft_board()
+    log("Opening the Draft Board (Manage Roster > Scouting > Prospects > Edit Draft Class)")
+    open_prospects()
 
     prev_sig = None
     row = 0
@@ -1716,12 +1721,27 @@ def run_prospects(out, max_prospects=32):
         sig = table_sig(path)
 
         if prev_sig is not None and same_table(prev_sig, sig):
-            # Screen didn't change: could be a dropped press or end of board. Retry once.
-            press("down", hold=0.1, wait=0.3)
-            snap(path)
-            sig = table_sig(path)
-            if same_table(prev_sig, sig):
+            # Screen didn't change: a late redraw, a dropped press, a stalled stream, or the end of
+            # the board. Look again before pressing: a second Down after a late redraw skips a row
+            # (Oct 15 full board: 5 prospects skipped, e.g. Round 2, Pick 29).
+            for _ in range(PROSPECT_RETRIES):
+                time.sleep(0.6)
+                snap(path)
+                sig = table_sig(path)
+                if not same_table(prev_sig, sig):
+                    break
+                press("down", hold=0.1, wait=0.6)
+                snap(path)
+                sig = table_sig(path)
+                if not same_table(prev_sig, sig):
+                    break
+            else:
                 os.remove(path)
+                # The board ends with the Undrafted prospects. Stopping anywhere else (18 rows in,
+                # Oct 15, right after chiaki-ng stopped drawing) is a stall: fail, so run_mode can
+                # check for a frozen stream, restart it and redo the board from Pick 1.
+                if "UNDRAFTED" not in Frame().text.upper():
+                    raise Abort(f"Draft Board stopped moving at row {row}, before the Undrafted prospects")
                 log(f"  Reached end of draft board after {row} prospects")
                 break
 

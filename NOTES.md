@@ -4,7 +4,7 @@
 **Status:** Feature Complete — Draft Board navigation automated (verified live Oct 15)  
 **Active Branch:** `feat/draft-kiper-mock`  
 **Active Worktree:** `/Users/jrereyi/Downloads/Project Mu/.claude/worktrees/draft-kiper-mock`  
-**Test Suite Status:** 124/124 tests passing (`python3 -m unittest tests/test_madden_capture.py tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
+**Test Suite Status:** 127/127 tests passing (`python3 -m unittest tests/test_madden_capture.py tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
 
 > [!IMPORTANT]
 > **DO NOT MERGE INTO `main` YET.**  
@@ -103,12 +103,22 @@ A bare Back does not leave the board. Back opens a **Draft Class Edited** prompt
 - `press_into()` retries L3 if Madden drops the press.
 - Tests: `DraftRouteTest` in `tests/test_madden_capture.py`. Mapping frames: `captures/2026-10-15_explore/explore/` (gitignored).
 
+### Full-Board Capture Reliability
+- **End of board:** the board ends on the Undrafted rows. A board that stops moving anywhere else raises `Abort`. `DRAFT_BOARD` is in `LIST_SCREENS`, so `run_mode`'s frozen-stream probe covers it, restarts the stream and redoes the board from Pick 1. The first full run stopped after 18 rows, right after chiaki-ng stopped drawing.
+- **Skipped rows:** when a frame looks unchanged, the capture waits 0.6 s and looks again before pressing Down again (`PROSPECT_RETRIES` = 3). Pressing straight away skipped 5 prospects in the second run (e.g. Round 2, Pick 29 Colin Franklin).
+- **Starting on the board:** the capture leaves the board and reopens it, since the highlight may not be on Pick 1.
+
 ### Live Checks (Oct 15)
 - `madden_capture.py --only prospects --prospects 3`, starting from the hub: navigated in, captured picks 1–3 (Vogel, Capps, Reynolds), left via SAVE AND EXIT, and `go_hub()` returned to the Manage Roster hub.
 - Each entry posts an "edit draft class" notice to the league transaction log.
 
+- Full board (`--only prospects --all-prospects`, `captures/2026-10-15_full_board3`): 389 frames, 224 drafted + 163 UDFA + 2 unreadable PICK cells. All 389 players match `captures/prospects/prospects.csv`.
+  - The remaining differences are OCR digit misreads, inconsistent between runs: 1↔7 in heights (18 rows), 3↔8 in weights (14 rows), 3↔8 / 5↔6 in 3 PICK cells, 15 first-name spellings (e.g. PAT FIOWERS / PAT FLOWERS), and a few blank cells.
+  - Spot check: Mitch Williams's card reads 6'1" (the reference is right; the new OCR said 6'7").
+
 ### Not Yet Done
-- A full `python3 -m pipeline.weekly_capture --mode prospects` run (`--all-prospects`), end to end.
+- A full `python3 -m pipeline.weekly_capture --mode prospects` run (extract + load), end to end.
+- OCR digit stability in `pipeline/extract_prospects_ocr.py`. Possible approaches: a second read of the HT/WT band, or a Gemini check on rows where two reads disagree.
 
 ---
 
@@ -126,7 +136,7 @@ A bare Back does not leave the board. Back opens a **Draft Class Edited** prompt
 Run these commands inside the worktree to verify the environment:
 
 ```bash
-# 1. Run all unit and integration test suites (124 tests)
+# 1. Run all unit and integration test suites (127 tests)
 python3 -m unittest \
   tests/test_madden_capture.py \
   tests/test_writer_config.py \

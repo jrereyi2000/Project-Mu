@@ -215,6 +215,37 @@ class DraftRouteTest(unittest.TestCase):
         close.assert_called_once()
         press.assert_not_called()                  # no bare Back on the board
 
+    def run_board(self, frames_moving, end_text, start="HUB_ROSTER"):
+        """run_prospects with the console faked: the table moves for `frames_moving` rows, then stays still."""
+        sigs = iter(list(range(frames_moving)) + ["still"] * 50)
+        out = tempfile.mkdtemp()
+        with mock.patch.object(mc, "look", return_value=(None, start)), \
+                mock.patch.object(mc, "open_prospects") as open_, \
+                mock.patch.object(mc, "close_draft_board") as close, \
+                mock.patch.object(mc, "snap", side_effect=lambda p: open(p, "w").close()), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda p: next(sigs)), \
+                mock.patch.object(mc, "same_table", side_effect=lambda a, b: a == b), \
+                mock.patch.object(mc, "Frame", return_value=mock.Mock(text=end_text)), \
+                mock.patch.object(mc, "press"), mock.patch.object(mc, "log"):
+            rows = mc.run_prospects(out, max_prospects=0)
+        return rows, open_, close, sorted(os.listdir(os.path.join(out, "prospects")))
+
+    def test_board_end_on_undrafted_rows(self):
+        rows, _, close, files = self.run_board(5, "Undrafted | J.Cowart | QB")
+        self.assertEqual(rows, 6)                  # 5 moving frames + the last still one
+        self.assertEqual(len(files), 6)
+        close.assert_called_once()
+
+    def test_board_stall_before_undrafted_fails(self):
+        # Oct 15: the board stopped moving at row 18 after chiaki-ng stopped drawing
+        with self.assertRaisesRegex(mc.Abort, "stopped moving"):
+            self.run_board(5, "Round 1, Pick 18 | S.Beatty")
+
+    def test_starting_on_the_board_reopens_it(self):
+        _, open_, close, _ = self.run_board(2, "Undrafted", start="DRAFT_BOARD")
+        open_.assert_called_once()
+        self.assertEqual(close.call_count, 2)      # once to reset the highlight, once at the end
+
     def test_open_prospects_from_the_prospects_list(self):
         # look(): the Prospects list, then the prompt again after the Down press
         screens = iter([(self.PROSPECTS, "SCOUT_PROSPECTS"), (self.PROMPT, "EDIT_CLASS_PROMPT")])
