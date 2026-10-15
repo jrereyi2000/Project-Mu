@@ -17,6 +17,7 @@ from engines.gotw_engine import display_excitement
 PRIMER = "LOCAL_MATCHUP_PRIMER"
 STATE_OF_THE_UNION = "FRANCHISE_STATE_OF_THE_UNION"
 PLAYOFF_AUTOPSY = "PLAYOFF_AUTOPSY"
+HOT_SEAT_AUDIT = "COACHING_HOT_SEAT_AUDIT"
 
 REGULAR_SEASON_FINAL_WEEK = 18
 WILD_CARD_WEEK = 19
@@ -24,6 +25,8 @@ SUPER_BOWL_WEEK = 23
 PHASE_4_WEEKS = range(15, 19)
 PLAYOFF_TEAMS_PER_CONFERENCE = 7
 PRIMER_ROTATION_WEEKS = 2
+# Week 19 hot-seat audit: wins - expected wins below this marks a coach who lost games the roster should have won.
+HOT_SEAT_WINS_ABOVE_EXPECTED = -1.5
 
 # Editorial stakes added to a game's (projected) raw Excitement Index when picking marquee games.
 # These are editorial weights, not part of the Excitement Index itself (which has no standings input).
@@ -35,7 +38,8 @@ PLAYOFF_RACE_BONUS = 2.0   # per team not yet mathematically eliminated (regular
 class LeagueSnapshot:
     season: int
     week: int
-    # team_id -> {"name", "conference", "division", "wins", "losses", "popularity"}
+    # team_id -> {"name", "conference", "division", "wins", "losses", "popularity", "expected_wins"}
+    # ("expected_wins" from Opponent-Adjusted Game Credit, None until the engine has run)
     teams: dict = field(default_factory=dict)
     # Non-bye games for `week`: {"game_id", "home_team_id", "away_team_id", "excitement", "projected"}.
     # "excitement" is the raw stored E for completed games, else the raw projected E (None if not projected yet).
@@ -262,6 +266,42 @@ def _eliminated_targets(snap: LeagueSnapshot, count: int, used: set) -> list:
     return targets
 
 
+def wins_above_expected(snap: LeagueSnapshot, team_id: int):
+    """Wins - expected wins (regular season), or None when the team has no expected wins yet."""
+    t = snap.teams.get(team_id, {})
+    if t.get("expected_wins") is None:
+        return None
+    return (t.get("wins") or 0) - t["expected_wins"]
+
+
+def hot_seat_team_ids(snap: LeagueSnapshot) -> list:
+    """Week 19: teams that missed the playoffs whose coach fell short of roster expectation
+    (wins - expected wins < HOT_SEAT_WINS_ABOVE_EXPECTED), steepest shortfall first (ties: more popular)."""
+    shortfalls = {t: wins_above_expected(snap, t) for t in _missed_playoff_team_ids(snap)}
+    hot = [t for t, d in shortfalls.items() if d is not None and d < HOT_SEAT_WINS_ABOVE_EXPECTED]
+    return sorted(hot, key=lambda t: (shortfalls[t], -_popularity(snap, t), t))
+
+
+def _hot_seat_targets(snap: LeagueSnapshot, count: int, used: set) -> list:
+    hot = [t for t in hot_seat_team_ids(snap) if t not in used]
+
+    def shortfall(t):
+        t_info = snap.teams[t]
+        return f"{t_info.get('wins') or 0} wins against {t_info['expected_wins']:.1f} expected ({wins_above_expected(snap, t):+.1f})"
+
+    targets = []
+    for team_id in hot[:count]:
+        used.add(team_id)
+        others = [t for t in hot if t != team_id]
+        note = (f"Black Monday: {_team_label(snap, team_id)} missed the playoffs with {shortfall(team_id)}, "
+                f"the steepest shortfall against roster expectation among eliminated teams; its head coach leads the Firing Line.")
+        if others:
+            note += " Other eliminated teams below " + f"{HOT_SEAT_WINS_ABOVE_EXPECTED:+.1f}: " + "; ".join(
+                f"{_team_label(snap, t)}, {shortfall(t)}" for t in others) + "."
+        targets.append(_team_target(snap, "HOT_SEAT", team_id, note))
+    return targets
+
+
 def _exit_targets(snap: LeagueSnapshot, kind: str, candidates: list, count: int, used: set, note_fmt: str) -> list:
     targets = []
     for team_id in _pick_by_popularity(snap, candidates, used, count):
@@ -289,6 +329,12 @@ def resolve_slot_targets(slots: list, snap: LeagueSnapshot) -> list:
     if primer_idx:
         picks = _super_bowl_primer_targets(snap, used) if week == SUPER_BOWL_WEEK else _primer_targets(snap, len(primer_idx), used)
         for i, t in zip(primer_idx, picks):
+            targets[i] = t
+
+    # The hot-seat audit takes the worst underperformer before the exit State of the Union picks its teams.
+    hot_seat_idx = indices(HOT_SEAT_AUDIT)
+    if hot_seat_idx and week == WILD_CARD_WEEK:
+        for i, t in zip(hot_seat_idx, _hot_seat_targets(snap, len(hot_seat_idx), used)):
             targets[i] = t
 
     sotu_idx = indices(STATE_OF_THE_UNION)
@@ -321,12 +367,13 @@ def load_league_snapshot(db_conn_info: str, season: int, week: int) -> LeagueSna
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT t.id, t.name, t.conference, t.division, COALESCE(ts.wins, 0), COALESCE(ts.losses, 0),
-                       COALESCE(ts.popularity_index, 0)
+                       COALESCE(ts.popularity_index, 0), ts.expected_wins
                 FROM teams t
                 LEFT JOIN team_seasons ts ON ts.team_id = t.id AND ts.season = %s;
             """, (season,))
-            for tid, name, conf, division, wins, losses, pop in cur.fetchall():
-                snap.teams[tid] = {"name": name, "conference": conf, "division": division, "wins": wins, "losses": losses, "popularity": float(pop)}
+            for tid, name, conf, division, wins, losses, pop, xw in cur.fetchall():
+                snap.teams[tid] = {"name": name, "conference": conf, "division": division, "wins": wins, "losses": losses,
+                                   "popularity": float(pop), "expected_wins": None if xw is None else float(xw)}
 
             cur.execute("""
                 SELECT id, home_team_id, away_team_id, status, excitement_index, projected_excitement

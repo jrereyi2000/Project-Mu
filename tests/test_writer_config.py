@@ -159,6 +159,24 @@ class WriterConfigTests(unittest.TestCase):
         with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
             self.assertGreaterEqual(f.read().count("get_coach_of_the_year_race"), 3)  # import, tool list, guideline
 
+    def test_hot_seat_audit_runs_week_19_slot_6(self):
+        week_19 = dict(dispatcher_literal("POSTSEASON_EDITORIAL_SLATES")[19])
+        self.assertEqual(week_19["Slot 6"], "COACHING_HOT_SEAT_AUDIT")
+        self.assertEqual(week_19["Slot 7"], "FRANCHISE_STATE_OF_THE_UNION")
+        info = self.article_types["COACHING_HOT_SEAT_AUDIT"]
+        self.assertEqual(info["allowed_writers"], ["SANDO", "BARNWELL"])
+        self.assertEqual(info["structure_source"], "article")
+        queried = " ".join(info["data_queried"])
+        for tool in ("R_rating", "Picks 1-18", "get_coach_of_the_year_race", "get_coach_profile"):
+            self.assertIn(tool, queried)
+        headers = ["# The Black Monday Verdicts", "## The Firing Line: Severe Underperformance vs. Talent",
+                   "## On the Bubble: Ultimatum Years & Scheme Mandates", "### The Safe Seats: Talent Deficit Pardons"]
+        st = info["structure_directive"]
+        self.assertEqual([st.index(h) for h in headers], sorted(st.index(h) for h in headers))
+        cur = info["curatorial_autonomy"]
+        for phrase in ("get_draft_order", "get_coach_of_the_year_race", "-1.5", "COACHING DATA:", "never turn them into percentages"):
+            self.assertIn(phrase, cur)
+
     def test_roundtable_is_always_the_panel(self):
         self.assertEqual(self.article_types["SUPER_BOWL_ROUNDTABLE_CONSENSUS"]["allowed_writers"], ["ROUNDTABLE_PANEL"])
 

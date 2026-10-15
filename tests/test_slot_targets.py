@@ -6,6 +6,7 @@ import unittest
 
 from newsroom.slot_targets import (
     LeagueSnapshot,
+    hot_seat_team_ids,
     mathematically_eliminated_team_ids,
     rank_games_by_interest,
     resolve_slot_targets,
@@ -146,6 +147,58 @@ class ExitTargetTests(unittest.TestCase):
         autopsy, primer = resolve_slot_targets(slots, snap)
         self.assertEqual(primer["team_id"], 32)
         self.assertEqual(autopsy["team_id"], 30)
+
+
+WC_GAMES = [game(1, 1, 2, 60), game(2, 3, 4, 70), game(3, 5, 6, 80), game(4, 17, 18, 50), game(5, 19, 20, 40), game(6, 21, 22, 30)]
+WEEK_19_SLOTS = [("Slot 6", "COACHING_HOT_SEAT_AUDIT"), ("Slot 7", "FRANCHISE_STATE_OF_THE_UNION"), ("Slot 8", "LOCAL_MATCHUP_PRIMER")]
+
+
+def wild_card_league(expected=None):
+    """Week 19: Wild Card games for 1-6 and 17-22, byes 7 (AFC) and 23 (NFC); everyone else missed the playoffs.
+    `expected` maps team_id -> (wins, expected wins)."""
+    snap = league(week=19, week_games=WC_GAMES)
+    for info in snap.teams.values():
+        info["wins"], info["losses"] = 8, 9
+    snap.teams[7]["wins"], snap.teams[7]["losses"] = 15, 2
+    snap.teams[23]["wins"], snap.teams[23]["losses"] = 14, 3
+    for t, (wins, xw) in (expected or {}).items():
+        snap.teams[t].update(wins=wins, losses=17 - wins, expected_wins=xw)
+    return snap
+
+
+class HotSeatTargetTests(unittest.TestCase):
+    def test_steepest_shortfall_among_eliminated_teams_leads(self):
+        snap = wild_card_league({10: (5, 7.0), 12: (4, 7.5), 30: (6, 7.6), 31: (8, 9.0)})
+        hot_seat, sotu, primer = resolve_slot_targets(WEEK_19_SLOTS, snap)
+        self.assertEqual(hot_seat["team_id"], 12)  # -3.5 beats 10 (-2.0) and 30 (-1.6); 31 (-1.0) isn't below -1.5
+        self.assertEqual(hot_seat["kind"], "HOT_SEAT")
+        self.assertIn("4 wins against 7.5 expected (-3.5)", hot_seat["note"])
+        self.assertIn("Team10 (ID: 10), 5 wins against 7.0 expected (-2.0)", hot_seat["note"])
+        self.assertIn("Team30 (ID: 30)", hot_seat["note"])
+        self.assertNotIn("Team31", hot_seat["note"])
+        self.assertEqual(sotu["team_id"], 32)  # the exit State of the Union still takes the most popular exit
+        self.assertEqual(primer["game_id"], 3)
+
+    def test_playoff_teams_and_byes_are_never_on_the_hot_seat(self):
+        self.assertEqual(hot_seat_team_ids(wild_card_league({1: (8, 12.0), 7: (15, 17.0), 23: (14, 16.0)})), [])
+
+    def test_threshold_is_strict(self):
+        self.assertEqual(hot_seat_team_ids(wild_card_league({10: (5, 6.5), 11: (5, 6.6)})), [11])
+
+    def test_teams_without_expected_wins_are_skipped(self):
+        snap = wild_card_league()
+        self.assertTrue(all(snap.teams[t].get("expected_wins") is None for t in snap.teams))
+        self.assertEqual(resolve_slot_targets(WEEK_19_SLOTS[:1], snap), [None])
+
+    def test_hot_seat_team_is_not_reused_by_the_exit_state_of_the_union(self):
+        snap = wild_card_league({32: (3, 6.0)})
+        hot_seat, sotu, _ = resolve_slot_targets(WEEK_19_SLOTS, snap)
+        self.assertEqual((hot_seat["team_id"], sotu["team_id"]), (32, 31))
+
+    def test_untargeted_outside_week_19(self):
+        snap = wild_card_league({12: (4, 7.5)})
+        snap.week = 20
+        self.assertEqual(resolve_slot_targets(WEEK_19_SLOTS[:1], snap), [None])
 
 
 class EliminationTests(unittest.TestCase):
