@@ -48,6 +48,12 @@ ROLE_CAPS = {"pundit": 3, "fantasy": 4, "beat": 2, "fan": 2, "bandwagon": 3, "me
 FORMER_TEAM_SLANT = {"OCHOCINCO": "CIN", "SHANNON": "DEN", "JJ_WATT": "HOU", "RG3": "WAS", "CLARK": "PIT", "MCAFEE": "IND"}
 BAD_GAME_SHARE = 0.65   # a flop is at most this share of his earlier average
 OFFENSE_POSITIONS = ("QB", "RB", "WR", "TE")
+# Defensive and kicking performances (captured games only): lines scoring DEF_PERFORMANCE_MIN+ on defense_play_score
+# take the 2nd, 5th, 8th ... ordinary (non-buzz) performance post, at most DEF_PERFORMANCE_MAX a week, inside the
+# same count.
+DEF_PERFORMANCE_MIN = 12
+DEF_PERFORMANCE_EVERY = 3
+DEF_PERFORMANCE_MAX = 3
 BAD_QB_INTERCEPTIONS = 2  # a QB with this many picks in a loss had a bad game (no QB threw 3 in a game in 2035)
 
 # "The league is talking" (agreed with JR on Oct 14; frequencies checked against the 2035 season). A tier-1 game
@@ -136,6 +142,8 @@ PUNDIT_AFFINITY = {
     "TE": ("SHANNON", "MCAFEE", "OCHOCINCO"),
     "HB": ("CLARK", "JJ_WATT", "EISEN", "WINGO"),
     "RB": ("CLARK", "JJ_WATT", "EISEN", "WINGO"),
+    "DEF": ("JJ_WATT", "SHANNON", "CLARK", "STEPHEN_A"),
+    "K": ("MCAFEE", "EISEN", "WINGO"),
 }
 
 # Articles shared from a different account than their byline: Skip's column byline shares from his tweet
@@ -225,6 +233,30 @@ def load_week_context(cur, season: int, week: int) -> dict:
         lines.append(d)
     ctx["player_lines"] = lines
 
+    # Defensive and kicking lines from the recap week's captured box scores (game_stat_lines). Only captured games have
+    # them (Week 17 of 2035 on); a game without any contributes none.
+    def_cols = ("def_tackles", "def_sacks", "def_tfl", "def_ints", "def_deflections", "def_forced_fumbles",
+                "def_fumble_recoveries", "def_tds", "def_safeties", "kick_fgm", "kick_fga", "kick_fg_long",
+                "kick_fgm_50", "kick_fga_50", "kick_xpm", "kick_xpa")
+    cur.execute(f"""
+        SELECT l.week, l.game_id, l.team_id, COALESCE(pse.position, ''), l.player_name,
+               COALESCE(l.full_name, l.player_name), l.player_id, COALESCE(pse.popularity_index, 0),
+               {', '.join('l.' + c for c in def_cols)}
+        FROM game_stat_lines l
+        JOIN games g ON g.id = l.game_id
+        LEFT JOIN player_seasons pse ON pse.player_id = l.player_id AND pse.season = g.season
+        WHERE g.season = %s AND g.week = %s AND g.status = 'COMPLETED' AND l.team_id IS NOT NULL
+          AND (l.def_tackles IS NOT NULL OR l.kick_fga IS NOT NULL)
+    """, (season, recap_week))
+    ctx["defense_lines"] = []
+    for r in cur.fetchall():
+        d = dict(zip(("week", "game_id", "team_id", "position", "short_name", "name", "player_id", "popularity") + def_cols, r))
+        d["popularity"] = float(d["popularity"] or 0)
+        d["name"] = tidy_name(d["name"])
+        for c in def_cols:
+            d[c] = float(d[c]) if d[c] is not None else None
+        ctx["defense_lines"].append(d)
+
     cur.execute("""
         SELECT id, persona, team_id, headline, excerpt, slot, article_type
         FROM news_feed WHERE season = %s AND week = %s AND content_type = 'ARTICLE' ORDER BY id
@@ -278,6 +310,46 @@ def stat_line(l: dict) -> str:
     return "; ".join(parts) or "no recorded stats"
 
 
+def _n(v):
+    """A stat for prose: whole numbers without .0 (sacks come in halves)."""
+    v = float(v or 0)
+    return int(v) if v.is_integer() else v
+
+
+def defense_stat_line(l: dict) -> str:
+    """A captured defensive or kicking game line, e.g. '6 tkl, 2.5 sacks, 1 FF' or '4/5 FG (long 56), 3/3 XP';
+    zero categories are left out."""
+    parts = []
+    if l.get("def_tackles") is not None:
+        d = [f"{_n(l['def_tackles'])} tkl"]
+        for k, label in (("def_sacks", "sacks"), ("def_tfl", "TFL"), ("def_ints", "INT"), ("def_deflections", "PD"),
+                         ("def_forced_fumbles", "FF"), ("def_fumble_recoveries", "FR"), ("def_tds", "def TD"),
+                         ("def_safeties", "safety")):
+            if l.get(k):
+                d.append(f"{_n(l[k])} {'sack' if label == 'sacks' and l[k] == 1 else label}")
+        parts.append(", ".join(d))
+    if l.get("kick_fga"):
+        kick = f"{_n(l['kick_fgm'])}/{_n(l['kick_fga'])} FG" + (f" (long {_n(l['kick_fg_long'])})" if l.get("kick_fg_long") else "")
+        if l.get("kick_fga_50"):
+            kick += f", {_n(l['kick_fgm_50'])}/{_n(l['kick_fga_50'])} from 50+"
+        if l.get("kick_xpa"):
+            kick += f", {_n(l['kick_xpm'])}/{_n(l['kick_xpa'])} XP"
+        parts.append(kick)
+    return "; ".join(parts) or "no recorded stats"
+
+
+def defense_play_score(l: dict) -> float:
+    """How big a captured defensive or kicking game was, or 0 if it isn't a performance worth a post. A big day is
+    DEF_PERFORMANCE_MIN points: 2 sacks, an interception plus a forced fumble, a defensive TD, two forced fumbles,
+    4 field goals, a 55+ yard field goal or two from 50+."""
+    d = (6 * (l.get("def_sacks") or 0) + 8 * (l.get("def_ints") or 0) + 4 * (l.get("def_forced_fumbles") or 0)
+         + 3 * (l.get("def_fumble_recoveries") or 0) + 12 * (l.get("def_tds") or 0) + 6 * (l.get("def_safeties") or 0))
+    k = (3 * (l.get("kick_fgm") or 0) + 3 * (l.get("kick_fgm_50") or 0)
+         + (12 if (l.get("kick_fg_long") or 0) >= 55 else 0))
+    score = max(d, k)
+    return score if score >= DEF_PERFORMANCE_MIN else 0.0
+
+
 def norm_pos(pos):
     p = (pos or "").upper()
     return "RB" if p in ("HB", "FB", "RB") else p
@@ -323,6 +395,8 @@ class Week:
             if l["week"] == self.recap_week:
                 self.lines_by_game[l["game_id"]].append(l)
         self.recap_lines = [l for l in ctx["player_lines"] if l["week"] == self.recap_week]
+        recap_ids = {g["id"] for g in ctx["recap_games"]}
+        self.defense_lines = [l for l in ctx.get("defense_lines", ()) if l["game_id"] in recap_ids]
         self.season_totals = self._season_totals()
 
     # -- records and standings (regular season only, before this publication week)
@@ -502,6 +576,27 @@ class Week:
             "opponent": self.team_label(opp),
             "season_so_far": season,
             "season_rank": rank,
+        }
+
+    def defense_performances(self):
+        """Last week's big defensive and kicking games from captured box scores, biggest first."""
+        rows = [(defense_play_score(l), l) for l in self.defense_lines]
+        rows = [(sc, l) for sc, l in rows if sc]
+        rows.sort(key=lambda x: (x[0], x[1].get("def_tackles") or 0, x[1]["popularity"]), reverse=True)
+        return [l for _, l in rows]
+
+    def defense_performance_facts(self, l):
+        g = next(g for g in self.ctx["recap_games"] if g["id"] == l["game_id"])
+        opp = g["away_team_id"] if g["home_team_id"] == l["team_id"] else g["home_team_id"]
+        w, _ = self.winner_loser(g)
+        return {
+            "player": f"{l['name']} ({l['position'] or ('K' if l.get('kick_fga') else 'DEF')}, {self.team_label(l['team_id'])})",
+            "week": l["week"],
+            "stat_line": defense_stat_line(l),
+            "game": self.game_label(g),
+            "team_result": "won" if w == l["team_id"] else "lost" if w else "tied",
+            "opponent": self.team_label(opp),
+            "note": "Game line from the captured box score; no season totals or fantasy points are given for it.",
         }
 
     def position_leaders(self, pos, n=5):
@@ -985,7 +1080,8 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                                          {k: art[k] for k in ("headline", "excerpt", "article_type", "slot")},
                                          filed_team=art["team_id"]))
 
-    # 2. Player performances from the recap week (offense only until the capture loads defense/kicking).
+    # 2. Player performances from the recap week: the top full-PPR offensive lines, with the 2nd, 5th, 8th ... ordinary
+    # post a big defensive or kicking game where the game's box score was captured.
     # League-wide voices only: pundits, ex-players (leaning to their old team, then their position), bandwagon
     # fans and the fantasy accounts. Die-hards talk about their own team in reactions and comparisons.
     perf_n = BUCKET_SIZES["PERFORMANCE"] if recap else 0
@@ -1041,27 +1137,42 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                 a["buzz_tier"] = tier
                 ranking_posts.append(a)
 
+    offense_queue = [l for l in top_lines if norm_pos(l["position"]) in OFFENSE_POSITIONS]
+    defense_queue = W.defense_performances()[:DEF_PERFORMANCE_MAX] if recap else []
+
+    def next_line():
+        """The next performance subject: a defensive or kicking game on the 2nd, 5th, 8th ... ordinary post (while
+        any are left), otherwise the next offensive line; falls back to whichever queue still has lines."""
+        n = sum(1 for a in plan["PERFORMANCE"] if not a.get("buzz_tier")) + 1
+        if defense_queue and (n % DEF_PERFORMANCE_EVERY == 2 or not offense_queue):
+            return defense_queue.pop(0), True
+        if offense_queue:
+            return offense_queue.pop(0), False
+        return None, False
+
     def add_performances(limit):
-        for l in top_lines:
-            if len(plan["PERFORMANCE"]) >= limit:
+        while len(plan["PERFORMANCE"]) < limit:
+            l, defensive = next_line()
+            if l is None:
                 break
-            if norm_pos(l["position"]) not in OFFENSE_POSITIONS:
-                continue
             key = l["player_id"] or (l["short_name"], l["team_id"])
             if key in seen_players:
                 continue
             seen_players.add(key)
+            pos = l["position"]
+            affinity = "K" if defensive and l.get("kick_fga") else "DEF" if defensive else pos
             who = pattern[len(plan["PERFORMANCE"]) % len(pattern)]
             account = (acc.fantasy() if who == "fantasy" else
-                       acc.former([l["team_id"]], l["position"]) if who == "former" else
+                       acc.former([l["team_id"]], pos) if who == "former" else
                        acc.bandwagon() if who == "bandwagon" else None)
             if account is None:
-                account = acc.pundit(prefer=PUNDIT_AFFINITY.get(l["position"], ()))
+                account = acc.pundit(prefer=PUNDIT_AFFINITY.get(affinity, ()))
             if account is None:
                 continue
+            facts = W.defense_performance_facts(l) if defensive else W.performance_facts(l)
             plan["PERFORMANCE"].append(_assignment("PERFORMANCE", account,
-                                                   {"type": "player", "id": l["player_id"], "team_id": l["team_id"], "label": f"{l['name']} ({l['position']}, {W.teams[l['team_id']]['abbr']})"},
-                                                   W.performance_facts(l)))
+                                                   {"type": "player", "id": l["player_id"], "team_id": l["team_id"], "label": f"{l['name']} ({pos or affinity}, {W.teams[l['team_id']]['abbr']})"},
+                                                   facts))
 
     add_performances(perf_n)
 

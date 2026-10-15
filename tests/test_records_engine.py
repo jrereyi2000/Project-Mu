@@ -16,6 +16,8 @@ CATS = {
     "season_team_points": {"label": "Points scored in a season", "scope": "SEASON", "subject": "TEAM", "better": "HIGH"},
     "season_team_fewest_points_allowed": {"label": "Fewest points allowed", "scope": "SEASON", "subject": "TEAM", "better": "LOW"},
     "game_receptions": {"label": "Receptions in a game", "scope": "GAME", "subject": "PLAYER", "better": "HIGH"},
+    "season_sacks": {"label": "Sacks in a season", "scope": "SEASON", "subject": "PLAYER", "better": "HIGH"},
+    "season_fg_long": {"label": "Longest field goal in a season", "scope": "SEASON", "subject": "PLAYER", "better": "HIGH"},
 }
 
 
@@ -29,6 +31,7 @@ def book(book_rows=(), book_categories=("season_rec_tds",)):
     franchise[(1, "season_team_points")] = [(589.0, "2007 New England Patriots", 2007)]
     franchise[(11, "season_team_fewest_points_allowed")] = [(218.0, "1996 Carolina Panthers", 1996)]
     franchise[(1, "season_team_fewest_points_allowed")] = [(225.0, "2019 New England Patriots", 2019)]
+    franchise[(11, "season_sacks")] = [(18.0, "Arvell Reese", 2031)]
     entries = {
         "season_rec_tds": [(23.0, "Randy Moss", 2007), (22.0, "Jerry Rice", 1987)] + [(18.0, f"P{i}", 2000 + i) for i in range(3)]
                           + [(17.0, f"Q{i}", 1990 + i) for i in range(10)],
@@ -39,9 +42,10 @@ def book(book_rows=(), book_categories=("season_rec_tds",)):
             "book_rows": list(book_rows), "book_entries": [], "book_categories": set(book_categories)}
 
 
-def run(players=(), teams=None, games=(), book_rows=()):
+def run(players=(), teams=None, games=(), book_rows=(), defense=()):
     with mock.patch.object(R, "load_book", return_value=book(book_rows)), \
             mock.patch.object(R, "season_player_values", return_value=list(players)), \
+            mock.patch.object(R, "season_defense_values", return_value=list(defense)), \
             mock.patch.object(R, "team_seasons", return_value=teams or {}), \
             mock.patch.object(R, "game_player_values", return_value=list(games)):
         return R.evaluate(None, 2035)
@@ -93,6 +97,25 @@ class EvaluateTests(unittest.TestCase):
         self.assertIn("regular season not finished", text)
         self.assertIn("Receiving TDs in a season: Trey'Mane Davis (Carolina Panthers), 27: broke Randy Moss (2007) (23)", text)
         self.assertIn("Wins in a season: Carolina Panthers (16-0), 16: tied 2007 New England Patriots (16)", text)
+
+    def test_defense_and_kicking_seasons(self):
+        r = run(defense=[("season_sacks", 11, 50, "Edge Rusher", 19.5), ("season_sacks", 11, 51, "Other End", 12.0),
+                         ("season_fg_long", 11, 60, "Kicker", 61.0), ("season_tackles", 11, 52, "Mike", 150.0)])
+        fr = find(r, type="franchise_record")
+        self.assertEqual([(e["holder"], e["value"], e["result"]) for e in fr], [("Edge Rusher", 19.5, "broke")])
+        self.assertEqual(fr[0]["old_holders"], ["Arvell Reese (2031)"])
+        self.assertFalse(find(r, holder="Kicker"))                  # no history for longest FG yet: nothing to break
+        self.assertFalse(find(r, holder="Mike"))                    # category not in record_categories yet: skipped
+
+    def test_unlisted_defenders_have_no_value(self):
+        cur = mock.MagicMock()
+        cur.fetchall.return_value = [(11, 50, "EDGE RUSHER", 14.5, None, 40, 0, None, None),   # sacks, no INTs listed
+                                     (11, 60, "Kicker", None, None, None, None, 30, 58)]
+        vals = R.season_defense_values(cur, 2035)
+        self.assertIn("season_stat_lines", cur.execute.call_args[0][0])
+        self.assertEqual(sorted((c, h, v) for c, _, _, h, v in vals),
+                         [("season_fg_long", "Kicker", 58.0), ("season_fgm", "Kicker", 30.0),
+                          ("season_sacks", "Edge Rusher", 14.5), ("season_tackles", "Edge Rusher", 40.0)])
 
     def test_helpers(self):
         self.assertEqual(R.tidy_name("OMAR COOPER JR."), "Omar Cooper Jr.")

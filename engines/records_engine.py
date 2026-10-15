@@ -4,7 +4,8 @@ The record book starts with real NFL history through 2025 (db/migrations/2026_10
 single-season record holders and the NFL's all-time top-10 lists), then the league's own record book for 2026–2035
 (2026_10_28_league_record_book.sql, source 'BOOK'). This engine compares a league season with everything before it:
 
-  - franchise records: a player's season (season_stats) or a team's season (regular-season games) that beats or ties
+  - franchise records: a player's season (season_stats; defense and kicking from season_stat_lines, Madden's listed
+    leaders only) or a team's season (regular-season games) that beats or ties
     its franchise's record;
   - NFL records and the all-time top 10: a season or a single game (player_stats) that would rank in the top 10.
 
@@ -30,6 +31,12 @@ PLAYER_STATS = {
     "scrimmage_tds": "COALESCE(rush_tds, 0) + COALESCE(rec_tds, 0)",
 }
 SEASON_PLAYER_CATEGORIES = {f"season_{k}": v for k, v in PLAYER_STATS.items()}
+# Defense and kicking, from the Season Stats capture (season_stat_lines). Madden lists only each category's leaders
+# (defenders by tackles), so a player without a listed line has unknown numbers: he gets no value, never a zero.
+SEASON_DEFENSE_CATEGORIES = {
+    "season_sacks": "def_sacks", "season_def_interceptions": "def_ints", "season_tackles": "def_tackles",
+    "season_def_tds": "def_tds", "season_fgm": "kick_fgm", "season_fg_long": "kick_fg_long",
+}
 GAME_PLAYER_CATEGORIES = {
     "game_pass_yards": "ps.pass_yards", "game_pass_tds": "ps.pass_tds", "game_rush_yards": "ps.rush_yards",
     "game_rec_yards": "ps.rec_yards", "game_receptions": "ps.receptions",
@@ -95,6 +102,25 @@ def season_player_values(cur, season):
     for row in cur.fetchall():
         team_id, player_id, name = row[0], row[1], tidy_name(row[2])
         for cat, value in zip(SEASON_PLAYER_CATEGORIES, row[3:]):
+            if value:
+                out.append((cat, team_id, player_id, name, float(value)))
+    return out
+
+
+def season_defense_values(cur, season):
+    """[(category, team_id, player_id, holder, value)] for defense and kicking from season_stat_lines. Only players
+    Madden lists in a category have a value there (NULL = not listed = unknown, so no entry)."""
+    cols = ", ".join(SEASON_DEFENSE_CATEGORIES.values())
+    cur.execute(f"""
+        SELECT team_id, player_id, COALESCE(full_name, player_name), {cols}
+        FROM season_stat_lines
+        WHERE season = %s AND team_id IS NOT NULL
+          AND (def_tackles IS NOT NULL OR kick_fga IS NOT NULL)
+    """, (season,))
+    out = []
+    for row in cur.fetchall():
+        team_id, player_id, name = row[0], row[1], tidy_name(row[2])
+        for cat, value in zip(SEASON_DEFENSE_CATEGORIES, row[3:]):
             if value:
                 out.append((cat, team_id, player_id, name, float(value)))
     return out
@@ -166,7 +192,8 @@ def evaluate(cur, season):
     records = team_seasons(cur, season)
     complete = bool(records) and all(r["games"] >= GAMES_PER_SEASON for r in records.values())
     cands = [{"category": c, "team_id": t, "player_id": p, "holder": h, "value": v}
-             for c, t, p, h, v in season_player_values(cur, season)]
+             for c, t, p, h, v in season_player_values(cur, season) + season_defense_values(cur, season)
+             if c in cats]
     for team_id, r in records.items():
         rec = f"{r['wins']}-{r['losses']}" + (f"-{r['ties']}" if r["ties"] else "")
         values = {"season_team_wins": r["wins"], "season_team_points": r["pf"]}
@@ -240,7 +267,7 @@ def evaluate(cur, season):
     # Only real disagreements: a book record the engine could have found (a category it computes, with an earlier
     # record to beat), and a broken record in a category the book tracks (the book lists records broken, not ties,
     # and has no team or combined-TD records).
-    computed = set(SEASON_PLAYER_CATEGORIES) | set(GAME_PLAYER_CATEGORIES) | set(TEAM_CATEGORIES)
+    computed = set(SEASON_PLAYER_CATEGORIES) | set(SEASON_DEFENSE_CATEGORIES) | set(GAME_PLAYER_CATEGORIES) | set(TEAM_CATEGORIES)
     book_only = [{**b, "team": teams[b["team_id"]]["name"], "label": cats[b["category"]]["label"], "value": _num(b["value"])}
                  for b in book_rows if (b["team_id"], b["category"]) not in found
                  and b["category"] in computed and (b["team_id"], b["category"]) in book["franchise"]]

@@ -281,6 +281,61 @@ class BuzzTests(unittest.TestCase):
         self.assertEqual(Week(league(week=1, played_weeks=[])).team_stories(), [])
 
 
+DEF_KEYS = ("def_tackles", "def_sacks", "def_tfl", "def_ints", "def_deflections", "def_forced_fumbles",
+            "def_fumble_recoveries", "def_tds", "def_safeties", "kick_fgm", "kick_fga", "kick_fg_long",
+            "kick_fgm_50", "kick_fga_50", "kick_xpm", "kick_xpa")
+
+
+def def_line(ctx, game_id, team, pid, name, position, **stats):
+    """A captured defensive or kicking game line (game_stat_lines) for last week's game `game_id`."""
+    line = {"week": ctx["recap_week"], "game_id": game_id, "team_id": team, "position": position, "short_name": name,
+            "name": name, "player_id": pid, "popularity": 50.0, **{k: None for k in DEF_KEYS}}
+    line.update({k: float(v) for k, v in stats.items()})
+    ctx.setdefault("defense_lines", []).append(line)
+    return line
+
+
+class DefensePerformanceTests(unittest.TestCase):
+    def captured(self):
+        ctx = league(week=9)
+        g = next(g for g in ctx["recap_games"] if g["home_team_id"] == 3)
+        def_line(ctx, g["id"], 3, 9001, "Edge Rusher", "LE", def_tackles=5, def_sacks=3, def_tfl=3, def_forced_fumbles=1)
+        def_line(ctx, g["id"], 19, 9002, "Ball Hawk", "CB", def_tackles=4, def_ints=1, def_tds=1)
+        def_line(ctx, g["id"], 3, 9003, "Big Leg", "K", kick_fgm=4, kick_fga=4, kick_fg_long=56, kick_fgm_50=2,
+                 kick_fga_50=2, kick_xpm=2, kick_xpa=2)
+        def_line(ctx, g["id"], 19, 9004, "Tackle Machine", "MLB", def_tackles=14, def_sacks=1)   # ordinary: no post
+        def_line(ctx, g["id"], 19, 9005, "Steady Leg", "K", kick_fgm=2, kick_fga=2, kick_fg_long=41, kick_xpm=1, kick_xpa=1)
+        return ctx, g
+
+    def test_big_defensive_and_kicking_games_join_the_performances(self):
+        ctx, g = self.captured()
+        base = len(by_kind(plan_social_week(league(week=9)))["PERFORMANCE"])
+        plan = plan_social_week(ctx)
+        perf = by_kind(plan)["PERFORMANCE"]
+        self.assertEqual(len(perf), base)                                   # same count, mixed in
+        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+        ordinary = [a["subject"]["id"] for a in perf if not a.get("buzz_tier")]
+        self.assertEqual(len(ordinary), 7)                                  # the rest are buzz posts
+        self.assertEqual([i for i in ordinary if i >= 9000], [9003, 9001])  # biggest first, ordinary lines left out
+        self.assertEqual([ordinary.index(i) for i in (9003, 9001)], [1, 4])  # 2nd and 5th ordinary post
+        self.assertNotIn("DIE_HARD_FAN", {a["archetype"] for a in perf})
+        self.assertEqual(Week(ctx).defense_performances()[2]["player_id"], 9002)   # next in line on a lighter week
+        rusher = next(a for a in perf if a["subject"]["id"] == 9001)
+        self.assertEqual(rusher["facts"]["stat_line"], "5 tkl, 3 sacks, 3 TFL, 1 FF")
+        self.assertEqual(rusher["facts"]["game"], Week(ctx).game_label(g))
+        self.assertNotIn("fantasy_points_ppr", rusher["facts"])
+        kicker = next(a for a in perf if a["subject"]["id"] == 9003)
+        self.assertEqual(kicker["facts"]["stat_line"], "4/4 FG (long 56), 2/2 from 50+, 2/2 XP")
+
+    def test_games_without_captured_lines_contribute_none(self):
+        ctx = league(week=9)
+        self.assertEqual(Week(ctx).defense_performances(), [])
+        def_line(ctx, 1, 1, 9001, "Old Week", "LE", def_tackles=5, def_sacks=4)  # game 1 is Week 1, not last week
+        self.assertEqual(Week(ctx).defense_performances(), [])
+        offense_only = [a["subject"]["id"] for a in by_kind(plan_social_week(ctx))["PERFORMANCE"]]
+        self.assertNotIn(9001, offense_only)
+
+
 class NameTests(unittest.TestCase):
     def test_tidy_name(self):
         self.assertEqual(tidy_name("OMAR COOPER JR."), "Omar Cooper Jr.")
