@@ -829,7 +829,7 @@
       "structure_source": "article"
     },
     "OFFSEASON_MOCK_DRAFT": {
-      "name": "Offseason Mock Draft 1.0 (Round 1 Projections)",
+      "name": "Offseason Mock Draft 1.0 (Picks 1–24 Locked)",
       "allowed_writers": [
         "MEL_KIPER",
         "YATES",
@@ -842,19 +842,20 @@
       ],
       "writing_archetype_category": "Draft & Offseason Horizon",
       "granularity": "Offseason / Round 1 Projection",
-      "focus": "First-round mock draft projecting selections for draft slots based on team needs, positional value, and blue-chip player traits.",
+      "focus": "First-round mock draft projecting selections for the 24 locked draft slots based on team needs, positional value, and the scouted prospect board.",
       "data_queried": [
+        "Round 1 Draft Order (get_draft_order)",
         "Round 1 Mock Draft Simulation (get_mock_draft)",
-        "Consensus Draft Prospects (get_draft_prospects)",
+        "Scouted Prospect Board (get_scouted_draft_board)",
+        "Team Draft Needs (get_team_draft_needs)",
         "Blue-Chip Pedigree (P_draft)",
         "Under-25 Production (Y_prod)",
-        "Positional Multiplier (M_pos)",
-        "Team Draft Needs (roster deficiencies)"
+        "Positional Multiplier (M_pos)"
       ],
-      "example_prompt_hook": "Project the Round 1 picks of the NFL Draft. Balance premium positional value against immediate roster holes for franchises.",
-      "directive": "ARTICLE TYPE SPECIFICATION: Offseason Mock Draft\nGranularity: Offseason / Round 1 Projection.\nFocus: Round 1 mock selections, franchise needs, premium positional value, and draft capital.\nScope: Project selections for the Round 1 draft order (Picks 1–32). Query get_mock_draft to obtain the algorithmic draft selections and team deficiencies, and present each pick with authoritative analysis. Focus strictly on team fit, physical traits, and scheme requirements.",
-      "curatorial_autonomy": "CURATORIAL AUTONOMY (MOCK_DRAFT):\nYou are projecting Round 1 of the NFL Draft. Query get_mock_draft to inspect the selections. Prioritize premium positional value (QB, OT, EDGE, CB) over low-impact positions. Evaluate team rosters using their Under-25 Production Share ($Y_{\\text{prod}}$) and starter deficiencies to explain whether an organization needs an immediate foundational starter or a high-ceiling developmental weapon.",
-      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as an authoritative Mock Draft (approx. 1,500–1,800 words).\n\n1. The Board Overview:\nOpen with a headline using # (e.g., # 2036 NFL Mock Draft 1.0: First-Round Projections for Picks 1–32).\nWrite a 2-paragraph introduction identifying the strengths of this draft class and the run on premium positions.\n\n2. The First-Round Projections (Picks 1–32):\nUse numbered ## headers for each selection formatted as: ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School] (e.g., ## 1. Philadelphia Eagles: Dave Vogel, LEDG, Georgia).\nUnder each pick, provide exactly 2 to 3 sentences explaining the team need, the player's physical traits, and how they fit the scheme.\n\n3. The Draft Floor Watch / Sleeper:\nConclude with a ### header analyzing which team got the draft steal of Round 1 or which eliminated franchise has the highest pressure to hit on their pick.",
+      "example_prompt_hook": "Project the first 24 picks of the NFL Draft. Balance premium positional value against immediate roster holes for eliminated franchises.",
+      "directive": "ARTICLE TYPE SPECIFICATION: Offseason Mock Draft\nGranularity: Offseason / Round 1 Projection.\nFocus: Round 1 mock selections, franchise needs, premium positional value, and draft capital.\nScope: Project selections for the 24 draft slots locked after the Wild Card round (Picks 1–24). Picks 25–32 belong to teams still in the playoffs: do not project them. Do not project speculative trades. Every prospect you name must come from get_scouted_draft_board or get_mock_draft.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (MOCK_DRAFT):\nYou are projecting the first 24 picks of the NFL Draft for eliminated teams.\n1. Call get_draft_order for the locked order of picks 1–24 (each pick says whether it is locked).\n2. Call get_mock_draft with limit 24 as your starting projection: the same simulated picks every writer sees this week. You may overrule a pick, but explain why.\n3. Call get_scouted_draft_board for the available prospects, using its position filter to check each team's top needs (get_team_draft_needs). Never name a prospect who isn't on the board, and never fill in a field the board leaves null (an unknown height, weight or OVR stays unmentioned).\nPrioritize premium positional value (QB, OT, EDGE, CB, the $M_{\\text{pos}}$ multipliers) over low-impact positions, balanced against team needs. Use each roster's Under-25 Production Share ($Y_{\\text{prod}}$) to judge whether an organization needs an immediate foundational starter or can afford a developmental high-ceiling prospect.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your piece as an authoritative Mock Draft (approx. 1,500–1,800 words).\n\n1. The Board Overview:\nOpen with a headline using # (e.g., # 2036 NFL Mock Draft 1.0: First-Round Projections for Picks 1–24).\nWrite a 2-paragraph introduction identifying the strengths of this draft class and the run on premium positions.\n\n2. The First-Round Projections (Picks 1–24):\nUse numbered ## headers for each selection formatted strictly as: ## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School] (e.g., ## 1. Philadelphia Eagles: Dave Vogel, LEDG, Georgia), taking the name, position and school exactly from the board.\nUnder each pick, give the prospect's height, weight and scouted OVR from the board, then exactly 2 to 3 sentences on the team need, the player's physical traits, and how they fit the scheme.\n\n3. The Draft Floor Watch / Sleeper:\nConclude with a ### header naming the steal of picks 1–24 or the eliminated franchise under the most pressure to hit on its pick.",
       "structure_source": "article"
     },
     "FANTASY_DRAFT_TIERS": {

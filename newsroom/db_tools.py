@@ -14,7 +14,6 @@ from engines import clutch_engine as clutch
 from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_splits, defense_groups,
                                    player_lines, stat_group, STATS as SPLIT_STATS)
 import json
-import os
 
 from newsroom.run_context import context_season, cutoff_week, is_visible_week
 
@@ -1563,95 +1562,24 @@ JIMMY_JOHNSON_CHART = {
 
 @tool
 def get_draft_order(season: int = 0) -> str:
-    """Fetch the official Round 1 NFL Draft selection order (Picks 1-32) for a given season, based on reverse regular season record, point differential tiebreakers, and postseason finish."""
+    """Fetch the Round 1 NFL Draft order (Picks 1-32) for a season: reverse regular-season record (point differential
+    breaks ties), with playoff exits in their brackets (missed playoffs 1-18, Wild Card losers 19-24, Divisional
+    25-28, Conference 29-30, Super Bowl loser 31, winner 32). Each pick says whether it is locked (that team's
+    season is over) or provisional (still alive, or the playoff field isn't set yet)."""
     try:
+        from engines.draft_order import compute_draft_order, fetch_games, fetch_teams
         s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT 
-                        CASE WHEN home_score > away_score THEN home_team_id ELSE away_team_id END as winner_id,
-                        CASE WHEN home_score > away_score THEN away_team_id ELSE home_team_id END as runner_up_id
-                    FROM games
-                    WHERE season = %s AND (game_type = 'SUPER_BOWL' OR week = 23) AND status = 'COMPLETED'
-                    LIMIT 1;
-                """, (s_val,))
-                sb_row = cur.fetchone()
-                sb_winner = sb_row[0] if sb_row else None
-                sb_runner = sb_row[1] if sb_row else None
-
-                cur.execute("""
-                    SELECT 
-                        t.id, t.name, t.abbreviation,
-                        ts.wins, ts.losses,
-                        ROUND((ts.wins::numeric / NULLIF(ts.wins + ts.losses, 0)::numeric), 3) as win_pct,
-                        COALESCE(SUM(CASE WHEN g.home_team_id = t.id THEN g.home_score WHEN g.away_team_id = t.id THEN g.away_score ELSE 0 END), 0) as pf,
-                        COALESCE(SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score WHEN g.away_team_id = t.id THEN g.home_score ELSE 0 END), 0) as pa
-                    FROM teams t
-                    JOIN team_seasons ts ON t.id = ts.team_id AND ts.season = %s
-                    LEFT JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id) AND g.season = %s AND g.status = 'COMPLETED'
-                    GROUP BY t.id, t.name, t.abbreviation, ts.wins, ts.losses
-                    ORDER BY win_pct ASC, (SUM(CASE WHEN g.home_team_id = t.id THEN g.home_score ELSE g.away_score END) - SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score ELSE g.home_score END)) ASC;
-                """, (s_val, s_val))
-                rows = cur.fetchall()
-                if not rows:
-                    return f"No draft order data found for Season {s_val}."
-
-                board = []
-                non_sb_rows = [r for r in rows if r[0] not in (sb_winner, sb_runner)]
-                sb_runner_row = [r for r in rows if r[0] == sb_runner]
-                sb_winner_row = [r for r in rows if r[0] == sb_winner]
-
-                pick = 1
-                for r in non_sb_rows:
-                    pf = int(r[6])
-                    pa = int(r[7])
-                    diff = pf - pa
-                    board.append({
-                        "pick": pick,
-                        "team_id": r[0],
-                        "team": r[1],
-                        "abbreviation": r[2],
-                        "record": f"{r[3]}-{r[4]}",
-                        "win_pct": float(r[5]) if r[5] is not None else 0.0,
-                        "point_differential": f"+{diff}" if diff > 0 else str(diff),
-                        "selection_status": "Regular Season Finish"
-                    })
-                    pick += 1
-
-                if sb_runner_row:
-                    r = sb_runner_row[0]
-                    diff = int(r[6]) - int(r[7])
-                    board.append({
-                        "pick": 31,
-                        "team_id": r[0],
-                        "team": r[1],
-                        "abbreviation": r[2],
-                        "record": f"{r[3]}-{r[4]}",
-                        "win_pct": float(r[5]) if r[5] is not None else 0.0,
-                        "point_differential": f"+{diff}" if diff > 0 else str(diff),
-                        "selection_status": "Super Bowl Runner-up"
-                    })
-                if sb_winner_row:
-                    r = sb_winner_row[0]
-                    diff = int(r[6]) - int(r[7])
-                    board.append({
-                        "pick": 32,
-                        "team_id": r[0],
-                        "team": r[1],
-                        "abbreviation": r[2],
-                        "record": f"{r[3]}-{r[4]}",
-                        "win_pct": float(r[5]) if r[5] is not None else 0.0,
-                        "point_differential": f"+{diff}" if diff > 0 else str(diff),
-                        "selection_status": "Super Bowl Champion"
-                    })
-
-                result = {
-                    "season": s_val,
-                    "total_picks": len(board),
-                    "round_1_order": board
-                }
-                return json.dumps(result, indent=2)
+                result = compute_draft_order(fetch_teams(cur), fetch_games(cur, s_val, before_week=cutoff_week(s_val)))
+        board = result["round_1_order"]
+        if not board:
+            return f"No draft order data found for Season {s_val}."
+        return json.dumps({"season": s_val, "total_picks": len(board),
+                           "locked_picks": sum(1 for b in board if b["locked"]),
+                           "playoff_field_known": result["playoff_field_known"],
+                           "rounds_complete": result["rounds_complete"],
+                           "round_1_order": board}, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -1978,100 +1906,90 @@ def get_franchise_rebuild_status(team_identifier: str, season: int = 0) -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
+def _draft_week(s_val: int) -> int:
+    """The week a mock draft is saved under: the run's week when one is set, else the league's current week."""
+    week = cutoff_week(s_val)
+    if week is not None:
+        return week
+    return db.get_current_league_state()[1]
+
+
 @tool
-def get_mock_draft(season: int = 0, file_path: str = "") -> str:
-    """Fetch the analytical 32-pick Round 1 NFL Mock Draft projection.
-    
-    Simulates all 32 selections based on draft order, team roster deficiencies/needs,
-    positional premium value (QB/OT/EDGE/CB), and scouted prospect grades.
-    Returns the pick-by-pick selections with team need context, prospect scouting profiles,
-    and fit rationales.
-    
+def get_mock_draft(season: int = 0, limit: int = 32) -> str:
+    """Fetch this week's Round 1 NFL Mock Draft: pick-by-pick selections from the scouted draft board, each with the
+    team, the prospect's scouting profile (blank fields are null), team-need fit and rationale, and whether the
+    pick is locked (that team's season is over) or provisional. Every article this week sees the same mock.
+
     Args:
-        season: Evaluation season for team needs and draft order (default: current season).
-        file_path: Optional custom path to prospect board CSV. Defaults to captures/prospects/prospects.csv
-                   or data/draft/{draft_season}_prospects.csv.
+        season: Evaluation season for draft order and team needs (default: current season).
+        limit: Only the first N picks (e.g. 24 while picks 25-32 belong to teams still in the playoffs).
     """
     try:
         from engines.mock_draft_engine import MockDraftEngine
+        from pipeline.draft_board import read_mock
         s_val = resolve_season(season)
-        draft_season = s_val + 1
-
-        path_to_use = None
-        if file_path and os.path.exists(file_path):
-            path_to_use = file_path
-        elif os.path.exists(os.path.join("captures", "prospects", "prospects.csv")):
-            path_to_use = os.path.join("captures", "prospects", "prospects.csv")
-        elif os.path.exists(os.path.join("data", "draft", f"{draft_season}_prospects.csv")):
-            path_to_use = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
-
-        engine = MockDraftEngine(season=s_val, prospects_path=path_to_use)
-        selections = engine.run_mock()
-
-        result = {
+        week = _draft_week(s_val)
+        with psycopg.connect(db.db_conn_info) as conn:
+            cur = conn.cursor()
+            selections = read_mock(cur, s_val, week)
+            source = "saved"
+            if not selections:
+                engine = MockDraftEngine(season=s_val)
+                selections = engine.run_mock()
+                engine.save(cur, week, selections)
+                conn.commit()
+                source = "generated"
+        limit_val = max(1, int(limit)) if limit else 32
+        picks = selections[:limit_val]
+        return json.dumps({
             "evaluation_season": s_val,
-            "draft_class_season": draft_season,
-            "prospects_source": engine.prospects_path,
-            "total_picks": len(selections),
-            "round_1_mock_draft": selections
-        }
-        return json.dumps(result, indent=2)
+            "draft_class_season": s_val + 1,
+            "week": week,
+            "source": source,
+            "total_picks": len(picks),
+            "locked_picks": sum(1 for p in picks if p.get("locked")),
+            "round_1_mock_draft": picks,
+        }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 
+
 @tool
-def get_draft_prospects(position: str = "", top_n: int = 32, file_path: str = "") -> str:
-    """Fetch top consensus NFL draft prospects from the scouted draft board, ordered by projected pick rank.
-    
+def get_scouted_draft_board(season: int = 0, limit: int = 32, position: str = "") -> str:
+    """Fetch the scouted draft prospect board for the upcoming draft class (season + 1), in projected pick order:
+    projected pick and round, name, position, college, height, weight, age, scouted OVR, archetype and notes.
+    A field the scan couldn't read is null; never fill it in.
+
     Args:
-        position: Optional filter by position (e.g. 'QB', 'OT', 'CB', 'EDGE', 'LEDG', 'WR', 'TE')
-                  or position group. If empty, returns top prospects regardless of position.
-        top_n: Number of prospects to return (default: 32).
-        file_path: Optional custom path to prospects CSV.
+        season: League season (default: current); the class is season + 1.
+        limit: Number of prospects to return (default 32).
+        position: Optional position or position group filter (QB, OT, EDGE, CB, LB, IOL, WR, S...).
     """
     try:
-        from pipeline.ingest_prospects import load_prospects_from_csv
-
-        path_to_use = None
-        if file_path and os.path.exists(file_path):
-            path_to_use = file_path
-        elif os.path.exists(os.path.join("captures", "prospects", "prospects.csv")):
-            path_to_use = os.path.join("captures", "prospects", "prospects.csv")
-        else:
-            s_val = resolve_season(0)
-            draft_season = s_val + 1
-            cand = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
-            if os.path.exists(cand):
-                path_to_use = cand
-            else:
-                path_to_use = os.path.join("data", "draft", "2036_prospects.csv")
-
-        if not path_to_use or not os.path.exists(path_to_use):
-            return "Error: No prospect board CSV found."
-
-        prospects = load_prospects_from_csv(path_to_use)
-
-        if position and str(position).strip():
-            pos_clean = str(position).strip().upper()
-            filtered = []
-            for p in prospects:
-                grp = POSITION_GROUP_MAP.get(p.position, p.position)
-                if p.position.upper() == pos_clean or grp.upper() == pos_clean:
-                    filtered.append(p)
-        else:
-            filtered = prospects
-
-        count = max(1, int(top_n))
-        results = filtered[:count]
-
-        result = {
-            "prospects_source": path_to_use,
-            "filter_position": position if position else "ALL",
-            "total_matching": len(filtered),
-            "returned_count": len(results),
-            "prospects": [p.to_dict() for p in results]
-        }
-        return json.dumps(result, indent=2)
+        from pipeline.draft_board import read_board
+        s_val = resolve_season(season)
+        draft_season = s_val + 1
+        with psycopg.connect(db.db_conn_info) as conn:
+            cur = conn.cursor()
+            board = read_board(cur, draft_season)
+            matching = read_board(cur, draft_season, position=position) if position else board
+        if not board:
+            return f"No scouted draft board for the {draft_season} draft class yet."
+        limit_val = max(1, int(limit)) if limit else 32
+        prospects = [{
+            "projected_pick": p.projected_pick, "projected_round": p.projected_round, "round_pick": p.round_pick,
+            "name": p.full_name, "pos": p.position, "college": p.college, "ht": p.height, "wt": p.weight,
+            "age": p.age, "ovr": p.overall_rating, "archetype": p.archetype, "notes": p.notes,
+        } for p in matching[:limit_val]]
+        return json.dumps({
+            "season": s_val,
+            "draft_season": draft_season,
+            "filter_position": position.upper() if position else "ALL",
+            "total_prospects": len(board),
+            "total_matching": len(matching),
+            "returned_count": len(prospects),
+            "prospects": prospects,
+        }, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

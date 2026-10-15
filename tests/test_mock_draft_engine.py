@@ -102,19 +102,40 @@ def test_load_prospects_duplicate_pick_error(tmp_path):
 
 
 def test_mock_draft_engine_run():
-    sample_csv = os.path.join("data", "draft", "2036_prospects.csv")
-    engine = MockDraftEngine(season=2035, prospects_path=sample_csv)
-    selections = engine.run_mock()
+    """A full round from the fixture board (blank cells included), with the order and needs stubbed."""
+    from unittest import mock
+    order = [{"pick": i, "team_id": i, "team": f"Team {i}", "abbreviation": f"T{i}", "record": "8-9",
+              "locked": i <= 24, "selection_status": "x"} for i in range(1, 33)]
+    engine = MockDraftEngine(season=2035, prospects_path="tests/fixtures/prospects_board.csv")
+    with mock.patch.object(MockDraftEngine, "get_draft_order", return_value=order), \
+         mock.patch.object(MockDraftEngine, "get_team_needs", return_value=[]):
+        selections = engine.run_mock()
+        first_24 = engine.run_mock(limit=24)
 
     assert len(selections) == 32
-    # Ensure every pick is unique
     picked_players = [s["prospect"]["full_name"] for s in selections]
     assert len(set(picked_players)) == 32
-    assert selections[0]["pick"] == 1
-    assert selections[31]["pick"] == 32
+    assert (selections[0]["pick"], selections[31]["pick"]) == (1, 32)
+    assert [s["locked"] for s in selections] == [True] * 24 + [False] * 8
+    assert selections[0]["team_id"] == 1
+    assert len(first_24) == 24
 
-    # Check formatting
     board = engine.format_board(selections)
-    assert "ROUND 1 MOCK DRAFT" in board
-    assert "#1" in board
-    assert "#32" in board
+    assert "ROUND 1 MOCK DRAFT" in board and "#1" in board and "#32" in board
+    assert "(provisional)" in board
+
+
+def test_unrated_prospect_is_still_draftable():
+    from engines.mock_draft_engine import UNRATED_OVR
+    engine = MockDraftEngine(season=2035, prospects_path="unused.csv")
+    p = Prospect(projected_pick=6, full_name="No Grade", position="CB", college=None, height=None, weight=None,
+                 age=None, overall_rating=None)
+    graded = Prospect(projected_pick=6, full_name="Graded", position="CB", college=None, height=None, weight=None,
+                      age=None, overall_rating=int(UNRATED_OVR))
+    assert engine.evaluate_fit(p, 6, [])[0] == engine.evaluate_fit(graded, 6, [])[0]
+
+
+def test_only_a_database_mock_can_be_saved():
+    engine = MockDraftEngine(season=2035, prospects_path="unused.csv")
+    with pytest.raises(ValueError, match="draft_prospects"):
+        engine.save(None, 20, [{"pick": 1, "prospect": {"prospect_id": None}}])

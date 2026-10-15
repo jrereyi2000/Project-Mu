@@ -1,14 +1,13 @@
 # Project Mu: Draft Prospects & Mock Draft Integration Notes
 
 **Date:** October 15, 2026  
-**Status:** Feature Complete — Draft Board navigation automated (verified live Oct 15)  
+**Status:** Agent 0 of `docs/PARALLEL_ARTICLE_UPGRADE_HANDOFF.md` done: board and mock draft in the database, one board tool, playoff-exit draft order, 24-pick `OFFSEASON_MOCK_DRAFT`; merged into `main`  
 **Active Branch:** `feat/draft-kiper-mock`  
 **Active Worktree:** `/Users/jrereyi/Downloads/Project Mu/.claude/worktrees/draft-kiper-mock`  
-**Test Suite Status:** 156/156 tests passing (`python3 -m pytest -q tests/test_madden_capture.py tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
+**Test Suite Status:** 534/534 tests passing (`python3 -m pytest -q tests`; the real-capture OCR test takes ~4 min)  
 
-> [!IMPORTANT]
-> **DO NOT MERGE INTO `main` YET.**  
-> Keep all work strictly on `feat/draft-kiper-mock` inside the `.claude/worktrees/draft-kiper-mock` worktree. Parallel sessions are actively running with uncommitted edits on `main` (`db/init_db.sql`, `engines/records_engine.py`, etc.).
+> [!NOTE]
+> Merged into `main` on Oct 15 at the end of Agent 0 (`docs/PARALLEL_ARTICLE_UPGRADE_HANDOFF.md`). Agents 1, 2 and 4–9 branch from that `main`.
 
 ---
 
@@ -18,7 +17,8 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
 
 ### Key Decisions
 1. **Zero Gemini Cost for Extraction:** Replaced multimodal LLM vision calls with on-device macOS Apple Vision OCR (`pipeline/extract_prospects_ocr.py`), with targeted Gemini vision remaining only as an automatic fallback.
-2. **No Schema Conflicts (Deferred DB Migration):** Prospect boards and mock draft results read/write directly from structured CSV boards (`data/draft/{draft_season}_prospects.csv` and `captures/prospects/prospects.csv`). Database table additions (`draft_prospects`, `mock_draft_picks`) are deferred until parallel sessions merge.
+2. **Board and Mock Draft in the Database:** `draft_prospects` holds the scouted board per draft class, and `mock_draft_picks` holds each week's saved Round 1 mock (`db/migrations/2026_11_19_draft_board.sql`, `pipeline/draft_board.py`). The CSVs are extraction output and an export copy only. Tools and tests never read `data/draft/` (on Oct 15 that held a hand-made 32-row stub that tests had come to depend on).
+5. **Lenient Board Loads (JR, Oct 15):** a board with a blank or implausible cell still loads. The cell is stored as NULL and listed as a warning; next season's roster scan has the real values once the prospect is a rookie, and links him (`draft_prospects.player_id`).
 3. **Line-by-Line Capture Mechanics:** Madden's Draft Board / College Prospects screen displays full legal names, heights, and weights only on the active highlighted row/card, requiring row-by-row keypresses (`madden_capture.py --only prospects`).
 4. **Decoupled Scan Cadence:** The draft board scan (`--mode prospects` / `draft_scan`) is completely separate from the roster scan (`--mode roster` / `roster_scan`).
 
@@ -43,27 +43,41 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
   - **First names** are re-read from their band alone. **Last names** go by vote: card, band and the table's short name.
   - **Result:** both full captures (`captures/prospects`, `captures/2026-10-15_full_board3`) extract to identical CSVs, 389/389 rows and no blank cells. 31 + 54 + 15 changed cards were checked by eye.
 - **Benchmark:** Parsed all 389 unique prospects (224 drafted + 165 UDFAs) from `captures/prospects` in ~75s with zero Gemini calls and 100% field completeness.
-- **Syncing:** `extract.py` automatically synchronizes extracted `prospects.csv` to canonical storage `data/draft/{draft_season}_prospects.csv` where `draft_season = season + 1`.
+- **Syncing:** `extract.py` still copies the extracted `prospects.csv` to `data/draft/{draft_season}_prospects.csv` (`draft_season = season + 1`). Nothing reads that copy now: the board reaches the tools only through `pipeline.load_capture` → `draft_prospects`.
 
 ### 2.2 Prospect Ingestion & Validation (`pipeline/ingest_prospects.py`)
 - Standardizes heights (`6'2"`), weights (140–420 lbs), ages (18–30), baseline ratings (50–99), and canonical position mappings (`LEDG`/`REDG` $\to$ `EDGE`, `SAM`/`MIKE`/`WILL` $\to$ `LB`, `LT`/`RT` $\to$ `OT`, `RG`/`LG` $\to$ `OG`, `HB` $\to$ `RB`).
-- `load_prospects_from_csv(csv_path)` validates pick uniqueness and returns sorted `List[Prospect]`.
+- `load_prospects_from_csv(csv_path, strict=True, warnings=None)` returns sorted `List[Prospect]` (now with `projected_round`, `round_pick`, `prospect_id`).
+  - Strict mode raises on the first bad field.
+  - Lenient mode (`strict=False`, used by the loader and `--file`) turns a bad field into `None` with a warning, skips a row with no name or pick, and keeps the first of two rows claiming one pick.
+  - Either way, an empty board raises.
+  - `height_inches` / `inches_height` convert for the database. An impossible height like `5'71"` is treated as blank.
 
 ### 2.3 Round 1 Mock Draft Engine (`engines/mock_draft_engine.py`)
-- Evaluates 32 Round 1 selections using live league data:
-  1. **Draft Order:** Reverse standings, point-differential tiebreakers, and playoff progression via `get_draft_order(season)`.
+- Evaluates Round 1 selections (32, or the first `limit`) using live league data:
+  1. **Draft Order:** `get_draft_order(season)` → `engines/draft_order.py`.
+     * Brackets: missed playoffs 1–18, Wild Card losers 19–24, Divisional 25–28, Conference 29–30, Super Bowl 31/32.
+     * Within a bracket: worst record first, ties counting half, then regular-season point differential.
+     * Each pick is `locked` or provisional.
+     * While only Wild Card games exist, each conference's best record is its bye.
+     * The run's week cutoff is respected.
   2. **Team Needs:** Baseline rating deficits, age cliffs (starters aged 30+ without under-25 developmental backups), and phase ranks via `get_team_draft_needs(team, season)`.
   3. **Scoring Function:**
      $$\text{FitScore} = 0.45 \cdot (\text{NeedScore} \cdot 1.5) + 0.40 \cdot (\text{BPA}) + 10.0 \cdot (M_{\text{pos}} - 1.0)$$
      where BPA is centered on scouted OVR with slot value delta $((i - \text{projected\_pick}) \cdot 0.5)$, and positional premium $M_{\text{pos}}$ prioritizes QB (1.25), OT/EDGE (1.12), and CB (1.10). A team already set at QB receives a severe penalty.
-- Produces 32 unique picks without duplicates and generates franchise-specific analytical rationales.
-- CLI: `python3 -m engines.mock_draft_engine [--season N] [--file path/to/prospects.csv] [--json]`.
+- Produces unique picks with `team_id`, `locked`, `selection_status`, fit score and rationale. A prospect with a blank OVR is valued at 50, not dropped.
+- Reads the board from `draft_prospects`. `save()` stores a run in `mock_draft_picks` for (season, week).
+- CLI: `python3 -m engines.mock_draft_engine [--season N] [--limit 24] [--save] [--file captures/<run>/prospects.csv] [--json]`.
 
 ### 2.4 Mel Kiper Jr. Persona & ReAct Tools
 - **ReAct Research Tools (`newsroom/db_tools.py`):**
-  - `get_mock_draft(season, file_path)`: executes the Round 1 simulation engine and returns pick-by-pick selections, team fit, and analytical rationales.
-  - `get_draft_prospects(position, top_n, file_path)`: queries consensus draft prospects with position filtering.
-  - Registered in `newsroom/swarm_dispatcher.py` (`self.tools`).
+  - `get_mock_draft(season, limit)`: the week's saved mock draft, so every article that week cites the same picks. It runs and saves the engine when there is none. `limit` 24 for Week 20.
+  - `get_scouted_draft_board(season, limit, position)`: replaces `get_draft_prospects`. It reads `draft_prospects`, returns blanks as null, and filters by position or position group.
+  - Registered in `newsroom/swarm_dispatcher.py` (`self.tools` and the writer research-tools list), alongside the playoff-aware `get_draft_order`.
+- **`OFFSEASON_MOCK_DRAFT` (Week 20, Slot 4): picks 1–24 locked**, writers `MEL_KIPER` / `YATES` / `BARNWELL`.
+  * Calls `get_draft_order`, `get_mock_draft` (limit 24), `get_scouted_draft_board` and `get_team_draft_needs`.
+  * Never names a prospect who isn't on the board, and never fills in a null field.
+  * Strict `## [Pick]. [Team]: [Prospect], [Position], [School]` headers, followed by height, weight and OVR from the board.
 - **Writer Persona (`newsroom/config/agent_personas.json`, `article_types.json`):**
   - Defined `MEL_KIPER` persona with signature voice ("Todd! Listen to me!", Big Board, trench warriors, signature Steals/Sleepers).
   - Assigned as primary writer for `OFFSEASON_MOCK_DRAFT`.
@@ -75,11 +89,12 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
   - `--only prospects [--prospects N | --all-prospects]`: captures draft board prospects line-by-line. Opens the Draft Board itself (`open_prospects()`, see §3).
 - **`pipeline/load_capture.py`:**
   - `detect_mode(folder)` recognizes mode `"prospects"` when `prospects.csv` is present.
-  - `load_prospects()` validates via `load_prospects_from_csv` and copies to `data/draft/{season+1}_prospects.csv` (respecting `dry_run`).
+  - `load_prospects()` loads `prospects.csv` leniently into `draft_prospects` for class season + 1, replacing an earlier scan of that class. Warnings go in `report["prospect_warnings"]`, and an export copy goes to `data/draft/` unless it's a `--dry-run`.
+  - A roster load links this season's rookies to their prospect rows. A roster folder with a `prospects.csv` loads the board too, and a bad board no longer fails the roster.
 - **`pipeline/weekly_capture.py`:**
   - Added `"roster"` and `"prospects"` to `MODES`.
   - `python3 -m pipeline.weekly_capture --mode roster`: captures rosters, extracts cards, loads players/seasons, shrinks media, notifies (`"Rosters loaded for Season {season}."`), skipping weekly game engines and articles.
-  - `python3 -m pipeline.weekly_capture --mode prospects`: captures draft board, extracts via Apple Vision OCR, loads/validates, syncs to `data/draft/{season+1}_prospects.csv`, shrinks media, notifies (`"Draft prospects loaded for Season {season}."`), skipping weekly game engines and articles.
+  - `python3 -m pipeline.weekly_capture --mode prospects`: captures draft board, extracts via Apple Vision OCR, loads it into `draft_prospects`, shrinks media, notifies (`"Draft prospects loaded for Season {season}."`), skipping weekly game engines and articles.
 - **Debug API & UI (`server/debug_api.py`, `Mu_Network/src/DebugPage.tsx`):**
   - Separate jobs: `roster_scan` ("Roster scan") and `draft_scan` ("Draft prospect scan").
   - The `#debug` page UI provides separate **Roster scan** and **Draft prospect scan** buttons.
@@ -126,11 +141,9 @@ A bare Back does not leave the board. Back opens a **Draft Class Edited** prompt
 
 ---
 
-## 4. Deferred Future Tasks (After Parallel Sessions Merge)
+## 4. Future Tasks
 
-1. **Database Schema Integration:**
-   - Add `draft_prospects` table and `mock_draft_picks` ledger in `db/init_db.sql` / migration once parallel sessions touch DB schema.
-2. **Multi-Round Simulation:**
+1. **Multi-Round Simulation:**
    - Extend `engines/mock_draft_engine.py` from 32 picks (Round 1) to full 7-round mock drafts (256+ picks) using the 389 extracted prospects.
 
 ---
@@ -140,22 +153,14 @@ A bare Back does not leave the board. Back opens a **Draft Class Edited** prompt
 Run these commands inside the worktree to verify the environment:
 
 ```bash
-# 1. Run all unit and integration test suites (156 tests; the real-capture OCR test takes ~4 min)
-python3 -m pytest -q \
-  tests/test_madden_capture.py \
-  tests/test_writer_config.py \
-  tests/test_mock_draft_tools.py \
-  tests/test_mock_draft_engine.py \
-  tests/test_extract_prospects_ocr.py \
-  tests/test_load_capture.py \
-  tests/test_weekly_capture.py \
-  tests/test_debug_api.py
+# 1. Run the whole test suite (534 tests; the real-capture OCR test takes ~4 min)
+python3 -m pytest -q tests
 
 # 2. Run Mock Draft Engine directly
-python3 -m engines.mock_draft_engine --season 2035 --file data/draft/2036_prospects.csv
+python3 -m engines.mock_draft_engine --season 2035 --limit 24          # board from draft_prospects
 
 # 3. Dry-run load of prospects board
-python3 -m pipeline.load_capture captures/prospects --dry-run
+python3 -m pipeline.load_capture captures/2026-10-15_full_board3 --dry-run   # rows + prospect_warnings, writes nothing
 
 # 4. Verify frontend build
 cd Mu_Network && npm run build

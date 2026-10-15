@@ -52,7 +52,7 @@ from newsroom.db_tools import (
     get_draft_trade_value,
     get_franchise_rebuild_status,
     get_mock_draft,
-    get_draft_prospects,
+    get_scouted_draft_board,
     get_team_articles,
     get_player_articles,
     get_team_injury_report,
@@ -765,7 +765,7 @@ class SwarmDispatcher:
             get_draft_trade_value,
             get_franchise_rebuild_status,
             get_mock_draft,
-            get_draft_prospects,
+            get_scouted_draft_board,
             get_team_articles,
             get_player_articles,
             get_team_injury_report,
@@ -972,7 +972,9 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need defensive or special-teams production (sack, interception, tackle, tackles-for-loss, pass-deflection, forced-fumble, field-goal, punting or return leaders), league-wide or for one team, call `get_defense_special_teams_leaders`. `get_player_season_stats` gives any one player's full line, and `get_game_box_score` lists a game's defensive playmakers and kickers when that game's stats were captured.
 - If you need a team's official weekly injury report (player status, injury type, duration, IR status, and whether an injury is a key injury), call `get_team_injury_report`. Remember national coverage is strictly restricted to marquee key injuries (OVR 88+, Popularity 50+, or starting QBs).
 - If you need a game's detailed player contributions, call `get_game_box_score`.
-- If you need the official Round 1 selection order (Picks 1-32), call `get_draft_order`.
+- If you need the Round 1 selection order (Picks 1-32, with which picks are locked and which are still provisional), call `get_draft_order`.
+- If you need the scouted draft prospect board (projected pick, position, college, height, weight, age, scouted OVR; filter by position), call `get_scouted_draft_board`. Never invent a prospect or fill in a field it leaves null.
+- If you need this week's Round 1 mock draft (the same picks every writer sees this week), call `get_mock_draft`.
 - If you need a team's primary roster needs ranked by urgency, call `get_team_draft_needs`.
 - If you need a team's complete positional depth chart with age brackets, call `get_team_roster_depth_chart`.
 - If you need draft pick trade points (Jimmy Johnson model) and trade package scenarios, call `get_draft_trade_value`.

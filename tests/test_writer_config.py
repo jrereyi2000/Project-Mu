@@ -270,6 +270,19 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("Round 1", mock_config["directive"])
         self.assertIn("get_mock_draft", mock_config["directive"])
 
+    def test_mock_draft_is_picks_1_to_24_on_the_scouted_board(self):
+        """Week 20's mock draft covers the 24 picks locked after the Wild Card round (handoff, Agent 3)."""
+        mock_config = self.article_types["OFFSEASON_MOCK_DRAFT"]
+        queried = " ".join(mock_config["data_queried"])
+        for tool in ("get_draft_order", "get_mock_draft", "get_scouted_draft_board", "get_team_draft_needs"):
+            self.assertIn(tool, queried)
+            self.assertIn(tool, mock_config["curatorial_autonomy"])
+        self.assertIn("1\u201324", mock_config["name"])
+        self.assertIn("Picks 1\u201324", mock_config["structure_directive"])
+        self.assertNotIn("1\u201332", mock_config["structure_directive"])
+        self.assertIn("## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School]", mock_config["structure_directive"])
+        self.assertNotIn("get_draft_prospects", json.dumps(self.article_types))
+
 
 if __name__ == "__main__":
     unittest.main()

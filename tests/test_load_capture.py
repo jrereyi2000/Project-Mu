@@ -225,33 +225,62 @@ class ProspectsLoadTest(unittest.TestCase):
         open(os.path.join(d, "prospects.csv"), "w").close()
         self.assertEqual(L.detect_mode(d), "roster")
 
-    def test_load_prospects_syncs_file(self):
-        d = tempfile.mkdtemp()
-        p_csv = os.path.join(d, "prospects.csv")
-        with open(p_csv, "w") as f:
-            f.write("PICK,NAME,POS,COLLEGE,HEIGHT,WEIGHT,AGE,OVR\n")
-            f.write("1,Caleb Williams,QB,USC,6-1,215,22,81\n")
-            f.write("2,Marvin Harrison Jr,WR,Ohio State,6-4,205,21,80\n")
+    class Cur:
+        """Records the SQL the board load runs."""
+        def __init__(self):
+            self.calls = []
 
-        dest_dir = tempfile.mkdtemp()
-        report = {}
-        target_csv = os.path.join(dest_dir, "2036_prospects.csv")
+        def execute(self, sql, params=None):
+            self.calls.append((" ".join(sql.split()), params))
+
+        def executemany(self, sql, rows):
+            self.calls.append((" ".join(sql.split()), list(rows)))
+
+    def board(self, *rows):
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, "prospects.csv"), "w") as f:
+            f.write("PROJECTED_PICK,PROJECTED_ROUND,ROUND_PICK,FULL_NAME,POSITION,COLLEGE,HEIGHT,WEIGHT,AGE,OVR\n")
+            f.writelines(r + "\n" for r in rows)
+        return d
+
+    def load(self, d, dry_run=False):
         from unittest import mock
+        cur, report = self.Cur(), {"dry_run": dry_run}
+        export = os.path.join(tempfile.mkdtemp(), "2036_prospects.csv")
         orig_join = os.path.join
-        with mock.patch("os.path.join", side_effect=lambda *args: target_csv if "data" in args and "draft" in args else orig_join(*args)):
-            count = L.load_prospects(None, d, 2035, report)
+        with mock.patch("os.path.join", side_effect=lambda *a: export if "data" in a and "draft" in a else orig_join(*a)):
+            count = L.load_prospects(cur, d, 2035, report)
+        return count, cur, report, export
+
+    def test_load_prospects_writes_board_and_export(self):
+        d = self.board("1,1,1,Caleb Williams,QB,USC,6'1\",215,22,81", "2,1,2,Marvin Harrison Jr,WR,Ohio State,6'4\",205,21,80")
+        count, cur, report, export = self.load(d)
+        self.assertEqual((count, report["prospects_loaded"], report["draft_season"]), (2, 2, 2036))
+        (delete, params), (insert, rows) = cur.calls
+        self.assertTrue(delete.startswith("DELETE FROM draft_prospects") and params == (2036,))
+        self.assertTrue(insert.startswith("INSERT INTO draft_prospects"))
+        self.assertEqual(rows[0][:8], (2036, 1, "1", 1, "Caleb Williams", "QB", "USC", 73))
+        self.assertEqual(rows[0][-1], os.path.basename(d))                  # source capture
+        self.assertTrue(os.path.exists(export))
+
+    def test_load_prospects_dry_run_writes_no_export(self):
+        d = self.board("1,1,1,Caleb Williams,QB,USC,6'1\",215,22,81")
+        _, _, _, export = self.load(d, dry_run=True)
+        self.assertFalse(os.path.exists(export))           # the board rows roll back with the transaction
+
+    def test_load_prospects_lenient(self):
+        # JR, Oct 15: a blank or bad cell or two still loads; next season's roster scan fills them in
+        d = self.board("1,1,1,Caleb Williams,UNKNOWN_POS,USC,6'1\",,22,81",
+                       "2,1,2,,WR,Ohio State,6'4\",205,21,80",            # no name: skipped
+                       "3,1,3,Rome Odunze,WR,,5'71\",212,22,79")
+        count, cur, report, _ = self.load(d)
         self.assertEqual(count, 2)
-        self.assertEqual(report["prospects_loaded"], 2)
-        self.assertEqual(report["draft_season"], 2036)
-        self.assertTrue(os.path.exists(target_csv))
+        rows = cur.calls[1][1]
+        self.assertEqual([(r[4], r[5], r[6], r[7], r[8]) for r in rows],
+                         [("Caleb Williams", None, "USC", 73, None), ("Rome Odunze", "WR", None, None, 212)])
+        self.assertEqual(len(report["prospect_warnings"]), 5)
 
-    def test_load_prospects_invalid_raises_load_error(self):
-        d = tempfile.mkdtemp()
-        p_csv = os.path.join(d, "prospects.csv")
-        with open(p_csv, "w") as f:
-            f.write("PICK,NAME,POS,COLLEGE,HEIGHT,WEIGHT,AGE,OVR\n")
-            f.write("1,Caleb Williams,UNKNOWN_POS,USC,6-1,215,22,81\n")
-
-        report = {}
+    def test_load_prospects_empty_board_raises_load_error(self):
+        d = self.board(",,,,QB,USC,6'1\",215,22,81")
         with self.assertRaises(L.LoadError):
-            L.load_prospects(None, d, 2035, report)
+            L.load_prospects(self.Cur(), d, 2035, {})
