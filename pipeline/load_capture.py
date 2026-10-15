@@ -280,6 +280,7 @@ OFFENSE_MUST_MATCH = ("passing", "rushing", "receiving")
 # Postseason weeks (capture_matching.db_week) -> games.game_type. Playoff games aren't in the season schedule:
 # the weekly load creates them from the captured schedule. Week 22 (Pro Bowl) has no games.
 PLAYOFF_GAME_TYPES = {19: "WILD_CARD", 20: "DIVISIONAL", 21: "CONFERENCE", 23: "SUPER_BOWL"}
+PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
 TEAM_TABS = {
     "team_conversions": {"3DC": "third_down_conv", "3DA": "third_down_att", "3D%": "third_down_pct",
                          "4DC": "fourth_down_conv", "4DA": "fourth_down_att", "4D%": "fourth_down_pct",
@@ -702,7 +703,8 @@ def load_next_round(cur, folder, season, current, by_name, problems):
         problems.append(f"schedule_next.csv: weeks {sorted(map(str, weeks))}, expected one")
         return None
     week = weeks.pop()
-    if week not in PLAYOFF_GAME_TYPES or week != current:
+    coming = FINAL_WEEK if current == PRO_BOWL_WEEK else current     # Pro Bowl week: the Super Bowl is next
+    if week not in PLAYOFF_GAME_TYPES or week != coming:
         problems.append(f"schedule_next.csv: week {week} isn't the coming playoff round (current week {current})")
         return None
     for r in rows:
@@ -737,6 +739,8 @@ def next_current_week(folder, week, stored):
             labels = json.load(fh)
         if db_week(labels.get("captured")) != week:
             raise LoadError(f"week.json says {labels.get('captured')!r} was captured, schedule.csv has week {week}")
+        if week == FINAL_WEEK:     # after the Super Bowl Madden is in the offseason: the season ends at 23
+            return FINAL_WEEK, f"season over (schedule opened on {labels.get('current')!r})"
         current = db_week(labels.get("current"))
         if current is None or current <= week:
             raise LoadError(f"week.json: current week {labels.get('current')!r} doesn't follow the loaded week {week}")

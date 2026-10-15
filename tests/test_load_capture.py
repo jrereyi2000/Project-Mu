@@ -171,3 +171,27 @@ class NextRoundTest(unittest.TestCase):
         self.assertEqual(L.detect_mode(d), "games")
         open(os.path.join(d, "schedule.csv"), "w").close()
         self.assertEqual(L.detect_mode(d), "playoff")
+
+
+class SeasonEndTest(unittest.TestCase):
+    def week_json(self, labels):
+        d = tempfile.mkdtemp()
+        json.dump(labels, open(os.path.join(d, "week.json"), "w"))
+        return d
+
+    def test_super_bowl_load_ends_the_season(self):
+        """After the Super Bowl the schedule shows an offseason stage (no week): the league stays at 23."""
+        d = self.week_json({"current": None, "captured": "POST SEASON SUPER BOWL"})
+        self.assertEqual(L.next_current_week(d, 23, 22)[0], 23)
+
+    def test_conference_load_moves_to_pro_bowl_week(self):
+        d = self.week_json({"current": "POST SEASON PRO BOWL", "captured": "POST SEASON CONFERENCE",
+                            "next": "POST SEASON SUPER BOWL"})
+        self.assertEqual(L.next_current_week(d, 21, 21)[0], 22)
+
+    def test_super_bowl_is_the_round_after_pro_bowl_week(self):
+        d = NextRoundTest().folder("Super Bowl")
+        problems = []
+        got = L.load_next_round(PlayoffGamesTest.Cur(), d, 2035, 22, {"STEELERS": 1, "RAVENS": 2}, problems)
+        self.assertEqual(problems, [])
+        self.assertEqual(got["week"], 23)

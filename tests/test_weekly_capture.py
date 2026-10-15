@@ -23,7 +23,9 @@ class RunTest(unittest.TestCase):
             step_load=self.fake_load,
             league_state=lambda: (2035, 18),   # the run captures Week 18 (regular season)
             step_engines=lambda season: self.calls.append(f"engines {season}"),
-            step_articles=lambda season: (self.calls.append("articles"), {"status": "published", "week": 19})[1],
+            step_articles=lambda season, week=None: (self.calls.append(f"articles {week}" if week else "articles"),
+                                                   {"status": "published", "week": week or 19})[1],
+            set_current_week=lambda week: self.calls.append(f"current {week}"),
         )
         p.start()
         self.addCleanup(p.stop)
@@ -35,9 +37,10 @@ class RunTest(unittest.TestCase):
         os.makedirs(os.path.join(self.tmp, name))
         return wc.run(name)
 
-    def fake_capture(self, folder, log_path, mode="weekly"):
+    def fake_capture(self, folder, log_path, mode="weekly", week_label=None):
         self.calls.append("capture")
         self.capture_mode = mode
+        self.week_label = week_label
         os.makedirs(os.path.join(folder, "stats"), exist_ok=True)
         Image.new("RGB", (40, 20), "red").save(os.path.join(folder, "stats", "01_passing_000.png"))
         os.makedirs(os.path.join(folder, "stop_debug"), exist_ok=True)
@@ -91,6 +94,29 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(wc, "league_state", lambda: (2035, 18)):   # the run captures Week 18
             self.start("w18")
         self.assertEqual(self.capture_mode, "weekly")
+
+    def test_week_22_is_articles_only(self):
+        """Pro Bowl week: no capture or folder; engines, the Week 23 slate, then the league moves to week 23."""
+        with mock.patch.object(wc, "league_state", lambda: (2035, 22)):
+            self.assertEqual(wc.run(), 0)
+        self.assertEqual(self.calls, ["engines 2035", "articles 23", "current 23"])
+        self.assertEqual(os.listdir(self.tmp), [".lock"])
+
+    def test_week_22_without_articles_stays_at_22(self):
+        with mock.patch.object(wc, "league_state", lambda: (2035, 22)):
+            self.assertEqual(wc.run(articles=False), 0)
+        self.assertEqual(self.calls, ["engines 2035"])
+
+    def test_super_bowl_capture_names_the_week(self):
+        """Madden is in the offseason after the Super Bowl: the last capture names the Super Bowl week."""
+        with mock.patch.object(wc, "league_state", lambda: (2035, 23)):
+            self.assertEqual(self.start("sb"), 0)
+        self.assertEqual((self.capture_mode, self.week_label), ("playoff", "POST SEASON SUPER BOWL"))
+
+    def test_wild_card_capture_reads_the_week_itself(self):
+        with mock.patch.object(wc, "league_state", lambda: (2035, 19)):
+            self.start("wc")
+        self.assertEqual((self.capture_mode, self.week_label), ("playoff", None))
 
     def test_folder_modes(self):
         f = os.path.join(self.tmp, "m")

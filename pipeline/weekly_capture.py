@@ -8,6 +8,11 @@ from the debug page (#debug, server/debug_api.py: Scan week / Backfill previous 
                                                       # with --replace over the backfill's lines; never articles
   python3 -m pipeline.weekly_capture --resume <run>   # continue captures/<run> from the step it stopped on
 
+Week 22 (league_state.current_week 22, Madden on Pro Bowl week): no games of ours, so Scan week is an
+articles-only run: engines, the Week 23 (Super Bowl week) slate, then current_week moves to 23. No console.
+Week 23: the last capture names the Super Bowl week (madden_capture.py --week), since Madden has moved into
+the offseason and the schedule shows no current week.
+
 Postseason (league_state.current_week 19+: the week a run captures is the one the last load left current,
 so from the Wild Card round on it is a playoff round): the run is a playoff run on its own (or --mode playoff). Season Stats and Team Stats are regular season only and don't change, so it
 captures last round's schedule (and the coming round's matchups) and every game's box score and lines
@@ -46,6 +51,8 @@ CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
 MODES = ("weekly", "games", "playoff")
 FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
+PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
+SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the last capture: Madden is in the offseason by then
 
 
 class WeekStopped(Exception):
@@ -149,16 +156,17 @@ def step_connect(log_path):
         raise WeekStopped(f"Couldn't reach Madden's franchise menus over chiaki-ng: {last}. Nothing was pressed.")
 
 
-def step_capture(folder, log_path, mode="weekly"):
+def step_capture(folder, log_path, mode="weekly", week_label=None):
     name = os.path.basename(folder)
+    named = ["--week", week_label] if week_label else []
     if mode == "games":                        # resumes per game (games/<NN>/DONE)
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "games")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "games", *where], GAMES_TIMEOUT
     elif mode == "playoff":                    # schedule (+ next round), then the games; a stop in the games resumes them
         if os.path.isdir(os.path.join(folder, "games")) and os.path.exists(os.path.join(folder, "week.json")):
-            args = [sys.executable, "madden_capture.py", "--only", "games", "--resume", name]
+            args = [sys.executable, "madden_capture.py", "--only", "games", "--resume", name, *named]
         else:
-            args = [sys.executable, "madden_capture.py", "--only", "playoff", "--out", name]
+            args = [sys.executable, "madden_capture.py", "--only", "playoff", "--out", name, *named]
         timeout = GAMES_TIMEOUT
     else:
         for d in CAPTURE_DIRS:                 # a re-capture starts the three modes clean
@@ -200,10 +208,10 @@ def step_engines(season):
                           f"articles): {e!r}")
 
 
-def step_articles(season):
+def step_articles(season, week=None):
     from newsroom.weekly_run import run_weekly_swarm
     try:
-        res = run_weekly_swarm(season=season)
+        res = run_weekly_swarm(season=season, week=week)
     except Exception as e:
         traceback.print_exc()
         raise WeekStopped(f"Articles failed: {e!r}")
@@ -229,14 +237,54 @@ def shrink(folder):
 
 
 # ----------------------------------------------------------------- run ----
+def set_current_week(week):
+    import psycopg
+    from pipeline.load_capture import DSN
+    with psycopg.connect(DSN) as conn:
+        conn.execute("UPDATE league_state SET current_week = %s WHERE id = 1", (week,))
+
+
+def bye_run(articles=True):
+    """League week 22 (Pro Bowl week): nothing to capture. Engines, the Week 23 slate, then current_week 23.
+    Returns 0 when it went through, 1 when it stopped (notice sent)."""
+    try:
+        season, _ = league_state()
+        log(f"Week 22 has no games: articles-only run (season {season})")
+        log("Step 7: engines")
+        step_engines(season)
+        if not articles:
+            log("Articles not requested; league stays at week 22")
+            return 0
+        log("Step 8: articles (Week 23 slate)")
+        res = step_articles(season, week=FINAL_WEEK)
+        if res.get("status") not in ("published", "skipped_exists"):
+            raise WeekStopped(f"Articles didn't publish ({res})")
+        set_current_week(FINAL_WEEK)
+        notify(f"Week 23 slate: {res.get('status')}. League now at week 23: play the Super Bowl, then Scan week.",
+               title="Mu: week done", tags=("white_check_mark",))
+        return 0
+    except WeekStopped as e:
+        log(f"WEEK STOPPED: {e}")
+        notify(f"{e}\nRun Scan week again once it's fixed (nothing to capture this week).",
+               title="Mu: week stopped", priority="urgent", tags=("warning",))
+        return 1
+
+
 def run(resume=None, articles=True, connect=True, mode="weekly"):
     """One weekly run (mode 'weekly'; 'playoff' for a postseason week, chosen automatically; or 'games' for
     every game of last week, never with articles). Returns 0 when the week went through, 1 when it stopped."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
+    current = None
+    if mode in ("weekly", "playoff"):
+        try:
+            current = league_state()[1]
+        except Exception:
+            current = None
     if mode == "weekly":
         mode = playoff_or_weekly(resume)
     articles = articles and mode in ("weekly", "playoff")
+    week_label = SUPER_BOWL_LABEL if mode == "playoff" and current is not None and current >= FINAL_WEEK else None
     what = {"games": "Game scan", "playoff": "Playoff capture"}.get(mode, "Weekly capture")
     os.makedirs(CAPTURES, exist_ok=True)
     lock = open(LOCK_PATH, "w")
@@ -245,6 +293,12 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
     except BlockingIOError:
         log("Another weekly run is in progress; not starting a second one")
         return 1
+    if current == PRO_BOWL_WEEK and mode == "playoff" and not resume:
+        try:
+            return bye_run(articles)
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            lock.close()
     name = resume or datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
     folder = os.path.join(CAPTURES, name)
     if resume and not os.path.isdir(folder):
@@ -261,7 +315,7 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
                 log("Step 2: connect")
                 step_connect(log_path)
             log("Step 3: capture")
-            step_capture(folder, log_path, mode)
+            step_capture(folder, log_path, mode, week_label)
             mins = (time.time() - started) / 60
             notify(f"{what} done in {mins:.0f} min ({captured_week(folder) or 'last week'}). Turn your controller "
                    "back on and restart the broadcast.", title="Mu: your turn", priority="high",

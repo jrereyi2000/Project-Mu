@@ -29,13 +29,24 @@ class WeekLabelTest(unittest.TestCase):
     def test_week_order(self):
         self.assertLess(mc.week_index("PRESEASON WEEK 3"), mc.week_index("SEASON WEEK 1"))
         self.assertEqual(mc.week_index("SEASON WEEK 18"), 18)
-        self.assertEqual(mc.week_index("POST SEASON SUPER BOWL"), 22)
+        self.assertEqual(mc.week_index("POST SEASON PRO BOWL"), 22)       # Madden's order is games.week
+        self.assertEqual(mc.week_index("POST SEASON SUPER BOWL"), 23)
+        self.assertEqual(mc.clean_week("POST SEASON PROBOWL"), "POST SEASON PRO BOWL")
 
     def test_previous_week(self):
         self.assertEqual(mc.previous_week("SEASON WEEK 9"), "SEASON WEEK 8")
         self.assertEqual(mc.previous_week("POST SEASON WILD CARD"), "SEASON WEEK 18")
         with self.assertRaises(mc.Abort):
             mc.previous_week("SEASON WEEK 1")
+        self.assertEqual(mc.previous_week("POST SEASON PRO BOWL"), "POST SEASON CONFERENCE")
+
+    def test_next_round(self):
+        """The coming playoff round recorded before stepping back: the Super Bowl from Pro Bowl week."""
+        self.assertEqual(mc.next_round("POST SEASON WILD CARD", "SEASON WEEK 18"), "POST SEASON WILD CARD")
+        self.assertEqual(mc.next_round("POST SEASON PRO BOWL", "POST SEASON CONFERENCE"), "POST SEASON SUPER BOWL")
+        self.assertIsNone(mc.next_round(None, "POST SEASON SUPER BOWL"))            # offseason
+        self.assertIsNone(mc.next_round("SEASON WEEK 12", "SEASON WEEK 11"))
+        self.assertIsNone(mc.next_round("POST SEASON DIVISIONAL", "POST SEASON DIVISIONAL"))
 
 
 class OcrTextTest(unittest.TestCase):
@@ -230,6 +241,18 @@ class ScheduleCrossRuleTest(unittest.TestCase):
             self.assertIn("FORCE WIN", mc.schedule_cross_ok(self.frame(17, "BOX SCORE", ("FORCE WIN",)), "SEASON WEEK 18"))
         with mock.patch.object(mc, "highlighted_schedule_row", return_value=["PACKERS @ LIONS", "0", "NONE"]):
             self.assertIn("final score", mc.schedule_cross_ok(self.frame(17, "BOX SCORE"), "SEASON WEEK 18"))
+
+    def test_super_bowl_box_score_in_the_offseason(self):
+        """After the Super Bowl there's no current week: only the Super Bowl week opens, with every other check."""
+        played = ["CHIEFS @ EAGLES", "KC 24 - 21 PHI"]
+        sb = self.frame(17, "BOX SCORE")
+        sb.text = sb.text.replace("SEASON WEEK 17", "POST SEASON SUPER BOWL")
+        with mock.patch.object(mc, "highlighted_schedule_row", return_value=played):
+            self.assertIsNone(mc.schedule_cross_ok(sb, None))
+            self.assertIn("not before", mc.schedule_cross_ok(self.frame(17, "BOX SCORE"), None))
+            sb_actions = self.frame(17, "BOX SCORE", ("ACTIONS",))
+            sb_actions.text = sb_actions.text.replace("SEASON WEEK 17", "POST SEASON SUPER BOWL")
+            self.assertIn("ACTIONS", mc.schedule_cross_ok(sb_actions, None))
 
     def test_result_pattern(self):
         self.assertTrue(mc.RESULT_RE.match("LAC 34 - 9LV"))
