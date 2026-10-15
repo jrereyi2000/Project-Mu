@@ -4,8 +4,8 @@ Run: python3 -m unittest tests.test_coach_profile
 """
 import unittest
 
-from engines.coach_profile import (accumulate, describe_tendencies, effective_tendencies, record_line,
-                                   season_record, staff_matchup)
+from engines.coach_profile import (accumulate, describe_tendencies, effective_tendencies, fetch_games, record_line,
+                                   season_record, staff_matchup, tenure_record)
 
 SNAP = {"season": 2034, "career_wins": 13, "career_losses": 4, "career_ties": 0, "winning_seasons": 1,
         "playoff_wins": 3, "playoff_losses": 0, "super_bowl_wins": 1, "super_bowl_losses": 0}
@@ -56,6 +56,48 @@ class CoachProfileTests(unittest.TestCase):
         line = record_line(dict(SNAP, career_ties=1))
         self.assertEqual(line["regular_season"], "13-4-1")
         self.assertEqual(line["super_bowls"], "1-0")
+
+    def test_playoff_record_with_team_counts_only_this_tenure(self):
+        # CAR's earlier coach (2030-2034) won a playoff game in 2034; the new coach started in 2035.
+        full_2035 = [game(2035, w, CAR, NYJ, 20, 10) for w in range(1, 18)]
+        games = full_2035 + [game(2034, 19, CAR, ATL, 30, 3, "WILD_CARD"),
+                             game(2035, 19, CAR, ATL, 27, 20, "WILD_CARD"),
+                             game(2035, 20, NYJ, CAR, 24, 17, "DIVISIONAL"),
+                             game(2035, 21, NYJ, ATL, 24, 17, "CONFERENCE")]   # not his team
+        self.assertEqual(tenure_record(games, CAR, 2035, 2035), ("17-0", "1-1"))
+        # A coach who changed teams: his NYJ playoff games don't count toward his CAR record.
+        nyj = [game(2034, 19, NYJ, ATL, 30, 3, "WILD_CARD"), game(2034, 23, NYJ, ATL, 30, 3, "SUPER_BOWL")]
+        self.assertEqual(tenure_record(nyj + games, CAR, 2035, 2035)[1], "1-1")
+
+    def test_playoff_record_with_team_over_several_seasons(self):
+        games = ([game(s, w, CAR, NYJ, 20, 10) for s in (2034, 2035) for w in range(1, 18)]
+                 + [game(2034, 19, CAR, ATL, 30, 3, "WILD_CARD"), game(2034, 23, CAR, NYJ, 30, 3, "SUPER_BOWL"),
+                    game(2035, 20, ATL, CAR, 30, 3, "DIVISIONAL")])
+        self.assertEqual(tenure_record(games, CAR, 2034, 2035), ("34-0", "2-1"))
+
+    def test_no_playoff_games_reads_zero_zero(self):
+        games = [game(2034, w, CAR, NYJ, 10, 20) for w in range(1, 18)] + [game(2035, 1, CAR, NYJ, 20, 10)]
+        self.assertEqual(tenure_record(games, CAR, 2034, 2035), ("1-17", "0-0"))
+
+    def test_records_with_team_null_when_an_earlier_season_is_missing(self):
+        games = [game(2034, w, CAR, NYJ, 20, 10) for w in range(1, 10)] + \
+                [game(2034, 19, CAR, ATL, 30, 3, "WILD_CARD")]
+        self.assertEqual(tenure_record(games, CAR, 2034, 2035), (None, None))
+
+    def test_games_past_the_cutoff_are_not_counted(self):
+        rows = [(2035, w, "REGULAR_SEASON", CAR, NYJ, 20, 10) for w in range(1, 18)] + \
+               [(2035, 19, "WILD_CARD", CAR, ATL, 27, 20), (2035, 20, "DIVISIONAL", ATL, CAR, 30, 3)]
+
+        class Cur:
+            def execute(self, *a):
+                pass
+
+            def fetchall(self):
+                return rows
+
+        games = fetch_games(Cur(), {CAR}, 2035, 2035, lambda s, w: w <= 19)   # article written before week 20
+        self.assertEqual(tenure_record(games, CAR, 2035, 2035), ("17-0", "1-0"))
+        self.assertEqual(season_record(games, CAR, 2035)["playoffs"], "1-0")
 
     def test_tendencies_are_words_with_their_source(self):
         coach = {"coach_name": "X", "offensive_scheme": "Spread", "defensive_scheme": "3-4", "pass_lean": "High",

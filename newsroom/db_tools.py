@@ -546,7 +546,7 @@ def get_team_context(team_identifier: str) -> str:
 
 @tool
 def get_coach_profile(team_identifier: str, season: int = 0) -> str:
-    """Fetch a team's head coach: tenure (season with the team, who he replaced), offensive scheme and defensive front, coaching tendencies (pass lean and fourth-down aggressiveness measured in this league, man coverage as the staff's real-world philosophy; Low/Medium/High with plain-language meaning), this season's record, record with the team, career record (regular season, winning seasons, playoffs, Super Bowls), Super Bowls with the team and Coach of the Year awards. Accepts team name, abbreviation, or team ID."""
+    """Fetch a team's head coach: tenure (season with the team, who he replaced), offensive scheme and defensive front, coaching tendencies (pass lean and fourth-down aggressiveness measured in this league, man coverage as the staff's real-world philosophy; Low/Medium/High with plain-language meaning), this season's record, regular-season and playoff record with the team, career record (regular season, winning seasons, playoffs, Super Bowls), Super Bowls with the team and Coach of the Year awards. Accepts team name, abbreviation, or team ID."""
     try:
         s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
