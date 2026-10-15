@@ -43,6 +43,7 @@ KEYCODES = {
     "r1": 20,      # 3
     "l2": 18,      # 1
     "r2": 21,      # 4
+    "l3": 23,      # 5: Scouting > Prospects opens the detailed Draft Board view
     "up": 126, "down": 125, "left": 123, "right": 124,
     "escape": 53,  # Esc: closes the PlayStation menu (only shown on a manual connect; never pressed by a run)
 }
@@ -455,6 +456,9 @@ SCHED_TILES = ["TEAM SCHEDULE", "LEAGUE SCHEDULE", "PLAYOFF PICTURE"]
 # Manage Roster tab's left-hand menu (mapped Oct 13; TRADE can show a lock icon)
 ROSTER_MENU = ["UPGRADE PLAYERS", "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH CHART", "TEAM SALARY",
                "INJURY REPORT", "TRADE", "FREE AGENCY", "SCOUTING", "FORMATION SUBS", "AUTO SUBS", "TEAM SCHEMES"]
+# Manage Roster > Scouting's left-hand menu, and the Edit Draft Class prompt's buttons (mapped Oct 15)
+SCOUTING_MENU = ["PROSPECTS", "SCOUTS", "REGION BREAKDOWN", "MOCK DRAFTS"]
+CLASS_PROMPT_OPTIONS = ["DOWNLOAD FROM DOWNLOAD CENTER", "EDIT DRAFT CLASS", "IMPORT LOCAL FILE"]
 # 32 NFL team nicknames as shown in chips/headers
 TEAMS = {"49ERS", "BEARS", "BENGALS", "BILLS", "BRONCOS", "BROWNS", "BUCCANEERS", "CARDINALS",
          "CHARGERS", "CHIEFS", "COLTS", "COMMANDERS", "COWBOYS", "DOLPHINS", "EAGLES", "FALCONS",
@@ -479,9 +483,17 @@ def classify(f):
     # Manage Roster > Injury Report: table with INJURY, IR, and player card
     if f.find("INJURY") and f.find("IR"):
         return "INJURY_REPORT"
-    # Manage Roster > Scouting / Draft Board: displays COLLEGE, PICK, ALL ROUNDS
-    if (f.find("ALL ROUNDS") or f.find("ROUND 1") or "Round 1, Pick" in t) and ("PICK" in t or "NAME" in t):
+    # Draft route (mapped Oct 15): Manage Roster > Scouting > Prospects > L3 > Edit Draft Class > Draft Board.
+    # The Draft Board's L2 chip reads ALL ROUNDS and its button bar ADJUST ORDER. The Prospects list
+    # shows "Round 1" in its PROJ column, so ROUND 1 alone isn't enough.
+    if (f.find("ALL ROUNDS") or "ADJUST ORDER" in t) and ("PICK" in t or "NAME" in t):
         return "DRAFT_BOARD"
+    if "EDIT DRAFT CLASS" in t and "IMPORT LOCAL FILE" in t:
+        return "EDIT_CLASS_PROMPT"
+    if "EDIT PLAYERS" in t and ("SET FAVORITE" in t or "SCOUTED" in t):
+        return "SCOUT_PROSPECTS"
+    if "TOP 10 PROSPECTS" in t and "MOCK DRAFTS" in t:
+        return "SCOUTING"
     if "PLAYER NAME" in t and "VIEW PLAYER CARD" in t:
         return "PLAYER_STATS"
     # A wide table scrolled to its right edge hides the PLAYER NAME column (seen Oct 14 after a stream
@@ -574,8 +586,18 @@ def cross(screen, frame=None):
     elif screen == "HUB_ROSTER":
         # Manage Roster's menu also holds Trade, Free Agency, Contracts: Cross only on Roster or Injury Report.
         cur = (frame or Frame()).highlighted(ROSTER_MENU)
-        if cur not in ("ROSTER", "INJURY REPORT"):
-            raise Abort(f"Refusing Cross on the Manage Roster menu: {cur} is highlighted, not ROSTER or INJURY REPORT")
+        if cur not in ("ROSTER", "INJURY REPORT", "SCOUTING"):
+            raise Abort(f"Refusing Cross on the Manage Roster menu: {cur} is highlighted, not ROSTER, INJURY REPORT or SCOUTING")
+    elif screen == "SCOUTING":
+        cur = (frame or Frame()).highlighted(SCOUTING_MENU)
+        if cur != "PROSPECTS":
+            raise Abort(f"Refusing Cross on the Scouting menu: {cur} is highlighted, not PROSPECTS")
+    elif screen == "EDIT_CLASS_PROMPT":
+        # The prompt opens on DOWNLOAD FROM DOWNLOAD CENTER; only EDIT DRAFT CLASS (JR's OK, Oct 15)
+        # leads to the Draft Board. It posts a notice to the league's transaction log.
+        cur = prompt_option(frame or Frame())
+        if cur != "EDIT DRAFT CLASS":
+            raise Abort(f"Refusing Cross on the Edit Draft Class prompt: {cur} is highlighted, not EDIT DRAFT CLASS")
     elif screen == "SCHED_LIST":
         # Only to open a played game's box score (JR's rule, Oct 13); an unplayed week's list
         # offers ACTIONS / Force Win instead.
@@ -1571,6 +1593,72 @@ def run_season_schedule(out, weeks=18):
         f, _ = wait_for(["SCHED_LIST"], timeout=10)
 
 
+def prompt_option(f):
+    """Which Edit Draft Class button is highlighted. The prompt's title also reads EDIT DRAFT
+    CLASS (mid-screen, ~53% down), so only the buttons below 65% count."""
+    W, H = f.size
+    labels = {norm(lab): lab for lab in CLASS_PROMPT_OPTIONS}
+    best, best_b = None, -1
+    for t, box in f.items:
+        lab = labels.get(norm(t))
+        if lab and box[1] > H * 0.65:
+            b = brightness(f.path, box)
+            if b > best_b:
+                best, best_b = lab, b
+    return best if best_b > 120 else None
+
+
+def press_into(key, screen, expected, timeout=8.0, tries=3):
+    """Like cross_into, for a non-Cross key (L3 on the Prospects list)."""
+    for attempt in range(1, tries + 1):
+        press(key, wait=1.5)
+        try:
+            return wait_for(expected, timeout)
+        except Abort:
+            f, s = look()
+            if s != screen:
+                raise
+            log(f"{key} didn't register on {screen} (attempt {attempt}), pressing again")
+    raise Abort(f"{key} never opened {expected} from {screen}")
+
+
+def open_prospects():
+    """Reach the Draft Board (mapped Oct 15): Manage Roster > Scouting > Prospects, L3 (Edit
+    Players), then EDIT DRAFT CLASS on the prompt. The board opens with Round 1, Pick 1 highlighted.
+    Picks up from any screen along the route."""
+    f, s = look()
+    for _ in range(8):
+        if s == "DRAFT_BOARD":
+            return f
+        if s == "EDIT_CLASS_PROMPT":
+            for _ in range(4):
+                cur = prompt_option(f)
+                if cur == "EDIT DRAFT CLASS":
+                    break
+                if cur is None:
+                    save_debug(f, "class_prompt_no_highlight")
+                    raise Abort("Can't tell which Edit Draft Class button is highlighted")
+                delta = CLASS_PROMPT_OPTIONS.index("EDIT DRAFT CLASS") - CLASS_PROMPT_OPTIONS.index(cur)
+                press("down" if delta > 0 else "up")
+                f, s = look()
+            f, s = cross_into("EDIT_CLASS_PROMPT", ["DRAFT_BOARD"], timeout=10)
+        elif s == "SCOUT_PROSPECTS":
+            f, s = press_into("l3", "SCOUT_PROSPECTS", ["EDIT_CLASS_PROMPT", "DRAFT_BOARD"])
+        elif s == "SCOUTING":
+            move_to(f, SCOUTING_MENU, "PROSPECTS", "up", "down", "Scouting menu item")
+            # the Prospects list draws its region tabs first and the table a moment later
+            f, s = cross_into("SCOUTING", ["SCOUT_PROSPECTS"], timeout=10)
+        else:
+            f, s = go_hub()
+            if s != "HUB_ROSTER":
+                log("Switching to MANAGE ROSTER tab")
+                move_to(f, HUB_TABS, "MANAGE ROSTER", "l1", "r1", "hub tab")
+                f, s = wait_for(["HUB_ROSTER"])
+            f = move_to(f, ROSTER_MENU, "SCOUTING", "up", "down", "Manage Roster menu item")
+            f, s = cross_into("HUB_ROSTER", ["SCOUTING"], timeout=8)
+    raise Abort(f"Could not reach the Draft Board (stuck on {s})")
+
+
 def run_prospects(out, max_prospects=32):
     """Capture the College Prospects / Draft Board screen line by line, because the full name,
     height, and weight are only displayed on the currently highlighted row.
@@ -1578,7 +1666,12 @@ def run_prospects(out, max_prospects=32):
     pdir = os.path.join(out, "prospects")
     os.makedirs(pdir, exist_ok=True)
     log("== Draft Board Prospects (Line by Line) ==")
-    log("Assuming console is already on the Draft Board / College Prospects screen (highlight on Pick #1)")
+    f, s = look()
+    if s != "DRAFT_BOARD":
+        log("Opening the Draft Board (Manage Roster > Scouting > Prospects > Edit Draft Class)")
+        open_prospects()
+    else:
+        log("Already on the Draft Board; assuming Round 1, Pick 1 is highlighted")
 
     prev_sig = None
     row = 0

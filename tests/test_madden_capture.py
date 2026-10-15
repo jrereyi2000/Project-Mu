@@ -115,6 +115,79 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(mc.classify(f), "HUB_ROSTER")
 
 
+class DraftRouteTest(unittest.TestCase):
+    """Manage Roster > Scouting > Prospects > L3 > Edit Draft Class > Draft Board (mapped Oct 15)."""
+    SCOUTING = _Frame("HIRE SCOUTS", "PROSPECTS", "SCOUTS", "REGION BREAKDOWN", "MOCK DRAFTS",
+                      "TOP 10 PROSPECTS", "DAVE VOGEL", "SELECT", "KEY INFO", "BACK")
+    PROSPECTS = _Frame("NATIONAL", "WEST", "LEDG", "ATTRIBUTES", "FAV", "RANK", "NAME", "D. VOGEL", "PROJ",
+                       "Round 1", "Top 5", "SCOUTED", "VIEW PLAYERCARD", "SORT", "SET FAVORITE", "EDIT PLAYERS", "BACK")
+    PROMPT = _Frame("EDIT DRAFT CLASS", "DO YOU WANT TO PROCEED?", "DOWNLOAD FROM DOWNLOAD CENTER",
+                    "EDIT DRAFT CLASS", "IMPORT LOCAL FILE", "SELECT", "BACK")
+    BOARD = _Frame("LEDG #72", "OVR75", "ALL ROUNDS", "PICK -", "ROUND 1, PICK 1", "R2", "ROSTER", "NAME",
+                   "D.VOGEL", "EDIT PLAYER", "SORT", "ADJUST ORDER", "BACK")
+
+    def test_l3_key(self):
+        self.assertEqual(mc.KEYCODES["l3"], 23)        # chiaki-ng: L3 = 5
+
+    def test_screens(self):
+        self.assertEqual(mc.classify(self.SCOUTING), "SCOUTING")
+        self.assertEqual(mc.classify(self.PROMPT), "EDIT_CLASS_PROMPT")
+        self.assertEqual(mc.classify(self.BOARD), "DRAFT_BOARD")
+
+    def test_prospects_list_is_not_the_draft_board(self):
+        # its PROJ column reads "Round 1", which the old DRAFT_BOARD check took for the board
+        self.assertEqual(mc.classify(self.PROSPECTS), "SCOUT_PROSPECTS")
+
+    def test_prompt_cross_only_on_edit_draft_class(self):
+        with mock.patch.object(mc, "prompt_option", return_value="DOWNLOAD FROM DOWNLOAD CENTER"), \
+                mock.patch.object(mc, "press") as press:
+            with self.assertRaises(mc.Abort):
+                mc.cross("EDIT_CLASS_PROMPT", self.PROMPT)
+        press.assert_not_called()
+        with mock.patch.object(mc, "prompt_option", return_value="EDIT DRAFT CLASS"), \
+                mock.patch.object(mc, "press") as press:
+            mc.cross("EDIT_CLASS_PROMPT", self.PROMPT)
+        press.assert_called_once()
+
+    def test_scouting_cross_only_on_prospects(self):
+        f = mock.Mock()
+        f.highlighted.return_value = "MOCK DRAFTS"
+        with mock.patch.object(mc, "press") as press:
+            with self.assertRaises(mc.Abort):
+                mc.cross("SCOUTING", f)
+        press.assert_not_called()
+
+    def test_no_cross_on_the_board(self):
+        # the board's Cross is EDIT PLAYER
+        with mock.patch.object(mc, "press") as press:
+            with self.assertRaises(mc.Abort):
+                mc.cross("DRAFT_BOARD", self.BOARD)
+        press.assert_not_called()
+
+    def test_prompt_option_ignores_the_title(self):
+        f = mock.Mock(size=(3024, 1888), path="unused.png",
+                      items=[("EDIT DRAFT CLASS", (1266, 992, 1754, 1067)),          # title, mid-screen
+                             ("DOWNLOAD FROM DOWNLOAD CENTER", (1270, 1383, 1754, 1423)),
+                             ("EDIT DRAFT CLASS", (1385, 1471, 1639, 1510)),
+                             ("IMPORT LOCAL FILE", (1389, 1559, 1631, 1598))])
+        lit = {1471: 155, 992: 200}                 # title brighter than any button: still ignored
+        with mock.patch.object(mc, "brightness", side_effect=lambda p, b: lit.get(b[1], 55)):
+            self.assertEqual(mc.prompt_option(f), "EDIT DRAFT CLASS")
+
+    def test_open_prospects_from_the_prospects_list(self):
+        # look(): the Prospects list, then the prompt again after the Down press
+        screens = iter([(self.PROSPECTS, "SCOUT_PROSPECTS"), (self.PROMPT, "EDIT_CLASS_PROMPT")])
+        with mock.patch.object(mc, "look", side_effect=lambda: next(screens)), \
+                mock.patch.object(mc, "press_into", return_value=(self.PROMPT, "EDIT_CLASS_PROMPT")) as l3, \
+                mock.patch.object(mc, "prompt_option", side_effect=["DOWNLOAD FROM DOWNLOAD CENTER", "EDIT DRAFT CLASS"]), \
+                mock.patch.object(mc, "press") as press, \
+                mock.patch.object(mc, "cross_into", return_value=(self.BOARD, "DRAFT_BOARD")) as cross_into:
+            self.assertIs(mc.open_prospects(), self.BOARD)
+        l3.assert_called_once()
+        press.assert_called_once_with("down")
+        cross_into.assert_called_once_with("EDIT_CLASS_PROMPT", ["DRAFT_BOARD"], timeout=10)
+
+
 # Apple Vision output for real card crops (captures/2026-10-13_explore, Oct 13)
 CRAWFORD = [("GEORGE", (46, 54, 132, 82)), ("CRAWFORD", (42, 86, 362, 156)),
             ("#10 @B I SCRAMBLER I FRANCHISE QB", (48, 166, 485, 187)),

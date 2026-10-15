@@ -1,11 +1,10 @@
 # Project Mu: Draft Prospects & Mock Draft Integration Notes
 
 **Date:** October 15, 2026  
-**Status:** Feature Complete — Ready for Console Navigation Mapping  
+**Status:** Feature Complete — Draft Board navigation automated (verified live Oct 15)  
 **Active Branch:** `feat/draft-kiper-mock`  
 **Active Worktree:** `/Users/jrereyi/Downloads/Project Mu/.claude/worktrees/draft-kiper-mock`  
-**Current Commit:** `a9bb069`  
-**Test Suite Status:** 78/78 tests passing (`python3 -m unittest tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
+**Test Suite Status:** 120/120 tests passing (`python3 -m unittest tests/test_madden_capture.py tests/test_writer_config.py tests/test_mock_draft_tools.py tests/test_mock_draft_engine.py tests/test_extract_prospects_ocr.py tests/test_load_capture.py tests/test_weekly_capture.py tests/test_debug_api.py`)
 
 > [!IMPORTANT]
 > **DO NOT MERGE INTO `main` YET.**  
@@ -68,7 +67,7 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
 ### 2.5 Separate Pipeline Orchestration & Debug UI
 - **`madden_capture.py`:**
   - `--only roster`: strictly captures 32 team rosters (`run_roster()`).
-  - `--only prospects [--prospects N | --all-prospects]`: captures draft board prospects line-by-line. Currently assumes console is sitting on the Draft Board screen with Pick #1 highlighted.
+  - `--only prospects [--prospects N | --all-prospects]`: captures draft board prospects line-by-line. Opens the Draft Board itself (`open_prospects()`, see §3).
 - **`pipeline/load_capture.py`:**
   - `detect_mode(folder)` recognizes mode `"prospects"` when `prospects.csv` is present.
   - `load_prospects()` validates via `load_prospects_from_csv` and copies to `data/draft/{season+1}_prospects.csv` (respecting `dry_run`).
@@ -82,20 +81,27 @@ Designed and implemented an automated pipeline for NFL draft prospect ingestion,
 
 ---
 
-## 3. The Remaining Task: Console Navigation Routing
+## 3. Console Navigation to the Draft Board (done, verified live Oct 15)
 
-Automating menu navigation to the Draft Board from the franchise hub is the **only remaining piece** for full end-to-end automation:
+`madden_capture.py --only prospects` (and the `draft_scan` job) now reaches the Draft Board by itself from anywhere in the franchise menus via `open_prospects()`, then captures row by row as before. If the console is already on the board, it starts there.
 
-### Current Behavior
-`madden_capture.py --only prospects` (and the debug page `draft_scan` job) currently assumes the console is already left on the Draft Board / College Prospects screen with Pick #1 highlighted. From there, it successfully handles all row-by-row scrolling, frame capture, and completion detection.
+### Mapped Route
+| Step | Screen (`classify()`) | Action |
+|---|---|---|
+| 1 | `HUB_ROSTER` (Manage Roster tab) | Highlight `SCOUTING`, press Cross |
+| 2 | `SCOUTING` (TOP 10 PROSPECTS, MOCK DRAFTS; opens on SCOUTS) | Up to `PROSPECTS`, press Cross. The list draws its region tabs first, then the table about a second later. |
+| 3 | `SCOUT_PROSPECTS` (button bar: SET FAVORITE, L3 EDIT PLAYERS) | Press L3 (chiaki-ng key `5`, `KEYCODES["l3"] = 23`) |
+| 4 | `EDIT_CLASS_PROMPT` (EDIT DRAFT CLASS, IMPORT LOCAL FILE) | Opens on **DOWNLOAD FROM DOWNLOAD CENTER**. Press Down to `EDIT DRAFT CLASS`, then Cross. JR approved this; Madden posts a notice to the league transaction log. |
+| 5 | `DRAFT_BOARD` (ALL ROUNDS, ADJUST ORDER) | Opens with Round 1, Pick 1 highlighted |
 
-### Next Session Goal: Automated Menu Navigation
-1. **Map the Exact Menu Route:**
-   - In Madden franchise menus, identify the exact tab and menu item path to reach the Draft Board / College Prospects screen (e.g. from `HUB` $\to$ `HUB_LEAGUE` or `HUB_ROSTER` $\to$ scouting / college prospects submenu).
-2. **Implement in `madden_capture.py`:**
-   - Add a robust `classify(f)` check for the Draft Board screen.
-   - Implement `open_prospects()` using `go_hub()`, `move_to()`, and `cross_into()`.
-   - Call `open_prospects()` at the start of `run_prospects()` if `s != "DRAFT_BOARD"`.
+### Safety & Classification
+- `DRAFT_BOARD` now needs `ALL ROUNDS` or `ADJUST ORDER`. The Prospects list's PROJ column reads "Round 1", which the old check took for the board.
+- `cross()` allows Cross only on: `SCOUTING` in the Manage Roster menu, `PROSPECTS` in the Scouting menu, and `EDIT DRAFT CLASS` on the prompt. `prompt_option()` only counts buttons below 65% of the screen height, because the prompt's title also reads EDIT DRAFT CLASS. Cross is never pressed on the Draft Board, where it means EDIT PLAYER.
+- `press_into()` retries L3 if Madden drops the press.
+- Tests: `DraftRouteTest` in `tests/test_madden_capture.py`. Mapping frames: `captures/2026-10-15_explore/explore/` (gitignored).
+
+### Not Yet Done
+- A full `python3 -m pipeline.weekly_capture --mode prospects` run, end to end, using the new navigation.
 
 ---
 
@@ -113,8 +119,9 @@ Automating menu navigation to the Draft Board from the franchise hub is the **on
 Run these commands inside the worktree to verify the environment:
 
 ```bash
-# 1. Run all unit and integration test suites (78 tests)
+# 1. Run all unit and integration test suites (120 tests)
 python3 -m unittest \
+  tests/test_madden_capture.py \
   tests/test_writer_config.py \
   tests/test_mock_draft_tools.py \
   tests/test_mock_draft_engine.py \
