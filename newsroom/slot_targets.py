@@ -47,10 +47,57 @@ class LeagueSnapshot:
     # Earlier LOCAL_MATCHUP_PRIMER coverage this season: [(team_id, week), ...]
     primer_history: list = field(default_factory=list)
     teams_with_beat_reporters: set = field(default_factory=set)
+    # Optional team stats / analytics mappings:
+    expected_wins: dict = field(default_factory=dict)
+    losing_streaks: dict = field(default_factory=dict)
 
 
 def _popularity(snap: LeagueSnapshot, team_id: int) -> float:
     return snap.teams.get(team_id, {}).get("popularity") or 0.0
+
+
+def get_team_expected_wins(snap: LeagueSnapshot, team_id: int) -> float | None:
+    t = snap.teams.get(team_id, {})
+    if "expected_wins" in t and t["expected_wins"] is not None:
+        return float(t["expected_wins"])
+    if hasattr(snap, "expected_wins") and team_id in snap.expected_wins:
+        val = snap.expected_wins[team_id]
+        return float(val) if val is not None else None
+    return None
+
+
+def get_team_delta_w(snap: LeagueSnapshot, team_id: int) -> float | None:
+    t = snap.teams.get(team_id, {})
+    if "delta_w" in t and t["delta_w"] is not None:
+        return float(t["delta_w"])
+    exp = get_team_expected_wins(snap, team_id)
+    if exp is not None:
+        wins = t.get("wins") or 0
+        return float(wins) - exp
+    return None
+
+
+def get_team_losing_streak(snap: LeagueSnapshot, team_id: int) -> int:
+    t = snap.teams.get(team_id, {})
+    if "losing_streak" in t and t["losing_streak"] is not None:
+        return int(t["losing_streak"])
+    if "streak" in t and t["streak"] is not None:
+        s = t["streak"]
+        if isinstance(s, int):
+            return -s if s < 0 else (s if s > 0 and (t.get("losses") or 0) > 0 and (t.get("wins") or 0) == 0 else 0)
+        if isinstance(s, str):
+            if s.endswith("L"):
+                try:
+                    return int(s[:-1])
+                except ValueError:
+                    pass
+    if hasattr(snap, "losing_streaks") and team_id in snap.losing_streaks:
+        return int(snap.losing_streaks[team_id])
+    wins = t.get("wins") or 0
+    losses = t.get("losses") or 0
+    if wins == 0 and losses > 0:
+        return losses
+    return 0
 
 
 def _win_pct(snap: LeagueSnapshot, team_id: int) -> float:
@@ -129,7 +176,7 @@ def _excitement_phrase(game: dict) -> str:
 # Matchup primers
 # ---------------------------------------------------------------------------
 
-def _primer_targets(snap: LeagueSnapshot, count: int, used: set) -> list:
+def _primer_targets(snap: LeagueSnapshot, count: int, used: set, used_games: set | None = None) -> list:
     """Top games by editorial interest (rank_games_by_interest); skip teams primed in the last PRIMER_ROTATION_WEEKS weeks
     (regular season only), then cover the side with fewer primers this season (ties: more popular)."""
     season_counts = {}
@@ -153,20 +200,20 @@ def _primer_targets(snap: LeagueSnapshot, count: int, used: set) -> list:
         return sides
 
     targets = []
-    used_games = set()
+    used_games_set = set(used_games) if used_games else set()
     # First pass honours rotation; second pass relaxes it if there aren't enough eligible games.
     for respect_rotation in ((True, False) if apply_rotation else (False,)):
         for game in games:
             if len(targets) >= count:
                 break
-            if game["game_id"] in used_games:
+            if game["game_id"] in used_games_set:
                 continue
             sides = eligible_sides(game, respect_rotation)
             if not sides:
                 continue
             team_id = min(sides, key=lambda t: (season_counts.get(t, 0), -_popularity(snap, t), t != game["home_team_id"]))
             used.add(team_id)
-            used_games.add(game["game_id"])
+            used_games_set.add(game["game_id"])
             note = (
                 f"Preview {_team_label(snap, team_id)} vs. "
                 f"{_team_label(snap, game['away_team_id'] if team_id == game['home_team_id'] else game['home_team_id'])} "
@@ -195,6 +242,103 @@ def _super_bowl_primer_targets(snap: LeagueSnapshot, used: set) -> list:
             f"Preview the Super Bowl from the locker room of the {conf} champion, {_team_label(snap, team_id)}."
         ))
     return targets
+
+
+# ---------------------------------------------------------------------------
+# Crisis Beat (Regular Season Slot 6, Weeks 2-18)
+# ---------------------------------------------------------------------------
+
+def rank_crisis_teams(snap: LeagueSnapshot, candidates: list | None = None) -> list:
+    """Ranks eligible crisis teams for Slot 6 (Weeks 2-18).
+    Qualifying criteria:
+    - Delta W = Wins - Expected Wins <= -2.0 (teams with worst win-differential vs expectation)
+    - Active losing streak (>= 1) with sub-.350 win percentage.
+    Teams with delta W <= -2.0 are prioritized (ordered by worst delta W), followed by teams
+    with losing streaks and sub-.350 win percentages (ordered by longest losing streak).
+    """
+    if candidates is None:
+        candidates = list(snap.teams.keys())
+
+    delta_w_candidates = []
+    streak_candidates = []
+
+    for t in candidates:
+        delta_w = get_team_delta_w(snap, t)
+        losing_streak = get_team_losing_streak(snap, t)
+        played = (snap.teams.get(t, {}).get("wins") or 0) + (snap.teams.get(t, {}).get("losses") or 0)
+        win_pct = _win_pct(snap, t)
+
+        if delta_w is not None and delta_w <= -2.0:
+            delta_w_candidates.append(t)
+        elif losing_streak >= 1 and played > 0 and win_pct < 0.350:
+            streak_candidates.append(t)
+
+    # Sort delta_w candidates: lowest (worst) delta_w first, then lowest win_pct, then highest popularity
+    sorted_delta_w = sorted(
+        delta_w_candidates,
+        key=lambda t: (get_team_delta_w(snap, t), _win_pct(snap, t), -_popularity(snap, t), t)
+    )
+
+    # Sort streak candidates: longest losing streak first, then lowest win_pct, then highest popularity
+    sorted_streak = sorted(
+        streak_candidates,
+        key=lambda t: (-get_team_losing_streak(snap, t), _win_pct(snap, t), -_popularity(snap, t), t)
+    )
+
+    return sorted_delta_w + sorted_streak
+
+
+def _crisis_beat_target(snap: LeagueSnapshot, used: set) -> dict | None:
+    """Target for Slot 6 Crisis Beat primer in regular season weeks 2-18."""
+    playing_teams = set()
+    if snap.week_games:
+        playing_teams = {g["home_team_id"] for g in snap.week_games} | {g["away_team_id"] for g in snap.week_games}
+
+    candidates = [
+        t for t in snap.teams
+        if t not in used
+        and (not snap.teams_with_beat_reporters or t in snap.teams_with_beat_reporters)
+        and (not playing_teams or t in playing_teams)
+    ]
+    ranked = rank_crisis_teams(snap, candidates)
+    if not ranked:
+        return None
+
+    team_id = ranked[0]
+    used.add(team_id)
+
+    delta_w = get_team_delta_w(snap, team_id)
+    losing_streak = get_team_losing_streak(snap, team_id)
+    wins = snap.teams.get(team_id, {}).get("wins") or 0
+    losses = snap.teams.get(team_id, {}).get("losses") or 0
+    pct = _win_pct(snap, team_id)
+
+    if delta_w is not None and delta_w <= -2.0:
+        crisis_reason = f"has underperformed expectation by {abs(delta_w):.1f} wins (delta W = {delta_w:+.1f}, {wins}-{losses})"
+    else:
+        crisis_reason = f"is mired in a {losing_streak}-game losing streak with a sub-.350 win percentage ({wins}-{losses}, .{int(round(pct * 1000)):03d})"
+
+    game = None
+    if snap.week_games:
+        for g in snap.week_games:
+            if team_id in (g["home_team_id"], g["away_team_id"]):
+                game = g
+                break
+
+    if game:
+        opp_id = game["away_team_id"] if team_id == game["home_team_id"] else game["home_team_id"]
+        note = (
+            f"Crisis beat / hot seat accountability: {_team_label(snap, team_id)} {crisis_reason}. "
+            f"Preview their matchup vs. {_team_label(snap, opp_id)} (game ID {game['game_id']}, {_excitement_phrase(game)}) "
+            f"from the {_team_label(snap, team_id)} locker room, interrogating coaching accountability and structural failure."
+        )
+        return _game_target(snap, "CRISIS_BEAT", game, team_id, note)
+    else:
+        note = (
+            f"Crisis beat / hot seat accountability: {_team_label(snap, team_id)} {crisis_reason}. "
+            f"Audit the coaching staff hot seat and structural crisis from the {_team_label(snap, team_id)} locker room."
+        )
+        return _team_target(snap, "CRISIS_BEAT", team_id, note)
 
 
 # ---------------------------------------------------------------------------
@@ -279,17 +423,49 @@ def resolve_slot_targets(slots: list, snap: LeagueSnapshot) -> list:
     target dict or None when the matrix leaves the subject to the writer (or no subject qualifies)."""
     week = snap.week
     used = set()
+    used_games = set()
     targets = [None] * len(slots)
 
     def indices(article_type):
         return [i for i, s in enumerate(slots) if s[1] == article_type]
 
-    # Primers are resolved first so the week's marquee games are never pre-empted by exit slots.
-    primer_idx = indices(PRIMER)
-    if primer_idx:
-        picks = _super_bowl_primer_targets(snap, used) if week == SUPER_BOWL_WEEK else _primer_targets(snap, len(primer_idx), used)
-        for i, t in zip(primer_idx, picks):
-            targets[i] = t
+    # In regular-season weeks (Weeks 2-18), convert Slot 6 into a "Crisis Beat" slot
+    slot6_idx = next(
+        (i for i, s in enumerate(slots) if s[0] == "Slot 6" and s[1] in (PRIMER, "CRISIS_BEAT")),
+        None,
+    )
+
+    if 2 <= week <= REGULAR_SEASON_FINAL_WEEK and slot6_idx is not None:
+        crisis_target = _crisis_beat_target(snap, used)
+        if crisis_target is not None:
+            targets[slot6_idx] = crisis_target
+            if crisis_target.get("game_id"):
+                used_games.add(crisis_target["game_id"])
+            other_primer_indices = [i for i, s in enumerate(slots) if s[1] == PRIMER and i != slot6_idx]
+            if other_primer_indices:
+                picks = _primer_targets(snap, len(other_primer_indices), used, used_games=used_games)
+                for i, t in zip(other_primer_indices, picks):
+                    targets[i] = t
+        else:
+            # Fall back to standard matchup primer if no crisis team qualifies
+            if slots[slot6_idx][1] == PRIMER:
+                primer_idx = indices(PRIMER)
+                picks = _primer_targets(snap, len(primer_idx), used, used_games=used_games)
+                for i, t in zip(primer_idx, picks):
+                    targets[i] = t
+            else:
+                other_primer_indices = [i for i, s in enumerate(slots) if s[1] == PRIMER and i != slot6_idx]
+                if other_primer_indices:
+                    picks = _primer_targets(snap, len(other_primer_indices), used, used_games=used_games)
+                    for i, t in zip(other_primer_indices, picks):
+                        targets[i] = t
+    else:
+        # Primers are resolved first so the week's marquee games are never pre-empted by exit slots.
+        primer_idx = indices(PRIMER)
+        if primer_idx:
+            picks = _super_bowl_primer_targets(snap, used) if week == SUPER_BOWL_WEEK else _primer_targets(snap, len(primer_idx), used)
+            for i, t in zip(primer_idx, picks):
+                targets[i] = t
 
     sotu_idx = indices(STATE_OF_THE_UNION)
     if sotu_idx and week == WILD_CARD_WEEK:
@@ -321,12 +497,47 @@ def load_league_snapshot(db_conn_info: str, season: int, week: int) -> LeagueSna
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT t.id, t.name, t.conference, t.division, COALESCE(ts.wins, 0), COALESCE(ts.losses, 0),
-                       COALESCE(ts.popularity_index, 0)
+                       COALESCE(ts.popularity_index, 0), ts.expected_wins
                 FROM teams t
                 LEFT JOIN team_seasons ts ON ts.team_id = t.id AND ts.season = %s;
             """, (season,))
-            for tid, name, conf, division, wins, losses, pop in cur.fetchall():
-                snap.teams[tid] = {"name": name, "conference": conf, "division": division, "wins": wins, "losses": losses, "popularity": float(pop)}
+            for tid, name, conf, division, wins, losses, pop, exp_wins in cur.fetchall():
+                exp = float(exp_wins) if exp_wins is not None else None
+                snap.teams[tid] = {
+                    "name": name, "conference": conf, "division": division,
+                    "wins": wins, "losses": losses, "popularity": float(pop),
+                    "expected_wins": exp,
+                    "losing_streak": 0,
+                }
+                if exp is not None:
+                    snap.expected_wins[tid] = exp
+
+            cur.execute("""
+                SELECT week, home_team_id, away_team_id, home_score, away_score
+                FROM games
+                WHERE season = %s AND week < %s AND status = 'COMPLETED'
+                  AND home_team_id IS NOT NULL AND away_team_id IS NOT NULL
+                ORDER BY week ASC;
+            """, (season, week))
+            team_history = {}
+            for _, h, a, hs, as_ in cur.fetchall():
+                if hs is None or as_ is None or hs == as_:
+                    continue
+                h_res = "W" if hs > as_ else "L"
+                a_res = "L" if hs > as_ else "W"
+                team_history.setdefault(h, []).append(h_res)
+                team_history.setdefault(a, []).append(a_res)
+
+            for tid, hist in team_history.items():
+                if tid in snap.teams:
+                    l_streak = 0
+                    for res in reversed(hist):
+                        if res == "L":
+                            l_streak += 1
+                        else:
+                            break
+                    snap.teams[tid]["losing_streak"] = l_streak
+                    snap.losing_streaks[tid] = l_streak
 
             cur.execute("""
                 SELECT id, home_team_id, away_team_id, status, excitement_index, projected_excitement

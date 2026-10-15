@@ -283,6 +283,17 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("## [Pick Number]. [Team Name]: [Prospect Name], [Position], [School]", mock_config["structure_directive"])
         self.assertNotIn("get_draft_prospects", json.dumps(self.article_types))
 
+    def test_progress_reports_query_draft_order_and_weigh_purgatory_capital(self):
+        """LOCAL_SEASON_PROGRESS_REPORT and SEASON_PROGRESS_AUDIT query get_draft_order
+        and weigh remaining schedule against projected draft capital for purgatory teams (handoff, Agent 9)."""
+        for key in ("LOCAL_SEASON_PROGRESS_REPORT", "SEASON_PROGRESS_AUDIT"):
+            config = self.article_types[key]
+            queried = " ".join(config["data_queried"])
+            self.assertIn("get_draft_order", queried, f"{key} missing get_draft_order in data_queried")
+            curatorial = config["curatorial_autonomy"]
+            self.assertIn("Purgatory Penalty", curatorial, f"{key} missing Purgatory Penalty in curatorial_autonomy")
+            self.assertIn("draft capital", curatorial, f"{key} missing draft capital weighing in curatorial_autonomy")
+
 
 if __name__ == "__main__":
     unittest.main()

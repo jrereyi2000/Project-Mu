@@ -6,7 +6,10 @@ import unittest
 
 from newsroom.slot_targets import (
     LeagueSnapshot,
+    get_team_delta_w,
+    get_team_losing_streak,
     mathematically_eliminated_team_ids,
+    rank_crisis_teams,
     rank_games_by_interest,
     resolve_slot_targets,
 )
@@ -186,6 +189,123 @@ class EliminationTests(unittest.TestCase):
     def test_state_of_the_union_outside_phase_4_is_untargeted(self):
         snap = league(week=8)
         self.assertEqual(resolve_slot_targets([("Slot 3", "FRANCHISE_STATE_OF_THE_UNION")], snap), [None])
+
+
+class CrisisBeatTargetTests(unittest.TestCase):
+    def test_slot_6_crisis_beat_worst_delta_w(self):
+        """In regular-season weeks 2-18, Slot 6 targets team with worst win-differential vs expectation (delta W <= -2.0)."""
+        games = [
+            game(1, 5, 6, 80),   # Team 5 playing
+            game(2, 8, 9, 85),   # Team 8 playing
+            game(3, 1, 2, 90),   # Top marquee game
+            game(4, 3, 4, 88),   # Second marquee game
+        ]
+        snap = league(week=6, week_games=games)
+        # Team 5 has delta W = -2.5 (1 win - 3.5 expected wins)
+        snap.teams[5]["wins"] = 1
+        snap.teams[5]["losses"] = 4
+        snap.expected_wins[5] = 3.5
+
+        # Team 8 has delta W = -3.2 (1 win - 4.2 expected wins) -> WORSE than Team 5
+        snap.teams[8]["wins"] = 1
+        snap.teams[8]["losses"] = 4
+        snap.expected_wins[8] = 4.2
+
+        # Team 1 has delta W = -1.0 (does not meet <= -2.0 threshold)
+        snap.teams[1]["wins"] = 2
+        snap.teams[1]["losses"] = 3
+        snap.expected_wins[1] = 3.0
+
+        targets = resolve_slot_targets(PRIMER_SLOTS, snap)
+        # Slot 6 is the crisis beat slot -> targets Team 8 (worst delta W)
+        self.assertIsNotNone(targets[0])
+        self.assertEqual(targets[0]["team_id"], 8)
+        self.assertEqual(targets[0]["opponent_team_id"], 9)
+        self.assertEqual(targets[0]["kind"], "CRISIS_BEAT")
+        self.assertIn("underperformed expectation by 3.2 wins", targets[0]["note"])
+
+        # Slots 7 and 8 remain LOCAL_MATCHUP_PRIMER for top remaining marquee games (Game 3, then Game 4)
+        self.assertEqual(targets[1]["game_id"], 3)
+        self.assertEqual(targets[1]["kind"], "MATCHUP_PRIMER")
+        self.assertEqual(targets[2]["game_id"], 4)
+        self.assertEqual(targets[2]["kind"], "MATCHUP_PRIMER")
+
+    def test_slot_6_crisis_beat_sub_350_losing_streak_selection(self):
+        """When no team has delta W <= -2.0, Slot 6 targets active losing streak with sub-.350 win percentage."""
+        games = [
+            game(1, 10, 11, 70),
+            game(2, 14, 15, 75),
+            game(3, 1, 2, 90),
+            game(4, 3, 4, 85),
+        ]
+        snap = league(week=7, week_games=games)
+        # Team 10: 1-5 (.167 win pct) on a 2-game losing streak
+        snap.teams[10]["wins"] = 1
+        snap.teams[10]["losses"] = 5
+        snap.losing_streaks[10] = 2
+
+        # Team 14: 1-5 (.167 win pct) on a 5-game losing streak -> LONGER streak
+        snap.teams[14]["wins"] = 1
+        snap.teams[14]["losses"] = 5
+        snap.losing_streaks[14] = 5
+
+        # Team 1: 2-4 (.333 win pct) but winning streak (losing streak = 0)
+        snap.teams[1]["wins"] = 2
+        snap.teams[1]["losses"] = 4
+        snap.losing_streaks[1] = 0
+
+        targets = resolve_slot_targets(PRIMER_SLOTS, snap)
+        # Slot 6 selects Team 14 (sub-.350 win pct with longest losing streak)
+        self.assertIsNotNone(targets[0])
+        self.assertEqual(targets[0]["team_id"], 14)
+        self.assertEqual(targets[0]["opponent_team_id"], 15)
+        self.assertEqual(targets[0]["kind"], "CRISIS_BEAT")
+        self.assertIn("5-game losing streak", targets[0]["note"])
+
+        # Slots 7 and 8 remain marquee primers
+        self.assertEqual(targets[1]["game_id"], 3)
+        self.assertEqual(targets[2]["game_id"], 4)
+
+    def test_slot_6_delta_w_prioritized_over_sub_350_streak(self):
+        """Teams with delta W <= -2.0 take priority over teams qualifying via losing streak alone."""
+        games = [game(1, 5, 6, 75), game(2, 14, 15, 70)]
+        snap = league(week=5, week_games=games)
+        # Team 5: delta W = -2.5, losing streak = 1
+        snap.teams[5]["wins"] = 1
+        snap.teams[5]["losses"] = 3
+        snap.teams[5]["delta_w"] = -2.5
+        snap.teams[5]["losing_streak"] = 1
+
+        # Team 14: delta W = -0.5, losing streak = 4, win pct = 1/4 = .250 (< .350)
+        snap.teams[14]["wins"] = 1
+        snap.teams[14]["losses"] = 3
+        snap.teams[14]["delta_w"] = -0.5
+        snap.teams[14]["losing_streak"] = 4
+
+        targets = resolve_slot_targets(PRIMER_SLOTS[:1], snap)
+        self.assertEqual(targets[0]["team_id"], 5)
+        self.assertEqual(targets[0]["kind"], "CRISIS_BEAT")
+
+    def test_slot_6_week_1_preseason_uses_standard_primers(self):
+        """Week 1 uses standard marquee primers for all 3 slots (no crisis beat)."""
+        games = [game(1, 1, 2, 90), game(2, 3, 4, 85), game(3, 5, 6, 80)]
+        snap = league(week=1, week_games=games)
+        # Even if a team has delta W <= -2.0, Week 1 does not use Crisis Beat
+        snap.teams[5]["delta_w"] = -3.0
+        targets = resolve_slot_targets(PRIMER_SLOTS, snap)
+        self.assertEqual([t["kind"] for t in targets], ["MATCHUP_PRIMER", "MATCHUP_PRIMER", "MATCHUP_PRIMER"])
+        self.assertEqual([t["game_id"] for t in targets], [1, 2, 3])
+
+    def test_slot_6_falls_back_to_marquee_when_no_crisis(self):
+        """When no team meets crisis criteria (delta W <= -2.0 or losing streak with sub-.350 pct), Slot 6 falls back to marquee primer."""
+        games = [game(1, 1, 2, 95), game(2, 3, 4, 90), game(3, 5, 6, 85)]
+        snap = league(week=8, week_games=games)
+        for t in snap.teams.values():
+            t["wins"] = 4
+            t["losses"] = 3
+        targets = resolve_slot_targets(PRIMER_SLOTS, snap)
+        self.assertEqual([t["kind"] for t in targets], ["MATCHUP_PRIMER", "MATCHUP_PRIMER", "MATCHUP_PRIMER"])
+        self.assertEqual([t["game_id"] for t in targets], [1, 2, 3])
 
 
 if __name__ == "__main__":
