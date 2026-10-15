@@ -218,6 +218,7 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         from engines.playoff_clout_engine import PlayoffCloutEngine
         from engines.popularity_engine import PopularityEngine
         from engines.player_popularity_engine import PlayerPopularityEngine
+        from engines.records_engine import RecordsEngine
         from engines.excitement_projection import project_scheduled_games
         from engines.fantasy_projection_engine import project_upcoming_week
         from engines.fantasy_league_sim import simulate_season
@@ -250,6 +251,10 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
 
         print("-> Running Player Popularity Engine...")
         PlayerPopularityEngine().calculate_popularity(season=season_year)
+
+        # Update franchise records and NFL top-10 lists for the season
+        print("-> Running Records Engine...")
+        RecordsEngine().calculate(season=season_year)
 
         # Project E for every still-scheduled game from the season so far (feeds the site, the brief and primer picks)
         print("-> Projecting Excitement Index for scheduled games...")

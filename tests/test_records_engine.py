@@ -147,12 +147,36 @@ class RecordBookTests(unittest.TestCase):
         self.assertEqual(stored["franchise_rows"], 0)
         self.assertEqual(stored["top10_rows"], 1)
 
+    @mock.patch("engines.records_engine.psycopg.connect")
+    @mock.patch("db.db_handler.DatabaseHandler")
+    def test_records_engine_class_calculate(self, mock_db_cls, mock_connect):
+        mock_db = mock.MagicMock()
+        mock_db.get_current_league_state.return_value = (2035, 18)
+        mock_db.db_conn_info = "mock_conn_info"
+        mock_db_cls.return_value = mock_db
+
+        mock_conn = mock.MagicMock()
+        mock_cur = mock.MagicMock()
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+        with mock.patch.object(R, "evaluate", return_value={"season": 2035, "events": [{"type": "franchise_record"}]}) as mock_eval, \
+             mock.patch.object(R, "apply", return_value={"franchise_rows": 1, "top10_rows": 0}) as mock_apply:
+            engine = R.RecordsEngine()
+            result = engine.calculate(season=2035)
+
+            mock_eval.assert_called_once_with(mock_cur, 2035)
+            mock_apply.assert_called_once()
+            self.assertEqual(result["stored"]["franchise_rows"], 1)
+            mock_conn.commit.assert_called_once()
+
 
 class SeedTests(unittest.TestCase):
     PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "migrations", "2026_10_26_nfl_records.sql")
 
     def test_every_team_has_every_season_record(self):
-        sql = open(self.PATH).read()
+        with open(self.PATH) as f:
+            sql = f.read()
         rows = re.findall(r"^\s+\('([A-Z]{2,3})', '(season_[a-z_]+)', ", sql, re.M)
         by_team = collections.defaultdict(set)
         for abbr, cat in rows:
@@ -161,9 +185,11 @@ class SeedTests(unittest.TestCase):
         self.assertTrue(all(len(c) == 11 for c in by_team.values()), {t: len(c) for t, c in by_team.items()})
 
     def test_league_lists_cover_every_player_category(self):
-        sql = open(self.PATH).read()
+        with open(self.PATH) as f:
+            sql = f.read()
         cats = set(re.findall(r"^\s+\('((?:season|game)_[a-z_]+)', \d+, '", sql, re.M))
         self.assertEqual(len(cats), 14)
+
 
 
 if __name__ == "__main__":
