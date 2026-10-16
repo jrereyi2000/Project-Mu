@@ -131,7 +131,7 @@ Project Mu/
 │   │                          #   2026_10_31_coach_baseline.sql, 2026_11_01_coach_schemes.sql,
 │   │                          #   2026_11_02_drop_coach_archetype.sql, 2026_11_03_whitfield_2034.sql,
 │   │                          #   2026_11_04_playoff_games.sql,
-│   │                          #   2026_11_05_coach_tendencies.sql, 2026_11_06_coty_scores.sql, 2026_11_07_coach_2034_totals.sql, 2026_11_08_injuries.sql, 2026_11_09_coach_full_names.sql, 2026_11_10_whitfield_tendencies.sql, 2026_11_11_whitfield_ratings.sql, 2026_11_12_defense_kicking_records.sql, 2026_11_13_observed_tendencies.sql, 2026_11_14_player_stats_line_source.sql, 2026_11_15_defense_kicking_history.sql, 2026_11_16_record_book_names.sql, 2026_11_17_record_book_names_2.sql, 2026_11_18_game_scripts.sql, 2026_11_19_draft_board.sql, 2026_11_20_all_pro_awards.sql (apply SQL ones via
+│   │                          #   2026_11_05_coach_tendencies.sql, 2026_11_06_coty_scores.sql, 2026_11_07_coach_2034_totals.sql, 2026_11_08_injuries.sql, 2026_11_09_coach_full_names.sql, 2026_11_10_whitfield_tendencies.sql, 2026_11_11_whitfield_ratings.sql, 2026_11_12_defense_kicking_records.sql, 2026_11_13_observed_tendencies.sql, 2026_11_14_player_stats_line_source.sql, 2026_11_15_defense_kicking_history.sql, 2026_11_16_record_book_names.sql, 2026_11_17_record_book_names_2.sql, 2026_11_18_game_scripts.sql, 2026_11_19_draft_board.sql, 2026_11_20_all_pro_awards.sql, 2026_11_21_rename_colliding_players.py, 2026_11_22_rename_colliding_prospects.py (python3 -m db.migrations.2026_11_22_rename_colliding_prospects, renames 16 colliding draft prospects) (apply SQL ones via
 │   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
@@ -581,6 +581,7 @@ Built on **React 19**, **TypeScript 5.7**, and **Vite 8**, featuring responsive 
 ### 5.1 Shared Navigation & Hash Routing
 Navigation uses a lightweight hash router (`window.location.hash`):
 - `#`: Gridiron Newsroom Home (featured stories, analysis, trending topics).
+- `#article-{id}`: Full reading view for stored newsroom articles (`/api/news/article/{id}`) and local/national beats, rendered via in-app markdown (`ArticleMarkdown`) with structured typography for headings (`<h2>`–`<h4>`), bullet and numbered lists (`<ul>`/`<ol>`), callout blockquotes with decorative quotation glyphs, responsive tables, horizontal dividers, inline formatting (`**bold**`, `*italic*`, `` `code` ``, `[link](url)`), and preserved drop-cap styling on the lead paragraph.
 - `#team-{abbr}`: Team hub with dynamic team colors, division rank, upcoming schedule, roster, and team stats.
 - `#schedule`: Full interactive 18-week league schedule.
 - `#game-{id}`: Game view (`GamePage`). Team Stats: the score line (quarter by quarter when the box score was captured), yards, touchdowns and turnovers, and a Situational block (first downs, third/fourth-down and two-point conversions, red zone TDs/FGs and trips, penalties, time of possession) showing only rows with a real value for at least one team. Player Stats: passing, rushing and receiving cards, plus Defense, Kicking and Punting cards when the game's player stats were captured.

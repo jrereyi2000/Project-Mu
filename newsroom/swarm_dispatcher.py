@@ -1098,6 +1098,10 @@ You MUST begin your article text on the very first lines with an explicit Markdo
 > **EXCERPT:** [A sharp, 1-to-2 sentence summary (under 250 characters) capturing the core thesis, revelation, or hook of the piece for newsroom cards.]
 
 Immediately follow the excerpt with the rest of your article sections and analysis.
+
+MARKDOWN & PARAGRAPH FORMATTING RULES:
+1. Always separate headings (##, ###), paragraphs, blockquotes, horizontal rules (---), tables, and lists with blank lines (double newlines). Never place a heading immediately above a paragraph or list without an empty line in between.
+2. In bulleted or numbered lists, format each item on its own line starting with '- ' or '1. '.
 """
 
         slot_target_directive = ""
