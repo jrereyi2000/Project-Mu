@@ -38,6 +38,7 @@ JOB_KINDS = {
     "season_scan": ("Season scan (schedule, rosters, draft board)", ["--mode", "season", "--no-articles"]),
     "roster_scan": ("Roster scan", ["--mode", "roster", "--no-articles"]),
     "draft_scan": ("Draft prospect scan", ["--mode", "prospects", "--no-articles"]),
+    "publish_articles": ("Publish articles (newsroom run)", []),
 }
 
 router = APIRouter(prefix="/api/debug")
@@ -101,6 +102,174 @@ def put_state(body: StateIn, x_debug_token: Optional[str] = Header(None)):
                               RETURNING current_season, current_week""",
                            (body.current_season, body.current_week)).fetchone()
     return {"state": row}
+
+
+# -------------------------------------------------------------- news ----
+class ClearNewsIn(BaseModel):
+    season: Optional[int] = None
+    week: Optional[int] = None
+    content_type: str = "ARTICLE"  # "ARTICLE", "ALL", "TWEET"
+    backup: bool = True
+
+
+def backup_news_tables() -> Optional[str]:
+    """Dumps news_feed and dependent tables to db/backups/news_feed_backup_<timestamp>.sql."""
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"news_feed_backup_{ts}.sql"
+    backup_dir = os.path.join(ROOT, "db", "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    backup_path = os.path.join(backup_dir, backup_filename)
+
+    candidate_tables = [
+        "news_feed", "article_teams", "article_players", "power_rankings",
+        "agent_memory_entries", "agent_predictions", "agent_season_summaries", "social_trends"
+    ]
+    try:
+        with connect() as conn:
+            existing = [t for t in candidate_tables
+                        if conn.execute("SELECT to_regclass(%s) IS NOT NULL AS ex", (f"public.{t}",)).fetchone()["ex"]]
+    except Exception:
+        existing = candidate_tables
+
+    table_args = []
+    for t in existing:
+        table_args.extend(["-t", t])
+
+    cmd_docker = ["docker", "exec", "madden-db", "pg_dump", "-U", "postgres", "-d", "madden", "--data-only", *table_args]
+    try:
+        with open(backup_path, "w") as fh:
+            res = subprocess.run(cmd_docker, stdout=fh, stderr=subprocess.PIPE, text=True, timeout=30)
+            if res.returncode == 0 and os.path.getsize(backup_path) > 0:
+                return backup_filename
+    except Exception:
+        pass
+
+    try:
+        cmd_local = ["pg_dump", "-d", CONN_INFO, "--data-only", *table_args]
+        with open(backup_path, "w") as fh:
+            res = subprocess.run(cmd_local, stdout=fh, stderr=subprocess.PIPE, text=True, timeout=30)
+            if res.returncode == 0 and os.path.getsize(backup_path) > 0:
+                return backup_filename
+    except Exception:
+        pass
+
+    if os.path.exists(backup_path) and os.path.getsize(backup_path) == 0:
+        try:
+            os.remove(backup_path)
+        except OSError:
+            pass
+    return None
+
+
+@router.get("/news")
+def get_news_summary():
+    with connect() as conn:
+        state = conn.execute("SELECT current_season, current_week FROM league_state WHERE id = 1").fetchone()
+        rows = conn.execute("""
+            SELECT season, week,
+                   COUNT(*) FILTER (WHERE content_type = 'ARTICLE')::int AS articles,
+                   COUNT(*) FILTER (WHERE content_type = 'TWEET')::int AS tweets
+            FROM news_feed
+            GROUP BY season, week
+            ORDER BY season DESC, week DESC
+        """).fetchall()
+        totals = conn.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE content_type = 'ARTICLE')::int AS total_articles,
+                COUNT(*) FILTER (WHERE content_type = 'TWEET')::int AS total_tweets
+            FROM news_feed
+        """).fetchone()
+    return {
+        "current_season": state["current_season"] if state else None,
+        "current_week": state["current_week"] if state else None,
+        "summary": rows,
+        "total_articles": totals["total_articles"] if totals else 0,
+        "total_tweets": totals["total_tweets"] if totals else 0,
+    }
+
+
+@router.post("/news/clear")
+def clear_news(body: ClearNewsIn, x_debug_token: Optional[str] = Header(None)):
+    require_token(x_debug_token)
+    if body.content_type not in ("ARTICLE", "ALL", "TWEET"):
+        raise HTTPException(400, "content_type must be ARTICLE, ALL, or TWEET")
+    if body.week is not None and not (1 <= body.week <= 23):
+        raise HTTPException(400, "week must be 1-23")
+    if body.season is not None and not (2000 <= body.season <= 2100):
+        raise HTTPException(400, "season must be a valid year")
+
+    backup_file = None
+    if body.backup:
+        backup_file = backup_news_tables()
+
+    where_parts = []
+    params = []
+    if body.content_type == "ARTICLE":
+        where_parts.append(sql.SQL("content_type = 'ARTICLE'"))
+    elif body.content_type == "TWEET":
+        where_parts.append(sql.SQL("content_type = 'TWEET'"))
+
+    if body.season is not None:
+        where_parts.append(sql.SQL("season = %s"))
+        params.append(body.season)
+    if body.week is not None:
+        where_parts.append(sql.SQL("week = %s"))
+        params.append(body.week)
+
+    where_clause = (sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_parts)) if where_parts else sql.SQL("")
+
+    with connect() as conn:
+        with conn.transaction():
+            query = sql.SQL("DELETE FROM news_feed{} RETURNING id").format(where_clause)
+            deleted = conn.execute(query, params).fetchall()
+            deleted_count = len(deleted)
+
+            if body.content_type in ("ARTICLE", "ALL"):
+                has_sum = conn.execute("SELECT to_regclass('public.agent_season_summaries') IS NOT NULL AS ex").fetchone()["ex"]
+                if has_sum:
+                    sum_where = []
+                    sum_params = []
+                    if body.season is not None:
+                        sum_where.append(sql.SQL("season = %s"))
+                        sum_params.append(body.season)
+                    if body.week is not None:
+                        sum_where.append(sql.SQL("through_week >= %s"))
+                        sum_params.append(body.week)
+                    sum_clause = (sql.SQL(" WHERE ") + sql.SQL(" AND ").join(sum_where)) if sum_where else sql.SQL("")
+                    conn.execute(sql.SQL("DELETE FROM agent_season_summaries{}").format(sum_clause), sum_params)
+
+            if body.content_type in ("TWEET", "ALL"):
+                has_trends = conn.execute("SELECT to_regclass('public.social_trends') IS NOT NULL AS ex").fetchone()["ex"]
+                if has_trends:
+                    trend_where = []
+                    trend_params = []
+                    if body.season is not None:
+                        trend_where.append(sql.SQL("season = %s"))
+                        trend_params.append(body.season)
+                    if body.week is not None:
+                        trend_where.append(sql.SQL("week = %s"))
+                        trend_params.append(body.week)
+                    trend_clause = (sql.SQL(" WHERE ") + sql.SQL(" AND ").join(trend_where)) if trend_where else sql.SQL("")
+                    conn.execute(sql.SQL("DELETE FROM social_trends{}").format(trend_clause), trend_params)
+
+            remaining = conn.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE content_type = 'ARTICLE')::int AS remaining_articles,
+                    COUNT(*) FILTER (WHERE content_type = 'TWEET')::int AS remaining_tweets
+                FROM news_feed
+            """).fetchone()
+
+    return {
+        "deleted": deleted_count,
+        "scope": {
+            "season": body.season,
+            "week": body.week,
+            "content_type": body.content_type,
+        },
+        "remaining_articles": remaining["remaining_articles"] if remaining else 0,
+        "remaining_tweets": remaining["remaining_tweets"] if remaining else 0,
+        "backup_file": backup_file,
+    }
 
 
 # ------------------------------------------------------------ tables ----
@@ -275,6 +444,7 @@ def doc(doc: str):
 class JobIn(BaseModel):
     kind: str
     resume: Optional[str] = None     # a captures/<run> folder to continue
+    week: Optional[int] = None       # optional week override (e.g. for publish_articles)
 
 
 def _job_path(job_id, ext):
@@ -343,8 +513,13 @@ def job_log(job_id: str, lines: int = 400):
     return {"job": _load_job(job_id), "log": tail(_job_path(job_id, "log"), max(1, min(lines, 5000)))}
 
 
-def job_command(kind, resume=None):
-    """The weekly run for a job kind (pipeline/weekly_capture.py)."""
+def job_command(kind, resume=None, week=None):
+    """The weekly run for a job kind."""
+    if kind == "publish_articles":
+        args = [sys.executable, "-u", "-m", "newsroom.weekly_run"]
+        if week is not None:
+            args.extend(["--week", str(week)])
+        return args
     args = [sys.executable, "-u", "-m", "pipeline.weekly_capture", *JOB_KINDS[kind][1]]
     return args + (["--resume", resume] if resume else [])
 
@@ -354,6 +529,8 @@ def start_job(body: JobIn, x_debug_token: Optional[str] = Header(None)):
     require_token(x_debug_token)
     if body.kind not in JOB_KINDS:
         raise HTTPException(400, f"kind must be one of {sorted(JOB_KINDS)}")
+    if body.week is not None and not (1 <= body.week <= 23):
+        raise HTTPException(400, "week must be 1-23")
     if body.resume and not re.fullmatch(r"[0-9A-Za-z_\-]+", body.resume):
         raise HTTPException(400, "resume must be a captures folder name")
     if body.resume and not os.path.isdir(os.path.join(ROOT, "captures", body.resume)):
@@ -363,13 +540,13 @@ def start_job(body: JobIn, x_debug_token: Optional[str] = Header(None)):
         raise HTTPException(409, f"job {busy['id']} ({busy['kind']}) is still running")
     os.makedirs(JOBS_DIR, exist_ok=True)
     job_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    args = job_command(body.kind, body.resume)
+    args = job_command(body.kind, body.resume, week=body.week) if body.week is not None else job_command(body.kind, body.resume)
     # sh writes the exit code next to the log, so the status survives an API restart
     cmd = ["sh", "-c", '"$@"; echo $? > "$EXIT"', "sh", *args]
     log = open(_job_path(job_id, "log"), "w")
     p = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                          env={**os.environ, "EXIT": _job_path(job_id, "exit"), "PYTHONUNBUFFERED": "1"})
-    job = {"id": job_id, "kind": body.kind, "resume": body.resume, "args": args[1:], "pid": p.pid,
+    job = {"id": job_id, "kind": body.kind, "resume": body.resume, "week": body.week, "args": args[1:], "pid": p.pid,
            "started_at": datetime.datetime.now().isoformat(timespec="seconds")}
     with open(_job_path(job_id, "json"), "w") as fh:
         json.dump(job, fh, indent=1)

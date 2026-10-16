@@ -14,6 +14,8 @@ type Job = { id: string; kind: string; kind_label: string; status: string; exit_
 type Capture = { id: number; folder: string; mode: string; season: number; week: number | null; status: string; error: string | null; loaded_at: string | null };
 type Resumable = { folder: string; mode: string; stage: string };
 type DebugState = { state: { current_season: number; current_week: number }; database: string; captures: Capture[]; writes_enabled: boolean; running_job: Job | null; resumable: Resumable[] };
+type NewsWeekSummary = { season: number; week: number; articles: number; tweets: number };
+type NewsSummary = { current_season: number; current_week: number; summary: NewsWeekSummary[]; total_articles: number; total_tweets: number };
 
 function readToken() {
   try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
@@ -43,6 +45,7 @@ const input = "border border-[var(--gray-300)] px-2 py-1 text-sm bg-white w-full
 // ------------------------------------------------------------- control ----
 const RUNS: { kind: string; title: string; note: string }[] = [
   { kind: "scan_week", title: "Scan week", note: "Full weekly run: capture Season Stats, Team Stats and last week's schedule, extract, load, engines, articles. Playoffs (week 19 on): last round's schedule, next round's matchups and every game's box score (~7 min a game) instead of Season Stats. Week 22 (Pro Bowl week): no console, just the Super Bowl week's articles." },
+  { kind: "publish_articles", title: "Publish articles", note: "Runs the newsroom swarm for the next unpublished week (national, fantasy, and Agent Wire slates)." },
   { kind: "backfill_week", title: "Backfill previous week", note: "The same capture, extract, load and engines. No articles." },
   { kind: "game_scan", title: "Game scan", note: "Every game of last week: box scores and both teams' player stats (~7 min a game), loaded over the backfill's lines. No articles." },
   { kind: "season_scan", title: "Season scan", note: "Annual start-of-season cadence: captures the 18-week schedule, all 32 team rosters, and the draft prospect board (in that order; prospects after both). No articles." },
@@ -114,6 +117,107 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
     catch (e) { setMessage(`Not stopped: ${(e as Error).message}`); }
   };
 
+  const [news, setNews] = useState<NewsSummary | null>(null);
+  const [targetWeek, setTargetWeek] = useState<string>("current");
+  const [newsScope, setNewsScope] = useState<"ARTICLE" | "ALL">("ARTICLE");
+  const [clearingNews, setClearingNews] = useState(false);
+
+  const loadNews = useCallback(() => {
+    call<NewsSummary>("/news").then(setNews).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadNews();
+  }, [loadNews]);
+
+  const curWeek = data?.state.current_week ?? Number(week) ?? 1;
+  const curSeason = data?.state.current_season ?? Number(season) ?? 2035;
+
+  let targetWeekNum: number | null = null;
+  let targetSeasonNum: number | null = curSeason;
+  let targetLabel = "";
+  let targetArticles = 0;
+  let targetTweets = 0;
+
+  if (targetWeek === "current") {
+    targetWeekNum = curWeek;
+    targetLabel = `Week ${curWeek}`;
+    const row = news?.summary.find(s => s.season === curSeason && s.week === curWeek);
+    targetArticles = row?.articles || 0;
+    targetTweets = row?.tweets || 0;
+  } else if (targetWeek === "all_season") {
+    targetWeekNum = null;
+    targetLabel = `Season ${curSeason} (all weeks)`;
+    const rows = (news?.summary || []).filter(s => s.season === curSeason);
+    targetArticles = rows.reduce((acc, r) => acc + r.articles, 0);
+    targetTweets = rows.reduce((acc, r) => acc + r.tweets, 0);
+  } else if (targetWeek === "all_time") {
+    targetWeekNum = null;
+    targetSeasonNum = null;
+    targetLabel = "All seasons & weeks";
+    targetArticles = news?.total_articles || 0;
+    targetTweets = news?.total_tweets || 0;
+  } else {
+    const w = Number(targetWeek);
+    targetWeekNum = w;
+    targetLabel = `Week ${w}`;
+    const row = news?.summary.find(s => s.season === curSeason && s.week === w);
+    targetArticles = row?.articles || 0;
+    targetTweets = row?.tweets || 0;
+  }
+
+  const itemsToClear = newsScope === "ALL" ? (targetArticles + targetTweets) : targetArticles;
+
+  const handleClearNews = async () => {
+    if (!token) return;
+    const desc = newsScope === "ALL" ? "articles & Agent Wire posts" : "articles";
+    const confirmMsg = `Clear ${itemsToClear} ${desc} for ${targetLabel}?\n\nThis removes articles from news_feed, cascading to tags, power rankings, and agent memory entries so the slate can be rerun cleanly.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setClearingNews(true);
+    setMessage("");
+    try {
+      const res = await call<{ deleted: number; remaining_articles: number; backup_file: string | null }>(
+        "/news/clear",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            season: targetSeasonNum,
+            week: targetWeekNum,
+            content_type: newsScope,
+            backup: true,
+          }),
+        },
+        token
+      );
+      setMessage(`Cleared ${res.deleted} items for ${targetLabel}. ${res.remaining_articles} articles remain in DB.${res.backup_file ? ` (Backup: ${res.backup_file})` : ""}`);
+      loadNews();
+      reload();
+    } catch (e) {
+      setMessage(`Clear failed: ${(e as Error).message}`);
+    } finally {
+      setClearingNews(false);
+    }
+  };
+
+  const handlePublishNews = async () => {
+    if (!token || !!running) return;
+    const w = targetWeekNum !== null ? targetWeekNum : curWeek;
+    if (!window.confirm(`Publish articles for Week ${w}?\n\nStarts the newsroom swarm (national, fantasy, and Agent Wire slates).`)) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await call("/jobs", { method: "POST", body: JSON.stringify({ kind: "publish_articles", week: w }) }, token);
+      setMessage(`Newsroom run for Week ${w} started.`);
+      loadJobs();
+      reload();
+    } catch (e) {
+      setMessage(`Not started: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const resumable = data?.resumable || [];
 
   return (
@@ -127,6 +231,66 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
           </div>
           <button className={btn} disabled={busy || !token} onClick={saveState}>Save</button>
           <p className="text-xs text-[var(--gray-500)] mt-2">Current week = Madden's next unplayed week (19–23 = postseason). The weekly load sets it; edit it only to fix it.</p>
+        </section>
+
+        <section className={card}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-black uppercase tracking-wide">Newsroom & Articles</h3>
+            <span className="text-[10px] font-mono text-[var(--gray-500)]">
+              {news ? `${news.total_articles} articles · ${news.total_tweets} posts` : "Loading..."}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <label>
+              <span className={label}>Target</span>
+              <select className={input} value={targetWeek} onChange={e => setTargetWeek(e.target.value)}>
+                <option value="current">Current week (Wk {curWeek})</option>
+                {Array.from({ length: 23 }, (_, i) => i + 1).map(w => (
+                  <option key={w} value={String(w)}>Week {w}{w === curWeek ? " (current)" : ""}</option>
+                ))}
+                <option value="all_season">All weeks (Season {curSeason})</option>
+                <option value="all_time">All seasons & weeks</option>
+              </select>
+            </label>
+            <label>
+              <span className={label}>Scope</span>
+              <select className={input} value={newsScope} onChange={e => setNewsScope(e.target.value as "ARTICLE" | "ALL")}>
+                <option value="ARTICLE">Articles only (keep tweets)</option>
+                <option value="ALL">Articles & Agent Wire posts</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="bg-[var(--paper)] p-2.5 mb-3 text-xs border border-[var(--gray-200)] flex items-center justify-between">
+            <div>
+              <span className="font-bold">{targetLabel}:</span>{" "}
+              <span>{targetArticles} articles, {targetTweets} posts</span>
+            </div>
+            <StatusPill status={targetArticles > 0 ? "done" : "stopped"} />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={btnRed}
+              disabled={clearingNews || busy || !token || itemsToClear === 0}
+              onClick={handleClearNews}
+            >
+              {clearingNews ? "Clearing..." : `Clear ${targetLabel} (${itemsToClear})`}
+            </button>
+            <button
+              className={btn}
+              disabled={busy || !token || !!running}
+              onClick={handlePublishNews}
+              title={`Run newsroom swarm for ${targetWeekNum ? `Week ${targetWeekNum}` : `Week ${curWeek}`}`}
+            >
+              Publish {targetWeekNum ? `Wk ${targetWeekNum}` : `Wk ${curWeek}`} Slate
+            </button>
+          </div>
+
+          <p className="text-xs text-[var(--gray-500)] mt-2">
+            Clearing articles removes article tags, power rankings, and agent memory takes, allowing the week to be rerun cleanly.
+          </p>
         </section>
 
         <section className={card}>

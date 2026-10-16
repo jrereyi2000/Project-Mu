@@ -28,7 +28,7 @@ class JobsTest(unittest.TestCase):
         self.script = "print('hello from the job')"
         patches = [mock.patch.object(dbg, "JOBS_DIR", self.tmp),
                    mock.patch.object(dbg, "env", lambda k, d=None: "tok" if k == "DEBUG_TOKEN" else d),
-                   mock.patch.object(dbg, "job_command", lambda kind, resume=None: [sys.executable, "-c", self.script])]
+                   mock.patch.object(dbg, "job_command", lambda kind, resume=None, week=None: [sys.executable, "-c", self.script])]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
@@ -93,6 +93,79 @@ class JobsTest(unittest.TestCase):
     def test_resume_must_be_a_captures_folder(self):
         r = self.client.post("/api/debug/jobs", json={"kind": "scan_week", "resume": "../etc"}, headers=self.h)
         self.assertEqual(r.status_code, 400)
+
+    def test_publish_articles_job(self):
+        job_id = self.start(kind="publish_articles")
+        job = wait_for(self.client, job_id, "done")
+        self.assertEqual(job["exit_code"], 0)
+        listed = self.client.get("/api/debug/jobs").json()
+        self.assertEqual(listed[0]["kind_label"], "Publish articles (newsroom run)")
+
+    def test_publish_articles_with_week(self):
+        r = self.client.post("/api/debug/jobs", json={"kind": "publish_articles", "week": 18}, headers=self.h)
+        self.assertEqual(r.status_code, 200, r.text)
+        job_id = r.json()["id"]
+        job = wait_for(self.client, job_id, "done")
+        self.assertEqual(job["exit_code"], 0)
+        self.assertEqual(job.get("week"), 18)
+
+    def test_job_invalid_week(self):
+        r = self.client.post("/api/debug/jobs", json={"kind": "publish_articles", "week": 99}, headers=self.h)
+        self.assertEqual(r.status_code, 400)
+
+    def test_news_summary_endpoint(self):
+        fake_conn = mock.MagicMock()
+        fake_conn.__enter__.return_value = fake_conn
+        fake_conn.execute.side_effect = [
+            mock.MagicMock(fetchone=lambda: {"current_season": 2035, "current_week": 21}),
+            mock.MagicMock(fetchall=lambda: [{"season": 2035, "week": 21, "articles": 9, "tweets": 10}]),
+            mock.MagicMock(fetchone=lambda: {"total_articles": 9, "total_tweets": 10}),
+        ]
+        with mock.patch.object(dbg, "connect", return_value=fake_conn):
+            r = self.client.get("/api/debug/news")
+            self.assertEqual(r.status_code, 200)
+            data = r.json()
+            self.assertEqual(data["current_season"], 2035)
+            self.assertEqual(data["current_week"], 21)
+            self.assertEqual(data["total_articles"], 9)
+            self.assertEqual(data["total_tweets"], 10)
+            self.assertEqual(len(data["summary"]), 1)
+
+    def test_clear_news_validation(self):
+        r = self.client.post("/api/debug/news/clear", json={"content_type": "ARTICLE"})
+        self.assertEqual(r.status_code, 401)
+        r = self.client.post("/api/debug/news/clear", json={"content_type": "ARTICLE"}, headers={"X-Debug-Token": "bad"})
+        self.assertEqual(r.status_code, 401)
+        r = self.client.post("/api/debug/news/clear", json={"content_type": "INVALID"}, headers=self.h)
+        self.assertEqual(r.status_code, 400)
+        r = self.client.post("/api/debug/news/clear", json={"content_type": "ARTICLE", "week": 25}, headers=self.h)
+        self.assertEqual(r.status_code, 400)
+        r = self.client.post("/api/debug/news/clear", json={"content_type": "ARTICLE", "season": 1999}, headers=self.h)
+        self.assertEqual(r.status_code, 400)
+
+    def test_clear_news_execution(self):
+        fake_conn = mock.MagicMock()
+        fake_conn.__enter__.return_value = fake_conn
+        fake_cursor = mock.MagicMock()
+        fake_conn.transaction.return_value.__enter__.return_value = fake_cursor
+        fake_conn.execute.side_effect = [
+            mock.MagicMock(fetchall=lambda: [{"id": 1}, {"id": 2}]),  # DELETE news_feed
+            mock.MagicMock(fetchone=lambda: {"ex": True}),             # to_regclass agent_season_summaries
+            mock.MagicMock(),                                          # DELETE agent_season_summaries
+            mock.MagicMock(fetchone=lambda: {"remaining_articles": 5, "remaining_tweets": 20}),
+        ]
+        with mock.patch.object(dbg, "connect", return_value=fake_conn), \
+             mock.patch.object(dbg, "backup_news_tables", return_value="news_feed_backup_mock.sql"):
+            r = self.client.post("/api/debug/news/clear",
+                                 json={"season": 2035, "week": 21, "content_type": "ARTICLE", "backup": True},
+                                 headers=self.h)
+            self.assertEqual(r.status_code, 200, r.text)
+            data = r.json()
+            self.assertEqual(data["deleted"], 2)
+            self.assertEqual(data["remaining_articles"], 5)
+            self.assertEqual(data["remaining_tweets"], 20)
+            self.assertEqual(data["backup_file"], "news_feed_backup_mock.sql")
+            self.assertEqual(data["scope"]["week"], 21)
 
 
 if __name__ == "__main__":
