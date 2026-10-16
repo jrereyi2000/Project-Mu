@@ -325,7 +325,7 @@ def get_postseason_playing_teams(captures_dir: str) -> Optional[set[str]]:
                                     if target_week_num is None:
                                         target_week_num = w
                                     break
-                            if any(term in (r.get("WEEK") or "").upper() for term in ("POST", "WILD", "SUPER", "DIVISIONAL", "CONFERENCE")):
+                            if any(term in (r.get("WEEK") or "").upper() for term in ("POST", "WILD", "SUPER", "DIVISIONAL", "DIV", "CONFERENCE", "CONF")):
                                 is_postseason = True
                                 week_determined = True
                                 break

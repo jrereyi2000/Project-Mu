@@ -12,18 +12,52 @@ import re
 RESULT_RE = re.compile(r"^([A-Z]{2,3}) ?(\d+) ?- ?(\d+) ?([A-Z]{2,3})$")    # "DET 38 - 24 NO"
 
 # games.week of the postseason rounds (docs/EDITORIAL_MATRIX.md: 22 is the Super Bowl bye)
-POST_WEEKS = {"WILDCARD": 19, "DIVISIONAL": 20, "CONFERENCE": 21, "PROBOWL": 22, "SUPERBOWL": 23}
+POST_WEEKS = {
+    "WILDCARD": 19,
+    "WILDCARDROUND": 19,
+    "DIVISIONAL": 20,
+    "DIVPLAYOFF": 20,
+    "DIVPLAYOFFS": 20,
+    "DIVISIONALPLAYOFF": 20,
+    "DIVISIONALPLAYOFFS": 20,
+    "DIVISIONALROUND": 20,
+    "CONFERENCE": 21,
+    "CONFPLAYOFF": 21,
+    "CONFPLAYOFFS": 21,
+    "CONFCHAMP": 21,
+    "CONFCHAMPIONSHIP": 21,
+    "CONFCHAMPIONSHIPS": 21,
+    "CONFERENCEPLAYOFF": 21,
+    "CONFERENCEPLAYOFFS": 21,
+    "CONFERENCECHAMP": 21,
+    "CONFERENCECHAMPIONSHIP": 21,
+    "CONFERENCECHAMPIONSHIPS": 21,
+    "CONFERENCEROUND": 21,
+    "PROBOWL": 22,
+    "SUPERBOWL": 23,
+    "SUPERBOWLROUND": 23,
+}
 
 
 def db_week(label):
     """games.week for a Madden week label: 'SEASON WEEK 17' and the schedule CSV's 'Week 17'
-    give 17, 'POST SEASON WILD CARD' 19 ... 'POST SEASON SUPER BOWL' 23. Preseason and
+    give 17, 'POST SEASON WILD CARD' 19 ... 'POST SEASON SUPER BOWL' 23. Also handles schedule
+    table labels like 'Div. Playoff' (20) and 'Conf. Playoff' (21). Preseason and
     unreadable labels give None."""
     t = re.sub(r"\s+", " ", (label or "").upper().strip())
     m = re.match(r"^(?:SEASON )?WEEK (\d{1,2})$", t)
     if m:
         return int(m.group(1))
-    return POST_WEEKS.get(re.sub(r"^POST ?SEASON ", "", t).replace(" ", ""))
+    clean = re.sub(r"^POST ?SEASON ", "", t)
+    clean = re.sub(r"[^A-Z]", "", clean)
+    res = POST_WEEKS.get(clean)
+    if res is not None:
+        return res
+    if clean.startswith(("DIVPLAYOFF", "DIVISION")):
+        return 20
+    if clean.startswith(("CONFPLAYOFF", "CONFCHAMP", "CONFERENCE")):
+        return 21
+    return None
 
 SUFFIX_RE = re.compile(r"(?:\s+(?:JR\.?|SR\.?|II|III|IV|V)|(?<=[a-z])(?:JR|SR)\.?)$", re.I)
 

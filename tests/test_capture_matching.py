@@ -102,9 +102,15 @@ class WeekTest(unittest.TestCase):
 
     def test_postseason_labels_follow_the_games_table(self):
         self.assertEqual(db_week("POST SEASON WILD CARD"), 19)
+        self.assertEqual(db_week("Wild Card"), 19)
         self.assertEqual(db_week("POST SEASON DIVISIONAL"), 20)
+        self.assertEqual(db_week("Div. Playoff"), 20)
+        self.assertEqual(db_week("Divisional"), 20)
         self.assertEqual(db_week("POST SEASON CONFERENCE"), 21)
+        self.assertEqual(db_week("Conf. Playoff"), 21)
+        self.assertEqual(db_week("Conf. Championship"), 21)
         self.assertEqual(db_week("POST SEASON SUPER BOWL"), 23)
+        self.assertEqual(db_week("Super Bowl"), 23)
 
     def test_preseason_and_junk_give_none(self):
         for label in ("PRESEASON WEEK 2", "", None, "WEEK", "SORT"):
