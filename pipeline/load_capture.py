@@ -700,6 +700,14 @@ def load_injuries(cur, folder, season, week, by_name, problems):
     if not rows:
         return 0
 
+    # In postseason (week 19+), only load injuries for teams playing games this week
+    playing_tids = None
+    if week is not None and week >= 19:
+        cur.execute("SELECT home_team_id, away_team_id FROM games WHERE season = %s AND week = %s", (season, week))
+        playing_tids = {tid for row in cur.fetchall() for tid in row if tid is not None}
+        if not playing_tids:
+            return 0
+
     # Look up players in this season by (team_id, name_key)
     cur.execute("""
         SELECT ps.player_id, ps.team_id, p.player_name, p.full_name, ps.position, ps.overall_rating
@@ -721,6 +729,9 @@ def load_injuries(cur, folder, season, week, by_name, problems):
         tid = by_name.get(team_str)
         if tid is None:
             problems.append(f"injuries: unknown team {team_str!r}")
+            continue
+
+        if playing_tids is not None and tid not in playing_tids:
             continue
 
         raw_name = r.get("PLAYER_NAME", "").strip()

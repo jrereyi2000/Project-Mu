@@ -113,7 +113,10 @@ def extract_done(folder, mode="weekly"):
     if mode == "games":
         return os.path.exists(os.path.join(folder, "game_scores.csv"))
     if mode == "playoff":
-        return all(os.path.exists(os.path.join(folder, f)) for f in ("game_scores.csv", "schedule.csv"))
+        ok = all(os.path.exists(os.path.join(folder, f)) for f in ("game_scores.csv", "schedule.csv"))
+        if os.path.isdir(os.path.join(folder, "injuries")):
+            ok = ok and os.path.exists(os.path.join(folder, "injuries.csv"))
+        return ok
     if mode == "roster":
         return all(os.path.exists(os.path.join(folder, f)) for f in ("roster_cards.csv", "roster_list.csv"))
     if mode == "prospects":

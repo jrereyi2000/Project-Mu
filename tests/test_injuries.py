@@ -146,3 +146,91 @@ class LoadInjuriesDbTest(unittest.TestCase):
             self.assertEqual(problems, [])
             self.assertEqual(cur.execute.call_count, 3)  # 1 SELECT + 2 INSERTs
 
+    def test_load_injuries_postseason_playing_teams_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = os.path.join(tmp, "injuries.csv")
+            with open(csv_path, "w") as fh:
+                fh.write(
+                    "TEAM,PLAYER_NAME,POSITION,OVR,INJURY_TYPE,DURATION,WEEKS_REMAINING,IS_IR\n"
+                    "CHIEFS,P.Mahomes,QB,99,HIGH ANKLE SPRAIN,WEEK TO WEEK,1,FALSE\n"
+                    "RAIDERS,M.Crosby,LEDG,95,KNEE SPRAIN,2 - 4 WEEKS,2,FALSE\n"
+                )
+
+            cur = MagicMock()
+            # In postseason week 19 (Wild Card), only RAIDERS are playing (tid=2), CHIEFS have a bye (tid=1)
+            # Call 1: cur.execute("SELECT home_team_id, away_team_id FROM games...") -> returns [(2, 3)]
+            # Call 2: cur.execute("SELECT ps.player_id...") -> returns roster rows
+            cur.fetchall.side_effect = [
+                [(2, 3)],  # games: team 2 and team 3
+                [
+                    (10, 1, "P.Mahomes", "Patrick Mahomes", "QB", 99),
+                    (20, 2, "M.Crosby", "Maxx Crosby", "LEDG", 95),
+                ],
+            ]
+
+            by_name = {"CHIEFS": 1, "RAIDERS": 2}
+            problems = []
+            count = LC.load_injuries(cur, tmp, 2035, 19, by_name, problems)
+
+            # Only Raiders player loaded, Chiefs skipped
+            self.assertEqual(count, 1)
+            self.assertEqual(problems, [])
+
+
+class PostseasonInjuryFilterTest(unittest.TestCase):
+    def test_normalize_team(self):
+        self.assertEqual(EIO.normalize_team("Raiders"), "RAIDERS")
+        self.assertEqual(EIO.normalize_team("49ers"), "49ERS")
+        self.assertEqual(EIO.normalize_team("Tampa Bay Buccaneers"), "BUCCANEERS")
+        self.assertEqual(EIO.normalize_team("Bills"), "BILLS")
+
+    def test_get_postseason_playing_teams_regular_season(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "week.json"), "w") as fh:
+                fh.write('{"current": "SEASON WEEK 10", "captured": "SEASON WEEK 9"}\n')
+            self.assertIsNone(EIO.get_postseason_playing_teams(tmp))
+
+    def test_get_postseason_playing_teams_postseason_schedule_next(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "week.json"), "w") as fh:
+                fh.write('{"current": "POST SEASON WILD CARD", "captured": "SEASON WEEK 18", "next": "POST SEASON WILD CARD"}\n')
+            with open(os.path.join(tmp, "schedule_next.csv"), "w") as fh:
+                fh.write("WEEK,MATCHUP\nWild Card,Raiders @ Texans\nWild Card,Lions @ Giants\n")
+            teams = EIO.get_postseason_playing_teams(tmp)
+            self.assertIsNotNone(teams)
+            self.assertEqual(teams, {"RAIDERS", "TEXANS", "LIONS", "GIANTS"})
+
+    def test_extract_injuries_postseason_filters_frames(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "week.json"), "w") as fh:
+                fh.write('{"current": "POST SEASON WILD CARD", "captured": "SEASON WEEK 18"}\n')
+            with open(os.path.join(tmp, "schedule.csv"), "w") as fh:
+                fh.write("WEEK,MATCHUP\nWild Card,Bills @ Patriots\n")
+
+            inj_dir = os.path.join(tmp, "injuries")
+            os.makedirs(inj_dir)
+            # Create frames for Bills (playing) and Chiefs (not playing)
+            open(os.path.join(inj_dir, "01_bills.png"), "w").close()
+            open(os.path.join(inj_dir, "02_chiefs.png"), "w").close()
+
+            # Mock parse_team_injury_frame
+            orig_parse = EIO.parse_team_injury_frame
+            try:
+                calls = []
+                def mock_parse(path):
+                    calls.append(path)
+                    return [{"TEAM": "BILLS", "PLAYER_NAME": "J.ALLEN", "POSITION": "QB",
+                             "OVR": 99, "INJURY_TYPE": "TURF TOE", "DURATION": "1 WEEK",
+                             "WEEKS_REMAINING": 1, "IS_IR": False}]
+                EIO.parse_team_injury_frame = mock_parse
+
+                csv_out = EIO.extract_injuries_ocr(tmp)
+                self.assertIsNotNone(csv_out)
+                self.assertTrue(os.path.exists(csv_out))
+
+                # Verify only 01_bills.png was parsed, 02_chiefs.png was skipped
+                self.assertEqual(len(calls), 1)
+                self.assertIn("01_bills.png", calls[0])
+            finally:
+                EIO.parse_team_injury_frame = orig_parse
+

@@ -50,6 +50,26 @@ KNOWN_POSITIONS = {
     "CB", "FS", "SS", "K", "P", "LS"
 }
 
+KNOWN_TEAMS = {
+    "49ERS", "BEARS", "BENGALS", "BILLS", "BRONCOS", "BROWNS", "BUCCANEERS", "CARDINALS",
+    "CHARGERS", "CHIEFS", "COLTS", "COMMANDERS", "COWBOYS", "DOLPHINS", "EAGLES", "FALCONS",
+    "GIANTS", "JAGUARS", "JETS", "LIONS", "PACKERS", "PANTHERS", "PATRIOTS", "RAIDERS",
+    "RAMS", "RAVENS", "SAINTS", "SEAHAWKS", "STEELERS", "TEXANS", "TITANS", "VIKINGS"
+}
+
+
+def normalize_team(raw: str) -> Optional[str]:
+    """Normalize raw team text or filename component to the canonical team nickname in KNOWN_TEAMS."""
+    clean = re.sub(r"[^A-Za-z0-9]", "", (raw or "").upper())
+    for k in KNOWN_TEAMS:
+        if clean == re.sub(r"[^A-Za-z0-9]", "", k):
+            return k
+    for k in KNOWN_TEAMS:
+        k_clean = re.sub(r"[^A-Za-z0-9]", "", k)
+        if clean.endswith(k_clean):
+            return k
+    return None
+
 
 def ocr_tokens(path: str) -> List[Tuple[str, Tuple[int, int, int, int]]]:
     """Run Apple Vision OCR on an image and return list of (text, (x0, y0, x1, y1))."""
@@ -133,9 +153,9 @@ def parse_team_injury_frame(path: str) -> List[Dict[str, Any]]:
     # Infer team from filename: e.g. '01_raiders.png' -> 'RAIDERS'
     base = os.path.basename(path)
     team_name = "UNKNOWN"
-    m_team = re.match(r"^\d+_([a-z0-9]+)\.png$", base)
+    m_team = re.match(r"^\d+_([a-z0-9]+)\.(?:png|webp)$", base)
     if m_team:
-        team_name = m_team.group(1).upper()
+        team_name = normalize_team(m_team.group(1)) or m_team.group(1).upper()
 
     # Find table header y position
     header_tokens = [b for t, b in tokens if t.upper() in ("NAME", "INJURY", "IR", "YOVR", "OVR", "POS") and b[1] < 500]
@@ -256,15 +276,198 @@ def parse_team_injury_frame(path: str) -> List[Dict[str, Any]]:
     return parsed_rows
 
 
+def get_postseason_playing_teams(captures_dir: str) -> Optional[set[str]]:
+    """Determine if captures_dir is from a postseason week, and if so, return the set of
+    team nicknames playing games in that week. Returns None during regular season (no filtering)."""
+    import json
+    from pipeline.capture_matching import db_week
+
+    week_json_path = os.path.join(captures_dir, "week.json")
+    is_postseason = False
+    target_week_num = None
+    week_determined = False
+
+    if os.path.exists(week_json_path):
+        try:
+            with open(week_json_path, "r", encoding="utf-8") as fh:
+                meta = json.load(fh)
+            cur = meta.get("current", "")
+            cap = meta.get("captured", "")
+            nxt = meta.get("next", "")
+            for label in (nxt, cur, cap):
+                w = db_week(label)
+                if w is not None:
+                    week_determined = True
+                    if w >= 19:
+                        is_postseason = True
+                        if target_week_num is None:
+                            target_week_num = w
+            if any(term in (s or "").upper() for s in (cur, cap, nxt)
+                   for term in ("POST SEASON", "SUPER BOWL", "WILD CARD", "DIVISIONAL", "CONFERENCE", "PRO BOWL")):
+                is_postseason = True
+                week_determined = True
+        except Exception:
+            pass
+
+    # Check schedule CSVs if not detected yet
+    if not week_determined:
+        for sched_name in ("schedule_next.csv", "schedule.csv"):
+            p = os.path.join(captures_dir, sched_name)
+            if os.path.exists(p):
+                try:
+                    with open(p, newline="", encoding="utf-8") as fh:
+                        for r in csv.DictReader(fh):
+                            w = db_week(r.get("WEEK", ""))
+                            if w is not None:
+                                week_determined = True
+                                if w >= 19:
+                                    is_postseason = True
+                                    if target_week_num is None:
+                                        target_week_num = w
+                                    break
+                            if any(term in (r.get("WEEK") or "").upper() for term in ("POST", "WILD", "SUPER", "DIVISIONAL", "CONFERENCE")):
+                                is_postseason = True
+                                week_determined = True
+                                break
+                except Exception:
+                    pass
+            if week_determined:
+                break
+
+    # Also check DB if not determined from files
+    if not week_determined:
+        try:
+            import psycopg
+            from pipeline.load_capture import DSN
+            with psycopg.connect(DSN) as conn:
+                row = conn.execute("SELECT current_week FROM league_state WHERE id = 1").fetchone()
+                if row and row[0] and row[0] >= 19:
+                    is_postseason = True
+                    target_week_num = row[0]
+        except Exception:
+            pass
+
+    if not is_postseason:
+        return None
+
+    # Postseason confirmed: find the teams playing that week
+    playing_teams = set()
+
+    # 1. schedule_next.csv (the upcoming round Madden opened on, if captured)
+    sched_next_path = os.path.join(captures_dir, "schedule_next.csv")
+    if os.path.exists(sched_next_path):
+        try:
+            with open(sched_next_path, newline="", encoding="utf-8") as fh:
+                for r in csv.DictReader(fh):
+                    mu = r.get("MATCHUP", "")
+                    if "@" in mu:
+                        away, home = mu.split("@", 1)
+                        ta = normalize_team(away)
+                        th = normalize_team(home)
+                        if ta: playing_teams.add(ta)
+                        if th: playing_teams.add(th)
+        except Exception:
+            pass
+
+    # 2. schedule.csv (if schedule_next wasn't present or empty)
+    if not playing_teams:
+        sched_path = os.path.join(captures_dir, "schedule.csv")
+        if os.path.exists(sched_path):
+            try:
+                with open(sched_path, newline="", encoding="utf-8") as fh:
+                    for r in csv.DictReader(fh):
+                        mu = r.get("MATCHUP", "")
+                        if "@" in mu:
+                            away, home = mu.split("@", 1)
+                            ta = normalize_team(away)
+                            th = normalize_team(home)
+                            if ta: playing_teams.add(ta)
+                            if th: playing_teams.add(th)
+            except Exception:
+                pass
+
+    # 3. games/ subfolders or games.txt
+    if not playing_teams:
+        games_txt = os.path.join(captures_dir, "games", "games.txt")
+        if os.path.exists(games_txt):
+            try:
+                with open(games_txt, "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        parts = line.strip().split("\t")
+                        if len(parts) >= 3 and "@" in parts[2]:
+                            away, home = parts[2].split("@", 1)
+                            ta = normalize_team(away)
+                            th = normalize_team(home)
+                            if ta: playing_teams.add(ta)
+                            if th: playing_teams.add(th)
+            except Exception:
+                pass
+        games_dir = os.path.join(captures_dir, "games")
+        if os.path.isdir(games_dir):
+            for d in os.listdir(games_dir):
+                m = re.match(r"^\d+_([a-z0-9]+)_at_([a-z0-9]+)$", d)
+                if m:
+                    ta = normalize_team(m.group(1))
+                    th = normalize_team(m.group(2))
+                    if ta: playing_teams.add(ta)
+                    if th: playing_teams.add(th)
+
+    # 4. Database games table if available
+    if not playing_teams and target_week_num:
+        try:
+            import psycopg
+            from pipeline.load_capture import DSN
+            with psycopg.connect(DSN) as conn:
+                q = """
+                    SELECT t1.name, t2.name FROM games g
+                    JOIN teams t1 ON g.home_team_id = t1.id
+                    JOIN teams t2 ON g.away_team_id = t2.id
+                    WHERE g.season = (SELECT current_season FROM league_state WHERE id = 1)
+                      AND g.week = %s
+                """
+                for h, a in conn.execute(q, (target_week_num,)).fetchall():
+                    if h:
+                        th = normalize_team(h)
+                        if th: playing_teams.add(th)
+                    if a:
+                        ta = normalize_team(a)
+                        if ta: playing_teams.add(ta)
+        except Exception:
+            pass
+
+    return playing_teams
+
+
 def extract_injuries_ocr(captures_dir: str) -> Optional[str]:
-    """Extract injuries from all screenshots in captures_dir/injuries/ and write injuries.csv.
+    """Extract injuries from screenshots in captures_dir/injuries/ and write injuries.csv.
+    In postseason weeks, only screenshots for teams playing games that week are parsed.
 
     Returns the path to injuries.csv, or None if no injury frames were found.
     """
     injury_dir = os.path.join(captures_dir, "injuries")
-    frames = sorted(glob.glob(os.path.join(injury_dir, "*.png")))
+    frames = sorted(glob.glob(os.path.join(injury_dir, "*.png")) + glob.glob(os.path.join(injury_dir, "*.webp")))
     if not frames:
         return None
+
+    playing_teams = get_postseason_playing_teams(captures_dir)
+    if playing_teams is not None:
+        print(f"Postseason detected: filtering injury extraction to {len(playing_teams)} teams playing this week: {sorted(playing_teams)}")
+        filtered = []
+        for f in frames:
+            base = os.path.basename(f)
+            m = re.match(r"^\d+_([a-z0-9]+)\.(?:png|webp)$", base)
+            if m:
+                t = normalize_team(m.group(1))
+                if t and t in playing_teams:
+                    filtered.append(f)
+        frames = filtered
+        if not frames:
+            print("No matching injury frames for teams playing this week.")
+            out_csv = os.path.join(captures_dir, "injuries.csv")
+            with open(out_csv, "w", newline="", encoding="utf-8") as fh:
+                writer = csv.DictWriter(fh, fieldnames=OUT_COLS)
+                writer.writeheader()
+            return out_csv
 
     all_rows = []
     print(f"Extracting injuries from {len(frames)} team screenshots via Apple Vision OCR...")

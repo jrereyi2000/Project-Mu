@@ -1843,9 +1843,10 @@ def injury_team(f):
     return None
 
 
-def run_injuries(out):
-    """Capture every NFL team's Injury Report screen (Manage Roster > Injury Report).
-    Teams are cycled with single L2 presses; all 32 teams fit on one page each."""
+def run_injuries(out, target_teams=None):
+    """Capture NFL teams' Injury Report screen (Manage Roster > Injury Report).
+    Teams are cycled with single L2 presses; all 32 teams fit on one page each.
+    If target_teams is provided, captures only those teams and stops once all are found."""
     log("== Injury Report ==")
     folder = os.path.join(out, "injuries")
     os.makedirs(folder, exist_ok=True)
@@ -1856,43 +1857,50 @@ def run_injuries(out):
 
     first_team = cur_team
     seen = {}
+    target_set = {t.upper() for t in target_teams} if target_teams else None
+    target_count = len(target_set) if target_set else 32
 
     # Seed seen teams from folder in case of resume
     for p in glob.glob(os.path.join(folder, "*.png")):
         base = os.path.basename(p)
         m = re.match(r"^\d+_([a-z0-9]+)\.png$", base)
         if m and m.group(1).upper() in TEAMS:
-            if os.path.getsize(p) > 0:
-                seen[m.group(1).upper()] = p
-            else:
-                os.remove(p)
+            t_upper = m.group(1).upper()
+            if target_set is None or t_upper in target_set:
+                if os.path.getsize(p) > 0:
+                    seen[t_upper] = p
+                else:
+                    os.remove(p)
 
-    if len(seen) == 32:
-        log(f"All 32 teams already captured in {folder}")
-        return 32
+    if len(seen) == target_count:
+        log(f"All {target_count} target teams already captured in {folder}")
+        return target_count
 
     log(f"Starting injury report capture at {cur_team}")
     idx = max([int(os.path.basename(p).split('_')[0]) for p in seen.values()] + [0])
 
     while True:
-        if cur_team not in seen:
-            idx += 1
-            path = os.path.join(folder, f"{idx:02d}_{cur_team.lower()}.png")
-            try:
-                snap(path)
-                if not os.path.exists(path) or os.path.getsize(path) == 0:
-                    raise Abort(f"Failed to capture frame for {cur_team}")
-            except Exception as e:
-                if os.path.exists(path):
-                    os.remove(path)
-                raise e
-            seen[cur_team] = path
-            log(f"  [{len(seen)}/32] Captured {cur_team}")
+        if target_set is None or cur_team in target_set:
+            if cur_team not in seen:
+                idx += 1
+                path = os.path.join(folder, f"{idx:02d}_{cur_team.lower()}.png")
+                try:
+                    snap(path)
+                    if not os.path.exists(path) or os.path.getsize(path) == 0:
+                        raise Abort(f"Failed to capture frame for {cur_team}")
+                except Exception as e:
+                    if os.path.exists(path):
+                        os.remove(path)
+                    raise e
+                seen[cur_team] = path
+                log(f"  [{len(seen)}/{target_count}] Captured {cur_team}")
+            else:
+                log(f"  [{len(seen)}/{target_count}] {cur_team} (already captured)")
         else:
-            log(f"  [{len(seen)}/32] {cur_team} (already captured)")
+            log(f"  Skipping {cur_team} (not in target teams)")
 
-        if len(seen) == 32:
-            log("All 32 teams captured!")
+        if len(seen) == target_count:
+            log(f"All {target_count} teams captured!")
             break
 
         # Advance to next team via L2
@@ -1920,9 +1928,9 @@ def run_injuries(out):
                 raise Abort(f"Could not advance team from {cur_team} after 3 tries (stream is not frozen)")
 
         cur_team = next_team
-        if cur_team == first_team and len(seen) < 32:
-            missing = TEAMS - set(seen.keys())
-            raise Abort(f"Wrapped back to {first_team} but only captured {len(seen)}/32 teams. Missing: {sorted(missing)}")
+        if cur_team == first_team and len(seen) < target_count:
+            missing = (target_set or TEAMS) - set(seen.keys())
+            raise Abort(f"Wrapped back to {first_team} but only captured {len(seen)}/{target_count} teams. Missing: {sorted(missing)}")
 
     log(f"Captured injury report for all {len(seen)} teams.")
     return len(seen)
@@ -2718,6 +2726,7 @@ def main():
             run_mode("the injury report", lambda: run_injuries(out))
         if a.only == "playoff":               # postseason week: no Season Stats / Team Stats (regular season only)
             run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
+            run_mode("the injury report", lambda: run_injuries(out))
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
         if a.only in ("season", "season-schedule"):
             run_mode("the season schedule", lambda: run_season_schedule(out), clear("season_schedule"))
