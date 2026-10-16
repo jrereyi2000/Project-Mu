@@ -196,11 +196,13 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
         where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects"))) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "season", "--all-prospects", *where], CAPTURE_TIMEOUT * 2
     else:
-        for d in CAPTURE_DIRS:                 # a re-capture starts the three modes clean
+        for d in DEBUG_DIRS:                   # clear old debug frames, keep partial captures
             shutil.rmtree(os.path.join(folder, d), ignore_errors=True)
         if os.path.exists(os.path.join(folder, "week.json")):
             os.remove(os.path.join(folder, "week.json"))
-        args, timeout = [sys.executable, "madden_capture.py", "--out", name], CAPTURE_TIMEOUT
+        has_partial = any(os.path.isdir(os.path.join(folder, d)) for d in ("stats", "injuries", "team_stats", "schedule"))
+        where = ["--resume", name] if has_partial else ["--out", name]
+        args, timeout = [sys.executable, "madden_capture.py", *where, *named], CAPTURE_TIMEOUT
     code, last = run_cmd(args, log_path, timeout)
     if code != 0 or (mode in ("weekly", "playoff") and not os.path.exists(os.path.join(folder, "week.json"))):
         raise WeekStopped(f"Capture stopped: {last}. The console is left where it stopped; frames in "

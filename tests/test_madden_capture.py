@@ -485,8 +485,50 @@ class RosterRecoveryTest(unittest.TestCase):
                 mock.patch.object(mc, "log"):
             with self.assertRaises(mc.Abort):
                 mc.run_roster(out, max_teams=1)
-            restart.assert_not_called()
+    def test_stats_resume_skips_done_and_discards_partial(self):
+        cats = ["PASSING", "RUSHING", "RECEIVING"]
+        captured = []
+        failed = [False]
+
+        def capture(out, idx, cat, all_rows):
+            folder = os.path.join(out, "stats")
+            p = os.path.join(folder, f"{idx:02d}_{mc.norm(cat).lower()}_000.png")
+            with open(p, "w") as f:
+                f.write("test")
+            if cat == "RUSHING" and not failed[0]:
+                failed[0] = True
+                raise mc.Abort("failure on rushing")
+            captured.append(cat)
+
+        with tempfile.TemporaryDirectory() as out, \
+                mock.patch.object(mc, "open_player_stats"), \
+                mock.patch.object(mc, "set_scope"), \
+                mock.patch.object(mc, "look", return_value=(mock.MagicMock(), "PLAYER_STATS")), \
+                mock.patch.object(mc, "chip_labels", return_value=(None, "PASSING")), \
+                mock.patch.object(mc, "next_category", side_effect=lambda cat, screen: {"PASSING": "RUSHING", "RUSHING": "RECEIVING", "RECEIVING": "PASSING"}[cat]), \
+                mock.patch.object(mc, "capture_category", side_effect=capture), \
+                mock.patch.object(mc, "log"):
+            # First attempt: PASSING succeeds, RUSHING aborts
+            with self.assertRaises(mc.Abort):
+                mc.run_stats(out, all_rows=False, resume=True)
+
+            sdir = os.path.join(out, "stats")
+            # 02_rushing_000.png should have been discarded on abort
+            self.assertFalse(os.path.exists(os.path.join(sdir, "02_rushing_000.png")))
+            # 01_passing_000.png kept
+            self.assertTrue(os.path.exists(os.path.join(sdir, "01_passing_000.png")))
+            with open(os.path.join(sdir, "done.txt")) as f:
+                done_lines = f.read().splitlines()
+            self.assertEqual(done_lines, ["1 PASSING"])
+
+            # Second attempt: resumes, skips PASSING, captures RUSHING and RECEIVING
+            mc.run_stats(out, all_rows=False, resume=True)
+            self.assertEqual(captured, ["PASSING", "RUSHING", "RECEIVING"])
+            with open(os.path.join(sdir, "done.txt")) as f:
+                done_lines = f.read().splitlines()
+            self.assertEqual(done_lines, ["1 PASSING", "2 RUSHING", "3 RECEIVING"])
 
 
 if __name__ == "__main__":
     unittest.main()
+

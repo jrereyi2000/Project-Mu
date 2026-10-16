@@ -1162,24 +1162,78 @@ def next_category(prev_cat, screen):
     raise Abort(f"Category stayed on {cat} after pressing R2 twice")
 
 
-def run_stats(out, all_rows):
+def run_stats(out, all_rows, resume=True):
     log("== Season stats ==")
+    sdir = os.path.join(out, "stats")
+    os.makedirs(sdir, exist_ok=True)
+    done_path = os.path.join(sdir, "done.txt")
+    done = {}                                       # norm(cat) -> index
+    if resume and os.path.exists(done_path):
+        with open(done_path) as dh:
+            for line in dh:
+                line = line.strip()
+                if line:
+                    parts = line.split(None, 1)
+                    if len(parts) >= 2 and parts[0].isdigit():
+                        done[norm(parts[1])] = int(parts[0])
+                    elif parts:
+                        done[norm(parts[0])] = len(done) + 1
+        log(f"Resuming Season Stats in {out}: {len(done)} categories already done ({', '.join(sorted(done))})")
+    else:
+        open(done_path, "w").close()
+
+    def clear_partial_stats():
+        for p in glob.glob(os.path.join(sdir, "*.png")):
+            b = os.path.basename(p)
+            parts = b.split("_")
+            if len(parts) >= 2 and parts[0].isdigit():
+                cat_name = norm(parts[1])
+                if cat_name not in done:
+                    os.remove(p)
+
+    clear_partial_stats()
+
+    if len(done) >= 9:
+        log(f"All {len(done)} stats categories already captured in {sdir}")
+        return len(done)
+
     open_player_stats()
     set_scope("NFL", debug_dir=os.path.join(out, "scope_debug"))
     f, _ = look()
     _, first = chip_labels(f)
     if not first:
         raise Abort("Can't read the stats category chip")
-    seen = []
-    cat = first
-    for _ in range(15):
-        log(f"Category: {cat}")
-        seen.append(cat)
-        capture_category(out, len(seen), cat, all_rows)
-        cat = next_category(cat, "PLAYER_STATS")
-        if norm(cat) == norm(first):
+
+    cat, visited = first, 0
+    while True:
+        cat_norm = norm(cat)
+        if cat_norm in done:
+            log(f"Category: {cat} (already captured)")
+        else:
+            log(f"Category: {cat}")
+            idx = max(list(done.values()) + [0]) + 1
+            for p in glob.glob(os.path.join(sdir, f"{idx:02d}_{cat_norm.lower()}_*")):
+                os.remove(p)
+            try:
+                capture_category(out, idx, cat, all_rows)
+            except Abort as e:
+                for p in glob.glob(os.path.join(sdir, f"{idx:02d}_{cat_norm.lower()}_*")):
+                    os.remove(p)
+                raise e
+            done[cat_norm] = idx
+            with open(done_path, "a") as dh:
+                dh.write(f"{idx} {cat_norm}\n")
+
+        visited += 1
+        if len(done) >= 9 or visited >= 15:
             break
-    log(f"Captured {len(seen)} categories: {', '.join(seen)}")
+        cat = next_category(cat, "PLAYER_STATS")
+        if norm(cat) == norm(first) and visited > 1:
+            break
+
+    log(f"Captured {len(done)} categories: {', '.join(sorted(done))}")
+    return len(done)
+
 
 
 def run_scoped_stats(out, team, categories, all_rows):
@@ -1801,22 +1855,34 @@ def run_injuries(out):
         base = os.path.basename(p)
         m = re.match(r"^\d+_([a-z0-9]+)\.png$", base)
         if m and m.group(1).upper() in TEAMS:
-            seen[m.group(1).upper()] = p
+            if os.path.getsize(p) > 0:
+                seen[m.group(1).upper()] = p
+            else:
+                os.remove(p)
 
     if len(seen) == 32:
         log(f"All 32 teams already captured in {folder}")
         return 32
 
     log(f"Starting injury report capture at {cur_team}")
-    idx = len(seen)
+    idx = max([int(os.path.basename(p).split('_')[0]) for p in seen.values()] + [0])
 
     while True:
         if cur_team not in seen:
             idx += 1
             path = os.path.join(folder, f"{idx:02d}_{cur_team.lower()}.png")
-            snap(path)
+            try:
+                snap(path)
+                if not os.path.exists(path) or os.path.getsize(path) == 0:
+                    raise Abort(f"Failed to capture frame for {cur_team}")
+            except Exception as e:
+                if os.path.exists(path):
+                    os.remove(path)
+                raise e
             seen[cur_team] = path
             log(f"  [{len(seen)}/32] Captured {cur_team}")
+        else:
+            log(f"  [{len(seen)}/32] {cur_team} (already captured)")
 
         if len(seen) == 32:
             log("All 32 teams captured!")
@@ -2382,12 +2448,21 @@ def run_roster(out, max_teams=32, resume=False):
     os.makedirs(rdir, exist_ok=True)
     cards_path, done_path = os.path.join(rdir, "cards.csv"), os.path.join(rdir, "done.txt")
     done = {}                                       # norm(team) -> folder index
-    if resume and os.path.exists(done_path):
-        for line in open(done_path):
-            if line.strip():
-                idx, t = line.split()
-                done[t] = int(idx)
-        kept = [r for r in csv.reader(open(cards_path))][1:] if os.path.exists(cards_path) else []
+    should_resume = bool(resume) or (os.path.exists(done_path) and os.path.getsize(done_path) > 0)
+    if should_resume and os.path.exists(done_path):
+        with open(done_path) as dh:
+            for line in dh:
+                if line.strip():
+                    parts = line.split()
+                    if len(parts) >= 2 and parts[0].isdigit():
+                        done[parts[1]] = int(parts[0])
+                    elif parts:
+                        done[parts[0]] = len(done) + 1
+        if os.path.exists(cards_path):
+            with open(cards_path) as ch:
+                kept = [r for r in csv.reader(ch)][1:]
+        else:
+            kept = []
         kept = [r for r in kept if norm(r[0]) in done]
         log(f"Resuming {out}: {len(done)} teams already done")
     else:
@@ -2400,9 +2475,9 @@ def run_roster(out, max_teams=32, resume=False):
                 shutil.rmtree(d)
 
     def recover(e):
-        """Restart the stream if it is frozen; otherwise (or out of restarts) re-raise."""
-        recover_stream(e)
+        """Clean up partial team, restart the stream if frozen; otherwise re-raise."""
         clear_partial()
+        recover_stream(e)
         return roster_team(open_roster())
 
     clear_partial()
@@ -2422,11 +2497,26 @@ def run_roster(out, max_teams=32, resume=False):
                 log(f"Team: {team}")
                 idx = max(list(done.values()) + [0]) + 1
                 rows = _Rows()
-                try:
-                    n = capture_team_roster(out, idx, team, rows)
-                except Abort as e:
-                    team = recover(e)
-                    continue                            # same team again, from the top
+                retries_left = 1
+                while True:
+                    try:
+                        n = capture_team_roster(out, idx, team, rows)
+                        break
+                    except Abort as e:
+                        clear_partial()
+                        rows = _Rows()
+                        if stream_frozen():
+                            team = recover(e)
+                            continue
+                        elif retries_left > 0:
+                            retries_left -= 1
+                            log(f"  {team} failed ({e}); stream not frozen, retrying team from top...")
+                            try:
+                                roster_to_top()
+                                continue
+                            except Exception:
+                                pass
+                        raise e
                 w.writerows(rows)
                 fh.flush()
                 total += n
@@ -2541,7 +2631,7 @@ def main():
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
     ap.add_argument("--all-prospects", action="store_true", help="--only prospects: capture the entire draft board until the end")
     ap.add_argument("--prospect-pages", type=int, help="--only prospects: stop after this many pages")
-    ap.add_argument("--resume", metavar="RUN", help="--only roster / games: continue a stopped run in captures/RUN; "
+    ap.add_argument("--resume", metavar="RUN", help="continue a stopped run in captures/RUN (stats, roster, games, injuries, season); "
                     "--scope: write into that (weekly) run's folder")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
     ap.add_argument("--all-rows", action="store_true", help="don't stop stats lists at all-zero rows")
@@ -2612,13 +2702,13 @@ def main():
             log(f"Done. Screenshots in {out}")
             return
         if a.only in (None, "stats"):
-            run_mode("Season Stats", lambda: run_stats(out, a.all_rows), clear("stats", "scope_debug"))
+            run_mode("Season Stats", lambda: run_stats(out, a.all_rows, resume=bool(a.resume) or os.path.exists(os.path.join(out, "stats", "done.txt"))), clear("scope_debug"))
         if a.only in (None, "team"):
             run_mode("Team Stats", lambda: run_team_stats(out), clear("team_stats"))
         if a.only in (None, "schedule"):
             run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
         if a.only in (None, "injuries"):
-            run_mode("the injury report", lambda: run_injuries(out), clear("injuries"))
+            run_mode("the injury report", lambda: run_injuries(out))
         if a.only == "playoff":               # postseason week: no Season Stats / Team Stats (regular season only)
             run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
@@ -2632,7 +2722,7 @@ def main():
 
             def rosters():
                 tries[0] += 1                   # after a stream restart, continue the same run
-                return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1)
+                return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1 or os.path.exists(os.path.join(out, "roster", "done.txt")))
             run_mode("the rosters", rosters)
             if a.only == "season":
                 log("Returning to the hub before draft prospects")
