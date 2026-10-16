@@ -392,12 +392,15 @@ def get_player_season_stats(player_identifier: str) -> str:
 
                 # Fetch career awards/accolades
                 cur.execute("""
-                    SELECT season, award_type 
+                    SELECT season, award_type, position 
                     FROM awards 
                     WHERE player_id = %s OR player_name ILIKE %s
                     ORDER BY season ASC;
                 """, (target_id, f"%{row[0]}%"))
-                career_awards = [f"{a[0]} {a[1]}" for a in cur.fetchall()]
+                career_awards = [
+                    f"{a[0]} {a[1]}" + (f" ({a[2]})" if a[2] and "All-Pro" in a[1] else "")
+                    for a in cur.fetchall()
+                ]
 
                 # Season touch share / yard share of the team's carries + catches (season totals, which are real;
                 # per-game splits for CPU-simmed games are synthetic, so no game-to-game usage deltas)

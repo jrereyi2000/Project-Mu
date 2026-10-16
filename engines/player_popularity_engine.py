@@ -4,8 +4,17 @@ from engines.market_constants import market, super_bowl_results
 import math
 from collections import defaultdict
 
-# Awards Equity (nfl_player_popularity_specification.md §2.5). All-Pro teams aren't recorded.
-AWARD_POINTS = {"MVP": 50, "OPOY": 35, "DPOY": 35, "SBMVP": 25, "OROY": 18, "DROY": 18}
+# Awards Equity (nfl_player_popularity_specification.md §2.5). All-Pro tracked from OFFICIAL_AP_ALL_PRO_ROSTER.
+AWARD_POINTS = {
+    "MVP": 50,
+    "OPOY": 35,
+    "DPOY": 35,
+    "First Team All-Pro": 30,
+    "SBMVP": 25,
+    "OROY": 18,
+    "DROY": 18,
+    "Second Team All-Pro": 15,
+}
 AWARD_DECAY = 0.35
 AWARD_WINDOW = 3
 CAREER_WEIGHT = 0.25

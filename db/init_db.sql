@@ -627,9 +627,20 @@ CREATE TABLE IF NOT EXISTS awards (
     coach_name VARCHAR(255),
     coach_id INT REFERENCES coaches(id),
     player_name VARCHAR(255),
-    position VARCHAR(10),
-    UNIQUE (season, award_type)
+    position VARCHAR(10)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS awards_season_player_type_idx 
+    ON awards (season, award_type, position, player_id) 
+    WHERE player_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS awards_single_winner_player_idx 
+    ON awards (season, award_type) 
+    WHERE award_type IN ('MVP', 'OPOY', 'DPOY', 'OROY', 'DROY', 'SBMVP');
+
+CREATE UNIQUE INDEX IF NOT EXISTS awards_coach_season_type_idx 
+    ON awards (season, award_type) 
+    WHERE award_type = 'COTY';
 
 -- ---------------------------------------------------------------------------
 -- Draft (2026_11_19_draft_board.sql)

@@ -22,6 +22,12 @@ from newsroom.power_rankings import (
     previous_rankings_directive,
     store_power_rankings,
 )
+from newsroom.all_pro import (
+    all_pro_fix_prompt,
+    load_roster_index,
+    parse_all_pro,
+    store_all_pro_teams,
+)
 from engines.gotw_engine import display_excitement
 from engines.game_script_engine import get_scripts, script_summary
 from newsroom.db_tools import (
@@ -1063,7 +1069,17 @@ Readers must experience this as professional, authentic sports journalism. You m
 - Instead of "Baseline Rating (R_rating)" -> write "baseline roster talent", "roster foundation".
 - Instead of "Legacy Floor (S_all-time)" -> write "historical franchise prestige", "championship pedigree".
 - Instead of "SpikeIndex" -> write "explosive ceiling", "boom-or-bust volatility", "single-game scoring explosion".
+- Instead of "Awards Equity (A_awards)" or "A_awards" -> write "championship pedigree and proven hardware", "decorated résumé", or "perennial All-Pro pedigree".
 Strict Rule: No raw algebraic symbols, formula notation, or LaTeX math equations ($...$) may appear in your final text.
+
+HONORIFICS & EARNED HARDWARE DIRECTIVE:
+When evaluating, referencing, or introducing players in your article, check their `career_awards` in their player profile (`get_player_season_stats` or `get_player_context`).
+Where natural in your prose, refer to decorated players by their earned hardware and status:
+- If a player won MVP in the immediately preceding season: refer to them as "the reigning MVP".
+- If a player has All-Pro selections: refer to them by their career tally or accolade (e.g., "three-time First-Team All-Pro cornerback", "two-time All-Pro left tackle", "First-Team All-Pro safety").
+- If a player won Rookie of the Year or Player of the Year: refer to them by that honor (e.g., "former Defensive Rookie of the Year", "the 2033 Offensive Player of the Year").
+- If a player won Super Bowl MVP: refer to them as "Super Bowl MVP".
+- STRICT ACCURACY RULE: NEVER invent unearned awards. Only cite accolades that actually exist in their recorded `career_awards`. If a player has "None recorded", do not fabricate All-Pros, MVPs, or Pro Bowls.
 
 GAME SCRIPTS ARE CANON (WHAT YOU MAY AND MAY NOT INVENT):
 Every completed game has a game script: the `game_script` at the end of `get_game_box_score`, summarized as `game_story` in the brief's recap slate. Its quarter scores, scoring plays (who scored, how, from how far, on what drive, at what point on the clock), lead changes, the score that won it, key moments, adjustments and defensive standouts are the official account every writer shares. When you describe how a game unfolded, follow it and never contradict it. Beyond it, invent the texture no data records: the snaps between the scores, play calls, pressure and coverage, a block, a drop, a sideline scene, the crowd, quotes. Keep it consistent with the script and the box score. Never invent anything the data records (scores, stats, records, standings, injuries), and a defender with no recorded line for a game gets praise in words, not numbers.
@@ -1354,6 +1370,19 @@ If you need specific stats, use your database tools before producing your final 
                             if retry_text:
                                 generated_text = retry_text
 
+                    # All-Pro Roster must have valid 29 First-Team and 29 Second-Team selections; give writer one rewrite
+                    if at_id == "OFFICIAL_AP_ALL_PRO_ROSTER" and generated_text:
+                        _, ap_errors = parse_all_pro(generated_text, self._all_pro_roster_index(season))
+                        if ap_errors:
+                            print("\n⚠️ [ALL-PRO ROSTER FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(ap_errors[:8]))
+                            retry = chat.send_message(all_pro_fix_prompt(ap_errors))
+                            retry_text = retry.text
+                            if not retry_text and hasattr(retry, "candidates") and retry.candidates:
+                                parts = retry.candidates[0].content.parts
+                                retry_text = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+                            if retry_text:
+                                generated_text = retry_text
+
                     if not (generated_text or "").strip():
                         failure_reason = "model returned no text"
                         generated_text = ""
@@ -1484,6 +1513,14 @@ If you need specific stats, use your database tools before producing your final 
                             else:
                                 n = store_power_rankings(cur, season, week, article_id, compiled_prompt["archetype"], entries)
                                 print(f"📊 [POWER RANKINGS STORED] Season {season} Week {week}: {n} teams from article #{article_id}.")
+
+                        if article_id and ctype == "ARTICLE" and at_id == "OFFICIAL_AP_ALL_PRO_ROSTER":
+                            entries, ap_errors = parse_all_pro(generated_text, load_roster_index(cur, season))
+                            if ap_errors:
+                                print(f"⚠️  [ALL-PRO NOT STORED] Article #{article_id}: " + " | ".join(ap_errors[:5]))
+                            else:
+                                n = store_all_pro_teams(cur, season, week, article_id, compiled_prompt["archetype"], entries)
+                                print(f"🏆 [ALL-PRO STORED] Season {season} Week {week}: {n} selections saved to awards from article #{article_id}.")
                     conn.commit()
             except Exception as e:
                 print(f"Failed to record news_feed entry for {display}: {e}")
@@ -1535,6 +1572,11 @@ If you need specific stats, use your database tools before producing your final 
         with psycopg.connect(self.db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 return load_team_index(cur)
+
+    def _all_pro_roster_index(self, season: int) -> dict:
+        with psycopg.connect(self.db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                return load_roster_index(cur, season)
 
     def get_agent_record(self, archetype: str) -> tuple:
         """Retrieves or synthesizes the agent memory record for a writer archetype."""
