@@ -4658,7 +4658,7 @@ function MegaMenu({
   close: () => void;
 }) {
   const systemStatus = useContext(SystemContext);
-  const weekTabs = week === 1 ? [1, 2, 3] : week === 18 ? [16, 17, 18] : [week - 1, week, week + 1];
+  const weekTabs = week === 1 ? [1, 2, 3] : week >= 23 ? [21, 22, 23] : [week - 1, week, week + 1];
   const [highlightedGames, setHighlightedGames] = useState<any[]>([]);
 
   useEffect(() => {
@@ -4695,7 +4695,7 @@ function MegaMenu({
               <div><span className="eyebrow">League schedule</span><h2>Week {week}</h2></div>
               <div className="week-arrows">
                 <button onClick={() => setWeek(Math.max(1, week - 1))} disabled={week === 1} aria-label="Previous week"><Chevron direction="left" /></button>
-                <button onClick={() => setWeek(Math.min(18, week + 1))} disabled={week === 18} aria-label="Next week"><Chevron direction="right" /></button>
+                <button onClick={() => setWeek(Math.min(23, week + 1))} disabled={week >= 23} aria-label="Next week"><Chevron direction="right" /></button>
               </div>
             </div>
             <div className="week-tabs">
@@ -4766,11 +4766,6 @@ function App() {
       setSystemStatus({ ...statusData, availableSeasons: Array.isArray(seasonsData) ? seasonsData : [statusData.season] });
       setWeek(statusData.week);
 
-      fetch(`${API_BASE}/api/news/week/${statusData.week}?season=${statusData.season}`)
-        .then(r => r.json())
-        .then(news => setNewsData(news))
-        .catch(err => console.error("Error fetching news:", err));
-
       fetch(`${API_BASE}/api/power_rankings?season=${statusData.season}`)
         .then(r => r.json())
         .then(rankings => setPowerRankings(rankings))
@@ -4796,6 +4791,14 @@ function App() {
       window.removeEventListener("hashchange", updateRoute);
     };
   }, []);
+
+  useEffect(() => {
+    if (!systemStatus.season || !week) return;
+    fetch(`${API_BASE}/api/news/week/${week}?season=${systemStatus.season}`)
+      .then(r => r.json())
+      .then(news => setNewsData(news))
+      .catch(err => console.error("Error fetching news:", err));
+  }, [week, systemStatus.season]);
 
   const selectedTeam = route.startsWith("#team-")
     && !route.startsWith("#team-schedule-")
