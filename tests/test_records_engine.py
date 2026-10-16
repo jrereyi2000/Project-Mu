@@ -209,5 +209,53 @@ class DefenseKickingSeedTests(unittest.TestCase):
             self.assertEqual(len(by_cat[cat]), 32, cat)
         self.assertIn("UPDATE record_categories SET coverage = 'FULL'", sql)
 
+
+try:
+    from db.db_handler import DatabaseHandler
+    import psycopg
+    with psycopg.connect(DatabaseHandler().db_conn_info) as _test_conn:
+        pass
+    HAS_LIVE_DB = True
+except Exception:
+    HAS_LIVE_DB = False
+
+
+class FindRecordsBrokenInWeekTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_LIVE_DB, "requires live database connection with 2035 season data")
+    def test_find_records_broken_in_week(self):
+        with psycopg.connect(DatabaseHandler().db_conn_info) as conn:
+            with conn.cursor() as cur:
+                # Week 1: No all-time records broken in week 1
+                w1 = R.find_records_broken_in_week(cur, 2035, 1)
+                self.assertEqual(len(w1), 0)
+
+                # Week 6: Crawford ties single-game 7 pass TDs
+                w6 = R.find_records_broken_in_week(cur, 2035, 6)
+                self.assertTrue(any(e["holder"] == "George Crawford" and e["category"] == "game_pass_tds" and e["result"] == "tied" for e in w6))
+
+                # Week 14: Crawford breaks single-season pass TDs (56)
+                w14 = R.find_records_broken_in_week(cur, 2035, 14)
+                self.assertTrue(any(e["holder"] == "George Crawford" and e["category"] == "season_pass_tds" and e["result"] == "broke" for e in w14))
+
+                # Week 15: Davis ties single-season rec TDs (23)
+                w15 = R.find_records_broken_in_week(cur, 2035, 15)
+                self.assertTrue(any(e["holder"] == "Trey'Mane Davis" and e["category"] == "season_rec_tds" and e["result"] == "tied" for e in w15))
+
+                # Week 16: Davis breaks single-season rec TDs (25)
+                w16 = R.find_records_broken_in_week(cur, 2035, 16)
+                self.assertTrue(any(e["holder"] == "Trey'Mane Davis" and e["category"] == "season_rec_tds" and e["result"] == "broke" for e in w16))
+
+                # Week 17: Panthers break team points (654) and tie wins (16)
+                w17 = R.find_records_broken_in_week(cur, 2035, 17)
+                self.assertTrue(any("Panthers" in e["holder"] and e["category"] == "season_team_points" and e["result"] == "broke" for e in w17))
+                self.assertTrue(any("Panthers" in e["holder"] and e["category"] == "season_team_wins" and e["result"] == "tied" for e in w17))
+
+                # Week 18: Crawford breaks pass yards (5,497) and Panthers break wins (17)
+                w18 = R.find_records_broken_in_week(cur, 2035, 18)
+                self.assertTrue(any(e["holder"] == "George Crawford" and e["category"] == "season_pass_yards" and e["result"] == "broke" for e in w18))
+                self.assertTrue(any("Panthers" in e["holder"] and e["category"] == "season_team_wins" and e["result"] == "broke" for e in w18))
+
+
 if __name__ == "__main__":
     unittest.main()
+

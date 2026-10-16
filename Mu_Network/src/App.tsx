@@ -4959,6 +4959,42 @@ function App() {
               );
             })()}
 
+            {/* ALL-TIME NFL RECORD SPOTLIGHT */}
+            {(() => {
+              const records = newsData?.slotted?.historic_events;
+              if (!Array.isArray(records) || records.length === 0) return null;
+              return (
+                <section className="historic-records-spotlight" aria-label="Historic NFL Record Breaking Coverage">
+                  <div className="historic-records-header">
+                    <span className="trophy-badge">🏆 ALL-TIME NFL RECORD BROKEN</span>
+                    <span className="historic-subtitle">HISTORY WRITTEN ON THE GRIDIRON</span>
+                  </div>
+                  <div className="historic-records-grid">
+                    {records.map((story: any) => {
+                      const author = story.author?.display_name || "National Correspondent";
+                      const initials = author.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase();
+                      return (
+                        <article key={story.id} className="historic-record-spotlight-card">
+                          <div className="historic-card-top">
+                            <span className="record-slot-chip">{story.slot || "Historic Milestone"}</span>
+                            <span className="record-exclusive-tag">COMMEMORATIVE FEATURE</span>
+                          </div>
+                          <a href={`#article-${story.id}`}>
+                            <h3>{story.headline}</h3>
+                          </a>
+                          <p>{story.excerpt}</p>
+                          <div className="author-row">
+                            <span className="avatar amber">{initials}</span>
+                            <span><b>{author}</b><small>HISTORICAL ANALYSIS · 9 MIN READ</small></span>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })()}
+
             <div className="latest-heading">
               <h2>{showAllStories ? "This Week's Stories" : "Latest Analysis"}</h2>
               <button onClick={() => setShowAllStories(!showAllStories)}>
@@ -4986,18 +5022,23 @@ function App() {
                   const blurb = story.excerpt || story.blurb;
                   const author = story.author?.display_name || story.author || "National Reporter";
                   const initials = isDb ? author.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() : story.initials;
-                  const kicker = story.article_type ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : (story.kicker || "Analysis");
+                  const isRecord = story.article_type === "HISTORIC_RECORD_BREAK" || (story.slot && story.slot.toLowerCase().includes("record"));
+                  const kicker = isRecord
+                    ? "🏆 ALL-TIME NFL RECORD"
+                    : story.article_type
+                      ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+                      : (story.kicker || "Analysis");
                   const readTime = story.read || "7 min read";
 
                   return (
-                    <article className={`story-card ${index === 0 ? "feature-card" : ""}`} key={story.id || title}>
+                    <article className={`story-card ${index === 0 ? "feature-card" : ""} ${isRecord ? "record-breaker-card" : ""}`} key={story.id || title}>
                       <span className="story-number">0{index + 1}</span>
                       <div className="story-copy">
-                        <span className="kicker">{kicker}</span>
+                        <span className={`kicker ${isRecord ? "record-kicker" : ""}`}>{kicker}</span>
                         <a href={artLink}><h3>{title}</h3></a>
                         <p>{blurb}</p>
                         <div className="author-row">
-                          <span className="avatar">{initials}</span>
+                          <span className={`avatar ${isRecord ? "amber" : ""}`}>{initials}</span>
                           <span><b>{author}</b><small>NATIONAL REPORTER · {readTime}</small></span>
                         </div>
                       </div>

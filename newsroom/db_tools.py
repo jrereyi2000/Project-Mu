@@ -2290,3 +2290,184 @@ def get_team_injury_report(team_identifier: str, week: int = 0, season: int = 0)
         return f"Error: {str(e)}"
 
 
+@tool
+def get_record_book(category: str = None, team_identifier: str = None, season: int = 0) -> str:
+    """Query the all-time NFL record book and franchise records.
+    Provides canonical historical marks, all-time record holders, previous records, and franchise leaderboards.
+    - category: optional specific stat category (e.g. 'season_pass_tds', 'Passing TDs in a season', 'season_pass_yards', 'season_rec_tds', 'game_pass_tds', 'season_team_points', 'season_team_wins'). Matches category names or labels flexibly.
+    - team_identifier: optional team name, city, abbreviation, or ID to look up that franchise's records.
+    - season: season year (default: current season).
+    Returns all-time NFL record holders, previous record holders, top-10 leaderboard entries for the category, franchise records, and any records broken or tied this season.
+    """
+    try:
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                # Load teams lookup
+                cur.execute("SELECT id, abbreviation, city, name FROM teams;")
+                team_map = {r[0]: {"abbr": r[1], "name": f"{r[2]} {r[3]}"} for r in cur.fetchall()}
+
+                # Load categories lookup
+                cur.execute("SELECT category, label, scope, subject, better FROM record_categories ORDER BY sort_order;")
+                cat_rows = cur.fetchall()
+                cat_lookup = {r[0]: {"label": r[1], "scope": r[2], "subject": r[3], "better": r[4]} for r in cat_rows}
+
+                matched_cats = []
+                if category:
+                    clean_c = category.strip().lower().replace(" ", "_")
+                    for c_key, c_info in cat_lookup.items():
+                        if clean_c in c_key.lower() or clean_c in c_info["label"].lower().replace(" ", "_") or c_key.lower() in clean_c:
+                            matched_cats.append(c_key)
+                    if not matched_cats:
+                        # Fallback: substring match on label
+                        for c_key, c_info in cat_lookup.items():
+                            if any(part in c_info["label"].lower() for part in clean_c.split("_") if len(part) > 2):
+                                matched_cats.append(c_key)
+
+                resolved_team_id = None
+                if team_identifier:
+                    resolved_team_id = _resolve_team_id(cur, team_identifier)
+
+                def fmt_num(v):
+                    if v is None:
+                        return None
+                    f = float(v)
+                    return int(f) if f.is_integer() else round(f, 2)
+
+                output = {"season": s_val}
+
+                # 1. If specific category or categories matched
+                if matched_cats:
+                    categories_data = []
+                    for c_key in matched_cats[:5]:
+                        c_info = cat_lookup[c_key]
+                        low = c_info["better"] == "LOW"
+
+                        # Current NFL record holder(s)
+                        cur.execute("""
+                            SELECT value, holder, season, team_id, source
+                            FROM league_records
+                            WHERE category = %s;
+                        """, (c_key,))
+                        nfl_recs = cur.fetchall()
+                        nfl_records_list = [{
+                            "holder": r[1],
+                            "value": fmt_num(r[0]),
+                            "season": r[2],
+                            "team": team_map.get(r[3], {}).get("name") if r[3] else None,
+                            "source": r[4]
+                        } for r in nfl_recs]
+
+                        # All-time top 10 entries
+                        order_dir = "ASC" if low else "DESC"
+                        cur.execute(f"""
+                            SELECT value, holder, season, team_id, source
+                            FROM league_record_entries
+                            WHERE category = %s
+                            ORDER BY value {order_dir}
+                            LIMIT 10;
+                        """, (c_key,))
+                        top10_rows = cur.fetchall()
+                        top10_list = [{
+                            "rank": idx + 1,
+                            "holder": r[1],
+                            "value": fmt_num(r[0]),
+                            "season": r[2],
+                            "team": team_map.get(r[3], {}).get("name") if r[3] else None
+                        } for idx, r in enumerate(top10_rows)]
+
+                        # Franchise record if team requested
+                        team_rec = None
+                        if resolved_team_id:
+                            cur.execute("""
+                                SELECT value, holder, season, source
+                                FROM franchise_records_current
+                                WHERE team_id = %s AND category = %s;
+                            """, (resolved_team_id, c_key))
+                            frow = cur.fetchone()
+                            if frow:
+                                team_rec = {
+                                    "team": team_map.get(resolved_team_id, {}).get("name"),
+                                    "holder": frow[1],
+                                    "value": fmt_num(frow[0]),
+                                    "season": frow[2],
+                                }
+
+                        categories_data.append({
+                            "category": c_key,
+                            "label": c_info["label"],
+                            "scope": c_info["scope"],
+                            "nfl_all_time_record": nfl_records_list,
+                            "nfl_all_time_top_10": top10_list,
+                            "franchise_record": team_rec
+                        })
+                    output["categories"] = categories_data
+
+                # 2. If team requested (and no single category or in addition)
+                elif resolved_team_id:
+                    cur.execute("""
+                        SELECT category, label, value, holder, season
+                        FROM franchise_records_current
+                        WHERE team_id = %s
+                        ORDER BY category;
+                    """, (resolved_team_id,))
+                    f_records = []
+                    for r in cur.fetchall():
+                        cat_key = r[0]
+                        f_records.append({
+                            "category": cat_key,
+                            "label": r[1],
+                            "holder": r[3],
+                            "value": fmt_num(r[2]),
+                            "season": r[4],
+                        })
+                    output["team"] = team_map.get(resolved_team_id, {}).get("name")
+                    output["franchise_records"] = f_records
+
+                # 3. Overview of all NFL all-time records
+                else:
+                    cur.execute("""
+                        SELECT lr.category, lr.label, lr.value, lr.holder, lr.season, lr.team_id, lr.source
+                        FROM league_records lr
+                        JOIN record_categories rc ON lr.category = rc.category
+                        ORDER BY rc.sort_order;
+                    """)
+                    all_nfl = []
+                    for r in cur.fetchall():
+                        all_nfl.append({
+                            "category": r[0],
+                            "label": r[1],
+                            "value": fmt_num(r[2]),
+                            "holder": r[3],
+                            "season": r[4],
+                            "team": team_map.get(r[5], {}).get("name") if r[5] else None,
+                        })
+                    output["nfl_all_time_records"] = all_nfl
+
+                # 4. Check for any records broken or tied this season
+                from engines.records_engine import evaluate
+                eval_res = evaluate(cur, s_val)
+                season_records = [
+                    {
+                        "type": e["type"],
+                        "result": e["result"],
+                        "category": e["category"],
+                        "label": e["label"],
+                        "holder": e["holder"],
+                        "team": e.get("team"),
+                        "value": fmt_num(e["value"]),
+                        "previous_record": fmt_num(e.get("old_value") or e.get("nfl_record")),
+                        "previous_holders": e.get("old_holders") or e.get("nfl_record_holders"),
+                        "week": e.get("week")
+                    }
+                    for e in eval_res.get("events", [])
+                    if e.get("type") == "nfl_record" or (e.get("type") == "top10" and e.get("result") in ("broke", "tied"))
+                ]
+                output["records_set_this_season"] = season_records
+
+                return json.dumps(output, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+

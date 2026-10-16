@@ -2411,6 +2411,7 @@ def get_weekly_news(week: int, season: Optional[int] = None):
                 "features": [],
                 "local_primers": [],
                 "standalone": None,
+                "historic_events": [],
                 "other": []
             }
 
@@ -2450,6 +2451,9 @@ def get_weekly_news(week: int, season: Optional[int] = None):
                     slotted_response["local_primers"].append(art_dict)
                 elif "standalone" in s_lower or a["article_type"] == "POWER_RANKINGS":
                     slotted_response["standalone"] = art_dict
+                elif "record" in s_lower or a["article_type"] == "HISTORIC_RECORD_BREAK":
+                    slotted_response["historic_events"].append(art_dict)
+                    slotted_response["features"].append(art_dict)
                 else:
                     slotted_response["other"].append(art_dict)
 

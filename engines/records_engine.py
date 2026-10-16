@@ -287,6 +287,250 @@ def evaluate(cur, season):
                           "entries": sorted({(b["team_id"], b["category"]) for b in book_entries})}}
 
 
+def find_records_broken_in_week(cur, season: int, week: int) -> list[dict]:
+    """Finds all NFL-wide all-time records broken or tied in a specific week of `season`.
+
+    Returns a list of event dicts:
+      type: "nfl_record",
+      scope: "game" | "season",
+      result: "broke" | "tied",
+      category, label, team_id, team, player_id, holder, value,
+      old_value, old_holders, week, game_id, opponent_team_id, opponent_name
+    """
+    book = load_book(cur, season)
+    cats, teams, entries = book["categories"], book["teams"], book["entries"]
+    low = lambda cat: cats[cat]["better"] == "LOW"
+    holders_text = lambda rows, best: [h if h[:4].isdigit() else f"{h} ({s})" for v, h, s in rows if v == best]
+
+    broken_events = []
+
+    # Helper to resolve game and opponent in that week
+    def get_game_info(team_id):
+        cur.execute("""
+            SELECT id, home_team_id, away_team_id FROM games
+            WHERE season = %s AND week = %s AND (home_team_id = %s OR away_team_id = %s)
+            LIMIT 1;
+        """, (season, week, team_id, team_id))
+        row = cur.fetchone()
+        if not row:
+            return None, None, None
+        gid, home_id, away_id = row
+        opp_id = away_id if home_id == team_id else home_id
+        opp_name = teams.get(opp_id, {}).get("name")
+        return gid, opp_id, opp_name
+
+    # 1. Single game records set in this week
+    cur.execute("""
+        SELECT ps.team_id, ps.player_id, COALESCE(p.full_name, ps.player_name), ps.game_id,
+               g.home_team_id, g.away_team_id,
+               ps.pass_yards, ps.pass_tds, ps.rush_yards, ps.rec_yards, ps.receptions,
+               COALESCE(ps.rush_tds, 0) + COALESCE(ps.rec_tds, 0) as scrimmage_tds,
+               ps.rush_tds, ps.rec_tds
+        FROM player_stats ps
+        JOIN games g ON g.id = ps.game_id
+        LEFT JOIN players p ON p.id = ps.player_id
+        WHERE g.season = %s AND g.week = %s AND g.status = 'COMPLETED'
+          AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+    """, (season, week))
+    cols = ['game_pass_yards', 'game_pass_tds', 'game_rush_yards', 'game_rec_yards', 'game_receptions',
+            'game_scrimmage_tds', 'game_rush_tds', 'game_rec_tds']
+    for row in cur.fetchall():
+        team_id, player_id, name, gid, home_id, away_id = row[0], row[1], tidy_name(row[2]), row[3], row[4], row[5]
+        opp_id = away_id if home_id == team_id else home_id
+        opp_name = teams.get(opp_id, {}).get("name")
+        for cat, val in zip(cols, row[6:]):
+            if val and cat in entries and entries[cat]:
+                best = (min if low(cat) else max)(v for v, _, _ in entries[cat])
+                is_broke = _better(val, best, low(cat))
+                is_tied = (val == best)
+                if is_broke or is_tied:
+                    broken_events.append({
+                        "type": "nfl_record",
+                        "scope": "game",
+                        "result": "broke" if is_broke else "tied",
+                        "category": cat,
+                        "label": cats[cat]["label"],
+                        "team_id": team_id,
+                        "team": teams.get(team_id, {}).get("name"),
+                        "player_id": player_id,
+                        "holder": name,
+                        "value": _num(val),
+                        "old_value": _num(best),
+                        "old_holders": holders_text(entries[cat], best),
+                        "week": week,
+                        "game_id": gid,
+                        "opponent_team_id": opp_id,
+                        "opponent_name": opp_name,
+                    })
+
+    # 2. Player cumulative season records crossing the all-time threshold in this week
+    for cat, expr in SEASON_PLAYER_CATEGORIES.items():
+        if cat not in entries or not entries[cat]:
+            continue
+        best = (min if low(cat) else max)(v for v, _, _ in entries[cat])
+        cur.execute(f"""
+            SELECT ps.player_id, COALESCE(p.full_name, ps.player_name), ps.team_id,
+                   SUM(CASE WHEN g.week < %s THEN {expr} ELSE 0 END) as prev_total,
+                   SUM(CASE WHEN g.week <= %s THEN {expr} ELSE 0 END) as curr_total
+            FROM player_stats ps
+            JOIN games g ON g.id = ps.game_id
+            LEFT JOIN players p ON p.id = ps.player_id
+            WHERE g.season = %s AND g.week <= %s AND g.status = 'COMPLETED'
+              AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+            GROUP BY ps.player_id, p.full_name, ps.player_name, ps.team_id
+        """, (week, week, season, week))
+        for pid, pname, tid, prev_tot, curr_tot in cur.fetchall():
+            prev_tot = float(prev_tot or 0)
+            curr_tot = float(curr_tot or 0)
+            is_tied = (prev_tot < best and curr_tot == best) if not low(cat) else (prev_tot > best and curr_tot == best)
+            is_broke = (prev_tot <= best and curr_tot > best) if not low(cat) else (prev_tot >= best and curr_tot < best)
+            if is_tied or is_broke:
+                gid, opp_id, opp_name = get_game_info(tid)
+                broken_events.append({
+                    "type": "nfl_record",
+                    "scope": "season",
+                    "result": "broke" if is_broke else "tied",
+                    "category": cat,
+                    "label": cats[cat]["label"],
+                    "team_id": tid,
+                    "team": teams.get(tid, {}).get("name"),
+                    "player_id": pid,
+                    "holder": tidy_name(pname),
+                    "value": _num(curr_tot),
+                    "old_value": _num(best),
+                    "old_holders": holders_text(entries[cat], best),
+                    "week": week,
+                    "game_id": gid,
+                    "opponent_team_id": opp_id,
+                    "opponent_name": opp_name,
+                })
+
+    # 3. Team season records crossing the all-time threshold in this week
+    # season_team_points
+    if "season_team_points" in cats:
+        rows = [(v, h, s) for (t, c), rs in book["franchise"].items() if c == "season_team_points" for v, h, s in rs]
+        if rows:
+            best_pts = max(v for v, _, _ in rows)
+            cur.execute("""
+                WITH weekly_pts AS (
+                    SELECT (CASE WHEN home_team_id = t.id THEN home_score ELSE away_score END) as pts,
+                           week, t.id as team_id, t.name as team_name
+                    FROM games g
+                    JOIN teams t ON t.id IN (g.home_team_id, g.away_team_id)
+                    WHERE g.season = %s AND g.week <= %s AND g.status = 'COMPLETED'
+                      AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+                )
+                SELECT team_id, team_name,
+                       SUM(CASE WHEN week < %s THEN pts ELSE 0 END) as prev_total,
+                       SUM(CASE WHEN week <= %s THEN pts ELSE 0 END) as curr_total
+                FROM weekly_pts
+                GROUP BY team_id, team_name
+            """, (season, week, week, week))
+            for tid, tname, prev_tot, curr_tot in cur.fetchall():
+                prev_tot = float(prev_tot or 0)
+                curr_tot = float(curr_tot or 0)
+                is_tied = (prev_tot < best_pts and curr_tot == best_pts)
+                is_broke = (prev_tot <= best_pts and curr_tot > best_pts)
+                if is_tied or is_broke:
+                    gid, opp_id, opp_name = get_game_info(tid)
+                    broken_events.append({
+                        "type": "nfl_record",
+                        "scope": "season",
+                        "result": "broke" if is_broke else "tied",
+                        "category": "season_team_points",
+                        "label": cats["season_team_points"]["label"],
+                        "team_id": tid,
+                        "team": teams.get(tid, {}).get("name", tname),
+                        "player_id": None,
+                        "holder": f"{season} {teams.get(tid, {}).get('name', tname)}",
+                        "value": _num(curr_tot),
+                        "old_value": _num(best_pts),
+                        "old_holders": holders_text(rows, best_pts),
+                        "week": week,
+                        "game_id": gid,
+                        "opponent_team_id": opp_id,
+                        "opponent_name": opp_name,
+                    })
+
+    # season_team_wins
+    if "season_team_wins" in cats:
+        rows = [(v, h, s) for (t, c), rs in book["franchise"].items() if c == "season_team_wins" for v, h, s in rs]
+        if rows:
+            best_wins = max(v for v, _, _ in rows)
+            cur.execute("""
+                WITH weekly_wins AS (
+                    SELECT (CASE WHEN (home_team_id = t.id AND home_score > away_score)
+                                   OR (away_team_id = t.id AND away_score > home_score) THEN 1 ELSE 0 END) as win,
+                           week, t.id as team_id, t.name as team_name
+                    FROM games g
+                    JOIN teams t ON t.id IN (g.home_team_id, g.away_team_id)
+                    WHERE g.season = %s AND g.week <= %s AND g.status = 'COMPLETED'
+                      AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+                )
+                SELECT team_id, team_name,
+                       SUM(CASE WHEN week < %s THEN win ELSE 0 END) as prev_total,
+                       SUM(CASE WHEN week <= %s THEN win ELSE 0 END) as curr_total
+                FROM weekly_wins
+                GROUP BY team_id, team_name
+            """, (season, week, week, week))
+            for tid, tname, prev_tot, curr_tot in cur.fetchall():
+                prev_tot = float(prev_tot or 0)
+                curr_tot = float(curr_tot or 0)
+                is_tied = (prev_tot < best_wins and curr_tot == best_wins)
+                is_broke = (prev_tot <= best_wins and curr_tot > best_wins)
+                if is_tied or is_broke:
+                    gid, opp_id, opp_name = get_game_info(tid)
+                    broken_events.append({
+                        "type": "nfl_record",
+                        "scope": "season",
+                        "result": "broke" if is_broke else "tied",
+                        "category": "season_team_wins",
+                        "label": cats["season_team_wins"]["label"],
+                        "team_id": tid,
+                        "team": teams.get(tid, {}).get("name", tname),
+                        "player_id": None,
+                        "holder": f"{season} {teams.get(tid, {}).get('name', tname)}",
+                        "value": _num(curr_tot),
+                        "old_value": _num(best_wins),
+                        "old_holders": holders_text(rows, best_wins),
+                        "week": week,
+                        "game_id": gid,
+                        "opponent_team_id": opp_id,
+                        "opponent_name": opp_name,
+                    })
+
+    # 4. At Week 18, check defense and kicking records from season_stat_lines
+    if week == REGULAR_SEASON_FINAL_WEEK:
+        for c, t, p, h, v in season_defense_values(cur, season):
+            if c in entries and entries[c]:
+                best = (min if low(c) else max)(val for val, _, _ in entries[c])
+                is_broke = _better(v, best, low(c))
+                is_tied = (v == best)
+                if is_broke or is_tied:
+                    gid, opp_id, opp_name = get_game_info(t)
+                    broken_events.append({
+                        "type": "nfl_record",
+                        "scope": "season",
+                        "result": "broke" if is_broke else "tied",
+                        "category": c,
+                        "label": cats[c]["label"],
+                        "team_id": t,
+                        "team": teams.get(t, {}).get("name"),
+                        "player_id": p,
+                        "holder": h,
+                        "value": _num(v),
+                        "old_value": _num(best),
+                        "old_holders": holders_text(entries[c], best),
+                        "week": week,
+                        "game_id": gid,
+                        "opponent_team_id": opp_id,
+                        "opponent_name": opp_name,
+                    })
+
+    return broken_events
+
+
+
 def apply(cur, season, result):
     """Stores the season's record rows (source 'LEAGUE'), replacing any stored earlier for the same season. Where the
     record book (BOOK) already has the season's row for that team and category, the book's row stands."""

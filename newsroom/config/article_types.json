@@ -1497,6 +1497,38 @@
       "directive": "ARTICLE TYPE SPECIFICATION: Dynasty Early Look\nGranularity: Next season / Dynasty Rankings.\nFocus: Early rankings for next season and dynasty leagues, weighted toward age and young players' trajectory.\nScope: Top 25 for next season, plus young risers and dynasty sells.",
       "example_prompt_hook": "Rank the top 25 fantasy players for next season, weighted toward age and young players on the rise.",
       "structure_source": "article"
+    },
+    "HISTORIC_RECORD_BREAK": {
+      "name": "The Historic Record Breaker",
+      "allowed_writers": [
+        "CHADIHA",
+        "YATES",
+        "SIMMONS",
+        "BARNWELL",
+        "ORLOVSKY"
+      ],
+      "writer_display_names": [
+        "Jeffri Chadiha (Narrative/Legacy)",
+        "Field Yates (Factual & Milestones)",
+        "Bill Simmons (Historical / Pop Culture)",
+        "Bill Barnwell (Statistical Context)",
+        "Dan Orlovsky (Film Room)"
+      ],
+      "writing_archetype_category": "Historic Milestones",
+      "granularity": "Historical / Event Milestone",
+      "focus": "Definitive coverage celebrating an all-time NFL record being shattered or tied, examining the historical weight, the fallen record standard, the mechanics of how it was broken, and its standing in NFL lore.",
+      "data_queried": [
+        "get_record_book",
+        "get_player_season_stats",
+        "get_game_box_score",
+        "get_team_context",
+        "get_player_context"
+      ],
+      "example_prompt_hook": "Celebrate an all-time NFL record being shattered or tied. Anchor the piece in the historical weight of the accomplishment: honor the legendary standard that previously stood, dissect the exact mechanics and scheme that enabled this milestone, and deliver a definitive verdict on where this feat ranks in the pantheon of NFL history.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Historic Record Breaker\nGranularity: Historical / Event Milestone.\nFocus: Legendary historical achievements, shattered all-time records, immortal milestones, and historical context.\nScope: You are writing a dedicated celebration of an all-time NFL record broken or tied. Center your entire piece around the historic magnitude of the event, the legend who held the mark previously, the schematic execution that made it possible, and what it means for football history.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (HISTORIC RECORD BREAKER):\nFocus exclusively on the NFL-wide record-breaking or record-tying event identified by the Editorial Desk in your assignment. Query get_record_book to retrieve the canonical all-time leaderboard, the previous record holder, the year it was set, and how long the record stood. Query get_game_box_score and get_player_season_stats for the exact statistical breakdown. Ground your praise in authentic football history: contrast the modern feat with the era of the previous record holder, explore how teammates and scheme unlocked it, and avoid generic filler.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an epic historical milestone celebration (approx. 1,000–1,400 words).\n\n# [Your Creative, Epic Headline Marking the Historic Feat]\n> **EXCERPT:** [A sharp, 1-to-2 sentence summary capturing the magnitude of the shattered record and its historical weight.]\n\n1. The Historical Moment (The Coronation):\nOpen with the visceral scene of history being made: the exact moment, the stadium reaction, the sheer weight of what football fans just witnessed. State the new record clearly.\n\n2. Toppling the Pantheon: The Old Standard:\nUse a ## header (e.g., ## Toppling Manning's Standard / ## The Ghost of Moss).\nExamine the previous record holder, the year it was established, and how long it stood as an untouchable standard in pro football lore. Compare the eras, the difficulty of the feat, and the legendary status of the player or team whose record just fell.\n\n3. The Anatomy of History: How the Record Fell:\nUse a ## header (e.g., ## The Machinery Behind the Mark / ## 56 Touchdowns in the Making).\nDissect the execution: the game script, the quarterback-receiver connection, the play-calling, down-and-distance situational mastery, or defensive dominance that made this record achievable. Use real stats from get_game_box_score and get_record_book.\n\n4. The Pantheon Verdict: Where This Campaign Stands:\nUse a ### header to place this achievement in all-time NFL immortality.\nDeliver a decisive verdict on where this accomplishment ranks among the greatest single-season or single-game performances in the history of the National Football League. End on a powerful historical note.",
+      "structure_source": "article"
     }
   }
 }

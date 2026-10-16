@@ -25,7 +25,7 @@ import argparse
 
 DEFAULT_MODEL = "gemini-3.8-flash"  # same default as SwarmDispatcher
 FINAL_WEEK = 23                 # Super Bowl week (see POSTSEASON_EDITORIAL_SLATES)
-NATIONAL_SLOT_FILTER = "(slot IN ('Hero Slot', 'Standalone') OR slot LIKE 'Slot %%')"  # local wakeups use 'Local Beat N'
+NATIONAL_SLOT_FILTER = "(slot IN ('Hero Slot', 'Standalone') OR slot LIKE 'Slot %%' OR slot LIKE 'Record%%')"  # local wakeups use 'Local Beat N'
 FANTASY_SLOT_FILTER = "slot LIKE 'Fantasy %%'"
 ADVISORY_LOCK_NAMESPACE = 470_118  # arbitrary constant for pg_try_advisory_lock(namespace, season*100 + week)
 

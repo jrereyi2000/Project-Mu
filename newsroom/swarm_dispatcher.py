@@ -30,6 +30,7 @@ from newsroom.all_pro import (
 )
 from engines.gotw_engine import display_excitement
 from engines.game_script_engine import get_scripts, script_summary
+from engines.records_engine import find_records_broken_in_week
 from newsroom.db_tools import (
     get_game_box_score,
     get_player_season_stats,
@@ -62,6 +63,7 @@ from newsroom.db_tools import (
     get_team_articles,
     get_player_articles,
     get_team_injury_report,
+    get_record_book,
 )
 from newsroom.fantasy_tools import FANTASY_TOOLS
 from newsroom.fantasy_desk import (
@@ -81,6 +83,7 @@ TEMPORAL_ARTICLE_MODES = {
     "SINGLE_GAME_SCHEMATIC_AUTOPSY": "RETROSPECTIVE",
     "LOCAL_POSTGAME_REPORT_CARD": "RETROSPECTIVE",
     "PLAYOFF_AUTOPSY": "RETROSPECTIVE",
+    "HISTORIC_RECORD_BREAK": "RETROSPECTIVE",
 
     # Prospective Previews (focus on upcoming week scheduled matchups)
     "SLATE_LOOKAHEAD_PREDICTIONS": "PROSPECTIVE",
@@ -369,6 +372,19 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
             landscape["most_popular_teams"] = [
                 f"{r[0]} ({records.get(r[1], '0-0')}, Popularity: {round(float(r[2] or 0), 1)})" for r in cur.fetchall()
             ]
+
+            # 5. Check for all-time NFL records broken or tied in the recap week
+            try:
+                broken_records = find_records_broken_in_week(cur, season, recap_week)
+                if broken_records:
+                    brief["records_broken_in_recap_week"] = broken_records
+                    brief["records_notice"] = (
+                        f"HISTORIC MILESTONES: In Week {recap_week}, {len(broken_records)} all-time NFL record(s) were broken or tied! "
+                        "These are monumental historical events. All writers covering recap narratives, awards, or historical context "
+                        "should acknowledge these milestones."
+                    )
+            except Exception as e:
+                pass
 
     return brief
 
@@ -777,6 +793,7 @@ class SwarmDispatcher:
             get_team_articles,
             get_player_articles,
             get_team_injury_report,
+            get_record_book,
         ]
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)
@@ -987,6 +1004,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need a team's complete positional depth chart with age brackets, call `get_team_roster_depth_chart`.
 - If you need draft pick trade points (Jimmy Johnson model) and trade package scenarios, call `get_draft_trade_value`.
 - If you need a franchise's rebuild lifecycle stage and draft posture, call `get_franchise_rebuild_status`.
+- If you need the all-time NFL record book, all-time top 10 leaderboards, previous record holders, franchise records, or records set this season, call `get_record_book`.
 
 3. DEFENSIVE DATA: Defense and special teams now have real season numbers: tackles, sacks, tackles for loss, interceptions, pass deflections, forced fumbles and recoveries, defensive TDs, kicking, punting and returns, plus sacks allowed for linemen and sacks taken for quarterbacks. Use them to back defensive claims with named players. The limits: Madden lists only its leaders in each category, so a player with no line has unknown numbers (not zeros); listed defenders don't add up to a team total, so never sum them into team sacks or takeaways; and pressures, blitzes, coverage, snap counts and targets aren't recorded, so never give them as numbers or rates. Describing them in words is fine when it fits the box score and the game script: a pass rush that lived in the backfield, a corner who blanketed his man, a defense that brought more heat after halftime. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and three tendencies (pass lean, fourth-down aggressiveness, man coverage) as Low / Medium / High against the league. Pass lean and fourth-down aggressiveness are measured from this league's results (allowing for the score), so you can state them as what the team does ("one of the league's most aggressive fourth-down teams"). Man coverage is the staff's real-world philosophy, not measured here: present it as reputation ("a staff known for zone"), never as what the defense has done this season. There is no blitz data, so never put a number on how often a defense blitzes or call it a season-long habit. Never turn a tier into a percentage, and never put a count or rate on how often a team blitzed or played man in a specific game; describing in words what a defense did in one game is fine when it fits the game script. Team situational numbers work the same way: season third-down, red-zone and penalty rates come from `get_team_efficiency_profile`, and a single game's come only from its box score's `team_situational` line. If a game has no such line, don't invent its third-down or red-zone totals. Third-down defense has no season total, so never cite a season third-down rate allowed beyond what the tool shows, and down-and-distance splits (third-and-short, third-and-long) aren't recorded. Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
 
@@ -1002,6 +1020,7 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 - Query your team's most recent box score and player performances with `get_game_box_score`.
 - Query your team's complete game schedule, results, and margins with `get_team_season_schedule`.
 - Query individual roster stats, age and experience with `get_player_season_stats` and `get_player_context`.
+- Query all-time franchise and NFL records with `get_record_book`.
 - BEAT INJURY REPORTING RULE: Check your team's injury status in the Assignment Brief or query `get_team_injury_report`. Report on any injured starters across offense, defense, and specialists. Detail who steps into the starting lineup ('next man up') and how the coordinator must adjust the gameplan. Never invent injuries not on the report.
 - Query team baseline ratings and top stars with `get_team_context`.
 - Query how your players (and the opponent's) produce against different kinds of defenses with `get_player_scheme_splits`. `get_player_scheme_splits` shows how a QB, back or receiver produces against Strong / Average / Weak scoring defenses, pass rushes and coverages (this season and last, real game lines only). Cite a split with its game count as a tendency ("in five games against top-11 pass rushes"); if its `verdict` says there aren't enough real games, don't cite splits for that player.
@@ -1714,7 +1733,43 @@ If you need specific stats, use your database tools before producing your final 
                 ("Standalone", "POWER_RANKINGS"),
             ]
 
-        # Optional truncation for tests/debugging only; production runs the full 10-slot matrix
+        # Check for NFL-wide records broken or tied in the recap week (expand the slate with dedicated coverage!)
+        recap_week = max(1, week - 1) if week > 1 else None
+        if recap_week is not None and "HISTORIC_RECORD_BREAK" in self.article_types_data:
+            try:
+                with psycopg.connect(self.db.db_conn_info) as conn:
+                    with conn.cursor() as cur:
+                        broken_records = find_records_broken_in_week(cur, season, recap_week)
+                        for idx, rec in enumerate(broken_records):
+                            slot_name = f"Record Breaker Slot {idx + 1}" if len(broken_records) > 1 else "Record Breaker Slot"
+                            prev_holders_str = ", ".join(rec.get("old_holders") or []) if rec.get("old_holders") else "Unknown"
+                            rec_target = {
+                                "team_id": rec["team_id"],
+                                "team_name": rec["team"],
+                                "game_id": rec.get("game_id"),
+                                "opponent_team_id": rec.get("opponent_team_id"),
+                                "opponent_name": rec.get("opponent_name"),
+                                "player_id": rec.get("player_id"),
+                                "player_name": rec.get("holder"),
+                                "category": rec["category"],
+                                "label": rec["label"],
+                                "value": rec["value"],
+                                "old_value": rec.get("old_value"),
+                                "old_holders": rec.get("old_holders"),
+                                "result": rec["result"],
+                                "kind": "HISTORIC_RECORD_BREAK",
+                                "note": (
+                                    f"HISTORIC ALL-TIME NFL RECORD: {rec['holder']} ({rec['team']}) "
+                                    f"{rec['result'].upper()} the all-time NFL record for {rec['label']} with {rec['value']} "
+                                    f"(previous record: {rec.get('old_value')}, held by {prev_holders_str}). "
+                                    f"Deliver a definitive celebration and historical breakdown of this legendary achievement."
+                                )
+                            }
+                            raw_slots.append((slot_name, "HISTORIC_RECORD_BREAK", None, rec_target))
+            except Exception as e:
+                pass
+
+        # Optional truncation for tests/debugging only; production runs the full matrix
         if target_articles is not None:
             raw_slots = raw_slots[:target_articles]
 
@@ -1730,6 +1785,8 @@ If you need specific stats, use your database tools before producing your final 
             slot_name = slot_tuple[0]
             at_id = slot_tuple[1]
             preferred_archetype = slot_tuple[2] if len(slot_tuple) > 2 else None
+            if len(slot_tuple) > 3 and slot_tuple[3]:
+                slot_target = slot_tuple[3]
 
             at_info = self.article_types_data.get(at_id)
             if not at_info:
