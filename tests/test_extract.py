@@ -94,5 +94,31 @@ class MergeWidePrefixTest(unittest.TestCase):
         self.assertEqual(rows, [("J.Sierra", "K", "30", "33", "0", "5", "5", "0")])
 
 
+class PostgameColumnsTest(unittest.TestCase):
+    def test_defense_labels_become_box_score_labels(self):
+        cols = ["TEAM", "PLAYER", "SOLO", "ASSIST", "TOTAL", "TFL", "SACK", "INT", "INT YDS", "INT AVG", "INT LG",
+                "PDEF", "FF", "FR", "FYDS", "BLOCKS", "SFTY", "TDS"]
+        out, rows = extract.postgame_columns("defense", cols, [["DEN", "K.Green"] + ["0"] * 16])
+        self.assertEqual(out, ["TEAM", "NAME", "SOLO", "ASSISTS", "TAK", "TFL", "SACK", "INT", "INT YDS", "INT AVG",
+                               "INT LG", "DEFL", "FFUMB", "FMBREC", "FMBYDS", "BLOCK", "SFTY", "TD"])
+        self.assertEqual(len(rows[0]), len(out))
+
+    def test_passing_gets_ypa_and_blank_sacks(self):
+        cols = ["TEAM", "PLAYER", "RATING", "COMP", "ATT", "YDS", "COMP%", "TD", "INT", "AVG", "LONG"]
+        out, rows = extract.postgame_columns("passing", cols, [("DEN", "B.Nix", "101.2", "20", "30", "250", "66.7",
+                                                                 "2", "0", "8.3", "40")])
+        self.assertEqual(out[1], "NAME")
+        self.assertIn("YARDS", out)
+        self.assertIn("YPA", out)
+        self.assertEqual(out[-1], "SACKS")
+        self.assertEqual(rows[0][-1], "")
+
+    def test_kicking_and_punting(self):
+        k, _ = extract.postgame_columns("kicking", ["TEAM", "PLAYER", "FGM", "LONG", "BLOCKS", "XP BLK", "FGA50+"], [])
+        self.assertEqual(k, ["TEAM", "NAME", "FGM", "FG LNG", "FG BLK", "XPB", "FGA50"])
+        p, _ = extract.postgame_columns("punting", ["TEAM", "PLAYER", "PUNTS", "YDS", "IN 20", "BLOCKS"], [])
+        self.assertEqual(p, ["TEAM", "NAME", "PUNTS", "YARDS", "IN20", "BLOCK"])
+
+
 if __name__ == "__main__":
     unittest.main()

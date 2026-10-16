@@ -25,7 +25,7 @@ Writes, inside that capture folder:
                          vision_disagrees names the fields where the two differ
   injuries.csv           the captured week's injury report across all 32 teams (Apple Vision OCR)
 """
-import csv, glob, io, os, sys, threading, time
+import csv, glob, io, os, re, sys, threading, time
 from collections import Counter, OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -760,6 +760,28 @@ def extract_highlights(hdir):
     return all_plays
 
 
+# The in-game postgame Player Stats screen (Super Bowl capture) labels columns differently from the
+# franchise box score (mapped Oct 16 on all 9 postgame categories; no General). Renamed to the box
+# score's labels so the loader's maps apply. Keys are normalized labels (letters and digits only).
+POSTGAME_RENAME = {
+    "*": {"PLAYER": "NAME", "YDS": "YARDS"},
+    "passing": {"AVG": "YPA"},
+    "defense": {"ASSIST": "ASSISTS", "TOTAL": "TAK", "PDEF": "DEFL", "FF": "FFUMB", "FR": "FMBREC",
+                "FYDS": "FMBYDS", "BLOCKS": "BLOCK", "TDS": "TD"},
+    "kicking": {"LONG": "FG LNG", "BLOCKS": "FG BLK", "XPBLK": "XPB", "FGA50": "FGA50", "FGM50": "FGM50"},
+    "punting": {"IN20": "IN20", "BLOCKS": "BLOCK"},
+}
+# Box score columns the postgame screen doesn't have: written blank (the loader stores nothing for them).
+POSTGAME_MISSING = {"passing": ["SACKS"]}
+
+
+def postgame_columns(cat, cols, rows):
+    ren = {**POSTGAME_RENAME["*"], **POSTGAME_RENAME.get(cat, {})}
+    cols = [ren.get(re.sub(r"[^A-Z0-9]", "", c.upper()), c) for c in cols]
+    extra = [c for c in POSTGAME_MISSING.get(cat, []) if c not in cols]
+    return cols + extra, [list(r) + [""] * len(extra) for r in rows]
+
+
 def extract_games(root):
     """games/<NN>_<away>_at_<home>/: box_top/box_bottom -> box_score.csv (label, away, home);
     stats/*.png -> stats_<category>.csv. Week-level: game_scores.csv (one row a game) and
@@ -806,6 +828,8 @@ def extract_games(root):
             cat = key.split("_", 1)[1]
             if cat == "defensive":
                 cat = "defense"
+            if "PLAYER" in cols:                # the in-game postgame screen labels its columns differently
+                cols, trows = postgame_columns(cat, cols, trows)
             if cat == "general":
                 cols = ["DP" if c == "OVR" else c for c in cols]
             write_csv(os.path.join(d, f"stats_{cat}.csv"), cols, trows)

@@ -678,7 +678,9 @@ class RosterRecoveryTest(unittest.TestCase):
         # f_wrap: 0:18 reappears after having disappeared -> triggers wrap!
         f_wrap = MockFrame("/tmp/f3.png", [("0:18", (100, 300, 150, 330))])
 
-        looks = [f_still_on_screen, f_mid, f_wrap]
+        # after the wrap, Up steps back to the quarter's bottom page (top clock jumps past the wrapped page's)
+        f_bottom = MockFrame("/tmp/f4.png", [("9:00", (100, 300, 150, 330))])
+        looks = [f_still_on_screen, f_mid, f_wrap, f_wrap, f_bottom]
 
         with tempfile.TemporaryDirectory() as hdir, \
                 mock.patch.object(mc, "wait_for", side_effect=[(f_start, "HIGHLIGHTS"), (f_start, "HIGHLIGHTS"), (f_start, "POSTGAME_MENU")]), \
@@ -690,8 +692,8 @@ class RosterRecoveryTest(unittest.TestCase):
                 mock.patch.object(mc.subprocess, "run"), \
                 mock.patch.object(mc, "log"):
             pages = mc.capture_highlights(hdir)
-            # Should have captured 3 pages (f_start, f_still_on_screen, f_mid), and stopped when f_wrap wrapped
-            self.assertEqual(pages, 3)
+            # f_start, f_still_on_screen, f_mid, then f_wrap wrapped and the bottom page was added
+            self.assertEqual(pages, 4)
 
     def test_capture_highlights_quarter_transition(self):
         class MockFrame:
@@ -754,7 +756,8 @@ class RosterRecoveryTest(unittest.TestCase):
                 mock.patch.object(mc, "key_down"), \
                 mock.patch.object(mc, "key_up"), \
                 mock.patch.object(mc.time, "sleep"):
-            res = mc.traverse_game("left")
+            with mock.patch.object(mc, "game_scroll_thumb", return_value=None):
+                res = mc.traverse_game("left")
             self.assertIs(res, f_left)
 
     def test_traverse_game_right_edge(self):
@@ -771,8 +774,178 @@ class RosterRecoveryTest(unittest.TestCase):
                 mock.patch.object(mc, "key_down"), \
                 mock.patch.object(mc, "key_up"), \
                 mock.patch.object(mc.time, "sleep"):
-            res = mc.traverse_game("right")
+            with mock.patch.object(mc, "game_scroll_thumb", return_value=None):
+                res = mc.traverse_game("right")
             self.assertIs(res, f_right)
+
+    def _scrollbar_frame(self, x0, x1, items=()):
+        """A 3024x1888 frame with the game table's scrollbar thumb from x0 to x1 (fractions)."""
+        from PIL import Image, ImageDraw
+        path = os.path.join(tempfile.mkdtemp(), "f.png")
+        img = Image.new("L", (3024, 1888), 12)
+        d = ImageDraw.Draw(img)
+        d.rectangle((122, 1598, 2895, 1602), fill=21)                       # faint track
+        d.rectangle((int(x0 * 3024), 1598, int(x1 * 3024), 1602), fill=235)  # thumb
+        img.save(path)
+
+        class F:
+            pass
+        f = F()
+        f.path, f.items, f.size = path, list(items), (3024, 1888)
+        return f
+
+    def test_game_scroll_thumb(self):
+        thumb = mc.game_scroll_thumb(self._scrollbar_frame(0.2864, 0.9563))
+        self.assertAlmostEqual(thumb[0], 0.2864, places=2)
+        self.assertAlmostEqual(thumb[1], 0.9563, places=2)
+        self.assertIsNone(mc.game_scroll_thumb(self._scrollbar_frame(0.5, 0.5)))
+
+    def test_traverse_game_postgame_pinned_columns_use_scrollbar(self):
+        # Postgame DEFENSIVE (Oct 16): TEAM and PLAYER stay pinned, so the header alone looked like
+        # the left edge at once and never like the right edge. The scrollbar thumb decides.
+        hdr = [("TEAM", (100, 860, 200, 890)), ("PLAYER", (300, 860, 500, 890)), ("SFTY", (2600, 860, 2700, 890))]
+        mid = self._scrollbar_frame(0.2295, 0.8995, hdr)       # one column short of the right edge
+        right = self._scrollbar_frame(0.2864, 0.9563, hdr)
+        left = self._scrollbar_frame(0.0403, 0.7407, hdr)
+        for direction, seq, want in (("right", [mid, mid, right], right), ("left", [mid, right, left], left)):
+            frames = list(seq)
+            with mock.patch.object(mc, "Frame", side_effect=lambda: frames.pop(0)), \
+                    mock.patch.object(mc, "key_down") as kd, \
+                    mock.patch.object(mc, "key_up"), \
+                    mock.patch.object(mc.time, "sleep"):
+                self.assertIs(mc.traverse_game(direction), want)
+                self.assertEqual(kd.call_count, 2)
+
+    def test_highlight_clocks_retina_frame(self):
+        # 3024x1888 stream (Oct 16): rows run down to ~82% of the height; the old 1080p pixel box
+        # (t < 950) only saw the top five
+        class F:
+            size = (3024, 1888)
+            items = [("0:36", (157, 590, 230, 620)), ("3:11", (157, 1080, 230, 1110)), ("6:02", (157, 1580, 230, 1610)),
+                     ("TIME", (120, 520, 230, 550))]
+        self.assertEqual(mc.highlight_clocks(F()), [36, 191, 362])
+
+    def test_capture_highlights_retries_dropped_scroll(self):
+        class MockFrame:
+            def __init__(self, path, items):
+                self.path, self.items = path, items
+        f0 = MockFrame("/tmp/f0.png", [("0:18", (100, 300, 150, 330))])
+        f1 = MockFrame("/tmp/f1.png", [("7:30", (100, 300, 150, 330))])   # one clock: Down has nowhere to go
+        sigs = iter(["a", "a", "b", "b", "b", "b", "b"])     # 1st Down batch dropped, 2nd scrolls, then a one-play end
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(mc, "wait_for", side_effect=[(f0, "HIGHLIGHTS"), (f0, "HIGHLIGHTS"), (f0, "POSTGAME_MENU")]), \
+                mock.patch.object(mc, "active_highlight_quarter", return_value="1ST"), \
+                mock.patch.object(mc, "look", side_effect=lambda: (f1, "HIGHLIGHTS")), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda *a: next(sigs)), \
+                mock.patch.object(mc, "same_table", side_effect=lambda a, b: a == b), \
+                mock.patch.object(mc, "press"), \
+                mock.patch.object(mc.subprocess, "run"), \
+                mock.patch.object(mc, "log"):
+            hdir = os.path.join(tmp, "highlights")
+            self.assertEqual(mc.capture_highlights(hdir), 2)
+            self.assertTrue(os.path.exists(os.path.join(hdir, "DONE")))
+
+    def test_capture_highlights_aborts_when_quarter_wont_change(self):
+        class MockFrame:
+            def __init__(self, path, items):
+                self.path, self.items = path, items
+        f4 = MockFrame("/tmp/f4.png", [("0:18", (100, 300, 150, 330))])
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(mc, "wait_for", side_effect=lambda *a, **k: (f4, "HIGHLIGHTS")), \
+                mock.patch.object(mc, "active_highlight_quarter", return_value="4TH"), \
+                mock.patch.object(mc, "look", side_effect=lambda: (f4, "HIGHLIGHTS")), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda *a: "same"), \
+                mock.patch.object(mc, "same_table", return_value=True), \
+                mock.patch.object(mc, "press"), \
+                mock.patch.object(mc.time, "sleep"), \
+                mock.patch.object(mc.subprocess, "run"), \
+                mock.patch.object(mc, "log"):
+            hdir = os.path.join(tmp, "highlights")
+            with self.assertRaises(mc.Abort):
+                mc.capture_highlights(hdir)
+            self.assertFalse(os.path.exists(os.path.join(hdir, "DONE")))
+
+    def test_capture_highlights_aborts_when_stream_stops_scrolling(self):
+        class MockFrame:
+            def __init__(self, path, items):
+                self.path, self.items = path, items
+        f = MockFrame("/tmp/f0.png", [("0:18", (100, 300, 150, 330)), ("0:40", (100, 350, 150, 380))])
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(mc, "wait_for", side_effect=lambda *a, **k: (f, "HIGHLIGHTS")), \
+                mock.patch.object(mc, "active_highlight_quarter", return_value="2ND"), \
+                mock.patch.object(mc, "look", side_effect=lambda: (f, "HIGHLIGHTS")), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda *a: "same"), \
+                mock.patch.object(mc, "same_table", return_value=True), \
+                mock.patch.object(mc, "press") as press, \
+                mock.patch.object(mc.subprocess, "run"), \
+                mock.patch.object(mc, "log"):
+            with self.assertRaises(mc.Abort):
+                mc.capture_highlights(os.path.join(tmp, "highlights"))
+            self.assertEqual(press.call_count, mc.HIGHLIGHT_SCROLL_TRIES)
+
+    def test_capture_wide_list_confirm_end_first_page(self):
+        # confirm_end once compared page 0 with itself and ended Defense/Kicking after 0 pages (Oct 16)
+        # page 0: left (checked, kept), right; page 1: right (checked, kept), left; page 2: left repeats
+        # page 1's left, gets one more Down batch, still repeats -> the end after 2 pages
+        sigs = iter(["L0", "L0", "R0", "R1", "R1", "L1", "L1", "L1"])
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(mc, "wait_table_loaded"), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda *a: next(sigs)), \
+                mock.patch.object(mc, "same_table", side_effect=lambda a, b: a == b), \
+                mock.patch.object(mc, "press"), \
+                mock.patch.object(mc.subprocess, "run", side_effect=lambda a: open(a[2], "w").close()), \
+                mock.patch.object(mc, "log"):
+            trav = mock.MagicMock(return_value=mock.MagicMock(path="/tmp/x.png"))
+            pages = mc.capture_wide_list(folder, "05_defense", rows_per_page=6, traverse=trav, end_on_left=True,
+                                         confirm_end=True)
+            self.assertEqual(pages, 2)
+
+    def test_capture_highlights_stops_when_top_clock_drops(self):
+        class MockFrame:
+            def __init__(self, path, items):
+                self.path, self.items = path, items
+        row = lambda c, y: (c, (100, y, 150, y + 30))
+        f0 = MockFrame("/tmp/f0.png", [row("0:03", 300), row("0:22", 350)])
+        f1 = MockFrame("/tmp/f1.png", [row("7:23", 300), row("11:00", 350)])
+        f_wrap = MockFrame("/tmp/f2.png", [row("0:22", 300), row("0:27", 350)])   # 0:03 not on top after the wrap
+        f_bottom = MockFrame("/tmp/f3.png", [row("10:30", 300), row("11:00", 350)])
+        looks = [f1, f_wrap, f_bottom]
+        sigs = iter(range(100))
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(mc, "wait_for", side_effect=[(f0, "HIGHLIGHTS"), (f0, "HIGHLIGHTS"), (f0, "POSTGAME_MENU")]), \
+                mock.patch.object(mc, "active_highlight_quarter", return_value="1ST"), \
+                mock.patch.object(mc, "look", side_effect=lambda: (looks.pop(0), "HIGHLIGHTS")), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda *a: next(sigs)), \
+                mock.patch.object(mc, "same_table", side_effect=lambda a, b: a == b), \
+                mock.patch.object(mc, "press"), \
+                mock.patch.object(mc.subprocess, "run"), \
+                mock.patch.object(mc, "log"):
+            self.assertEqual(mc.capture_highlights(os.path.join(tmp, "highlights")), 3)   # 2 pages + the bottom
+
+    def test_clear_postgame_keeps_finished_parts(self):
+        with tempfile.TemporaryDirectory() as out:
+            g = os.path.join(out, "games", "01_super_bowl")
+            os.makedirs(os.path.join(g, "stats"))
+            os.makedirs(os.path.join(g, "highlights"))
+            for p in ("box_top.png", "stats/01_passing_000.png", "highlights/q4th_000.png", "highlights/DONE"):
+                open(os.path.join(g, p), "w").close()
+            mc.clear_postgame(out)
+            self.assertFalse(os.path.exists(os.path.join(g, "stats")))
+            self.assertFalse(os.path.exists(os.path.join(g, "box_top.png")))
+            self.assertTrue(os.path.exists(os.path.join(g, "highlights", "q4th_000.png")))
+
+    def test_capture_list_confirm_end_retries_dropped_presses(self):
+        sigs = iter(["p0", "p0", "p1", "p1", "p1"])    # page 1 repeats once (dropped Downs), then moves; then the end
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(mc, "wait_table_loaded"), \
+                mock.patch.object(mc, "snap", side_effect=lambda p: open(p, "w").close()), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda *a: next(sigs)), \
+                mock.patch.object(mc, "same_table", side_effect=lambda a, b: a == b), \
+                mock.patch.object(mc, "press") as press, \
+                mock.patch.object(mc, "log"):
+            pages = mc.capture_list(folder, "05_x", rows_per_page=6, stop_at_zeros=False, confirm_end=True)
+            self.assertEqual(pages, 2)
+            self.assertEqual(press.call_count, 4)
 
 
 if __name__ == "__main__":

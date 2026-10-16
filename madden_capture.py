@@ -1053,16 +1053,25 @@ def table_text(path, top=0.48, bottom=0.90):
 
 
 def capture_list(folder, prefix, rows_per_page=10, max_pages=250, stop_at_zeros=True, direction="down",
-                 text_end=False, zero_min=20):
+                 text_end=False, zero_min=20, confirm_end=False):
+    """confirm_end: a page that repeats the last one gets one more batch of presses before it
+    counts as the end (Madden lists don't wrap; after a stream restart, Oct 16, a whole batch
+    of Down presses was dropped and a game's Defense stopped after 2 of 7 pages)."""
     os.makedirs(folder, exist_ok=True)
     wait_table_loaded()
     prev, prev_text = None, None
     for page in range(max_pages):
         path = os.path.join(folder, f"{prefix}_{page:03d}.png")
-        snap(path)
-        sig = table_sig(path)
-        text = table_text(path) if text_end else None
-        if prev is not None and (same_table(prev, sig) or (text_end and text and text == prev_text)):
+        for attempt in range(2 if confirm_end else 1):
+            if attempt:
+                press(direction, hold=0.07, wait=LIST_WAIT, times=rows_per_page)
+            snap(path)
+            sig = table_sig(path)
+            text = table_text(path) if text_end else None
+            repeat = prev is not None and (same_table(prev, sig) or (text_end and text and text == prev_text))
+            if not repeat:
+                break
+        if repeat:
             os.remove(path)
             log(f"  {prefix}: end of list after {page} pages")
             return page
@@ -1108,7 +1117,7 @@ def traverse(direction, burst=6, max_rounds=12):
 
 
 def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=traverse, text_end=False,
-                      end_on_left=False, stop_at_zeros=False):
+                      end_on_left=False, stop_at_zeros=False, confirm_end=False):
     """Wide tables: NAME/POS are NOT pinned when the table scrolls right, so every page is
     captured at both edges at the same row position. Row N of {base}_NNN.png is row N of
     {base}_right_NNN.png. Zig-zags (left, right, down, right, left, down...) so each page
@@ -1124,17 +1133,23 @@ def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=tr
     def path(s, page):
         return os.path.join(folder, f"{base}_{page:03d}.png" if s == "left" else f"{base}_right_{page:03d}.png")
 
-    def repeats(s, file):
+    def repeats(s, file, keep=True):
         sig = table_sig(file)
         text = table_text(file) if text_end else None
         same = prev[s] is not None and (same_table(prev[s], sig) or (text_end and text and text == prev_text[s]))
-        prev[s], prev_text[s] = sig, text
+        if keep:
+            prev[s], prev_text[s] = sig, text
         return same and (s == "left" or not end_on_left)
 
     for page in range(max_pages):
         first = path(side, page)
         f = traverse(side)                      # confirm we're still at this side's edge
         subprocess.run(["cp", f.path, first])
+        if confirm_end and repeats(side, first, keep=False):
+            # the list doesn't wrap: a repeat may be dropped Down presses (see capture_list)
+            press("down", hold=0.07, wait=LIST_WAIT, times=rows_per_page)
+            f = traverse(side)
+            subprocess.run(["cp", f.path, first])
         if repeats(side, first):
             os.remove(first)
             log(f"  {base}: end of list after {page} pages")
@@ -1556,14 +1571,39 @@ def game_header(f):
     return [t for t, b in sorted(f.items, key=lambda i: i[1][0]) if H * 0.44 < b[1] < H * 0.48]
 
 
-def traverse_game(direction, chunk=1.5, max_chunks=8):
+GAME_SCROLL_Y = (0.835, 0.86)          # horizontal scrollbar under the game stats table
+GAME_SCROLL_ENDS = (0.046, 0.950)      # thumb at the track's ends (measured Oct 16: 0.040 / 0.956)
+
+
+def game_scroll_thumb(f):
+    """The game stats table's horizontal scrollbar thumb as (left, right) fractions of the width,
+    or None when there's no scrollbar. Same geometry on the franchise box score and the postgame
+    screen (Oct 16): bright thumb (~235) on a faint track (~21) at ~84.6% of the height."""
+    import numpy as np
+    a = np.asarray(Image.open(f.path).convert("L"))
+    H, W = a.shape
+    best = None
+    for y in range(int(H * GAME_SCROLL_Y[0]), int(H * GAME_SCROLL_Y[1])):
+        xs = np.where(a[y] > 150)[0]
+        if len(xs) > 0.15 * W and xs[-1] - xs[0] < 1.05 * len(xs) and (best is None or len(xs) > best[0]):
+            best = (len(xs), xs[0] / W, xs[-1] / W)
+    return best and best[1:]
+
+
+def traverse_game(direction, chunk=1.5, max_chunks=20):
     """Left/Right across a game's player-stats table by holding the key (Madden auto-repeats:
-    ~4 s of held Right crosses Defense, vs ~20 s of single presses). Right first moves a column
-    highlight before the table scrolls, so a stable header isn't enough: at the right edge
-    TEAM/NAME/PLAYER have scrolled away, at the left edge NAME or PLAYER shows."""
+    ~4 s of held Right crosses Defense, vs ~20 s of single presses; the postgame screen repeats
+    slower, ~1.3 columns a second, Oct 16). Right first moves a column highlight before the table
+    scrolls, so a stable header isn't enough. The edge is read from the scrollbar thumb touching
+    the end of its track. Without a scrollbar, by the header: at the right edge TEAM/NAME have
+    scrolled away, at the left edge NAME shows. (The postgame table pins TEAM and PLAYER, so
+    the header can't tell its edges apart.)"""
     prev = None
 
-    def at(h):
+    def at(h, f):
+        thumb = game_scroll_thumb(f)
+        if thumb:
+            return thumb[0] <= GAME_SCROLL_ENDS[0] if direction == "left" else thumb[1] >= GAME_SCROLL_ENDS[1]
         if direction == "left":
             return any(x in h for x in ("NAME", "PLAYER"))
         return "NAME" not in h and "PLAYER" not in h and "TEAM" not in h
@@ -1574,10 +1614,15 @@ def traverse_game(direction, chunk=1.5, max_chunks=8):
         n = [re.sub(r"^[YV*4]", "", norm(x)) for x in h]
         return tuple(n[-2:] if direction == "right" else n[:2])
 
+    def done(f, h):
+        if game_scroll_thumb(f):                 # the thumb is exact: no need to wait for a stable header
+            return at(h, f)
+        return bool(h) and prev is not None and key(h) == key(prev) and at(h, f)
+
     for _ in range(max_chunks):
         f = Frame()
         h = game_header(f)
-        if h and prev is not None and key(h) == key(prev) and at(h):
+        if done(f, h):
             return f
         prev = h
         key_down(direction)
@@ -1585,8 +1630,7 @@ def traverse_game(direction, chunk=1.5, max_chunks=8):
         key_up(direction)
         time.sleep(0.5)
     f = Frame()
-    h = game_header(f)
-    if prev and key(h) == key(prev) and at(h):
+    if done(f, game_header(f)):
         return f
     path = save_debug(f, f"game_never_reached_{direction}_edge")
     raise Abort(f"Never reached the {direction} edge of the game stats table (frame: {path})")
@@ -1608,23 +1652,27 @@ def capture_game_category(folder, base, cat, all_rows):
         os.remove(old_p)
     if norm(cat) in GAME_WIDE_CATEGORIES:
         capture_wide_list(folder, base, rows_per_page=GAME_PAGE_STEP, traverse=traverse_game, text_end=True,
-                          end_on_left=True, stop_at_zeros=not all_rows)
+                          end_on_left=True, stop_at_zeros=not all_rows, confirm_end=True)
     else:
         capture_list(folder, base, rows_per_page=GAME_PAGE_STEP, stop_at_zeros=not all_rows, text_end=True,
-                     zero_min=6)
+                     zero_min=6, confirm_end=True)
 
 
 def box_score_bottom():
-    """Step the box score's highlight down until Time of Possession is highlighted."""
-    for _ in range(25):
+    """Step the box score's highlight down until Time of Possession is highlighted. The postgame
+    TEAM STATS table is longer than the franchise box score (Oct 16: the 25th Down reached
+    POSSESSION TIME), so allow 40 and check the frame after the last press too."""
+    for i in range(41):
         f = Frame()
         W, H = f.size
         lab = max(((brightness(f.path, b, pad=0), t) for t, b in f.items
                    if 0.4 * W < b[0] < 0.6 * W and b[1] > 0.3 * H and len(t) > 4), default=(0, None))[1]
         if lab and norm(lab) in (norm(r) for r in BOX_LAST_ROWS):
             return f
-        press("down", hold=0.12, wait=0.5)
-    raise Abort("Couldn't reach the bottom of the box score")
+        if i < 40:
+            press("down", hold=0.12, wait=0.5)
+    path = save_debug(f, "box_score_no_bottom")
+    raise Abort(f"Couldn't reach the bottom of the box score (frame: {path})")
 
 
 def capture_game(gdir, all_rows):
@@ -1759,41 +1807,64 @@ def active_highlight_quarter(path):
         return "OT"
 
 
-def highlight_top_clock(f):
-    """The top clock displayed in the highlights table, returned as clock seconds (mm * 60 + ss)
-    or None. Highlights list the latest plays (closest to 0:00) at the top; scrolling down moves
-    backwards in time towards the start of the quarter (11:00/15:00), so clock seconds strictly increase.
-    When the list wraps around back to the top of the quarter, the top clock drops back down."""
-    clocks = []
+HIGHLIGHT_CLOCK_BOX = (0.036, 0.24, 0.115, 0.88)   # TIME column of the highlights table (left/top fractions)
+HIGHLIGHT_SCROLL_TRIES = 3   # the highlights list wraps (stats tables don't), so Down always changes it:
+                             # a page that didn't move is a dropped input (Oct 16, after a stream restart)
+
+
+def highlight_clocks(f):
+    """Clocks in the highlights table's TIME column, top to bottom, as seconds (mm * 60 + ss).
+    Fractions of the frame, so it works at 1080p and at the 3024x1888 Retina stream (the old
+    1080p pixel box only saw the top five rows there)."""
+    W, H = getattr(f, "size", (1920, 1080))
+    x0, y0, x1, y1 = HIGHLIGHT_CLOCK_BOX
+    out = []
     for w, (l, t, r, b) in getattr(f, "items", []):
-        if ":" in w and 70 < l < 220 and 260 < t < 950:
+        if ":" in w and x0 * W < l < x1 * W and y0 * H < t < y1 * H:
             parts = w.split(":")
             if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                clocks.append((t, int(parts[0]) * 60 + int(parts[1])))
-    if not clocks:
-        return None
-    clocks.sort(key=lambda x: x[0])
-    return clocks[0][1]
+                out.append((t, int(parts[0]) * 60 + int(parts[1])))
+    return [c for _, c in sorted(out)]
+
+
+def highlight_top_clock(f):
+    """The top clock in the highlights table (seconds) or None. Highlights list the latest plays
+    (closest to 0:00) first; scrolling down goes back toward the start of the quarter, so clock
+    seconds increase. The list wraps: past the last play it returns to the top, and the top clock
+    drops back down."""
+    c = highlight_clocks(f)
+    return c[0] if c else None
 
 
 def highlight_visible_clocks(f):
-    """Set of all clock seconds (mm * 60 + ss) currently visible in the highlights table."""
-    clocks = set()
-    for w, (l, t, r, b) in getattr(f, "items", []):
-        if ":" in w and 70 < l < 220 and 260 < t < 950:
-            parts = w.split(":")
-            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                clocks.add(int(parts[0]) * 60 + int(parts[1]))
-    return clocks
+    """Set of all clock seconds currently visible in the highlights table."""
+    return set(highlight_clocks(f))
+
+
+def highlight_bottom_page(f, top):
+    """After a Down batch wrapped past the last play, the bottom page was never on screen (Oct 16:
+    3RD's last play, 11:00, was missed). Up from the top row wraps to the last row, so step Up one
+    row at a time until the top clock jumps past the wrapped page's. Returns that frame or None."""
+    for _ in range(16):
+        press("up", hold=0.12, wait=0.6)
+        f, _ = look()
+        t = highlight_top_clock(f)
+        if t is not None and top is not None and t > top:
+            return f
+    log("    couldn't step back to the bottom of the quarter")
+    return None
 
 
 def capture_highlights(hdir):
     """Capture game highlights across quarters (starts at 4TH/OT, scrolls down each quarter,
-    presses Left to step through 3RD, 2ND, 1ST). Handles circular list wrap (scrolling down past
-    the start of the quarter wraps back to the top). Ensures the initial top play's clock seconds
-    have scrolled off screen before checking if they reappear. Saves screenshots as
-    highlights/q<quarter>_NNN.png. Returns total pages captured."""
-    os.makedirs(hdir, exist_ok=True)
+    presses Left to step through 3RD, 2ND, 1ST). Saves screenshots as highlights/q<quarter>_NNN.png
+    and highlights/DONE once every quarter is in. Down moves the row highlight first, then scrolls.
+    The list wraps, so a quarter ends when the first page's top play, once scrolled off, comes back
+    (or the top clock drops). A table that didn't move is retried (dropped presses after a stream
+    restart, Oct 16) and only then taken as the end. Stops (Abort) when Left won't change the
+    quarter instead of keeping a partial set. Returns total pages captured."""
+    shutil.rmtree(hdir, ignore_errors=True)
+    os.makedirs(hdir)
     f, s = wait_for(["HIGHLIGHTS"], timeout=10)
     q = active_highlight_quarter(f.path) or "4TH"
     log(f"  Starting highlights capture on quarter {q}")
@@ -1810,36 +1881,49 @@ def capture_highlights(hdir):
 
         while True:
             png_name = f"q{q.lower()}_{page:03d}.png"
-            png_path = os.path.join(hdir, png_name)
-            subprocess.run(["cp", f.path, png_path])
+            subprocess.run(["cp", f.path, os.path.join(hdir, png_name)])
             log(f"    saved {png_name}")
             total_pages += 1
             page += 1
+            if page >= 30:
+                raise Abort(f"Highlights quarter {q} never stopped scrolling after {page} pages")
             sig_cur = table_sig(f.path, 0.28, 0.92)
-
-            if page >= 8:
-                log(f"    max pages reached for quarter {q}")
+            for attempt in range(HIGHLIGHT_SCROLL_TRIES):
+                press("down", times=8, hold=0.12, wait=0.8)   # a page holds 12-13 rows
+                f_next, _ = look()
+                moved = not same_table(sig_cur, table_sig(f_next.path, 0.28, 0.92))
+                if moved:
+                    break
+            if not moved:
+                # the list wraps, so only a one-play quarter (Down has nowhere to go) stays put;
+                # otherwise the stream stopped taking input (Oct 16): stop rather than keep a partial quarter
+                if len(highlight_clocks(f)) > 1:
+                    raise Abort(f"Highlights quarter {q} stopped scrolling after {page} pages")
+                log(f"    end of quarter {q} reached (one play)")
                 break
-
-            # Scroll down by pressing Down ~8 times (page holds 11-12 rows)
-            press("down", times=8, hold=0.1, wait=0.8)
-            f_next, _ = look()
-            sig_next = table_sig(f_next.path, 0.28, 0.92)
-            next_top = highlight_top_clock(f_next)
-            vis_next = highlight_visible_clocks(f_next)
-
-            if same_table(sig_cur, sig_next):
-                log(f"    end of quarter {q} reached (table stopped moving)")
+            # wrap: the top clock only grows while scrolling down a quarter, so a drop means the
+            # list came round (Oct 16: 3RD went 443 -> 22, its first play's 3 s row not on top)
+            vis_next, next_top, cur_top = highlight_visible_clocks(f_next), highlight_top_clock(f_next), highlight_top_clock(f)
+            if cur_top is not None and next_top is not None and next_top < cur_top:
+                log(f"    end of quarter {q} reached (list wrapped: top clock {cur_top}s -> {next_top}s)")
+                f = highlight_bottom_page(f_next, next_top)
+                if f is not None:
+                    subprocess.run(["cp", f.path, os.path.join(hdir, f"q{q.lower()}_{page:03d}.png")])
+                    log(f"    saved q{q.lower()}_{page:03d}.png (bottom of the quarter)")
+                    total_pages += 1
                 break
-
-            # Make sure the initial top play's clock seconds have disappeared before seeing if they reappeared
+            # ... and the first page's top play must scroll off before its return counts
             if init_clock is not None:
                 if init_clock not in vis_next:
                     top_disappeared = True
                 if top_disappeared and (init_clock in vis_next or (next_top is not None and next_top <= init_clock)):
                     log(f"    end of quarter {q} reached (top play {init_clock}s reappeared after scrolling off)")
+                    f = highlight_bottom_page(f_next, next_top)
+                    if f is not None:
+                        subprocess.run(["cp", f.path, os.path.join(hdir, f"q{q.lower()}_{page:03d}.png")])
+                        log(f"    saved q{q.lower()}_{page:03d}.png (bottom of the quarter)")
+                        total_pages += 1
                     break
-
             f = f_next
 
         captured_quarters.add(q)
@@ -1847,7 +1931,6 @@ def capture_highlights(hdir):
             log("  1ST quarter finished; all quarters captured")
             break
 
-        # Move to previous quarter with Left (retry up to 3 times to ensure quarter tab switched)
         log("  Switching to previous quarter (pressing left)")
         new_q = None
         for attempt in range(3):
@@ -1857,12 +1940,11 @@ def capture_highlights(hdir):
             if new_q and new_q != q:
                 break
             time.sleep(0.5)
+        if not new_q or new_q == q or new_q in captured_quarters:
+            raise Abort(f"Left didn't move the highlights from quarter {q} to an earlier one (reads {new_q})")
+        q = new_q
 
-        if new_q and new_q in captured_quarters:
-            log(f"  Quarter {new_q} already captured; finished all quarters")
-            break
-        q = new_q or q
-
+    open(os.path.join(hdir, "DONE"), "w").close()
     # Return to POSTGAME_MENU with Back (Circle)
     log("  Leaving highlights: pressing circle")
     for attempt in range(3):
@@ -1879,7 +1961,14 @@ def run_postgame(out, all_rows=False):
     or PLAYER STATS (GAME_STATS). Captures box_top/box_bottom, player stats,
     and highlights into games/01_super_bowl/."""
     log("== Super Bowl Postgame Capture ==")
-    f, s = wait_for(["POSTGAME_MENU", "BOX_SCORE", "GAME_STATS"], timeout=15)
+    f, s = wait_for(["POSTGAME_MENU", "BOX_SCORE", "GAME_STATS", "HIGHLIGHTS"], timeout=15)
+    if s == "HIGHLIGHTS":                  # a stream restart mid-highlights lands here (Oct 16)
+        log("On Highlights: back to the Postgame Menu")
+        for _ in range(3):
+            press("circle", wait=2.0)
+            f, s = wait_for(["POSTGAME_MENU", "HIGHLIGHTS"], timeout=10)
+            if s == "POSTGAME_MENU":
+                break
     gdir = os.path.join(out, "games", "01_super_bowl")
     hdir = os.path.join(gdir, "highlights")
 
@@ -1896,6 +1985,14 @@ def run_postgame(out, all_rows=False):
         log("On Player Stats: switching to TEAM STATS with L1")
         press("l1", wait=2.0)
         f, s = wait_for(["BOX_SCORE"], timeout=10)
+    elif s == "BOX_SCORE":
+        # a resume can land on Team Stats scrolled down (left there by box_score_bottom); Up doesn't
+        # wrap at the top (Oct 16), so hold it back to the first row before box_top is taken
+        log("On Team Stats: back to the top row")
+        key_down("up")
+        time.sleep(6)
+        key_up("up")
+        time.sleep(0.8)
 
     if os.path.exists(os.path.join(gdir, "DONE")):
         log("  already captured (redo after a stream restart)")
@@ -1905,22 +2002,35 @@ def run_postgame(out, all_rows=False):
             fh.write(",".join(cats) + "\n")
         log(f"  {len(cats)} categories")
 
-    # If highlights weren't captured yet (e.g. started on BOX_SCORE or GAME_STATS)
-    if not glob.glob(os.path.join(hdir, "*.png")):
+    # If highlights weren't all captured yet (e.g. started on BOX_SCORE or GAME_STATS)
+    if not os.path.exists(os.path.join(hdir, "DONE")):
         log("Capturing highlights: returning to POSTGAME_MENU with circle")
         for _ in range(3):
             press("circle", wait=2.0)
             f, s = wait_for(["POSTGAME_MENU", "BOX_SCORE", "GAME_STATS"], timeout=10)
             if s == "POSTGAME_MENU":
                 break
-        if s == "POSTGAME_MENU":
-            f = move_to(f, POSTGAME_MENU_ITEMS, "VIEW HIGHLIGHTS", "up", "down", "postgame menu item")
-            f, s = cross_into("POSTGAME_MENU", ["HIGHLIGHTS"], timeout=10)
-            capture_highlights(hdir)
+        if s != "POSTGAME_MENU":
+            raise Abort(f"Back didn't return to the Postgame Menu for the highlights (on {s})")
+        f = move_to(f, POSTGAME_MENU_ITEMS, "VIEW HIGHLIGHTS", "up", "down", "postgame menu item")
+        f, s = cross_into("POSTGAME_MENU", ["HIGHLIGHTS"], timeout=10)
+        capture_highlights(hdir)
 
     # Record week label so load_capture knows it is the Super Bowl (week 23)
     with open(os.path.join(out, "week.json"), "w") as fh:
         json.dump({"current": SUPER_BOWL, "captured": SUPER_BOWL}, fh)
+
+
+def clear_postgame(out):
+    """Before redoing the postgame capture after a stream restart: drop only the unfinished parts
+    (stats without games/01_super_bowl/DONE, highlights without highlights/DONE)."""
+    gdir = os.path.join(out, "games", "01_super_bowl")
+    if not os.path.exists(os.path.join(gdir, "DONE")):
+        for p in glob.glob(os.path.join(gdir, "box_*")):
+            os.remove(p)
+        shutil.rmtree(os.path.join(gdir, "stats"), ignore_errors=True)
+    if not os.path.exists(os.path.join(gdir, "highlights", "DONE")):
+        shutil.rmtree(os.path.join(gdir, "highlights"), ignore_errors=True)
 
 
 def run_season_schedule(out, weeks=18):
@@ -3017,7 +3127,7 @@ def main():
         if a.only == "games":
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
         if a.only in ("postgame", "superbowl"):
-            run_mode("the Super Bowl postgame stats", lambda: run_postgame(out, a.all_rows), clear("games"))
+            run_mode("the Super Bowl postgame stats", lambda: run_postgame(out, a.all_rows), lambda: clear_postgame(out))
         if a.only in ("season", "prospects"):
             n_prospects = 0 if a.all_prospects else a.prospects
             run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
