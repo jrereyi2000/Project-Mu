@@ -114,6 +114,27 @@ class ClassifyTest(unittest.TestCase):
                    "ADJUST LINEUP", "ROSTER", "DEPTH CHART")
         self.assertEqual(mc.classify(f), "HUB_ROSTER")
 
+    def test_sched_tiles_regular(self):
+        f = _Frame("TEAM SCHEDULE", "LEAGUE SCHEDULE", "PLAYOFF PICTURE")
+        self.assertEqual(mc.classify(f), "SCHED_TILES")
+
+    def test_sched_tiles_playoff(self):
+        f = _Frame("PLAYOFF SCHEDULE", "TEAM SCHEDULE", "PLAYOFF PICTURE")
+        self.assertEqual(mc.classify(f), "SCHED_TILES")
+
+    def test_sched_tiles_stop_debug_frame(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "captures", "2026-10-15_2009", "stop_debug",
+                            "202855_expected_SCHED_TILES_got_UNKNOWN.png")
+        if os.path.exists(path):
+            class StopFrame:
+                def __init__(self, p):
+                    self.path = p
+                    self.items = mc.ocr(p)
+                    self.text = " | ".join(t for t, _ in self.items)
+                find = mc.Frame.find
+            f = StopFrame(path)
+            self.assertEqual(mc.classify(f), "SCHED_TILES")
+
 
 class DraftRouteTest(unittest.TestCase):
     """Manage Roster > Scouting > Prospects > L3 > Edit Draft Class > Draft Board (mapped Oct 15)."""

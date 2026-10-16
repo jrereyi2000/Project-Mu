@@ -454,6 +454,7 @@ WEEK_RE = re.compile(r"(PRESEASON WEEK ?[0-9TILO]{1,2}\b|SEASON WEEK ?[0-9TILO]{
 HUB_TABS = ["GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "OPTIONS"]
 LEAGUE_MENU = ["NFL STANDINGS", "SCHEDULE", "STATS & AWARDS", "LEAGUE TRANSACTIONS", "LEAGUE HISTORY", "RELOCATE OR REBUILD"]
 SCHED_TILES = ["TEAM SCHEDULE", "LEAGUE SCHEDULE", "PLAYOFF PICTURE"]
+PLAYOFF_SCHED_TILES = ["PLAYOFF SCHEDULE", "TEAM SCHEDULE", "PLAYOFF PICTURE"]
 # Manage Roster tab's left-hand menu (mapped Oct 13; TRADE can show a lock icon)
 ROSTER_MENU = ["UPGRADE PLAYERS", "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH CHART", "TEAM SALARY",
                "INJURY REPORT", "TRADE", "FREE AGENCY", "SCOUTING", "FORMATION SUBS", "AUTO SUBS", "TEAM SCHEMES"]
@@ -513,7 +514,7 @@ def classify(f):
         return "BOX_SCORE"                     # top or scrolled to the bottom
     if "PLAYER STATS" in t and "LEGACY LEADERBOARD" in t:
         return "STATS_TILES"
-    if "LEAGUE SCHEDULE" in t and "PLAYOFF PICTURE" in t:
+    if ("LEAGUE SCHEDULE" in t or "PLAYOFF SCHEDULE" in t) and ("PLAYOFF PICTURE" in t or "TEAM SCHEDULE" in t):
         return "SCHED_TILES"
     if f.find("GAMEDAY") and (f.find("COACH CENTRAL") or "COACH CENTRAL" in t or f.find("OPTIONS") or f.find("MANAGE ROSTER")):
         if f.find("STATS & AWARDS"):
@@ -739,7 +740,13 @@ def open_league_schedule():
     f = to_league_tab()
     f = move_to(f, LEAGUE_MENU, "SCHEDULE", "up", "down", "League menu item")
     f, _ = cross_into("HUB_LEAGUE", ["SCHED_TILES"])
-    move_to(f, SCHED_TILES, "LEAGUE SCHEDULE", "left", "right", "schedule tile")
+    is_playoff = ("PLAYOFF SCHEDULE" in f.text) or (f.find("PLAYOFF SCHEDULE") is not None)
+    target = "PLAYOFF SCHEDULE" if is_playoff else "LEAGUE SCHEDULE"
+    tiles = PLAYOFF_SCHED_TILES if is_playoff else SCHED_TILES
+    boxes = {lab: f.find(lab) for lab in tiles}
+    if all(boxes.values()):
+        tiles = sorted(tiles, key=lambda lab: boxes[lab][0])
+    move_to(f, tiles, target, "left", "right", "schedule tile")
     f = cross_into("SCHED_TILES", ["SCHED_LIST"], timeout=10)[0]
     CURRENT_WEEK = week_label(f)
     return f
