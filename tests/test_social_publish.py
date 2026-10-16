@@ -6,10 +6,12 @@ import ast
 import datetime as dt
 import os
 import unittest
+from unittest.mock import MagicMock
 
 from newsroom.social_desk import PUNDIT_EXCLUDED, plan_replies, plan_social_week, plan_team_wakeup
-from newsroom.social_publish import (GAME_LENGTH, compute_trends, engagement, followers_for, kickoff, load_config,
-                                     post_time, publishable, subject_heat, week_thursday)
+from newsroom.social_publish import (GAME_LENGTH, compute_trends, engagement, find_duplicate_content_tweet,
+                                     followers_for, kickoff, load_config, normalize_tweet_text, post_time,
+                                     publishable, save_post, subject_heat, week_thursday, _publish)
 from tests.test_social_desk import dominate, league
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -189,6 +191,56 @@ class ReplyAndWakeupTests(unittest.TestCase):
         excluded = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
                         and any(getattr(t, "id", None) == "TWEET_EXCLUDED_ARCHETYPES" for t in n.targets))
         self.assertTrue(set(excluded) <= PUNDIT_EXCLUDED)
+
+
+class DeduplicationTests(unittest.TestCase):
+    def test_normalize_tweet_text(self):
+        self.assertEqual(normalize_tweet_text("  Hello  World!  "), "hello world")
+        self.assertEqual(normalize_tweet_text("TOUCHDOWN PANTHERS!!!"), "touchdown panthers")
+        self.assertEqual(normalize_tweet_text("Line 1\nLine 2..."), "line 1 line 2")
+        self.assertEqual(normalize_tweet_text(""), "")
+
+    def test_find_duplicate_content_tweet(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = [
+            (101, "Great game by Carolina today!"),
+            (102, "Another take.")
+        ]
+        # Exact match
+        self.assertEqual(find_duplicate_content_tweet(cur, 2035, 19, "agent_1", "Great game by Carolina today!"), 101)
+        # Normalized match (different case / punctuation / spacing)
+        self.assertEqual(find_duplicate_content_tweet(cur, 2035, 19, "agent_1", "  great GAME by Carolina today!!!  "), 101)
+        # Non-matching
+        self.assertIsNone(find_duplicate_content_tweet(cur, 2035, 19, "agent_1", "Totally different content."))
+
+    def test_save_post_skips_duplicate_content(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = [(101, "Existing text")]
+        ctx = {"season": 2035, "week": 19, "recap_games": [], "preview_games": []}
+        a = {"agent_id": "test_agent", "kind": "BEAT", "subject": {"type": "team", "id": 1, "label": "Panthers"}, "archetype": "LOCAL_BEAT_REPORTER"}
+        post = {"text": "Existing text."}
+        eng = {"likes": 10, "reposts": 2, "reply_count": 0, "views": 100}
+
+        post_id = save_post(cur, ctx, a, post, dt.datetime.now(), eng, "Agent Wire")
+        self.assertIsNone(post_id)
+        # Ensure no INSERT was executed
+        for call in cur.execute.call_args_list:
+            self.assertNotIn("INSERT INTO news_feed", call[0][0])
+
+    def test_publish_skips_already_published_assignments(self):
+        cur = MagicMock()
+        cur.fetchone.return_value = (999, "Already published text", 500, dt.datetime(2035, 9, 10), "agent_1")
+        ctx = {"season": 2035, "week": 19, "recap_games": [], "preview_games": []}
+        a = {"agent_id": "agent_1", "kind": "BEAT", "subject": {"type": "team", "id": 1, "label": "Panthers"}, "archetype": "LOCAL_BEAT_REPORTER", "handle": "@agent_1"}
+        writer = MagicMock()
+        writer.accounts = {"agent_1": {"handle": "@agent_1", "display_name": "Agent 1"}}
+
+        saved, failed = _publish(conn=MagicMock(), cur=cur, ctx=ctx, assignments=[a], writer=writer,
+                                 followers={"agent_1": 1000}, cfg=CFG, slot="Agent Wire", tagger=None, log=lambda *args: None)
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["id"], 999)
+        self.assertEqual(failed, 0)
+        writer.write.assert_not_called()
 
 
 if __name__ == "__main__":

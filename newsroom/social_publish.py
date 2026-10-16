@@ -321,8 +321,72 @@ def ensure_followers(cur, ctx: dict, cfg: dict) -> dict:
     return out
 
 
-def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=None) -> int:
-    """Insert one post into news_feed, tag its teams and players, and record it as the author's take."""
+def normalize_tweet_text(text: str) -> str:
+    """Normalize tweet text for duplicate matching: lowercase, collapsed whitespace, trimmed punctuation."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"\s+", " ", text.strip().lower())
+    cleaned = cleaned.strip(".!?,;:\"'")
+    return cleaned
+
+
+def find_duplicate_content_tweet(cur, season: int, week: int, agent_id: str, content: str) -> int | None:
+    """Returns the id of an existing tweet if the author already posted identical or normalized-matching content
+    in the same season and week."""
+    if not agent_id or not content:
+        return None
+    cur.execute("""
+        SELECT id, content FROM news_feed
+        WHERE season = %s AND week = %s AND agent_id = %s AND content_type = 'TWEET'
+    """, (season, week, agent_id))
+    target_norm = normalize_tweet_text(content)
+    for existing_id, existing_content in cur.fetchall():
+        if normalize_tweet_text(existing_content) == target_norm:
+            return existing_id
+    return None
+
+
+def find_existing_tweet_for_assignment(cur, ctx: dict, a: dict, slot: str, parent_id: int = None) -> dict | None:
+    """Find an existing tweet in news_feed that matches this planned assignment."""
+    if not a.get("agent_id") or not a.get("kind"):
+        return None
+    subj = a.get("subject") or {}
+    game = _find_game(ctx, a)
+    game_id = game["id"] if game else (a.get("parent_game_id") if a.get("kind") == "REPLY" else None)
+    art_id = subj.get("id") if a.get("kind") == "SHARE" else None
+    player_id = subj.get("id") if subj.get("type") == "player" else None
+    rep_id = parent_id or (a.get("parent") or {}).get("id")
+
+    query = """
+        SELECT id, content, likes, posted_at, agent_id
+        FROM news_feed
+        WHERE season = %s AND week = %s AND content_type = 'TWEET' AND slot = %s
+          AND agent_id = %s AND post_kind = %s
+          AND linked_article_id IS NOT DISTINCT FROM %s
+          AND subject_game_id IS NOT DISTINCT FROM %s
+          AND subject_player_id IS NOT DISTINCT FROM %s
+          AND reply_to_id IS NOT DISTINCT FROM %s
+        ORDER BY id ASC
+        LIMIT 1
+    """
+    cur.execute(query, (ctx["season"], ctx["week"], slot, a.get("agent_id"), a.get("kind"),
+                        art_id, game_id, player_id, rep_id))
+    row = cur.fetchone()
+    if row:
+        return {"id": row[0], "text": row[1], "likes": row[2], "posted_at": row[3], "agent_id": row[4]}
+    return None
+
+
+def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=None) -> int | None:
+    """Insert one post into news_feed, tag its teams and players, and record it as the author's take.
+    Returns post_id, or None if duplicate content or assignment already exists in news_feed."""
+    dup_id = find_duplicate_content_tweet(cur, ctx["season"], ctx["week"], a.get("agent_id"), post.get("text"))
+    if dup_id is not None:
+        return None
+    existing = find_existing_tweet_for_assignment(cur, ctx, a, slot, parent_id)
+    if existing is not None:
+        return None
+
     subj = a["subject"]
     game = _find_game(ctx, a)
     game_id = game["id"] if game else (a.get("parent_game_id") if a["kind"] == "REPLY" else None)
@@ -426,9 +490,27 @@ def _load_accounts_full(cur) -> dict:
 
 def _publish(conn, cur, ctx, assignments, writer, followers, cfg, slot, tagger, log, parent_times=None):
     """Write, time, score and save assignments. Returns saved posts [{id, assignment, text, likes, ...}]."""
-    results = writer.write(assignments)
     saved, failed = [], 0
-    for a, post in zip(assignments, results):
+    to_write = []
+
+    for a in assignments:
+        parent = a.get("parent")
+        parent_id = parent["id"] if parent else None
+        existing = find_existing_tweet_for_assignment(cur, ctx, a, slot, parent_id)
+        if existing:
+            acct = writer.accounts.get(a.get("agent_id"), {})
+            saved.append({"id": existing["id"], "assignment": a, "text": existing["text"], "likes": existing["likes"],
+                          "posted_at": existing["posted_at"], "agent_id": a.get("agent_id"),
+                          "handle": acct.get("handle", a.get("handle")), "display_name": acct.get("display_name", a.get("handle"))})
+            log(f"⏭️  [ALREADY PUBLISHED] {a.get('handle', a.get('agent_id'))} {a['kind']} (#{existing['id']})")
+        else:
+            to_write.append(a)
+
+    if not to_write:
+        return saved, failed
+
+    results = writer.write(to_write)
+    for a, post in zip(to_write, results):
         if not publishable(post):
             failed += 1
             log(f"⏭️  [NOT SAVED] {a['handle']} {a['kind']} ({a['subject']['label']}): "
@@ -442,6 +524,9 @@ def _publish(conn, cur, ctx, assignments, writer, followers, cfg, slot, tagger, 
                          (ctx["season"], ctx["week"], a["agent_id"], a["kind"], a["subject"]["id"], post["text"][:40]), cfg)
         try:
             post_id = save_post(cur, ctx, a, post, posted_at, eng, slot, tagger, parent["id"] if parent else None)
+            if post_id is None:
+                log(f"⏭️  [DUPLICATE SKIPPED] {a.get('handle', a.get('agent_id'))} {a['kind']}: duplicate tweet detected")
+                continue
             conn.commit()
         except Exception as e:
             conn.rollback()
