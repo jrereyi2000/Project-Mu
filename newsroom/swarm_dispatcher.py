@@ -29,6 +29,12 @@ from newsroom.all_pro import (
     parse_all_pro,
     store_all_pro_teams,
 )
+from newsroom.award_winners import (
+    award_winners_fix_prompt,
+    load_coach_index,
+    parse_award_winners,
+    store_award_winners,
+)
 from engines.gotw_engine import display_excitement
 from engines.game_script_engine import get_scripts, script_summary
 from engines.records_engine import find_records_broken_in_week
@@ -1405,6 +1411,19 @@ If you need specific stats, use your database tools before producing your final 
                             if retry_text:
                                 generated_text = retry_text
 
+                    # Award Winners article (Week 22 AWARDS_TRACKER) must have all 6 valid award winners; give writer one rewrite
+                    if at_id == "AWARDS_TRACKER" and week == 22 and generated_text:
+                        _, aw_errors = parse_award_winners(generated_text, self._all_pro_roster_index(season), self._coach_index(season))
+                        if aw_errors:
+                            print("\n⚠️ [AWARDS WINNERS FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(aw_errors[:8]))
+                            retry = chat.send_message(award_winners_fix_prompt(aw_errors))
+                            retry_text = retry.text
+                            if not retry_text and hasattr(retry, "candidates") and retry.candidates:
+                                parts = retry.candidates[0].content.parts
+                                retry_text = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+                            if retry_text:
+                                generated_text = retry_text
+
                     if not (generated_text or "").strip():
                         failure_reason = "model returned no text"
                         generated_text = ""
@@ -1545,6 +1564,14 @@ If you need specific stats, use your database tools before producing your final 
                             else:
                                 n = store_all_pro_teams(cur, season, week, article_id, compiled_prompt["archetype"], entries)
                                 print(f"🏆 [ALL-PRO STORED] Season {season} Week {week}: {n} selections saved to awards from article #{article_id}.")
+
+                        if article_id and ctype == "ARTICLE" and at_id == "AWARDS_TRACKER" and week == 22:
+                            entries, aw_errors = parse_award_winners(generated_text, load_roster_index(cur, season), load_coach_index(cur, season))
+                            if aw_errors:
+                                print(f"⚠️  [AWARDS NOT STORED] Article #{article_id}: " + " | ".join(aw_errors[:5]))
+                            else:
+                                n = store_award_winners(cur, season, week, article_id, compiled_prompt["archetype"], entries)
+                                print(f"🏆 [AWARDS STORED] Season {season} Week {week}: {n} major award winners saved to awards from article #{article_id}.")
                     conn.commit()
             except Exception as e:
                 print(f"Failed to record news_feed entry for {display}: {e}")
@@ -1601,6 +1628,11 @@ If you need specific stats, use your database tools before producing your final 
         with psycopg.connect(self.db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 return load_roster_index(cur, season)
+
+    def _coach_index(self, season: int) -> dict:
+        with psycopg.connect(self.db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                return load_coach_index(cur, season)
 
     def get_agent_record(self, archetype: str) -> tuple:
         """Retrieves or synthesizes the agent memory record for a writer archetype."""

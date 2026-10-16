@@ -16,6 +16,7 @@ CLI:
 """
 
 import argparse
+import collections
 import statistics
 
 import psycopg
@@ -32,6 +33,15 @@ WEIGHTS = {
 FIRST_YEAR_BONUS = 3.0
 FULL_SEASON_GAMES = 17   # a team's regular season; fewer previous-season games = improvement skipped
 BASE, SCALE = 50.0, 10.0
+
+# Historical Rarity & Records Bonuses
+UNDEFEATED_FULL_SEASON_BONUS = 15.0      # Real-life 16-0 / 17-0 is an all-time coaching masterpiece (unanimous COTY)
+HISTORIC_9_WIN_TURNAROUND_BONUS = 6.0   # +9 or more win improvement over previous season
+MAJOR_7_WIN_TURNAROUND_BONUS = 3.0      # +7 or more win improvement
+NFL_TEAM_RECORD_BROKEN_BONUS = 5.0      # All-time NFL regular season team record broken
+NFL_TEAM_RECORD_TIED_BONUS = 2.5
+FRANCHISE_TEAM_RECORD_BROKEN_BONUS = 2.0  # Franchise regular season team record broken
+FRANCHISE_TEAM_RECORD_TIED_BONUS = 1.0
 
 
 def average_ranks(values: dict) -> dict:
@@ -85,7 +95,116 @@ def full_season_win_pcts(games: list, min_games: int = FULL_SEASON_GAMES) -> dic
     return {t: pct for t, pct in win_pcts(games).items() if played[t] >= min_games}
 
 
-def compute_coty(season: int, games: list, coaches: dict, team_ovr: dict, prev_win_pct: dict) -> list:
+def evaluate_team_historical_rarity(games: list, prev_win_pct: dict, franchise_records: dict | None = None) -> dict:
+    """Computes historical rarity bonuses and team records broken/tied for each team from regular-season games:
+    - Undefeated regular season: +15.0 points (full regular season, win_pct == 1.0, 0 losses).
+    - 9+ win turnaround (win_pct_change >= 9/17): +6.0 points.
+    - 7+ win turnaround (win_pct_change >= 7/17): +3.0 points.
+    - NFL team records broken: +5.0 points (+2.5 tied).
+    - Franchise team records broken: +2.0 points (+1.0 tied).
+
+    Returns: {team_id: {"historical_bonus": float, "notes": list[str]}}
+    """
+    totals = {}
+    for g in regular_season(games):
+        for team, pf, pa in ((g["home_team_id"], g["home_score"], g["away_score"]),
+                             (g["away_team_id"], g["away_score"], g["home_score"])):
+            w, l, t, f, a, n = totals.get(team, (0, 0, 0, 0, 0, 0))
+            if pf > pa:
+                w += 1
+            elif pf < pa:
+                l += 1
+            else:
+                t += 1
+            totals[team] = (w, l, t, f + pf, a + pa, n + 1)
+
+    book = franchise_records or {}
+    all_time_wins = [v for (t, c), rs in book.items() if c == "season_team_wins" for v, _, _ in rs]
+    all_time_pts = [v for (t, c), rs in book.items() if c == "season_team_points" for v, _, _ in rs]
+    all_time_pa = [v for (t, c), rs in book.items() if c == "season_team_fewest_points_allowed" for v, _, _ in rs]
+    nfl_best_wins = max(all_time_wins) if all_time_wins else None
+    nfl_best_pts = max(all_time_pts) if all_time_pts else None
+    nfl_best_pa = min(all_time_pa) if all_time_pa else None
+
+    rarity = {}
+    for team, (w, l, t, pf, pa, n) in totals.items():
+        bonus = 0.0
+        notes = []
+
+        # 1. Undefeated regular season
+        if n >= FULL_SEASON_GAMES and l == 0 and t == 0 and w == n:
+            bonus += UNDEFEATED_FULL_SEASON_BONUS
+            notes.append(f"Undefeated regular season ({w}-0)")
+        elif n >= 8 and l == 0 and t == 0 and w == n:
+            part_bonus = min(UNDEFEATED_FULL_SEASON_BONUS, round(w * 0.9, 1))
+            bonus += part_bonus
+            notes.append(f"Undefeated season in progress ({w}-0)")
+
+        # 2. Turnaround (win improvement)
+        if team in prev_win_pct and n > 0:
+            win_pct = (w + 0.5 * t) / n
+            delta_pct = win_pct - prev_win_pct[team]
+            if delta_pct >= 9.0 / FULL_SEASON_GAMES:
+                bonus += HISTORIC_9_WIN_TURNAROUND_BONUS
+                notes.append(f"Historic {round(delta_pct * FULL_SEASON_GAMES, 1):g}+ win turnaround")
+            elif delta_pct >= 7.0 / FULL_SEASON_GAMES:
+                bonus += MAJOR_7_WIN_TURNAROUND_BONUS
+                notes.append(f"Major {round(delta_pct * FULL_SEASON_GAMES, 1):g}+ win turnaround")
+
+        # 3. NFL team records broken
+        if nfl_best_wins is not None:
+            if w > nfl_best_wins:
+                bonus += NFL_TEAM_RECORD_BROKEN_BONUS
+                notes.append(f"Broke NFL single-season wins record ({w} vs {int(nfl_best_wins)})")
+            elif w == nfl_best_wins and w >= 15:
+                bonus += NFL_TEAM_RECORD_TIED_BONUS
+                notes.append(f"Tied NFL single-season wins record ({w})")
+
+        if nfl_best_pts is not None:
+            if pf > nfl_best_pts:
+                bonus += NFL_TEAM_RECORD_BROKEN_BONUS
+                notes.append(f"Broke NFL single-season scoring record ({pf} vs {int(nfl_best_pts)})")
+            elif pf == nfl_best_pts:
+                bonus += NFL_TEAM_RECORD_TIED_BONUS
+                notes.append(f"Tied NFL single-season scoring record ({pf})")
+
+        if n >= FULL_SEASON_GAMES and nfl_best_pa is not None:
+            if pa < nfl_best_pa:
+                bonus += NFL_TEAM_RECORD_BROKEN_BONUS
+                notes.append(f"Broke NFL single-season scoring defense record ({pa} pts allowed)")
+
+        # 4. Franchise team records broken
+        if (team, "season_team_wins") in book:
+            f_best_wins = max(v for v, _, _ in book[(team, "season_team_wins")])
+            if w > f_best_wins:
+                bonus += FRANCHISE_TEAM_RECORD_BROKEN_BONUS
+                notes.append(f"Broke franchise wins record ({w} vs {int(f_best_wins)})")
+            elif w == f_best_wins and w >= 10:
+                bonus += FRANCHISE_TEAM_RECORD_TIED_BONUS
+                notes.append(f"Tied franchise wins record ({w})")
+
+        if (team, "season_team_points") in book:
+            f_best_pts = max(v for v, _, _ in book[(team, "season_team_points")])
+            if pf > f_best_pts:
+                bonus += FRANCHISE_TEAM_RECORD_BROKEN_BONUS
+                notes.append(f"Broke franchise scoring record ({pf} vs {int(f_best_pts)})")
+            elif pf == f_best_pts:
+                bonus += FRANCHISE_TEAM_RECORD_TIED_BONUS
+                notes.append(f"Tied franchise scoring record ({pf})")
+
+        if n >= FULL_SEASON_GAMES and (team, "season_team_fewest_points_allowed") in book:
+            f_best_pa = min(v for v, _, _ in book[(team, "season_team_fewest_points_allowed")])
+            if pa < f_best_pa:
+                bonus += FRANCHISE_TEAM_RECORD_BROKEN_BONUS
+                notes.append(f"Broke franchise scoring defense record ({pa} pts allowed)")
+
+        rarity[team] = {"historical_bonus": round(bonus, 2), "notes": notes}
+
+    return rarity
+
+
+def compute_coty(season: int, games: list, coaches: dict, team_ovr: dict, prev_win_pct: dict,
+                 franchise_records: dict | None = None) -> list:
     """games: the season's completed games (non-regular-season ones are ignored). coaches: {team_id: {coach_id,
     coach_name, start_season}}. team_ovr: {team_id: OVR}. prev_win_pct: {team_id: last season's regular-season
     win%}, teams without one omitted. Returns one dict per coach whose team has played, best score first."""
@@ -107,6 +226,7 @@ def compute_coty(season: int, games: list, coaches: dict, team_ovr: dict, prev_w
         "win_pct_change": {t: (win_pct[t] - prev_win_pct[t]) if t in prev_win_pct else None for t in teams},
     }
     z = {name: zscores(vals) for name, vals in raw.items()}
+    rarity = evaluate_team_historical_rarity(games, prev_win_pct, franchise_records)
 
     out = []
     for t in teams:
@@ -116,6 +236,9 @@ def compute_coty(season: int, games: list, coaches: dict, team_ovr: dict, prev_w
         blend = sum(WEIGHTS[name] * used[name] for name in used) / total_w if total_w else 0.0
         coach = coaches[t]
         first_year = coach.get("start_season") == season
+        r_info = rarity.get(t, {"historical_bonus": 0.0, "notes": []})
+        h_bonus = r_info["historical_bonus"]
+        h_notes = r_info["notes"]
         out.append({
             "coach_id": coach["coach_id"],
             "coach_name": coach["coach_name"],
@@ -133,8 +256,10 @@ def compute_coty(season: int, games: list, coaches: dict, team_ovr: dict, prev_w
             "prev_win_pct": prev_win_pct.get(t),
             "win_pct_change": raw["win_pct_change"][t],
             "first_year_with_team": first_year,
+            "historical_bonus": h_bonus,
+            "historical_notes": h_notes,
             "inputs_used": sorted(used),
-            "coty_score": BASE + SCALE * blend + (FIRST_YEAR_BONUS if first_year else 0.0),
+            "coty_score": BASE + SCALE * blend + (FIRST_YEAR_BONUS if first_year else 0.0) + h_bonus,
         })
     out.sort(key=lambda r: r["coty_score"], reverse=True)
     for i, r in enumerate(out, start=1):
@@ -157,11 +282,19 @@ def fetch_team_ovr(cur, season: int) -> dict:
     return dict(cur.fetchall())
 
 
+def fetch_franchise_records(cur, season: int) -> dict:
+    cur.execute("SELECT team_id, category, value, holder, season FROM franchise_records WHERE season < %s", (season,))
+    franchise = collections.defaultdict(list)
+    for team_id, cat, value, holder, s in cur.fetchall():
+        franchise[(team_id, cat)].append((float(value), holder, s))
+    return franchise
+
+
 def fetch_inputs(cur, season: int) -> tuple:
-    """(coaches, team_ovr, prev_win_pct) for `season`. The season's games are fetched by the caller, which may
+    """(coaches, team_ovr, prev_win_pct, franchise_records) for `season`. The season's games are fetched by the caller, which may
     apply a week cutoff; the previous season is complete history and is read whole."""
     prev = full_season_win_pcts(fetch_completed_games(cur, season - 1))
-    return fetch_coaches(cur, season), fetch_team_ovr(cur, season), prev
+    return fetch_coaches(cur, season), fetch_team_ovr(cur, season), prev, fetch_franchise_records(cur, season)
 
 
 class CotyEngine:
@@ -178,13 +311,16 @@ class CotyEngine:
                 cur.execute("DELETE FROM coty_scores WHERE season = %s", (season,))
                 cur.executemany("""
                     INSERT INTO coty_scores (coach_id, team_id, season, coty_score, coty_rank, win_pct,
-                        wins_above_expected, roster_outperformance, win_pct_change, first_year_with_team)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        wins_above_expected, roster_outperformance, win_pct_change, first_year_with_team,
+                        historical_bonus, historical_notes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, [(r["coach_id"], r["team_id"], season, round(r["coty_score"], 2), r["coty_rank"],
                        round(r["win_pct"], 3), round(r["wins_above_expected"], 2),
                        None if r["roster_outperformance"] is None else round(r["roster_outperformance"], 1),
                        None if r["win_pct_change"] is None else round(r["win_pct_change"], 3),
-                       r["first_year_with_team"]) for r in race])
+                       r["first_year_with_team"],
+                       round(r["historical_bonus"], 2),
+                       r["historical_notes"]) for r in race])
                 cur.execute("SELECT id, abbreviation FROM teams")
                 abbr = dict(cur.fetchall())
             conn.commit()
@@ -199,9 +335,10 @@ class CotyEngine:
         for r in race:
             change = "  n/a" if r["win_pct_change"] is None else f"{r['win_pct_change']:+.3f}"
             roster = "  n/a" if r["roster_outperformance"] is None else f"{r['roster_outperformance']:+5.1f}"
+            hist = f" | Hist +{r['historical_bonus']:g} ({', '.join(r['historical_notes'])})" if r["historical_bonus"] else ""
             print(f"{r['coty_rank']:>2}. {r['coach_name']:<22} {abbr.get(r['team_id'], ''):<4} "
                   f"{r['wins']:g}-{r['losses']:g} | Score {r['coty_score']:5.1f} | W−xW {r['wins_above_expected']:+4.1f} "
-                  f"| Roster {roster} | ΔWin% {change}{' | 1st yr' if r['first_year_with_team'] else ''}")
+                  f"| Roster {roster} | ΔWin% {change}{' | 1st yr' if r['first_year_with_team'] else ''}{hist}")
         return race
 
 

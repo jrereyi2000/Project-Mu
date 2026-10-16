@@ -126,6 +126,32 @@ class CotyScoreTests(unittest.TestCase):
     def test_weights_sum_to_one(self):
         self.assertAlmostEqual(sum(WEIGHTS.values()), 1.0)
 
+    def test_undefeated_season_historical_bonus(self):
+        # 17 games, all won by team 1
+        undefeated_games = [game(i, i, 1, 2, 30, 10) for i in range(1, 18)]
+        coaches_map = {1: {"coach_id": 101, "coach_name": "Coach 1", "start_season": 2030},
+                       2: {"coach_id": 102, "coach_name": "Coach 2", "start_season": 2030}}
+        race = {r["team_id"]: r for r in compute_coty(2035, undefeated_games, coaches_map, {1: 90, 2: 70}, {})}
+        self.assertEqual(race[1]["coty_rank"], 1)
+        self.assertGreaterEqual(race[1]["historical_bonus"], 15.0)
+        self.assertTrue(any("Undefeated regular season" in n for n in race[1]["historical_notes"]))
+
+    def test_turnaround_and_records_bonuses(self):
+        # 17 games: team 1 wins 15, previously had 0.1 win% (1.7 wins -> ~13 win improvement)
+        games = [game(i, i, 1, 2, 28, 14) for i in range(1, 16)] + [game(16, 16, 2, 1, 21, 14), game(17, 17, 2, 1, 21, 14)]
+        coaches_map = {1: {"coach_id": 101, "coach_name": "Coach 1", "start_season": 2030},
+                       2: {"coach_id": 102, "coach_name": "Coach 2", "start_season": 2030}}
+        book = {
+            (1, "season_team_wins"): [(12.0, "Old Holder", 2030)],
+            (1, "season_team_points"): [(300.0, "Old Holder", 2030)],
+        }
+        race = {r["team_id"]: r for r in compute_coty(2035, games, coaches_map, {1: 80, 2: 80}, {1: 0.1}, franchise_records=book)}
+        # +6.0 for 9+ win turnaround, +2.0 for franchise wins (15 vs 12), +2.0 for franchise pts
+        self.assertGreaterEqual(race[1]["historical_bonus"], 10.0)
+        self.assertTrue(any("win turnaround" in n for n in race[1]["historical_notes"]))
+        self.assertTrue(any("Broke franchise wins record" in n for n in race[1]["historical_notes"]))
+
 
 if __name__ == "__main__":
     unittest.main()
+
