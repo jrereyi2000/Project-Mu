@@ -25,7 +25,7 @@ Project Mu/
 │                              #   Madden lists the top ~270 per category; Passing/Defense/Kicking: each page also captured scrolled right at the same row position, *_right_NNN.png)
 │                              #   Team Stats tabs Conversions / Red Zone Efficiency / Penalties (NFL scope, 32 teams),
 │                              #   the previous week's League Schedule (week picked via the held-L2 dropdown; in playoffs the tile is renamed Playoff Schedule and reordered to the first slot, opening the same list), and the 32-team Injury Report
-│                              #   (Manage Roster > Injury Report, cycled via single L2 presses, no vertical scrolling) → captures/<YYYY-MM-DD_HHMM>/{stats,team_stats,schedule,injuries}/
+│                              #   (Manage Roster > Injury Report, cycled via single L2 presses, no vertical scrolling; recognized with table or when empty via NO INJURIES TO REPORT banner) → captures/<YYYY-MM-DD_HHMM>/{stats,team_stats,schedule,injuries}/
 │                              #   Cross on the League Schedule list only opens a played game's box score (week before the current one, BOX SCORE button, no ACTIONS, FORCE WIN only as the column header, highlighted row has a final score)
 │                              #   `--only games [--week ...] [--games N]`: every game of a week (default the previous one): League Schedule → guarded Cross → box score
 │                              #   (box_top.png, box_bottom.png: 17 team-stat rows) → R1 player stats (TEAM column, 10 categories via R2, 6-row page steps; Kicking/Defense

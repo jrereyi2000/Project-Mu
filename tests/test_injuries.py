@@ -234,3 +234,33 @@ class PostseasonInjuryFilterTest(unittest.TestCase):
             finally:
                 EIO.parse_team_injury_frame = orig_parse
 
+
+class InjuryReportClassifyTest(unittest.TestCase):
+    def test_classify_injury_report_with_injuries(self):
+        import madden_capture as MC
+        mock_frame = MagicMock()
+        mock_frame.text = "INJURY REPORT | BILLS | NAME | POS | OVR | INJURY | DURATION | IR"
+        mock_frame.find.side_effect = lambda x: (10, 10, 50, 50) if x in ("INJURY", "IR") else None
+        mock_frame.size = (1512, 944)
+        mock_frame.items = [("BILLS", (50, 150, 100, 20))]
+        self.assertEqual(MC.classify(mock_frame), "INJURY_REPORT")
+
+    def test_classify_injury_report_empty_no_injuries(self):
+        import madden_capture as MC
+        mock_frame = MagicMock()
+        mock_frame.text = "INJURY REPORT | PANTHERS | NO INJURIES TO REPORT | BACK"
+        mock_frame.find.side_effect = lambda x: (10, 10, 50, 50) if x in ("BACK", "INJURY REPORT") else None
+        mock_frame.size = (1512, 944)
+        mock_frame.items = [("PANTHERS", (50, 150, 100, 20)), ("NO INJURIES TO REPORT", (500, 500, 200, 40))]
+        self.assertEqual(MC.classify(mock_frame), "INJURY_REPORT")
+
+    def test_classify_hub_roster_not_injury_report(self):
+        import madden_capture as MC
+        mock_frame = MagicMock()
+        mock_frame.text = "GAMEDAY | COACH CENTRAL | MANAGE ROSTER | OPTIONS | ADJUST LINEUP | DEPTH CHART | INJURY REPORT"
+        mock_frame.find.side_effect = lambda x: (10, 10, 50, 50) if x in ("GAMEDAY", "MANAGE ROSTER", "ADJUST LINEUP", "DEPTH CHART", "INJURY REPORT") else None
+        mock_frame.size = (1512, 944)
+        mock_frame.items = []
+        self.assertEqual(MC.classify(mock_frame), "HUB_ROSTER")
+
+

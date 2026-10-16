@@ -483,8 +483,11 @@ def classify(f):
     # It also shows TEAM NAME, SORT and R2, so it must come before TEAM_STATS.
     if f.find("BOX SCORE") and f.find("PLAYER STATS") and f.find("TEAM") and "TOTAL YARDS GAINED" not in t:
         return "GAME_STATS"
-    # Manage Roster > Injury Report: table with INJURY, IR, and player card
-    if f.find("INJURY") and f.find("IR"):
+    # Manage Roster > Injury Report: table with INJURY, IR, and player card (when players are injured),
+    # or "NO INJURIES TO REPORT" banner / header when a team is completely healthy.
+    if (f.find("INJURY") and f.find("IR")) or ("NO INJUR" in t and "GAMEDAY" not in t):
+        return "INJURY_REPORT"
+    if "INJURY REPORT" in t and "GAMEDAY" not in t and "ADJUST LINEUP" not in t and ("NO INJUR" in t or "BACK" in t or injury_team(f)):
         return "INJURY_REPORT"
     # Draft route (mapped Oct 15): Manage Roster > Scouting > Prospects > L3 > Edit Draft Class > Draft Board.
     # The Draft Board's L2 chip reads ALL ROUNDS and its button bar ADJUST ORDER. The Prospects list
