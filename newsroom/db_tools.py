@@ -933,7 +933,7 @@ def get_opponent_adjusted_credit(team_identifier: str = "", season: int = 0) -> 
 
 @tool
 def get_coach_of_the_year_race(limit: int = 10, season: int = 0) -> str:
-    """Fetch the Coach of the Year race: head coaches ranked by COTY score (50 = league average, about 10 points per standard deviation), built from the regular season only. Each candidate shows record and win%, wins above expectation (wins minus expected wins from opponent-adjusted credit), roster outperformance (team OVR rank minus win% rank; positive = winning more than the roster's rating says), improvement over last season's win% (null unless the team's full 17-game regular season last year is recorded), and whether it is the coach's first season with the team."""
+    """Fetch the Coach of the Year race: head coaches ranked by regular-season coaching achievement index (internal COTY score; do not quote the score or bonus numbers in articles, describe the real-world records and turnaround instead). Built from the regular season only. Each candidate shows record and win%, wins above expectation (wins minus expected wins from opponent-adjusted credit), roster outperformance (team OVR rank minus win% rank; positive = winning more than the roster's rating says), improvement over last season's win% (null unless the team's full 17-game regular season last year is recorded), and whether it is the coach's first season with the team."""
     try:
         s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -966,11 +966,11 @@ def get_coach_of_the_year_race(limit: int = 10, season: int = 0) -> str:
             "historical_bonus": round(r.get("historical_bonus", 0.0), 1),
             "historical_notes": r.get("historical_notes", []),
         } for r in race[:max(1, int(limit))]]
-        note = ("Score blends win% (30%), wins above expectation (20%), roster outperformance (20%) and improvement "
-                "over last season (30%), each relative to the league; a missing input is skipped and the rest "
-                "re-weighted. +3 for a coach's first season with the team. Historical rarity & team records bonuses: "
-                "+15.0 for an undefeated regular season (16-0/17-0), +6.0 for a 9+ win turnaround, +5.0 per NFL team "
-                "record broken, +2.0 per franchise team record broken. Ranks: 1 = best; tied ranks are averaged.")
+        note = ("INTERNAL RANKING INDEX: Score blends win% (30%), wins above expectation (20%), roster outperformance (20%) and improvement "
+                "over last season (30%), plus bonuses for historical rarity (undefeated season, records broken, 9+ win turnaround). "
+                "DO NOT cite 'COTY score', 'coach scores', 'Coach of the Year metric', or 'historical bonus' in published copy. "
+                "Instead, describe the coach's real-world football achievements: the record, undefeated season, franchise/NFL records broken, "
+                "turnaround, scoring margin, and roster outperformance. Ranks: 1 = best; tied ranks are averaged.")
         if all(r["win_pct_change"] is None for r in race):
             note += f" No team has a full {s_val - 1} regular season recorded, so improvement is left out this year."
         return json.dumps({"season": s_val, "games_through_cutoff": sum(r["games"] for r in race) // 2,

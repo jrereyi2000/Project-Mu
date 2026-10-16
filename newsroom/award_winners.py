@@ -289,7 +289,8 @@ Please rewrite your article ensuring all 6 major regular-season award winners ar
 - ## DROY: [Player Full Name], [Position], [Team Name]
 - ## Coach of the Year: [Coach Full Name], [Team Name]
 
-Do not omit any of the 6 awards, and verify player and coach names and teams match real active rosters and coaching staffs."""
+Do not omit any of the 6 awards, and verify player and coach names and teams match real active rosters and coaching staffs.
+Remember: never refer explicitly to internal engine mechanics or formulas (e.g. 'COTY score', 'coach scores', 'Coach of the Year metric', 'historical bonus', or internal point metrics) in the Coach of the Year section; describe real-world on-field achievements, records, and team performance instead."""
 
 
 def store_award_winners(cur, season: int, week: int, article_id: int, persona: str, entries: list) -> int:
