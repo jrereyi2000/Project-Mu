@@ -10,6 +10,8 @@ writer's own numbers can be wrong. A ranking is stored only if it names all 32 t
 import re
 
 TEAM_COUNT = 32
+# Week 19 (entering the Wild Card round) ranks the finished regular season; no ranking is published after it
+FINAL_RANKINGS_WEEK = 19
 
 # "## 4. Denver Broncos (13-3) ...", tolerating ###, bold, "4)" and a missing record
 HEADER_RE = re.compile(r"^\s*#{1,4}\s*(?:\*\*)?\s*(\d{1,2})\s*[.)]\s*(.+?)\s*$")
@@ -140,13 +142,16 @@ def store_power_rankings(cur, season: int, week: int, article_id: int, persona: 
 def previous_rankings_directive(cur, season: int, week: int) -> str:
     """Prompt block giving the writer last stored week's order so movement indicators are real."""
     prev_week = previous_ranked_week(cur, season, week)
+    final_rule = ("" if week != FINAL_RANKINGS_WEEK else
+                  "\n- This is the FINAL Power Rankings of the season: the regular season is over, so rank all 32 teams on "
+                  "their complete Weeks 1–18 body of work. No further rankings will be published during the playoffs.")
     header_rule = ("Use exactly one numbered ## header per team, formatted: ## [Rank]. [City] [Team] ([W-L]) "
                    "(Previous: [last rank] | Change: [+N, -N or --]). Rank all 32 teams exactly once.")
     if not prev_week:
         return f"""
 POWER RANKINGS CONTINUITY (MANDATORY):
 - No earlier Power Rankings have been published this season. Write "(Previous: — | New)" for every team; do not invent prior ranks.
-- {header_rule}
+- {header_rule}{final_rule}
 """
     cur.execute("""
         SELECT pr.rank, t.city || ' ' || t.name
@@ -158,7 +163,7 @@ POWER RANKINGS CONTINUITY (MANDATORY):
 POWER RANKINGS CONTINUITY (MANDATORY):
 - Last published Power Rankings (Week {prev_week}). Your movement indicators must be computed from this list; do not invent prior ranks:
 {order}
-- {header_rule}
+- {header_rule}{final_rule}
 """
 
 

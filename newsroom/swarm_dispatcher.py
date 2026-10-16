@@ -16,6 +16,7 @@ from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standi
 from newsroom import agent_memory
 from newsroom.playoff_overrides import find_active_override, normalize_temporal_mode, validate_playoff_overrides
 from newsroom.power_rankings import (
+    FINAL_RANKINGS_WEEK,
     fix_prompt as power_rankings_fix_prompt,
     load_team_index,
     parse_power_rankings,
@@ -440,6 +441,8 @@ REGULAR_SEASON_FEATURE_POOLS = {
     },
 }
 
+# Week 19's Power Rankings (entering the Wild Card round, through Week 18) is the season's final ranking; the
+# playoff weeks run without one so the regular-season order is not re-ranked (newsroom/power_rankings.FINAL_RANKINGS_WEEK).
 POSTSEASON_EDITORIAL_SLATES = {
     19: [  # Week 19: Wild Card Eve
         ("Hero Slot", "MACRO_SLATE_RECAP"),
@@ -463,7 +466,6 @@ POSTSEASON_EDITORIAL_SLATES = {
         ("Slot 6", "PLAYOFF_AUTOPSY"),
         ("Slot 7", "PLAYOFF_AUTOPSY"),
         ("Slot 8", "LOCAL_MATCHUP_PRIMER"),
-        ("Standalone", "POWER_RANKINGS"),
     ],
     21: [  # Week 21: Championship Eve
         ("Hero Slot", "MACRO_SLATE_RECAP"),
@@ -475,7 +477,6 @@ POSTSEASON_EDITORIAL_SLATES = {
         ("Slot 6", "PLAYOFF_AUTOPSY"),
         ("Slot 7", "PLAYOFF_AUTOPSY"),
         ("Slot 8", "LOCAL_MATCHUP_PRIMER"),
-        ("Standalone", "POWER_RANKINGS"),
     ],
     22: [  # Week 22: Super Bowl Bye
         ("Hero Slot", "MACRO_SLATE_RECAP"),
@@ -487,7 +488,6 @@ POSTSEASON_EDITORIAL_SLATES = {
         ("Slot 6", "PLAYOFF_AUTOPSY"),
         ("Slot 7", "PLAYOFF_AUTOPSY"),
         ("Slot 8", "SUPER_BOWL_HISTORICAL_STAKES"),
-        ("Standalone", "POWER_RANKINGS"),
     ],
     23: [  # Week 23: Super Bowl Week
         ("Hero Slot", "SUPER_BOWL_COMPREHENSIVE_PREVIEW"),
@@ -499,7 +499,6 @@ POSTSEASON_EDITORIAL_SLATES = {
         ("Slot 6", "LOCAL_MATCHUP_PRIMER"),
         ("Slot 7", "LOCAL_MATCHUP_PRIMER"),
         ("Slot 8", "MARKET_GRAVITY_LEGACY_AUDIT"),
-        ("Standalone", "POWER_RANKINGS"),
     ],
 }
 
@@ -1529,7 +1528,9 @@ If you need specific stats, use your database tools before producing your final 
                             p_cnt = len(tag_res.get("players", []))
                             print(f"🏷️  [ENTITY TAGGING] Article #{article_id} tagged with {t_cnt} teams and {p_cnt} players.")
 
-                        if article_id and ctype == "ARTICLE" and at_id == "POWER_RANKINGS":
+                        if article_id and ctype == "ARTICLE" and at_id == "POWER_RANKINGS" and week > FINAL_RANKINGS_WEEK:
+                            print(f"⚠️  [POWER RANKINGS NOT STORED] Week {week} is after the final ranking week ({FINAL_RANKINGS_WEEK}).")
+                        elif article_id and ctype == "ARTICLE" and at_id == "POWER_RANKINGS":
                             entries, pr_errors = parse_power_rankings(generated_text, load_team_index(cur))
                             if pr_errors:
                                 print(f"⚠️  [POWER RANKINGS NOT STORED] Article #{article_id}: " + " | ".join(pr_errors))

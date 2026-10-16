@@ -74,10 +74,10 @@ Each weekly generation dynamically selects **three non-repeating article types**
 | Week | Phase | Hero Slot | Slot 1 | Slot 2 | Slot 3 | Slot 4 | Slot 5 | Slot 6 | Slot 7 | Slot 8 | Standalone |
 | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Week 19** | **Wild Card Eve** | `MACRO_SLATE_RECAP` (Week 18) | `SLATE_LOOKAHEAD_PREDICTIONS` (WC) | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `PLAYOFF_PREDICTOR` | `OFFICIAL_AP_ALL_PRO_ROSTER` | `NATIONAL_OPINION_COLUMN` | `COACHING_HOT_SEAT_AUDIT` (Black Monday) | `FRANCHISE_STATE_OF_THE_UNION` (Exit) | `LOCAL_MATCHUP_PRIMER` (WC Game) | `POWER_RANKINGS` |
-| **Week 20** | **Divisional Eve** | `MACRO_SLATE_RECAP` (Wild Card) | `SLATE_LOOKAHEAD_PREDICTIONS` (DIV) | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `SUPER_BOWL_CONTENDER_BLUEPRINT` | `OFFSEASON_MOCK_DRAFT` | `NATIONAL_OPINION_COLUMN` | `PLAYOFF_AUTOPSY` (WC Exit) | `PLAYOFF_AUTOPSY` (WC Exit) | `LOCAL_MATCHUP_PRIMER` (DIV Game) | `POWER_RANKINGS` |
-| **Week 21** | **Championship Eve** | `MACRO_SLATE_RECAP` (Divisional) | `SLATE_LOOKAHEAD_PREDICTIONS` (CONF) | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `SUPER_BOWL_CONTENDER_BLUEPRINT` | `AWARDS_TRACKER` (Finalists) | `DRAFT_BLUEPRINT_ROSTER_AUDIT` | `PLAYOFF_AUTOPSY` (DIV Exit) | `PLAYOFF_AUTOPSY` (DIV Exit) | `LOCAL_MATCHUP_PRIMER` (CONF Game) | `POWER_RANKINGS` |
-| **Week 22** | **Super Bowl Bye** | `MACRO_SLATE_RECAP` (Conference) | `SLATE_LOOKAHEAD_PREDICTIONS` (Tale of Tape) | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `AWARDS_TRACKER` (Winners) | `FRANCHISE_ARCHITECTURE_BLUEPRINT` | `SEASON_PROGRESS_AUDIT` | `PLAYOFF_AUTOPSY` (CONF Exit) | `PLAYOFF_AUTOPSY` (CONF Exit) | `SUPER_BOWL_HISTORICAL_STAKES` | `POWER_RANKINGS` |
-| **Week 23** | **Super Bowl Week** | `SUPER_BOWL_COMPREHENSIVE_PREVIEW` | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `QUARTERBACK_DUEL_TAPE_BREAKDOWN` | `SUPER_BOWL_ROUNDTABLE_CONSENSUS` | `SUPER_BOWL_MEDIA_INTERVIEW_AUDIT` | `X_FACTOR_VOLATILITY_SPOTLIGHT` | `LOCAL_MATCHUP_PRIMER` (AFC Champ) | `LOCAL_MATCHUP_PRIMER` (NFC Champ) | `MARKET_GRAVITY_LEGACY_AUDIT` | `POWER_RANKINGS` |
+| **Week 20** | **Divisional Eve** | `MACRO_SLATE_RECAP` (Wild Card) | `SLATE_LOOKAHEAD_PREDICTIONS` (DIV) | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `SUPER_BOWL_CONTENDER_BLUEPRINT` | `OFFSEASON_MOCK_DRAFT` | `NATIONAL_OPINION_COLUMN` | `PLAYOFF_AUTOPSY` (WC Exit) | `PLAYOFF_AUTOPSY` (WC Exit) | `LOCAL_MATCHUP_PRIMER` (DIV Game) | — |
+| **Week 21** | **Championship Eve** | `MACRO_SLATE_RECAP` (Divisional) | `SLATE_LOOKAHEAD_PREDICTIONS` (CONF) | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `SUPER_BOWL_CONTENDER_BLUEPRINT` | `AWARDS_TRACKER` (Finalists) | `DRAFT_BLUEPRINT_ROSTER_AUDIT` | `PLAYOFF_AUTOPSY` (DIV Exit) | `PLAYOFF_AUTOPSY` (DIV Exit) | `LOCAL_MATCHUP_PRIMER` (CONF Game) | — |
+| **Week 22** | **Super Bowl Bye** | `MACRO_SLATE_RECAP` (Conference) | `SLATE_LOOKAHEAD_PREDICTIONS` (Tale of Tape) | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `AWARDS_TRACKER` (Winners) | `FRANCHISE_ARCHITECTURE_BLUEPRINT` | `SEASON_PROGRESS_AUDIT` | `PLAYOFF_AUTOPSY` (CONF Exit) | `PLAYOFF_AUTOPSY` (CONF Exit) | `SUPER_BOWL_HISTORICAL_STAKES` | — |
+| **Week 23** | **Super Bowl Week** | `SUPER_BOWL_COMPREHENSIVE_PREVIEW` | `SINGLE_GAME_SCHEMATIC_AUTOPSY` | `QUARTERBACK_DUEL_TAPE_BREAKDOWN` | `SUPER_BOWL_ROUNDTABLE_CONSENSUS` | `SUPER_BOWL_MEDIA_INTERVIEW_AUDIT` | `X_FACTOR_VOLATILITY_SPOTLIGHT` | `LOCAL_MATCHUP_PRIMER` (AFC Champ) | `LOCAL_MATCHUP_PRIMER` (NFC Champ) | `MARKET_GRAVITY_LEGACY_AUDIT` | — |
 
 ---
 
@@ -96,5 +96,7 @@ Some slots are pinned to a specific subject (team and/or game). The Editorial De
 | `PLAYOFF_AUTOPSY` (Slots 6 & 7) | W20–W22 | Two distinct losers from the previous week's playoff round. Most popular first. |
 
 All other slots are untargeted: the writer chooses the subject under the article type's curatorial autonomy. If league data is unavailable, or no subject qualifies, the slot runs untargeted.
+
+**Power Rankings:** the Week 19 `POWER_RANKINGS` (entering the Wild Card round, through Week 18) is the season's final ranking. Weeks 20–23 publish no Power Rankings, so the regular-season order is never re-ranked during the playoffs.
 
 **Week numbering:** postseason games are identified by week number (19 = Wild Card, 20 = Divisional, 21 = Conference Championships, 22 = Super Bowl bye, 23 = Super Bowl).
