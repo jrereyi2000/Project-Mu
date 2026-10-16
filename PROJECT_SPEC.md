@@ -587,7 +587,7 @@ Built on **React 19**, **TypeScript 5.7**, and **Vite 8**, featuring responsive 
 
 ### 5.1 Shared Navigation & Hash Routing
 Navigation uses a lightweight hash router (`window.location.hash`):
-- `#`: Gridiron Newsroom Home (featured stories, analysis, trending topics).
+- `#`: Gridiron Newsroom Home (featured stories, analysis, trending topics, commemorative historic record spotlight, interactive edition-bar week picker to browse and read any week's articles).
 - `#article-{id}`: Full reading view for stored newsroom articles (`/api/news/article/{id}`) and local/national beats, rendered via in-app markdown (`ArticleMarkdown`) with structured typography for headings (`<h2>`–`<h4>`), bullet and numbered lists (`<ul>`/`<ol>`), callout blockquotes with decorative quotation glyphs, responsive tables, horizontal dividers, inline formatting (`**bold**`, `*italic*`, `` `code` ``, `[link](url)`), and preserved drop-cap styling on the lead paragraph.
 - `#team-{abbr}`: Team hub with dynamic team colors, division rank, upcoming schedule, roster, and team stats.
 - `#schedule`: Full interactive 18-week league schedule.
