@@ -654,17 +654,28 @@ class RosterRecoveryTest(unittest.TestCase):
         f3 = FakeFrame([("TOUCHDOWN", (200, 300, 400, 330))])
         self.assertIsNone(mc.highlight_top_clock(f3))
 
+    def test_highlight_visible_clocks(self):
+        class FakeFrame:
+            def __init__(self, items):
+                self.items = items
+        f = FakeFrame([("0:18", (100, 300, 150, 330)), ("1:12", (100, 350, 150, 380)), ("TOUCHDOWN", (200, 300, 400, 330))])
+        self.assertEqual(mc.highlight_visible_clocks(f), {18, 72})
+
     def test_capture_highlights_stops_on_wrap(self):
         class MockFrame:
             def __init__(self, path, items):
                 self.path = path
                 self.items = items
 
-        f_start = MockFrame("/tmp/f0.png", [("0:18", (100, 300, 150, 330))])
-        f_mid = MockFrame("/tmp/f1.png", [("7:30", (100, 300, 150, 330))])
-        f_wrap = MockFrame("/tmp/f2.png", [("0:18", (100, 300, 150, 330))])
+        f_start = MockFrame("/tmp/f0.png", [("0:18", (100, 300, 150, 330)), ("0:28", (100, 350, 150, 380))])
+        # f_still_on_screen: 0:18 is still visible after a short scroll (should NOT trigger wrap)
+        f_still_on_screen = MockFrame("/tmp/f1.png", [("0:18", (100, 350, 150, 380)), ("1:12", (100, 400, 150, 430))])
+        # f_mid: 0:18 has completely disappeared from screen
+        f_mid = MockFrame("/tmp/f2.png", [("7:30", (100, 300, 150, 330))])
+        # f_wrap: 0:18 reappears after having disappeared -> triggers wrap!
+        f_wrap = MockFrame("/tmp/f3.png", [("0:18", (100, 300, 150, 330))])
 
-        looks = [f_mid, f_wrap]
+        looks = [f_still_on_screen, f_mid, f_wrap]
 
         with tempfile.TemporaryDirectory() as hdir, \
                 mock.patch.object(mc, "wait_for", side_effect=[(f_start, "HIGHLIGHTS"), (f_start, "HIGHLIGHTS"), (f_start, "POSTGAME_MENU")]), \
@@ -676,8 +687,8 @@ class RosterRecoveryTest(unittest.TestCase):
                 mock.patch.object(mc.subprocess, "run"), \
                 mock.patch.object(mc, "log"):
             pages = mc.capture_highlights(hdir)
-            # Should have captured 2 pages (f_start and f_mid), and stopped when f_wrap wrapped
-            self.assertEqual(pages, 2)
+            # Should have captured 3 pages (f_start, f_still_on_screen, f_mid), and stopped when f_wrap wrapped
+            self.assertEqual(pages, 3)
 
 
 if __name__ == "__main__":

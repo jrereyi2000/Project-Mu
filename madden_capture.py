@@ -1761,11 +1761,23 @@ def highlight_top_clock(f):
     return clocks[0][1]
 
 
+def highlight_visible_clocks(f):
+    """Set of all clock seconds (mm * 60 + ss) currently visible in the highlights table."""
+    clocks = set()
+    for w, (l, t, r, b) in getattr(f, "items", []):
+        if ":" in w and 70 < l < 220 and 260 < t < 950:
+            parts = w.split(":")
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                clocks.add(int(parts[0]) * 60 + int(parts[1]))
+    return clocks
+
+
 def capture_highlights(hdir):
     """Capture game highlights across quarters (starts at 4TH/OT, scrolls down each quarter,
     presses Left to step through 3RD, 2ND, 1ST). Handles circular list wrap (scrolling down past
-    the start of the quarter wraps back to the top). Saves screenshots as highlights/q<quarter>_NNN.png.
-    Returns total pages captured."""
+    the start of the quarter wraps back to the top). Ensures the initial top play's clock seconds
+    have scrolled off screen before checking if they reappear. Saves screenshots as
+    highlights/q<quarter>_NNN.png. Returns total pages captured."""
     os.makedirs(hdir, exist_ok=True)
     f, s = wait_for(["HIGHLIGHTS"], timeout=10)
     q = active_highlight_quarter(f.path) or "4TH"
@@ -1778,6 +1790,8 @@ def capture_highlights(hdir):
         q = active_highlight_quarter(f.path) or q
         log(f"  Highlights quarter {q}")
         page = 0
+        init_clock = highlight_top_clock(f)
+        top_disappeared = False
 
         while True:
             png_name = f"q{q.lower()}_{page:03d}.png"
@@ -1786,7 +1800,6 @@ def capture_highlights(hdir):
             log(f"    saved {png_name}")
             total_pages += 1
             page += 1
-            cur_clock = highlight_top_clock(f)
             sig_cur = table_sig(f.path, 0.28, 0.92)
 
             if page >= 8:
@@ -1797,14 +1810,21 @@ def capture_highlights(hdir):
             press("down", times=8, hold=0.1, wait=0.8)
             f_next, _ = look()
             sig_next = table_sig(f_next.path, 0.28, 0.92)
-            next_clock = highlight_top_clock(f_next)
+            next_top = highlight_top_clock(f_next)
+            vis_next = highlight_visible_clocks(f_next)
 
             if same_table(sig_cur, sig_next):
                 log(f"    end of quarter {q} reached (table stopped moving)")
                 break
-            if cur_clock is not None and next_clock is not None and next_clock <= cur_clock:
-                log(f"    end of quarter {q} reached (list wrapped around from {cur_clock}s to {next_clock}s)")
-                break
+
+            # Make sure the initial top play's clock seconds have disappeared before seeing if they reappeared
+            if init_clock is not None:
+                if init_clock not in vis_next:
+                    top_disappeared = True
+                if top_disappeared and (init_clock in vis_next or (next_top is not None and next_top <= init_clock)):
+                    log(f"    end of quarter {q} reached (top play {init_clock}s reappeared after scrolling off)")
+                    break
+
             f = f_next
 
         captured_quarters.add(q)
