@@ -622,22 +622,25 @@ class RosterRecoveryTest(unittest.TestCase):
     def test_active_highlight_quarter(self):
         import numpy as np
         from PIL import Image
-        # Create synthetic images with underline at each expected position
-        quarters = {
-            "1ST": (717, 776),
-            "2ND": (795, 854),
-            "3RD": (873, 932),
-            "4TH": (952, 1009),
-            "OT": (1030, 1085),
+        centers = {
+            "1ST": 0.389,
+            "2ND": 0.429,
+            "3RD": 0.470,
+            "4TH": 0.511,
+            "OT": 0.551,
         }
-        for q, (x0, x1) in quarters.items():
-            arr = np.zeros((220, 1200), dtype=np.uint8)
-            arr[198:202, x0:x1] = 255
-            path = os.path.join(self.tmp if hasattr(self, "tmp") else "/tmp", f"test_q_{q}.png")
-            Image.fromarray(arr).save(path)
-            self.assertEqual(mc.active_highlight_quarter(path), q)
-            if os.path.exists(path):
-                os.remove(path)
+        for H, W in [(1080, 1920), (1888, 3024)]:
+            for q, norm_c in centers.items():
+                arr = np.zeros((H, W), dtype=np.uint8)
+                bar_w = int(W * 0.03)
+                c_px = int(W * norm_c)
+                y_px = int(H * 0.185)
+                arr[y_px:y_px + 4, c_px - bar_w // 2 : c_px + bar_w // 2] = 255
+                path = os.path.join(self.tmp if hasattr(self, "tmp") else "/tmp", f"test_q_{W}_{q}.png")
+                Image.fromarray(arr).save(path)
+                self.assertEqual(mc.active_highlight_quarter(path), q)
+                if os.path.exists(path):
+                    os.remove(path)
 
 
     def test_highlight_top_clock(self):
@@ -689,6 +692,50 @@ class RosterRecoveryTest(unittest.TestCase):
             pages = mc.capture_highlights(hdir)
             # Should have captured 3 pages (f_start, f_still_on_screen, f_mid), and stopped when f_wrap wrapped
             self.assertEqual(pages, 3)
+
+    def test_capture_highlights_quarter_transition(self):
+        class MockFrame:
+            def __init__(self, path, items):
+                self.path = path
+                self.items = items
+
+        f4 = MockFrame("/tmp/f4.png", [("0:18", (100, 300, 150, 330))])
+        f3 = MockFrame("/tmp/f3.png", [("1:20", (100, 300, 150, 330))])
+        f1 = MockFrame("/tmp/f1.png", [("5:00", (100, 300, 150, 330))])
+        f_postgame = MockFrame("/tmp/postgame.png", [])
+
+        wait_fors = [
+            (f4, "HIGHLIGHTS"),
+            (f4, "HIGHLIGHTS"),
+            (f3, "HIGHLIGHTS"),
+            (f3, "HIGHLIGHTS"),
+            (f1, "HIGHLIGHTS"),
+            (f1, "HIGHLIGHTS"),
+            (f_postgame, "POSTGAME_MENU"),
+        ]
+
+        def fake_active_quarter(p):
+            if "f4" in p:
+                return "4TH"
+            elif "f3" in p:
+                return "3RD"
+            elif "f1" in p:
+                return "1ST"
+            return None
+
+        with tempfile.TemporaryDirectory() as hdir, \
+                mock.patch.object(mc, "wait_for", side_effect=wait_fors), \
+                mock.patch.object(mc, "active_highlight_quarter", side_effect=fake_active_quarter), \
+                mock.patch.object(mc, "look", side_effect=lambda: (f4, "HIGHLIGHTS")), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda *a: mock.MagicMock()), \
+                mock.patch.object(mc, "same_table", return_value=True), \
+                mock.patch.object(mc, "press") as mock_press, \
+                mock.patch.object(mc.subprocess, "run"), \
+                mock.patch.object(mc, "log"):
+            pages = mc.capture_highlights(hdir)
+            self.assertEqual(pages, 3)
+            left_calls = [c for c in mock_press.call_args_list if c[0][0] == "left"]
+            self.assertEqual(len(left_calls), 2)
 
 
 if __name__ == "__main__":

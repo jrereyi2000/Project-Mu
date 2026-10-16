@@ -1709,36 +1709,43 @@ def run_games(out, week=None, all_rows=False, max_games=None):
 
 def active_highlight_quarter(path):
     """Detect which quarter tab is active on the HIGHLIGHTS screen by the underline bar.
+    Works across any resolution (1080p, Retina 1888p, etc.) using normalized coordinates.
     Returns '1ST', '2ND', '3RD', '4TH', 'OT', or None."""
     import numpy as np
     img = Image.open(path).convert("L")
     arr = np.array(img)
-    if arr.shape[0] < 210 or arr.shape[1] < 1100:
+    H, W = arr.shape
+    y0, y1 = int(H * 0.15), int(H * 0.28)
+    x0, x1 = int(W * 0.35), int(W * 0.60)
+    sub = arr[y0:y1, x0:x1]
+    min_len, max_len = int(W * 0.018), int(W * 0.055)
+    candidates = []
+    for y in range(sub.shape[0]):
+        white = np.where(sub[y] > 160)[0]
+        if len(white) >= min_len:
+            runs, cur = [], [white[0]]
+            for c in white[1:]:
+                if c == cur[-1] + 1:
+                    cur.append(c)
+                else:
+                    runs.append(cur)
+                    cur = [c]
+            runs.append(cur)
+            for r in runs:
+                if min_len <= len(r) <= max_len:
+                    mid = x0 + (r[0] + r[-1]) / 2
+                    candidates.append((y0 + y, len(r), mid / W))
+    if not candidates:
         return None
-    sub = arr[196:205, 700:1100]
-    white = (sub > 160).astype(int)
-    cols = np.where(white.sum(axis=0) >= 3)[0]
-    if not len(cols):
-        return None
-    runs, cur_run = [], [cols[0]]
-    for c in cols[1:]:
-        if c == cur_run[-1] + 1:
-            cur_run.append(c)
-        else:
-            runs.append(cur_run)
-            cur_run = [c]
-    runs.append(cur_run)
-    longest = max(runs, key=len)
-    if len(longest) < 30:
-        return None
-    mid_x = 700 + (longest[0] + longest[-1]) / 2
-    if mid_x < 785:
+    best = max(candidates, key=lambda c: c[1])
+    norm_x = best[2]
+    if norm_x < 0.409:
         return "1ST"
-    elif mid_x < 865:
+    elif norm_x < 0.450:
         return "2ND"
-    elif mid_x < 940:
+    elif norm_x < 0.490:
         return "3RD"
-    elif mid_x < 1020:
+    elif norm_x < 0.531:
         return "4TH"
     else:
         return "OT"
@@ -1829,14 +1836,22 @@ def capture_highlights(hdir):
 
         captured_quarters.add(q)
         if q == "1ST":
+            log("  1ST quarter finished; all quarters captured")
             break
 
-        # Move to previous quarter with Left
-        log(f"  Switching to previous quarter (pressing left)")
-        press("left", wait=1.5)
-        f, _ = look()
-        new_q = active_highlight_quarter(f.path)
+        # Move to previous quarter with Left (retry up to 3 times to ensure quarter tab switched)
+        log("  Switching to previous quarter (pressing left)")
+        new_q = None
+        for attempt in range(3):
+            press("left", wait=1.5)
+            f, _ = wait_for(["HIGHLIGHTS"], timeout=8)
+            new_q = active_highlight_quarter(f.path)
+            if new_q and new_q != q:
+                break
+            time.sleep(0.5)
+
         if new_q and new_q in captured_quarters:
+            log(f"  Quarter {new_q} already captured; finished all quarters")
             break
         q = new_q or q
 
