@@ -256,6 +256,68 @@ class FindRecordsBrokenInWeekTests(unittest.TestCase):
                 self.assertTrue(any("Panthers" in e["holder"] and e["category"] == "season_team_wins" and e["result"] == "broke" for e in w18))
 
 
+
+class PostseasonRecordsTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_LIVE_DB, "requires live database connection")
+    def test_postseason_categories_and_top10(self):
+        with psycopg.connect(DatabaseHandler().db_conn_info) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT count(*) FROM record_categories WHERE season_type = 'POSTSEASON'")
+                count = cur.fetchone()[0]
+                self.assertGreaterEqual(count, 39)
+
+                # Check single-game, run, Super Bowl, and career categories in league_top10
+                cur.execute("""
+                    SELECT category, holder, value
+                    FROM league_top10
+                    WHERE category = 'postseason_game_pass_yards' AND rank = 1
+                """)
+                top_pass = cur.fetchone()
+                self.assertIsNotNone(top_pass)
+                self.assertEqual(top_pass[1], "Tom Brady")
+                self.assertEqual(float(top_pass[2]), 505.0)
+
+                cur.execute("""
+                    SELECT category, holder, value
+                    FROM league_top10
+                    WHERE category = 'postseason_run_pass_yards' AND rank = 1
+                """)
+                top_run = cur.fetchone()
+                self.assertIsNotNone(top_run)
+                self.assertEqual(top_run[1], "Eli Manning")
+                self.assertEqual(float(top_run[2]), 1219.0)
+
+                cur.execute("""
+                    SELECT category, holder, value
+                    FROM league_top10
+                    WHERE category = 'super_bowl_pass_tds' AND rank = 1
+                """)
+                top_sb_tds = cur.fetchone()
+                self.assertIsNotNone(top_sb_tds)
+                self.assertEqual(top_sb_tds[1], "Steve Young")
+                self.assertEqual(float(top_sb_tds[2]), 6.0)
+
+                cur.execute("""
+                    SELECT category, holder, value
+                    FROM league_top10
+                    WHERE category = 'career_postseason_pass_yards' AND rank = 1
+                """)
+                top_career = cur.fetchone()
+                self.assertIsNotNone(top_career)
+                self.assertEqual(top_career[1], "Tom Brady")
+                self.assertEqual(float(top_career[2]), 13049.0)
+
+                cur.execute("""
+                    SELECT category, holder, value
+                    FROM league_records
+                    WHERE category = 'career_postseason_rec_yards'
+                """)
+                top_rec = cur.fetchone()
+                self.assertIsNotNone(top_rec)
+                self.assertEqual(top_rec[1], "Jerry Rice")
+                self.assertEqual(float(top_rec[2]), 2245.0)
+
+
 if __name__ == "__main__":
     unittest.main()
 

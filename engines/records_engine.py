@@ -71,8 +71,8 @@ def ordinal(n: int) -> str:
 def load_book(cur, season):
     """Categories, franchise records and top-10 entries from before this season (the baseline the season is measured
     against), plus the record book's rows for this season (BOOK), which are the authority for it."""
-    cur.execute("SELECT category, label, scope, subject, better FROM record_categories ORDER BY sort_order")
-    cats = {r[0]: {"label": r[1], "scope": r[2], "subject": r[3], "better": r[4]} for r in cur.fetchall()}
+    cur.execute("SELECT category, label, scope, subject, better, COALESCE(season_type, 'REGULAR') FROM record_categories ORDER BY sort_order")
+    cats = {r[0]: {"label": r[1], "scope": r[2], "subject": r[3], "better": r[4], "season_type": r[5]} for r in cur.fetchall()}
     cur.execute("SELECT team_id, category, value, holder, season, source FROM franchise_records WHERE season <= %s", (season,))
     franchise, book_rows = collections.defaultdict(list), []
     for team_id, cat, value, holder, s, source in cur.fetchall():
