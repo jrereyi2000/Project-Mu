@@ -119,15 +119,37 @@ TEAM_STORY_ROLES = {
 }
 # Angles by (role, good news?); a second post by the same role takes the next angle.
 BUZZ_ANGLES = {
-    ("pundit", True): ("where this ranks around the league this season", "the skeptic's case: what the numbers hide"),
-    ("pundit", False): ("what went wrong and who is to blame", "whether it can be fixed, or what comes next"),
-    ("former", True): ("how it looks to someone who played: what you see in it",),
-    ("former", False): ("how it feels from the inside, as someone who played through it",),
-    ("bandwagon", True): ("pure hype: you are hopping on the bandwagon",),
-    ("bandwagon", False): ("you are hopping off, loudly",),
+    ("pundit", True): (
+        "legacy claim: whether this is the best player in the league right now or an all-time peak at the position",
+        "where this ranks around the league this season",
+        "the skeptic's case: what the numbers hide and whether it holds up in January",
+        "the eye test: why the tape and swagger show he is unstoppable",
+    ),
+    ("pundit", False): (
+        "direct player accountability: calling out the disappearing act when it mattered",
+        "what went wrong schematically and who is to blame",
+        "whether this is a temporary slump or an exposed flaw",
+    ),
+    ("former", True): (
+        "how it looks to someone who played: respect for the craft and physical execution",
+        "declaring this player the undisputed best at his position in football right now",
+        "legacy perspective: comparing this level of play to past greats you played with or against",
+    ),
+    ("former", False): (
+        "calling out a lack of urgency, physical toughness, or business decisions",
+        "how it feels from the inside when your execution lets the squad down",
+    ),
+    ("bandwagon", True): (
+        "declaring this player the undisputed best player alive right now",
+        "pure hype and aura: claiming this is an all-time peak",
+    ),
+    ("bandwagon", False): (
+        "clowning the performance and labeling them a fraud",
+        "declaring they have zero clutch gene when it matters",
+    ),
     ("fantasy", True): ("what it means for fantasy managers",),
-    ("meme", False): ("roast it",),
-    ("meme", True): ("make a joke out of how lopsided it is",),
+    ("meme", False): ("roast the performance with savage humor",),
+    ("meme", True): ("make a meme about how absurd and unfair this performance was",),
 }
 # Bucket floors when a busy week has to trim to stay near TARGET_POSTS (last-added posts go first).
 TRIM_ORDER = (("PERFORMANCE", 10), ("COMPARISON", 7), ("BAD_GAME", 5), ("TEAM_STORY", 4))
@@ -1274,25 +1296,57 @@ class Accounts:
 # --------------------------------------------------------------------------------------------- planner ---
 # Fan posts each get one angle so a team's fans don't all write the same post (docs/SOCIAL_MATRIX.md §3).
 FAN_ANGLES = (
-    "one specific player from the facts",
+    "one specific player who dominated or struggled",
     "the turning point of the game as you remember it (no invented stats)",
     "what this result means for the rest of the season",
-    "trash talk aimed at the other team's fans",
-    "the coaching and play-calling",
-    "the atmosphere in the stadium or at your watch party",
-    "one number from the facts that tells the story",
-    "looking ahead to next week's game",
+    "trash talk or banter aimed at the other team's fans",
+    "the coaching, preparation, and play-calling decisions",
+    "the atmosphere in the stadium or watching with friends",
+    "one memorable number or moment from the facts",
+    "looking ahead to next week's matchup",
+    "declaring your player the best in the league or best at his position right now",
+    "legacy debate: measuring this team or player against franchise or all-time history",
+    "fanbase trauma or anxiety: living on the edge of your seat ('I have seen this movie before')",
+    "keeping receipts: calling out media and doubters who counted your team out",
+    "admitting you were wrong about a player and eating your words (apology form)",
+    "attacking an underperforming star for disappearing when the lights were bright",
+)
+BANDWAGON_ANGLES = (
+    "declaring this player the undisputed best in the league right now",
+    "pure hype: crown them, this team or player has unmatched aura",
+    "calling out a player for being a total fraud when the lights got bright",
+    "jumping on the bandwagon: this offense is the most electric thing in football",
+    "the eye test: why numbers don't do justice to how unstoppable they look",
+    "legacy claim: claiming this is an all-time great season we will talk about for decades",
+)
+BEAT_ANGLES = (
+    "practice observation and physical execution in the trenches",
+    "locker room focus, leadership quotes, or coach press conference tone",
+    "tactical and schematic matchup key for the upcoming opponent",
+    "roster depth, rotational players, or young player development",
+)
+PREVIEW_ANGLES = (
+    "fear and dread: terrified of what the opponent's star player might do to your team",
+    "swagger and confidence: why your team has the upper hand and will not back down",
+    "fan anxiety and nervous energy: pacing the floor before kickoff",
+    "matchup battle: the key battle in the trenches or on the perimeter that decides the game",
+    "revenge or statement: a chance to prove the doubters wrong",
 )
 FAN_ARCHETYPES = ("DIE_HARD_FAN", "BANDWAGON_FAN")
 # Replies to the same post take different stances, in this order.
 REPLY_STANCES = ("push back on it", "agree and add a point of your own", "make a joke about it")
 
 
-def _assignment(kind, account, subject, facts, filed_team=None):
-    angle = None
-    if account and account.get("archetype") == "DIE_HARD_FAN" and kind in ("REACTION", "PREVIEW"):
-        seed = sum(ord(c) for c in f"{account['agent_id']}|{kind}|{subject.get('id')}")
-        angle = FAN_ANGLES[seed % len(FAN_ANGLES)]
+def _assignment(kind, account, subject, facts, filed_team=None, angle=None):
+    if angle is None and account:
+        arch = account.get("archetype")
+        seed = sum(ord(c) for c in f"{account.get('agent_id', '')}|{kind}|{subject.get('id', '')}")
+        if arch == "DIE_HARD_FAN" and kind == "REACTION":
+            angle = FAN_ANGLES[seed % len(FAN_ANGLES)]
+        elif arch == "DIE_HARD_FAN" and kind == "PREVIEW":
+            angle = PREVIEW_ANGLES[seed % len(PREVIEW_ANGLES)]
+        elif arch == "BANDWAGON_FAN" and kind in ("PERFORMANCE", "BAD_GAME", "STANDINGS"):
+            angle = BANDWAGON_ANGLES[seed % len(BANDWAGON_ANGLES)]
     return {
         "angle": angle,
         "kind": kind,
@@ -1901,8 +1955,9 @@ def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=
             out.append(_assignment("BEAT_INJURY", b, {"type": "team", "id": team_id, "label": f"{W.team_label(team_id)}: {top_inj['player_name']} Injury"},
                                    W.beat_injury_facts(team_id, top_inj), filed_team=team_id))
         else:
+            angle = BEAT_ANGLES[idx % len(BEAT_ANGLES)]
             out.append(_assignment("BEAT", b, {"type": "team", "id": team_id, "label": W.team_label(team_id)},
-                                   W.beat_facts(team_id), filed_team=team_id))
+                                   W.beat_facts(team_id), filed_team=team_id, angle=angle))
     fans = sorted((x for x in acc.all() if x["archetype"] == "DIE_HARD_FAN" and x["team_id"] == team_id
                    and acc.uses[x["agent_id"]] < 1000), key=lambda x: acc.order[x["agent_id"]])
     key_injuries = [inj for inj in starter_injuries if inj.get("is_key_injury")]
