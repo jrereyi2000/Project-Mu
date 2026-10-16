@@ -1331,12 +1331,35 @@ def run_team_stats(out):
     log(f"Captured team tabs: {', '.join(TEAM_TABS)}")
 
 
+def menu_index(label):
+    """Position of a week in Madden's dropdown list order:
+    Season Week 1-18 (1-18), Wild Card (19), Divisional (20), Conference (21),
+    Super Bowl (22), Preseason Week 1-4 (23-26).
+    In this physical order, Super Bowl sits directly between Conference and Preseason Week 1."""
+    label = clean_week(label)
+    m = re.match(r"^SEASON WEEK (\d+)$", label)
+    if m:
+        return int(m.group(1))
+    if label in ("POST SEASON WILD CARD", "WILD CARD"):
+        return 19
+    if label in ("POST SEASON DIVISIONAL", "DIVISIONAL"):
+        return 20
+    if label in ("POST SEASON CONFERENCE", "CONFERENCE"):
+        return 21
+    if label in ("POST SEASON SUPER BOWL", "SUPER BOWL"):
+        return 22
+    m = re.match(r"^PRESEASON WEEK (\d+)$", label)
+    if m:
+        return 22 + int(m.group(1))
+    return None
+
+
 def week_entries(f):
     """Week labels visible on screen, as (clean label, box)."""
     out = []
     for t, box in f.items:
         lab = clean_week(t)
-        if week_index(lab) is not None:
+        if menu_index(lab) is not None:
             out.append((lab, box))
     return out
 
@@ -1363,7 +1386,9 @@ def select_week(target, debug_dir=None):
                 best, best_b = lab, b
         return best if best_b > 120 else None
 
-    t_idx = week_index(target)
+    t_idx = menu_index(target)
+    if t_idx is None:
+        raise Abort(f"Don't know the dropdown position of '{target}'")
     key_down("l2")
     try:
         f = None
@@ -1386,9 +1411,9 @@ def select_week(target, debug_dir=None):
                 sel = selected(f)
             if sel is None:
                 raise Abort("Lost track of the highlighted week")
-            if week_index(sel) == t_idx:
+            if menu_index(sel) == t_idx:
                 break
-            direction = "up" if week_index(sel) > t_idx else "down"
+            direction = "up" if menu_index(sel) > t_idx else "down"
             key_down(direction); time.sleep(0.1); key_up(direction)
             time.sleep(0.45)
             f = frame()
@@ -1407,14 +1432,15 @@ def select_week(target, debug_dir=None):
 def go_to_week(f, target, out):
     """On the League Schedule list, switch to `target` (held-L2 week list; falls back to
     tapping L2, which steps one week forward and wraps). Returns the frame."""
-    if week_index(week_label(f) or "") != week_index(target):
+    target_clean = clean_week(target)
+    if clean_week(week_label(f) or "") != target_clean:
         try:
             f = select_week(target, debug_dir=os.path.join(out, "week_debug"))
         except Abort as e:
             log(f"Week list didn't work ({e}); falling back to tapping L2 forward")
             f, _ = wait_for(["SCHED_LIST"], timeout=10)
         for _ in range(40):                     # verify (and fallback: tap = next week, wraps)
-            if week_index(week_label(f) or "") == week_index(target):
+            if clean_week(week_label(f) or "") == target_clean:
                 break
             press("l2", hold=0.15, wait=1.3)
             f, _ = wait_for(["SCHED_LIST"], timeout=10)
@@ -1631,7 +1657,7 @@ def run_games(out, week=None, all_rows=False, max_games=None):
     target = clean_week(week) if week else previous_week(CURRENT_WEEK)
     log(f"Current week: {CURRENT_WEEK}. Games of: {target}")
     f = go_to_week(f, target, out)
-    if week_index(week_label(f) or "") != week_index(target):
+    if clean_week(week_label(f) or "") != clean_week(target):
         raise Abort(f"Not on {target}")
     done, results = [], []
     while True:
@@ -1718,9 +1744,27 @@ def active_highlight_quarter(path):
         return "OT"
 
 
+def highlight_top_clock(f):
+    """The top clock displayed in the highlights table, returned as clock seconds (mm * 60 + ss)
+    or None. Highlights list the latest plays (closest to 0:00) at the top; scrolling down moves
+    backwards in time towards the start of the quarter (11:00/15:00), so clock seconds strictly increase.
+    When the list wraps around back to the top of the quarter, the top clock drops back down."""
+    clocks = []
+    for w, (l, t, r, b) in getattr(f, "items", []):
+        if ":" in w and 70 < l < 220 and 260 < t < 950:
+            parts = w.split(":")
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                clocks.append((t, int(parts[0]) * 60 + int(parts[1])))
+    if not clocks:
+        return None
+    clocks.sort(key=lambda x: x[0])
+    return clocks[0][1]
+
+
 def capture_highlights(hdir):
     """Capture game highlights across quarters (starts at 4TH/OT, scrolls down each quarter,
-    presses Left to step through 3RD, 2ND, 1ST). Saves screenshots as highlights/q<quarter>_NNN.png.
+    presses Left to step through 3RD, 2ND, 1ST). Handles circular list wrap (scrolling down past
+    the start of the quarter wraps back to the top). Saves screenshots as highlights/q<quarter>_NNN.png.
     Returns total pages captured."""
     os.makedirs(hdir, exist_ok=True)
     f, s = wait_for(["HIGHLIGHTS"], timeout=10)
@@ -1742,15 +1786,24 @@ def capture_highlights(hdir):
             log(f"    saved {png_name}")
             total_pages += 1
             page += 1
+            cur_clock = highlight_top_clock(f)
             sig_cur = table_sig(f.path, 0.28, 0.92)
+
+            if page >= 8:
+                log(f"    max pages reached for quarter {q}")
+                break
 
             # Scroll down by pressing Down ~8 times (page holds 11-12 rows)
             press("down", times=8, hold=0.1, wait=0.8)
             f_next, _ = look()
             sig_next = table_sig(f_next.path, 0.28, 0.92)
+            next_clock = highlight_top_clock(f_next)
 
             if same_table(sig_cur, sig_next):
-                log(f"    end of quarter {q} reached")
+                log(f"    end of quarter {q} reached (table stopped moving)")
+                break
+            if cur_clock is not None and next_clock is not None and next_clock <= cur_clock:
+                log(f"    end of quarter {q} reached (list wrapped around from {cur_clock}s to {next_clock}s)")
                 break
             f = f_next
 

@@ -66,6 +66,24 @@ class WeekLabelTest(unittest.TestCase):
             self.assertEqual(labels["captured"], "POST SEASON CONFERENCE")
             self.assertEqual(labels["next"], "POST SEASON SUPER BOWL")
 
+    def test_menu_index(self):
+        """Dropdown physical order: Season Week 1-18, Wild Card, Divisional, Conference, Super Bowl, Preseason Week 1-4.
+        Super Bowl sits directly between Conference and Preseason Week 1."""
+        self.assertEqual(mc.menu_index("SEASON WEEK 18"), 18)
+        self.assertEqual(mc.menu_index("POST SEASON WILD CARD"), 19)
+        self.assertEqual(mc.menu_index("POST SEASON DIVISIONAL"), 20)
+        self.assertEqual(mc.menu_index("POST SEASON CONFERENCE"), 21)
+        self.assertEqual(mc.menu_index("POST SEASON SUPER BOWL"), 22)
+        self.assertEqual(mc.menu_index("PRESEASON WEEK 1"), 23)
+        self.assertEqual(mc.menu_index("PRESEASON WEEK 4"), 26)
+
+        # Preseason Week 1 -> Super Bowl is UP (23 > 22)
+        self.assertGreater(mc.menu_index("PRESEASON WEEK 1"), mc.menu_index("POST SEASON SUPER BOWL"))
+        # Super Bowl -> Conference is UP (22 > 21)
+        self.assertGreater(mc.menu_index("POST SEASON SUPER BOWL"), mc.menu_index("POST SEASON CONFERENCE"))
+        # Conference -> Super Bowl is DOWN (21 < 22)
+        self.assertLess(mc.menu_index("POST SEASON CONFERENCE"), mc.menu_index("POST SEASON SUPER BOWL"))
+
 
 class OcrTextTest(unittest.TestCase):
     def test_cyrillic_lookalikes_become_latin(self):
@@ -620,6 +638,46 @@ class RosterRecoveryTest(unittest.TestCase):
             self.assertEqual(mc.active_highlight_quarter(path), q)
             if os.path.exists(path):
                 os.remove(path)
+
+
+    def test_highlight_top_clock(self):
+        class FakeFrame:
+            def __init__(self, items):
+                self.items = items
+        # clock at (l=100, t=300) should be parsed to 18s
+        f1 = FakeFrame([("0:18", (100, 300, 150, 330)), ("1:12", (100, 350, 150, 380))])
+        self.assertEqual(mc.highlight_top_clock(f1), 18)
+        # clock at (l=100, t=300) with 8:04 should be parsed to 484s
+        f2 = FakeFrame([("8:04", (100, 300, 150, 330))])
+        self.assertEqual(mc.highlight_top_clock(f2), 484)
+        # no clocks
+        f3 = FakeFrame([("TOUCHDOWN", (200, 300, 400, 330))])
+        self.assertIsNone(mc.highlight_top_clock(f3))
+
+    def test_capture_highlights_stops_on_wrap(self):
+        class MockFrame:
+            def __init__(self, path, items):
+                self.path = path
+                self.items = items
+
+        f_start = MockFrame("/tmp/f0.png", [("0:18", (100, 300, 150, 330))])
+        f_mid = MockFrame("/tmp/f1.png", [("7:30", (100, 300, 150, 330))])
+        f_wrap = MockFrame("/tmp/f2.png", [("0:18", (100, 300, 150, 330))])
+
+        looks = [f_mid, f_wrap]
+
+        with tempfile.TemporaryDirectory() as hdir, \
+                mock.patch.object(mc, "wait_for", side_effect=[(f_start, "HIGHLIGHTS"), (f_start, "HIGHLIGHTS"), (f_start, "POSTGAME_MENU")]), \
+                mock.patch.object(mc, "active_highlight_quarter", return_value="1ST"), \
+                mock.patch.object(mc, "look", side_effect=lambda: (looks.pop(0), "HIGHLIGHTS")), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda *a: mock.MagicMock()), \
+                mock.patch.object(mc, "same_table", return_value=False), \
+                mock.patch.object(mc, "press"), \
+                mock.patch.object(mc.subprocess, "run"), \
+                mock.patch.object(mc, "log"):
+            pages = mc.capture_highlights(hdir)
+            # Should have captured 2 pages (f_start and f_mid), and stopped when f_wrap wrapped
+            self.assertEqual(pages, 2)
 
 
 if __name__ == "__main__":
