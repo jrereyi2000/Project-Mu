@@ -1920,7 +1920,8 @@ def format_plan(plan: dict, teams: dict) -> str:
     for a in plan["assignments"]:
         if a["kind"] != kind:
             kind = a["kind"]
-            out.append(f"\n== {kind} ({plan['counts'][kind]}) · {WINDOWS.get(kind, '')}")
+            count = plan["counts"].get(kind, sum(1 for x in plan["assignments"] if x["kind"] == kind))
+            out.append(f"\n== {kind} ({count}) · {WINDOWS.get(kind, '')}")
         team = teams.get(a["team_id"], {}).get("abbr", "") if a["team_id"] else ""
         out.append(f"  {(a['handle'] or '(tbd)'):<24} {team:<4} {a['subject']['label']}")
     return "\n".join(out)
