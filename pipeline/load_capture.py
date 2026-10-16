@@ -957,8 +957,14 @@ def load_games(cur, folder, season, report, replace=False):
         cmap = GAME_OFFENSE.get(cat) or CATEGORY.get(cat) or ({"DP": ("downs_played", I)} if cat == "general" else None)
         if cmap is None:
             continue
+        csv_rows = read_csv(os.path.join(folder, path))
+        if not csv_rows:
+            continue
+        if cat == "general":
+            dp_key = "DP" if any("DP" in r for r in csv_rows) else ("OVR" if any("OVR" in r for r in csv_rows) else "DP")
+            cmap = {dp_key: ("downs_played", I)}
         table = "player_stats" if cat in GAME_OFFENSE else f"game_stat_{cat}"
-        for r in read_csv(os.path.join(folder, path)):
+        for r in csv_rows:
             g = games.get(r["GAME"])
             if g is None:
                 continue
@@ -990,7 +996,8 @@ def load_games(cur, folder, season, report, replace=False):
             unmatched.append(f"{r['GAME']} general: {r['TEAM']} {r['NAME']} ({len(hits)} players)")
             continue
         pid, pos, pn = played[0]
-        vals = parse_row(r, {"DP": ("downs_played", I)}, f"{r['GAME']} general {r['NAME']}")
+        dp_key = "DP" if "DP" in r else ("OVR" if "OVR" in r else "DP")
+        vals = parse_row(r, {dp_key: ("downs_played", I)}, f"{r['GAME']} general {r['NAME']}")
         if any(vals.values()):
             lines[(g["id"], pid)].setdefault("game_stat_general", {}).update(vals)
     if problems:

@@ -57,6 +57,12 @@ class HeaderTest(unittest.TestCase):
         with self.assertRaises(L.LoadError):
             L.parse_row({"NAME": "X", "REC": "3"}, {"REC": ("receptions", L.num), "YARDS": ("rec_yards", L.num)}, "t")
 
+    def test_general_ovr_fallback(self):
+        row = {"NAME": "E.Roman", "OVR": "80"}
+        dp_key = "DP" if "DP" in row else ("OVR" if "OVR" in row else "DP")
+        vals = L.parse_row(row, {dp_key: ("downs_played", L.num)}, "test")
+        self.assertEqual(vals, {"downs_played": 80})
+
 
 class MisreadTest(unittest.TestCase):
     def test_one_row_read_twice(self):

@@ -233,11 +233,16 @@ def read_table(path):
 def merge(paths, label, key_cols=None):
     """Rows of overlapping pages, first copy kept. key_cols (column names) de-duplicates on
     those columns only, for tables where a repeated row can be read slightly differently."""
-    columns, rows = None, OrderedDict()
-    for p in sorted(paths):
-        t = read_table(p)
-        columns = columns or t["columns"]
-        idx = [columns.index(c) for c in key_cols if c in columns] if key_cols else None
+    tables = [(p, read_table(p)) for p in sorted(paths)]
+    col_counts = Counter()
+    for _, t in tables:
+        clean = tuple(_col(c) for c in t.get("columns", []))
+        if clean:
+            col_counts[clean] += 1
+    columns = list(col_counts.most_common(1)[0][0]) if col_counts else []
+    rows = OrderedDict()
+    idx = [columns.index(c) for c in key_cols if c in columns] if key_cols else None
+    for p, t in tables:
         for n, r in enumerate(t["rows"]):
             k = tuple(r[i] if i < len(r) else "" for i in idx) if idx else tuple(r)
             _seen_at(label, tuple(r), len(t["rows"]) - 1 - n)
@@ -672,7 +677,8 @@ quarter scores and totals, and every visible stat row exactly as shown (e.g. "37
 
 GAME_NOTE = """
 This is one game's player stats; the TEAM column shows each player's team abbreviation. Ignore
-the player photo/banner above the table."""
+the player photo/banner above the table. For the GENERAL category, the stat column is DP
+(Downs Played / snap count, NOT OVR)."""
 
 
 def _is_game(path):
@@ -798,10 +804,10 @@ def extract_games(root):
             else:
                 cols, trows = merge(paths, f"{game} {key}")
             cat = key.split("_", 1)[1]
+            if cat == "general":
+                cols = ["DP" if c == "OVR" else c for c in cols]
             write_csv(os.path.join(d, f"stats_{cat}.csv"), cols, trows)
-            wc, wr = week.setdefault(cat, [None, []])
-            week[cat][0] = wc or cols
-            week[cat][1] += [[game] + list(r) for r in trows]
+            week.setdefault(cat, []).append((game, list(cols), trows))
         hdir = os.path.join(d, "highlights")
         if os.path.isdir(hdir):
             hl = extract_highlights(hdir)
@@ -813,8 +819,18 @@ def extract_games(root):
     hdr = ["GAME", "AWAY", "A1", "A2", "A3", "A4", "AOT", "ATOTAL", "HOME", "H1", "H2", "H3", "H4", "HOT", "HTOTAL",
            "QUARTERS_OK"]
     write_csv(os.path.join(root, "game_scores.csv"), hdr, scores)
-    for cat, (cols, rows) in sorted(week.items()):
-        write_csv(os.path.join(root, f"game_stats_{cat}.csv"), ["GAME"] + list(cols), rows)
+    for cat, game_entries in sorted(week.items()):
+        cols = []
+        for _, gcols, _ in game_entries:
+            for c in gcols:
+                if c not in cols:
+                    cols.append(c)
+        rows = []
+        for game, gcols, trows in game_entries:
+            for r in trows:
+                rd = dict(zip(gcols, r))
+                rows.append([game] + [rd.get(c, "") for c in cols])
+        write_csv(os.path.join(root, f"game_stats_{cat}.csv"), ["GAME"] + cols, rows)
 
 
 def write_csv(path, columns, rows):

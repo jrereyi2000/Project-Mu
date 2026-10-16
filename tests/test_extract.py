@@ -36,6 +36,29 @@ class MergeTest(unittest.TestCase):
         self.assertEqual([r[0] for r in rows], ["B.McGrath", "T.Ramos", "V.Amaya"])
         self.assertEqual(rows[1][3], "79")          # first copy kept
 
+    def test_majority_vote_columns(self):
+        extract._cache.update({
+            "p1.png": {"title": "", "columns": ["TEAM", "NAME", "OVR"], "rows": [["DEN", "E.Roman", "80"]]},
+            "p2.png": {"title": "", "columns": ["TEAM", "NAME", "DP"], "rows": [["DEN", "E.Roman", "80"]]},
+            "p3.png": {"title": "", "columns": ["TEAM", "NAME", "DP"], "rows": [["HOU", "J.Bloom", "69"]]},
+        })
+        try:
+            columns, rows = extract.merge(["p1.png", "p2.png", "p3.png"], "test")
+        finally:
+            for k in ("p1.png", "p2.png", "p3.png"):
+                extract._cache.pop(k)
+        self.assertEqual(columns, ["TEAM", "NAME", "DP"])
+
+    def test_merge_strips_sort_marks(self):
+        extract._cache.update({
+            "p1.png": {"title": "", "columns": ["TEAM", "NAME", "▼DP"], "rows": [["DEN", "E.Roman", "80"]]},
+        })
+        try:
+            columns, rows = extract.merge(["p1.png"], "test")
+        finally:
+            extract._cache.pop("p1.png")
+        self.assertEqual(columns, ["TEAM", "NAME", "DP"])
+
 
 class MergeWideTest(unittest.TestCase):
     def test_half_visible_column_does_not_shift_values(self):
