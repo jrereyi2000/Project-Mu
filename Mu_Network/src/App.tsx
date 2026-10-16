@@ -4917,14 +4917,45 @@ function App() {
         <div className="edition-bar">
           <span>THE NEWSROOM</span>
           <span>{systemStatus.season} SEASON</span>
-          <span>WEEK {systemStatus.week}</span>
+          <div className="edition-week-picker">
+            <button
+              className="edition-week-btn"
+              onClick={() => setWeek(Math.max(1, week - 1))}
+              disabled={week <= 1}
+              aria-label="Previous week"
+              title="Previous week"
+            >
+              ◀
+            </button>
+            <select
+              className="edition-week-select"
+              value={week}
+              onChange={(e) => setWeek(Number(e.target.value))}
+              aria-label="Select news week"
+            >
+              {Array.from({ length: Math.max(systemStatus.week || 19, 19) }, (_, i) => i + 1).map((w) => (
+                <option key={w} value={w}>
+                  WEEK {w}{w === 19 ? " · WILD CARD" : w === 20 ? " · DIVISIONAL" : w === 21 ? " · CONF CHAMP" : w === 22 ? " · PRO BOWL" : w === 23 ? " · SUPER BOWL" : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              className="edition-week-btn"
+              onClick={() => setWeek(Math.min(systemStatus.week || 23, week + 1))}
+              disabled={week >= (systemStatus.week || 23)}
+              aria-label="Next week"
+              title="Next week"
+            >
+              ▶
+            </button>
+          </div>
         </div>
 
         <div className="page-grid">
           <section className="main-column">
             <div className="section-heading">
               <div><span className="red-rule" /><h1>National Desk</h1></div>
-              <p>Reporting, analysis, and film study from across the league</p>
+              <p>Week {week} reporting, analysis, and film study</p>
             </div>
 
             {/* HERO STORY */}

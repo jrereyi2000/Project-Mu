@@ -105,7 +105,13 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 42px 80px; }
 .edition-bar { height: 58px; border-bottom: 1px solid var(--gray-300); display: flex; align-items: center; gap: 22px; color: var(--gray-500); font: 600 9px var(--font-mono); letter-spacing: .08em; }
 .edition-bar span:first-child { color: var(--ink); font-weight: 700; }
 .edition-bar span:nth-child(2):before, .edition-bar span:nth-child(3):before { content: "/"; margin-right: 22px; color: var(--gray-300); }
-.edition-bar span:last-child { margin-left: auto; color: var(--team-color, var(--red)); }
+.edition-bar span:last-child { color: var(--gray-500); }
+.edition-week-picker { margin-left: auto; display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); }
+.edition-week-btn { background: transparent; border: 1px solid var(--gray-300); color: var(--ink); cursor: pointer; padding: 3px 8px; font-size: 10px; font-weight: 700; border-radius: 2px; transition: all .15s ease; line-height: 1; }
+.edition-week-btn:hover:not(:disabled) { background: var(--ink); color: var(--white); border-color: var(--ink); }
+.edition-week-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.edition-week-select { background: var(--white); border: 1px solid var(--gray-300); color: var(--team-color, var(--red)); font: 700 9px var(--font-mono); letter-spacing: .08em; padding: 4px 8px; border-radius: 2px; cursor: pointer; outline: none; }
+.edition-week-select:hover { border-color: var(--gray-500); }
 .page-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(300px, 1fr); gap: 50px; padding-top: 38px; }
 .main-column { min-width: 0; }
 .section-heading { margin-bottom: 22px; display: flex; align-items: flex-end; justify-content: space-between; }
