@@ -1560,11 +1560,13 @@ def traverse_game(direction, chunk=1.5, max_chunks=8):
     """Left/Right across a game's player-stats table by holding the key (Madden auto-repeats:
     ~4 s of held Right crosses Defense, vs ~20 s of single presses). Right first moves a column
     highlight before the table scrolls, so a stable header isn't enough: at the right edge
-    TEAM/NAME have scrolled away, at the left edge NAME shows."""
+    TEAM/NAME/PLAYER have scrolled away, at the left edge NAME or PLAYER shows."""
     prev = None
 
     def at(h):
-        return ("NAME" in h) if direction == "left" else ("NAME" not in h and "TEAM" not in h)
+        if direction == "left":
+            return any(x in h for x in ("NAME", "PLAYER"))
+        return "NAME" not in h and "PLAYER" not in h and "TEAM" not in h
 
     def key(h):
         # OCR varies between reads ("INT YDS"/"INTYDS", sort marks "Y TAK"/"*TAK"), so compare the
@@ -1583,14 +1585,16 @@ def traverse_game(direction, chunk=1.5, max_chunks=8):
         key_up(direction)
         time.sleep(0.5)
     f = Frame()
-    if prev and key(game_header(f)) == key(prev) and at(prev):
+    h = game_header(f)
+    if prev and key(h) == key(prev) and at(h):
         return f
     path = save_debug(f, f"game_never_reached_{direction}_edge")
     raise Abort(f"Never reached the {direction} edge of the game stats table (frame: {path})")
 
 
 # Game categories wider than the screen (mapped Oct 13: horizontal scrollbar, Right scrolls).
-GAME_WIDE_CATEGORIES = {"KICKING", "DEFENSE"}
+# Both "DEFENSE" (franchise box score) and "DEFENSIVE" (postgame stats) are wide.
+GAME_WIDE_CATEGORIES = {"KICKING", "DEFENSE", "DEFENSIVE"}
 GAME_PAGE_STEP = 6   # Down presses per page: 8 rows show, so pages overlap by 2 (a dropped press can't leave a gap)
 
 
@@ -1599,6 +1603,9 @@ def capture_game_category(folder, base, cat, all_rows):
     (Testing every category's width cost ~35 s each, so the wide ones are listed.)"""
     os.makedirs(folder, exist_ok=True)
     wait_table_loaded()
+    prefix = base.split("_")[0]
+    for old_p in glob.glob(os.path.join(folder, f"{prefix}_*.png")):
+        os.remove(old_p)
     if norm(cat) in GAME_WIDE_CATEGORIES:
         capture_wide_list(folder, base, rows_per_page=GAME_PAGE_STEP, traverse=traverse_game, text_end=True,
                           end_on_left=True, stop_at_zeros=not all_rows)
@@ -1641,7 +1648,8 @@ def capture_game(gdir, all_rows):
     seen, cat = [], first
     for _ in range(12):
         seen.append(cat)
-        capture_game_category(os.path.join(gdir, "stats"), f"{len(seen):02d}_{norm(cat).lower()}", cat, all_rows)
+        file_cat = "defense" if norm(cat) in ("DEFENSE", "DEFENSIVE") else norm(cat).lower()
+        capture_game_category(os.path.join(gdir, "stats"), f"{len(seen):02d}_{file_cat}", cat, all_rows)
         cat = next_category(cat, "GAME_STATS")
         if norm(cat) == norm(first):
             break

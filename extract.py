@@ -804,6 +804,8 @@ def extract_games(root):
             else:
                 cols, trows = merge(paths, f"{game} {key}")
             cat = key.split("_", 1)[1]
+            if cat == "defensive":
+                cat = "defense"
             if cat == "general":
                 cols = ["DP" if c == "OVR" else c for c in cols]
             write_csv(os.path.join(d, f"stats_{cat}.csv"), cols, trows)

@@ -737,6 +737,43 @@ class RosterRecoveryTest(unittest.TestCase):
             left_calls = [c for c in mock_press.call_args_list if c[0][0] == "left"]
             self.assertEqual(len(left_calls), 2)
 
+    def test_game_wide_categories(self):
+        self.assertIn("DEFENSE", mc.GAME_WIDE_CATEGORIES)
+        self.assertIn("DEFENSIVE", mc.GAME_WIDE_CATEGORIES)
+        self.assertIn("KICKING", mc.GAME_WIDE_CATEGORIES)
+
+    def test_traverse_game_left_edge_with_player_header(self):
+        class MockFrame:
+            def __init__(self, items):
+                self.items = items
+                self.size = (3024, 1888)
+        # Table header with TEAM, PLAYER at y = 0.46
+        f_left = MockFrame([("TEAM", (100, 860, 200, 890)), ("PLAYER", (300, 860, 500, 890)), ("Y FGM", (700, 860, 800, 890))])
+        frames = [f_left, f_left]
+        with mock.patch.object(mc, "Frame", side_effect=lambda: frames.pop(0)), \
+                mock.patch.object(mc, "key_down"), \
+                mock.patch.object(mc, "key_up"), \
+                mock.patch.object(mc.time, "sleep"):
+            res = mc.traverse_game("left")
+            self.assertIs(res, f_left)
+
+    def test_traverse_game_right_edge(self):
+        class MockFrame:
+            def __init__(self, items):
+                self.items = items
+                self.size = (3024, 1888)
+        # Mid frame (scrolling, TEAM still visible)
+        f_mid = MockFrame([("TEAM", (100, 860, 200, 890)), ("FGM", (300, 860, 400, 890))])
+        # Right frame: neither TEAM nor PLAYER visible, ending in SFTY, TD
+        f_right = MockFrame([("BLOCK", (300, 860, 400, 890)), ("SFTY", (500, 860, 600, 890)), ("TD", (700, 860, 800, 890))])
+        frames = [f_mid, f_right, f_right]
+        with mock.patch.object(mc, "Frame", side_effect=lambda: frames.pop(0)), \
+                mock.patch.object(mc, "key_down"), \
+                mock.patch.object(mc, "key_up"), \
+                mock.patch.object(mc.time, "sleep"):
+            res = mc.traverse_game("right")
+            self.assertIs(res, f_right)
+
 
 if __name__ == "__main__":
     unittest.main()
