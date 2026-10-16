@@ -404,36 +404,50 @@ function TeamPage({ team }: { team: Team }) {
                   feedItems.push({
                     isDb: true,
                     id: art.id,
+                    week: art.week,
+                    season: art.season,
                     label: art.article_type ? art.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : "Beat Report",
                     title: art.headline,
                     excerpt: art.excerpt,
                     author: art.author?.display_name || "Beat Reporter",
+                    authorHandle: art.author?.handle,
                     link: `#article-${art.id}`
                   });
                 });
 
-                teamArticles.forEach((tmpl, idx) => {
-                  if (feedItems.length < 4) {
+                if (feedItems.length === 0) {
+                  teamArticles.forEach((tmpl, idx) => {
                     feedItems.push({
                       isDb: false,
                       id: null,
+                      week: systemStatus.week,
+                      season: systemStatus.season,
                       label: tmpl.label,
                       title: tmpl.title,
                       excerpt: tmpl.excerpt,
                       author: "Jordan Ellis",
+                      authorHandle: null,
                       link: `#article-team-${team.abbr}-${idx}`
                     });
-                  }
-                });
+                  });
+                }
 
-                return feedItems.slice(0, 4).map((article, index) => (
-                  <article className="team-feed-card" key={article.id || article.title}>
-                    <span className="story-number">0{index + 1}</span>
-                    <div>
-                      <span className="kicker">{article.label}</span>
+                return feedItems.map((article, index) => (
+                  <article className="team-feed-card" key={article.id || `${article.title}-${index}`}>
+                    <div className="team-feed-card-top">
+                      <span className="story-number">{index + 1 < 10 ? `0${index + 1}` : index + 1}</span>
+                      <span className="kicker">{article.week ? `WK ${article.week} · ` : ""}{article.label}</span>
+                    </div>
+                    <div className="team-feed-card-body">
                       <a href={article.link}><h3>{article.title}</h3></a>
                       <p>{article.excerpt}</p>
-                      <small>By {article.author} · {index + 2}h ago</small>
+                    </div>
+                    <div className="team-feed-card-footer">
+                      <small>
+                        By {article.authorHandle ? (
+                          <a href={`#author-${article.authorHandle.replace(/^@/, '')}`} className="author-link">{article.author}</a>
+                        ) : article.author}
+                      </small>
                     </div>
                   </article>
                 ));
@@ -2283,20 +2297,23 @@ function ArticlePage({ articleId }: { articleId: string }) {
       title: dbArticle.headline || data.title,
       dek: dbArticle.excerpt || data.dek,
       author: authorName,
+      authorHandle: dbArticle.author?.handle,
+      authorBio: dbArticle.author?.bio,
       role: dbArticle.author?.archetype ? `${dbArticle.author.archetype.replace(/_/g, " ")}` : "Staff Writer",
       initials,
       subject: primaryTeam ? primaryTeam.name : "the league",
       body: dbArticle.content || "",
       teams: dbArticle.tagged_teams || [],
       players: dbArticle.tagged_players || [],
+      related: dbArticle.related_articles || [],
     };
   } else if (nationalMatch) {
     const story = stories[Number(nationalMatch[1])] ?? stories[0];
-    data = { ...data, category: story.kicker, title: story.title, dek: story.blurb, author: story.author, role: "National Reporter", initials: story.initials, subject: story.title.toLowerCase() };
+    data = { ...data, category: story.kicker, title: story.title, dek: story.blurb, author: story.author, authorHandle: null, authorBio: null, role: "National Reporter", initials: story.initials, subject: story.title.toLowerCase(), related: [] };
   } else if (localMatch) {
     const story = localStories.find((item) => item.team === localMatch[1]) ?? localStories[0];
     const team = teams.find((item) => item.abbr === story.team) ?? teams[0];
-    data = { ...data, category: story.tag, title: story.title, dek: `Inside the decisions, matchups and personalities shaping the latest chapter for ${team.name}.`, author: story.author, role: `${team.name} Beat Reporter`, initials: story.author.split(" ").map((part) => part[0]).join(""), subject: team.name };
+    data = { ...data, category: story.tag, title: story.title, dek: `Inside the decisions, matchups and personalities shaping the latest chapter for ${team.name}.`, author: story.author, authorHandle: null, authorBio: null, role: `${team.name} Beat Reporter`, initials: story.author.split(" ").map((part) => part[0]).join(""), subject: team.name, related: [] };
   } else if (teamHeroMatch || teamStoryMatch) {
     const abbr = teamHeroMatch?.[1] ?? teamStoryMatch?.[1] ?? "sf";
     const team = teams.find((item) => item.abbr === abbr) ?? teams[0];
@@ -2313,10 +2330,13 @@ function ArticlePage({ articleId }: { articleId: string }) {
       title: titles[storyIndex % titles.length],
       dek: `One locker room, one shared standard and a season still waiting to be defined. A closer look inside ${team.name}.`,
       author: "Jordan Ellis",
+      authorHandle: null,
+      authorBio: null,
       role: `${team.name} Beat Reporter`,
       initials: "JE",
       subject: team.name,
       image: "https://images.unsplash.com/photo-1704713611761-e0fbbdecc3e9?auto=format&fit=crop&w=1800&q=85",
+      related: [],
     };
   } else if (playerStoryMatch) {
     const category = playerStoryMatch[1];
@@ -2331,7 +2351,7 @@ function ArticlePage({ articleId }: { articleId: string }) {
       `${player.name} on leadership, pressure and the postseason chase`,
       `Where ${player.name} ranks among the league's best at ${player.position}`,
     ];
-    data = { ...data, category: "Player Coverage", title: titles[storyIndex % titles.length], dek: `The film, numbers and voices behind ${player.name}'s impact on the ${player.team.name} this season.`, author: "Jordan Ellis", role: "National Reporter", initials: "JE", subject: player.name };
+    data = { ...data, category: "Player Coverage", title: titles[storyIndex % titles.length], dek: `The film, numbers and voices behind ${player.name}'s impact on the ${player.team.name} this season.`, author: "Jordan Ellis", authorHandle: null, authorBio: null, role: "National Reporter", initials: "JE", subject: player.name, related: [] };
   }
 
   return (
@@ -2344,8 +2364,15 @@ function ArticlePage({ articleId }: { articleId: string }) {
           <p>{data.dek}</p>
           <div className="article-byline">
             <span className="avatar red">{data.initials}</span>
-            <div><strong>{data.author}</strong><span>{data.role}</span></div>
-            <div><small>PUBLISHED</small><b>December 23, {systemStatus.season} · 9:15 AM ET</b></div>
+            <div>
+              <strong>
+                {data.authorHandle ? (
+                  <a href={`#author-${data.authorHandle.replace(/^@/, '')}`} className="author-byline-link">{data.author}</a>
+                ) : data.author}
+              </strong>
+              <span>{data.role}</span>
+            </div>
+            <div><small>PUBLISHED</small><b>{dbArticle?.week ? `Week ${dbArticle.week}, ${systemStatus.season} Season` : `December 23, ${systemStatus.season} · 9:15 AM ET`}</b></div>
             <div><small>READ TIME</small><b>9 min</b></div>
           </div>
         </header>
@@ -2379,17 +2406,145 @@ function ArticlePage({ articleId }: { articleId: string }) {
             )}
             <div className="article-author-note">
               <span className="avatar">{data.initials}</span>
-              <div><strong>{data.author}</strong><p>{data.author} covers the league for Gridiron, specializing in film analysis, roster construction and the stories behind the numbers.</p></div>
+              <div>
+                <strong>
+                  {data.authorHandle ? (
+                    <a href={`#author-${data.authorHandle.replace(/^@/, '')}`} className="author-byline-link">{data.author}</a>
+                  ) : data.author}
+                </strong>
+                <p>{data.authorBio || `${data.author} covers the league for Gridiron, specializing in film analysis, roster construction and the stories behind the numbers.`}</p>
+              </div>
             </div>
           </div>
           <aside className="article-related">
             <span>KEEP READING</span>
-            {stories.slice(0, 3).map((story, index) => (
-              <a href={`#article-national-${index}`} key={story.title}><small>0{index + 1}</small><strong>{story.title}</strong><i>→</i></a>
-            ))}
+            {((data as any).related && (data as any).related.length > 0 ? (data as any).related.slice(0, 4) : stories.slice(0, 3)).map((story: any, index: number) => {
+              const link = story.id ? `#article-${story.id}` : `#article-national-${index}`;
+              const title = story.headline || story.title;
+              return (
+                <a href={link} key={story.id || story.title}>
+                  <small>0{index + 1}</small>
+                  <strong>{title}</strong>
+                  <i>→</i>
+                </a>
+              );
+            })}
           </aside>
         </div>
       </article>
+    </main>
+  );
+}
+
+function AuthorPage({ authorKey }: { authorKey: string }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API_BASE}/api/author/${encodeURIComponent(authorKey)}`)
+      .then(res => res.json())
+      .then(json => {
+        if (!json.error) setData(json);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Error loading author:", err);
+        setLoading(false);
+      });
+  }, [authorKey]);
+
+  if (loading) {
+    return (
+      <main className="author-page">
+        <div className="author-loading">Loading author archive...</div>
+      </main>
+    );
+  }
+
+  if (!data || !data.author) {
+    return (
+      <main className="author-page">
+        <div className="author-not-found">
+          <h2>Author not found</h2>
+          <p>No profile found for "{authorKey}".</p>
+          <a href="#" className="back-link">← Return to Newsroom</a>
+        </div>
+      </main>
+    );
+  }
+
+  const { author, articles, total_articles } = data;
+  const initials = author.display_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() || "GW";
+  const teamColor = author.team?.team_color || "var(--red)";
+
+  return (
+    <main className="author-page" style={{ "--author-team-color": teamColor } as any}>
+      <header className="author-profile-header">
+        <div className="author-profile-main">
+          <div className="author-avatar-wrap">
+            <span className="avatar author-large-avatar" style={{ background: teamColor }}>{initials}</span>
+          </div>
+          <div className="author-meta-info">
+            <div className="author-role-pills">
+              <span className="author-badge">{author.archetype?.replace(/_/g, " ")}</span>
+              {author.team && (
+                <a href={`#team-${author.team.abbreviation.toLowerCase()}`} className="author-team-badge">
+                  {author.team.name}
+                </a>
+              )}
+            </div>
+            <h1>{author.display_name}</h1>
+            <div className="author-handle-row">
+              <span className="author-handle">{author.handle}</span>
+              <span className="author-archive-stat"><strong>{total_articles}</strong> Articles in Archive</span>
+            </div>
+            <p className="author-bio">{author.bio}</p>
+          </div>
+        </div>
+      </header>
+
+      <section className="author-articles-section">
+        <div className="author-section-title">
+          <span>Writing Archive</span>
+          <h2>Published Work ({total_articles})</h2>
+        </div>
+
+        {articles && articles.length > 0 ? (
+          <div className="author-articles-grid">
+            {articles.map((art: any, index: number) => (
+              <article className="author-article-card" key={art.id}>
+                <div className="author-card-header">
+                  <span className="story-number">{index + 1 < 10 ? `0${index + 1}` : index + 1}</span>
+                  <span className="kicker">WEEK {art.week} · {art.label}</span>
+                </div>
+                <div className="author-card-body">
+                  <a href={`#article-${art.id}`}>
+                    <h3>{art.headline}</h3>
+                  </a>
+                  <p>{art.excerpt}</p>
+                </div>
+                <div className="author-card-footer">
+                  {art.tagged_teams && art.tagged_teams.length > 0 && (
+                    <div className="author-tagged-chips">
+                      {art.tagged_teams.slice(0, 3).map((t: any) => (
+                        <a href={`#team-${t.abbr.toLowerCase()}`} key={t.id} className="team-chip-tag">
+                          {t.abbr}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  <small>Read Article →</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="author-empty-archive">
+            <p>No articles published yet.</p>
+          </div>
+        )}
+      </section>
     </main>
   );
 }
@@ -4809,6 +4964,7 @@ function App() {
     : undefined;
   const gameRoute = route.match(/^#game-(\d+)$/);
   const playerRoute = route.match(/^#player-(?:[a-z]+-)?(\d+)$/);
+  const authorRoute = route.match(/^#author-(.+)$/);
   const articleRoute = route.match(/^#article-(.+)$/);
   const fantasyArticleRoute = route.match(/^#article-fantasy-(start-sit|p\d+|\d+)$/);
   const socialTeamRoute = route.match(/^#social-team-([a-z]+)$/);
@@ -4893,6 +5049,8 @@ function App() {
 
       {route === "#debug" ? (
         <DebugPage />
+      ) : authorRoute ? (
+        <AuthorPage authorKey={authorRoute[1]} key={route} />
       ) : articleRoute ? (
         <ArticlePage articleId={articleRoute[1]} key={route} />
       ) : playerRoute ? (

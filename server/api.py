@@ -309,10 +309,13 @@ def get_team_schedule(abbr: str, season: Optional[int] = None):
             return schedule_games
 
 @app.get("/api/team/{abbr}/news")
-def get_team_news(abbr: str, season: Optional[int] = None, limit: int = 10):
+def get_team_news(abbr: str, season: Optional[int] = None, limit: Optional[int] = None):
     """
     Returns news articles and beat coverage specifically tagged for or assigned to a franchise.
     Uses article_teams join or fallback to news_feed.team_id.
+    Opposing teams' local beat reporters are excluded so that only the franchise's own beat coverage
+    and general/national coverage appear.
+    If limit is None, returns all articles written for that team this season.
     """
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
@@ -339,14 +342,17 @@ def get_team_news(abbr: str, season: Optional[int] = None, limit: int = 10):
             maybe_start_team_wakeup(cur, team_id, season, label=abbr)
 
             # 3. Query articles tagged with this team via article_teams OR news_feed.team_id
+            # Exclude opposing teams' beat reporters (LOCAL_BEAT_REPORTER assigned to a different team)
             cur.execute("""
                 SELECT DISTINCT ON (n.id)
                        n.id, n.season, n.week, n.team_id, n.content_type, n.persona,
                        n.article_type, n.slot, n.headline, n.excerpt, n.content, n.created_at,
                        am.display_name, am.handle, am.archetype,
                        COALESCE(at.mention_type, 'PRIMARY') AS mention_type,
-                       COALESCE(at.mention_count, 1) AS mention_count
+                       COALESCE(at.mention_count, 1) AS mention_count,
+                       t_author.name AS author_team_name
                 FROM news_feed n
+                LEFT JOIN teams t_author ON t_author.id = n.team_id
                 LEFT JOIN article_teams at ON at.article_id = n.id AND at.team_id = %s
                 LEFT JOIN agent_memories am ON (
                     (n.team_id IS NOT NULL AND am.assigned_team_id = n.team_id AND UPPER(am.archetype) = UPPER(n.persona))
@@ -355,13 +361,14 @@ def get_team_news(abbr: str, season: Optional[int] = None, limit: int = 10):
                 WHERE n.season = %s
                   AND n.content_type = 'ARTICLE'
                   AND (at.team_id = %s OR n.team_id = %s)
+                  AND NOT (n.persona = 'LOCAL_BEAT_REPORTER' AND n.team_id IS DISTINCT FROM %s)
                 ORDER BY n.id ASC,
                          (CASE WHEN at.mention_type = 'PRIMARY' THEN 1 
                                WHEN at.mention_type = 'FEATURED' THEN 2 
                                ELSE 3 END) ASC,
                          at.mention_count DESC,
                          n.week DESC;
-            """, (team_id, season, team_id, team_id))
+            """, (team_id, season, team_id, team_id, team_id))
             raw_articles = cur.fetchall()
 
             # Sort by week DESC, primary mentions first
@@ -370,7 +377,8 @@ def get_team_news(abbr: str, season: Optional[int] = None, limit: int = 10):
                 1 if a.get("mention_type") == "PRIMARY" else 0,
                 a.get("mention_count") or 0
             ), reverse=True)
-            raw_articles = raw_articles[:limit]
+            if limit is not None and limit > 0:
+                raw_articles = raw_articles[:limit]
 
             # 3. Fetch all tagged teams and players for these articles
             formatted = []
@@ -400,7 +408,8 @@ def get_team_news(abbr: str, season: Optional[int] = None, limit: int = 10):
                     art_id = a["id"]
                     author_name = a["display_name"] or a["persona"]
                     if a["persona"] == "LOCAL_BEAT_REPORTER":
-                        author_name = f"{team['name']} Beat Reporter"
+                        t_name = a.get("author_team_name") or team["name"]
+                        author_name = f"{t_name} Beat Reporter"
                     formatted.append({
                         "id": art_id,
                         "season": a["season"],
@@ -964,15 +973,23 @@ def get_player_api(id: int, season: Optional[int] = None):
             for c in career:
                 c['team_abbr'] = display_team_abbr(c['team_abbr'])
             # The player's coverage: newsroom articles tagged with him (article_players), newest first
+            # Exclude opposing teams' beat reporters (only allow player's own team beat or national/general writers)
+            player_team_id = player.get('team_id') if player else None
             cur.execute("""
                 SELECT DISTINCT ON (nf.id) nf.id, nf.season, nf.week, nf.article_type, nf.headline, nf.excerpt,
-                       nf.persona, nf.created_at, ap.mention_type, ap.mention_count, am.display_name
+                       nf.persona, nf.created_at, ap.mention_type, ap.mention_count, am.display_name, am.handle,
+                       t_auth.name AS author_team_name
                 FROM article_players ap
                 JOIN news_feed nf ON nf.id = ap.article_id AND nf.content_type = 'ARTICLE'
-                LEFT JOIN agent_memories am ON UPPER(am.archetype) = UPPER(nf.persona)
+                LEFT JOIN teams t_auth ON t_auth.id = nf.team_id
+                LEFT JOIN agent_memories am ON (
+                    (nf.team_id IS NOT NULL AND am.assigned_team_id = nf.team_id AND UPPER(am.archetype) = UPPER(nf.persona))
+                    OR (nf.team_id IS NULL AND UPPER(am.archetype) = UPPER(nf.persona))
+                )
                 WHERE ap.player_id = %s
+                  AND NOT (nf.persona = 'LOCAL_BEAT_REPORTER' AND nf.team_id IS DISTINCT FROM %s)
                 ORDER BY nf.id, am.assigned_team_id NULLS FIRST, am.id
-            """, (id,))
+            """, (id, player_team_id))
             arts = sorted(cur.fetchall(), key=lambda a: (a["season"], a["week"], a["mention_type"] == "PRIMARY",
                                                          a["mention_count"] or 0, a["id"]), reverse=True)[:6]
             # Short labels: "The Weekly Slate Lookahead (ESPN ...)" -> "Weekly Slate Lookahead"
@@ -982,7 +999,9 @@ def get_player_api(id: int, season: Optional[int] = None):
                 "id": a["id"], "season": a["season"], "week": a["week"], "headline": a["headline"],
                 "excerpt": a["excerpt"],
                 "label": type_names.get(a["article_type"], (a["article_type"] or "Article").replace("_", " ").title()),
-                "author": a["display_name"] or (a["persona"] or "").replace("_", " ").title(),
+                "author": (f"{a['author_team_name']} Beat Reporter" if a["persona"] == "LOCAL_BEAT_REPORTER" and a.get("author_team_name")
+                           else a["display_name"] or (a["persona"] or "").replace("_", " ").title()),
+                "author_handle": a["handle"] or f"@{a['persona']}",
                 "mention": a["mention_type"],
             } for a in arts]
 
@@ -2467,15 +2486,20 @@ def get_weekly_news(week: int, season: Optional[int] = None):
 
 @app.get("/api/news/article/{article_id}")
 def get_article_detail(article_id: int):
-    """Returns the full text and metadata of a specific article."""
+    """Returns the full text and metadata of a specific article, along with related articles written that week."""
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT n.id, n.season, n.week, n.team_id, n.content_type, n.persona,
                        n.article_type, n.slot, n.headline, n.excerpt, n.content, n.created_at,
-                       am.display_name, am.handle, am.archetype
+                       am.display_name, am.handle, am.archetype, am.bio,
+                       t_auth.name AS author_team_name, t_auth.abbreviation AS author_team_abbr
                 FROM news_feed n
-                LEFT JOIN agent_memories am ON UPPER(am.archetype) = UPPER(n.persona)
+                LEFT JOIN teams t_auth ON t_auth.id = n.team_id
+                LEFT JOIN agent_memories am ON (
+                    (n.team_id IS NOT NULL AND am.assigned_team_id = n.team_id AND UPPER(am.archetype) = UPPER(n.persona))
+                    OR (n.team_id IS NULL AND UPPER(am.archetype) = UPPER(n.persona))
+                )
                 WHERE n.id = %s;
             """, (article_id,))
             article = cur.fetchone()
@@ -2503,6 +2527,49 @@ def get_article_detail(article_id: int):
             """, (article["season"], article_id))
             players = cur.fetchall()
 
+            # Query real related articles actually written that week (excluding current article)
+            cur.execute("""
+                SELECT n.id, n.season, n.week, n.headline, n.excerpt, n.article_type, n.persona, n.slot,
+                       n.created_at, am.display_name, am.handle, t_sub.name AS author_team_name
+                FROM news_feed n
+                LEFT JOIN teams t_sub ON t_sub.id = n.team_id
+                LEFT JOIN agent_memories am ON (
+                    (n.team_id IS NOT NULL AND am.assigned_team_id = n.team_id AND UPPER(am.archetype) = UPPER(n.persona))
+                    OR (n.team_id IS NULL AND UPPER(am.archetype) = UPPER(n.persona))
+                )
+                WHERE n.season = %s AND n.week = %s AND n.content_type = 'ARTICLE' AND n.id != %s
+                ORDER BY n.id ASC
+                LIMIT 6;
+            """, (article["season"], article["week"], article_id))
+            related_rows = cur.fetchall()
+
+            type_names = {k: re.sub(r"^The\s+|\s*\(.*\)\s*$", "", v.get("name", k))
+                          for k, v in _load_config("article_types.json", "article_types").items()}
+
+            related_articles = []
+            for r in related_rows:
+                r_author = r["display_name"] or r["persona"]
+                if r["persona"] == "LOCAL_BEAT_REPORTER" and r.get("author_team_name"):
+                    r_author = f"{r['author_team_name']} Beat Reporter"
+                related_articles.append({
+                    "id": r["id"],
+                    "season": r["season"],
+                    "week": r["week"],
+                    "headline": r["headline"],
+                    "excerpt": r["excerpt"],
+                    "article_type": r["article_type"],
+                    "label": type_names.get(r["article_type"], (r["article_type"] or "Article").replace("_", " ").title()),
+                    "author": {
+                        "display_name": r_author,
+                        "handle": r["handle"] or f"@{r['persona']}",
+                        "archetype": r["persona"]
+                    }
+                })
+
+            author_name = article["display_name"] or article["persona"]
+            if article["persona"] == "LOCAL_BEAT_REPORTER" and article.get("author_team_name"):
+                author_name = f"{article['author_team_name']} Beat Reporter"
+
             return {
                 "id": article["id"],
                 "season": article["season"],
@@ -2513,9 +2580,11 @@ def get_article_detail(article_id: int):
                 "excerpt": article["excerpt"],
                 "content": article["content"],
                 "author": {
-                    "display_name": article["display_name"] or article["persona"],
+                    "display_name": author_name,
                     "handle": article["handle"] or f"@{article['persona']}",
-                    "archetype": article["persona"]
+                    "archetype": article["persona"],
+                    "bio": article["bio"],
+                    "team_abbr": display_team_abbr(article["author_team_abbr"]) if article.get("author_team_abbr") else None
                 },
                 "team_id": article["team_id"],
                 "created_at": article["created_at"].isoformat() if article["created_at"] else None,
@@ -2528,7 +2597,156 @@ def get_article_detail(article_id: int):
                     "id": p["id"], "name": p["full_name"], "position": p["position"],
                     "team": display_team_abbr(p["team_abbr"]) if p["team_abbr"] else None,
                     "mention_type": p["mention_type"], "mention_count": p["mention_count"]
-                } for p in players]
+                } for p in players],
+                "related_articles": related_articles
+            }
+
+@app.get("/api/author/{author_key}")
+def get_author_profile(author_key: str):
+    """
+    Returns an author's profile and all articles written by them across the season/archive.
+    author_key can be a handle (e.g. '@billbarnwell', 'billbarnwell'), an archetype (e.g. 'BARNWELL', 'LOCAL_BEAT_REPORTER'),
+    or an agent_id (e.g. 'Bill_Barnwell', 'Cowboys_Beat_1').
+    """
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            clean_key = author_key.strip()
+            handle_norm = clean_key if clean_key.startswith("@") else f"@{clean_key}"
+            handle_raw = clean_key.lstrip("@")
+
+            # 1. Look up agent in agent_memories
+            cur.execute("""
+                SELECT am.agent_id, am.archetype, am.handle, am.display_name, am.bio, am.assigned_team_id,
+                       t.id AS team_id, t.name AS team_name, t.city AS team_city, t.abbreviation AS team_abbr, t.team_color
+                FROM agent_memories am
+                LEFT JOIN teams t ON t.id = am.assigned_team_id
+                WHERE lower(am.handle) = lower(%s)
+                   OR lower(am.handle) = lower(%s)
+                   OR lower(am.agent_id) = lower(%s)
+                   OR lower(am.archetype) = lower(%s)
+                ORDER BY am.assigned_team_id NULLS LAST
+                LIMIT 1;
+            """, (clean_key, handle_norm, clean_key, clean_key))
+            agent = cur.fetchone()
+
+            # 2. Query articles written by this author
+            if agent:
+                assigned_team_id = agent["assigned_team_id"]
+                archetype = agent["archetype"]
+                agent_id = agent["agent_id"]
+                display_name = agent["display_name"] or agent["handle"] or archetype
+                if archetype == "LOCAL_BEAT_REPORTER" and agent.get("team_name"):
+                    display_name = f"{agent['team_name']} Beat Reporter"
+
+                if assigned_team_id is not None and archetype == "LOCAL_BEAT_REPORTER":
+                    cur.execute("""
+                        SELECT n.id, n.season, n.week, n.team_id, n.content_type, n.persona,
+                               n.article_type, n.slot, n.headline, n.excerpt, n.content, n.created_at
+                        FROM news_feed n
+                        WHERE n.content_type = 'ARTICLE'
+                          AND n.persona = 'LOCAL_BEAT_REPORTER'
+                          AND n.team_id = %s
+                        ORDER BY n.season DESC, n.week DESC, n.id DESC;
+                    """, (assigned_team_id,))
+                else:
+                    cur.execute("""
+                        SELECT n.id, n.season, n.week, n.team_id, n.content_type, n.persona,
+                               n.article_type, n.slot, n.headline, n.excerpt, n.content, n.created_at
+                        FROM news_feed n
+                        WHERE n.content_type = 'ARTICLE'
+                          AND (n.agent_id = %s OR UPPER(n.persona) = UPPER(%s) OR UPPER(n.persona) = UPPER(%s))
+                        ORDER BY n.season DESC, n.week DESC, n.id DESC;
+                    """, (agent_id, archetype, clean_key))
+                raw_articles = cur.fetchall()
+                author_data = {
+                    "handle": agent["handle"] or f"@{archetype.lower()}",
+                    "display_name": display_name,
+                    "archetype": archetype,
+                    "bio": agent["bio"] or f"Covers the NFL for Gridiron Newsroom.",
+                    "team": {
+                        "id": agent["team_id"],
+                        "name": agent["team_name"],
+                        "city": agent["team_city"],
+                        "abbreviation": display_team_abbr(agent["team_abbr"]),
+                        "team_color": agent["team_color"]
+                    } if agent["team_id"] else None
+                }
+            else:
+                # Fallback directly to news_feed persona matching
+                cur.execute("""
+                    SELECT n.id, n.season, n.week, n.team_id, n.content_type, n.persona,
+                           n.article_type, n.slot, n.headline, n.excerpt, n.content, n.created_at,
+                           t.name AS team_name, t.city AS team_city, t.abbreviation AS team_abbr, t.team_color
+                    FROM news_feed n
+                    LEFT JOIN teams t ON t.id = n.team_id
+                    WHERE n.content_type = 'ARTICLE'
+                      AND (UPPER(n.persona) = UPPER(%s) OR UPPER(n.persona) = UPPER(%s))
+                    ORDER BY n.season DESC, n.week DESC, n.id DESC;
+                """, (clean_key, handle_raw))
+                raw_articles = cur.fetchall()
+                if not raw_articles:
+                    return {"error": f"Author '{author_key}' not found.", "articles": []}
+
+                first_art = raw_articles[0]
+                author_data = {
+                    "handle": f"@{clean_key.lstrip('@')}",
+                    "display_name": clean_key.replace("_", " ").title(),
+                    "archetype": first_art["persona"],
+                    "bio": "Staff Writer for Gridiron Newsroom.",
+                    "team": {
+                        "id": first_art["team_id"],
+                        "name": first_art["team_name"],
+                        "city": first_art["team_city"],
+                        "abbreviation": display_team_abbr(first_art["team_abbr"]),
+                        "team_color": first_art["team_color"]
+                    } if first_art["team_id"] else None
+                }
+
+            # Fetch tagged entities for these articles
+            formatted = []
+            if raw_articles:
+                art_ids = [a["id"] for a in raw_articles]
+                cur.execute("""
+                    SELECT at_sub.article_id, t.id AS team_id, t.name, t.city, t.abbreviation, 
+                           at_sub.mention_type, at_sub.mention_count
+                    FROM article_teams at_sub
+                    JOIN teams t ON at_sub.team_id = t.id
+                    WHERE at_sub.article_id = ANY(%s)
+                    ORDER BY at_sub.mention_type = 'PRIMARY' DESC, at_sub.mention_count DESC;
+                """, (art_ids,))
+                team_rows = cur.fetchall()
+                teams_by_art = {}
+                for tr in team_rows:
+                    teams_by_art.setdefault(tr["article_id"], []).append({
+                        "id": tr["team_id"],
+                        "name": tr["name"],
+                        "city": tr["city"],
+                        "abbr": display_team_abbr(tr["abbreviation"]),
+                        "mention_type": tr["mention_type"],
+                        "mention_count": tr["mention_count"]
+                    })
+
+                type_names = {k: re.sub(r"^The\s+|\s*\(.*\)\s*$", "", v.get("name", k))
+                              for k, v in _load_config("article_types.json", "article_types").items()}
+
+                for a in raw_articles:
+                    formatted.append({
+                        "id": a["id"],
+                        "season": a["season"],
+                        "week": a["week"],
+                        "slot": a["slot"] or "Coverage",
+                        "article_type": a["article_type"],
+                        "label": type_names.get(a["article_type"], (a["article_type"] or "Article").replace("_", " ").title()),
+                        "headline": a["headline"],
+                        "excerpt": a["excerpt"],
+                        "created_at": a["created_at"].isoformat() if a["created_at"] else None,
+                        "tagged_teams": teams_by_art.get(a["id"], [])
+                    })
+
+            return {
+                "author": author_data,
+                "total_articles": len(formatted),
+                "articles": formatted
             }
 
 @app.post("/api/news/team/{team_id}/wakeup")
