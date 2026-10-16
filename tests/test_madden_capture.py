@@ -109,6 +109,22 @@ class ClassifyTest(unittest.TestCase):
         f = _Frame("L1", "BOX SCORE", "PLAYER STATS", "R1", "BOTH", "PASSING", "TEAM", "NAME", "TEAM NAME", "SORT")
         self.assertEqual(mc.classify(f), "GAME_STATS")
 
+    def test_postgame_menu(self):
+        f = _Frame("FINISH GAME", "VIEW HIGHLIGHTS", "PLAYER STATS", "TEAM STATS", "SCORE SUMMARY")
+        self.assertEqual(mc.classify(f), "POSTGAME_MENU")
+
+    def test_postgame_team_stats_box_score(self):
+        f = _Frame("L1", "TEAM STATS", "PLAYER STATS", "SCORING SUMMARY", "R1", "ATL", "CAR", "FIRST DOWNS", "TOTAL OFFENSE")
+        self.assertEqual(mc.classify(f), "BOX_SCORE")
+
+    def test_postgame_team_stats_scrolled_to_bottom(self):
+        f = _Frame("L1", "TEAM STATS", "PLAYER STATS", "SCORING SUMMARY", "R1", "ATL", "CAR", "PENALTIES", "POSSESSION TIME")
+        self.assertEqual(mc.classify(f), "BOX_SCORE")
+
+    def test_postgame_player_stats(self):
+        f = _Frame("L1", "TEAM STATS", "PLAYER STATS", "SCORING SUMMARY", "R1", "BOTH", "R2", "PASSING", "TEAM", "PLAYER")
+        self.assertEqual(mc.classify(f), "GAME_STATS")
+
     def test_manage_roster_hub(self):
         f = _Frame("GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "UPGRADE PLAYERS",
                    "ADJUST LINEUP", "ROSTER", "DEPTH CHART")
@@ -177,6 +193,20 @@ class DraftRouteTest(unittest.TestCase):
             with self.assertRaises(mc.Abort):
                 mc.cross("SCOUTING", f)
         press.assert_not_called()
+
+    def test_postgame_cross_allowed_only_on_stats(self):
+        f = mock.Mock()
+        for item, allowed in (("FINISH GAME", False), ("VIEW HIGHLIGHTS", False),
+                              ("SCORE SUMMARY", False), ("TEAM STATS", True), ("PLAYER STATS", True)):
+            f.highlighted.return_value = item
+            with mock.patch.object(mc, "press") as press:
+                if allowed:
+                    mc.cross("POSTGAME_MENU", f)
+                    press.assert_called_once_with("cross", wait=1.5)
+                else:
+                    with self.assertRaises(mc.Abort):
+                        mc.cross("POSTGAME_MENU", f)
+                    press.assert_not_called()
 
     def test_no_cross_on_the_board(self):
         # the board's Cross is EDIT PLAYER

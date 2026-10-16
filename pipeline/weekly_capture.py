@@ -10,8 +10,8 @@ from the debug page (#debug, server/debug_api.py: Scan week / Backfill previous 
 
 Week 22 (league_state.current_week 22, Madden on Pro Bowl week): no games of ours, so Scan week is an
 articles-only run: engines, the Week 23 (Super Bowl week) slate, then current_week moves to 23. No console.
-Week 23: the last capture names the Super Bowl week (madden_capture.py --week), since Madden has moved into
-the offseason and the schedule shows no current week.
+Week 23: the Super Bowl capture assumes Madden is on the postgame screen after playing the game;
+captures the Super Bowl box score and player stats directly without advancing to the offseason.
 
 Postseason (league_state.current_week 19+: the week a run captures is the one the last load left current,
 so from the Wild Card round on it is a playoff round): the run is a playoff run on its own (or --mode playoff). Season Stats and Team Stats are regular season only and don't change, so it
@@ -24,7 +24,8 @@ Steps (each one's failure stops the week: nothing after it runs, and a notice go
                for a franchise screen (chiaki stream lands on it directly). Presses nothing.
   3. capture   madden_capture.py --out <run>: Season Stats, Team Stats and last week's schedule
                (games mode: --only games, ~7 min a game, resuming per game; playoff mode: --only playoff,
-               the schedule then every game, resuming the games with --only games --resume).
+               the schedule then every game, resuming the games with --only games --resume;
+               Super Bowl / Week 23: --only postgame directly from the postgame screen).
   4. hand back notice: turn the controller back on and restart the broadcast (the script doesn't disconnect).
   5. extract   extract.py captures/<run>.
   6. load      pipeline.load_capture, one transaction; a failed check writes nothing.
@@ -35,7 +36,7 @@ Steps (each one's failure stops the week: nothing after it runs, and a notice go
 
 Resuming picks the first step not done: capture is done when the run wrote .capture_done (a weekly run
 from before that marker: week.json), extract when the mode's CSVs exist (weekly: schedule.csv + stats_*.csv;
-games: game_scores.csv), load when the captures row is 'loaded'.
+games/postgame: game_scores.csv), load when the captures row is 'loaded'.
 The backfill only fills missing games and the articles skip a published week, so both are safe to rerun.
 Only one weekly run at a time (lock file captures/.weekly_run.lock).
 """
@@ -49,10 +50,10 @@ DEBUG_DIRS = ("stop_debug", "scope_debug", "week_debug", "team_debug", "probe", 
 CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice when it has to relaunch
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
-MODES = ("weekly", "games", "playoff", "roster", "prospects", "season")
+MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame")
 FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
 PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
-SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the last capture: Madden is in the offseason by then
+SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the Super Bowl postgame capture
 
 
 class WeekStopped(Exception):
@@ -110,9 +111,11 @@ def capture_done(folder, mode="weekly"):
 
 
 def extract_done(folder, mode="weekly"):
-    if mode == "games":
+    if mode in ("games", "postgame"):
         return os.path.exists(os.path.join(folder, "game_scores.csv"))
     if mode == "playoff":
+        if os.path.isdir(os.path.join(folder, "games", "01_super_bowl")) or not os.path.isdir(os.path.join(folder, "schedule")):
+            return os.path.exists(os.path.join(folder, "game_scores.csv"))
         ok = all(os.path.exists(os.path.join(folder, f)) for f in ("game_scores.csv", "schedule.csv"))
         if os.path.isdir(os.path.join(folder, "injuries")):
             ok = ok and os.path.exists(os.path.join(folder, "injuries.csv"))
@@ -184,8 +187,11 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
     if mode == "games":                        # resumes per game (games/<NN>/DONE)
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "games")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "games", *where], GAMES_TIMEOUT
-    elif mode == "playoff":                    # schedule (+ next round), then the games; a stop in the games resumes them
-        if os.path.isdir(os.path.join(folder, "games")) and os.path.exists(os.path.join(folder, "week.json")):
+    elif mode in ("playoff", "postgame"):      # schedule (+ next round), then the games; Super Bowl is postgame
+        if mode == "postgame" or week_label == SUPER_BOWL_LABEL:
+            where = ["--resume", name] if os.path.isdir(os.path.join(folder, "games")) else ["--out", name]
+            args, timeout = [sys.executable, "madden_capture.py", "--only", "postgame", *where], GAMES_TIMEOUT
+        elif os.path.isdir(os.path.join(folder, "games")) and os.path.exists(os.path.join(folder, "week.json")):
             args = [sys.executable, "madden_capture.py", "--only", "games", "--resume", name, *named]
         else:
             args = [sys.executable, "madden_capture.py", "--only", "playoff", "--out", name, *named]
@@ -207,7 +213,7 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
         where = ["--resume", name] if has_partial else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", *where, *named], CAPTURE_TIMEOUT
     code, last = run_cmd(args, log_path, timeout)
-    if code != 0 or (mode in ("weekly", "playoff") and not os.path.exists(os.path.join(folder, "week.json"))):
+    if code != 0 or (mode in ("weekly", "playoff", "postgame") and not os.path.exists(os.path.join(folder, "week.json"))):
         raise WeekStopped(f"Capture stopped: {last}. The console is left where it stopped; frames in "
                           f"{os.path.relpath(folder, ROOT)}/stop_debug.")
     open(os.path.join(folder, ".capture_done"), "w").close()
@@ -308,16 +314,19 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
     current = None
-    if mode in ("weekly", "playoff"):
+    if mode in ("weekly", "playoff", "postgame"):
         try:
             current = league_state()[1]
         except Exception:
             current = None
     if mode == "weekly":
         mode = playoff_or_weekly(resume)
-    articles = articles and mode in ("weekly", "playoff")
-    week_label = SUPER_BOWL_LABEL if mode == "playoff" and current is not None and current >= FINAL_WEEK else None
-    what = {"games": "Game scan", "playoff": "Playoff capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan"}.get(mode, "Weekly capture")
+    articles = articles and mode in ("weekly", "playoff", "postgame")
+    week_label = SUPER_BOWL_LABEL if mode in ("playoff", "postgame") and current is not None and current >= FINAL_WEEK else None
+    if week_label == SUPER_BOWL_LABEL or mode == "postgame":
+        what = "Super Bowl postgame capture"
+    else:
+        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan"}.get(mode, "Weekly capture")
     os.makedirs(CAPTURES, exist_ok=True)
     lock = open(LOCK_PATH, "w")
     try:
@@ -406,7 +415,8 @@ def main():
     ap.add_argument("--no-articles", action="store_true", help="stop after the backfill and engines")
     ap.add_argument("--mode", choices=MODES, default="weekly",
                     help="games: every game of last week (box scores + player stats), loaded with --replace; "
-                         "playoff: a postseason week (chosen automatically from league current week 19 on); "
+                         "playoff: a postseason week (chosen automatically from league current week 19 on; week 23 is postgame); "
+                         "postgame: capture Super Bowl directly from the in-game postgame screen; "
                          "season: start-of-season cadence scan (schedule, rosters, then draft board); "
                          "roster: season cadence scan of all 32 team rosters; "
                          "prospects: draft board scan of college prospects")

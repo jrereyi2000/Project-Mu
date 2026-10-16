@@ -305,13 +305,21 @@ TEAM_TABS = {
                                "DEF%": "red_zone_def_pct"},
     "team_penalties": {"PEN": "penalties", "YARDS": "penalty_yards"},
 }
-BOX_SCORE = {"OFF YARDS GAINED": "total_offense", "OFF RUSH YARDS": "rushing_yards", "OFF PASS YARDS": "passing_yards",
-             "OFF FIRST DOWN": "first_downs", "PUNT RETURN YARDS": "punt_return_yards",
-             "KICK RETURN YARDS": "kick_return_yards", "TOTAL YARDS GAINED": "total_yards_gained",
-             "TURNOVERS": "turnovers", "THIRD DOWN CONVERSIONS": "third_down_conversions",
-             "FOURTH DOWN CONVERSIONS": "fourth_down_conversions", "TWO POINT CONVERSIONS": "two_point_conversions",
-             "RED ZONE OFF PERCENTAGE": "red_zone_pct", "RED ZONE OFF TD": "red_zone_tds", "RED ZONE OFF FG": "red_zone_fgs",
-             "PENALTY YARDS": "penalty_yards"}
+BOX_SCORE = {
+    "OFF YARDS GAINED": "total_offense", "TOTAL OFFENSE": "total_offense",
+    "OFF RUSH YARDS": "rushing_yards", "RUSHING YARDS": "rushing_yards",
+    "OFF PASS YARDS": "passing_yards", "PASSING YARDS": "passing_yards",
+    "OFF FIRST DOWN": "first_downs", "FIRST DOWNS": "first_downs",
+    "PUNT RETURN YARDS": "punt_return_yards", "PR YARDS": "punt_return_yards",
+    "KICK RETURN YARDS": "kick_return_yards", "KR YARDS": "kick_return_yards",
+    "TOTAL YARDS GAINED": "total_yards_gained", "TOTAL YARDS": "total_yards_gained",
+    "TURNOVERS": "turnovers",
+    "THIRD DOWN CONVERSIONS": "third_down_conversions", "3RD DOWN CONV.": "third_down_conversions",
+    "FOURTH DOWN CONVERSIONS": "fourth_down_conversions", "4TH DOWN CONV.": "fourth_down_conversions",
+    "TWO POINT CONVERSIONS": "two_point_conversions", "2-POINT CONV.": "two_point_conversions",
+    "RED ZONE OFF PERCENTAGE": "red_zone_pct", "RED ZONE OFF TD": "red_zone_tds", "RED ZONE OFF FG": "red_zone_fgs",
+    "RED ZONE TD | FG | %": "red_zone_pct",
+    "PENALTY YARDS": "penalty_yards", "PENALTIES": "penalty_yards"}
 # positions that can appear in a game category; settles teammates who share a list name (S.Lewis LT / HB)
 CATEGORY_POSITIONS = {
     "passing": {"QB", "HB", "FB", "WR", "TE", "P", "K"}, "rushing": {"QB", "HB", "FB", "WR", "TE"},
@@ -892,6 +900,12 @@ def load_games(cur, folder, season, report, replace=False):
     players = roster(cur, season)
     problems = []
     round_week = report.get("week")          # set when a playoff run loaded the round's schedule first
+    if round_week is None and os.path.exists(os.path.join(folder, "week.json")):
+        try:
+            with open(os.path.join(folder, "week.json")) as fh:
+                round_week = db_week(json.load(fh).get("captured"))
+        except Exception:
+            pass
     scores = read_csv(os.path.join(folder, "game_scores.csv"))
     games = {}
     for r in scores:
@@ -1014,9 +1028,26 @@ def load_games(cur, folder, season, report, replace=False):
         ok = r.get("QUARTERS_OK", "y") == "y"
         for side, tid, pre in (("away", g["away"], "A"), ("home", g["home"], "H")):
             abbr = r["AWAY" if side == "away" else "HOME"]
-            vals = {col: (dec if col.endswith("pct") else num)(box[label][abbr]) for label, col in BOX_SCORE.items()
-                    if label in box}
-            top = box.get("TIME OF POSSESSION", {}).get(abbr, "")
+            vals = {}
+            for label, col in BOX_SCORE.items():
+                if label in box and abbr in box[label]:
+                    raw = str(box[label][abbr])
+                    if col in ("third_down_conversions", "fourth_down_conversions", "two_point_conversions"):
+                        vals[col] = num(raw.split("|")[0].split("/")[0].split("(")[0])
+                    elif col == "penalty_yards":
+                        vals[col] = num(raw.split("|")[-1]) if "|" in raw else num(raw)
+                    elif col == "turnovers":
+                        vals[col] = num(raw.split("(")[0])
+                    elif label == "RED ZONE TD | FG | %":
+                        if "|" in raw:
+                            parts = raw.split("|")
+                            if len(parts) >= 3:
+                                vals["red_zone_tds"] = num(parts[0])
+                                vals["red_zone_fgs"] = num(parts[1])
+                                vals["red_zone_pct"] = dec(parts[2].replace("%", "").strip())
+                    else:
+                        vals[col] = (dec if col.endswith("pct") else num)(raw)
+            top = box.get("TIME OF POSSESSION", {}).get(abbr, "") or box.get("POSSESSION TIME", {}).get(abbr, "")
             if ":" in top:
                 mm, ss = top.split(":")
                 vals["time_of_possession_s"] = int(mm) * 60 + int(ss)

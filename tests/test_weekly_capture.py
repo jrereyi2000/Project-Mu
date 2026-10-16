@@ -7,6 +7,8 @@ from PIL import Image
 
 import pipeline.weekly_capture as wc
 
+ORIG_STEP_CAPTURE = wc.step_capture
+
 
 class RunTest(unittest.TestCase):
     def setUp(self):
@@ -152,6 +154,17 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(wc, "league_state", lambda: (2035, 19)):
             self.start("wc")
         self.assertEqual((self.capture_mode, self.week_label), ("playoff", None))
+
+    def test_super_bowl_step_capture_calls_postgame(self):
+        with mock.patch.object(wc, "run_cmd", return_value=(0, "ok")) as mock_cmd:
+            f = os.path.join(self.tmp, "sb_step")
+            os.makedirs(f, exist_ok=True)
+            with open(os.path.join(f, "week.json"), "w") as fh:
+                fh.write("{}")
+            ORIG_STEP_CAPTURE(f, "log.txt", mode="playoff", week_label=wc.SUPER_BOWL_LABEL)
+            cmd = mock_cmd.call_args[0][0]
+            self.assertIn("--only", cmd)
+            self.assertIn("postgame", cmd)
 
     def test_folder_modes(self):
         f = os.path.join(self.tmp, "m")

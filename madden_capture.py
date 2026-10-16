@@ -462,6 +462,7 @@ ROSTER_MENU = ["UPGRADE PLAYERS", "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH
 SCOUTING_MENU = ["PROSPECTS", "SCOUTS", "REGION BREAKDOWN", "MOCK DRAFTS"]
 CLASS_PROMPT_OPTIONS = ["DOWNLOAD FROM DOWNLOAD CENTER", "EDIT DRAFT CLASS", "IMPORT LOCAL FILE"]
 EXIT_PROMPT_OPTIONS = ["EXPORT LOCAL FILE", "UPLOAD TO DOWNLOAD CENTER", "SAVE AND EXIT"]
+POSTGAME_MENU_ITEMS = ["FINISH GAME", "VIEW HIGHLIGHTS", "PLAYER STATS", "TEAM STATS", "SCORE SUMMARY"]
 # 32 NFL team nicknames as shown in chips/headers
 TEAMS = {"49ERS", "BEARS", "BENGALS", "BILLS", "BRONCOS", "BROWNS", "BUCCANEERS", "CARDINALS",
          "CHARGERS", "CHIEFS", "COLTS", "COMMANDERS", "COWBOYS", "DOLPHINS", "EAGLES", "FALCONS",
@@ -473,6 +474,9 @@ def classify(f):
     t = f.text
     if "WANT TO QUIT" in t:
         return "QUIT"
+    # Postgame menu after playing a game: FINISH GAME, VIEW HIGHLIGHTS, PLAYER STATS, TEAM STATS, SCORE SUMMARY
+    if f.find("FINISH GAME") and (f.find("TEAM STATS") or f.find("PLAYER STATS") or f.find("SCORE SUMMARY")):
+        return "POSTGAME_MENU"
     # Manage Roster > Roster (mapped Oct 13): also shows PLAYER NAME (sort chip) and VIEW
     # PLAYER CARD, so it must be told apart from Player Stats by its own columns. The button
     # bar blanks for a moment when it changes (rows with a contract action add SPEAK WITH
@@ -480,8 +484,11 @@ def classify(f):
     if f.find("SAVINGS") and f.find("PENALTY") and f.find("MOR"):
         return "ROSTER_LIST"
     # Box score > R1 (mapped Oct 13): one game's player stats, TEAM column, L2 BOTH / R2 category.
+    # In schedule: L1 BOX SCORE | PLAYER STATS R1
+    # In postgame: L1 TEAM STATS | PLAYER STATS | SCORING SUMMARY R1
     # It also shows TEAM NAME, SORT and R2, so it must come before TEAM_STATS.
-    if f.find("BOX SCORE") and f.find("PLAYER STATS") and f.find("TEAM") and "TOTAL YARDS GAINED" not in t:
+    is_box_or_postgame = (f.find("BOX SCORE") or (f.find("TEAM STATS") and f.find("SCORING SUMMARY"))) and f.find("PLAYER STATS")
+    if is_box_or_postgame and f.find("TEAM") and "TOTAL YARDS GAINED" not in t and "TOTAL OFFENSE" not in t:
         return "GAME_STATS"
     # Manage Roster > Injury Report: table with INJURY, IR, and player card (when players are injured),
     # or "NO INJURIES TO REPORT" banner / header when a team is completely healthy.
@@ -512,8 +519,9 @@ def classify(f):
     if "TEAM NAME" in t and "SORT" in t and f.find("R2"):
         return "TEAM_STATS"
     # League Schedule > Cross on a played game (mapped Oct 13): L1 BOX SCORE | PLAYER STATS R1
-    if f.find("BOX SCORE") and f.find("PLAYER STATS") and any(
-            lab in t for lab in ("OFF YARDS GAINED", "TOTAL YARDS GAINED", "TIME OF POSSESSION", "TURNOVERS")):
+    # In postgame: L1 TEAM STATS | PLAYER STATS | SCORING SUMMARY R1
+    if is_box_or_postgame and any(
+            lab in t for lab in ("OFF YARDS GAINED", "TOTAL YARDS GAINED", "TIME OF POSSESSION", "POSSESSION TIME", "TURNOVERS", "TOTAL OFFENSE")):
         return "BOX_SCORE"                     # top or scrolled to the bottom
     if "PLAYER STATS" in t and "LEGACY LEADERBOARD" in t:
         return "STATS_TILES"
@@ -618,6 +626,10 @@ def cross(screen, frame=None):
         why = schedule_cross_ok(frame or Frame(), CURRENT_WEEK)
         if why:
             raise Abort(f"Refusing Cross on the League Schedule: {why}")
+    elif screen == "POSTGAME_MENU":
+        cur = (frame or Frame()).highlighted(POSTGAME_MENU_ITEMS)
+        if cur not in ("TEAM STATS", "PLAYER STATS"):
+            raise Abort(f"Refusing Cross on the Postgame Menu: {cur} is highlighted, not TEAM STATS or PLAYER STATS")
     elif screen not in ("HUB_LEAGUE", "SCHED_TILES", "STATS_TILES"):
         raise Abort(f"Refusing to press Cross on screen {screen}")
     press("cross", wait=1.5)
@@ -1496,6 +1508,7 @@ def schedule_cross_ok(f, current_week):
 # Right moves a column highlight, then scrolls; TEAM/NAME scroll away. Back returns to the
 # schedule list with the same game highlighted.
 BOX_LAST_ROW = "TIME OF POSSESSION"
+BOX_LAST_ROWS = ("TIME OF POSSESSION", "POSSESSION TIME")
 
 
 def game_header(f):
@@ -1562,7 +1575,7 @@ def box_score_bottom():
         W, H = f.size
         lab = max(((brightness(f.path, b, pad=0), t) for t, b in f.items
                    if 0.4 * W < b[0] < 0.6 * W and b[1] > 0.3 * H and len(t) > 4), default=(0, None))[1]
-        if lab and norm(lab) == norm(BOX_LAST_ROW):
+        if lab and norm(lab) in (norm(r) for r in BOX_LAST_ROWS):
             return f
         press("down", hold=0.12, wait=0.5)
     raise Abort("Couldn't reach the bottom of the box score")
@@ -1653,6 +1666,37 @@ def run_games(out, week=None, all_rows=False, max_games=None):
         for i, (mu, res) in enumerate(results, 1):
             fh.write(f"{i:02d}\t{target}\t{mu}\t{res}\n")
     log(f"Captured {len(done)} games of {target}")
+
+
+def run_postgame(out, all_rows=False):
+    """Capture the single Super Bowl game directly from the in-game postgame screen:
+    starts from POSTGAME_MENU (FINISH GAME visible), TEAM STATS (BOX_SCORE),
+    or PLAYER STATS (GAME_STATS). Captures box_top/box_bottom and all player stats
+    categories into games/01_super_bowl/."""
+    log("== Super Bowl Postgame Capture ==")
+    f, s = wait_for(["POSTGAME_MENU", "BOX_SCORE", "GAME_STATS"], timeout=15)
+    if s == "POSTGAME_MENU":
+        log("On Postgame Menu: moving to TEAM STATS")
+        f = move_to(f, POSTGAME_MENU_ITEMS, "TEAM STATS", "up", "down", "postgame menu item")
+        f, s = cross_into("POSTGAME_MENU", ["BOX_SCORE"], timeout=10)
+    elif s == "GAME_STATS":
+        log("On Player Stats: switching to TEAM STATS with L1")
+        press("l1", wait=2.0)
+        f, s = wait_for(["BOX_SCORE"], timeout=10)
+
+    gdir = os.path.join(out, "games", "01_super_bowl")
+    if os.path.exists(os.path.join(gdir, "DONE")):
+        log("  already captured (redo after a stream restart)")
+    else:
+        shutil.rmtree(gdir, ignore_errors=True)
+        cats = capture_game(gdir, all_rows)
+        with open(os.path.join(gdir, "DONE"), "w") as fh:
+            fh.write(",".join(cats) + "\n")
+        log(f"  {len(cats)} categories")
+
+    # Record week label so load_capture knows it is the Super Bowl (week 23)
+    with open(os.path.join(out, "week.json"), "w") as fh:
+        json.dump({"current": SUPER_BOWL, "captured": SUPER_BOWL}, fh)
 
 
 def run_season_schedule(out, weeks=18):
@@ -2642,8 +2686,8 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season"],
-                    help="roster, season-schedule, prospects and season are never part of the default run")
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl"],
+                    help="roster, season-schedule, prospects, season and postgame are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
@@ -2748,10 +2792,12 @@ def main():
                 go_hub()
         if a.only == "games":
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
+        if a.only in ("postgame", "superbowl"):
+            run_mode("the Super Bowl postgame stats", lambda: run_postgame(out, a.all_rows), clear("games"))
         if a.only in ("season", "prospects"):
             n_prospects = 0 if a.all_prospects else a.prospects
             run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
-        if a.only != "prospects":
+        if a.only not in ("prospects", "postgame", "superbowl"):
             log("Returning to the hub")
             go_hub()
         log(f"Done. Screenshots in {out}")
