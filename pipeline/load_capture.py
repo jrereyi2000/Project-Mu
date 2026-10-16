@@ -1065,6 +1065,23 @@ def load_games(cur, folder, season, report, replace=False):
         # (a playoff game was scored at its result load, before it had any lines)
         cur.execute("UPDATE games SET away_score = %s, home_score = %s, status = 'COMPLETED', excitement_index = NULL "
                     "WHERE id = %s", (num(r["ATOTAL"]), num(r["HTOTAL"]), g["id"]))
+        hl_path = os.path.join(folder, "games", r["GAME"], "highlights.json")
+        if os.path.exists(hl_path):
+            try:
+                with open(hl_path) as hf:
+                    hl_data = json.load(hf)
+                if hl_data:
+                    cur.execute("""
+                        INSERT INTO game_highlights (game_id, season, week, highlights)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (game_id) DO UPDATE SET
+                            highlights = EXCLUDED.highlights,
+                            season = EXCLUDED.season,
+                            week = EXCLUDED.week,
+                            created_at = now()
+                    """, (g["id"], season, g["week"], json.dumps(hl_data)))
+            except Exception as e:
+                problems.append(f"{r['GAME']}: failed to load highlights: {e}")
     report["games"], report["lines"] = len(games), n
     return n
 

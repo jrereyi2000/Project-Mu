@@ -113,7 +113,7 @@ CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
 
 
 LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST", "INJURY_REPORT",
-                "DRAFT_BOARD")
+                "DRAFT_BOARD", "HIGHLIGHTS")
 TILE_SCREENS = ("SCHED_TILES", "STATS_TILES")
 HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER")
 
@@ -477,6 +477,9 @@ def classify(f):
     # Postgame menu after playing a game: FINISH GAME, VIEW HIGHLIGHTS, PLAYER STATS, TEAM STATS, SCORE SUMMARY
     if f.find("FINISH GAME") and (f.find("TEAM STATS") or f.find("PLAYER STATS") or f.find("SCORE SUMMARY")):
         return "POSTGAME_MENU"
+    # Postgame highlights screen: VIEW PLAY / CHANGE QUARTER at bottom, TIME / PLAY in table
+    if f.find("VIEW PLAY") and (f.find("CHANGE QUARTER") or (f.find("TIME") and f.find("RATING"))):
+        return "HIGHLIGHTS"
     # Manage Roster > Roster (mapped Oct 13): also shows PLAYER NAME (sort chip) and VIEW
     # PLAYER CARD, so it must be told apart from Player Stats by its own columns. The button
     # bar blanks for a moment when it changes (rows with a contract action add SPEAK WITH
@@ -628,8 +631,8 @@ def cross(screen, frame=None):
             raise Abort(f"Refusing Cross on the League Schedule: {why}")
     elif screen == "POSTGAME_MENU":
         cur = (frame or Frame()).highlighted(POSTGAME_MENU_ITEMS)
-        if cur not in ("TEAM STATS", "PLAYER STATS"):
-            raise Abort(f"Refusing Cross on the Postgame Menu: {cur} is highlighted, not TEAM STATS or PLAYER STATS")
+        if cur not in ("TEAM STATS", "PLAYER STATS", "VIEW HIGHLIGHTS"):
+            raise Abort(f"Refusing Cross on the Postgame Menu: {cur} is highlighted, not TEAM STATS, PLAYER STATS or VIEW HIGHLIGHTS")
     elif screen not in ("HUB_LEAGUE", "SCHED_TILES", "STATS_TILES"):
         raise Abort(f"Refusing to press Cross on screen {screen}")
     press("cross", wait=1.5)
@@ -763,7 +766,12 @@ def open_league_schedule():
         tiles = sorted(tiles, key=lambda lab: boxes[lab][0])
     move_to(f, tiles, target, "left", "right", "schedule tile")
     f = cross_into("SCHED_TILES", ["SCHED_LIST"], timeout=10)[0]
-    CURRENT_WEEK = week_label(f)
+    raw = week_label(f)
+    if raw == "PRESEASON WEEK 1":
+        log(f"Schedule opened on '{raw}' (no games this week; Pro Bowl week); treating current week as '{PRO_BOWL}'")
+        CURRENT_WEEK = PRO_BOWL
+    else:
+        CURRENT_WEEK = raw
     return f
 
 
@@ -855,6 +863,8 @@ def next_round(cur, target):
 
 def previous_week(label):
     label = label.replace("WILDCARD", "WILD CARD").replace("SUPERBOWL", "SUPER BOWL").replace("PROBOWL", "PRO BOWL")
+    if label == "PRESEASON WEEK 1":
+        label = PRO_BOWL
     m = re.match(r"SEASON WEEK (\d+)", label)
     if m:
         n = int(m.group(1))
@@ -1366,7 +1376,7 @@ def select_week(target, debug_dir=None):
         else:
             raise Abort("Week list did not open while holding L2")
         stuck = 0
-        for _ in range(40):
+        for _ in range(50):
             sel = selected(f)
             for _retry in range(3):
                 if sel:
@@ -1403,7 +1413,7 @@ def go_to_week(f, target, out):
         except Abort as e:
             log(f"Week list didn't work ({e}); falling back to tapping L2 forward")
             f, _ = wait_for(["SCHED_LIST"], timeout=10)
-        for _ in range(30):                     # verify (and fallback: tap = next week, wraps)
+        for _ in range(40):                     # verify (and fallback: tap = next week, wraps)
             if week_index(week_label(f) or "") == week_index(target):
                 break
             press("l2", hold=0.15, wait=1.3)
@@ -1416,11 +1426,14 @@ def go_to_week(f, target, out):
 def run_schedule(out, week=None):
     log("== Schedule ==")
     f = open_league_schedule()
-    cur = week_label(f)
+    cur = CURRENT_WEEK or week_label(f)
     if not cur and not week:
         raise Abort("Can't read the schedule week label")
     if not cur:      # after the Super Bowl Madden is in the offseason: the run names the week (--week)
         log(f"No week label on the schedule (offseason?); capturing {clean_week(week)} as asked")
+    if cur == "PRESEASON WEEK 1":
+        log(f"Schedule week reads '{cur}' (no games this week; Pro Bowl week); treating current week as '{PRO_BOWL}'")
+        cur = PRO_BOWL
     target = clean_week(week) if week else previous_week(cur)
     log(f"Current week: {cur}. Target: {target}")
     labels = {"current": cur, "captured": clean_week(target)}
@@ -1668,15 +1681,119 @@ def run_games(out, week=None, all_rows=False, max_games=None):
     log(f"Captured {len(done)} games of {target}")
 
 
+def active_highlight_quarter(path):
+    """Detect which quarter tab is active on the HIGHLIGHTS screen by the underline bar.
+    Returns '1ST', '2ND', '3RD', '4TH', 'OT', or None."""
+    import numpy as np
+    img = Image.open(path).convert("L")
+    arr = np.array(img)
+    if arr.shape[0] < 210 or arr.shape[1] < 1100:
+        return None
+    sub = arr[196:205, 700:1100]
+    white = (sub > 160).astype(int)
+    cols = np.where(white.sum(axis=0) >= 3)[0]
+    if not len(cols):
+        return None
+    runs, cur_run = [], [cols[0]]
+    for c in cols[1:]:
+        if c == cur_run[-1] + 1:
+            cur_run.append(c)
+        else:
+            runs.append(cur_run)
+            cur_run = [c]
+    runs.append(cur_run)
+    longest = max(runs, key=len)
+    if len(longest) < 30:
+        return None
+    mid_x = 700 + (longest[0] + longest[-1]) / 2
+    if mid_x < 785:
+        return "1ST"
+    elif mid_x < 865:
+        return "2ND"
+    elif mid_x < 940:
+        return "3RD"
+    elif mid_x < 1020:
+        return "4TH"
+    else:
+        return "OT"
+
+
+def capture_highlights(hdir):
+    """Capture game highlights across quarters (starts at 4TH/OT, scrolls down each quarter,
+    presses Left to step through 3RD, 2ND, 1ST). Saves screenshots as highlights/q<quarter>_NNN.png.
+    Returns total pages captured."""
+    os.makedirs(hdir, exist_ok=True)
+    f, s = wait_for(["HIGHLIGHTS"], timeout=10)
+    q = active_highlight_quarter(f.path) or "4TH"
+    log(f"  Starting highlights capture on quarter {q}")
+    captured_quarters = set()
+    total_pages = 0
+
+    while True:
+        f, s = wait_for(["HIGHLIGHTS"], timeout=10)
+        q = active_highlight_quarter(f.path) or q
+        log(f"  Highlights quarter {q}")
+        page = 0
+
+        while True:
+            png_name = f"q{q.lower()}_{page:03d}.png"
+            png_path = os.path.join(hdir, png_name)
+            subprocess.run(["cp", f.path, png_path])
+            log(f"    saved {png_name}")
+            total_pages += 1
+            page += 1
+            sig_cur = table_sig(f.path, 0.28, 0.92)
+
+            # Scroll down by pressing Down ~8 times (page holds 11-12 rows)
+            press("down", times=8, hold=0.1, wait=0.8)
+            f_next, _ = look()
+            sig_next = table_sig(f_next.path, 0.28, 0.92)
+
+            if same_table(sig_cur, sig_next):
+                log(f"    end of quarter {q} reached")
+                break
+            f = f_next
+
+        captured_quarters.add(q)
+        if q == "1ST":
+            break
+
+        # Move to previous quarter with Left
+        log(f"  Switching to previous quarter (pressing left)")
+        press("left", wait=1.5)
+        f, _ = look()
+        new_q = active_highlight_quarter(f.path)
+        if new_q and new_q in captured_quarters:
+            break
+        q = new_q or q
+
+    # Return to POSTGAME_MENU with Back (Circle)
+    log("  Leaving highlights: pressing circle")
+    for attempt in range(3):
+        press("circle", wait=2.0)
+        f, s = wait_for(["POSTGAME_MENU", "HIGHLIGHTS"], timeout=10)
+        if s == "POSTGAME_MENU":
+            break
+    return total_pages
+
+
 def run_postgame(out, all_rows=False):
     """Capture the single Super Bowl game directly from the in-game postgame screen:
     starts from POSTGAME_MENU (FINISH GAME visible), TEAM STATS (BOX_SCORE),
-    or PLAYER STATS (GAME_STATS). Captures box_top/box_bottom and all player stats
-    categories into games/01_super_bowl/."""
+    or PLAYER STATS (GAME_STATS). Captures box_top/box_bottom, player stats,
+    and highlights into games/01_super_bowl/."""
     log("== Super Bowl Postgame Capture ==")
     f, s = wait_for(["POSTGAME_MENU", "BOX_SCORE", "GAME_STATS"], timeout=15)
+    gdir = os.path.join(out, "games", "01_super_bowl")
+    hdir = os.path.join(gdir, "highlights")
+
     if s == "POSTGAME_MENU":
-        log("On Postgame Menu: moving to TEAM STATS")
+        log("On Postgame Menu: capturing highlights first")
+        f = move_to(f, POSTGAME_MENU_ITEMS, "VIEW HIGHLIGHTS", "up", "down", "postgame menu item")
+        f, s = cross_into("POSTGAME_MENU", ["HIGHLIGHTS"], timeout=10)
+        capture_highlights(hdir)
+        f, s = wait_for(["POSTGAME_MENU"], timeout=10)
+        log("Back on Postgame Menu: moving to TEAM STATS")
         f = move_to(f, POSTGAME_MENU_ITEMS, "TEAM STATS", "up", "down", "postgame menu item")
         f, s = cross_into("POSTGAME_MENU", ["BOX_SCORE"], timeout=10)
     elif s == "GAME_STATS":
@@ -1684,15 +1801,26 @@ def run_postgame(out, all_rows=False):
         press("l1", wait=2.0)
         f, s = wait_for(["BOX_SCORE"], timeout=10)
 
-    gdir = os.path.join(out, "games", "01_super_bowl")
     if os.path.exists(os.path.join(gdir, "DONE")):
         log("  already captured (redo after a stream restart)")
     else:
-        shutil.rmtree(gdir, ignore_errors=True)
         cats = capture_game(gdir, all_rows)
         with open(os.path.join(gdir, "DONE"), "w") as fh:
             fh.write(",".join(cats) + "\n")
         log(f"  {len(cats)} categories")
+
+    # If highlights weren't captured yet (e.g. started on BOX_SCORE or GAME_STATS)
+    if not glob.glob(os.path.join(hdir, "*.png")):
+        log("Capturing highlights: returning to POSTGAME_MENU with circle")
+        for _ in range(3):
+            press("circle", wait=2.0)
+            f, s = wait_for(["POSTGAME_MENU", "BOX_SCORE", "GAME_STATS"], timeout=10)
+            if s == "POSTGAME_MENU":
+                break
+        if s == "POSTGAME_MENU":
+            f = move_to(f, POSTGAME_MENU_ITEMS, "VIEW HIGHLIGHTS", "up", "down", "postgame menu item")
+            f, s = cross_into("POSTGAME_MENU", ["HIGHLIGHTS"], timeout=10)
+            capture_highlights(hdir)
 
     # Record week label so load_capture knows it is the Super Bowl (week 23)
     with open(os.path.join(out, "week.json"), "w") as fh:
@@ -2803,6 +2931,10 @@ def main():
         log(f"Done. Screenshots in {out}")
     except Abort as e:
         log(f"STOPPED: {e}")
+        try:
+            save_debug(Frame(), "stopped")
+        except Exception:
+            pass
         sys.exit(1)
     except KeyboardInterrupt:
         for k in KEYCODES:

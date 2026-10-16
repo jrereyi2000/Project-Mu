@@ -39,6 +39,8 @@ class WeekLabelTest(unittest.TestCase):
         with self.assertRaises(mc.Abort):
             mc.previous_week("SEASON WEEK 1")
         self.assertEqual(mc.previous_week("POST SEASON PRO BOWL"), "POST SEASON CONFERENCE")
+        # Pro Bowl week opens to Preseason Week 1 because it has no games
+        self.assertEqual(mc.previous_week("PRESEASON WEEK 1"), "POST SEASON CONFERENCE")
 
     def test_next_round(self):
         """The coming playoff round recorded before stepping back: the Super Bowl from Pro Bowl week."""
@@ -47,6 +49,22 @@ class WeekLabelTest(unittest.TestCase):
         self.assertIsNone(mc.next_round(None, "POST SEASON SUPER BOWL"))            # offseason
         self.assertIsNone(mc.next_round("SEASON WEEK 12", "SEASON WEEK 11"))
         self.assertIsNone(mc.next_round("POST SEASON DIVISIONAL", "POST SEASON DIVISIONAL"))
+
+    def test_pro_bowl_week_schedule_resolution(self):
+        """On Pro Bowl week Madden opens the schedule to Preseason Week 1; run_schedule recognizes this."""
+        with tempfile.TemporaryDirectory() as out:
+            f = mock.Mock(text="PRESEASON WEEK 1 | FORCE WIN | BACK", items=[])
+            mc.CURRENT_WEEK = "PRESEASON WEEK 1"
+            with mock.patch.object(mc, "open_league_schedule", return_value=f), \
+                    mock.patch.object(mc, "go_to_week", return_value=f), \
+                    mock.patch.object(mc, "capture_list", return_value=1), \
+                    mock.patch.object(mc, "log"):
+                mc.run_schedule(out)
+            import json
+            labels = json.load(open(os.path.join(out, "week.json")))
+            self.assertEqual(labels["current"], "POST SEASON PRO BOWL")
+            self.assertEqual(labels["captured"], "POST SEASON CONFERENCE")
+            self.assertEqual(labels["next"], "POST SEASON SUPER BOWL")
 
 
 class OcrTextTest(unittest.TestCase):
@@ -125,6 +143,10 @@ class ClassifyTest(unittest.TestCase):
         f = _Frame("L1", "TEAM STATS", "PLAYER STATS", "SCORING SUMMARY", "R1", "BOTH", "R2", "PASSING", "TEAM", "PLAYER")
         self.assertEqual(mc.classify(f), "GAME_STATS")
 
+    def test_highlights_screen(self):
+        f = _Frame("TIME", "RATING", "PLAY", "VIEW PLAY", "CHANGE QUARTER", "BACK", "4TH", "OT", "TOTAL")
+        self.assertEqual(mc.classify(f), "HIGHLIGHTS")
+
     def test_manage_roster_hub(self):
         f = _Frame("GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "UPGRADE PLAYERS",
                    "ADJUST LINEUP", "ROSTER", "DEPTH CHART")
@@ -196,7 +218,7 @@ class DraftRouteTest(unittest.TestCase):
 
     def test_postgame_cross_allowed_only_on_stats(self):
         f = mock.Mock()
-        for item, allowed in (("FINISH GAME", False), ("VIEW HIGHLIGHTS", False),
+        for item, allowed in (("FINISH GAME", False), ("VIEW HIGHLIGHTS", True),
                               ("SCORE SUMMARY", False), ("TEAM STATS", True), ("PLAYER STATS", True)):
             f.highlighted.return_value = item
             with mock.patch.object(mc, "press") as press:
@@ -578,6 +600,26 @@ class RosterRecoveryTest(unittest.TestCase):
             with open(os.path.join(sdir, "done.txt")) as f:
                 done_lines = f.read().splitlines()
             self.assertEqual(done_lines, ["1 PASSING", "2 RUSHING", "3 RECEIVING"])
+
+    def test_active_highlight_quarter(self):
+        import numpy as np
+        from PIL import Image
+        # Create synthetic images with underline at each expected position
+        quarters = {
+            "1ST": (717, 776),
+            "2ND": (795, 854),
+            "3RD": (873, 932),
+            "4TH": (952, 1009),
+            "OT": (1030, 1085),
+        }
+        for q, (x0, x1) in quarters.items():
+            arr = np.zeros((220, 1200), dtype=np.uint8)
+            arr[198:202, x0:x1] = 255
+            path = os.path.join(self.tmp if hasattr(self, "tmp") else "/tmp", f"test_q_{q}.png")
+            Image.fromarray(arr).save(path)
+            self.assertEqual(mc.active_highlight_quarter(path), q)
+            if os.path.exists(path):
+                os.remove(path)
 
 
 if __name__ == "__main__":

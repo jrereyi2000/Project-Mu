@@ -686,6 +686,74 @@ def read_box(path):
     return _cache[path]
 
 
+HIGHLIGHTS_BOX = (0.05, 0.08, 0.95, 0.92)
+
+
+class HighlightPlay(BaseModel):
+    quarter: str
+    clock: str
+    down_dist: str = ""
+    play: str
+    play_type: str = "PLAY"
+    scoring: bool = False
+    points: int = 0
+
+
+class HighlightPage(BaseModel):
+    plays: list[HighlightPlay]
+
+
+HIGHLIGHT_PROMPT = """Extract all plays visible in order from top to bottom on this Madden game highlights screen.
+Return every play with:
+- quarter: e.g. 'Q4', 'Q3', 'Q2', 'Q1', 'OT' (from the active quarter indicated by the underline on the scoreboard)
+- clock: game clock time, e.g. '0:18'
+- down_dist: e.g. '1ST & 10 ON PIT 18' (or '' if kickoff/extra point)
+- play: exact play description
+- play_type: e.g. 'RUSH', 'PASS', 'TOUCHDOWN', 'FIELD_GOAL', 'EXTRA_POINT', 'TWO_POINT', 'SAFETY', 'INTERCEPTION', 'FUMBLE', 'SACK', 'KICKOFF', 'PUNT', 'PENALTY'
+- scoring: true if points were scored
+- points: 6 for TD, 3 for FG, 1 for XP, 2 for 2PT/Safety, 0 otherwise
+"""
+
+
+def read_highlights(path):
+    if path not in _cache:
+        hp = _generate([HIGHLIGHT_PROMPT, prepare_image(path, HIGHLIGHTS_BOX)], HighlightPage, os.path.basename(path))
+        _cache[path] = [p.model_dump() for p in hp.plays]
+    return _cache[path]
+
+
+def extract_highlights(hdir):
+    """Extract and chronologically order all highlights from highlights/*.png."""
+    paths = sorted(glob.glob(os.path.join(hdir, "*.png")) + glob.glob(os.path.join(hdir, "*.webp")))
+    if not paths:
+        return []
+    all_plays, seen = [], set()
+    for p in paths:
+        try:
+            plays = read_highlights(p)
+            for pl in plays:
+                key = (pl.get("quarter", "").upper(), pl.get("clock"), pl.get("play"))
+                if key not in seen:
+                    seen.add(key)
+                    all_plays.append(pl)
+        except Exception as e:
+            print(f"  WARNING extracting {p}: {e}")
+
+    q_rank = {"Q1": 1, "1ST": 1, "Q2": 2, "2ND": 2, "Q3": 3, "3RD": 3, "Q4": 4, "4TH": 4, "OT": 5}
+    def sort_key(pl):
+        q = q_rank.get(pl.get("quarter", "").upper(), 9)
+        clock_s = 0
+        try:
+            parts = pl.get("clock", "0:00").split(":")
+            clock_s = int(parts[0]) * 60 + int(parts[1])
+        except Exception:
+            pass
+        return (q, -clock_s)
+
+    all_plays.sort(key=sort_key)
+    return all_plays
+
+
 def extract_games(root):
     """games/<NN>_<away>_at_<home>/: box_top/box_bottom -> box_score.csv (label, away, home);
     stats/*.png -> stats_<category>.csv. Week-level: game_scores.csv (one row a game) and
@@ -734,6 +802,14 @@ def extract_games(root):
             wc, wr = week.setdefault(cat, [None, []])
             week[cat][0] = wc or cols
             week[cat][1] += [[game] + list(r) for r in trows]
+        hdir = os.path.join(d, "highlights")
+        if os.path.isdir(hdir):
+            hl = extract_highlights(hdir)
+            if hl:
+                import json
+                with open(os.path.join(d, "highlights.json"), "w") as fh:
+                    json.dump(hl, fh, indent=2)
+                print(f"{game}: extracted {len(hl)} highlights")
     hdr = ["GAME", "AWAY", "A1", "A2", "A3", "A4", "AOT", "ATOTAL", "HOME", "H1", "H2", "H3", "H4", "HOT", "HTOTAL",
            "QUARTERS_OK"]
     write_csv(os.path.join(root, "game_scores.csv"), hdr, scores)

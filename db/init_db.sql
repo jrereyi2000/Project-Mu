@@ -343,6 +343,16 @@ CREATE TABLE IF NOT EXISTS game_scripts (
 );
 CREATE INDEX IF NOT EXISTS idx_game_scripts_season_week ON game_scripts(season, week);
 
+-- 5d. Game highlights (scanned from in-game postgame View Highlights screen).
+CREATE TABLE IF NOT EXISTS game_highlights (
+    game_id INTEGER PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+    season INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    highlights JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_game_highlights_season_week ON game_highlights(season, week);
+
 -- 6. One row per capture run (duplicate / missed-week / row-count checks, resuming, token totals).
 CREATE TABLE IF NOT EXISTS captures (
     id SERIAL PRIMARY KEY,

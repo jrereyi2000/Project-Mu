@@ -169,5 +169,24 @@ class RenderTest(unittest.TestCase):
         self.assertNotEqual(facts_hash(a), facts_hash(c))
 
 
+class HighlightsGameTest(unittest.TestCase):
+    def test_anchored_to_highlights(self):
+        game = weekly_game()
+        game["highlights"] = [
+            {"quarter": "1ST", "clock": "09:15", "play_type": "TOUCHDOWN", "play": "Josh Allen 15-yard touchdown pass to Khalil Shakir (Kick is good)", "team": "BUF", "rating": "88"},
+            {"quarter": "2ND", "clock": "05:40", "play_type": "TOUCHDOWN", "play": "Justin Fields 4-yard touchdown run (Kick is good)", "team": "NYJ", "rating": "82"},
+            {"quarter": "2ND", "clock": "00:12", "play_type": "FIELD GOAL", "play": "Bills 42-yard Field Goal is Good", "team": "BUF", "rating": "75"},
+            {"quarter": "3RD", "clock": "07:22", "play_type": "INTERCEPTION", "play": "Justin Fields pass intercepted by Bills DEF", "team": "BUF", "rating": "80"},
+            {"quarter": "4TH", "clock": "02:10", "play_type": "TOUCHDOWN", "play": "Josh Allen 1-yard touchdown run (Kick is good)", "team": "BUF", "rating": "90"},
+        ]
+        script = build_script(game)
+        self.assertEqual(script["quarter_scores_source"], "captured highlights & box score")
+        self.assertIn("highlights", script)
+        self.assertEqual(len(script["highlights"]), 5)
+        self.assertEqual(len(script["scoring"]), 4)
+        self.assertTrue(any("Khalil Shakir" in s["play"] for s in script["scoring"]))
+        self.assertTrue(any(m["type"] == "interception" for m in script["key_moments"]))
+
+
 if __name__ == "__main__":
     unittest.main()

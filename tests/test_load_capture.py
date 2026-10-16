@@ -284,3 +284,57 @@ class ProspectsLoadTest(unittest.TestCase):
         d = self.board(",,,,QB,USC,6'1\",215,22,81")
         with self.assertRaises(L.LoadError):
             L.load_prospects(self.Cur(), d, 2035, {})
+
+
+class LoadHighlightsTest(unittest.TestCase):
+    def test_load_games_saves_highlights(self):
+        folder = tempfile.mkdtemp()
+        with open(os.path.join(folder, "game_scores.csv"), "w") as f:
+            f.write("GAME,AWAY,HOME,A1,A2,A3,A4,AOT,ATOTAL,H1,H2,H3,H4,HOT,HTOTAL,QUARTERS_OK\n")
+            f.write("01_super_bowl,BUF,NYJ,7,3,7,7,0,24,0,10,0,10,0,20,y\n")
+
+        gdir = os.path.join(folder, "games", "01_super_bowl")
+        os.makedirs(gdir, exist_ok=True)
+        with open(os.path.join(gdir, "box_score.csv"), "w") as f:
+            f.write("LABEL,BUF,NYJ\n")
+            f.write("TOTAL OFFENSE,350,300\n")
+
+        hl_data = [{"quarter": "1ST", "clock": "10:00", "play_type": "TOUCHDOWN", "play": "Test TD"}]
+        with open(os.path.join(gdir, "highlights.json"), "w") as f:
+            json.dump(hl_data, f)
+
+        class MockCur:
+            def __init__(self):
+                self.calls = []
+            def execute(self, sql, params=None):
+                self.calls.append((" ".join(sql.split()), params))
+            def fetchall(self):
+                last_sql = self.calls[-1][0] if self.calls else ""
+                if "id, name, abbreviation" in last_sql:
+                    return [(1, "Bills", "BUF"), (2, "Jets", "NYJ")]
+                if "id, name FROM teams" in last_sql:
+                    return [(1, "Bills"), (2, "Jets")]
+                if "FROM players" in last_sql:
+                    return []
+                if "FROM games WHERE season" in last_sql:
+                    return [(42, 23)]
+                return []
+            def fetchone(self):
+                last_sql = self.calls[-1][0] if self.calls else ""
+                if "COUNT(*)" in last_sql.upper() and "GAMES" in last_sql.upper():
+                    return (1,)
+                if "COUNT(*)" in last_sql.upper() and "PLAYER_STATS" in last_sql.upper():
+                    return (0,)
+                if "COALESCE(SUM" in last_sql:
+                    return (0, 0, 0, 0, 0)
+                return (1,)
+
+        cur = MockCur()
+        report = {}
+        L.load_games(cur, folder, 2035, report)
+
+        hl_calls = [c for c in cur.calls if "INSERT INTO game_highlights" in c[0]]
+        self.assertEqual(len(hl_calls), 1)
+        sql, params = hl_calls[0]
+        self.assertEqual(params[:3], (42, 2035, 23))
+        self.assertEqual(json.loads(params[3]), hl_data)

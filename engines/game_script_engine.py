@@ -711,10 +711,184 @@ def _shape(events, flow, game, winner, overtime) -> tuple:
                             f"for good" if dec else f"The {w['name']} took control")
 
 
-# ------------------------------------------------------------------------------------------------ build ---
+def _clock_to_sec(c: str) -> int:
+    try:
+        parts = str(c).split(":")
+        return int(parts[0]) * 60 + int(parts[1])
+    except Exception:
+        return 0
+
+
+def _side_for_play(p: dict, game: dict) -> str:
+    text = (p.get("play") or "").upper()
+    team_hint = (p.get("team") or "").upper()
+    if team_hint == game["away"]["abbr"].upper():
+        return "away"
+    if team_hint == game["home"]["abbr"].upper():
+        return "home"
+    for side in ("away", "home"):
+        for u in ("offense", "defense"):
+            for pl in (game[side].get(u) or []):
+                pname = pl.get("name", "").upper()
+                if pname and len(pname) >= 5 and pname in text:
+                    return side
+        k = (game[side].get("kicking") or {}).get("name", "").upper()
+        if k and len(k) >= 5 and k in text:
+            return side
+    away_abbr, home_abbr = game["away"]["abbr"].upper(), game["home"]["abbr"].upper()
+    if f"ON {away_abbr}" in text:
+        return "home" if "FIELD GOAL" in text else "away"
+    if f"ON {home_abbr}" in text:
+        return "away" if "FIELD GOAL" in text else "home"
+    if away_abbr in text and home_abbr not in text:
+        return "away"
+    if home_abbr in text and away_abbr not in text:
+        return "home"
+    return "away"
+
+
+def _points_for_play(p: dict) -> int:
+    pts = p.get("points")
+    if pts is not None and int(pts) > 0:
+        return int(pts)
+    ptype = (p.get("play_type") or "").upper()
+    txt = (p.get("play") or "").upper()
+    if "TOUCHDOWN" in ptype or "TOUCHDOWN" in txt:
+        return 6
+    if "FIELD GOAL" in ptype or "FIELD GOAL" in txt or " FG " in txt or txt.endswith(" FG"):
+        if "MISSED" not in txt and "NO GOOD" not in txt and "BLOCKED" not in txt:
+            return 3
+    if "SAFETY" in ptype or "SAFETY" in txt:
+        return 2
+    if "EXTRA POINT" in txt and "GOOD" in txt:
+        return 1
+    if "TWO-POINT" in txt and "GOOD" in txt:
+        return 2
+    return 0
+
+
+def _script_from_highlights(game: dict, rng: random.Random) -> dict | None:
+    highlights = game.get("highlights")
+    if not highlights:
+        return None
+    margin = game["away"]["score"] - game["home"]["score"]
+    winner = "away" if margin > 0 else "home" if margin < 0 else None
+    q_map = {"Q1": 0, "1ST": 0, "Q2": 1, "2ND": 1, "Q3": 2, "3RD": 2, "Q4": 3, "4TH": 3, "OT": 4}
+
+    events = []
+    running_score = {"away": 0, "home": 0}
+    overtime = False
+
+    for p in highlights:
+        q_str = p.get("quarter", "Q1").upper()
+        period = q_map.get(q_str, 0)
+        if period == 4:
+            overtime = True
+        pts = _points_for_play(p)
+        if pts > 0 or p.get("scoring"):
+            side = _side_for_play(p, game)
+            running_score[side] += pts
+            events.append({
+                "side": side,
+                "points": pts,
+                "period": period,
+                "clock": _clock_to_sec(p.get("clock", "0:00")),
+                "play": p.get("play", ""),
+                "score_after": dict(running_score),
+            })
+
+    if not events:
+        return None
+
+    flow = _flow(events, winner)
+    shape, storyline = _shape(events, flow, game, winner, overtime)
+    adjustments = _adjustments(events, game, flow, winner, rng)
+
+    scoring = []
+    for i, e in enumerate(events):
+        tags = []
+        before = events[i - 1]["score_after"] if i else {"away": 0, "home": 0}
+        lead_before = before[e["side"]] - before[_other(e["side"])]
+        lead_after = e["score_after"][e["side"]] - e["score_after"][_other(e["side"])]
+        if i == 0:
+            tags.append("opening score")
+        elif lead_before <= 0 < lead_after:
+            tags.append("go-ahead")
+        if lead_after == 0:
+            tags.append("tying")
+        if flow["decisive"] == i:
+            tags.append("lead for good")
+        scoring.append({
+            "period": PERIOD_NAMES[e["period"]],
+            "clock": _clock(e["clock"]),
+            "team": game[e["side"]]["abbr"],
+            "play": e["play"],
+            "drive": None,
+            "score": _score_text(e["score_after"], game),
+            "tags": tags,
+            "points": e["points"],
+            "score_after": {game[x]["abbr"]: e["score_after"][x] for x in ("away", "home")},
+        })
+
+    moments = []
+    for p in highlights:
+        ptype = (p.get("play_type") or "").upper()
+        txt = (p.get("play") or "").upper()
+        is_moment = ptype in ("INTERCEPTION", "FUMBLE", "SACK", "FOURTH_DOWN", "BLOCKED") or any(
+            k in txt for k in ("INTERCEPTION", "FUMBLE", "SACK", "4TH &", "FOURTH DOWN", "TOUCHDOWN", "MISSED")
+        )
+        if is_moment:
+            q_str = p.get("quarter", "Q1").upper()
+            period = q_map.get(q_str, 0)
+            side = _side_for_play(p, game)
+            moments.append({
+                "period": PERIOD_NAMES[period],
+                "clock": p.get("clock", "0:00"),
+                "team": game[side]["abbr"],
+                "type": p.get("play_type", "moment").lower(),
+                "text": p.get("play", ""),
+            })
+
+    quarters_known = all(game[s]["quarters"] for s in ("away", "home"))
+    by_period = {s: [0] * 5 for s in ("away", "home")}
+    for e in events:
+        by_period[e["side"]][e["period"]] += e["points"]
+    if quarters_known:
+        by_period = {s: list(game[s]["quarters"]) for s in ("away", "home")}
+
+    largest = {game[s]["abbr"]: flow["largest"][s][0] for s in ("away", "home")}
+    return {
+        "version": SCRIPT_VERSION,
+        "game_id": game["game_id"],
+        "matchup": f"{game['away']['name']} {game['away']['score']} @ {game['home']['name']} {game['home']['score']}"
+                   + (" (OT)" if overtime else ""),
+        "teams": {s: game[s]["abbr"] for s in ("away", "home")},
+        "shape": shape,
+        "storyline": storyline,
+        "overtime": overtime,
+        "quarter_scores": {game[s]["abbr"]: by_period[s][:5 if overtime else 4] for s in ("away", "home")},
+        "quarter_scores_source": "captured highlights & box score",
+        "halftime": _score_text(flow["halftime"], game),
+        "end_of_regulation": _score_text(flow["regulation"], game) if overtime else None,
+        "lead_changes": flow["lead_changes"],
+        "ties": flow["ties"],
+        "largest_lead": largest,
+        "winner_largest_deficit": flow["winner_deficit"] if winner else None,
+        "scoring": scoring,
+        "key_moments": moments[:10],
+        "adjustments": [{"team": game[a["side"]]["abbr"], "unit": a["unit"], "text": a["text"]} for a in adjustments],
+        "defensive_standouts": _standouts(game),
+        "highlights": highlights,
+    }
+
+
 def build_script(game: dict) -> dict:
     """The game script for one game's inputs (fetch_inputs). Pure: same inputs → same script."""
     rng = random.Random(f"game-script:{game['game_id']}:{SCRIPT_VERSION}")
+    if game.get("highlights"):
+        hl_script = _script_from_highlights(game, rng)
+        if hl_script:
+            return hl_script
     margin = game["away"]["score"] - game["home"]["score"]
     winner = "away" if margin > 0 else "home" if margin < 0 else None
     units, tries, plans, all_plans = {}, {}, {}, {}
@@ -986,6 +1160,9 @@ def fetch_inputs(cur, game_id: int) -> dict | None:
     game["overtime_known"] = any((game[s]["quarters"] or [0] * 5)[4] for s in ("away", "home")) or (
         game["away"]["score"] == game["home"]["score"] and all(game[s]["quarters"] for s in ("away", "home")))
     game["tie_possible_ot"] = game["away"]["score"] == game["home"]["score"]
+    cur.execute("SELECT highlights FROM game_highlights WHERE game_id = %s", (game_id,))
+    hl_row = cur.fetchone()
+    game["highlights"] = hl_row[0] if hl_row else None
     return game
 
 
