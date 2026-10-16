@@ -388,6 +388,14 @@ def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=No
         return None
 
     subj = a["subject"]
+    from newsroom.fantasy_desk import fantasy_phase
+    fantasy_active = fantasy_phase(ctx["week"]) is not None
+    if not fantasy_active:
+        if a.get("archetype") in ("FANTASY_GURU", "BERRY", "YATES") or a.get("subject", {}).get("type") == "fantasy":
+            return None
+        if re.search(r"\b(?:fantasy|full-ppr|\bppr\b|start/sit|waiver\s*wire)\b", post.get("text", ""), re.I):
+            return None
+
     game = _find_game(ctx, a)
     game_id = game["id"] if game else (a.get("parent_game_id") if a["kind"] == "REPLY" else None)
     cur.execute("""
@@ -421,10 +429,12 @@ def save_post(cur, ctx, a, post, posted_at, eng, slot, tagger=None, parent_id=No
     return post_id
 
 
-def publishable(post: dict) -> bool:
+def publishable(post: dict, fantasy_active: bool = True) -> bool:
     if post.get("error") or not post.get("text"):
         return False
-    blocking = ("empty", "mentions ratings or Madden")
+    blocking = ("empty", "mentions ratings or Madden", "mentions fantasy after season is over")
+    if not fantasy_active and re.search(r"\b(?:fantasy|full-ppr|\bppr\b|start/sit|waiver\s*wire)\b", post.get("text", ""), re.I):
+        return False
     return not any(p in blocking or "over 280" in p for p in post.get("problems", []))
 
 
@@ -454,12 +464,14 @@ class _Writer:
 
     def write(self, assignments):
         prompts = [self.prompt(a) for a in assignments]
+        from newsroom.fantasy_desk import fantasy_phase
+        fantasy_active = fantasy_phase(self.ctx["week"]) is not None
 
         def one(args):
             a, (system, prompt) = args
             model = self.cfg.get("model_by_kind", {}).get(a["kind"], self.model)
             try:
-                return write_post(self.client, model, system, prompt)
+                return write_post(self.client, model, system, prompt, fantasy_active=fantasy_active)
             except Exception as e:
                 return {"error": f"{type(e).__name__}: {e}", "text": "", "problems": ["call failed"]}
 
@@ -492,6 +504,11 @@ def _publish(conn, cur, ctx, assignments, writer, followers, cfg, slot, tagger, 
     """Write, time, score and save assignments. Returns saved posts [{id, assignment, text, likes, ...}]."""
     saved, failed = [], 0
     to_write = []
+    from newsroom.fantasy_desk import fantasy_phase
+    fantasy_active = fantasy_phase(ctx["week"]) is not None
+    if not fantasy_active:
+        assignments = [a for a in assignments if a.get("archetype") not in ("FANTASY_GURU", "BERRY", "YATES")
+                       and a.get("subject", {}).get("type") != "fantasy"]
 
     for a in assignments:
         parent = a.get("parent")
@@ -511,7 +528,7 @@ def _publish(conn, cur, ctx, assignments, writer, followers, cfg, slot, tagger, 
 
     results = writer.write(to_write)
     for a, post in zip(to_write, results):
-        if not publishable(post):
+        if not publishable(post, fantasy_active=fantasy_active):
             failed += 1
             log(f"⏭️  [NOT SAVED] {a['handle']} {a['kind']} ({a['subject']['label']}): "
                 f"{post.get('error') or ', '.join(post.get('problems', [])) or 'no text'}")

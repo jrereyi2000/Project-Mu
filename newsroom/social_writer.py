@@ -81,6 +81,10 @@ def build_post_prompt(assignment: dict, account: dict, persona: str, team_name: 
     instruction = KIND_INSTRUCTIONS[kind_key(assignment)]
     instruction = instruction.replace("{your_team_result}", str(facts.get("your_team_result", "played")))
     parts = [f"POST TYPE: {kind_key(assignment)}", f"TASK: {instruction}"]
+    from newsroom.fantasy_desk import fantasy_phase
+    week_num = facts.get("week") or assignment.get("week")
+    if week_num is not None and fantasy_phase(week_num) is None:
+        parts.append("MANDATORY RULE: The fantasy football season is over. Never mention fantasy football, fantasy points, PPR, start/sit, waivers, or fantasy matchups.")
     if assignment.get("angle"):
         parts.append(f"YOUR ANGLE FOR THIS POST: {assignment['angle']}.")
     if assignment.get("slant_team"):
@@ -99,7 +103,7 @@ _URL = re.compile(r"https?://\S+|www\.\S+")
 _HASHTAG = re.compile(r"(?<!\w)#\w+")
 
 
-def clean_post(text: str) -> dict:
+def clean_post(text: str, fantasy_active: bool = True) -> dict:
     """{"text", "hashtags", "problems"} from raw model output. Problems are kept for review, not fixed silently
     beyond formatting: over-length posts are flagged so the caller can ask for a rewrite."""
     problems = []
@@ -125,6 +129,8 @@ def clean_post(text: str) -> dict:
         problems.append(f"{len(t)} characters (over {MAX_CHARS})")
     if re.search(r"\b\d{2}\s*(?:ovr|overall)\b|\bmadden\b", t, re.I):
         problems.append("mentions ratings or Madden")
+    if not fantasy_active and re.search(r"\b(?:fantasy|full-ppr|\bppr\b|start/sit|waiver\s*wire)\b", t, re.I):
+        problems.append("mentions fantasy after season is over")
     return {"text": t, "hashtags": [x[1:] for x in tags], "problems": problems}
 
 
@@ -140,7 +146,7 @@ def cost_usd(model: str, usage: dict) -> float:
     return (usage["input"] * pin + (usage["output"] + usage["thinking"]) * pout) / 1_000_000
 
 
-def write_post(client, model: str, system: str, prompt: str, temperature: float = 0.9) -> dict:
+def write_post(client, model: str, system: str, prompt: str, temperature: float = 0.9, fantasy_active: bool = True) -> dict:
     """One Gemini call (no tools). If the post runs over 280 characters, asks once for a shorter version.
     Returns {"raw", "text", "hashtags", "problems", "usage", "cost_usd", "seconds", "calls"}."""
     from google.genai import types
@@ -156,7 +162,7 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
         return resp.text or ""
 
     raw = call(prompt)
-    post = clean_post(raw)
+    post = clean_post(raw, fantasy_active=fantasy_active)
     calls = 1
     if any("over 280" in p for p in post["problems"]):
         turn = lambda role, text: types.Content(role=role, parts=[types.Part(text=text)])
@@ -164,7 +170,7 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
                      turn("user", f"That is {len(post['text'])} characters. Rewrite it in under 260 characters, "
                                   "same voice. Output only the post.")])
         calls = 2
-        post2 = clean_post(raw2)
+        post2 = clean_post(raw2, fantasy_active=fantasy_active)
         post2["problems"] = ["rewritten once for length"] + post2["problems"]
         raw, post = raw2, post2
     return {"raw": raw, **post, "usage": usage_total, "cost_usd": cost_usd(model, usage_total),

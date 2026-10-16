@@ -58,7 +58,11 @@ class NewsroomInjuriesTest(unittest.TestCase):
             self.assertEqual(inj["fantasy_group"], "RB")
 
     def test_preview_slate_key_injuries_injection(self):
-        brief = build_weekly_assignment_brief(self.db_conn_info, season=2035, week=19)
+        with psycopg.connect(self.db_conn_info) as conn, conn.cursor() as cur:
+            cur.execute("SELECT MIN(week) FROM games WHERE season = 2035 AND status = 'SCHEDULED'")
+            row = cur.fetchone()
+            target_week = row[0] if row and row[0] is not None else 21
+        brief = build_weekly_assignment_brief(self.db_conn_info, season=2035, week=target_week)
         self.assertIn("preview_slate", brief)
         games = brief["preview_slate"]["all_games"]
         self.assertGreater(len(games), 0)

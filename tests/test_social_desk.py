@@ -162,6 +162,27 @@ class SocialDeskTests(unittest.TestCase):
         self.assertEqual(len([a for a in by_kind(plan_social_week(league(week=9)))["PREVIEW"] if a["subject"]["type"] == "fantasy"]), 2)
         self.assertFalse([a for a in by_kind(plan_social_week(league(week=18)))["PREVIEW"] if a["subject"]["type"] == "fantasy"])
 
+    def test_no_fantasy_tweets_in_playoffs_or_offseason(self):
+        import json
+        for w in (19, 20, 21, 22, 23):
+            wc = [(17, 1, "COMPLETED"), (18, 2, "COMPLETED")]
+            div = [(1, 7, "SCHEDULED")]
+            ctx = league(week=w, played_weeks=range(1, min(w, 19)), playoff={19: wc, 20: div})
+            plan = plan_social_week(ctx)
+            # 1. No fantasy accounts
+            self.assertFalse([a for a in plan["assignments"] if a.get("archetype") in ("FANTASY_GURU", "BERRY", "YATES")])
+            # 2. No fantasy subject types
+            self.assertFalse([a for a in plan["assignments"] if a.get("subject", {}).get("type") == "fantasy"])
+            # 3. No fantasy angles
+            self.assertFalse([a for a in plan["assignments"] if a.get("angle") == "what it means for fantasy managers"])
+            # 4. No fantasy kinds
+            self.assertFalse([a for a in plan["assignments"] if a.get("kind") == "FANTASY_PREVIEW"])
+            # 5. No PPR or fantasy points mentions in any assignment facts
+            for a in plan["assignments"]:
+                dumped = json.dumps(a).lower()
+                for term in ("fantasy", "full-ppr", "ppr points", "ppr)", "fantasy_points"):
+                    self.assertNotIn(term, dumped, f"Found {term} in week {w} assignment: {a}")
+
     def test_plan_is_deterministic(self):
         self.assertEqual(plan_social_week(league(week=9)), plan_social_week(league(week=9)))
 

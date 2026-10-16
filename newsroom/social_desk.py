@@ -141,7 +141,7 @@ PUNDIT_EXCLUDED = {
     "BARNWELL", "SANDO", "JOYNER", "ROSENTHAL", "CHADIHA", "KIMES", "ORLOVSKY",
     "SKIP_BAYLESS", "ROUNDTABLE_PANEL",
     "LOCAL_BEAT_REPORTER", "DIE_HARD_FAN", "BANDWAGON_FAN",
-    "FANTASY_GURU", "NFL_MEMES", "DRAFT_SICKO", "FORMER_PLAYER",
+    "FANTASY_GURU", "BERRY", "YATES", "NFL_MEMES", "DRAFT_SICKO", "FORMER_PLAYER",
 }
 FANTASY_ARCHETYPES = ("FANTASY_GURU", "BERRY", "YATES")
 
@@ -508,6 +508,7 @@ class Week:
         recap_ids = {g["id"] for g in ctx["recap_games"]}
         self.defense_lines = [l for l in ctx.get("defense_lines", ()) if l["game_id"] in recap_ids]
         self.season_totals = self._season_totals()
+        self.fantasy_active = fantasy_phase(self.week) is not None
 
     # -- records and standings (regular season only, before this publication week)
     def _records(self):
@@ -698,27 +699,46 @@ class Week:
         t = self.season_totals.get(key)
         if not t:
             return None, None
-        same_pos = sorted((v for v in self.season_totals.values() if v["position"] == t["position"]),
-                          key=lambda v: v["fantasy_points"], reverse=True)
-        rank = next(i for i, v in enumerate(same_pos, 1) if v is t)
-        return f"{t['games']} games: {stat_line(t)}", f"{norm_pos(t['position'])}{rank} in full-PPR points ({t['fantasy_points']:.1f})"
+        pos = norm_pos(t["position"])
+        if self.fantasy_active:
+            same_pos = sorted((v for v in self.season_totals.values() if v["position"] == t["position"]),
+                              key=lambda v: v["fantasy_points"], reverse=True)
+            rank = next(i for i, v in enumerate(same_pos, 1) if v is t)
+            return f"{t['games']} games: {stat_line(t)}", f"{pos}{rank} in full-PPR points ({t['fantasy_points']:.1f})"
+        else:
+            if pos == "QB":
+                stat_key, stat_name = "pass_yards", "passing yards"
+            elif pos == "RB":
+                stat_key, stat_name = "rush_yards", "rushing yards"
+            elif pos in ("WR", "TE"):
+                stat_key, stat_name = "rec_yards", "receiving yards"
+            else:
+                stat_key, stat_name = "rush_yards", "yards"
+            same_pos = sorted((v for v in self.season_totals.values() if norm_pos(v["position"]) == pos),
+                              key=lambda v: (v.get(stat_key) or 0, v.get("pass_tds" if pos == "QB" else "rec_tds" if pos in ("WR", "TE") else "rush_tds") or 0),
+                              reverse=True)
+            rank = next((i for i, v in enumerate(same_pos, 1) if v is t), 1)
+            val = t.get(stat_key) or 0
+            return f"{t['games']} games: {stat_line(t)}", f"{pos}{rank} in {stat_name} ({val:,})"
 
     def performance_facts(self, l):
         g = next(g for g in self.ctx["recap_games"] if g["id"] == l["game_id"])
         opp = g["away_team_id"] if g["home_team_id"] == l["team_id"] else g["home_team_id"]
         w, _ = self.winner_loser(g)
         season, rank = self.season_line(l)
-        return {
+        facts = {
             "player": f"{l['name']} ({l['position']}, {self.team_label(l['team_id'])})",
             "week": l["week"],
             "stat_line": stat_line(l),
-            "fantasy_points_ppr": round(l["fantasy_points"], 1),
             "game": self.game_label(g),
             "team_result": "won" if w == l["team_id"] else "lost" if w else "tied",
             "opponent": self.team_label(opp),
             "season_so_far": season,
             "season_rank": rank,
         }
+        if self.fantasy_active:
+            facts["fantasy_points_ppr"] = round(l["fantasy_points"], 1)
+        return facts
 
     def defense_performances(self):
         """Last week's big defensive and kicking games from captured box scores, biggest first."""
@@ -907,6 +927,8 @@ class Week:
         tier, reasons = 0, []
         pos = norm_pos(l["position"])
         rules = dict(SINGLE_GAME_BUZZ)
+        if not self.fantasy_active:
+            rules.pop("fantasy_points", None)
         rules.update(SINGLE_GAME_BUZZ_BY_POSITION.get(pos, {}))
         for stat, (words, big, historic) in rules.items():
             v = round(_stat(l, stat), 1) if stat == "fantasy_points" else _stat(l, stat)
@@ -922,7 +944,7 @@ class Week:
             if rank <= 3:
                 text += f", the {'most' if rank == 1 else ordinal(rank) + '-most'}{where} in a game this season"
             reasons.append((t, text))
-        if tier and self.recap_week >= 4 and self._game_rank("fantasy_points", l["fantasy_points"], pos) == 1 \
+        if self.fantasy_active and tier and self.recap_week >= 4 and self._game_rank("fantasy_points", l["fantasy_points"], pos) == 1 \
                 and not any("most by a" in r for _, r in reasons):
             tier = 2
             reasons.append((2, f"the best single game by a {pos} this season (full PPR)"))
@@ -983,8 +1005,10 @@ class Week:
         pos = norm_pos(pos)
         rows = sorted((x for x in self.ctx["player_lines"] if norm_pos(x["position"]) == pos),
                       key=lambda x: x["fantasy_points"], reverse=True)[:n]
-        return [f"{x['name']} ({self.teams[x['team_id']]['abbr']}), Week {x['week']}: {stat_line(x)} "
-                f"({x['fantasy_points']:.1f} PPR)" for x in rows]
+        if self.fantasy_active:
+            return [f"{x['name']} ({self.teams[x['team_id']]['abbr']}), Week {x['week']}: {stat_line(x)} "
+                    f"({x['fantasy_points']:.1f} PPR)" for x in rows]
+        return [f"{x['name']} ({self.teams[x['team_id']]['abbr']}), Week {x['week']}: {stat_line(x)}" for x in rows]
 
     def buzz_facts(self, l, tier, reasons):
         facts = self.performance_facts(l)
@@ -1125,7 +1149,8 @@ class Week:
 
     def bad_game_facts(self, l, avg):
         facts = self.performance_facts(l)
-        facts["season_average_before_this_game_ppr"] = round(avg, 1)
+        if self.fantasy_active:
+            facts["season_average_before_this_game_ppr"] = round(avg, 1)
         facts["note"] = "A bad game by his standard."
         return facts
 
@@ -1157,11 +1182,12 @@ class Week:
 class Accounts:
     """Account pools by role, with least-used selection under weekly caps. Deterministic for a seed."""
 
-    def __init__(self, accounts, seed):
+    def __init__(self, accounts, seed, fantasy_enabled: bool = True):
         self.rng = random.Random(seed)
         self.uses = collections.Counter()
         self.by_id = {a["agent_id"]: a for a in accounts}
         self.order = {a["agent_id"]: self.rng.random() for a in accounts}  # stable tie-break
+        self.fantasy_enabled = fantasy_enabled
         self.role = {}
         for a in accounts:
             arch = a["archetype"]
@@ -1171,9 +1197,9 @@ class Accounts:
                 "beat" if arch == "LOCAL_BEAT_REPORTER" else
                 "meme" if arch == "NFL_MEMES" else
                 "draft" if arch == "DRAFT_SICKO" else
-                "fantasy" if arch == "FANTASY_GURU" else
+                "fantasy" if arch in FANTASY_ARCHETYPES else
                 "former" if arch == "FORMER_PLAYER" else
-                "pundit" if arch not in PUNDIT_EXCLUDED else
+                "pundit" if arch not in PUNDIT_EXCLUDED and arch not in FANTASY_ARCHETYPES else
                 None
             )
 
@@ -1192,6 +1218,8 @@ class Accounts:
 
     def _pick(self, candidates, prefer=(), cap_role=None):
         prefer = set(prefer)
+        if not self.fantasy_enabled:
+            candidates = [a for a in candidates if a.get("archetype") not in FANTASY_ARCHETYPES and self.role.get(a["agent_id"]) != "fantasy"]
         ok = [a for a in candidates
               if self.uses[a["agent_id"]] < ROLE_CAPS.get(cap_role or self.role.get(a["agent_id"]) or "pundit", 3)]
         if not ok:
@@ -1216,6 +1244,8 @@ class Accounts:
         return self._pick([a for a in self.all() if self.role.get(a["agent_id"]) == "pundit"], prefer)
 
     def fantasy(self):
+        if not self.fantasy_enabled:
+            return None
         return self._pick([a for a in self.all() if a["archetype"] in FANTASY_ARCHETYPES], cap_role="fantasy",
                           prefer=("FANTASY_GURU",))
 
@@ -1317,7 +1347,8 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
     """Plan one week's Agent Wire posts. Returns {"season", "week", "phase", "assignments", "counts", "notes"}."""
     W = Week(ctx)
     season, week = W.season, W.week
-    acc = Accounts(ctx["accounts"], seed=f"{season}-{week}")
+    fantasy_active = fantasy_phase(week) is not None
+    acc = Accounts(ctx["accounts"], seed=f"{season}-{week}", fantasy_enabled=fantasy_active)
     notes = []
     plan = collections.OrderedDict((k, []) for k in
                                    ("SHARE", "REACTION", "PERFORMANCE", "BAD_GAME", "COMPARISON", "TEAM_STORY", "PLAYER", "BEAT",
@@ -1340,6 +1371,10 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
         if art["persona"] in NO_SHARE_ARCHETYPES or art["persona"] == "LOCAL_BEAT_REPORTER" \
                 or (art.get("slot") or "").startswith("Local Beat"):
             continue
+        if not fantasy_active and ((art.get("slot") or "").startswith("Fantasy")
+                                   or (art.get("article_type") or "").startswith("FANTASY_")
+                                   or art.get("persona") in FANTASY_ARCHETYPES):
+            continue
         account = None
         if art["persona"]:
             account = acc.by_archetype_uncapped(SHARE_ACCOUNT_ARCHETYPE.get(art["persona"], art["persona"]))
@@ -1355,10 +1390,14 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
     perf_n = BUCKET_SIZES["PERFORMANCE"] if recap else 0
     top_lines = sorted(W.recap_lines, key=lambda l: (l["fantasy_points"], l["popularity"]), reverse=True)
     seen_players = set()
-    pattern = ["fantasy", "pundit", "former", "bandwagon", "former", "pundit", "bandwagon"]
+    pattern = (["fantasy", "pundit", "former", "bandwagon", "former", "pundit", "bandwagon"]
+               if fantasy_active else
+               ["pundit", "former", "bandwagon", "former", "pundit", "bandwagon"])
 
     def pick(role, team_id=None, pos=None, avoid=()):
         """An account for a buzz post by role, never one already posting about the same subject."""
+        if not fantasy_active and role == "fantasy":
+            role = "pundit"
         for _ in range(4):
             account = (acc.fantasy() if role == "fantasy" else
                        acc.former([team_id] if team_id else [], pos) if role == "former" else
@@ -1371,6 +1410,8 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
         return None
 
     def with_angle(a, role, roles, i, good=True):
+        if not fantasy_active and role == "fantasy":
+            role = "pundit"
         options = BUZZ_ANGLES.get((role, good), ())
         if options:
             a["angle"] = options[roles[:i].count(role) % len(options)]
@@ -1382,6 +1423,8 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
     ranking_posts = []
     for l, tier, reasons in buzz:
         roles = PLAYER_BUZZ_ROLES[tier]
+        if not fantasy_active and tier == 2:
+            roles = ("pundit", "former", "bandwagon", "pundit")
         if len(plan["PERFORMANCE"]) + len(roles) > perf_n:
             continue
         key = l["player_id"] or (l["short_name"], l["team_id"])
@@ -1709,6 +1752,11 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             room -= 1
 
     assignments = [a for v in plan.values() for a in v]
+    if not fantasy_active:
+        assignments = [a for a in assignments if a.get("archetype") not in FANTASY_ARCHETYPES
+                       and a.get("subject", {}).get("type") != "fantasy"
+                       and a.get("angle") != "what it means for fantasy managers"
+                       and a.get("kind") != "FANTASY_PREVIEW"]
     _add_slants(assignments, acc, W)
     counts = {k: len(v) for k, v in plan.items() if v}
     if not recap:
@@ -1755,7 +1803,9 @@ def plan_replies(ctx: dict, plan: dict, posts: list, total: int = None) -> list:
     Authors are rivals or natural foils: the other team's fans, a contrarian pundit, the roasted team's fans.
     """
     total = BUCKET_SIZES["REPLY"] if total is None else total
-    acc = Accounts(ctx["accounts"], seed=f"{ctx['season']}-{ctx['week']}-replies").replay(plan["assignments"])
+    fantasy_active = fantasy_phase(ctx["week"]) is not None
+    acc = Accounts(ctx["accounts"], seed=f"{ctx['season']}-{ctx['week']}-replies",
+                   fantasy_enabled=fantasy_active).replay(plan["assignments"])
     parents = sorted((p for p in posts if p["assignment"]["kind"] != "REPLY" and p.get("text")),
                      key=lambda p: p.get("likes") or 0, reverse=True)
     out = []
@@ -1774,6 +1824,8 @@ def plan_replies(ctx: dict, plan: dict, posts: list, total: int = None) -> list:
         def foil():
             arch = CONTRARIAN.get(a.get("archetype"))
             if arch:
+                if not fantasy_active and arch in FANTASY_ARCHETYPES:
+                    return None
                 pool = [x for x in acc.all() if x["archetype"] == arch and x["agent_id"] not in used_here]
                 return acc._pick(pool, cap_role="pundit")
             return None
@@ -1831,7 +1883,8 @@ def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=
     already_posted: agent ids that already posted in an earlier wakeup for this team and week.
     """
     W = Week(ctx)
-    acc = Accounts(ctx["accounts"], seed=f"{W.season}-{W.week}-team{team_id}").block(already_posted)
+    acc = Accounts(ctx["accounts"], seed=f"{W.season}-{W.week}-team{team_id}",
+                   fantasy_enabled=fantasy_phase(W.week) is not None).block(already_posted)
     last, nxt = W.team_games(team_id)
     out = []
     for art, agent_id in local_articles:

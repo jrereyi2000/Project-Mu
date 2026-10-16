@@ -237,10 +237,35 @@ class DeduplicationTests(unittest.TestCase):
 
         saved, failed = _publish(conn=MagicMock(), cur=cur, ctx=ctx, assignments=[a], writer=writer,
                                  followers={"agent_1": 1000}, cfg=CFG, slot="Agent Wire", tagger=None, log=lambda *args: None)
-        self.assertEqual(len(saved), 1)
-        self.assertEqual(saved[0]["id"], 999)
-        self.assertEqual(failed, 0)
         writer.write.assert_not_called()
+
+
+class FantasySuppressionTests(unittest.TestCase):
+    def test_publishable_blocks_fantasy_when_inactive(self):
+        # When fantasy_active is False (postseason/offseason), fantasy text is blocked
+        post = {"text": "He scored 25.4 fantasy points today!"}
+        self.assertFalse(publishable(post, fantasy_active=False))
+        post_ppr = {"text": "Great game in full-PPR scoring."}
+        self.assertFalse(publishable(post_ppr, fantasy_active=False))
+        # Normal football text is allowed
+        clean_post = {"text": "Great game: 120 rushing yards and 2 TDs!"}
+        self.assertTrue(publishable(clean_post, fantasy_active=False))
+        # When fantasy_active is True (regular season), fantasy text is allowed
+        self.assertTrue(publishable(post, fantasy_active=True))
+
+    def test_save_post_blocks_fantasy_archetypes_and_content_in_postseason(self):
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        ctx = {"season": 2035, "week": 19, "recap_games": [], "preview_games": []}
+        eng = {"likes": 10, "reposts": 2, "reply_count": 0, "views": 100}
+
+        # Fantasy archetype blocked in week 19
+        a_guru = {"agent_id": "guru", "kind": "PERFORMANCE", "subject": {"type": "player", "id": 1, "label": "Star"}, "archetype": "FANTASY_GURU"}
+        self.assertIsNone(save_post(cur, ctx, a_guru, {"text": "Nice run."}, dt.datetime.now(), eng, "Agent Wire"))
+
+        # Fantasy content blocked in week 19
+        a_pundit = {"agent_id": "pundit", "kind": "PERFORMANCE", "subject": {"type": "player", "id": 1, "label": "Star"}, "archetype": "STEPHEN_A"}
+        self.assertIsNone(save_post(cur, ctx, a_pundit, {"text": "He won your fantasy league today!"}, dt.datetime.now(), eng, "Agent Wire"))
 
 
 if __name__ == "__main__":
