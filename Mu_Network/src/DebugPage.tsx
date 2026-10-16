@@ -10,7 +10,7 @@ const TOKEN_KEY = "mu_debug_token";
 
 type Column = { column: string; type: string; nullable: boolean; generated: boolean; pk: boolean };
 type TableRows = { table: string; kind: string; columns: Column[]; pk: string[]; total: number; page: number; page_size: number; rows: Record<string, unknown>[] };
-type Job = { id: string; kind: string; kind_label: string; status: string; exit_code?: number | null; started_at: string; resume?: string | null; log_tail?: string };
+type Job = { id: string; kind: string; kind_label: string; status: string; exit_code?: number | null; started_at: string; resume?: string | null; log_tail?: string; url_hash?: string; headline?: string; article_id?: number; target_desk?: string };
 type Capture = { id: number; folder: string; mode: string; season: number; week: number | null; status: string; error: string | null; loaded_at: string | null };
 type Resumable = { folder: string; mode: string; stage: string };
 type DebugState = { state: { current_season: number; current_week: number }; database: string; captures: Capture[]; writes_enabled: boolean; running_job: Job | null; resumable: Resumable[] };
@@ -122,6 +122,37 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
   const [newsScope, setNewsScope] = useState<"ARTICLE" | "ALL">("ARTICLE");
   const [clearingNews, setClearingNews] = useState(false);
 
+  // Custom story commissioning state (Two-Step Flow)
+  const [promptText, setPromptText] = useState("");
+  const [promptSeason, setPromptSeason] = useState("");
+  const [promptWeek, setPromptWeek] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [commissioning, setCommissioning] = useState(false);
+  const [customPlan, setCustomPlan] = useState<{
+    classification: {
+      target_desk: "NATIONAL" | "FANTASY";
+      article_type_id: string;
+      article_type_name: string;
+      writer_archetype: string;
+      team_id: number | null;
+      desk_note: string;
+      rationale: string;
+    };
+    catalog: {
+      national_types: { id: string; name: string; allowed_writers: string[] }[];
+      fantasy_types: { id: string; name: string; allowed_writers: string[] }[];
+      national_writers: { id: string; name: string }[];
+      fantasy_writers: { id: string; name: string }[];
+      teams: { id: number; city: string; name: string; abbr: string }[];
+    };
+  } | null>(null);
+
+  const [formDesk, setFormDesk] = useState<"NATIONAL" | "FANTASY">("NATIONAL");
+  const [formType, setFormType] = useState("");
+  const [formWriter, setFormWriter] = useState("");
+  const [formTeam, setFormTeam] = useState<string>("");
+  const [formDeskNote, setFormDeskNote] = useState("");
+
   const loadNews = useCallback(() => {
     call<NewsSummary>("/news").then(setNews).catch(() => {});
   }, []);
@@ -218,6 +249,80 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
     }
   };
 
+  useEffect(() => {
+    if (data) {
+      if (!promptSeason) setPromptSeason(String(data.state.current_season));
+      if (!promptWeek) setPromptWeek(String(data.state.current_week));
+    }
+  }, [data?.state.current_season, data?.state.current_week, promptSeason, promptWeek]);
+
+  const handleAnalyzePrompt = async () => {
+    if (!token || !promptText.trim()) return;
+    setAnalyzing(true);
+    setMessage("");
+    try {
+      const res = await call<NonNullable<typeof customPlan>>(
+        "/classify_article",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            prompt: promptText.trim(),
+            season: Number(promptSeason) || curSeason,
+            week: Number(promptWeek) || curWeek,
+          }),
+        },
+        token
+      );
+      setCustomPlan(res);
+      setFormDesk(res.classification.target_desk);
+      setFormType(res.classification.article_type_id);
+      setFormWriter(res.classification.writer_archetype);
+      setFormTeam(res.classification.team_id !== null ? String(res.classification.team_id) : "");
+      setFormDeskNote(res.classification.desk_note);
+      setMessage("Prompt analyzed. Review and adjust parameters below, then commission.");
+    } catch (e) {
+      setMessage(`Analysis failed: ${(e as Error).message}`);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleCommissionStory = async () => {
+    if (!token || !customPlan) return;
+    setCommissioning(true);
+    setMessage("");
+    try {
+      const s = Number(promptSeason) || curSeason;
+      const w = Number(promptWeek) || curWeek;
+      await call(
+        "/commission_article",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            prompt: promptText.trim(),
+            season: s,
+            week: w,
+            target_desk: formDesk,
+            article_type_id: formType,
+            writer_archetype: formWriter,
+            team_id: formTeam ? Number(formTeam) : null,
+            desk_note: formDeskNote.trim() || promptText.trim(),
+          }),
+        },
+        token
+      );
+      setMessage(`Commissioned ${formDesk} article. Log streaming below.`);
+      setCustomPlan(null);
+      setPromptText("");
+      loadJobs();
+      reload();
+    } catch (e) {
+      setMessage(`Commission failed: ${(e as Error).message}`);
+    } finally {
+      setCommissioning(false);
+    }
+  };
+
   const resumable = data?.resumable || [];
 
   return (
@@ -294,6 +399,172 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
         </section>
 
         <section className={card}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-black uppercase tracking-wide">Commission Custom Story</h3>
+            <span className="text-[10px] font-mono text-[var(--gray-500)]">AI Editorial Desk</span>
+          </div>
+          <p className="text-xs text-[var(--gray-600)] mb-3">
+            Give a story prompt or topic. Step 1 uses Gemini to classify the angle and assign an appropriate writer. Step 2 lets you review or adjust parameters before dispatching the ReAct swarm.
+          </p>
+
+          {!customPlan ? (
+            <div className="grid gap-3">
+              <label>
+                <span className={label}>Story Prompt / Assignment</span>
+                <textarea
+                  className={`${input} min-h-[75px] resize-y font-sans`}
+                  placeholder="e.g. Deep dive into Caleb Williams' performance under pressure vs man coverage, or who to target on fantasy waivers for the playoffs..."
+                  value={promptText}
+                  onChange={e => setPromptText(e.target.value)}
+                  disabled={analyzing || busy}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label>
+                  <span className={label}>Season</span>
+                  <input
+                    className={input}
+                    inputMode="numeric"
+                    value={promptSeason}
+                    onChange={e => setPromptSeason(e.target.value)}
+                    disabled={analyzing || busy}
+                  />
+                </label>
+                <label>
+                  <span className={label}>Publication Week</span>
+                  <input
+                    className={input}
+                    inputMode="numeric"
+                    value={promptWeek}
+                    onChange={e => setPromptWeek(e.target.value)}
+                    disabled={analyzing || busy}
+                  />
+                </label>
+              </div>
+              <button
+                className={btn}
+                disabled={analyzing || busy || !token || !promptText.trim()}
+                onClick={handleAnalyzePrompt}
+              >
+                {analyzing ? "Analyzing Prompt with Gemini…" : "Step 1: Analyze Prompt & Plan"}
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-3 border-t border-[var(--gray-200)] pt-3">
+              <div className="bg-[var(--paper)] p-2.5 text-xs border border-[var(--gray-200)]">
+                <div className="font-bold text-[10px] uppercase text-[var(--ink)] mb-1">Proposed Angle & Rationale</div>
+                <p className="text-[var(--gray-700)] italic">{customPlan.classification.rationale}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label>
+                  <span className={label}>Target Desk</span>
+                  <select
+                    className={input}
+                    value={formDesk}
+                    onChange={e => {
+                      const newDesk = e.target.value as "NATIONAL" | "FANTASY";
+                      setFormDesk(newDesk);
+                      const available = newDesk === "FANTASY" ? customPlan.catalog.fantasy_types : customPlan.catalog.national_types;
+                      if (available.length > 0) {
+                        setFormType(available[0].id);
+                        const writers = newDesk === "FANTASY" ? customPlan.catalog.fantasy_writers : customPlan.catalog.national_writers;
+                        setFormWriter(writers[0]?.id || "");
+                      }
+                    }}
+                  >
+                    <option value="NATIONAL">National Newsroom (Main Slate)</option>
+                    <option value="FANTASY">Mu Fantasy Desk</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span className={label}>Target Team (Optional)</span>
+                  <select
+                    className={input}
+                    value={formTeam}
+                    onChange={e => setFormTeam(e.target.value)}
+                  >
+                    <option value="">League-Wide / None</option>
+                    {customPlan.catalog.teams.map(t => (
+                      <option key={t.id} value={String(t.id)}>
+                        {t.city} {t.name} ({t.abbr})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label>
+                  <span className={label}>Article Type</span>
+                  <select
+                    className={input}
+                    value={formType}
+                    onChange={e => {
+                      const newType = e.target.value;
+                      setFormType(newType);
+                      const currentTypes = formDesk === "FANTASY" ? customPlan.catalog.fantasy_types : customPlan.catalog.national_types;
+                      const found = currentTypes.find(t => t.id === newType);
+                      if (found && found.allowed_writers.length > 0 && !found.allowed_writers.includes(formWriter)) {
+                        setFormWriter(found.allowed_writers[0]);
+                      }
+                    }}
+                  >
+                    {(formDesk === "FANTASY" ? customPlan.catalog.fantasy_types : customPlan.catalog.national_types).map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span className={label}>Writer / Persona</span>
+                  <select
+                    className={input}
+                    value={formWriter}
+                    onChange={e => setFormWriter(e.target.value)}
+                  >
+                    {(formDesk === "FANTASY" ? customPlan.catalog.fantasy_writers : customPlan.catalog.national_writers).map(w => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                <span className={label}>Mandatory Angle / Desk Note</span>
+                <textarea
+                  className={`${input} min-h-[55px] resize-y font-sans`}
+                  value={formDeskNote}
+                  onChange={e => setFormDeskNote(e.target.value)}
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  className={btnRed}
+                  disabled={commissioning || busy || !token}
+                  onClick={handleCommissionStory}
+                >
+                  {commissioning ? "Dispatching Swarm…" : "Step 2: Commission Story"}
+                </button>
+                <button
+                  className={btn}
+                  disabled={commissioning || busy}
+                  onClick={() => setCustomPlan(null)}
+                >
+                  Edit Prompt
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className={card}>
           <h3 className="font-black uppercase tracking-wide mb-3">Runs</h3>
           <div className="grid gap-3">
             {RUNS.map(r => (
@@ -335,6 +606,24 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
             {latest && <span className="text-xs font-mono">{latest.started_at.replace("T", " ")}</span>}
             {running && <button className={btn} disabled={!token} onClick={() => stop(running.id)}>Stop</button>}
           </div>
+          {latest?.status === "done" && latest.url_hash && (
+            <div className="bg-emerald-50 border-2 border-emerald-500 p-3 mb-3 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="font-black uppercase tracking-wider block text-[10px] text-emerald-800">
+                  {latest.kind === "custom_commission" ? "Commissioned Story Published" : "Article Published"}
+                </span>
+                <span className="font-bold">{latest.headline || "Story ready"}</span>
+              </div>
+              <a
+                href={latest.url_hash}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-emerald-700 text-white font-bold uppercase text-[10px] tracking-wider hover:bg-emerald-800"
+              >
+                Read Story →
+              </a>
+            </div>
+          )}
           <pre ref={logRef} className="bg-[#07080a] text-[#d8d8d8] text-[11px] leading-snug p-3 h-[420px] overflow-auto whitespace-pre-wrap break-words font-mono">{log || "Logs appear here when a run starts."}</pre>
         </section>
         <section className={card}>

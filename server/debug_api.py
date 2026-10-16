@@ -39,6 +39,7 @@ JOB_KINDS = {
     "roster_scan": ("Roster scan", ["--mode", "roster", "--no-articles"]),
     "draft_scan": ("Draft prospect scan", ["--mode", "prospects", "--no-articles"]),
     "publish_articles": ("Publish articles (newsroom run)", []),
+    "custom_commission": ("Commission custom article", []),
 }
 
 router = APIRouter(prefix="/api/debug")
@@ -474,6 +475,17 @@ def _load_job(job_id):
         code = open(exit_path).read().strip()
         job["exit_code"] = int(code) if code.lstrip("-").isdigit() else None
         job["status"] = "done" if job["exit_code"] == 0 else ("stopped" if job.get("stop_requested") else "failed")
+        if job["status"] == "done":
+            log_tail = tail(_job_path(job_id, "log"), 50)
+            m_url = re.search(r"URL Route:\s*(\S+)", log_tail)
+            if m_url and m_url.group(1):
+                job["url_hash"] = m_url.group(1)
+            m_head = re.search(r"Headline:\s*(.+)", log_tail)
+            if m_head:
+                job["headline"] = m_head.group(1).strip()
+            m_id = re.search(r"Article ID:\s*(\d+)", log_tail)
+            if m_id:
+                job["article_id"] = int(m_id.group(1))
     elif _alive(job["pid"]):
         job["status"] = "running"
     else:
@@ -567,3 +579,127 @@ def stop_job(job_id: str, x_debug_token: Optional[str] = Header(None)):
     with open(_job_path(job_id, "json"), "w") as fh:
         json.dump({k: v for k, v in job.items() if k not in ("status", "exit_code")}, fh, indent=1)
     return {"stopping": job_id}
+
+
+# --------------------------------------------------- custom commissioning ----
+class ClassifyIn(BaseModel):
+    prompt: str
+    season: Optional[int] = None
+    week: Optional[int] = None
+
+
+class CommissionIn(BaseModel):
+    prompt: str
+    season: int
+    week: int
+    target_desk: str
+    article_type_id: str
+    writer_archetype: str
+    team_id: Optional[int] = None
+    desk_note: Optional[str] = None
+    slot: Optional[str] = None
+
+
+@router.post("/classify_article")
+def classify_article_endpoint(body: ClassifyIn, x_debug_token: Optional[str] = Header(None)):
+    require_token(x_debug_token)
+    if not body.prompt.strip():
+        raise HTTPException(400, "prompt cannot be empty")
+    from newsroom.custom_commission import classify_prompt, load_article_catalog, load_teams
+    try:
+        classification = classify_prompt(body.prompt, body.season, body.week, conn_info=CONN_INFO)
+    except Exception as e:
+        raise HTTPException(500, f"Classification failed: {e}")
+
+    article_types, fantasy_writers, national_personas = load_article_catalog()
+    teams = load_teams(CONN_INFO)
+
+    national_writers = [
+        {"id": "BARNWELL", "name": "Bill Barnwell (Analytics / Regression)"},
+        {"id": "SANDO", "name": "Mike Sando (Front Office / Coaching)"},
+        {"id": "JOYNER", "name": "KC Joyner (Tape Breakdown / Efficiency)"},
+        {"id": "ROSENTHAL", "name": "Gregg Rosenthal (Aesthetics / Vibes)"},
+        {"id": "CHADIHA", "name": "Jeffri Chadiha (Legacy / Narrative)"},
+        {"id": "LOCAL_BEAT_REPORTER", "name": "Local Beat Reporter (Franchise Beat)"},
+        {"id": "SIMMONS", "name": "Bill Simmons (Pop-Culture / Column)"},
+        {"id": "KIMES", "name": "Mina Kimes (Film Dissection / Scheme)"},
+        {"id": "ORLOVSKY", "name": "Dan Orlovsky (QB Play / Protection)"},
+        {"id": "MEL_KIPER", "name": "Mel Kiper Jr. (Draft / Prospects)"},
+    ]
+
+    fantasy_writers_list = [
+        {"id": "BERRY", "name": "Matthew Berry (Love/Hate / Anecdotes)"},
+        {"id": "YATES", "name": "Field Yates (Field Notes / Lists / Waivers)"},
+        {"id": "FANTASY_GURU", "name": "Mu Fantasy Guru (Algorithm / Projections)"},
+    ]
+
+    return {
+        "classification": classification,
+        "catalog": {
+            "national_types": [
+                {"id": k, "name": v.get("name", k), "allowed_writers": v.get("allowed_writers", [])}
+                for k, v in article_types.items() if not k.startswith("FANTASY_")
+            ],
+            "fantasy_types": [
+                {"id": k, "name": v.get("name", k), "allowed_writers": v.get("allowed_writers", [])}
+                for k, v in article_types.items() if k.startswith("FANTASY_")
+            ],
+            "national_writers": national_writers,
+            "fantasy_writers": fantasy_writers_list,
+            "teams": [
+                {"id": t["id"], "city": t["city"], "name": t["name"], "abbr": t["abbreviation"]}
+                for t in teams
+            ],
+        }
+    }
+
+
+@router.post("/commission_article")
+def commission_article_endpoint(body: CommissionIn, x_debug_token: Optional[str] = Header(None)):
+    require_token(x_debug_token)
+    if not body.prompt.strip():
+        raise HTTPException(400, "prompt cannot be empty")
+    busy = running_job()
+    if busy:
+        raise HTTPException(409, f"job {busy['id']} ({busy['kind']}) is still running")
+
+    os.makedirs(JOBS_DIR, exist_ok=True)
+    job_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    args = [
+        sys.executable, "-u", "-m", "newsroom.custom_commission",
+        "--prompt", body.prompt,
+        "--season", str(body.season),
+        "--week", str(body.week),
+        "--desk", body.target_desk.upper(),
+        "--type", body.article_type_id,
+        "--writer", body.writer_archetype,
+    ]
+    if body.team_id:
+        args += ["--team", str(body.team_id)]
+    if body.desk_note:
+        args += ["--desk-note", body.desk_note]
+    if body.slot:
+        args += ["--slot", body.slot]
+
+    cmd = ["sh", "-c", '"$@"; echo $? > "$EXIT"', "sh", *args]
+    log = open(_job_path(job_id, "log"), "w")
+    p = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                         env={**os.environ, "EXIT": _job_path(job_id, "exit"), "PYTHONUNBUFFERED": "1"})
+    job = {
+        "id": job_id,
+        "kind": "custom_commission",
+        "kind_label": f"Commission {body.target_desk.title()} Article",
+        "prompt": body.prompt,
+        "article_type_id": body.article_type_id,
+        "writer": body.writer_archetype,
+        "season": body.season,
+        "week": body.week,
+        "target_desk": body.target_desk.upper(),
+        "args": args[1:],
+        "pid": p.pid,
+        "started_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with open(_job_path(job_id, "json"), "w") as fh:
+        json.dump(job, fh, indent=1)
+    return _load_job(job_id)
+
