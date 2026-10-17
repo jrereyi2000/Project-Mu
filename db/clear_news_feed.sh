@@ -71,9 +71,14 @@ fi
 
 WHERE="TRUE"
 if [ ${#WHERE_PARTS[@]} -gt 0 ]; then
-  WHERE=$(IFS=" AND "; echo "${WHERE_PARTS[*]}")
+  WHERE=$(printf " AND %s" "${WHERE_PARTS[@]}")
+  WHERE="${WHERE:5}"
 fi
-SCOPE=$(IFS=", "; echo "${SCOPE_PARTS[*]}")
+SCOPE=""
+if [ ${#SCOPE_PARTS[@]} -gt 0 ]; then
+  SCOPE=$(printf ", %s" "${SCOPE_PARTS[@]}")
+  SCOPE="${SCOPE:2}"
+fi
 
 echo "Current news_feed contents:"
 "${PSQL[@]}" -F $'\t' -c "SELECT content_type, COUNT(*), MIN(season)||' W'||MIN(week), MAX(season)||' W'||MAX(week) FROM news_feed GROUP BY content_type ORDER BY 1;" \
