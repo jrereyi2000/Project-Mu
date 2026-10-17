@@ -1339,5 +1339,5 @@ Follows the franchise from the Super Bowl through the first round of the next NF
 - **REST Endpoints (`server/debug_api.py`):**
   - `POST /api/debug/offseason/preview`: validates manifest and returns structured preview with resolved teams, coaches, slants, qualitative tiers, and warnings.
   - `POST /api/debug/offseason/run`: runs the offseason package background job with live log streaming.
-- **Tests:** `tests/test_offseason_service.py` (28 tests), `tests/test_offseason_catalog.py` (7 tests), `tests/test_coordinators.py` (14 tests), `tests/test_draft_results.py` (20 tests), `tests/test_extract_draft_results.py` (5 tests).
+- **Tests:** `tests/test_offseason_service.py` (28 tests), `tests/test_offseason_catalog.py` (7 tests), `tests/test_coordinators.py` (14 tests), `tests/test_draft_results.py` (20 tests), `tests/test_extract_draft_results.py` (5 tests), `tests/test_weekly_capture.py` (21 tests).
 

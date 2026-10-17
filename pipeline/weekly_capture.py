@@ -348,6 +348,10 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
     every game of last week, never with articles). Returns 0 when the week went through, 1 when it stopped."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
+    if mode == "weekly" and resume and os.path.isdir(os.path.join(CAPTURES, resume)):
+        detected = folder_mode(os.path.join(CAPTURES, resume))
+        if detected != "weekly":
+            mode = detected
     current = None
     if mode in ("weekly", "playoff", "postgame"):
         try:
@@ -440,7 +444,8 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
         return 0
     except WeekStopped as e:
         log(f"WEEK STOPPED: {e}")
-        notify(f"{e}\nResume by hand: python3 -m pipeline.weekly_capture --resume {name}",
+        mode_arg = f" --mode {mode}" if mode != "weekly" else ""
+        notify(f"{e}\nResume by hand: python3 -m pipeline.weekly_capture --resume {name}{mode_arg}",
                title="Mu: week stopped", priority="urgent", tags=("warning",))
         return 1
     finally:

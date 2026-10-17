@@ -218,6 +218,13 @@ class RunTest(unittest.TestCase):
         self.assertEqual(wc.run("nope"), 1)
         self.assertEqual(self.calls, [])
 
+    def test_resume_auto_detects_draft_results_mode(self):
+        f = os.path.join(self.tmp, "dr_resume")
+        os.makedirs(os.path.join(f, "draft_results"))
+        self.assertEqual(wc.run("dr_resume"), 0)
+        self.assertEqual(self.load_mode, "draft-results")
+        self.assertEqual(self.notices[-1][0], "Mu: draft-results scan done")
+
     def test_engine_failure_stops_before_articles(self):
         def boom(season):
             self.calls.append("engines")
