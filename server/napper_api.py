@@ -1007,12 +1007,15 @@ def get_league_chat(league_id: int, limit: int = 50):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, league_id, sender_type, sender_name, sender_handle, avatar_url,
-                       message_text, card_payload, created_at
-                FROM napper_chat
-                WHERE league_id = %s
-                ORDER BY created_at ASC
-                LIMIT %s
+                SELECT * FROM (
+                    SELECT id, league_id, sender_type, sender_name, sender_handle, avatar_url,
+                           message_text, card_payload, created_at
+                    FROM napper_chat
+                    WHERE league_id = %s
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT %s
+                ) sub
+                ORDER BY created_at ASC, id ASC
             """, (league_id, limit))
             messages = cur.fetchall()
 

@@ -6,7 +6,8 @@ Gridiron is a sports-media platform for a simulated NFL universe. The applicatio
 
 1. **Gridiron Newsroom** — league news, teams, schedules, games, standings, power rankings, statistics, player profiles, and long-form articles.
 2. **Mu Fantasy Analytics** — fantasy command center, weekly rankings, rest-of-season rankings, preseason ADP consensus board, global player search, and rich interactive player modal overlays.
-3. **Agent Wire** — a dark social-news experience with national posts, topic discovery, author profiles, team feeds, and live NFL schedule container with Excitement Index rankings.
+3. **Napper Fantasy Platform** — interactive Sleeper-style multi-league web application (`#napper`, `#napper-{leagueId}`) featuring starter/bench lineup swaps, waiver claims, AI trade negotiations, and autonomous manager chat banter with award cards.
+4. **Agent Wire** — a dark social-news experience with national posts, topic discovery, author profiles, team feeds, and live NFL schedule container with Excitement Index rankings.
 
 The frontend is powered by a live FastAPI backend (`server/api.py`) backed by a temporal PostgreSQL database (`madden`), providing authentic simulated player stats, weekly projections, team rosters, schedules, and quantitative indices.
 
@@ -63,6 +64,8 @@ The app integrates with the canonical PostgreSQL database via RESTful JSON endpo
 | `#rankings` | Power rankings | `/api/power_rankings` |
 | `#article-{articleId}` | Long-form article | News feed / Editorial |
 | `#fantasy` | Mu Fantasy dashboard | `/api/fantasy/dashboard` |
+| `#napper` | Napper Fantasy Platform | `/api/napper/profile`, `/api/napper/leagues` |
+| `#napper-{leagueId}` | Napper League Arena (3 panels, 7 tabs) | `/api/napper/league/{id}/*` |
 | `#fantasy-rankings` | Weekly fantasy rankings | `/api/fantasy/rankings/weekly` |
 | `#fantasy-adp` | Preseason ADP board | `/api/fantasy/rankings/adp` |
 | `#fantasy-all` | All Mu Fantasy analysis for the week (front page + more analysis, week chips) | `/api/fantasy/articles` |
@@ -92,8 +95,10 @@ The standard Gridiron shell surrounds the newsroom, team, schedule, game, stats,
 
 - Gridiron brand returns to the newsroom home.
 - **Teams** opens the league mega menu.
-- **Stats** opens the statistics menu.
-- Direct links open Standings, Schedule, Fantasy, and Social.
+- Direct links open Standings, Schedule, and Social.
+- **Fantasy** opens a dropdown menu with:
+  - **Analytics** (`#fantasy`): Mu Fantasy Command Center, weekly rankings, rest-of-season projections, and ADP board.
+  - **Napper** (`#napper`): Sleeper-style interactive multi-league platform with lineup management, waivers, trades, and chat.
 - Search icon is currently visual only.
 - “LIVE” is a status indicator only.
 
@@ -544,6 +549,48 @@ Fantasy screens use a separate light design system with navy, green, mint, and p
 - Section tabs smoothly scroll to the corresponding modal section and update active state.
 - “View more seasons” expands from one season to all career seasons.
 - “Full profile” links to the player profile route (`#player-{id}`).
+
+## 6b. Napper Fantasy Platform (`src/NapperPage.tsx`, `src/napper.css`)
+
+Napper is an interactive Sleeper-style multi-league web application featuring real-time matchup simulation, roster manipulation, autonomous AI manager trade negotiations, and interactive league banter.
+
+### Visual System & Styling
+- Dark navy palette: background `#121926`, panel containers `#1a2332`, cards `#222f44`, accents `#00ceb8` (Sleeper cyan), warning/danger `#ff4458`.
+- Sleeper typography hierarchy, slot badges (`QB` crimson, `RB` emerald, `WR` royal blue, `TE` amber, `K` purple, `DEF` gray), robot manager avatars, and animated win probability gauges.
+
+### 3-Panel Desktop Layout
+1. **Left Navigation Rail (Leagues & User Profile)**:
+   - League selector displaying user's active leagues (`Solo 2026 8-Team SF PPR`, `The Justice League`, `The Avengers`).
+   - Each league item renders avatar, league name, season, scoring format badge, user win-loss record, live user vs opponent score, and unplayed starters count.
+   - User profile card pinned at the bottom showing user handle `@jrereyi2000`, display name "The Straw Hat Pirates", avatar, trophies counter (3), settings button, and pending trade notification counter badge.
+2. **Center Stage (7 Interactive Tabs)**:
+   - **`MATCHUP` (`NapperMatchupTab.tsx`)**:
+     - Week selector supporting weeks 1 to 17 with live schedule cloning.
+     - Split matchup header with team names, manager handles, live scores, projected totals, and win probability percentage bar.
+     - Starter-by-starter comparison table matching reference screenshot specs: exactly 10 slots (`QB`, `RB`, `RB`, `WR`, `WR`, `TE`, `FLEX`, `SUPERFLEX`, `K`, `DEF`) pairing left team and right team players directly across each slot.
+     - Bench table with side-by-side player cards.
+   - **`TEAM` (`NapperTeamTab.tsx`)**:
+     - Complete roster management with one-click slot swapping. Clicking a player initiates swap mode, highlighting eligible starter/bench positions; selecting the destination executes an atomic swap via `POST /api/napper/league/{id}/lineup`.
+   - **`PLAYERS` (`NapperPlayersTab.tsx`)**:
+     - Available free agents board with position filter pills (`ALL`, `QB`, `RB`, `WR`, `TE`, `K`, `DEF`) and instant debounced search.
+     - Clicking "+" opens the Add/Drop modal, allowing user to pick a bench player to drop and confirm the waiver claim (`POST /api/napper/league/{id}/waivers/claim`).
+   - **`LEAGUE` (`NapperLeagueTab.tsx`)**:
+     - League standings table with rank, team name, manager handle, W-L-T record, points for, and points against.
+     - Interactive 6-team playoff bracket tree showing Quarterfinals (seeds 3 vs 6, 4 vs 5; seeds 1 and 2 bye), Semifinals, and Championship matchup.
+   - **`SCORES` (`NapperScoresTab.tsx`)**:
+     - Full league scoreboard grid for the selected week.
+   - **`TRADES` (`NapperTradesTab.tsx`)**:
+     - Active trade market displaying pending incoming offers with AI rationale pitches, net projected point impact, and Accept / Reject buttons (`POST /api/napper/league/{id}/trades/{id}/respond`).
+     - "Propose Trade" button opens interactive trade builder modal to assemble multi-player offers with any AI manager in the league.
+   - **`CHAT`**:
+     - Mobile / responsive full-screen chat tab.
+3. **Right Rail (Autonomous League Chat & Awards)**:
+   - Stream of autonomous bot award cards generated by `engines/napper_chat_engine.py`:
+     - "RB / WR / TE Benchwarmer of the Week" highlighting the manager who left top fantasy points on the bench.
+     - "High Scorer of the Week" and "Heartbreaker of the Week".
+     - "Trade Alert" and "Waiver Claim" announcements.
+   - Natural-language banter from AI managers across 4 distinct personas (`TRASH_TALKER`, `ANALYTICS_NERD`, `WAIVER_HAWK`, `DIE_HARD`).
+   - User message input bar with attachment button, GIF selector, emoji picker, and send button (`POST /api/napper/league/{id}/chat/send`).
 
 ## 7. Agent Wire
 

@@ -485,7 +485,7 @@ PERSONA_BANTER_TEMPLATES = {
         "INJURY": [
             "Crushed for {player} ({injury_type}). That man leaves his heart on the field every single Sunday. Prayers up for a speedy recovery 🙏",
             "Gutted seeing {player} go down. True team captain and warrior. Time for the next man up to show what this franchise culture is made of!",
-            "Tough injury news, but this locker room has grit. We're going to rally together and play inspired football.",
+            "Tough injury news for {player}, but this locker room has grit. We're going to rally together and play inspired football.",
         ],
         "BLOWOUT_WIN": [
             "That's four quarters of smash-mouth football right there! Total team win from opening kickoff to final whistle @{loser_handle}!",

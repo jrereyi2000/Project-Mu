@@ -85,7 +85,9 @@ POS_NORMALIZATION = {
 
 
 def _safe_commit(conn) -> None:
-    """Commits connection if not inside an external transaction block that forbids explicit commit."""
+    """Commits connection if not inside an external transaction block or marked as uncommitted."""
+    if getattr(conn, "_no_commit", False):
+        return
     try:
         conn.commit()
     except psycopg.ProgrammingError:
@@ -816,8 +818,9 @@ def process_ai_to_ai_trades(
                 # Fetch player details and values
                 cur.execute(
                     """
-                    SELECT p.id, COALESCE(p.full_name, p.player_name), COALESCE(fp.position, 'WR'), COALESCE(fp.ros_total_points, 15.0)
+                    SELECT p.id, COALESCE(p.full_name, p.player_name), COALESCE(ps.position, fp.position, 'WR'), COALESCE(fp.ros_total_points, 15.0)
                     FROM players p
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s
                     WHERE p.id = ANY(%s)
                     """,
@@ -827,8 +830,9 @@ def process_ai_to_ai_trades(
 
                 cur.execute(
                     """
-                    SELECT p.id, COALESCE(p.full_name, p.player_name), COALESCE(fp.position, 'WR'), COALESCE(fp.ros_total_points, 15.0)
+                    SELECT p.id, COALESCE(p.full_name, p.player_name), COALESCE(ps.position, fp.position, 'WR'), COALESCE(fp.ros_total_points, 15.0)
                     FROM players p
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s
                     WHERE p.id = ANY(%s)
                     """,
@@ -854,12 +858,13 @@ def process_ai_to_ai_trades(
                 # Does giving up requested players leave target with fewer than starter requirement?
                 cur.execute(
                     """
-                    SELECT COALESCE(fp.position, 'WR'), COUNT(*)
+                    SELECT COALESCE(ps.position, fp.position, 'WR'), COUNT(*)
                     FROM napper_rosters r
                     JOIN players p ON r.player_id = p.id
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s
                     WHERE r.league_id = %s AND r.team_id = %s AND r.week = %s
-                    GROUP BY COALESCE(fp.position, 'WR')
+                    GROUP BY COALESCE(ps.position, fp.position, 'WR')
                     """,
                     (week, league_id, targ_id, week),
                 )

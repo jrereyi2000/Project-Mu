@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type CSSPropert
 
 import { API_BASE } from "./api";
 import DebugPage from "./DebugPage";
+import { NapperPage } from "./NapperPage";
 export const SystemContext = createContext<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
 
 /** "Oct 15 · 8:03 AM" for the Stats page's Updated stamp (the latest capture load). */
@@ -3277,6 +3278,7 @@ function FantasyHeader({ active }: { active: "news" | "rankings" }) {
           <a className="fantasy-nfl-link" href="#">NFL</a>
           <a className={active === "news" ? "active" : ""} href="#fantasy">News &amp; Articles</a>
           <a className={active === "rankings" ? "active" : ""} href="#fantasy-rankings">Rankings</a>
+          <a href="#napper" style={{ color: "var(--napper-teal, #00ceb8)", fontWeight: "700" }}>🛏️ Napper</a>
         </div>
         <div className="fantasy-tools">
           <div className="fantasy-search">
@@ -4909,6 +4911,7 @@ function StatsDropdown({ close }: { close: () => void }) {
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [fantasyOpen, setFantasyOpen] = useState(false);
   const [showAllStories, setShowAllStories] = useState(false);
   const [systemStatus, setSystemStatus] = useState<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
   const [week, setWeek] = useState(18);
@@ -5013,6 +5016,9 @@ function App() {
     content = <FantasyPlayerProvider><FantasyRankingsPage view="weekly" /></FantasyPlayerProvider>;
   } else if (route === "#fantasy-ros") {
     content = <FantasyPlayerProvider><FantasyRankingsPage view="ros" /></FantasyPlayerProvider>;
+  } else if (route === "#napper" || route.startsWith("#napper-")) {
+    const leagueId = route.startsWith("#napper-") ? Number(route.split("-")[1]) || 1 : 1;
+    content = <NapperPage initialLeagueId={leagueId} />;
   } else if (route === "#social") {
     content = <SocialFeedPage />;
   } else if (route === "#social-explore") {
@@ -5056,7 +5062,58 @@ function App() {
             </button>
             <a href="#standings">Standings</a>
             <a href="#schedule">Schedule</a>
-            <a href="#fantasy">Fantasy</a>
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <button
+                className={`fantasy-trigger ${fantasyOpen ? "active" : ""}`}
+                onClick={() => { setFantasyOpen(!fantasyOpen); setMenuOpen(false); setStatsOpen(false); }}
+                style={{ background: "none", border: "none", font: "inherit", color: "inherit", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                Fantasy <Chevron />
+              </button>
+              {fantasyOpen && (
+                <div style={{
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  left: "-20px",
+                  background: "#ffffff",
+                  border: "1px solid var(--gray-300, #cbd5e1)",
+                  boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                  borderRadius: "8px",
+                  minWidth: "220px",
+                  zIndex: 1000,
+                  padding: "6px 0",
+                  textAlign: "left"
+                }}>
+                  <a
+                    href="#fantasy"
+                    onClick={() => setFantasyOpen(false)}
+                    style={{
+                      display: "block",
+                      padding: "10px 16px",
+                      textDecoration: "none",
+                      color: "inherit",
+                      borderBottom: "1px solid #f1f5f9"
+                    }}
+                  >
+                    <div style={{ fontWeight: "700", fontSize: "14px", color: "#0f172a" }}>📊 Analytics</div>
+                    <div style={{ color: "#64748b", fontSize: "11px", marginTop: "2px" }}>Consensus rankings, ADP &amp; articles</div>
+                  </a>
+                  <a
+                    href="#napper"
+                    onClick={() => setFantasyOpen(false)}
+                    style={{
+                      display: "block",
+                      padding: "10px 16px",
+                      textDecoration: "none",
+                      color: "inherit"
+                    }}
+                  >
+                    <div style={{ fontWeight: "700", fontSize: "14px", color: "#00ceb8" }}>🛏️ Napper</div>
+                    <div style={{ color: "#64748b", fontSize: "11px", marginTop: "2px" }}>Playable leagues, matchups &amp; trades</div>
+                  </a>
+                </div>
+              )}
+            </div>
             <a href="#social">Social</a>
           </div>
           <div className="nav-tools">

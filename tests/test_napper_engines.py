@@ -38,6 +38,7 @@ def db_conn():
     """Provides a psycopg database connection rolled back after each test."""
     conn = psycopg.connect(DATABASE_URL)
     conn.autocommit = False
+    conn._no_commit = True
     try:
         yield conn
     finally:
