@@ -172,6 +172,7 @@ Project Mu/
 │   ├── NEWSROOM_INJURY_INTEGRATION_PLAN.md # Plan for tiered injury coverage across newsroom, fantasy desk, and social wire
 │   ├── OFFSEASON_EDITORIAL_SLATE_IMPLEMENTATION_PLAN.md # Proposed six-article offseason package published between W23 and next W1, with each story narrated as the week after its event
 │   ├── COACH_SLANTS_AND_COORDINATORS_PLAN.md # Implementation plan for head coach slants (OFFENSIVE/DEFENSIVE/CEO), coordinator tenures (OC/DC), Madden seeding, and scheme inheritance
+│   ├── PLAY_FANTASY_SLEEPER_PLAN.md # Implementation plan for "Play Fantasy" Sleeper-style interactive multi-league hub (#play-fantasy)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
 │   ├── reference/             #   Source PDFs
