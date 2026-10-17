@@ -113,7 +113,7 @@ CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
 
 
 LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST", "INJURY_REPORT",
-                "DRAFT_BOARD", "HIGHLIGHTS")
+                "DRAFT_BOARD", "HIGHLIGHTS", "DRAFT_RECAP")
 TILE_SCREENS = ("SCHED_TILES", "STATS_TILES")
 HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER")
 
@@ -413,8 +413,8 @@ def brightness(path, box, pad=8):
 
 
 class Frame:
-    def __init__(self):
-        self.path = snap()
+    def __init__(self, path=None):
+        self.path = path or snap()
         self.items = ocr(self.path)
         self.text = " | ".join(t for t, _ in self.items)
         self.size = Image.open(self.path).size
@@ -505,6 +505,10 @@ def classify(f):
     # Draft Class Edited prompt over it, so that is checked first.
     if "DRAFT CLASS EDITED" in t and "SAVE AND EXIT" in t:
         return "EXIT_CLASS_PROMPT"
+    # Completed Draft Recap (mapped Oct 16): Weekly Hub > Draft Recap tile > L2 to NFL.
+    # Shows ALL ROUNDS chip, PICK, ROUND, and rookie contract columns (SALARY, BONUS, LENGTH).
+    if (f.find("ALL ROUNDS") or "ALL ROUNDS" in t) and ("SALARY" in t or "BONUS" in t or "CAP ROOM" in t) and ("PICK" in t or "NAME" in t):
+        return "DRAFT_RECAP"
     if (f.find("ALL ROUNDS") or "ADJUST ORDER" in t) and ("PICK" in t or "NAME" in t):
         return "DRAFT_BOARD"
     if "EDIT DRAFT CLASS" in t and "IMPORT LOCAL FILE" in t:
@@ -670,6 +674,10 @@ def go_hub():
             continue
         if s in ("DRAFT_BOARD", "EXIT_CLASS_PROMPT"):
             close_draft_board()
+            continue
+        if s == "DRAFT_RECAP":
+            log("Leaving Draft Recap (Back)")
+            press("circle", wait=2.0)
             continue
         if s == "UNKNOWN":                     # don't press Back on a loading screen
             for _ in range(6):
@@ -909,8 +917,8 @@ def dropdown_selected(f, top=0.35, bottom=0.92):
 
 def set_scope(target="NFL", debug_dir=None):
     f, s = look()
-    if s not in ("PLAYER_STATS", "TEAM_STATS"):
-        raise Abort(f"set_scope needs Player Stats or Team Stats, on {s}")
+    if s not in ("PLAYER_STATS", "TEAM_STATS", "DRAFT_RECAP"):
+        raise Abort(f"set_scope needs Player Stats, Team Stats, or Draft Recap, on {s}")
     screen = s
     scope, _ = chip_labels(f)
     log(f"Scope chip reads: {scope}")
@@ -2196,6 +2204,186 @@ def run_prospects(out, max_prospects=32):
     return row
 
 
+# --------------------------------------------------------- draft recap ----
+def open_draft_recap():
+    """Reach the completed Draft Recap screen (under Weekly Hub).
+    Navigates from Franchise Hub -> Weekly Hub tab -> DRAFT RECAP tile -> permitted Cross ->
+    switches scope to 'NFL' via L2. Re-opens cleanly so Round 1, Pick 1 is highlighted."""
+    f, s = look()
+    if s == "DRAFT_RECAP":
+        log("Already on Draft Recap; leaving and reopening so Round 1, Pick 1 is highlighted")
+        press("circle", wait=2.0)
+        f, s = wait_for(["HUB", "HUB_ROSTER", "HUB_LEAGUE"])
+
+    f, s = go_hub()
+    cur_tab = f.highlighted(HUB_TABS)
+    if cur_tab != "WEEKLY HUB":
+        log("Switching to WEEKLY HUB tab")
+        f = move_to(f, HUB_TABS, "WEEKLY HUB", "l1", "r1", "hub tab")
+        time.sleep(1.0)
+        f, s = look()
+
+    if "DRAFT RECAP" not in f.text:
+        raise Abort("DRAFT RECAP tile not found on Weekly Hub")
+
+    log("Opening Draft Recap (permitted Cross on DRAFT RECAP tile)")
+    press("cross", wait=2.5)
+    f, s = wait_for(["DRAFT_RECAP"], timeout=10.0)
+
+    scope, _ = chip_labels(f)
+    if not scope or norm(scope) != "NFL":
+        log(f"Draft Recap opened on {scope}; switching scope to NFL via L2")
+        f = set_scope("NFL")
+
+    return f
+
+
+def read_draft_recap_card(f):
+    """Extract player details from the top card on the Draft Recap screen."""
+    name_parts = []
+    college = None
+    age = None
+    archetype = None
+    position = None
+    for t, box in sorted(f.items, key=lambda x: (x[1][1], x[1][0])):
+        # Card name area: y between 160 and 360, x between 900 and 1450
+        if 160 <= box[1] <= 360 and 900 <= box[0] <= 1450:
+            if not any(k in t for k in ("AGE:", "ARCHETYPE:", "COLLEGE:", "CAP ROOM:")):
+                name_parts.append(t)
+        if "COLLEGE:" in t:
+            college = t.split(":", 1)[1].strip() if ":" in t else t
+        if "AGE:" in t:
+            age = t.split(":", 1)[1].strip() if ":" in t else t
+        if "ARCHETYPE:" in t:
+            archetype = t.split(":", 1)[1].strip() if ":" in t else t
+        # Position icon is near y=500, x=120
+        if 480 <= box[1] <= 560 and 100 <= box[0] <= 240:
+            position = t.strip()
+    return {
+        "name": " ".join(name_parts),
+        "position": position,
+        "age": age,
+        "college": college,
+        "archetype": archetype,
+    }
+
+
+def run_draft_recap(out, max_picks=32, paged=False, rows_per_page=10, max_pages=30):
+    """Capture the completed Madden Draft Recap screen for all Round 1 picks (1-32)
+    or all 224 picks across all 7 rounds when paged=True (scrolling 10 rows at a time).
+    Captures screenshots into captures/<run>/draft_results/
+    Also extracts and writes draft_results.csv and draft_results.json into <out>
+    for immediate ingestion by pipeline.draft_results."""
+    rdir = os.path.join(out, "draft_results")
+    os.makedirs(rdir, exist_ok=True)
+    open_draft_recap()
+
+    # Load draft order teams from database or draft order engine
+    team_order = {}
+    try:
+        import psycopg
+        from engines.draft_order import compute_draft_order, fetch_games, fetch_teams
+        dsn = _env("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
+        with psycopg.connect(dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+                season_val = cur.fetchone()[0]
+                teams = fetch_teams(cur)
+                games = fetch_games(cur, season_val)
+                order_res = compute_draft_order(teams, games)
+                for item in order_res.get("round_1_order", []):
+                    team_order[item["pick"]] = {
+                        "team": item["team"],
+                        "abbreviation": item["abbreviation"],
+                        "team_id": item["team_id"],
+                    }
+    except Exception as e:
+        log(f"Warning: could not load team draft order from DB ({e})")
+
+    if paged:
+        log(f"== Completed Draft Recap (Paged, {rows_per_page} rows per step) ==")
+        pages = capture_list(rdir, "page", rows_per_page=rows_per_page, max_pages=max_pages, stop_at_zeros=False, confirm_end=True)
+        log(f"Captured {pages} page(s) into {rdir}")
+        press("circle", wait=1.5)
+        return pages
+
+    log("== Completed Draft Recap (Round 1, Row by Row) ==")
+    prev_sig = None
+    row = 0
+    limit = max_picks if (max_picks and max_picks > 0) else 32
+    records = []
+
+    while row < limit:
+        pick_num = row + 1
+        path = os.path.join(rdir, f"pick_{pick_num:02d}.png")
+        snap(path)
+        sig = table_sig(path)
+
+        if prev_sig is not None and same_table(prev_sig, sig):
+            for _ in range(PROSPECT_RETRIES):
+                time.sleep(0.6)
+                snap(path)
+                sig = table_sig(path)
+                if not same_table(prev_sig, sig):
+                    break
+                press("down", hold=0.1, wait=0.6)
+                snap(path)
+                sig = table_sig(path)
+                if not same_table(prev_sig, sig):
+                    break
+            else:
+                os.remove(path)
+                log(f"  Draft Recap stopped moving after {row} picks")
+                break
+
+        prev_sig = sig
+        f_card = Frame(path)
+        card_info = read_draft_recap_card(f_card)
+        tinfo = team_order.get(pick_num, {})
+        team_str = tinfo.get("abbreviation") or tinfo.get("team") or ""
+        records.append({
+            "overall_pick": pick_num,
+            "round": 1,
+            "round_pick": pick_num,
+            "team": team_str,
+            "team_id": tinfo.get("team_id"),
+            "player_name": card_info["name"],
+            "position": card_info["position"],
+            "college": card_info.get("college"),
+            "age": card_info.get("age"),
+            "archetype": card_info.get("archetype"),
+        })
+        log(f"  Pick {pick_num:02d}: {card_info['name']} ({card_info['position']}) -> {team_str}")
+
+        row += 1
+        if row < limit:
+            press("down", hold=0.1, wait=0.35)
+
+    log(f"Captured {row} draft pick row(s) into {rdir}")
+
+    # Write draft_results.csv and draft_results.json into out
+    csv_path = os.path.join(out, "draft_results.csv")
+    json_path = os.path.join(out, "draft_results.json")
+    try:
+        import csv
+        with open(csv_path, "w", newline="", encoding="utf-8") as fh:
+            fieldnames = ["overall_pick", "round", "round_pick", "team", "player_name", "position", "college", "age", "archetype"]
+            writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for rec in records:
+                writer.writerow(rec)
+        log(f"Saved draft results CSV to {csv_path}")
+
+        with open(json_path, "w", encoding="utf-8") as fh:
+            json.dump(records, fh, indent=2)
+        log(f"Saved draft results JSON to {json_path}")
+    except Exception as e:
+        log(f"Warning: could not write draft_results.csv/.json ({e})")
+
+    press("circle", wait=1.5)
+    return row
+
+
 # ------------------------------------------------------------- injuries ----
 def open_injury_report():
     f, s = look()
@@ -3020,13 +3208,14 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl"],
-                    help="roster, season-schedule, prospects, season and postgame are never part of the default run")
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap"],
+                    help="roster, season-schedule, prospects, season, postgame and draft-results are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
     ap.add_argument("--all-prospects", action="store_true", help="--only prospects: capture the entire draft board until the end")
     ap.add_argument("--prospect-pages", type=int, help="--only prospects: stop after this many pages")
+    ap.add_argument("--paged", action="store_true", help="--only draft-results: scroll 10 rows at a time page-by-page through all rounds")
     ap.add_argument("--resume", metavar="RUN", help="continue a stopped run in captures/RUN (stats, roster, games, injuries, season); "
                     "--scope: write into that (weekly) run's folder")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
@@ -3131,7 +3320,9 @@ def main():
         if a.only in ("season", "prospects"):
             n_prospects = 0 if a.all_prospects else a.prospects
             run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
-        if a.only not in ("prospects", "postgame", "superbowl"):
+        if a.only in ("draft-results", "draft-recap"):
+            run_mode("the draft recap", lambda: run_draft_recap(out, paged=a.paged), clear("draft_results"))
+        if a.only not in ("prospects", "postgame", "superbowl", "draft-results", "draft-recap"):
             log("Returning to the hub")
             go_hub()
         log(f"Done. Screenshots in {out}")
