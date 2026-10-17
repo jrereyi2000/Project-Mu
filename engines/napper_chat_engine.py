@@ -40,6 +40,16 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres"
 )
 
+
+def get_previous_season(cur) -> int:
+    cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+    row = cur.fetchone()
+    if row:
+        cs = row["current_season"] if isinstance(row, dict) else row[0]
+        if cs:
+            return int(cs) - 1
+    return 2035
+
 BOT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg?seed=NapperBot"
 BOT_NAME = "Napper Awards Bot"
 BOT_HANDLE = "napper_bot"
@@ -126,7 +136,7 @@ def generate_weekly_awards(
             # Fetch league season
             cur.execute("SELECT season FROM napper_leagues WHERE id = %s", (league_id,))
             league_row = cur.fetchone()
-            season = league_row[0] if league_row else 2035
+            season = league_row[0] if (league_row and league_row[0]) else get_previous_season(cur)
 
             teams = _get_league_teams(cur, league_id)
             if not teams:
@@ -540,7 +550,7 @@ def generate_manager_banter(
         with active_conn.cursor() as cur:
             cur.execute("SELECT season FROM napper_leagues WHERE id = %s", (league_id,))
             league_row = cur.fetchone()
-            season = league_row[0] if league_row else 2035
+            season = league_row[0] if (league_row and league_row[0]) else get_previous_season(cur)
 
             teams = _get_league_teams(cur, league_id)
             if not teams:

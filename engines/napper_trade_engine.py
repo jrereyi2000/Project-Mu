@@ -26,6 +26,16 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres"
 )
 
+
+def get_previous_season(cur) -> int:
+    cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+    row = cur.fetchone()
+    if row:
+        cs = row["current_season"] if isinstance(row, dict) else row[0]
+        if cs:
+            return int(cs) - 1
+    return 2035
+
 # Standard baseline positional starters (can be overridden by league roster_format)
 DEFAULT_STARTER_REQ = {
     "QB": 1,
@@ -211,12 +221,13 @@ def _get_league_roster_requirements(cur, league_id: int) -> Tuple[int, Dict[str,
         (league_id,),
     )
     row = cur.fetchone()
-    season = 2035
+    prev_season = get_previous_season(cur)
+    season = prev_season
     roster_req = dict(DEFAULT_STARTER_REQ)
     is_superflex = False
 
     if row:
-        season = row[0] or 2035
+        season = row[0] or prev_season
         fmt = row[1]
         if isinstance(fmt, str):
             try:
@@ -815,16 +826,17 @@ def process_ai_to_ai_trades(
                 off_ids = off_ids or []
                 req_ids = req_ids or []
 
+                prev_season = get_previous_season(cur)
                 # Fetch player details and values
                 cur.execute(
                     """
                     SELECT p.id, COALESCE(p.full_name, p.player_name), COALESCE(ps.position, fp.position, 'WR'), COALESCE(fp.ros_total_points, 15.0)
                     FROM players p
-                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s
                     WHERE p.id = ANY(%s)
                     """,
-                    (trade_week, off_ids),
+                    (prev_season, trade_week, off_ids),
                 )
                 off_players = cur.fetchall()
 
@@ -832,11 +844,11 @@ def process_ai_to_ai_trades(
                     """
                     SELECT p.id, COALESCE(p.full_name, p.player_name), COALESCE(ps.position, fp.position, 'WR'), COALESCE(fp.ros_total_points, 15.0)
                     FROM players p
-                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s
                     WHERE p.id = ANY(%s)
                     """,
-                    (trade_week, req_ids),
+                    (prev_season, trade_week, req_ids),
                 )
                 req_players = cur.fetchall()
 
@@ -861,12 +873,12 @@ def process_ai_to_ai_trades(
                     SELECT COALESCE(ps.position, fp.position, 'WR'), COUNT(*)
                     FROM napper_rosters r
                     JOIN players p ON r.player_id = p.id
-                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s
                     WHERE r.league_id = %s AND r.team_id = %s AND r.week = %s
                     GROUP BY COALESCE(ps.position, fp.position, 'WR')
                     """,
-                    (week, league_id, targ_id, week),
+                    (prev_season, week, league_id, targ_id, week),
                 )
                 current_counts = {POS_NORMALIZATION.get(row[0], "WR"): row[1] for row in cur.fetchall()}
 

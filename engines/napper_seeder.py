@@ -62,11 +62,27 @@ REFERENCE_PLAYERS = [
 ]
 
 
-def get_or_create_player(cur, p_info: dict) -> int:
+def get_previous_season(cur) -> int:
+    cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+    row = cur.fetchone()
+    if row:
+        cs = row["current_season"] if isinstance(row, dict) else row[0]
+        if cs:
+            return int(cs) - 1
+    return 2035
+
+
+def get_or_create_player(cur, p_info: dict, season: Optional[int] = None) -> int:
     """Finds or inserts player into players table and returns player_id."""
+    target_season = season or get_previous_season(cur)
     cur.execute(
-        "SELECT id FROM players WHERE full_name = %s OR player_name = %s LIMIT 1",
-        (p_info["full_name"], p_info["player_name"])
+        """
+        SELECT p.id FROM players p
+        JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+        WHERE p.full_name = %s AND ps.position = %s
+        LIMIT 1
+        """,
+        (target_season, p_info["full_name"], p_info["pos"])
     )
     row = cur.fetchone()
     if row:
@@ -95,15 +111,14 @@ def get_or_create_player(cur, p_info: dict) -> int:
         team_row = cur.fetchone()
     team_id = team_row[0]
 
-    # Insert player_seasons for 2035
+    # Insert player_seasons for previous season only if not already present
     cur.execute(
         """
         INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating)
-        VALUES (%s, %s, 2035, %s, 26, 88)
-        ON CONFLICT (player_id, season) DO UPDATE
-        SET position = EXCLUDED.position, team_id = EXCLUDED.team_id
+        VALUES (%s, %s, %s, %s, 26, 88)
+        ON CONFLICT (player_id, season) DO NOTHING
         """,
-        (player_id, team_id, p_info["pos"])
+        (player_id, team_id, target_season, p_info["pos"])
     )
 
     # Insert fantasy_projections for weeks 1..14
@@ -112,10 +127,10 @@ def get_or_create_player(cur, p_info: dict) -> int:
         cur.execute(
             """
             INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position)
-            VALUES (2035, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT DO NOTHING
             """,
-            (wk, player_id, p_info["player_name"], team_id, base_proj, p_info["pos"])
+            (target_season, wk, player_id, p_info["player_name"], team_id, base_proj, p_info["pos"])
         )
 
     return player_id
@@ -160,10 +175,12 @@ def seed_napper_database():
         user_id = cur.fetchone()[0]
         print(f"👤 Created user profile: @jrereyi2000 (ID: {user_id})")
 
+        prev_season = get_previous_season(cur)
+
         # 2. Reference Players
         player_map = {}
         for p in REFERENCE_PLAYERS:
-            pid = get_or_create_player(cur, p)
+            pid = get_or_create_player(cur, p, season=prev_season)
             player_map[p["player_name"]] = pid
         print(f"🏈 Seeded {len(player_map)} reference fantasy players.")
 
@@ -171,9 +188,9 @@ def seed_napper_database():
         cur.execute("""
             SELECT p.id, p.player_name, ps.position
             FROM players p
-            JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+            JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
             LIMIT 200;
-        """)
+        """, (prev_season,))
         extra_players = cur.fetchall()
 
         # 3. Seed Leagues
@@ -186,7 +203,7 @@ def seed_napper_database():
             """,
             (
                 "Solo 2026 8-Team SF PPR",
-                2035,
+                prev_season,
                 8,
                 "PPR",
                 psycopg.types.json.Jsonb({
@@ -209,7 +226,7 @@ def seed_napper_database():
             """,
             (
                 "The Justice League",
-                2035,
+                prev_season,
                 12,
                 "PPR",
                 psycopg.types.json.Jsonb({
@@ -232,7 +249,7 @@ def seed_napper_database():
             """,
             (
                 "The Avengers",
-                2035,
+                prev_season,
                 8,
                 "PPR",
                 psycopg.types.json.Jsonb({
