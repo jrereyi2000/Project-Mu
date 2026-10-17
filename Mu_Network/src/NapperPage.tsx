@@ -1,7 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./napper.css";
+import { API_BASE } from "./api";
 import NapperMatchupTab from "./components/napper/NapperMatchupTab";
 import NapperTeamTab from "./components/napper/NapperTeamTab";
+import { NapperLeagueTab } from "./components/napper/NapperLeagueTab";
+import { NapperPlayersTab } from "./components/napper/NapperPlayersTab";
+import { NapperTradesTab } from "./components/napper/NapperTradesTab";
+import { NapperScoresTab } from "./components/napper/NapperScoresTab";
 import {
   BlueRobotAvatar,
   PinkRobotAvatar,
@@ -9,7 +14,7 @@ import {
   getPlayerHeadshotUrl,
   handleImageError,
 } from "./components/napper/napperUtils";
-import type { NapperChatMessage, NapperStarterPlayer } from "./types/napper";
+import type { NapperChatMessage, NapperStarterPlayer, NapperLeagueSummary, NapperUserProfile } from "./types/napper";
 
 interface NapperPageProps {
   leagueId?: number;
@@ -17,76 +22,57 @@ interface NapperPageProps {
   onBackToMu?: () => void;
 }
 
-// Sleeper benchmark benchwarmer cards from data/images/sleeper_desktop_reference.png
-const DEFAULT_CHAT_MESSAGES: NapperChatMessage[] = [
+const FALLBACK_LEAGUES: NapperLeagueSummary[] = [
   {
     id: 1,
-    league_id: 1,
-    sender_type: "SYSTEM_BOT",
-    sender_name: "Sleeper Bot",
-    sender_handle: "sleeperbot",
+    name: "Solo 2026 8-Team SF PPR",
+    season: 2035,
+    teams_count: 8,
+    scoring_type: "PPR",
+    status: "IN_SEASON",
     avatar_url: "",
-    message_text: "@Team 2 had the best RB benchwarmer this week!",
-    card_payload: {
-      type: "BENCHWARMER",
-      title: "RB BENCHWARMER OF THE WEEK",
-      subtitle: "@Team 2 had the best RB benchwarmer this week!",
-      player: {
-        name: "Aaron Jones",
-        position: "RB",
-        team: "MIN",
-        stats: "25 CAR, 113 YD, 1 TD, 3/3 REC, 4 YD, 1 FUM LOST",
-        fpts: 18.7,
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3042519.png",
-      },
-    },
-    created_at: "2026-10-14T09:15:00Z",
+    user_team_id: 1,
+    user_team_name: "The Straw Hat Pirates",
+    user_score: 0.0,
+    user_proj: 152.14,
+    opponent_team_name: "Team 3",
+    opponent_score: 25.4,
+    opponent_proj: 113.95,
+    unplayed_count: 10,
   },
   {
     id: 2,
-    league_id: 1,
-    sender_type: "SYSTEM_BOT",
-    sender_name: "Sleeper Bot",
-    sender_handle: "sleeperbot",
+    name: "The Justice League",
+    season: 2035,
+    teams_count: 12,
+    scoring_type: "PPR",
+    status: "IN_SEASON",
     avatar_url: "",
-    message_text: "@jrereyi2000 had the best WR benchwarmer this week!",
-    card_payload: {
-      type: "BENCHWARMER",
-      title: "WR BENCHWARMER OF THE WEEK",
-      subtitle: "@jrereyi2000 had the best WR benchwarmer this week!",
-      player: {
-        name: "Puka Nacua",
-        position: "WR",
-        team: "LAR",
-        stats: "2 CAR, 9 YD, 17/24 REC, 138 YD, 1 TD",
-        fpts: 37.7,
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4426515.png",
-      },
-    },
-    created_at: "2026-10-14T09:16:00Z",
+    user_team_id: 3,
+    user_team_name: "The Straw Hat Pirates",
+    user_score: 0.0,
+    user_proj: 128.5,
+    opponent_team_name: "Gotham Dark Knights",
+    opponent_score: 0.0,
+    opponent_proj: 122.0,
+    unplayed_count: 9,
   },
   {
     id: 3,
-    league_id: 1,
-    sender_type: "SYSTEM_BOT",
-    sender_name: "Sleeper Bot",
-    sender_handle: "sleeperbot",
+    name: "The Avengers",
+    season: 2035,
+    teams_count: 8,
+    scoring_type: "PPR",
+    status: "PRE_DRAFT",
     avatar_url: "",
-    message_text: "@Team 6 had the best TE benchwarmer this week!",
-    card_payload: {
-      type: "BENCHWARMER",
-      title: "TE BENCHWARMER OF THE WEEK",
-      subtitle: "@Team 6 had the best TE benchwarmer this week!",
-      player: {
-        name: "Brock Bowers",
-        position: "TE",
-        team: "LV",
-        stats: "8/10 REC, 110 YD, 1 TD, 1 FUM LOST",
-        fpts: 21.0,
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432665.png",
-      },
-    },
-    created_at: "2026-10-14T09:17:00Z",
+    user_team_id: 4,
+    user_team_name: "The Straw Hat Pirates",
+    user_score: 0.0,
+    user_proj: 0.0,
+    opponent_team_name: "Stark Industries",
+    opponent_score: 0.0,
+    opponent_proj: 0.0,
+    unplayed_count: 0,
   },
 ];
 
@@ -99,28 +85,102 @@ export const NapperPage: React.FC<NapperPageProps> = ({
     "MATCHUP" | "TEAM" | "LEAGUE" | "PLAYERS" | "TREND" | "TRADES" | "SCORES"
   >(initialTab);
   const [selectedLeagueId, setSelectedLeagueId] = useState<number>(leagueId);
-  const [chatMessages, setChatMessages] = useState<NapperChatMessage[]>(DEFAULT_CHAT_MESSAGES);
+  const [profile, setProfile] = useState<NapperUserProfile | null>(null);
+  const [pendingTradesCount, setPendingTradesCount] = useState<number>(0);
+  const [leagues, setLeagues] = useState<NapperLeagueSummary[]>(FALLBACK_LEAGUES);
+  const [chatMessages, setChatMessages] = useState<NapperChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState<boolean>(true);
   const [inputText, setInputText] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<NapperStarterPlayer | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createSuccessMsg, setCreateSuccessMsg] = useState<string | null>(null);
 
+  // 1. Fetch user profile
+  useEffect(() => {
+    fetch(`${API_BASE}/api/napper/profile`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.profile) {
+          setProfile(data.profile);
+        }
+        if (typeof data.pending_trades_count === "number") {
+          setPendingTradesCount(data.pending_trades_count);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // 2. Fetch leagues list
+  useEffect(() => {
+    fetch(`${API_BASE}/api/napper/leagues`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.leagues) && data.leagues.length > 0) {
+          setLeagues(data.leagues);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // 3. Fetch league chat stream
+  const loadChat = () => {
+    setChatLoading(true);
+    fetch(`${API_BASE}/api/napper/league/${selectedLeagueId}/chat?limit=50`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.messages)) {
+          setChatMessages(data.messages);
+        }
+        setChatLoading(false);
+      })
+      .catch(() => setChatLoading(false));
+  };
+
+  useEffect(() => {
+    loadChat();
+  }, [selectedLeagueId]);
+
+  // 4. Send chat message
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim()) return;
 
-    const newMsg: NapperChatMessage = {
-      id: Date.now(),
-      league_id: selectedLeagueId,
-      sender_type: "USER",
-      sender_name: "jrereyi2000",
-      sender_handle: "jrereyi2000",
-      avatar_url: "",
-      message_text: inputText.trim(),
-      created_at: new Date().toISOString(),
-    };
-
-    setChatMessages((prev) => [...prev, newMsg]);
+    const textToSend = inputText.trim();
     setInputText("");
+
+    fetch(`${API_BASE}/api/napper/league/${selectedLeagueId}/chat/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sender_type: "USER",
+        sender_name: profile?.display_name || "jrereyi2000",
+        sender_handle: profile?.handle || "jrereyi2000",
+        message_text: textToSend,
+      }),
+    })
+      .then((res) => res.json())
+      .then(() => {
+        loadChat();
+      })
+      .catch(() => {
+        // Optimistic append fallback
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            league_id: selectedLeagueId,
+            sender_type: "USER",
+            sender_name: profile?.display_name || "jrereyi2000",
+            sender_handle: profile?.handle || "jrereyi2000",
+            avatar_url: "",
+            message_text: textToSend,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      });
   };
+
+  const currentLeague = leagues.find((l) => l.id === selectedLeagueId) || leagues[0] || FALLBACK_LEAGUES[0];
 
   return (
     <div className="napper-shell">
@@ -156,27 +216,40 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
         {/* Top Direct Navigation */}
         <div className="px-3 py-2 space-y-1">
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-white hover:bg-[#182333] transition-colors cursor-pointer group">
+          <div
+            onClick={() => setActiveTab("TRADES")}
+            className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-white hover:bg-[#182333] transition-colors cursor-pointer group"
+          >
             <div className="flex items-center gap-3">
               <div className="relative">
                 <svg className="w-4 h-4 text-[#8a99ad] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
-                <span className="absolute -top-1.5 -right-2 bg-[#00ceb8] text-[#0d1722] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">
-                  2
-                </span>
+                {pendingTradesCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-[#00ceb8] text-[#0d1722] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                    {pendingTradesCount}
+                  </span>
+                )}
               </div>
-              <span>Direct Messages</span>
+              <span>Trade Proposals</span>
             </div>
+            {pendingTradesCount > 0 && (
+              <span className="text-[10px] font-bold text-[#00ceb8] bg-[#00ceb8]/10 px-1.5 py-0.5 rounded">
+                {pendingTradesCount} new
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-white hover:bg-[#182333] transition-colors cursor-pointer group">
+          <div
+            onClick={() => setActiveTab("PLAYERS")}
+            className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-white hover:bg-[#182333] transition-colors cursor-pointer group"
+          >
             <div className="flex items-center gap-3">
               <svg className="w-4 h-4 text-[#8a99ad] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                 <polyline points="22,6 12,13 2,6" />
               </svg>
-              <span>Inbox</span>
+              <span>Waivers & Agency</span>
             </div>
           </div>
         </div>
@@ -184,10 +257,11 @@ export const NapperPage: React.FC<NapperPageProps> = ({
         {/* Leagues Header */}
         <div className="px-5 pt-3 pb-1 flex items-center justify-between">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#5c6c80]">
-            Leagues
+            Leagues ({leagues.length})
           </span>
           <button
             type="button"
+            onClick={() => setCreateModalOpen(true)}
             title="Create or Join League"
             className="w-5 h-5 rounded-full border border-[#283850] bg-[#172130] hover:border-[#00ceb8] hover:text-[#00ceb8] flex items-center justify-center text-xs text-[#8a99ad] cursor-pointer transition-colors"
           >
@@ -195,121 +269,68 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           </button>
         </div>
 
-        {/* Mock Drafts Item */}
-        <div className="px-3 py-1">
-          <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-white hover:bg-[#182333] transition-colors cursor-pointer">
-            <svg className="w-4 h-4 text-[#5c6c80]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
-            </svg>
-            <span className="tracking-wide">MOCK DRAFTS</span>
-          </div>
-        </div>
-
         {/* Scrollable League List */}
-        <div className="napper-left-rail-scroll px-3 py-1 space-y-1.5">
-          {/* League 1 (Active Solo League from Reference) */}
-          <div
-            onClick={() => setSelectedLeagueId(1)}
-            className={`p-2.5 rounded-xl transition-all cursor-pointer border ${
-              selectedLeagueId === 1
-                ? "bg-[#182436] border-[#00ceb8]/50 shadow-[0_0_12px_rgba(0,206,184,0.15)]"
-                : "bg-transparent border-transparent hover:bg-[#16202e]"
-            }`}
-          >
-            <div className="flex items-start gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#00ceb8] to-[#0ea5e9] flex items-center justify-center shrink-0 shadow-sm">
-                <NapperMoonIcon size={20} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold text-white truncate">Solo</div>
-                <div className="text-[10px] text-[#8a99ad] truncate">
-                  The Straw... <span className="text-[#5c6c80]">vs.</span> Team 3
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono mt-0.5">
-                  <span className="text-white font-semibold">- 152.14</span>
-                  <span className="text-[#00ceb8] font-bold">25.40 113.95</span>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="napper-left-rail-scroll px-3 py-1 space-y-1.5 flex-1 overflow-y-auto">
+          {leagues.map((lg) => {
+            const isSelected = selectedLeagueId === lg.id;
+            const isPreDraft = lg.status === "PRE_DRAFT";
 
-          {/* League 2: Justice League Pick'em */}
-          <div
-            onClick={() => setSelectedLeagueId(2)}
-            className={`p-2.5 rounded-xl transition-all cursor-pointer border ${
-              selectedLeagueId === 2
-                ? "bg-[#182436] border-[#00ceb8]/50"
-                : "bg-transparent border-transparent hover:bg-[#16202e]"
-            }`}
-          >
-            <div className="flex items-start gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-[#092d3b] border border-[#0284c7]/40 flex items-center justify-center shrink-0 text-[#38bdf8] font-black text-[9px] tracking-tight">
-                PICK'EM
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold text-[#cbd5e1] truncate">Justice League Pick...</div>
-                <div className="text-[10px] text-[#5c6c80] truncate">2026 500-Team Pick'ems</div>
-              </div>
-            </div>
-          </div>
-
-          {/* League 3: The Justice League */}
-          <div
-            onClick={() => setSelectedLeagueId(3)}
-            className={`p-2.5 rounded-xl transition-all cursor-pointer border ${
-              selectedLeagueId === 3
-                ? "bg-[#182436] border-[#00ceb8]/50"
-                : "bg-transparent border-transparent hover:bg-[#16202e]"
-            }`}
-          >
-            <div className="flex items-start gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shrink-0 overflow-hidden">
-                <img
-                  src="https://sleepercdn.com/images/v2/icons/league_avatar_default.png"
-                  alt="Justice League"
-                  onError={handleImageError}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold text-[#cbd5e1] truncate">The Justice League</div>
-                <div className="text-[10px] text-[#8a99ad] truncate">
-                  Free Eats <span className="text-[#5c6c80]">vs.</span> Zesty Willi...
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono mt-0.5">
-                  <span className="text-[#8a99ad]">5.20 119.73</span>
-                  <span className="text-[#00ceb8]">25.40 135.08</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* League 4: The Avengers */}
-          <div
-            onClick={() => setSelectedLeagueId(4)}
-            className={`p-2.5 rounded-xl transition-all cursor-pointer border ${
-              selectedLeagueId === 4
-                ? "bg-[#182436] border-[#00ceb8]/50"
-                : "bg-transparent border-transparent hover:bg-[#16202e]"
-            }`}
-          >
-            <div className="flex items-start gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#ea580c] to-[#b91c1c] flex items-center justify-center shrink-0 text-white font-black text-xs">
-                A
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold text-[#cbd5e1] truncate">The Avengers</div>
-                <div className="text-[10px] text-[#8a99ad] truncate">2026 8-Team Dynasty PPR</div>
-                <div className="inline-flex items-center gap-1 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#38bdf8]" />
-                  <span className="text-[9px] font-bold text-[#38bdf8] tracking-wider uppercase">
-                    PRE DRAFT
-                  </span>
+            return (
+              <div
+                key={lg.id}
+                onClick={() => setSelectedLeagueId(lg.id)}
+                className={`p-2.5 rounded-xl transition-all cursor-pointer border ${
+                  isSelected
+                    ? "bg-[#182436] border-[#00ceb8]/50 shadow-[0_0_12px_rgba(0,206,184,0.15)]"
+                    : "bg-transparent border-transparent hover:bg-[#16202e]"
+                }`}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+                      lg.id === 1
+                        ? "bg-gradient-to-br from-[#00ceb8] to-[#0ea5e9] text-[#0d1722]"
+                        : lg.id === 2
+                        ? "bg-gradient-to-br from-[#3b82f6] to-[#1d4ed8] text-white"
+                        : "bg-gradient-to-br from-[#ea580c] to-[#b91c1c] text-white font-black text-xs"
+                    }`}
+                  >
+                    {lg.id === 1 ? (
+                      <NapperMoonIcon size={20} />
+                    ) : (
+                      <span>{lg.name.charAt(0)}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-white truncate">{lg.name}</div>
+                    <div className="text-[10px] text-[#8a99ad] truncate">
+                      {isPreDraft ? (
+                        <span className="text-[#38bdf8] font-bold uppercase tracking-wider text-[9px]">
+                          • PRE DRAFT ({lg.teams_count}T)
+                        </span>
+                      ) : (
+                        <span>
+                          {lg.user_team_name || "My Team"}{" "}
+                          <span className="text-[#5c6c80]">vs.</span>{" "}
+                          {lg.opponent_team_name || "Opponent"}
+                        </span>
+                      )}
+                    </div>
+                    {!isPreDraft && (
+                      <div className="flex items-center justify-between text-[10px] font-mono mt-0.5">
+                        <span className="text-white font-semibold">
+                          {(lg.user_score ?? 0).toFixed(1)} pro: {(lg.user_proj ?? 0).toFixed(1)}
+                        </span>
+                        <span className="text-[#00ceb8] font-bold">
+                          {(lg.opponent_score ?? 0).toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* User Profile Footer */}
@@ -317,16 +338,23 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           <div className="flex items-center gap-2.5 min-w-0">
             <BlueRobotAvatar size={34} />
             <div className="min-w-0">
-              <div className="text-xs font-bold text-white truncate">jrereyi2000</div>
+              <div className="text-xs font-bold text-white truncate">
+                {profile?.handle || "jrereyi2000"}
+              </div>
               <div className="flex items-center gap-1.5 text-[10px] text-[#8a99ad]">
-                <span className="text-[#f59e0b]">🍪</span>
-                <span className="font-mono font-bold text-[#cbd5e1]">0</span>
+                <span className="text-[#f59e0b]">🏆</span>
+                <span className="font-mono font-bold text-[#cbd5e1]">
+                  {profile?.trophies ?? 3}
+                </span>
+                <span className="text-[#5c6c80]">•</span>
+                <span className="text-[#00ceb8] text-[9px] font-semibold">Online</span>
               </div>
             </div>
           </div>
           <button
             type="button"
-            title="User Settings"
+            title="User Profile Settings"
+            onClick={() => setCreateModalOpen(true)}
             className="w-7 h-7 rounded-lg bg-[#172130] hover:bg-[#202d40] border border-[#283850] flex items-center justify-center text-[#8a99ad] hover:text-white transition-colors cursor-pointer"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -339,7 +367,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
       {/* =========================================================================
           PANEL 2: CENTER STAGE (flex-1)
-          Houses League Header, Nav Tab Pills, and Matchup/Team Views
+          Houses League Header, Nav Tab Pills, and Interactive Tabs
           ========================================================================= */}
       <main className="napper-center-stage">
         {/* League Top Header Bar */}
@@ -351,10 +379,13 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-black tracking-tight text-white font-sans">
-                  Solo
+                  {currentLeague.name}
                 </h1>
                 <span className="text-xs text-[#8a99ad] font-medium">
-                  2026 8-Team SF PPR
+                  {currentLeague.season} • {currentLeague.teams_count}-Team {currentLeague.scoring_type}
+                </span>
+                <span className="text-[10px] font-bold text-[#00ceb8] bg-[#00ceb8]/15 px-2 py-0.5 rounded-full border border-[#00ceb8]/30">
+                  {currentLeague.status}
                 </span>
               </div>
             </div>
@@ -363,6 +394,15 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => setActiveTab("LEAGUE")}
+              title="League Standings & Bracket"
+              className="px-3 py-1.5 rounded-xl bg-[#1a2332] hover:bg-[#202d40] border border-[#283850] text-xs font-semibold text-[#8a99ad] hover:text-white transition-colors cursor-pointer"
+            >
+              Standings
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreateModalOpen(true)}
               title="League Settings"
               className="w-9 h-9 rounded-xl bg-[#1a2332] hover:bg-[#202d40] border border-[#283850] flex items-center justify-center text-[#8a99ad] hover:text-white transition-colors cursor-pointer"
             >
@@ -484,32 +524,104 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             />
           )}
 
-          {activeTab !== "MATCHUP" && activeTab !== "TEAM" && (
-            <div className="max-w-4xl mx-auto px-6 py-12 text-center">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#1a2332] border border-[#283850] flex items-center justify-center text-[#00ceb8] mb-4">
-                <NapperMoonIcon size={32} />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-2">
-                {activeTab} Overview
-              </h3>
-              <p className="text-xs text-[#8a99ad] max-w-md mx-auto">
-                Live simulated fantasy records, automated AI trade offers, and waiver wire depth are active for League #{selectedLeagueId}.
-              </p>
-              <div className="mt-6 flex justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("MATCHUP")}
-                  className="px-4 py-2 rounded-xl bg-[#00ceb8] text-[#0d1722] font-bold text-xs hover:bg-[#2bd9c6] transition-colors cursor-pointer"
-                >
-                  Return to Matchup
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("TEAM")}
-                  className="px-4 py-2 rounded-xl bg-[#1a2332] text-white border border-[#283850] font-bold text-xs hover:bg-[#202d40] transition-colors cursor-pointer"
-                >
-                  Manage Roster
-                </button>
+          {activeTab === "LEAGUE" && (
+            <NapperLeagueTab leagueId={selectedLeagueId} />
+          )}
+
+          {activeTab === "PLAYERS" && (
+            <NapperPlayersTab leagueId={selectedLeagueId} />
+          )}
+
+          {activeTab === "TRADES" && (
+            <NapperTradesTab leagueId={selectedLeagueId} />
+          )}
+
+          {activeTab === "SCORES" && (
+            <NapperScoresTab leagueId={selectedLeagueId} />
+          )}
+
+          {activeTab === "TREND" && (
+            <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
+              <div className="bg-[#1a2332] border border-[#283850] rounded-2xl p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-9 h-9 rounded-xl bg-[#00ceb8]/15 border border-[#00ceb8]/30 flex items-center justify-center text-[#00ceb8]">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                      <polyline points="17 6 23 6 23 12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-white">Market Intelligence & Waiver Heatmap</h3>
+                    <p className="text-xs text-[#8a99ad]">Most added and trending free agents across Napper leagues over the last 48 hours.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-[#141d2b] border border-[#223145] rounded-xl p-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[#00ceb8] mb-3 flex items-center justify-between">
+                      <span>🔥 Top Added Players</span>
+                      <span className="text-[10px] text-[#8a99ad]">Net adds</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      {[
+                        { name: "Kenneth Walker III", team: "SEA", pos: "RB", adds: "+42.5%", fpts: 22.8 },
+                        { name: "Jaxon Smith-Njigba", team: "SEA", pos: "WR", adds: "+31.2%", fpts: 15.6 },
+                        { name: "David Montgomery", team: "DET", pos: "RB", adds: "+18.9%", fpts: 13.9 },
+                        { name: "Sam LaPorta", team: "DET", pos: "TE", adds: "+14.0%", fpts: 12.8 },
+                      ].map((p, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-[#5c6c80] w-3">{idx + 1}</span>
+                            <span className="font-bold text-white">{p.name}</span>
+                            <span className="text-[10px] text-[#8a99ad]">{p.pos} • {p.team}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono text-emerald-400 text-[11px] font-semibold">{p.adds}</span>
+                            <span className="font-mono text-[#cbd5e1] text-[11px]">{p.fpts} pts</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#141d2b] border border-[#223145] rounded-xl p-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[#ff4458] mb-3 flex items-center justify-between">
+                      <span>❄️ Most Dropped Players</span>
+                      <span className="text-[10px] text-[#8a99ad]">Net drops</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      {[
+                        { name: "Dallas Goedert", team: "PHI", pos: "TE", drops: "-12.4%", fpts: 8.7 },
+                        { name: "Tyler Bass", team: "BUF", pos: "K", drops: "-15.2%", fpts: 8.0 },
+                        { name: "Brock Purdy", team: "SF", pos: "QB", drops: "-8.1%", fpts: 17.1 },
+                        { name: "Baker Mayfield", team: "TB", pos: "QB", drops: "-6.5%", fpts: 16.0 },
+                      ].map((p, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-[#5c6c80] w-3">{idx + 1}</span>
+                            <span className="font-bold text-white">{p.name}</span>
+                            <span className="text-[10px] text-[#8a99ad]">{p.pos} • {p.team}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono text-rose-400 text-[11px] font-semibold">{p.drops}</span>
+                            <span className="font-mono text-[#cbd5e1] text-[11px]">{p.fpts} pts</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-[#223145] flex items-center justify-between">
+                  <span className="text-xs text-[#8a99ad]">Want to claim available talent? Jump directly to waivers.</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("PLAYERS")}
+                    className="px-4 py-2 rounded-xl bg-[#00ceb8] text-[#0d1722] font-bold text-xs hover:bg-[#2bd9c6] transition-colors cursor-pointer"
+                  >
+                    Open Waiver Wire
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -523,28 +635,24 @@ export const NapperPage: React.FC<NapperPageProps> = ({
       <aside className="napper-right-rail">
         {/* Chat Rail Header */}
         <div className="p-4 flex items-center justify-between border-b border-[#1e2a3c]">
-          <h2 className="text-base font-extrabold text-white tracking-wide">
-            League Chat
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-extrabold text-white tracking-wide">
+              League Chat
+            </h2>
+            <span className="text-[10px] font-mono text-[#00ceb8] bg-[#00ceb8]/15 px-1.5 py-0.5 rounded font-bold">
+              Lg #{selectedLeagueId}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              title="Pin Chat"
+              onClick={loadChat}
+              title="Refresh Chat Stream"
               className="w-7 h-7 rounded-lg bg-[#172130] hover:bg-[#202d40] border border-[#283850] flex items-center justify-center text-[#8a99ad] hover:text-white transition-colors cursor-pointer"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="17" x2="12" y2="22" />
-                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              title="Notifications"
-              className="w-7 h-7 rounded-lg bg-[#172130] hover:bg-[#202d40] border border-[#283850] flex items-center justify-center text-[#8a99ad] hover:text-white transition-colors cursor-pointer"
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
               </svg>
             </button>
           </div>
@@ -552,78 +660,128 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
         {/* Chat Feed (Scrollable) */}
         <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin">
-          {chatMessages.map((msg) => {
-            const card = msg.card_payload;
+          {chatLoading && chatMessages.length === 0 ? (
+            <div className="p-6 text-center text-xs text-[#8a99ad]">
+              Connecting to league stream...
+            </div>
+          ) : chatMessages.length === 0 ? (
+            <div className="p-6 text-center text-xs text-[#8a99ad]">
+              No messages yet in this league. Break the ice below!
+            </div>
+          ) : (
+            chatMessages.map((msg) => {
+              const card = msg.card_payload;
 
-            if (card && card.type === "BENCHWARMER" && card.player) {
+              // Benchwarmer Award Card
+              if (card && (card.type === "BENCHWARMER" || card.award_type === "BENCHWARMER")) {
+                const p = card.player || {
+                  name: card.player_name || "Aaron Jones",
+                  position: "RB",
+                  team: "MIN",
+                  stats: "Top scorer on bench",
+                  fpts: card.points || 18.2,
+                  headshot_url: "",
+                };
+                return (
+                  <div key={msg.id} className="napper-chat-card-benchwarmer">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#cbd5e1]">
+                        {card.title || "BENCHWARMER OF THE WEEK"}
+                      </span>
+                      <span className="text-base font-serif text-[#8a99ad] leading-none">”</span>
+                    </div>
+
+                    <div className="text-[11px] text-[#8a99ad] mb-2 leading-relaxed">
+                      {card.subtitle || msg.message_text}
+                    </div>
+
+                    <div className="napper-chat-inner-player">
+                      <img
+                        src={getPlayerHeadshotUrl(p.name, p.headshot_url)}
+                        alt={p.name}
+                        onError={handleImageError}
+                        className="w-10 h-10 rounded-full object-cover border border-[#283850] shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-white truncate">
+                          {p.name}
+                        </div>
+                        <div className="text-[10px] text-[#8a99ad] font-semibold">
+                          {p.position} - {p.team}
+                        </div>
+                        <div className="text-[9px] text-[#8a99ad] truncate mt-0.5 font-mono">
+                          {p.stats}
+                        </div>
+                      </div>
+                      <div className="text-right pl-1 shrink-0">
+                        <div className="text-base font-extrabold text-white font-mono">
+                          {typeof p.fpts === "number" ? p.fpts.toFixed(1) : p.fpts}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Trade Alert Card
+              if (card && (card.type === "TRADE_ALERT" || card.award_type === "TRADE_ALERT")) {
+                return (
+                  <div key={msg.id} className="bg-[#1e2333] border border-[#3b82f6]/40 rounded-xl p-3 shadow-md">
+                    <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#38bdf8] mb-1">
+                      <span>🚨</span>
+                      <span>{card.title || "TRADE ALERT"}</span>
+                    </div>
+                    <div className="text-xs text-white font-bold mb-1">
+                      {card.subtitle || msg.message_text}
+                    </div>
+                    {card.details && (
+                      <div className="text-[11px] text-[#8a99ad] space-y-1 bg-[#141926] p-2 rounded-lg mt-1 font-mono">
+                        {card.details.offered && <div>⇄ Gives: <span className="text-white">{card.details.offered}</span></div>}
+                        {card.details.requested && <div>⇄ Gets: <span className="text-white">{card.details.requested}</span></div>}
+                        {card.details.rationale && <div className="text-[10px] italic text-[#94a3b8] mt-1 font-sans">"{card.details.rationale}"</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // Waiver Claim Card
+              if (card && card.type === "WAIVER_CLAIM") {
+                return (
+                  <div key={msg.id} className="bg-[#172533] border border-[#00ceb8]/40 rounded-xl p-3 shadow-sm">
+                    <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-[#00ceb8] mb-1">
+                      <span>⚡</span>
+                      <span>WAIVER WIRE TRANSACTION</span>
+                    </div>
+                    <p className="text-xs text-white font-medium leading-relaxed">
+                      {msg.message_text}
+                    </p>
+                  </div>
+                );
+              }
+
+              // Standard User or AI manager chat bubble
+              const isUser = msg.sender_type === "USER";
               return (
-                <div key={msg.id} className="napper-chat-card-benchwarmer">
-                  {/* Benchwarmer Header & Quote Icon */}
+                <div key={msg.id} className="bg-[#172130] border border-[#243449] rounded-xl p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#cbd5e1]">
-                      {card.title}
+                    <div className="flex items-center gap-1.5">
+                      {isUser ? <BlueRobotAvatar size={18} /> : <PinkRobotAvatar size={18} />}
+                      <span className="text-xs font-bold text-white">
+                        {msg.sender_handle || msg.sender_name}
+                      </span>
+                    </div>
+                    <span className="text-[9px] text-[#5c6c80]">
+                      {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
                     </span>
-                    <span className="text-base font-serif text-[#8a99ad] leading-none">”</span>
                   </div>
-
-                  {/* Recognition Text */}
-                  <div className="text-[11px] text-[#8a99ad] mb-2 leading-relaxed">
-                    {card.subtitle}
-                  </div>
-
-                  {/* Player Box Card */}
-                  <div className="napper-chat-inner-player">
-                    <img
-                      src={getPlayerHeadshotUrl(card.player.name, card.player.headshot_url)}
-                      alt={card.player.name}
-                      onError={handleImageError}
-                      className="w-10 h-10 rounded-full object-cover border border-[#283850] shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold text-white truncate">
-                        {card.player.name}
-                      </div>
-                      <div className="text-[10px] text-[#8a99ad] font-semibold">
-                        {card.player.position} - {card.player.team}
-                      </div>
-                      <div className="text-[9px] text-[#8a99ad] truncate mt-0.5 font-mono">
-                        {card.player.stats}
-                      </div>
-                    </div>
-                    <div className="text-right pl-1 shrink-0">
-                      <div className="text-base font-extrabold text-white font-mono">
-                        {card.player.fpts.toFixed(1)}
-                      </div>
-                    </div>
-                  </div>
+                  <p className="text-xs text-[#cbd5e1] leading-relaxed mt-1">
+                    {msg.message_text}
+                  </p>
                 </div>
               );
-            }
-
-            // Normal User/AI chat message
-            return (
-              <div key={msg.id} className="bg-[#172130] border border-[#243449] rounded-xl p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    {msg.sender_type === "USER" ? (
-                      <BlueRobotAvatar size={18} />
-                    ) : (
-                      <PinkRobotAvatar size={18} />
-                    )}
-                    <span className="text-xs font-bold text-white">
-                      {msg.sender_handle}
-                    </span>
-                  </div>
-                  <span className="text-[9px] text-[#5c6c80]">
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </div>
-                <p className="text-xs text-[#cbd5e1] leading-relaxed mt-1">
-                  {msg.message_text}
-                </p>
-              </div>
-            );
-          })}
+            })
+          )}
         </div>
 
         {/* Chat Input Bar */}
@@ -638,6 +796,9 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           <button
             type="button"
             title="Insert GIF"
+            onClick={() => {
+              setInputText((prev) => prev + " 🏈");
+            }}
             className="px-2 py-1 rounded bg-[#1a2536] hover:bg-[#223147] border border-[#283850] text-[10px] font-black text-[#8a99ad] hover:text-white transition-colors cursor-pointer shrink-0"
           >
             GIF
@@ -652,6 +813,9 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           <button
             type="button"
             title="Insert Emoji"
+            onClick={() => {
+              setInputText((prev) => prev + " 🔥");
+            }}
             className="text-base text-[#8a99ad] hover:text-white cursor-pointer px-1 shrink-0"
           >
             😊
@@ -669,6 +833,77 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           </button>
         </form>
       </aside>
+
+      {/* =========================================================================
+          MODAL: CREATE / JOIN LEAGUE MODAL
+          ========================================================================= */}
+      {createModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#172233] border border-[#283850] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#223147] pb-3">
+              <div className="flex items-center gap-2">
+                <NapperMoonIcon size={22} />
+                <h3 className="text-base font-extrabold text-white">Join or Switch League</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                className="text-[#8a99ad] hover:text-white text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-[#8a99ad]">
+              Select an existing league to manage your roster, trade with AI managers, or track live scores:
+            </p>
+
+            <div className="space-y-2">
+              {leagues.map((lg) => (
+                <div
+                  key={lg.id}
+                  onClick={() => {
+                    setSelectedLeagueId(lg.id);
+                    setCreateModalOpen(false);
+                  }}
+                  className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                    selectedLeagueId === lg.id
+                      ? "bg-[#1f2d42] border-[#00ceb8]"
+                      : "bg-[#121926] border-[#223147] hover:border-[#38bdf8]"
+                  }`}
+                >
+                  <div>
+                    <div className="text-xs font-bold text-white">{lg.name}</div>
+                    <div className="text-[10px] text-[#8a99ad]">{lg.teams_count} Teams • {lg.scoring_type} • {lg.status}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-3 py-1 rounded-lg bg-[#00ceb8] text-[#0d1722] text-xs font-bold"
+                  >
+                    Select
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {createSuccessMsg && (
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs text-center font-semibold">
+                {createSuccessMsg}
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-[#223147] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-[#1f2d42] text-white hover:bg-[#283850] text-xs font-bold transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
