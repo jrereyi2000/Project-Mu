@@ -98,6 +98,34 @@ ARCHETYPE_MANAGERS = {
         {"name": "Ceiling Chasers", "handle": "@CeilingChasers", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
         {"name": "Cinderella Squad", "handle": "@UnderdogHQ", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
     ],
+    "RB_HEAVY": [
+        {"name": "Heavy Trench", "handle": "@HeavyTrench", "persona": "RB_HEAVY", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Ground & Pound", "handle": "@GroundPound", "persona": "RB_HEAVY", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Smashmouth Syndicate", "handle": "@SmashTrench", "persona": "RB_HEAVY", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Bellcow Dynasty", "handle": "@BellcowKings", "persona": "RB_HEAVY", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Trench Bullies", "handle": "@TrenchBullies", "persona": "RB_HEAVY", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "EARLY_QB": [
+        {"name": "Gunslinger Dynasty", "handle": "@GunslingerHQ", "persona": "EARLY_QB", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Field Generals", "handle": "@FieldGeneral", "persona": "EARLY_QB", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Elite Arms Lab", "handle": "@EliteArms", "persona": "EARLY_QB", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Pocket Kings", "handle": "@PocketKings", "persona": "EARLY_QB", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Dual-Threat Society", "handle": "@DualThreat", "persona": "EARLY_QB", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "EARLY_TE": [
+        {"name": "Middle Seam", "handle": "@MiddleSeam", "persona": "EARLY_TE", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Unicorn Tight Ends", "handle": "@UnicornTE", "persona": "EARLY_TE", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Endzone Enforcers", "handle": "@TE_Enforcers", "persona": "EARLY_TE", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Y-Option Lab", "handle": "@YOption", "persona": "EARLY_TE", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Seam Stretchers", "handle": "@SeamStretcher", "persona": "EARLY_TE", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "BPA": [
+        {"name": "Pure Consensus", "handle": "@ConsensusBoard", "persona": "BPA", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Best Board Available", "handle": "@TrueBPA", "persona": "BPA", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Value Over Replacement", "handle": "@VORP_Pure", "persona": "BPA", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Board Discipline", "handle": "@BoardDiscipline", "persona": "BPA", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Market Consensus", "handle": "@MarketConsensus", "persona": "BPA", "avatar": "/static/players/robot_avatar.webp"},
+    ],
 }
 
 DEFAULT_MOCK_MANAGERS = [
@@ -919,6 +947,26 @@ def _generate_pick_commentary(
     if persona == "UNDERDOG":
         return f"The entire league is sleeping on {player_name} at pick #{overall_pick}. Massive breakout ceiling incoming!"
 
+    if persona == "RB_HEAVY":
+        if position in ("RB", "HB"):
+            return f"Ground and pound! Locking in another workhorse backfield weapon with {player_name} at #{overall_pick}. We win in the trenches."
+        return f"Balanced reinforcement: adding {player_name} ({position}) to complete the roster around my heavy backfield."
+
+    if persona == "EARLY_QB":
+        if position == "QB":
+            return f"Franchise field general locked! {player_name} gives me the ultimate weekly floor and ceiling at pick #{overall_pick}."
+        return f"Surrounding my elite quarterback with {player_name} ({position}) at pick #{overall_pick}."
+
+    if persona == "EARLY_TE":
+        if position == "TE":
+            return f"Positional cheat code secured! {player_name} gives me an insurmountable weekly advantage at tight end at pick #{overall_pick}."
+        return f"Capitalizing on elite TE positional scarcity by adding {player_name} at pick #{overall_pick}."
+
+    if persona == "BPA":
+        if is_steal:
+            return f"Discipline and consensus board value: {player_name} was the clear best player available at pick #{overall_pick}."
+        return f"Pure best player available: selecting {player_name} ({position}) to maximize overall roster talent."
+
     if is_steal:
         return f"Steal alert! {team_name} snags {player_name} at #{overall_pick} despite ADP #{adp_rank}."
     return f"{team_name} selects {player_name} ({position}) with the #{overall_pick} overall pick."
@@ -1070,7 +1118,7 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
             teams_info = settings.get("teams_info", [])
             team_meta = next((t for t in teams_info if t["slot_num"] == slot_num), {})
             persona = team_meta.get("persona", "AI")
-            is_superflex = settings.get("is_superflex", True)
+            is_superflex = settings.get("is_superflex", False)
 
             prev_season = get_previous_season(cur)
 
@@ -1091,12 +1139,36 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
             k_cnt = pos_counts.get("K", 0)
             def_cnt = pos_counts.get("DEF", 0)
 
+            # Roster caps aligned with fantasy_league_sim DRAFT_CAP
             max_qb = 3 if is_superflex else 2
-            max_rb = 5
-            max_wr = 6
+            max_rb = 7
+            max_wr = 7
             max_te = 2
             max_k = 1
             max_def = 1
+
+            rounds = draft.get("rounds", 15) or 15
+
+            # Starter requirements aligned with fantasy_league_sim LINEUP
+            starter_targets = {
+                "QB": 1 if rounds >= 1 else 0,
+                "RB": 2 if rounds >= 8 else (1 if rounds >= 2 else 0),
+                "WR": 2 if rounds >= 8 else (1 if rounds >= 3 else 0),
+                "TE": 1 if rounds >= 4 else 0,
+                "K": 1 if rounds >= 14 else 0,
+                "DEF": 1 if rounds >= 14 else 0,
+            }
+
+            need_qb = max(0, starter_targets["QB"] - qb_cnt)
+            need_rb = max(0, starter_targets["RB"] - rb_cnt)
+            need_wr = max(0, starter_targets["WR"] - wr_cnt)
+            need_te = max(0, starter_targets["TE"] - te_cnt)
+            need_k = max(0, starter_targets["K"] - k_cnt)
+            need_def = max(0, starter_targets["DEF"] - def_cnt)
+            total_need = need_qb + need_rb + need_wr + need_te + need_k + need_def
+            total_rostered = qb_cnt + rb_cnt + wr_cnt + te_cnt + k_cnt + def_cnt
+            picks_left = max(1, rounds - total_rostered)
+            forced = total_need >= picks_left
 
             # Fetch top 100 available players by ADP
             cur.execute("""
@@ -1122,7 +1194,6 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                 raise ValueError("No available players left in player pool")
 
             curr_round = active_pick["round_num"]
-            rounds = draft.get("rounds", 15) or 15
             k_def_start_round = max(1, rounds - 2)
             best_candidate = None
             best_score = -999999.0
@@ -1145,48 +1216,91 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                 if norm_pos == "DEF" and (def_cnt >= max_def or curr_round < k_def_start_round):
                     continue
 
+                # Forced starting lineup rule from fantasy_league_sim
+                if forced:
+                    if norm_pos == "QB" and need_qb == 0:
+                        continue
+                    if norm_pos == "RB" and need_rb == 0:
+                        continue
+                    if norm_pos == "WR" and need_wr == 0:
+                        continue
+                    if norm_pos == "TE" and need_te == 0:
+                        continue
+                    if norm_pos == "K" and need_k == 0:
+                        continue
+                    if norm_pos == "DEF" and need_def == 0:
+                        continue
+
                 adp = float(cand["adp_rank"])
                 proj = float(cand["projected_points"])
 
-                score = 1000.0 - (adp * 2.0) + (proj * 3.5)
+                # Positional Weighting (aligned with fantasy_league_sim POS_WEIGHT: QB 0.4, TE 0.8, RB/WR 1.0)
+                pos_wt = 1.0 if is_superflex and norm_pos == "QB" else {"QB": 0.4, "RB": 1.0, "WR": 1.0, "TE": 0.8, "K": 0.2, "DEF": 0.2}.get(norm_pos, 0.7)
+                score = 1000.0 - (adp * 2.0) + (proj * pos_wt * 3.5)
 
-                # Positional urgency
-                if is_superflex and norm_pos == "QB" and curr_round <= 4:
-                    score *= 1.35
-                if norm_pos == "QB" and qb_cnt == 0 and curr_round >= 6:
-                    score *= 1.5
-                if norm_pos == "RB" and rb_cnt == 0 and curr_round >= 4:
-                    score *= 1.4
-                if norm_pos == "WR" and wr_cnt == 0 and curr_round >= 3:
-                    score *= 1.3
-                if norm_pos == "TE" and te_cnt == 0 and curr_round >= 8:
-                    score *= 1.4
+                # Backup penalties (aligned with fantasy_league_sim BACKUP_PENALTY)
+                if norm_pos == "QB" and qb_cnt >= 1:
+                    score -= 350.0 * qb_cnt
+                elif norm_pos == "TE" and te_cnt >= 1:
+                    score -= 250.0 * te_cnt
+                elif norm_pos == "RB" and rb_cnt >= 4:
+                    score -= 60.0 * (rb_cnt - 3)
+                elif norm_pos == "WR" and wr_cnt >= 4:
+                    score -= 60.0 * (wr_cnt - 3)
 
-                # Persona adjustments
-                if persona == "ZERO_RB_ZEALOT":
-                    if curr_round <= 5 and norm_pos == "RB":
-                        score *= 0.05
-                    elif curr_round <= 5 and norm_pos in ("WR", "TE", "QB"):
-                        score *= 1.25
+                # Starter urgency
+                if norm_pos == "TE" and te_cnt == 0 and curr_round >= 6:
+                    score += 250.0
+                if norm_pos == "QB" and qb_cnt == 0 and curr_round >= 5:
+                    score += 250.0
+                if norm_pos == "WR" and wr_cnt < starter_targets["WR"] and curr_round >= 4:
+                    score += 200.0
+                if norm_pos == "RB" and rb_cnt < starter_targets["RB"] and curr_round >= 4:
+                    score += 200.0
+
+                # Strategy / Persona adjustments (aligned with fantasy_league_sim strategy_adjustment)
+                if persona in ("ZERO_RB_ZEALOT", "ZERO_RB"):
+                    if curr_round <= 4 and norm_pos == "RB":
+                        score -= 400.0
+                    elif curr_round in (5, 6, 7) and norm_pos == "RB":
+                        score += 200.0
+                    elif curr_round <= 4 and norm_pos in ("WR", "TE", "QB"):
+                        score += 150.0
                 elif persona == "HERO_RB":
                     if curr_round <= 2 and rb_cnt == 0 and norm_pos == "RB":
-                        score *= 2.2
+                        score += 300.0
                     elif curr_round in (3, 4, 5, 6) and rb_cnt >= 1 and norm_pos == "RB":
-                        score *= 0.2
-                elif persona == "ANALYTICS_NERD":
+                        score -= 350.0
+                elif persona == "RB_HEAVY":
+                    if curr_round <= 4 and norm_pos == "RB":
+                        if rb_cnt < 2:
+                            score += 280.0
+                        elif rb_cnt == 2:
+                            score += 140.0
+                elif persona == "EARLY_QB":
+                    if curr_round <= 3 and norm_pos == "QB" and qb_cnt == 0:
+                        score += 350.0
+                elif persona == "EARLY_TE":
+                    if curr_round <= 3 and norm_pos == "TE" and te_cnt == 0:
+                        score += 300.0
+                elif persona in ("BPA", "ANALYTICS_NERD"):
                     if adp < current_pick:
-                        # Dropped below ADP (steal)
-                        score += (current_pick - adp) * 4.0
+                        score += (current_pick - adp) * 5.0
                 elif persona == "TRASH_TALKER":
                     score += random.uniform(-10.0, 15.0)
                     if cand.get("projected_points", 0) > 220.0:
                         score *= 1.15
+                    if curr_round <= 3 and norm_pos in ("QB", "TE") and ((norm_pos == "QB" and qb_cnt == 0) or (norm_pos == "TE" and te_cnt == 0)):
+                        score += 180.0
                 elif persona == "WAIVER_HAWK":
                     if norm_pos in ("WR", "RB"):
                         score += float(cand.get("ppg", 10.0)) * 2.0
                     if curr_round >= 9 and norm_pos in ("RB", "WR"):
-                        score *= 1.25
+                        score += 1.25
                 elif persona == "DIE_HARD":
+                    if curr_round <= 4 and norm_pos == "RB":
+                        if rb_cnt < 2:
+                            score += 200.0
                     score += random.uniform(-5.0, 10.0)
                     if cand.get("age", 25) >= 27:
                         score *= 1.1

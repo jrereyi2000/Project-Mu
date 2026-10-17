@@ -218,7 +218,11 @@ export type NapperManagerArchetype =
   | "WAIVER_HAWK"
   | "DIE_HARD"
   | "TRADE_FIEND"
-  | "UNDERDOG";
+  | "UNDERDOG"
+  | "RB_HEAVY"
+  | "EARLY_QB"
+  | "EARLY_TE"
+  | "BPA";
 
 export interface ArchetypeMeta {
   key: NapperManagerArchetype;
@@ -311,6 +315,46 @@ export const ARCHETYPE_METAS: Record<NapperManagerArchetype, ArchetypeMeta> = {
     color: "#6366f1",
     bgColor: "rgba(99, 102, 241, 0.15)",
     borderColor: "rgba(99, 102, 241, 0.4)",
+  },
+  RB_HEAVY: {
+    key: "RB_HEAVY",
+    label: "Robust RB",
+    shortLabel: "Robust RB",
+    tagline: "Bully Trench & Multi-Bellcow",
+    description: "Locks 2-3 bellcow running backs in rounds 1-4 to dominate positional scarcity and ground volume.",
+    color: "#e11d48",
+    bgColor: "rgba(225, 29, 72, 0.15)",
+    borderColor: "rgba(225, 29, 72, 0.4)",
+  },
+  EARLY_QB: {
+    key: "EARLY_QB",
+    label: "Early QB",
+    shortLabel: "Early QB",
+    tagline: "Elite Field General in Rounds 1-3",
+    description: "Targets a Tier-1 dual-threat quarterback in rounds 1-3 for guaranteed weekly positional advantage.",
+    color: "#f59e0b",
+    bgColor: "rgba(245, 158, 11, 0.15)",
+    borderColor: "rgba(245, 158, 11, 0.4)",
+  },
+  EARLY_TE: {
+    key: "EARLY_TE",
+    label: "Early TE",
+    shortLabel: "Early TE",
+    tagline: "Unicorn TE Advantage in Rounds 1-3",
+    description: "Secures an elite game-breaking tight end in rounds 1-3 to exploit the largest positional drop-off in fantasy.",
+    color: "#8b5cf6",
+    bgColor: "rgba(139, 92, 246, 0.15)",
+    borderColor: "rgba(139, 92, 246, 0.4)",
+  },
+  BPA: {
+    key: "BPA",
+    label: "Best Player Available",
+    shortLabel: "BPA",
+    tagline: "Pure Value Over Replacement",
+    description: "Drafts strictly off consensus Value Over Replacement (VORP), refusing positional bias while respecting roster caps.",
+    color: "#06b6d4",
+    bgColor: "rgba(6, 182, 212, 0.15)",
+    borderColor: "rgba(6, 182, 212, 0.4)",
   },
 };
 

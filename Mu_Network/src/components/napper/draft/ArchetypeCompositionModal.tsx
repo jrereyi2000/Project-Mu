@@ -141,6 +141,27 @@ export const ARCHETYPE_PRESETS: Array<{
       return balanceCounts(counts, aiSlots, "TRASH_TALKER");
     },
   },
+  {
+    name: "Fantasy League Sim Mix",
+    description: "Aligns with fantasy_league_sim distribution: BPA 35%, Hero RB 15%, Zero RB 15%, Robust RB 15%, Early QB 10%, Early TE 10%.",
+    getCounts: (aiSlots: number) => {
+      const counts: Record<string, number> = {
+        BPA: Math.max(1, Math.round(aiSlots * 0.35)),
+        HERO_RB: Math.max(1, Math.round(aiSlots * 0.15)),
+        ZERO_RB_ZEALOT: Math.max(1, Math.round(aiSlots * 0.15)),
+        RB_HEAVY: Math.max(1, Math.round(aiSlots * 0.15)),
+        EARLY_QB: Math.max(1, Math.round(aiSlots * 0.10)),
+        EARLY_TE: Math.max(1, Math.round(aiSlots * 0.10)),
+        ANALYTICS_NERD: 0,
+        TRASH_TALKER: 0,
+        WAIVER_HAWK: 0,
+        DIE_HARD: 0,
+        TRADE_FIEND: 0,
+        UNDERDOG: 0,
+      };
+      return balanceCounts(counts, aiSlots, "BPA");
+    },
+  },
 ];
 
 function balanceCounts(counts: Record<string, number>, targetTotal: number, primaryKey: string): Record<string, number> {
@@ -177,6 +198,10 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
     DIE_HARD: 0,
     TRADE_FIEND: 0,
     UNDERDOG: 0,
+    RB_HEAVY: 0,
+    EARLY_QB: 0,
+    EARLY_TE: 0,
+    BPA: 0,
     ...currentComposition,
   }));
   const [activePreset, setActivePreset] = useState<string>("Custom");
@@ -192,6 +217,10 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
         DIE_HARD: 0,
         TRADE_FIEND: 0,
         UNDERDOG: 0,
+        RB_HEAVY: 0,
+        EARLY_QB: 0,
+        EARLY_TE: 0,
+        BPA: 0,
         ...currentComposition,
       });
     }

@@ -943,6 +943,34 @@ const MOCK_ARCHETYPE_TEAMS: Record<string, Array<{ name: string; handle: string;
     { name: "Ceiling Chasers", handle: "@CeilingChasers", persona: "UNDERDOG" },
     { name: "Cinderella Squad", handle: "@UnderdogHQ", persona: "UNDERDOG" },
   ],
+  RB_HEAVY: [
+    { name: "Heavy Trench", handle: "@HeavyTrench", persona: "RB_HEAVY" },
+    { name: "Ground & Pound", handle: "@GroundPound", persona: "RB_HEAVY" },
+    { name: "Smashmouth Syndicate", handle: "@SmashTrench", persona: "RB_HEAVY" },
+    { name: "Bellcow Dynasty", handle: "@BellcowKings", persona: "RB_HEAVY" },
+    { name: "Trench Bullies", handle: "@TrenchBullies", persona: "RB_HEAVY" },
+  ],
+  EARLY_QB: [
+    { name: "Gunslinger Dynasty", handle: "@GunslingerHQ", persona: "EARLY_QB" },
+    { name: "Field Generals", handle: "@FieldGeneral", persona: "EARLY_QB" },
+    { name: "Elite Arms Lab", handle: "@EliteArms", persona: "EARLY_QB" },
+    { name: "Pocket Kings", handle: "@PocketKings", persona: "EARLY_QB" },
+    { name: "Dual-Threat Society", handle: "@DualThreat", persona: "EARLY_QB" },
+  ],
+  EARLY_TE: [
+    { name: "Middle Seam", handle: "@MiddleSeam", persona: "EARLY_TE" },
+    { name: "Unicorn Tight Ends", handle: "@UnicornTE", persona: "EARLY_TE" },
+    { name: "Endzone Enforcers", handle: "@TE_Enforcers", persona: "EARLY_TE" },
+    { name: "Y-Option Lab", handle: "@YOption", persona: "EARLY_TE" },
+    { name: "Seam Stretchers", handle: "@SeamStretcher", persona: "EARLY_TE" },
+  ],
+  BPA: [
+    { name: "Pure Consensus", handle: "@ConsensusBoard", persona: "BPA" },
+    { name: "Best Board Available", handle: "@TrueBPA", persona: "BPA" },
+    { name: "Value Over Replacement", handle: "@VORP_Pure", persona: "BPA" },
+    { name: "Board Discipline", handle: "@BoardDiscipline", persona: "BPA" },
+    { name: "Market Consensus", handle: "@MarketConsensus", persona: "BPA" },
+  ],
 };
 
 const DEFAULT_AI_TEAMS = [
@@ -1733,53 +1761,128 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
 
       // Count positions drafted
       const qbCount = currentRoster.filter((p) => p.position === "QB").length;
-      const rbCount = currentRoster.filter((p) => p.position === "RB").length;
+      const rbCount = currentRoster.filter((p) => p.position === "RB" || p.position === "HB" || p.position === "FB").length;
       const wrCount = currentRoster.filter((p) => p.position === "WR").length;
       const teCount = currentRoster.filter((p) => p.position === "TE").length;
+      const kCount = currentRoster.filter((p) => p.position === "K").length;
+      const defCount = currentRoster.filter((p) => p.position === "DEF").length;
 
-      // Filter and evaluate top 40 candidates
-      const candidates = unpicked.slice(0, 40);
+      // Starter requirements aligned with fantasy_league_sim LINEUP
+      const starterTargets = {
+        QB: draftState.rounds_count >= 1 ? 1 : 0,
+        RB: draftState.rounds_count >= 8 ? 2 : (draftState.rounds_count >= 2 ? 1 : 0),
+        WR: draftState.rounds_count >= 8 ? 2 : (draftState.rounds_count >= 3 ? 1 : 0),
+        TE: draftState.rounds_count >= 4 ? 1 : 0,
+        K: draftState.rounds_count >= 14 ? 1 : 0,
+        DEF: draftState.rounds_count >= 14 ? 1 : 0,
+      };
+
+      const needQb = Math.max(0, starterTargets.QB - qbCount);
+      const needRb = Math.max(0, starterTargets.RB - rbCount);
+      const needWr = Math.max(0, starterTargets.WR - wrCount);
+      const needTe = Math.max(0, starterTargets.TE - teCount);
+      const needK = Math.max(0, starterTargets.K - kCount);
+      const needDef = Math.max(0, starterTargets.DEF - defCount);
+      const totalNeed = needQb + needRb + needWr + needTe + needK + needDef;
+      const totalRostered = qbCount + rbCount + wrCount + teCount + kCount + defCount;
+      const picksLeft = Math.max(1, draftState.rounds_count - totalRostered);
+      const forced = totalNeed >= picksLeft;
+
+      // Filter and evaluate top 100 candidates
+      const candidates = unpicked.slice(0, 100);
       let bestPlayer: NapperDraftPlayer = candidates[0];
       let bestScore = -999999;
 
       for (const player of candidates) {
-        const pos = player.position;
+        const rawPos = player.position;
+        const pos = (rawPos === "HB" || rawPos === "FB") ? "RB" : rawPos;
 
-        // Roster position limits
-        if (pos === "QB" && qbCount >= 3) continue;
-        if (pos === "RB" && rbCount >= 5) continue;
-        if (pos === "WR" && wrCount >= 6) continue;
+        // Hard roster caps (aligned with fantasy_league_sim DRAFT_CAP: max 2 QBs, max 2 TEs)
+        if (pos === "QB" && qbCount >= 2) continue;
+        if (pos === "RB" && rbCount >= 7) continue;
+        if (pos === "WR" && wrCount >= 7) continue;
         if (pos === "TE" && teCount >= 2) continue;
-        if ((pos === "K" || pos === "DEF") && currentRound < 14) continue;
+        if (pos === "K" && (kCount >= 1 || currentRound < Math.max(1, draftState.rounds_count - 2))) continue;
+        if (pos === "DEF" && (defCount >= 1 || currentRound < Math.max(1, draftState.rounds_count - 2))) continue;
 
-        let score = 1000 - (player.adp * 2.0) + (player.proj_pts * 3.0);
+        // Forced starting lineup filling: if remaining picks equal empty starter needs, only draft needed positions
+        if (forced) {
+          if (pos === "QB" && needQb === 0) continue;
+          if (pos === "RB" && needRb === 0) continue;
+          if (pos === "WR" && needWr === 0) continue;
+          if (pos === "TE" && needTe === 0) continue;
+          if (pos === "K" && needK === 0) continue;
+          if (pos === "DEF" && needDef === 0) continue;
+        }
 
-        // Archetype Biases
-        if (persona === "ZERO_RB_ZEALOT") {
-          if (currentRound <= 5 && pos === "RB") {
-            score *= 0.08;
-          } else if (currentRound <= 5 && (pos === "WR" || pos === "TE" || pos === "QB")) {
-            score *= 1.35;
+        // Positional Weighting (aligned with fantasy_league_sim POS_WEIGHT: QB 0.4, TE 0.8, RB/WR 1.0)
+        const posWeight = pos === "QB" ? 0.4 : pos === "TE" ? 0.8 : (pos === "K" || pos === "DEF") ? 0.2 : 1.0;
+        let score = 1000 - (player.adp * 2.0) + (player.proj_pts * posWeight * 3.5);
+
+        // Backup penalties (aligned with fantasy_league_sim BACKUP_PENALTY)
+        if (pos === "QB" && qbCount >= 1) {
+          score -= 350 * qbCount;
+        } else if (pos === "TE" && teCount >= 1) {
+          score -= 250 * teCount;
+        } else if (pos === "RB" && rbCount >= 4) {
+          score -= 60 * (rbCount - 3);
+        } else if (pos === "WR" && wrCount >= 4) {
+          score -= 60 * (wrCount - 3);
+        }
+
+        // Starter urgency
+        if (pos === "TE" && teCount === 0 && currentRound >= 6) score += 250;
+        if (pos === "QB" && qbCount === 0 && currentRound >= 5) score += 250;
+        if (pos === "WR" && wrCount < starterTargets.WR && currentRound >= 4) score += 200;
+        if (pos === "RB" && rbCount < starterTargets.RB && currentRound >= 4) score += 200;
+
+        // Strategy / Archetype Biases
+        if (persona === "ZERO_RB_ZEALOT" || persona === "ZERO_RB") {
+          if (currentRound <= 4 && pos === "RB") {
+            score -= 400;
+          } else if (currentRound >= 5 && currentRound <= 7 && pos === "RB") {
+            score += 200;
+          } else if (currentRound <= 4 && (pos === "WR" || pos === "TE" || pos === "QB")) {
+            score += 150;
           }
         } else if (persona === "HERO_RB") {
           if (currentRound <= 2 && rbCount === 0 && pos === "RB") {
-            score *= 2.4;
+            score += 300;
           } else if (currentRound >= 3 && currentRound <= 6 && rbCount >= 1 && pos === "RB") {
-            score *= 0.25;
+            score -= 350;
           }
-        } else if (persona === "ANALYTICS_NERD") {
+        } else if (persona === "RB_HEAVY") {
+          if (currentRound <= 4 && pos === "RB") {
+            if (rbCount < 2) score += 280;
+            else if (rbCount === 2) score += 140;
+          }
+        } else if (persona === "EARLY_QB") {
+          if (currentRound <= 3 && pos === "QB" && qbCount === 0) {
+            score += 350;
+          }
+        } else if (persona === "EARLY_TE") {
+          if (currentRound <= 3 && pos === "TE" && teCount === 0) {
+            score += 300;
+          }
+        } else if (persona === "BPA" || persona === "ANALYTICS_NERD") {
           if (player.adp < currentOverall) {
-            score += (currentOverall - player.adp) * 6.0;
+            score += (currentOverall - player.adp) * 5.0;
           }
         } else if (persona === "TRASH_TALKER") {
-          score += (Math.random() * 30 - 15);
+          score += (Math.random() * 24 - 12);
           if (player.proj_pts > 220) score *= 1.15;
+          if (currentRound <= 3 && (pos === "QB" || pos === "TE") && ((pos === "QB" && qbCount === 0) || (pos === "TE" && teCount === 0))) {
+            score += 180;
+          }
         } else if (persona === "WAIVER_HAWK") {
           if (pos === "WR" || pos === "RB") score += (player.proj_avg || 10) * 2.5;
-          if (currentRound >= 10 && (pos === "RB" || pos === "WR")) score *= 1.2;
+          if (currentRound >= 9 && (pos === "RB" || pos === "WR")) score *= 1.2;
         } else if (persona === "DIE_HARD") {
+          if (currentRound <= 4 && pos === "RB") {
+            if (rbCount < 2) score += 200;
+          }
           if (player.age >= 26) score *= 1.15;
-          score += (Math.random() * 15 - 7);
+          score += (Math.random() * 12 - 6);
         } else if (persona === "TRADE_FIEND") {
           if (player.adp < currentOverall) {
             score += (currentOverall - player.adp) * 4.5;
@@ -1787,7 +1890,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           if (player.proj_pts > 200) score *= 1.12;
         } else if (persona === "UNDERDOG") {
           if (player.age <= 24) score *= 1.25;
-          score += (Math.random() * 20 - 5);
+          score += (Math.random() * 16 - 4);
         }
 
         if (score > bestScore) {
