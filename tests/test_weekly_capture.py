@@ -58,15 +58,18 @@ class RunTest(unittest.TestCase):
             open(os.path.join(folder, "roster_list.csv"), "w").write("x\n")
         elif mode == "prospects":
             open(os.path.join(folder, "prospects.csv"), "w").write("x\n")
+        elif mode in ("draft-results", "draft_results"):
+            open(os.path.join(folder, "draft_results.csv"), "w").write("x\n")
         for f in ("schedule.csv", "stats_passing.csv"):
             open(os.path.join(folder, f), "w").write("x\n")
 
-    def fake_load(self, folder, replace=False):
+    def fake_load(self, folder, replace=False, mode="weekly", **kwargs):
         self.replace = replace
+        self.load_mode = mode
         self.calls.append("load")
         if self.load_error:
             raise wc.WeekStopped(self.load_error)
-        return {"mode": "weekly", "week": 18}
+        return {"mode": mode, "week": 18}
 
     def test_full_run_in_order_and_shrunk(self):
         self.assertEqual(self.start("r1"), 0)
@@ -99,6 +102,16 @@ class RunTest(unittest.TestCase):
         self.assertIn("Draft prospect scan", self.notices[0][1])
         self.assertEqual(self.notices[-1][0], "Mu: prospects scan done")
         self.assertIn("Draft prospects loaded for Season 2035", self.notices[-1][1])
+
+    def test_draft_results_scan_runs_capture_extract_load_and_skips_articles(self):
+        os.makedirs(os.path.join(self.tmp, "dr1"))
+        self.assertEqual(wc.run("dr1", articles=True, mode="draft-results"), 0)
+        self.assertEqual(self.calls, ["connect", "capture", "extract", "load"])
+        self.assertEqual(self.capture_mode, "draft-results")
+        self.assertEqual(self.notices[0][0], "Mu: capture starting")
+        self.assertIn("Draft results scan", self.notices[0][1])
+        self.assertEqual(self.notices[-1][0], "Mu: draft-results scan done")
+        self.assertIn("Draft results loaded for Season 2035", self.notices[-1][1])
 
     def test_season_scan_runs_capture_extract_load_and_skips_articles(self):
         os.makedirs(os.path.join(self.tmp, "seas1"))

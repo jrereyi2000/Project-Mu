@@ -79,12 +79,26 @@ class TestPickValidation(unittest.TestCase):
             R.validate_completeness(parsed)
         self.assertIn("duplicate picks: [10]", str(ctx.exception))
 
+    def test_valid_224_picks(self):
+        picks = [
+            {
+                "pick": i,
+                "team": "CAR" if i % 2 == 1 else "KC",
+                "player_name": f"Prospect {i}",
+                "position": "QB" if i % 4 == 0 else "WR",
+            }
+            for i in range(1, 225)
+        ]
+        parsed = R.parse_raw_picks(picks)
+        R.validate_completeness(parsed)
+        self.assertEqual(len(parsed), 224)
+
     def test_incorrect_pick_count(self):
         picks = sample_32_picks()[:30]  # Only 30 picks
         parsed = R.parse_raw_picks(picks)
         with self.assertRaises(ValueError) as ctx:
             R.validate_completeness(parsed)
-        self.assertIn("exactly 32 picks (found 30)", str(ctx.exception))
+        self.assertIn("at least 32 picks (found 30)", str(ctx.exception))
 
     def test_empty_player_name(self):
         picks = sample_32_picks()

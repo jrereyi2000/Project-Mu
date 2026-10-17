@@ -289,10 +289,10 @@ def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: 
                             preview["draft_summary"] = {
                                 "source_file": sf,
                                 "pick_count": len(picks),
-                                "status": "Ready for ingestion" if len(picks) == 32 else f"Warning: {len(picks)} picks found (expected 32)",
+                                "status": "Ready for ingestion" if len(picks) >= 32 else f"Warning: {len(picks)} picks found (expected at least 32)",
                             }
-                            if len(picks) != 32:
-                                preview["warnings"].append(f"Draft source file contains {len(picks)} picks (Round 1 requires exactly 32)")
+                            if len(picks) < 32:
+                                preview["warnings"].append(f"Draft source file contains {len(picks)} picks (expected at least 32)")
                         except Exception as ex:
                             preview["draft_summary"] = {"source_file": sf, "error": str(ex)}
                             preview["warnings"].append(f"Failed to inspect draft file: {ex}")
@@ -308,8 +308,8 @@ def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: 
                         "pick_count": len(draft_meta),
                         "status": "Picks provided in manifest array",
                     }
-                    if len(draft_meta) != 32:
-                        preview["warnings"].append(f"Draft results list contains {len(draft_meta)} picks (expected 32)")
+                    if len(draft_meta) < 32:
+                        preview["warnings"].append(f"Draft results list contains {len(draft_meta)} picks (expected at least 32)")
 
         # Summary line
         cm_count = len(preview["coaching_moves"])

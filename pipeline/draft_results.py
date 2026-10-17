@@ -177,8 +177,13 @@ def parse_raw_picks(raw_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             or norm_row.get("comments")
         )
 
+        round_val = norm_row.get("round") or norm_row.get("actual_round")
+        round_pick_val = norm_row.get("round_pick") or norm_row.get("actual_round_pick")
+
         parsed.append({
             "overall_pick": pick_num,
+            "round": int(round_val) if round_val is not None and str(round_val).isdigit() else None,
+            "round_pick": int(round_pick_val) if round_pick_val is not None and str(round_pick_val).isdigit() else None,
             "team_val": team_val,
             "player_name": (str(player_name).strip() if player_name is not None else ""),
             "position": (str(position).strip() if position is not None else None),
@@ -189,17 +194,23 @@ def parse_raw_picks(raw_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def validate_completeness(parsed_picks: List[Dict[str, Any]]) -> None:
-    """Enforce completeness: exactly 32 picks (picks 1–32 present without gaps or duplicates)."""
-    if len(parsed_picks) != 32:
-        raise ValueError(f"Draft results must contain exactly 32 picks (found {len(parsed_picks)})")
+    """Enforce completeness: at least 32 picks (Round 1), or full draft (all 7 rounds, 224+ picks, up to 300),
+    with picks present consecutively from 1 to N without gaps or duplicates."""
+    if not parsed_picks or len(parsed_picks) < 32:
+        found_len = len(parsed_picks) if parsed_picks else 0
+        raise ValueError(f"Draft results must contain at least 32 picks (found {found_len})")
+    if len(parsed_picks) > 300:
+        raise ValueError(f"Draft results exceeds maximum supported picks of 300 (found {len(parsed_picks)})")
 
     pick_nums = [p["overall_pick"] for p in parsed_picks]
-    expected_picks = set(range(1, 33))
+    n_picks = len(parsed_picks)
+
+    expected_picks = set(range(1, n_picks + 1))
     actual_picks = set(pick_nums)
 
     missing = sorted(expected_picks - actual_picks)
     duplicates = sorted(set(p for p in pick_nums if pick_nums.count(p) > 1))
-    out_of_bounds = sorted(p for p in pick_nums if p < 1 or p > 32)
+    out_of_bounds = sorted(p for p in pick_nums if p < 1 or p > n_picks)
 
     errors = []
     if missing:
@@ -286,11 +297,14 @@ def resolve_and_load_picks(
             if resolved_pid is not None:
                 matched_prospect_ids.setdefault(resolved_pid, []).append(pick)
 
+            calc_round = str(pick_item.get("round") or (((pick - 1) // 32) + 1))
+            calc_round_pick = int(pick_item.get("round_pick") or (((pick - 1) % 32) + 1))
+
             resolved_selections.append({
                 "draft_season": target_season,
                 "overall_pick": pick,
-                "actual_round": "1",
-                "actual_round_pick": pick,
+                "actual_round": calc_round,
+                "actual_round_pick": calc_round_pick,
                 "team_id": team_id,
                 "prospect_id": resolved_pid,
                 "player_name": player_name,

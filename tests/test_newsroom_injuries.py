@@ -58,25 +58,39 @@ class NewsroomInjuriesTest(unittest.TestCase):
             self.assertEqual(inj["fantasy_group"], "RB")
 
     def test_preview_slate_key_injuries_injection(self):
+        needs_temp_status = False
+        target_week = 18
         with psycopg.connect(self.db_conn_info) as conn, conn.cursor() as cur:
             cur.execute("SELECT MIN(week) FROM games WHERE season = 2035 AND status = 'SCHEDULED'")
             row = cur.fetchone()
-            target_week = row[0] if row and row[0] is not None else 21
-        brief = build_weekly_assignment_brief(self.db_conn_info, season=2035, week=target_week)
-        self.assertIn("preview_slate", brief)
-        games = brief["preview_slate"]["all_games"]
-        self.assertGreater(len(games), 0)
-        # Check if games have key_injuries dictionary
-        games_with_injuries = [g for g in games if "key_injuries" in g]
-        self.assertGreater(len(games_with_injuries), 0)
-        for g in games_with_injuries:
-            self.assertIn("away", g["key_injuries"])
-            self.assertIn("home", g["key_injuries"])
-            for inj in g["key_injuries"]["away"] + g["key_injuries"]["home"]:
-                self.assertTrue(
-                    inj["overall_rating"] >= 88 or inj["popularity_index"] >= 50.0 or inj.get("is_starting_qb"),
-                    f"Injury {inj} does not meet national threshold"
-                )
+            if row and row[0] is not None:
+                target_week = row[0]
+            else:
+                needs_temp_status = True
+                cur.execute("UPDATE games SET status = 'SCHEDULED' WHERE season = 2035 AND week = 18")
+                conn.commit()
+
+        try:
+            brief = build_weekly_assignment_brief(self.db_conn_info, season=2035, week=target_week)
+            self.assertIn("preview_slate", brief)
+            games = brief["preview_slate"]["all_games"]
+            self.assertGreater(len(games), 0)
+            # Check if games have key_injuries dictionary
+            games_with_injuries = [g for g in games if "key_injuries" in g]
+            self.assertGreater(len(games_with_injuries), 0)
+            for g in games_with_injuries:
+                self.assertIn("away", g["key_injuries"])
+                self.assertIn("home", g["key_injuries"])
+                for inj in g["key_injuries"]["away"] + g["key_injuries"]["home"]:
+                    self.assertTrue(
+                        inj["overall_rating"] >= 88 or inj["popularity_index"] >= 50.0 or inj.get("is_starting_qb"),
+                        f"Injury {inj} does not meet national threshold"
+                    )
+        finally:
+            if needs_temp_status:
+                with psycopg.connect(self.db_conn_info) as conn, conn.cursor() as cur:
+                    cur.execute("UPDATE games SET status = 'COMPLETED' WHERE season = 2035 AND week = 18")
+                    conn.commit()
 
     def test_beat_brief_team_injuries_injection(self):
         brief = build_weekly_assignment_brief(self.db_conn_info, season=2035, week=18)
