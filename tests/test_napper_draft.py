@@ -622,4 +622,66 @@ def test_set_draft_order_endpoint_with_custom_teams_and_validation():
     assert "Cannot set draft order after draft has started" in started_order_res.json()["detail"]
 
 
+def test_available_players_includes_kickers():
+    """Verifies that kickers are draftable players with proper ADP and projections."""
+    create_res = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 8,
+        "rounds": 15,
+        "user_slot": 1,
+    })
+    assert create_res.status_code == 200
+    draft_id = create_res.json()["id"]
+
+    # 1. Query with position="K"
+    res_k = client.get(f"/api/napper/draft/{draft_id}/available_players?position=K&limit=50")
+    assert res_k.status_code == 200
+    k_data = res_k.json()
+    assert k_data["total"] > 0
+    kickers = k_data["players"]
+    assert len(kickers) > 0
+    for k in kickers:
+        assert k["position"] == "K"
+        assert k["adp"] < 999  # Valid ADP assigned
+        assert k["projections"]["pts"] > 0
+
+    # 2. Query with position="ALL" with limit=600 includes kickers
+    res_all = client.get(f"/api/napper/draft/{draft_id}/available_players?position=ALL&limit=600")
+    assert res_all.status_code == 200
+    all_data = res_all.json()
+    all_positions = {p["position"] for p in all_data["players"]}
+    assert "K" in all_positions
+
+
+def test_draft_kicker_selection():
+    """Verifies drafting a kicker advances the draft and records the selection."""
+    create_res = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 4,
+        "rounds": 3,
+        "user_slot": 1,
+    })
+    assert create_res.status_code == 200
+    draft_id = create_res.json()["id"]
+
+    # Start draft
+    client.post(f"/api/napper/draft/{draft_id}/start")
+
+    # Find a kicker
+    res_k = client.get(f"/api/napper/draft/{draft_id}/available_players?position=K&limit=10")
+    kicker = res_k.json()["players"][0]
+    kicker_id = kicker["id"]
+
+    # Pick the kicker at pick #1
+    pick_res = client.post(f"/api/napper/draft/{draft_id}/pick", json={"player_id": kicker_id})
+    assert pick_res.status_code == 200
+    draft_state = pick_res.json()
+
+    # Verify pick was recorded
+    first_pick = draft_state["picks"][0]
+    assert first_pick["player"] is not None
+    assert first_pick["player"]["id"] == kicker_id
+    assert first_pick["player"]["position"] == "K"
+    assert first_pick["player"]["name"] == kicker["name"]
+
+
+
 

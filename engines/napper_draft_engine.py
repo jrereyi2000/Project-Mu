@@ -188,6 +188,12 @@ def build_ai_managers(
 
 def ensure_defenses_exist(cur):
     """Ensures all 32 NFL team defenses exist in players and player_seasons for drafting."""
+    prev_season = get_previous_season(cur)
+    cur.execute("SELECT COUNT(*) as cnt FROM fantasy_projections WHERE season = %s AND position = 'DEF' AND adp_rank IS NOT NULL", (prev_season,))
+    row = cur.fetchone()
+    if row and (row["cnt"] if isinstance(row, dict) else row[0]) >= 32:
+        return
+
     cur.execute("SELECT id, name, abbreviation FROM teams ORDER BY id")
     nfl_teams = cur.fetchall()
     for tm in nfl_teams:
@@ -205,19 +211,58 @@ def ensure_defenses_exist(cur):
         else:
             p_id = row["id"]
 
-        prev_season = get_previous_season(cur)
-        cur.execute("""
-            INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating)
-            VALUES (%s, %s, %s, 'DEF', 28, 83)
-            ON CONFLICT (player_id, season) DO NOTHING
-        """, (p_id, tm["id"], prev_season))
-
-        for wk in range(1, 15):
+        for s in (prev_season, prev_season + 1):
             cur.execute("""
-                INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position, adp_rank)
-                VALUES (%s, %s, %s, %s, %s, 7.5, 'DEF', %s)
-                ON CONFLICT DO NOTHING
-            """, (prev_season, wk, p_id, p_name, tm["id"], 140 + tm["id"]))
+                INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating)
+                VALUES (%s, %s, %s, 'DEF', 28, 83)
+                ON CONFLICT (player_id, season) DO NOTHING
+            """, (p_id, tm["id"], s))
+
+            for wk in range(1, 19):
+                cur.execute("""
+                    INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position, adp_rank)
+                    VALUES (%s, %s, %s, %s, %s, 7.5, 'DEF', %s)
+                    ON CONFLICT (season, week, player_id) DO UPDATE SET
+                        adp_rank = EXCLUDED.adp_rank,
+                        projected_points = EXCLUDED.projected_points,
+                        position = EXCLUDED.position
+                """, (s, wk, p_id, p_name, tm["id"], 140 + tm["id"]))
+
+
+def ensure_kickers_exist(cur):
+    """Ensures simulation kickers have baseline fantasy projections and ADP ranks for drafting."""
+    prev_season = get_previous_season(cur)
+    cur.execute("SELECT COUNT(*) as cnt FROM fantasy_projections WHERE season = %s AND position = 'K' AND adp_rank IS NOT NULL", (prev_season,))
+    row = cur.fetchone()
+    if row and (row["cnt"] if isinstance(row, dict) else row[0]) >= 32:
+        return
+
+    for season in (prev_season, prev_season + 1):
+        cur.execute("""
+            SELECT p.id, p.player_name, ps.team_id, COALESCE(ps.overall_rating, 80) as ovr
+            FROM players p
+            JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+            WHERE ps.position = 'K'
+            ORDER BY ps.overall_rating DESC NULLS LAST, p.id ASC
+        """, (season,))
+        kickers = cur.fetchall()
+        for idx, k in enumerate(kickers, start=1):
+            adp = 150 + idx
+            avg_pts = round(7.0 + (float(k["ovr"]) / 99.0) * 2.5, 1)
+            for wk in range(1, 19):
+                ros_total = round(avg_pts * (19 - wk), 1)
+                cur.execute("""
+                    INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position, adp_rank, avg_points, ros_total_points)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'K', %s, %s, %s)
+                    ON CONFLICT (season, week, player_id) DO UPDATE SET
+                        player_name = EXCLUDED.player_name,
+                        team_id = EXCLUDED.team_id,
+                        projected_points = EXCLUDED.projected_points,
+                        position = EXCLUDED.position,
+                        adp_rank = EXCLUDED.adp_rank,
+                        avg_points = EXCLUDED.avg_points,
+                        ros_total_points = EXCLUDED.ros_total_points
+                """, (season, wk, k["id"], k["player_name"], k["team_id"], avg_pts, adp, avg_pts, ros_total))
 
 
 def create_draft_session(
@@ -251,6 +296,7 @@ def create_draft_session(
     with get_db() as conn:
         with conn.cursor() as cur:
             ensure_defenses_exist(cur)
+            ensure_kickers_exist(cur)
 
             is_superflex = settings.get("is_superflex", "SUPERFLEX" in scoring_type.upper() or scoring_type.upper() == "PPR")
             settings["is_superflex"] = is_superflex

@@ -1603,7 +1603,7 @@ def get_available_players(
     draft_id: int,
     search: Optional[str] = Query(None),
     position: Optional[str] = Query("ALL"),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
     """Returns available players ordered by ADP, with bye, age, ros_pct, projections, rush/rec stats, and draft count."""

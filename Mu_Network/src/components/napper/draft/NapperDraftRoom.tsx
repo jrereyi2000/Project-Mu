@@ -824,12 +824,72 @@ const MOCK_DRAFT_PLAYERS: NapperDraftPlayer[] = [
     bye: 7,
     age: 31.3,
     ros_pct: 99.0,
-    adp: 88.0,
-    adp_rank: 35,
+    adp: 148.0,
+    adp_rank: 148,
     proj_pts: 148.0,
     proj_avg: 8.7,
     headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432577.png",
     notes: "60+ yard field goal machine with highest projected kicking total in the league.",
+  },
+  {
+    player_id: 579,
+    name: "Jesse Fernandez",
+    position: "K",
+    team: "DEN",
+    bye: 8,
+    age: 26.0,
+    ros_pct: 98.0,
+    adp: 151.0,
+    adp_rank: 151,
+    proj_pts: 171.0,
+    proj_avg: 10.1,
+    headshot_url: "/static/players/579.webp",
+    notes: "Elite 98 OVR franchise kicker with league-leading accuracy and leg strength.",
+  },
+  {
+    player_id: 311,
+    name: "Cam Little",
+    position: "K",
+    team: "IND",
+    bye: 13,
+    age: 23.0,
+    ros_pct: 97.5,
+    adp: 152.0,
+    adp_rank: 152,
+    proj_pts: 169.2,
+    proj_avg: 10.0,
+    headshot_url: "/static/players/311.webp",
+    notes: "Booming leg with 94 OVR rating providing steady high-volume scoring.",
+  },
+  {
+    player_id: 737,
+    name: "Brian Westbrook",
+    position: "K",
+    team: "BUF",
+    bye: 12,
+    age: 25.0,
+    ros_pct: 97.0,
+    adp: 153.0,
+    adp_rank: 153,
+    proj_pts: 167.4,
+    proj_avg: 9.8,
+    headshot_url: "/static/players/737.webp",
+    notes: "High-scoring offense multiplier in Buffalo with elite clutch rating.",
+  },
+  {
+    player_id: 523,
+    name: "Matthew Falk",
+    position: "K",
+    team: "NYJ",
+    bye: 12,
+    age: 27.0,
+    ros_pct: 96.5,
+    adp: 154.0,
+    adp_rank: 154,
+    proj_pts: 167.4,
+    proj_avg: 9.8,
+    headshot_url: "/static/players/523.webp",
+    notes: "Consistent 90 OVR kicker with automatic touchback distance.",
   },
   {
     player_id: 15683,
@@ -839,8 +899,8 @@ const MOCK_DRAFT_PLAYERS: NapperDraftPlayer[] = [
     bye: 14,
     age: 36.9,
     ros_pct: 97.0,
-    adp: 95.0,
-    adp_rank: 36,
+    adp: 155.0,
+    adp_rank: 155,
     proj_pts: 138.0,
     proj_avg: 8.1,
     headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/15683.png",
@@ -1224,9 +1284,9 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       try {
         const draftIdNum = Number(draftState.id);
         const validDraftId = !isNaN(draftIdNum) && draftIdNum > 0 ? draftIdNum : 0;
-        let res = await fetch(`${API_BASE}/api/napper/draft/${validDraftId}/available_players?limit=250`);
+        let res = await fetch(`${API_BASE}/api/napper/draft/${validDraftId}/available_players?limit=600`);
         if (!res.ok) {
-          res = await fetch(`${API_BASE}/api/fantasy/projections?season=2035&week=1&limit=250`);
+          res = await fetch(`${API_BASE}/api/fantasy/projections?season=2035&week=1&limit=600`);
         }
         if (res.ok) {
           const data = await res.json();

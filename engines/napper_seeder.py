@@ -19,7 +19,7 @@ from collections import defaultdict
 import psycopg
 from psycopg.rows import dict_row
 
-from engines.napper_draft_engine import ensure_defenses_exist
+from engines.napper_draft_engine import ensure_defenses_exist, ensure_kickers_exist
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -50,24 +50,8 @@ def build_schedule(n_teams: int, weeks: int = 14) -> List[List[tuple]]:
 
 
 def ensure_kicker_projections(cur, season: int):
-    """Ensures simulation kickers have baseline fantasy projections for the given season."""
-    cur.execute("""
-        SELECT p.id, p.player_name, ps.team_id
-        FROM players p
-        JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-        WHERE ps.position = 'K'
-    """, (season,))
-    kickers = cur.fetchall()
-    for k in kickers:
-        kid = k["id"] if isinstance(k, dict) else k[0]
-        kname = k["player_name"] if isinstance(k, dict) else k[1]
-        ktid = k["team_id"] if isinstance(k, dict) else k[2]
-        for wk in range(1, 15):
-            cur.execute("""
-                INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position)
-                VALUES (%s, %s, %s, %s, %s, 8.5, 'K')
-                ON CONFLICT DO NOTHING
-            """, (season, wk, kid, kname, ktid))
+    """Ensures simulation kickers have baseline fantasy projections and ADP ranks."""
+    ensure_kickers_exist(cur)
 
 
 def fetch_id(cur) -> int:
