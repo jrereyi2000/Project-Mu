@@ -6,13 +6,25 @@ import { getPlayerHeadshotUrl, handleImageError } from "../napperUtils";
 interface DraftBoardGridProps {
   draftState: NapperDraftState;
   onClaimSlot: (slot: number) => void;
+  onOpenSetOrder?: () => void;
   onSelectPick?: (pick: NapperDraftPick) => void;
+  isSelectionBoxOpen?: boolean;
+  onToggleSelectionBox?: () => void;
+  onOpenSelectionBox?: () => void;
+  onCloseSelectionBox?: () => void;
+  isUserTurn?: boolean;
 }
 
 export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
   draftState,
   onClaimSlot,
+  onOpenSetOrder,
   onSelectPick,
+  isSelectionBoxOpen = true,
+  onToggleSelectionBox,
+  onOpenSelectionBox,
+  onCloseSelectionBox,
+  isUserTurn = false,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeCellRef = useRef<HTMLDivElement>(null);
@@ -38,15 +50,25 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
     }
   }, [current_pick_index]);
 
-  const handleScrollUp = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ top: -140, behavior: "smooth" });
+  const handleUpArrowClick = () => {
+    if (!isSelectionBoxOpen) {
+      if (onOpenSelectionBox) onOpenSelectionBox();
+      else if (onToggleSelectionBox) onToggleSelectionBox();
+    } else {
+      // If already open, clicking up collapses the selection box to expand board view
+      if (onCloseSelectionBox) onCloseSelectionBox();
+      else if (onToggleSelectionBox) onToggleSelectionBox();
     }
   };
 
-  const handleScrollDown = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ top: 140, behavior: "smooth" });
+  const handleDownArrowClick = () => {
+    if (isSelectionBoxOpen) {
+      if (onCloseSelectionBox) onCloseSelectionBox();
+      else if (onToggleSelectionBox) onToggleSelectionBox();
+    } else {
+      // If already closed, clicking down re-opens the selection box
+      if (onOpenSelectionBox) onOpenSelectionBox();
+      else if (onToggleSelectionBox) onToggleSelectionBox();
     }
   };
 
@@ -75,7 +97,7 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
   };
 
   return (
-    <div className="draft-board-wrapper">
+    <div className={`draft-board-wrapper ${!isSelectionBoxOpen ? "expanded" : ""}`}>
       <div className="draft-board-scroll-container" ref={scrollContainerRef}>
         <div className="draft-board-table">
           {/* Claim Header Row */}
@@ -236,13 +258,25 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
         </div>
       </div>
 
-      {/* Floating Scroll Nav Chevrons */}
+      {/* Floating Chevrons: Open or close draft selection box */}
       <div className="draft-floating-nav">
+        {!isSelectionBoxOpen && (
+          <button
+            type="button"
+            onClick={handleUpArrowClick}
+            className="draft-toggle-pill-btn flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0e1626]/95 border border-[#00ceb8]/50 text-[#00ceb8] text-xs font-bold shadow-xl hover:border-[#00ceb8] hover:bg-[#14233a] transition-all cursor-pointer"
+            title="Click to open draft selection box"
+          >
+            <span className="w-2 h-2 rounded-full bg-[#00ceb8] animate-pulse" />
+            <span>{isUserTurn ? "YOUR TURN — OPEN SELECTION" : "FULL BOARD (CLICK TO OPEN)"}</span>
+          </button>
+        )}
         <button
           type="button"
-          onClick={handleScrollUp}
-          className="draft-scroll-btn"
-          title="Scroll Board Up"
+          onClick={handleUpArrowClick}
+          className={`draft-scroll-btn ${!isSelectionBoxOpen ? "active-action" : "subtle-action"}`}
+          title={isSelectionBoxOpen ? "Close draft selection box (view full board)" : "Open draft selection box"}
+          aria-label={isSelectionBoxOpen ? "Close draft selection box" : "Open draft selection box"}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
             <polyline points="18 15 12 9 6 15" />
@@ -250,9 +284,10 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
         </button>
         <button
           type="button"
-          onClick={handleScrollDown}
-          className="draft-scroll-btn"
-          title="Scroll Board Down"
+          onClick={handleDownArrowClick}
+          className={`draft-scroll-btn ${isSelectionBoxOpen ? "active-action" : "subtle-action"}`}
+          title={isSelectionBoxOpen ? "Close draft selection box (view full board)" : "Open draft selection box"}
+          aria-label={isSelectionBoxOpen ? "Close draft selection box" : "Open draft selection box"}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
             <polyline points="6 9 12 15 18 9" />

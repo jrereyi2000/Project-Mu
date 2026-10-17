@@ -18,6 +18,23 @@ from engines.napper_draft_engine import (
 client = TestClient(app)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def setup_draft_module():
+    from engines.napper_seeder import seed_napper_database
+    from engines.napper_draft_engine import get_db
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
+        conn.commit()
+    seed_napper_database()
+    yield
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
+        conn.commit()
+    seed_napper_database()
+
+
 def test_create_mock_draft_endpoint():
     """Tests POST /api/napper/drafts/create_mock with custom slots and snake ordering."""
     payload = {
@@ -543,6 +560,83 @@ def test_mock_draft_archetype_composition_and_randomized_order():
     assert claimed_data["user_slot"] == target_slot
     claimed_user_team = next(t for t in claimed_data["teams"] if t["slot_num"] == target_slot)
     assert claimed_user_team["is_user"] is True
+
+
+def test_set_draft_order_endpoint_with_slot_order():
+    """Tests POST /api/napper/draft/{id}/set_order using a slot_order permutation."""
+    create_res = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 8,
+        "scoring_type": "PPR",
+        "user_slot": 3,
+        "rounds": 14,
+        "is_superflex": True,
+    })
+    assert create_res.status_code == 200
+    draft_id = create_res.json()["id"]
+
+    # Invert the draft order: previous slot 8 becomes 1, ..., previous slot 1 becomes 8
+    # Previous user slot was 3; in [8, 7, 6, 5, 4, 3, 2, 1], slot 3 is at index 5 -> slot 6!
+    slot_order = [8, 7, 6, 5, 4, 3, 2, 1]
+    order_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": slot_order})
+    assert order_res.status_code == 200
+    data = order_res.json()
+
+    assert data["user_slot"] == 6
+    user_team = next(t for t in data["teams"] if t["slot_num"] == 6)
+    assert user_team["is_user"] is True
+    assert user_team["team_name"] == "The Straw Hat Pirates"
+
+    # Verify picks ownership updated
+    user_picks = [p for p in data["picks"] if p["slot_num"] == 6]
+    for p in user_picks:
+        assert p["picked_by"] == "USER"
+        assert p["team_name"] == "The Straw Hat Pirates"
+
+    non_user_picks = [p for p in data["picks"] if p["slot_num"] != 6]
+    for p in non_user_picks:
+        assert p["picked_by"] == "AI"
+
+
+def test_set_draft_order_endpoint_with_custom_teams_and_validation():
+    """Tests POST /api/napper/draft/{id}/set_order with custom teams list and validation checks."""
+    create_res = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 8,
+        "scoring_type": "PPR",
+        "user_slot": 1,
+        "rounds": 12,
+        "is_superflex": True,
+    })
+    assert create_res.status_code == 200
+    draft_id = create_res.json()["id"]
+
+    # 1. Invalid permutation (duplicate slots or wrong length)
+    bad_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [1, 2, 3, 4, 5, 6, 7]})
+    assert bad_res.status_code == 400
+
+    bad_res2 = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [1, 1, 2, 3, 4, 5, 6, 7]})
+    assert bad_res2.status_code == 400
+
+    # 2. Reorder using custom teams payload
+    current_teams = create_res.json()["teams"]
+    # Move user (index 0) to slot 5 (index 4)
+    reordered_teams = current_teams[1:5] + [current_teams[0]] + current_teams[5:]
+    assert len(reordered_teams) == 8
+
+    custom_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"teams": reordered_teams})
+    assert custom_res.status_code == 200
+    custom_data = custom_res.json()
+    assert custom_data["user_slot"] == 5
+
+    user_team = next(t for t in custom_data["teams"] if t["slot_num"] == 5)
+    assert user_team["is_user"] is True
+
+    # 3. Cannot change order after draft has started
+    start_res = client.post(f"/api/napper/draft/{draft_id}/start")
+    assert start_res.status_code == 200
+
+    started_order_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [8, 7, 6, 5, 4, 3, 2, 1]})
+    assert started_order_res.status_code == 400
+    assert "Cannot set draft order after draft has started" in started_order_res.json()["detail"]
 
 
 

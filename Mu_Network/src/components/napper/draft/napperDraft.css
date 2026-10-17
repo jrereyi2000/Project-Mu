@@ -263,6 +263,14 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: flex 0.2s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.draft-board-wrapper.expanded {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
+  border-bottom: none;
 }
 
 .draft-board-scroll-container {
@@ -498,7 +506,7 @@
   color: #94a3b8;
 }
 
-/* Floating Scroll Chevrons */
+/* Floating Scroll / View Toggle Chevrons */
 .draft-floating-nav {
   position: absolute;
   bottom: 16px;
@@ -529,6 +537,46 @@
   transform: scale(1.06);
 }
 
+.draft-scroll-btn.active-action {
+  background-color: #00ceb8;
+  color: #090e17;
+  box-shadow: 0 0 16px rgba(0, 206, 184, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.draft-scroll-btn.active-action:hover {
+  background-color: #2bd9c6;
+  transform: scale(1.08);
+}
+
+.draft-scroll-btn.subtle-action {
+  background-color: #162438;
+  color: #94a3b8;
+  border: 1px solid #223758;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.draft-scroll-btn.subtle-action:hover {
+  background-color: #1e314d;
+  color: #ffffff;
+  border-color: #3b82f6;
+  transform: scale(1.06);
+}
+
+.draft-toggle-pill-btn {
+  animation: draftPillFadeIn 0.2s ease-out;
+}
+
+@keyframes draftPillFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ==========================================================================
    Bottom Half: Split View (Player Pool Left, Roster/Queue Right)
    ========================================================================== */
@@ -538,6 +586,10 @@
   display: flex;
   overflow: hidden;
   background-color: var(--draft-bg-darkest);
+}
+
+.draft-bottom-split.collapsed {
+  display: none !important;
 }
 
 /* Left Panel: Player Pool (~64%) */
@@ -1246,5 +1298,22 @@
   background-color: rgba(148, 163, 184, 0.15);
   border-color: rgba(148, 163, 184, 0.3);
   color: #94a3b8;
+}
+
+/* Draft Order Modal Styles */
+.draft-order-modal {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 206, 184, 0.1);
+}
+
+.draft-order-row {
+  user-select: none;
+}
+
+.draft-order-row:hover {
+  border-color: #2e4362;
+}
+
+.draft-order-row.is-user {
+  box-shadow: 0 0 15px rgba(0, 206, 184, 0.08);
 }
 

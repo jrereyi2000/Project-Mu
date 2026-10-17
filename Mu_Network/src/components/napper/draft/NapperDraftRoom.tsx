@@ -12,6 +12,7 @@ import DraftPlayerPool from "./DraftPlayerPool";
 import DraftRosterQueue from "./DraftRosterQueue";
 import DraftRecapModal from "./DraftRecapModal";
 import ArchetypeCompositionModal, { ARCHETYPE_PRESETS } from "./ArchetypeCompositionModal";
+import { DraftOrderModal } from "./DraftOrderModal";
 import { ARCHETYPE_METAS } from "../../../types/napper";
 import "./napperDraft.css";
 
@@ -928,11 +929,27 @@ const MOCK_ARCHETYPE_TEAMS: Record<string, Array<{ name: string; handle: string;
     { name: "Eye Test Only", handle: "@FilmRoomEye", persona: "DIE_HARD" },
     { name: "Hometown Heroes", handle: "@CivicPride", persona: "DIE_HARD" },
   ],
+  TRADE_FIEND: [
+    { name: "Trade Block Titans", handle: "@BlockBuster", persona: "TRADE_FIEND" },
+    { name: "Buy Low Syndicate", handle: "@MarketFlip", persona: "TRADE_FIEND" },
+    { name: "Asset Allocators", handle: "@ConsolidationKing", persona: "TRADE_FIEND" },
+    { name: "Two-For-One Lab", handle: "@PackageDeal", persona: "TRADE_FIEND" },
+    { name: "Touchdown Todd", handle: "@TouchdownTodd", persona: "TRADE_FIEND" },
+  ],
+  UNDERDOG: [
+    { name: "Sleeper Syndicate", handle: "@SleeperSteve", persona: "UNDERDOG" },
+    { name: "Breakout Blueprint", handle: "@NextGenStars", persona: "UNDERDOG" },
+    { name: "Young Gun Dynasty", handle: "@YouthMovement", persona: "UNDERDOG" },
+    { name: "Ceiling Chasers", handle: "@CeilingChasers", persona: "UNDERDOG" },
+    { name: "Cinderella Squad", handle: "@UnderdogHQ", persona: "UNDERDOG" },
+  ],
 };
 
 const DEFAULT_AI_TEAMS = [
   { name: "Zero-RB Theory", handle: "@ZeroHero", persona: "ZERO_RB_ZEALOT" },
   { name: "Data Analytics", handle: "@DataDog", persona: "ANALYTICS_NERD" },
+  { name: "Trade Block Titans", handle: "@BlockBuster", persona: "TRADE_FIEND" },
+  { name: "Sleeper Syndicate", handle: "@SleeperSteve", persona: "UNDERDOG" },
   { name: "Gridiron Dominance", handle: "@Champ2035", persona: "TRASH_TALKER" },
   { name: "Hero RB Squad", handle: "@AnchorBack", persona: "HERO_RB" },
   { name: "Waiver Wire Kings", handle: "@WireHawk", persona: "WAIVER_HAWK" },
@@ -1109,6 +1126,8 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
   const [selectedNotesPlayer, setSelectedNotesPlayer] = useState<NapperDraftPlayer | null>(null);
   const [assistantModalOpen, setAssistantModalOpen] = useState(false);
   const [recapModalOpen, setRecapModalOpen] = useState(false);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [isSelectionBoxOpen, setIsSelectionBoxOpen] = useState<boolean>(true);
 
   // Fetch live draft state from backend if available
   useEffect(() => {
@@ -1429,6 +1448,71 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     }
   };
 
+  // Apply manual draft order customization
+  const handleApplyDraftOrder = (orderedTeams: NapperDraftTeam[]) => {
+    if (draftState.status !== "NOT_STARTED") return;
+
+    // Find new user slot
+    const userTeam = orderedTeams.find((t) => t.is_user);
+    const newUserSlot = userTeam ? userTeam.slot : draftState.user_slot;
+
+    // Map slot to team
+    const teamBySlot: Record<number, NapperDraftTeam> = {};
+    orderedTeams.forEach((t) => {
+      teamBySlot[t.slot] = t;
+    });
+
+    // Re-assign picks according to new team slots
+    const updatedPicks = draftState.picks.map((p) => {
+      const assignedTeam = teamBySlot[p.team_slot];
+      return {
+        ...p,
+        team_id: assignedTeam?.id || p.team_slot,
+        team_name: assignedTeam?.name || `Team ${p.team_slot}`,
+      };
+    });
+
+    setDraftState((prev) => ({
+      ...prev,
+      user_slot: newUserSlot,
+      teams: orderedTeams,
+      picks: updatedPicks,
+      current_pick_index: 0,
+    }));
+
+    setComments((prev) => [
+      ...prev,
+      {
+        id: `c-order-${Date.now()}`,
+        sender_name: "Draft Commissioner",
+        sender_handle: "@DraftBot",
+        message: `📋 Draft order customized! You are drafting from Slot #${newUserSlot}.`,
+        timestamp: "Just now",
+        is_bot: true,
+      },
+    ]);
+
+    const draftIdNum = Number(draftState.id);
+    if (!isNaN(draftIdNum) && draftIdNum > 0) {
+      fetch(`${API_BASE}/api/napper/draft/${draftIdNum}/set_order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slot_order: orderedTeams.map((t) => t.slot),
+          teams: orderedTeams.map((t) => ({
+            slot_num: t.slot,
+            team_id: t.id,
+            team_name: t.name,
+            manager_handle: t.manager_handle,
+            persona: t.persona,
+            avatar_url: t.avatar_url,
+            is_user: !!t.is_user,
+          })),
+        }),
+      }).catch(() => {});
+    }
+  };
+
   // Switch Team Count (8, 10, 12 Teams) and regenerate snake picks
   const handleTeamCountChange = (newCount: number) => {
     if (draftState.status !== "NOT_STARTED") return;
@@ -1583,6 +1667,10 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         commentText = `Target volume and versatile snaps secured. ${draftedPlayer.name} fits my roster depth perfectly at pick #${targetPick.pick_overall}.`;
       } else if (persona === "DIE_HARD") {
         commentText = `Pure grit and veteran leadership. ${draftedPlayer.name} brings championship DNA to this franchise at pick #${targetPick.pick_overall}.`;
+      } else if (persona === "TRADE_FIEND") {
+        commentText = `Taking ${draftedPlayer.name} at #${targetPick.pick_overall}. Tremendous value, and my DMs are wide open if anyone wants to talk trade right now.`;
+      } else if (persona === "UNDERDOG") {
+        commentText = `The room is sleeping on ${draftedPlayer.name} at pick #${targetPick.pick_overall}. Massive breakout ceiling incoming!`;
       }
 
       const botPickComment: NapperDraftComment = {
@@ -1692,6 +1780,14 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         } else if (persona === "DIE_HARD") {
           if (player.age >= 26) score *= 1.15;
           score += (Math.random() * 15 - 7);
+        } else if (persona === "TRADE_FIEND") {
+          if (player.adp < currentOverall) {
+            score += (currentOverall - player.adp) * 4.5;
+          }
+          if (player.proj_pts > 200) score *= 1.12;
+        } else if (persona === "UNDERDOG") {
+          if (player.age <= 24) score *= 1.25;
+          score += (Math.random() * 20 - 5);
         }
 
         if (score > bestScore) {
@@ -2126,6 +2222,14 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
             >
               <span>🎲 Randomize Order</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setOrderModalOpen(true)}
+              className="draft-config-pill flex items-center gap-1 hover:border-[#00ceb8] hover:text-[#00ceb8]"
+              title="Manually customize and set draft slot order for all teams"
+            >
+              <span>↕ Set Order</span>
+            </button>
           </div>
         </div>
       )}
@@ -2134,13 +2238,19 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       <DraftBoardGrid
         draftState={draftState}
         onClaimSlot={handleClaimSlot}
+        onOpenSetOrder={() => setOrderModalOpen(true)}
         onSelectPick={(p) => {
           if (p.player) setSelectedNotesPlayer(p.player);
         }}
+        isSelectionBoxOpen={isSelectionBoxOpen}
+        onToggleSelectionBox={() => setIsSelectionBoxOpen((prev) => !prev)}
+        onOpenSelectionBox={() => setIsSelectionBoxOpen(true)}
+        onCloseSelectionBox={() => setIsSelectionBoxOpen(false)}
+        isUserTurn={isUserTurn}
       />
 
       {/* 3. Bottom Half: Split View (Player Pool Left, Roster/Queue/Chat Right) */}
-      <div className="draft-bottom-split">
+      <div className={`draft-bottom-split ${!isSelectionBoxOpen ? "collapsed" : ""}`}>
         {/* Left: Player Pool Table & Filter Bar */}
         <DraftPlayerPool
           players={availablePlayers}
@@ -2338,6 +2448,14 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         teamsCount={draftState.teams_count}
         currentComposition={archetypeComposition}
         onApply={handleApplyArchetypes}
+      />
+
+      {/* 8. Customize Draft Order Modal */}
+      <DraftOrderModal
+        isOpen={orderModalOpen}
+        onClose={() => setOrderModalOpen(false)}
+        teams={draftState.teams}
+        onApplyOrder={handleApplyDraftOrder}
       />
     </div>
   );

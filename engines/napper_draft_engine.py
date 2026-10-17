@@ -84,20 +84,34 @@ ARCHETYPE_MANAGERS = {
         {"name": "Eye Test Only", "handle": "@FilmRoomEye", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
         {"name": "Hometown Heroes", "handle": "@CivicPride", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
     ],
+    "TRADE_FIEND": [
+        {"name": "Trade Block Titans", "handle": "@BlockBuster", "persona": "TRADE_FIEND", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Buy Low Syndicate", "handle": "@MarketFlip", "persona": "TRADE_FIEND", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Asset Allocators", "handle": "@ConsolidationKing", "persona": "TRADE_FIEND", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Two-For-One Lab", "handle": "@PackageDeal", "persona": "TRADE_FIEND", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Touchdown Todd", "handle": "@TouchdownTodd", "persona": "TRADE_FIEND", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "UNDERDOG": [
+        {"name": "Sleeper Syndicate", "handle": "@SleeperSteve", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Breakout Blueprint", "handle": "@NextGenStars", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Young Gun Dynasty", "handle": "@YouthMovement", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Ceiling Chasers", "handle": "@CeilingChasers", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Cinderella Squad", "handle": "@UnderdogHQ", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
+    ],
 }
 
 DEFAULT_MOCK_MANAGERS = [
     {"name": "Zero-RB Theory", "handle": "@ZeroHero", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Data Analytics", "handle": "@DataDog", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
+    {"name": "Trade Block Titans", "handle": "@BlockBuster", "persona": "TRADE_FIEND", "avatar": "/static/players/robot_avatar.webp"},
+    {"name": "Sleeper Syndicate", "handle": "@SleeperSteve", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Gridiron Dominance", "handle": "@Champ2035", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Hero RB Squad", "handle": "@AnchorBack", "persona": "HERO_RB", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Waiver Wire Kings", "handle": "@WireHawk", "persona": "WAIVER_HAWK", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Franchise DieHards", "handle": "@DieHardFan", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "VORP Machine", "handle": "@QuantKing", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
-    {"name": "Smashmouth Crew", "handle": "@HeavyHitter", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
-    {"name": "Robust RB Lab", "handle": "@BellCowBros", "persona": "HERO_RB", "avatar": "/static/players/robot_avatar.webp"},
-    {"name": "PPR Machines", "handle": "@PPRGod", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
-    {"name": "Draft Board Wizards", "handle": "@ScoutMaster", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
+    {"name": "Touchdown Todd", "handle": "@TouchdownTodd", "persona": "TRADE_FIEND", "avatar": "/static/players/robot_avatar.webp"},
+    {"name": "Ceiling Chasers", "handle": "@CeilingChasers", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
 ]
 
 
@@ -167,8 +181,7 @@ def ensure_defenses_exist(cur):
         cur.execute("""
             INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating)
             VALUES (%s, %s, %s, 'DEF', 28, 83)
-            ON CONFLICT (player_id, season) DO UPDATE
-            SET position = 'DEF', team_id = EXCLUDED.team_id
+            ON CONFLICT (player_id, season) DO NOTHING
         """, (p_id, tm["id"], prev_season))
 
         for wk in range(1, 15):
@@ -656,6 +669,85 @@ def randomize_draft_order(draft_id: int, keep_user_slot: bool = False) -> Dict[s
     return get_draft_state(draft_id)
 
 
+def set_draft_order(
+    draft_id: int,
+    slot_order: Optional[List[int]] = None,
+    teams: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """Manually sets the draft order for all teams in a pending draft."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM napper_drafts WHERE id = %s", (draft_id,))
+            draft = cur.fetchone()
+            if not draft:
+                raise ValueError(f"Draft {draft_id} not found")
+            if draft["status"] != "PENDING":
+                raise ValueError("Cannot set draft order after draft has started")
+
+            teams_count = draft["teams_count"]
+            settings = draft["settings"] or {}
+            old_teams_info = settings.get("teams_info", [])
+            old_by_slot = {t["slot_num"]: t for t in old_teams_info}
+
+            new_teams_info = []
+            if teams is not None:
+                if len(teams) != teams_count:
+                    raise ValueError(f"teams list must contain exactly {teams_count} teams, got {len(teams)}")
+                for idx, tm in enumerate(teams):
+                    s_num = idx + 1
+                    tm_copy = dict(tm)
+                    tm_copy["slot_num"] = s_num
+                    new_teams_info.append(tm_copy)
+            elif slot_order is not None:
+                if len(slot_order) != teams_count:
+                    raise ValueError(f"slot_order must contain {teams_count} slots, got {len(slot_order)}")
+                if sorted(slot_order) != list(range(1, teams_count + 1)):
+                    raise ValueError(f"slot_order must be a permutation of slots 1 to {teams_count}")
+                for new_slot, old_slot in enumerate(slot_order, start=1):
+                    tm = dict(old_by_slot.get(old_slot, {}))
+                    tm["slot_num"] = new_slot
+                    new_teams_info.append(tm)
+            else:
+                raise ValueError("Either slot_order or teams must be provided")
+
+            # Determine user_slot from the team where is_user is True (or persona is 'USER')
+            user_meta = next((t for t in new_teams_info if t.get("is_user") or t.get("persona") == "USER"), None)
+            new_user_slot = user_meta["slot_num"] if user_meta else draft["user_slot"]
+
+            # Ensure is_user is properly marked
+            for tm in new_teams_info:
+                tm["is_user"] = (tm["slot_num"] == new_user_slot)
+
+            new_teams_info.sort(key=lambda x: x["slot_num"])
+            settings["teams_info"] = new_teams_info
+
+            # Update napper_drafts
+            cur.execute("""
+                UPDATE napper_drafts
+                SET user_slot = %s, settings = %s
+                WHERE id = %s
+            """, (new_user_slot, psycopg.types.json.Jsonb(settings), draft_id))
+
+            # Update napper_draft_picks
+            slot_by_num = {t["slot_num"]: t for t in new_teams_info}
+            for s_num, t_meta in slot_by_num.items():
+                cur.execute("""
+                    UPDATE napper_draft_picks
+                    SET picked_by = %s, team_name = %s, team_id = %s
+                    WHERE draft_id = %s AND slot_num = %s
+                """, (
+                    "USER" if s_num == new_user_slot else "AI",
+                    t_meta.get("team_name"),
+                    t_meta.get("team_id"),
+                    draft_id,
+                    s_num
+                ))
+
+        conn.commit()
+
+    return get_draft_state(draft_id)
+
+
 def set_draft_archetypes(
     draft_id: int,
     archetype_composition: Optional[Dict[str, int]] = None,
@@ -821,6 +913,12 @@ def _generate_pick_commentary(
     if persona == "DIE_HARD":
         return f"Pure grit and veteran leadership. {player_name} brings championship DNA to this franchise at pick #{overall_pick}."
 
+    if persona == "TRADE_FIEND":
+        return f"Thrilled to lock down {player_name} at #{overall_pick}. Outstanding player, but my DMs are open if anyone wants to send trade offers right now."
+
+    if persona == "UNDERDOG":
+        return f"The entire league is sleeping on {player_name} at pick #{overall_pick}. Massive breakout ceiling incoming!"
+
     if is_steal:
         return f"Steal alert! {team_name} snags {player_name} at #{overall_pick} despite ADP #{adp_rank}."
     return f"{team_name} selects {player_name} ({position}) with the #{overall_pick} overall pick."
@@ -908,11 +1006,13 @@ def make_draft_pick(draft_id: int, player_id: int, picked_by: str = "USER") -> D
 
             # Post chat message if real league draft
             if draft["league_id"]:
-                chat_text = f"Round {active_pick['round_num']}, Pick {active_pick['pick_num']} (#{current_pick}): {active_pick['team_name']} drafted {p_name} ({player['position']} - {player['team_abbr']})."
-                cur.execute("""
-                    INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text)
-                    VALUES (%s, 'SYSTEM_BOT', 'Draft Bot', '@DraftBot', '/static/players/robot_avatar.webp', %s)
-                """, (draft["league_id"], chat_text))
+                cur.execute("SELECT id FROM napper_leagues WHERE id = %s", (draft["league_id"],))
+                if cur.fetchone():
+                    chat_text = f"Round {active_pick['round_num']}, Pick {active_pick['pick_num']} (#{current_pick}): {active_pick['team_name']} drafted {p_name} ({player['position']} - {player['team_abbr']})."
+                    cur.execute("""
+                        INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text)
+                        VALUES (%s, 'SYSTEM_BOT', 'Draft Bot', '@DraftBot', '/static/players/robot_avatar.webp', %s)
+                    """, (draft["league_id"], chat_text))
 
             # Advance pick
             next_pick = current_pick + 1
@@ -1088,6 +1188,15 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                     score += random.uniform(-5.0, 10.0)
                     if cand.get("age", 25) >= 27:
                         score *= 1.1
+                elif persona == "TRADE_FIEND":
+                    if adp < current_pick:
+                        score += (current_pick - adp) * 4.5
+                    if cand.get("projected_points", 0) > 200.0:
+                        score *= 1.12
+                elif persona == "UNDERDOG":
+                    if cand.get("age", 25) <= 24:
+                        score *= 1.25
+                    score += random.uniform(-5.0, 15.0)
 
                 if score > best_score:
                     best_score = score

@@ -51,6 +51,8 @@ class LeagueCreateRequest(BaseModel):
     status: str = "IN_SEASON"
     is_superflex: bool = True
     avatar_url: Optional[str] = None
+    archetype_preset: Optional[str] = None
+    archetype_composition: Optional[Dict[str, int]] = None
 
 
 class LineupSwap(BaseModel):
@@ -109,6 +111,11 @@ class RandomizeOrderRequest(BaseModel):
 class SetArchetypesRequest(BaseModel):
     archetype_composition: Optional[Dict[str, int]] = None
     archetypes: Optional[List[str]] = None
+
+
+class SetDraftOrderRequest(BaseModel):
+    slot_order: Optional[List[int]] = None
+    teams: Optional[List[Dict[str, Any]]] = None
 
 
 class ClaimSlotRequest(BaseModel):
@@ -443,24 +450,66 @@ def create_league(req: LeagueCreateRequest):
             ))
             user_team_id = cur.fetchone()["id"]
 
-            # 5. Create AI Teams
-            AI_CANDIDATES = [
-                {"name": "Team Rocket", "handle": "jesse_james", "persona": "TRASH_TALKER", "w": 4, "l": 1, "pf": 712.5, "pa": 645.0, "seed": 2},
-                {"name": "Gotham Rogues", "handle": "bruce_w", "persona": "ANALYTICS_NERD", "w": 3, "l": 2, "pf": 654.2, "pa": 620.1, "seed": 3},
-                {"name": "Metropolis Titans", "handle": "clark_k", "persona": "DIE_HARD", "w": 3, "l": 2, "pf": 641.8, "pa": 632.5, "seed": 4},
-                {"name": "Asgard Hammers", "handle": "thor_o", "persona": "WAIVER_HAWK", "w": 2, "l": 3, "pf": 592.1, "pa": 651.4, "seed": 5},
-                {"name": "Central City Streaks", "handle": "barry_a", "persona": "ZERO_RB_ZEALOT", "w": 2, "l": 3, "pf": 583.4, "pa": 662.0, "seed": 6},
-                {"name": "Starling Archers", "handle": "oliver_q", "persona": "TRASH_TALKER", "w": 1, "l": 4, "pf": 542.0, "pa": 681.3, "seed": 7},
-                {"name": "Wakanda Panthers", "handle": "tchalla", "persona": "DIE_HARD", "w": 0, "l": 5, "pf": 511.9, "pa": 720.5, "seed": 8},
-                {"name": "Atlantis Tridents", "handle": "arthur_c", "persona": "WAIVER_HAWK", "w": 3, "l": 2, "pf": 660.0, "pa": 640.0, "seed": 9},
-                {"name": "The Daily Planet", "handle": "lois_l", "persona": "ANALYTICS_NERD", "w": 2, "l": 3, "pf": 640.0, "pa": 660.0, "seed": 10},
-                {"name": "Stark Industries", "handle": "tony_s", "persona": "TRASH_TALKER", "w": 4, "l": 1, "pf": 720.0, "pa": 630.0, "seed": 11},
-                {"name": "X-Men First Class", "handle": "charles_x", "persona": "DIE_HARD", "w": 1, "l": 4, "pf": 595.0, "pa": 700.0, "seed": 12},
-            ]
+            # 5. Create AI Teams using the 8 canonical manager archetypes
+            archetype_composition = req.archetype_composition
+            if not archetype_composition and req.archetype_preset:
+                preset_lower = req.archetype_preset.lower()
+                ai_slots = teams_count - 1
+                if "trader" in preset_lower or "trade" in preset_lower:
+                    archetype_composition = {
+                        "TRADE_FIEND": max(1, round(ai_slots * 0.45)),
+                        "ANALYTICS_NERD": max(1, round(ai_slots * 0.25)),
+                        "WAIVER_HAWK": 1,
+                        "HERO_RB": 1,
+                    }
+                elif "sleeper" in preset_lower or "underdog" in preset_lower:
+                    archetype_composition = {
+                        "UNDERDOG": max(1, round(ai_slots * 0.45)),
+                        "ZERO_RB_ZEALOT": max(1, round(ai_slots * 0.25)),
+                        "HERO_RB": 1,
+                        "ANALYTICS_NERD": 1,
+                    }
+                elif "zero" in preset_lower:
+                    archetype_composition = {
+                        "ZERO_RB_ZEALOT": max(1, round(ai_slots * 0.55)),
+                        "ANALYTICS_NERD": 1,
+                        "UNDERDOG": 1,
+                        "HERO_RB": 1,
+                    }
+                elif "hero" in preset_lower:
+                    archetype_composition = {
+                        "HERO_RB": max(1, round(ai_slots * 0.55)),
+                        "ZERO_RB_ZEALOT": 1,
+                        "ANALYTICS_NERD": 1,
+                        "TRADE_FIEND": 1,
+                    }
+                elif "chaos" in preset_lower or "trash" in preset_lower:
+                    archetype_composition = {
+                        "TRASH_TALKER": max(1, round(ai_slots * 0.45)),
+                        "DIE_HARD": max(1, round(ai_slots * 0.35)),
+                        "TRADE_FIEND": 1,
+                    }
+                elif "analytics" in preset_lower:
+                    archetype_composition = {
+                        "ANALYTICS_NERD": max(1, round(ai_slots * 0.55)),
+                        "ZERO_RB_ZEALOT": 1,
+                        "TRADE_FIEND": 1,
+                        "HERO_RB": 1,
+                    }
+
+            ai_managers = napper_draft_engine.build_ai_managers(
+                teams_count=teams_count,
+                archetype_composition=archetype_composition,
+            )
 
             team_ids = [user_team_id]
-            for i in range(teams_count - 1):
-                cand = AI_CANDIDATES[i % len(AI_CANDIDATES)]
+            for idx, cand in enumerate(ai_managers):
+                seed_num = idx + 2
+                w = max(0, 4 - (idx % 4)) if status == "IN_SEASON" else 0
+                l = (5 - w) if status == "IN_SEASON" else 0
+                pf = round(720.0 - (idx * 22.5), 1) if status == "IN_SEASON" else 0.0
+                pa = round(620.0 + (idx * 15.0), 1) if status == "IN_SEASON" else 0.0
+
                 cur.execute("""
                     INSERT INTO napper_teams (
                         league_id, user_id, team_name, manager_handle, avatar_url,
@@ -469,13 +518,9 @@ def create_league(req: LeagueCreateRequest):
                     RETURNING id
                 """, (
                     league_id, cand["name"], cand["handle"],
-                    f"https://api.dicebear.com/7.x/identicon/svg?seed={cand['name']}",
+                    cand.get("avatar") or f"https://api.dicebear.com/7.x/identicon/svg?seed={cand['name']}",
                     cand["persona"],
-                    cand["w"] if status == "IN_SEASON" else 0,
-                    cand["l"] if status == "IN_SEASON" else 0,
-                    cand["pf"] if status == "IN_SEASON" else 0.0,
-                    cand["pa"] if status == "IN_SEASON" else 0.0,
-                    cand["seed"]
+                    w, l, pf, pa, seed_num
                 ))
                 team_ids.append(cur.fetchone()["id"])
 
@@ -613,7 +658,7 @@ def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
                     players.append({
                         "id": p["id"],
                         "name": p["player_name"] or p["full_name"],
-                        "position": p["position"],
+                        "position": "RB" if p["position"] in ("HB", "RB", "FB") else p["position"],
                         "slot": p["slot"],
                         "proj_fpts": float(p["proj_fpts"]),
                         "headshot_url": f"/static/players/{p['id']}.webp",
@@ -716,7 +761,7 @@ def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
                     "player_id": pid,
                     "name": r["player_name"] or r["full_name"],
                     "full_name": r["full_name"] or r["player_name"],
-                    "position": r["position"] or "FLEX",
+                    "position": "RB" if r["position"] in ("HB", "RB", "FB") else (r["position"] or "FLEX"),
                     "slot": r.get("slot"),
                     "team": r["nfl_team"] or "NFL",
                     "opponent": "vs OPP",
@@ -1438,6 +1483,22 @@ def set_draft_archetypes(draft_id: int, req: SetArchetypesRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error updating archetypes in draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/set_order")
+def set_draft_order(draft_id: int, req: SetDraftOrderRequest):
+    """Sets custom draft order for all teams in a pending draft."""
+    try:
+        return napper_draft_engine.set_draft_order(
+            draft_id,
+            slot_order=req.slot_order,
+            teams=req.teams
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error setting draft order {draft_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
