@@ -32,6 +32,16 @@ def get_db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
+def get_previous_season(cur) -> int:
+    cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+    row = cur.fetchone()
+    if row:
+        cs = row["current_season"] if isinstance(row, dict) else row[0]
+        if cs:
+            return int(cs) - 1
+    return 2035
+
+
 # ──────────────────────────────── Models ────────────────────────────────
 
 class LeagueCreateRequest(BaseModel):
@@ -84,9 +94,21 @@ class ChatMessageRequest(BaseModel):
 class MockDraftCreateRequest(BaseModel):
     teams_count: int = 10
     scoring_type: str = "PPR"
-    user_slot: int = 1
+    user_slot: Optional[int] = None
     rounds: int = 15
     is_superflex: bool = True
+    randomize_user_slot: bool = True
+    archetype_composition: Optional[Dict[str, int]] = None
+    archetypes: Optional[List[str]] = None
+
+
+class RandomizeOrderRequest(BaseModel):
+    keep_user_slot: bool = False
+
+
+class SetArchetypesRequest(BaseModel):
+    archetype_composition: Optional[Dict[str, int]] = None
+    archetypes: Optional[List[str]] = None
 
 
 class ClaimSlotRequest(BaseModel):
@@ -376,6 +398,8 @@ def create_league(req: LeagueCreateRequest):
 
     with get_db() as conn:
         with conn.cursor() as cur:
+            prev_season = get_previous_season(cur)
+
             # 1. Remove seed leagues if any exist
             cur.execute("DELETE FROM napper_leagues WHERE is_seed = TRUE")
 
@@ -384,9 +408,9 @@ def create_league(req: LeagueCreateRequest):
                 INSERT INTO napper_leagues (
                     name, season, teams_count, scoring_type, roster_format,
                     status, avatar_url, current_week, is_seed
-                ) VALUES (%s, 2035, %s, %s, %s, %s, %s, %s, FALSE)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, FALSE)
                 RETURNING id, name, season, teams_count, scoring_type, status, current_week, avatar_url
-            """, (name, teams_count, scoring_type, psycopg.types.json.Jsonb(roster_format), status, avatar, current_week))
+            """, (name, prev_season, teams_count, scoring_type, psycopg.types.json.Jsonb(roster_format), status, avatar, current_week))
             new_league = cur.fetchone()
             league_id = new_league["id"]
 
@@ -460,10 +484,10 @@ def create_league(req: LeagueCreateRequest):
                 cur.execute("""
                     SELECT p.id, p.player_name, ps.position
                     FROM players p
-                    JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                    JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     ORDER BY p.id ASC
                     LIMIT 300
-                """)
+                """, (prev_season,))
                 avail = cur.fetchall()
 
                 pos_pools = defaultdict(list)
@@ -571,6 +595,7 @@ def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
             """, (league_id,))
             teams = cur.fetchall()
 
+            prev_season = get_previous_season(cur)
             teams_data = []
             for tm in teams:
                 cur.execute("""
@@ -578,11 +603,11 @@ def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
                            nr.slot, COALESCE(fp.projected_points, 10.0) as proj_fpts
                     FROM napper_rosters nr
                     JOIN players p ON p.id = nr.player_id
-                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
-                    LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = 2035
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                    LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
                     WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s
                     ORDER BY nr.slot != 'BN' DESC, proj_fpts DESC
-                """, (wk, league_id, tm["id"], wk))
+                """, (prev_season, wk, prev_season, league_id, tm["id"], wk))
                 players = []
                 for p in cur.fetchall():
                     players.append({
@@ -661,6 +686,8 @@ def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
             left_team_meta = teams_map.get(left_team_id, {})
             right_team_meta = teams_map.get(right_team_id, {})
 
+            prev_season = get_previous_season(cur)
+
             # Query rosters for both teams in this week
             cur.execute("""
                 SELECT nr.team_id, nr.slot, nr.player_id, p.player_name, p.full_name, p.espn_id,
@@ -669,11 +696,11 @@ def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
                        COALESCE(fp.projected_points, 12.0) as proj_pts
                 FROM napper_rosters nr
                 JOIN players p ON p.id = nr.player_id
-                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                 LEFT JOIN teams t ON t.id = ps.team_id
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = 2035
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
                 WHERE nr.league_id = %s AND nr.week = %s AND nr.team_id IN (%s, %s)
-            """, (wk, league_id, wk, left_team_id, right_team_id))
+            """, (prev_season, wk, prev_season, league_id, wk, left_team_id, right_team_id))
             roster_rows = cur.fetchall()
 
             left_roster = [r for r in roster_rows if r["team_id"] == left_team_id]
@@ -811,13 +838,15 @@ def update_lineup(league_id: int, req: LineupRequest):
             if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Team not found in this league")
 
+            prev_season = get_previous_season(cur)
+
             # 3. Fetch current team roster for this week
             cur.execute("""
                 SELECT nr.player_id, nr.slot, COALESCE(ps.position, 'FLEX') as position
                 FROM napper_rosters nr
-                LEFT JOIN player_seasons ps ON ps.player_id = nr.player_id AND ps.season = 2035
+                LEFT JOIN player_seasons ps ON ps.player_id = nr.player_id AND ps.season = %s
                 WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s
-            """, (league_id, req.team_id, wk))
+            """, (prev_season, league_id, req.team_id, wk))
             current_roster = cur.fetchall()
             if not current_roster:
                 raise HTTPException(status_code=400, detail=f"No roster found for team {req.team_id} in week {wk}")
@@ -881,9 +910,9 @@ def update_lineup(league_id: int, req: LineupRequest):
             cur.execute("""
                 SELECT COALESCE(SUM(fp.projected_points), 0.0) as new_proj
                 FROM napper_rosters nr
-                JOIN fantasy_projections fp ON fp.player_id = nr.player_id AND fp.week = %s AND fp.season = 2035
+                JOIN fantasy_projections fp ON fp.player_id = nr.player_id AND fp.week = %s AND fp.season = %s
                 WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s AND nr.slot != 'BN'
-            """, (wk, league_id, req.team_id, wk))
+            """, (wk, prev_season, league_id, req.team_id, wk))
             new_proj_val = float(cur.fetchone()["new_proj"] or 0.0)
 
             # Update matchup projections if available
@@ -923,6 +952,8 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
             lg = cur.fetchone()
             wk = lg["current_week"] if lg else 6
 
+            prev_season = get_previous_season(cur)
+
             # Query all players not currently rostered in this league for this week
             sql = """
                 SELECT p.id as player_id, p.player_name, p.full_name, ps.position,
@@ -932,14 +963,14 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
                        COALESCE(fp.matchup_stars, 3) as matchup_stars,
                        COALESCE(t.abbreviation, 'NFL') as team_abbr
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                 LEFT JOIN teams t ON t.id = ps.team_id
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = 2035
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
                 WHERE p.id NOT IN (
                     SELECT player_id FROM napper_rosters WHERE league_id = %s AND week = %s
                 )
             """
-            params = [wk, league_id, wk]
+            params = [prev_season, wk, prev_season, league_id, wk]
             if position and position != "ALL":
                 sql += " AND ps.position = %s"
                 params.append(position)
@@ -1098,14 +1129,15 @@ def get_trades(league_id: int):
 
             players_map = {}
             if all_pids:
+                prev_season = get_previous_season(cur)
                 cur.execute("""
                     SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
                            COALESCE(fp.projected_points, 12.0) as proj
                     FROM players p
-                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
-                    LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = 6 AND fp.season = 2035
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                    LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = 6 AND fp.season = %s
                     WHERE p.id = ANY(%s)
-                """, (list(all_pids),))
+                """, (prev_season, prev_season, list(all_pids)))
                 for p in cur.fetchall():
                     players_map[p["id"]] = {
                         "id": p["id"],
@@ -1368,12 +1400,44 @@ def create_mock_draft(req: MockDraftCreateRequest):
             user_slot=req.user_slot,
             rounds=req.rounds,
             is_mock=True,
+            archetype_composition=req.archetype_composition,
+            archetypes=req.archetypes,
+            randomize_user_slot=req.randomize_user_slot,
             settings={"is_superflex": req.is_superflex}
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating mock draft: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/randomize_order")
+def randomize_draft_order(draft_id: int, req: Optional[RandomizeOrderRequest] = None):
+    """Randomizes the draft slot order and optionally user slot in a pending draft."""
+    try:
+        keep_user = req.keep_user_slot if req else False
+        return napper_draft_engine.randomize_draft_order(draft_id, keep_user_slot=keep_user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error randomizing draft order {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/set_archetypes")
+def set_draft_archetypes(draft_id: int, req: SetArchetypesRequest):
+    """Updates the AI archetype composition for a pending draft."""
+    try:
+        return napper_draft_engine.set_draft_archetypes(
+            draft_id,
+            archetype_composition=req.archetype_composition,
+            archetypes=req.archetypes
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating archetypes in draft {draft_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1484,8 +1548,9 @@ def get_available_players(
     """Returns available players ordered by ADP, with bye, age, ros_pct, projections, rush/rec stats, and draft count."""
     with get_db() as conn:
         with conn.cursor() as cur:
+            prev_season = get_previous_season(cur)
             where_clauses = []
-            params: Dict[str, Any] = {"limit": limit, "offset": offset}
+            params: Dict[str, Any] = {"limit": limit, "offset": offset, "prev_season": prev_season}
 
             if draft_id > 0:
                 cur.execute("SELECT id FROM napper_drafts WHERE id = %s", (draft_id,))
@@ -1516,7 +1581,7 @@ def get_available_players(
             cur.execute(f"""
                 SELECT COUNT(DISTINCT p.id) as total
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %(prev_season)s
                 WHERE {where_sql}
             """, params)
             total = cur.fetchone()["total"]
@@ -1538,10 +1603,10 @@ def get_available_players(
                        COALESCE(ss.rec_tds, 0) as rec_tds,
                        (SELECT COUNT(*) FROM napper_draft_picks ndp WHERE ndp.player_id = p.id) as draft_count
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %(prev_season)s
                 LEFT JOIN teams t ON t.id = ps.team_id
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
-                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %(prev_season)s AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %(prev_season)s
                 WHERE {where_sql}
                 ORDER BY COALESCE(fp.adp_rank, 999) ASC, ss.total_fantasy_points DESC NULLS LAST, p.id ASC
                 LIMIT %(limit)s OFFSET %(offset)s

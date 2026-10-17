@@ -31,6 +31,61 @@ def get_db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
+def get_previous_season(cur) -> int:
+    cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+    row = cur.fetchone()
+    if row:
+        cs = row["current_season"] if isinstance(row, dict) else row[0]
+        if cs:
+            return int(cs) - 1
+    return 2035
+
+
+ARCHETYPE_MANAGERS = {
+    "ZERO_RB_ZEALOT": [
+        {"name": "Zero-RB Theory", "handle": "@ZeroHero", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "PPR Machines", "handle": "@PPRGod", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Air Raid Society", "handle": "@AirRaidHQ", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Late Round RB Lab", "handle": "@LateBacks", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Target Monster", "handle": "@TargetShare", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "HERO_RB": [
+        {"name": "Hero RB Squad", "handle": "@AnchorBack", "persona": "HERO_RB", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Robust RB Lab", "handle": "@BellCowBros", "persona": "HERO_RB", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Workhorse Dynasty", "handle": "@Workhorse", "persona": "HERO_RB", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Ground & Pound", "handle": "@HeavyTrench", "persona": "HERO_RB", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Bellcow Believers", "handle": "@BellcowBros", "persona": "HERO_RB", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "ANALYTICS_NERD": [
+        {"name": "Data Analytics", "handle": "@DataDog", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "VORP Machine", "handle": "@QuantKing", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Draft Board Wizards", "handle": "@ScoutMaster", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Regression Models", "handle": "@StatSigma", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Expected Points HQ", "handle": "@xFP_Metrics", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "TRASH_TALKER": [
+        {"name": "Gridiron Dominance", "handle": "@Champ2035", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Smashmouth Crew", "handle": "@HeavyHitter", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Trophy Chasers", "handle": "@RingCollector", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "No Fear Fantasy", "handle": "@SwaggerKing", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Scoreboard Watchers", "handle": "@CheckTheBoard", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "WAIVER_HAWK": [
+        {"name": "Waiver Wire Kings", "handle": "@WireHawk", "persona": "WAIVER_HAWK", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "FAAB Bidding Lab", "handle": "@FAABMaxer", "persona": "WAIVER_HAWK", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Depth Hoarders", "handle": "@BenchDepth", "persona": "WAIVER_HAWK", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Midnight Churners", "handle": "@WaiverNinja", "persona": "WAIVER_HAWK", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Upside Lottery Co", "handle": "@HandcuffLotto", "persona": "WAIVER_HAWK", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+    "DIE_HARD": [
+        {"name": "Franchise DieHards", "handle": "@DieHardFan", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Sunday Loyalty", "handle": "@BleedColors", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Legacy Believers", "handle": "@OldSchoolGrit", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Eye Test Only", "handle": "@FilmRoomEye", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Hometown Heroes", "handle": "@CivicPride", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
+    ],
+}
+
 DEFAULT_MOCK_MANAGERS = [
     {"name": "Zero-RB Theory", "handle": "@ZeroHero", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Data Analytics", "handle": "@DataDog", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
@@ -44,6 +99,49 @@ DEFAULT_MOCK_MANAGERS = [
     {"name": "PPR Machines", "handle": "@PPRGod", "persona": "ZERO_RB_ZEALOT", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Draft Board Wizards", "handle": "@ScoutMaster", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
 ]
+
+
+def build_ai_managers(
+    teams_count: int,
+    archetype_composition: Optional[Dict[str, int]] = None,
+    archetypes: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Builds a customized list of AI managers based on desired archetype composition."""
+    ai_slots = teams_count - 1
+    selected_personas: List[str] = []
+
+    if archetypes and len(archetypes) > 0:
+        selected_personas = list(archetypes)[:ai_slots]
+    elif archetype_composition and sum(archetype_composition.values()) > 0:
+        for persona, count in archetype_composition.items():
+            if persona in ARCHETYPE_MANAGERS:
+                selected_personas.extend([persona] * max(0, int(count)))
+        selected_personas = selected_personas[:ai_slots]
+
+    # Fill any remaining slots with a balanced round-robin
+    canonical_personas = list(ARCHETYPE_MANAGERS.keys())
+    idx = 0
+    while len(selected_personas) < ai_slots:
+        selected_personas.append(canonical_personas[idx % len(canonical_personas)])
+        idx += 1
+
+    # Map each chosen persona to an AI manager template
+    managers: List[Dict[str, Any]] = []
+    used_indices: Dict[str, int] = defaultdict(int)
+
+    for persona in selected_personas:
+        pool = ARCHETYPE_MANAGERS.get(persona, ARCHETYPE_MANAGERS["ANALYTICS_NERD"])
+        use_idx = used_indices[persona] % len(pool)
+        used_indices[persona] += 1
+        m = pool[use_idx]
+        managers.append({
+            "name": m["name"],
+            "handle": m["handle"],
+            "persona": m["persona"],
+            "avatar": m.get("avatar", "/static/players/robot_avatar.webp"),
+        })
+
+    return managers
 
 
 def ensure_defenses_exist(cur):
@@ -65,33 +163,49 @@ def ensure_defenses_exist(cur):
         else:
             p_id = row["id"]
 
+        prev_season = get_previous_season(cur)
         cur.execute("""
             INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating)
-            VALUES (%s, %s, 2035, 'DEF', 28, 83)
+            VALUES (%s, %s, %s, 'DEF', 28, 83)
             ON CONFLICT (player_id, season) DO UPDATE
             SET position = 'DEF', team_id = EXCLUDED.team_id
-        """, (p_id, tm["id"]))
+        """, (p_id, tm["id"], prev_season))
 
         for wk in range(1, 15):
             cur.execute("""
                 INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position, adp_rank)
-                VALUES (2035, %s, %s, %s, %s, 7.5, 'DEF', %s)
+                VALUES (%s, %s, %s, %s, %s, 7.5, 'DEF', %s)
                 ON CONFLICT DO NOTHING
-            """, (wk, p_id, p_name, tm["id"], 140 + tm["id"]))
+            """, (prev_season, wk, p_id, p_name, tm["id"], 140 + tm["id"]))
 
 
 def create_draft_session(
     league_id: Optional[int] = None,
     teams_count: int = 10,
     scoring_type: str = "PPR",
-    user_slot: int = 1,
+    user_slot: Optional[int] = None,
     rounds: int = 15,
     is_mock: bool = True,
+    archetype_composition: Optional[Dict[str, int]] = None,
+    archetypes: Optional[List[str]] = None,
+    randomize_user_slot: bool = True,
     settings: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Initializes a new draft session and pre-populates all snake pick slots."""
     if settings is None:
         settings = {}
+
+    if archetype_composition:
+        settings["archetype_composition"] = archetype_composition
+
+    # Randomize user slot by default for mock drafts if not explicitly pinned
+    if league_id is None and is_mock:
+        if user_slot is None:
+            user_slot = random.randint(1, teams_count)
+        else:
+            user_slot = max(1, min(teams_count, int(user_slot)))
+    else:
+        user_slot = user_slot or 1
 
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -167,6 +281,15 @@ def create_draft_session(
                 u_name = "The Straw Hat Pirates"
                 u_avatar = prof["avatar_url"] if prof else "/static/players/robot_avatar.webp"
 
+                # Build customized AI managers according to chosen archetype composition
+                ai_managers = build_ai_managers(
+                    teams_count=teams_count,
+                    archetype_composition=archetype_composition,
+                    archetypes=archetypes
+                )
+                # Shuffle AI managers so no two drafts have the exact same order
+                random.shuffle(ai_managers)
+
                 ai_idx = 0
                 for s in range(1, teams_count + 1):
                     if s == user_slot:
@@ -180,7 +303,7 @@ def create_draft_session(
                             "is_user": True,
                         })
                     else:
-                        ai_m = DEFAULT_MOCK_MANAGERS[ai_idx % len(DEFAULT_MOCK_MANAGERS)]
+                        ai_m = ai_managers[ai_idx]
                         ai_idx += 1
                         teams_info.append({
                             "slot_num": s,
@@ -194,16 +317,19 @@ def create_draft_session(
 
             settings["teams_info"] = teams_info
 
+            prev_season = get_previous_season(cur)
+
             # Insert draft record
             cur.execute("""
                 INSERT INTO napper_drafts (
                     league_id, season, rounds, teams_count, scoring_type,
                     status, current_round, current_pick, is_mock, user_slot, settings
-                ) VALUES (%s, 2035, %s, %s, %s, 'PENDING', 1, 1, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, 'PENDING', 1, 1, %s, %s, %s)
                 RETURNING id, league_id, season, rounds, teams_count, scoring_type,
                           status, current_round, current_pick, is_mock, user_slot, settings, created_at
             """, (
                 league_id,
+                prev_season,
                 rounds,
                 teams_count,
                 scoring_type,
@@ -268,6 +394,8 @@ def get_draft_state(draft_id: int) -> Dict[str, Any]:
             settings = draft["settings"] or {}
             teams_info = settings.get("teams_info", [])
 
+            prev_season = get_previous_season(cur)
+
             # Fetch all picks with drafted player details
             cur.execute("""
                 SELECT dp.id, dp.round_num, dp.pick_num, dp.overall_pick, dp.slot_num,
@@ -279,13 +407,13 @@ def get_draft_state(draft_id: int) -> Dict[str, Any]:
                        COALESCE(fp.adp_rank, 150) as adp_rank
                 FROM napper_draft_picks dp
                 LEFT JOIN players p ON p.id = dp.player_id
-                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                 LEFT JOIN teams t ON t.id = ps.team_id
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
-                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
                 WHERE dp.draft_id = %s
                 ORDER BY dp.overall_pick ASC
-            """, (draft_id,))
+            """, (prev_season, prev_season, prev_season, draft_id))
             raw_picks = cur.fetchall()
 
             drafted_player_ids = set()
@@ -442,6 +570,180 @@ def claim_slot(draft_id: int, new_slot: int) -> Dict[str, Any]:
     return get_draft_state(draft_id)
 
 
+def randomize_draft_order(draft_id: int, keep_user_slot: bool = False) -> Dict[str, Any]:
+    """Randomizes the draft slot order and optionally user slot in a pending draft."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM napper_drafts WHERE id = %s", (draft_id,))
+            draft = cur.fetchone()
+            if not draft:
+                raise ValueError(f"Draft {draft_id} not found")
+            if draft["status"] != "PENDING":
+                raise ValueError("Cannot randomize draft order after draft has started")
+
+            teams_count = draft["teams_count"]
+            old_user_slot = draft["user_slot"]
+            settings = draft["settings"] or {}
+            teams_info = settings.get("teams_info", [])
+
+            user_meta = next((t for t in teams_info if t.get("is_user")), None)
+            ai_metas = [t for t in teams_info if not t.get("is_user")]
+
+            if not user_meta:
+                user_meta = {
+                    "slot_num": old_user_slot,
+                    "team_id": None,
+                    "team_name": "The Straw Hat Pirates",
+                    "manager_handle": "@jrereyi2000",
+                    "persona": "USER",
+                    "avatar_url": "/static/players/robot_avatar.webp",
+                    "is_user": True,
+                }
+
+            # Determine new user slot
+            if keep_user_slot:
+                new_user_slot = old_user_slot
+            else:
+                available_slots = list(range(1, teams_count + 1))
+                if len(available_slots) > 1 and old_user_slot in available_slots:
+                    available_slots.remove(old_user_slot)
+                new_user_slot = random.choice(available_slots)
+
+            # Shuffle AI managers across the other slots
+            random.shuffle(ai_metas)
+
+            new_teams_info = []
+            ai_idx = 0
+            for s in range(1, teams_count + 1):
+                if s == new_user_slot:
+                    user_meta["slot_num"] = s
+                    user_meta["is_user"] = True
+                    new_teams_info.append(user_meta)
+                else:
+                    tm = ai_metas[ai_idx] if ai_idx < len(ai_metas) else DEFAULT_MOCK_MANAGERS[ai_idx % len(DEFAULT_MOCK_MANAGERS)]
+                    ai_idx += 1
+                    tm["slot_num"] = s
+                    tm["is_user"] = False
+                    new_teams_info.append(tm)
+
+            new_teams_info.sort(key=lambda x: x["slot_num"])
+            settings["teams_info"] = new_teams_info
+
+            # Update napper_drafts
+            cur.execute("""
+                UPDATE napper_drafts
+                SET user_slot = %s, settings = %s
+                WHERE id = %s
+            """, (new_user_slot, psycopg.types.json.Jsonb(settings), draft_id))
+
+            # Update napper_draft_picks
+            slot_by_num = {t["slot_num"]: t for t in new_teams_info}
+            for s_num, t_meta in slot_by_num.items():
+                cur.execute("""
+                    UPDATE napper_draft_picks
+                    SET picked_by = %s, team_name = %s, team_id = %s
+                    WHERE draft_id = %s AND slot_num = %s
+                """, (
+                    "USER" if s_num == new_user_slot else "AI",
+                    t_meta.get("team_name"),
+                    t_meta.get("team_id"),
+                    draft_id,
+                    s_num
+                ))
+
+        conn.commit()
+
+    return get_draft_state(draft_id)
+
+
+def set_draft_archetypes(
+    draft_id: int,
+    archetype_composition: Optional[Dict[str, int]] = None,
+    archetypes: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Updates AI team archetypes and managers for a pending mock draft."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM napper_drafts WHERE id = %s", (draft_id,))
+            draft = cur.fetchone()
+            if not draft:
+                raise ValueError(f"Draft {draft_id} not found")
+            if draft["status"] != "PENDING":
+                raise ValueError("Cannot change archetypes after draft has started")
+
+            teams_count = draft["teams_count"]
+            user_slot = draft["user_slot"]
+            settings = draft["settings"] or {}
+            teams_info = settings.get("teams_info", [])
+
+            user_meta = next((t for t in teams_info if t.get("is_user")), None)
+            if not user_meta:
+                user_meta = {
+                    "slot_num": user_slot,
+                    "team_id": None,
+                    "team_name": "The Straw Hat Pirates",
+                    "manager_handle": "@jrereyi2000",
+                    "persona": "USER",
+                    "avatar_url": "/static/players/robot_avatar.webp",
+                    "is_user": True,
+                }
+
+            new_ai_managers = build_ai_managers(
+                teams_count=teams_count,
+                archetype_composition=archetype_composition,
+                archetypes=archetypes
+            )
+            random.shuffle(new_ai_managers)
+
+            new_teams_info = []
+            ai_idx = 0
+            for s in range(1, teams_count + 1):
+                if s == user_slot:
+                    user_meta["slot_num"] = s
+                    user_meta["is_user"] = True
+                    new_teams_info.append(user_meta)
+                else:
+                    tm = new_ai_managers[ai_idx]
+                    ai_idx += 1
+                    new_teams_info.append({
+                        "slot_num": s,
+                        "team_id": None,
+                        "team_name": tm["name"],
+                        "manager_handle": tm["handle"],
+                        "persona": tm["persona"],
+                        "avatar_url": tm["avatar"],
+                        "is_user": False,
+                    })
+
+            new_teams_info.sort(key=lambda x: x["slot_num"])
+            settings["teams_info"] = new_teams_info
+            if archetype_composition:
+                settings["archetype_composition"] = archetype_composition
+
+            cur.execute("""
+                UPDATE napper_drafts
+                SET settings = %s
+                WHERE id = %s
+            """, (psycopg.types.json.Jsonb(settings), draft_id))
+
+            for tm in new_teams_info:
+                cur.execute("""
+                    UPDATE napper_draft_picks
+                    SET picked_by = %s, team_name = %s, team_id = %s
+                    WHERE draft_id = %s AND slot_num = %s
+                """, (
+                    "USER" if tm["slot_num"] == user_slot else "AI",
+                    tm.get("team_name"),
+                    tm.get("team_id"),
+                    draft_id,
+                    tm["slot_num"]
+                ))
+
+        conn.commit()
+
+    return get_draft_state(draft_id)
+
+
 def start_draft(draft_id: int) -> Dict[str, Any]:
     """Transitions a draft from PENDING to IN_PROGRESS."""
     with get_db() as conn:
@@ -513,6 +815,12 @@ def _generate_pick_commentary(
             return f"Rankings are for cowards. {player_name} is going to dominate the entire league this year. Good luck stopping us."
         return f"Thanks for letting {player_name} fall to me. You all just handed me the championship."
 
+    if persona == "WAIVER_HAWK":
+        return f"Target volume and versatile snaps secured. {player_name} fits my roster depth perfectly at pick #{overall_pick}."
+
+    if persona == "DIE_HARD":
+        return f"Pure grit and veteran leadership. {player_name} brings championship DNA to this franchise at pick #{overall_pick}."
+
     if is_steal:
         return f"Steal alert! {team_name} snags {player_name} at #{overall_pick} despite ADP #{adp_rank}."
     return f"{team_name} selects {player_name} ({position}) with the #{overall_pick} overall pick."
@@ -555,6 +863,7 @@ def make_draft_pick(draft_id: int, player_id: int, picked_by: str = "USER") -> D
             if not active_pick:
                 raise ValueError(f"No active pick found for overall #{current_pick}")
 
+            prev_season = get_previous_season(cur)
             # Get player info
             cur.execute("""
                 SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
@@ -563,12 +872,12 @@ def make_draft_pick(draft_id: int, player_id: int, picked_by: str = "USER") -> D
                        COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg,
                        COALESCE(fp.adp_rank, 150) as adp_rank
                 FROM players p
-                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                 LEFT JOIN teams t ON t.id = ps.team_id
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
-                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
                 WHERE p.id = %s
-            """, (player_id,))
+            """, (prev_season, prev_season, prev_season, player_id))
             player = cur.fetchone()
             if not player:
                 raise ValueError(f"Player {player_id} not found")
@@ -663,14 +972,16 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
             persona = team_meta.get("persona", "AI")
             is_superflex = settings.get("is_superflex", True)
 
+            prev_season = get_previous_season(cur)
+
             # Count positions already drafted by this team
             cur.execute("""
                 SELECT COALESCE(ps.position, 'FLEX') as pos, COUNT(*) as cnt
                 FROM napper_draft_picks dp
-                JOIN player_seasons ps ON ps.player_id = dp.player_id AND ps.season = 2035
+                JOIN player_seasons ps ON ps.player_id = dp.player_id AND ps.season = %s
                 WHERE dp.draft_id = %s AND dp.slot_num = %s AND dp.player_id IS NOT NULL
                 GROUP BY ps.position
-            """, (draft_id, slot_num))
+            """, (prev_season, draft_id, slot_num))
             pos_counts = {r["pos"]: r["cnt"] for r in cur.fetchall()}
 
             qb_cnt = pos_counts.get("QB", 0)
@@ -694,9 +1005,9 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                        COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
                        COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
-                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
                 WHERE p.id NOT IN (
                     SELECT player_id FROM napper_draft_picks
                     WHERE draft_id = %s AND player_id IS NOT NULL
@@ -704,7 +1015,7 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                 AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
                 ORDER BY COALESCE(fp.adp_rank, 200) ASC, ss.total_fantasy_points DESC NULLS LAST, projected_points DESC
                 LIMIT 100
-            """, (draft_id,))
+            """, (prev_season, prev_season, prev_season, draft_id))
             candidates = cur.fetchall()
 
             if not candidates:
@@ -766,6 +1077,17 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                         score += (current_pick - adp) * 4.0
                 elif persona == "TRASH_TALKER":
                     score += random.uniform(-10.0, 15.0)
+                    if cand.get("projected_points", 0) > 220.0:
+                        score *= 1.15
+                elif persona == "WAIVER_HAWK":
+                    if norm_pos in ("WR", "RB"):
+                        score += float(cand.get("ppg", 10.0)) * 2.0
+                    if curr_round >= 9 and norm_pos in ("RB", "WR"):
+                        score *= 1.25
+                elif persona == "DIE_HARD":
+                    score += random.uniform(-5.0, 10.0)
+                    if cand.get("age", 25) >= 27:
+                        score *= 1.1
 
                 if score > best_score:
                     best_score = score
@@ -826,6 +1148,8 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
             # Mark COMPLETED
             cur.execute("UPDATE napper_drafts SET status = 'COMPLETED' WHERE id = %s", (draft_id,))
 
+            prev_season = get_previous_season(cur)
+
             # Fetch all picks with drafted player info
             cur.execute("""
                 SELECT dp.overall_pick, dp.slot_num, dp.team_id, dp.team_name, dp.player_id,
@@ -835,12 +1159,12 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
                        COALESCE(fp.adp_rank, 150) as adp_rank
                 FROM napper_draft_picks dp
                 JOIN players p ON p.id = dp.player_id
-                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
-                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
+                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
                 WHERE dp.draft_id = %s AND dp.player_id IS NOT NULL
                 ORDER BY dp.overall_pick ASC
-            """, (draft_id,))
+            """, (prev_season, prev_season, prev_season, draft_id))
             picks = cur.fetchall()
 
             # Group by slot

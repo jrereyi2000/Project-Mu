@@ -477,3 +477,72 @@ def test_player_pool_season_2035_and_projections():
     assert p1["projections"]["pts"] > 0
 
 
+def test_mock_draft_archetype_composition_and_randomized_order():
+    """Tests creating mock drafts with custom archetype compositions, randomized slots, and claiming slots."""
+    # 1. Create a draft with a specific archetype composition: 4 ANALYTICS_NERD, 3 ZERO_RB_ZEALOT, 2 HERO_RB
+    custom_comp = {
+        "ANALYTICS_NERD": 4,
+        "ZERO_RB_ZEALOT": 3,
+        "HERO_RB": 2,
+    }
+    res = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 10,
+        "rounds": 5,
+        "archetype_composition": custom_comp,
+    })
+    assert res.status_code == 200
+    data = res.json()
+    draft_id = data["id"]
+
+    # Slot should be randomized between 1 and 10
+    user_slot = data["user_slot"]
+    assert 1 <= user_slot <= 10
+
+    # Teams should have the requested archetype composition
+    ai_teams = [t for t in data["teams"] if not t["is_user"]]
+    assert len(ai_teams) == 9
+
+    personas = [t["persona"] for t in ai_teams]
+    assert personas.count("ANALYTICS_NERD") == 4
+    assert personas.count("ZERO_RB_ZEALOT") == 3
+    assert personas.count("HERO_RB") == 2
+
+    # 2. Test randomizing draft order
+    rand_res = client.post(f"/api/napper/draft/{draft_id}/randomize_order", json={"keep_user_slot": False})
+    assert rand_res.status_code == 200
+    rand_data = rand_res.json()
+    new_user_slot = rand_data["user_slot"]
+    assert 1 <= new_user_slot <= 10
+
+    # Check picks reflect the updated user slot
+    user_picks = [p for p in rand_data["picks"] if p["slot_num"] == new_user_slot]
+    for up in user_picks:
+        assert up["picked_by"] == "USER"
+        assert up["team_name"] == "The Straw Hat Pirates"
+
+    # 3. Test changing archetype composition via endpoint
+    new_comp = {
+        "TRASH_TALKER": 4,
+        "WAIVER_HAWK": 3,
+        "DIE_HARD": 2,
+    }
+    arch_res = client.post(f"/api/napper/draft/{draft_id}/set_archetypes", json={"archetype_composition": new_comp})
+    assert arch_res.status_code == 200
+    arch_data = arch_res.json()
+    new_ai_teams = [t for t in arch_data["teams"] if not t["is_user"]]
+    new_personas = [t["persona"] for t in new_ai_teams]
+    assert new_personas.count("TRASH_TALKER") == 4
+    assert new_personas.count("WAIVER_HAWK") == 3
+    assert new_personas.count("DIE_HARD") == 2
+
+    # 4. User can still claim any slot after randomization
+    target_slot = 1 if new_user_slot != 1 else 10
+    claim_res = client.post(f"/api/napper/draft/{draft_id}/claim_slot", json={"slot": target_slot})
+    assert claim_res.status_code == 200
+    claimed_data = claim_res.json()
+    assert claimed_data["user_slot"] == target_slot
+    claimed_user_team = next(t for t in claimed_data["teams"] if t["slot_num"] == target_slot)
+    assert claimed_user_team["is_user"] is True
+
+
+

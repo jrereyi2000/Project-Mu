@@ -11,6 +11,8 @@ import DraftBoardGrid from "./DraftBoardGrid";
 import DraftPlayerPool from "./DraftPlayerPool";
 import DraftRosterQueue from "./DraftRosterQueue";
 import DraftRecapModal from "./DraftRecapModal";
+import ArchetypeCompositionModal, { ARCHETYPE_PRESETS } from "./ArchetypeCompositionModal";
+import { ARCHETYPE_METAS } from "../../../types/napper";
 import "./napperDraft.css";
 
 // Comprehensive Mock Player Dataset based on Season 2035 & NFL Consensus ADP
@@ -880,40 +882,139 @@ interface NapperDraftRoomProps {
   initialSlot?: number;
   onBack: () => void;
   onLeagueCreated?: (newLeagueId: number) => void;
+  onExitToMu?: () => void;
 }
 
+const MOCK_ARCHETYPE_TEAMS: Record<string, Array<{ name: string; handle: string; persona: string }>> = {
+  ZERO_RB_ZEALOT: [
+    { name: "Zero-RB Theory", handle: "@ZeroHero", persona: "ZERO_RB_ZEALOT" },
+    { name: "PPR Machines", handle: "@PPRGod", persona: "ZERO_RB_ZEALOT" },
+    { name: "Air Raid Society", handle: "@AirRaidHQ", persona: "ZERO_RB_ZEALOT" },
+    { name: "Late Round RB Lab", handle: "@LateBacks", persona: "ZERO_RB_ZEALOT" },
+    { name: "Target Monster", handle: "@TargetShare", persona: "ZERO_RB_ZEALOT" },
+  ],
+  HERO_RB: [
+    { name: "Hero RB Squad", handle: "@AnchorBack", persona: "HERO_RB" },
+    { name: "Robust RB Lab", handle: "@BellCowBros", persona: "HERO_RB" },
+    { name: "Workhorse Dynasty", handle: "@Workhorse", persona: "HERO_RB" },
+    { name: "Ground & Pound", handle: "@HeavyTrench", persona: "HERO_RB" },
+    { name: "Bellcow Believers", handle: "@BellcowBros", persona: "HERO_RB" },
+  ],
+  ANALYTICS_NERD: [
+    { name: "Data Analytics", handle: "@DataDog", persona: "ANALYTICS_NERD" },
+    { name: "VORP Machine", handle: "@QuantKing", persona: "ANALYTICS_NERD" },
+    { name: "Draft Board Wizards", handle: "@ScoutMaster", persona: "ANALYTICS_NERD" },
+    { name: "Regression Models", handle: "@StatSigma", persona: "ANALYTICS_NERD" },
+    { name: "Expected Points HQ", handle: "@xFP_Metrics", persona: "ANALYTICS_NERD" },
+  ],
+  TRASH_TALKER: [
+    { name: "Gridiron Dominance", handle: "@Champ2035", persona: "TRASH_TALKER" },
+    { name: "Smashmouth Crew", handle: "@HeavyHitter", persona: "TRASH_TALKER" },
+    { name: "Trophy Chasers", handle: "@RingCollector", persona: "TRASH_TALKER" },
+    { name: "No Fear Fantasy", handle: "@SwaggerKing", persona: "TRASH_TALKER" },
+    { name: "Scoreboard Watchers", handle: "@CheckTheBoard", persona: "TRASH_TALKER" },
+  ],
+  WAIVER_HAWK: [
+    { name: "Waiver Wire Kings", handle: "@WireHawk", persona: "WAIVER_HAWK" },
+    { name: "FAAB Bidding Lab", handle: "@FAABMaxer", persona: "WAIVER_HAWK" },
+    { name: "Depth Hoarders", handle: "@BenchDepth", persona: "WAIVER_HAWK" },
+    { name: "Midnight Churners", handle: "@WaiverNinja", persona: "WAIVER_HAWK" },
+    { name: "Upside Lottery Co", handle: "@HandcuffLotto", persona: "WAIVER_HAWK" },
+  ],
+  DIE_HARD: [
+    { name: "Franchise DieHards", handle: "@DieHardFan", persona: "DIE_HARD" },
+    { name: "Sunday Loyalty", handle: "@BleedColors", persona: "DIE_HARD" },
+    { name: "Legacy Believers", handle: "@OldSchoolGrit", persona: "DIE_HARD" },
+    { name: "Eye Test Only", handle: "@FilmRoomEye", persona: "DIE_HARD" },
+    { name: "Hometown Heroes", handle: "@CivicPride", persona: "DIE_HARD" },
+  ],
+};
+
 const DEFAULT_AI_TEAMS = [
-  { name: "Zero-RB Theory", handle: "@ZeroHero" },
-  { name: "Data Analytics", handle: "@DataDog" },
-  { name: "Gridiron Dominance", handle: "@Champ2035" },
-  { name: "Hero RB Squad", handle: "@AnchorBack" },
-  { name: "Waiver Wire Kings", handle: "@WireHawk" },
-  { name: "Franchise DieHards", handle: "@DieHardFan" },
-  { name: "VORP Machine", handle: "@QuantKing" },
-  { name: "Smashmouth Crew", handle: "@HeavyHitter" },
-  { name: "Robust RB Lab", handle: "@BellCowBros" },
-  { name: "PPR Machines", handle: "@PPRGod" },
-  { name: "Draft Board Wizards", handle: "@ScoutMaster" },
-  { name: "Red Zone Raiders", handle: "@RedZoneKing" },
+  { name: "Zero-RB Theory", handle: "@ZeroHero", persona: "ZERO_RB_ZEALOT" },
+  { name: "Data Analytics", handle: "@DataDog", persona: "ANALYTICS_NERD" },
+  { name: "Gridiron Dominance", handle: "@Champ2035", persona: "TRASH_TALKER" },
+  { name: "Hero RB Squad", handle: "@AnchorBack", persona: "HERO_RB" },
+  { name: "Waiver Wire Kings", handle: "@WireHawk", persona: "WAIVER_HAWK" },
+  { name: "Franchise DieHards", handle: "@DieHardFan", persona: "DIE_HARD" },
 ];
 
 function buildMockTeamsAndPicks(
   teamsCount: number,
   roundsCount: number,
-  userSlot: number
+  userSlot: number,
+  composition?: Record<string, number>,
+  randomizeAiOrder: boolean = true
 ): { teams: NapperDraftTeam[]; picks: NapperDraftPick[] } {
+  const aiSlots = Math.max(1, teamsCount - 1);
+  const selectedPersonas: string[] = [];
+
+  if (composition && Object.values(composition).reduce((a, b) => a + b, 0) > 0) {
+    for (const [persona, count] of Object.entries(composition)) {
+      if (persona in MOCK_ARCHETYPE_TEAMS) {
+        for (let i = 0; i < count; i++) {
+          selectedPersonas.push(persona);
+        }
+      }
+    }
+  }
+
+  const allKeys = Object.keys(MOCK_ARCHETYPE_TEAMS);
+  let pIdx = 0;
+  while (selectedPersonas.length < aiSlots) {
+    selectedPersonas.push(allKeys[pIdx % allKeys.length]);
+    pIdx++;
+  }
+  selectedPersonas.length = aiSlots;
+
+  // Build AI manager templates
+  const usedIndices: Record<string, number> = {};
+  const aiManagers = selectedPersonas.map((persona) => {
+    const pool = MOCK_ARCHETYPE_TEAMS[persona] || MOCK_ARCHETYPE_TEAMS.ANALYTICS_NERD;
+    const idx = (usedIndices[persona] || 0) % pool.length;
+    usedIndices[persona] = (usedIndices[persona] || 0) + 1;
+    return { ...pool[idx] };
+  });
+
+  if (randomizeAiOrder) {
+    // Fisher-Yates shuffle so no two drafts have the same order
+    for (let i = aiManagers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [aiManagers[i], aiManagers[j]] = [aiManagers[j], aiManagers[i]];
+    }
+  }
+
+  let aiCursor = 0;
   const teams: NapperDraftTeam[] = Array.from({ length: teamsCount }, (_, i) => {
     const slot = i + 1;
     const isUser = slot === userSlot;
-    const aiTemplate = DEFAULT_AI_TEAMS[i % DEFAULT_AI_TEAMS.length];
+    if (isUser) {
+      return {
+        id: slot,
+        slot,
+        name: "The Straw Hat Pirates",
+        is_user: true,
+        is_ai: false,
+        avatar_url: "/static/players/robot_avatar.webp",
+        manager_handle: "@jrereyi2000",
+        persona: "USER",
+        roster: [],
+      };
+    }
+    const aiManager = aiManagers[aiCursor++] || {
+      name: `Team ${slot}`,
+      handle: `@Manager${slot}`,
+      persona: "ANALYTICS_NERD",
+    };
     return {
       id: slot,
       slot,
-      name: isUser ? "The Straw Hat Pirates" : aiTemplate.name,
-      is_user: isUser,
-      is_ai: !isUser,
+      name: aiManager.name,
+      is_user: false,
+      is_ai: true,
       avatar_url: "/static/players/robot_avatar.webp",
-      manager_handle: isUser ? "@jrereyi2000" : aiTemplate.handle,
+      manager_handle: aiManager.handle,
+      persona: aiManager.persona,
       roster: [],
     };
   });
@@ -942,24 +1043,39 @@ function buildMockTeamsAndPicks(
 
 export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
   leagueId = 1,
-  initialSlot = 1,
+  initialSlot,
   onBack,
   onLeagueCreated,
 }) => {
+  const defaultTeamsCount = 10;
+  const defaultRoundsCount = 15;
+
+  const [archetypeComposition, setArchetypeComposition] = useState<Record<string, number>>(() =>
+    ARCHETYPE_PRESETS[0].getCounts(defaultTeamsCount - 1)
+  );
+  const [archetypePresetName, setArchetypePresetName] = useState<string>("Balanced Mix");
+  const [archetypeModalOpen, setArchetypeModalOpen] = useState(false);
+
   const [draftState, setDraftState] = useState<NapperDraftState>(() => {
-    const teamsCount = 10;
-    const roundsCount = 15;
-    const userSlot = Math.min(Math.max(1, initialSlot), teamsCount);
+    const teamsCount = defaultTeamsCount;
+    const roundsCount = defaultRoundsCount;
+    // Default to randomized slot if not explicitly provided
+    const userSlot = initialSlot && initialSlot >= 1 && initialSlot <= teamsCount
+      ? initialSlot
+      : Math.floor(Math.random() * teamsCount) + 1;
+    const initialComp = ARCHETYPE_PRESETS[0].getCounts(teamsCount - 1);
     const { teams: initialTeams, picks: initialPicks } = buildMockTeamsAndPicks(
       teamsCount,
       roundsCount,
-      userSlot
+      userSlot,
+      initialComp,
+      true
     );
 
     return {
       id: `mock-${Date.now()}`,
       league_id: leagueId,
-      title: "10-Team PPR Snake Mock",
+      title: `${teamsCount}-Team PPR Snake Mock`,
       teams_count: teamsCount,
       rounds_count: roundsCount,
       seconds_per_pick: 120,
@@ -1168,7 +1284,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     prevIsUserTurnRef.current = isUserTurn;
   }, [isUserTurn, playChime]);
 
-  // Claim Slot Action: Updates user's slot and renames all picks for this slot
+  // Claim Slot Action: Updates user's slot and swaps teams
   const handleClaimSlot = (slot: number) => {
     if (draftState.status !== "NOT_STARTED") return;
     if (slot < 1 || slot > draftState.teams_count) return;
@@ -1177,45 +1293,49 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     if (oldSlot === slot) return;
 
     setDraftState((prev) => {
+      const targetTeam = prev.teams.find((t) => t.slot === slot);
+      const userTeam = prev.teams.find((t) => t.slot === oldSlot);
+
       const updatedTeams = prev.teams.map((t) => {
         if (t.slot === slot) {
           return {
             ...t,
-            name: "The Straw Hat Pirates",
+            name: userTeam?.name || "The Straw Hat Pirates",
             is_user: true,
             is_ai: false,
-            manager_handle: "@jrereyi2000",
+            manager_handle: userTeam?.manager_handle || "@jrereyi2000",
+            persona: "USER",
           };
         }
         if (t.slot === oldSlot) {
-          const aiTemplate = DEFAULT_AI_TEAMS[(oldSlot - 1) % DEFAULT_AI_TEAMS.length];
           return {
             ...t,
-            name: aiTemplate.name,
+            name: targetTeam?.name || `Team ${oldSlot}`,
             is_user: false,
             is_ai: true,
-            manager_handle: aiTemplate.handle,
+            manager_handle: targetTeam?.manager_handle || `@Manager${oldSlot}`,
+            persona: targetTeam?.persona || "ANALYTICS_NERD",
           };
         }
         return t;
       });
 
-      const userTeam = updatedTeams.find((t) => t.slot === slot);
-      const oldTeam = updatedTeams.find((t) => t.slot === oldSlot);
+      const newUserTeam = updatedTeams.find((t) => t.slot === slot);
+      const newOldTeam = updatedTeams.find((t) => t.slot === oldSlot);
 
       const updatedPicks = prev.picks.map((p) => {
         if (p.team_slot === slot) {
           return {
             ...p,
-            team_name: userTeam?.name || "The Straw Hat Pirates",
-            team_id: userTeam?.id || slot,
+            team_name: newUserTeam?.name || "The Straw Hat Pirates",
+            team_id: newUserTeam?.id || slot,
           };
         }
         if (p.team_slot === oldSlot) {
           return {
             ...p,
-            team_name: oldTeam?.name || `Team ${oldSlot}`,
-            team_id: oldTeam?.id || oldSlot,
+            team_name: newOldTeam?.name || `Team ${oldSlot}`,
+            team_id: newOldTeam?.id || oldSlot,
           };
         }
         return p;
@@ -1239,19 +1359,94 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     }
   };
 
+  // Randomize Order Action: Re-rolls draft spot and shuffles all opponents
+  const handleRandomizeOrder = (keepUser: boolean = false) => {
+    if (draftState.status !== "NOT_STARTED") return;
+    const count = draftState.teams_count;
+    let newSlot = draftState.user_slot;
+    if (!keepUser) {
+      const candidates = Array.from({ length: count }, (_, i) => i + 1).filter(
+        (s) => s !== draftState.user_slot
+      );
+      newSlot = candidates[Math.floor(Math.random() * candidates.length)] || 1;
+    }
+
+    const { teams: newTeams, picks: newPicks } = buildMockTeamsAndPicks(
+      count,
+      draftState.rounds_count,
+      newSlot,
+      archetypeComposition,
+      true
+    );
+
+    setDraftState((prev) => ({
+      ...prev,
+      user_slot: newSlot,
+      teams: newTeams,
+      picks: newPicks,
+      current_pick_index: 0,
+    }));
+    setAvailablePlayers((prev) => prev.map((p) => ({ ...p, is_drafted: false })));
+
+    const draftIdNum = Number(draftState.id);
+    if (!isNaN(draftIdNum) && draftIdNum > 0) {
+      fetch(`${API_BASE}/api/napper/draft/${draftIdNum}/randomize_order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keep_user_slot: keepUser }),
+      }).catch(() => {});
+    }
+  };
+
+  // Apply customized archetype composition
+  const handleApplyArchetypes = (newComposition: Record<string, number>, presetName?: string) => {
+    if (draftState.status !== "NOT_STARTED") return;
+    setArchetypeComposition(newComposition);
+    if (presetName) setArchetypePresetName(presetName);
+
+    const { teams: newTeams, picks: newPicks } = buildMockTeamsAndPicks(
+      draftState.teams_count,
+      draftState.rounds_count,
+      draftState.user_slot,
+      newComposition,
+      true
+    );
+
+    setDraftState((prev) => ({
+      ...prev,
+      teams: newTeams,
+      picks: newPicks,
+      current_pick_index: 0,
+    }));
+
+    const draftIdNum = Number(draftState.id);
+    if (!isNaN(draftIdNum) && draftIdNum > 0) {
+      fetch(`${API_BASE}/api/napper/draft/${draftIdNum}/set_archetypes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archetype_composition: newComposition }),
+      }).catch(() => {});
+    }
+  };
+
   // Switch Team Count (8, 10, 12 Teams) and regenerate snake picks
   const handleTeamCountChange = (newCount: number) => {
     if (draftState.status !== "NOT_STARTED") return;
-    const clampedUserSlot = Math.min(draftState.user_slot, newCount);
+    const newComp = ARCHETYPE_PRESETS[0].getCounts(newCount - 1);
+    setArchetypeComposition(newComp);
+    setArchetypePresetName("Balanced Mix");
+    const newSlot = Math.floor(Math.random() * newCount) + 1;
     const { teams: newTeams, picks: newPicks } = buildMockTeamsAndPicks(
       newCount,
       draftState.rounds_count,
-      clampedUserSlot
+      newSlot,
+      newComp,
+      true
     );
     setDraftState((prev) => ({
       ...prev,
       teams_count: newCount,
-      user_slot: clampedUserSlot,
+      user_slot: newSlot,
       title: `${newCount}-Team PPR Snake Mock`,
       teams: newTeams,
       picks: newPicks,
@@ -1266,9 +1461,10 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       body: JSON.stringify({
         teams_count: newCount,
         scoring_type: "PPR",
-        user_slot: clampedUserSlot,
+        user_slot: newSlot,
         rounds: draftState.rounds_count,
         is_superflex: true,
+        archetype_composition: newComp,
       }),
     })
       .then((res) => res.json())
@@ -1286,7 +1482,9 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     const { teams: newTeams, picks: newPicks } = buildMockTeamsAndPicks(
       draftState.teams_count,
       newRounds,
-      draftState.user_slot
+      draftState.user_slot,
+      archetypeComposition,
+      false
     );
     setDraftState((prev) => ({
       ...prev,
@@ -1340,12 +1538,58 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       const nextPickIndex = pickIndex + 1;
       const isComplete = nextPickIndex >= prev.picks.length;
 
-      // Add commentary
+      // Add archetype-tailored commentary
+      const pickingTeam = prev.teams.find((t) => t.slot === pickingTeamSlot);
+      const persona = pickingTeam?.persona || "AI";
+      let commentText = `${targetPick.team_name} selects ${draftedPlayer.position} ${draftedPlayer.name} with pick ${targetPick.round}.${targetPick.round_pick} (Overall #${targetPick.pick_overall})`;
+
+      const diff = targetPick.pick_overall - draftedPlayer.adp;
+      const isSteal = diff >= 6;
+      const isReach = diff <= -6;
+
+      if (pickingTeamSlot === prev.user_slot) {
+        if (isSteal) {
+          commentText = `🔥 Great value! You drafted ${draftedPlayer.name} (ADP #${draftedPlayer.adp_rank}) at pick #${targetPick.pick_overall}.`;
+        } else if (isReach) {
+          commentText = `👀 Aggressive reach! You took ${draftedPlayer.name} ahead of consensus ADP at pick #${targetPick.pick_overall}.`;
+        } else {
+          commentText = `Solid selection with ${draftedPlayer.position} ${draftedPlayer.name} at pick #${targetPick.pick_overall}.`;
+        }
+      } else if (persona === "ZERO_RB_ZEALOT") {
+        if (draftedPlayer.position === "RB") {
+          commentText = `Breaking my Zero-RB rule for ${draftedPlayer.name} at #${targetPick.pick_overall}. The value was simply unavoidable.`;
+        } else {
+          commentText = `Zero-RB masterclass in progress. Locking down ${draftedPlayer.position} ${draftedPlayer.name} with projected ${draftedPlayer.proj_pts.toFixed(0)} FPTS.`;
+        }
+      } else if (persona === "HERO_RB") {
+        if (draftedPlayer.position === "RB") {
+          commentText = `Anchor back secured! ${draftedPlayer.name} gives me the bellcow foundation I needed at pick #${targetPick.pick_overall}.`;
+        } else {
+          commentText = `Bolstering pass-catchers around my anchor back with ${draftedPlayer.name} at #${targetPick.pick_overall}.`;
+        }
+      } else if (persona === "ANALYTICS_NERD") {
+        if (isSteal) {
+          commentText = `My VORP algorithms flagged ${draftedPlayer.name} as a +${diff} pick market inefficiency. Automatic trigger.`;
+        } else {
+          commentText = `Optimal expected-value pick: ${draftedPlayer.name} projects for ${draftedPlayer.proj_pts.toFixed(0)} FPTS with an elite target/touch profile.`;
+        }
+      } else if (persona === "TRASH_TALKER") {
+        if (isReach) {
+          commentText = `Rankings are for cowards. ${draftedPlayer.name} is going to dominate the entire league this year. Good luck stopping us.`;
+        } else {
+          commentText = `Thanks for letting ${draftedPlayer.name} fall to me. You all just handed me the championship.`;
+        }
+      } else if (persona === "WAIVER_HAWK") {
+        commentText = `Target volume and versatile snaps secured. ${draftedPlayer.name} fits my roster depth perfectly at pick #${targetPick.pick_overall}.`;
+      } else if (persona === "DIE_HARD") {
+        commentText = `Pure grit and veteran leadership. ${draftedPlayer.name} brings championship DNA to this franchise at pick #${targetPick.pick_overall}.`;
+      }
+
       const botPickComment: NapperDraftComment = {
         id: `pick-${pickIndex}`,
-        sender_name: "DraftBot",
-        sender_handle: "@DraftBot",
-        message: `${targetPick.team_name} selects ${draftedPlayer.position} ${draftedPlayer.name} with pick ${targetPick.round}.${targetPick.round_pick} (Overall #${targetPick.pick_overall})`,
+        sender_name: pickingTeam?.name || "DraftBot",
+        sender_handle: pickingTeam?.manager_handle || "@DraftBot",
+        message: commentText,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         is_bot: true,
         pick_badge: {
@@ -1385,14 +1629,81 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     setTimerSeconds(draftState.seconds_per_pick);
   }, [draftState.picks.length, draftState.seconds_per_pick, playChime]);
 
-  // AI Logic to select the best player for an AI team
-  const selectAiPlayer = useCallback((): NapperDraftPlayer | null => {
-    const unpicked = availablePlayers.filter((p) => !p.is_drafted);
-    if (unpicked.length === 0) return null;
+  // AI Logic to select the best player for an AI team based on its Archetype and team needs
+  const selectAiPlayer = useCallback(
+    (slotNum?: number): NapperDraftPlayer | null => {
+      const unpicked = availablePlayers.filter((p) => !p.is_drafted);
+      if (unpicked.length === 0) return null;
 
-    // Pick top available by ADP with smart positional weighting
-    return unpicked[0];
-  }, [availablePlayers]);
+      const currentP = draftState.picks[draftState.current_pick_index];
+      const targetSlot = slotNum ?? currentP?.team_slot;
+      const team = draftState.teams.find((t) => t.slot === targetSlot);
+      const persona = team?.persona || "ANALYTICS_NERD";
+      const currentRoster = team?.roster || [];
+      const currentRound = currentP?.round || 1;
+      const currentOverall = currentP?.pick_overall || 1;
+
+      // Count positions drafted
+      const qbCount = currentRoster.filter((p) => p.position === "QB").length;
+      const rbCount = currentRoster.filter((p) => p.position === "RB").length;
+      const wrCount = currentRoster.filter((p) => p.position === "WR").length;
+      const teCount = currentRoster.filter((p) => p.position === "TE").length;
+
+      // Filter and evaluate top 40 candidates
+      const candidates = unpicked.slice(0, 40);
+      let bestPlayer: NapperDraftPlayer = candidates[0];
+      let bestScore = -999999;
+
+      for (const player of candidates) {
+        const pos = player.position;
+
+        // Roster position limits
+        if (pos === "QB" && qbCount >= 3) continue;
+        if (pos === "RB" && rbCount >= 5) continue;
+        if (pos === "WR" && wrCount >= 6) continue;
+        if (pos === "TE" && teCount >= 2) continue;
+        if ((pos === "K" || pos === "DEF") && currentRound < 14) continue;
+
+        let score = 1000 - (player.adp * 2.0) + (player.proj_pts * 3.0);
+
+        // Archetype Biases
+        if (persona === "ZERO_RB_ZEALOT") {
+          if (currentRound <= 5 && pos === "RB") {
+            score *= 0.08;
+          } else if (currentRound <= 5 && (pos === "WR" || pos === "TE" || pos === "QB")) {
+            score *= 1.35;
+          }
+        } else if (persona === "HERO_RB") {
+          if (currentRound <= 2 && rbCount === 0 && pos === "RB") {
+            score *= 2.4;
+          } else if (currentRound >= 3 && currentRound <= 6 && rbCount >= 1 && pos === "RB") {
+            score *= 0.25;
+          }
+        } else if (persona === "ANALYTICS_NERD") {
+          if (player.adp < currentOverall) {
+            score += (currentOverall - player.adp) * 6.0;
+          }
+        } else if (persona === "TRASH_TALKER") {
+          score += (Math.random() * 30 - 15);
+          if (player.proj_pts > 220) score *= 1.15;
+        } else if (persona === "WAIVER_HAWK") {
+          if (pos === "WR" || pos === "RB") score += (player.proj_avg || 10) * 2.5;
+          if (currentRound >= 10 && (pos === "RB" || pos === "WR")) score *= 1.2;
+        } else if (persona === "DIE_HARD") {
+          if (player.age >= 26) score *= 1.15;
+          score += (Math.random() * 15 - 7);
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestPlayer = player;
+        }
+      }
+
+      return bestPlayer;
+    },
+    [availablePlayers, draftState.picks, draftState.current_pick_index, draftState.teams]
+  );
 
   // Single Simulation Step (AI or Auto-Pick)
   const handleSimStep = useCallback(() => {
@@ -1509,14 +1820,18 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     setIsSimulatingAll(false);
     setAvailablePlayers((prev) => prev.map((p) => ({ ...p, is_drafted: false })));
     setQueuedIds([]);
+    const newSlot = Math.floor(Math.random() * draftState.teams_count) + 1;
     const { teams: resetTeams, picks: resetPicks } = buildMockTeamsAndPicks(
       draftState.teams_count,
       draftState.rounds_count,
-      draftState.user_slot
+      newSlot,
+      archetypeComposition,
+      true
     );
     setDraftState((prev) => ({
       ...prev,
       status: "NOT_STARTED",
+      user_slot: newSlot,
       current_pick_index: 0,
       auto_pick: false,
       teams: resetTeams,
@@ -1752,13 +2067,49 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
             ))}
           </div>
 
-          {/* User Draft Slot selector */}
+          {/* Archetypes Composition Selector */}
+          <div className="draft-config-group">
+            <span className="draft-config-label">Archetypes:</span>
+            <select
+              value={archetypePresetName}
+              onChange={(e) => {
+                const pName = e.target.value;
+                if (pName === "Custom") {
+                  setArchetypeModalOpen(true);
+                } else {
+                  const p = ARCHETYPE_PRESETS.find((x) => x.name === pName);
+                  if (p) {
+                    handleApplyArchetypes(p.getCounts(draftState.teams_count - 1), pName);
+                  }
+                }
+              }}
+              className="draft-config-select font-bold"
+              title="Select archetype preset or customize AI composition"
+            >
+              {ARCHETYPE_PRESETS.map((p) => (
+                <option key={`opt-preset-${p.name}`} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+              <option value="Custom">Custom...</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setArchetypeModalOpen(true)}
+              className="draft-config-pill active flex items-center gap-1 text-[10px]"
+              title="Open full archetype composition editor"
+            >
+              <span>⚙ Customize</span>
+            </button>
+          </div>
+
+          {/* User Draft Slot selector & Randomize Order Button */}
           <div className="draft-config-group">
             <span className="draft-config-label">Your Slot:</span>
             <select
               value={draftState.user_slot}
               onChange={(e) => handleClaimSlot(Number(e.target.value))}
-              className="draft-config-select"
+              className="draft-config-select font-black text-[#00ceb8]"
               title="Select your team's draft slot"
             >
               {Array.from({ length: draftState.teams_count }, (_, i) => i + 1).map((s) => (
@@ -1767,6 +2118,14 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => handleRandomizeOrder(false)}
+              className="draft-config-pill flex items-center gap-1 hover:border-[#00ceb8] hover:text-[#00ceb8]"
+              title="Randomize both user draft spot and opponent draft order"
+            >
+              <span>🎲 Randomize Order</span>
+            </button>
           </div>
         </div>
       )}
@@ -1971,6 +2330,15 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           }}
         />
       )}
+
+      {/* 7. Mock Draft Archetype Composition Modal */}
+      <ArchetypeCompositionModal
+        isOpen={archetypeModalOpen}
+        onClose={() => setArchetypeModalOpen(false)}
+        teamsCount={draftState.teams_count}
+        currentComposition={archetypeComposition}
+        onApply={handleApplyArchetypes}
+      />
     </div>
   );
 };

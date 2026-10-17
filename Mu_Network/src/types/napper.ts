@@ -104,7 +104,10 @@ export interface NapperChatMessage {
   avatar_url: string;
   message_text: string;
   card_payload?: {
-    type: "BENCHWARMER" | "HIGH_SCORER" | "HEARTBREAKER" | "WAIVER_ALERT" | "TRADE_ALERT";
+    type: "BENCHWARMER" | "HIGH_SCORER" | "HEARTBREAKER" | "WAIVER_ALERT" | "TRADE_ALERT" | "WAIVER_CLAIM";
+    award_type?: string;
+    player_name?: string;
+    points?: number;
     title: string;
     subtitle: string;
     player?: {
@@ -115,6 +118,13 @@ export interface NapperChatMessage {
       fpts: number;
       headshot_url: string;
     };
+    details?: {
+      offered?: string;
+      requested?: string;
+      rationale?: string;
+      [key: string]: any;
+    };
+    [key: string]: any;
   };
   created_at: string;
 }
@@ -197,7 +207,90 @@ export interface NapperDraftTeam {
   roster: NapperDraftPlayer[];
   grade?: string;
   proj_fpts_total?: number;
+  persona?: string; // e.g. "USER" | "ZERO_RB_ZEALOT" | "HERO_RB" | "ANALYTICS_NERD" | "TRASH_TALKER" | "WAIVER_HAWK" | "DIE_HARD"
 }
+
+export type NapperManagerArchetype =
+  | "ZERO_RB_ZEALOT"
+  | "HERO_RB"
+  | "ANALYTICS_NERD"
+  | "TRASH_TALKER"
+  | "WAIVER_HAWK"
+  | "DIE_HARD";
+
+export interface ArchetypeMeta {
+  key: NapperManagerArchetype;
+  label: string;
+  shortLabel: string;
+  tagline: string;
+  description: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+}
+
+export const ARCHETYPE_METAS: Record<NapperManagerArchetype, ArchetypeMeta> = {
+  ANALYTICS_NERD: {
+    key: "ANALYTICS_NERD",
+    label: "Analytics Nerd",
+    shortLabel: "Analytics",
+    tagline: "VORP & Market Inefficiencies",
+    description: "Strict VORP optimizer. Hunts falling ADP values and market inefficiencies without emotion.",
+    color: "#38bdf8",
+    bgColor: "rgba(56, 189, 248, 0.15)",
+    borderColor: "rgba(56, 189, 248, 0.4)",
+  },
+  ZERO_RB_ZEALOT: {
+    key: "ZERO_RB_ZEALOT",
+    label: "Zero-RB Zealot",
+    shortLabel: "Zero-RB",
+    tagline: "Pass-Catcher Stack / No Early RBs",
+    description: "Hard constraint against RBs through round 5. Prioritizes elite WRs, top TEs, and dual-threat QBs.",
+    color: "#a855f7",
+    bgColor: "rgba(168, 85, 247, 0.15)",
+    borderColor: "rgba(168, 85, 247, 0.4)",
+  },
+  HERO_RB: {
+    key: "HERO_RB",
+    label: "Hero RB",
+    shortLabel: "Hero RB",
+    tagline: "Bellcow Anchor & WR Avalanche",
+    description: "Locks a tier-1 bellcow running back in round 1 or 2, then shifts heavily to pass-catchers.",
+    color: "#10b981",
+    bgColor: "rgba(16, 185, 129, 0.15)",
+    borderColor: "rgba(16, 185, 129, 0.4)",
+  },
+  TRASH_TALKER: {
+    key: "TRASH_TALKER",
+    label: "Trash Talker",
+    shortLabel: "Trash Talker",
+    tagline: "Volatile Reaches & Maximum Ceiling",
+    description: "High variance and swagger. Reaches ahead of ADP for explosive offensive weapons and taunts the room.",
+    color: "#f43f5e",
+    bgColor: "rgba(244, 63, 94, 0.15)",
+    borderColor: "rgba(244, 63, 94, 0.4)",
+  },
+  WAIVER_HAWK: {
+    key: "WAIVER_HAWK",
+    label: "Waiver Hawk",
+    shortLabel: "Waiver Hawk",
+    tagline: "Balanced Touch Share & High Floor",
+    description: "Builds deep, balanced lineups with proven touch shares, setting up versatile weekly management.",
+    color: "#00ceb8",
+    bgColor: "rgba(0, 206, 184, 0.15)",
+    borderColor: "rgba(0, 206, 184, 0.4)",
+  },
+  DIE_HARD: {
+    key: "DIE_HARD",
+    label: "Die-Hard Fan",
+    shortLabel: "Die-Hard",
+    tagline: "Proven Veterans & Franchise Grit",
+    description: "Values high-floor proven leaders and franchise cornerstones, undervaluing unproven rookies.",
+    color: "#f59e0b",
+    bgColor: "rgba(245, 158, 11, 0.15)",
+    borderColor: "rgba(245, 158, 11, 0.4)",
+  },
+};
 
 export interface NapperDraftComment {
   id: string;

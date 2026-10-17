@@ -1214,3 +1214,37 @@
   cursor: pointer;
 }
 
+/* Archetype Badges & Pills */
+.draft-team-archetype-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.draft-archetype-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.draft-archetype-pill.user {
+  background-color: rgba(0, 206, 184, 0.2);
+  border-color: #00ceb8;
+  color: #00ceb8;
+}
+
+.draft-archetype-pill.ai {
+  background-color: rgba(148, 163, 184, 0.15);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #94a3b8;
+}
+

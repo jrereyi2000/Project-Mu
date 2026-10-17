@@ -4,6 +4,7 @@ import type {
   NapperDraftTeam,
   NapperDraftComment,
 } from "../../../types/napper";
+import { ARCHETYPE_METAS } from "../../../types/napper";
 
 interface DraftRosterQueueProps {
   teams: NapperDraftTeam[];
@@ -181,13 +182,41 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
               onChange={(e) => setSelectedSlot(Number(e.target.value))}
               className="draft-team-select"
             >
-              {teams.map((t) => (
-                <option key={t.id} value={t.slot}>
-                  {t.slot === userSlot ? `★ ${t.name} (My Team)` : `${t.name}`}
-                </option>
-              ))}
+              {teams.map((t) => {
+                const persona = t.persona as any;
+                const meta = persona && persona in ARCHETYPE_METAS ? (ARCHETYPE_METAS as any)[persona] : null;
+                const archTag = t.slot === userSlot ? "(YOU)" : meta ? `[${meta.shortLabel}]` : "";
+                return (
+                  <option key={t.id} value={t.slot}>
+                    {t.slot === userSlot ? `★ ${t.name} (My Team)` : `${t.name} ${archTag}`}
+                  </option>
+                );
+              })}
             </select>
           </div>
+
+          {currentTeam && (
+            <div className="px-3 py-1.5 bg-[#090e17] border-b border-[#182333] flex items-center justify-between text-[11px]">
+              <span className="text-[#8a99ad] font-bold">{currentTeam.manager_handle}</span>
+              {currentTeam.slot === userSlot ? (
+                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-[#00ceb8]/15 border border-[#00ceb8]/40 text-[#00ceb8]">
+                  YOU
+                </span>
+              ) : currentTeam.persona && currentTeam.persona in ARCHETYPE_METAS ? (
+                <span
+                  className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border"
+                  style={{
+                    color: (ARCHETYPE_METAS as any)[currentTeam.persona].color,
+                    backgroundColor: (ARCHETYPE_METAS as any)[currentTeam.persona].bgColor,
+                    borderColor: (ARCHETYPE_METAS as any)[currentTeam.persona].borderColor,
+                  }}
+                  title={(ARCHETYPE_METAS as any)[currentTeam.persona].tagline}
+                >
+                  {(ARCHETYPE_METAS as any)[currentTeam.persona].label}
+                </span>
+              ) : null}
+            </div>
+          )}
 
           <div className="draft-roster-list">
             {mappedSlots.map((item, idx) => {

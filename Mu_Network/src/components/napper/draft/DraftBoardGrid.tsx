@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import type { NapperDraftState, NapperDraftPick } from "../../../types/napper";
+import { ARCHETYPE_METAS } from "../../../types/napper";
 import { getPlayerHeadshotUrl, handleImageError } from "../napperUtils";
 
 interface DraftBoardGridProps {
@@ -84,6 +85,8 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
               const team = teams.find((t) => t.slot === slotNum);
               const isClaimedByMe = user_slot === slotNum;
               const isDraftActive = status === "IN_PROGRESS" || status === "COMPLETED";
+              const persona = team?.persona as any;
+              const meta = persona && (persona in ARCHETYPE_METAS) ? (ARCHETYPE_METAS as any)[persona] : null;
 
               return (
                 <div key={`col-head-${slotNum}`} className="draft-team-header-cell">
@@ -98,6 +101,25 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
                   </button>
                   <div className="draft-team-name-label">
                     {team?.name || `Team ${slotNum}`}
+                  </div>
+                  <div className="draft-team-archetype-label mt-0.5">
+                    {isClaimedByMe ? (
+                      <span className="draft-archetype-pill user">YOU</span>
+                    ) : meta ? (
+                      <span
+                        className="draft-archetype-pill"
+                        style={{
+                          color: meta.color,
+                          backgroundColor: meta.bgColor,
+                          borderColor: meta.borderColor,
+                        }}
+                        title={`${meta.label}: ${meta.tagline}`}
+                      >
+                        {meta.shortLabel}
+                      </span>
+                    ) : (
+                      <span className="draft-archetype-pill ai">AI</span>
+                    )}
                   </div>
                 </div>
               );
