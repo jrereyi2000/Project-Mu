@@ -2589,10 +2589,7 @@ def run_team_overalls(out):
     with open(done_file, "w") as df:
         df.write("32 teams\n")
     log("Captured all 32 team overalls; returning to Weekly Hub")
-    press("circle", wait=1.5)
-    wait_for(["USER_TEAMS", "HUB_OPTIONS", "HUB"], timeout=6.0)
-    press("circle", wait=1.5)
-    f, s = wait_for(["HUB_OPTIONS", "HUB"], timeout=6.0)
+    f, s = go_hub()
     if f.highlighted(HUB_TABS) != "WEEKLY HUB":
         move_to(f, HUB_TABS, "WEEKLY HUB", "l1", "r1", "hub tab")
     log("Returned to WEEKLY HUB")
