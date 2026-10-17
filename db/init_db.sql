@@ -525,6 +525,7 @@ JOIN league_pos_benchmarks lpb ON tpt.season = lpb.season AND tpt.position = lpb
 CREATE TABLE IF NOT EXISTS coaches (
     id SERIAL PRIMARY KEY,
     coach_name VARCHAR(255) UNIQUE NOT NULL,
+    slant VARCHAR(16) NOT NULL DEFAULT 'OFFENSIVE' CHECK (slant IN ('OFFENSIVE', 'DEFENSIVE', 'CEO')),
     offensive_scheme VARCHAR(64),
     defensive_scheme VARCHAR(64),
     -- 2026 tendencies, Low / Medium / High (2026_11_05_coach_tendencies.sql)
@@ -544,6 +545,32 @@ CREATE TABLE IF NOT EXISTS coach_tenures (
     UNIQUE (coach_id, team_id, start_season),
     CHECK (end_season IS NULL OR end_season >= start_season)
 );
+
+-- Coordinators and staff tenures (2026_11_25_coordinators_and_slants.sql, docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md)
+CREATE TABLE IF NOT EXISTS coordinators (
+    id SERIAL PRIMARY KEY,
+    coordinator_name VARCHAR(255) NOT NULL,
+    side VARCHAR(16) NOT NULL CHECK (side IN ('OFFENSIVE', 'DEFENSIVE')),
+    scheme VARCHAR(64) NOT NULL,
+    playbook VARCHAR(64),
+    pass_lean VARCHAR(6) CHECK (pass_lean IN ('Low', 'Medium', 'High')),
+    blitz_rate VARCHAR(6) CHECK (blitz_rate IN ('Low', 'Medium', 'High')),
+    man_coverage VARCHAR(6) CHECK (man_coverage IN ('Low', 'Medium', 'High')),
+    origin_notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS coordinator_tenures (
+    id SERIAL PRIMARY KEY,
+    coordinator_id INT NOT NULL REFERENCES coordinators(id) ON DELETE CASCADE,
+    team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    role VARCHAR(8) NOT NULL CHECK (role IN ('OC', 'DC')),
+    start_season INT NOT NULL,
+    end_season INT,
+    UNIQUE (coordinator_id, team_id, role, start_season),
+    CHECK (end_season IS NULL OR end_season >= start_season)
+);
+CREATE INDEX IF NOT EXISTS idx_coord_tenures_team_season ON coordinator_tenures(team_id, start_season, coalesce(end_season, 9999));
 
 -- Career counters as the coach screen shows them at the end of each season (they include
 -- pre-franchise NFL careers, so they are stored, not rebuilt from games).
@@ -663,7 +690,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS awards_coach_season_type_idx
 CREATE TABLE IF NOT EXISTS draft_prospects (
     id SERIAL PRIMARY KEY,
     draft_season INT NOT NULL,              -- the class: league season + 1
-    projected_pick INT NOT NULL,            -- overall: 1-224 drafted, then the undrafted in board order
+    projected_pick INT,                     -- overall: 1-224 drafted, then the undrafted in board order (nullable for unprojected picks)
     projected_round VARCHAR(4),             -- '1'..'7' or 'UDFA'
     round_pick SMALLINT,
     full_name VARCHAR(255) NOT NULL,
@@ -678,9 +705,17 @@ CREATE TABLE IF NOT EXISTS draft_prospects (
     source_capture VARCHAR(255),            -- captures/<run> the board came from
     player_id INT REFERENCES players(id) ON DELETE SET NULL,
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Actual draft selection columns (2026_11_26_draft_selections.sql)
+    actual_round VARCHAR(8),
+    actual_round_pick SMALLINT,
+    actual_pick SMALLINT CHECK (actual_pick BETWEEN 1 AND 32),
+    drafted_team_id INT REFERENCES teams(id) ON DELETE SET NULL,
+    selection_notes TEXT,
     UNIQUE (draft_season, projected_pick)
 );
 CREATE INDEX IF NOT EXISTS idx_draft_prospects_player ON draft_prospects(player_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_draft_prospects_actual_pick ON draft_prospects(draft_season, actual_pick) WHERE actual_pick IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_draft_prospects_drafted_team ON draft_prospects(draft_season, drafted_team_id) WHERE drafted_team_id IS NOT NULL;
 
 -- Round 1 mock draft per (season, week), saved by engines/mock_draft_engine.py so every article that week
 -- cites the same picks. Rows go with the board they were drawn from (a re-scan replaces both).
