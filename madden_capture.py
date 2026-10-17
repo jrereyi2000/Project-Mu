@@ -2268,9 +2268,9 @@ def read_draft_recap_card(f):
     }
 
 
-def run_draft_recap(out, max_picks=32, paged=False, rows_per_page=10, max_pages=30):
+def run_draft_recap(out, max_picks=32, paged=False, rows_per_page=15, max_pages=30):
     """Capture the completed Madden Draft Recap screen for all Round 1 picks (1-32)
-    or all 224 picks across all 7 rounds when paged=True (scrolling 10 rows at a time).
+    or all 224 picks across all 7 rounds when paged=True (scrolling 15 rows at a time).
     Captures screenshots into captures/<run>/draft_results/
     Also extracts and writes draft_results.csv and draft_results.json into <out>
     for immediate ingestion by pipeline.draft_results."""
@@ -3215,7 +3215,8 @@ def main():
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
     ap.add_argument("--all-prospects", action="store_true", help="--only prospects: capture the entire draft board until the end")
     ap.add_argument("--prospect-pages", type=int, help="--only prospects: stop after this many pages")
-    ap.add_argument("--paged", action="store_true", help="--only draft-results: scroll 10 rows at a time page-by-page through all rounds")
+    ap.add_argument("--paged", action="store_true", help="--only draft-results: scroll rows_per_page (default 15) at a time page-by-page through all rounds")
+    ap.add_argument("--rows-per-page", type=int, default=15, help="--only draft-results --paged: rows to scroll down between captures (default 15)")
     ap.add_argument("--resume", metavar="RUN", help="continue a stopped run in captures/RUN (stats, roster, games, injuries, season); "
                     "--scope: write into that (weekly) run's folder")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
@@ -3321,7 +3322,7 @@ def main():
             n_prospects = 0 if a.all_prospects else a.prospects
             run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
         if a.only in ("draft-results", "draft-recap"):
-            run_mode("the draft recap", lambda: run_draft_recap(out, paged=a.paged), clear("draft_results"))
+            run_mode("the draft recap", lambda: run_draft_recap(out, paged=a.paged, rows_per_page=a.rows_per_page), clear("draft_results"))
         if a.only not in ("prospects", "postgame", "superbowl", "draft-results", "draft-recap"):
             log("Returning to the hub")
             go_hub()
