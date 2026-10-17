@@ -99,4 +99,73 @@ All other slots are untargeted: the writer chooses the subject under the article
 
 **Power Rankings:** the Week 19 `POWER_RANKINGS` (entering the Wild Card round, through Week 18) is the season's final ranking. Weeks 20–23 publish no Power Rankings, so the regular-season order is never re-ranked during the playoffs.
 
-**Week numbering:** postseason games are identified by week number (19 = Wild Card, 20 = Divisional, 21 = Conference Championships, 22 = Super Bowl bye, 23 = Super Bowl).
+**Week numbering:** postseason games are identified by week number (19 = Wild Card, 20 = Divisional, 21 = Conference Championships, 22 = Super Bowl bye, 23 = Super Bowl). Week 24 represents the unified Offseason Package (labeled "Offseason" in the newsroom edition selector).
+
+---
+
+# NFL Offseason Editorial Package (Week 24: "Offseason")
+
+The Offseason Editorial Package bridges the completed NFL season from the Super Bowl through the first round of the NFL Draft. All six articles publish together as a unified package in the single interseason publication week after Week 23 and before the next season's Week 1 (internal database marker: **Week 24**, displayed as **“Offseason”** in the UI).
+
+## Offseason Desk Grid & Slot Distribution
+
+The National Desk layout for Week 24 utilizes the **1 Hero, 2 Secondary, 3 Features** grid structure (totaling exactly 6 articles):
+
+| Slot | Article Type | Description | Allowed Writers | Narrative Anchor Date |
+| :--- | :--- | :--- | :--- | :--- |
+| **Hero** | `SUPER_BOWL_GAME_RECAP` | The definitive breakdown of how the championship was won, isolating key turning points and game-defining performances. | `BARNWELL`, `ROSENTHAL`, `CHADIHA` | 1 week post-Super Bowl (mid-Feb) |
+| **Secondary 1** | `SUPER_BOWL_CHAMPION_RETROSPECTIVE` | The full-season and playoff championship arc, validating how regular-season identity traveled through January. | `CHADIHA`, `SANDO`, `ROSENTHAL` | 1 week post-Super Bowl (mid-Feb) |
+| **Secondary 2** | `SUPER_BOWL_RUNNER_UP_POSTMORTEM` | Rigorous diagnosis of the Super Bowl defeat, separating tactical variance from structural flaws, and setting the top offseason mandate. | `SANDO`, `BARNWELL` | 1 week post-Super Bowl (mid-Feb) |
+| **Feature 3** | `COACHING_CAROUSEL_AUDIT` | Comprehensive audit and letter grades for the hiring/firing cycle, evaluating coordinator origins, head coach slants, and scheme inheritance. | `SANDO`, `BARNWELL` | 1 week post-hiring cycle (late Feb) |
+| **Feature 4** | `FREE_AGENCY_SIGNING_GRADES` | Rigorous evaluation of curated marquee veteran signings (90+ OVR), grading scheme fit, expected role, and downside risk. | `YATES`, `BARNWELL`, `SANDO` | 1 week post-signing wave (mid-March) |
+| **Feature 5** | `NFL_DRAFT_CLASS_RECAP` | Definitive recap of the captured actual First-Round NFL Draft results (picks 1–32), spotlighting value steals, major reaches, and franchise-altering bets. | `MEL_KIPER`, `YATES`, `BARNWELL` | 1 week post-draft (early May) |
+
+## Narrative Anchor Dates & Temporal Cadence
+
+Although all six stories are published together under `week = 24`, each article is researched, compiled, and narrated as if written in the week immediately following its respective event (`event_date + 1 week`). This decouples the publication edition (Week 24) from each story's narrative anchor:
+- **Super Bowl Stories (Recap, Champion Retrospective, Runner-Up Postmortem):** Narrated from mid-February, immediately after the conclusion of Super Bowl Sunday.
+- **Coaching Carousel Audit:** Narrated from late February, following the conclusion of the head coach and coordinator hiring cycle.
+- **Marquee Free Agency Signing Grades:** Narrated from mid-March, following the opening wave of marquee unrestricted free-agent signings.
+- **First-Round Draft Class Recap:** Narrated from early May, following the completion of the first round of the NFL Draft.
+
+## Anti-Leakage Information Visibility Cascade
+
+To preserve historical authenticity, prevent chronological leakage, and enforce narrative integrity, prompt contexts enforce a strict event-relative visibility cascade:
+
+```
+[Super Bowl (Week 23)]
+        │
+        ▼  (Sees season + SB game; NO coaching, signings, or draft)
+   [1. SB Recap, 2. Champion Retro, 3. Runner-Up Postmortem]
+        │
+        ▼  (Sees SB + coaching moves; NO signings or draft)
+   [4. Coaching Carousel Audit]
+        │
+        ▼  (Sees SB + coaching moves + signings; NO draft)
+   [5. Marquee Signing Grades]
+        │
+        ▼  (Sees full offseason: SB + coaching + signings + Round 1 picks)
+   [6. First-Round Draft Recap]
+```
+
+### Strict Anti-Leakage Rules:
+
+1. **Super Bowl Articles (Recap, Champion Retrospective, Runner-Up Postmortem):**
+   - Access concluded season data through Week 23 only.
+   - Forbidden from referencing head coach firings, hires, coordinator movements, free-agent departures/signings, or draft selections as completed facts.
+2. **Coaching Carousel Audit:**
+   - Access concluded season records, team situational efficiency, coach career profiles, and submitted coaching moves.
+   - Forbidden from referencing free-agent signings, trades, or rookie draft selections.
+   - **Coordinator & Scheme Rules:** Evaluates coordinator origins (promotions vs. outside hires) and coaching slants (`OFFENSIVE`, `DEFENSIVE`, `CEO`). Applies scheme inheritance rules: an offensive-slant hire imports offensive scheme/playbook while retaining defensive scheme continuity; a defensive-slant hire imports defensive scheme/playbook while retaining offensive scheme continuity; a CEO-slant hire delegates play-calling and schemes to retained/hired coordinators.
+3. **Marquee Signing Grades:**
+   - Access concluded season records, updated coaching/coordinator scheme context, and submitted marquee signing facts.
+   - Forbidden from referencing actual draft selections or rookie acquisitions.
+   - **Strict Numeric OVR Ban:** Articles must NEVER state, quote, or cite numeric OVR ratings. Players are evaluated strictly through qualitative tiers:
+     - **95–99 OVR:** *“Tier 1 superstar / elite franchise cornerstone”*
+     - **90–94 OVR:** *“High-impact marquee starter / Pro Bowl caliber talent”*
+   - **All-Pro Descriptor Rule:** The term "All-Pro" must NEVER be used as a generic synonym for high OVR. It may only be cited if the player earned an official AP All-Pro selection in the database `awards` table. Scope is strictly restricted to curated marquee players (90+ OVR).
+4. **First-Round Draft Class Recap:**
+   - Access full offseason context: coaching schemes, veteran signings, and captured actual Round 1 selections.
+   - **Round 1 Only Constraint:** Strictly restricted to Round 1 selections (picks 1–32). Writers must never grade or imply coverage of Rounds 2–7, UDFAs, or full draft classes.
+   - **Actual Results Only:** Actual picks originate exclusively from captured/ingested results in `draft_selections`, never mock projections (`mock_draft_picks`).
+
