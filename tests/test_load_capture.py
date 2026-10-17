@@ -344,3 +344,39 @@ class LoadHighlightsTest(unittest.TestCase):
         sql, params = hl_calls[0]
         self.assertEqual(params[:3], (42, 2035, 23))
         self.assertEqual(json.loads(params[3]), hl_data)
+
+    def test_load_season_loads_injuries(self):
+        folder = tempfile.mkdtemp()
+        with open(os.path.join(folder, "season_schedule.csv"), "w") as f:
+            f.write("WEEK,HOME,AWAY\n")
+        with open(os.path.join(folder, "injuries.csv"), "w") as f:
+            f.write("TEAM,PLAYER_NAME,POSITION,OVR,INJURY_TYPE,DURATION,WEEKS_REMAINING,IS_IR\n")
+            f.write("BILLS,J.Allen,QB,99,Shoulder,3 Weeks,3,false\n")
+
+        class MockCur:
+            def __init__(self):
+                self.calls = []
+            def execute(self, sql, params=None):
+                self.calls.append((" ".join(sql.split()), params))
+            def fetchall(self):
+                last_sql = self.calls[-1][0] if self.calls else ""
+                if "id, name, abbreviation FROM teams" in last_sql:
+                    return [(1, "Bills", "BUF")]
+                if "FROM player_seasons" in last_sql:
+                    return [(101, 1, "J.Allen", "Josh Allen", "QB", 99)]
+                if "SELECT home_team_id" in last_sql:
+                    return []
+                return []
+            def fetchone(self):
+                return None
+
+        cur = MockCur()
+        report = {}
+        with unittest.mock.patch.object(L, "load_season_schedule", return_value=0):
+            L.load_season(cur, folder, 2036, report)
+
+        self.assertEqual(report.get("injuries"), 1)
+        injury_inserts = [c for c in cur.calls if "INSERT INTO injuries" in c[0]]
+        self.assertEqual(len(injury_inserts), 1)
+        sql, params = injury_inserts[0]
+        self.assertEqual(params[:4], (2036, 1, 1, 101))

@@ -23,11 +23,12 @@ class RunTest(unittest.TestCase):
             step_extract=self.fake_extract,
             load_status=lambda folder: self.status,
             step_load=self.fake_load,
-            league_state=lambda: (2035, 18),   # the run captures Week 18 (regular season)
+            league_state=lambda: getattr(self, "league_state_val", (2035, 18)),
             step_engines=lambda season: self.calls.append(f"engines {season}"),
             step_articles=lambda season, week=None: (self.calls.append(f"articles {week}" if week else "articles"),
                                                    {"status": "published", "week": week or 19})[1],
             set_current_week=lambda week: self.calls.append(f"current {week}"),
+            set_league_state=lambda s, w: (setattr(self, "league_state_val", (s, w)), self.calls.append(f"set_state {s} {w}")),
         )
         p.start()
         self.addCleanup(p.stop)
@@ -116,12 +117,12 @@ class RunTest(unittest.TestCase):
     def test_season_scan_runs_capture_extract_load_and_skips_articles(self):
         os.makedirs(os.path.join(self.tmp, "seas1"))
         self.assertEqual(wc.run("seas1", articles=True, mode="season"), 0)
-        self.assertEqual(self.calls, ["connect", "capture", "extract", "load"])
+        self.assertEqual(self.calls, ["set_state 2036 1", "connect", "capture", "extract", "load"])
         self.assertEqual(self.capture_mode, "season")
         self.assertEqual(self.notices[0][0], "Mu: capture starting")
         self.assertIn("Season scan", self.notices[0][1])
         self.assertEqual(self.notices[-1][0], "Mu: season scan done")
-        self.assertIn("Season setup (schedule, rosters, draft prospects) loaded for Season 2035", self.notices[-1][1])
+        self.assertIn("Season setup (schedule, rosters, draft prospects) loaded for Season 2036", self.notices[-1][1])
 
     def test_game_scan_replaces_and_never_writes_articles(self):
         os.makedirs(os.path.join(self.tmp, "g1"))
@@ -243,6 +244,31 @@ class RunTest(unittest.TestCase):
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
             lock.close()
+
+    def test_season_mode_auto_rolls_over_league_state(self):
+        self.league_state_val = (2035, 23)
+        folder = os.path.join(self.tmp, "s1")
+        os.makedirs(folder)
+        def fake_extract_season(f, log_path, mode="weekly"):
+            self.calls.append("extract")
+            open(os.path.join(f, "season_schedule.csv"), "w").write("x\n")
+            open(os.path.join(f, "roster_cards.csv"), "w").write("x\n")
+            open(os.path.join(f, "roster_list.csv"), "w").write("x\n")
+            open(os.path.join(f, "prospects.csv"), "w").write("x\n")
+        with mock.patch.object(wc, "step_extract", fake_extract_season):
+            self.assertEqual(wc.run("s1", mode="season"), 0)
+        self.assertIn("set_state 2036 1", self.calls)
+
+    def test_season_extract_done_requires_injuries_csv_if_injuries_folder_exists(self):
+        f = os.path.join(self.tmp, "s2")
+        os.makedirs(f)
+        for name in ("season_schedule.csv", "roster_cards.csv", "roster_list.csv", "prospects.csv"):
+            open(os.path.join(f, name), "w").close()
+        self.assertTrue(wc.extract_done(f, "season"))
+        os.makedirs(os.path.join(f, "injuries"))
+        self.assertFalse(wc.extract_done(f, "season"))
+        open(os.path.join(f, "injuries.csv"), "w").close()
+        self.assertTrue(wc.extract_done(f, "season"))
 
 
 if __name__ == "__main__":

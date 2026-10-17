@@ -3315,8 +3315,12 @@ def main():
                 return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1 or os.path.exists(os.path.join(out, "roster", "done.txt")))
             run_mode("the rosters", rosters)
             if a.only == "season":
-                log("Returning to the hub before draft prospects")
+                log("Returning to the hub before injury report")
                 go_hub()
+        if a.only == "season":
+            run_mode("the injury report", lambda: run_injuries(out))
+            log("Returning to the hub before draft prospects")
+            go_hub()
         if a.only == "games":
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
         if a.only in ("postgame", "superbowl"):

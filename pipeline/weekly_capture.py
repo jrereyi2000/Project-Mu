@@ -133,9 +133,12 @@ def extract_done(folder, mode="weekly"):
     if mode == "prospects":
         return os.path.exists(os.path.join(folder, "prospects.csv"))
     if mode == "season":
-        return (os.path.exists(os.path.join(folder, "season_schedule.csv"))
+        ok = (os.path.exists(os.path.join(folder, "season_schedule.csv"))
                 and all(os.path.exists(os.path.join(folder, f)) for f in ("roster_cards.csv", "roster_list.csv"))
                 and os.path.exists(os.path.join(folder, "prospects.csv")))
+        if os.path.isdir(os.path.join(folder, "injuries")):
+            ok = ok and os.path.exists(os.path.join(folder, "injuries.csv"))
+        return ok
     weekly_ok = (os.path.exists(os.path.join(folder, "schedule.csv"))
                  and bool(glob.glob(os.path.join(folder, "stats_*.csv"))))
     if os.path.isdir(os.path.join(folder, "injuries")):
@@ -210,7 +213,7 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
     elif mode == "prospects":
         args, timeout = [sys.executable, "madden_capture.py", "--only", "prospects", "--all-prospects", "--out", name], CAPTURE_TIMEOUT
     elif mode == "season":
-        where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects"))) else ["--out", name]
+        where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects")) or os.path.isdir(os.path.join(folder, "injuries"))) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "season", "--all-prospects", *where], CAPTURE_TIMEOUT * 2
     elif mode in ("draft-results", "draft_results"):
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "draft_results")) else ["--out", name]
@@ -310,6 +313,13 @@ def shrink(folder):
 
 
 # ----------------------------------------------------------------- run ----
+def set_league_state(season, week):
+    import psycopg
+    from pipeline.load_capture import DSN
+    with psycopg.connect(DSN) as conn:
+        conn.execute("UPDATE league_state SET current_season = %s, current_week = %s WHERE id = 1", (season, week))
+
+
 def set_current_week(week):
     import psycopg
     from pipeline.load_capture import DSN
@@ -343,15 +353,25 @@ def bye_run(articles=True):
         return 1
 
 
-def run(resume=None, articles=True, connect=True, mode="weekly"):
+def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
     """One weekly run (mode 'weekly'; 'playoff' for a postseason week, chosen automatically; or 'games' for
-    every game of last week, never with articles). Returns 0 when the week went through, 1 when it stopped."""
+    every game of last week, never with articles; 'season' for start-of-season calibration).
+    Returns 0 when the week went through, 1 when it stopped."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
     if mode == "weekly" and resume and os.path.isdir(os.path.join(CAPTURES, resume)):
         detected = folder_mode(os.path.join(CAPTURES, resume))
         if detected != "weekly":
             mode = detected
+    if mode == "season":
+        try:
+            curr_s, curr_w = league_state()
+            target_season = season or (curr_s + 1 if curr_w != 1 else curr_s)
+            if target_season != curr_s or curr_w != 1:
+                set_league_state(target_season, 1)
+                log(f"Season scan: rolled over league_state from Season {curr_s} Week {curr_w} to Season {target_season}, Week 1")
+        except Exception as e:
+            log(f"Warning: could not inspect/update league_state: {e}")
     current = None
     if mode in ("weekly", "playoff", "postgame"):
         try:
@@ -467,8 +487,9 @@ def main():
                          "draft-results: capture and load actual draft results into draft_prospects")
     ap.add_argument("--no-connect", action="store_true",
                     help="skip the connect step (chiaki-ng is already streaming the franchise menus)")
+    ap.add_argument("--season", type=int, help="explicitly target season for the run")
     a = ap.parse_args()
-    sys.exit(run(a.resume, articles=not a.no_articles, connect=not a.no_connect, mode=a.mode))
+    sys.exit(run(a.resume, articles=not a.no_articles, connect=not a.no_connect, mode=a.mode, season=a.season))
 
 
 if __name__ == "__main__":

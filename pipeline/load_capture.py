@@ -1156,7 +1156,7 @@ def load_prospects(cur, folder, season, report):
 
 
 def load_season(cur, folder, season, report):
-    """Full start-of-season setup: schedule, rosters + rookie linking, then draft prospects board (after both)."""
+    """Full start-of-season setup: schedule, rosters + rookie linking, draft prospects board (after both), and injury report."""
     rows = 0
     if os.path.exists(os.path.join(folder, "season_schedule.csv")):
         rows += load_season_schedule(cur, folder, season, report)
@@ -1164,6 +1164,14 @@ def load_season(cur, folder, season, report):
         rows += load_roster(cur, folder, season, report)
     elif os.path.exists(os.path.join(folder, "prospects.csv")):
         rows += load_prospects(cur, folder, season, report)
+    if os.path.exists(os.path.join(folder, "injuries.csv")):
+        cur.execute("SELECT id, name, abbreviation FROM teams")
+        by_name = {n.upper(): tid for tid, n, _ in cur.fetchall()}
+        problems = []
+        report["injuries"] = load_injuries(cur, folder, season, 1, by_name, problems)
+        if problems:
+            raise LoadError("injuries checks failed:\n  " + "\n  ".join(problems))
+        rows += report["injuries"]
     return rows
 
 
@@ -1181,6 +1189,10 @@ def load(folder, dry_run=False, replace=False):
         cur = conn.cursor()
         cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
         season, week = cur.fetchone()
+        if mode == "season" and week != 1:
+            season = season + 1
+            week = 1
+            cur.execute("UPDATE league_state SET current_season = %s, current_week = 1 WHERE id = 1", (season,))
         report["season"] = season
         cid = capture_row(cur, folder, mode, season, None if mode in ("roster", "prospects", "season_schedule", "season") else week, dry_run)
         conn.commit()                        # the run is recorded even if the load fails
