@@ -1,0 +1,425 @@
+/* ==========================================================================
+   NAPPER FANTASY PLATFORM STYLESHEET
+   Sleeper-inspired high-density dark UI theme & 3-panel layout system
+   Reference: data/images/sleeper_desktop_reference.png
+   ========================================================================== */
+
+:root {
+  --napper-bg: #131a24;
+  --napper-rail-left: #101622;
+  --napper-rail-right: #101622;
+  --napper-panel-bg: #182333;
+  --napper-card-surface: #1a2432;
+  --napper-card-hover: #202d40;
+  --napper-card-active: #28374d;
+  --napper-border: #233146;
+  --napper-border-subtle: #1c2738;
+  --napper-border-focus: #00ceb8;
+
+  --napper-text: #f1f5f9;
+  --napper-text-muted: #8a99ad;
+  --napper-text-dim: #5c6c80;
+
+  --napper-teal: #00ceb8;
+  --napper-teal-hover: #2bd9c6;
+  --napper-teal-dim: rgba(0, 206, 184, 0.12);
+  --napper-teal-border: rgba(0, 206, 184, 0.35);
+
+  --napper-coral: #ff5779;
+  --napper-coral-hover: #ff6f8e;
+  --napper-coral-dim: rgba(255, 87, 121, 0.12);
+
+  --napper-amber: #f59e0b;
+  --napper-green: #10b981;
+  --napper-purple: #c084fc;
+  --napper-sky: #38bdf8;
+}
+
+/* ==========================================================================
+   Master 3-Panel Shell Layout
+   Left Rail: 260px, Center Stage: flex-1, Right Rail: 340px
+   ========================================================================== */
+
+.napper-shell {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  background-color: var(--napper-bg);
+  color: var(--napper-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+}
+
+/* Panel 1: Left Navigation Rail (260px) */
+.napper-left-rail {
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+  background-color: var(--napper-rail-left);
+  border-right: 1px solid var(--napper-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  z-index: 20;
+}
+
+.napper-left-rail-scroll {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #243347 transparent;
+}
+
+.napper-left-rail-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.napper-left-rail-scroll::-webkit-scrollbar-thumb {
+  background: #243347;
+  border-radius: 4px;
+}
+
+/* Panel 2: Center Stage (flex-1) */
+.napper-center-stage {
+  flex: 1;
+  min-width: 0;
+  background-color: var(--napper-bg);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #243347 transparent;
+}
+
+.napper-center-stage::-webkit-scrollbar {
+  width: 6px;
+}
+.napper-center-stage::-webkit-scrollbar-thumb {
+  background: #243347;
+  border-radius: 4px;
+}
+
+/* Panel 3: Right Chat Rail (340px) */
+.napper-right-rail {
+  width: 340px;
+  min-width: 340px;
+  max-width: 340px;
+  background-color: var(--napper-rail-right);
+  border-left: 1px solid var(--napper-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  z-index: 20;
+}
+
+/* ==========================================================================
+   Tab Navigation Buttons (Sleeper Pill Tabs)
+   MATCHUP, TEAM, LEAGUE, PLAYERS, TREND, TRADES, SCORES
+   ========================================================================== */
+
+.napper-nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+  background-color: #172130;
+  border: 1px solid var(--napper-border);
+  color: var(--napper-text-muted);
+  white-space: nowrap;
+}
+
+.napper-nav-tab:hover {
+  background-color: #202d40;
+  color: #ffffff;
+  border-color: #354763;
+}
+
+.napper-nav-tab.active {
+  background-color: var(--napper-teal);
+  color: #0b141e;
+  border-color: var(--napper-teal);
+  box-shadow: 0 0 16px rgba(0, 206, 184, 0.4);
+}
+
+/* ==========================================================================
+   Matchup Banner Header Card (Sleeper Desktop Matchup Header)
+   Team names, manager handles, win prob gauge, score vs projected
+   ========================================================================== */
+
+.napper-matchup-banner {
+  background: linear-gradient(180deg, #182334 0%, #151d2a 100%);
+  border: 1px solid var(--napper-border);
+  border-radius: 16px;
+  padding: 18px 24px;
+  position: relative;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+
+.napper-winprob-track {
+  width: 100%;
+  height: 6px;
+  background-color: #1e293b;
+  border-radius: 9999px;
+  overflow: hidden;
+  display: flex;
+}
+
+.napper-winprob-fill-left {
+  height: 100%;
+  background: linear-gradient(90deg, #00ceb8 0%, #2bd9c6 100%);
+  border-radius: 9999px 0 0 9999px;
+  transition: width 0.4s ease;
+  box-shadow: 0 0 12px rgba(0, 206, 184, 0.5);
+}
+
+.napper-winprob-fill-right {
+  height: 100%;
+  background: #334155;
+  border-radius: 0 9999px 9999px 0;
+  transition: width 0.4s ease;
+}
+
+/* ==========================================================================
+   Starter Comparison Rows (3-Column Layout: Left Player - Slot Badge - Right Player)
+   ========================================================================== */
+
+.napper-matchup-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.napper-player-card {
+  background-color: var(--napper-card-surface);
+  border: 1px solid var(--napper-border);
+  border-radius: 12px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  min-height: 58px;
+}
+
+.napper-player-card:hover {
+  background-color: var(--napper-card-hover);
+  border-color: #354763;
+}
+
+.napper-player-card.active-swap-target {
+  border-color: var(--napper-teal);
+  background-color: rgba(0, 206, 184, 0.1);
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(0, 206, 184, 0.25);
+}
+
+.napper-player-card.active-selected {
+  border-color: var(--napper-coral);
+  background-color: rgba(255, 87, 121, 0.1);
+  box-shadow: 0 0 12px rgba(255, 87, 121, 0.25);
+}
+
+/* ==========================================================================
+   Centered Position Slot Pill Badges
+   QB, RB, WR, TE, FLEX, SUPERFLEX, BN with crisp typography and colors
+   ========================================================================== */
+
+.napper-slot-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 44px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background-color: #172130;
+  border: 1px solid #283a54;
+  color: #8fa0b5;
+  box-sizing: border-box;
+}
+
+.napper-slot-badge.slot-qb {
+  color: #ff5779;
+  border-color: rgba(255, 87, 121, 0.35);
+  background: rgba(255, 87, 121, 0.1);
+}
+
+.napper-slot-badge.slot-rb {
+  color: #00ceb8;
+  border-color: rgba(0, 206, 184, 0.35);
+  background: rgba(0, 206, 184, 0.1);
+}
+
+.napper-slot-badge.slot-wr {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.napper-slot-badge.slot-te {
+  color: #facc15;
+  border-color: rgba(250, 204, 21, 0.35);
+  background: rgba(250, 204, 21, 0.1);
+}
+
+.napper-slot-badge.slot-flex {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, 0.35);
+  background: rgba(192, 132, 252, 0.1);
+}
+
+.napper-slot-badge.slot-superflex {
+  color: #f472b6;
+  border-color: rgba(244, 114, 182, 0.35);
+  background: rgba(244, 114, 182, 0.1);
+  min-width: 82px;
+}
+
+.napper-slot-badge.slot-k {
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.napper-slot-badge.slot-def {
+  color: #cbd5e1;
+  border-color: rgba(203, 213, 225, 0.35);
+  background: rgba(203, 213, 225, 0.1);
+}
+
+.napper-slot-badge.slot-bn {
+  color: #64748b;
+  border-color: #243449;
+  background: #141c28;
+}
+
+/* Circular Headshot Crop */
+.napper-headshot-crop {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 9999px;
+  object-fit: cover;
+  background-color: #121926;
+  border: 1px solid var(--napper-border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* Injury Pill Badges */
+.napper-injury-pill {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1.1;
+  display: inline-block;
+  letter-spacing: 0.04em;
+}
+
+.napper-injury-pill.out {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.napper-injury-pill.ques {
+  background-color: #f59e0b;
+  color: #000000;
+}
+
+.napper-injury-pill.ir {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   Right Rail Chat Cards (Sleeper BENCHWARMER OF THE WEEK)
+   Quotes tag, player headshot, stat line, fantasy points
+   ========================================================================== */
+
+.napper-chat-card-benchwarmer {
+  background: linear-gradient(180deg, #1b2636 0%, #151f2d 100%);
+  border: 1px solid #2b3b52;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.napper-chat-card-benchwarmer:hover {
+  transform: translateY(-1px);
+  border-color: var(--napper-teal);
+}
+
+.napper-chat-inner-player {
+  background-color: #111722;
+  border: 1px solid #233146;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.napper-chat-input-container {
+  background-color: #141c28;
+  border-top: 1px solid var(--napper-border);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.napper-chat-input-pill {
+  flex: 1;
+  background-color: #1c2738;
+  border: 1px solid #283850;
+  border-radius: 9999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #f1f5f9;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.napper-chat-input-pill:focus {
+  border-color: var(--napper-teal);
+}
+
+.napper-chat-input-pill::placeholder {
+  color: #5c6c80;
+}
+
+/* Matchup Pulse Indicator */
+@keyframes napper-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.napper-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background-color: #22c55e;
+  display: inline-block;
+  animation: napper-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
