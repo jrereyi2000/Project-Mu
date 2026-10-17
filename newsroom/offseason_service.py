@@ -770,16 +770,27 @@ def build_event_facts_packet(
                 }
 
             elif event_key in ("draft", "draft_class", "nfl_draft_class_recap"):
-                # Fetch actual round 1 picks from draft_prospects
+                # Fetch actual round 1 picks from draft_prospects for the single target class
+                # Prioritize canonical incoming rookie class (season + 1); fallback to (season) if stored under concluded year
                 cur.execute("""
                     SELECT dp.actual_pick, dp.full_name, dp.position, dp.college, dp.projected_pick,
                            dp.selection_notes, t.abbreviation as drafted_team_abbr, t.name as drafted_team_name
                     FROM draft_prospects dp
                     LEFT JOIN teams t ON t.id = dp.drafted_team_id
-                    WHERE dp.draft_season IN (%s, %s) AND dp.actual_pick IS NOT NULL
+                    WHERE dp.draft_season = %s AND dp.actual_pick IS NOT NULL
                     ORDER BY dp.actual_pick ASC
-                """, (season, season + 1))
+                """, (season + 1,))
                 db_picks = cur.fetchall()
+                if not db_picks:
+                    cur.execute("""
+                        SELECT dp.actual_pick, dp.full_name, dp.position, dp.college, dp.projected_pick,
+                               dp.selection_notes, t.abbreviation as drafted_team_abbr, t.name as drafted_team_name
+                        FROM draft_prospects dp
+                        LEFT JOIN teams t ON t.id = dp.drafted_team_id
+                        WHERE dp.draft_season = %s AND dp.actual_pick IS NOT NULL
+                        ORDER BY dp.actual_pick ASC
+                    """, (season,))
+                    db_picks = cur.fetchall()
 
                 picks_packet = []
                 if db_picks and len(db_picks) >= 32:
