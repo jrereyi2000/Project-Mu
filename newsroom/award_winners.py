@@ -39,6 +39,11 @@ AWARD_ALIASES = {
     "COTY": "COTY",
     "COACH OF THE YEAR": "COTY",
     "HEAD COACH OF THE YEAR": "COTY",
+    "SBMVP": "SBMVP",
+    "SUPER BOWL MVP": "SBMVP",
+    "SUPER BOWL MOST VALUABLE PLAYER": "SBMVP",
+    "PETE ROZELLE TROPHY": "SBMVP",
+    "PETE ROZELLE SUPER BOWL MVP": "SBMVP",
 }
 
 
@@ -315,3 +320,104 @@ def store_award_winners(cur, season: int, week: int, article_id: int, persona: s
         rows_written += 1
 
     return rows_written
+
+
+def parse_sb_mvp(text: str, roster_index: dict) -> tuple:
+    """Parses a SUPER_BOWL_GAME_RECAP article to extract and resolve the Super Bowl MVP (SBMVP).
+    Returns (entry, errors).
+    entry: {
+        "award_type": "SBMVP",
+        "player_id": int,
+        "coach_id": None,
+        "player_name": str,
+        "coach_name": None,
+        "team_id": int,
+        "position": str,
+    } or None
+    """
+    errors = []
+    raw_val = None
+
+    # Pattern 1: Level 2 or 3 header with recipient on same line
+    # e.g. ## Super Bowl MVP: George Crawford, QB, Carolina Panthers
+    m_header = re.search(
+        r"^(?:##|###)\s*(?:Official\s+)?(?:Pete\s+Rozelle\s+(?:Trophy\s*[/—–-]?\s*)?)?(?:Super\s+Bowl\s+MVP|Super\s+Bowl\s+Most\s+Valuable\s+Player|SBMVP)\s*[:\-—]\s*(.+)$",
+        text,
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if m_header:
+        raw_val = m_header.group(1).strip()
+
+    # Pattern 2: Bold inline line anywhere
+    # e.g. **Super Bowl MVP:** George Crawford, QB, Carolina Panthers
+    if not raw_val:
+        m_bold = re.search(
+            r"^\s*[-*]?\s*(?:\*\*)?(?:Super\s+Bowl\s+MVP|SBMVP)[:\-—]?(?:\*\*)?[:\-—]\s*(.+)$",
+            text,
+            re.MULTILINE | re.IGNORECASE,
+        )
+        if m_bold:
+            raw_val = m_bold.group(1).strip()
+
+    # Pattern 3: Header by itself, recipient on subsequent non-empty line or bullet
+    # e.g. ## Official Super Bowl MVP Award \n - **Winner**: George Crawford, QB, Carolina Panthers
+    if not raw_val:
+        m_section = re.search(
+            r"^(?:##|###)\s*(?:Official\s+)?(?:Pete\s+Rozelle\s+(?:Trophy\s*[/—–-]?\s*)?)?(?:Super\s+Bowl\s+MVP|Super\s+Bowl\s+Most\s+Valuable\s+Player|SBMVP)(?:\s+Award)?\s*$\n+([^\n#]+)",
+            text,
+            re.MULTILINE | re.IGNORECASE,
+        )
+        if m_section:
+            line = m_section.group(1).strip()
+            line = re.sub(r"^[-*]\s*", "", line)
+            line = re.sub(r"^(?:\*\*)?(?:Winner|Recipient|Player)?(?:\*\*)?[:\-—]\s*", "", line, flags=re.IGNORECASE)
+            raw_val = line.strip()
+
+    if not raw_val:
+        errors.append("Missing required Super Bowl MVP header (e.g., '## Super Bowl MVP: [Player Full Name], [Position], [Team Name]')")
+        return None, errors
+
+    clean_val = re.sub(r"[*_`]", "", raw_val).strip()
+    player, p_name, pos, t_str, err = resolve_player_award(clean_val, "SBMVP", roster_index)
+    if err:
+        errors.append(f"Super Bowl MVP error: {err}")
+        return None, errors
+
+    entry = {
+        "award_type": "SBMVP",
+        "player_id": player["player_id"],
+        "player_name": player["full_name"],
+        "coach_id": None,
+        "coach_name": None,
+        "team_id": player["team_id"],
+        "position": pos or player["position"],
+    }
+    return entry, []
+
+
+def sb_mvp_fix_prompt(errors: list) -> str:
+    """Generates an in-flight validation fix prompt for the active model chat session."""
+    err_list = "\n".join(f"- {e}" for e in errors)
+    return f"""Your Super Bowl recap article could not be stored in the canonical awards table because of the following Super Bowl MVP header formatting or player resolution error:
+
+{err_list}
+
+Please include the official Super Bowl MVP announcement using an exact Markdown level-2 (##) header in this exact format:
+## Super Bowl MVP: [Player Full Name], [Position], [Team Name]
+
+Make sure the player's full name, position, and team match an active roster player from the game.
+Under this header, deliver the definitive case for the award winner based on their recorded Super Bowl box-score line, pivotal second-half or drive-sustaining plays, and game-clinching impact."""
+
+
+def store_sb_mvp(cur, season: int, week: int, article_id: int, persona: str, entry: dict) -> int:
+    """Replaces stored Super Bowl MVP for this season in the awards table. Returns rows written (1)."""
+    cur.execute("""
+        DELETE FROM awards 
+        WHERE season = %s AND award_type = 'SBMVP'
+    """, (season,))
+
+    cur.execute("""
+        INSERT INTO awards (season, award_type, player_id, player_name, team_id, position)
+        VALUES (%s, 'SBMVP', %s, %s, %s, %s)
+    """, (season, entry["player_id"], entry["player_name"], entry["team_id"], entry["position"]))
+    return 1

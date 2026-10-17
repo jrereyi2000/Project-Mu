@@ -12,6 +12,9 @@ from newsroom.award_winners import (
     store_award_winners,
     resolve_coach,
     resolve_player_award,
+    parse_sb_mvp,
+    sb_mvp_fix_prompt,
+    store_sb_mvp,
 )
 
 
@@ -149,6 +152,93 @@ Perfection in Carolina redefined what was possible in professional football.
     """, (2035,))
         self.assertEqual(cur.execute.call_count, 3)
 
+    def test_parse_valid_sb_mvp(self):
+        text = """
+# The Regression Bill Comes Due: How Carolina Demolished Denver's House of Cards
+
+The final score was Carolina 59, Denver 6...
+
+## The Defining Turn: How One Strip-Sack Shattered Denver's High-Wire Act
+Carolina took total control early...
+
+## How Each Side Performed: Baseline Efficiency vs. Situational Bankruptcy
+Carolina executed with robotic precision...
+
+## Consequential Individual Performances: The Crawford-Davis Axiom
+Standout showings on both sides...
+
+## Super Bowl MVP: George Crawford, QB, Carolina Panthers
+In a game defined by total offensive mastery, George Crawford delivered an emphatic exclamation point to his historic sophomore campaign...
+
+### What Decided the Championship: The Mean Always Collects
+Perfection was secured...
+"""
+        entry, errors = parse_sb_mvp(text, self.roster_index)
+        self.assertEqual(errors, [])
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["award_type"], "SBMVP")
+        self.assertEqual(entry["player_id"], 101)
+        self.assertEqual(entry["player_name"], "George Crawford")
+        self.assertEqual(entry["team_id"], 1)
+        self.assertEqual(entry["position"], "QB")
+
+    def test_parse_sb_mvp_alternate_headers(self):
+        variations = [
+            "## Super Bowl MVP — George Crawford, QB, Carolina Panthers",
+            "### Super Bowl MVP: George Crawford (QB, Carolina Panthers)",
+            "## Pete Rozelle Trophy / Super Bowl MVP: George Crawford, QB, Carolina Panthers",
+            "## SBMVP: George Crawford, QB, Carolina Panthers",
+            "**Super Bowl MVP:** George Crawford, QB, Carolina Panthers",
+            "## Official Super Bowl MVP Award\n\n- **Winner**: George Crawford, QB, Carolina Panthers",
+        ]
+        for v in variations:
+            entry, errors = parse_sb_mvp(v, self.roster_index)
+            self.assertEqual(errors, [], f"Failed on variation: {v}")
+            self.assertIsNotNone(entry, f"Failed on variation: {v}")
+            self.assertEqual(entry["player_id"], 101)
+
+    def test_parse_sb_mvp_missing_header(self):
+        text = """
+# Super Bowl Recap
+No MVP header in this text.
+"""
+        entry, errors = parse_sb_mvp(text, self.roster_index)
+        self.assertIsNone(entry)
+        self.assertTrue(any("Missing required Super Bowl MVP header" in e for e in errors))
+
+    def test_parse_sb_mvp_unresolved_player(self):
+        text = "## Super Bowl MVP: Ghost Player, QB, Carolina Panthers"
+        entry, errors = parse_sb_mvp(text, self.roster_index)
+        self.assertIsNone(entry)
+        self.assertTrue(any("Could not find player 'Ghost Player'" in e for e in errors))
+
+    def test_sb_mvp_fix_prompt(self):
+        errors = ["Missing required Super Bowl MVP header"]
+        prompt = sb_mvp_fix_prompt(errors)
+        self.assertIn("Missing required Super Bowl MVP header", prompt)
+        self.assertIn("## Super Bowl MVP:", prompt)
+
+    def test_store_sb_mvp(self):
+        cur = MagicMock()
+        entry = {
+            "award_type": "SBMVP",
+            "player_id": 101,
+            "player_name": "George Crawford",
+            "team_id": 1,
+            "position": "QB",
+        }
+        n = store_sb_mvp(cur, 2035, 24, 1163, "BARNWELL", entry)
+        self.assertEqual(n, 1)
+        cur.execute.assert_any_call("""
+        DELETE FROM awards 
+        WHERE season = %s AND award_type = 'SBMVP'
+    """, (2035,))
+        cur.execute.assert_any_call("""
+        INSERT INTO awards (season, award_type, player_id, player_name, team_id, position)
+        VALUES (%s, 'SBMVP', %s, %s, %s, %s)
+    """, (2035, 101, "George Crawford", 1, "QB"))
+
 
 if __name__ == "__main__":
     unittest.main()
+

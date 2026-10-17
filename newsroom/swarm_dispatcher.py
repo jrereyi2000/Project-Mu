@@ -33,7 +33,10 @@ from newsroom.award_winners import (
     award_winners_fix_prompt,
     load_coach_index,
     parse_award_winners,
+    parse_sb_mvp,
+    sb_mvp_fix_prompt,
     store_award_winners,
+    store_sb_mvp,
 )
 from engines.gotw_engine import display_excitement
 from engines.game_script_engine import get_scripts, script_summary
@@ -1424,6 +1427,19 @@ If you need specific stats, use your database tools before producing your final 
                             if retry_text:
                                 generated_text = retry_text
 
+                    # Super Bowl Game Recap article must name a valid Super Bowl MVP; give writer one rewrite
+                    if at_id == "SUPER_BOWL_GAME_RECAP" and generated_text:
+                        _, sb_errors = parse_sb_mvp(generated_text, self._all_pro_roster_index(season))
+                        if sb_errors:
+                            print("\n⚠️ [SUPER BOWL MVP FAILED VALIDATION] Requesting one rewrite:\n   " + "\n   ".join(sb_errors[:8]))
+                            retry = chat.send_message(sb_mvp_fix_prompt(sb_errors))
+                            retry_text = retry.text
+                            if not retry_text and hasattr(retry, "candidates") and retry.candidates:
+                                parts = retry.candidates[0].content.parts
+                                retry_text = "\n".join(p.text for p in parts if hasattr(p, "text") and p.text)
+                            if retry_text:
+                                generated_text = retry_text
+
                     if not (generated_text or "").strip():
                         failure_reason = "model returned no text"
                         generated_text = ""
@@ -1572,6 +1588,14 @@ If you need specific stats, use your database tools before producing your final 
                             else:
                                 n = store_award_winners(cur, season, week, article_id, compiled_prompt["archetype"], entries)
                                 print(f"🏆 [AWARDS STORED] Season {season} Week {week}: {n} major award winners saved to awards from article #{article_id}.")
+
+                        if article_id and ctype == "ARTICLE" and at_id == "SUPER_BOWL_GAME_RECAP":
+                            entry, sb_errors = parse_sb_mvp(generated_text, load_roster_index(cur, season))
+                            if sb_errors:
+                                print(f"⚠️  [SBMVP NOT STORED] Article #{article_id}: " + " | ".join(sb_errors[:5]))
+                            else:
+                                n = store_sb_mvp(cur, season, week, article_id, compiled_prompt["archetype"], entry)
+                                print(f"🏆 [SUPER BOWL MVP STORED] Season {season} Week {week}: {entry['player_name']} ({entry['position']}) saved to awards from article #{article_id}.")
                     conn.commit()
             except Exception as e:
                 print(f"Failed to record news_feed entry for {display}: {e}")
