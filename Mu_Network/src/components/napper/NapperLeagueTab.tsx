@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import { BlueRobotAvatar, PinkRobotAvatar } from "./napperUtils";
 import { ARCHETYPE_METAS, NapperManagerArchetype } from "../../types/napper";
+import ArchetypeCompositionModal from "./draft/ArchetypeCompositionModal";
 
 interface NapperLeagueTabProps {
   leagueId: number;
@@ -11,8 +12,9 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
   const [league, setLeague] = useState<any>(null);
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [strategyModalOpen, setStrategyModalOpen] = useState<boolean>(false);
 
-  useEffect(() => {
+  const fetchLeagueData = () => {
     fetch(`${API_BASE}/api/napper/league/${leagueId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -21,14 +23,103 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchLeagueData();
   }, [leagueId]);
 
   if (loading) {
     return <div style={{ padding: "32px", color: "#8a99ad", textAlign: "center" }}>Loading standings & bracket...</div>;
   }
 
+  const aiTeams = teams.filter((t) => t.is_ai);
+  const aiSlots = aiTeams.length;
+  const currentComposition: Record<string, number> = {};
+  aiTeams.forEach((t) => {
+    const p = t.persona || "ANALYTICS_NERD";
+    currentComposition[p] = (currentComposition[p] || 0) + 1;
+  });
+
+  const handleApplyStrategies = (newComposition: Record<string, number>, presetName?: string) => {
+    fetch(`${API_BASE}/api/napper/league/${leagueId}/set_strategies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        archetype_composition: newComposition,
+        archetype_preset: presetName,
+      }),
+    })
+      .then((res) => res.json())
+      .then(() => {
+        fetchLeagueData();
+      })
+      .catch(() => {});
+  };
+
   return (
     <div className="napper-league-tab" style={{ padding: "16px 24px" }}>
+      {/* League Strategies Card */}
+      <div style={{ marginBottom: "24px", background: "#1a2332", border: "1px solid #283850", borderRadius: "10px", padding: "14px 18px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "16px" }}>🎯</span>
+            <span style={{ color: "#e2e8f0", fontSize: "14px", fontWeight: "700" }}>League Manager Strategies</span>
+            <span style={{ color: "var(--napper-teal)", fontSize: "11px", fontWeight: "700", background: "rgba(0, 206, 184, 0.15)", border: "1px solid rgba(0, 206, 184, 0.3)", padding: "1px 8px", borderRadius: "10px" }}>
+              {aiSlots} AI Managers
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStrategyModalOpen(true)}
+            style={{
+              background: "rgba(0, 206, 184, 0.15)",
+              border: "1px solid var(--napper-teal)",
+              color: "var(--napper-teal)",
+              padding: "5px 12px",
+              borderRadius: "8px",
+              fontSize: "11px",
+              fontWeight: "700",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            <span>⚙</span>
+            <span>Customize League Strategies</span>
+          </button>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+          {Object.entries(currentComposition).map(([key, count]) => {
+            const meta = ARCHETYPE_METAS[key as NapperManagerArchetype];
+            return (
+              <div
+                key={key}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  color: meta?.color || "#e2e8f0",
+                  background: meta?.bgColor || "rgba(255, 255, 255, 0.05)",
+                  border: `1px solid ${meta?.borderColor || "#283850"}`,
+                }}
+              >
+                <span>{meta?.label || key}</span>
+                <span style={{ background: "rgba(0, 0, 0, 0.4)", padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "700" }}>
+                  {count}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Standings Table */}
       <div style={{ marginBottom: "32px" }}>
         <h3 style={{ color: "#e2e8f0", fontSize: "16px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -141,6 +232,17 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
           </div>
         </div>
       </div>
+
+      <ArchetypeCompositionModal
+        isOpen={strategyModalOpen}
+        onClose={() => setStrategyModalOpen(false)}
+        teamsCount={teams.length || 8}
+        currentComposition={currentComposition}
+        onApply={handleApplyStrategies}
+        title="Customize League Strategies"
+        subtitle={`Pick what strategies and manager personas you want in this league (${aiSlots} AI managers)`}
+        applyButtonText="Update League Strategies"
+      />
     </div>
   );
 }

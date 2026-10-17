@@ -147,6 +147,7 @@ def build_ai_managers(
     teams_count: int,
     archetype_composition: Optional[Dict[str, int]] = None,
     archetypes: Optional[List[str]] = None,
+    randomize_order: bool = True,
 ) -> List[Dict[str, Any]]:
     """Builds a customized list of AI managers based on desired archetype composition."""
     ai_slots = teams_count - 1
@@ -166,6 +167,9 @@ def build_ai_managers(
     while len(selected_personas) < ai_slots:
         selected_personas.append(canonical_personas[idx % len(canonical_personas)])
         idx += 1
+
+    if randomize_order and not (archetypes and len(archetypes) > 0):
+        random.shuffle(selected_personas)
 
     # Map each chosen persona to an AI manager template
     managers: List[Dict[str, Any]] = []

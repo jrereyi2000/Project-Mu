@@ -8,6 +8,10 @@ import { NapperPlayersTab } from "./components/napper/NapperPlayersTab";
 import { NapperTradesTab } from "./components/napper/NapperTradesTab";
 import { NapperScoresTab } from "./components/napper/NapperScoresTab";
 import NapperDraftRoom from "./components/napper/draft/NapperDraftRoom";
+import ArchetypeCompositionModal, {
+  ARCHETYPE_PRESETS,
+  balanceCounts,
+} from "./components/napper/draft/ArchetypeCompositionModal";
 import {
   BlueRobotAvatar,
   PinkRobotAvatar,
@@ -15,7 +19,14 @@ import {
   getPlayerHeadshotUrl,
   handleImageError,
 } from "./components/napper/napperUtils";
-import type { NapperChatMessage, NapperStarterPlayer, NapperLeagueSummary, NapperUserProfile } from "./types/napper";
+import type {
+  NapperChatMessage,
+  NapperStarterPlayer,
+  NapperLeagueSummary,
+  NapperUserProfile,
+  NapperManagerArchetype,
+} from "./types/napper";
+import { ARCHETYPE_METAS } from "./types/napper";
 
 interface NapperPageProps {
   leagueId?: number;
@@ -126,9 +137,57 @@ export const NapperPage: React.FC<NapperPageProps> = ({
   const [createSuperflex, setCreateSuperflex] = useState<boolean>(true);
   const [createStatus, setCreateStatus] = useState<"IN_SEASON" | "PRE_DRAFT">("IN_SEASON");
   const [createArchetypePreset, setCreateArchetypePreset] = useState<string>("Balanced Mix");
+  const [createArchetypeComposition, setCreateArchetypeComposition] = useState<Record<string, number>>(() =>
+    ARCHETYPE_PRESETS[0].getCounts(7)
+  );
+  const [createStrategyTab, setCreateStrategyTab] = useState<"SUGGESTED" | "CUSTOM">("SUGGESTED");
+  const [createCustomModalOpen, setCreateCustomModalOpen] = useState<boolean>(false);
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccessMsg, setCreateSuccessMsg] = useState<string | null>(null);
+
+  const handleTeamCountChange = (cnt: number) => {
+    setCreateTeamsCount(cnt);
+    const aiSlots = Math.max(1, cnt - 1);
+    if (createArchetypePreset !== "Custom") {
+      const p = ARCHETYPE_PRESETS.find((x) => x.name === createArchetypePreset) || ARCHETYPE_PRESETS[0];
+      setCreateArchetypeComposition(p.getCounts(aiSlots));
+    } else {
+      setCreateArchetypeComposition((prev) => balanceCounts({ ...prev }, aiSlots, "ANALYTICS_NERD"));
+    }
+  };
+
+  const handleSelectPreset = (presetName: string) => {
+    setCreateArchetypePreset(presetName);
+    const p = ARCHETYPE_PRESETS.find((x) => x.name === presetName) || ARCHETYPE_PRESETS[0];
+    setCreateArchetypeComposition(p.getCounts(createTeamsCount - 1));
+  };
+
+  const handleApplyCustomStrategies = (newComp: Record<string, number>, presetName?: string) => {
+    setCreateArchetypeComposition(newComp);
+    setCreateArchetypePreset(presetName || "Custom");
+    if (presetName && presetName !== "Custom") {
+      setCreateStrategyTab("SUGGESTED");
+    } else {
+      setCreateStrategyTab("CUSTOM");
+    }
+  };
+
+  const handleCreateIncrementStrategy = (key: string) => {
+    setCreateArchetypeComposition((prev) => ({
+      ...prev,
+      [key]: (prev[key] || 0) + 1,
+    }));
+    setCreateArchetypePreset("Custom");
+  };
+
+  const handleCreateDecrementStrategy = (key: string) => {
+    setCreateArchetypeComposition((prev) => ({
+      ...prev,
+      [key]: Math.max(0, (prev[key] || 0) - 1),
+    }));
+    setCreateArchetypePreset("Custom");
+  };
 
   // 1. Fetch user profile
   useEffect(() => {
@@ -185,6 +244,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
         is_superflex: createSuperflex,
         status: createStatus,
         archetype_preset: createArchetypePreset,
+        archetype_composition: createArchetypeComposition,
       }),
     })
       .then((res) => {
@@ -1089,7 +1149,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                       <button
                         key={cnt}
                         type="button"
-                        onClick={() => setCreateTeamsCount(cnt)}
+                        onClick={() => handleTeamCountChange(cnt)}
                         className={`py-2 text-xs font-bold rounded-xl border transition-colors cursor-pointer ${
                           createTeamsCount === cnt
                             ? "bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8]"
@@ -1177,36 +1237,166 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                   </div>
                 </div>
 
-                {/* AI Manager Archetype Strategy */}
+                {/* AI Manager Strategies & Archetypes */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-[#8a99ad] uppercase tracking-wider">
-                      AI Manager Strategy
-                    </label>
-                    <span className="text-[10px] text-[#00ceb8] font-bold">8 Archetypes</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { key: "Balanced Mix", label: "Balanced 8-Way", desc: "All 8 archetypes represented" },
-                      { key: "Trader's Paradise", label: "Trader's Paradise", desc: "Trade Fiends & Analytics Nerds" },
-                      { key: "Sleeper Upside", label: "Sleeper Upside", desc: "Underdogs & Zero-RB breakouts" },
-                      { key: "Chaos & Reachers", label: "Chaos & Swagger", desc: "Trash Talkers & Die-Hards" },
-                    ].map((p) => (
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <label className="text-xs font-bold text-[#8a99ad] uppercase tracking-wider block">
+                        AI Manager Strategy
+                      </label>
+                      <span className="text-[10px] text-[#5c6c80]">
+                        Select suggested preset or pick exact strategies to draft with you
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-[#111827] p-0.5 rounded-lg border border-[#223147]">
                       <button
-                        key={p.key}
                         type="button"
-                        onClick={() => setCreateArchetypePreset(p.key)}
-                        className={`p-2.5 text-left rounded-xl border transition-colors cursor-pointer ${
-                          createArchetypePreset === p.key
-                            ? "bg-[#00ceb8]/15 border-[#00ceb8] text-white"
-                            : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
+                        onClick={() => setCreateStrategyTab("SUGGESTED")}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
+                          createStrategyTab === "SUGGESTED"
+                            ? "bg-[#00ceb8] text-[#0d1722]"
+                            : "text-[#8a99ad] hover:text-white"
                         }`}
                       >
-                        <div className="text-xs font-bold leading-tight">{p.label}</div>
-                        <div className="text-[10px] text-[#8a99ad] opacity-80 mt-0.5 leading-tight">{p.desc}</div>
+                        Suggested
                       </button>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={() => setCreateStrategyTab("CUSTOM")}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
+                          createStrategyTab === "CUSTOM"
+                            ? "bg-[#00ceb8] text-[#0d1722]"
+                            : "text-[#8a99ad] hover:text-white"
+                        }`}
+                      >
+                        🎯 Pick Strategies
+                      </button>
+                    </div>
                   </div>
+
+                  {createStrategyTab === "SUGGESTED" ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+                        {ARCHETYPE_PRESETS.map((p) => {
+                          const isSelected = createArchetypePreset === p.name;
+                          return (
+                            <button
+                              key={p.name}
+                              type="button"
+                              onClick={() => handleSelectPreset(p.name)}
+                              className={`p-2.5 text-left rounded-xl border transition-all cursor-pointer ${
+                                isSelected
+                                  ? "bg-[#00ceb8]/15 border-[#00ceb8] text-white shadow-[0_0_12px_rgba(0,206,184,0.15)]"
+                                  : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:border-[#334661] hover:text-white"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold leading-tight text-white">{p.name}</span>
+                                {isSelected && (
+                                  <span className="text-[10px] text-[#00ceb8] font-bold">✓ Active</span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-[#8a99ad] opacity-80 mt-1 leading-snug line-clamp-2">
+                                {p.description}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#121926] border border-[#223147] text-[11px]">
+                        <span className="text-[#8a99ad]">
+                          Want to pick exact strategies in the league?
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCreateStrategyTab("CUSTOM");
+                            setCreateCustomModalOpen(true);
+                          }}
+                          className="text-[#00ceb8] hover:text-[#2bd9c6] font-bold hover:underline cursor-pointer"
+                        >
+                          Pick Strategies ➜
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 bg-[#121926] p-3 rounded-xl border border-[#223147]">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white">Picked Strategies</span>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-[#00ceb8]/20 text-[#00ceb8] border border-[#00ceb8]/40">
+                            {Object.values(createArchetypeComposition).reduce((a, b) => a + b, 0)} / {createTeamsCount - 1} AI Slots
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCreateCustomModalOpen(true)}
+                          className="px-2.5 py-1 rounded-lg bg-[#00ceb8]/20 hover:bg-[#00ceb8]/30 border border-[#00ceb8]/50 text-[#00ceb8] text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                        >
+                          <span>⚙</span>
+                          <span>Full Strategy Picker</span>
+                        </button>
+                      </div>
+
+                      {/* Active strategy pills with quick stepper */}
+                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1 scrollbar-thin">
+                        {(Object.keys(ARCHETYPE_METAS) as NapperManagerArchetype[]).map((key) => {
+                          const meta = ARCHETYPE_METAS[key];
+                          const count = createArchetypeComposition[key] || 0;
+                          return (
+                            <div
+                              key={key}
+                              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-colors ${
+                                count > 0 ? "opacity-100" : "opacity-40 hover:opacity-80"
+                              }`}
+                              style={{
+                                color: meta?.color || "#fff",
+                                backgroundColor: meta?.bgColor || "rgba(255,255,255,0.05)",
+                                borderColor: meta?.borderColor || "#334661",
+                              }}
+                            >
+                              <span className="font-bold text-[11px]">{meta?.shortLabel || key}</span>
+                              <span className="px-1.5 py-0.2 bg-black/50 rounded text-[10px] font-mono font-bold text-white">
+                                {count}
+                              </span>
+                              <div className="flex items-center gap-0.5 ml-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCreateDecrementStrategy(key)}
+                                  disabled={count <= 0}
+                                  className="w-4 h-4 rounded bg-black/40 hover:bg-black/70 text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-[10px]"
+                                >
+                                  -
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCreateIncrementStrategy(key)}
+                                  className="w-4 h-4 rounded bg-black/40 hover:bg-black/70 text-white flex items-center justify-center font-black text-[10px]"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-[#8a99ad] pt-1 border-t border-[#1c2738]">
+                        <span>Allocate {createTeamsCount - 1} AI managers across strategies.</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCreateArchetypePreset("Balanced Mix");
+                            setCreateArchetypeComposition(ARCHETYPE_PRESETS[0].getCounts(createTeamsCount - 1));
+                            setCreateStrategyTab("SUGGESTED");
+                          }}
+                          className="text-[#8a99ad] hover:text-white underline cursor-pointer"
+                        >
+                          Reset to Balanced
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Submit buttons */}
@@ -1275,6 +1465,18 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal: Pick Strategies for League Creation */}
+      <ArchetypeCompositionModal
+        isOpen={createCustomModalOpen}
+        onClose={() => setCreateCustomModalOpen(false)}
+        teamsCount={createTeamsCount}
+        currentComposition={createArchetypeComposition}
+        onApply={handleApplyCustomStrategies}
+        title="Pick League Strategies"
+        subtitle={`Select what strategies and manager personas you want to have in the league with you (${createTeamsCount - 1} AI slots)`}
+        applyButtonText="Set League Strategies"
+      />
     </div>
   );
 };

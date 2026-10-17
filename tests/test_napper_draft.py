@@ -683,5 +683,68 @@ def test_draft_kicker_selection():
     assert first_pick["player"]["name"] == kicker["name"]
 
 
+def test_pick_league_custom_strategies():
+    """Verifies that creating a league with picked custom strategies populates the AI managers accordingly."""
+    payload = {
+        "name": "Custom Strategy League",
+        "teams_count": 8,
+        "scoring_type": "PPR",
+        "status": "PRE_DRAFT",
+        "archetype_preset": "Custom",
+        "archetype_composition": {
+            "HERO_RB": 3,
+            "ZERO_RB_ZEALOT": 2,
+            "EARLY_QB": 2,
+        },
+    }
+    res = client.post("/api/napper/leagues/create", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    league_id = data["league"]["id"]
+
+    # Verify AI team personas
+    detail_res = client.get(f"/api/napper/league/{league_id}")
+    assert detail_res.status_code == 200
+    teams = detail_res.json()["teams"]
+    ai_teams = [t for t in teams if t["is_ai"]]
+    assert len(ai_teams) == 7
+
+    personas = [t["persona"] for t in ai_teams]
+    assert personas.count("HERO_RB") == 3
+    assert personas.count("ZERO_RB_ZEALOT") == 2
+    assert personas.count("EARLY_QB") == 2
 
 
+def test_set_league_strategies_endpoint():
+    """Verifies updating an existing league's strategies via POST /league/{id}/set_strategies."""
+    # Create test league
+    res = client.post("/api/napper/leagues/create", json={
+        "name": "Strategy Switch League",
+        "teams_count": 8,
+        "scoring_type": "PPR",
+        "status": "IN_SEASON",
+        "archetype_preset": "Balanced Mix",
+    })
+    assert res.status_code == 200
+    league_id = res.json()["league"]["id"]
+
+    # Update strategies to custom composition
+    update_res = client.post(f"/api/napper/league/{league_id}/set_strategies", json={
+        "archetype_preset": "Custom",
+        "archetype_composition": {
+            "ANALYTICS_NERD": 4,
+            "TRADE_FIEND": 3,
+        },
+    })
+    assert update_res.status_code == 200
+    assert update_res.json()["status"] == "success"
+
+    # Verify updated AI team personas
+    detail_res = client.get(f"/api/napper/league/{league_id}")
+    assert detail_res.status_code == 200
+    teams = detail_res.json()["teams"]
+    ai_teams = [t for t in teams if t["is_ai"]]
+    personas = [t["persona"] for t in ai_teams]
+
+    assert personas.count("ANALYTICS_NERD") == 4
+    assert personas.count("TRADE_FIEND") == 3

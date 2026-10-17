@@ -111,6 +111,7 @@ class RandomizeOrderRequest(BaseModel):
 class SetArchetypesRequest(BaseModel):
     archetype_composition: Optional[Dict[str, int]] = None
     archetypes: Optional[List[str]] = None
+    archetype_preset: Optional[str] = None
 
 
 class SetDraftOrderRequest(BaseModel):
@@ -380,6 +381,85 @@ def get_league_detail(league_id: int):
             }
 
 
+def resolve_archetype_preset_composition(preset_name: Optional[str], ai_slots: int) -> Dict[str, int]:
+    """Resolves archetype preset name into specific archetype slot counts for AI managers."""
+    preset_lower = (preset_name or "").lower()
+    if "trader" in preset_lower or "trade" in preset_lower:
+        comp = {
+            "TRADE_FIEND": max(1, round(ai_slots * 0.45)),
+            "ANALYTICS_NERD": max(1, round(ai_slots * 0.25)),
+            "WAIVER_HAWK": 1,
+            "HERO_RB": 1,
+        }
+    elif "sleeper" in preset_lower or "underdog" in preset_lower:
+        comp = {
+            "UNDERDOG": max(1, round(ai_slots * 0.45)),
+            "ZERO_RB_ZEALOT": max(1, round(ai_slots * 0.25)),
+            "HERO_RB": 1,
+            "ANALYTICS_NERD": 1,
+        }
+    elif "zero" in preset_lower:
+        comp = {
+            "ZERO_RB_ZEALOT": max(1, round(ai_slots * 0.55)),
+            "ANALYTICS_NERD": 1,
+            "UNDERDOG": 1,
+            "HERO_RB": 1,
+        }
+    elif "hero" in preset_lower:
+        comp = {
+            "HERO_RB": max(1, round(ai_slots * 0.55)),
+            "ZERO_RB_ZEALOT": 1,
+            "ANALYTICS_NERD": 1,
+            "TRADE_FIEND": 1,
+        }
+    elif "chaos" in preset_lower or "trash" in preset_lower:
+        comp = {
+            "TRASH_TALKER": max(1, round(ai_slots * 0.45)),
+            "DIE_HARD": max(1, round(ai_slots * 0.35)),
+            "TRADE_FIEND": 1,
+        }
+    elif "analytics" in preset_lower:
+        comp = {
+            "ANALYTICS_NERD": max(1, round(ai_slots * 0.55)),
+            "ZERO_RB_ZEALOT": 1,
+            "TRADE_FIEND": 1,
+            "HERO_RB": 1,
+        }
+    elif "sim" in preset_lower or "fantasy league" in preset_lower:
+        comp = {
+            "BPA": max(1, round(ai_slots * 0.35)),
+            "HERO_RB": max(1, round(ai_slots * 0.15)),
+            "ZERO_RB_ZEALOT": max(1, round(ai_slots * 0.15)),
+            "RB_HEAVY": max(1, round(ai_slots * 0.15)),
+            "EARLY_QB": max(1, round(ai_slots * 0.10)),
+            "EARLY_TE": max(1, round(ai_slots * 0.10)),
+        }
+    else:
+        # Default: Balanced Mix across the 8 archetypes
+        canonical = [
+            "ANALYTICS_NERD", "ZERO_RB_ZEALOT", "HERO_RB", "TRASH_TALKER",
+            "WAIVER_HAWK", "DIE_HARD", "TRADE_FIEND", "UNDERDOG"
+        ]
+        comp = defaultdict(int)
+        for i in range(ai_slots):
+            comp[canonical[i % len(canonical)]] += 1
+        return dict(comp)
+
+    # Balance counts to exact ai_slots
+    cur_total = sum(comp.values())
+    if cur_total < ai_slots:
+        first_key = next(iter(comp))
+        comp[first_key] += (ai_slots - cur_total)
+    elif cur_total > ai_slots:
+        diff = cur_total - ai_slots
+        for k in list(comp.keys()):
+            if comp[k] > 0 and diff > 0:
+                sub = min(comp[k], diff)
+                comp[k] -= sub
+                diff -= sub
+    return comp
+
+
 @router.post("/leagues/create")
 def create_league(req: LeagueCreateRequest):
     """Creates a new fantasy league.
@@ -450,56 +530,15 @@ def create_league(req: LeagueCreateRequest):
             ))
             user_team_id = cur.fetchone()["id"]
 
-            # 5. Create AI Teams using the 8 canonical manager archetypes
+            # 5. Create AI Teams using custom picked strategies or preset
             archetype_composition = req.archetype_composition
-            if not archetype_composition and req.archetype_preset:
-                preset_lower = req.archetype_preset.lower()
-                ai_slots = teams_count - 1
-                if "trader" in preset_lower or "trade" in preset_lower:
-                    archetype_composition = {
-                        "TRADE_FIEND": max(1, round(ai_slots * 0.45)),
-                        "ANALYTICS_NERD": max(1, round(ai_slots * 0.25)),
-                        "WAIVER_HAWK": 1,
-                        "HERO_RB": 1,
-                    }
-                elif "sleeper" in preset_lower or "underdog" in preset_lower:
-                    archetype_composition = {
-                        "UNDERDOG": max(1, round(ai_slots * 0.45)),
-                        "ZERO_RB_ZEALOT": max(1, round(ai_slots * 0.25)),
-                        "HERO_RB": 1,
-                        "ANALYTICS_NERD": 1,
-                    }
-                elif "zero" in preset_lower:
-                    archetype_composition = {
-                        "ZERO_RB_ZEALOT": max(1, round(ai_slots * 0.55)),
-                        "ANALYTICS_NERD": 1,
-                        "UNDERDOG": 1,
-                        "HERO_RB": 1,
-                    }
-                elif "hero" in preset_lower:
-                    archetype_composition = {
-                        "HERO_RB": max(1, round(ai_slots * 0.55)),
-                        "ZERO_RB_ZEALOT": 1,
-                        "ANALYTICS_NERD": 1,
-                        "TRADE_FIEND": 1,
-                    }
-                elif "chaos" in preset_lower or "trash" in preset_lower:
-                    archetype_composition = {
-                        "TRASH_TALKER": max(1, round(ai_slots * 0.45)),
-                        "DIE_HARD": max(1, round(ai_slots * 0.35)),
-                        "TRADE_FIEND": 1,
-                    }
-                elif "analytics" in preset_lower:
-                    archetype_composition = {
-                        "ANALYTICS_NERD": max(1, round(ai_slots * 0.55)),
-                        "ZERO_RB_ZEALOT": 1,
-                        "TRADE_FIEND": 1,
-                        "HERO_RB": 1,
-                    }
+            if not archetype_composition:
+                archetype_composition = resolve_archetype_preset_composition(req.archetype_preset, teams_count - 1)
 
             ai_managers = napper_draft_engine.build_ai_managers(
                 teams_count=teams_count,
                 archetype_composition=archetype_composition,
+                randomize_order=True,
             )
 
             team_ids = [user_team_id]
@@ -619,6 +658,74 @@ def create_league(req: LeagueCreateRequest):
         "league": new_league,
         "user_team_id": user_team_id,
     }
+
+
+@router.post("/league/{league_id}/set_strategies")
+def set_league_strategies(league_id: int, req: SetArchetypesRequest):
+    """Updates the manager strategies/personas for all AI teams in a league."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name, teams_count, status FROM napper_leagues WHERE id = %s", (league_id,))
+            league = cur.fetchone()
+            if not league:
+                raise HTTPException(status_code=404, detail="League not found")
+
+            # Fetch existing AI teams
+            cur.execute("""
+                SELECT id, persona FROM napper_teams
+                WHERE league_id = %s AND is_ai = TRUE
+                ORDER BY seed ASC, id ASC
+            """, (league_id,))
+            ai_teams = cur.fetchall()
+            if not ai_teams:
+                raise HTTPException(status_code=400, detail="No AI teams found in league to update")
+
+            ai_slots = len(ai_teams)
+            comp = req.archetype_composition
+            if not comp and req.archetype_preset:
+                comp = resolve_archetype_preset_composition(req.archetype_preset, ai_slots)
+
+            new_managers = napper_draft_engine.build_ai_managers(
+                teams_count=ai_slots + 1,
+                archetype_composition=comp,
+                archetypes=req.archetypes,
+                randomize_order=True,
+            )
+
+            for idx, tm in enumerate(ai_teams):
+                m = new_managers[idx % len(new_managers)]
+                cur.execute("""
+                    UPDATE napper_teams
+                    SET persona = %s, team_name = %s, manager_handle = %s
+                    WHERE id = %s
+                """, (m["persona"], m["name"], m["handle"], tm["id"]))
+
+            # Announce update in league chat
+            summary_parts = []
+            if comp:
+                for k, v in comp.items():
+                    if v > 0:
+                        clean_name = k.replace("_", " ").title()
+                        summary_parts.append(f"{v} {clean_name}")
+            summary_str = ", ".join(summary_parts) if summary_parts else (req.archetype_preset or "Custom Strategy Mix")
+
+            cur.execute("""
+                INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text, card_payload)
+                VALUES (%s, 'SYSTEM_BOT', 'Commissioner', '@CommissionerBot', '/static/players/robot_avatar.webp', %s, %s)
+            """, (
+                league_id,
+                f"⚙ League strategies updated: {summary_str}",
+                psycopg.types.json.Jsonb({
+                    "type": "STRATEGY_UPDATE",
+                    "title": "League Strategies Updated",
+                    "highlight": f"{ai_slots} AI Teams Reconfigured",
+                    "commentary": f"Active manager strategies: {summary_str}",
+                })
+            ))
+
+        conn.commit()
+
+    return {"status": "success", "message": "League strategies updated", "league_id": league_id}
 
 
 @router.get("/league/{league_id}/teams_rosters")

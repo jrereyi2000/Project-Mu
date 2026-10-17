@@ -5,12 +5,15 @@ import {
   ArchetypeMeta,
 } from "../../../types/napper";
 
-interface ArchetypeCompositionModalProps {
+export interface ArchetypeCompositionModalProps {
   isOpen: boolean;
   onClose: () => void;
   teamsCount: number;
   currentComposition: Record<string, number>;
   onApply: (newComposition: Record<string, number>, presetName?: string) => void;
+  title?: string;
+  subtitle?: string;
+  applyButtonText?: string;
 }
 
 export const ARCHETYPE_PRESETS: Array<{
@@ -164,7 +167,7 @@ export const ARCHETYPE_PRESETS: Array<{
   },
 ];
 
-function balanceCounts(counts: Record<string, number>, targetTotal: number, primaryKey: string): Record<string, number> {
+export function balanceCounts(counts: Record<string, number>, targetTotal: number, primaryKey: string): Record<string, number> {
   let currentTotal = Object.values(counts).reduce((a, b) => a + b, 0);
   if (currentTotal < targetTotal) {
     counts[primaryKey] += targetTotal - currentTotal;
@@ -187,6 +190,9 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
   teamsCount,
   currentComposition,
   onApply,
+  title,
+  subtitle,
+  applyButtonText,
 }) => {
   const aiSlots = Math.max(1, teamsCount - 1);
   const [counts, setCounts] = useState<Record<string, number>>(() => ({
@@ -273,11 +279,11 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
             <div className="flex items-center gap-2">
               <span className="text-lg">🤖</span>
               <h2 className="text-base font-black uppercase tracking-wider text-white">
-                Mock Draft Archetype Composition
+                {title || "Mock Draft Archetype Composition"}
               </h2>
             </div>
             <p className="text-xs text-[#8a99ad] mt-0.5">
-              Customize the draft personas of the {aiSlots} AI managers drafting against you
+              {subtitle || `Customize the draft personas of the ${aiSlots} AI managers drafting against you`}
             </p>
           </div>
           <button
@@ -409,7 +415,7 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
               onClick={handleApply}
               className="px-5 py-2 rounded-xl bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#090e17] text-xs font-black uppercase tracking-wider shadow-[0_0_12px_rgba(0,206,184,0.3)] transition-all cursor-pointer"
             >
-              Apply Archetypes
+              {applyButtonText || "Apply Archetypes"}
             </button>
           </div>
         </div>
