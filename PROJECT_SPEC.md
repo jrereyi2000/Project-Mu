@@ -101,7 +101,8 @@ Project Mu/
 │   ├── fantasy_projection_engine.py # Weekly PPR projections, matchup stars, pos/ROS ranks → fantasy_projections (+ --backtest)
 │   ├── napper_seeder.py       #   Seeds reference user @jrereyi2000, 3 reference leagues, rosters, week 6 matchups, and chat cards (§3.4b)
 │   ├── napper_trade_engine.py #   Proactive AI trade engine with positional scarcity weights, bench depth penalties, and stochastic execution (§4.4b)
-│   └── napper_chat_engine.py  #   Autonomous league chat banter (4 manager personas) and weekly bot award cards (benchwarmers, high scorer) (§4.4b)
+│   ├── napper_chat_engine.py  #   Autonomous league chat banter (4 manager personas) and weekly bot award cards (benchwarmers, high scorer) (§4.4b)
+│   └── napper_draft_engine.py #   Interactive snake draft and solo mock draft simulator engine (Phase 6, docs/NAPPER_FANTASY_PLAN.md)
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
 │   ├── slot_targets.py        #   Editorial Matrix slot targeting (primer games, exits, eliminations, W19 hot seat)
@@ -668,6 +669,11 @@ High-performance RESTful API powering the Napper interactive multi-league Sleepe
 - `POST /api/napper/league/{id}/trades/{trade_id}/respond`: Handles trade acceptance or rejection (`{response: "ACCEPT" | "REJECT"}`). Acceptance atomically mutates rosters across current and future weeks, logging a `TRADE_ALERT` announcement in `napper_chat`.
 - `GET /api/napper/league/{id}/chat?limit={limit}`: Returns league chat messages and bot cards in ascending chronological order (querying the most recent messages up to `limit`).
 - `POST /api/napper/league/{id}/chat/send`: Posts user chat message or custom payload to the league chat stream.
+- `POST /api/napper/drafts/create_mock`: Initializes a solo mock draft session with custom team count, draft slot, scoring, and speed.
+- `GET /api/napper/draft/{id}`: Returns real-time draft room state, board picks matrix, active on-the-clock team, and remaining timer.
+- `POST /api/napper/draft/{id}/pick`: Submits a draft pick (`{player_id}`).
+- `POST /api/napper/draft/{id}/sim_step`: Steps or fast-forwards AI bot draft turns based on ADP & need (`engines/napper_draft_engine.py`).
+- `POST /api/napper/draft/{id}/finalize`: Finalizes draft, generates letter-grade recap, and atomizes rosters for pre-draft leagues.
 
 ### 4.5 Debug Endpoints (`server/debug_api.py`, the `#debug` page)
 Reads are open like the rest of the API; every write needs header `X-Debug-Token` = `DEBUG_TOKEN` (env or `.env`; 403 when unset, 401 when wrong). The module opens its own connections (`DATABASE_URL`).
