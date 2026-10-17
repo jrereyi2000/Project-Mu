@@ -246,6 +246,10 @@ def test_process_ai_trade_bench_depth_rejection(db_conn):
     if qb_row:
         qb_id = qb_row[0]
         cur.execute(
+            "DELETE FROM napper_rosters WHERE league_id = 1 AND team_id = %s AND week = 6 AND player_id != %s",
+            (ai_team_2, qb_id),
+        )
+        cur.execute(
             """
             INSERT INTO napper_trades (
                 league_id, week, proposer_team_id, target_team_id,
@@ -302,7 +306,7 @@ def test_generate_manager_banter_all_personas(db_conn):
         banter = generate_manager_banter(1, 6, context_type=ctx, conn=db_conn, random_seed=42)
         assert isinstance(banter, list)
         for b in banter:
-            assert b["persona"] in ("TRASH_TALKER", "ANALYTICS_NERD", "WAIVER_HAWK", "DIE_HARD")
+            assert b["persona"] in PERSONA_BANTER_TEMPLATES
             assert len(b["message"]) > 10
 
             # Ensure valid sender handle format
@@ -313,7 +317,7 @@ def test_generate_manager_banter_all_personas(db_conn):
 def test_persona_banter_template_integrity():
     """Verify all 4 personas have diverse templates across required triggers."""
     expected_personas = {"TRASH_TALKER", "ANALYTICS_NERD", "WAIVER_HAWK", "DIE_HARD"}
-    assert set(PERSONA_BANTER_TEMPLATES.keys()) == expected_personas
+    assert expected_personas.issubset(set(PERSONA_BANTER_TEMPLATES.keys()))
 
     for persona, triggers in PERSONA_BANTER_TEMPLATES.items():
         assert "INJURY" in triggers

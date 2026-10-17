@@ -1122,6 +1122,8 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                 raise ValueError("No available players left in player pool")
 
             curr_round = active_pick["round_num"]
+            rounds = draft.get("rounds", 15) or 15
+            k_def_start_round = max(1, rounds - 2)
             best_candidate = None
             best_score = -999999.0
 
@@ -1138,9 +1140,9 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                     continue
                 if norm_pos == "TE" and te_cnt >= max_te:
                     continue
-                if norm_pos == "K" and (k_cnt >= max_k or curr_round < 14):
+                if norm_pos == "K" and (k_cnt >= max_k or curr_round < k_def_start_round):
                     continue
-                if norm_pos == "DEF" and (def_cnt >= max_def or curr_round < 14):
+                if norm_pos == "DEF" and (def_cnt >= max_def or curr_round < k_def_start_round):
                     continue
 
                 adp = float(cand["adp_rank"])

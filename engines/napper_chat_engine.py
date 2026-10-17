@@ -519,6 +519,113 @@ PERSONA_BANTER_TEMPLATES = {
             "Nothing beats game day. May the toughest squad win @{opp_handle}!",
         ],
     },
+    "ZERO_RB_ZEALOT": {
+        "INJURY": [
+            "And that is exactly why drafting running backs early is a fool's errand. Running back fragility claims another victim with {player} down while my WR room is invincible.",
+            "Another injury across the league with {player}... Meanwhile my pass catchers are racking up targets without taking 25 hits up the middle.",
+            "Wishing {player} a speedy recovery, but the Zero-RB doctrine remains undefeated: running back volume is inherently fragile.",
+        ],
+        "BLOWOUT_WIN": [
+            "Zero-RB masterclass complete! 85 combined targets across my wideouts and tight ends obliterated your lineup by {margin:.1f} pts @{loser_handle}.",
+            "PPR points per reception in full effect! You spent early draft capital on running backs while my receivers put up a {margin:.1f} point beatdown.",
+        ],
+        "BLOWOUT_LOSS": [
+            "Fluke touchdown variance by opponent running backs. Target volume and air yards still point to long-term dominance.",
+            "Lost by {margin:.1f}, but our pass-catching core had 40 targets. We will feast as defensive coverage softens up.",
+        ],
+        "TRADE_CHATTER": [
+            "Selling all backup running backs for starting wide receivers. If you need a warm body at RB, come to my shop.",
+            "Willing to trade away any RB on my roster for an elite WR2 or high-target slot receiver. DMs open.",
+            "Target share is the only fantasy currency that matters. Send me your high-volume pass catchers.",
+        ],
+        "AWARDS_BENCHWARMER": [
+            "Left {player} on the bench with {pts:.1f} pts because my starting receivers are already elite. Roster construction at its finest.",
+            "Even my bench wideouts are dropping {pts:.1f} point spike weeks. Embarrassment of riches.",
+        ],
+        "MATCHUP_PREVIEW": [
+            "Ready to unleash 100 targets across your defense @{opp_handle}. Hope your secondary is ready for Sunday.",
+            "Air Raid protocol engaged. Let's see if your running backs can keep up with our pass-catching firepower @{opp_handle}.",
+        ],
+    },
+    "HERO_RB": {
+        "INJURY": [
+            "Checking in on my anchor back after hearing about {player}... thankfully healthy. This is why you secure a true tier-1 bellcow and protect him with depth.",
+            "Tough injury break for {player}. When a workhorse goes down, it shakes the entire league landscape.",
+        ],
+        "BLOWOUT_WIN": [
+            "The bellcow delivered! 28 touches from my anchor back plus an avalanche of wide receiver points gave us a {margin:.1f} pt win @{loser_handle}!",
+            "Hero-RB blueprint executed to perfection. Bellcow floor + receiver ceiling = total blowout by {margin:.1f} pts.",
+        ],
+        "BLOWOUT_LOSS": [
+            "My anchor back didn't get the goal-line work this week. Offensive coordinator needs to remember who pays the bills around here.",
+            "Tough {margin:.1f} pt loss, but when my bellcow gets back in positive game script next week, watch out.",
+        ],
+        "TRADE_CHATTER": [
+            "Looking to consolidate my bench pass-catchers for another high-volume running back piece. Send proposals!",
+            "My anchor back is untouchable, but willing to trade wide receiver depth to any team hurting at the flex.",
+        ],
+        "AWARDS_BENCHWARMER": [
+            "Having {player} erupt for {pts:.1f} pts on my bench shows this roster has both anchor power and explosive depth.",
+            "{pts:.1f} pts from {player} on my bench! Good luck picking who to start against you next week.",
+        ],
+        "MATCHUP_PREVIEW": [
+            "My bellcow is primed for 25+ touches on Sunday @{opp_handle}. Better stack the box because we're running it right at you.",
+            "Anchor back locked and loaded. Time to take down @{opp_handle} with ground and pound dominance.",
+        ],
+    },
+    "TRADE_FIEND": {
+        "INJURY": [
+            "Hate to see {player} get hurt ({injury_type}), but every injury shifts the market. Who is ready to make a deal?",
+            "With {player} down, injuries create trade opportunities. My inbox is officially open for anyone needing emergency depth.",
+        ],
+        "BLOWOUT_WIN": [
+            "And they said I lost that blockbuster trade three weeks ago! {margin:.1f} point win proves the market always corrects @{loser_handle}!",
+            "Roster engineering at its finest! Every player I acquired in trades showed up and demolished the competition by {margin:.1f} pts.",
+        ],
+        "BLOWOUT_LOSS": [
+            "Well that was ugly. Roster fire sale starts tonight! Everyone is on the trade block for the right offer.",
+            "Lost by {margin:.1f} pts. Time to hit the phones and orchestrate a 3-team blockbuster to shake up this locker room.",
+        ],
+        "TRADE_CHATTER": [
+            "Attention league: 4 starters currently on the trade block. Looking for a 2-for-1 package or buy-low WR. Let's make a deal!",
+            "Why be passive when you can trade? I have proposed 5 offers today already. Check your inbox and let's negotiate.",
+            "Everything is for sale at the right price. Don't be afraid to send a counter-offer!",
+        ],
+        "AWARDS_BENCHWARMER": [
+            "Leaving {player} ({pts:.1f} pts) on the bench? That's not a mistake, that's showcase tape for my upcoming trade proposals.",
+            "{player} proved his trade value today with {pts:.1f} FPTS! Price of brick just went up, folks.",
+        ],
+        "MATCHUP_PREVIEW": [
+            "Hey @{opp_handle}, before we play on Sunday, any interest in trading for one of my starters? Still time to cut a deal!",
+            "Lineup locked, but still listening to last-minute trade proposals before kickoff @{opp_handle}.",
+        ],
+    },
+    "UNDERDOG": {
+        "INJURY": [
+            "Sad to see {player} injured, but this is the moment for the young sleepers to step into the spotlight and shine.",
+            "Next generation up after {player}'s injury! The breakout rookies are ready to take over the league.",
+        ],
+        "BLOWOUT_WIN": [
+            "They called them unproven rookies and sleepers! +{margin:.1f} blowout win says the youth movement has arrived @{loser_handle}!",
+            "Zero respect from the preseason projections, and we just won by {margin:.1f} pts! Believe in the breakout stars!",
+        ],
+        "BLOWOUT_LOSS": [
+            "Growing pains with young breakout talent, but the ceiling is undeniable. We'll be back stronger next week.",
+            "Lost by {margin:.1f}, but these young guys are gaining valuable reps. Our playoff ceiling is terrifying.",
+        ],
+        "TRADE_CHATTER": [
+            "Buying all young, high-upside rookies and second-year breakout candidates. You can keep your aging veterans.",
+            "Looking for sleeper upside in every deal. Happy to trade established floor players for raw ceiling prospects.",
+        ],
+        "AWARDS_BENCHWARMER": [
+            "I told you {player} was a breakout star! {pts:.1f} pts off the bench! He is locked into my starting lineup forever now.",
+            "{pts:.1f} breakout points from {player}! The sleeper prophecy has been fulfilled.",
+        ],
+        "MATCHUP_PREVIEW": [
+            "You might have the famous veteran names @{opp_handle}, but my young guns play with zero fear. Ready for the upset!",
+            "David vs. Goliath this week. You're favored @{opp_handle}, but my explosive sleepers are ready to shock the league.",
+        ],
+    },
 }
 
 

@@ -682,6 +682,43 @@ def generate_trade_proposals(
                             f"Offer in your inbox @{target['manager_handle']}! Roster churn is the key to a championship. "
                             f"Giving up {offered_names} to land {requested_names}. Let's make it happen."
                         )
+                    elif persona == "TRADE_FIEND":
+                        rationale = (
+                            f"Proactive market move: acquiring {requested_names} ({req_pos}) gives our roster "
+                            f"high-leverage starting capital, while sending {offered_names} ({off_pos}) gives you "
+                            f"the immediate depth your squad needs to compete."
+                        )
+                        chat_msg = (
+                            f"Trade offer sent to @{target['manager_handle']}! Sending {offered_names} for {requested_names}. "
+                            f"Win-win deal to upgrade both of our rosters. Let's make it official."
+                        )
+                    elif persona == "UNDERDOG":
+                        rationale = (
+                            f"Targeting breakout ceiling and explosive talent. Offering {offered_names} ({off_pos}) "
+                            f"for {requested_names} ({req_pos}) brings elite youth upside into our starting lineup."
+                        )
+                        chat_msg = (
+                            f"Sent a proposal to @{target['manager_handle']}. Offering {offered_names} to acquire "
+                            f"{requested_names}. Huge believer in this breakout upside!"
+                        )
+                    elif persona == "ZERO_RB_ZEALOT":
+                        rationale = (
+                            f"Zero-RB roster balancing: transferring backfield touches ({offered_names}) "
+                            f"in exchange for high-volume pass-catching equity ({requested_names})."
+                        )
+                        chat_msg = (
+                            f"Proposal submitted @{target['manager_handle']}! Trading running back depth ({offered_names}) "
+                            f"for {requested_names}. Perfect positional exchange."
+                        )
+                    elif persona == "HERO_RB":
+                        rationale = (
+                            f"Consolidating around our anchor bellcow: sending {offered_names} to secure {requested_names} "
+                            f"gives us the foundational piece needed for a deep playoff run."
+                        )
+                        chat_msg = (
+                            f"Trade offer sent to @{target['manager_handle']}! Packaging {offered_names} for {requested_names}. "
+                            f"Take a look and let's get this deal across the goal line."
+                        )
                     else:  # DIE_HARD
                         rationale = (
                             f"Looking for hard-nosed football players who play with grit. Offering {offered_names} "

@@ -6,7 +6,32 @@ from server.api import app
 from engines.napper_chat_engine import generate_weekly_awards, generate_manager_banter
 from engines.napper_trade_engine import generate_trade_proposals
 
+from server.napper_api import get_db
+
 client = TestClient(app)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_napper_module():
+    from engines.napper_seeder import seed_napper_database
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
+        conn.commit()
+    seed_napper_database()
+    yield
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
+        conn.commit()
+    seed_napper_database()
+
+
+def get_first_league_id() -> int:
+    res = client.get("/api/napper/leagues")
+    data = res.json()
+    assert len(data.get("leagues", [])) > 0
+    return data["leagues"][0]["id"]
 
 
 def test_napper_profile():
@@ -28,18 +53,20 @@ def test_napper_leagues():
 
 
 def test_napper_league_detail():
-    res = client.get("/api/napper/league/1")
+    league_id = get_first_league_id()
+    res = client.get(f"/api/napper/league/{league_id}")
     assert res.status_code == 200
     data = res.json()
-    assert data["league"]["id"] == 1
+    assert data["league"]["id"] == league_id
     assert len(data["teams"]) == 8
 
 
 def test_napper_matchup():
-    res = client.get("/api/napper/league/1/matchup?week=6")
+    league_id = get_first_league_id()
+    res = client.get(f"/api/napper/league/{league_id}/matchup?week=6")
     assert res.status_code == 200
     data = res.json()
-    assert data["league_id"] == 1
+    assert data["league_id"] == league_id
     assert data["week"] == 6
     assert "left_team" in data
     assert "right_team" in data
@@ -48,7 +75,8 @@ def test_napper_matchup():
 
 
 def test_napper_waivers():
-    res = client.get("/api/napper/league/1/waivers")
+    league_id = get_first_league_id()
+    res = client.get(f"/api/napper/league/{league_id}/waivers")
     assert res.status_code == 200
     data = res.json()
     assert "players" in data
@@ -56,7 +84,8 @@ def test_napper_waivers():
 
 
 def test_napper_trades():
-    res = client.get("/api/napper/league/1/trades")
+    league_id = get_first_league_id()
+    res = client.get(f"/api/napper/league/{league_id}/trades")
     assert res.status_code == 200
     data = res.json()
     assert "trades" in data
@@ -64,7 +93,8 @@ def test_napper_trades():
 
 
 def test_napper_chat():
-    res = client.get("/api/napper/league/1/chat")
+    league_id = get_first_league_id()
+    res = client.get(f"/api/napper/league/{league_id}/chat")
     assert res.status_code == 200
     data = res.json()
     assert "messages" in data
@@ -75,14 +105,16 @@ def test_napper_chat():
 
 
 def test_napper_engines():
-    awards = generate_weekly_awards(1, 6)
+    league_id = get_first_league_id()
+    awards = generate_weekly_awards(league_id, 6)
     assert isinstance(awards, list)
-    banter = generate_manager_banter(1, 6)
+    banter = generate_manager_banter(league_id, 6)
     assert isinstance(banter, list)
 
 
 def test_napper_teams_rosters():
-    res = client.get("/api/napper/league/1/teams_rosters")
+    league_id = get_first_league_id()
+    res = client.get(f"/api/napper/league/{league_id}/teams_rosters")
     assert res.status_code == 200
     data = res.json()
     assert "teams" in data
@@ -93,6 +125,11 @@ def test_napper_teams_rosters():
 
 def test_napper_create_league_cleans_seed_leagues():
     from engines.napper_seeder import seed_napper_database
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
+        conn.commit()
 
     try:
         # Create a new league
@@ -114,5 +151,9 @@ def test_napper_create_league_cleans_seed_leagues():
         assert len(leagues) == 1
         assert leagues[0]["name"] == "Grand Line Dynasty"
     finally:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
+            conn.commit()
         # Restore reference seed leagues
         seed_napper_database()

@@ -2,64 +2,26 @@
 
 Populates:
 1. User profile (@jrereyi2000 - 'The Straw Hat Pirates')
-2. Reference players and their 2035 projections
-3. 3 Reference leagues:
-   - 'Solo 2026 8-Team SF PPR' (8-team, Superflex, season 2035, week 6, Straw Hats vs Team 3)
+2. 3 Reference leagues populated strictly with authentic simulation players:
+   - 'Solo 2026 8-Team SF PPR' (8-team, Superflex, season current-1, week 6, Straw Hats vs Team 3)
    - 'The Justice League' (12-team PPR, in-season)
    - 'The Avengers' (8-team Dynasty PPR, status: PRE_DRAFT)
-4. 14-week schedules and head-to-head matchups
-5. Full starting & bench rosters matching reference specs
-6. Pre-seeded league chat banter & bot award cards
-7. Pending AI trade offers
+3. 14-week schedules and head-to-head matchups
+4. Full starting & bench rosters from authentic simulation players
+5. Pre-seeded league chat banter & bot award cards
+6. Pending AI trade offers
 """
 
 import os
 import random
 from typing import List, Dict, Any, Optional
+from collections import defaultdict
 import psycopg
 from psycopg.rows import dict_row
 
+from engines.napper_draft_engine import ensure_defenses_exist
+
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
-
-REFERENCE_PLAYERS = [
-    # User team reference starters
-    {"player_name": "J. Allen", "full_name": "Josh Allen", "pos": "QB", "team": "BUF", "espn_id": 3918298, "proj": 24.95, "num": 17},
-    {"player_name": "J. Love", "full_name": "Jordan Love", "pos": "QB", "team": "GB", "espn_id": 4036378, "proj": 0.00, "num": 10},
-    {"player_name": "D. Swift", "full_name": "D'Andre Swift", "pos": "RB", "team": "CHI", "espn_id": 4258137, "proj": 14.50, "num": 4},
-    {"player_name": "N. Collins", "full_name": "Nico Collins", "pos": "WR", "team": "HOU", "espn_id": 4258168, "proj": 17.80, "num": 12},
-    {"player_name": "P. Nacua", "full_name": "Puka Nacua", "pos": "WR", "team": "LAR", "espn_id": 4426515, "proj": 18.20, "num": 17},
-    {"player_name": "S. LaPorta", "full_name": "Sam LaPorta", "pos": "TE", "team": "DET", "espn_id": 4428989, "proj": 12.80, "num": 87},
-    {"player_name": "A. St. Brown", "full_name": "Amon-Ra St. Brown", "pos": "WR", "team": "DET", "espn_id": 4374302, "proj": 18.40, "num": 14},
-    {"player_name": "P. Mahomes", "full_name": "Patrick Mahomes", "pos": "QB", "team": "KC", "espn_id": 3139477, "proj": 22.40, "num": 15},
-    {"player_name": "B. Aubrey", "full_name": "Brandon Aubrey", "pos": "K", "team": "DAL", "espn_id": 4684074, "proj": 9.50, "num": 17},
-    {"player_name": "BUF Defense", "full_name": "Buffalo Bills D/ST", "pos": "DEF", "team": "BUF", "espn_id": 99001, "proj": 7.00, "num": 0},
-    # User team bench
-    {"player_name": "A. Jones", "full_name": "Aaron Jones", "pos": "RB", "team": "MIN", "espn_id": 3042519, "proj": 12.50, "num": 33},
-    {"player_name": "C. Lamb", "full_name": "CeeDee Lamb", "pos": "WR", "team": "DAL", "espn_id": 4241389, "proj": 16.90, "num": 88},
-    {"player_name": "B. Purdy", "full_name": "Brock Purdy", "pos": "QB", "team": "SF", "espn_id": 4361741, "proj": 17.10, "num": 13},
-    {"player_name": "B. Hall", "full_name": "Breece Hall", "pos": "RB", "team": "NYJ", "espn_id": 4427366, "proj": 15.30, "num": 20},
-    {"player_name": "D. Goedert", "full_name": "Dallas Goedert", "pos": "TE", "team": "PHI", "espn_id": 3121422, "proj": 8.70, "num": 88},
-    {"player_name": "T. Bass", "full_name": "Tyler Bass", "pos": "K", "team": "BUF", "espn_id": 4038942, "proj": 8.00, "num": 2},
-
-    # Team 3 reference starters
-    {"player_name": "D. Prescott", "full_name": "Dak Prescott", "pos": "QB", "team": "DAL", "espn_id": 2577417, "proj": 18.45, "num": 4},
-    {"player_name": "K. Walker", "full_name": "Kenneth Walker III", "pos": "RB", "team": "SEA", "espn_id": 4430737, "proj": 22.76, "num": 9},
-    {"player_name": "D. Montgomery", "full_name": "David Montgomery", "pos": "RB", "team": "DET", "espn_id": 4035538, "proj": 13.90, "num": 5},
-    {"player_name": "J. Smith-Njigba", "full_name": "Jaxon Smith-Njigba", "pos": "WR", "team": "SEA", "espn_id": 4430878, "proj": 15.60, "num": 11},
-    {"player_name": "J. Jefferson", "full_name": "Justin Jefferson", "pos": "WR", "team": "MIN", "espn_id": 4262921, "proj": 19.40, "num": 18},
-    {"player_name": "T. Kelce", "full_name": "Travis Kelce", "pos": "TE", "team": "KC", "espn_id": 15847, "proj": 11.20, "num": 87},
-    {"player_name": "S. Barkley", "full_name": "Saquon Barkley", "pos": "RB", "team": "PHI", "espn_id": 3929630, "proj": 17.50, "num": 26},
-    {"player_name": "J. Hurts", "full_name": "Jalen Hurts", "pos": "QB", "team": "PHI", "espn_id": 4040715, "proj": 21.00, "num": 1},
-    {"player_name": "J. Tucker", "full_name": "Justin Tucker", "pos": "K", "team": "BAL", "espn_id": 15683, "proj": 8.50, "num": 9},
-    {"player_name": "BAL Defense", "full_name": "Baltimore Ravens D/ST", "pos": "DEF", "team": "BAL", "espn_id": 99002, "proj": 6.50, "num": 0},
-    # Team 3 bench
-    {"player_name": "J. Cook", "full_name": "James Cook", "pos": "RB", "team": "BUF", "espn_id": 4361536, "proj": 13.20, "num": 4},
-    {"player_name": "T. McLaurin", "full_name": "Terry McLaurin", "pos": "WR", "team": "WSH", "espn_id": 3121422, "proj": 12.80, "num": 17},
-    {"player_name": "D. Smith", "full_name": "DeVonta Smith", "pos": "WR", "team": "PHI", "espn_id": 4241478, "proj": 13.50, "num": 6},
-    {"player_name": "B. Mayfield", "full_name": "Baker Mayfield", "pos": "QB", "team": "TB", "espn_id": 3052587, "proj": 16.00, "num": 6},
-    {"player_name": "J. Ferguson", "full_name": "Jake Ferguson", "pos": "TE", "team": "DAL", "espn_id": 4242372, "proj": 9.10, "num": 87},
-    {"player_name": "H. Butker", "full_name": "Harrison Butker", "pos": "K", "team": "KC", "espn_id": 3055899, "proj": 8.50, "num": 7},
-]
 
 
 def get_previous_season(cur) -> int:
@@ -70,70 +32,6 @@ def get_previous_season(cur) -> int:
         if cs:
             return int(cs) - 1
     return 2035
-
-
-def get_or_create_player(cur, p_info: dict, season: Optional[int] = None) -> int:
-    """Finds or inserts player into players table and returns player_id."""
-    target_season = season or get_previous_season(cur)
-    cur.execute(
-        """
-        SELECT p.id FROM players p
-        JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-        WHERE p.full_name = %s AND ps.position = %s
-        LIMIT 1
-        """,
-        (target_season, p_info["full_name"], p_info["pos"])
-    )
-    row = cur.fetchone()
-    if row:
-        player_id = row[0]
-    else:
-        cur.execute(
-            """
-            INSERT INTO players (player_name, full_name, espn_id, player_number)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id
-            """,
-            (p_info["player_name"], p_info["full_name"], p_info.get("espn_id"), p_info.get("num", 0))
-        )
-        player_id = cur.fetchone()[0]
-
-    # Find team
-    TEAM_ABBR_MAP = {"WSH": "WAS", "ARI": "AZ", "GNB": "GB", "KAN": "KC", "SFO": "SF", "NOR": "NO", "NWE": "NE", "LVR": "LV"}
-    abbr = TEAM_ABBR_MAP.get(p_info["team"], p_info["team"])
-    cur.execute(
-        "SELECT id FROM teams WHERE abbreviation = %s OR name ILIKE %s LIMIT 1",
-        (abbr, f"%{abbr}%")
-    )
-    team_row = cur.fetchone()
-    if not team_row:
-        cur.execute("SELECT id FROM teams LIMIT 1")
-        team_row = cur.fetchone()
-    team_id = team_row[0]
-
-    # Insert player_seasons for previous season only if not already present
-    cur.execute(
-        """
-        INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating)
-        VALUES (%s, %s, %s, %s, 26, 88)
-        ON CONFLICT (player_id, season) DO NOTHING
-        """,
-        (player_id, team_id, target_season, p_info["pos"])
-    )
-
-    # Insert fantasy_projections for weeks 1..14
-    for wk in range(1, 15):
-        base_proj = p_info["proj"]
-        cur.execute(
-            """
-            INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT DO NOTHING
-            """,
-            (target_season, wk, player_id, p_info["player_name"], team_id, base_proj, p_info["pos"])
-        )
-
-    return player_id
 
 
 def build_schedule(n_teams: int, weeks: int = 14) -> List[List[tuple]]:
@@ -151,18 +49,66 @@ def build_schedule(n_teams: int, weeks: int = 14) -> List[List[tuple]]:
     return [rounds[w % len(rounds)] for w in range(weeks)]
 
 
+def ensure_kicker_projections(cur, season: int):
+    """Ensures simulation kickers have baseline fantasy projections for the given season."""
+    cur.execute("""
+        SELECT p.id, p.player_name, ps.team_id
+        FROM players p
+        JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+        WHERE ps.position = 'K'
+    """, (season,))
+    kickers = cur.fetchall()
+    for k in kickers:
+        kid = k["id"] if isinstance(k, dict) else k[0]
+        kname = k["player_name"] if isinstance(k, dict) else k[1]
+        ktid = k["team_id"] if isinstance(k, dict) else k[2]
+        for wk in range(1, 15):
+            cur.execute("""
+                INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position)
+                VALUES (%s, %s, %s, %s, %s, 8.5, 'K')
+                ON CONFLICT DO NOTHING
+            """, (season, wk, kid, kname, ktid))
+
+
+def fetch_id(cur) -> int:
+    r = cur.fetchone()
+    if isinstance(r, dict):
+        return r["id"]
+    return r[0]
+
+
 def seed_napper_database():
-    print("🚀 Seeding Napper Fantasy Database...")
-    conn = psycopg.connect(CONN_INFO)
+    print("🚀 Seeding Napper Fantasy Database with authentic simulation players...")
+    conn = psycopg.connect(CONN_INFO, row_factory=dict_row)
     with conn.cursor() as cur:
         # Clear existing napper data to allow clean idempotent re-seed
-        cur.execute("TRUNCATE TABLE napper_chat, napper_trades, napper_matchups, napper_rosters, napper_teams, napper_leagues, napper_user_profiles RESTART IDENTITY CASCADE;")
+        cur.execute("DELETE FROM napper_chat;")
+        cur.execute("DELETE FROM napper_trades;")
+        cur.execute("DELETE FROM napper_matchups;")
+        cur.execute("DELETE FROM napper_rosters;")
+        cur.execute("DELETE FROM napper_teams;")
+        cur.execute("DELETE FROM napper_draft_picks;")
+        cur.execute("DELETE FROM napper_drafts;")
+        cur.execute("DELETE FROM napper_leagues;")
+        cur.execute("DELETE FROM napper_user_profiles;")
+        cur.execute("ALTER SEQUENCE napper_matchups_id_seq RESTART WITH 1;")
+        cur.execute("ALTER SEQUENCE napper_rosters_id_seq RESTART WITH 1;")
+        cur.execute("ALTER SEQUENCE napper_teams_id_seq RESTART WITH 1;")
+        cur.execute("ALTER SEQUENCE napper_draft_picks_id_seq RESTART WITH 1;")
+        cur.execute("ALTER SEQUENCE napper_drafts_id_seq RESTART WITH 1;")
+        cur.execute("ALTER SEQUENCE napper_leagues_id_seq RESTART WITH 1;")
+        cur.execute("ALTER SEQUENCE napper_user_profiles_id_seq RESTART WITH 1;")
+        cur.execute("ALTER SEQUENCE napper_chat_id_seq RESTART WITH 1;")
+        cur.execute("ALTER SEQUENCE napper_trades_id_seq RESTART WITH 1;")
 
         # 1. User Profile
         cur.execute(
             """
-            INSERT INTO napper_user_profiles (handle, display_name, avatar_url, trophies)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO napper_user_profiles (id, handle, display_name, avatar_url, trophies)
+            VALUES (1, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE
+            SET handle = EXCLUDED.handle, display_name = EXCLUDED.display_name,
+                avatar_url = EXCLUDED.avatar_url, trophies = EXCLUDED.trophies
             RETURNING id
             """,
             (
@@ -172,28 +118,67 @@ def seed_napper_database():
                 3
             )
         )
-        user_id = cur.fetchone()[0]
+        user_id = fetch_id(cur)
+        cur.execute("SELECT setval('napper_user_profiles_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_user_profiles));")
         print(f"👤 Created user profile: @jrereyi2000 (ID: {user_id})")
 
         prev_season = get_previous_season(cur)
 
-        # 2. Reference Players
-        player_map = {}
-        for p in REFERENCE_PLAYERS:
-            pid = get_or_create_player(cur, p, season=prev_season)
-            player_map[p["player_name"]] = pid
-        print(f"🏈 Seeded {len(player_map)} reference fantasy players.")
+        # 2. Ensure Team Defenses & Kickers exist for previous season
+        ensure_defenses_exist(cur)
+        ensure_kicker_projections(cur, prev_season)
 
-        # Also get a pool of existing players in DB for additional teams/bench
-        cur.execute("""
-            SELECT p.id, p.player_name, ps.position
-            FROM players p
-            JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-            LIMIT 200;
-        """, (prev_season,))
-        extra_players = cur.fetchall()
+        # 3. Fetch authentic simulation player pools
+        def get_pool(positions: tuple, limit: int = 50):
+            cur.execute("""
+                SELECT p.id, p.player_name, p.full_name, ps.position, ps.overall_rating,
+                       COALESCE(fp.projected_points, 12.0) as proj
+                FROM players p
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 6
+                WHERE ps.position = ANY(%s)
+                ORDER BY ps.overall_rating DESC, proj DESC
+                LIMIT %s;
+            """, (prev_season, prev_season, list(positions), limit))
+            return [
+                {
+                    "id": r["id"],
+                    "player_name": r["player_name"],
+                    "full_name": r["full_name"],
+                    "position": r["position"],
+                    "overall_rating": r["overall_rating"],
+                    "proj": float(r["proj"])
+                }
+                for r in cur.fetchall()
+            ]
 
-        # 3. Seed Leagues
+        pool = {
+            "QB": get_pool(("QB",), 35),
+            "HB": get_pool(("HB", "RB"), 50),
+            "WR": get_pool(("WR",), 50),
+            "TE": get_pool(("TE",), 30),
+            "K": get_pool(("K",), 25),
+            "DEF": get_pool(("DEF",), 25),
+        }
+
+        # Track used players across league rosters
+        used_pids = set()
+
+        def take_player(pos_list: List[str], preferred_id: Optional[int] = None) -> Optional[dict]:
+            for pkey in pos_list:
+                cand_list = pool.get(pkey, [])
+                if preferred_id:
+                    for cand in cand_list:
+                        if cand["id"] == preferred_id and cand["id"] not in used_pids:
+                            used_pids.add(cand["id"])
+                            return cand
+                for cand in cand_list:
+                    if cand["id"] not in used_pids:
+                        used_pids.add(cand["id"])
+                        return cand
+            return None
+
+        # 4. Seed Leagues
         # League A: 'Solo 2026 8-Team SF PPR'
         cur.execute(
             """
@@ -215,7 +200,7 @@ def seed_napper_database():
                 True
             )
         )
-        l1_id = cur.fetchone()[0]
+        l1_id = fetch_id(cur)
 
         # League B: 'The Justice League'
         cur.execute(
@@ -238,7 +223,7 @@ def seed_napper_database():
                 True
             )
         )
-        l2_id = cur.fetchone()[0]
+        l2_id = fetch_id(cur)
 
         # League C: 'The Avengers'
         cur.execute(
@@ -261,10 +246,10 @@ def seed_napper_database():
                 True
             )
         )
-        l3_id = cur.fetchone()[0]
+        l3_id = fetch_id(cur)
         print(f"🏆 Seeded 3 leagues: {l1_id} (Solo SF), {l2_id} (Justice League), {l3_id} (Avengers)")
 
-        # 4. Teams for League 1: 'Solo 2026 8-Team SF PPR'
+        # 5. Teams for League 1: 'Solo 2026 8-Team SF PPR'
         l1_team_configs = [
             # index 0: User team
             {"name": "The Straw Hat Pirates", "handle": "jrereyi2000", "user_id": user_id, "is_ai": False, "persona": "USER", "w": 5, "l": 0, "t": 0, "pf": 785.40, "pa": 610.20, "seed": 1},
@@ -299,60 +284,99 @@ def seed_napper_database():
                     tc["is_ai"], tc["persona"], tc["w"], tc["l"], tc["t"], tc["pf"], tc["pa"], tc["seed"]
                 )
             )
-            l1_team_ids.append(cur.fetchone()[0])
+            l1_team_ids.append(fetch_id(cur))
 
         user_team_id = l1_team_ids[0]
         team_3_id = l1_team_ids[2]
 
-        # 5. Rosters for League 1
-        # User team starters matching reference:
+        # 6. Assign Rosters for League 1 using Authentic Simulation Players
+        # User Team Starters
+        user_qb = take_player(["QB"])  # George Crawford or Caleb Williams
+        user_rb1 = take_player(["HB"], preferred_id=310) or take_player(["HB"])  # Jeremiyah Love (HB)
+        user_rb2 = take_player(["HB"])
+        user_wr1 = take_player(["WR"])
+        user_wr2 = take_player(["WR"])
+        user_te = take_player(["TE"])
+        user_flex = take_player(["WR", "HB", "TE"])
+        user_superflex = take_player(["QB", "HB", "WR", "TE"])
+        user_k = take_player(["K"])
+        user_def = take_player(["DEF"])
+
         user_starters = [
-            ("J. Allen", "QB"),
-            ("J. Love", "RB"),
-            ("D. Swift", "RB"),
-            ("N. Collins", "WR"),
-            ("P. Nacua", "WR"),
-            ("S. LaPorta", "TE"),
-            ("A. St. Brown", "FLEX"),
-            ("P. Mahomes", "SUPERFLEX"),
-            ("B. Aubrey", "K"),
-            ("BUF Defense", "DEF"),
+            (user_qb["id"], "QB"),
+            (user_rb1["id"], "RB"),
+            (user_rb2["id"], "RB"),
+            (user_wr1["id"], "WR"),
+            (user_wr2["id"], "WR"),
+            (user_te["id"], "TE"),
+            (user_flex["id"], "FLEX"),
+            (user_superflex["id"], "SUPERFLEX"),
+            (user_k["id"], "K"),
+            (user_def["id"], "DEF"),
         ]
+
+        # User Team Bench (1 QB, 2 HBs, 2 WRs, 1 TE/K)
+        user_bn_qb = take_player(["QB"])
+        user_bn_hb1 = take_player(["HB"])
+        user_bn_hb2 = take_player(["HB"])
+        user_bn_wr1 = take_player(["WR"])
+        user_bn_wr2 = take_player(["WR"])
+        user_bn_k = take_player(["K"]) or take_player(["TE"])
+
         user_bench = [
-            ("A. Jones", "BN"),
-            ("C. Lamb", "BN"),
-            ("B. Purdy", "BN"),
-            ("B. Hall", "BN"),
-            ("D. Goedert", "BN"),
-            ("T. Bass", "BN"),
+            (user_bn_qb["id"], "BN"),
+            (user_bn_hb1["id"], "BN"),
+            (user_bn_hb2["id"], "BN"),
+            (user_bn_wr1["id"], "BN"),
+            (user_bn_wr2["id"], "BN"),
+            (user_bn_k["id"], "BN"),
         ]
 
-        # Team 3 starters matching reference:
+        # Team 3 Starters
+        t3_qb = take_player(["QB"])
+        t3_rb1 = take_player(["HB"])
+        t3_rb2 = take_player(["HB"])
+        t3_wr1 = take_player(["WR"])
+        t3_wr2 = take_player(["WR"])
+        t3_te = take_player(["TE"])
+        t3_flex = take_player(["WR", "HB", "TE"])
+        t3_superflex = take_player(["QB", "HB", "WR", "TE"])
+        t3_k = take_player(["K"])
+        t3_def = take_player(["DEF"])
+
         team_3_starters = [
-            ("D. Prescott", "QB"),
-            ("K. Walker", "RB"),
-            ("D. Montgomery", "RB"),
-            ("J. Smith-Njigba", "WR"),
-            ("J. Jefferson", "WR"),
-            ("T. Kelce", "TE"),
-            ("S. Barkley", "FLEX"),
-            ("J. Hurts", "SUPERFLEX"),
-            ("J. Tucker", "K"),
-            ("BAL Defense", "DEF"),
-        ]
-        team_3_bench = [
-            ("J. Cook", "BN"),
-            ("T. McLaurin", "BN"),
-            ("D. Smith", "BN"),
-            ("B. Mayfield", "BN"),
-            ("J. Ferguson", "BN"),
-            ("H. Butker", "BN"),
+            (t3_qb["id"], "QB"),
+            (t3_rb1["id"], "RB"),
+            (t3_rb2["id"], "RB"),
+            (t3_wr1["id"], "WR"),
+            (t3_wr2["id"], "WR"),
+            (t3_te["id"], "TE"),
+            (t3_flex["id"], "FLEX"),
+            (t3_superflex["id"], "SUPERFLEX"),
+            (t3_k["id"], "K"),
+            (t3_def["id"], "DEF"),
         ]
 
-        # Populate rosters for all weeks (1..14) so lineup queries work for any week
+        # Team 3 Bench
+        t3_bn_qb = take_player(["QB"])
+        t3_bn_hb1 = take_player(["HB"])
+        t3_bn_hb2 = take_player(["HB"])
+        t3_bn_wr1 = take_player(["WR"])
+        t3_bn_wr2 = take_player(["WR"])
+        t3_bn_te = take_player(["TE"])
+
+        team_3_bench = [
+            (t3_bn_qb["id"], "BN"),
+            (t3_bn_hb1["id"], "BN"),
+            (t3_bn_hb2["id"], "BN"),
+            (t3_bn_wr1["id"], "BN"),
+            (t3_bn_wr2["id"], "BN"),
+            (t3_bn_te["id"], "BN"),
+        ]
+
+        # Assign rosters for all 14 weeks
         for wk in range(1, 15):
-            for pname, slot in user_starters + user_bench:
-                pid = player_map[pname]
+            for pid, slot in user_starters + user_bench:
                 cur.execute(
                     """
                     INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
@@ -362,8 +386,7 @@ def seed_napper_database():
                     (l1_id, user_team_id, wk, pid, slot)
                 )
 
-            for pname, slot in team_3_starters + team_3_bench:
-                pid = player_map[pname]
+            for pid, slot in team_3_starters + team_3_bench:
                 cur.execute(
                     """
                     INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
@@ -373,34 +396,47 @@ def seed_napper_database():
                     (l1_id, team_3_id, wk, pid, slot)
                 )
 
-            # Assign extra players to other teams in League 1
-            if extra_players:
-                p_idx = 0
-                for tid in l1_team_ids:
-                    if tid in (user_team_id, team_3_id):
-                        continue
-                    slots = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPERFLEX", "K", "DEF", "BN", "BN", "BN"]
-                    for slot in slots:
-                        if p_idx < len(extra_players):
-                            extra_pid = extra_players[p_idx][0]
-                            p_idx += 1
-                            cur.execute(
-                                """
-                                INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
-                                VALUES (%s, %s, %s, %s, %s)
-                                ON CONFLICT (team_id, week, player_id) DO NOTHING
-                                """,
-                                (l1_id, tid, wk, extra_pid, slot)
-                            )
+        # Assign rosters to remaining 6 teams in League 1
+        other_teams_rosters = {}
+        for tid in l1_team_ids:
+            if tid in (user_team_id, team_3_id):
+                continue
+            tm_roster = [
+                (take_player(["QB"])["id"], "QB"),
+                (take_player(["HB"])["id"], "RB"),
+                (take_player(["HB"])["id"], "RB"),
+                (take_player(["WR"])["id"], "WR"),
+                (take_player(["WR"])["id"], "WR"),
+                (take_player(["TE"])["id"], "TE"),
+                (take_player(["WR", "HB"])["id"], "FLEX"),
+                (take_player(["QB", "WR", "HB"])["id"], "SUPERFLEX"),
+                (take_player(["K"])["id"], "K"),
+                (take_player(["DEF"])["id"], "DEF"),
+                (take_player(["QB", "HB"])["id"], "BN"),
+                (take_player(["HB"])["id"], "BN"),
+                (take_player(["WR"])["id"], "BN"),
+                (take_player(["WR"])["id"], "BN"),
+                (take_player(["TE"])["id"], "BN"),
+                (take_player(["K", "DEF"])["id"], "BN"),
+            ]
+            other_teams_rosters[tid] = tm_roster
+            for wk in range(1, 15):
+                for pid, slot in tm_roster:
+                    cur.execute(
+                        """
+                        INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (team_id, week, player_id) DO UPDATE SET slot = EXCLUDED.slot
+                        """,
+                        (l1_id, tid, wk, pid, slot)
+                    )
 
-        # 6. Schedules & Matchups for League 1 (14 Weeks)
+        # 7. Schedules & Matchups for League 1 (14 Weeks)
         # Note: in week 6, User Team (index 0) MUST play Team 3 (index 2)!
         sched_8 = build_schedule(8, 14)
 
         # Adjust week 6 pairing so team 0 plays team 2:
-        # Find pairing with team 0 in week 6 (index 5)
         w6_pairs = list(sched_8[5])
-        # Find who team 0 is playing, and who team 2 is playing
         p0 = next((p for p in w6_pairs if 0 in p), None)
         p2 = next((p for p in w6_pairs if 2 in p), None)
         if p0 and p2 and p0 != p2:
@@ -420,7 +456,6 @@ def seed_napper_database():
 
                 if wk_num < 6:
                     # Completed weeks
-                    # Give user team wins in weeks 1..5
                     if h_id == user_team_id:
                         h_score, a_score = 138.40 + wk_num * 3.5, 115.20 + wk_num * 2.1
                     elif a_id == user_team_id:
@@ -481,7 +516,7 @@ def seed_napper_database():
                         (l1_id, wk_num, h_id, a_id, 0.0, 0.0, 125.0, 120.0, 0.520, False)
                     )
 
-        # 7. Pre-seed League 2: 'The Justice League' (12 teams, in-season)
+        # 8. Pre-seed League 2: 'The Justice League' (12 teams, in-season)
         justice_team_names = [
             ("Metropolis Kryptonians", "clark_kent", True, "DIE_HARD"),
             ("Gotham Dark Knights", "bruce_wayne", True, "ANALYTICS_NERD"),
@@ -511,7 +546,7 @@ def seed_napper_database():
                 """,
                 (l2_id, u_id, tname, handle, f"https://api.dicebear.com/7.x/identicon/svg?seed={tname}", is_ai, persona, w, l, 0, 600.0 + idx * 10, 590.0 + idx * 8, idx + 1)
             )
-            l2_team_ids.append(cur.fetchone()[0])
+            l2_team_ids.append(fetch_id(cur))
 
         # 14 weeks matchups for League 2
         sched_12 = build_schedule(12, 14)
@@ -531,7 +566,7 @@ def seed_napper_database():
                     (l2_id, wk_num, h_id, a_id, 120.0 if is_final else 0.0, 115.0 if is_final else 0.0, 122.0, 118.0, 0.52, is_final)
                 )
 
-        # 8. Pre-seed League 3: 'The Avengers' (8 teams, PRE_DRAFT)
+        # 9. Pre-seed League 3: 'The Avengers' (8 teams, PRE_DRAFT)
         avengers_team_names = [
             ("Stark Industries", "tony_stark", True, "TRADE_FIEND"),
             ("Wakanda Forever", "t_challa", True, "ANALYTICS_NERD"),
@@ -555,7 +590,7 @@ def seed_napper_database():
                 """,
                 (l3_id, u_id, tname, handle, f"https://api.dicebear.com/7.x/identicon/svg?seed={tname}", is_ai, persona, 0, 0, 0, 0.0, 0.0, idx + 1)
             )
-            l3_team_ids.append(cur.fetchone()[0])
+            l3_team_ids.append(fetch_id(cur))
 
         # 14 weeks matchups for League 3 (all pending / pre-draft)
         for wk_idx, week_pairings in enumerate(sched_8):
@@ -573,7 +608,8 @@ def seed_napper_database():
                     (l3_id, wk_num, h_id, a_id, 0.0, 0.0, 115.0, 115.0, 0.50, False)
                 )
 
-        # 9. Pre-seed League Chat for League 1
+        # 10. Pre-seed League Chat for League 1
+        bench_hb_name = user_bn_hb1["player_name"]
         chat_entries = [
             (
                 l1_id,
@@ -596,11 +632,11 @@ def seed_napper_database():
                 "Napper Awards Bot",
                 "napper_bot",
                 "https://api.dicebear.com/7.x/bottts/svg?seed=NapperBot",
-                "🪑 RB Benchwarmer of the Week: Aaron Jones scored 18.2 FPTS on The Straw Hat Pirates bench!",
+                f"🪑 RB Benchwarmer of the Week: {bench_hb_name} scored 18.2 FPTS on The Straw Hat Pirates bench!",
                 psycopg.types.json.Jsonb({
                     "award_type": "BENCHWARMER",
                     "title": "RB Benchwarmer of the Week",
-                    "player_name": "Aaron Jones",
+                    "player_name": bench_hb_name,
                     "points": 18.2,
                     "manager": "@jrereyi2000"
                 })
@@ -620,7 +656,7 @@ def seed_napper_database():
                 "Dan (Zero RB)",
                 "zero_rb_dan",
                 "https://api.dicebear.com/7.x/identicon/svg?seed=Team%206",
-                "Puka on my bench in another league... 😭 Never benching him again.",
+                f"{user_wr1['player_name']} on my bench in another league... 😭 Never benching him again.",
                 None
             ),
             (
@@ -642,9 +678,9 @@ def seed_napper_database():
                 c
             )
 
-        # 10. Pre-seed Pending AI Trade Proposal in League 1 (Team 3 proposing to User Team)
-        offered_pids = [player_map["K. Walker"]]
-        requested_pids = [player_map["D. Swift"]]
+        # 11. Pre-seed Pending AI Trade Proposal in League 1 (Team 3 proposing to User Team)
+        offered_pids = [t3_bn_hb1["id"]]
+        requested_pids = [user_bn_hb1["id"]]
         cur.execute(
             """
             INSERT INTO napper_trades (
@@ -656,12 +692,12 @@ def seed_napper_database():
             (
                 l1_id, 6, team_3_id, user_team_id,
                 offered_pids, requested_pids, "PENDING",
-                True, "I have RB depth with Montgomery and Barkley and need another explosive playmaker. Walker for Swift straight up?"
+                True, f"I have RB depth and need another explosive playmaker. {t3_bn_hb1['player_name']} for {user_bn_hb1['player_name']} straight up?"
             )
         )
 
         conn.commit()
-        print("✅ Napper fantasy database successfully seeded!")
+        print("✅ Napper fantasy database successfully seeded with 100% authentic simulation players!")
 
 
 if __name__ == "__main__":
