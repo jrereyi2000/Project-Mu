@@ -2943,9 +2943,20 @@ def line_cells(lines, i, win_w, list_x0):
     return row
 
 
+def norm_pos(p):
+    p = norm(p or "")
+    if p in ("OB", "@B", "0B"):
+        return "QB"
+    if p in ("F8", "EB"):
+        return "FB"
+    if p in ("H8",):
+        return "HB"
+    return p
+
+
 def _matches(cells, card):
     """A table line agrees with a card: same position, and same age where both were read."""
-    if not card.get("position") or norm(cells.get("POS", "")) != card["position"]:
+    if not card.get("position") or norm_pos(cells.get("POS", "")) != norm_pos(card["position"]):
         return False
     age = cells.get("AGE", "")
     return not (card.get("age") and age.isdigit() and int(age) != card["age"])
@@ -2992,7 +3003,7 @@ def list_row_for(lines, card, win_w, list_x0):
         found = [line_cells(lines, by_last[0], win_w, list_x0)]
     # the same list name can repeat (Seahawks: S.Lewis LT and S.Lewis HB on adjacent rows)
     if len(found) > 1:
-        same_pos = [r for r in found if card.get("position") and norm(r.get("POS", "")) == card["position"]]
+        same_pos = [r for r in found if card.get("position") and norm_pos(r.get("POS", "")) == norm_pos(card["position"])]
         if len(same_pos) == 1:
             return same_pos[0]
         found[0]["ambiguous"] = True        # can't tell which row: don't use it to check a step
@@ -3215,7 +3226,7 @@ def capture_team_roster(out, index, team, writer):
         if list_row is None:
             flags.append("not_in_list")
         else:
-            if card["position"] and "POS" in list_row and norm(list_row["POS"]) != card["position"]:
+            if card["position"] and "POS" in list_row and norm_pos(list_row["POS"]) != norm_pos(card["position"]):
                 flags.append("list_position_mismatch")
             if card["age"] and list_row.get("AGE", "").isdigit() and int(list_row["AGE"]) != card["age"]:
                 flags.append("list_age_mismatch")
