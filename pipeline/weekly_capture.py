@@ -284,6 +284,29 @@ def step_engines(season):
                           f"articles): {e!r}")
 
 
+def step_preseason_engines(season):
+    """Preseason engines for start-of-season calibration (schedule, rosters, injuries loaded):
+    1. Preseason Fantasy ADP (runs 100 simulated drafts, writes Week 1 ADP board).
+    2. Scheduled Game Excitement Projections (pre-game E for all scheduled games).
+    3. Week 1 Fantasy Projections (points, matchup stars, pos ranks)."""
+    try:
+        from engines.fantasy_adp_engine import generate_preseason_adp
+        from engines.excitement_projection import project_scheduled_games
+        from engines.fantasy_projection_engine import project_weeks
+
+        log("  Preseason engine 1/3: Simulated fantasy drafts & ADP board...")
+        generate_preseason_adp(season=season, redraft=True)
+
+        log("  Preseason engine 2/3: Projected game excitement (E)...")
+        project_scheduled_games(season)
+
+        log("  Preseason engine 3/3: Week 1 fantasy projections & matchup stars...")
+        project_weeks(season, [1])
+    except Exception as e:
+        traceback.print_exc()
+        raise WeekStopped(f"Preseason engines failed after the load: {e!r}")
+
+
 def step_articles(season, week=None):
     from newsroom.weekly_run import run_weekly_swarm
     try:
@@ -380,7 +403,7 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
             current = None
     if mode == "weekly":
         mode = playoff_or_weekly(resume)
-    articles = articles and mode in ("weekly", "playoff", "postgame")
+    articles = articles and mode in ("weekly", "playoff", "postgame", "season")
     week_label = SUPER_BOWL_LABEL if mode in ("playoff", "postgame") and current is not None and current >= FINAL_WEEK else None
     if week_label == SUPER_BOWL_LABEL or mode == "postgame":
         what = "Super Bowl postgame capture"
@@ -432,12 +455,28 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
             log(f"Loaded: {report.get('mode')} week {report.get('week')}")
         else:
             log("Already loaded; skipping the load")
-        if mode in ("roster", "prospects", "season", "draft-results"):
+        if mode == "season":
             season, _ = league_state()
-            what_done = "Season setup (schedule, rosters, draft prospects)" if mode == "season" else (
-                "Rosters" if mode == "roster" else (
-                    "Draft prospects" if mode == "prospects" else "Draft results"
-                )
+            log(f"Step 7: preseason engines (season {season})")
+            step_preseason_engines(season)
+            published = None
+            if articles:
+                log("Step 8: articles (Week 1 preseason slate)")
+                res = step_articles(season, week=1)
+                published = f"slate for Week 1: {res.get('status')}"
+                if res.get("status") not in ("published", "skipped_exists", "season_complete"):
+                    raise WeekStopped(f"Preseason articles didn't publish ({res})")
+            log("Step 9: shrink")
+            before, after = shrink(folder)
+            log(f"Capture folder {before / 1e6:.0f} MB -> {after / 1e6:.0f} MB")
+            notify(f"Season setup, preseason engines, and Week 1 projections loaded for Season {season}. "
+                   f"{published or 'Articles not run.'}",
+                   title="Mu: season scan done", tags=("white_check_mark",))
+            return 0
+        if mode in ("roster", "prospects", "draft-results"):
+            season, _ = league_state()
+            what_done = "Rosters" if mode == "roster" else (
+                "Draft prospects" if mode == "prospects" else "Draft results"
             )
             log(f"{what_done} loaded. Skipping weekly engines and articles.")
             log("Step 9: shrink")

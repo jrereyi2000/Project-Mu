@@ -25,6 +25,7 @@ class RunTest(unittest.TestCase):
             step_load=self.fake_load,
             league_state=lambda: getattr(self, "league_state_val", (2035, 18)),
             step_engines=lambda season: self.calls.append(f"engines {season}"),
+            step_preseason_engines=lambda season: self.calls.append(f"preseason_engines {season}"),
             step_articles=lambda season, week=None: (self.calls.append(f"articles {week}" if week else "articles"),
                                                    {"status": "published", "week": week or 19})[1],
             set_current_week=lambda week: self.calls.append(f"current {week}"),
@@ -114,15 +115,20 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.notices[-1][0], "Mu: draft-results scan done")
         self.assertIn("Draft results loaded for Season 2035", self.notices[-1][1])
 
-    def test_season_scan_runs_capture_extract_load_and_skips_articles(self):
+    def test_season_scan_runs_preseason_engines_and_skips_articles_when_no_articles(self):
         os.makedirs(os.path.join(self.tmp, "seas1"))
-        self.assertEqual(wc.run("seas1", articles=True, mode="season"), 0)
-        self.assertEqual(self.calls, ["set_state 2036 1", "connect", "capture", "extract", "load"])
+        self.assertEqual(wc.run("seas1", articles=False, mode="season"), 0)
+        self.assertEqual(self.calls, ["set_state 2036 1", "connect", "capture", "extract", "load", "preseason_engines 2036"])
         self.assertEqual(self.capture_mode, "season")
         self.assertEqual(self.notices[0][0], "Mu: capture starting")
         self.assertIn("Season scan", self.notices[0][1])
         self.assertEqual(self.notices[-1][0], "Mu: season scan done")
-        self.assertIn("Season setup (schedule, rosters, draft prospects) loaded for Season 2036", self.notices[-1][1])
+        self.assertIn("Season setup, preseason engines, and Week 1 projections loaded for Season 2036", self.notices[-1][1])
+
+    def test_season_scan_runs_preseason_articles_when_requested(self):
+        os.makedirs(os.path.join(self.tmp, "seas1_art"))
+        self.assertEqual(wc.run("seas1_art", articles=True, mode="season"), 0)
+        self.assertEqual(self.calls, ["set_state 2036 1", "connect", "capture", "extract", "load", "preseason_engines 2036", "articles 1"])
 
     def test_game_scan_replaces_and_never_writes_articles(self):
         os.makedirs(os.path.join(self.tmp, "g1"))
@@ -258,6 +264,7 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(wc, "step_extract", fake_extract_season):
             self.assertEqual(wc.run("s1", mode="season"), 0)
         self.assertIn("set_state 2036 1", self.calls)
+        self.assertIn("preseason_engines 2036", self.calls)
 
     def test_season_extract_done_requires_injuries_csv_if_injuries_folder_exists(self):
         f = os.path.join(self.tmp, "s2")
