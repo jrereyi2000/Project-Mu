@@ -2268,9 +2268,9 @@ def read_draft_recap_card(f):
     }
 
 
-def run_draft_recap(out, max_picks=224, paged=False, rows_per_page=10, max_pages=30):
+def run_draft_recap(out, max_picks=224, paged=True, rows_per_page=10, max_pages=30):
     """Capture the completed Madden Draft Recap screen for all picks across all 7 rounds (default 224)
-    or all picks when paged=True (scrolling rows_per_page at a time).
+    using paged scrolling (default, scrolling rows_per_page at a time) or row-by-row if paged=False.
     Captures screenshots into captures/<run>/draft_results/
     Also extracts and writes draft_results.csv and draft_results.json into <out>
     for immediate ingestion by pipeline.draft_results."""
@@ -3216,9 +3216,9 @@ def main():
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
     ap.add_argument("--all-prospects", action="store_true", help="--only prospects: capture the entire draft board until the end")
-    ap.add_argument("--prospect-pages", type=int, help="--only prospects: stop after this many pages")
-    ap.add_argument("--paged", action="store_true", help="--only draft-results: scroll rows_per_page (default 10) at a time page-by-page through all rounds")
-    ap.add_argument("--rows-per-page", type=int, default=10, help="--only draft-results --paged: rows to scroll down between captures (default 10)")
+    ap.add_argument("--paged", action="store_true", default=True, help="--only draft-results: scroll rows_per_page (default 10) at a time page-by-page through all rounds (default)")
+    ap.add_argument("--row-by-row", action="store_true", help="--only draft-results: capture row-by-row reading player cards instead of paged")
+    ap.add_argument("--rows-per-page", type=int, default=10, help="--only draft-results (paged): rows to scroll down between captures (default 10)")
     ap.add_argument("--draft-picks", type=int, default=224, help="--only draft-results: maximum picks to capture (default 224 for all 7 rounds, 0 for all)")
     ap.add_argument("--resume", metavar="RUN", help="continue a stopped run in captures/RUN (stats, roster, games, injuries, season); "
                     "--scope: write into that (weekly) run's folder")
@@ -3325,7 +3325,8 @@ def main():
             n_prospects = 0 if a.all_prospects else a.prospects
             run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
         if a.only in ("draft-results", "draft-recap"):
-            run_mode("the draft recap", lambda: run_draft_recap(out, max_picks=a.draft_picks, paged=a.paged, rows_per_page=a.rows_per_page), clear("draft_results"))
+            paged_mode = not a.row_by_row
+            run_mode("the draft recap", lambda: run_draft_recap(out, max_picks=a.draft_picks, paged=paged_mode, rows_per_page=a.rows_per_page), clear("draft_results"))
         if a.only not in ("prospects", "postgame", "superbowl", "draft-results", "draft-recap"):
             log("Returning to the hub")
             go_hub()

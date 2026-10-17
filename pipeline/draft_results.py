@@ -18,6 +18,8 @@ import re
 import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from pipeline.capture_matching import name_key
+
 SUFFIX_RE = re.compile(r"\b(JR|SR|[IVXLCDM]+)\.?\b", re.IGNORECASE)
 
 POSITION_GROUP_MAP = {
@@ -249,10 +251,14 @@ def resolve_and_load_picks(
 
         # Build prospect index: normalized_name -> list of (id, full_name, position)
         prospect_by_name: Dict[str, List[Tuple[int, str, Optional[str]]]] = {}
+        prospect_by_namekey: Dict[str, List[Tuple[int, str, Optional[str]]]] = {}
         for pid, full_name, pos in prospect_rows:
             key = normalize_name(full_name)
             if key:
                 prospect_by_name.setdefault(key, []).append((pid, full_name, pos))
+            nk = name_key(full_name)
+            if nk:
+                prospect_by_namekey.setdefault(nk, []).append((pid, full_name, pos))
 
         warnings: List[str] = []
         resolved_selections: List[Dict[str, Any]] = []
@@ -267,6 +273,9 @@ def resolve_and_load_picks(
 
             norm_name = normalize_name(player_name)
             candidates = prospect_by_name.get(norm_name, [])
+            if not candidates:
+                nk = name_key(player_name)
+                candidates = prospect_by_namekey.get(nk, [])
 
             resolved_pid: Optional[int] = None
             if not candidates:

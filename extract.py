@@ -24,6 +24,7 @@ Writes, inside that capture folder:
                          the card crops, 20 per request; vision_* keep Vision's values and
                          vision_disagrees names the fields where the two differ
   injuries.csv           the captured week's injury report across all 32 teams (Apple Vision OCR)
+  draft_results.csv      --only draft-results: all 7 rounds of draft picks (Apple Vision OCR)
 """
 import csv, glob, io, os, re, sys, threading, time
 from collections import Counter, OrderedDict
@@ -953,6 +954,12 @@ def main():
             extract_injuries_ocr(root)
         except Exception as e:
             print(f"Error extracting injuries via Apple Vision: {e}")
+    if os.path.isdir(os.path.join(root, "draft_results")):
+        try:
+            from pipeline.extract_draft_results import extract_draft_results
+            extract_draft_results(root)
+        except Exception as e:
+            print(f"Error extracting draft results: {e}")
     if METER is not None:
         try:
             from pipeline.load_capture import detect_mode
