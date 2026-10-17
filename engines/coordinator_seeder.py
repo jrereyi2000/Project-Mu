@@ -89,13 +89,15 @@ BASELINE_STAFF_REFERENCE: Dict[str, Dict[str, Dict[str, Any]]] = {
         "DC": {"name": "Jim Leonhard", "scheme": "3-4", "playbook": "Buffalo Defense", "blitz_rate": "High", "man_coverage": "High"},
     },
     "CAR": {
-        # Carolina: Dave Canales (2026-2033), Marcus Whitfield served as Panthers OC prior to taking over as HC in 2034 (§4.2)
-        "OC_2026": {"name": "Marcus Whitfield", "scheme": "Wide Zone West Coast", "playbook": "Carolina Offense", "pass_lean": "Low", "origin_notes": "Panthers OC under Dave Canales (2026-2033); promoted to HC in 2034"},
-        "OC_2034": {"name": "Brad Idzik", "scheme": "Wide Zone West Coast", "playbook": "Carolina Offense", "pass_lean": "Low", "origin_notes": "Panthers OC under Marcus Whitfield from 2034"},
+        # Carolina: Dave Canales (2026-2033), Brad Idzik OC (2026-present), Ejiro Evero DC (2026-present)
+        "OC": {"name": "Brad Idzik", "scheme": "Wide Zone West Coast", "playbook": "Carolina Offense", "pass_lean": "Low", "origin_notes": "Panthers OC under Dave Canales (2026-2033) and Marcus Whitfield (2034-present)"},
         "DC": {"name": "Ejiro Evero", "scheme": "3-4", "playbook": "Carolina Defense", "blitz_rate": "Medium", "man_coverage": "Low", "origin_notes": "Fangio defensive tree"},
     },
     "CHI": {
-        "OC": {"name": "Thomas Brown", "scheme": "Wide Zone West Coast", "playbook": "Chicago Offense", "pass_lean": "Medium"},
+        # Chicago: Ben Johnson (HC), Thomas Brown OC (2026-2027), Marcus Whitfield OC (2028-2033), Thomas Brown OC (2034-present)
+        "OC_2026": {"name": "Thomas Brown", "scheme": "Wide Zone West Coast", "playbook": "Chicago Offense", "pass_lean": "Medium", "origin_notes": "Bears OC (2026-2027)"},
+        "OC_2028": {"name": "Marcus Whitfield", "scheme": "Wide Zone West Coast", "playbook": "Chicago Offense", "pass_lean": "Low", "origin_notes": "Bears OC under Ben Johnson (2028-2033); hired as Panthers HC in 2034"},
+        "OC_2034": {"name": "Thomas Brown", "scheme": "Wide Zone West Coast", "playbook": "Chicago Offense", "pass_lean": "Medium", "origin_notes": "Bears OC from 2034"},
         "DC": {"name": "Dennis Allen", "scheme": "4-3", "playbook": "Chicago Defense", "blitz_rate": "Medium", "man_coverage": "High"},
     },
     "CIN": {
@@ -279,8 +281,9 @@ def seed_coordinators(cur, reference_data: Optional[Dict[str, Any]] = None) -> D
     """Seeds baseline Offensive and Defensive Coordinators for all franchises in `teams`.
 
     Handles:
-    - Carolina narrative (§4.2): Whitfield as OC (2026-2033), Brad Idzik as OC (2034-present),
-      Ejiro Evero as DC (2026-present).
+    - Chicago Bears narrative (§4.2): Thomas Brown OC (2026-2027), Marcus Whitfield OC (2028-2033),
+      Thomas Brown OC (2034-present), Dennis Allen DC (2026-present).
+    - Carolina Panthers narrative: Brad Idzik OC (2026-present), Ejiro Evero DC (2026-present).
     - All other teams starting in 2026.
     - Procedural fallback for teams or coordinator slots missing reference data.
 
@@ -313,50 +316,66 @@ def seed_coordinators(cur, reference_data: Optional[Dict[str, Any]] = None) -> D
         hc_blitz = hc_row[3] if hc_row and hc_row[3] else "Medium"
         hc_man = hc_row[4] if hc_row and hc_row[4] else "Medium"
 
-        # Special handling for Carolina Panthers (§4.2)
-        if abbr == "CAR":
-            # 1. Marcus Whitfield as OC 2026-2033
+        # Special handling for Chicago Bears (§4.2)
+        # Ben Johnson HC (2026-present)
+        # Thomas Brown OC (2026-2027), Marcus Whitfield OC (2028-2033), Thomas Brown OC (2034-present)
+        # Dennis Allen DC (2026-present)
+        if abbr == "CHI":
+            # 1. Thomas Brown as OC 2026-2027
             oc_26_ref = ref.get("OC_2026", {})
-            car_oc_1_id = _get_or_create_coordinator(
+            chi_oc_1_id = _get_or_create_coordinator(
                 cur,
-                name=oc_26_ref.get("name", "Marcus Whitfield"),
+                name=oc_26_ref.get("name", "Thomas Brown"),
                 side="OFFENSIVE",
                 scheme=oc_26_ref.get("scheme", hc_off),
                 playbook=oc_26_ref.get("playbook", f"{city} Offense"),
                 pass_lean=oc_26_ref.get("pass_lean", hc_pass_lean),
-                origin_notes=oc_26_ref.get("origin_notes", "Panthers OC under Dave Canales (2026-2033)")
+                origin_notes=oc_26_ref.get("origin_notes", "Bears OC under Ben Johnson (2026-2027)")
             )
-            _ensure_tenure(cur, car_oc_1_id, team_id, "OC", start_season=2026, end_season=2033)
+            _ensure_tenure(cur, chi_oc_1_id, team_id, "OC", start_season=2026, end_season=2027)
 
-            # 2. Brad Idzik as OC 2034-present
-            oc_34_ref = ref.get("OC_2034", {})
-            car_oc_2_id = _get_or_create_coordinator(
+            # 2. Marcus Whitfield as OC 2028-2033
+            oc_28_ref = ref.get("OC_2028", {})
+            chi_oc_2_id = _get_or_create_coordinator(
                 cur,
-                name=oc_34_ref.get("name", "Brad Idzik"),
+                name=oc_28_ref.get("name", "Marcus Whitfield"),
+                side="OFFENSIVE",
+                scheme=oc_28_ref.get("scheme", hc_off),
+                playbook=oc_28_ref.get("playbook", f"{city} Offense"),
+                pass_lean=oc_28_ref.get("pass_lean", hc_pass_lean),
+                origin_notes=oc_28_ref.get("origin_notes", "Bears OC under Ben Johnson (2028-2033); hired as Panthers HC in 2034")
+            )
+            _ensure_tenure(cur, chi_oc_2_id, team_id, "OC", start_season=2028, end_season=2033)
+
+            # 3. Thomas Brown as OC 2034-present
+            oc_34_ref = ref.get("OC_2034", {})
+            chi_oc_3_id = _get_or_create_coordinator(
+                cur,
+                name=oc_34_ref.get("name", "Thomas Brown"),
                 side="OFFENSIVE",
                 scheme=oc_34_ref.get("scheme", hc_off),
                 playbook=oc_34_ref.get("playbook", f"{city} Offense"),
                 pass_lean=oc_34_ref.get("pass_lean", hc_pass_lean),
-                origin_notes=oc_34_ref.get("origin_notes", "Panthers OC under Marcus Whitfield from 2034")
+                origin_notes=oc_34_ref.get("origin_notes", "Bears OC under Ben Johnson (2034-present)")
             )
-            _ensure_tenure(cur, car_oc_2_id, team_id, "OC", start_season=2034, end_season=None)
+            _ensure_tenure(cur, chi_oc_3_id, team_id, "OC", start_season=2034, end_season=None)
 
-            # 3. Ejiro Evero as DC 2026-present
+            # 4. Dennis Allen as DC 2026-present
             dc_ref = ref.get("DC", {})
-            car_dc_id = _get_or_create_coordinator(
+            chi_dc_id = _get_or_create_coordinator(
                 cur,
-                name=dc_ref.get("name", "Ejiro Evero"),
+                name=dc_ref.get("name", "Dennis Allen"),
                 side="DEFENSIVE",
                 scheme=dc_ref.get("scheme", hc_def),
                 playbook=dc_ref.get("playbook", f"{city} Defense"),
                 blitz_rate=dc_ref.get("blitz_rate", hc_blitz),
                 man_coverage=dc_ref.get("man_coverage", hc_man),
-                origin_notes=dc_ref.get("origin_notes", "Fangio defensive tree DC")
+                origin_notes=dc_ref.get("origin_notes", "Dennis Allen defensive tree DC")
             )
-            _ensure_tenure(cur, car_dc_id, team_id, "DC", start_season=2026, end_season=None)
+            _ensure_tenure(cur, chi_dc_id, team_id, "DC", start_season=2026, end_season=None)
 
             coord_count += 3
-            tenure_count += 3
+            tenure_count += 4
             continue
 
         # Standard team seeding: 1 OC and 1 DC from 2026
