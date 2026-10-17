@@ -1525,8 +1525,11 @@ def get_available_players(
                 SELECT p.id, p.player_name, p.full_name, ps.position, ps.age, ps.team_id,
                        COALESCE(t.abbreviation, 'NFL') as team_abbr,
                        COALESCE(fp.adp_rank, 999) as adp,
-                       COALESCE(NULLIF(fp.projected_points, 0), fp.avg_points, 12.0) as proj_pts,
-                       COALESCE(fp.avg_points, 11.5) as avg_pts,
+                       ss.total_fantasy_points as ss_total_pts,
+                       ss.ppg_fantasy_points as ss_ppg_pts,
+                       fp.ros_total_points,
+                       fp.avg_points as fp_avg_pts,
+                       NULLIF(fp.projected_points, 0) as fp_proj_pts,
                        COALESCE(ss.rush_attempts, 0) as rush_att,
                        COALESCE(ss.rush_yards, 0) as rush_yds,
                        COALESCE(ss.rush_tds, 0) as rush_tds,
@@ -1540,7 +1543,7 @@ def get_available_players(
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
                 LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
                 WHERE {where_sql}
-                ORDER BY COALESCE(fp.adp_rank, 999) ASC, proj_pts DESC, p.id ASC
+                ORDER BY COALESCE(fp.adp_rank, 999) ASC, ss.total_fantasy_points DESC NULLS LAST, p.id ASC
                 LIMIT %(limit)s OFFSET %(offset)s
             """, params)
             rows = cur.fetchall()
@@ -1551,6 +1554,39 @@ def get_available_players(
                 team_id = r["team_id"] or 1
                 bye_wk = (team_id % 10) + 5
                 ros_pct = round(max(5.0, min(100.0, 100.0 - (float(adp_val) * 0.45))), 1) if adp_val <= 200 else 5.0
+
+                ss_total = r["ss_total_pts"]
+                ss_ppg = r["ss_ppg_pts"]
+                ros_total = r["ros_total_points"]
+                fp_avg = r["fp_avg_pts"]
+                fp_proj = r["fp_proj_pts"]
+
+                # PTS must be season total points, and AVG must be ppg
+                if ss_total is not None and float(ss_total) > 10.0:
+                    tot_pts = round(float(ss_total), 1)
+                    avg_ppg = round(float(ss_ppg) if ss_ppg and float(ss_ppg) > 0 else (tot_pts / 17.0), 1)
+                elif ros_total is not None and float(ros_total) > 10.0:
+                    tot_pts = round(float(ros_total), 1)
+                    avg_ppg = round(tot_pts / 17.0, 1)
+                elif fp_avg is not None and float(fp_avg) > 0:
+                    avg_ppg = round(float(fp_avg), 1)
+                    tot_pts = round(avg_ppg * 17.0, 1)
+                elif fp_proj is not None and float(fp_proj) > 0:
+                    avg_ppg = round(float(fp_proj), 1)
+                    tot_pts = round(avg_ppg * 17.0, 1)
+                else:
+                    # Consensus projection scaled by ADP
+                    if adp_val <= 12:
+                        avg_ppg = round(18.0 - (adp_val * 0.3), 1)
+                    elif adp_val <= 36:
+                        avg_ppg = round(14.5 - ((adp_val - 12) * 0.15), 1)
+                    elif adp_val <= 75:
+                        avg_ppg = round(11.0 - ((adp_val - 36) * 0.08), 1)
+                    elif adp_val <= 150:
+                        avg_ppg = round(8.0 - ((adp_val - 75) * 0.03), 1)
+                    else:
+                        avg_ppg = round(max(3.5, 6.0 - ((adp_val - 150) * 0.01)), 1)
+                    tot_pts = round(avg_ppg * 17.0, 1)
 
                 players.append({
                     "id": r["id"],
@@ -1564,8 +1600,8 @@ def get_available_players(
                     "age": r["age"] or 25,
                     "ros_pct": ros_pct,
                     "projections": {
-                        "pts": round(float(r["proj_pts"]), 2),
-                        "avg": round(float(r["avg_pts"]), 2),
+                        "pts": tot_pts,
+                        "avg": avg_ppg,
                     },
                     "rush": {
                         "rush": int(r["rush_att"]),

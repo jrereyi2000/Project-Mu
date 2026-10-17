@@ -274,13 +274,15 @@ def get_draft_state(draft_id: int) -> Dict[str, Any]:
                        dp.team_id, dp.team_name, dp.player_id, dp.picked_by, dp.pick_notes,
                        p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
                        COALESCE(t.abbreviation, 'NFL') as team_abbr,
-                       COALESCE(NULLIF(fp.projected_points, 0), fp.avg_points, 12.0) as projected_points,
+                       COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
+                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg,
                        COALESCE(fp.adp_rank, 150) as adp_rank
                 FROM napper_draft_picks dp
                 LEFT JOIN players p ON p.id = dp.player_id
                 LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
                 LEFT JOIN teams t ON t.id = ps.team_id
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
                 WHERE dp.draft_id = %s
                 ORDER BY dp.overall_pick ASC
             """, (draft_id,))
@@ -302,6 +304,7 @@ def get_draft_state(draft_id: int) -> Dict[str, Any]:
                         "team": rp["team_abbr"],
                         "headshot_url": f"/static/players/{rp['player_id']}.webp",
                         "projected_points": float(rp["projected_points"]),
+                        "ppg": float(rp["ppg"]),
                         "adp": int(rp["adp_rank"]),
                     }
                     roster_by_slot[rp["slot_num"]].append(player_data)
@@ -556,12 +559,14 @@ def make_draft_pick(draft_id: int, player_id: int, picked_by: str = "USER") -> D
             cur.execute("""
                 SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
                        COALESCE(t.abbreviation, 'NFL') as team_abbr,
-                       COALESCE(NULLIF(fp.projected_points, 0), fp.avg_points, 12.0) as projected_points,
+                       COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
+                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg,
                        COALESCE(fp.adp_rank, 150) as adp_rank
                 FROM players p
                 LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
                 LEFT JOIN teams t ON t.id = ps.team_id
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
                 WHERE p.id = %s
             """, (player_id,))
             player = cur.fetchone()
@@ -686,16 +691,18 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
             cur.execute("""
                 SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
                        COALESCE(fp.adp_rank, 200) as adp_rank,
-                       COALESCE(NULLIF(fp.projected_points, 0), fp.avg_points, 10.0) as projected_points
+                       COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
+                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg
                 FROM players p
                 JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
                 WHERE p.id NOT IN (
                     SELECT player_id FROM napper_draft_picks
                     WHERE draft_id = %s AND player_id IS NOT NULL
                 )
                 AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
-                ORDER BY COALESCE(fp.adp_rank, 200) ASC, projected_points DESC
+                ORDER BY COALESCE(fp.adp_rank, 200) ASC, ss.total_fantasy_points DESC NULLS LAST, projected_points DESC
                 LIMIT 100
             """, (draft_id,))
             candidates = cur.fetchall()
@@ -823,12 +830,14 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
             cur.execute("""
                 SELECT dp.overall_pick, dp.slot_num, dp.team_id, dp.team_name, dp.player_id,
                        p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
-                       COALESCE(NULLIF(fp.projected_points, 0), fp.avg_points, 10.0) as projected_points,
+                       COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
+                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg,
                        COALESCE(fp.adp_rank, 150) as adp_rank
                 FROM napper_draft_picks dp
                 JOIN players p ON p.id = dp.player_id
                 LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
                 WHERE dp.draft_id = %s AND dp.player_id IS NOT NULL
                 ORDER BY dp.overall_pick ASC
             """, (draft_id,))
@@ -884,10 +893,10 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
 
                 # Balance penalty if completely missing core positions
                 balance_pen = 0.0
-                if "QB" not in norm_pos: balance_pen += 25.0
-                if "RB" not in norm_pos: balance_pen += 30.0
-                if "WR" not in norm_pos: balance_pen += 25.0
-                if "TE" not in norm_pos: balance_pen += 15.0
+                if "QB" not in norm_pos: balance_pen += 250.0
+                if "RB" not in norm_pos: balance_pen += 300.0
+                if "WR" not in norm_pos: balance_pen += 250.0
+                if "TE" not in norm_pos: balance_pen += 150.0
 
                 comp_score = total_proj - balance_pen
                 team_name = p_list[0]["team_name"] if p_list else f"Team {slot_num}"

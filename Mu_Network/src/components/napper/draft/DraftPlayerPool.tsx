@@ -290,8 +290,8 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
               <th style={{ width: "40px" }}>BYE</th>
               <th style={{ width: "45px" }}>AGE</th>
               <th style={{ width: "55px" }}>ROS%</th>
-              <th style={{ width: "55px" }}>PTS</th>
-              <th style={{ width: "45px" }}>AVG</th>
+              <th style={{ width: "55px" }} title="Projected Season Total Fantasy Points (PPR)">PTS</th>
+              <th style={{ width: "45px" }} title="Projected Points Per Game (PPG)">AVG</th>
               <th style={{ width: "50px" }}>RUSH</th>
               <th style={{ width: "55px" }}>YDS</th>
               <th style={{ width: "40px" }}>TD</th>
