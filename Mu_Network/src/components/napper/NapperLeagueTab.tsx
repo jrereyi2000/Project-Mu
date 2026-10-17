@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import { BlueRobotAvatar, PinkRobotAvatar } from "./napperUtils";
+import { ARCHETYPE_METAS, NapperManagerArchetype } from "../../types/napper";
 
 interface NapperLeagueTabProps {
   leagueId: number;
@@ -63,7 +64,24 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
                   <div style={{ color: "#e2e8f0", fontWeight: "600" }}>
                     {t.team_name} {t.is_user && <span style={{ color: "var(--napper-teal)", fontSize: "11px" }}>(You)</span>}
                   </div>
-                  <div style={{ color: "#8a99ad", fontSize: "11px" }}>{t.manager_handle} {t.is_ai ? `· ${t.persona || "AI"}` : ""}</div>
+                  <div style={{ color: "#8a99ad", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span>{t.manager_handle}</span>
+                    {t.is_ai && (
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: "700",
+                          color: ARCHETYPE_METAS[t.persona as NapperManagerArchetype]?.color || "#8a99ad",
+                          background: ARCHETYPE_METAS[t.persona as NapperManagerArchetype]?.bgColor || "rgba(255,255,255,0.06)",
+                          border: `1px solid ${ARCHETYPE_METAS[t.persona as NapperManagerArchetype]?.borderColor || "transparent"}`,
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {ARCHETYPE_METAS[t.persona as NapperManagerArchetype]?.shortLabel || t.persona || "AI"}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div style={{ textAlign: "center", color: "#cbd5e1", fontWeight: "700" }}>{t.wins}-{t.losses}-{t.ties}</div>

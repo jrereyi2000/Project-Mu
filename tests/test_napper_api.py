@@ -11,22 +11,6 @@ from server.napper_api import get_db
 client = TestClient(app)
 
 
-@pytest.fixture(scope="module", autouse=True)
-def setup_napper_module():
-    from engines.napper_seeder import seed_napper_database
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
-        conn.commit()
-    seed_napper_database()
-    yield
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
-        conn.commit()
-    seed_napper_database()
-
-
 def get_first_league_id() -> int:
     res = client.get("/api/napper/leagues")
     data = res.json()

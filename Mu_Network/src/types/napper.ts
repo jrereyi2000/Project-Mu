@@ -44,7 +44,7 @@ export interface NapperTeam {
   manager_handle: string;
   avatar_url: string;
   is_ai: boolean;
-  persona?: "TRASH_TALKER" | "ANALYTICS_NERD" | "WAIVER_HAWK" | "DIE_HARD";
+  persona?: "TRASH_TALKER" | "ANALYTICS_NERD" | "WAIVER_HAWK" | "DIE_HARD" | "ZERO_RB_ZEALOT" | "HERO_RB" | "TRADE_FIEND" | "UNDERDOG";
   wins: number;
   losses: number;
   ties: number;
@@ -216,7 +216,9 @@ export type NapperManagerArchetype =
   | "ANALYTICS_NERD"
   | "TRASH_TALKER"
   | "WAIVER_HAWK"
-  | "DIE_HARD";
+  | "DIE_HARD"
+  | "TRADE_FIEND"
+  | "UNDERDOG";
 
 export interface ArchetypeMeta {
   key: NapperManagerArchetype;
@@ -289,6 +291,26 @@ export const ARCHETYPE_METAS: Record<NapperManagerArchetype, ArchetypeMeta> = {
     color: "#f59e0b",
     bgColor: "rgba(245, 158, 11, 0.15)",
     borderColor: "rgba(245, 158, 11, 0.4)",
+  },
+  TRADE_FIEND: {
+    key: "TRADE_FIEND",
+    label: "Trade Fiend",
+    shortLabel: "Trade Fiend",
+    tagline: "Aggressive Deals & Buy-Low / Sell-High",
+    description: "Relentless dealmaker viewing fantasy as an asset market. Consolidates depth and hunts 2-for-1 upgrades.",
+    color: "#ec4899",
+    bgColor: "rgba(236, 72, 153, 0.15)",
+    borderColor: "rgba(236, 72, 153, 0.4)",
+  },
+  UNDERDOG: {
+    key: "UNDERDOG",
+    label: "The Underdog",
+    shortLabel: "Underdog",
+    tagline: "Young Sleepers & High-Ceiling Breakouts",
+    description: "Chases high-upside younger talent, rookie breakout candidates, and sleeper prospects for league-winning ceiling.",
+    color: "#6366f1",
+    bgColor: "rgba(99, 102, 241, 0.15)",
+    borderColor: "rgba(99, 102, 241, 0.4)",
   },
 };
 

@@ -20,7 +20,7 @@ export const ARCHETYPE_PRESETS: Array<{
 }> = [
   {
     name: "Balanced Mix",
-    description: "Realistic spread of analytics minds, bellcow believers, and pass-catcher zealots.",
+    description: "Realistic spread of all 8 archetypes: analytics minds, bellcow believers, trade fiends, and sleepers.",
     getCounts: (aiSlots: number) => {
       const counts: Record<string, number> = {
         ANALYTICS_NERD: 0,
@@ -29,12 +29,48 @@ export const ARCHETYPE_PRESETS: Array<{
         TRASH_TALKER: 0,
         WAIVER_HAWK: 0,
         DIE_HARD: 0,
+        TRADE_FIEND: 0,
+        UNDERDOG: 0,
       };
       const keys = Object.keys(counts);
       for (let i = 0; i < aiSlots; i++) {
         counts[keys[i % keys.length]] += 1;
       }
       return counts;
+    },
+  },
+  {
+    name: "Trader's Paradise",
+    description: "Active market room dominated by aggressive Trade Fiends and VORP Analytics dealmakers.",
+    getCounts: (aiSlots: number) => {
+      const counts: Record<string, number> = {
+        TRADE_FIEND: Math.max(1, Math.round(aiSlots * 0.45)),
+        ANALYTICS_NERD: Math.max(1, Math.round(aiSlots * 0.25)),
+        WAIVER_HAWK: 1,
+        HERO_RB: 1,
+        ZERO_RB_ZEALOT: 0,
+        TRASH_TALKER: 0,
+        DIE_HARD: 0,
+        UNDERDOG: 0,
+      };
+      return balanceCounts(counts, aiSlots, "TRADE_FIEND");
+    },
+  },
+  {
+    name: "Sleeper Upside",
+    description: "Young gun breakout room dominated by Underdogs and Zero-RB pass-catcher enthusiasts.",
+    getCounts: (aiSlots: number) => {
+      const counts: Record<string, number> = {
+        UNDERDOG: Math.max(1, Math.round(aiSlots * 0.45)),
+        ZERO_RB_ZEALOT: Math.max(1, Math.round(aiSlots * 0.25)),
+        HERO_RB: 1,
+        ANALYTICS_NERD: 1,
+        TRADE_FIEND: 0,
+        TRASH_TALKER: 0,
+        WAIVER_HAWK: 0,
+        DIE_HARD: 0,
+      };
+      return balanceCounts(counts, aiSlots, "UNDERDOG");
     },
   },
   {
@@ -45,11 +81,12 @@ export const ARCHETYPE_PRESETS: Array<{
         ANALYTICS_NERD: Math.max(1, Math.round(aiSlots * 0.55)),
         ZERO_RB_ZEALOT: Math.max(1, Math.round(aiSlots * 0.15)),
         HERO_RB: Math.max(1, Math.round(aiSlots * 0.15)),
+        TRADE_FIEND: 1,
         TRASH_TALKER: 0,
-        WAIVER_HAWK: Math.max(0, aiSlots - Math.round(aiSlots * 0.85)),
+        WAIVER_HAWK: 0,
         DIE_HARD: 0,
+        UNDERDOG: 0,
       };
-      // Normalize to exact aiSlots
       return balanceCounts(counts, aiSlots, "ANALYTICS_NERD");
     },
   },
@@ -60,10 +97,12 @@ export const ARCHETYPE_PRESETS: Array<{
       const counts: Record<string, number> = {
         ZERO_RB_ZEALOT: Math.max(1, Math.round(aiSlots * 0.55)),
         ANALYTICS_NERD: Math.max(1, Math.round(aiSlots * 0.15)),
+        UNDERDOG: 1,
         HERO_RB: 1,
-        TRASH_TALKER: 1,
+        TRASH_TALKER: 0,
         WAIVER_HAWK: 0,
         DIE_HARD: 0,
+        TRADE_FIEND: 0,
       };
       return balanceCounts(counts, aiSlots, "ZERO_RB_ZEALOT");
     },
@@ -76,9 +115,11 @@ export const ARCHETYPE_PRESETS: Array<{
         HERO_RB: Math.max(1, Math.round(aiSlots * 0.55)),
         ZERO_RB_ZEALOT: 1,
         ANALYTICS_NERD: 1,
-        TRASH_TALKER: 1,
+        TRADE_FIEND: 1,
+        TRASH_TALKER: 0,
         WAIVER_HAWK: 0,
         DIE_HARD: 0,
+        UNDERDOG: 0,
       };
       return balanceCounts(counts, aiSlots, "HERO_RB");
     },
@@ -90,7 +131,9 @@ export const ARCHETYPE_PRESETS: Array<{
       const counts: Record<string, number> = {
         TRASH_TALKER: Math.max(1, Math.round(aiSlots * 0.45)),
         DIE_HARD: Math.max(1, Math.round(aiSlots * 0.35)),
-        HERO_RB: 1,
+        TRADE_FIEND: 1,
+        UNDERDOG: 0,
+        HERO_RB: 0,
         ANALYTICS_NERD: 0,
         ZERO_RB_ZEALOT: 0,
         WAIVER_HAWK: 0,
@@ -132,6 +175,8 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
     TRASH_TALKER: 0,
     WAIVER_HAWK: 0,
     DIE_HARD: 0,
+    TRADE_FIEND: 0,
+    UNDERDOG: 0,
     ...currentComposition,
   }));
   const [activePreset, setActivePreset] = useState<string>("Custom");
@@ -145,6 +190,8 @@ export const ArchetypeCompositionModal: React.FC<ArchetypeCompositionModalProps>
         TRASH_TALKER: 0,
         WAIVER_HAWK: 0,
         DIE_HARD: 0,
+        TRADE_FIEND: 0,
+        UNDERDOG: 0,
         ...currentComposition,
       });
     }

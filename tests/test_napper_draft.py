@@ -18,23 +18,6 @@ from engines.napper_draft_engine import (
 client = TestClient(app)
 
 
-@pytest.fixture(scope="module", autouse=True)
-def setup_draft_module():
-    from engines.napper_seeder import seed_napper_database
-    from engines.napper_draft_engine import get_db
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
-        conn.commit()
-    seed_napper_database()
-    yield
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
-        conn.commit()
-    seed_napper_database()
-
-
 def test_create_mock_draft_endpoint():
     """Tests POST /api/napper/drafts/create_mock with custom slots and snake ordering."""
     payload = {
@@ -330,7 +313,7 @@ def test_league_draft_lifecycle():
 
         # 3. Simulate entire draft
         sim_res = client.post(f"/api/napper/draft/{draft_id}/sim_all")
-        assert sim_res.status_code == 200
+        assert sim_res.status_code == 200, sim_res.json()
         final_state = sim_res.json()
         assert final_state["status"] == "COMPLETED"
 

@@ -19,6 +19,7 @@ import type { NapperChatMessage, NapperStarterPlayer, NapperLeagueSummary, Nappe
 
 interface NapperPageProps {
   leagueId?: number;
+  initialLeagueId?: number;
   initialTab?: "MATCHUP" | "TEAM" | "LEAGUE" | "PLAYERS" | "TREND" | "TRADES" | "SCORES";
   onBackToMu?: () => void;
 }
@@ -78,14 +79,16 @@ const FALLBACK_LEAGUES: NapperLeagueSummary[] = [
 ];
 
 export const NapperPage: React.FC<NapperPageProps> = ({
-  leagueId = 1,
+  leagueId,
+  initialLeagueId,
   initialTab = "MATCHUP",
   onBackToMu,
 }) => {
+  const effectiveLeagueId = leagueId ?? initialLeagueId ?? 1;
   const [activeTab, setActiveTab] = useState<
     "MATCHUP" | "TEAM" | "LEAGUE" | "PLAYERS" | "TREND" | "TRADES" | "SCORES"
   >(initialTab);
-  const [selectedLeagueId, setSelectedLeagueId] = useState<number>(leagueId);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<number>(effectiveLeagueId);
   const [profile, setProfile] = useState<NapperUserProfile | null>(null);
   const [pendingTradesCount, setPendingTradesCount] = useState<number>(0);
   const [leagues, setLeagues] = useState<NapperLeagueSummary[]>(FALLBACK_LEAGUES);
@@ -97,12 +100,18 @@ export const NapperPage: React.FC<NapperPageProps> = ({
     return typeof window !== "undefined" && window.location.hash.includes("draft");
   });
 
+  // Keep selectedLeagueId in sync if props change
+  useEffect(() => {
+    const nextId = leagueId ?? initialLeagueId;
+    if (nextId && nextId !== selectedLeagueId) {
+      setSelectedLeagueId(nextId);
+    }
+  }, [leagueId, initialLeagueId]);
+
   // Listen for draft hash changes
   useEffect(() => {
     const handleHash = () => {
-      if (window.location.hash.includes("draft")) {
-        setInDraftRoom(true);
-      }
+      setInDraftRoom(window.location.hash.includes("draft"));
     };
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
@@ -116,6 +125,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
   const [createScoringType, setCreateScoringType] = useState<string>("PPR");
   const [createSuperflex, setCreateSuperflex] = useState<boolean>(true);
   const [createStatus, setCreateStatus] = useState<"IN_SEASON" | "PRE_DRAFT">("IN_SEASON");
+  const [createArchetypePreset, setCreateArchetypePreset] = useState<string>("Balanced Mix");
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccessMsg, setCreateSuccessMsg] = useState<string | null>(null);
@@ -174,6 +184,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
         scoring_type: createScoringType,
         is_superflex: createSuperflex,
         status: createStatus,
+        archetype_preset: createArchetypePreset,
       }),
     })
       .then((res) => {
@@ -271,6 +282,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             window.location.hash = `#napper-${selectedLeagueId}`;
           }
         }}
+        onExitToMu={onBackToMu || (() => { window.location.hash = ""; })}
         onLeagueCreated={(newId) => {
           setInDraftRoom(false);
           loadLeagues(newId);
@@ -287,32 +299,39 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           ========================================================================= */}
       <aside className="napper-left-rail">
         {/* Sleeper / Napper Brand Header */}
-        <div className="p-4 flex items-center justify-between border-b border-[#1e2a3c]">
-          <div className="flex items-center gap-2.5">
-            <NapperMoonIcon size={26} />
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black tracking-tight text-white font-sans lowercase">
-                sleeper
-              </span>
-              <span className="text-[10px] uppercase font-extrabold tracking-widest text-[#00ceb8] bg-[#00ceb8]/15 px-1.5 py-0.5 rounded border border-[#00ceb8]/30">
-                napper
-              </span>
-            </div>
+        <div className="p-4 flex items-center gap-2.5 border-b border-[#1e2a3c]">
+          <NapperMoonIcon size={26} />
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xl font-black tracking-tight text-white font-sans lowercase">
+              sleeper
+            </span>
+            <span className="text-[10px] uppercase font-extrabold tracking-widest text-[#00ceb8] bg-[#00ceb8]/15 px-1.5 py-0.5 rounded border border-[#00ceb8]/30">
+              napper
+            </span>
           </div>
-          {onBackToMu && (
-            <button
-              type="button"
-              onClick={onBackToMu}
-              title="Return to Mu Network"
-              className="text-[11px] font-semibold text-[#8a99ad] hover:text-[#00ceb8] transition-colors cursor-pointer bg-[#172130] hover:bg-[#202d40] px-2 py-1 rounded border border-[#283850]"
-            >
-              Exit
-            </button>
-          )}
         </div>
 
         {/* Top Direct Navigation */}
         <div className="px-3 py-2 space-y-1">
+          <div
+            onClick={() => {
+              if (onBackToMu) {
+                onBackToMu();
+              } else {
+                window.location.hash = "";
+              }
+            }}
+            className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-white hover:bg-[#182333] transition-colors cursor-pointer group"
+          >
+            <div className="flex items-center gap-3">
+              <svg className="w-4 h-4 text-[#8a99ad] group-hover:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+              <span>Back to Home</span>
+            </div>
+          </div>
+
           <div
             onClick={() => setActiveTab("TRADES")}
             className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-white hover:bg-[#182333] transition-colors cursor-pointer group"
@@ -516,9 +535,9 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               type="button"
               onClick={() => setInDraftRoom(true)}
               title="Enter Draft Room"
-              className="px-3.5 py-1.5 rounded-xl bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#090e17] text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_12px_rgba(0,206,184,0.3)] flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-xl bg-[#1a2332] hover:bg-[#202d40] border border-[#283850] hover:border-[#00ceb8]/50 text-xs font-semibold text-[#8a99ad] hover:text-white transition-all cursor-pointer flex items-center gap-1.5 group"
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg className="w-3.5 h-3.5 text-[#00ceb8] group-hover:text-[#2bd9c6] transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 <circle cx="12" cy="11" r="3" />
               </svg>
@@ -553,9 +572,9 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             <button
               type="button"
               onClick={() => setInDraftRoom(true)}
-              className="napper-nav-tab border border-[#00ceb8]/40 text-[#00ceb8] hover:bg-[#00ceb8]/10 font-black"
+              className="napper-nav-tab hover:text-[#00ceb8] hover:border-[#00ceb8]/40"
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 <circle cx="12" cy="11" r="3" />
               </svg>
@@ -1155,6 +1174,38 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                     >
                       Pre-Draft (Draft Room)
                     </button>
+                  </div>
+                </div>
+
+                {/* AI Manager Archetype Strategy */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-[#8a99ad] uppercase tracking-wider">
+                      AI Manager Strategy
+                    </label>
+                    <span className="text-[10px] text-[#00ceb8] font-bold">8 Archetypes</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: "Balanced Mix", label: "Balanced 8-Way", desc: "All 8 archetypes represented" },
+                      { key: "Trader's Paradise", label: "Trader's Paradise", desc: "Trade Fiends & Analytics Nerds" },
+                      { key: "Sleeper Upside", label: "Sleeper Upside", desc: "Underdogs & Zero-RB breakouts" },
+                      { key: "Chaos & Reachers", label: "Chaos & Swagger", desc: "Trash Talkers & Die-Hards" },
+                    ].map((p) => (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setCreateArchetypePreset(p.key)}
+                        className={`p-2.5 text-left rounded-xl border transition-colors cursor-pointer ${
+                          createArchetypePreset === p.key
+                            ? "bg-[#00ceb8]/15 border-[#00ceb8] text-white"
+                            : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
+                        }`}
+                      >
+                        <div className="text-xs font-bold leading-tight">{p.label}</div>
+                        <div className="text-[10px] text-[#8a99ad] opacity-80 mt-0.5 leading-tight">{p.desc}</div>
+                      </button>
+                    ))}
                   </div>
                 </div>
 

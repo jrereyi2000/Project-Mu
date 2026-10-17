@@ -5019,7 +5019,16 @@ function App() {
   } else if (route === "#napper" || route.startsWith("#napper-")) {
     const cleanRoute = route.replace("#napper-draft-", "").replace("#napper-draft", "").replace("#napper-", "");
     const leagueId = Number(cleanRoute) || 1;
-    content = <NapperPage initialLeagueId={leagueId} />;
+    content = (
+      <NapperPage
+        key={route}
+        leagueId={leagueId}
+        initialLeagueId={leagueId}
+        onBackToMu={() => {
+          window.location.hash = "";
+        }}
+      />
+    );
   } else if (route === "#social") {
     content = <SocialFeedPage />;
   } else if (route === "#social-explore") {
