@@ -1478,23 +1478,24 @@ def get_available_players(
     draft_id: int,
     search: Optional[str] = Query(None),
     position: Optional[str] = Query("ALL"),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0)
 ):
     """Returns available players ordered by ADP, with bye, age, ros_pct, projections, rush/rec stats, and draft count."""
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id FROM napper_drafts WHERE id = %s", (draft_id,))
-            if not cur.fetchone():
-                raise HTTPException(status_code=404, detail=f"Draft {draft_id} not found")
+            where_clauses = []
+            params: Dict[str, Any] = {"limit": limit, "offset": offset}
 
-            where_clauses = [
-                """p.id NOT IN (
+            if draft_id > 0:
+                cur.execute("SELECT id FROM napper_drafts WHERE id = %s", (draft_id,))
+                if not cur.fetchone():
+                    raise HTTPException(status_code=404, detail=f"Draft {draft_id} not found")
+                where_clauses.append("""p.id NOT IN (
                     SELECT player_id FROM napper_draft_picks
                     WHERE draft_id = %(draft_id)s AND player_id IS NOT NULL
-                )"""
-            ]
-            params: Dict[str, Any] = {"draft_id": draft_id, "limit": limit, "offset": offset}
+                )""")
+                params["draft_id"] = draft_id
 
             if position and position.upper() != "ALL":
                 pos_upper = position.upper()
@@ -1503,12 +1504,14 @@ def get_available_players(
                 else:
                     where_clauses.append("ps.position = %(position)s")
                     params["position"] = pos_upper
+            else:
+                where_clauses.append("ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')")
 
             if search:
                 where_clauses.append("(p.full_name ILIKE %(search)s OR p.player_name ILIKE %(search)s)")
                 params["search"] = f"%{search.strip()}%"
 
-            where_sql = " AND ".join(where_clauses)
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
             cur.execute(f"""
                 SELECT COUNT(DISTINCT p.id) as total

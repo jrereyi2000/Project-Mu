@@ -13,8 +13,92 @@ import DraftRosterQueue from "./DraftRosterQueue";
 import DraftRecapModal from "./DraftRecapModal";
 import "./napperDraft.css";
 
-// Comprehensive Mock Player Dataset based on 2025-2026 Consensus ADP & Reference Screenshot
+// Comprehensive Mock Player Dataset based on Season 2035 & NFL Consensus ADP
 const MOCK_DRAFT_PLAYERS: NapperDraftPlayer[] = [
+  {
+    player_id: 80,
+    name: "Trey'Mane Davis",
+    position: "WR",
+    team: "CAR",
+    bye: 6,
+    age: 24.0,
+    ros_pct: 99.8,
+    adp: 1.0,
+    adp_rank: 1,
+    proj_pts: 288.0,
+    proj_avg: 16.9,
+    rush_att: 0,
+    rush_yds: 0,
+    rush_td: 0,
+    rec: 107.0,
+    rec_yds: 2111.0,
+    rec_td: 29.0,
+    headshot_url: "/static/players/80.webp",
+    notes: "Consensus #1 overall fantasy pick in season 2035 with 2,111 yards and 29 TDs.",
+  },
+  {
+    player_id: 138,
+    name: "KC Concepcion Jr",
+    position: "WR",
+    team: "CLE",
+    bye: 9,
+    age: 30.0,
+    ros_pct: 99.5,
+    adp: 2.0,
+    adp_rank: 2,
+    proj_pts: 272.0,
+    proj_avg: 16.0,
+    rush_att: 2.0,
+    rush_yds: 12.0,
+    rush_td: 0,
+    rec: 102.0,
+    rec_yds: 1673.0,
+    rec_td: 14.0,
+    headshot_url: "/static/players/138.webp",
+    notes: "Elite route acrobat and target accumulator in Cleveland.",
+  },
+  {
+    player_id: 3,
+    name: "G. Crawford",
+    position: "QB",
+    team: "IND",
+    bye: 13,
+    age: 26.0,
+    ros_pct: 99.4,
+    adp: 3.0,
+    adp_rank: 3,
+    proj_pts: 335.0,
+    proj_avg: 19.7,
+    rush_att: 95.0,
+    rush_yds: 510.0,
+    rush_td: 8.0,
+    pass_yds: 4200,
+    pass_td: 28,
+    int: 10,
+    headshot_url: "/static/players/3.webp",
+    notes: "Top-ranked dual-threat quarterback in season 2035 with immense weekly ceiling.",
+  },
+  {
+    player_id: 1404,
+    name: "M. McBride",
+    position: "RB",
+    team: "DEN",
+    bye: 8,
+    age: 25.0,
+    ros_pct: 99.3,
+    adp: 4.0,
+    adp_rank: 4,
+    proj_pts: 258.0,
+    proj_avg: 15.2,
+    rush_att: 275.0,
+    rush_yds: 1340.0,
+    rush_td: 12.0,
+    rec: 48.0,
+    rec_yds: 390.0,
+    rec_td: 2.0,
+    headshot_url: "/static/players/1404.webp",
+    notes: "Season 2035 workhorse running back commanding true 3-down volume.",
+  },
   {
     player_id: 4430807,
     name: "Bijan Robinson",
@@ -798,6 +882,64 @@ interface NapperDraftRoomProps {
   onLeagueCreated?: (newLeagueId: number) => void;
 }
 
+const DEFAULT_AI_TEAMS = [
+  { name: "Zero-RB Theory", handle: "@ZeroHero" },
+  { name: "Data Analytics", handle: "@DataDog" },
+  { name: "Gridiron Dominance", handle: "@Champ2035" },
+  { name: "Hero RB Squad", handle: "@AnchorBack" },
+  { name: "Waiver Wire Kings", handle: "@WireHawk" },
+  { name: "Franchise DieHards", handle: "@DieHardFan" },
+  { name: "VORP Machine", handle: "@QuantKing" },
+  { name: "Smashmouth Crew", handle: "@HeavyHitter" },
+  { name: "Robust RB Lab", handle: "@BellCowBros" },
+  { name: "PPR Machines", handle: "@PPRGod" },
+  { name: "Draft Board Wizards", handle: "@ScoutMaster" },
+  { name: "Red Zone Raiders", handle: "@RedZoneKing" },
+];
+
+function buildMockTeamsAndPicks(
+  teamsCount: number,
+  roundsCount: number,
+  userSlot: number
+): { teams: NapperDraftTeam[]; picks: NapperDraftPick[] } {
+  const teams: NapperDraftTeam[] = Array.from({ length: teamsCount }, (_, i) => {
+    const slot = i + 1;
+    const isUser = slot === userSlot;
+    const aiTemplate = DEFAULT_AI_TEAMS[i % DEFAULT_AI_TEAMS.length];
+    return {
+      id: slot,
+      slot,
+      name: isUser ? "The Straw Hat Pirates" : aiTemplate.name,
+      is_user: isUser,
+      is_ai: !isUser,
+      avatar_url: "/static/players/robot_avatar.webp",
+      manager_handle: isUser ? "@jrereyi2000" : aiTemplate.handle,
+      roster: [],
+    };
+  });
+
+  const picks: NapperDraftPick[] = [];
+  for (let r = 1; r <= roundsCount; r++) {
+    const isOdd = r % 2 === 1;
+    for (let p = 1; p <= teamsCount; p++) {
+      const overall = (r - 1) * teamsCount + p;
+      const slot = isOdd ? p : teamsCount - p + 1;
+      const team = teams.find((t) => t.slot === slot);
+      picks.push({
+        pick_overall: overall,
+        round: r,
+        round_pick: p,
+        team_id: team?.id || slot,
+        team_name: team?.name || `Team ${slot}`,
+        team_slot: slot,
+        player: null,
+      });
+    }
+  }
+
+  return { teams, picks };
+}
+
 export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
   leagueId = 1,
   initialSlot = 1,
@@ -807,51 +949,23 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
   const [draftState, setDraftState] = useState<NapperDraftState>(() => {
     const teamsCount = 10;
     const roundsCount = 15;
-    const initialTeams: NapperDraftTeam[] = Array.from({ length: teamsCount }, (_, i) => {
-      const slot = i + 1;
-      const isUser = slot === initialSlot;
-      return {
-        id: slot,
-        slot,
-        name: isUser ? "The Straw Hat Pirates" : `Team ${slot}`,
-        is_user: isUser,
-        is_ai: !isUser,
-        avatar_url: isUser ? "/static/players/robot_avatar.webp" : "/static/players/robot_avatar.webp",
-        manager_handle: isUser ? "@jrereyi2000" : `@BotManager_${slot}`,
-        roster: [],
-      };
-    });
-
-    const initialPicks: NapperDraftPick[] = [];
-    for (let r = 1; r <= roundsCount; r++) {
-      const isOdd = r % 2 === 1;
-      for (let c = 1; c <= teamsCount; c++) {
-        const roundPick = isOdd ? c : teamsCount - c + 1;
-        const overall = (r - 1) * teamsCount + roundPick;
-        const team = initialTeams.find((t) => t.slot === (isOdd ? c : teamsCount - c + 1));
-        initialPicks.push({
-          pick_overall: overall,
-          round: r,
-          round_pick: roundPick,
-          team_id: team?.id || 1,
-          team_name: team?.name || `Team ${roundPick}`,
-          team_slot: isOdd ? c : teamsCount - c + 1,
-          player: null,
-        });
-      }
-    }
-    initialPicks.sort((a, b) => a.pick_overall - b.pick_overall);
+    const userSlot = Math.min(Math.max(1, initialSlot), teamsCount);
+    const { teams: initialTeams, picks: initialPicks } = buildMockTeamsAndPicks(
+      teamsCount,
+      roundsCount,
+      userSlot
+    );
 
     return {
       id: `mock-${Date.now()}`,
       league_id: leagueId,
-      title: "10-team Standard Snake",
+      title: "10-Team PPR Snake Mock",
       teams_count: teamsCount,
       rounds_count: roundsCount,
       seconds_per_pick: 120,
       status: "NOT_STARTED",
       current_pick_index: 0,
-      user_slot: initialSlot,
+      user_slot: userSlot,
       auto_pick: false,
       teams: initialTeams,
       picks: initialPicks,
@@ -940,6 +1054,58 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       });
   }, [leagueId]);
 
+  // Fetch real players for season 2035 from backend
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPlayerPool = async () => {
+      try {
+        const draftIdNum = Number(draftState.id);
+        const validDraftId = !isNaN(draftIdNum) && draftIdNum > 0 ? draftIdNum : 0;
+        let res = await fetch(`${API_BASE}/api/napper/draft/${validDraftId}/available_players?limit=250`);
+        if (!res.ok) {
+          res = await fetch(`${API_BASE}/api/fantasy/projections?season=2035&week=1&limit=250`);
+        }
+        if (res.ok) {
+          const data = await res.json();
+          const rawPlayers = data.players || [];
+          if (rawPlayers.length > 0 && isMounted) {
+            const mapped: NapperDraftPlayer[] = rawPlayers.map((p: any) => ({
+              player_id: p.id || p.player_id,
+              name: p.name || p.player_name,
+              position: p.position === "HB" || p.position === "FB" ? "RB" : p.position,
+              team: p.team || p.team_abbr || "NFL",
+              bye: p.bye ?? (p.team_id ? (p.team_id % 10) + 5 : 7),
+              age: p.age ?? 25,
+              ros_pct: p.ros_pct ?? 95,
+              adp: p.adp ?? 999,
+              adp_rank: p.adp ?? 999,
+              proj_pts: p.projections?.pts ?? p.proj_pts ?? 12.0,
+              proj_avg: p.projections?.avg ?? p.avg_pts ?? 11.5,
+              rush_att: p.rush?.rush ?? p.rush_att ?? 0,
+              rush_yds: p.rush?.yds ?? p.rush_yds ?? 0,
+              rush_td: p.rush?.td ?? p.rush_td ?? 0,
+              rec: p.rec?.rec ?? p.rec ?? 0,
+              rec_yds: p.rec?.yds ?? p.rec_yds ?? 0,
+              rec_td: p.rec?.td ?? p.rec_td ?? 0,
+              pass_yds: p.pass_yds ?? 0,
+              pass_td: p.pass_td ?? 0,
+              int: p.int ?? 0,
+              headshot_url: p.headshot_url || `/static/players/${p.id || p.player_id}.webp`,
+              is_drafted: false,
+            }));
+            setAvailablePlayers(mapped);
+          }
+        }
+      } catch {
+        // Fallback to MOCK_DRAFT_PLAYERS
+      }
+    };
+    fetchPlayerPool();
+    return () => {
+      isMounted = false;
+    };
+  }, [draftState.id]);
+
   // Web Audio Chime Generator
   const playChime = useCallback((type: "USER_TURN" | "PICK_MADE" | "DRAFT_DONE") => {
     if (!soundEnabled) return;
@@ -1002,26 +1168,133 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     prevIsUserTurnRef.current = isUserTurn;
   }, [isUserTurn, playChime]);
 
-  // Claim Slot Action
+  // Claim Slot Action: Updates user's slot and renames all picks for this slot
   const handleClaimSlot = (slot: number) => {
     if (draftState.status !== "NOT_STARTED") return;
+    if (slot < 1 || slot > draftState.teams_count) return;
+
+    const oldSlot = draftState.user_slot;
+    if (oldSlot === slot) return;
+
     setDraftState((prev) => {
       const updatedTeams = prev.teams.map((t) => {
-        const isUser = t.slot === slot;
-        return {
-          ...t,
-          name: isUser ? "The Straw Hat Pirates" : `Team ${t.slot}`,
-          is_user: isUser,
-          is_ai: !isUser,
-          manager_handle: isUser ? "@jrereyi2000" : `@BotManager_${t.slot}`,
-        };
+        if (t.slot === slot) {
+          return {
+            ...t,
+            name: "The Straw Hat Pirates",
+            is_user: true,
+            is_ai: false,
+            manager_handle: "@jrereyi2000",
+          };
+        }
+        if (t.slot === oldSlot) {
+          const aiTemplate = DEFAULT_AI_TEAMS[(oldSlot - 1) % DEFAULT_AI_TEAMS.length];
+          return {
+            ...t,
+            name: aiTemplate.name,
+            is_user: false,
+            is_ai: true,
+            manager_handle: aiTemplate.handle,
+          };
+        }
+        return t;
       });
+
+      const userTeam = updatedTeams.find((t) => t.slot === slot);
+      const oldTeam = updatedTeams.find((t) => t.slot === oldSlot);
+
+      const updatedPicks = prev.picks.map((p) => {
+        if (p.team_slot === slot) {
+          return {
+            ...p,
+            team_name: userTeam?.name || "The Straw Hat Pirates",
+            team_id: userTeam?.id || slot,
+          };
+        }
+        if (p.team_slot === oldSlot) {
+          return {
+            ...p,
+            team_name: oldTeam?.name || `Team ${oldSlot}`,
+            team_id: oldTeam?.id || oldSlot,
+          };
+        }
+        return p;
+      });
+
       return {
         ...prev,
         user_slot: slot,
         teams: updatedTeams,
+        picks: updatedPicks,
       };
     });
+
+    const draftIdNum = Number(draftState.id);
+    if (!isNaN(draftIdNum) && draftIdNum > 0) {
+      fetch(`${API_BASE}/api/napper/draft/${draftIdNum}/claim_slot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slot }),
+      }).catch(() => {});
+    }
+  };
+
+  // Switch Team Count (8, 10, 12 Teams) and regenerate snake picks
+  const handleTeamCountChange = (newCount: number) => {
+    if (draftState.status !== "NOT_STARTED") return;
+    const clampedUserSlot = Math.min(draftState.user_slot, newCount);
+    const { teams: newTeams, picks: newPicks } = buildMockTeamsAndPicks(
+      newCount,
+      draftState.rounds_count,
+      clampedUserSlot
+    );
+    setDraftState((prev) => ({
+      ...prev,
+      teams_count: newCount,
+      user_slot: clampedUserSlot,
+      title: `${newCount}-Team PPR Snake Mock`,
+      teams: newTeams,
+      picks: newPicks,
+      current_pick_index: 0,
+    }));
+    setAvailablePlayers((prev) => prev.map((p) => ({ ...p, is_drafted: false })));
+    setQueuedIds([]);
+
+    fetch(`${API_BASE}/api/napper/drafts/create_mock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        teams_count: newCount,
+        scoring_type: "PPR",
+        user_slot: clampedUserSlot,
+        rounds: draftState.rounds_count,
+        is_superflex: true,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.id) {
+          setDraftState((prev) => ({ ...prev, id: String(data.id) }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  // Customize Rounds Count (12, 14, 15, 16)
+  const handleRoundsChange = (newRounds: number) => {
+    if (draftState.status !== "NOT_STARTED") return;
+    const { teams: newTeams, picks: newPicks } = buildMockTeamsAndPicks(
+      draftState.teams_count,
+      newRounds,
+      draftState.user_slot
+    );
+    setDraftState((prev) => ({
+      ...prev,
+      rounds_count: newRounds,
+      teams: newTeams,
+      picks: newPicks,
+      current_pick_index: 0,
+    }));
   };
 
   // Submit a pick (by user or AI)
@@ -1234,19 +1507,21 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
   const handleRestartMock = () => {
     setRecapModalOpen(false);
     setIsSimulatingAll(false);
-    setAvailablePlayers(MOCK_DRAFT_PLAYERS.map((p) => ({ ...p, is_drafted: false })));
+    setAvailablePlayers((prev) => prev.map((p) => ({ ...p, is_drafted: false })));
     setQueuedIds([]);
-    setDraftState((prev) => {
-      const resetTeams = prev.teams.map((t) => ({ ...t, roster: [] }));
-      const resetPicks = prev.picks.map((p) => ({ ...p, player: null }));
-      return {
-        ...prev,
-        status: "NOT_STARTED",
-        current_pick_index: 0,
-        teams: resetTeams,
-        picks: resetPicks,
-      };
-    });
+    const { teams: resetTeams, picks: resetPicks } = buildMockTeamsAndPicks(
+      draftState.teams_count,
+      draftState.rounds_count,
+      draftState.user_slot
+    );
+    setDraftState((prev) => ({
+      ...prev,
+      status: "NOT_STARTED",
+      current_pick_index: 0,
+      auto_pick: false,
+      teams: resetTeams,
+      picks: resetPicks,
+    }));
   };
 
   // Top Recommendation from Assistant
@@ -1286,7 +1561,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           <div className="draft-title-box">
             <h1 className="draft-main-title">{draftState.title}</h1>
             <div className="draft-sub-title">
-              Mock Draft • 2 Min Per Pick • {draftState.rounds_count} rounds
+              Mock Draft • {draftState.teams_count} Teams • PPR • {draftState.rounds_count} Rounds • Slot {draftState.user_slot}
             </div>
           </div>
         </div>
@@ -1424,6 +1699,77 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           </select>
         </div>
       </header>
+
+      {/* 1b. Mock Draft Composition Toolbar (Visible when NOT_STARTED) */}
+      {draftState.status === "NOT_STARTED" && (
+        <div className="draft-config-bar">
+          {/* Teams count pills */}
+          <div className="draft-config-group">
+            <span className="draft-config-label">Teams:</span>
+            {[8, 10, 12].map((cnt) => (
+              <button
+                key={`team-pill-${cnt}`}
+                type="button"
+                onClick={() => handleTeamCountChange(cnt)}
+                className={`draft-config-pill ${draftState.teams_count === cnt ? "active" : ""}`}
+                title={`Configure a ${cnt}-team draft`}
+              >
+                {cnt} Teams
+              </button>
+            ))}
+          </div>
+
+          {/* Scoring Format: Strictly PPR only */}
+          <div className="draft-config-group">
+            <span className="draft-config-label">Scoring:</span>
+            <span
+              className="draft-config-pill active cursor-default"
+              title="Official Project Mu scoring format: 1.0 Point Per Reception"
+            >
+              PPR (1.0)
+            </span>
+            <span
+              className="draft-config-pill text-[#00ceb8] cursor-default text-[10px]"
+              title="Superflex active (QB/RB/WR/TE in Flex 2)"
+            >
+              SUPERFLEX
+            </span>
+          </div>
+
+          {/* Rounds count pills */}
+          <div className="draft-config-group">
+            <span className="draft-config-label">Rounds:</span>
+            {[12, 14, 15, 16].map((rnd) => (
+              <button
+                key={`round-pill-${rnd}`}
+                type="button"
+                onClick={() => handleRoundsChange(rnd)}
+                className={`draft-config-pill ${draftState.rounds_count === rnd ? "active" : ""}`}
+                title={`Draft length: ${rnd} rounds`}
+              >
+                {rnd} Rds
+              </button>
+            ))}
+          </div>
+
+          {/* User Draft Slot selector */}
+          <div className="draft-config-group">
+            <span className="draft-config-label">Your Slot:</span>
+            <select
+              value={draftState.user_slot}
+              onChange={(e) => handleClaimSlot(Number(e.target.value))}
+              className="draft-config-select"
+              title="Select your team's draft slot"
+            >
+              {Array.from({ length: draftState.teams_count }, (_, i) => i + 1).map((s) => (
+                <option key={`opt-slot-${s}`} value={s}>
+                  Slot {s} {s === draftState.user_slot ? "(YOU)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       {/* 2. Top Half: Snaking Draft Board Grid Matrix */}
       <DraftBoardGrid

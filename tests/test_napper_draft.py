@@ -350,3 +350,130 @@ def test_league_draft_lifecycle():
                 conn.commit()
         seed_napper_database()
 
+
+def test_snake_draft_order_8_10_12_teams():
+    """Verifies snake draft pick orders, turns, and mathematical formulas for 8, 10, and 12 teams."""
+    # Test 8-team draft
+    res_8 = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 8,
+        "rounds": 15,
+        "user_slot": 1,
+        "scoring_type": "PPR",
+    })
+    assert res_8.status_code == 200
+    data_8 = res_8.json()
+    picks_8 = data_8["picks"]
+    assert len(picks_8) == 120
+
+    # Round 1: slots 1 to 8
+    assert picks_8[0]["round_num"] == 1 and picks_8[0]["pick_num"] == 1 and picks_8[0]["slot_num"] == 1
+    assert picks_8[7]["round_num"] == 1 and picks_8[7]["pick_num"] == 8 and picks_8[7]["slot_num"] == 8
+
+    # Round 2 turn: slot 8 picks at 2.1 (back-to-back at the turn!), slot 1 picks at 2.8
+    assert picks_8[8]["round_num"] == 2 and picks_8[8]["pick_num"] == 1 and picks_8[8]["slot_num"] == 8
+    assert picks_8[9]["round_num"] == 2 and picks_8[9]["pick_num"] == 2 and picks_8[8+1]["slot_num"] == 7
+    assert picks_8[15]["round_num"] == 2 and picks_8[15]["pick_num"] == 8 and picks_8[15]["slot_num"] == 1
+
+    # Round 3 turn: slot 1 picks at 3.1 (back-to-back at the turn!), slot 8 picks at 3.8
+    assert picks_8[16]["round_num"] == 3 and picks_8[16]["pick_num"] == 1 and picks_8[16]["slot_num"] == 1
+    assert picks_8[23]["round_num"] == 3 and picks_8[23]["pick_num"] == 8 and picks_8[23]["slot_num"] == 8
+
+    # Round 4 turn: slot 8 picks at 4.1
+    assert picks_8[24]["round_num"] == 4 and picks_8[24]["pick_num"] == 1 and picks_8[24]["slot_num"] == 8
+    assert picks_8[31]["round_num"] == 4 and picks_8[31]["pick_num"] == 8 and picks_8[31]["slot_num"] == 1
+
+    # Comprehensive verification of all 120 picks for 8-team
+    for p in picks_8:
+        r = p["round_num"]
+        pk = p["pick_num"]
+        overall = (r - 1) * 8 + pk
+        expected_slot = pk if (r % 2 == 1) else (8 - pk + 1)
+        assert p["overall_pick"] == overall
+        assert p["slot_num"] == expected_slot
+
+    # Test 10-team draft
+    res_10 = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 10,
+        "rounds": 15,
+        "user_slot": 5,
+        "scoring_type": "PPR",
+    })
+    assert res_10.status_code == 200
+    data_10 = res_10.json()
+    picks_10 = data_10["picks"]
+    assert len(picks_10) == 150
+
+    # Round 1 & Round 2 turns for 10-team
+    assert picks_10[0]["slot_num"] == 1
+    assert picks_10[9]["slot_num"] == 10
+    assert picks_10[10]["slot_num"] == 10  # 2.1 is slot 10
+    assert picks_10[19]["slot_num"] == 1   # 2.10 is slot 1
+    assert picks_10[20]["slot_num"] == 1   # 3.1 is slot 1
+    assert picks_10[29]["slot_num"] == 10  # 3.10 is slot 10
+
+    for p in picks_10:
+        r = p["round_num"]
+        pk = p["pick_num"]
+        overall = (r - 1) * 10 + pk
+        expected_slot = pk if (r % 2 == 1) else (10 - pk + 1)
+        assert p["overall_pick"] == overall
+        assert p["slot_num"] == expected_slot
+
+    # Test 12-team draft
+    res_12 = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 12,
+        "rounds": 15,
+        "user_slot": 12,
+        "scoring_type": "PPR",
+    })
+    assert res_12.status_code == 200
+    data_12 = res_12.json()
+    picks_12 = data_12["picks"]
+    assert len(picks_12) == 180
+
+    # Round 1 & Round 2 turns for 12-team
+    assert picks_12[0]["slot_num"] == 1
+    assert picks_12[11]["slot_num"] == 12  # 1.12 is slot 12
+    assert picks_12[12]["slot_num"] == 12  # 2.1 is slot 12 (turn!)
+    assert picks_12[13]["slot_num"] == 11  # 2.2 is slot 11
+    assert picks_12[23]["slot_num"] == 1   # 2.12 is slot 1 (turn!)
+    assert picks_12[24]["slot_num"] == 1   # 3.1 is slot 1
+    assert picks_12[35]["slot_num"] == 12  # 3.12 is slot 12
+    assert picks_12[36]["slot_num"] == 12  # 4.1 is slot 12
+    assert picks_12[47]["slot_num"] == 1   # 4.12 is slot 1
+
+    for p in picks_12:
+        r = p["round_num"]
+        pk = p["pick_num"]
+        overall = (r - 1) * 12 + pk
+        expected_slot = pk if (r % 2 == 1) else (12 - pk + 1)
+        assert p["overall_pick"] == overall
+        assert p["slot_num"] == expected_slot
+
+
+def test_player_pool_season_2035_and_projections():
+    """Verifies that available_players and fantasy/projections return season 2035 players."""
+    # Test fantasy projections endpoint
+    proj_res = client.get("/api/fantasy/projections?season=2035&week=1&limit=50")
+    assert proj_res.status_code == 200
+    proj_data = proj_res.json()
+    assert proj_data["season"] == 2035
+    assert proj_data["week"] == 1
+    assert proj_data["count"] > 0
+    players = proj_data["players"]
+    positions = {p["position"] for p in players}
+    assert any(pos in ("QB",) for pos in positions)
+    assert any(pos in ("WR",) for pos in positions)
+    assert any(pos in ("HB", "RB", "FB") for pos in positions)
+
+    # Test available_players with draft_id=0
+    pool_res = client.get("/api/napper/draft/0/available_players?limit=50")
+    assert pool_res.status_code == 200
+    pool_data = pool_res.json()
+    assert pool_data["total"] > 50
+    assert len(pool_data["players"]) == 50
+    p1 = pool_data["players"][0]
+    assert p1["adp"] >= 1
+    assert p1["projections"]["pts"] > 0
+
+

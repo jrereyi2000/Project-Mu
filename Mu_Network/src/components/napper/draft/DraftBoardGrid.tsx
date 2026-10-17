@@ -51,10 +51,7 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
 
   // Helper to get pick object for round r (1-based) and column c (1-based)
   const getPickForCell = (r: number, c: number): NapperDraftPick | undefined => {
-    const isOdd = r % 2 === 1;
-    const roundPick = isOdd ? c : teams_count - c + 1;
-    const overallPick = (r - 1) * teams_count + roundPick;
-    return picks.find((p) => p.pick_overall === overallPick);
+    return picks.find((p) => p.round === r && p.team_slot === c);
   };
 
   const getPositionStyle = (pos?: string) => {
@@ -116,24 +113,32 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
               <div key={`round-row-${roundNum}`} className="draft-round-row">
                 {Array.from({ length: teams_count }, (_, cIdx) => {
                   const colNum = cIdx + 1;
-                  const roundPick = isOdd ? colNum : teams_count - colNum + 1;
-                  const overallPick = (roundNum - 1) * teams_count + roundPick;
                   const pickObj = getPickForCell(roundNum, colNum);
                   const isCurrentClock =
-                    status === "IN_PROGRESS" && current_pick_index === overallPick - 1;
+                    status === "IN_PROGRESS" &&
+                    Boolean(pickObj && current_pick_index === pickObj.pick_overall - 1);
                   const isPicked = Boolean(pickObj?.player);
-                  const isLastInRound = isOdd ? colNum === teams_count : colNum === 1;
-
-                  const arrowSymbol = isLastInRound ? "↓" : isOdd ? "→" : "←";
+                  const arrowSymbol = isOdd
+                    ? colNum < teams_count
+                      ? "→"
+                      : "↓"
+                    : colNum > 1
+                    ? "←"
+                    : "↓";
                   const posStyle = isPicked ? getPositionStyle(pickObj?.player?.position) : null;
+                  const isUserCol = user_slot === colNum;
+                  const roundPick =
+                    pickObj?.round_pick ?? (isOdd ? colNum : teams_count - colNum + 1);
+                  const overallPick =
+                    pickObj?.pick_overall ?? (roundNum - 1) * teams_count + roundPick;
 
                   return (
                     <div
                       key={`cell-${roundNum}-${colNum}`}
                       ref={isCurrentClock ? activeCellRef : null}
                       onClick={() => pickObj && onSelectPick?.(pickObj)}
-                      className={`draft-cell ${isCurrentClock ? "active-clock" : ""}`}
-                      title={`Round ${roundNum}, Pick ${roundPick} (Overall #${overallPick})`}
+                      className={`draft-cell ${isCurrentClock ? "active-clock" : ""} ${isUserCol ? "user-slot-cell" : ""}`}
+                      title={`Round ${roundNum}, Pick ${roundPick} (Overall #${overallPick})${pickObj?.team_name ? ` • ${pickObj.team_name}` : ""}`}
                     >
                       {/* Cell Header: Pick Number and Arrow */}
                       <div className="flex items-center justify-between w-full">

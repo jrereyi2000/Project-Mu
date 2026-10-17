@@ -1088,25 +1088,11 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                   <label className="block text-xs font-bold text-[#8a99ad] uppercase tracking-wider mb-1.5">
                     Scoring Format
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: "PPR", label: "Full PPR" },
-                      { id: "HALF_PPR", label: "0.5 PPR" },
-                      { id: "STANDARD", label: "Standard" },
-                    ].map((sc) => (
-                      <button
-                        key={sc.id}
-                        type="button"
-                        onClick={() => setCreateScoringType(sc.id)}
-                        className={`py-2 text-xs font-bold rounded-xl border transition-colors cursor-pointer ${
-                          createScoringType === sc.id
-                            ? "bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8]"
-                            : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
-                        }`}
-                      >
-                        {sc.label}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 py-2 px-3 text-xs font-bold rounded-xl border bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8] flex items-center justify-between">
+                      <span>Full PPR (1.0 Point Per Reception)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-[#00ceb8]/20 text-[#00ceb8] uppercase font-black">Official</span>
+                    </div>
                   </div>
                 </div>
 

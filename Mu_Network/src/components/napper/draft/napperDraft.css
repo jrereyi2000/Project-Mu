@@ -379,6 +379,11 @@
   background-color: #18263e;
 }
 
+.draft-cell.user-slot-cell {
+  border-color: rgba(0, 206, 184, 0.28);
+  background-color: rgba(0, 206, 184, 0.04);
+}
+
 /* Pick index header */
 .draft-cell-index {
   font-size: 11px;
@@ -1144,3 +1149,68 @@
   color: #f43f5e;
   border: 1px solid #f43f5e;
 }
+
+/* Mock Draft Setup & Configuration Bar */
+.draft-config-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background-color: #0b121e;
+  border-bottom: 1px solid var(--draft-border-subtle);
+  font-size: 11px;
+  gap: 12px;
+  flex-wrap: wrap;
+  z-index: 25;
+}
+
+.draft-config-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.draft-config-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.5px;
+}
+
+.draft-config-pill {
+  padding: 3px 10px;
+  border-radius: 12px;
+  background-color: #141f33;
+  border: 1px solid #20314d;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-config-pill:hover {
+  background-color: #1c2b44;
+  color: #ffffff;
+  border-color: #38bdf8;
+}
+
+.draft-config-pill.active {
+  background-color: rgba(0, 206, 184, 0.15);
+  border-color: var(--draft-cyan);
+  color: var(--draft-cyan);
+}
+
+.draft-config-select {
+  padding: 3px 8px;
+  border-radius: 8px;
+  background-color: #141f33;
+  border: 1px solid #20314d;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+

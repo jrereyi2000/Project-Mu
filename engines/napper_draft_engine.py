@@ -694,6 +694,7 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                     SELECT player_id FROM napper_draft_picks
                     WHERE draft_id = %s AND player_id IS NOT NULL
                 )
+                AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
                 ORDER BY COALESCE(fp.adp_rank, 200) ASC, projected_points DESC
                 LIMIT 100
             """, (draft_id,))
