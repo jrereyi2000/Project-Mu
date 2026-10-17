@@ -92,10 +92,12 @@ BASELINE_STAFF_REFERENCE: Dict[str, Dict[str, Dict[str, Any]]] = {
         # Carolina: Dave Canales (2026-2033), Marcus Whitfield (2034-present)
         # Brad Idzik OC (2026-2033 under Canales; tenure ended when Whitfield was hired in 2034)
         # Charles Grant OC (2034-present under Whitfield for the past two seasons)
-        # Ejiro Evero DC (2026-present)
+        # Ejiro Evero DC (2026-2033 under Canales)
+        # Shavon Bell DC (2034-present under Whitfield)
         "OC_2026": {"name": "Brad Idzik", "scheme": "Wide Zone West Coast", "playbook": "Carolina Offense", "pass_lean": "Low", "origin_notes": "Panthers OC under Dave Canales (2026-2033)"},
         "OC_2034": {"name": "Charles Grant", "scheme": "Wide Zone West Coast", "playbook": "Carolina Offense", "pass_lean": "Low", "origin_notes": "Panthers OC under Marcus Whitfield (2034-present)"},
-        "DC": {"name": "Ejiro Evero", "scheme": "3-4", "playbook": "Carolina Defense", "blitz_rate": "Medium", "man_coverage": "Low", "origin_notes": "Fangio defensive tree"},
+        "DC_2026": {"name": "Ejiro Evero", "scheme": "3-4", "playbook": "Carolina Defense", "blitz_rate": "Medium", "man_coverage": "Low", "origin_notes": "Panthers DC under Dave Canales (2026-2033); Fangio defensive tree"},
+        "DC_2034": {"name": "Shavon Bell", "scheme": "3-4", "playbook": "Carolina Defense", "blitz_rate": "Medium", "man_coverage": "Low", "origin_notes": "Panthers DC under Marcus Whitfield (2034-present)"},
     },
     "CHI": {
         # Chicago: Ben Johnson (HC), Thomas Brown OC (2026-2027), Marcus Whitfield OC (2028-2033), Brett Vance OC (2034-present)
@@ -288,7 +290,8 @@ def seed_coordinators(cur, reference_data: Optional[Dict[str, Any]] = None) -> D
     - Chicago Bears narrative (§4.2): Thomas Brown OC (2026-2027), Marcus Whitfield OC (2028-2033),
       Brett Vance OC (2034-present), Dennis Allen DC (2026-present).
     - Carolina Panthers narrative: Brad Idzik OC (2026-2033 under Canales),
-      Charles Grant OC (2034-present under Whitfield), Ejiro Evero DC (2026-present).
+      Charles Grant OC (2034-present under Whitfield), Ejiro Evero DC (2026-2033 under Canales),
+      Shavon Bell DC (2034-present under Whitfield).
     - All other teams starting in 2026.
     - Procedural fallback for teams or coordinator slots missing reference data.
 
@@ -353,22 +356,36 @@ def seed_coordinators(cur, reference_data: Optional[Dict[str, Any]] = None) -> D
             )
             _ensure_tenure(cur, car_oc_2_id, team_id, "OC", start_season=2034, end_season=None)
 
-            # 3. Ejiro Evero as DC 2026-present
-            dc_ref = ref.get("DC", {})
-            car_dc_id = _get_or_create_coordinator(
+            # 3. Ejiro Evero as DC 2026-2033
+            dc_26_ref = ref.get("DC_2026", {})
+            car_dc_1_id = _get_or_create_coordinator(
                 cur,
-                name=dc_ref.get("name", "Ejiro Evero"),
+                name=dc_26_ref.get("name", "Ejiro Evero"),
                 side="DEFENSIVE",
-                scheme=dc_ref.get("scheme", hc_def),
-                playbook=dc_ref.get("playbook", f"{city} Defense"),
-                blitz_rate=dc_ref.get("blitz_rate", hc_blitz),
-                man_coverage=dc_ref.get("man_coverage", hc_man),
-                origin_notes=dc_ref.get("origin_notes", "Fangio defensive tree DC")
+                scheme=dc_26_ref.get("scheme", hc_def),
+                playbook=dc_26_ref.get("playbook", f"{city} Defense"),
+                blitz_rate=dc_26_ref.get("blitz_rate", hc_blitz),
+                man_coverage=dc_26_ref.get("man_coverage", hc_man),
+                origin_notes=dc_26_ref.get("origin_notes", "Panthers DC under Dave Canales (2026-2033); Fangio defensive tree")
             )
-            _ensure_tenure(cur, car_dc_id, team_id, "DC", start_season=2026, end_season=None)
+            _ensure_tenure(cur, car_dc_1_id, team_id, "DC", start_season=2026, end_season=2033)
 
-            coord_count += 3
-            tenure_count += 3
+            # 4. Shavon Bell as DC 2034-present
+            dc_34_ref = ref.get("DC_2034", {})
+            car_dc_2_id = _get_or_create_coordinator(
+                cur,
+                name=dc_34_ref.get("name", "Shavon Bell"),
+                side="DEFENSIVE",
+                scheme=dc_34_ref.get("scheme", hc_def),
+                playbook=dc_34_ref.get("playbook", f"{city} Defense"),
+                blitz_rate=dc_34_ref.get("blitz_rate", hc_blitz),
+                man_coverage=dc_34_ref.get("man_coverage", hc_man),
+                origin_notes=dc_34_ref.get("origin_notes", "Panthers DC under Marcus Whitfield (2034-present)")
+            )
+            _ensure_tenure(cur, car_dc_2_id, team_id, "DC", start_season=2034, end_season=None)
+
+            coord_count += 4
+            tenure_count += 4
             continue
 
         # Special handling for Chicago Bears (§4.2)

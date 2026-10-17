@@ -268,7 +268,7 @@ class TestDatabaseCoordinatorsAndSlants(unittest.TestCase):
                 self.assertEqual(slants["John Harbaugh"], "CEO")
 
     def test_carolina_narrative_continuity(self):
-        """Verifies Panthers staff continuity: Brad Idzik OC (2026-2033 under Canales), Charles Grant OC (2034+ under Whitfield), Evero DC (2026+)."""
+        """Verifies Panthers staff continuity: Brad Idzik OC & Evero DC (2026-2033 under Canales), Charles Grant OC & Shavon Bell DC (2034+ under Whitfield)."""
         with psycopg.connect(self.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT id FROM teams WHERE abbreviation = 'CAR';")
@@ -287,7 +287,7 @@ class TestDatabaseCoordinatorsAndSlants(unittest.TestCase):
                 self.assertEqual(staff_2035["head_coach"]["coach_name"], "Marcus Whitfield")
                 self.assertEqual(staff_2035["head_coach"]["slant"], "OFFENSIVE")
                 self.assertEqual(staff_2035["offensive_coordinator"]["name"], "Charles Grant")
-                self.assertEqual(staff_2035["defensive_coordinator"]["name"], "Ejiro Evero")
+                self.assertEqual(staff_2035["defensive_coordinator"]["name"], "Shavon Bell")
 
     def test_chicago_narrative_continuity(self):
         """Verifies Bears staff continuity (§4.2): Thomas Brown OC (2026-2027), Whitfield OC (2028-2033), Brett Vance OC (2034+)."""
