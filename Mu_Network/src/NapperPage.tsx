@@ -345,8 +345,11 @@ export const NapperPage: React.FC<NapperPageProps> = ({
         onExitToMu={onBackToMu || (() => { window.location.hash = ""; })}
         onLeagueCreated={(newId) => {
           setInDraftRoom(false);
+          setSelectedLeagueId(newId);
           loadLeagues(newId);
+          window.location.hash = `#napper-${newId}`;
         }}
+
       />
     );
   }

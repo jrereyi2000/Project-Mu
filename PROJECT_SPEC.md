@@ -102,7 +102,8 @@ Project Mu/
 │   ├── napper_seeder.py       #   Seeds reference user @jrereyi2000, 3 reference leagues, rosters, week 6 matchups, and chat cards with 100% authentic simulation players (§3.4b)
 │   ├── napper_trade_engine.py #   Proactive AI trade engine with positional scarcity weights, bench depth penalties, and stochastic execution (§4.4b)
 │   ├── napper_chat_engine.py  #   Autonomous league chat banter (4 manager personas) and weekly bot award cards (benchwarmers, high scorer) (§4.4b)
-│   └── napper_draft_engine.py #   Interactive snake draft and solo mock draft simulator engine (Phase 6, docs/NAPPER_FANTASY_PLAN.md); seeds DEF & K projections and ADP ranks (`ensure_defenses_exist`, `ensure_kickers_exist`)
+│   └── napper_draft_engine.py #   Interactive snake draft and solo mock draft simulator engine (Phase 6, docs/NAPPER_FANTASY_PLAN.md); seeds DEF & K projections and ADP ranks (`ensure_defenses_exist`, `ensure_kickers_exist`); converts and persists completed drafts into active leagues (`save_draft_as_league`)
+
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
 │   ├── slot_targets.py        #   Editorial Matrix slot targeting (primer games, exits, eliminations, W19 hot seat)
@@ -705,7 +706,9 @@ High-performance RESTful API powering the Napper interactive multi-league Sleepe
 - `POST /api/napper/draft/{id}/sim_to_user`: Simulates all AI picks until user is back on the clock or draft completes.
 - `POST /api/napper/draft/{id}/sim_all`: Fast-forwards all remaining picks to completion.
 - `POST /api/napper/draft/{id}/finalize`: Finalizes draft, generates letter-grade report cards, identifies best value and biggest reach, assigns starting and bench slots in `napper_rosters`, and generates round-robin schedule.
+- `POST /api/napper/drafts/save_as_league`: Converts and persists a completed live or mock draft into an active, functional fantasy league in PostgreSQL (`napper_leagues` status `IN_SEASON`, `is_seed: false`, current week 1, 14-week schedule, optimal starters & bench slots, chat announcement).
 - `GET /api/napper/draft/{id}/available_players?search={q}&position={pos}&limit={limit}&offset={offset}`: Returns available players ordered by ADP, with bye, age, ros_pct, projections (`pts`: projected season total fantasy points, `avg`: projected points per game PPG), rush stats (rush, yds, td), rec stats (rec, yds, td), and draft counts. When `id=0`, returns the complete simulation fantasy player pool for the draft's season without filtering already-drafted picks. Supports limit up to 1000, ensuring all simulation positions (`QB`, `HB`/`RB`, `FB`, `WR`, `TE`, `K`, `DEF`) are included with consensus ADP ranks and weekly baseline projections.
+
 - `GET /api/fantasy/projections?season={season}&week={week}&position={pos}&limit={limit}`: Returns stored fantasy projections and consensus ADP rankings for fantasy-eligible positions (`QB`, `RB`, `WR`, `TE`, `K`, `DEF`), with `projections.pts` representing season total fantasy points and `projections.avg` representing weekly points per game (PPG). Defaults limit to 600.
 - `GET /api/napper/league/{id}/draft`: Retrieves existing draft session or initializes a new draft session for a league in `PRE_DRAFT` status.
 - **Tests:** `tests/test_napper_api.py`, `tests/test_napper_draft.py`, `tests/test_napper_draft_alignment.py`, `tests/test_napper_engines.py`, `tests/test_napper_e2e.py`.

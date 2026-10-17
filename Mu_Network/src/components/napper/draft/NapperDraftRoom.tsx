@@ -1216,6 +1216,8 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
   const [recapModalOpen, setRecapModalOpen] = useState(false);
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [isSelectionBoxOpen, setIsSelectionBoxOpen] = useState<boolean>(true);
+  const [isSavingLeague, setIsSavingLeague] = useState<boolean>(false);
+
 
   // Fetch live draft state from backend if available
   useEffect(() => {
@@ -2098,7 +2100,75 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     }));
   };
 
+  // Save Draft As Active League
+  const handleSaveAsLeague = async (customTitle?: string) => {
+    try {
+      setIsSavingLeague(true);
+      const draftIdNum = Number(draftState.id);
+      const validDraftId = !isNaN(draftIdNum) && draftIdNum > 0 ? draftIdNum : undefined;
+
+      const payload = {
+        name: customTitle || draftState.title || "My Draft League",
+        teams_count: draftState.teams_count,
+        scoring_type: draftState.scoring_type,
+        is_superflex: draftState.settings?.is_superflex ?? true,
+        user_slot: draftState.user_slot,
+        draft_id: validDraftId,
+        teams: draftState.teams.map((t) => ({
+          name: t.name,
+          handle: t.manager_handle || `@${t.name.replace(/\s+/g, "")}`,
+          avatar: t.avatar_url,
+          is_user: t.is_user,
+          persona: t.persona || (t.is_user ? "USER" : "ANALYTICS_NERD"),
+          slot: t.slot,
+          roster: (t.roster || []).map((p) => ({
+            player_id: p.player_id,
+            name: p.name,
+            position: p.position,
+            proj_pts: p.proj_pts,
+          })),
+        })),
+        picks: draftState.picks.map((p) => ({
+          overall_pick: p.pick_overall,
+          round_num: p.round,
+          pick_num: p.round_pick,
+          slot_num: p.team_slot,
+          team_name: p.team_name,
+          player_id: p.player?.player_id,
+          picked_by: p.team_slot === draftState.user_slot ? "USER" : "AI",
+        })),
+      };
+
+      const res = await fetch(`${API_BASE}/api/napper/drafts/save_as_league`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to save draft as league");
+      }
+
+      const data = await res.json();
+      setIsSavingLeague(false);
+      setRecapModalOpen(false);
+
+      if (data.league?.id) {
+        if (onLeagueCreated) {
+          onLeagueCreated(data.league.id);
+        } else {
+          onBack();
+        }
+      }
+    } catch (err: any) {
+      setIsSavingLeague(false);
+      alert(err.message || "Failed to save draft as league.");
+    }
+  };
+
   // Top Recommendation from Assistant
+
   const topAssistantRecommendation = availablePlayers.find((p) => !p.is_drafted);
 
   const queuedPlayersList = queuedIds
@@ -2593,15 +2663,10 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           draftState={draftState}
           onClose={() => setRecapModalOpen(false)}
           onRestartMock={handleRestartMock}
-          onSaveAsLeague={(title) => {
-            if (onLeagueCreated) {
-              onLeagueCreated(Date.now());
-            } else {
-              alert(`Draft saved! League "${title}" created.`);
-              onBack();
-            }
-          }}
+          onSaveAsLeague={handleSaveAsLeague}
+          isSaving={isSavingLeague}
         />
+
       )}
 
       {/* 7. Mock Draft Archetype Composition Modal */}

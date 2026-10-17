@@ -7,6 +7,7 @@ interface DraftRecapModalProps {
   onClose: () => void;
   onRestartMock: () => void;
   onSaveAsLeague?: (leagueName: string) => void;
+  isSaving?: boolean;
 }
 
 export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
@@ -14,7 +15,9 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
   onClose,
   onRestartMock,
   onSaveAsLeague,
+  isSaving = false,
 }) => {
+
   const { teams, picks, user_slot } = draftState;
 
   // Grade calculation and analysis
@@ -268,12 +271,22 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
             {onSaveAsLeague && (
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => onSaveAsLeague(draftState.title)}
-                className="px-5 py-2 rounded-xl bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#090e17] text-xs font-black uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(0,206,184,0.3)]"
+                className={`px-5 py-2 rounded-xl bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#090e17] text-xs font-black uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(0,206,184,0.3)] flex items-center gap-2 ${
+                  isSaving ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                }`}
               >
-                Save as League
+                {isSaving && (
+                  <svg className="w-3.5 h-3.5 animate-spin text-[#090e17]" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                )}
+                <span>{isSaving ? "Saving League..." : "Save as League"}</span>
               </button>
             )}
+
           </div>
         </div>
       </div>

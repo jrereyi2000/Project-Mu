@@ -110,11 +110,7 @@ def test_napper_teams_rosters():
 def test_napper_create_league_cleans_seed_leagues():
     from engines.napper_seeder import seed_napper_database
 
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
-        conn.commit()
-
+    created_id = None
     try:
         # Create a new league
         res = client.post("/api/napper/leagues/create", json={
@@ -127,17 +123,20 @@ def test_napper_create_league_cleans_seed_leagues():
         assert res.status_code == 200
         data = res.json()
         assert data["league"]["name"] == "Grand Line Dynasty"
+        created_id = data["league"]["id"]
 
         # Check that seed leagues have been removed
         l_res = client.get("/api/napper/leagues")
         assert l_res.status_code == 200
         leagues = l_res.json()["leagues"]
-        assert len(leagues) == 1
-        assert leagues[0]["name"] == "Grand Line Dynasty"
+        assert any(l["id"] == created_id for l in leagues)
+        assert not any(l.get("is_seed") for l in leagues)
     finally:
         with get_db() as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM napper_leagues WHERE is_seed = FALSE")
+                if created_id:
+                    cur.execute("DELETE FROM napper_leagues WHERE id = %s", (created_id,))
             conn.commit()
-        # Restore reference seed leagues
+        # Restore reference seed leagues without wiping user leagues
         seed_napper_database()
+

@@ -127,7 +127,19 @@ class DraftPickRequest(BaseModel):
     player_id: int
 
 
+class SaveDraftAsLeagueRequest(BaseModel):
+    name: Optional[str] = "My Draft League"
+    teams_count: Optional[int] = 8
+    scoring_type: str = "PPR"
+    is_superflex: bool = True
+    user_slot: Optional[int] = 1
+    draft_id: Optional[int] = None
+    teams: Optional[List[Dict[str, Any]]] = None
+    picks: Optional[List[Dict[str, Any]]] = None
+
+
 # Positional eligibility map
+
 ELIGIBLE_POSITIONS: Dict[str, set] = {
     "QB": {"QB"},
     "RB": {"RB", "FB", "HB"},
@@ -1562,6 +1574,28 @@ def create_mock_draft(req: MockDraftCreateRequest):
     except Exception as e:
         logger.error(f"Error creating mock draft: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/drafts/save_as_league")
+def save_draft_as_league(req: SaveDraftAsLeagueRequest):
+    """Converts and saves a completed draft into an active, persistent fantasy league in PostgreSQL."""
+    try:
+        return napper_draft_engine.save_draft_as_league(
+            name=req.name,
+            teams_count=req.teams_count,
+            scoring_type=req.scoring_type,
+            is_superflex=req.is_superflex,
+            user_slot=req.user_slot,
+            draft_id=req.draft_id,
+            teams=req.teams,
+            picks=req.picks,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error saving draft as league: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.post("/draft/{draft_id}/randomize_order")

@@ -61,29 +61,43 @@ def fetch_id(cur) -> int:
     return r[0]
 
 
-def seed_napper_database():
+def seed_napper_database(wipe_all: bool = False):
     print("🚀 Seeding Napper Fantasy Database with authentic simulation players...")
     conn = psycopg.connect(CONN_INFO, row_factory=dict_row)
     with conn.cursor() as cur:
-        # Clear existing napper data to allow clean idempotent re-seed
-        cur.execute("DELETE FROM napper_chat;")
-        cur.execute("DELETE FROM napper_trades;")
-        cur.execute("DELETE FROM napper_matchups;")
-        cur.execute("DELETE FROM napper_rosters;")
-        cur.execute("DELETE FROM napper_teams;")
-        cur.execute("DELETE FROM napper_draft_picks;")
-        cur.execute("DELETE FROM napper_drafts;")
-        cur.execute("DELETE FROM napper_leagues;")
-        cur.execute("DELETE FROM napper_user_profiles;")
-        cur.execute("ALTER SEQUENCE napper_matchups_id_seq RESTART WITH 1;")
-        cur.execute("ALTER SEQUENCE napper_rosters_id_seq RESTART WITH 1;")
-        cur.execute("ALTER SEQUENCE napper_teams_id_seq RESTART WITH 1;")
-        cur.execute("ALTER SEQUENCE napper_draft_picks_id_seq RESTART WITH 1;")
-        cur.execute("ALTER SEQUENCE napper_drafts_id_seq RESTART WITH 1;")
-        cur.execute("ALTER SEQUENCE napper_leagues_id_seq RESTART WITH 1;")
-        cur.execute("ALTER SEQUENCE napper_user_profiles_id_seq RESTART WITH 1;")
-        cur.execute("ALTER SEQUENCE napper_chat_id_seq RESTART WITH 1;")
-        cur.execute("ALTER SEQUENCE napper_trades_id_seq RESTART WITH 1;")
+        if wipe_all:
+            cur.execute("DELETE FROM napper_chat;")
+            cur.execute("DELETE FROM napper_trades;")
+            cur.execute("DELETE FROM napper_matchups;")
+            cur.execute("DELETE FROM napper_rosters;")
+            cur.execute("DELETE FROM napper_teams;")
+            cur.execute("DELETE FROM napper_draft_picks;")
+            cur.execute("DELETE FROM napper_drafts;")
+            cur.execute("DELETE FROM napper_leagues;")
+            cur.execute("DELETE FROM napper_user_profiles;")
+            cur.execute("ALTER SEQUENCE napper_matchups_id_seq RESTART WITH 1;")
+            cur.execute("ALTER SEQUENCE napper_rosters_id_seq RESTART WITH 1;")
+            cur.execute("ALTER SEQUENCE napper_teams_id_seq RESTART WITH 1;")
+            cur.execute("ALTER SEQUENCE napper_draft_picks_id_seq RESTART WITH 1;")
+            cur.execute("ALTER SEQUENCE napper_drafts_id_seq RESTART WITH 1;")
+            cur.execute("ALTER SEQUENCE napper_leagues_id_seq RESTART WITH 1;")
+            cur.execute("ALTER SEQUENCE napper_user_profiles_id_seq RESTART WITH 1;")
+            cur.execute("ALTER SEQUENCE napper_chat_id_seq RESTART WITH 1;")
+            cur.execute("ALTER SEQUENCE napper_trades_id_seq RESTART WITH 1;")
+        else:
+            # Delete only existing seed leagues (cascades to their child teams, rosters, matchups, chat, trades, drafts)
+            # Preserves all active user-created leagues (is_seed = FALSE)
+            cur.execute("DELETE FROM napper_leagues WHERE is_seed = TRUE OR id IN (1, 2, 3);")
+            cur.execute("SELECT setval('napper_matchups_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_matchups));")
+            cur.execute("SELECT setval('napper_rosters_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_rosters));")
+            cur.execute("SELECT setval('napper_teams_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_teams));")
+            cur.execute("SELECT setval('napper_draft_picks_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_draft_picks));")
+            cur.execute("SELECT setval('napper_drafts_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_drafts));")
+            cur.execute("SELECT setval('napper_leagues_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_leagues));")
+            cur.execute("SELECT setval('napper_user_profiles_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_user_profiles));")
+            cur.execute("SELECT setval('napper_chat_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_chat));")
+            cur.execute("SELECT setval('napper_trades_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_trades));")
+
 
         # 1. User Profile
         cur.execute(
@@ -166,8 +180,8 @@ def seed_napper_database():
         # League A: 'Solo 2026 8-Team SF PPR'
         cur.execute(
             """
-            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO napper_leagues (id, name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
+            VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -189,8 +203,8 @@ def seed_napper_database():
         # League B: 'The Justice League'
         cur.execute(
             """
-            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO napper_leagues (id, name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
+            VALUES (2, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -212,8 +226,8 @@ def seed_napper_database():
         # League C: 'The Avengers'
         cur.execute(
             """
-            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO napper_leagues (id, name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
+            VALUES (3, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -231,6 +245,7 @@ def seed_napper_database():
             )
         )
         l3_id = fetch_id(cur)
+        cur.execute("SELECT setval('napper_leagues_id_seq', (SELECT GREATEST(MAX(id), 3) FROM napper_leagues));")
         print(f"🏆 Seeded 3 leagues: {l1_id} (Solo SF), {l2_id} (Justice League), {l3_id} (Avengers)")
 
         # 5. Teams for League 1: 'Solo 2026 8-Team SF PPR'

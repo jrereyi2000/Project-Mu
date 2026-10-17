@@ -161,9 +161,15 @@ class TestNapperE2E:
         bench_p = next(p for p in left_bench if p["position"] == "RB" and p["id"] != starter_pid)
         bench_pid = bench_p["id"]
 
+        # Look up user team id for league 1
+        with get_db_cursor() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM napper_teams WHERE league_id = 1 AND user_id IS NOT NULL LIMIT 1")
+                user_team_id = cur.fetchone()["id"]
+
         # 1. Invalid player validation
         bad_player_res = client.post("/api/napper/league/1/lineup", json={
-            "team_id": 1,
+            "team_id": user_team_id,
             "swaps": [{"player_id": 9999999, "new_slot": "RB"}]
         })
         assert bad_player_res.status_code == 400
@@ -171,7 +177,7 @@ class TestNapperE2E:
 
         # 2. Invalid slot validation
         bad_slot_res = client.post("/api/napper/league/1/lineup", json={
-            "team_id": 1,
+            "team_id": user_team_id,
             "swaps": [{"player_id": starter_pid, "new_slot": "INVALID_SLOT"}]
         })
         assert bad_slot_res.status_code == 400
@@ -179,7 +185,7 @@ class TestNapperE2E:
 
         # 3. Valid atomic swap: swap starter with bench player
         swap_res = client.post("/api/napper/league/1/lineup", json={
-            "team_id": 1,
+            "team_id": user_team_id,
             "week": 6,
             "swaps": [
                 {"player_id": starter_pid, "new_slot": "BN"},
@@ -201,7 +207,7 @@ class TestNapperE2E:
 
         # Revert swap to leave roster in clean state
         client.post("/api/napper/league/1/lineup", json={
-            "team_id": 1,
+            "team_id": user_team_id,
             "week": 6,
             "swaps": [
                 {"player_id": bench_pid, "new_slot": "BN"},
@@ -213,25 +219,30 @@ class TestNapperE2E:
         """Verify full trade flow: propose trade, accept response, roster transfer, and chat notice."""
         with get_db_cursor() as conn:
             with conn.cursor() as cur:
+                cur.execute("SELECT id FROM napper_teams WHERE league_id = 1 AND user_id IS NOT NULL LIMIT 1")
+                t1_id = cur.fetchone()["id"]
+                cur.execute("SELECT id FROM napper_teams WHERE league_id = 1 AND team_name = 'Team 3' LIMIT 1")
+                t3_id = cur.fetchone()["id"]
+
                 # Find bench players on Team 1 and Team 3
                 cur.execute("""
                     SELECT player_id FROM napper_rosters
-                    WHERE league_id = 1 AND team_id = 1 AND slot = 'BN' AND week = 6
+                    WHERE league_id = 1 AND team_id = %s AND slot = 'BN' AND week = 6
                     LIMIT 1
-                """)
+                """, (t1_id,))
                 t1_player_id = cur.fetchone()["player_id"]
 
                 cur.execute("""
                     SELECT player_id FROM napper_rosters
-                    WHERE league_id = 1 AND team_id = 3 AND slot = 'BN' AND week = 6
+                    WHERE league_id = 1 AND team_id = %s AND slot = 'BN' AND week = 6
                     LIMIT 1
-                """)
+                """, (t3_id,))
                 t3_player_id = cur.fetchone()["player_id"]
 
         # 1. Propose trade
         prop_res = client.post("/api/napper/league/1/trades/propose", json={
-            "proposer_team_id": 1,
-            "target_team_id": 3,
+            "proposer_team_id": t1_id,
+            "target_team_id": t3_id,
             "offered_player_ids": [t1_player_id],
             "requested_player_ids": [t3_player_id],
             "ai_rationale": "Mutually beneficial depth swap."
@@ -247,8 +258,8 @@ class TestNapperE2E:
         matched_trade = next((t for t in trades if t["id"] == trade_id), None)
         assert matched_trade is not None
         assert matched_trade["status"] == "PENDING"
-        assert matched_trade["proposer"]["id"] == 1
-        assert matched_trade["target"]["id"] == 3
+        assert matched_trade["proposer"]["id"] == t1_id
+        assert matched_trade["target"]["id"] == t3_id
 
         # 3. Respond with ACCEPT
         resp_res = client.post(f"/api/napper/league/1/trades/{trade_id}/respond", json={
@@ -264,13 +275,13 @@ class TestNapperE2E:
                     SELECT team_id FROM napper_rosters
                     WHERE league_id = 1 AND player_id = %s AND week = 6
                 """, (t1_player_id,))
-                assert cur.fetchone()["team_id"] == 3  # Moved to team 3
+                assert cur.fetchone()["team_id"] == t3_id  # Moved to team 3
 
                 cur.execute("""
                     SELECT team_id FROM napper_rosters
                     WHERE league_id = 1 AND player_id = %s AND week = 6
                 """, (t3_player_id,))
-                assert cur.fetchone()["team_id"] == 1  # Moved to team 1
+                assert cur.fetchone()["team_id"] == t1_id  # Moved to team 1
 
         # 5. Verify chat announcement
         chat_res = client.get("/api/napper/league/1/chat")
@@ -291,19 +302,21 @@ class TestNapperE2E:
         claim_pid = claim_player["player_id"]
         claim_name = claim_player["name"]
 
-        # 2. Get a bench player from team 1 to drop
+        # 2. Get a bench player from user team to drop
         with get_db_cursor() as conn:
             with conn.cursor() as cur:
+                cur.execute("SELECT id FROM napper_teams WHERE league_id = 1 AND user_id IS NOT NULL LIMIT 1")
+                t1_id = cur.fetchone()["id"]
                 cur.execute("""
                     SELECT player_id FROM napper_rosters
-                    WHERE league_id = 1 AND team_id = 1 AND slot = 'BN' AND week = 6
+                    WHERE league_id = 1 AND team_id = %s AND slot = 'BN' AND week = 6
                     LIMIT 1
-                """)
+                """, (t1_id,))
                 drop_pid = cur.fetchone()["player_id"]
 
         # 3. Invalid claim: trying to drop a player not on the team
         bad_drop_res = client.post("/api/napper/league/1/waivers/claim", json={
-            "team_id": 1,
+            "team_id": t1_id,
             "add_player_id": claim_pid,
             "drop_player_id": 9999999,
         })
@@ -311,7 +324,7 @@ class TestNapperE2E:
 
         # 4. Valid waiver claim
         claim_res = client.post("/api/napper/league/1/waivers/claim", json={
-            "team_id": 1,
+            "team_id": t1_id,
             "add_player_id": claim_pid,
             "drop_player_id": drop_pid,
         })
@@ -327,8 +340,8 @@ class TestNapperE2E:
                 # Add player is now on team 1
                 cur.execute("""
                     SELECT slot FROM napper_rosters
-                    WHERE league_id = 1 AND team_id = 1 AND player_id = %s AND week = 6
-                """, (claim_pid,))
+                    WHERE league_id = 1 AND team_id = %s AND player_id = %s AND week = 6
+                """, (t1_id, claim_pid))
                 row = cur.fetchone()
                 assert row is not None
                 assert row["slot"] == "BN"
@@ -336,8 +349,8 @@ class TestNapperE2E:
                 # Drop player is no longer on team 1
                 cur.execute("""
                     SELECT id FROM napper_rosters
-                    WHERE league_id = 1 AND team_id = 1 AND player_id = %s AND week = 6
-                """, (drop_pid,))
+                    WHERE league_id = 1 AND team_id = %s AND player_id = %s AND week = 6
+                """, (t1_id, drop_pid))
                 assert cur.fetchone() is None
 
         # 6. Verify chat announcement

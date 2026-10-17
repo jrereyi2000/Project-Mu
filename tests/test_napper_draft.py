@@ -748,3 +748,88 @@ def test_set_league_strategies_endpoint():
 
     assert personas.count("ANALYTICS_NERD") == 4
     assert personas.count("TRADE_FIEND") == 3
+
+
+def test_save_draft_as_league():
+    """Tests saving a draft session as a persistent active fantasy league."""
+    # 1. Create mock draft session
+    mock_res = client.post("/api/napper/drafts/create_mock", json={
+        "teams_count": 8,
+        "rounds": 15,
+        "user_slot": 1,
+        "scoring_type": "PPR",
+        "is_superflex": True,
+    })
+    assert mock_res.status_code == 200
+    mock_data = mock_res.json()
+    draft_id = mock_data["id"]
+
+    # 2. Simulate draft picks
+    sim_res = client.post(f"/api/napper/draft/{draft_id}/sim_all")
+    assert sim_res.status_code == 200
+    final_draft = sim_res.json()
+
+    # 3. Save as league
+    save_res = client.post("/api/napper/drafts/save_as_league", json={
+        "name": "Draft Champions League",
+        "teams_count": 8,
+        "scoring_type": "PPR",
+        "is_superflex": True,
+        "user_slot": 1,
+        "draft_id": draft_id,
+        "teams": [
+            {
+                "slot": t["slot_num"],
+                "name": t["team_name"],
+                "handle": t["manager_handle"],
+                "avatar": t["avatar_url"],
+                "is_user": t["is_user"],
+                "persona": t["persona"],
+                "roster": final_draft.get("rosters", {}).get(str(t["slot_num"]), []),
+            }
+            for t in final_draft.get("teams_info", [])
+        ],
+        "picks": final_draft.get("picks", []),
+    })
+    assert save_res.status_code == 200, save_res.json()
+    save_data = save_res.json()
+    assert save_data["status"] == "success"
+    league = save_data["league"]
+    league_id = league["id"]
+    assert league["name"] == "Draft Champions League"
+    assert league["status"] == "IN_SEASON"
+
+    try:
+        # 4. Verify league appears in /api/napper/leagues
+        leagues_res = client.get("/api/napper/leagues")
+        assert leagues_res.status_code == 200
+        league_list = leagues_res.json()["leagues"]
+        matched = next((l for l in league_list if l["id"] == league_id), None)
+        assert matched is not None
+        assert matched["name"] == "Draft Champions League"
+
+        # 5. Verify rosters exist with starting slots and bench
+        rosters_res = client.get(f"/api/napper/league/{league_id}/teams_rosters?week=1")
+        assert rosters_res.status_code == 200
+        teams_rosters = rosters_res.json()["teams"]
+        assert len(teams_rosters) == 8
+        for tm in teams_rosters:
+            assert len(tm["players"]) > 0
+
+        # 6. Verify 14-week schedule generated
+        matchup_res = client.get(f"/api/napper/league/{league_id}/matchup?week=1")
+        assert matchup_res.status_code == 200
+
+        # 7. Verify chat announcement
+        chat_res = client.get(f"/api/napper/league/{league_id}/chat")
+        assert chat_res.status_code == 200
+        messages = chat_res.json()["messages"]
+        assert any("draft" in m["message_text"].lower() or (m.get("card_payload") and m["card_payload"].get("type") == "DRAFT_RECAP") for m in messages)
+    finally:
+        from engines.napper_draft_engine import get_db
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM napper_leagues WHERE id = %s", (league_id,))
+            conn.commit()
+
+

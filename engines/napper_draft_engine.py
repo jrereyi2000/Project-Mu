@@ -1685,3 +1685,329 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
         conn.commit()
 
     return get_draft_state(draft_id)
+
+
+def save_draft_as_league(
+    name: Optional[str] = None,
+    teams_count: Optional[int] = 8,
+    scoring_type: str = "PPR",
+    is_superflex: bool = True,
+    user_slot: Optional[int] = 1,
+    draft_id: Optional[int] = None,
+    teams: Optional[List[Dict[str, Any]]] = None,
+    picks: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Converts and persists a completed draft (live or mock) into an active, functional fantasy league.
+
+    Populates:
+    1. napper_leagues (status: 'IN_SEASON', is_seed: FALSE, current_week: 1)
+    2. napper_teams (all manager profiles, user profile linked, personas, seeds 1..N)
+    3. napper_rosters (weeks 1..14 optimal starters and bench assigned from drafted players)
+    4. napper_matchups (14-week round-robin head-to-head schedule)
+    5. napper_chat (welcome announcement & draft recap)
+    6. napper_drafts & napper_draft_picks (persisted draft history)
+    """
+    clean_name = (name or "").strip() or "My Draft League"
+    clean_scoring = scoring_type if scoring_type in ("PPR", "HALF_PPR", "STANDARD") else "PPR"
+    actual_teams_count = teams_count or (len(teams) if teams else 8)
+    actual_user_slot = user_slot or 1
+
+    roster_format = {
+        "QB": 1,
+        "RB": 2,
+        "WR": 2,
+        "TE": 1,
+        "FLEX": 1,
+        "SUPERFLEX": 1 if is_superflex else 0,
+        "K": 1,
+        "DEF": 1,
+        "BN": 6,
+    }
+    avatar = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=256&h=256&q=80"
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            prev_season = get_previous_season(cur)
+
+            # 1. Create league
+            cur.execute("""
+                INSERT INTO napper_leagues (
+                    name, season, teams_count, scoring_type, roster_format,
+                    status, avatar_url, current_week, is_seed
+                ) VALUES (%s, %s, %s, %s, %s, 'IN_SEASON', %s, 1, FALSE)
+                RETURNING id, name, season, teams_count, scoring_type, status, current_week, avatar_url
+            """, (clean_name, prev_season, actual_teams_count, clean_scoring, psycopg.types.json.Jsonb(roster_format), avatar))
+            new_league = cur.fetchone()
+            league_id = new_league["id"]
+
+            # 2. Get user profile
+            cur.execute("SELECT id, handle, display_name, avatar_url FROM napper_user_profiles LIMIT 1")
+            user_prof = cur.fetchone()
+            if not user_prof:
+                cur.execute("""
+                    INSERT INTO napper_user_profiles (handle, display_name, avatar_url, trophies)
+                    VALUES ('jrereyi2000', 'The Straw Hat Pirates',
+                            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80', 3)
+                    RETURNING id, handle, display_name, avatar_url
+                """)
+                user_prof = cur.fetchone()
+            user_id = user_prof["id"]
+
+            # 3. Create Teams
+            slot_to_team_id: Dict[int, int] = {}
+            team_names_map: Dict[str, int] = {}
+            team_ids: List[int] = []
+
+            if teams:
+                for idx, tm in enumerate(teams):
+                    s_num = int(tm.get("slot") or tm.get("slot_num") or (idx + 1))
+                    is_u = bool(tm.get("is_user") or s_num == actual_user_slot)
+                    t_name = tm.get("name") or tm.get("team_name") or (user_prof["display_name"] if is_u else f"Team {s_num}")
+                    t_handle = tm.get("handle") or tm.get("manager_handle") or (user_prof["handle"] if is_u else f"@Manager{s_num}")
+                    t_avatar = tm.get("avatar") or tm.get("avatar_url") or (user_prof["avatar_url"] if is_u else f"https://api.dicebear.com/7.x/identicon/svg?seed={t_name}")
+                    t_persona = "USER" if is_u else (tm.get("persona") or "ANALYTICS_NERD")
+
+                    cur.execute("""
+                        INSERT INTO napper_teams (
+                            league_id, user_id, team_name, manager_handle, avatar_url,
+                            is_ai, persona, wins, losses, ties, points_for, points_against, seed
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, 0, 0, 0, 0.0, 0.0, %s)
+                        RETURNING id
+                    """, (
+                        league_id,
+                        user_id if is_u else None,
+                        t_name,
+                        t_handle,
+                        t_avatar,
+                        not is_u,
+                        t_persona,
+                        s_num
+                    ))
+                    t_id = cur.fetchone()["id"]
+                    slot_to_team_id[s_num] = t_id
+                    team_names_map[t_name] = t_id
+                    team_ids.append(t_id)
+            else:
+                # Default AI managers if no teams provided
+                cur.execute("""
+                    INSERT INTO napper_teams (
+                        league_id, user_id, team_name, manager_handle, avatar_url,
+                        is_ai, persona, wins, losses, ties, points_for, points_against, seed
+                    ) VALUES (%s, %s, %s, %s, %s, FALSE, 'USER', 0, 0, 0, 0.0, 0.0, 1)
+                    RETURNING id
+                """, (league_id, user_id, user_prof["display_name"], user_prof["handle"], user_prof["avatar_url"]))
+                u_tid = cur.fetchone()["id"]
+                slot_to_team_id[actual_user_slot] = u_tid
+                team_ids.append(u_tid)
+
+                for s in range(1, actual_teams_count + 1):
+                    if s == actual_user_slot:
+                        continue
+                    cur.execute("""
+                        INSERT INTO napper_teams (
+                            league_id, user_id, team_name, manager_handle, avatar_url,
+                            is_ai, persona, wins, losses, ties, points_for, points_against, seed
+                        ) VALUES (%s, NULL, %s, %s, %s, TRUE, 'ANALYTICS_NERD', 0, 0, 0, 0.0, 0.0, %s)
+                        RETURNING id
+                    """, (league_id, f"Team {s}", f"@Manager{s}", f"https://api.dicebear.com/7.x/identicon/svg?seed=Team{s}", s))
+                    other_tid = cur.fetchone()["id"]
+                    slot_to_team_id[s] = other_tid
+                    team_ids.append(other_tid)
+
+            # 4. Link or Create Draft Record
+            if draft_id:
+                cur.execute("SELECT id FROM napper_drafts WHERE id = %s", (draft_id,))
+                if cur.fetchone():
+                    cur.execute("""
+                        UPDATE napper_drafts
+                        SET league_id = %s, status = 'COMPLETED'
+                        WHERE id = %s
+                    """, (league_id, draft_id))
+                    final_draft_id = draft_id
+                else:
+                    draft_id = None
+
+            if not draft_id:
+                cur.execute("""
+                    INSERT INTO napper_drafts (
+                        league_id, season, rounds, teams_count, scoring_type,
+                        status, current_round, current_pick, is_mock, user_slot, settings
+                    ) VALUES (%s, %s, 15, %s, %s, 'COMPLETED', 15, %s, FALSE, %s, %s)
+                    RETURNING id
+                """, (
+                    league_id, prev_season, actual_teams_count, clean_scoring,
+                    actual_teams_count * 15, actual_user_slot, psycopg.types.json.Jsonb({"is_superflex": is_superflex})
+                ))
+                final_draft_id = cur.fetchone()["id"]
+
+            # 5. Populate Draft Picks
+            if picks:
+                for idx, p in enumerate(picks):
+                    overall = int(p.get("overall_pick") or p.get("pick_overall") or (idx + 1))
+                    r_num = int(p.get("round_num") or p.get("round") or ((overall - 1) // actual_teams_count + 1))
+                    p_num = int(p.get("pick_num") or p.get("round_pick") or ((overall - 1) % actual_teams_count + 1))
+                    s_num = int(p.get("slot_num") or p.get("team_slot") or 1)
+                    t_name = p.get("team_name") or ""
+                    pid = p.get("player_id") or (p.get("player") or {}).get("player_id")
+                    if not pid:
+                        continue
+                    p_by = p.get("picked_by") or ("USER" if s_num == actual_user_slot else "AI")
+                    t_id = slot_to_team_id.get(s_num) or team_names_map.get(t_name)
+
+                    cur.execute("""
+                        INSERT INTO napper_draft_picks (
+                            draft_id, round_num, pick_num, overall_pick, team_id,
+                            team_name, slot_num, player_id, picked_by
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (draft_id, overall_pick) DO NOTHING
+                    """, (final_draft_id, r_num, p_num, overall, t_id, t_name, s_num, pid, p_by))
+
+            # 6. Populate Rosters for Weeks 1..14
+            # Look up player positions and projections
+            all_roster_pids = set()
+            team_player_lists: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+
+            if teams:
+                for idx, tm in enumerate(teams):
+                    s_num = int(tm.get("slot") or tm.get("slot_num") or (idx + 1))
+                    t_id = slot_to_team_id[s_num]
+                    for p in (tm.get("roster") or []):
+                        pid = p.get("player_id") or p.get("id")
+                        if pid:
+                            all_roster_pids.add(pid)
+                            team_player_lists[t_id].append({
+                                "player_id": pid,
+                                "pos": p.get("position") or p.get("pos"),
+                                "proj": float(p.get("proj_pts", 10.0)),
+                            })
+
+            # If team_player_lists is empty, fallback to reading picks from napper_draft_picks
+            if not team_player_lists and final_draft_id:
+                cur.execute("""
+                    SELECT dp.slot_num, dp.player_id, COALESCE(ps.position, 'FLEX') as position,
+                           COALESCE(fp.projected_points, 10.0) as proj
+                    FROM napper_draft_picks dp
+                    LEFT JOIN player_seasons ps ON ps.player_id = dp.player_id AND ps.season = %s
+                    LEFT JOIN fantasy_projections fp ON fp.player_id = dp.player_id AND fp.season = %s AND fp.week = 1
+                    WHERE dp.draft_id = %s AND dp.player_id IS NOT NULL
+                """, (prev_season, prev_season, final_draft_id))
+                for r in cur.fetchall():
+                    s_num = r["slot_num"]
+                    t_id = slot_to_team_id.get(s_num)
+                    if t_id:
+                        all_roster_pids.add(r["player_id"])
+                        team_player_lists[t_id].append({
+                            "player_id": r["player_id"],
+                            "pos": r["position"],
+                            "proj": float(r["proj"]),
+                        })
+
+            # Fetch DB metadata for accurate positions
+            if all_roster_pids:
+
+                cur.execute("""
+                    SELECT p.id, ps.position, COALESCE(fp.projected_points, 10.0) as proj
+                    FROM players p
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                    LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
+                    WHERE p.id = ANY(%s)
+                """, (prev_season, prev_season, list(all_roster_pids)))
+                player_meta = {r["id"]: r for r in cur.fetchall()}
+            else:
+                player_meta = {}
+
+            # Assign starters and bench slots for each team
+            for t_id, p_list in team_player_lists.items():
+                resolved_players = []
+                for p in p_list:
+                    meta = player_meta.get(p["player_id"])
+                    raw_pos = (meta["position"] if meta and meta["position"] else None) or p.get("pos") or "WR"
+                    norm_pos = "RB" if raw_pos in ("HB", "FB", "RB") else raw_pos
+                    proj = float(meta["proj"] if meta and meta["proj"] else p.get("proj", 10.0))
+                    resolved_players.append({
+                        "player_id": p["player_id"],
+                        "pos": norm_pos,
+                        "proj": proj,
+                    })
+
+                # Sort by projected points descending
+                resolved_players.sort(key=lambda x: x["proj"], reverse=True)
+                unassigned = list(resolved_players)
+                assigned_slots: List[tuple] = []
+
+                # Core slots
+                for s_key in ["QB", "RB", "WR", "TE", "K", "DEF"]:
+                    count = int(roster_format.get(s_key, 1))
+                    for _ in range(count):
+                        match_idx = next((i for i, pl in enumerate(unassigned) if pl["pos"] == s_key), None)
+                        if match_idx is not None:
+                            pl = unassigned.pop(match_idx)
+                            assigned_slots.append((pl["player_id"], s_key))
+
+                # FLEX (RB, WR, TE)
+                flex_count = int(roster_format.get("FLEX", 1))
+                for _ in range(flex_count):
+                    match_idx = next((i for i, pl in enumerate(unassigned) if pl["pos"] in ("RB", "WR", "TE")), None)
+                    if match_idx is not None:
+                        pl = unassigned.pop(match_idx)
+                        assigned_slots.append((pl["player_id"], "FLEX"))
+
+                # SUPERFLEX (QB, RB, WR, TE)
+                sf_count = int(roster_format.get("SUPERFLEX", 1 if is_superflex else 0))
+                for _ in range(sf_count):
+                    match_idx = next((i for i, pl in enumerate(unassigned) if pl["pos"] in ("QB", "RB", "WR", "TE")), None)
+                    if match_idx is not None:
+                        pl = unassigned.pop(match_idx)
+                        assigned_slots.append((pl["player_id"], "SUPERFLEX"))
+
+                # Remaining to BN
+                for pl in unassigned:
+                    assigned_slots.append((pl["player_id"], "BN"))
+
+                # Write to napper_rosters for weeks 1..14
+                for w in range(1, 15):
+                    for pid, s_name in assigned_slots:
+                        cur.execute("""
+                            INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
+                            VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (team_id, week, player_id) DO NOTHING
+                        """, (league_id, t_id, w, pid, s_name))
+
+            # 7. Generate 14-week Round-Robin Schedule
+            n = len(team_ids)
+            if n >= 2:
+                for w in range(1, 15):
+                    round_idx = (w - 1) % (n - 1)
+                    rotated = [team_ids[0]] + team_ids[1:][round_idx:] + team_ids[1:][:round_idx]
+                    for match_i in range(n // 2):
+                        home = rotated[match_i]
+                        away = rotated[n - 1 - match_i]
+                        cur.execute("""
+                            INSERT INTO napper_matchups (
+                                league_id, week, home_team_id, away_team_id,
+                                home_score, away_score, home_proj, away_proj,
+                                win_prob_home, is_final
+                            ) VALUES (%s, %s, %s, %s, 0.00, 0.00, 118.50, 114.20, 0.520, FALSE)
+                        """, (league_id, w, home, away))
+
+            # 8. Post welcome & draft recap in league chat
+            welcome_card = {
+                "type": "DRAFT_RECAP",
+                "title": f"Welcome to {clean_name}!",
+                "highlight": f"{actual_teams_count} Teams · {clean_scoring} · 15 Rounds",
+                "commentary": "Draft concluded! Rosters and 14-week head-to-head schedules have been locked in for Week 1.",
+            }
+            cur.execute("""
+                INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text, card_payload)
+                VALUES (%s, 'SYSTEM_BOT', 'Draft Commissioner', '@DraftBot', '/static/players/robot_avatar.webp',
+                        %s, %s)
+            """, (league_id, f"🏆 {clean_name} draft has completed! Rosters and matchups are officially set for Week 1.", psycopg.types.json.Jsonb(welcome_card)))
+
+        conn.commit()
+
+    return {
+        "status": "success",
+        "league": new_league,
+        "league_id": league_id,
+    }
+
