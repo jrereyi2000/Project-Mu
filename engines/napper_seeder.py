@@ -180,8 +180,8 @@ def seed_napper_database():
         # League A: 'Solo 2026 8-Team SF PPR'
         cur.execute(
             """
-            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -194,7 +194,8 @@ def seed_napper_database():
                 }),
                 "IN_SEASON",
                 "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=256&h=256&q=80",
-                6
+                6,
+                True
             )
         )
         l1_id = cur.fetchone()[0]
@@ -202,8 +203,8 @@ def seed_napper_database():
         # League B: 'The Justice League'
         cur.execute(
             """
-            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -216,7 +217,8 @@ def seed_napper_database():
                 }),
                 "IN_SEASON",
                 "https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=256&h=256&q=80",
-                6
+                6,
+                True
             )
         )
         l2_id = cur.fetchone()[0]
@@ -224,8 +226,8 @@ def seed_napper_database():
         # League C: 'The Avengers'
         cur.execute(
             """
-            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -238,7 +240,8 @@ def seed_napper_database():
                 }),
                 "PRE_DRAFT",
                 "https://images.unsplash.com/photo-1635863138275-d9b33299680b?auto=format&fit=crop&w=256&h=256&q=80",
-                1
+                1,
+                True
             )
         )
         l3_id = cur.fetchone()[0]

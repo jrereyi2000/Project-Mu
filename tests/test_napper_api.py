@@ -79,3 +79,40 @@ def test_napper_engines():
     assert isinstance(awards, list)
     banter = generate_manager_banter(1, 6)
     assert isinstance(banter, list)
+
+
+def test_napper_teams_rosters():
+    res = client.get("/api/napper/league/1/teams_rosters")
+    assert res.status_code == 200
+    data = res.json()
+    assert "teams" in data
+    assert len(data["teams"]) == 8
+    user_team = next(t for t in data["teams"] if t["is_user"])
+    assert len(user_team["players"]) > 0
+
+
+def test_napper_create_league_cleans_seed_leagues():
+    from engines.napper_seeder import seed_napper_database
+
+    try:
+        # Create a new league
+        res = client.post("/api/napper/leagues/create", json={
+            "name": "Grand Line Dynasty",
+            "teams_count": 8,
+            "scoring_type": "PPR",
+            "is_superflex": True,
+            "status": "IN_SEASON"
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["league"]["name"] == "Grand Line Dynasty"
+
+        # Check that seed leagues have been removed
+        l_res = client.get("/api/napper/leagues")
+        assert l_res.status_code == 200
+        leagues = l_res.json()["leagues"]
+        assert len(leagues) == 1
+        assert leagues[0]["name"] == "Grand Line Dynasty"
+    finally:
+        # Restore reference seed leagues
+        seed_napper_database()

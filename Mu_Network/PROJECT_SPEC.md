@@ -560,7 +560,7 @@ Napper is an interactive Sleeper-style multi-league web application featuring re
 
 ### 3-Panel Desktop Layout
 1. **Left Navigation Rail (Leagues & User Profile)**:
-   - League selector displaying user's active leagues (`Solo 2026 8-Team SF PPR`, `The Justice League`, `The Avengers`).
+   - League selector displaying user's active leagues. Clicking `+` opens the interactive Create League modal (supporting 8/10/12 teams, PPR/Half-PPR/Standard scoring, Superflex toggle, and In-Season/Pre-Draft mode); creating a new league automatically purges initial placeholder seed leagues (`is_seed = TRUE`).
    - Each league item renders avatar, league name, season, scoring format badge, user win-loss record, live user vs opponent score, and unplayed starters count.
    - User profile card pinned at the bottom showing user handle `@jrereyi2000`, display name "The Straw Hat Pirates", avatar, trophies counter (3), settings button, and pending trade notification counter badge.
 2. **Center Stage (7 Interactive Tabs)**:
@@ -572,7 +572,7 @@ Napper is an interactive Sleeper-style multi-league web application featuring re
    - **`TEAM` (`NapperTeamTab.tsx`)**:
      - Complete roster management with one-click slot swapping. Clicking a player initiates swap mode, highlighting eligible starter/bench positions; selecting the destination executes an atomic swap via `POST /api/napper/league/{id}/lineup`.
    - **`PLAYERS` (`NapperPlayersTab.tsx`)**:
-     - Available free agents board with position filter pills (`ALL`, `QB`, `RB`, `WR`, `TE`, `K`, `DEF`) and instant debounced search.
+     - Available free agents board with position filter pills (`ALL`, `QB`, `RB`, `WR`, `TE`, `K`, `DEF`), player headshots, null-safe projected points, and instant debounced search.
      - Clicking "+" opens the Add/Drop modal, allowing user to pick a bench player to drop and confirm the waiver claim (`POST /api/napper/league/{id}/waivers/claim`).
    - **`LEAGUE` (`NapperLeagueTab.tsx`)**:
      - League standings table with rank, team name, manager handle, W-L-T record, points for, and points against.
@@ -581,7 +581,7 @@ Napper is an interactive Sleeper-style multi-league web application featuring re
      - Full league scoreboard grid for the selected week.
    - **`TRADES` (`NapperTradesTab.tsx`)**:
      - Active trade market displaying pending incoming offers with AI rationale pitches, net projected point impact, and Accept / Reject buttons (`POST /api/napper/league/{id}/trades/{id}/respond`).
-     - "Propose Trade" button opens interactive trade builder modal to assemble multi-player offers with any AI manager in the league.
+     - "+ Propose New Trade" opens an interactive trade builder modal that queries `GET /api/napper/league/{id}/teams_rosters` to browse side-by-side rosters with checkboxes to assemble reciprocal multi-player trade offers (`POST /api/napper/league/{id}/trades/propose`).
    - **`CHAT`**:
      - Mobile / responsive full-screen chat tab.
 3. **Right Rail (Autonomous League Chat & Awards)**:

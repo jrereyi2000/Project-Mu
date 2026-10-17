@@ -42,14 +42,27 @@ export function NapperPlayersTab({ leagueId }: NapperPlayersTabProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        team_id: 1, // User team
+        team_id: 0, // 0 triggers user team resolution
         add_player_id: selectedAdd.player_id,
       }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          return res.json().then((d) => {
+            throw new Error(d.detail || "Failed to claim player");
+          });
+        }
+        return res.json();
+      })
       .then(() => {
         setClaimStatus(`Successfully claimed ${selectedAdd.name}! Check your bench and league chat.`);
+        const claimedId = selectedAdd.player_id;
         setSelectedAdd(null);
+        setPlayers((prev) => prev.filter((p) => p.player_id !== claimedId));
+        setTimeout(() => setClaimStatus(null), 4000);
+      })
+      .catch((err) => {
+        setClaimStatus(`Claim failed: ${err.message}`);
         setTimeout(() => setClaimStatus(null), 4000);
       });
   };
@@ -133,7 +146,7 @@ export function NapperPlayersTab({ leagueId }: NapperPlayersTabProps) {
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <img
-                  src={getPlayerHeadshotUrl(p.player_id)}
+                  src={getPlayerHeadshotUrl(p.name, `/static/players/${p.player_id}.webp`)}
                   alt=""
                   onError={handleImageError}
                   style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#202d40", objectFit: "cover" }}
@@ -144,8 +157,12 @@ export function NapperPlayersTab({ leagueId }: NapperPlayersTabProps) {
                 </div>
               </div>
               <div style={{ color: "#8a99ad" }}>{p.opponent || "vs OPP"}</div>
-              <div style={{ textAlign: "right", color: "var(--napper-teal)", fontWeight: "700" }}>{p.proj_fpts.toFixed(1)}</div>
-              <div style={{ textAlign: "right", color: "#cbd5e1" }}>{p.avg_fpts.toFixed(1)}</div>
+              <div style={{ textAlign: "right", color: "var(--napper-teal)", fontWeight: "700" }}>
+                {(p.proj_fpts != null ? Number(p.proj_fpts) : 0).toFixed(1)}
+              </div>
+              <div style={{ textAlign: "right", color: "#cbd5e1" }}>
+                {(p.avg_fpts != null ? Number(p.avg_fpts) : 0).toFixed(1)}
+              </div>
               <div style={{ textAlign: "center" }}>
                 <button
                   onClick={() => handleClaim(p)}

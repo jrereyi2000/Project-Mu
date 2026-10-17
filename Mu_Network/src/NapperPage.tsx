@@ -92,7 +92,17 @@ export const NapperPage: React.FC<NapperPageProps> = ({
   const [chatLoading, setChatLoading] = useState<boolean>(true);
   const [inputText, setInputText] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<NapperStarterPlayer | null>(null);
+
+  // Modal State
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"CREATE" | "SWITCH">("CREATE");
+  const [createName, setCreateName] = useState("");
+  const [createTeamsCount, setCreateTeamsCount] = useState<number>(8);
+  const [createScoringType, setCreateScoringType] = useState<string>("PPR");
+  const [createSuperflex, setCreateSuperflex] = useState<boolean>(true);
+  const [createStatus, setCreateStatus] = useState<"IN_SEASON" | "PRE_DRAFT">("IN_SEASON");
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccessMsg, setCreateSuccessMsg] = useState<string | null>(null);
 
   // 1. Fetch user profile
@@ -111,16 +121,70 @@ export const NapperPage: React.FC<NapperPageProps> = ({
   }, []);
 
   // 2. Fetch leagues list
-  useEffect(() => {
+  const loadLeagues = (newSelectedId?: number) => {
     fetch(`${API_BASE}/api/napper/leagues`)
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data.leagues) && data.leagues.length > 0) {
+        if (Array.isArray(data.leagues)) {
           setLeagues(data.leagues);
+          if (newSelectedId) {
+            setSelectedLeagueId(newSelectedId);
+          } else if (data.leagues.length > 0 && !data.leagues.some((l: any) => l.id === selectedLeagueId)) {
+            setSelectedLeagueId(data.leagues[0].id);
+          }
         }
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadLeagues();
   }, []);
+
+  const handleCreateLeague = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createName.trim()) {
+      setCreateError("Please enter a league name.");
+      return;
+    }
+    setCreateSubmitting(true);
+    setCreateError(null);
+
+    fetch(`${API_BASE}/api/napper/leagues/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: createName.trim(),
+        teams_count: createTeamsCount,
+        scoring_type: createScoringType,
+        is_superflex: createSuperflex,
+        status: createStatus,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          return res.json().then((d) => {
+            throw new Error(d.detail || "Failed to create league");
+          });
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setCreateSubmitting(false);
+        setCreateSuccessMsg(`🎉 League "${data.league.name}" created! Placeholder seed leagues have been removed.`);
+        const newLid = data.league.id;
+        loadLeagues(newLid);
+        setTimeout(() => {
+          setCreateModalOpen(false);
+          setCreateSuccessMsg(null);
+          setCreateName("");
+        }, 1800);
+      })
+      .catch((err) => {
+        setCreateSubmitting(false);
+        setCreateError(err.message);
+      });
+  };
 
   // 3. Fetch league chat stream
   const loadChat = () => {
@@ -261,8 +325,12 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           </span>
           <button
             type="button"
-            onClick={() => setCreateModalOpen(true)}
-            title="Create or Join League"
+            onClick={() => {
+              setModalMode("CREATE");
+              setCreateError(null);
+              setCreateModalOpen(true);
+            }}
+            title="Create New League"
             className="w-5 h-5 rounded-full border border-[#283850] bg-[#172130] hover:border-[#00ceb8] hover:text-[#00ceb8] flex items-center justify-center text-xs text-[#8a99ad] cursor-pointer transition-colors"
           >
             +
@@ -353,8 +421,11 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           </div>
           <button
             type="button"
-            title="User Profile Settings"
-            onClick={() => setCreateModalOpen(true)}
+            title="User Profile Settings & League Switcher"
+            onClick={() => {
+              setModalMode("SWITCH");
+              setCreateModalOpen(true);
+            }}
             className="w-7 h-7 rounded-lg bg-[#172130] hover:bg-[#202d40] border border-[#283850] flex items-center justify-center text-[#8a99ad] hover:text-white transition-colors cursor-pointer"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -838,12 +909,13 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           MODAL: CREATE / JOIN LEAGUE MODAL
           ========================================================================= */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#172233] border border-[#283850] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-[#172233] border border-[#283850] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-[#223147] pb-3">
               <div className="flex items-center gap-2">
                 <NapperMoonIcon size={22} />
-                <h3 className="text-base font-extrabold text-white">Join or Switch League</h3>
+                <h3 className="text-base font-extrabold text-white">Napper Fantasy Leagues</h3>
               </div>
               <button
                 type="button"
@@ -854,53 +926,241 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               </button>
             </div>
 
-            <p className="text-xs text-[#8a99ad]">
-              Select an existing league to manage your roster, trade with AI managers, or track live scores:
-            </p>
-
-            <div className="space-y-2">
-              {leagues.map((lg) => (
-                <div
-                  key={lg.id}
-                  onClick={() => {
-                    setSelectedLeagueId(lg.id);
-                    setCreateModalOpen(false);
-                  }}
-                  className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
-                    selectedLeagueId === lg.id
-                      ? "bg-[#1f2d42] border-[#00ceb8]"
-                      : "bg-[#121926] border-[#223147] hover:border-[#38bdf8]"
-                  }`}
-                >
-                  <div>
-                    <div className="text-xs font-bold text-white">{lg.name}</div>
-                    <div className="text-[10px] text-[#8a99ad]">{lg.teams_count} Teams • {lg.scoring_type} • {lg.status}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="px-3 py-1 rounded-lg bg-[#00ceb8] text-[#0d1722] text-xs font-bold"
-                  >
-                    Select
-                  </button>
-                </div>
-              ))}
+            {/* Mode Switcher Tabs */}
+            <div className="flex bg-[#111827] p-1 rounded-xl border border-[#223147]">
+              <button
+                type="button"
+                onClick={() => setModalMode("CREATE")}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                  modalMode === "CREATE"
+                    ? "bg-[#00ceb8] text-[#0d1722]"
+                    : "text-[#8a99ad] hover:text-white"
+                }`}
+              >
+                + Create League
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalMode("SWITCH")}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                  modalMode === "SWITCH"
+                    ? "bg-[#00ceb8] text-[#0d1722]"
+                    : "text-[#8a99ad] hover:text-white"
+                }`}
+              >
+                Switch League ({leagues.length})
+              </button>
             </div>
 
+            {createError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+                {createError}
+              </div>
+            )}
+
             {createSuccessMsg && (
-              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs text-center font-semibold">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
                 {createSuccessMsg}
               </div>
             )}
 
-            <div className="pt-2 border-t border-[#223147] flex justify-end">
-              <button
-                type="button"
-                onClick={() => setCreateModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-[#1f2d42] text-white hover:bg-[#283850] text-xs font-bold transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+            {modalMode === "CREATE" ? (
+              <form onSubmit={handleCreateLeague} className="space-y-4">
+                {/* Seed removal notice */}
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] leading-relaxed">
+                  💡 <b>Auto-Cleanup:</b> Creating a new league will permanently remove all initial placeholder seed leagues, leaving only your active leagues.
+                </div>
+
+                {/* League Name */}
+                <div>
+                  <label className="block text-xs font-bold text-[#8a99ad] uppercase tracking-wider mb-1.5">
+                    League Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Grand Line Dynasty, All-Mighty 10..."
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                    className="w-full bg-[#111827] border border-[#283850] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-[#5c6c80] focus:outline-none focus:border-[#00ceb8]"
+                  />
+                </div>
+
+                {/* Teams Count */}
+                <div>
+                  <label className="block text-xs font-bold text-[#8a99ad] uppercase tracking-wider mb-1.5">
+                    Number of Teams
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[8, 10, 12].map((cnt) => (
+                      <button
+                        key={cnt}
+                        type="button"
+                        onClick={() => setCreateTeamsCount(cnt)}
+                        className={`py-2 text-xs font-bold rounded-xl border transition-colors cursor-pointer ${
+                          createTeamsCount === cnt
+                            ? "bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8]"
+                            : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
+                        }`}
+                      >
+                        {cnt} Teams
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Scoring Type */}
+                <div>
+                  <label className="block text-xs font-bold text-[#8a99ad] uppercase tracking-wider mb-1.5">
+                    Scoring Format
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: "PPR", label: "Full PPR" },
+                      { id: "HALF_PPR", label: "0.5 PPR" },
+                      { id: "STANDARD", label: "Standard" },
+                    ].map((sc) => (
+                      <button
+                        key={sc.id}
+                        type="button"
+                        onClick={() => setCreateScoringType(sc.id)}
+                        className={`py-2 text-xs font-bold rounded-xl border transition-colors cursor-pointer ${
+                          createScoringType === sc.id
+                            ? "bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8]"
+                            : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
+                        }`}
+                      >
+                        {sc.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Superflex / 1QB */}
+                <div>
+                  <label className="block text-xs font-bold text-[#8a99ad] uppercase tracking-wider mb-1.5">
+                    Roster Composition
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCreateSuperflex(true)}
+                      className={`py-2 text-xs font-bold rounded-xl border transition-colors cursor-pointer ${
+                        createSuperflex
+                          ? "bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8]"
+                          : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
+                      }`}
+                    >
+                      Superflex (2QB Capable)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateSuperflex(false)}
+                      className={`py-2 text-xs font-bold rounded-xl border transition-colors cursor-pointer ${
+                        !createSuperflex
+                          ? "bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8]"
+                          : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
+                      }`}
+                    >
+                      Standard 1QB
+                    </button>
+                  </div>
+                </div>
+
+                {/* Starting Phase */}
+                <div>
+                  <label className="block text-xs font-bold text-[#8a99ad] uppercase tracking-wider mb-1.5">
+                    Initial Phase
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCreateStatus("IN_SEASON")}
+                      className={`py-2 text-xs font-bold rounded-xl border transition-colors cursor-pointer ${
+                        createStatus === "IN_SEASON"
+                          ? "bg-[#00ceb8]/15 border-[#00ceb8] text-[#00ceb8]"
+                          : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
+                      }`}
+                    >
+                      In-Season (Active Week 6)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateStatus("PRE_DRAFT")}
+                      className={`py-2 text-xs font-bold rounded-xl border transition-colors cursor-pointer ${
+                        createStatus === "PRE_DRAFT"
+                          ? "bg-[#38bdf8]/15 border-[#38bdf8] text-[#38bdf8]"
+                          : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
+                      }`}
+                    >
+                      Pre-Draft (Draft Room)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Submit buttons */}
+                <div className="pt-3 border-t border-[#223147] flex justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setCreateModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-[#1f2d42] text-white hover:bg-[#283850] text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createSubmitting}
+                    className="px-5 py-2 rounded-xl bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#0d1722] text-xs font-extrabold transition-colors cursor-pointer disabled:opacity-60"
+                  >
+                    {createSubmitting ? "Creating League..." : "Create League"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-[#8a99ad]">
+                  Select an active league to view its matchup, roster, standings, and trades:
+                </p>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {leagues.map((lg) => (
+                    <div
+                      key={lg.id}
+                      onClick={() => {
+                        setSelectedLeagueId(lg.id);
+                        setCreateModalOpen(false);
+                      }}
+                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                        selectedLeagueId === lg.id
+                          ? "bg-[#1f2d42] border-[#00ceb8]"
+                          : "bg-[#121926] border-[#223147] hover:border-[#38bdf8]"
+                      }`}
+                    >
+                      <div>
+                        <div className="text-xs font-bold text-white">{lg.name}</div>
+                        <div className="text-[10px] text-[#8a99ad]">
+                          {lg.teams_count} Teams • {lg.scoring_type} • {lg.status}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="px-3 py-1 rounded-lg bg-[#00ceb8] text-[#0d1722] text-xs font-bold"
+                      >
+                        Select
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-2 border-t border-[#223147] flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setCreateModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-[#1f2d42] text-white hover:bg-[#283850] text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

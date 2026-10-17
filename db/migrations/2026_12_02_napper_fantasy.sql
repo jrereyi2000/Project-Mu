@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS napper_leagues (
     status VARCHAR(16) DEFAULT 'IN_SEASON',
     avatar_url TEXT,
     current_week INT DEFAULT 1,
+    is_seed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

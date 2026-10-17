@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import os
+import random
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
@@ -31,6 +32,15 @@ def get_db():
 
 
 # ──────────────────────────────── Models ────────────────────────────────
+
+class LeagueCreateRequest(BaseModel):
+    name: str
+    teams_count: int = 8
+    scoring_type: str = "PPR"
+    status: str = "IN_SEASON"
+    is_superflex: bool = True
+    avatar_url: Optional[str] = None
+
 
 class LineupSwap(BaseModel):
     player_id: int
@@ -322,6 +332,259 @@ def get_league_detail(league_id: int):
                 "league": league,
                 "teams": teams,
             }
+
+
+@router.post("/leagues/create")
+def create_league(req: LeagueCreateRequest):
+    """Creates a new fantasy league.
+
+    User Rule: When a new league is created, any existing seed leagues (is_seed = TRUE)
+    are permanently removed from the system.
+    """
+    name = (req.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="League name cannot be empty")
+
+    teams_count = req.teams_count if req.teams_count in (8, 10, 12) else 8
+    scoring_type = req.scoring_type if req.scoring_type in ("PPR", "HALF_PPR", "STANDARD") else "PPR"
+    status = "PRE_DRAFT" if req.status == "PRE_DRAFT" else "IN_SEASON"
+
+    if req.is_superflex:
+        roster_format = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6}
+    else:
+        roster_format = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6}
+
+    avatar = req.avatar_url or "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=256&h=256&q=80"
+    current_week = 6 if status == "IN_SEASON" else 1
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            # 1. Remove seed leagues if any exist
+            cur.execute("DELETE FROM napper_leagues WHERE is_seed = TRUE")
+
+            # 2. Insert new user league
+            cur.execute("""
+                INSERT INTO napper_leagues (
+                    name, season, teams_count, scoring_type, roster_format,
+                    status, avatar_url, current_week, is_seed
+                ) VALUES (%s, 2035, %s, %s, %s, %s, %s, %s, FALSE)
+                RETURNING id, name, season, teams_count, scoring_type, status, current_week, avatar_url
+            """, (name, teams_count, scoring_type, psycopg.types.json.Jsonb(roster_format), status, avatar, current_week))
+            new_league = cur.fetchone()
+            league_id = new_league["id"]
+
+            # 3. Fetch or create user profile
+            cur.execute("SELECT id, handle, display_name, avatar_url FROM napper_user_profiles LIMIT 1")
+            user_prof = cur.fetchone()
+            if not user_prof:
+                cur.execute("""
+                    INSERT INTO napper_user_profiles (handle, display_name, avatar_url, trophies)
+                    VALUES ('jrereyi2000', 'The Straw Hat Pirates',
+                            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80', 3)
+                    RETURNING id, handle, display_name, avatar_url
+                """)
+                user_prof = cur.fetchone()
+            user_id = user_prof["id"]
+
+            # 4. Create User's Team
+            cur.execute("""
+                INSERT INTO napper_teams (
+                    league_id, user_id, team_name, manager_handle, avatar_url,
+                    is_ai, persona, wins, losses, ties, points_for, points_against, seed
+                ) VALUES (%s, %s, %s, %s, %s, FALSE, 'USER', %s, %s, 0, %s, %s, 1)
+                RETURNING id
+            """, (
+                league_id, user_id, user_prof["display_name"], user_prof["handle"], user_prof["avatar_url"],
+                5 if status == "IN_SEASON" else 0,
+                0 if status == "IN_SEASON" else 0,
+                785.4 if status == "IN_SEASON" else 0.0,
+                610.2 if status == "IN_SEASON" else 0.0
+            ))
+            user_team_id = cur.fetchone()["id"]
+
+            # 5. Create AI Teams
+            AI_CANDIDATES = [
+                {"name": "Team Rocket", "handle": "jesse_james", "persona": "TRASH_TALKER", "w": 4, "l": 1, "pf": 712.5, "pa": 645.0, "seed": 2},
+                {"name": "Gotham Rogues", "handle": "bruce_w", "persona": "ANALYTICS_NERD", "w": 3, "l": 2, "pf": 654.2, "pa": 620.1, "seed": 3},
+                {"name": "Metropolis Titans", "handle": "clark_k", "persona": "DIE_HARD", "w": 3, "l": 2, "pf": 641.8, "pa": 632.5, "seed": 4},
+                {"name": "Asgard Hammers", "handle": "thor_o", "persona": "WAIVER_HAWK", "w": 2, "l": 3, "pf": 592.1, "pa": 651.4, "seed": 5},
+                {"name": "Central City Streaks", "handle": "barry_a", "persona": "ZERO_RB_ZEALOT", "w": 2, "l": 3, "pf": 583.4, "pa": 662.0, "seed": 6},
+                {"name": "Starling Archers", "handle": "oliver_q", "persona": "TRASH_TALKER", "w": 1, "l": 4, "pf": 542.0, "pa": 681.3, "seed": 7},
+                {"name": "Wakanda Panthers", "handle": "tchalla", "persona": "DIE_HARD", "w": 0, "l": 5, "pf": 511.9, "pa": 720.5, "seed": 8},
+                {"name": "Atlantis Tridents", "handle": "arthur_c", "persona": "WAIVER_HAWK", "w": 3, "l": 2, "pf": 660.0, "pa": 640.0, "seed": 9},
+                {"name": "The Daily Planet", "handle": "lois_l", "persona": "ANALYTICS_NERD", "w": 2, "l": 3, "pf": 640.0, "pa": 660.0, "seed": 10},
+                {"name": "Stark Industries", "handle": "tony_s", "persona": "TRASH_TALKER", "w": 4, "l": 1, "pf": 720.0, "pa": 630.0, "seed": 11},
+                {"name": "X-Men First Class", "handle": "charles_x", "persona": "DIE_HARD", "w": 1, "l": 4, "pf": 595.0, "pa": 700.0, "seed": 12},
+            ]
+
+            team_ids = [user_team_id]
+            for i in range(teams_count - 1):
+                cand = AI_CANDIDATES[i % len(AI_CANDIDATES)]
+                cur.execute("""
+                    INSERT INTO napper_teams (
+                        league_id, user_id, team_name, manager_handle, avatar_url,
+                        is_ai, persona, wins, losses, ties, points_for, points_against, seed
+                    ) VALUES (%s, NULL, %s, %s, %s, TRUE, %s, %s, %s, 0, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    league_id, cand["name"], cand["handle"],
+                    f"https://api.dicebear.com/7.x/identicon/svg?seed={cand['name']}",
+                    cand["persona"],
+                    cand["w"] if status == "IN_SEASON" else 0,
+                    cand["l"] if status == "IN_SEASON" else 0,
+                    cand["pf"] if status == "IN_SEASON" else 0.0,
+                    cand["pa"] if status == "IN_SEASON" else 0.0,
+                    cand["seed"]
+                ))
+                team_ids.append(cur.fetchone()["id"])
+
+            # 6. If IN_SEASON, populate reference rosters & schedule
+            if status == "IN_SEASON":
+                cur.execute("""
+                    SELECT p.id, p.player_name, ps.position
+                    FROM players p
+                    JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                    ORDER BY p.id ASC
+                    LIMIT 300
+                """)
+                avail = cur.fetchall()
+
+                pos_pools = defaultdict(list)
+                for p in avail:
+                    pos_pools[p["position"]].append(p["id"])
+
+                slots_needed = _get_slot_order(roster_format) + ["BN"] * int(roster_format.get("BN", 6))
+
+                used_pids = set()
+                for tid in team_ids:
+                    team_assigned = []
+                    for slot in slots_needed:
+                        eligible_poses = ELIGIBLE_POSITIONS.get(slot, {"WR", "RB"})
+                        picked_pid = None
+                        for ep in eligible_poses:
+                            for candidate in pos_pools.get(ep, []):
+                                if candidate not in used_pids:
+                                    picked_pid = candidate
+                                    break
+                            if picked_pid:
+                                break
+                        if not picked_pid and avail:
+                            for cand in avail:
+                                if cand["id"] not in used_pids:
+                                    picked_pid = cand["id"]
+                                    break
+                        if picked_pid:
+                            used_pids.add(picked_pid)
+                            team_assigned.append((picked_pid, slot))
+
+                    for w in range(1, 15):
+                        for pid, slot in team_assigned:
+                            cur.execute("""
+                                INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
+                                VALUES (%s, %s, %s, %s, %s)
+                                ON CONFLICT (team_id, week, player_id) DO NOTHING
+                            """, (league_id, tid, w, pid, slot))
+
+                n = len(team_ids)
+                t_list = list(team_ids)
+                for w in range(1, 15):
+                    round_idx = (w - 1) % (n - 1)
+                    rotated = [t_list[0]] + t_list[1:][round_idx:] + t_list[1:][:round_idx]
+                    for match_i in range(n // 2):
+                        home = rotated[match_i]
+                        away = rotated[n - 1 - match_i]
+                        is_final = (w < current_week)
+                        h_score = round(random.uniform(90.0, 140.0), 2) if is_final else 0.00
+                        a_score = round(random.uniform(85.0, 135.0), 2) if is_final else 0.00
+                        cur.execute("""
+                            INSERT INTO napper_matchups (
+                                league_id, week, home_team_id, away_team_id,
+                                home_score, away_score, home_proj, away_proj,
+                                win_prob_home, is_final
+                            ) VALUES (%s, %s, %s, %s, %s, %s, 118.5, 114.2, 0.520, %s)
+                        """, (league_id, w, home, away, h_score, a_score, is_final))
+
+                welcome_card = {
+                    "type": "LEAGUE_CREATED",
+                    "title": f"Welcome to {name}!",
+                    "highlight": f"{teams_count} Teams · {scoring_type} · Superflex" if req.is_superflex else f"{teams_count} Teams · {scoring_type}",
+                    "commentary": "All rosters and matchups are locked in for Week 6. Make your waiver moves and set your lineups!",
+                }
+                cur.execute("""
+                    INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text, card_payload)
+                    VALUES (%s, 'SYSTEM_BOT', 'Napper Commissioner', '@CommissionerBot', '/static/players/robot_avatar.webp', %s, %s)
+                """, (league_id, f"🏆 {name} has officially kicked off!", psycopg.types.json.Jsonb(welcome_card)))
+            else:
+                welcome_card = {
+                    "type": "PRE_DRAFT_READY",
+                    "title": f"{name} Draft Lobby Open",
+                    "highlight": f"{teams_count} Teams · Snake Draft Order",
+                    "commentary": "Draft order has been randomized. Join the draft room when you're ready to make your selections!",
+                }
+                cur.execute("""
+                    INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text, card_payload)
+                    VALUES (%s, 'SYSTEM_BOT', 'Draft Commissioner', '@DraftBot', '/static/players/robot_avatar.webp', %s, %s)
+                """, (league_id, f"⚡ {name} draft room is open in PRE_DRAFT mode!", psycopg.types.json.Jsonb(welcome_card)))
+
+        conn.commit()
+
+    return {
+        "status": "success",
+        "league": new_league,
+        "user_team_id": user_team_id,
+    }
+
+
+@router.get("/league/{league_id}/teams_rosters")
+def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
+    """Returns all teams in a league and their active rosters for trading/proposals."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_week FROM napper_leagues WHERE id = %s", (league_id,))
+            lg = cur.fetchone()
+            if not lg:
+                raise HTTPException(status_code=404, detail="League not found")
+            wk = int(week) if week is not None else (lg["current_week"] or 6)
+
+            cur.execute("""
+                SELECT id, team_name, manager_handle, avatar_url, (user_id IS NOT NULL) as is_user
+                FROM napper_teams
+                WHERE league_id = %s
+                ORDER BY (user_id IS NOT NULL) DESC, team_name ASC
+            """, (league_id,))
+            teams = cur.fetchall()
+
+            teams_data = []
+            for tm in teams:
+                cur.execute("""
+                    SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
+                           nr.slot, COALESCE(fp.projected_points, 10.0) as proj_fpts
+                    FROM napper_rosters nr
+                    JOIN players p ON p.id = nr.player_id
+                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                    LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = 2035
+                    WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s
+                    ORDER BY nr.slot != 'BN' DESC, proj_fpts DESC
+                """, (wk, league_id, tm["id"], wk))
+                players = []
+                for p in cur.fetchall():
+                    players.append({
+                        "id": p["id"],
+                        "name": p["player_name"] or p["full_name"],
+                        "position": p["position"],
+                        "slot": p["slot"],
+                        "proj_fpts": float(p["proj_fpts"]),
+                        "headshot_url": f"/static/players/{p['id']}.webp",
+                    })
+                teams_data.append({
+                    "id": tm["id"],
+                    "team_name": tm["team_name"],
+                    "manager_handle": tm["manager_handle"],
+                    "is_user": tm["is_user"],
+                    "players": players,
+                })
+
+            return {"teams": teams_data}
 
 
 @router.get("/league/{league_id}/matchup")
@@ -702,10 +965,18 @@ def claim_waiver_player(league_id: int, req: WaiverClaimRequest):
             wk = req.week or lg["current_week"] or 6
 
             # Validate team
-            cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE id = %s AND league_id = %s", (req.team_id, league_id))
-            tm = cur.fetchone()
+            if not req.team_id:
+                cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
+                tm = cur.fetchone()
+            else:
+                cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE id = %s AND league_id = %s", (req.team_id, league_id))
+                tm = cur.fetchone()
+                if not tm:
+                    cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
+                    tm = cur.fetchone()
             if not tm:
                 raise HTTPException(status_code=404, detail="Team not found in this league")
+            actual_team_id = tm["id"]
 
             # Validate add player
             cur.execute("SELECT id, player_name, full_name FROM players WHERE id = %s", (req.add_player_id,))
@@ -727,7 +998,7 @@ def claim_waiver_player(league_id: int, req: WaiverClaimRequest):
                 cur.execute("""
                     SELECT id FROM napper_rosters
                     WHERE league_id = %s AND team_id = %s AND week = %s AND player_id = %s
-                """, (league_id, req.team_id, wk, req.drop_player_id))
+                """, (league_id, actual_team_id, wk, req.drop_player_id))
                 if not cur.fetchone():
                     raise HTTPException(status_code=400, detail="Player to drop is not on team roster")
 
@@ -738,7 +1009,7 @@ def claim_waiver_player(league_id: int, req: WaiverClaimRequest):
                 cur.execute("""
                     DELETE FROM napper_rosters
                     WHERE league_id = %s AND team_id = %s AND week >= %s AND player_id = %s
-                """, (league_id, req.team_id, wk, req.drop_player_id))
+                """, (league_id, actual_team_id, wk, req.drop_player_id))
 
             # Add player to bench for this and subsequent weeks
             cur.execute("SELECT DISTINCT week FROM napper_rosters WHERE league_id = %s AND week >= %s", (league_id, wk))
@@ -751,7 +1022,7 @@ def claim_waiver_player(league_id: int, req: WaiverClaimRequest):
                     INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
                     VALUES (%s, %s, %s, %s, 'BN')
                     ON CONFLICT (team_id, week, player_id) DO UPDATE SET slot = 'BN'
-                """, (league_id, req.team_id, w, req.add_player_id))
+                """, (league_id, actual_team_id, w, req.add_player_id))
 
             # Construct announcement message
             team_title = tm["team_name"]
@@ -866,18 +1137,26 @@ def propose_trade(league_id: int, req: TradeProposeRequest):
             wk = lg["current_week"] if lg else 6
 
             # Verify proposer and target teams belong to this league
-            cur.execute("SELECT id, team_name FROM napper_teams WHERE id = %s AND league_id = %s", (req.proposer_team_id, league_id))
-            prop_tm = cur.fetchone()
+            if not req.proposer_team_id:
+                cur.execute("SELECT id, team_name FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
+                prop_tm = cur.fetchone()
+            else:
+                cur.execute("SELECT id, team_name FROM napper_teams WHERE id = %s AND league_id = %s", (req.proposer_team_id, league_id))
+                prop_tm = cur.fetchone()
+                if not prop_tm:
+                    cur.execute("SELECT id, team_name FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
+                    prop_tm = cur.fetchone()
             cur.execute("SELECT id, team_name FROM napper_teams WHERE id = %s AND league_id = %s", (req.target_team_id, league_id))
             target_tm = cur.fetchone()
             if not prop_tm or not target_tm:
                 raise HTTPException(status_code=404, detail="Proposer or target team not found in league")
+            actual_proposer_id = prop_tm["id"]
 
             # Verify offered players are on proposer roster
             cur.execute("""
                 SELECT player_id FROM napper_rosters
                 WHERE league_id = %s AND team_id = %s AND week = %s AND player_id = ANY(%s)
-            """, (league_id, req.proposer_team_id, wk, req.offered_player_ids))
+            """, (league_id, actual_proposer_id, wk, req.offered_player_ids))
             found_offered = {r["player_id"] for r in cur.fetchall()}
             if len(found_offered) != len(req.offered_player_ids):
                 raise HTTPException(status_code=400, detail="One or more offered players are not on proposer's roster")
@@ -898,7 +1177,7 @@ def propose_trade(league_id: int, req: TradeProposeRequest):
                     initiated_by_ai, ai_rationale
                 ) VALUES (%s, %s, %s, %s, %s, %s, 'PENDING', FALSE, %s)
                 RETURNING id
-            """, (league_id, wk, req.proposer_team_id, req.target_team_id, req.offered_player_ids, req.requested_player_ids, req.ai_rationale))
+            """, (league_id, wk, actual_proposer_id, req.target_team_id, req.offered_player_ids, req.requested_player_ids, req.ai_rationale))
             tid = cur.fetchone()["id"]
 
         conn.commit()

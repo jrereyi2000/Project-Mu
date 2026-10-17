@@ -42,12 +42,20 @@ export const ESPN_PLAYER_IDS: Record<string, string> = {
 
 export const DEFAULT_AVATAR = "https://sleepercdn.com/images/v2/icons/player_default.webp";
 
-export function getPlayerHeadshotUrl(name?: string, fallbackUrl?: string): string {
+export function getPlayerHeadshotUrl(nameOrId?: string | number, fallbackUrl?: string): string {
   if (fallbackUrl && fallbackUrl.startsWith("http") && !fallbackUrl.includes("placeholder")) {
     return fallbackUrl;
   }
-  if (!name) return DEFAULT_AVATAR;
-  const clean = name.toLowerCase().trim();
+  if (nameOrId === undefined || nameOrId === null) return DEFAULT_AVATAR;
+  if (typeof nameOrId === "number") {
+    return `/static/players/${nameOrId}.webp`;
+  }
+  const str = String(nameOrId).trim();
+  if (!str) return DEFAULT_AVATAR;
+  if (/^\d+$/.test(str)) {
+    return `/static/players/${str}.webp`;
+  }
+  const clean = str.toLowerCase();
   const espnId = ESPN_PLAYER_IDS[clean];
   if (espnId) {
     return `https://a.espncdn.com/i/headshots/nfl/players/full/${espnId}.png`;
