@@ -163,6 +163,7 @@ Project Mu/
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── USAGE_GUIDE.md         # Comprehensive end-to-end usage and operational guide
+│   ├── HEADSHOT_PIPELINE.md   # Deterministic appearance synthesis, Gemini batch generation, rembg cutout pipeline
 │   ├── EDITORIAL_MATRIX.md
 │   ├── PARALLEL_ARTICLE_UPGRADE_HANDOFF.md # Agent 0–9 plan for the coaching/prospect article upgrades (Agent 0 done: draft tables, tools, mock draft)
 │   ├── FANTASY_EDITORIAL_MATRIX.md # Agreed fantasy slate: fantasy calendar (W1 positional draft tiers, W2–14 season, W15–17 playoffs, W18 review, W19–23 frozen), 100 simulated leagues (strategy drafts → ADP, rostered/start %, 6-team playoffs), K/DST after migration phase 3; built: league sim, writer tools, fantasy desk, API and page
@@ -172,7 +173,7 @@ Project Mu/
 │   ├── NEWSROOM_INJURY_INTEGRATION_PLAN.md # Plan for tiered injury coverage across newsroom, fantasy desk, and social wire
 │   ├── OFFSEASON_EDITORIAL_SLATE_IMPLEMENTATION_PLAN.md # Proposed six-article offseason package published between W23 and next W1, with each story narrated as the week after its event
 │   ├── COACH_SLANTS_AND_COORDINATORS_PLAN.md # Implementation plan for head coach slants (OFFENSIVE/DEFENSIVE/CEO), coordinator tenures (OC/DC), Madden seeding, and scheme inheritance
-│   ├── PLAY_FANTASY_SLEEPER_PLAN.md # Implementation plan for "Play Fantasy" Sleeper-style interactive multi-league hub (#play-fantasy)
+│   ├── NAPPER_FANTASY_PLAN.md # Implementation plan for "Napper" Sleeper-style interactive multi-league platform (#napper) with proactive AI trade & banter engines
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
 │   ├── reference/             #   Source PDFs
@@ -372,6 +373,22 @@ JR, Oct 15: the real-world 2026 coach tiers (§3.3a) were checked against the 20
 - **Tiers** `observed_pass_lean` / `observed_fourth_down`: ranked across teams with at least 4 regular-season games, top 11/32 High, next 10/32 Medium, rest Low. Teams with fewer games get values but no tier. `tendency_games` is the number of games behind them.
 - **Stored** on `team_seasons` by `TendencyEngine().calculate(season)` after the team efficiency engine in the weekly run (§6, step 3); `python3 -m engines.tendency_engine [--season N]`. These are season totals, so they aren't cut off by an article's week, like the other `team_seasons` values (§7).
 - **Used by** the writer tools through `engines/coach_profile.py` (§3.3a): this season's tier, else last season's when the same coach ran the team, else the coach's real-world tier, each labelled with its source.
+
+### 2.13 Player Headshot Generation Architecture (`headshots/`, `docs/HEADSHOT_PIPELINE.md`)
+Fictional players in Madden lack official broadcast photography. The headshot subsystem creates photorealistic, broadcast-grade media-day player portraits across all 1,499 players in `players` and serves them as transparent WebP cutouts.
+- **Deterministic Appearance Synthesis (`headshots/headshot_appearance_generator.py`):** Uses independent SHA-256 seed streams (`name + team + version`) to deterministically sample physical traits: position-weighted skin tones (`TONE_W` across 5 tone brackets), authentic hair textures, facial hair distributions (skews clean-shaven for QBs/kickers/punters), BMI-derived physical build from database `height` and `weight`, age-dependent hairline recession, and micro-aging fine lines. Attractiveness and facial asymmetry (jawline, nose, eyes, natural skin blemishes) are jittered along a Gaussian stream to avoid synthetic airbrushed artifacts.
+- **Official Franchise Staging & Prompts (`headshots/make_headshot.py`):** Combines the synthesized appearance line with an authoritative 32-team home jersey color palette (`_color_cache`, primary/secondary hex values). Formulates a high-fashion sports media-day prompt: 85mm portrait lens at $f/5.6$, key/fill/rim lighting, natural fabric mesh folds, and a seamless pure white backdrop (`#FFFFFF`).
+- **Batch API Pipeline (`headshots/make_headshot.py`, `headshots/gen.py`):**
+  - Compiles all 1,499 active players into `data/headshots/batch_headshot_requests.jsonl` using `build_batch_request`, handling duplicate same-team name collisions by suffixing position or ID.
+  - Submits the batch payload to Gemini Batch API targeting `gemini-nano-banana-2.1` with `responseModalities: ["IMAGE"]` and 3:4 portrait aspect ratio.
+  - Downloads completed batch artifacts into `data/headshots/batch_results.jsonl`.
+- **Background Removal & WebP Processing (`headshots/process_headshots.py`):**
+  - Executes across 6 concurrent multiprocessing workers with an in-memory queue.
+  - Uses `rembg` with the edge-preserving ONNX `silueta` model ($\approx 0.35\text{s}$ inference) to cleanly segment players from the white background.
+  - Encodes the RGBA cutout into WebP (`quality=90`, `method=4`, $\approx 110\text{–}180\text{ KB}$).
+  - Re-maps request keys to each player's primary key `players.id`, saving directly to `static/players/{player_id}.webp`.
+- **Frontend Serving:** Served statically at `/static/players/{player_id}.webp` by FastAPI (`server/api.py`). The React frontend (`Mu_Network/src/App.tsx`) loads headshots with cache-busting `?v=${HEADSHOT_VERSION}` across player modals, roster views, and social cards, falling back to team-colored initialed avatars if missing. Full architectural spec in [`docs/HEADSHOT_PIPELINE.md`](docs/HEADSHOT_PIPELINE.md).
+
 - **2035 (Week 17):** most pass-leaning New Orleans (+7.1 points of pass share), Chargers and Bengals; most run-leaning Buffalo (−8.6), Miami and Baltimore. Most aggressive on fourth down Baltimore (+0.59 attempts a game), Philadelphia and Miami; least Rams, Browns and Packers.
 - **Tests:** `tests/test_tendency_engine.py` (residuals, the 11/10/11 split, a lean that is only the score being none, per-game fourth downs, no tier before 4 games, missing inputs).
 
@@ -652,7 +669,7 @@ Navigation uses a lightweight hash router (`window.location.hash`):
      - **News**: Analytical blurbs and beat commentary.
 2. **Global Player Search (`FantasyHeader`)**:
    - Accessible from any fantasy view with global `⌘ K` / `Ctrl+K` shortcut support.
-   - Queries `/api/fantasy/players`, displaying official ESPN headshots, team, position, and season fantasy points.
+   - Queries `/api/fantasy/players`, displaying player headshots (`/static/players/{player_id}.webp`), team, position, and season fantasy points.
    - Selecting a player opens their modal instantly.
 3. **Preseason ADP Board**:
    - Clean draft board view with `RANK`, `PLAYER`, `POSITION` (e.g. `RB1`, `WR1`), `TEAM (BYE)`, `SEASON SOS`, and `PLAYOFF SOS`.
