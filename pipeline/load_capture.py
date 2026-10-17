@@ -41,12 +41,15 @@ def detect_mode(folder):
     has_roster = os.path.exists(os.path.join(folder, "roster_cards.csv"))
     has_sched = os.path.exists(os.path.join(folder, "season_schedule.csv"))
     has_prosp = os.path.exists(os.path.join(folder, "prospects.csv"))
+    has_overalls = os.path.exists(os.path.join(folder, "team_overalls.csv"))
     if has_sched and has_roster:
         return "season"
     if has_roster:
         return "roster"
     if has_sched:
         return "season_schedule"
+    if has_overalls and not (has_sched or has_roster):
+        return "team_overalls"
     if os.path.exists(os.path.join(folder, "game_scores.csv")):
         # a postseason run: last round's schedule (+ next round) and its box scores, no Season Stats
         return "playoff" if os.path.exists(os.path.join(folder, "schedule.csv")) else "games"
@@ -804,6 +807,69 @@ def load_injuries_standalone(cur, folder, season, report):
     return loaded
 
 
+def load_team_overalls(cur, folder, season, report):
+    """Load captures/<run>/team_overalls.csv into the team_seasons table.
+    Updates or inserts team_ovr, off_ovr, def_ovr, pass_off_rank, rush_off_rank,
+    pass_rush_rank, coverage_rank for all 32 teams."""
+    path = os.path.join(folder, "team_overalls.csv")
+    if not os.path.exists(path):
+        return 0
+    rows = read_csv(path)
+    if not rows:
+        return 0
+
+    cur.execute("SELECT id, name, abbreviation FROM teams")
+    by_name = {n.upper(): tid for tid, n, _ in cur.fetchall()}
+    by_abbr = {a.upper(): tid for tid, _, a in cur.fetchall()}
+
+    problems = []
+    loaded = 0
+    for r in rows:
+        t_str = r.get("team", "").strip().upper()
+        tid = by_name.get(t_str) or by_abbr.get(t_str)
+        if tid is None:
+            problems.append(f"team_overalls: unknown team {t_str!r}")
+            continue
+
+        def parse_int(v):
+            if v is None or v == "":
+                return None
+            try:
+                return int(v)
+            except (ValueError, TypeError):
+                return None
+
+        team_ovr = parse_int(r.get("team_ovr"))
+        off_ovr = parse_int(r.get("off_ovr"))
+        def_ovr = parse_int(r.get("def_ovr"))
+        pass_off_rank = parse_int(r.get("pass_off_rank"))
+        rush_off_rank = parse_int(r.get("rush_off_rank"))
+        pass_rush_rank = parse_int(r.get("pass_rush_rank"))
+        coverage_rank = parse_int(r.get("coverage_rank"))
+
+        cur.execute("""
+            INSERT INTO team_seasons (
+                team_id, season, team_ovr, off_ovr, def_ovr,
+                pass_off_rank, rush_off_rank, pass_rush_rank, coverage_rank
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (team_id, season) DO UPDATE SET
+                team_ovr = COALESCE(EXCLUDED.team_ovr, team_seasons.team_ovr),
+                off_ovr = COALESCE(EXCLUDED.off_ovr, team_seasons.off_ovr),
+                def_ovr = COALESCE(EXCLUDED.def_ovr, team_seasons.def_ovr),
+                pass_off_rank = COALESCE(EXCLUDED.pass_off_rank, team_seasons.pass_off_rank),
+                rush_off_rank = COALESCE(EXCLUDED.rush_off_rank, team_seasons.rush_off_rank),
+                pass_rush_rank = COALESCE(EXCLUDED.pass_rush_rank, team_seasons.pass_rush_rank),
+                coverage_rank = COALESCE(EXCLUDED.coverage_rank, team_seasons.coverage_rank)
+        """, (tid, season, team_ovr, off_ovr, def_ovr, pass_off_rank, rush_off_rank, pass_rush_rank, coverage_rank))
+        loaded += 1
+
+    if problems:
+        raise LoadError("team_overalls checks failed:\n  " + "\n  ".join(problems))
+
+    report["team_overalls"] = loaded
+    return loaded
+
+
 def add_playoff_games(cur, sched, season, week, by_name):
     """Create the playoff games a schedule capture lists (matchup and kickoff time; the load's score update
     completes them). Games already stored are left alone; unknown teams are reported by the schedule check."""
@@ -1172,11 +1238,14 @@ def load_season(cur, folder, season, report):
         if problems:
             raise LoadError("injuries checks failed:\n  " + "\n  ".join(problems))
         rows += report["injuries"]
+    if os.path.exists(os.path.join(folder, "team_overalls.csv")):
+        rows += load_team_overalls(cur, folder, season, report)
     return rows
 
 
 LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly, "playoff": load_playoff,
-           "games": load_games, "injuries": load_injuries_standalone, "prospects": load_prospects, "season": load_season}
+           "games": load_games, "injuries": load_injuries_standalone, "prospects": load_prospects, "season": load_season,
+           "team_overalls": load_team_overalls, "team-overalls": load_team_overalls}
 
 
 def load(folder, dry_run=False, replace=False):

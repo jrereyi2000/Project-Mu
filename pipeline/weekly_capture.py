@@ -50,7 +50,7 @@ DEBUG_DIRS = ("stop_debug", "scope_debug", "week_debug", "team_debug", "probe", 
 CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice when it has to relaunch
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
-MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame", "draft-results")
+MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame", "draft-results", "team-overalls")
 FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
 PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
 SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the Super Bowl postgame capture
@@ -93,6 +93,8 @@ def folder_mode(folder):
     """A run folder's mode from what it holds."""
     if os.path.exists(os.path.join(folder, "draft_results.csv")) or os.path.exists(os.path.join(folder, "draft_results.json")) or os.path.isdir(os.path.join(folder, "draft_results")):
         return "draft-results"
+    if os.path.isdir(os.path.join(folder, "team_overalls")):
+        return "team-overalls"
     if os.path.isdir(os.path.join(folder, "season_schedule")) and (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "prospects"))):
         return "season"
     if os.path.isdir(os.path.join(folder, "prospects")):
@@ -113,12 +115,17 @@ def capture_done(folder, mode="weekly"):
         return (os.path.exists(os.path.join(folder, "draft_results.csv"))
                 or os.path.exists(os.path.join(folder, "draft_results.json"))
                 or os.path.isdir(os.path.join(folder, "draft_results")))
+    if mode in ("team-overalls", "team_overalls"):
+        return (os.path.exists(os.path.join(folder, "team_overalls.csv"))
+                or os.path.isdir(os.path.join(folder, "team_overalls")))
     return mode == "weekly" and os.path.exists(os.path.join(folder, "week.json"))
 
 
 def extract_done(folder, mode="weekly"):
     if mode in ("draft-results", "draft_results"):
         return os.path.exists(os.path.join(folder, "draft_results.csv")) or os.path.exists(os.path.join(folder, "draft_results.json"))
+    if mode in ("team-overalls", "team_overalls"):
+        return os.path.exists(os.path.join(folder, "team_overalls.csv"))
     if mode in ("games", "postgame"):
         return os.path.exists(os.path.join(folder, "game_scores.csv"))
     if mode == "playoff":
@@ -138,11 +145,15 @@ def extract_done(folder, mode="weekly"):
                 and os.path.exists(os.path.join(folder, "prospects.csv")))
         if os.path.isdir(os.path.join(folder, "injuries")):
             ok = ok and os.path.exists(os.path.join(folder, "injuries.csv"))
+        if os.path.isdir(os.path.join(folder, "team_overalls")):
+            ok = ok and os.path.exists(os.path.join(folder, "team_overalls.csv"))
         return ok
     weekly_ok = (os.path.exists(os.path.join(folder, "schedule.csv"))
                  and bool(glob.glob(os.path.join(folder, "stats_*.csv"))))
     if os.path.isdir(os.path.join(folder, "injuries")):
         weekly_ok = weekly_ok and os.path.exists(os.path.join(folder, "injuries.csv"))
+    if os.path.isdir(os.path.join(folder, "team_overalls")):
+        weekly_ok = weekly_ok and os.path.exists(os.path.join(folder, "team_overalls.csv"))
     return weekly_ok
 
 
@@ -212,8 +223,11 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
         args, timeout = [sys.executable, "madden_capture.py", "--only", "roster", *where], CAPTURE_TIMEOUT
     elif mode == "prospects":
         args, timeout = [sys.executable, "madden_capture.py", "--only", "prospects", "--all-prospects", "--out", name], CAPTURE_TIMEOUT
+    elif mode in ("team-overalls", "team_overalls"):
+        where = ["--resume", name] if os.path.isdir(os.path.join(folder, "team_overalls")) else ["--out", name]
+        args, timeout = [sys.executable, "madden_capture.py", "--only", "team-overalls", *where], CAPTURE_TIMEOUT
     elif mode == "season":
-        where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects")) or os.path.isdir(os.path.join(folder, "injuries"))) else ["--out", name]
+        where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects")) or os.path.isdir(os.path.join(folder, "injuries")) or os.path.isdir(os.path.join(folder, "team_overalls"))) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "season", "--all-prospects", *where], CAPTURE_TIMEOUT * 2
     elif mode in ("draft-results", "draft_results"):
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "draft_results")) else ["--out", name]
@@ -408,7 +422,7 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
     if week_label == SUPER_BOWL_LABEL or mode == "postgame":
         what = "Super Bowl postgame capture"
     else:
-        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan", "draft-results": "Draft results scan"}.get(mode, "Weekly capture")
+        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan", "draft-results": "Draft results scan", "team-overalls": "Team overalls scan"}.get(mode, "Weekly capture")
     os.makedirs(CAPTURES, exist_ok=True)
     lock = open(LOCK_PATH, "w")
     try:

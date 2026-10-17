@@ -960,6 +960,12 @@ def main():
             extract_draft_results(root)
         except Exception as e:
             print(f"Error extracting draft results: {e}")
+    if os.path.isdir(os.path.join(root, "team_overalls")):
+        try:
+            from pipeline.extract_team_overalls_ocr import extract_team_overalls_ocr
+            extract_team_overalls_ocr(root)
+        except Exception as e:
+            print(f"Error extracting team overalls via Apple Vision: {e}")
     if METER is not None:
         try:
             from pipeline.load_capture import detect_mode

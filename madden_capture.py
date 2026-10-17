@@ -39,6 +39,8 @@ from PIL import Image, ImageStat
 KEYCODES = {
     "cross": 1,    # S
     "circle": 2,   # D
+    "triangle": 13,# W
+    "square": 0,   # A
     "l1": 19,      # 2
     "r1": 20,      # 3
     "l2": 18,      # 1
@@ -115,7 +117,7 @@ CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
 LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST", "INJURY_REPORT",
                 "DRAFT_BOARD", "HIGHLIGHTS", "DRAFT_RECAP")
 TILE_SCREENS = ("SCHED_TILES", "STATS_TILES")
-HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER")
+HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER", "HUB_OPTIONS")
 
 
 def stream_frozen():
@@ -458,6 +460,25 @@ PLAYOFF_SCHED_TILES = ["PLAYOFF SCHEDULE", "TEAM SCHEDULE", "PLAYOFF PICTURE"]
 # Manage Roster tab's left-hand menu (mapped Oct 13; TRADE can show a lock icon)
 ROSTER_MENU = ["UPGRADE PLAYERS", "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH CHART", "TEAM SALARY",
                "INJURY REPORT", "TRADE", "FREE AGENCY", "SCOUTING", "FORMATION SUBS", "AUTO SUBS", "TEAM SCHEMES"]
+# Options tab's left-hand menu
+OPTIONS_MENU = ["USER SETTINGS", "LEAGUE SETTINGS", "GAME OPTIONS", "XP RATE SLIDERS", "GAMEPLAY SLIDERS",
+                "USER TEAMS", "DEMAND RELEASE", "RETIRE"]
+# 4 cols x 8 rows Team Overalls grid (in alphabetical order by nickname / city)
+TEAM_GRID = [
+    ["BEARS", "BENGALS", "BILLS", "BRONCOS"],
+    ["BROWNS", "BUCCANEERS", "CARDINALS", "CHARGERS"],
+    ["CHIEFS", "COLTS", "COMMANDERS", "COWBOYS"],
+    ["DOLPHINS", "EAGLES", "FALCONS", "49ERS"],
+    ["GIANTS", "JAGUARS", "JETS", "LIONS"],
+    ["PACKERS", "PANTHERS", "PATRIOTS", "RAIDERS"],
+    ["RAMS", "RAVENS", "SAINTS", "SEAHAWKS"],
+    ["STEELERS", "TEXANS", "TITANS", "VIKINGS"],
+]
+TEAM_POSITIONS = {
+    tm: (r, c)
+    for r, row in enumerate(TEAM_GRID)
+    for c, tm in enumerate(row)
+}
 # Manage Roster > Scouting's left-hand menu, and the Edit Draft Class prompt's buttons (mapped Oct 15)
 SCOUTING_MENU = ["PROSPECTS", "SCOUTS", "REGION BREAKDOWN", "MOCK DRAFTS"]
 CLASS_PROMPT_OPTIONS = ["DOWNLOAD FROM DOWNLOAD CENTER", "EDIT DRAFT CLASS", "IMPORT LOCAL FILE"]
@@ -534,11 +555,17 @@ def classify(f):
         return "STATS_TILES"
     if ("LEAGUE SCHEDULE" in t or "PLAYOFF SCHEDULE" in t) and ("PLAYOFF PICTURE" in t or "TEAM SCHEDULE" in t):
         return "SCHED_TILES"
+    if ("RANDOM TEAM" in t or f.find("RANDOM TEAM")) and ("NFL RANKING" in t or "FRANCHISE INFO" in t or "PASS RUSH" in t or "CHOOSE TEAM" in t):
+        return "TEAM_OVERALLS"
+    if f.find("NEW CHARACTER") and (f.find("COMMISSIONER") or f.find("LEGACY SCORE") or "COMMISSIONER" in t):
+        return "USER_TEAMS"
     if f.find("GAMEDAY") and (f.find("COACH CENTRAL") or "COACH CENTRAL" in t or f.find("OPTIONS") or f.find("MANAGE ROSTER")):
         if f.find("STATS & AWARDS"):
             return "HUB_LEAGUE"
         if f.find("ADJUST LINEUP") and f.find("DEPTH CHART"):
             return "HUB_ROSTER"
+        if f.find("USER SETTINGS") and f.find("LEAGUE SETTINGS"):
+            return "HUB_OPTIONS"
         return "HUB"
     if (WEEK_RE.search(t) or "GAME TIME" in t) and ("FORCE WIN" in t or "SORT" in t or "BACK" in t):
         return "SCHED_LIST"
@@ -637,6 +664,10 @@ def cross(screen, frame=None):
         cur = (frame or Frame()).highlighted(POSTGAME_MENU_ITEMS)
         if cur not in ("TEAM STATS", "PLAYER STATS", "VIEW HIGHLIGHTS"):
             raise Abort(f"Refusing Cross on the Postgame Menu: {cur} is highlighted, not TEAM STATS, PLAYER STATS or VIEW HIGHLIGHTS")
+    elif screen == "HUB_OPTIONS":
+        cur = (frame or Frame()).highlighted(OPTIONS_MENU)
+        if cur != "USER TEAMS":
+            raise Abort(f"Refusing Cross on the Options menu: {cur} is highlighted, not USER TEAMS")
     elif screen not in ("HUB_LEAGUE", "SCHED_TILES", "STATS_TILES"):
         raise Abort(f"Refusing to press Cross on screen {screen}")
     press("cross", wait=1.5)
@@ -664,9 +695,9 @@ def cross_into(screen, expected, timeout=6.0, tries=3):
 
 # ----------------------------------------------------------- navigation ----
 def go_hub():
-    for _ in range(10):
+    for _ in range(12):
         f, s = look()
-        if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER"):
+        if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER", "HUB_OPTIONS"):
             return f, s
         if s == "QUIT":
             log("Quit prompt is open, choosing NO")
@@ -679,13 +710,21 @@ def go_hub():
             log("Leaving Draft Recap (Back)")
             press("circle", wait=2.0)
             continue
+        if s == "TEAM_OVERALLS":
+            log("Leaving Team Overalls (Back)")
+            press("circle", wait=2.0)
+            continue
+        if s == "USER_TEAMS":
+            log("Leaving User Teams (Back)")
+            press("circle", wait=2.0)
+            continue
         if s == "UNKNOWN":                     # don't press Back on a loading screen
             for _ in range(6):
                 time.sleep(1.0)
                 f, s = look()
                 if s != "UNKNOWN":
                     break
-            if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER", "QUIT"):
+            if s in ("HUB", "HUB_LEAGUE", "HUB_ROSTER", "HUB_OPTIONS", "QUIT"):
                 continue
         log(f"On {s}, pressing Back")
         press("circle", wait=1.5)
@@ -2386,6 +2425,141 @@ def run_draft_recap(out, max_picks=224, paged=True, rows_per_page=10, max_pages=
     return row
 
 
+# -------------------------------------------------------- team overalls ----
+def to_options_tab():
+    f, s = go_hub()
+    if s != "HUB_OPTIONS":
+        log("Switching to OPTIONS tab")
+        f = move_to(f, HUB_TABS, "OPTIONS", "l1", "r1", "hub tab")
+        f, s = wait_for(["HUB_OPTIONS", "HUB"])
+    return f
+
+
+def open_user_teams():
+    f, s = look()
+    if s == "USER_TEAMS":
+        return f
+    to_options_tab()
+    f, s = look()
+    f = move_to(f, OPTIONS_MENU, "USER TEAMS", "up", "down", "Options menu item")
+    f, s = cross_into("HUB_OPTIONS", ["USER_TEAMS"], timeout=8.0)
+    return f
+
+
+def open_team_overalls():
+    f, s = look()
+    if s == "TEAM_OVERALLS":
+        return f
+    if s != "USER_TEAMS":
+        open_user_teams()
+    log("On User Teams; pressing Triangle to view all team overalls")
+    press("triangle", wait=2.5)
+    f, s = wait_for(["TEAM_OVERALLS"], timeout=10.0)
+    return f
+
+
+def team_overalls_team(f):
+    """The focused team nickname on the Team Overalls screen (header area, x: ~1400-2200, y: ~250-550)."""
+    W, H = f.size
+    for t, b in f.items:
+        if 1400 <= b[0] <= 2200 and 250 <= b[1] <= 550:
+            for tm in TEAMS:
+                if tm == t.upper() or tm in t.upper().split():
+                    return tm
+    for t, b in f.items:
+        for tm in TEAMS:
+            if tm == t.upper() or tm in t.upper().split():
+                return tm
+    return None
+
+
+def navigate_to_bears():
+    """From any team in the grid, navigate to BEARS at Row 0, Col 0."""
+    f, s = look()
+    cur = team_overalls_team(f)
+    if not cur:
+        time.sleep(1.0)
+        f, s = look()
+        cur = team_overalls_team(f)
+    if not cur:
+        raise Abort("Cannot determine currently focused team on Team Overalls screen")
+
+    if cur not in TEAM_POSITIONS:
+        raise Abort(f"Focused team {cur} not found in TEAM_POSITIONS grid")
+
+    cur_row, cur_col = TEAM_POSITIONS[cur]
+    log(f"Initially focused on {cur} (row {cur_row}, col {cur_col})")
+
+    if cur_col > 0:
+        for _ in range(cur_col):
+            press("left", wait=0.8)
+
+    if cur_row > 0:
+        for _ in range(cur_row):
+            press("up", wait=0.8)
+
+    time.sleep(0.5)
+    f, s = look()
+    cur = team_overalls_team(f)
+    if cur != "BEARS":
+        log(f"Warning: expected BEARS after navigation, got {cur}. Re-aligning...")
+        if cur in TEAM_POSITIONS:
+            r, c = TEAM_POSITIONS[cur]
+            for _ in range(c): press("left", wait=0.8)
+            for _ in range(r): press("up", wait=0.8)
+            time.sleep(0.5)
+            f, s = look()
+            cur = team_overalls_team(f)
+    if cur != "BEARS":
+        raise Abort(f"Failed to navigate to BEARS (on {cur})")
+    log("Aligned on BEARS (row 0, col 0)")
+    return f
+
+
+def run_team_overalls(out):
+    """Capture all 32 team overalls and rankings cards (OPTIONS > USER TEAMS > Triangle).
+    Navigates row-by-row across the 4x8 grid:
+    team_overalls/01_bears.png ... 32_vikings.png
+    Leaves the screen safely via Back -> USER_TEAMS -> Back -> HUB -> Weekly Hub."""
+    log("== Team Overalls & Rankings ==")
+    folder = os.path.join(out, "team_overalls")
+    os.makedirs(folder, exist_ok=True)
+
+    open_team_overalls()
+    navigate_to_bears()
+
+    team_idx = 0
+    for r in range(8):
+        for c in range(4):
+            expected_team = TEAM_GRID[r][c]
+            team_idx += 1
+            f, s = look()
+            cur_team = team_overalls_team(f)
+            if cur_team and cur_team != expected_team:
+                log(f"Note: grid expected {expected_team}, screen shows {cur_team}")
+            team_name = cur_team or expected_team
+            filename = f"{team_idx:02d}_{norm(team_name).lower()}.png"
+            dst = os.path.join(folder, filename)
+            snap(dst)
+            log(f"[{team_idx}/32] Captured {team_name} (row {r}, col {c}) -> {filename}")
+
+            if c < 3:
+                press("right", wait=0.8)
+
+        if r < 7:
+            press("down", wait=0.8)
+            press("right", wait=0.8)
+
+    log("Captured all 32 team overalls; returning to Weekly Hub")
+    press("circle", wait=1.5)
+    wait_for(["USER_TEAMS", "HUB_OPTIONS", "HUB"], timeout=6.0)
+    press("circle", wait=1.5)
+    f, s = wait_for(["HUB_OPTIONS", "HUB"], timeout=6.0)
+    if f.highlighted(HUB_TABS) != "WEEKLY HUB":
+        move_to(f, HUB_TABS, "WEEKLY HUB", "l1", "r1", "hub tab")
+    log("Returned to WEEKLY HUB")
+
+
 # ------------------------------------------------------------- injuries ----
 def open_injury_report():
     f, s = look()
@@ -3210,8 +3384,8 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap"],
-                    help="roster, season-schedule, prospects, season, postgame and draft-results are never part of the default run")
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings"],
+                    help="roster, season-schedule, prospects, season, postgame, draft-results, and team-overalls are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
@@ -3315,6 +3489,11 @@ def main():
                 return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1 or os.path.exists(os.path.join(out, "roster", "done.txt")))
             run_mode("the rosters", rosters)
             if a.only == "season":
+                log("Returning to the hub before team overalls")
+                go_hub()
+        if a.only in ("season", "team-overalls", "team-ratings"):
+            run_mode("the team overalls", lambda: run_team_overalls(out), clear("team_overalls"))
+            if a.only == "season":
                 log("Returning to the hub before injury report")
                 go_hub()
         if a.only == "season":
@@ -3331,7 +3510,7 @@ def main():
         if a.only in ("draft-results", "draft-recap"):
             paged_mode = not a.row_by_row
             run_mode("the draft recap", lambda: run_draft_recap(out, max_picks=a.draft_picks, paged=paged_mode, rows_per_page=a.rows_per_page), clear("draft_results"))
-        if a.only not in ("prospects", "postgame", "superbowl", "draft-results", "draft-recap"):
+        if a.only not in ("prospects", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings"):
             log("Returning to the hub")
             go_hub()
         log(f"Done. Screenshots in {out}")
