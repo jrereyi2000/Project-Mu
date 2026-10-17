@@ -97,3 +97,40 @@ CREATE INDEX IF NOT EXISTS idx_napper_rosters_league_week ON napper_rosters(leag
 CREATE INDEX IF NOT EXISTS idx_napper_matchups_league_week ON napper_matchups(league_id, week);
 CREATE INDEX IF NOT EXISTS idx_napper_trades_league ON napper_trades(league_id);
 CREATE INDEX IF NOT EXISTS idx_napper_chat_league ON napper_chat(league_id, created_at);
+
+CREATE TABLE IF NOT EXISTS napper_drafts (
+    id SERIAL PRIMARY KEY,
+    league_id INT REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    season INT DEFAULT 2035,
+    rounds INT DEFAULT 15,
+    teams_count INT DEFAULT 10,
+    scoring_type VARCHAR(16) DEFAULT 'PPR',
+    status VARCHAR(16) DEFAULT 'PENDING',
+    current_round INT DEFAULT 1,
+    current_pick INT DEFAULT 1,
+    is_mock BOOLEAN DEFAULT FALSE,
+    user_slot INT DEFAULT 1,
+    settings JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS napper_draft_picks (
+    id SERIAL PRIMARY KEY,
+    draft_id INT REFERENCES napper_drafts(id) ON DELETE CASCADE,
+    round_num INT NOT NULL,
+    pick_num INT NOT NULL,
+    overall_pick INT NOT NULL,
+    team_id INT REFERENCES napper_teams(id) ON DELETE CASCADE,
+    team_name VARCHAR(64),
+    slot_num INT NOT NULL,
+    player_id INT REFERENCES players(id) ON DELETE CASCADE,
+    picked_by VARCHAR(16) DEFAULT 'AI',
+    pick_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(draft_id, overall_pick)
+);
+
+CREATE INDEX IF NOT EXISTS idx_napper_drafts_league ON napper_drafts(league_id);
+CREATE INDEX IF NOT EXISTS idx_napper_draft_picks_draft ON napper_draft_picks(draft_id);
+CREATE INDEX IF NOT EXISTS idx_napper_draft_picks_draft_overall ON napper_draft_picks(draft_id, overall_pick);
+CREATE INDEX IF NOT EXISTS idx_napper_draft_picks_player ON napper_draft_picks(player_id);

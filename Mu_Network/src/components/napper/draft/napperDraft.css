@@ -1,0 +1,1146 @@
+/* ==========================================================================
+   NAPPER DRAFT ROOM STYLESHEET
+   Sleeper-inspired high-density dark UI theme & draft board matrix
+   Reference Image: media_1792262198318.png
+   ========================================================================== */
+
+:root {
+  --draft-bg-darkest: #090e17;
+  --draft-bg-board: #0e1626;
+  --draft-bg-panel: #141f33;
+  --draft-bg-card: #1a2842;
+  --draft-bg-hover: #223455;
+  --draft-border: #1f2d45;
+  --draft-border-subtle: #172338;
+  --draft-border-focus: #00ceb8;
+
+  --draft-text-main: #f1f5f9;
+  --draft-text-muted: #8a99ad;
+  --draft-text-dim: #4e6178;
+
+  /* Sleeper Accent Colors */
+  --draft-cyan: #00ceb8;
+  --draft-cyan-hover: #2bd9c6;
+  --draft-cyan-glow: rgba(0, 206, 184, 0.4);
+
+  /* Position Badges */
+  --draft-pos-qb: #f43f5e;
+  --draft-pos-qb-bg: rgba(244, 63, 94, 0.15);
+  --draft-pos-qb-border: rgba(244, 63, 94, 0.35);
+
+  --draft-pos-rb: #10b981;
+  --draft-pos-rb-bg: rgba(16, 185, 129, 0.15);
+  --draft-pos-rb-border: rgba(16, 185, 129, 0.35);
+
+  --draft-pos-wr: #06b6d4;
+  --draft-pos-wr-bg: rgba(6, 182, 212, 0.15);
+  --draft-pos-wr-border: rgba(6, 182, 212, 0.35);
+
+  --draft-pos-te: #f59e0b;
+  --draft-pos-te-bg: rgba(245, 158, 11, 0.15);
+  --draft-pos-te-border: rgba(245, 158, 11, 0.35);
+
+  --draft-pos-k: #8b5cf6;
+  --draft-pos-k-bg: rgba(139, 92, 246, 0.15);
+  --draft-pos-k-border: rgba(139, 92, 246, 0.35);
+
+  --draft-pos-def: #64748b;
+  --draft-pos-def-bg: rgba(100, 116, 139, 0.15);
+  --draft-pos-def-border: rgba(100, 116, 139, 0.35);
+
+  --draft-pos-flex: #3b82f6;
+  --draft-pos-flex-bg: rgba(59, 130, 246, 0.15);
+  --draft-pos-flex-border: rgba(59, 130, 246, 0.35);
+}
+
+/* Master Draft Room Container */
+.napper-draft-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  background-color: var(--draft-bg-darkest);
+  color: var(--draft-text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+}
+
+/* Top Navigation Header Bar */
+.draft-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  min-height: 60px;
+  padding: 0 16px;
+  background-color: var(--draft-bg-darkest);
+  border-bottom: 1px solid var(--draft-border-subtle);
+  z-index: 30;
+}
+
+.draft-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.draft-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: var(--draft-text-muted);
+  background: transparent;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.draft-back-btn:hover {
+  background-color: var(--draft-bg-card);
+  color: var(--draft-text-main);
+}
+
+.draft-shield-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+}
+
+.draft-title-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.draft-main-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.draft-sub-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--draft-text-muted);
+  letter-spacing: 0.2px;
+}
+
+/* Header Middle Action Controls */
+.draft-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.draft-potion-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background-color: #17243b;
+  border: 1px solid #233758;
+  color: #38bdf8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-potion-btn:hover {
+  background-color: #203354;
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.draft-start-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  height: 38px;
+  border-radius: 20px;
+  background-color: var(--draft-cyan);
+  color: #090e17;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 0 16px rgba(0, 206, 184, 0.35);
+}
+
+.draft-start-pill-btn:hover {
+  background-color: var(--draft-cyan-hover);
+  box-shadow: 0 0 22px rgba(0, 206, 184, 0.55);
+  transform: translateY(-1px);
+}
+
+.draft-sim-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 34px;
+  border-radius: 17px;
+  background-color: #1c2b44;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #2c4266;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-sim-pill-btn:hover {
+  background-color: #273d62;
+  border-color: #00ceb8;
+  color: #ffffff;
+}
+
+.draft-sim-pill-btn.active {
+  background-color: rgba(0, 206, 184, 0.18);
+  border-color: #00ceb8;
+  color: #00ceb8;
+}
+
+/* Header Right Utilities */
+.draft-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-util-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background-color: #152236;
+  border: 1px solid #20314d;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-util-btn:hover {
+  background-color: #1c2d47;
+  color: #ffffff;
+  border-color: #38bdf8;
+}
+
+.draft-util-btn.active {
+  background-color: #00ceb8;
+  color: #090e17;
+  border-color: #00ceb8;
+}
+
+/* ==========================================================================
+   Draft Board Matrix (Top Half)
+   ========================================================================== */
+
+.draft-board-wrapper {
+  position: relative;
+  flex: 0 0 44%;
+  min-height: 240px;
+  max-height: 48%;
+  background-color: var(--draft-bg-board);
+  border-bottom: 2px solid var(--draft-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.draft-board-scroll-container {
+  flex: 1;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #223454 transparent;
+  padding: 12px 16px 20px 16px;
+}
+
+.draft-board-scroll-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.draft-board-scroll-container::-webkit-scrollbar-thumb {
+  background: #24395c;
+  border-radius: 4px;
+}
+
+.draft-board-table {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 100%;
+}
+
+/* Columns Claim Header Row */
+.draft-claim-row {
+  display: flex;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background-color: var(--draft-bg-board);
+  padding-bottom: 6px;
+}
+
+.draft-team-header-cell {
+  flex: 1 0 110px;
+  min-width: 110px;
+  max-width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.draft-claim-pill {
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 14px;
+  background-color: #16243a;
+  border: 1px solid #223758;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-claim-pill:hover {
+  background-color: #213554;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.draft-claim-pill.claimed {
+  background-color: rgba(0, 206, 184, 0.18);
+  border-color: var(--draft-cyan);
+  color: var(--draft-cyan);
+}
+
+.draft-team-name-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+/* Round Row */
+.draft-round-row {
+  display: flex;
+  gap: 6px;
+}
+
+/* Draft Grid Cell */
+.draft-cell {
+  position: relative;
+  flex: 1 0 110px;
+  min-width: 110px;
+  max-width: 150px;
+  height: 64px;
+  border-radius: 8px;
+  background-color: #141f33;
+  border: 1px solid #1c2b44;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.15s ease;
+  overflow: hidden;
+}
+
+.draft-cell:hover {
+  border-color: #2c4266;
+  background-color: #18263e;
+}
+
+/* Pick index header */
+.draft-cell-index {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  line-height: 1;
+}
+
+/* Snake Direction Arrow in Cell */
+.draft-snake-arrow {
+  font-size: 11px;
+  color: #475569;
+  line-height: 1;
+}
+
+/* On-The-Clock Active Cell */
+.draft-cell.active-clock {
+  background: linear-gradient(135deg, #162a47 0%, #1a3357 100%);
+  border: 2px solid var(--draft-cyan);
+  box-shadow: 0 0 16px rgba(0, 206, 184, 0.45), inset 0 0 12px rgba(0, 206, 184, 0.2);
+  animation: pulse-glow 2s infinite ease-in-out;
+  z-index: 10;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(0, 206, 184, 0.4), inset 0 0 8px rgba(0, 206, 184, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(0, 206, 184, 0.7), inset 0 0 16px rgba(0, 206, 184, 0.35);
+  }
+}
+
+/* Picked Cell Content */
+.draft-picked-content {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 100%;
+}
+
+.draft-picked-avatar-box {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.draft-picked-headshot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: #0b111a;
+  border: 1px solid #243550;
+}
+
+.draft-picked-team-chip {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  font-size: 7px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e2e8f0;
+}
+
+.draft-picked-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.draft-picked-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.draft-picked-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.draft-picked-pos-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.draft-picked-team {
+  font-size: 9px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+/* Floating Scroll Chevrons */
+.draft-floating-nav {
+  position: absolute;
+  bottom: 16px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 25;
+}
+
+.draft-scroll-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  color: #090e17;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-scroll-btn:hover {
+  background-color: #f1f5f9;
+  transform: scale(1.06);
+}
+
+/* ==========================================================================
+   Bottom Half: Split View (Player Pool Left, Roster/Queue Right)
+   ========================================================================== */
+
+.draft-bottom-split {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background-color: var(--draft-bg-darkest);
+}
+
+/* Left Panel: Player Pool (~64%) */
+.draft-player-pool-panel {
+  flex: 0 0 65%;
+  display: flex;
+  flex-direction: column;
+  border-right: 2px solid var(--draft-border);
+  overflow: hidden;
+  background-color: #0b111a;
+}
+
+/* Pool Filter Bar */
+.draft-pool-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background-color: #0e1624;
+  border-bottom: 1px solid var(--draft-border);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.draft-pool-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.draft-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #141f33;
+  border: 1px solid #223455;
+  border-radius: 8px;
+  padding: 0 10px;
+  height: 32px;
+  min-width: 170px;
+  max-width: 220px;
+}
+
+.draft-search-box input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 11px;
+  width: 100%;
+}
+
+.draft-search-box input::placeholder {
+  color: #64748b;
+}
+
+.draft-kbd-shortcut {
+  font-size: 9px;
+  font-weight: 700;
+  color: #64748b;
+  background-color: #1e2c45;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid #2a3c5e;
+  white-space: nowrap;
+}
+
+/* Positional Pill Filters */
+.draft-pos-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.draft-pos-pill {
+  padding: 4px 9px;
+  border-radius: 14px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  background-color: #141f33;
+  border: 1px solid #1c2b44;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.draft-pos-pill:hover {
+  background-color: #1d2c47;
+  color: #ffffff;
+  border-color: #2c4266;
+}
+
+.draft-pos-pill.active {
+  background-color: #ffffff;
+  color: #090e17;
+  border-color: #ffffff;
+}
+
+.draft-pool-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-pool-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background-color: #141f33;
+  border: 1px solid #20314d;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-pool-icon-btn:hover {
+  background-color: #1d2c47;
+  color: #ffffff;
+}
+
+.draft-pool-icon-btn.active {
+  color: #00ceb8;
+  border-color: #00ceb8;
+}
+
+/* Player Table Container */
+.draft-pool-table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #223454 transparent;
+}
+
+.draft-pool-table-wrap::-webkit-scrollbar {
+  width: 6px;
+}
+
+.draft-pool-table-wrap::-webkit-scrollbar-thumb {
+  background: #24395c;
+  border-radius: 4px;
+}
+
+.draft-pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.draft-pool-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #0e1624;
+  border-bottom: 1px solid #1f2d45;
+}
+
+.draft-pool-table th {
+  padding: 8px 10px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.draft-pool-table th:first-child,
+.draft-pool-table th:nth-child(2),
+.draft-pool-table th:nth-child(3) {
+  text-align: left;
+}
+
+.draft-pool-table tbody tr {
+  border-bottom: 1px solid #141f30;
+  transition: background-color 0.1s ease;
+}
+
+.draft-pool-table tbody tr:hover {
+  background-color: #141f33;
+}
+
+.draft-pool-table td {
+  padding: 6px 10px;
+  color: #cbd5e1;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.draft-pool-table td:first-child,
+.draft-pool-table td:nth-child(2),
+.draft-pool-table td:nth-child(3) {
+  text-align: left;
+}
+
+/* Pick Button in Table */
+.draft-table-pick-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background-color: #162438;
+  border: 1px solid #233758;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draft-table-pick-btn.on-clock {
+  background-color: var(--draft-cyan);
+  border-color: var(--draft-cyan);
+  color: #090e17;
+  box-shadow: 0 0 10px rgba(0, 206, 184, 0.4);
+}
+
+.draft-table-pick-btn.on-clock:hover {
+  background-color: var(--draft-cyan-hover);
+  transform: scale(1.04);
+}
+
+.draft-table-pick-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Player Column Info */
+.draft-player-cell-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-table-avatar-box {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.draft-table-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background-color: #090e17;
+  border: 1px solid #23334c;
+}
+
+.draft-table-team-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  font-size: 7px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.draft-table-name-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.draft-table-player-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.draft-table-player-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.draft-adp-pill {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background-color: rgba(0, 206, 184, 0.12);
+  border: 1px solid rgba(0, 206, 184, 0.3);
+  color: #00ceb8;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-block;
+}
+
+/* ==========================================================================
+   Right Panel: Roster / Queue / Chat (~35%)
+   ========================================================================== */
+
+.draft-roster-queue-panel {
+  flex: 0 0 35%;
+  display: flex;
+  flex-direction: column;
+  background-color: #0d1522;
+  overflow: hidden;
+}
+
+/* Top Tab Bar */
+.draft-side-tabs {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--draft-border);
+  background-color: #0a101a;
+  padding: 0 16px;
+  gap: 16px;
+  height: 48px;
+}
+
+.draft-side-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #8a99ad;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0 4px;
+}
+
+.draft-side-tab-btn:hover {
+  color: #ffffff;
+}
+
+.draft-side-tab-btn.active {
+  color: #ffffff;
+  border-bottom-color: var(--draft-cyan);
+}
+
+.draft-side-content {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #223454 transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+.draft-side-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.draft-side-content::-webkit-scrollbar-thumb {
+  background: #24395c;
+  border-radius: 4px;
+}
+
+/* Roster Sub-Header */
+.draft-roster-subbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background-color: #101929;
+  border-bottom: 1px solid var(--draft-border);
+}
+
+.draft-roster-heading {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #ffffff;
+}
+
+.draft-team-select {
+  background-color: #17243b;
+  border: 1px solid #233758;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Roster Slot Rows */
+.draft-roster-list {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draft-slot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background-color: #141f33;
+  border: 1px solid #1c2b44;
+  height: 40px;
+}
+
+.draft-slot-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.draft-slot-tag {
+  width: 38px;
+  height: 24px;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+.draft-slot-empty-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.draft-slot-filled-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.draft-slot-filled-meta {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.draft-slot-filled-pts {
+  font-size: 11px;
+  font-weight: 800;
+  font-mono: true;
+  color: #00ceb8;
+}
+
+/* Queue Tab View */
+.draft-queue-view {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draft-queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: #141f33;
+  border: 1px solid #20314d;
+}
+
+/* Chat Tab View */
+.draft-chat-feed {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.draft-chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: #141f33;
+  border: 1px solid #1c2b44;
+  font-size: 11px;
+}
+
+.draft-chat-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.draft-chat-text {
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+
+.draft-chat-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background-color: #0a101a;
+  border-top: 1px solid var(--draft-border);
+}
+
+.draft-chat-input-bar input {
+  flex: 1;
+  background-color: #141f33;
+  border: 1px solid #233758;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #ffffff;
+  outline: none;
+}
+
+.draft-chat-input-bar input:focus {
+  border-color: #00ceb8;
+}
+
+/* ==========================================================================
+   Draft Recap Modal
+   ========================================================================== */
+
+.draft-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(9, 14, 23, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.draft-recap-card {
+  width: 100%;
+  max-width: 820px;
+  max-height: 90vh;
+  background-color: #0e1626;
+  border: 1px solid #233758;
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.draft-recap-header {
+  padding: 24px;
+  border-bottom: 1px solid #1f2d45;
+  background: linear-gradient(135deg, #14223d 0%, #0e1626 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.draft-grade-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.grade-a {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid #10b981;
+}
+
+.grade-b {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid #38bdf8;
+}
+
+.grade-c {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid #f59e0b;
+}
+
+.grade-d {
+  background: rgba(244, 63, 94, 0.2);
+  color: #f43f5e;
+  border: 1px solid #f43f5e;
+}

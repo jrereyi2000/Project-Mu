@@ -5017,7 +5017,8 @@ function App() {
   } else if (route === "#fantasy-ros") {
     content = <FantasyPlayerProvider><FantasyRankingsPage view="ros" /></FantasyPlayerProvider>;
   } else if (route === "#napper" || route.startsWith("#napper-")) {
-    const leagueId = route.startsWith("#napper-") ? Number(route.split("-")[1]) || 1 : 1;
+    const cleanRoute = route.replace("#napper-draft-", "").replace("#napper-draft", "").replace("#napper-", "");
+    const leagueId = Number(cleanRoute) || 1;
     content = <NapperPage initialLeagueId={leagueId} />;
   } else if (route === "#social") {
     content = <SocialFeedPage />;

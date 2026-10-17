@@ -192,7 +192,14 @@ Project Mu/
 └── Mu_Network/                # React frontend (has its own PROJECT_SPEC.md for UI screens)
     ├── src/NapperPage.tsx     #   Napper interactive 3-panel Sleeper fantasy platform (#napper, #napper-{leagueId})
     ├── src/napper.css         #   Napper Sleeper dark theme (#121926, #1a2332, #00ceb8 teal accents)
-    ├── src/types/napper.ts    #   TypeScript types for Napper platform (leagues, matchups, rosters, trades, chat)
+    ├── src/types/napper.ts    #   TypeScript types for Napper platform (leagues, matchups, rosters, trades, chat, drafts)
+    └── src/components/napper/draft/ # Sleeper-inspired Interactive Draft Room & Mock Draft Simulator (#napper-draft)
+        ├── NapperDraftRoom.tsx    # Master draft room container with header controls, sim engine, audio chimes, and split layout
+        ├── DraftBoardGrid.tsx     # 15-round snaking draft board matrix with slot claiming, direction arrows, and clock glow
+        ├── DraftPlayerPool.tsx    # Filterable player pool with search (⌘ U), positional count pills, and detailed projection lines
+        ├── DraftRosterQueue.tsx   # Right 3-tab panel (ROSTER slot tracker, starred QUEUE, live CHAT commentary feed)
+        ├── DraftRecapModal.tsx    # Post-draft recap modal with team letter grades (A+ to D), steals, reaches, and league save
+        └── napperDraft.css        # High-density Sleeper dark navy theme palette (#090e17, #0e1626, #141f33, #00ceb8)
     └── src/components/napper/ #   Napper tab components (Matchup, Team, Players/Waivers, Trades, League, Scores, utils)
 ```
 
@@ -553,6 +560,10 @@ Multi-league interactive Sleeper-style fantasy ecosystem supporting real-time ma
   - `id` (SERIAL PK), `league_id` (FK `napper_leagues(id)` ON DELETE CASCADE), `week` (int NOT NULL), `proposer_team_id` (FK `napper_teams(id)` ON DELETE CASCADE), `target_team_id` (FK `napper_teams(id)` ON DELETE CASCADE), `offered_player_ids` (int[]), `requested_player_ids` (int[]), `status` (varchar(16) DEFAULT 'PENDING' — `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`), `initiated_by_ai` (boolean DEFAULT FALSE), `ai_rationale` (text), `created_at` (timestamptz DEFAULT NOW()).
 - **`napper_chat`**:
   - `id` (SERIAL PK), `league_id` (FK `napper_leagues(id)` ON DELETE CASCADE), `sender_type` (varchar(16) — `USER`, `AI_MANAGER`, `SYSTEM_BOT`), `sender_name` (varchar(64)), `sender_handle` (varchar(32)), `avatar_url` (text), `message_text` (text NOT NULL), `card_payload` (jsonb — Benchwarmer of the Week, High Scorer, Trade Alert, Waiver Claim cards), `created_at` (timestamptz DEFAULT NOW()).
+- **`napper_drafts`**:
+  - `id` (SERIAL PK), `league_id` (FK `napper_leagues(id)` ON DELETE CASCADE, nullable for standalone mock drafts), `season` (int DEFAULT 2035), `rounds` (int DEFAULT 15), `teams_count` (int DEFAULT 10), `scoring_type` (varchar(16) DEFAULT 'PPR'), `status` (varchar(16) DEFAULT 'PENDING' — `PENDING`, `IN_PROGRESS`, `COMPLETED`), `current_round` (int DEFAULT 1), `current_pick` (int DEFAULT 1), `is_mock` (boolean DEFAULT FALSE), `user_slot` (int DEFAULT 1), `settings` (jsonb DEFAULT `{}`), `created_at` (timestamptz DEFAULT NOW()).
+- **`napper_draft_picks`**:
+  - `id` (SERIAL PK), `draft_id` (FK `napper_drafts(id)` ON DELETE CASCADE), `round_num` (int NOT NULL), `pick_num` (int NOT NULL), `overall_pick` (int NOT NULL), `team_id` (FK `napper_teams(id)` ON DELETE CASCADE, nullable for mock drafts), `team_name` (varchar(64)), `slot_num` (int NOT NULL), `player_id` (FK `players(id)` ON DELETE CASCADE, nullable until selected), `picked_by` (varchar(16) DEFAULT 'AI' — `USER`, `AI`, `AUTO`), `pick_notes` (text), `created_at` (timestamptz DEFAULT NOW()). Unique constraint: `UNIQUE(draft_id, overall_pick)`.
 
 
 ### 3.5 Media & Content Tables
@@ -669,11 +680,18 @@ High-performance RESTful API powering the Napper interactive multi-league Sleepe
 - `POST /api/napper/league/{id}/trades/{trade_id}/respond`: Handles trade acceptance or rejection (`{response: "ACCEPT" | "REJECT"}`). Acceptance atomically mutates rosters across current and future weeks, logging a `TRADE_ALERT` announcement in `napper_chat`.
 - `GET /api/napper/league/{id}/chat?limit={limit}`: Returns league chat messages and bot cards in ascending chronological order (querying the most recent messages up to `limit`).
 - `POST /api/napper/league/{id}/chat/send`: Posts user chat message or custom payload to the league chat stream.
-- `POST /api/napper/drafts/create_mock`: Initializes a solo mock draft session with custom team count, draft slot, scoring, and speed.
-- `GET /api/napper/draft/{id}`: Returns real-time draft room state, board picks matrix, active on-the-clock team, and remaining timer.
-- `POST /api/napper/draft/{id}/pick`: Submits a draft pick (`{player_id}`).
-- `POST /api/napper/draft/{id}/sim_step`: Steps or fast-forwards AI bot draft turns based on ADP & need (`engines/napper_draft_engine.py`).
-- `POST /api/napper/draft/{id}/finalize`: Finalizes draft, generates letter-grade recap, and atomizes rosters for pre-draft leagues.
+- `POST /api/napper/drafts/create_mock`: Initializes a solo mock draft session (`{teams_count, scoring_type, user_slot, rounds, is_superflex}`) pre-populating snake picks across all rounds.
+- `GET /api/napper/draft/{id}`: Returns real-time draft room state, board picks matrix, active on-the-clock team, teams list, and remaining timer.
+- `POST /api/napper/draft/{id}/claim_slot`: Updates user's draft slot (`{slot}`) in a pending draft, reassigning pick ownership.
+- `POST /api/napper/draft/{id}/start`: Transitions draft status from `PENDING` to `IN_PROGRESS`.
+- `POST /api/napper/draft/{id}/pick`: Submits a draft pick (`{player_id}`), advances draft clock, and posts commentary in `napper_chat`.
+- `POST /api/napper/draft/{id}/sim_step`: Simulates a single AI bot draft turn based on consensus ADP, roster need, and manager persona (`engines/napper_draft_engine.py`).
+- `POST /api/napper/draft/{id}/sim_to_user`: Simulates all AI picks until user is back on the clock or draft completes.
+- `POST /api/napper/draft/{id}/sim_all`: Fast-forwards all remaining picks to completion.
+- `POST /api/napper/draft/{id}/finalize`: Finalizes draft, generates letter-grade report cards, identifies best value and biggest reach, assigns starting and bench slots in `napper_rosters`, and generates round-robin schedule.
+- `GET /api/napper/draft/{id}/available_players?search={q}&position={pos}&limit={limit}&offset={offset}`: Returns available players ordered by ADP, with bye, age, ros_pct, projections (pts, avg), rush stats (rush, yds, td), rec stats (rec, yds, td), and draft counts.
+- `GET /api/napper/league/{id}/draft`: Retrieves existing draft session or initializes a new draft session for a league in `PRE_DRAFT` status.
+- **Tests:** `tests/test_napper_api.py`, `tests/test_napper_draft.py`.
 
 ### 4.5 Debug Endpoints (`server/debug_api.py`, the `#debug` page)
 Reads are open like the rest of the API; every write needs header `X-Debug-Token` = `DEBUG_TOKEN` (env or `.env`; 403 when unset, 401 when wrong). The module opens its own connections (`DATABASE_URL`).
@@ -708,6 +726,7 @@ Navigation uses a lightweight hash router (`window.location.hash`):
 - `#standings` & `#rankings`: Division standings and power rankings. `PowerRankingsPage` reads `GET /api/power_rankings`: one button per stored week, each team's rank, logo, record, last-week rank and movement ("NEW" when there is no previous week), kicker and blurb, with an empty state when nothing is stored.
 - `#fantasy`: Mu Fantasy Analytics Command Center (accessible via top-nav "Fantasy" dropdown → "Analytics").
 - `#napper` & `#napper-{leagueId}`: Napper Interactive Fantasy Platform (accessible via top-nav "Fantasy" dropdown → "Napper"). Dedicated Sleeper-style multi-league experience with 3-panel layout: Left Rail (league switcher & user profile), Center Stage (7 tabs: `MATCHUP`, `TEAM`, `PLAYERS`, `LEAGUE`, `SCORES`, `TRADES`, `CHAT`), and Right Rail (living league chat stream with autonomous manager banter and automated bot award cards).
+- `#napper-draft` & `#napper-draft-{leagueId}`: Napper Interactive Draft Room and Mock Draft Simulator (accessible via left rail "Mock Draft Room", pre-draft league banners, and direct URL). Implements a 15-round snaking draft board matrix (`DraftBoardGrid.tsx`), a filterable player pool with search shortcut `⌘ U`, positional count badges, and detailed projections (`DraftPlayerPool.tsx`), a right 3-tab drawer for slot tracking, queued players, and real-time draft chat (`DraftRosterQueue.tsx`), web audio chimes, fast-forward simulation controls, and post-draft report card recaps (`DraftRecapModal.tsx`).
 - `#fantasy-rankings`: Weekly Fantasy Rankings board.
 - `#fantasy-ros`: Rest of Season Rankings board.
 - `#fantasy-adp`: Preseason ADP Consensus Board.

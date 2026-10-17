@@ -7,6 +7,7 @@ import { NapperLeagueTab } from "./components/napper/NapperLeagueTab";
 import { NapperPlayersTab } from "./components/napper/NapperPlayersTab";
 import { NapperTradesTab } from "./components/napper/NapperTradesTab";
 import { NapperScoresTab } from "./components/napper/NapperScoresTab";
+import NapperDraftRoom from "./components/napper/draft/NapperDraftRoom";
 import {
   BlueRobotAvatar,
   PinkRobotAvatar,
@@ -92,6 +93,20 @@ export const NapperPage: React.FC<NapperPageProps> = ({
   const [chatLoading, setChatLoading] = useState<boolean>(true);
   const [inputText, setInputText] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<NapperStarterPlayer | null>(null);
+  const [inDraftRoom, setInDraftRoom] = useState<boolean>(() => {
+    return typeof window !== "undefined" && window.location.hash.includes("draft");
+  });
+
+  // Listen for draft hash changes
+  useEffect(() => {
+    const handleHash = () => {
+      if (window.location.hash.includes("draft")) {
+        setInDraftRoom(true);
+      }
+    };
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
 
   // Modal State
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -246,6 +261,24 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
   const currentLeague = leagues.find((l) => l.id === selectedLeagueId) || leagues[0] || FALLBACK_LEAGUES[0];
 
+  if (inDraftRoom) {
+    return (
+      <NapperDraftRoom
+        leagueId={selectedLeagueId}
+        onBack={() => {
+          setInDraftRoom(false);
+          if (window.location.hash.includes("draft")) {
+            window.location.hash = `#napper-${selectedLeagueId}`;
+          }
+        }}
+        onLeagueCreated={(newId) => {
+          setInDraftRoom(false);
+          loadLeagues(newId);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="napper-shell">
       {/* =========================================================================
@@ -315,6 +348,22 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               </svg>
               <span>Waivers & Agency</span>
             </div>
+          </div>
+
+          <div
+            onClick={() => setInDraftRoom(true)}
+            className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-[#00ceb8] hover:bg-[#182333] transition-colors cursor-pointer group"
+          >
+            <div className="flex items-center gap-3">
+              <svg className="w-4 h-4 text-[#8a99ad] group-hover:text-[#00ceb8]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <circle cx="12" cy="11" r="3" />
+              </svg>
+              <span>Mock Draft Room</span>
+            </div>
+            <span className="text-[9px] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/10 px-1.5 py-0.5 rounded">
+              Live
+            </span>
           </div>
         </div>
 
@@ -465,6 +514,19 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => setInDraftRoom(true)}
+              title="Enter Draft Room"
+              className="px-3.5 py-1.5 rounded-xl bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#090e17] text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_12px_rgba(0,206,184,0.3)] flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <circle cx="12" cy="11" r="3" />
+              </svg>
+              <span>Draft Room</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab("LEAGUE")}
               title="League Standings & Bracket"
               className="px-3 py-1.5 rounded-xl bg-[#1a2332] hover:bg-[#202d40] border border-[#283850] text-xs font-semibold text-[#8a99ad] hover:text-white transition-colors cursor-pointer"
@@ -488,6 +550,18 @@ export const NapperPage: React.FC<NapperPageProps> = ({
         {/* Sleeper Pill Nav Tabs Bar */}
         <div className="px-6 pt-4 pb-2">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setInDraftRoom(true)}
+              className="napper-nav-tab border border-[#00ceb8]/40 text-[#00ceb8] hover:bg-[#00ceb8]/10 font-black"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <circle cx="12" cy="11" r="3" />
+              </svg>
+              <span>Draft</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setActiveTab("MATCHUP")}

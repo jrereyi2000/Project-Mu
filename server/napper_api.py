@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import psycopg
 from psycopg.rows import dict_row
+from engines import napper_draft_engine
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,22 @@ class ChatMessageRequest(BaseModel):
     sender_name: Optional[str] = "The Straw Hat Pirates"
     sender_handle: Optional[str] = "@jrereyi2000"
     card_payload: Optional[Dict[str, Any]] = None
+
+
+class MockDraftCreateRequest(BaseModel):
+    teams_count: int = 10
+    scoring_type: str = "PPR"
+    user_slot: int = 1
+    rounds: int = 15
+    is_superflex: bool = True
+
+
+class ClaimSlotRequest(BaseModel):
+    slot: int
+
+
+class DraftPickRequest(BaseModel):
+    player_id: int
 
 
 # Positional eligibility map
@@ -1336,3 +1353,246 @@ def send_chat_message(league_id: int, req: ChatMessageRequest):
         conn.commit()
 
     return {"status": "ok", "id": row["id"], "created_at": row["created_at"].isoformat()}
+
+
+# ────────────────────────── Draft & Mock Draft Endpoints ──────────────────────────
+
+@router.post("/drafts/create_mock")
+def create_mock_draft(req: MockDraftCreateRequest):
+    """Creates a new mock draft session with pre-populated snake pick order."""
+    try:
+        return napper_draft_engine.create_draft_session(
+            league_id=None,
+            teams_count=req.teams_count,
+            scoring_type=req.scoring_type,
+            user_slot=req.user_slot,
+            rounds=req.rounds,
+            is_mock=True,
+            settings={"is_superflex": req.is_superflex}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating mock draft: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/draft/{draft_id}")
+def get_draft(draft_id: int):
+    """Returns real-time draft state, board matrix, and on-the-clock timer."""
+    try:
+        return napper_draft_engine.get_draft_state(draft_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error fetching draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/claim_slot")
+def claim_draft_slot(draft_id: int, req: ClaimSlotRequest):
+    """Changes the user's draft slot in a pending draft."""
+    try:
+        return napper_draft_engine.claim_slot(draft_id, req.slot)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error claiming slot in draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/start")
+def start_draft(draft_id: int):
+    """Transitions a pending draft into progress."""
+    try:
+        return napper_draft_engine.start_draft(draft_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error starting draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/pick")
+def make_draft_pick(draft_id: int, req: DraftPickRequest):
+    """Submits a user selection for the current on-the-clock pick."""
+    try:
+        return napper_draft_engine.make_draft_pick(draft_id, req.player_id, picked_by="USER")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error making pick in draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/sim_step")
+def simulate_draft_step(draft_id: int):
+    """Simulates a single AI draft turn based on ADP, team need, and manager persona."""
+    try:
+        return napper_draft_engine.simulate_ai_pick(draft_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error simulating step in draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/sim_to_user")
+def simulate_draft_to_user(draft_id: int):
+    """Simulates all AI picks until the user is back on the clock or draft completes."""
+    try:
+        return napper_draft_engine.simulate_until_user(draft_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error simulating to user in draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/sim_all")
+def simulate_entire_draft(draft_id: int):
+    """Fast-forwards all remaining draft picks to completion."""
+    try:
+        return napper_draft_engine.simulate_entire_draft(draft_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error simulating entire draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/draft/{draft_id}/finalize")
+def finalize_draft(draft_id: int):
+    """Completes draft, generates report cards and recap, and assigns rosters/matchups."""
+    try:
+        return napper_draft_engine.finalize_draft(draft_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error finalizing draft {draft_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/draft/{draft_id}/available_players")
+def get_available_players(
+    draft_id: int,
+    search: Optional[str] = Query(None),
+    position: Optional[str] = Query("ALL"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0)
+):
+    """Returns available players ordered by ADP, with bye, age, ros_pct, projections, rush/rec stats, and draft count."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM napper_drafts WHERE id = %s", (draft_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail=f"Draft {draft_id} not found")
+
+            where_clauses = [
+                """p.id NOT IN (
+                    SELECT player_id FROM napper_draft_picks
+                    WHERE draft_id = %(draft_id)s AND player_id IS NOT NULL
+                )"""
+            ]
+            params: Dict[str, Any] = {"draft_id": draft_id, "limit": limit, "offset": offset}
+
+            if position and position.upper() != "ALL":
+                pos_upper = position.upper()
+                if pos_upper in ("RB", "HB"):
+                    where_clauses.append("ps.position IN ('RB', 'HB', 'FB')")
+                else:
+                    where_clauses.append("ps.position = %(position)s")
+                    params["position"] = pos_upper
+
+            if search:
+                where_clauses.append("(p.full_name ILIKE %(search)s OR p.player_name ILIKE %(search)s)")
+                params["search"] = f"%{search.strip()}%"
+
+            where_sql = " AND ".join(where_clauses)
+
+            cur.execute(f"""
+                SELECT COUNT(DISTINCT p.id) as total
+                FROM players p
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                WHERE {where_sql}
+            """, params)
+            total = cur.fetchone()["total"]
+
+            cur.execute(f"""
+                SELECT p.id, p.player_name, p.full_name, ps.position, ps.age, ps.team_id,
+                       COALESCE(t.abbreviation, 'NFL') as team_abbr,
+                       COALESCE(fp.adp_rank, 999) as adp,
+                       COALESCE(NULLIF(fp.projected_points, 0), fp.avg_points, 12.0) as proj_pts,
+                       COALESCE(fp.avg_points, 11.5) as avg_pts,
+                       COALESCE(ss.rush_attempts, 0) as rush_att,
+                       COALESCE(ss.rush_yards, 0) as rush_yds,
+                       COALESCE(ss.rush_tds, 0) as rush_tds,
+                       COALESCE(ss.receptions, 0) as rec,
+                       COALESCE(ss.rec_yards, 0) as rec_yds,
+                       COALESCE(ss.rec_tds, 0) as rec_tds,
+                       (SELECT COUNT(*) FROM napper_draft_picks ndp WHERE ndp.player_id = p.id) as draft_count
+                FROM players p
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = 2035
+                LEFT JOIN teams t ON t.id = ps.team_id
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = 2035 AND fp.week = 1
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = 2035
+                WHERE {where_sql}
+                ORDER BY COALESCE(fp.adp_rank, 999) ASC, proj_pts DESC, p.id ASC
+                LIMIT %(limit)s OFFSET %(offset)s
+            """, params)
+            rows = cur.fetchall()
+
+            players = []
+            for r in rows:
+                adp_val = int(r["adp"])
+                team_id = r["team_id"] or 1
+                bye_wk = (team_id % 10) + 5
+                ros_pct = round(max(5.0, min(100.0, 100.0 - (float(adp_val) * 0.45))), 1) if adp_val <= 200 else 5.0
+
+                players.append({
+                    "id": r["id"],
+                    "name": r["full_name"] or r["player_name"],
+                    "player_name": r["player_name"],
+                    "position": r["position"],
+                    "team": r["team_abbr"],
+                    "headshot_url": f"/static/players/{r['id']}.webp",
+                    "adp": adp_val,
+                    "bye": bye_wk,
+                    "age": r["age"] or 25,
+                    "ros_pct": ros_pct,
+                    "projections": {
+                        "pts": round(float(r["proj_pts"]), 2),
+                        "avg": round(float(r["avg_pts"]), 2),
+                    },
+                    "rush": {
+                        "rush": int(r["rush_att"]),
+                        "yds": int(r["rush_yds"]),
+                        "td": int(r["rush_tds"]),
+                    },
+                    "rec": {
+                        "rec": int(r["rec"]),
+                        "yds": int(r["rec_yds"]),
+                        "td": int(r["rec_tds"]),
+                    },
+                    "draft_count": int(r["draft_count"]),
+                })
+
+            return {"players": players, "total": total}
+
+
+@router.get("/league/{league_id}/draft")
+def get_league_draft(league_id: int, rounds: int = Query(15, ge=1, le=25)):
+    """Retrieves or creates a draft session for a league in PRE_DRAFT status."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, status FROM napper_leagues WHERE id = %s", (league_id,))
+            league = cur.fetchone()
+            if not league:
+                raise HTTPException(status_code=404, detail="League not found")
+
+            cur.execute("SELECT id FROM napper_drafts WHERE league_id = %s ORDER BY id DESC LIMIT 1", (league_id,))
+            row = cur.fetchone()
+
+    if row:
+        return napper_draft_engine.get_draft_state(row["id"])
+    return napper_draft_engine.create_draft_session(league_id=league_id, rounds=rounds)
