@@ -40,6 +40,7 @@ JOB_KINDS = {
     "draft_scan": ("Draft prospect scan", ["--mode", "prospects", "--no-articles"]),
     "publish_articles": ("Publish articles (newsroom run)", []),
     "custom_commission": ("Commission custom article", []),
+    "offseason_run": ("Offseason run (editorial package)", []),
 }
 
 router = APIRouter(prefix="/api/debug")
@@ -702,4 +703,75 @@ def commission_article_endpoint(body: CommissionIn, x_debug_token: Optional[str]
     with open(_job_path(job_id, "json"), "w") as fh:
         json.dump(job, fh, indent=1)
     return _load_job(job_id)
+
+
+# ------------------------------------------------------------- offseason ----
+class OffseasonRequestIn(BaseModel):
+    season: int
+    manifest_path: str
+    dry_run: bool = False
+    only: Optional[str] = None
+
+
+@router.post("/offseason/preview")
+def offseason_preview_endpoint(body: OffseasonRequestIn, x_debug_token: Optional[str] = Header(None)):
+    require_token(x_debug_token)
+    from newsroom.offseason_service import preview_manifest
+    manifest_path = body.manifest_path.strip()
+    full_path = manifest_path if os.path.isabs(manifest_path) else os.path.join(ROOT, manifest_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(404, f"Manifest file '{manifest_path}' does not exist on disk")
+    try:
+        preview = preview_manifest(full_path, conn_info=CONN_INFO)
+        return preview
+    except Exception as e:
+        raise HTTPException(400, f"Offseason manifest preview failed: {e}")
+
+
+@router.post("/offseason/run")
+def offseason_run_endpoint(body: OffseasonRequestIn, x_debug_token: Optional[str] = Header(None)):
+    require_token(x_debug_token)
+    busy = running_job()
+    if busy:
+        raise HTTPException(409, f"job {busy['id']} ({busy['kind']}) is still running")
+
+    manifest_path = body.manifest_path.strip()
+    full_path = manifest_path if os.path.isabs(manifest_path) else os.path.join(ROOT, manifest_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(404, f"Manifest file '{manifest_path}' does not exist on disk")
+
+    os.makedirs(JOBS_DIR, exist_ok=True)
+    job_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    args = [
+        sys.executable, "-u", "-m", "newsroom.offseason_run",
+        "--season", str(body.season),
+        "--input", manifest_path,
+    ]
+    if body.dry_run:
+        args.append("--dry-run")
+    if body.only:
+        args += ["--only", body.only]
+
+    cmd = ["sh", "-c", '"$@"; echo $? > "$EXIT"', "sh", *args]
+    log = open(_job_path(job_id, "log"), "w")
+    p = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                         env={**os.environ, "EXIT": _job_path(job_id, "exit"), "PYTHONUNBUFFERED": "1"})
+    mode_str = " (Dry Run)" if body.dry_run else ""
+    only_str = f" [{body.only}]" if body.only else ""
+    job = {
+        "id": job_id,
+        "kind": "offseason_run",
+        "kind_label": f"Offseason Run Season {body.season}{only_str}{mode_str}",
+        "season": body.season,
+        "manifest_path": manifest_path,
+        "dry_run": body.dry_run,
+        "only": body.only,
+        "args": args[1:],
+        "pid": p.pid,
+        "started_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with open(_job_path(job_id, "json"), "w") as fh:
+        json.dump(job, fh, indent=1)
+    return _load_job(job_id)
+
 
