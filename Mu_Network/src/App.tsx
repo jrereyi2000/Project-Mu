@@ -1163,10 +1163,11 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
   const [playerData, setPlayerData] = useState<any>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/player/${playerId}?season=${systemStatus.season}`)
+    fetch(`${API_BASE}/api/player/${playerId}?season=${gameLogSeason}`)
       .then(res => res.json())
-      .then(data => setPlayerData(data));
-  }, [playerId, systemStatus.season]);
+      .then(data => setPlayerData(data))
+      .catch(err => console.error("Error loading player:", err));
+  }, [playerId, gameLogSeason]);
 
   if (!playerData || playerData.error) {
     return <main className="player-page" style={{ padding: "4rem", textAlign: "center" }}>Loading player...</main>;
@@ -1183,8 +1184,8 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
   const careerCols = unitGroup ? unitCareerColumns[unitGroup] : [];
   const missingGameLines = unitGroup !== null && visibleGames.some((g: any) => g.status === "COMPLETED" && !g.has_capture_line);
   
-  // Calculate season highlights from career_stats for the current season
-  const currentSeasonStats = career_stats.find((s: any) => s.season === systemStatus.season) || {};
+  // Calculate season highlights from career_stats for the selected season
+  const currentSeasonStats = (career_stats || []).find((s: any) => s.season === gameLogSeason) || (career_stats || [])[0] || {};
   const listed = currentSeasonStats.has_capture_line;
   const seasonHighlight = unitGroup === "defense"
     ? ["CB", "FS", "SS"].includes(player.position)
@@ -1203,6 +1204,13 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
     : ["HB", "FB"].includes(player.position)
       ? { yards: currentSeasonStats.rush_yards || 0, yardsLabel: "RUSHING YARDS", touchdowns: currentSeasonStats.rush_tds || 0, touchdownLabel: "RUSHING TD" }
       : { yards: currentSeasonStats.rec_yards || 0, yardsLabel: "RECEIVING YARDS", touchdowns: currentSeasonStats.rec_tds || 0, touchdownLabel: "RECEIVING TD" };
+
+  const availablePlayerSeasons: number[] = Array.from(
+    new Set([
+      ...(career_stats || []).map((s: any) => Number(s.season)),
+      systemStatus.season,
+    ])
+  ).filter((s) => !Number.isNaN(s) && s > 2000).sort((a, b) => b - a);
 
   // Newsroom articles tagged with this player (GET /api/player/{id} `articles`, newest first)
   const playerStories: any[] = Array.isArray(playerData.articles) ? playerData.articles : [];
@@ -1246,7 +1254,7 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
             </div>
           </div>
           <div className="player-season-card">
-            <span>{systemStatus.season} SEASON</span>
+            <span>{gameLogSeason} SEASON</span>
             <strong>{seasonHighlight.yards}</strong>
             <small>{seasonHighlight.yardsLabel}</small>
             <div><b>{seasonHighlight.touchdowns}</b><span>{seasonHighlight.touchdownLabel}</span></div>
@@ -1268,7 +1276,7 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
                 </button>
                 {gameLogSeasonOpen && (
                   <div className="game-log-season-menu">
-                    {systemStatus.availableSeasons.map((year) => (
+                    {availablePlayerSeasons.map((year) => (
                       <button
                         className={gameLogSeason === year ? "selected" : ""}
                         onClick={() => { setGameLogSeason(year); setGameLogSeasonOpen(false); }}
@@ -1363,11 +1371,22 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
                 </tr>
               </thead>
               <tbody>
-                {career_stats.map((s: any) => (
-                  <tr key={s.season}>
-                    <td><strong>{s.season}</strong></td>
-                    <td><a href={`#team-${s.team_abbr.toLowerCase()}`}><img src={logo(s.team_abbr.toLowerCase())} alt="" /><span>{s.team_name}</span></a></td>
-                    <td>{s.gp || 0}</td>
+                {career_stats.map((s: any) => {
+                  const isSelected = gameLogSeason === s.season;
+                  return (
+                    <tr
+                      key={s.season}
+                      onClick={() => setGameLogSeason(s.season)}
+                      style={{ cursor: "pointer", background: isSelected ? "rgba(227, 24, 55, 0.08)" : undefined }}
+                      className={isSelected ? "selected-season-row" : ""}
+                      title={`Click to view ${s.season} season stats and game log`}
+                    >
+                      <td>
+                        <strong>{s.season}</strong>
+                        {isSelected && <span style={{ marginLeft: "6px", color: "var(--team-color, #e31837)", fontSize: "11px" }}>●</span>}
+                      </td>
+                      <td><a href={`#team-${s.team_abbr.toLowerCase()}`} onClick={(e) => e.stopPropagation()}><img src={logo(s.team_abbr.toLowerCase())} alt="" /><span>{s.team_name}</span></a></td>
+                      <td>{s.gp || 0}</td>
                     {unitGroup ? (
                       careerCols.map((col) => <td key={col.label}>{col.value(s)}</td>)
                     ) : isQuarterback ? (
@@ -1389,7 +1408,8 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
                       </>
                     )}
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>
@@ -3236,6 +3256,7 @@ function FantasyHeader({ active }: { active: "news" | "rankings" }) {
   const [search, setSearch] = useState("");
   const [allPlayers, setAllPlayers] = useState<any[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/fantasy/players?season=${systemStatus.season || 2035}`)
@@ -3254,8 +3275,17 @@ function FantasyHeader({ active }: { active: "news" | "rankings" }) {
         searchInputRef.current?.blur();
       }
     };
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearch("");
+      }
+    };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   const searchClean = search.trim().toLowerCase();
@@ -3266,6 +3296,15 @@ function FantasyHeader({ active }: { active: "news" | "rankings" }) {
         )
         .slice(0, 8)
     : [];
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && matches.length > 0) {
+      e.preventDefault();
+      openPlayer(matches[0]);
+      setSearch("");
+      searchInputRef.current?.blur();
+    }
+  };
 
   return (
     <header className="fantasy-header">
@@ -3281,13 +3320,14 @@ function FantasyHeader({ active }: { active: "news" | "rankings" }) {
           <a href="#napper" style={{ color: "var(--napper-teal, #00ceb8)", fontWeight: "700" }}>🛏️ Napper</a>
         </div>
         <div className="fantasy-tools">
-          <div className="fantasy-search">
+          <div className="fantasy-search" ref={searchContainerRef}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
             <input
               ref={searchInputRef}
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={handleInputKeyDown}
               placeholder="Search players"
               aria-label="Search fantasy players"
               autoComplete="off"
@@ -3297,7 +3337,15 @@ function FantasyHeader({ active }: { active: "news" | "rankings" }) {
               <div className="fantasy-search-results">
                 <span>{matches.length ? `PLAYERS (${matches.length})` : "NO PLAYERS FOUND"}</span>
                 {matches.map((player) => (
-                  <button onClick={() => { openPlayer(player); setSearch(""); }} key={player.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      openPlayer(player);
+                      setSearch("");
+                    }}
+                    key={player.id}
+                  >
                     <i>
                       <img
                         src={getPlayerHeadshot(player)}
@@ -4908,9 +4956,261 @@ function StatsDropdown({ close }: { close: () => void }) {
   );
 }
 
+type SearchTeamResult = {
+  id: number;
+  name: string;
+  city: string;
+  fullName: string;
+  abbr: string;
+  displayAbbr: string;
+  conference: string;
+  division: string;
+  color: string;
+};
+
+type SearchPlayerResult = {
+  id: number;
+  name: string;
+  position: string;
+  overall: number;
+  number: number | null;
+  teamAbbr: string;
+  teamDisplayAbbr: string;
+  teamName: string;
+  espn_id?: number | string | null;
+};
+
+function GlobalSearchModal({ close }: { close: () => void }) {
+  const systemStatus = useContext(SystemContext);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [teamResults, setTeamResults] = useState<SearchTeamResult[]>([]);
+  const [playerResults, setPlayerResults] = useState<SearchPlayerResult[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [close]);
+
+  // Search effect
+  useEffect(() => {
+    const clean = query.trim();
+    if (!clean) {
+      setTeamResults([]);
+      setPlayerResults([]);
+      setLoading(false);
+      return;
+    }
+
+    // Instant local team matches from teams constant
+    const cleanLower = clean.toLowerCase();
+    const localTeams = teams.filter(
+      (t) =>
+        t.name.toLowerCase().includes(cleanLower) ||
+        t.abbr.toLowerCase() === cleanLower
+    );
+    if (localTeams.length > 0) {
+      setTeamResults(
+        localTeams.map((t) => ({
+          id: 0,
+          name: t.name,
+          city: "",
+          fullName: t.name,
+          abbr: t.abbr,
+          displayAbbr: t.abbr.toUpperCase(),
+          conference: "",
+          division: "",
+          color: "#e31837",
+        }))
+      );
+    }
+
+    setLoading(true);
+    const timer = setTimeout(() => {
+      fetch(`${API_BASE}/api/search?q=${encodeURIComponent(clean)}&season=${systemStatus.season}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setTeamResults(data.teams || []);
+          setPlayerResults(data.players || []);
+          setLoading(false);
+          setSelectedIndex(0);
+        })
+        .catch(() => {
+          setLoading(false);
+        });
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [query, systemStatus.season]);
+
+  const totalItems = teamResults.length + playerResults.length;
+
+  const navigateTo = (type: "team" | "player", target: SearchTeamResult | SearchPlayerResult) => {
+    if (type === "team") {
+      window.location.hash = `#team-${target.abbr.toLowerCase()}`;
+    } else {
+      window.location.hash = `#player-${target.id}`;
+    }
+    close();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((prev) => (totalItems > 0 ? (prev + 1) % totalItems : 0));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((prev) => (totalItems > 0 ? (prev - 1 + totalItems) % totalItems : 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (totalItems === 0) return;
+      if (selectedIndex < teamResults.length) {
+        navigateTo("team", teamResults[selectedIndex]);
+      } else {
+        const playerIdx = selectedIndex - teamResults.length;
+        if (playerResults[playerIdx]) {
+          navigateTo("player", playerResults[playerIdx]);
+        }
+      }
+    }
+  };
+
+  return (
+    <div className="global-search-modal">
+      <div className="global-search-scrim" onClick={close} />
+      <div className="global-search-dialog">
+        <div className="global-search-input-wrap">
+          <svg className="global-search-icon" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m16 16 4 4" />
+          </svg>
+          <input
+            ref={inputRef}
+            type="text"
+            className="global-search-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search players or teams (e.g. Crawford, Chiefs, WR)..."
+            aria-label="Search players or teams"
+          />
+          {query && (
+            <button
+              type="button"
+              className="global-search-clear"
+              onClick={() => { setQuery(""); inputRef.current?.focus(); }}
+              aria-label="Clear query"
+            >
+              ×
+            </button>
+          )}
+          <span className="global-search-shortcut">ESC</span>
+        </div>
+
+        <div className="global-search-body">
+          {!query.trim() ? (
+            <div className="global-search-empty-state">
+              <p>Search across all 32 NFL franchises and simulated league players.</p>
+              <div className="global-search-suggestions">
+                <span>Try searching:</span>
+                <button type="button" onClick={() => setQuery("Crawford")}>George Crawford</button>
+                <button type="button" onClick={() => setQuery("Panthers")}>Carolina Panthers</button>
+                <button type="button" onClick={() => setQuery("Chiefs")}>Kansas City Chiefs</button>
+                <button type="button" onClick={() => setQuery("Davis")}>Trey'Mane Davis</button>
+              </div>
+            </div>
+          ) : (
+            <div className="global-search-results">
+              {loading && teamResults.length === 0 && playerResults.length === 0 && (
+                <div className="global-search-loading">Searching league database…</div>
+              )}
+
+              {teamResults.length > 0 && (
+                <div className="global-search-group">
+                  <div className="global-search-group-header">TEAMS ({teamResults.length})</div>
+                  {teamResults.map((team, idx) => {
+                    const isSelected = selectedIndex === idx;
+                    return (
+                      <div
+                        key={`team-${team.abbr}-${idx}`}
+                        className={`global-search-item ${isSelected ? "selected" : ""}`}
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                        onClick={() => navigateTo("team", team)}
+                      >
+                        <img src={logo(team.abbr)} alt="" className="global-search-item-logo" />
+                        <div className="global-search-item-info">
+                          <strong>{team.fullName || team.name}</strong>
+                          <small>{team.division ? `${team.division} · ${team.displayAbbr}` : team.displayAbbr}</small>
+                        </div>
+                        <span className="global-search-item-badge">Team</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {playerResults.length > 0 && (
+                <div className="global-search-group">
+                  <div className="global-search-group-header">PLAYERS ({playerResults.length})</div>
+                  {playerResults.map((player, idx) => {
+                    const itemIdx = teamResults.length + idx;
+                    const isSelected = selectedIndex === itemIdx;
+                    return (
+                      <div
+                        key={`player-${player.id}`}
+                        className={`global-search-item ${isSelected ? "selected" : ""}`}
+                        onMouseEnter={() => setSelectedIndex(itemIdx)}
+                        onClick={() => navigateTo("player", player)}
+                      >
+                        <div className="global-search-item-avatar">
+                          <img
+                            src={getPlayerHeadshot(player)}
+                            alt=""
+                            onError={(e) => handleHeadshotError(e, player)}
+                          />
+                        </div>
+                        <div className="global-search-item-info">
+                          <strong>{player.name}</strong>
+                          <small>
+                            {player.number ? `#${player.number} · ` : ""}{player.position} · {player.teamDisplayAbbr || player.teamName}
+                          </small>
+                        </div>
+                        <span className="global-search-item-ovr">{player.overall} OVR</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!loading && teamResults.length === 0 && playerResults.length === 0 && (
+                <div className="global-search-no-results">
+                  No players or teams found matching <strong>"{query}"</strong>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="global-search-footer">
+          <span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span>
+          <span><kbd>↵</kbd> Select</span>
+          <span><kbd>ESC</kbd> Close</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [fantasyOpen, setFantasyOpen] = useState(false);
   const [showAllStories, setShowAllStories] = useState(false);
   const [systemStatus, setSystemStatus] = useState<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
@@ -4938,18 +5238,30 @@ function App() {
       if (event.key === "Escape") {
         setMenuOpen(false);
         setStatsOpen(false);
+        setSearchOpen(false);
+      }
+    };
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        if (!window.location.hash.startsWith("#fantasy")) {
+          e.preventDefault();
+          setSearchOpen((prev) => !prev);
+        }
       }
     };
     const updateRoute = () => {
       setRoute(window.location.hash);
       setMenuOpen(false);
       setStatsOpen(false);
+      setSearchOpen(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
     window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", handleGlobalKeyDown);
     window.addEventListener("hashchange", updateRoute);
     return () => {
       window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", handleGlobalKeyDown);
       window.removeEventListener("hashchange", updateRoute);
     };
   }, []);
@@ -5127,7 +5439,11 @@ function App() {
             <a href="#social">Social</a>
           </div>
           <div className="nav-tools">
-            <button aria-label="Search">
+            <button
+              aria-label="Search"
+              onClick={() => setSearchOpen(true)}
+              title="Search players or teams (⌘K)"
+            >
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
             </button>
             <a className="live-dot" href="#debug" title="Debug: league state, tables, runs">LIVE</a>
@@ -5135,6 +5451,7 @@ function App() {
         </nav>
         {menuOpen && <MegaMenu week={week} setWeek={setWeek} close={() => setMenuOpen(false)} />}
         {statsOpen && <StatsDropdown close={() => setStatsOpen(false)} />}
+        {searchOpen && <GlobalSearchModal close={() => setSearchOpen(false)} />}
       </header>
 
       {route === "#debug" ? (

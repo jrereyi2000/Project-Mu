@@ -724,52 +724,99 @@ def get_player_api(id: int, season: Optional[int] = None):
                 cur.execute("SELECT current_season FROM league_state LIMIT 1;")
                 st_row = cur.fetchone()
                 season = st_row["current_season"] if st_row and st_row.get("current_season") else 2035
+            # Query base player
             cur.execute("""
-                SELECT p.id, p.full_name as name, p.player_number, p.height, p.weight, p.espn_id,
-                       ps.position, ps.years_of_experience, ps.overall_rating,
-                       t.id as team_id, t.name as team_name, t.abbreviation as team_abbr, t.team_color
+                SELECT p.id, p.full_name as name, p.player_number, p.height, p.weight, p.espn_id
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                JOIN teams t ON t.id = ps.team_id
                 WHERE p.id = %s
-            """, (season, id))
-            player = cur.fetchone()
-
-            if not player:
+            """, (id,))
+            base_player = cur.fetchone()
+            if not base_player:
                 return {"error": "Player not found"}
 
+            # Query player season info for requested season
             cur.execute("""
-                WITH weekly_ranks AS (
-                    SELECT g.season, g.week, st.player_id, ps.position,
-                           (ps.position || DENSE_RANK() OVER (PARTITION BY g.season, g.week, ps.position ORDER BY st.fantasy_points DESC)) as weekly_pos_rank
+                SELECT ps.position, ps.years_of_experience, ps.overall_rating,
+                       t.id as team_id, t.name as team_name, t.abbreviation as team_abbr, t.team_color
+                FROM player_seasons ps
+                JOIN teams t ON t.id = ps.team_id
+                WHERE ps.player_id = %s AND ps.season = %s
+            """, (id, season))
+            ps_row = cur.fetchone()
+
+            # If not in player_seasons for this season, check season_stats
+            if not ps_row:
+                cur.execute("""
+                    SELECT ss.position, NULL as years_of_experience, NULL as overall_rating,
+                           t.id as team_id, t.name as team_name, t.abbreviation as team_abbr, t.team_color
+                    FROM season_stats ss
+                    JOIN teams t ON t.id = ss.team_id
+                    WHERE ss.player_id = %s AND ss.season = %s
+                    LIMIT 1
+                """, (id, season))
+                ps_row = cur.fetchone()
+
+            # If still not found for this season, fallback to player's most recent season
+            if not ps_row:
+                cur.execute("""
+                    SELECT ps.position, ps.years_of_experience, ps.overall_rating,
+                           t.id as team_id, t.name as team_name, t.abbreviation as team_abbr, t.team_color
+                    FROM player_seasons ps
+                    JOIN teams t ON t.id = ps.team_id
+                    WHERE ps.player_id = %s
+                    ORDER BY ps.season DESC
+                    LIMIT 1
+                """, (id,))
+                ps_row = cur.fetchone()
+
+            player = dict(base_player)
+            if ps_row:
+                player.update(dict(ps_row))
+            else:
+                player.update({
+                    "position": "ATH",
+                    "years_of_experience": 0,
+                    "overall_rating": 70,
+                    "team_id": None,
+                    "team_name": "Free Agent",
+                    "team_abbr": "FA",
+                    "team_color": "#e31837"
+                })
+
+            raw_games = []
+            if player.get("team_id"):
+                cur.execute("""
+                    WITH weekly_ranks AS (
+                        SELECT g.season, g.week, st.player_id, ps.position,
+                               (ps.position || DENSE_RANK() OVER (PARTITION BY g.season, g.week, ps.position ORDER BY st.fantasy_points DESC)) as weekly_pos_rank
+                        FROM games g
+                        JOIN player_stats st ON st.game_id = g.id
+                        LEFT JOIN player_seasons ps ON ps.season = g.season AND ps.player_id = st.player_id
+                        WHERE g.season = %s AND g.status = 'COMPLETED'
+                    )
+                    SELECT g.week, g.status, g.home_team_id, g.away_team_id, g.home_score, g.away_score,
+                           t_home.name as home_name, t_home.abbreviation as home_abbr,
+                           t_away.name as away_name, t_away.abbreviation as away_abbr,
+                           st.fantasy_points,
+                           wr.weekly_pos_rank,
+                           st.completions, st.pass_attempts, st.pass_yards, st.pass_tds, st.interceptions,
+                           st.rush_attempts, st.rush_yards, st.rush_tds,
+                           st.receptions, st.rec_yards, st.rec_tds, st.fumb,
+                           gl.def_tackles, gl.def_sacks, gl.def_tfl, gl.def_ints, gl.def_deflections, gl.def_forced_fumbles,
+                           gl.def_fumble_recoveries, gl.def_tds, gl.kick_fgm, gl.kick_fga, gl.kick_fg_long, gl.kick_xpm,
+                           gl.kick_xpa, gl.punt_punts, gl.punt_average, gl.punt_net_average, gl.punt_inside_20,
+                           gl.kr_returns, gl.kr_yards, gl.pr_returns, gl.pr_yards, gl.blk_sacks_allowed,
+                           (gl.player_id IS NOT NULL) AS has_capture_line
                     FROM games g
-                    JOIN player_stats st ON st.game_id = g.id
-                    JOIN player_seasons ps ON ps.season = g.season AND ps.player_id = st.player_id
-                    WHERE g.season = %s AND g.status = 'COMPLETED'
-                )
-                SELECT g.week, g.status, g.home_team_id, g.away_team_id, g.home_score, g.away_score,
-                       t_home.name as home_name, t_home.abbreviation as home_abbr,
-                       t_away.name as away_name, t_away.abbreviation as away_abbr,
-                       st.fantasy_points,
-                       wr.weekly_pos_rank,
-                       st.completions, st.pass_attempts, st.pass_yards, st.pass_tds, st.interceptions,
-                       st.rush_attempts, st.rush_yards, st.rush_tds,
-                       st.receptions, st.rec_yards, st.rec_tds, st.fumb,
-                       gl.def_tackles, gl.def_sacks, gl.def_tfl, gl.def_ints, gl.def_deflections, gl.def_forced_fumbles,
-                       gl.def_fumble_recoveries, gl.def_tds, gl.kick_fgm, gl.kick_fga, gl.kick_fg_long, gl.kick_xpm,
-                       gl.kick_xpa, gl.punt_punts, gl.punt_average, gl.punt_net_average, gl.punt_inside_20,
-                       gl.kr_returns, gl.kr_yards, gl.pr_returns, gl.pr_yards, gl.blk_sacks_allowed,
-                       (gl.player_id IS NOT NULL) AS has_capture_line
-                FROM games g
-                LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_id = %s
-                LEFT JOIN game_stat_lines gl ON gl.game_id = g.id AND gl.player_id = %s
-                LEFT JOIN weekly_ranks wr ON wr.season = g.season AND wr.week = g.week AND wr.player_id = st.player_id
-                JOIN teams t_home ON t_home.id = g.home_team_id
-                JOIN teams t_away ON t_away.id = g.away_team_id
-                WHERE g.season = %s AND (g.home_team_id = %s OR g.away_team_id = %s)
-                ORDER BY g.week
-            """, (season, id, id, season, player['team_id'], player['team_id']))
-            raw_games = cur.fetchall()
+                    LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_id = %s
+                    LEFT JOIN game_stat_lines gl ON gl.game_id = g.id AND gl.player_id = %s
+                    LEFT JOIN weekly_ranks wr ON wr.season = g.season AND wr.week = g.week AND wr.player_id = st.player_id
+                    JOIN teams t_home ON t_home.id = g.home_team_id
+                    JOIN teams t_away ON t_away.id = g.away_team_id
+                    WHERE g.season = %s AND (g.home_team_id = %s OR g.away_team_id = %s)
+                    ORDER BY g.week
+                """, (season, id, id, season, player['team_id'], player['team_id']))
+                raw_games = cur.fetchall()
 
             # Build all 18 weeks, inserting BYE week if team had a bye
             game_map = {g['week']: g for g in raw_games}
@@ -834,7 +881,38 @@ def get_player_api(id: int, season: Optional[int] = None):
                 GROUP BY ps.season, t.name, t.abbreviation, sor.total_fpts, sor.overall_rank
                 ORDER BY ps.season DESC
             """, (id,))
-            career = cur.fetchall()
+            career = [dict(r) for r in cur.fetchall()]
+
+            # Merge historical seasons from season_stats (e.g. 2034, 2033, 2032) into career_stats
+            cur.execute("""
+                SELECT ss.season, t.name as team_name, t.abbreviation as team_abbr,
+                       17 as gp,
+                       COALESCE(ss.total_fantasy_points, 0) as total_fpts,
+                       1 as overall_rank,
+                       ss.completions, ss.pass_attempts, ss.pass_yards, ss.pass_tds, ss.interceptions,
+                       ss.rush_attempts, ss.rush_yards, ss.rush_tds,
+                       ss.receptions, ss.rec_yards, ss.rec_tds
+                FROM season_stats ss
+                JOIN teams t ON t.id = ss.team_id
+                WHERE ss.player_id = %s
+                ORDER BY ss.season DESC
+            """, (id,))
+            ss_rows = [dict(r) for r in cur.fetchall()]
+            career_by_season = {c["season"]: c for c in career}
+            for sr in ss_rows:
+                s_yr = sr["season"]
+                if s_yr not in career_by_season:
+                    career.append(sr)
+                    career_by_season[s_yr] = sr
+                else:
+                    target = career_by_season[s_yr]
+                    for field in ["completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions",
+                                  "rush_attempts", "rush_yards", "rush_tds", "receptions", "rec_yards", "rec_tds"]:
+                        if not target.get(field) and sr.get(field):
+                            target[field] = sr[field]
+                    if not target.get("total_fpts") and sr.get("total_fpts"):
+                        target["total_fpts"] = sr["total_fpts"]
+            career.sort(key=lambda x: x["season"], reverse=True)
 
             # Defense, kicking, punting, returns and pass protection from the Season Stats capture (listed players only)
             cur.execute("""
@@ -854,7 +932,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                     for k, v in line.items():
                         if k != "season":
                             c[k] = _n(v) if k != "games_played" else v
-                    if not c.get("gp") and line.get("games_played"):
+                    if line.get("games_played"):
                         c["gp"] = line["games_played"]
             for g in games:
                 for k in [k for k in g if k.startswith(("def_", "kick_", "punt_", "kr_", "pr_", "blk_"))]:
@@ -2286,7 +2364,7 @@ def get_fantasy_projections_api(
     season: Optional[int] = None,
     week: Optional[int] = None,
     position: Optional[str] = "ALL",
-    limit: int = 250,
+    limit: int = 600,
 ):
     """Returns fantasy projections for the specified season and week."""
     season, default_week = season_week(season)
@@ -2410,11 +2488,97 @@ def get_fantasy_projections_api(
             }
 
 
+@app.get("/api/search")
+def search_global(q: str = "", season: Optional[int] = None, limit: int = 20):
+    """
+    Search teams and players for the global site search bar.
+    """
+    season, _ = season_week(season)
+    clean_q = q.strip()
+    if not clean_q:
+        return {"query": "", "teams": [], "players": []}
+
+    pattern = f"%{clean_q}%"
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            # Search teams
+            cur.execute("""
+                SELECT id, name, city, abbreviation, conference, division, team_color
+                FROM teams
+                WHERE name ILIKE %s OR city ILIKE %s OR abbreviation ILIKE %s OR (city || ' ' || name) ILIKE %s
+                ORDER BY name
+                LIMIT 8;
+            """, (pattern, pattern, pattern, pattern))
+            team_rows = cur.fetchall()
+            teams_res = [
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "city": r["city"],
+                    "fullName": f"{r['city']} {r['name']}",
+                    "abbr": r["abbreviation"].lower(),
+                    "displayAbbr": display_team_abbr(r["abbreviation"]),
+                    "conference": r["conference"],
+                    "division": r["division"],
+                    "color": r["team_color"],
+                }
+                for r in team_rows
+            ]
+
+            # Search players
+            cur.execute("""
+                SELECT p.id, p.full_name, p.player_number, p.espn_id,
+                       COALESCE(ps_curr.position, ps_latest.position, 'ATH') as position,
+                       COALESCE(ps_curr.overall_rating, ps_latest.overall_rating, 75) as overall_rating,
+                       COALESCE(t_curr.abbreviation, t_latest.abbreviation, 'FA') as team_abbr,
+                       COALESCE(t_curr.name, t_latest.name, 'Free Agent') as team_name
+                FROM players p
+                LEFT JOIN player_seasons ps_curr ON ps_curr.player_id = p.id AND ps_curr.season = %s
+                LEFT JOIN teams t_curr ON t_curr.id = ps_curr.team_id
+                LEFT JOIN LATERAL (
+                    SELECT ps.position, ps.overall_rating, ps.team_id
+                    FROM player_seasons ps
+                    WHERE ps.player_id = p.id
+                    ORDER BY ps.season DESC
+                    LIMIT 1
+                ) ps_latest ON true
+                LEFT JOIN teams t_latest ON t_latest.id = ps_latest.team_id
+                WHERE p.full_name ILIKE %s
+                ORDER BY overall_rating DESC
+                LIMIT 15;
+            """, (season, pattern))
+            player_rows = cur.fetchall()
+            players_res = [
+                {
+                    "id": r["id"],
+                    "name": r["full_name"],
+                    "position": _ui_position(r["position"]) if r["position"] else "ATH",
+                    "overall": r["overall_rating"],
+                    "number": r["player_number"],
+                    "teamAbbr": display_team_abbr(r["team_abbr"]).lower(),
+                    "teamDisplayAbbr": display_team_abbr(r["team_abbr"]),
+                    "teamName": r["team_name"],
+                    "espn_id": r["espn_id"],
+                }
+                for r in player_rows
+            ]
+
+            return {
+                "query": clean_q,
+                "teams": teams_res,
+                "players": players_res,
+            }
+
+
 @app.get("/api/fantasy/players")
-def get_fantasy_search_players(season: Optional[int] = None, min_points: float = 1.0, q: Optional[str] = None):
+def get_fantasy_search_players(season: Optional[int] = None, min_points: Optional[float] = None, q: Optional[str] = None):
     season, _ = season_week(season)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT current_week FROM league_state LIMIT 1;")
+            st_row = cur.fetchone()
+            curr_week = st_row["current_week"] if st_row else 1
+
             cur.execute("""
                 SELECT p.id,
                        p.full_name,
@@ -2422,31 +2586,38 @@ def get_fantasy_search_players(season: Optional[int] = None, min_points: float =
                        ps.position,
                        t.id AS team_id,
                        t.abbreviation AS team_abbr,
-                       ROUND(SUM(st.fantasy_points), 1) AS total_fpts
-                FROM games g
-                JOIN player_stats st ON st.game_id = g.id
-                JOIN player_seasons ps ON ps.season = g.season AND ps.player_id = st.player_id
+                       COALESCE(ROUND(SUM(st.fantasy_points), 1), 0.0) AS total_fpts,
+                       COALESCE(fp.projected_points, 0.0) AS proj_fpts
+                FROM player_seasons ps
                 JOIN players p ON p.id = ps.player_id
                 JOIN teams t ON t.id = ps.team_id
-                WHERE g.season = %s AND g.status = 'COMPLETED'
-                  AND ps.position IN ('QB', 'HB', 'FB', 'WR', 'TE')
-                GROUP BY p.id, p.full_name, p.espn_id, ps.position, t.id, t.abbreviation
-                HAVING SUM(st.fantasy_points) >= %s
-                ORDER BY SUM(st.fantasy_points) DESC;
-            """, (season, min_points))
+                LEFT JOIN games g ON g.season = ps.season AND g.status = 'COMPLETED' AND (g.home_team_id = t.id OR g.away_team_id = t.id)
+                LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_id = p.id
+                LEFT JOIN fantasy_projections fp ON fp.season = ps.season AND fp.player_id = p.id AND fp.week = %s
+                WHERE ps.season = %s
+                  AND ps.position IN ('QB', 'HB', 'FB', 'WR', 'TE', 'K')
+                GROUP BY p.id, p.full_name, p.espn_id, ps.position, t.id, t.abbreviation, fp.projected_points, ps.overall_rating
+                ORDER BY total_fpts DESC, proj_fpts DESC, ps.overall_rating DESC;
+            """, (curr_week, season))
             rows = cur.fetchall()
 
             players = []
             for r in rows:
                 ui_pos = _ui_position(r["position"])
                 t_abbr = display_team_abbr(r["team_abbr"])
+                fpts = float(r["total_fpts"] or 0.0)
+                proj = float(r["proj_fpts"] or 0.0)
+                if min_points is not None and fpts < min_points:
+                    continue
                 players.append({
                     "id": r["id"],
                     "playerId": r["id"],
                     "name": r["full_name"],
                     "position": ui_pos,
                     "team": t_abbr,
-                    "fpts": float(r["total_fpts"] or 0.0),
+                    "fpts": fpts if fpts > 0 else proj,
+                    "actual_fpts": fpts,
+                    "projected_fpts": proj,
                     "espn_id": r["espn_id"],
                 })
 
