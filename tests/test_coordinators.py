@@ -268,7 +268,7 @@ class TestDatabaseCoordinatorsAndSlants(unittest.TestCase):
                 self.assertEqual(slants["John Harbaugh"], "CEO")
 
     def test_carolina_narrative_continuity(self):
-        """Verifies Panthers staff continuity: Brad Idzik OC (2026+), Evero DC (2026+), Canales (2026-2033) then Whitfield (2034+)."""
+        """Verifies Panthers staff continuity: Brad Idzik OC (2026-2033 under Canales), Charles Grant OC (2034+ under Whitfield), Evero DC (2026+)."""
         with psycopg.connect(self.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT id FROM teams WHERE abbreviation = 'CAR';")
@@ -286,11 +286,11 @@ class TestDatabaseCoordinatorsAndSlants(unittest.TestCase):
                 self.assertIsNotNone(staff_2035)
                 self.assertEqual(staff_2035["head_coach"]["coach_name"], "Marcus Whitfield")
                 self.assertEqual(staff_2035["head_coach"]["slant"], "OFFENSIVE")
-                self.assertEqual(staff_2035["offensive_coordinator"]["name"], "Brad Idzik")
+                self.assertEqual(staff_2035["offensive_coordinator"]["name"], "Charles Grant")
                 self.assertEqual(staff_2035["defensive_coordinator"]["name"], "Ejiro Evero")
 
     def test_chicago_narrative_continuity(self):
-        """Verifies Bears staff continuity (§4.2): Thomas Brown OC (2026-2027), Whitfield OC (2028-2033), Thomas Brown OC (2034+)."""
+        """Verifies Bears staff continuity (§4.2): Thomas Brown OC (2026-2027), Whitfield OC (2028-2033), Brett Vance OC (2034+)."""
         with psycopg.connect(self.db_conn_info) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT id FROM teams WHERE abbreviation = 'CHI';")
@@ -310,11 +310,11 @@ class TestDatabaseCoordinatorsAndSlants(unittest.TestCase):
                 self.assertEqual(staff_2030["offensive_coordinator"]["name"], "Marcus Whitfield")
                 self.assertEqual(staff_2030["defensive_coordinator"]["name"], "Dennis Allen")
 
-                # Season 2035 (Thomas Brown return stint)
+                # Season 2035 (Brett Vance era)
                 staff_2035 = fetch_team_staff(cur, chi_id, 2035)
                 self.assertIsNotNone(staff_2035)
                 self.assertEqual(staff_2035["head_coach"]["coach_name"], "Ben Johnson")
-                self.assertEqual(staff_2035["offensive_coordinator"]["name"], "Thomas Brown")
+                self.assertEqual(staff_2035["offensive_coordinator"]["name"], "Brett Vance")
                 self.assertEqual(staff_2035["defensive_coordinator"]["name"], "Dennis Allen")
 
     def test_every_active_team_has_full_staff(self):
