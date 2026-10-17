@@ -376,19 +376,19 @@ class TestOffseasonRunnerExecution(unittest.TestCase):
 
         sb = resolve_sub_event_slate("super_bowl")
         self.assertEqual(len(sb), 3)
-        self.assertEqual([x["slot"] for x in sb], ["Hero", "Secondary 1", "Secondary 2"])
+        self.assertEqual([x["slot"] for x in sb], ["Hero Slot", "Slot 1", "Slot 2"])
 
         coach = resolve_sub_event_slate("coaching")
         self.assertEqual(len(coach), 1)
-        self.assertEqual(coach[0]["slot"], "Feature 3")
+        self.assertEqual(coach[0]["slot"], "Slot 3")
 
         sign = resolve_sub_event_slate("signings")
         self.assertEqual(len(sign), 1)
-        self.assertEqual(sign[0]["slot"], "Feature 4")
+        self.assertEqual(sign[0]["slot"], "Slot 4")
 
         draft = resolve_sub_event_slate("draft")
         self.assertEqual(len(draft), 1)
-        self.assertEqual(draft[0]["slot"], "Feature 5")
+        self.assertEqual(draft[0]["slot"], "Slot 5")
 
     def test_runner_dry_run_execution(self):
         """Test full package dry-run without mutating database."""
@@ -403,7 +403,7 @@ class TestOffseasonRunnerExecution(unittest.TestCase):
         self.assertTrue(res["dry_run"])
         self.assertEqual(len(res["articles"]), 6)
         slots = [a["slot"] for a in res["articles"]]
-        self.assertEqual(slots, ["Hero", "Secondary 1", "Secondary 2", "Feature 3", "Feature 4", "Feature 5"])
+        self.assertEqual(slots, ["Hero Slot", "Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5"])
 
     def test_runner_only_coaching_dry_run(self):
         """Test partial package dry run for coaching carousel only."""
@@ -415,7 +415,7 @@ class TestOffseasonRunnerExecution(unittest.TestCase):
             live=False,
         )
         self.assertEqual(len(res["articles"]), 1)
-        self.assertEqual(res["articles"][0]["slot"], "Feature 3")
+        self.assertEqual(res["articles"][0]["slot"], "Slot 3")
         self.assertEqual(res["articles"][0]["article_type"], "COACHING_CAROUSEL_AUDIT")
 
 

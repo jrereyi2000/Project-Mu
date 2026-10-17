@@ -40,42 +40,42 @@ CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=po
 
 OFFSEASON_SLATE_SPEC = [
     {
-        "slot": "Hero",
+        "slot": "Hero Slot",
         "article_type": "SUPER_BOWL_GAME_RECAP",
         "event_type": "super_bowl",
         "writer": "BARNWELL",
         "title_hint": "The Super Bowl: How the Game Was Won",
     },
     {
-        "slot": "Secondary 1",
+        "slot": "Slot 1",
         "article_type": "SUPER_BOWL_CHAMPION_RETROSPECTIVE",
         "event_type": "super_bowl",
         "writer": "CHADIHA",
         "title_hint": "The Champion's Road to the Lombardi",
     },
     {
-        "slot": "Secondary 2",
+        "slot": "Slot 2",
         "article_type": "SUPER_BOWL_RUNNER_UP_POSTMORTEM",
         "event_type": "super_bowl",
         "writer": "SANDO",
         "title_hint": "The Super Bowl Loss: What Comes Next",
     },
     {
-        "slot": "Feature 3",
+        "slot": "Slot 3",
         "article_type": "COACHING_CAROUSEL_AUDIT",
         "event_type": "coaching",
         "writer": "SANDO",
         "title_hint": "The Coaching Carousel: Hires, Firings, and Grades",
     },
     {
-        "slot": "Feature 4",
+        "slot": "Slot 4",
         "article_type": "FREE_AGENCY_SIGNING_GRADES",
         "event_type": "signings",
         "writer": "YATES",
         "title_hint": "The Biggest Signings: Fit, Value, and Risk",
     },
     {
-        "slot": "Feature 5",
+        "slot": "Slot 5",
         "article_type": "NFL_DRAFT_CLASS_RECAP",
         "event_type": "draft",
         "writer": "MEL_KIPER",

@@ -2462,9 +2462,9 @@ def get_weekly_news(week: int, season: Optional[int] = None):
                 s_lower = slot_name.lower()
                 if "hero" in s_lower:
                     slotted_response["hero"] = art_dict
-                elif s_lower in ("slot 1", "slot 2"):
+                elif s_lower in ("slot 1", "slot 2") or s_lower.startswith("secondary"):
                     slotted_response["secondary"].append(art_dict)
-                elif s_lower in ("slot 3", "slot 4", "slot 5"):
+                elif s_lower in ("slot 3", "slot 4", "slot 5") or s_lower.startswith("feature"):
                     slotted_response["features"].append(art_dict)
                 elif s_lower in ("slot 6", "slot 7", "slot 8"):
                     slotted_response["local_primers"].append(art_dict)

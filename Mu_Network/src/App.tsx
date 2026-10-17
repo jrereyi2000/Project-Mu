@@ -5139,7 +5139,7 @@ function App() {
           );
         })()}
 
-        <div className="page-grid">
+        <div className="page-grid" style={week === 24 ? { gridTemplateColumns: "1fr" } : undefined}>
           <section className="main-column">
             <div className="section-heading">
               <div><span className="red-rule" /><h1>National Desk</h1></div>
@@ -5221,7 +5221,7 @@ function App() {
               <div className="offseason-editorial-slate">
                 {/* 2 SECONDARY STORIES */}
                 <div className="latest-heading">
-                  <h2>Postseason Retrospective &amp; Loss Analysis</h2>
+                  <h2>Secondary Slots (1 &amp; 2) · Retrospective &amp; Loss Analysis</h2>
                   <span style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: ".08em", color: "var(--gray-500)", fontFamily: "var(--font-mono)" }}>
                     Secondary Analysis · Slots 1 &amp; 2
                   </span>
@@ -5272,7 +5272,7 @@ function App() {
 
                 {/* 3 FEATURE STORIES */}
                 <div className="latest-heading" style={{ marginTop: "44px" }}>
-                  <h2>Offseason In-Depth Audits</h2>
+                  <h2>Feature Slots (3, 4 &amp; 5) · Offseason In-Depth Audits</h2>
                   <span style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: ".08em", color: "var(--gray-500)", fontFamily: "var(--font-mono)" }}>
                     Coaching · Free Agency · Draft · Slots 3, 4 &amp; 5
                   </span>
@@ -5281,7 +5281,7 @@ function App() {
                   className="offseason-features-grid"
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gridTemplateColumns: "repeat(3, 1fr)",
                     borderBottom: "1px solid var(--gray-300)"
                   }}
                 >
@@ -5430,61 +5430,63 @@ function App() {
             )}
           </section>
 
-          <aside className="sidebar">
-            <div className="sticky-panel">
-              <div className="sidebar-title">
-                <span className="pulse" />
-                <div><span>POPULAR MARKETS</span><h2>Trending Local Coverage</h2></div>
-              </div>
-              <div className="market-list">
-                {(() => {
-                  const primers = newsData?.slotted?.local_primers;
-                  if (Array.isArray(primers) && primers.length > 0) {
-                    return primers.map((story: any, index: number) => {
-                      const primaryTeam = story.tagged_teams?.find((t: any) => t.mention_type === 'PRIMARY') || story.tagged_teams?.[0];
-                      const teamAbbr = primaryTeam?.abbr?.toLowerCase() || "nfl";
-                      const teamName = primaryTeam?.name || "Local";
-                      const author = story.author?.display_name || "Franchise Beat";
+          {week !== 24 && (
+            <aside className="sidebar">
+              <div className="sticky-panel">
+                <div className="sidebar-title">
+                  <span className="pulse" />
+                  <div><span>POPULAR MARKETS</span><h2>Trending Local Coverage</h2></div>
+                </div>
+                <div className="market-list">
+                  {(() => {
+                    const primers = newsData?.slotted?.local_primers;
+                    if (Array.isArray(primers) && primers.length > 0) {
+                      return primers.map((story: any, index: number) => {
+                        const primaryTeam = story.tagged_teams?.find((t: any) => t.mention_type === 'PRIMARY') || story.tagged_teams?.[0];
+                        const teamAbbr = primaryTeam?.abbr?.toLowerCase() || "nfl";
+                        const teamName = primaryTeam?.name || "Local";
+                        const author = story.author?.display_name || "Franchise Beat";
 
-                      return (
-                        <article className="market-story" key={story.id}>
-                          <span className="rank">{String(index + 1).padStart(2, "0")}</span>
-                          <div className="market-copy">
-                            <span className="team-tag"><img src={logo(teamAbbr)} alt="" />{teamName} Beat</span>
-                            <a href={`#article-${story.id}`}><h3>{story.headline}</h3></a>
-                            <p>By {author} <span>·</span> Beat Reporter</p>
-                          </div>
-                        </article>
-                      );
-                    });
-                  }
+                        return (
+                          <article className="market-story" key={story.id}>
+                            <span className="rank">{String(index + 1).padStart(2, "0")}</span>
+                            <div className="market-copy">
+                              <span className="team-tag"><img src={logo(teamAbbr)} alt="" />{teamName} Beat</span>
+                              <a href={`#article-${story.id}`}><h3>{story.headline}</h3></a>
+                              <p>By {author} <span>·</span> Beat Reporter</p>
+                            </div>
+                          </article>
+                        );
+                      });
+                    }
 
-                  return localStories.map((story, index) => (
-                    <article className="market-story" key={story.title}>
-                      <span className="rank">{String(index + 1).padStart(2, "0")}</span>
-                      <div className="market-copy">
-                        <span className="team-tag"><img src={logo(story.team)} alt="" />{story.tag}</span>
-                        <a href={`#article-local-${story.team}`}><h3>{story.title}</h3></a>
-                        <p>By {story.author} <span>·</span> {story.time} ago</p>
-                      </div>
-                    </article>
-                  ));
-                })()}
+                    return localStories.map((story, index) => (
+                      <article className="market-story" key={story.title}>
+                        <span className="rank">{String(index + 1).padStart(2, "0")}</span>
+                        <div className="market-copy">
+                          <span className="team-tag"><img src={logo(story.team)} alt="" />{story.tag}</span>
+                          <a href={`#article-local-${story.team}`}><h3>{story.title}</h3></a>
+                          <p>By {story.author} <span>·</span> {story.time} ago</p>
+                        </div>
+                      </article>
+                    ));
+                  })()}
+                </div>
+                <a className="local-link" href="#social-teams">Explore all local markets <span>↗</span></a>
               </div>
-              <a className="local-link" href="#social-teams">Explore all local markets <span>↗</span></a>
-            </div>
-            <div className="power-card">
-              <span>POWER RANKINGS</span>
-              <h3>{powerRankings?.week ? <>Week {powerRankings.week}<br />Top 3</> : <>Power<br />Rankings</>}</h3>
-              <div className="power-teams">
-                {(powerRankings?.rankings || []).slice(0, 3).map((team) => (
-                  <span key={team.team_id}><b>{String(team.rank).padStart(2, "0")}</b><img src={logo(team.abbr)} alt="" />{team.abbr}<em>{team.record || ""}</em></span>
-                ))}
-                {!powerRankings?.rankings?.length && <span>Published with this week's column</span>}
+              <div className="power-card">
+                <span>POWER RANKINGS</span>
+                <h3>{powerRankings?.week ? <>Week {powerRankings.week}<br />Top 3</> : <>Power<br />Rankings</>}</h3>
+                <div className="power-teams">
+                  {(powerRankings?.rankings || []).slice(0, 3).map((team) => (
+                    <span key={team.team_id}><b>{String(team.rank).padStart(2, "0")}</b><img src={logo(team.abbr)} alt="" />{team.abbr}<em>{team.record || ""}</em></span>
+                  ))}
+                  {!powerRankings?.rankings?.length && <span>Published with this week's column</span>}
+                </div>
+                <a href="#rankings">Full rankings →</a>
               </div>
-              <a href="#rankings">Full rankings →</a>
-            </div>
-          </aside>
+            </aside>
+          )}
         </div>
       </main>}
       <footer>
