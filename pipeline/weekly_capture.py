@@ -50,7 +50,7 @@ DEBUG_DIRS = ("stop_debug", "scope_debug", "week_debug", "team_debug", "probe", 
 CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice when it has to relaunch
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
-MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame")
+MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame", "draft-results")
 FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
 PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
 SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the Super Bowl postgame capture
@@ -91,6 +91,8 @@ def run_cmd(args, log_path, timeout):
 # --------------------------------------------------------------- state ----
 def folder_mode(folder):
     """A run folder's mode from what it holds."""
+    if os.path.exists(os.path.join(folder, "draft_results.csv")) or os.path.exists(os.path.join(folder, "draft_results.json")) or os.path.isdir(os.path.join(folder, "draft_results")):
+        return "draft-results"
     if os.path.isdir(os.path.join(folder, "season_schedule")) and (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "prospects"))):
         return "season"
     if os.path.isdir(os.path.join(folder, "prospects")):
@@ -107,10 +109,16 @@ def folder_mode(folder):
 def capture_done(folder, mode="weekly"):
     if os.path.exists(os.path.join(folder, ".capture_done")):
         return True
+    if mode in ("draft-results", "draft_results"):
+        return (os.path.exists(os.path.join(folder, "draft_results.csv"))
+                or os.path.exists(os.path.join(folder, "draft_results.json"))
+                or os.path.isdir(os.path.join(folder, "draft_results")))
     return mode == "weekly" and os.path.exists(os.path.join(folder, "week.json"))
 
 
 def extract_done(folder, mode="weekly"):
+    if mode in ("draft-results", "draft_results"):
+        return os.path.exists(os.path.join(folder, "draft_results.csv")) or os.path.exists(os.path.join(folder, "draft_results.json"))
     if mode in ("games", "postgame"):
         return os.path.exists(os.path.join(folder, "game_scores.csv"))
     if mode == "playoff":
@@ -204,6 +212,9 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
     elif mode == "season":
         where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects"))) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "season", "--all-prospects", *where], CAPTURE_TIMEOUT * 2
+    elif mode in ("draft-results", "draft_results"):
+        where = ["--resume", name] if os.path.isdir(os.path.join(folder, "draft_results")) else ["--out", name]
+        args, timeout = [sys.executable, "madden_capture.py", "--only", "draft-results", *where], CAPTURE_TIMEOUT
     else:
         for d in DEBUG_DIRS:                   # clear old debug frames, keep partial captures
             shutil.rmtree(os.path.join(folder, d), ignore_errors=True)
@@ -220,12 +231,36 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
 
 
 def step_extract(folder, log_path, mode="weekly"):
+    if mode in ("draft-results", "draft_results") and extract_done(folder, mode):
+        return
     code, last = run_cmd([sys.executable, "extract.py", folder], log_path, 60 * 60)
     if code != 0 or not extract_done(folder, mode):
         raise WeekStopped(f"extract.py failed: {last}")
 
 
-def step_load(folder, replace=False):
+def step_load(folder, replace=False, mode="weekly"):
+    if mode in ("draft-results", "draft_results"):
+        from pipeline.draft_results import load_draft_results_csv, load_draft_results_json
+        import psycopg
+        from pipeline.load_capture import DSN
+        csv_path = os.path.join(folder, "draft_results.csv")
+        json_path = os.path.join(folder, "draft_results.json")
+        season, _ = league_state()
+        if os.path.exists(csv_path):
+            report = load_draft_results_csv(csv_path, season)
+        elif os.path.exists(json_path):
+            report = load_draft_results_json(json_path, season)
+        else:
+            raise WeekStopped(f"No draft results found in {folder} (expected draft_results.csv or draft_results.json)")
+        name = os.path.basename(os.path.normpath(folder))
+        with psycopg.connect(DSN) as conn:
+            conn.execute(
+                "INSERT INTO captures (folder, mode, season, week, status, loaded_at) "
+                "VALUES (%s, %s, %s, %s, 'loaded', NOW()) "
+                "ON CONFLICT (folder) DO UPDATE SET status = 'loaded', loaded_at = NOW()",
+                (name, "draft-results", season, 24),
+            )
+        return {"mode": "draft-results", "week": 24, "report": report}
     from pipeline.load_capture import LoadError, load
     try:
         report = load(folder, replace=replace)
@@ -326,7 +361,7 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
     if week_label == SUPER_BOWL_LABEL or mode == "postgame":
         what = "Super Bowl postgame capture"
     else:
-        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan"}.get(mode, "Weekly capture")
+        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan", "draft-results": "Draft results scan"}.get(mode, "Weekly capture")
     os.makedirs(CAPTURES, exist_ok=True)
     lock = open(LOCK_PATH, "w")
     try:
@@ -369,13 +404,17 @@ def run(resume=None, articles=True, connect=True, mode="weekly"):
         status = load_status(folder)
         if status != "loaded":
             log("Step 6: load")
-            report = step_load(folder, replace=(mode == "games"))
+            report = step_load(folder, replace=(mode == "games"), mode=mode)
             log(f"Loaded: {report.get('mode')} week {report.get('week')}")
         else:
             log("Already loaded; skipping the load")
-        if mode in ("roster", "prospects", "season"):
+        if mode in ("roster", "prospects", "season", "draft-results"):
             season, _ = league_state()
-            what_done = "Season setup (schedule, rosters, draft prospects)" if mode == "season" else ("Rosters" if mode == "roster" else "Draft prospects")
+            what_done = "Season setup (schedule, rosters, draft prospects)" if mode == "season" else (
+                "Rosters" if mode == "roster" else (
+                    "Draft prospects" if mode == "prospects" else "Draft results"
+                )
+            )
             log(f"{what_done} loaded. Skipping weekly engines and articles.")
             log("Step 9: shrink")
             before, after = shrink(folder)
@@ -419,7 +458,8 @@ def main():
                          "postgame: capture Super Bowl directly from the in-game postgame screen; "
                          "season: start-of-season cadence scan (schedule, rosters, then draft board); "
                          "roster: season cadence scan of all 32 team rosters; "
-                         "prospects: draft board scan of college prospects")
+                         "prospects: draft board scan of college prospects; "
+                         "draft-results: capture and load actual draft results into draft_prospects")
     ap.add_argument("--no-connect", action="store_true",
                     help="skip the connect step (chiaki-ng is already streaming the franchise menus)")
     a = ap.parse_args()
