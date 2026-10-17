@@ -2083,9 +2083,26 @@ def clear_postgame(out):
 def run_season_schedule(out, weeks=18):
     """League Schedule weeks 1-18 (start of season: every game as scheduled). Each week's
     pages go to season_schedule/season_week_N_NNN.png. Presses nothing but L2 and Down."""
+    folder = os.path.join(out, "season_schedule")
+    os.makedirs(folder, exist_ok=True)
+    done_file = os.path.join(folder, "done.txt")
+    if os.path.exists(done_file):
+        log(f"Season schedule already captured ({done_file}). Skipping.")
+        return
+    existing = glob.glob(os.path.join(folder, "season_week_*.png"))
+    existing_weeks = set()
+    for p in existing:
+        m = re.search(r"season_week_(\d+)_", os.path.basename(p))
+        if m:
+            existing_weeks.add(int(m.group(1)))
+    if len(existing_weeks) >= weeks:
+        log(f"Season schedule already has all {weeks} weeks captured. Marking done and skipping.")
+        with open(done_file, "w") as df:
+            df.write(f"weeks 1-{weeks}\n")
+        return
+
     log("== Season schedule ==")
     f = open_league_schedule()
-    folder = os.path.join(out, "season_schedule")
     for n in range(1, weeks + 1):
         target = f"SEASON WEEK {n}"
         f = go_to_week(f, target, out)
@@ -2093,6 +2110,9 @@ def run_season_schedule(out, weeks=18):
         pages = capture_list(folder, f"season_week_{n:02d}", stop_at_zeros=False)
         log(f"  {target}: {pages} pages")
         f, _ = wait_for(["SCHED_LIST"], timeout=10)
+    with open(done_file, "w") as df:
+        df.write(f"weeks 1-{weeks}\n")
+    log("Season schedule complete.")
 
 
 def prompt_option(f, options=CLASS_PROMPT_OPTIONS):
@@ -2191,6 +2211,10 @@ def run_prospects(out, max_prospects=32):
     Captures one screenshot per row into prospects/prospect_NNN.png."""
     pdir = os.path.join(out, "prospects")
     os.makedirs(pdir, exist_ok=True)
+    done_file = os.path.join(out, ".prospects_done")
+    if os.path.exists(done_file):
+        log(f"Draft prospects already captured ({done_file}). Skipping.")
+        return 0
     log("== Draft Board Prospects (Line by Line) ==")
     f, s = look()
     if s in ("DRAFT_BOARD", "EXIT_CLASS_PROMPT"):
@@ -2238,6 +2262,8 @@ def run_prospects(out, max_prospects=32):
         row += 1
         press("down", hold=0.1, wait=0.25)
 
+    with open(done_file, "w") as df:
+        df.write(f"{row} prospects\n")
     log(f"Captured {row} prospect row(s) into {pdir}")
     close_draft_board()
     return row
@@ -2524,6 +2550,16 @@ def run_team_overalls(out):
     log("== Team Overalls & Rankings ==")
     folder = os.path.join(out, "team_overalls")
     os.makedirs(folder, exist_ok=True)
+    done_file = os.path.join(folder, "done.txt")
+    if os.path.exists(done_file):
+        log(f"Team overalls already captured ({done_file}). Skipping.")
+        return
+    existing = glob.glob(os.path.join(folder, "*.png"))
+    if len(existing) >= 32:
+        log(f"All 32 team overalls already captured in {folder}. Marking done and skipping.")
+        with open(done_file, "w") as df:
+            df.write("32 teams\n")
+        return
 
     open_team_overalls()
     navigate_to_bears()
@@ -2550,6 +2586,8 @@ def run_team_overalls(out):
             press("down", wait=0.8)
             press("right", wait=0.8)
 
+    with open(done_file, "w") as df:
+        df.write("32 teams\n")
     log("Captured all 32 team overalls; returning to Weekly Hub")
     press("circle", wait=1.5)
     wait_for(["USER_TEAMS", "HUB_OPTIONS", "HUB"], timeout=6.0)
@@ -2595,17 +2633,15 @@ def run_injuries(out, target_teams=None):
     log("== Injury Report ==")
     folder = os.path.join(out, "injuries")
     os.makedirs(folder, exist_ok=True)
-    f = open_injury_report()
-    cur_team = injury_team(f)
-    if not cur_team:
-        raise Abort("Can't read the team on the Injury Report screen")
-
-    first_team = cur_team
-    seen = {}
+    done_file = os.path.join(folder, "done.txt")
     target_set = {t.upper() for t in target_teams} if target_teams else None
     target_count = len(target_set) if target_set else 32
 
-    # Seed seen teams from folder in case of resume
+    if os.path.exists(done_file):
+        log(f"Injury report already captured ({done_file}). Skipping.")
+        return target_count
+
+    seen = {}
     for p in glob.glob(os.path.join(folder, "*.png")):
         base = os.path.basename(p)
         m = re.match(r"^\d+_([a-z0-9]+)\.png$", base)
@@ -2618,8 +2654,18 @@ def run_injuries(out, target_teams=None):
                     os.remove(p)
 
     if len(seen) == target_count:
-        log(f"All {target_count} target teams already captured in {folder}")
+        log(f"All {target_count} target teams already captured in {folder}. Marking done and skipping.")
+        with open(done_file, "w") as df:
+            for t in sorted(seen.keys()):
+                df.write(f"{t}\n")
         return target_count
+
+    f = open_injury_report()
+    cur_team = injury_team(f)
+    if not cur_team:
+        raise Abort("Can't read the team on the Injury Report screen")
+
+    first_team = cur_team
 
     log(f"Starting injury report capture at {cur_team}")
     idx = max([int(os.path.basename(p).split('_')[0]) for p in seen.values()] + [0])
@@ -2677,6 +2723,9 @@ def run_injuries(out, target_teams=None):
             missing = (target_set or TEAMS) - set(seen.keys())
             raise Abort(f"Wrapped back to {first_team} but only captured {len(seen)}/{target_count} teams. Missing: {sorted(missing)}")
 
+    with open(done_file, "w") as df:
+        for t in sorted(seen.keys()):
+            df.write(f"{t}\n")
     log(f"Captured injury report for all {len(seen)} teams.")
     return len(seen)
 
@@ -3225,6 +3274,9 @@ def run_roster(out, max_teams=32, resume=False):
             kept = []
         kept = [r for r in kept if norm(r[0]) in done]
         log(f"Resuming {out}: {len(done)} teams already done")
+        if len(done) >= max_teams:
+            log(f"All {len(done)} team rosters already captured in {done_path}. Skipping.")
+            return len(kept)
     else:
         kept = []
         open(done_path, "w").close()
@@ -3477,27 +3529,49 @@ def main():
             run_mode("the injury report", lambda: run_injuries(out))
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
         if a.only in ("season", "season-schedule"):
-            run_mode("the season schedule", lambda: run_season_schedule(out), clear("season_schedule"))
+            sched_done = os.path.join(out, "season_schedule", "done.txt")
+            if bool(a.resume) and (os.path.exists(sched_done) or len(glob.glob(os.path.join(out, "season_schedule", "season_week_*.png"))) >= 18):
+                log("Season schedule already captured. Skipping.")
+            else:
+                run_mode("the season schedule", lambda: run_season_schedule(out), clear("season_schedule"))
             if a.only == "season":
                 log("Returning to the hub before rosters")
                 go_hub()
         if a.only in ("season", "roster"):
             tries = [0]
+            roster_done = os.path.join(out, "roster", "done.txt")
+            roster_skip = False
+            if bool(a.resume) and os.path.exists(roster_done):
+                with open(roster_done) as rdh:
+                    done_count = len([line for line in rdh if line.strip()])
+                if done_count >= (a.teams or 32):
+                    log(f"All {done_count} team rosters already captured in done.txt. Skipping.")
+                    roster_skip = True
 
-            def rosters():
-                tries[0] += 1                   # after a stream restart, continue the same run
-                return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1 or os.path.exists(os.path.join(out, "roster", "done.txt")))
-            run_mode("the rosters", rosters)
+            if not roster_skip:
+                def rosters():
+                    tries[0] += 1                   # after a stream restart, continue the same run
+                    return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1 or os.path.exists(roster_done))
+                run_mode("the rosters", rosters)
+
             if a.only == "season":
                 log("Returning to the hub before team overalls")
                 go_hub()
         if a.only in ("season", "team-overalls", "team-ratings"):
-            run_mode("the team overalls", lambda: run_team_overalls(out), clear("team_overalls"))
+            overalls_done = os.path.join(out, "team_overalls", "done.txt")
+            if bool(a.resume) and (os.path.exists(overalls_done) or len(glob.glob(os.path.join(out, "team_overalls", "*.png"))) >= 32):
+                log("All 32 team overalls already captured. Skipping.")
+            else:
+                run_mode("the team overalls", lambda: run_team_overalls(out), clear("team_overalls"))
             if a.only == "season":
                 log("Returning to the hub before injury report")
                 go_hub()
         if a.only == "season":
-            run_mode("the injury report", lambda: run_injuries(out))
+            injuries_done = os.path.join(out, "injuries", "done.txt")
+            if bool(a.resume) and (os.path.exists(injuries_done) or len(glob.glob(os.path.join(out, "injuries", "*.png"))) >= 32):
+                log("All 32 team injury reports already captured. Skipping.")
+            else:
+                run_mode("the injury report", lambda: run_injuries(out))
             log("Returning to the hub before draft prospects")
             go_hub()
         if a.only == "games":
@@ -3505,8 +3579,12 @@ def main():
         if a.only in ("postgame", "superbowl"):
             run_mode("the Super Bowl postgame stats", lambda: run_postgame(out, a.all_rows), lambda: clear_postgame(out))
         if a.only in ("season", "prospects"):
-            n_prospects = 0 if a.all_prospects else a.prospects
-            run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
+            prospects_done = os.path.join(out, ".prospects_done")
+            if bool(a.resume) and os.path.exists(prospects_done):
+                log("Draft prospects already captured. Skipping.")
+            else:
+                n_prospects = 0 if a.all_prospects else a.prospects
+                run_mode("draft prospects", lambda: run_prospects(out, max_prospects=n_prospects), clear("prospects"))
         if a.only in ("draft-results", "draft-recap"):
             paged_mode = not a.row_by_row
             run_mode("the draft recap", lambda: run_draft_recap(out, max_picks=a.draft_picks, paged=paged_mode, rows_per_page=a.rows_per_page), clear("draft_results"))

@@ -948,6 +948,62 @@ class RosterRecoveryTest(unittest.TestCase):
             self.assertEqual(press.call_count, 4)
 
 
+class SeasonResumeTest(unittest.TestCase):
+    def test_run_season_schedule_skips_when_done_txt_exists(self):
+        with tempfile.TemporaryDirectory() as out:
+            sdir = os.path.join(out, "season_schedule")
+            os.makedirs(sdir)
+            with open(os.path.join(sdir, "done.txt"), "w") as f:
+                f.write("weeks 1-18\n")
+            with mock.patch.object(mc, "open_league_schedule") as mock_open:
+                mc.run_season_schedule(out)
+                mock_open.assert_not_called()
+
+    def test_run_roster_skips_when_all_32_teams_in_done_txt(self):
+        with tempfile.TemporaryDirectory() as out:
+            rdir = os.path.join(out, "roster")
+            os.makedirs(rdir)
+            with open(os.path.join(rdir, "done.txt"), "w") as f:
+                for i in range(32):
+                    f.write(f"{i+1} TEAM{i+1}\n")
+            with mock.patch.object(mc, "open_roster") as mock_open:
+                res = mc.run_roster(out, max_teams=32, resume=True)
+                mock_open.assert_not_called()
+                self.assertEqual(res, 0)
+
+    def test_run_team_overalls_skips_when_done_txt_exists(self):
+        with tempfile.TemporaryDirectory() as out:
+            tdir = os.path.join(out, "team_overalls")
+            os.makedirs(tdir)
+            with open(os.path.join(tdir, "done.txt"), "w") as f:
+                f.write("32 teams\n")
+            with mock.patch.object(mc, "open_team_overalls") as mock_open:
+                mc.run_team_overalls(out)
+                mock_open.assert_not_called()
+
+    def test_run_injuries_skips_when_done_txt_exists(self):
+        with tempfile.TemporaryDirectory() as out:
+            idir = os.path.join(out, "injuries")
+            os.makedirs(idir)
+            with open(os.path.join(idir, "done.txt"), "w") as f:
+                f.write("done\n")
+            with mock.patch.object(mc, "open_injury_report") as mock_open:
+                res = mc.run_injuries(out)
+                mock_open.assert_not_called()
+                self.assertEqual(res, 32)
+
+    def test_run_prospects_skips_when_done_exists(self):
+        with tempfile.TemporaryDirectory() as out:
+            pdir = os.path.join(out, "prospects")
+            os.makedirs(pdir)
+            with open(os.path.join(out, ".prospects_done"), "w") as f:
+                f.write("done\n")
+            with mock.patch.object(mc, "open_prospects") as mock_open:
+                res = mc.run_prospects(out)
+                mock_open.assert_not_called()
+                self.assertEqual(res, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
 
