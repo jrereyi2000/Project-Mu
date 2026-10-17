@@ -2284,6 +2284,9 @@ function ArticlePage({ articleId }: { articleId: string }) {
     body: null as string | null,
     teams: [] as any[],
     players: [] as any[],
+    authorHandle: null as string | null | undefined,
+    authorBio: null as string | null | undefined,
+    related: [] as any[],
   };
 
   if (isDbArticle && dbArticle) {
@@ -2372,7 +2375,7 @@ function ArticlePage({ articleId }: { articleId: string }) {
               </strong>
               <span>{data.role}</span>
             </div>
-            <div><small>PUBLISHED</small><b>{dbArticle?.week ? `Week ${dbArticle.week}, ${systemStatus.season} Season` : `December 23, ${systemStatus.season} · 9:15 AM ET`}</b></div>
+            <div><small>PUBLISHED</small><b>{dbArticle?.week ? (dbArticle.week === 24 ? `Offseason Edition, ${systemStatus.season} Season` : `Week ${dbArticle.week}, ${systemStatus.season} Season`) : `December 23, ${systemStatus.season} · 9:15 AM ET`}</b></div>
             <div><small>READ TIME</small><b>9 min</b></div>
           </div>
         </header>
@@ -2614,7 +2617,7 @@ function useFantasyPlayer() {
 function FantasyPlayerModal({ player: p, close }: { player: FantasyPlayer; close: () => void }) {
   const [activeTab, setActiveTab] = useState<"news" | "logs" | "stats" | "outlook">("logs");
   const [showAllSeasons, setShowAllSeasons] = useState(false);
-  const playerId = p.playerId || (p as any).id;
+  const playerId = (p as any).playerId || (p as any).id;
   const systemStatus = useContext(SystemContext);
   const [playerData, setPlayerData] = useState<any>(null);
 
@@ -4909,6 +4912,7 @@ function App() {
   const [showAllStories, setShowAllStories] = useState(false);
   const [systemStatus, setSystemStatus] = useState<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
   const [week, setWeek] = useState(18);
+  const [hasOffseasonArticles, setHasOffseasonArticles] = useState(false);
   const [newsData, setNewsData] = useState<any>(null);
   const [powerRankings, setPowerRankings] = useState<PowerRankingsResponse | null>(null);
   const [route, setRoute] = useState(window.location.hash);
@@ -4948,10 +4952,29 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!systemStatus.season) return;
+    fetch(`${API_BASE}/api/news/week/24?season=${systemStatus.season}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data?.total_articles > 0 || (Array.isArray(data?.articles) && data.articles.length > 0)) {
+          setHasOffseasonArticles(true);
+        } else {
+          setHasOffseasonArticles(false);
+        }
+      })
+      .catch(() => {});
+  }, [systemStatus.season, week]);
+
+  useEffect(() => {
     if (!systemStatus.season || !week) return;
     fetch(`${API_BASE}/api/news/week/${week}?season=${systemStatus.season}`)
       .then(r => r.json())
-      .then(news => setNewsData(news))
+      .then(news => {
+        setNewsData(news);
+        if (week === 24 && (news?.total_articles > 0 || (Array.isArray(news?.articles) && news.articles.length > 0))) {
+          setHasOffseasonArticles(true);
+        }
+      })
       .catch(err => console.error("Error fetching news:", err));
   }, [week, systemStatus.season]);
 
@@ -5072,60 +5095,67 @@ function App() {
       ) : route === "#schedule" ? (
         <SchedulePage />
       ) : <main>
-        <div className="edition-bar">
-          <span>THE NEWSROOM</span>
-          <span>{systemStatus.season} SEASON</span>
-          <div className="edition-week-picker">
-            <button
-              className="edition-week-btn"
-              onClick={() => setWeek(Math.max(1, week - 1))}
-              disabled={week <= 1}
-              aria-label="Previous week"
-              title="Previous week"
-            >
-              ◀
-            </button>
-            <select
-              className="edition-week-select"
-              value={week}
-              onChange={(e) => setWeek(Number(e.target.value))}
-              aria-label="Select news week"
-            >
-              {Array.from({ length: Math.max(systemStatus.week || 19, 19) }, (_, i) => i + 1).map((w) => (
-                <option key={w} value={w}>
-                  WEEK {w}{w === 19 ? " · WILD CARD" : w === 20 ? " · DIVISIONAL" : w === 21 ? " · CONF CHAMP" : w === 22 ? " · PRO BOWL" : w === 23 ? " · SUPER BOWL" : ""}
-                </option>
-              ))}
-            </select>
-            <button
-              className="edition-week-btn"
-              onClick={() => setWeek(Math.min(systemStatus.week || 23, week + 1))}
-              disabled={week >= (systemStatus.week || 23)}
-              aria-label="Next week"
-              title="Next week"
-            >
-              ▶
-            </button>
-          </div>
-        </div>
+        {(() => {
+          const canAccessOffseason = hasOffseasonArticles || week === 24 || (systemStatus.week && systemStatus.week >= 24);
+          const maxNewsWeek = canAccessOffseason ? Math.max(systemStatus.week || 24, 24) : Math.max(systemStatus.week || 19, 19);
+
+          return (
+            <div className="edition-bar">
+              <span>{week === 24 ? "OFFSEASON EDITION" : "THE NEWSROOM"}</span>
+              <span>{systemStatus.season} SEASON</span>
+              <div className="edition-week-picker">
+                <button
+                  className="edition-week-btn"
+                  onClick={() => setWeek(Math.max(1, week - 1))}
+                  disabled={week <= 1}
+                  aria-label="Previous week"
+                  title="Previous week"
+                >
+                  ◀
+                </button>
+                <select
+                  className="edition-week-select"
+                  value={week}
+                  onChange={(e) => setWeek(Number(e.target.value))}
+                  aria-label="Select news week"
+                >
+                  {Array.from({ length: maxNewsWeek }, (_, i) => i + 1).map((w) => (
+                    <option key={w} value={w}>
+                      WEEK {w}{w === 19 ? " · WILD CARD" : w === 20 ? " · DIVISIONAL" : w === 21 ? " · CONF CHAMP" : w === 22 ? " · PRO BOWL" : w === 23 ? " · SUPER BOWL" : w === 24 ? " · OFFSEASON" : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="edition-week-btn"
+                  onClick={() => setWeek(Math.min(maxNewsWeek, week + 1))}
+                  disabled={week >= maxNewsWeek}
+                  aria-label="Next week"
+                  title="Next week"
+                >
+                  ▶
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="page-grid">
           <section className="main-column">
             <div className="section-heading">
               <div><span className="red-rule" /><h1>National Desk</h1></div>
-              <p>Week {week} reporting, analysis, and film study</p>
+              <p>{week === 24 ? "Offseason reporting, analysis, and editorial package" : `Week ${week} reporting, analysis, and film study`}</p>
             </div>
 
             {/* HERO STORY */}
             {(() => {
               const hero = newsData?.slotted?.hero;
               const heroId = hero?.id ?? "game-of-week";
-              const heroTitle = hero?.headline || "One night. Two contenders. Everything on the line.";
-              const heroExcerpt = hero?.excerpt || "The league's most explosive offense meets the defense built to stop it. Inside the tactical battle that will define the season.";
+              const heroTitle = hero?.headline || (week === 24 ? "The Super Bowl: How the Game Was Won" : "One night. Two contenders. Everything on the line.");
+              const heroExcerpt = hero?.excerpt || (week === 24 ? "Inside the pivotal fourth-quarter swings and championship-clinching adjustments that decided the title." : "The league's most explosive offense meets the defense built to stop it. Inside the tactical battle that will define the season.");
               const heroAuthor = hero?.author?.display_name || "Bill Barnwell";
               const heroInitials = heroAuthor.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() || "BB";
               const heroRole = hero?.author?.archetype ? hero.author.archetype.replace(/_/g, " ") : "National Writer";
-              const heroSlotLabel = hero?.slot ? hero.slot.toUpperCase() : "GAME OF THE WEEK";
+              const heroSlotLabel = hero?.slot ? hero.slot.toUpperCase() : (week === 24 ? "OFFSEASON LEAD · SUPER BOWL RECAP" : "GAME OF THE WEEK");
 
               return (
                 <article className="hero-story">
@@ -5139,7 +5169,7 @@ function App() {
                     <span className="play-button" aria-hidden="true"><i /></span>
                   </a>
                   <div className="hero-content">
-                    <div className="hero-meta"><span>THE BIG READ</span><span>12 MIN READ</span></div>
+                    <div className="hero-meta"><span>{week === 24 ? "OFFSEASON LEAD READ" : "THE BIG READ"}</span><span>12 MIN READ</span></div>
                     <a href={`#article-${heroId}`}><h2>{heroTitle}</h2></a>
                     <p>{heroExcerpt}</p>
                     <div className="byline">
@@ -5187,58 +5217,217 @@ function App() {
               );
             })()}
 
-            <div className="latest-heading">
-              <h2>{showAllStories ? "This Week's Stories" : "Latest Analysis"}</h2>
-              <button onClick={() => setShowAllStories(!showAllStories)}>
-                {showAllStories ? "Show featured" : "See all stories"} <span>{showAllStories ? "↑" : "→"}</span>
-              </button>
-            </div>
-            <div className={`story-grid ${showAllStories ? "expanded" : ""}`}>
-              {(() => {
-                const slotted = newsData?.slotted;
-                const dynamicStories: any[] = [];
-                if (slotted) {
-                  if (Array.isArray(slotted.secondary)) dynamicStories.push(...slotted.secondary);
-                  if (Array.isArray(slotted.features)) dynamicStories.push(...slotted.features);
-                  if (Array.isArray(slotted.other)) dynamicStories.push(...slotted.other);
-                }
+            {week === 24 ? (
+              <div className="offseason-editorial-slate">
+                {/* 2 SECONDARY STORIES */}
+                <div className="latest-heading">
+                  <h2>Postseason Retrospective &amp; Loss Analysis</h2>
+                  <span style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: ".08em", color: "var(--gray-500)", fontFamily: "var(--font-mono)" }}>
+                    Secondary Analysis · Slots 1 &amp; 2
+                  </span>
+                </div>
+                <div className="story-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)" }}>
+                  {(() => {
+                    const secondary = (newsData?.slotted?.secondary && newsData.slotted.secondary.length > 0)
+                      ? newsData.slotted.secondary
+                      : [];
 
-                const storyList = dynamicStories.length > 0
-                  ? (showAllStories ? dynamicStories : dynamicStories.slice(0, 3))
-                  : (showAllStories ? stories : stories.slice(0, 3));
-
-                return storyList.map((story: any, index: number) => {
-                  const isDb = Boolean(story.id);
-                  const artLink = isDb ? `#article-${story.id}` : `#article-national-${index}`;
-                  const title = story.headline || story.title;
-                  const blurb = story.excerpt || story.blurb;
-                  const author = story.author?.display_name || story.author || "National Reporter";
-                  const initials = isDb ? author.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() : story.initials;
-                  const isRecord = story.article_type === "HISTORIC_RECORD_BREAK" || (story.slot && story.slot.toLowerCase().includes("record"));
-                  const kicker = isRecord
-                    ? "🏆 ALL-TIME NFL RECORD"
-                    : story.article_type
-                      ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
-                      : (story.kicker || "Analysis");
-                  const readTime = story.read || "7 min read";
-
-                  return (
-                    <article className={`story-card ${index === 0 ? "feature-card" : ""} ${isRecord ? "record-breaker-card" : ""}`} key={story.id || title}>
-                      <span className="story-number">0{index + 1}</span>
-                      <div className="story-copy">
-                        <span className={`kicker ${isRecord ? "record-kicker" : ""}`}>{kicker}</span>
-                        <a href={artLink}><h3>{title}</h3></a>
-                        <p>{blurb}</p>
-                        <div className="author-row">
-                          <span className={`avatar ${isRecord ? "amber" : ""}`}>{initials}</span>
-                          <span><b>{author}</b><small>NATIONAL REPORTER · {readTime}</small></span>
+                    if (secondary.length === 0) {
+                      return (
+                        <div style={{ gridColumn: "1 / -1", padding: "28px", color: "var(--gray-500)", background: "var(--paper)", border: "1px solid var(--gray-300)" }}>
+                          No secondary retrospective articles loaded for Week 24 yet.
                         </div>
-                      </div>
-                    </article>
-                  );
-                });
-              })()}
-            </div>
+                      );
+                    }
+
+                    return secondary.map((story: any, idx: number) => {
+                      const isDb = Boolean(story.id);
+                      const artLink = isDb ? `#article-${story.id}` : `#article-offseason-sec-${idx}`;
+                      const title = story.headline || story.title;
+                      const blurb = story.excerpt || story.blurb;
+                      const author = story.author?.display_name || story.author || "National Reporter";
+                      const initials = isDb ? author.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() : "MU";
+                      const kicker = story.article_type
+                        ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+                        : (story.slot || "Secondary Analysis");
+                      const readTime = story.read || "8 min read";
+
+                      return (
+                        <article className="story-card" key={story.id || title} style={{ borderLeft: idx % 2 === 1 ? "1px solid var(--gray-300)" : undefined }}>
+                          <span className="story-number">0{idx + 1}</span>
+                          <div className="story-copy">
+                            <span className="kicker">{kicker}</span>
+                            <a href={artLink}><h3>{title}</h3></a>
+                            <p>{blurb}</p>
+                            <div className="author-row">
+                              <span className="avatar">{initials}</span>
+                              <span><b>{author}</b><small>NATIONAL REPORTER · {readTime}</small></span>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* 3 FEATURE STORIES */}
+                <div className="latest-heading" style={{ marginTop: "44px" }}>
+                  <h2>Offseason In-Depth Audits</h2>
+                  <span style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: ".08em", color: "var(--gray-500)", fontFamily: "var(--font-mono)" }}>
+                    Coaching · Free Agency · Draft · Slots 3, 4 &amp; 5
+                  </span>
+                </div>
+                <div
+                  className="offseason-features-grid"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    borderBottom: "1px solid var(--gray-300)"
+                  }}
+                >
+                  {(() => {
+                    const features = (newsData?.slotted?.features && newsData.slotted.features.length > 0)
+                      ? newsData.slotted.features
+                      : [];
+
+                    if (features.length === 0) {
+                      return (
+                        <div style={{ gridColumn: "1 / -1", padding: "28px", color: "var(--gray-500)", background: "var(--paper)", border: "1px solid var(--gray-300)" }}>
+                          No offseason feature articles loaded for Week 24 yet.
+                        </div>
+                      );
+                    }
+
+                    return features.map((story: any, idx: number) => {
+                      const isDb = Boolean(story.id);
+                      const artLink = isDb ? `#article-${story.id}` : `#article-offseason-feat-${idx}`;
+                      const title = story.headline || story.title;
+                      const blurb = story.excerpt || story.blurb;
+                      const author = story.author?.display_name || story.author || "National Columnist";
+                      const initials = isDb ? author.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() : "MU";
+                      const kicker = story.article_type
+                        ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+                        : (story.slot || "Feature Audit");
+                      const readTime = story.read || "9 min read";
+
+                      return (
+                        <article
+                          className="story-card"
+                          key={story.id || title}
+                          style={{
+                            borderLeft: idx > 0 ? "1px solid var(--gray-300)" : undefined,
+                            borderBottom: "none"
+                          }}
+                        >
+                          <span className="story-number">0{idx + 3}</span>
+                          <div className="story-copy">
+                            <span className="kicker">{kicker}</span>
+                            <a href={artLink}><h3 style={{ fontSize: "20px" }}>{title}</h3></a>
+                            <p>{blurb}</p>
+                            <div className="author-row">
+                              <span className="avatar amber">{initials}</span>
+                              <span><b>{author}</b><small>EXPERT ANALYST · {readTime}</small></span>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* OTHER ARTICLES (IF ANY) */}
+                {Array.isArray(newsData?.slotted?.other) && newsData.slotted.other.length > 0 && (
+                  <>
+                    <div className="latest-heading" style={{ marginTop: "44px" }}>
+                      <h2>Additional Coverage</h2>
+                    </div>
+                    <div className="story-grid">
+                      {newsData.slotted.other.map((story: any, idx: number) => {
+                        const isDb = Boolean(story.id);
+                        const artLink = isDb ? `#article-${story.id}` : `#article-other-${idx}`;
+                        const title = story.headline || story.title;
+                        const blurb = story.excerpt || story.blurb;
+                        const author = story.author?.display_name || story.author || "Contributor";
+                        const initials = isDb ? author.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() : "MU";
+                        const kicker = story.article_type
+                          ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+                          : (story.slot || "Special Commission");
+
+                        return (
+                          <article className="story-card" key={story.id || title}>
+                            <span className="story-number">0{idx + 6}</span>
+                            <div className="story-copy">
+                              <span className="kicker">{kicker}</span>
+                              <a href={artLink}><h3>{title}</h3></a>
+                              <p>{blurb}</p>
+                              <div className="author-row">
+                                <span className="avatar">{initials}</span>
+                                <span><b>{author}</b><small>CONTRIBUTOR · 7 min read</small></span>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="latest-heading">
+                  <h2>{showAllStories ? "This Week's Stories" : "Latest Analysis"}</h2>
+                  <button onClick={() => setShowAllStories(!showAllStories)}>
+                    {showAllStories ? "Show featured" : "See all stories"} <span>{showAllStories ? "↑" : "→"}</span>
+                  </button>
+                </div>
+                <div className={`story-grid ${showAllStories ? "expanded" : ""}`}>
+                  {(() => {
+                    const slotted = newsData?.slotted;
+                    const dynamicStories: any[] = [];
+                    if (slotted) {
+                      if (Array.isArray(slotted.secondary)) dynamicStories.push(...slotted.secondary);
+                      if (Array.isArray(slotted.features)) dynamicStories.push(...slotted.features);
+                      if (Array.isArray(slotted.other)) dynamicStories.push(...slotted.other);
+                    }
+
+                    const storyList = dynamicStories.length > 0
+                      ? (showAllStories ? dynamicStories : dynamicStories.slice(0, 3))
+                      : (showAllStories ? stories : stories.slice(0, 3));
+
+                    return storyList.map((story: any, index: number) => {
+                      const isDb = Boolean(story.id);
+                      const artLink = isDb ? `#article-${story.id}` : `#article-national-${index}`;
+                      const title = story.headline || story.title;
+                      const blurb = story.excerpt || story.blurb;
+                      const author = story.author?.display_name || story.author || "National Reporter";
+                      const initials = isDb ? author.split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() : story.initials;
+                      const isRecord = story.article_type === "HISTORIC_RECORD_BREAK" || (story.slot && story.slot.toLowerCase().includes("record"));
+                      const kicker = isRecord
+                        ? "🏆 ALL-TIME NFL RECORD"
+                        : story.article_type
+                          ? story.article_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+                          : (story.kicker || "Analysis");
+                      const readTime = story.read || "7 min read";
+
+                      return (
+                        <article className={`story-card ${index === 0 ? "feature-card" : ""} ${isRecord ? "record-breaker-card" : ""}`} key={story.id || title}>
+                          <span className="story-number">0{index + 1}</span>
+                          <div className="story-copy">
+                            <span className="kicker">{kicker}</span>
+                            <a href={artLink}><h3>{title}</h3></a>
+                            <p>{blurb}</p>
+                            <div className="author-row">
+                              <span className={`avatar ${isRecord ? "amber" : ""}`}>{initials}</span>
+                              <span><b>{author}</b><small>NATIONAL REPORTER · {readTime}</small></span>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    });
+                  })()}
+                </div>
+              </>
+            )}
           </section>
 
           <aside className="sidebar">

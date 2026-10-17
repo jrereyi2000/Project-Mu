@@ -69,7 +69,13 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
   const logRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
-    if (data) { setSeason(String(data.state.current_season)); setWeek(String(data.state.current_week)); }
+    if (data) {
+      const s = String(data.state.current_season);
+      setSeason(s);
+      setWeek(String(data.state.current_week));
+      setOffseasonSeason(prev => prev || s);
+      setOffseasonManifestPath(prev => prev || `captures/offseason/${s}/manifest.json`);
+    }
   }, [data?.state.current_season, data?.state.current_week]);
 
   const loadJobs = useCallback(() => {
@@ -152,6 +158,15 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
   const [formWriter, setFormWriter] = useState("");
   const [formTeam, setFormTeam] = useState<string>("");
   const [formDeskNote, setFormDeskNote] = useState("");
+
+  // Offseason Package state
+  const [offseasonSeason, setOffseasonSeason] = useState("");
+  const [offseasonManifestPath, setOffseasonManifestPath] = useState("");
+  const [offseasonDryRun, setOffseasonDryRun] = useState(false);
+  const [offseasonOnly, setOffseasonOnly] = useState("");
+  const [previewingOffseason, setPreviewingOffseason] = useState(false);
+  const [runningOffseason, setRunningOffseason] = useState(false);
+  const [offseasonPreviewData, setOffseasonPreviewData] = useState<any>(null);
 
   const loadNews = useCallback(() => {
     call<NewsSummary>("/news").then(setNews).catch(() => {});
@@ -323,6 +338,77 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
     }
   };
 
+  const handleOffseasonSeasonChange = (val: string) => {
+    setOffseasonSeason(val);
+    if (!offseasonManifestPath || offseasonManifestPath.startsWith("captures/offseason/")) {
+      setOffseasonManifestPath(`captures/offseason/${val}/manifest.json`);
+    }
+  };
+
+  const handleValidateOffseason = async () => {
+    if (!token) return;
+    setPreviewingOffseason(true);
+    setMessage("");
+    setOffseasonPreviewData(null);
+    try {
+      const s = Number(offseasonSeason) || curSeason;
+      const res = await call<any>(
+        "/offseason/preview",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            season: s,
+            manifest_path: offseasonManifestPath.trim(),
+            dry_run: offseasonDryRun,
+            only: offseasonOnly || null,
+          }),
+        },
+        token
+      );
+      setOffseasonPreviewData(res);
+      setMessage("Offseason manifest validated successfully.");
+    } catch (e) {
+      setMessage(`Manifest preview failed: ${(e as Error).message}`);
+    } finally {
+      setPreviewingOffseason(false);
+    }
+  };
+
+  const handleRunOffseason = async () => {
+    if (!token || !!running) return;
+    const s = Number(offseasonSeason) || curSeason;
+    const mode = offseasonDryRun ? "DRY-RUN " : "";
+    const scope = offseasonOnly ? `(${offseasonOnly})` : "(Full Package)";
+    if (!window.confirm(`Run ${mode}Offseason Editorial Swarm for Season ${s} ${scope}?\n\nManifest: ${offseasonManifestPath}`)) return;
+
+    setRunningOffseason(true);
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await call<any>(
+        "/offseason/run",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            season: s,
+            manifest_path: offseasonManifestPath.trim(),
+            dry_run: offseasonDryRun,
+            only: offseasonOnly || null,
+          }),
+        },
+        token
+      );
+      setMessage(res?.message || `Offseason swarm run started for Season ${s}.`);
+      loadJobs();
+      reload();
+    } catch (e) {
+      setMessage(`Offseason run failed: ${(e as Error).message}`);
+    } finally {
+      setRunningOffseason(false);
+      setBusy(false);
+    }
+  };
+
   const resumable = data?.resumable || [];
 
   return (
@@ -351,8 +437,10 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
               <span className={label}>Target</span>
               <select className={input} value={targetWeek} onChange={e => setTargetWeek(e.target.value)}>
                 <option value="current">Current week (Wk {curWeek})</option>
-                {Array.from({ length: 23 }, (_, i) => i + 1).map(w => (
-                  <option key={w} value={String(w)}>Week {w}{w === curWeek ? " (current)" : ""}</option>
+                {Array.from({ length: 24 }, (_, i) => i + 1).map(w => (
+                  <option key={w} value={String(w)}>
+                    Week {w}{w === 24 ? " (Offseason)" : ""}{w === curWeek ? " (current)" : ""}
+                  </option>
                 ))}
                 <option value="all_season">All weeks (Season {curSeason})</option>
                 <option value="all_time">All seasons & weeks</option>
@@ -396,6 +484,115 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
           <p className="text-xs text-[var(--gray-500)] mt-2">
             Clearing articles removes article tags, power rankings, and agent memory takes, allowing the week to be rerun cleanly.
           </p>
+        </section>
+
+        <section className={card}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-black uppercase tracking-wide">Offseason Editorial Package</h3>
+            <span className="text-[10px] font-mono text-[var(--gray-500)]">Week 24 Slate</span>
+          </div>
+          <p className="text-xs text-[var(--gray-600)] mb-3">
+            Publish the 6-article offseason editorial package (Super Bowl recap &amp; retrospectives, coaching carousel audit, marquee signings, and first-round draft recap).
+          </p>
+
+          <div className="grid gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <label>
+                <span className={label}>Season</span>
+                <input
+                  className={input}
+                  inputMode="numeric"
+                  value={offseasonSeason}
+                  onChange={e => handleOffseasonSeasonChange(e.target.value)}
+                  disabled={previewingOffseason || runningOffseason || busy}
+                />
+              </label>
+
+              <label>
+                <span className={label}>Sub-Event Scope (--only)</span>
+                <select
+                  className={input}
+                  value={offseasonOnly}
+                  onChange={e => setOffseasonOnly(e.target.value)}
+                  disabled={previewingOffseason || runningOffseason || busy}
+                >
+                  <option value="">All (Full 6-Article Package)</option>
+                  <option value="super_bowl">super_bowl (SB Recap, Champ, Runner-Up)</option>
+                  <option value="coaching">coaching (Coaching Carousel Audit)</option>
+                  <option value="signings">signings (Marquee Signing Grades)</option>
+                  <option value="draft">draft (First-Round Draft Recap)</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              <span className={label}>Manifest Path</span>
+              <input
+                className={input}
+                value={offseasonManifestPath}
+                onChange={e => setOffseasonManifestPath(e.target.value)}
+                placeholder="captures/offseason/2035/manifest.json"
+                disabled={previewingOffseason || runningOffseason || busy}
+              />
+            </label>
+
+            <div className="flex items-center gap-2 py-1">
+              <input
+                type="checkbox"
+                id="offseason-dry-run"
+                checked={offseasonDryRun}
+                onChange={e => setOffseasonDryRun(e.target.checked)}
+                disabled={previewingOffseason || runningOffseason || busy}
+                className="w-4 h-4 text-[var(--red)] border-[var(--gray-300)] rounded cursor-pointer"
+              />
+              <label htmlFor="offseason-dry-run" className="text-xs font-bold uppercase tracking-wider text-[var(--ink)] cursor-pointer select-none">
+                Dry Run (<code className="font-mono text-[11px] font-normal">--dry-run</code>)
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                className={btn}
+                disabled={previewingOffseason || runningOffseason || busy || !token || !offseasonManifestPath.trim()}
+                onClick={handleValidateOffseason}
+              >
+                {previewingOffseason ? "Validating Manifest…" : "Validate / Preview Manifest"}
+              </button>
+              <button
+                className={btnRed}
+                disabled={previewingOffseason || runningOffseason || busy || !token || !!running || !offseasonManifestPath.trim()}
+                onClick={handleRunOffseason}
+              >
+                {runningOffseason ? "Dispatching Swarm…" : "Run Offseason Swarm"}
+              </button>
+              {offseasonPreviewData && (
+                <button
+                  className="px-2 py-1 text-xs border border-[var(--gray-300)] text-[var(--gray-500)] hover:text-black"
+                  onClick={() => setOffseasonPreviewData(null)}
+                >
+                  Dismiss Preview
+                </button>
+              )}
+            </div>
+
+            {offseasonPreviewData && (
+              <div className="bg-[var(--paper)] p-3 text-xs border border-[var(--gray-200)] mt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold uppercase text-[10px] tracking-wider text-[var(--ink)]">Manifest Preview Result</span>
+                  <StatusPill status={offseasonPreviewData.valid !== false && !offseasonPreviewData.error ? "done" : "stopped"} />
+                </div>
+                {offseasonPreviewData.error && (
+                  <div className="text-[var(--red)] font-bold mb-2">Error: {String(offseasonPreviewData.error)}</div>
+                )}
+                {offseasonPreviewData.summary && (
+                  <div className="text-[var(--ink)] mb-2 font-medium">{String(offseasonPreviewData.summary)}</div>
+                )}
+                <pre className="max-h-60 overflow-y-auto text-[11px] font-mono bg-white p-2 border border-[var(--gray-200)] text-[var(--gray-700)]">
+                  {JSON.stringify(offseasonPreviewData, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
         </section>
 
         <section className={card}>
