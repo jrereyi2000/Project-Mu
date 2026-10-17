@@ -150,7 +150,7 @@ def record_line(t: dict | None) -> dict | None:
 
 # --- database --------------------------------------------------------------------------------------------------
 
-COACH_COLS = ("id", "coach_name", "offensive_scheme", "defensive_scheme", "pass_lean",
+COACH_COLS = ("id", "coach_name", "slant", "offensive_scheme", "defensive_scheme", "pass_lean",
               "fourth_down_aggressiveness", "blitz_rate", "man_coverage")
 
 
@@ -188,11 +188,57 @@ def fetch_observed(cur, team_id: int, season: int, coach_id: int) -> dict:
 
 
 def fetch_team_staff(cur, team_id: int, season: int) -> dict | None:
-    """fetch_team_coach plus the team's measured tendencies under 'observed'."""
-    coach = fetch_team_coach(cur, team_id, season)
-    if coach:
-        coach["observed"] = fetch_observed(cur, team_id, season, coach["id"])
-    return coach
+    """Returns head coach, OC, and DC for team in season, with effective unit schemes (§6.1)."""
+    # 1. Fetch Head Coach (coaches + coach_tenures)
+    hc = fetch_team_coach(cur, team_id, season)
+    if not hc:
+        return None
+    hc["observed"] = fetch_observed(cur, team_id, season, hc["id"])
+
+    # 2. Fetch Coordinators (coordinators + coordinator_tenures)
+    cur.execute("""
+        SELECT ct.role, c.coordinator_name, c.scheme, c.playbook, c.pass_lean, c.blitz_rate, c.man_coverage
+        FROM coordinator_tenures ct
+        JOIN coordinators c ON c.id = ct.coordinator_id
+        WHERE ct.team_id = %s AND ct.start_season <= %s AND COALESCE(ct.end_season, 9999) >= %s
+    """, (team_id, season, season))
+    coords = {}
+    for r in cur.fetchall():
+        role = r[0]
+        coord_dict = dict(zip(("role", "name", "scheme", "playbook", "pass_lean", "blitz_rate", "man_coverage"), r))
+        coord_dict["coordinator_name"] = coord_dict["name"]
+        coords[role] = coord_dict
+
+    # 3. Resolve Effective Unit Schemes based on HC slant (§5.2, §6.1)
+    slant = hc.get("slant") or "OFFENSIVE"
+    oc = coords.get("OC")
+    dc = coords.get("DC")
+
+    if slant == "OFFENSIVE":
+        effective_off_scheme = hc["offensive_scheme"]
+        effective_def_scheme = (dc.get("scheme") if dc else None) or hc["defensive_scheme"]
+    elif slant == "DEFENSIVE":
+        effective_off_scheme = (oc.get("scheme") if oc else None) or hc["offensive_scheme"]
+        effective_def_scheme = hc["defensive_scheme"]
+    else:  # CEO
+        effective_off_scheme = (oc.get("scheme") if oc else None) or hc["offensive_scheme"]
+        effective_def_scheme = (dc.get("scheme") if dc else None) or hc["defensive_scheme"]
+
+    staff = {
+        "head_coach": hc,
+        "offensive_coordinator": oc,
+        "defensive_coordinator": dc,
+        "effective_offense": effective_off_scheme,
+        "effective_defense": effective_def_scheme,
+        "staff_philosophy_summary": f"HC {hc['coach_name']} ({slant} slant) calling {effective_off_scheme} / DC coordinating {effective_def_scheme}",
+    }
+
+    # Populate top-level coach keys for backwards compatibility with legacy callers
+    for k, v in hc.items():
+        if k not in staff:
+            staff[k] = v
+
+    return staff
 
 
 def fetch_previous_coach(cur, team_id: int, start_season: int):
@@ -237,9 +283,10 @@ def fetch_games(cur, team_ids, first_season: int, last_season: int, visible) -> 
 def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool) -> dict | None:
     """Everything a writer needs about the team's head coach in `season`. `awards_visible`: whether this season's
     awards (decided after the season) may be shown."""
-    coach = fetch_team_staff(cur, team_id, season)
-    if not coach:
+    staff = fetch_team_staff(cur, team_id, season)
+    if not staff:
         return None
+    coach = staff.get("head_coach") or staff
     tenures = fetch_tenures(cur, coach["id"])
     snapshot = fetch_snapshot(cur, coach["id"], season)
     first = min([snapshot["season"] + 1 if snapshot else season] + [t["start_season"] for t in tenures])
@@ -259,10 +306,17 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
 
     return {
         "coach": coach["coach_name"],
+        "slant": coach.get("slant", "OFFENSIVE"),
         "season_with_team": season - start + 1,
         "with_team_since": start,
         "replaced": fetch_previous_coach(cur, team_id, start),
-        "schemes": {"offense": coach["offensive_scheme"], "defensive_front": coach["defensive_scheme"]},
+        "schemes": {
+            "offense": staff.get("effective_offense") or coach["offensive_scheme"],
+            "defensive_front": staff.get("effective_defense") or coach["defensive_scheme"],
+        },
+        "offensive_coordinator": staff.get("offensive_coordinator"),
+        "defensive_coordinator": staff.get("defensive_coordinator"),
+        "staff_philosophy_summary": staff.get("staff_philosophy_summary"),
         "tendencies": describe_tendencies(coach),
         "this_season": season_record(games, team_id, season),
         "record_with_team": with_team,
@@ -283,7 +337,14 @@ def staff_matchup(off_coach: dict | None, def_coach: dict | None) -> dict | None
     """One offense-vs-defense coaching line for get_matchup_edges."""
     if not off_coach or not def_coach:
         return None
-    o, d = effective_tendencies(off_coach), effective_tendencies(def_coach)
+
+    off_hc = off_coach.get("head_coach", off_coach)
+    def_hc = def_coach.get("head_coach", def_coach)
+
+    off_scheme = off_coach.get("effective_offense") or off_hc.get("offensive_scheme")
+    def_scheme = def_coach.get("effective_defense") or def_hc.get("defensive_scheme")
+
+    o, d = effective_tendencies(off_hc), effective_tendencies(def_hc)
 
     def short(key, v):
         if not v:
@@ -292,9 +353,9 @@ def staff_matchup(off_coach: dict | None, def_coach: dict | None) -> dict | None
         return f"{v[0]} ({label}; {'measured' if v[1].startswith('measured') else 'reputation'})"
 
     return {
-        "offense": f"{off_coach['coach_name']}: {off_coach['offensive_scheme']}, pass lean "
+        "offense": f"{off_hc['coach_name']}: {off_scheme}, pass lean "
                    f"{short('pass_lean', o['pass_lean'])}, fourth down "
                    f"{short('fourth_down_aggressiveness', o['fourth_down_aggressiveness'])}",
-        "defense": f"{def_coach['coach_name']}: {def_coach['defensive_scheme']} front, "
+        "defense": f"{def_hc['coach_name']}: {def_scheme} front, "
                    f"coverage {short('man_coverage', d['man_coverage'])}",
     }

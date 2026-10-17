@@ -1529,6 +1529,183 @@
       "curatorial_autonomy": "CURATORIAL AUTONOMY (HISTORIC RECORD BREAKER):\nFocus exclusively on the NFL-wide record-breaking or record-tying event identified by the Editorial Desk in your assignment. Query get_record_book to retrieve the canonical all-time leaderboard, the previous record holder, the year it was set, and how long the record stood. Query get_game_box_score and get_player_season_stats for the exact statistical breakdown. Ground your praise in authentic football history: contrast the modern feat with the era of the previous record holder, explore how teammates and scheme unlocked it, and avoid generic filler.",
       "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an epic historical milestone celebration (approx. 1,000–1,400 words).\n\n# [Your Creative, Epic Headline Marking the Historic Feat]\n> **EXCERPT:** [A sharp, 1-to-2 sentence summary capturing the magnitude of the shattered record and its historical weight.]\n\n1. The Historical Moment (The Coronation):\nOpen with the visceral scene of history being made: the exact moment, the stadium reaction, the sheer weight of what football fans just witnessed. State the new record clearly.\n\n2. Toppling the Pantheon: The Old Standard:\nUse a ## header (e.g., ## Toppling Manning's Standard / ## The Ghost of Moss).\nExamine the previous record holder, the year it was established, and how long it stood as an untouchable standard in pro football lore. Compare the eras, the difficulty of the feat, and the legendary status of the player or team whose record just fell.\n\n3. The Anatomy of History: How the Record Fell:\nUse a ## header (e.g., ## The Machinery Behind the Mark / ## 56 Touchdowns in the Making).\nDissect the execution: the game script, the quarterback-receiver connection, the play-calling, down-and-distance situational mastery, or defensive dominance that made this record achievable. Use real stats from get_game_box_score and get_record_book.\n\n4. The Pantheon Verdict: Where This Campaign Stands:\nUse a ### header to place this achievement in all-time NFL immortality.\nDeliver a decisive verdict on where this accomplishment ranks among the greatest single-season or single-game performances in the history of the National Football League. End on a powerful historical note.",
       "structure_source": "article"
+    },
+    "SUPER_BOWL_GAME_RECAP": {
+      "name": "The Super Bowl: How the Game Was Won",
+      "allowed_writers": [
+        "BARNWELL",
+        "ROSENTHAL",
+        "CHADIHA"
+      ],
+      "writer_display_names": [
+        "Bill Barnwell (Efficiency & Regression)",
+        "Gregg Rosenthal (Game Flow & Watchability)",
+        "Jeffri Chadiha (Stakes & Performance Under Pressure)"
+      ],
+      "writing_archetype_category": "Super Bowl Postgame Recap",
+      "granularity": "One completed game (Super Bowl)",
+      "focus": "One completed game; explain the result through its pivotal turning points and recorded performances.",
+      "data_queried": [
+        "Game Box Scores & Quarter Scoring",
+        "Team & Player Box-Score Lines",
+        "Game Script & Turnovers",
+        "Team Efficiency Profile (get_team_efficiency_profile)",
+        "Situational Baselines (Red Zone, 3rd/4th Down)",
+        "Single-Game Excitement Index (E)"
+      ],
+      "example_prompt_hook": "Explain how the Super Bowl was decided, identifying the pivotal stretch and the performances that changed the game.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Super Bowl Game Recap\nGranularity: One completed game (Super Bowl).\nFocus: One completed game; explain the result through its pivotal turning points and recorded performances.\nScope: You are writing the definitive recap of the Super Bowl. Explain how the championship was decided by isolating pivotal turning points, critical momentum swings, and standout individual performances. Lead with the most consequential sequence. Detail how team efficiency and regular-season identities manifested in the title game. Access only concluded season data through Week 23; strictly do not reference future coaching changes, free-agent transactions, or draft selections.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (SUPER_BOWL_GAME_RECAP):\nLead with the most consequential swing. Explain how recorded production and each team's regular-season identity manifested in the title game. Do not invent film observations, quotes, injuries, or play details absent from supplied data. Temporal constraint: Access only concluded season data through Week 23. You are strictly forbidden from referencing firings, hirings, free-agent departures/arrivals, or draft projections as completed facts.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as the definitive Super Bowl recap (approx. 1,000–1,400 words).\n\n1. The Defining Turn:\nOpen with an authoritative headline using # (e.g., # The Super Bowl: How the Game Was Won).\nLead with the most consequential turning point or swing in the game and set the championship scene.\n\n2. How Each Side Performed:\nUse a ## header analyzing the schematic and situational battle between the two teams. Detail how quarter scores, game script, and red-zone/third-down execution dictated the flow.\n\n3. Consequential Individual Performances:\nUse a ## header highlighting the standout player performances, box-score lines, and pressure-moment contributions that swung the game.\n\n4. What Decided the Championship:\nConclude with a ### header synthesizing what ultimately determined the outcome and crowned the champion.",
+      "structure_source": "article"
+    },
+    "SUPER_BOWL_CHAMPION_RETROSPECTIVE": {
+      "name": "The Champion's Road to the Lombardi",
+      "allowed_writers": [
+        "CHADIHA",
+        "SANDO",
+        "ROSENTHAL"
+      ],
+      "writer_display_names": [
+        "Jeffri Chadiha (Legacy & Narrative)",
+        "Mike Sando (Roster Construction & Executive Context)",
+        "Gregg Rosenthal (Season Identity & Team Vibes)"
+      ],
+      "writing_archetype_category": "Championship Legacy Audit",
+      "granularity": "Full-season and postseason arc",
+      "focus": "Full-season and postseason arc; demonstrate how regular-season strengths traveled through January.",
+      "data_queried": [
+        "Regular-Season & Playoff Results",
+        "Cumulative Player Production & Box Scores",
+        "Head-Coach Profile (get_coach_profile)",
+        "Team Efficiency Profile (get_team_efficiency_profile)",
+        "Opponent-Adjusted Game Credit",
+        "Under-25 Production (Y_prod)",
+        "Blue-Chip Pedigree (P_draft)",
+        "Playoff Clout (S_playoff)"
+      ],
+      "example_prompt_hook": "Trace the champion's path from its regular-season identity to the Super Bowl, and explain what the title validates.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Champion's Road to the Lombardi\nGranularity: Full-season and postseason arc.\nFocus: Full-season and postseason arc; demonstrate how regular-season strengths traveled through January.\nScope: Trace the champion's entire journey from opening kickoff to lifting the Lombardi Trophy. Trace the actual path, not a generic championship narrative. Identify strengths that translated to the playoffs, who carried the run, and whether the title validates a durable foundation or a narrow set of circumstances. Access only concluded season data through Week 23; strictly do not reference future coaching changes, free-agent transactions, or draft selections.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (SUPER_BOWL_CHAMPION_RETROSPECTIVE):\nTrace the actual path, not a generic championship narrative. Identify strengths that translated to the playoffs, who carried the run, and whether the title validates a durable foundation or a narrow set of circumstances. Metrics serve as evidence, not required name-drops. Temporal constraint: Access only concluded season data through Week 23. You are strictly forbidden from referencing firings, hirings, free-agent departures/arrivals, or draft projections as completed facts.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a full-season championship retrospective (approx. 1,000–1,400 words).\n\n1. Regular-Season Identity:\nOpen with an authoritative headline using # (e.g., # The Champion's Road: How [Team Name] Built a Championship Identity).\nFrame the origins of the team's championship foundation and their regular-season baseline.\n\n2. Defining Playoff Tests:\nUse a ## header detailing the crucible of their postseason run. Break down how the team navigated playoff matchups and adversity leading up to the Super Bowl.\n\n3. Players and Units That Carried the Run:\nUse a ## header breaking down the specific players, position groups, and leaders who elevated their game and carried the postseason load.\n\n4. What the Title Changes for the Franchise:\nConclude with a ### header evaluating the organizational legacy, whether this marks a durable foundation or a narrow set of circumstances, and what the title validates.",
+      "structure_source": "article"
+    },
+    "SUPER_BOWL_RUNNER_UP_POSTMORTEM": {
+      "name": "The Super Bowl Loss: What Comes Next",
+      "allowed_writers": [
+        "SANDO",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Front-Office Accountability & Roster Window)",
+        "Bill Barnwell (Tactical Diagnosis & Sustainability)"
+      ],
+      "writing_archetype_category": "Postseason Exit Diagnostics",
+      "granularity": "Championship exit and offseason horizon",
+      "focus": "Championship exit and offseason horizon; diagnose why the runner-up lost and identify its primary offseason priority.",
+      "data_queried": [
+        "Super Bowl Box Score & Game Script",
+        "Postseason Cumulative Game Results",
+        "Team Efficiency Profile (get_team_efficiency_profile)",
+        "Situational Baselines (Red Zone, 3rd/4th Down)",
+        "Head-Coach Profile (get_coach_profile)",
+        "Under-25 Production (Y_prod)",
+        "Roster Age & Purgatory Penalty",
+        "Team Draft Needs (get_team_draft_needs)"
+      ],
+      "example_prompt_hook": "Explain what kept the runner-up from winning the championship and identify the most urgent step toward another chance.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Super Bowl Loss: What Comes Next\nGranularity: Championship exit and offseason horizon.\nFocus: Championship exit and offseason horizon; diagnose why the runner-up lost and identify its primary offseason priority.\nScope: Deliver a rigorous postmortem on the Super Bowl runner-up. Diagnose this team's loss, separating game-specific execution from recurring season-long flaws. Ground both in recorded data. Conclude with one clear roster, coaching, or scheme priority. Do not assume unentered personnel moves. Access only concluded season data through Week 23; strictly do not reference future coaching changes, free-agent transactions, or draft selections.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (SUPER_BOWL_RUNNER_UP_POSTMORTEM):\nDiagnose this team's loss, separating game-specific execution from recurring season-long flaws. Ground both in recorded data. Conclude with one clear roster, coaching, or scheme priority. Do not assume unentered personnel moves. Temporal constraint: Access only concluded season data through Week 23. You are strictly forbidden from referencing firings, hirings, free-agent departures/arrivals, or draft projections as completed facts.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as a rigorous championship postmortem (approx. 900–1,200 words).\n\n1. What the Loss Exposed:\nOpen with an authoritative headline using # (e.g., # The Super Bowl Postmortem: Why [Team Name] Fell Short on the Final Sunday).\nDiagnose the primary tactical and schematic breakdowns in the title game.\n\n2. Whether the Weakness Was Recurring:\nUse a ## header comparing the Super Bowl failure points against regular-season and playoff efficiency baselines to determine if the loss was variance or systemic flaw.\n\n3. Championship-Window Outlook:\nUse a ## header evaluating the roster age curve, contract/cap pressures, and whether the franchise's title window is expanding, stable, or closing.\n\n4. Top Offseason Mandate:\nConclude with a ### header defining the single most urgent offseason priority (roster, coaching, or scheme) necessary to make another run.",
+      "structure_source": "article"
+    },
+    "COACHING_CAROUSEL_AUDIT": {
+      "name": "The Coaching Carousel: Hires, Firings, and Grades",
+      "allowed_writers": [
+        "SANDO",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Mike Sando (Executive Decisions & Team Windows)",
+        "Bill Barnwell (Performance Context & Sustainability)"
+      ],
+      "writing_archetype_category": "Front-Office Columnists",
+      "granularity": "Offseason coaching cycle",
+      "focus": "Offseason coaching cycle; grade each entered team decision in context.",
+      "data_queried": [
+        "Submitted Coaching Move Facts (Outgoing/Incoming Coach, Action, Notes)",
+        "Head Coach Slant (OFFENSIVE, DEFENSIVE, CEO)",
+        "Coordinator Origin & Previous Role (Former Team OC/DC/HC)",
+        "Scheme Inheritance (Imported vs. Retained Offensive/Defensive Schemes)",
+        "Head-Coach Profile (get_coach_profile)",
+        "Team Record & Win Expectation (team_seasons.expected_wins)",
+        "Team Efficiency Profile (get_team_efficiency_profile)",
+        "Roster Age & Under-25 Production (Y_prod)"
+      ],
+      "example_prompt_hook": "Grade the coaching changes entered for this offseason, explaining which teams addressed their needs and which accepted the greatest risk.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Coaching Carousel: Hires, Firings, and Grades\nGranularity: Offseason coaching cycle.\nFocus: Offseason coaching cycle; grade each entered team decision in context.\nScope: Audit the head coaching hiring and firing cycle across the league. Cover only submitted moves from the offseason manifest. Evaluate coordinator origins, head coach slants (OFFENSIVE, DEFENSIVE, CEO), and scheme inheritance rules (imported schemes vs. retained continuity). Assign letter grades with rigorous rationale. Temporal cutoff: Sees Super Bowl and coaching moves; strictly forbidden from referencing free-agent signings, trades, or draft selections.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (COACHING_CAROUSEL_AUDIT):\nCover only submitted moves from the offseason manifest. Explain the team's need, what the hire addresses, and the tactical/philosophical risks. Evaluate coordinator origins (e.g. former OC/DC promotions or outside hires) and coaching slants (OFFENSIVE, DEFENSIVE, CEO). Apply scheme inheritance logic: an OFFENSIVE slant coach imports offensive scheme/playbook while retaining defensive continuity; a DEFENSIVE slant coach imports defensive scheme/playbook while retaining offensive continuity; a CEO slant coach oversees game management while delegating scheme execution to retained or hired OC/DC coordinators. Assign letter grades supported by concrete rationale. Temporal constraint: Access concluded season and submitted coaching moves; strictly forbidden from referencing free-agent signings or draft selections.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an executive coaching cycle audit and gradebook (approx. 1,000–1,400 words).\n\n1. Main Carousel Pattern:\nOpen with an authoritative headline using # (e.g., # The Coaching Carousel: Grades, Scheme Shifts, and Executive Verdicts).\nSynthesize the overarching philosophy of this hiring cycle (e.g. offensive play-callers, defensive stabilizers, or CEO leaders).\n\n2. Consequential Entered Moves:\nUse ## headers for each submitted coaching move (e.g., ## Indianapolis Colts: Marcus Whitfield (Grade: B+)).\nFor each move, analyze the outgoing context, the incoming coach's slant and coordinator origin, and the imported vs. retained scheme fit. Provide an explicit letter grade.\n\n3. Strongest Decision:\nUse a ## header highlighting the hire with the highest ceiling and best organizational fit.\n\n4. Highest-Risk Decision:\nUse a ## header identifying the hire facing the steepest schematic hurdle, coordinator volatility, or developmental risk.\n\n5. Brief Note on Material Unknowns:\nConclude with a ### header noting crucial unentered vacancies or pending coordinator selections.",
+      "structure_source": "article"
+    },
+    "FREE_AGENCY_SIGNING_GRADES": {
+      "name": "The Biggest Signings: Fit, Value, and Risk",
+      "allowed_writers": [
+        "YATES",
+        "BARNWELL",
+        "SANDO"
+      ],
+      "writer_display_names": [
+        "Field Yates (Role & Roster Fit)",
+        "Bill Barnwell (Value & Downside Risk)",
+        "Mike Sando (Team-Building Rationale)"
+      ],
+      "writing_archetype_category": "Front-Office Roster Construction",
+      "granularity": "Curated marquee signings only (90+ OVR)",
+      "focus": "Curated marquee signings only (short manual list of 2–3 players rated 90+ OVR). Sub-90 signings are not evaluated.",
+      "data_queried": [
+        "Submitted Signing Facts (Player, Position, Former Team, New Team, Role Notes)",
+        "Qualitative Player Tier (Tier 1 Superstar / High-Impact Marquee Starter)",
+        "Player Career Production & Season Stats",
+        "Official AP All-Pro Awards (awards table verification only)",
+        "Destination Roster Composition & Depth",
+        "Team Draft Needs (get_team_draft_needs)",
+        "Updated Coaching Scheme Context"
+      ],
+      "example_prompt_hook": "Grade the marquee signings entered for this offseason, weighing player fit and team need against the risks supported by available information.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Biggest Signings: Fit, Value, and Risk\nGranularity: Curated marquee signings only (90+ OVR).\nFocus: Marquee veteran additions, scheme fit, expected role, value, and downside risk.\nScope: Evaluate the curated marquee free-agency signings entered for this offseason. Analyze only submitted entries (2–3 players rated 90+ OVR). STRICT NUMERIC OVR BAN: You must never state the OVR, quote a numeric rating, or cite OVR as evidence; evaluate players strictly using qualitative tiers (Tier 1 superstar / elite franchise cornerstone for 95–99 OVR, high-impact marquee starter / Pro Bowl caliber talent for 90–94 OVR). NEVER use the term 'All-Pro' unless verified by an official AP All-Pro selection in the awards database. Temporal cutoff: Sees Super Bowl, coaching moves, and signings; strictly forbidden from referencing actual draft results or rookie selections.",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (FREE_AGENCY_SIGNING_GRADES):\nAnalyze only submitted marquee entries (90+ OVR). Grade fit, expected role, and risk. Never infer unstated contract figures or modify database player/roster records. STRICT RULE ON NUMERIC OVR: You must NEVER state the OVR, quote the numeric rating, or cite OVR as evidence. All numerical ratings are qualitative tiers: 95–99 is a 'Tier 1 superstar / elite franchise cornerstone', and 90–94 is a 'High-impact marquee starter / Pro Bowl caliber talent'. ALL-PRO DESCRIPTOR RULE: The term 'All-Pro' must NEVER be used as a generic description based on rating; cite 'All-Pro' only if the player actually earned an Official AP All-Pro selection in the database awards table. Temporal constraint: Access concluded season, coaching changes, and submitted signings; strictly forbidden from referencing draft selections or rookie picks.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an executive free-agency evaluation and gradebook (approx. 1,000–1,400 words).\n\n1. Themes Across the Marquee Signings:\nOpen with an authoritative headline using # (e.g., # Free Agency Grades: Fit, Value, and Risk for the Biggest Veteran Signings).\nWrite an opening overview detailing the league-wide spending trends and philosophical roster investments.\n\n2. Evaluation and Letter Grade for Each Signing:\nUse ## headers for each evaluated signing (e.g., ## Patrick Surtain II to the Detroit Lions (Grade: A)).\nBreak down scheme fit, projected role, and how the addition addresses franchise need without ever mentioning numeric OVR. Assign an explicit letter grade.\n\n3. Strongest Team Fit:\nUse a ## header highlighting the marquee addition with the cleanest scheme alignment and highest immediate floor.\n\n4. Greatest Downside Risk:\nUse a ## header diagnosing the signing carrying the most age, scheme mismatch, or regression volatility.\n\n5. The Next Offseason Phase:\nConclude with a ### header bridging to the upcoming draft without leaking draft results.",
+      "structure_source": "article"
+    },
+    "NFL_DRAFT_CLASS_RECAP": {
+      "name": "The Draft Is In: First-Round Classes and Biggest Bets",
+      "allowed_writers": [
+        "MEL_KIPER",
+        "YATES",
+        "BARNWELL"
+      ],
+      "writer_display_names": [
+        "Mel Kiper Jr. (Prospect Traits & Draft-Room Conviction)",
+        "Field Yates (Team Needs & Positional Value)",
+        "Bill Barnwell (Draft Capital & Opportunity Cost)"
+      ],
+      "writing_archetype_category": "Draft & Offseason Horizon",
+      "granularity": "Completed NFL Draft, Round 1 only (actual selections, never mock projections)",
+      "focus": "First-round draft evaluation, value picks, and organizational bets.",
+      "data_queried": [
+        "Captured First-Round Draft Selections (Picks 1–32, draft_selections)",
+        "Scouted Prospect Board (get_scouted_draft_board)",
+        "Team Draft Needs (get_team_draft_needs)",
+        "Updated Coaching Staff Schemes & Slants",
+        "Offseason Veteran Additions",
+        "Positional Market Multiplier (M_pos)"
+      ],
+      "example_prompt_hook": "Review the captured first-round results, grade the most consequential selections, and identify the picks that most changed a team's outlook.",
+      "directive": "ARTICLE TYPE SPECIFICATION: The Draft Is In: First-Round Classes and Biggest Bets\nGranularity: Completed NFL Draft, Round 1 only (actual selections, never mock projections).\nFocus: First-round draft evaluation, value picks, and organizational bets.\nScope: Deliver the definitive review of Round 1 of the NFL Draft (picks 1–32). Evaluate actual captured results, never mock projections. Never grade or imply coverage of Rounds 2–7, UDFAs, or full draft classes. Focus on a curated set of 4–6 teams or selections illustrating exceptional value, major reaches, scheme fit, or aggressive organizational bets. Temporal scope: Full offseason context accessible (Super Bowl, coaching hires, marquee signings, and captured Round 1 picks).",
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (NFL_DRAFT_CLASS_RECAP):\nEvaluate first-round picks exclusively (picks 1–32). Never grade or imply coverage of Rounds 2–7, UDFAs, or full draft classes. Actual picks must originate from captured/loaded results in `draft_selections`, never `mock_draft_picks`. Focus on a curated set of 4–6 teams/picks that best demonstrate great value, surprising reaches, seamless scheme fits, or aggressive organizational bets. Compare actual draft position with pre-draft consensus board rankings only when prospect matching is unambiguous.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure your article as an authoritative first-round draft review (approx. 1,200–1,600 words).\n\n1. First-Round Macro Trends:\nOpen with an authoritative headline using # (e.g., # The Draft Is In: First-Round Grades, Value Steals, and Franchise Bets).\nSynthesize the overarching story of Round 1 (runs on premium positions, quarterback landing spots, or bold trades).\n\n2. Spotlighted First-Round Pick Evaluations:\nUse ## headers for each featured selection formatted strictly as: ## Pick [Number]. [Team Name]: [Player Name], [Position], [College] (Grade: [Letter Grade]).\nProvide a rigorous 2-to-3 paragraph evaluation covering scheme fit, team need, tape traits, and draft capital value.\n\n3. Best Value Pick of Round 1:\nUse a ## header highlighting the selection that represented the greatest surplus value relative to the consensus board.\n\n4. Biggest Risk or Reach of Round 1:\nUse a ## header diagnosing the pick with the widest variance, developmental projection, or questionable positional capital.\n\n5. Outlook Transformed:\nConclude with a ### header identifying the franchise that most altered its competitive trajectory with its Round 1 selection.",
+      "structure_source": "article"
     }
   }
 }
