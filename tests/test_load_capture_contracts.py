@@ -33,7 +33,7 @@ def contract_rows(team, roster, cap_hit="$1.0M"):
 
 
 def cap_row(team, label="36 CAP", rookie="37 ROOKIE RES", salaries="$46.0M"):
-    return [team, label, "$305.2M", "36 ROLLOVER", "$12.1M", "$317.3M", "$263.5M", salaries, "$7.8M", "$53.8M",
+    return [team, label, "$305.2M", "35 ROLLOVER", "$12.1M", "$317.3M", "$263.5M", salaries, "$7.8M", "$53.8M",
             rookie, "$11.2M"]
 
 
@@ -87,15 +87,17 @@ class LoadContractsTest(unittest.TestCase):
 
     def test_panthers_load(self):
         rows = contract_rows("PANTHERS", ROSTER[5])
-        rows[0][-2], rows[0][-1] = "PRO BOWL", "YES"
+        rows[0][-2], rows[0][-1] = "YES", "YES"
+        rows[1][-2] = "NO"
         self.write(rows, [cap_row("PANTHERS")])
         cur, report = self.load()
         inserts = cur.sql("INSERT INTO player_contracts")
         self.assertEqual(len(inserts), N)
         first = inserts[0][1]
-        self.assertEqual(first[:11], (1000, 5, 2036, 3, 2, 3_000_000, 600_000, 400_000, 600_000, True, "PRO BOWL"))
+        self.assertEqual(first[:11], (1000, 5, 2036, 3, 2, 3_000_000, 600_000, 400_000, 600_000, True, "YES"))
         self.assertEqual(first[11:], ("SCAN", 42))
-        self.assertIsNone(inserts[1][1][10])                         # NONE incentive -> NULL
+        self.assertIsNone(inserts[1][1][10])                         # NO incentive -> NULL
+        self.assertIsNone(inserts[2][1][10])                         # NONE too
         years = cur.sql("INSERT INTO player_contract_years")
         self.assertEqual(len(years), N * 5)
         self.assertEqual([y[1][1:] for y in years[:5]], [(2036, 1_000_000), (2037, 1_000_000), (2038, 0), (2039, 0), (2040, 0)])
@@ -105,7 +107,7 @@ class LoadContractsTest(unittest.TestCase):
         self.assertEqual(report["contracts"], N)
         self.assertEqual(report["superseded"], 7)
         self.assertEqual(report["cap_warnings"], [])
-        self.assertEqual(report["incentives"], ["PANTHERS P.Playeraa WR: PRO BOWL"])
+        self.assertEqual(report["incentives"], ["PANTHERS P.Playeraa WR: YES"])
 
     def test_partial_run_supersedes_only_its_team(self):
         self.write(contract_rows("PANTHERS", ROSTER[5]), [cap_row("PANTHERS")])

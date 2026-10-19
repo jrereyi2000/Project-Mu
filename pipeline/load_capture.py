@@ -1417,7 +1417,10 @@ def load_contracts(cur, folder, season, report):
         parsed.append({"team": team, "team_id": team_ids.get(team), "NAME": r["NAME"].strip(), "POS": r.get("POS", ""),
                        "AGE": age, "OVR": ovr, "length": length, "years_remaining": rem, **money,
                        "no_trade_clause": (r.get("NO TRADE CLAUSE") or "").strip().upper() in ("YES", "Y", "TRUE"),
-                       "incentive": None if incentive.upper() in ("", "NONE") else incentive, "years": hits})
+                       # the table's INCENTIVE is YES/NO (the incentive's name is on the player card only):
+                       # NO/NONE -> NULL, YES kept as 'YES' for JR to look up
+                       "incentive": None if incentive.upper() in ("", "NONE", "NO") else incentive.upper(),
+                       "years": hits})
     for team, n in sorted(per_team.items()):
         if not ROSTER_TEAMS_MIN <= n <= ROSTER_TEAMS_MAX:
             problems.append(f"{team}: {n} contract rows (expected {ROSTER_TEAMS_MIN}-{ROSTER_TEAMS_MAX})")

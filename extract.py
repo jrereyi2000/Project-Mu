@@ -132,8 +132,9 @@ def _labelled(label):
 TABLE_BOX = (0, 0.27, 1, 0.89)          # fractions of the screenshot
 # Team Salary (Phase 0 sets these from console frames): the table's headers and rows, not the player card on
 # the right; and the cap strip above the table
-SALARY_LIST_BOX = (0, 0.20, 0.735, 0.90)
-SALARY_HEADER_BOX = (0, 0.08, 1, 0.26)
+SALARY_LIST_BOX = (0, 0.295, 0.71, 0.84)   # column headers (y 584) to the 12th row (1550), left of the cut-off
+                                           # column sliver (x 2154) and the player card (x 2272) on 3024x1888
+SALARY_HEADER_BOX = (0, 0.15, 0.66, 0.23)  # the cap strip: labels y 320, values to 408, x 88-1890
 ROSTER_LIST_BOX = (0, 0.10, 0.735, 0.85)  # roster table only: chips + rows, not the player card
 
 
@@ -584,12 +585,12 @@ def extract_roster(root):
 # Team management step 1 (docs/team_management/01_CONTRACT_SCAN_PLAN.md Phase 3). Read with Gemini through
 # merge_wide like every capture_wide_list table: Apple Vision drops the digit 1 in Madden's font, and money
 # cells are full of 1s.
-SALARY_PAGE_ROWS = 11
+SALARY_PAGE_ROWS = 12           # rows visible on a page (frames of 2026-10-19)
 SALARY_NOTE = """
 This is a Madden NFL Team Salary table (one team's contracts). Copy money exactly as shown, with its $ and
 suffix: $16.8M, $200K, $0, -$1.2M. The CONV column shows an icon, not text: return "" for it. Year column
 headers are 4-digit years (2036, 2037, ...). NO TRADE CLAUSE: return YES or NO as shown ("" if the cell is
-empty). INCENTIVE: the text shown, e.g. NONE. Ignore the player card on the right and the cap figures above
+empty). INCENTIVE: return YES or NO as shown. Ignore the player card on the right and the cap figures above
 the table."""
 
 
@@ -610,7 +611,7 @@ def salary_col(c):
 class CapStrip(BaseModel):
     cap_label: str              # e.g. 36 CAP
     cap: str                    # values as shown, e.g. $305.2M
-    rollover_label: str         # e.g. 36 ROLLOVER
+    rollover_label: str         # e.g. 35 ROLLOVER (last season's money rolled over)
     rollover: str
     adjusted_cap: str
     cap_space: str
@@ -624,7 +625,7 @@ class CapStrip(BaseModel):
 CAP_FIELDS = list(CapStrip.model_fields)
 CAP_PROMPT = """This is the cap strip above a Madden NFL Team Salary table. Return each figure exactly as
 shown, with its $ and suffix ($305.2M, $200K, -$4.1M). The labels that carry a two-digit year (e.g. 36 CAP,
-36 ROLLOVER, 37 ROOKIE RES) are returned with that year exactly as shown."""
+35 ROLLOVER, 36 SALARIES, 37 ROOKIE RES.) are returned with that year exactly as shown."""
 CAP_TOLERANCE = 3_000_000       # C10 identities hold, but Madden rounds: off by up to a few $M (JR, 2026-10-19)
 
 

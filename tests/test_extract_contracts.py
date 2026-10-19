@@ -26,7 +26,7 @@ PLAYERS = [
      ["$200K", "$800K", "$150K", "$950K", "$1.1M", "$1.2M", "$0", "$0", "NONE", "NO"]),
 ]
 
-STRIP = {"cap_label": "36 CAP", "cap": "$305.2M", "rollover_label": "36 ROLLOVER", "rollover": "$12.1M",
+STRIP = {"cap_label": "36 CAP", "cap": "$305.2M", "rollover_label": "35 ROLLOVER", "rollover": "$12.1M",
          "adjusted_cap": "$317.3M", "cap_space": "$9.4M", "salaries": "$300.1M", "cap_penalty": "$7.8M",
          "total_spend": "$307.9M", "rookie_res_label": "37 ROOKIE RES", "rookie_res": "$11.2M"}
 

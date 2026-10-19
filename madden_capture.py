@@ -516,7 +516,7 @@ def classify(f):
     if f.find("VIEW PLAY") and (f.find("CHANGE QUARTER") or (f.find("TIME") and f.find("RATING"))):
         return "HIGHLIGHTS"
     # Manage Roster > Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md C3): its right edge shows
-    # SAVINGS and PENALTY too, so it is told apart by the cap strip over the table (36 CAP, 36 ROLLOVER,
+    # SAVINGS and PENALTY too, so it is told apart by the cap strip over the table (36 CAP, 35 ROLLOVER,
     # ADJUSTED CAP, CAP SPACE, SALARIES, CAP PENALTY, TOTAL SPEND, 37 ROOKIE RES), which every team shows.
     # The hub (tabs showing) never counts, whatever tile it shows.
     if ("ROLLOVER" in t and "CAP SPACE" in t and ("ROOKIE RES" in t or "TOTAL SPEND" in t)
@@ -2850,12 +2850,14 @@ def run_injuries(out, target_teams=None):
 
 # ------------------------------------------------------- team salary ----
 # Manage Roster > Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md; master plan §3.1):
-#  * 11 rows a page. NAME/POS scroll away when the table moves right, so every page is captured at
-#    both edges at the same row position (capture_wide_list): left edge = NAME header showing,
-#    right edge = NO TRADE CLAUSE.
-#  * L2 cycles teams in place, like the Injury Report. The cap strip (36 CAP ... 37 ROOKIE RES) is
-#    in every screenshot; extract.py reads it.
-#  * Read-only. Cross on the table itself is refused (it would open a contract action).
+#  * 12 rows show (frames of 2026-10-19); pages step 11 rows, so consecutive pages overlap by one (merged
+#    away). NAME/POS scroll away when the table moves right, so every page is captured at both edges at
+#    the same row position (capture_wide_list): left edge = NAME header showing, right edge = the
+#    highlight on NO TRADE CLAUSE (the chip above the table names the highlighted column).
+#  * L2 cycles teams in place and wraps VIKINGS -> BEARS; the next team opens at the top of its list.
+#    The team chip sits top-left (~6% across, ~26% down). The cap strip (36 CAP, 35 ROLLOVER, ...,
+#    37 ROOKIE RES.) is in every screenshot; extract.py reads it.
+#  * Read-only. Cross on the table itself is refused (the button bar offers RESTRUCTURE CONTRACT).
 SALARY_ROWS = 11
 SALARY_MIN_PAGES = 3          # 53 rows need >= 5 pages; fewer than 3 means the list stopped early
 
@@ -2874,16 +2876,24 @@ def open_team_salary():
 
 
 def salary_team(f):
-    """The team nickname on Team Salary. Until C2 is mapped this uses the Injury Report geometry
-    (top-left), falling back to any team name in the top 30% of the screen."""
-    return injury_team(f)
+    """The team nickname on Team Salary: the chip at the top-left of the table (x < 20%, y 22-32%;
+    PANTHERS at 180,492 of 3024x1888), falling back to any team name in the top third."""
+    W, H = f.size
+    for t, b in f.items:
+        if b[0] < W * 0.20 and H * 0.22 < b[1] < H * 0.32 and norm(t) in TEAMS:
+            return norm(t)
+    for t, b in f.items:
+        if b[1] < H * 0.33 and norm(t) in TEAMS:
+            return norm(t)
+    return None
 
 
 def salary_at_edge(f, direction):
-    """Right edge: the last column, NO TRADE CLAUSE (OCR may cut it to NO TRADE), is showing.
-    Left edge: the NAME column header is visible (it scrolls away moving right)."""
+    """Right edge: NO TRADE CLAUSE is showing (OCR reads the header as NOTRADE CLAUSE and the highlighted-
+    column chip as NO TRADE CLAUSE [YES/NO], so spaces are ignored). Left edge: the NAME column header is
+    visible (it scrolls away moving right)."""
     if direction == "right":
-        return "NO TRADE" in f.text
+        return "NOTRADE" in f.text.replace(" ", "")
     return f.find("NAME") is not None
 
 
