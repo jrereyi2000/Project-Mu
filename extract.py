@@ -609,7 +609,7 @@ def salary_col(c):
 class CapStrip(BaseModel):
     cap_label: str              # e.g. 36 CAP
     cap: str                    # values as shown, e.g. $305.2M
-    rollover_label: str         # e.g. 35 ROLLOVER
+    rollover_label: str         # e.g. 36 ROLLOVER
     rollover: str
     adjusted_cap: str
     cap_space: str
@@ -623,8 +623,8 @@ class CapStrip(BaseModel):
 CAP_FIELDS = list(CapStrip.model_fields)
 CAP_PROMPT = """This is the cap strip above a Madden NFL Team Salary table. Return each figure exactly as
 shown, with its $ and suffix ($305.2M, $200K, -$4.1M). The labels that carry a two-digit year (e.g. 36 CAP,
-35 ROLLOVER, 37 ROOKIE RES) are returned with that year exactly as shown."""
-CAP_TOLERANCE = 200_000         # C10 identities hold within display rounding
+36 ROLLOVER, 37 ROOKIE RES) are returned with that year exactly as shown."""
+CAP_TOLERANCE = 3_000_000       # C10 identities hold, but Madden rounds: off by up to a few $M (JR, 2026-10-19)
 
 
 def cap_identity_misses(strip):

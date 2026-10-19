@@ -92,7 +92,7 @@ ORDER = ["PANTHERS", "SAINTS", "BUCCANEERS", "FALCONS"] + sorted(mc.TEAMS - {"PA
 class FakeConsole:
     """L2 steps through ORDER and wraps; capture_team_salary writes a folder (or fails once if asked)."""
     def __init__(self, out, fail_on=None):
-        self.i, self.out, self.fail_on, self.captured = 0, out, set(fail_on or ()), []
+        self.i, self.out, self.fail_on, self.captured, self.to_top = 0, out, set(fail_on or ()), [], []
 
     def press(self, key, **kw):
         if key == "l2":
@@ -105,7 +105,8 @@ class FakeConsole:
         self.i = 0
         return object()
 
-    def capture(self, out, index, team):
+    def capture(self, out, index, team, to_top=True):
+        self.to_top.append((team, to_top))
         folder = os.path.join(out, "contracts", f"{index:02d}_{team.lower()}")
         os.makedirs(folder, exist_ok=True)
         open(os.path.join(folder, "salary_000.png"), "w").close()
@@ -148,6 +149,9 @@ class RunContractsTest(unittest.TestCase):
             self.assertEqual(len(done), 32)
             targets = open(os.path.join(out, "contracts", "targets.txt")).read().split()
             self.assertEqual(len(targets), 32)
+            # only the team the screen opened on is scrolled to the top; L2 opens the next at the top (C5)
+            self.assertEqual(c.to_top[0], ("PANTHERS", True))
+            self.assertTrue(all(not t for _, t in c.to_top[1:]))
 
     def test_subset_stops_when_targets_done(self):
         with tempfile.TemporaryDirectory() as out:
@@ -197,6 +201,7 @@ class RunContractsTest(unittest.TestCase):
             c = FakeConsole(out, fail_on={"SAINTS"})
             run(c, out, ["SAINTS"])
             self.assertEqual(c.captured, ["SAINTS"])
+            self.assertEqual(c.to_top, [("SAINTS", False), ("SAINTS", True)])     # the retry scrolls up first
             self.assertEqual(os.listdir(os.path.join(out, "contracts", "01_saints")), ["salary_000.png"])
 
     def test_wrap_before_done_raises(self):

@@ -33,7 +33,7 @@ def contract_rows(team, roster, cap_hit="$1.0M"):
 
 
 def cap_row(team, label="36 CAP", rookie="37 ROOKIE RES", salaries="$46.0M"):
-    return [team, label, "$305.2M", "35 ROLLOVER", "$12.1M", "$317.3M", "$263.5M", salaries, "$7.8M", "$53.8M",
+    return [team, label, "$305.2M", "36 ROLLOVER", "$12.1M", "$317.3M", "$263.5M", salaries, "$7.8M", "$53.8M",
             rookie, "$11.2M"]
 
 
@@ -105,6 +105,7 @@ class LoadContractsTest(unittest.TestCase):
         self.assertEqual(report["contracts"], N)
         self.assertEqual(report["superseded"], 7)
         self.assertEqual(report["cap_warnings"], [])
+        self.assertEqual(report["incentives"], ["PANTHERS P.Playeraa WR: PRO BOWL"])
 
     def test_partial_run_supersedes_only_its_team(self):
         self.write(contract_rows("PANTHERS", ROSTER[5]), [cap_row("PANTHERS")])
@@ -176,6 +177,11 @@ class LoadContractsTest(unittest.TestCase):
         self.write(contract_rows("PANTHERS", ROSTER[5]), [cap_row("PANTHERS")], targets=None)
         with self.assertRaises(L.LoadError):
             self.load()
+
+    def test_rounding_within_a_few_million_is_no_warning(self):
+        self.write(contract_rows("PANTHERS", ROSTER[5]), [cap_row("PANTHERS", salaries="$47.5M")])
+        _, report = self.load()
+        self.assertEqual(report["cap_warnings"], [])
 
     def test_cap_warnings_not_fatal(self):
         self.write(contract_rows("PANTHERS", ROSTER[5]), [cap_row("PANTHERS", salaries="$99.0M")])

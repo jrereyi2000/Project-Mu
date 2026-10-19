@@ -513,7 +513,7 @@ def classify(f):
     if f.find("VIEW PLAY") and (f.find("CHANGE QUARTER") or (f.find("TIME") and f.find("RATING"))):
         return "HIGHLIGHTS"
     # Manage Roster > Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md C3): its right edge shows
-    # SAVINGS and PENALTY too, so it is told apart by the cap strip over the table (36 CAP, 35 ROLLOVER,
+    # SAVINGS and PENALTY too, so it is told apart by the cap strip over the table (36 CAP, 36 ROLLOVER,
     # ADJUSTED CAP, CAP SPACE, SALARIES, CAP PENALTY, TOTAL SPEND, 37 ROOKIE RES), which every team shows.
     # The hub (tabs showing) never counts, whatever tile it shows.
     if ("ROLLOVER" in t and "CAP SPACE" in t and ("ROOKIE RES" in t or "TOTAL SPEND" in t)
@@ -2897,10 +2897,13 @@ def salary_to_top(max_pages=10):
     salary_traverse("left")
 
 
-def capture_team_salary(out, index, team):
-    """One team's Team Salary pages into contracts/<NN>_<team>/salary[_right]_NNN.png. Returns the page count."""
+def capture_team_salary(out, index, team, to_top=True):
+    """One team's Team Salary pages into contracts/<NN>_<team>/salary[_right]_NNN.png. Returns the page count.
+    to_top=False right after an L2: L2 opens the next team at the top of its list (C5, JR 2026-10-19), so only
+    the left edge is checked (capture_wide_list does that)."""
     folder = os.path.join(out, "contracts", f"{index:02d}_{team.lower()}")
-    salary_to_top()
+    if to_top:
+        salary_to_top()
     pages = capture_wide_list(folder, "salary", rows_per_page=SALARY_ROWS, traverse=salary_traverse,
                               confirm_end=True)
     if pages < SALARY_MIN_PAGES:
@@ -2975,17 +2978,18 @@ def run_contracts(out, target_teams=None, resume=False):
     if not first:
         raise Abort("Can't read the team on the Team Salary screen")
     log(f"Starting at {first}; {len(targets - set(done))} of {len(targets)} target teams to capture")
-    team, visited = first, 0
+    team, visited, at_top = first, 0, False      # the screen opened as Madden left it: scroll up first
     while True:
         if team in targets and team not in done:
             idx = max(list(done.values()) + [0]) + 1
             retries_left = 1
             while True:
                 try:
-                    pages = capture_team_salary(out, idx, team)
+                    pages = capture_team_salary(out, idx, team, to_top=not at_top)
                     break
                 except Abort as e:
                     clear_partial()
+                    at_top = False                      # a retry starts from wherever the list stopped
                     if stream_frozen():
                         team = reopen(e)
                         idx = max(list(done.values()) + [0]) + 1
@@ -3019,10 +3023,10 @@ def run_contracts(out, target_teams=None, resume=False):
             time.sleep(0.5)
         if not nxt:
             if stream_frozen():
-                team = reopen(Abort("Stream frozen on Team Salary"))
+                team, at_top = reopen(Abort("Stream frozen on Team Salary")), False
                 continue
             raise Abort(f"Could not advance the team from {team} after 3 tries (stream is not frozen)")
-        team = nxt
+        team, at_top = nxt, True                        # L2 resets the list to the top (C5)
         if team == first and visited > 1:
             missing = sorted(targets - set(done))
             raise Abort(f"Wrapped back to {first} with {len(missing)} target teams missing: {missing}")

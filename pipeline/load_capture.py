@@ -1321,7 +1321,7 @@ CONTRACT_MONEY = {"TOTAL": "total_value", "BONUS": "bonus", "SAVINGS": "cut_savi
 CAP_MONEY = {"CAP": "cap", "ROLLOVER": "rollover", "ADJUSTED_CAP": "adjusted_cap", "CAP_SPACE": "cap_space",
              "SALARIES": "salaries", "CAP_PENALTY": "cap_penalty", "TOTAL_SPEND": "total_spend",
              "ROOKIE_RES": "next_rookie_reserve"}
-CAP_TOLERANCE = 200_000          # C10 identities, within display rounding
+CAP_TOLERANCE = 3_000_000        # C10 identities hold, but Madden rounds: off by up to a few $M (JR, 2026-10-19)
 ROW_ROUNDING = 50_000            # summed year-0 cap hits vs SALARIES: $0.05M display rounding per row
 
 
@@ -1461,6 +1461,8 @@ def load_contracts(cur, folder, season, report):
     report["contracts"] = len(matched_rows)
     report["teams"] = len(scanned)
     report["cap_warnings"] = cap_warnings
+    # C9: Madden shows only the incentive's name; JR looks each one up by hand after a scan
+    report["incentives"] = [f"{p['team']} {p['NAME']} {p['POS']}: {p['incentive']}" for p in matched_rows if p["incentive"]]
     return len(matched_rows) + len(cap_values)
 
 
