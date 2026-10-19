@@ -1,6 +1,8 @@
 # Napper Updates: Injuries, Weekly Lineups, Weekly Trades, K/DEF Projections
 
-Handoff notes from an agent session that ran out of quota partway through. This covers what the session found, what it was asked to build, what it changed, and what's left.
+Handoff notes from an agent session that ran out of quota partway through. This covers what the session found and what it was asked to build.
+
+> **Status (2026-10-19): all four goals are done.** The work followed [NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md](NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md); `PROJECT_SPEC.md` describes the current system. Sections 2–4 below are kept as the original investigation and describe the code **before** the work, so they are no longer current.
 
 ---
 
@@ -12,10 +14,10 @@ Four workstreams:
 
 | # | Goal | Status |
 |---|------|--------|
-| G1 | Weekly lineup optimizer for AI Napper managers, with IR slot usage | Not started |
-| G2 | Run the trade engine on the weekly cadence | Not started |
-| G3 | Show injuries in the Napper UI | Not started |
-| G4 | Projections for kickers (K) and team defenses (DEF) | **Done (Phase 1, 2026-10-19), uncommitted.** 2036 re-projected; see `PROJECT_SPEC.md` §3.4 |
+| G1 | Weekly lineup optimizer for AI Napper managers, with IR slot usage | Done: `engines/napper_lineup_engine.py` (`087d9e0`), IR slot (`9325961`) |
+| G2 | Run the trade engine on the weekly cadence | Done: `engines/napper_weekly.py` in the post-week pipeline (`9008744`); trade slot refill (`02713ea`); waivers added later (`ed41dcf`) |
+| G3 | Show injuries in the Napper UI | Done: injury keys on API payloads and `InjuryPill` (`8a0f7fc`) |
+| G4 | Projections for kickers (K) and team defenses (DEF) | Done (`1709f23`); 2036 re-projected |
 
 ---
 
@@ -62,7 +64,7 @@ Four workstreams:
 
 ---
 
-## 3. Changes made (uncommitted, in `engines/fantasy_projection_engine.py`)
+## 3. Changes the original session made (in `engines/fantasy_projection_engine.py`; finished and committed in `1709f23`)
 
 The session died after two errors (a network error, then "Agent execution terminated"). It reported **+56 / −4** in this file. `git diff` on the file now shows **+218 / −9**, because the file also holds earlier uncommitted work on week-1 projections (§3b). Neither part has been run or tested.
 
@@ -97,7 +99,7 @@ The session died after two errors (a network error, then "Agent execution termin
 
 ---
 
-## 4. Remaining work
+## 4. Remaining work as of the handoff (all done since; see the plan)
 
 ### G1. Weekly AI lineup optimizer with IR
 - New module, e.g. `engines/napper_lineup_engine.py`, CLI `--league N --week W` (or every league).

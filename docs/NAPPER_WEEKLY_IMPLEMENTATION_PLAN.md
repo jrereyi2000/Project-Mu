@@ -179,7 +179,9 @@ run_napper_week(season, week=None):
 
 ---
 
-## Phase 6: Spec, docs, cleanup
+## Phase 6: Spec, docs, cleanup — DONE (2026-10-19)
+
+> Every spec item below was kept current phase by phase. The final pass also added Napper as a consumer of the `injuries` table, refreshed the trade engine's layout line, and marked `NAPPER_UPDATES.md` complete (kept as the record of the original findings).
 
 - `PROJECT_SPEC.md`:
   - new files (`napper_lineup_engine.py`, `napper_weekly.py`, `napper_injuries.py`, the migration)
