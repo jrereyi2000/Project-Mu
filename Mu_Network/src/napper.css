@@ -354,6 +354,30 @@
   color: #ffffff;
 }
 
+/* Team tab: starters who won't score this week (injured or on bye) */
+.napper-lineup-warning {
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+  background-color: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Player modal: injury line under the name */
+.napper-modal-injury {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+  color: #fca5a5;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* ==========================================================================
    Right Rail Chat Cards (Sleeper BENCHWARMER OF THE WEEK)
    Quotes tag, player headshot, stat line, fantasy points

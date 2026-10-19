@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import type { NapperDraftPlayer, NapperStarterPlayer, NapperWaiverPlayer } from "../../types/napper";
-import { getPlayerHeadshotUrl, handleImageError } from "./napperUtils";
+import { getPlayerHeadshotUrl, handleImageError, InjuryPill, injuryDescription } from "./napperUtils";
 
 type NapperPlayer = NapperStarterPlayer | NapperWaiverPlayer | NapperDraftPlayer;
 type DetailTab = "logs" | "stats" | "outlook";
@@ -136,6 +136,11 @@ export default function NapperPlayerModal({ player: source, onClose, scoringType
 
           <div className="fantasy-modal-identity">
             <h2 id="napper-player-title">{name}</h2>
+            {"injury_status" in player && player.injury_status && (
+              <div className="napper-modal-injury">
+                <InjuryPill player={player} /> <span>{injuryDescription(player)}{player.injury_duration ? ` (${player.injury_duration.toLowerCase()})` : ""}</span>
+              </div>
+            )}
             <div className="fantasy-modal-bio">
               <strong>{position} — {teamAbbr}</strong>
               <i />

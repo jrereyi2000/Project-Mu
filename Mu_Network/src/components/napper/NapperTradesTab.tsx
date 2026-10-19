@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
-import { getPlayerHeadshotUrl, handleImageError } from "./napperUtils";
+import { getPlayerHeadshotUrl, handleImageError, InjuryPill } from "./napperUtils";
 
 interface NapperTradesTabProps {
   leagueId: number;
@@ -221,6 +221,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
                       <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover" }} />
                       <span style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: "600" }}>{p.name}</span>
+                      <InjuryPill player={p} />
                       <span style={{ color: "var(--napper-teal)", fontSize: "11px" }}>{p.position} · {p.proj_fpts != null ? `${Number(p.proj_fpts).toFixed(1)} proj` : ""}</span>
                     </div>
                   ))}
@@ -231,6 +232,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
                       <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover" }} />
                       <span style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: "600" }}>{p.name}</span>
+                      <InjuryPill player={p} />
                       <span style={{ color: "#cbd5e1", fontSize: "11px" }}>{p.position} · {p.proj_fpts != null ? `${Number(p.proj_fpts).toFixed(1)} proj` : ""}</span>
                     </div>
                   ))}
@@ -336,6 +338,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                             <input
                               type="checkbox"
                               checked={isChecked}
+                              disabled={p.slot === "IR"}
                               onChange={(e) => {
                                 if (e.target.checked) setOfferedIds((prev) => [...prev, p.id]);
                                 else setOfferedIds((prev) => prev.filter((id) => id !== p.id));
@@ -344,7 +347,10 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                             <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ color: "#e2e8f0", fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                              <div style={{ color: "#8a99ad", fontSize: "10px" }}>{p.position} · {Number(p.proj_fpts).toFixed(1)} proj</div>
+                              <div style={{ color: "#8a99ad", fontSize: "10px", display: "flex", gap: "4px", alignItems: "center" }}>
+                                {p.position} · {Number(p.proj_fpts).toFixed(1)} proj <InjuryPill player={p} />
+                                {p.slot === "IR" && <span>· on IR, can't be traded</span>}
+                              </div>
                             </div>
                           </label>
                         );
@@ -378,6 +384,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                             <input
                               type="checkbox"
                               checked={isChecked}
+                              disabled={p.slot === "IR"}
                               onChange={(e) => {
                                 if (e.target.checked) setRequestedIds((prev) => [...prev, p.id]);
                                 else setRequestedIds((prev) => prev.filter((id) => id !== p.id));
@@ -386,7 +393,10 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                             <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ color: "#e2e8f0", fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-                              <div style={{ color: "#8a99ad", fontSize: "10px" }}>{p.position} · {Number(p.proj_fpts).toFixed(1)} proj</div>
+                              <div style={{ color: "#8a99ad", fontSize: "10px", display: "flex", gap: "4px", alignItems: "center" }}>
+                                {p.position} · {Number(p.proj_fpts).toFixed(1)} proj <InjuryPill player={p} />
+                                {p.slot === "IR" && <span>· on IR, can't be traded</span>}
+                              </div>
                             </div>
                           </label>
                         );

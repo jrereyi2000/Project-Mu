@@ -61,6 +61,17 @@ def require_current_season_league(cur, league_id: int) -> Dict[str, Any]:
     return league
 
 
+def _injury_fields(injuries: Dict[int, dict], player_id: int) -> Dict[str, Any]:
+    """Injury keys for a player payload, from engines.napper_injuries.get_injury_map (all None when healthy)."""
+    info = injuries.get(player_id)
+    return {
+        "injury_status": info["status"] if info else None,  # "IR" | "O" | None
+        "injury_type": info["injury_type"] if info else None,
+        "injury_duration": info["duration"] if info else None,
+        "injury_weeks_remaining": info["weeks_remaining"] if info else None,
+    }
+
+
 def _reception_adjustment(scoring_type: Optional[str]) -> float:
     if scoring_type == "HALF_PPR":
         return 0.5
@@ -860,8 +871,10 @@ def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
                       AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
                     ORDER BY CASE nr.slot WHEN 'IR' THEN 2 WHEN 'BN' THEN 1 ELSE 0 END, proj_fpts DESC
                 """, (season, wk, season, league_id, tm["id"], wk))
+                team_rows = cur.fetchall()
+                injuries = get_injury_map(cur, season, wk, [p["id"] for p in team_rows])
                 players = []
-                for p in cur.fetchall():
+                for p in team_rows:
                     players.append({
                         "id": p["id"],
                         "player_id": p["id"],
@@ -871,6 +884,7 @@ def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
                         "slot": p["slot"],
                         "proj_fpts": float(p["proj_fpts"]) if p["proj_fpts"] is not None else None,
                         "headshot_url": f"/static/players/{p['id']}.webp",
+                        **_injury_fields(injuries, p["id"]),
                     })
                 teams_data.append({
                     "id": tm["id"],
@@ -936,8 +950,10 @@ def get_league_user_team(league_id: int, week: Optional[int] = Query(None)):
             """, (season, wk, season, wk, wk, season,
                   season, season, wk, wk, season, league_id, team["team_id"], wk))
 
+            team_rows = cur.fetchall()
+            injuries = get_injury_map(cur, season, wk, [r["player_id"] for r in team_rows])
             players = []
-            for row in cur.fetchall():
+            for row in team_rows:
                 position = row["position"]
                 if position in ("HB", "FB"):
                     position = "RB"
@@ -955,7 +971,7 @@ def get_league_user_team(league_id: int, week: Optional[int] = Query(None)):
                     "fpts": round(float(row["fantasy_points"] or 0) - float(row["receptions"] or 0) * _reception_adjustment(team["scoring_type"]), 2),
                     "proj_fpts": float(row["projected_points"]) if row["projected_points"] is not None else None,
                     "is_yet_to_play": row["nfl_game_status"] != "COMPLETED",
-                    "injury_status": None,
+                    **_injury_fields(injuries, row["player_id"]),
                     "slot": row["slot"],
                 })
 
@@ -1183,6 +1199,7 @@ def get_league_matchup(
 
             left_roster = [r for r in roster_rows if r["team_id"] == left_team_id]
             right_roster = [r for r in roster_rows if r["team_id"] == right_team_id]
+            injuries = get_injury_map(cur, season, wk, [r["player_id"] for r in roster_rows])
 
             def make_player_dict(r):
                 if not r:
@@ -1205,7 +1222,7 @@ def get_league_matchup(
                     "fpts": round(float(r["fantasy_points"] or 0) - float(r["receptions"] or 0) * _reception_adjustment(lg["scoring_type"]), 2),
                     "proj_fpts": round(proj, 2) if proj is not None else None,
                     "is_yet_to_play": r["nfl_game_status"] != "COMPLETED",
-                    "injury_status": None,
+                    **_injury_fields(injuries, pid),
                 }
 
             roster_format = lg["roster_format"] or {}
@@ -1510,6 +1527,7 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
             sql += " ORDER BY proj_pts DESC NULLS LAST LIMIT 60"
             cur.execute(sql, params)
             rows = cur.fetchall()
+            injuries = get_injury_map(cur, current_season, wk, [r["player_id"] for r in rows])
 
             players = []
             for r in rows:
@@ -1527,6 +1545,7 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
                     "ros_rank": r["ros_rank"],
                     "rostered_pct": None,
                     "headshot_url": f"/static/players/{r['player_id']}.webp",
+                    **_injury_fields(injuries, r["player_id"]),
                 })
 
             return {"players": players}
@@ -1672,7 +1691,9 @@ def get_trades(league_id: int):
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
                     WHERE p.id = ANY(%s)
                 """, (current_season, current_week, current_season, list(all_pids)))
-                for p in cur.fetchall():
+                trade_rows = cur.fetchall()
+                injuries = get_injury_map(cur, current_season, current_week, list(all_pids))
+                for p in trade_rows:
                     players_map[p["id"]] = {
                         "id": p["id"],
                         "player_id": p["id"],
@@ -1681,6 +1702,7 @@ def get_trades(league_id: int):
                         "position": p["position"] or "",
                         "headshot_url": f"/static/players/{p['id']}.webp",
                         "proj_fpts": float(p["proj"]) if p["proj"] is not None else None,
+                        **_injury_fields(injuries, p["id"]),
                     }
 
             trades = []

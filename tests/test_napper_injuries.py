@@ -74,5 +74,17 @@ class NapperInjuriesTest(unittest.TestCase):
         self.assertEqual(conn.calls[0][1], (2036, 4, [186]))
 
 
+class InjuryPayloadFieldsTest(unittest.TestCase):
+    def test_injury_fields_for_injured_and_healthy_players(self):
+        from server.napper_api import _injury_fields
+        injuries = {186: {"status": "O", "injury_type": "UPPER ARM FRACTURE", "duration": "2 - 4 WEEKS",
+                          "weeks_remaining": 2, "is_ir": False}}
+        self.assertEqual(_injury_fields(injuries, 186), {
+            "injury_status": "O", "injury_type": "UPPER ARM FRACTURE",
+            "injury_duration": "2 - 4 WEEKS", "injury_weeks_remaining": 2,
+        })
+        self.assertEqual(set(_injury_fields(injuries, 1).values()), {None})
+
+
 if __name__ == "__main__":
     unittest.main()

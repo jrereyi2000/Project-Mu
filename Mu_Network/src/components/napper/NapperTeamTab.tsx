@@ -5,6 +5,7 @@ import {
   getPlayerHeadshotUrl,
   getSlotBadgeClass,
   handleImageError,
+  InjuryPill,
 } from "./napperUtils";
 
 interface TeamRosterSlot {
@@ -135,6 +136,10 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
   const starters = roster.filter((s) => s.slot !== "BN" && s.slot !== "IR");
   const bench = roster.filter((s) => s.slot === "BN");
   const ir = roster.filter((s) => s.slot === "IR");
+  // Starters who can't score this week: injured (OUT/IR) or on a bye. Your lineup is never changed for you.
+  const inactiveStarters = starters
+    .map((s) => s.player)
+    .filter((p): p is NapperStarterPlayer => !!p && (!!p.injury_status || p.game_status === "Bye week"));
 
   const saveTeamName = async () => {
     const nextName = editedTeamName.trim();
@@ -263,6 +268,16 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
       ) : roster.length === 0 ? (
         <div className="py-12 text-center text-sm text-[#8a99ad]">No roster has been drafted for this league yet.</div>
       ) : <>
+      {inactiveStarters.length > 0 && (
+        <div role="status" className="napper-lineup-warning">
+          ⚠ {inactiveStarters.length === 1 ? "1 starter" : `${inactiveStarters.length} starters`} won't score in week {week}:{" "}
+          {inactiveStarters
+            .map((p) => `${p.name} (${p.injury_status === "IR" ? "IR" : p.injury_status ? "Out" : "Bye"})`)
+            .join(", ")}
+          . Swap in a bench player{inactiveStarters.some((p) => p.injury_status) ? " or move the injured player to IR" : ""}.
+        </div>
+      )}
+
       {/* Section 1: Starters */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2.5 px-1">
@@ -324,15 +339,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                           <span className="text-[10px] text-[#8a99ad] font-semibold">
                             {p.position} - {p.team}
                           </span>
-                          {p.injury_status && (
-                            <span
-                              className={`napper-injury-pill ${
-                                p.injury_status === "O" ? "out" : "ques"
-                              }`}
-                            >
-                              {p.injury_status}
-                            </span>
-                          )}
+                          <InjuryPill player={p} />
                         </div>
                         <div className="text-[11px] text-[#8a99ad] mt-0.5">
                           {p.kickoff} {p.opponent}
@@ -415,15 +422,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                           <span className="text-[10px] text-[#8a99ad] font-semibold">
                             {p.position} - {p.team}
                           </span>
-                          {p.injury_status && (
-                            <span
-                              className={`napper-injury-pill ${
-                                p.injury_status === "O" ? "out" : "ques"
-                              }`}
-                            >
-                              {p.injury_status}
-                            </span>
-                          )}
+                          <InjuryPill player={p} />
                         </div>
                         <div className="text-[11px] text-[#8a99ad] mt-0.5">
                           {p.kickoff} {p.opponent}
@@ -491,7 +490,9 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                           <span className="text-[10px] text-[#ff6b87] font-semibold">
                             {p.position} - {p.team}
                           </span>
-                          <span className="napper-injury-pill ir">IR</span>
+                          {p.injury_status ? <InjuryPill player={p} /> : (
+                            <span className="text-[10px] text-[#8a99ad]" title="No longer injured: move to your bench to free the IR slot">Healthy</span>
+                          )}
                         </div>
                         <div className="text-[11px] text-[#ff6b87]/80 mt-0.5">
                           {p.kickoff}

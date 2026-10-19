@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import type { NapperWaiverPlayer } from "../../types/napper";
-import { getPlayerHeadshotUrl, handleImageError } from "./napperUtils";
+import { getPlayerHeadshotUrl, handleImageError, InjuryPill } from "./napperUtils";
 
 interface NapperPlayersTabProps {
   leagueId: number;
@@ -159,7 +159,9 @@ export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabP
                 />
                 <div>
                   <div style={{ color: "#e2e8f0", fontWeight: "600" }}>{p.name}</div>
-                  <div style={{ color: "#8a99ad", fontSize: "11px" }}>{p.position} · {p.team}</div>
+                  <div style={{ color: "#8a99ad", fontSize: "11px", display: "flex", gap: "6px", alignItems: "center" }}>
+                    {p.position} · {p.team} <InjuryPill player={p} />
+                  </div>
                 </div>
               </button>
               <div style={{ color: "#8a99ad", fontSize: "11px" }}>

@@ -74,7 +74,9 @@ The work is already in the uncommitted diff of `engines/fantasy_projection_engin
 
 ---
 
-## Phase 3: Injury display (G3)
+## Phase 3: Injury display (G3) — DONE (2026-10-19)
+
+> Landed as planned. A shared `InjuryPill` (`napperUtils.tsx`; tooltip such as "Out · Upper Arm Fracture · 1 wk left") replaced the inline pills. It also shows in the Players and Trades tabs, the trade builder (IR players can't be selected) and the player modal. Step 4, showing injured players in the weekly rankings instead of hiding them, was skipped.
 
 1. **API payloads:** replace the hardcoded `"injury_status": None` at `napper_api.py:972` (team) and `:1218` (matchup) with values from `get_injury_map(cur, season, wk)`. Load the map once per request, not per player.
    - The Madden report has no "questionable" level, so there are two statuses:

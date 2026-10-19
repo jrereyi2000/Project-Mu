@@ -7,6 +7,7 @@ import {
   getPlayerHeadshotUrl,
   getSlotBadgeClass,
   handleImageError,
+  InjuryPill,
 } from "./napperUtils";
 
 interface NapperMatchupTabProps {
@@ -279,15 +280,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                         <span className="text-[11px] text-[#8a99ad] font-semibold">
                           {lp.position} - {lp.team}
                         </span>
-                        {lp.injury_status && (
-                          <span
-                            className={`napper-injury-pill ${
-                              lp.injury_status === "O" ? "out" : "ques"
-                            }`}
-                          >
-                            {lp.injury_status}
-                          </span>
-                        )}
+                        <InjuryPill player={lp} />
                       </div>
                       <div className="text-[11px] text-[#8a99ad] flex items-center gap-1.5 mt-0.5 truncate">
                         <span>{lp.kickoff}</span>
@@ -350,15 +343,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                   <div className="flex items-center justify-end gap-3 min-w-0 flex-1">
                     <div className="min-w-0 text-right">
                       <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                        {rp.injury_status && (
-                          <span
-                            className={`napper-injury-pill ${
-                              rp.injury_status === "O" ? "out" : "ques"
-                            }`}
-                          >
-                            {rp.injury_status}
-                          </span>
-                        )}
+                        <InjuryPill player={rp} />
                         <span className="text-[11px] text-[#8a99ad] font-semibold">
                           {rp.position} - {rp.team}
                         </span>

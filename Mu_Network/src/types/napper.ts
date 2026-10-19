@@ -53,7 +53,15 @@ export interface NapperTeam {
   seed?: number;
 }
 
-export interface NapperStarterPlayer {
+/** Injury keys on Napper player payloads (server: _injury_fields). Healthy players have all nulls. */
+export interface NapperInjuryInfo {
+  injury_status?: "IR" | "O" | string | null;
+  injury_type?: string | null;
+  injury_duration?: string | null;
+  injury_weeks_remaining?: number | null;
+}
+
+export interface NapperStarterPlayer extends NapperInjuryInfo {
   id: number;
   player_id: number;
   name: string;
@@ -67,7 +75,6 @@ export interface NapperStarterPlayer {
   fpts: number;
   proj_fpts: number | null;
   is_yet_to_play: boolean;
-  injury_status?: string | null;
 }
 
 export interface NapperStarterSlot {
@@ -145,7 +152,7 @@ export interface NapperTradeOffer {
   created_at: string;
 }
 
-export interface NapperWaiverPlayer {
+export interface NapperWaiverPlayer extends NapperInjuryInfo {
   player_id: number;
   name: string;
   espn_id?: number | string | null;

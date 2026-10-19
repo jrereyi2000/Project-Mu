@@ -1,5 +1,6 @@
 import React from "react";
 import { API_BASE } from "../../api";
+import type { NapperInjuryInfo } from "../../types/napper";
 
 // Known ESPN player IDs for headshots
 export const ESPN_PLAYER_IDS: Record<string, string> = {
@@ -88,6 +89,31 @@ export function handleImageError(e: React.SyntheticEvent<HTMLImageElement>) {
 }
 
 /** Position slot styling class */
+function titleCase(text: string): string {
+  return text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Human-readable injury line, e.g. "Out · Upper Arm Fracture · 2 wks left". Empty when healthy. */
+export function injuryDescription(player: NapperInjuryInfo): string {
+  if (!player.injury_status) return "";
+  const type = player.injury_type ? titleCase(player.injury_type) : "Injury";
+  const weeks = player.injury_weeks_remaining ?? 0;
+  const left = weeks > 0 ? ` · ${weeks} wk${weeks === 1 ? "" : "s"} left` : "";
+  return `${player.injury_status === "IR" ? "Injured reserve" : "Out"} · ${type}${left}`;
+}
+
+/** OUT / IR badge with the injury and expected return in its tooltip; renders nothing for healthy players. */
+export const InjuryPill: React.FC<{ player: NapperInjuryInfo }> = ({ player }) => {
+  if (!player.injury_status) return null;
+  const tone = player.injury_status === "IR" ? "ir" : player.injury_status === "O" ? "out" : "ques";
+  const description = injuryDescription(player);
+  return (
+    <span className={`napper-injury-pill ${tone}`} title={description} aria-label={description}>
+      {player.injury_status}
+    </span>
+  );
+};
+
 export function getSlotBadgeClass(slot: string): string {
   const s = slot.toUpperCase();
   if (s.includes("QB")) return "slot-qb";
