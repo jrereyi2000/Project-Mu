@@ -29,7 +29,13 @@ def _header(h):
     'Y YARDS' through OCR) on the page Gemini read; without this a sorted column's values went
     missing (receiving yards, Oct 14)."""
     h = (h or "").strip()
-    return h.lstrip("▼▲*").strip() if h[:1] in "▼▲*" else h
+    if h[:1] in "▼▲*":
+        h = h.lstrip("▼▲* ").strip()
+    elif h[:2].upper() in ("Y ", "V "):
+        h = h[2:].strip()
+    if h == "ARDS":
+        return "YARDS"
+    return h
 
 
 def read_csv(path):
@@ -458,10 +464,84 @@ def resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, 
                             "read differently on overlapping pages; re-extract")
             continue
         if not cands:
-            twin = [r2 for r2 in rows if r2 is not rs[0] and r2["POS"] == pos and r2["NAME"] != rs[0]["NAME"]
-                    and all(r2.get(h) == rs[0].get(h) for h in cmap)]
-            unmatched.append(f"{cat}: {rs[0]['NAME']} {pos}" + (f" (same numbers as {twin[0]['NAME']}: a misread name?)"
-                                                               if twin else ""))
+            if cat in OFFENSE_MUST_MATCH:
+                # Unmatched player: find screenshot and save cropped row snippet
+                sc_path, snip_path = (None, None)
+                if folder:
+                    from pipeline.resolve_player import find_and_crop_unmatched_player
+                    sc_path, snip_path = find_and_crop_unmatched_player(folder, cat, rs[0]["NAME"])
+
+                # Check if interactive terminal session
+                resolved = None
+                if sys.stdin and sys.stdin.isatty():
+                    from pipeline.resolve_player import prompt_resolve_player
+                    resolved = prompt_resolve_player(
+                        cur,
+                        season=season,
+                        cat=cat,
+                        player_name=rs[0]["NAME"],
+                        position=pos,
+                        stats=rs[0],
+                        screenshot_path=sc_path,
+                        snippet_path=snip_path,
+                        is_interactive=True
+                    )
+
+                if resolved:
+                    res_pid, res_team_id = resolved
+                    players.append((res_pid, name_key(rs[0]["NAME"]), res_team_id, pos, rs[0]["NAME"]))
+                    by_key.setdefault((name_key(rs[0]["NAME"]), pos), []).append((res_pid, res_team_id))
+                    out[res_pid] = (rs[0], values[0], res_team_id)
+                    if folder:
+                        json_path = os.path.join(folder, "unmatched_players.json")
+                        if os.path.exists(json_path):
+                            try:
+                                with open(json_path) as fh:
+                                    j_entries = json.load(fh)
+                                j_entries = [e for e in j_entries if not (e.get("category") == cat and e.get("player_name") == rs[0]["NAME"])]
+                                with open(json_path, "w") as fh:
+                                    json.dump(j_entries, fh, indent=2)
+                            except Exception:
+                                pass
+                    continue
+
+                # Non-interactive or skipped: record in unmatched_players.json
+                if folder:
+                    json_path = os.path.join(folder, "unmatched_players.json")
+                    existing_entries = []
+                    if os.path.exists(json_path):
+                        try:
+                            with open(json_path) as fh:
+                                existing_entries = json.load(fh)
+                        except Exception:
+                            existing_entries = []
+                    if not any(e.get("category") == cat and e.get("player_name") == rs[0]["NAME"] for e in existing_entries):
+                        existing_entries.append({
+                            "category": cat,
+                            "player_name": rs[0]["NAME"],
+                            "position": pos,
+                            "stats": rs[0],
+                            "screenshot_path": sc_path,
+                            "snippet_path": snip_path,
+                            "season": season
+                        })
+                        try:
+                            with open(json_path, "w") as fh:
+                                json.dump(existing_entries, fh, indent=2)
+                        except Exception:
+                            pass
+
+                twin = [r2 for r2 in rows if r2 is not rs[0] and r2["POS"] == pos and r2["NAME"] != rs[0]["NAME"]
+                        and all(r2.get(h) == rs[0].get(h) for h in cmap)]
+                unmatched.append(f"{cat}: {rs[0]['NAME']} {pos}" + (f" (same numbers as {twin[0]['NAME']}: a misread name?)"
+                                                                   if twin else ""))
+                if not (sys.stdin and sys.stdin.isatty()):
+                    raise LoadError(f"{cat}: unmatched player {rs[0]['NAME']} {pos}. Run: python3 -m pipeline.resolve_player {folder}")
+            else:
+                twin = [r2 for r2 in rows if r2 is not rs[0] and r2["POS"] == pos and r2["NAME"] != rs[0]["NAME"]
+                        and all(r2.get(h) == rs[0].get(h) for h in cmap)]
+                unmatched.append(f"{cat}: {rs[0]['NAME']} {pos}" + (f" (same numbers as {twin[0]['NAME']}: a misread name?)"
+                                                                   if twin else ""))
             continue
         if len(cands) == 1 and len(rs) == 1:
             out[cands[0][0]] = (rs[0], values[0], cands[0][1])
@@ -599,7 +679,8 @@ def load_weekly(cur, folder, season, report, season_stats=True):
             continue
         if cat in OFFENSE_MUST_MATCH and len(unmatched) > before:
             problems.append(f"{cat}: {len(unmatched) - before} rows match no rostered player (offense must match 100%): "
-                            + "; ".join(unmatched[before:before + 10]))
+                            + "; ".join(unmatched[before:before + 10])
+                            + (f"\n  Run: python3 -m pipeline.resolve_player {folder}" if folder else ""))
         for pid, (r, vals, team) in got.items():
             writes.append((table, pid, team, r["POS"], vals))
             g = general.setdefault(pid, {"team": team, "pos": r["POS"], "games_played": None, "downs_played": None})
@@ -628,15 +709,21 @@ def load_weekly(cur, folder, season, report, season_stats=True):
             elif down:
                 problems.append(f"{table} player {pid}: totals went down ({', '.join(down)})")
 
-    # row counts within 10% of the last weekly capture
+    # Weekly season stats row count checks against the last weekly capture (starting week 3,
+    # once early-season stat lists have established their baseline after week 1's single-game sample)
     cur.execute("SELECT row_counts FROM captures WHERE mode = 'weekly' AND season = %s AND status = 'loaded' "
                 "ORDER BY week DESC LIMIT 1", (season,))
     prev = cur.fetchone()
-    if season_stats and prev and prev[0]:
+    if season_stats and prev and prev[0] and week > 2:
         now = row_counts(folder)
         for f, n in prev[0].items():
-            if f.startswith("stats_") and f in now and n and abs(now[f] - n) > 0.1 * n:
-                problems.append(f"{f}: {now[f]} rows, last week {n} (more than 10% apart)")
+            if f.startswith("stats_") and f in now and n:
+                # Monotonic lower-bound check: cannot decrease (allow 2-row margin for ~250 cap variance)
+                if now[f] < n - 2:
+                    problems.append(f"{f}: {now[f]} rows, last week {n} (row count decreased from last week; capture is incomplete)")
+                # Upper-bound expansion check: allow up to 30% expansion with an absolute floor of 20
+                elif now[f] > n + max(20, int(0.30 * n)):
+                    problems.append(f"{f}: {now[f]} rows, last week {n} (exceeded 30% expansion limit)")
 
     if problems:
         raise LoadError("weekly checks failed:\n  " + "\n  ".join(problems))

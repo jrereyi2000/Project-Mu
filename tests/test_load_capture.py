@@ -52,6 +52,7 @@ class HeaderTest(unittest.TestCase):
         self.assertEqual(L._header("▼YARDS"), "YARDS")
         self.assertEqual(L._header("*TAK"), "TAK")
         self.assertEqual(L._header("FG%"), "FG%")
+        self.assertEqual(L._header("ARDS"), "YARDS")
 
     def test_missing_column_is_an_error(self):
         with self.assertRaises(L.LoadError):

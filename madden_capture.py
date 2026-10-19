@@ -151,12 +151,21 @@ RESTARTS = [0]               # stream restarts used in this run (all modes share
 
 
 def recover_stream(e):
-    """After a failure: if the stream is frozen and restarts are left, restart it (the caller
+    """After a failure: if the stream is frozen or crashed/closed and restarts are left, restart it (the caller
     then redoes its step); otherwise re-raise the failure."""
-    if RESTARTS[0] >= STREAM_RESTARTS or not stream_frozen():
+    if RESTARTS[0] >= STREAM_RESTARTS:
+        raise e
+    crashed = not chiaki_running()
+    frozen = False
+    if not crashed:
+        try:
+            frozen = stream_frozen()
+        except Exception:
+            frozen = True
+    if not (crashed or frozen):
         raise e
     RESTARTS[0] += 1
-    log(f"  The stream is frozen ({e}); restart {RESTARTS[0]} of {STREAM_RESTARTS}")
+    log(f"  The stream {'crashed/closed' if crashed else 'is frozen'} ({e}); restart {RESTARTS[0]} of {STREAM_RESTARTS}")
     restart_stream()
 
 
@@ -1227,13 +1236,96 @@ def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=tr
     return max_pages
 
 
-def capture_category(out, index, cat, all_rows):
+def prior_category_pages(out, cat):
+    """Find the page count for category from the most recent prior weekly capture."""
+    cat_norm = norm(cat).lower()
+    out_dir = os.path.abspath(out)
+    root = os.path.dirname(out_dir)
+    cur_base = os.path.basename(out_dir)
+    if os.path.isdir(root):
+        candidates = []
+        for d in sorted(os.listdir(root), reverse=True):
+            if d >= cur_base:
+                continue
+            p = os.path.join(root, d)
+            if not os.path.isdir(p):
+                continue
+            if os.path.isdir(os.path.join(p, "stats")) or os.path.exists(os.path.join(p, f"stats_{cat_norm}.csv")):
+                candidates.append(p)
+        for p in candidates:
+            sdir = os.path.join(p, "stats")
+            if os.path.isdir(sdir):
+                imgs = [f for f in os.listdir(sdir) if f"_{cat_norm}_" in f and "_right_" not in f and (f.endswith(".png") or f.endswith(".webp"))]
+                if imgs:
+                    return len(imgs)
+            csv_file = os.path.join(p, f"stats_{cat_norm}.csv")
+            if os.path.exists(csv_file):
+                try:
+                    with open(csv_file) as fh:
+                        rows = max(0, sum(1 for _ in fh) - 1)
+                    if rows > 0:
+                        return (rows + 9) // 10
+                except Exception:
+                    pass
+    try:
+        import psycopg
+        dsn = _env("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
+        with psycopg.connect(dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT row_counts FROM captures WHERE mode = 'weekly' AND status = 'loaded' ORDER BY season DESC, week DESC LIMIT 1")
+                r = cur.fetchone()
+                if r and r[0]:
+                    counts = r[0] if isinstance(r[0], dict) else json.loads(r[0])
+                    csv_key = f"stats_{cat_norm}.csv"
+                    if csv_key in counts and counts[csv_key]:
+                        return (counts[csv_key] + 9) // 10
+    except Exception:
+        pass
+    return None
+
+
+def list_to_top(rows_per_page=10, max_pages=35):
+    """Scroll a stats list back to the top by pressing Up until the screen repeats."""
+    traverse("left")
+    prev = None
+    for _ in range(max_pages):
+        press("up", hold=0.07, wait=LIST_WAIT, times=rows_per_page)
+        f = Frame()
+        sig = table_sig(f.path)
+        if prev is not None and same_table(prev, sig):
+            break
+        prev = sig
+    traverse("left")
+
+
+def capture_category(out, index, cat, all_rows, max_attempts=2):
     folder = os.path.join(out, "stats")
-    base = f"{index:02d}_{norm(cat).lower()}"
-    if norm(cat) in WIDE_CATEGORIES:
-        capture_wide_list(folder, base)
-    else:
-        capture_list(folder, base, stop_at_zeros=not all_rows)
+    cat_norm = norm(cat).lower()
+    base = f"{index:02d}_{cat_norm}"
+    prior_pages = prior_category_pages(out, cat)
+
+    for attempt in range(max_attempts):
+        if norm(cat) in WIDE_CATEGORIES:
+            pages = capture_wide_list(folder, base, confirm_end=True)
+        else:
+            pages = capture_list(folder, base, stop_at_zeros=not all_rows, confirm_end=True)
+
+        if prior_pages is not None and prior_pages >= 3 and pages < prior_pages - 2:
+            log(f"WARNING: {cat} captured {pages} pages, but prior week had {prior_pages}. Possible dropped input.")
+            if attempt < max_attempts - 1:
+                log(f"Re-attempting {cat}...")
+                for p in glob.glob(os.path.join(folder, f"{base}_*")):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
+                list_to_top()
+                continue
+            # still short on the last attempt: don't let run_stats mark it done
+            raise Abort(f"{cat} came up short twice ({pages} pages, prior week {prior_pages}); "
+                        f"re-run with --resume to capture it again")
+        return pages
+
 
 
 # ------------------------------------------------------------------ runs ----
@@ -1305,7 +1397,7 @@ def run_stats(out, all_rows, resume=True):
             log(f"Category: {cat} (already captured)")
         else:
             log(f"Category: {cat}")
-            idx = max(list(done.values()) + [0]) + 1
+            idx = next(i for i in range(1, 20) if i not in done.values())
             for p in glob.glob(os.path.join(sdir, f"{idx:02d}_{cat_norm.lower()}_*")):
                 os.remove(p)
             try:
