@@ -247,3 +247,54 @@ def assign_by_history(rows, candidates, keys):
     if best is None or tie:
         return None
     return dict(enumerate(best))
+
+
+# OCR slips in a position cell (madden_capture.norm_pos)
+POS_FIXES = {"OB": "QB", "@B": "QB", "0B": "QB", "F8": "FB", "EB": "FB", "H8": "HB"}
+
+
+def contract_pos(p):
+    p = re.sub(r"[^A-Z0-9@]", "", (p or "").upper())
+    return POS_FIXES.get(p, p)
+
+
+def match_contract_rows(rows, candidates, season=None):
+    """Team Salary rows -> players, never guessing (team management step 1; the roster load's rule).
+
+    rows: [{"team": name, "team_id": id, "NAME": list name, "POS": .., "AGE": int|None, "OVR": int|None}]
+    candidates: [(player_id, team_id, name_key, full_key, position, age, ovr)] for the season.
+    Per row: same team and name key (narrowed by the full name when the screen shows one), then the same
+    position, then AGE, then OVR; a step that would leave nobody is skipped. Exactly one candidate is a
+    match; none or several, or two rows on one player, is a problem. Returns ({row index: player_id}, problems).
+    """
+    by_team = {}
+    for c in candidates:
+        by_team.setdefault(c[1], []).append(c)
+    where = f"the team's {season} roster" if season else "the team's roster"
+    matches, problems, taken = {}, [], {}
+    for i, r in enumerate(rows):
+        label = f"{r['team']} {r['NAME']} {r.get('POS', '')}".strip()
+        nk = name_key(r["NAME"])
+        cands = [c for c in by_team.get(r["team_id"], []) if c[2] == nk]
+        if len(cands) > 1 and "." not in r["NAME"] and " " in r["NAME"].strip():
+            fk = full_key(r["NAME"])                    # a full name on screen (C7)
+            cands = [c for c in cands if c[3] == fk] or cands
+        pos = contract_pos(r.get("POS"))
+        for test in (lambda c: contract_pos(c[4]) == pos,
+                     lambda c: r.get("AGE") is not None and c[5] == r.get("AGE"),
+                     lambda c: r.get("OVR") is not None and c[6] == r.get("OVR")):
+            if len(cands) <= 1:
+                break
+            cands = [c for c in cands if test(c)] or cands
+        if not cands:
+            problems.append(f"{label}: not on {where}")
+        elif len(cands) > 1:
+            problems.append(f"{label}: can't be told apart ({len(cands)} players: {sorted(c[0] for c in cands)})")
+        else:
+            pid = cands[0][0]
+            if pid in taken:
+                problems.append(f"{label}: the same player as row {taken[pid] + 1} ({rows[taken[pid]]['NAME']})")
+            else:
+                taken[pid] = i
+                matches[i] = pid
+    return matches, problems

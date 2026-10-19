@@ -123,3 +123,57 @@ class WeekTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContractMatchTest(unittest.TestCase):
+    """match_contract_rows (team management step 1): Team Salary rows -> players, never guessing."""
+    from pipeline.capture_matching import match_contract_rows as _m
+    match = staticmethod(_m)
+    CANDS = [
+        (1, 5, name_key("B. Young"), full_key("Bryce Young"), "QB", 25, 84),
+        (2, 5, name_key("D. Brown"), full_key("Damien Brown"), "LT", 29, 88),
+        (3, 5, name_key("D. Brown"), full_key("Dante Brown"), "WR", 24, 70),     # same list name, other position
+        (4, 5, name_key("J. Smith"), full_key("Jalen Smith"), "CB", 26, 75),
+        (5, 5, name_key("J. Smith"), full_key("Jordan Smith"), "CB", 23, 68),    # same name and position
+        (6, 5, name_key("K. Lee"), full_key("Kai Lee"), "MIKE", 27, 77),
+        (7, 5, name_key("K. Lee"), full_key("Kris Lee"), "MIKE", 27, 72),        # same age too
+        (8, 6, name_key("B. Young"), full_key("Ben Young"), "QB", 30, 70),       # another team
+    ]
+
+    def row(self, name, pos, age=None, ovr=None, team_id=5):
+        return {"team": "PANTHERS", "team_id": team_id, "NAME": name, "POS": pos, "AGE": age, "OVR": ovr}
+
+    def test_unique_match(self):
+        m, p = self.match([self.row("B.Young", "QB", 25, 84)], self.CANDS, 2036)
+        self.assertEqual((m, p), ({0: 1}, []))
+
+    def test_position_tie_break(self):
+        m, p = self.match([self.row("D.Brown", "LT"), self.row("D.Brown", "WR")], self.CANDS)
+        self.assertEqual((m, p), ({0: 2, 1: 3}, []))
+
+    def test_age_then_ovr_tie_break(self):
+        m, p = self.match([self.row("J.Smith", "CB", 23, 68), self.row("K.Lee", "MIKE", 27, 72)], self.CANDS)
+        self.assertEqual((m, p), ({0: 5, 1: 7}, []))
+
+    def test_full_name_on_screen(self):
+        m, p = self.match([self.row("Jordan Smith", "CB")], self.CANDS)
+        self.assertEqual((m, p), ({0: 5}, []))
+
+    def test_not_on_roster(self):
+        m, p = self.match([self.row("Z.Nobody", "QB")], self.CANDS, 2036)
+        self.assertEqual(m, {})
+        self.assertIn("not on the team's 2036 roster", p[0])
+
+    def test_ambiguous(self):
+        m, p = self.match([self.row("K.Lee", "MIKE", 27)], self.CANDS)
+        self.assertEqual(m, {})
+        self.assertIn("can't be told apart", p[0])
+
+    def test_two_rows_one_player(self):
+        m, p = self.match([self.row("B.Young", "QB"), self.row("B.Young", "QB")], self.CANDS)
+        self.assertEqual(m, {0: 1})
+        self.assertIn("same player as row 1", p[0])
+
+    def test_ocr_position_slip(self):
+        m, p = self.match([self.row("B.Young", "OB")], self.CANDS)
+        self.assertEqual((m, p), ({0: 1}, []))
