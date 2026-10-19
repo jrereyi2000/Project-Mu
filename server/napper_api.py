@@ -77,6 +77,110 @@ def _injury_fields(injuries: Dict[int, dict], player_id: int) -> Dict[str, Any]:
     }
 
 
+def _n(v) -> int:
+    return int(v or 0)
+
+
+def format_stat_line(position: Optional[str], st: Dict[str, Any]) -> str:
+    """Sleeper-style box score line for one player-week, e.g. "12/19 CMP, 210 YD, 1 TD, 1 INT, 10 CAR, 121 YD".
+    st: summed player_stats columns (skill players), game_stat_kicking columns (K) or game_stat_defense
+    columns plus points_allowed (DEF). Zero categories are left out."""
+    def td(n):
+        return [f"{n} TD"] if n else []
+
+    if position == "K":
+        parts = []
+        if _n(st.get("fga")):
+            parts.append(f"{_n(st.get('fgm'))}/{_n(st.get('fga'))} FG")
+            if _n(st.get("fg_long")):
+                parts.append(f"LNG {_n(st.get('fg_long'))}")
+        if _n(st.get("xpa")):
+            parts.append(f"{_n(st.get('xpm'))}/{_n(st.get('xpa'))} XP")
+        return ", ".join(parts) or "No attempts"
+    if position == "DEF":
+        parts = [f"{float(st.get('sacks') or 0):g} SACK"] if float(st.get("sacks") or 0) else []
+        for key, label in (("ints", "INT"), ("fumble_recoveries", "FR"), ("tds", "TD"), ("safeties", "SFTY"),
+                           ("blocks", "BLK")):
+            if _n(st.get(key)):
+                parts.append(f"{_n(st.get(key))} {label}")
+        if st.get("points_allowed") is not None:
+            parts.append(f"{_n(st.get('points_allowed'))} PA")
+        return ", ".join(parts)
+
+    passing = ([f"{_n(st.get('completions'))}/{_n(st.get('pass_attempts'))} CMP", f"{_n(st.get('pass_yards'))} YD",
+                *td(_n(st.get("pass_tds")))] + ([f"{_n(st.get('interceptions'))} INT"] if _n(st.get("interceptions")) else [])
+               if _n(st.get("pass_attempts")) else [])
+    rushing = ([f"{_n(st.get('rush_attempts'))} CAR", f"{_n(st.get('rush_yards'))} YD", *td(_n(st.get("rush_tds")))]
+               if _n(st.get("rush_attempts")) else [])
+    receiving = ([f"{_n(st.get('receptions'))} REC", f"{_n(st.get('rec_yards'))} YD", *td(_n(st.get("rec_tds")))]
+                 if _n(st.get("receptions")) else [])
+    order = [receiving, rushing, passing] if position in ("WR", "TE") else [passing, rushing, receiving]
+    parts = [x for group in order for x in group]
+    if _n(st.get("fumb")):
+        parts.append(f"{_n(st.get('fumb'))} FUM")
+    return ", ".join(parts) or "No stats"
+
+
+def _weekly_game_lines(cur, season: int, week: int, player_ids: List[int]) -> Dict[int, Dict[str, str]]:
+    """Post-game card lines for players whose NFL game that week is final: {player_id: {game_result:
+    "Final W 37-34 @ LAR", stat_line}}. Players on bye or not yet played are left out."""
+    if not player_ids:
+        return {}
+    cur.execute("""
+        SELECT DISTINCT ON (ps.player_id) ps.player_id, ps.team_id, ps.position,
+               g.id AS game_id, g.home_team_id, g.home_score, g.away_score, opp.abbreviation AS opp_abbr
+        FROM player_seasons ps
+        JOIN games g ON g.season = ps.season AND g.week = %s AND g.status = 'COMPLETED'
+            AND ps.team_id IN (g.home_team_id, g.away_team_id)
+        JOIN teams opp ON opp.id = CASE WHEN g.home_team_id = ps.team_id THEN g.away_team_id ELSE g.home_team_id END
+        WHERE ps.season = %s AND ps.player_id = ANY(%s) AND ps.team_id IS NOT NULL
+        ORDER BY ps.player_id, ps.team_id
+    """, (week, season, list(player_ids)))
+    games = {r["player_id"]: r for r in cur.fetchall()}
+    if not games:
+        return {}
+    game_ids = list({g["game_id"] for g in games.values()})
+
+    cur.execute("""
+        SELECT player_id, SUM(completions) AS completions, SUM(pass_attempts) AS pass_attempts,
+               SUM(pass_yards) AS pass_yards, SUM(pass_tds) AS pass_tds, SUM(interceptions) AS interceptions,
+               SUM(rush_attempts) AS rush_attempts, SUM(rush_yards) AS rush_yards, SUM(rush_tds) AS rush_tds,
+               SUM(receptions) AS receptions, SUM(rec_yards) AS rec_yards, SUM(rec_tds) AS rec_tds, SUM(fumb) AS fumb
+        FROM player_stats
+        WHERE game_id = ANY(%s) AND player_id = ANY(%s) AND position NOT IN ('K', 'DEF')
+        GROUP BY player_id
+    """, (game_ids, list(games)))
+    stats = {r["player_id"]: r for r in cur.fetchall()}
+    cur.execute("""
+        SELECT player_id, SUM(fgm) AS fgm, SUM(fga) AS fga, MAX(fg_long) AS fg_long, SUM(xpm) AS xpm, SUM(xpa) AS xpa
+        FROM game_stat_kicking WHERE game_id = ANY(%s) AND player_id = ANY(%s) GROUP BY player_id
+    """, (game_ids, list(games)))
+    stats.update({r["player_id"]: r for r in cur.fetchall()})
+    cur.execute("""
+        SELECT game_id, team_id, SUM(sacks) AS sacks, SUM(ints) AS ints, SUM(fumble_recoveries) AS fumble_recoveries,
+               SUM(tds) AS tds, SUM(safeties) AS safeties, SUM(blocks) AS blocks
+        FROM game_stat_defense WHERE game_id = ANY(%s) GROUP BY game_id, team_id
+    """, (game_ids,))
+    defense = {(r["game_id"], r["team_id"]): r for r in cur.fetchall()}
+
+    out = {}
+    for pid, g in games.items():
+        home = g["home_team_id"] == g["team_id"]
+        mine, theirs = (g["home_score"], g["away_score"]) if home else (g["away_score"], g["home_score"])
+        mine, theirs = _n(mine), _n(theirs)
+        result = "W" if mine > theirs else ("L" if mine < theirs else "T")
+        pos = "RB" if g["position"] in ("HB", "FB") else g["position"]
+        if pos == "DEF":
+            st = dict(defense.get((g["game_id"], g["team_id"])) or {}, points_allowed=theirs)
+        else:
+            st = stats.get(pid) or {}
+        out[pid] = {
+            "game_result": f"Final {result} {mine}-{theirs} {'vs' if home else '@'} {g['opp_abbr']}",
+            "stat_line": format_stat_line(pos, st),
+        }
+    return out
+
+
 def _reception_adjustment(scoring_type: Optional[str]) -> float:
     if scoring_type == "HALF_PPR":
         return 0.5
@@ -1024,6 +1128,7 @@ def get_league_user_team(league_id: int, week: Optional[int] = Query(None)):
 
             team_rows = cur.fetchall()
             injuries = get_injury_map(cur, season, wk, [r["player_id"] for r in team_rows])
+            game_lines = _weekly_game_lines(cur, season, wk, [r["player_id"] for r in team_rows])
             players = []
             for row in team_rows:
                 position = row["position"]
@@ -1043,6 +1148,8 @@ def get_league_user_team(league_id: int, week: Optional[int] = Query(None)):
                     "fpts": round(float(row["fantasy_points"] or 0) - float(row["receptions"] or 0) * _reception_adjustment(team["scoring_type"]), 2),
                     "proj_fpts": float(row["projected_points"]) if row["projected_points"] is not None else None,
                     "is_yet_to_play": row["nfl_game_status"] != "COMPLETED",
+                    "game_result": (game_lines.get(row["player_id"]) or {}).get("game_result"),
+                    "stat_line": (game_lines.get(row["player_id"]) or {}).get("stat_line"),
                     **_injury_fields(injuries, row["player_id"]),
                     "slot": row["slot"],
                 })
@@ -1283,6 +1390,7 @@ def get_league_matchup(
             left_roster = [r for r in roster_rows if r["team_id"] == left_team_id]
             right_roster = [r for r in roster_rows if r["team_id"] == right_team_id]
             injuries = get_injury_map(cur, season, wk, [r["player_id"] for r in roster_rows])
+            game_lines = _weekly_game_lines(cur, season, wk, [r["player_id"] for r in roster_rows])
 
             def make_player_dict(r):
                 if not r:
@@ -1305,6 +1413,8 @@ def get_league_matchup(
                     "fpts": round(float(r["fantasy_points"] or 0) - float(r["receptions"] or 0) * _reception_adjustment(lg["scoring_type"]), 2),
                     "proj_fpts": round(proj, 2) if proj is not None else None,
                     "is_yet_to_play": r["nfl_game_status"] != "COMPLETED",
+                    "game_result": (game_lines.get(pid) or {}).get("game_result"),
+                    "stat_line": (game_lines.get(pid) or {}).get("stat_line"),
                     **_injury_fields(injuries, pid),
                 }
 

@@ -75,6 +75,9 @@ export interface NapperStarterPlayer extends NapperInjuryInfo {
   fpts: number;
   proj_fpts: number | null;
   is_yet_to_play: boolean;
+  /** Once the NFL game is final: "Final W 37-34 @ LAR" and a box score line ("12/19 CMP, 210 YD, 1 TD"). */
+  game_result?: string | null;
+  stat_line?: string | null;
 }
 
 export interface NapperStarterSlot {

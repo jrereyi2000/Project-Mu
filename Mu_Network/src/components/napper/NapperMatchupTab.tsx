@@ -8,6 +8,8 @@ import {
   getSlotBadgeClass,
   handleImageError,
   InjuryPill,
+  PostGameLine,
+  projClass,
 } from "./napperUtils";
 
 interface NapperMatchupTabProps {
@@ -297,6 +299,9 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                         </span>
                         <InjuryPill player={lp} />
                       </div>
+                      {lp.game_result ? (
+                        <PostGameLine player={lp} />
+                      ) : (
                       <div className="text-[11px] text-[#8a99ad] flex items-center gap-1.5 mt-0.5 truncate">
                         <span>{lp.kickoff}</span>
                         <span>{lp.opponent}</span>
@@ -309,6 +314,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                           </>
                         )}
                       </div>
+                      )}
                     </div>
                   </div>
 
@@ -317,7 +323,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                     <div className="text-sm font-black text-white font-mono leading-none">
                       {!lp.is_yet_to_play ? lp.fpts.toFixed(2) : "-"}
                     </div>
-                    <div className="text-[11px] text-[#8a99ad] font-mono mt-1 font-medium">
+                    <div className={`text-[11px] ${projClass(lp)} font-mono mt-1 font-medium`}>
                       {lp.proj_fpts != null ? lp.proj_fpts.toFixed(2) : "—"}
                     </div>
                   </div>
@@ -350,7 +356,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                     >
                       {!rp.is_yet_to_play ? rp.fpts.toFixed(2) : "-"}
                     </div>
-                    <div className="text-[11px] text-[#8a99ad] font-mono mt-1 font-medium">
+                    <div className={`text-[11px] ${projClass(rp)} font-mono mt-1 font-medium`}>
                       {rp.proj_fpts != null ? rp.proj_fpts.toFixed(2) : "—"}
                     </div>
                   </div>
@@ -366,6 +372,9 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                           {rp.name}
                         </span>
                       </div>
+                      {rp.game_result ? (
+                        <PostGameLine player={rp} align="right" />
+                      ) : (
                       <div className="text-[11px] text-[#8a99ad] flex items-center justify-end gap-1.5 mt-0.5 truncate">
                         {rp.game_status && (
                           <>
@@ -378,6 +387,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                         <span>{rp.kickoff}</span>
                         <span>{rp.opponent}</span>
                       </div>
+                      )}
                     </div>
                     <img
                       src={getPlayerHeadshotUrl(rp.player_id, rp.headshot_url, rp.espn_id)}
@@ -451,16 +461,20 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                               {lp.position} - {lp.team}
                             </span>
                           </div>
-                          <div className="text-[11px] text-[#8a99ad] mt-0.5">
-                            {lp.kickoff} {lp.opponent}
-                          </div>
+                          {lp.game_result ? (
+                            <PostGameLine player={lp} />
+                          ) : (
+                            <div className="text-[11px] text-[#8a99ad] mt-0.5">
+                              {lp.kickoff} {lp.opponent}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="text-right pl-3 shrink-0">
                         <div className="text-xs font-black text-white font-mono leading-none">
                           {!lp.is_yet_to_play ? lp.fpts.toFixed(2) : "-"}
                         </div>
-                        <div className="text-[10px] text-[#8a99ad] font-mono mt-1 font-medium">
+                        <div className={`text-[10px] ${projClass(lp)} font-mono mt-1 font-medium`}>
                           {lp.proj_fpts != null ? lp.proj_fpts.toFixed(2) : "—"}
                         </div>
                       </div>
@@ -486,7 +500,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                         <div className="text-xs font-black text-white font-mono leading-none">
                           {!rp.is_yet_to_play ? rp.fpts.toFixed(2) : "-"}
                         </div>
-                        <div className="text-[10px] text-[#8a99ad] font-mono mt-1 font-medium">
+                        <div className={`text-[10px] ${projClass(rp)} font-mono mt-1 font-medium`}>
                           {rp.proj_fpts != null ? rp.proj_fpts.toFixed(2) : "—"}
                         </div>
                       </div>
@@ -498,9 +512,13 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                             </span>
                             <span className="text-xs font-bold text-white truncate">{rp.name}</span>
                           </div>
-                          <div className="text-[11px] text-[#8a99ad] mt-0.5">
-                            {rp.kickoff} {rp.opponent}
-                          </div>
+                          {rp.game_result ? (
+                            <PostGameLine player={rp} align="right" />
+                          ) : (
+                            <div className="text-[11px] text-[#8a99ad] mt-0.5">
+                              {rp.kickoff} {rp.opponent}
+                            </div>
+                          )}
                         </div>
                         <img
                           src={getPlayerHeadshotUrl(rp.player_id, rp.headshot_url, rp.espn_id)}

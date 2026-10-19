@@ -114,6 +114,23 @@ export const InjuryPill: React.FC<{ player: NapperInjuryInfo }> = ({ player }) =
   );
 };
 
+/** Projection color once the game is final: teal when the player beat it, red when he fell short. */
+export function projClass(player: { is_yet_to_play?: boolean; fpts?: number; proj_fpts?: number | null }): string {
+  if (player.is_yet_to_play || player.proj_fpts == null) return "text-[#8a99ad]";
+  return (player.fpts ?? 0) >= player.proj_fpts ? "text-[#00ceb8]" : "text-[#ff6b81]";
+}
+
+/** Post-game lines under a player's name: the final result, then the box score. */
+export const PostGameLine: React.FC<{ player: { game_result?: string | null; stat_line?: string | null }; align?: "left" | "right" }> = ({ player, align = "left" }) => {
+  if (!player.game_result) return null;
+  return (
+    <div className={`mt-0.5 text-[11px] leading-snug ${align === "right" ? "text-right" : "text-left"}`}>
+      <div className="text-[#8a99ad] font-semibold">{player.game_result}</div>
+      {player.stat_line && <div className="text-[#cbd5e1] whitespace-normal break-words">{player.stat_line}</div>}
+    </div>
+  );
+};
+
 export function getSlotBadgeClass(slot: string): string {
   const s = slot.toUpperCase();
   if (s.includes("QB")) return "slot-qb";

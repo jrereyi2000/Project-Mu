@@ -6,6 +6,7 @@ import {
   getSlotBadgeClass,
   handleImageError,
   InjuryPill,
+  PostGameLine,
 } from "./napperUtils";
 
 interface TeamRosterSlot {
@@ -341,9 +342,13 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                           </span>
                           <InjuryPill player={p} />
                         </div>
-                        <div className="text-[11px] text-[#8a99ad] mt-0.5">
-                          {p.kickoff} {p.opponent}
-                        </div>
+                        {p.game_result ? (
+                          <PostGameLine player={p} />
+                        ) : (
+                          <div className="text-[11px] text-[#8a99ad] mt-0.5">
+                            {p.kickoff} {p.opponent}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -424,9 +429,13 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                           </span>
                           <InjuryPill player={p} />
                         </div>
-                        <div className="text-[11px] text-[#8a99ad] mt-0.5">
-                          {p.kickoff} {p.opponent}
-                        </div>
+                        {p.game_result ? (
+                          <PostGameLine player={p} />
+                        ) : (
+                          <div className="text-[11px] text-[#8a99ad] mt-0.5">
+                            {p.kickoff} {p.opponent}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
