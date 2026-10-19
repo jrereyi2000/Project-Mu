@@ -20,6 +20,7 @@ import psycopg
 from psycopg.rows import dict_row
 from engines import napper_draft_engine
 from engines.napper_trade_engine import fill_empty_starter_slots
+from engines.napper_injuries import IR_MIN_WEEKS, get_injury_map, is_ir_eligible
 from engines.fantasy_projection_engine import DEF_POINTS_SQL, DEF_STATS_JOIN_SQL, KICKING_POINTS_SQL
 
 logger = logging.getLogger(__name__)
@@ -111,7 +112,7 @@ def _get_weekly_team_totals(cur, league_id: int, season: int, week: int, scoring
         LEFT JOIN fantasy_projections fp
           ON fp.player_id = nr.player_id AND fp.season = %s AND fp.week = %s
         LEFT JOIN actual ON actual.player_id = nr.player_id
-        WHERE nr.league_id = %s AND nr.week = %s AND nr.slot <> 'BN'
+        WHERE nr.league_id = %s AND nr.week = %s AND nr.slot NOT IN ('BN', 'IR')
         GROUP BY nr.team_id
     """, (season, week, season, week, week, season,
           _reception_adjustment(scoring_type), season, week, league_id, week))
@@ -303,6 +304,8 @@ ELIGIBLE_POSITIONS: Dict[str, set] = {
     "K": {"K"},
     "DEF": {"DEF"},
     "BN": {"QB", "RB", "WR", "TE", "FB", "HB", "K", "DEF"},
+    # Any position, but only an IR-eligible player (engines/napper_injuries.is_ir_eligible); never starts or scores.
+    "IR": {"QB", "RB", "WR", "TE", "FB", "HB", "K", "DEF"},
 }
 
 
@@ -624,9 +627,9 @@ def create_league(req: LeagueCreateRequest):
     status = "PRE_DRAFT" if req.status == "PRE_DRAFT" else "IN_SEASON"
 
     if req.is_superflex:
-        roster_format = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6}
+        roster_format = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6, "IR": 1}
     else:
-        roster_format = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6}
+        roster_format = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6, "IR": 1}
 
     avatar = req.avatar_url or "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=256&h=256&q=80"
     with get_db() as conn:
@@ -855,7 +858,7 @@ def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
                     WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s
                       AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
-                    ORDER BY nr.slot != 'BN' DESC, proj_fpts DESC
+                    ORDER BY CASE nr.slot WHEN 'IR' THEN 2 WHEN 'BN' THEN 1 ELSE 0 END, proj_fpts DESC
                 """, (season, wk, season, league_id, tm["id"], wk))
                 players = []
                 for p in cur.fetchall():
@@ -966,6 +969,7 @@ def get_league_user_team(league_id: int, week: Optional[int] = Query(None)):
             for slot in slot_order:
                 player = by_slot[slot].pop(0) if by_slot[slot] else None
                 roster.append({"id": f"{slot}-{len(roster) + 1}", "slot": slot, "slot_label": slot, "player": player})
+            ir_players = by_slot.pop("IR", [])
             for slot in list(by_slot):
                 if slot != "BN":
                     by_slot["BN"].extend(by_slot.pop(slot))
@@ -974,6 +978,9 @@ def get_league_user_team(league_id: int, week: Optional[int] = Query(None)):
             for index in range(bench_count):
                 player = bench_players[index] if index < len(bench_players) else None
                 roster.append({"id": f"BN-{index + 1}", "slot": "BN", "slot_label": "BN", "player": player})
+            for index in range(max(int(roster_format.get("IR", 0)), len(ir_players))):
+                player = ir_players[index] if index < len(ir_players) else None
+                roster.append({"id": f"IR-{index + 1}", "slot": "IR", "slot_label": "IR", "player": player})
 
             wins, losses, ties = team["wins"] or 0, team["losses"] or 0, team["ties"] or 0
             return {
@@ -1205,7 +1212,7 @@ def get_league_matchup(
             slot_order = _get_slot_order(roster_format)
 
             def assign_slots_to_players(roster: List[dict]):
-                starters_pool = [r for r in roster if r["slot"] != "BN"]
+                starters_pool = [r for r in roster if r["slot"] not in ("BN", "IR")]
                 bench_pool = [r for r in roster if r["slot"] == "BN"]
 
                 by_slot = defaultdict(list)
@@ -1382,6 +1389,21 @@ def update_lineup(league_id: int, req: LineupRequest):
                     )
 
                 simulated_slots[swap.player_id] = new_slot
+
+            # IR takes only players on injured reserve or out for IR_MIN_WEEKS+ weeks (decision D1).
+            to_ir = [swap.player_id for swap in req.swaps if swap.new_slot.upper() == "IR"
+                     and roster_by_pid[swap.player_id]["slot"] != "IR"]
+            if to_ir:
+                injuries = get_injury_map(cur, current_season, wk, to_ir)
+                for pid in to_ir:
+                    if not is_ir_eligible(injuries.get(pid)):
+                        cur.execute("SELECT COALESCE(player_name, full_name) AS name FROM players WHERE id = %s", (pid,))
+                        name_row = cur.fetchone()
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"{name_row['name'] if name_row else pid} can't go on IR: only players on "
+                                   f"injured reserve or out {IR_MIN_WEEKS}+ weeks are eligible",
+                        )
 
             # 5. Validate roster slot limits
             roster_format = lg["roster_format"] or {}
@@ -1687,6 +1709,18 @@ def get_trades(league_id: int):
             return {"trades": trades}
 
 
+def _reject_ir_trade_players(cur, league_id: int, week: int, player_ids: List[int]) -> None:
+    """Players in an IR slot can't be traded (decision D2)."""
+    cur.execute("""
+        SELECT COALESCE(p.player_name, p.full_name) AS name
+        FROM napper_rosters nr JOIN players p ON p.id = nr.player_id
+        WHERE nr.league_id = %s AND nr.week = %s AND nr.slot = 'IR' AND nr.player_id = ANY(%s)
+    """, (league_id, week, list(player_ids)))
+    names = [r["name"] for r in cur.fetchall()]
+    if names:
+        raise HTTPException(status_code=400, detail=f"Players on IR can't be traded: {', '.join(names)}")
+
+
 @router.post("/league/{league_id}/trades/propose")
 def propose_trade(league_id: int, req: TradeProposeRequest):
     """Proposes a new trade between two teams."""
@@ -1732,6 +1766,7 @@ def propose_trade(league_id: int, req: TradeProposeRequest):
             found_requested = {r["player_id"] for r in cur.fetchall()}
             if len(found_requested) != len(req.requested_player_ids):
                 raise HTTPException(status_code=400, detail="One or more requested players are not on target's roster")
+            _reject_ir_trade_players(cur, league_id, wk, req.offered_player_ids + req.requested_player_ids)
 
             cur.execute("""
                 INSERT INTO napper_trades (
@@ -1770,6 +1805,9 @@ def respond_trade(league_id: int, trade_id: int, req: TradeRespondRequest):
 
             if tr["status"] != "PENDING":
                 raise HTTPException(status_code=400, detail=f"Trade is already {tr['status']}")
+            if status == "ACCEPTED":
+                _reject_ir_trade_players(cur, league_id, tr["week"],
+                                         (tr["offered_player_ids"] or []) + (tr["requested_player_ids"] or []))
 
             cur.execute("SELECT team_name FROM napper_teams WHERE id = %s", (tr["proposer_team_id"],))
             p_tm = cur.fetchone()

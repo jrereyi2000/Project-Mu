@@ -188,7 +188,7 @@ def seed_napper_database(wipe_all: bool = False):
                 8,
                 "PPR",
                 psycopg.types.json.Jsonb({
-                    "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6
+                    "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6, "IR": 1
                 }),
                 "IN_SEASON",
                 "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=256&h=256&q=80",
@@ -211,7 +211,7 @@ def seed_napper_database(wipe_all: bool = False):
                 12,
                 "PPR",
                 psycopg.types.json.Jsonb({
-                    "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6
+                    "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6, "IR": 1
                 }),
                 "IN_SEASON",
                 "https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=256&h=256&q=80",
@@ -234,7 +234,7 @@ def seed_napper_database(wipe_all: bool = False):
                 8,
                 "PPR",
                 psycopg.types.json.Jsonb({
-                    "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 8
+                    "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 8, "IR": 1
                 }),
                 "PRE_DRAFT",
                 "https://images.unsplash.com/photo-1635863138275-d9b33299680b?auto=format&fit=crop&w=256&h=256&q=80",

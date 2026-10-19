@@ -1504,7 +1504,7 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
                 cur.execute("SELECT * FROM napper_leagues WHERE id = %s", (league_id,))
                 league = cur.fetchone()
                 roster_fmt = league["roster_format"] or {
-                    "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6
+                    "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6, "IR": 1
                 }
 
                 cur.execute("SELECT id, team_name FROM napper_teams WHERE league_id = %s", (league_id,))
@@ -1672,6 +1672,7 @@ def save_draft_as_league(
         "K": 1,
         "DEF": 1,
         "BN": 6,
+        "IR": 1,
     }
     avatar = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=256&h=256&q=80"
 

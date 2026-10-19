@@ -51,7 +51,9 @@ The work is already in the uncommitted diff of `engines/fantasy_projection_engin
 
 ---
 
-## Phase 2: IR slot support (needed by G1 and G3)
+## Phase 2: IR slot support (needed by G1 and G3) — DONE (2026-10-19)
+
+> Landed as planned, with these differences: waiver claims enforce no roster-size limit at all, so there was nothing to exempt IR from (an IR-aware limit is left for Phase 4's drop logic, D3); the matchup view hides IR players instead of listing them; `get_injury_map` follows the projection engine's countdown rule; no frontend change was needed, since the Team tab already renders `IR` slots and shows the API's 400 message.
 
 1. **Migration `db/migrations/2026_12_04_napper_ir_slot.sql`**:
    - Add `"IR": 1` to the default `roster_format`, then backfill existing leagues with `UPDATE napper_leagues SET roster_format = roster_format || '{"IR": 1}' WHERE NOT roster_format ? 'IR'`.

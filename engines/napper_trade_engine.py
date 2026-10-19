@@ -192,7 +192,7 @@ def ensure_napper_tables_exist(conn) -> None:
                 season INT DEFAULT 2035,
                 teams_count SMALLINT DEFAULT 8,
                 scoring_type VARCHAR(16) DEFAULT 'PPR',
-                roster_format JSONB DEFAULT '{"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6}'::jsonb,
+                roster_format JSONB DEFAULT '{"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6, "IR": 1}'::jsonb,
                 current_week INT DEFAULT 1,
                 status VARCHAR(16) DEFAULT 'IN_SEASON',
                 avatar_url TEXT
@@ -454,8 +454,8 @@ def analyze_team_rosters(
         rows = cur.fetchall()
 
     for tid, pid, slot, pname, raw_pos, ros_val, wk_proj, nfl_team in rows:
-        if tid not in teams:
-            continue
+        if tid not in teams or slot.upper() == "IR":
+            continue  # players on IR are never traded and don't count toward depth (decision D2)
         norm_pos = POS_NORMALIZATION.get(raw_pos.upper(), "WR")
         is_bench = slot.upper().startswith("BN") or slot.upper() == "BENCH"
         player_obj = {
@@ -979,7 +979,7 @@ def process_ai_to_ai_trades(
                     JOIN players p ON r.player_id = p.id
                     LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = %s
-                    WHERE r.league_id = %s AND r.team_id = %s AND r.week = %s
+                    WHERE r.league_id = %s AND r.team_id = %s AND r.week = %s AND r.slot <> 'IR'
                     GROUP BY COALESCE(ps.position, fp.position, 'WR')
                     """,
                     (league_season, league_season, week, league_id, targ_id, week),
@@ -1006,9 +1006,20 @@ def process_ai_to_ai_trades(
 
                 val_ratio = off_val / max(req_val, 1.0)
 
+                # A player moved to IR since the offer can't be traded (decision D2).
+                cur.execute(
+                    """
+                    SELECT 1 FROM napper_rosters
+                    WHERE league_id = %s AND week = %s AND slot = 'IR' AND player_id = ANY(%s)
+                    LIMIT 1
+                    """,
+                    (league_id, week, list(off_ids) + list(req_ids)),
+                )
+                involves_ir = cur.fetchone() is not None
+
                 # Stochastic acceptance probability based on value balance and bench safety
-                if leaves_orphan_starter:
-                    accept_prob = 0.0  # Automatic reject: cannot forfeit required starters
+                if leaves_orphan_starter or involves_ir:
+                    accept_prob = 0.0  # Automatic reject: cannot forfeit required starters or trade IR players
                 elif 0.88 <= val_ratio <= 1.25:
                     accept_prob = 0.82  # Fair deal
                 elif 0.72 <= val_ratio < 0.88:
