@@ -46,3 +46,15 @@ def test_generate_defense_and_special_teams_stats_empty_games():
     empty_df = pd.DataFrame()
     # Should not raise any exceptions
     generate_defense_and_special_teams_stats(2036, empty_df)
+
+
+def test_released_player_gets_no_lines_from_release_week():
+    """League Transactions: games from the release week on get weight 0 (no line); the rest still sums up."""
+    from engines.game_stat_generator import _player_weights
+    assert _player_weights([1.0, 2.0, 3.0], [3, 4, 5], None) == [1.0, 2.0, 3.0]
+    w = _player_weights([1.0, 2.0, 3.0], [3, 4, 5], 4)
+    assert w == [1.0, 0.0, 0.0]
+    allocs = _distribute_metric(7, w)
+    assert allocs == [7, 0, 0]
+    assert _player_weights([1.0, 2.0], [4, 5], 4) is None
+    assert sum(_distribute_metric(9, _player_weights([1.0, 1.0, 2.0], [1, 2, 3], 3))) == 9

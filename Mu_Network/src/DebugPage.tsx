@@ -51,8 +51,51 @@ const RUNS: { kind: string; title: string; note: string }[] = [
   { kind: "season_scan", title: "Season scan", note: "Annual start-of-season cadence: captures the 18-week schedule, all 32 team rosters, every team's contracts (Team Salary, right after rosters), and the draft prospect board (in that order; prospects last). No articles." },
   { kind: "roster_scan", title: "Roster scan", note: "Captures all 32 team rosters, extracts player cards, and updates players/seasons in the database (normally run once a season with schedule and draft board). No articles." },
   { kind: "contract_scan", title: "Contract scan", note: "Captures every team's Team Salary screen (contracts and cap), extracts and loads it; a re-scan supersedes the old contracts. ~40 min. Normally part of the Season scan; only loads in-season (the year on screen must match the league season). No articles." },
+  { kind: "transactions_scan", title: "League transactions scan", note: "Reads League > League Transactions from the newest week already loaded (the whole list the first time; moves before Week 1 are kept as history only), loads signings, releases, trades and re-signings (team moves, contracts and cap kept current from them; no Team Salary re-scan). Scan week does this too. No articles." },
   { kind: "draft_scan", title: "Draft prospect scan", note: "Scans the scouting draft board line-by-line, extracts prospects via Apple Vision OCR, and syncs data/draft/ prospects board (normally run once a season with schedule and roster scans, after both). No articles." },
 ];
+
+// League Transactions (team management step 2): rows to review
+type TxRow = { id: number; txn_date: string; type: string; player_name: string | null; position: string | null; from_team: string | null; to_team: string | null; raw_text: string; flags: string | null; applied: boolean };
+type TxState = { season: number; installed: boolean; rows: TxRow[]; unparsed: TxRow[]; ambiguous: TxRow[] };
+
+function TransactionsCard() {
+  const [tx, setTx] = useState<TxState | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    call<TxState>("/transactions?limit=25").then(setTx).catch(e => setError(String(e.message || e)));
+  }, []);
+  const line = (r: TxRow) => (
+    <div key={r.id} className="border-b border-[var(--gray-100)] pb-1">
+      <span className="font-mono text-[var(--gray-500)] mr-2">{r.txn_date}</span>
+      <b className="mr-2">{r.type}</b>{r.raw_text}
+      {!r.applied && <span className="ml-2 text-[var(--gray-500)]">(history)</span>}
+    </div>
+  );
+  return (
+    <section className={card}>
+      <h3 className="font-black uppercase tracking-wide mb-3">League transactions{tx ? ` · ${tx.season}` : ""}</h3>
+      {error && <p className="text-xs text-[var(--red)]">{error}</p>}
+      {tx && !tx.installed && <p className="text-xs text-[var(--gray-500)]">The transactions migration isn't applied to this database yet.</p>}
+      {tx?.installed && (
+        <div className="grid gap-3 text-xs">
+          <div>
+            <span className={label}>Unparsed rows ({tx.unparsed.length})</span>
+            {tx.unparsed.length ? tx.unparsed.map(line) : <span className="text-[var(--gray-500)]">None.</span>}
+          </div>
+          <div>
+            <span className={label}>Ambiguous players ({tx.ambiguous.length})</span>
+            {tx.ambiguous.length ? tx.ambiguous.map(line) : <span className="text-[var(--gray-500)]">None.</span>}
+          </div>
+          <div>
+            <span className={label}>Latest rows</span>
+            {tx.rows.length ? tx.rows.map(line) : <span className="text-[var(--gray-500)]">Nothing loaded yet.</span>}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function StatusPill({ status }: { status: string }) {
   const color = status === "running" ? "bg-amber-400 text-black" : status === "done" ? "bg-emerald-600 text-white" : status === "stopped" ? "bg-[var(--gray-500)] text-white" : "bg-[var(--red)] text-white";
@@ -794,6 +837,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
             ))}
           </div>
         </section>
+        <TransactionsCard />
       </div>
 
       <div className="grid gap-4 content-start">

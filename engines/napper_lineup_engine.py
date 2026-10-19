@@ -139,11 +139,12 @@ def _load_team_week(c, league_id: int, team_id: int, season: int, week: int) -> 
         SELECT nr.player_id, nr.slot, COALESCE(p.player_name, p.full_name), pos.position, pos.team_id,
                COALESCE(fp.projected_points, 0)::float, COALESCE(fp.ros_total_points, 0)::float,
                EXISTS (SELECT 1 FROM games g WHERE g.season = %s AND g.week = %s
-                       AND pos.team_id IN (g.home_team_id, g.away_team_id)) AS has_game
+                       AND pos.team_id IN (g.home_team_id, g.away_team_id)
+                       AND (pos.released_week IS NULL OR pos.released_week > g.week)) AS has_game
         FROM napper_rosters nr
         JOIN players p ON p.id = nr.player_id
         LEFT JOIN LATERAL (
-            SELECT ps.position, ps.team_id FROM player_seasons ps
+            SELECT ps.position, ps.team_id, ps.released_week FROM player_seasons ps
             WHERE ps.player_id = nr.player_id AND ps.season = %s
             ORDER BY ps.team_id IS NULL LIMIT 1
         ) pos ON TRUE

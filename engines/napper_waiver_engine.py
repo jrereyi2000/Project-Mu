@@ -257,7 +257,8 @@ def _load_pool(c, league_id: int, season: int, week: int) -> Dict[int, dict]:
         SELECT ps.player_id, COALESCE(p.player_name, p.full_name), ps.position,
                COALESCE(fp.projected_points, 0)::float, COALESCE(fp.ros_total_points, 0)::float,
                EXISTS (SELECT 1 FROM games g WHERE g.season = %s AND g.week = %s
-                       AND ps.team_id IN (g.home_team_id, g.away_team_id)) AS has_game
+                       AND ps.team_id IN (g.home_team_id, g.away_team_id)
+                       AND (ps.released_week IS NULL OR ps.released_week > g.week)) AS has_game
         FROM player_seasons ps
         JOIN players p ON p.id = ps.player_id
         LEFT JOIN fantasy_projections fp ON fp.player_id = ps.player_id AND fp.season = %s AND fp.week = %s

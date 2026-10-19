@@ -10,6 +10,15 @@ from the debug page (#debug, server/debug_api.py: Scan week / Backfill previous 
   python3 -m pipeline.weekly_capture --mode contracts [--teams CAR,NO]
                                                       # Team Salary for all 32 teams (or a re-scan of these),
                                                       # extracted and loaded; never engines or articles
+  python3 -m pipeline.weekly_capture --mode transactions
+                                                      # League Transactions only: capture (from the newest loaded
+                                                      # heading, or the whole list on the first run), extract,
+                                                      # load; never engines or articles
+
+League Transactions (team management step 2): the weekly and playoff captures also read League > LEAGUE
+TRANSACTIONS from the newest heading already loaded (--since); the load applies the moves before Season Stats
+and keeps contracts and team cap rows current from them. Nothing re-scans Team Salary automatically (JR,
+2026-10-19): --mode contracts --teams stays a by-hand tool.
 
 Week 22 (league_state.current_week 22, Madden on Pro Bowl week): no games of ours, so Scan week is an
 articles-only run: engines, the Week 23 (Super Bowl week) slate, then current_week moves to 23. No console.
@@ -54,7 +63,7 @@ CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice wh
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
 MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame", "draft-results", "team-overalls",
-         "contracts")
+         "contracts", "transactions")
 FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
 PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
 SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the Super Bowl postgame capture
@@ -112,7 +121,21 @@ def folder_mode(folder):
         return "season_schedule"
     if os.path.isdir(os.path.join(folder, "games")):
         return "playoff" if os.path.isdir(os.path.join(folder, "schedule")) else "games"
+    if os.path.isdir(os.path.join(folder, "transactions")) and not any(
+            os.path.isdir(os.path.join(folder, d)) for d in ("stats", "schedule", "team_stats", "injuries")):
+        return "transactions"
     return "weekly"
+
+
+def tx_pages(folder):
+    """League Transactions screenshots (PNG, or WebP after shrink)."""
+    return glob.glob(os.path.join(folder, "transactions", "page_*.png")) + \
+        glob.glob(os.path.join(folder, "transactions", "page_*.webp"))
+
+
+def tx_extracted(folder):
+    """No transactions pages, or transactions.csv written."""
+    return not tx_pages(folder) or os.path.exists(os.path.join(folder, "transactions.csv"))
 
 
 def capture_done(folder, mode="weekly"):
@@ -141,7 +164,9 @@ def extract_done(folder, mode="weekly"):
         ok = all(os.path.exists(os.path.join(folder, f)) for f in ("game_scores.csv", "schedule.csv"))
         if os.path.isdir(os.path.join(folder, "injuries")):
             ok = ok and os.path.exists(os.path.join(folder, "injuries.csv"))
-        return ok
+        return ok and tx_extracted(folder)
+    if mode == "transactions":
+        return os.path.exists(os.path.join(folder, "transactions.csv"))
     if mode == "contracts":
         return all(os.path.exists(os.path.join(folder, f)) for f in ("contracts.csv", "team_cap.csv"))
     if mode == "roster":
@@ -165,7 +190,7 @@ def extract_done(folder, mode="weekly"):
         weekly_ok = weekly_ok and os.path.exists(os.path.join(folder, "injuries.csv"))
     if os.path.isdir(os.path.join(folder, "team_overalls")):
         weekly_ok = weekly_ok and os.path.exists(os.path.join(folder, "team_overalls.csv"))
-    return weekly_ok
+    return weekly_ok and tx_extracted(folder)
 
 
 def load_status(folder):
@@ -214,10 +239,12 @@ def step_connect(log_path):
         raise WeekStopped(f"Couldn't reach Madden's franchise menus over chiaki-ng: {last}. Nothing was pressed.")
 
 
-def step_capture(folder, log_path, mode="weekly", week_label=None, teams=None):
-    """teams: --mode contracts only, team nicknames (PANTHERS) for madden_capture --team-names."""
+def step_capture(folder, log_path, mode="weekly", week_label=None, teams=None, since=None):
+    """teams: --mode contracts only, team nicknames (PANTHERS) for madden_capture --team-names.
+    since: League Transactions cutoff heading for the weekly, playoff and transactions captures."""
     name = os.path.basename(folder)
     named = ["--week", week_label] if week_label else []
+    since_args = ["--since", since] if since else []
     if mode == "games":                        # resumes per game (games/<NN>/DONE)
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "games")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "games", *where], GAMES_TIMEOUT
@@ -228,7 +255,7 @@ def step_capture(folder, log_path, mode="weekly", week_label=None, teams=None):
         elif os.path.isdir(os.path.join(folder, "games")) and os.path.exists(os.path.join(folder, "week.json")):
             args = [sys.executable, "madden_capture.py", "--only", "games", "--resume", name, *named]
         else:
-            args = [sys.executable, "madden_capture.py", "--only", "playoff", "--out", name, *named]
+            args = [sys.executable, "madden_capture.py", "--only", "playoff", "--out", name, *named, *since_args]
         timeout = GAMES_TIMEOUT
     elif mode == "roster":
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "roster")) else ["--out", name]
@@ -237,6 +264,9 @@ def step_capture(folder, log_path, mode="weekly", week_label=None, teams=None):
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "contracts")) else ["--out", name]
         named_teams = ["--team-names", ",".join(teams)] if teams else []
         args, timeout = [sys.executable, "madden_capture.py", "--only", "contracts", *where, *named_teams], CAPTURE_TIMEOUT
+    elif mode == "transactions":
+        where = ["--resume", name] if os.path.isdir(os.path.join(folder, "transactions")) else ["--out", name]
+        args, timeout = [sys.executable, "madden_capture.py", "--only", "transactions", *where, *since_args], CAPTURE_TIMEOUT
     elif mode == "prospects":
         args, timeout = [sys.executable, "madden_capture.py", "--only", "prospects", "--all-prospects", "--out", name], CAPTURE_TIMEOUT
     elif mode in ("team-overalls", "team_overalls"):
@@ -256,7 +286,7 @@ def step_capture(folder, log_path, mode="weekly", week_label=None, teams=None):
             os.remove(os.path.join(folder, "week.json"))
         has_partial = any(os.path.isdir(os.path.join(folder, d)) for d in ("stats", "injuries", "team_stats", "schedule"))
         where = ["--resume", name] if has_partial else ["--out", name]
-        args, timeout = [sys.executable, "madden_capture.py", *where, *named], CAPTURE_TIMEOUT
+        args, timeout = [sys.executable, "madden_capture.py", *where, *named, *since_args], CAPTURE_TIMEOUT
     code, last = run_cmd(args, log_path, timeout)
     if code != 0 or (mode in ("weekly", "playoff", "postgame") and not os.path.exists(os.path.join(folder, "week.json"))):
         raise WeekStopped(f"Capture stopped: {last}. The console is left where it stopped; frames in "
@@ -405,8 +435,8 @@ def team_nicknames(abbrs):
 def contracts_phase(folder, log_path, teams=None):
     """Capture -> extract -> load of a Team Salary run in its own folder (team management step 1), each step
     skipped when already done. teams: abbreviations for a re-scan (None = all 32). Takes no lock and doesn't
-    connect: run(mode='contracts') holds the lock, and step 2's weekly phase calls it inside its own run after
-    its transactions load. Returns the load report (None when the folder was already loaded)."""
+    connect: run(mode='contracts') holds the lock. Nothing calls it automatically for League Transactions
+    (JR, 2026-10-19: no automatic re-scans). Returns the load report (None when the folder was already loaded)."""
     os.makedirs(folder, exist_ok=True)
     report = None
     if not capture_done(folder, "contracts"):
@@ -422,6 +452,25 @@ def contracts_phase(folder, log_path, teams=None):
         log(f"Loaded {report.get('contracts')} contracts for {report.get('teams')} teams "
             f"({report.get('superseded')} superseded; cap warnings: {len(report.get('cap_warnings') or [])})")
     return report
+
+
+# ---------------------------------------------------------- transactions ----
+def since_heading(season, weekly=True):
+    """The newest League Transactions heading loaded for the season (by heading order), for --since. A season
+    with nothing loaded yet gives '<season> SEASON - WEEK 1' in the weekly run (rows before it are history only,
+    plan §6 answer 2, so the weekly capture needn't read the whole list) and None for --mode transactions (the
+    first-run backfill reads the whole list). None too when the transactions table doesn't exist."""
+    import psycopg
+    from pipeline.load_capture import DSN
+    from pipeline.transactions_parse import heading_ordinal
+    with psycopg.connect(DSN) as conn:
+        if not conn.execute("SELECT to_regclass('transactions') IS NOT NULL").fetchone()[0]:
+            return None
+        heads = [r[0] for r in conn.execute("SELECT DISTINCT txn_date FROM transactions WHERE season = %s", (season,))]
+    heads = [h for h in heads if heading_ordinal(h)]
+    if heads:
+        return max(heads, key=heading_ordinal)
+    return f"{season} SEASON - WEEK 1" if weekly else None
 
 
 # ----------------------------------------------------------------- run ----
@@ -499,7 +548,7 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
     if week_label == SUPER_BOWL_LABEL or mode == "postgame":
         what = "Super Bowl postgame capture"
     else:
-        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan", "draft-results": "Draft results scan", "team-overalls": "Team overalls scan", "contracts": "Contract scan"}.get(mode, "Weekly capture")
+        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan", "draft-results": "Draft results scan", "team-overalls": "Team overalls scan", "contracts": "Contract scan", "transactions": "League transactions scan"}.get(mode, "Weekly capture")
     os.makedirs(CAPTURES, exist_ok=True)
     lock = open(LOCK_PATH, "w")
     try:
@@ -547,8 +596,14 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             if connect:
                 log("Step 2: connect")
                 step_connect(log_path)
-            log("Step 3: capture")
-            step_capture(folder, log_path, mode, week_label)
+            since = None
+            if mode in ("weekly", "playoff", "transactions") and week_label != SUPER_BOWL_LABEL:
+                try:
+                    since = since_heading(league_state()[0], weekly=(mode != "transactions"))
+                except Exception as e:
+                    log(f"[WARN] No League Transactions cutoff ({e}); the scan reads the whole list")
+            log("Step 3: capture" + (f" (League Transactions since {since})" if since else ""))
+            step_capture(folder, log_path, mode, week_label, **({"since": since} if since else {}))
             mins = (time.time() - started) / 60
             notify(f"{what} done in {mins:.0f} min ({captured_week(folder) or 'last week'}). Turn your controller "
                    "back on and restart the broadcast.", title="Mu: your turn", priority="high",
@@ -565,6 +620,13 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             log(f"Loaded: {report.get('mode')} week {report.get('week')}")
         else:
             log("Already loaded; skipping the load")
+        if mode == "transactions":
+            log("League transactions loaded. Skipping weekly engines and articles.")
+            log("Step 9: shrink")
+            before, after = shrink(folder)
+            log(f"Capture folder {before / 1e6:.0f} MB -> {after / 1e6:.0f} MB")
+            notify(f"{what} loaded.", title="Mu: transactions scan done", tags=("white_check_mark",))
+            return 0
         if mode == "season":
             season, _ = league_state()
             log(f"Step 6b: rookie headshots (season {season})")
@@ -639,7 +701,8 @@ def main():
                          "roster: season cadence scan of all 32 team rosters; "
                          "prospects: draft board scan of college prospects; "
                          "draft-results: capture and load actual draft results into draft_prospects; "
-                         "contracts: Team Salary for all 32 teams (or --teams), extracted and loaded")
+                         "contracts: Team Salary for all 32 teams (or --teams), extracted and loaded; "
+                         "transactions: League Transactions alone, extracted and loaded")
     ap.add_argument("--teams", metavar="ABBRS", help="--mode contracts: re-scan only these teams, e.g. CAR,NO")
     ap.add_argument("--no-connect", action="store_true",
                     help="skip the connect step (chiaki-ng is already streaming the franchise menus)")

@@ -1007,3 +1007,51 @@ class SeasonResumeTest(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class LeagueTransactionsTest(unittest.TestCase):
+    """League > League Transactions (team management step 2): classifier, the League-menu Cross guard (D7),
+    and the weekly cutoff."""
+    SCREEN = _Frame("LEAGUE TRANSACTIONS", "NFL", "R2", "ALL", "2036 SEASON - WEEK 4",
+                    "JAGUARS SIGNED FREE AGENT (WR) DEVONTA TAYLOR TO 1 YEAR, $3.93M CONTRACT",
+                    "2036 SEASON - WEEK 4", "JAGUARS RELEASE (WR) JULIUS SLATON", "BACK")
+    HUB = _Frame("GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "OPTIONS", "NFL STANDINGS",
+                 "SCHEDULE", "STATS & AWARDS", "LEAGUE TRANSACTIONS", "LEAGUE HISTORY", "RELOCATE OR REBUILD",
+                 "2036 SEASON - WEEK 4", "JAGUARS SIGNED FREE AGENT (WR) DEVONTA TAYLOR")
+
+    def test_screen_vs_hub(self):
+        self.assertEqual(mc.classify(self.SCREEN), "LEAGUE_TRANSACTIONS")
+        self.assertEqual(mc.classify(self.HUB), "HUB_LEAGUE")
+
+    def test_league_menu_cross_by_name(self):
+        f = mock.Mock()
+        for item, allowed in (("RELOCATE OR REBUILD", False), ("LEAGUE HISTORY", False), ("NFL STANDINGS", False),
+                              (None, False), ("STATS & AWARDS", True), ("SCHEDULE", True), ("LEAGUE TRANSACTIONS", True)):
+            f.highlighted.return_value = item
+            with mock.patch.object(mc, "press") as press:
+                if allowed:
+                    mc.cross("HUB_LEAGUE", f)
+                    press.assert_called_once_with("cross", wait=1.5)
+                else:
+                    with self.assertRaises(mc.Abort):
+                        mc.cross("HUB_LEAGUE", f)
+                    press.assert_not_called()
+
+    def test_no_cross_on_the_list(self):
+        with mock.patch.object(mc, "press") as press:
+            with self.assertRaises(mc.Abort):
+                mc.cross("LEAGUE_TRANSACTIONS", self.SCREEN)
+        press.assert_not_called()
+
+    def test_week_cutoff(self):
+        since = "2036 SEASON - WEEK 4"
+        self.assertTrue(mc.older_than(["2036 SEASON - WEEK 3", "2036 SEASON - WEEK 2"], since))
+        self.assertFalse(mc.older_than(["2036 SEASON - WEEK 4", "2036 SEASON - WEEK 3"], since))   # mixed page
+        self.assertFalse(mc.older_than(["2036 SEASON - WEEK 4"], since))                           # the since week is re-read
+        self.assertFalse(mc.older_than([], since))
+        self.assertFalse(mc.older_than(["BLUR", "2036 SEASON - WEEK 1"], since))
+
+    def test_headings_read_top_to_bottom(self):
+        f = mock.Mock(items=[("2036 SEASON - WEEKT", (0, 900, 1, 1)), ("JAGUARS RELEASE (WR) X Y", (0, 950, 1, 1)),
+                             ("2036 SEASON - WEEK 2", (0, 500, 1, 1))])
+        self.assertEqual(mc.transaction_headings(f), ["2036 SEASON - WEEK 2", "2036 SEASON - WEEK 1"])

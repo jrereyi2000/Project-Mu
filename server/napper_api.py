@@ -132,6 +132,7 @@ def _weekly_game_lines(cur, season: int, week: int, player_ids: List[int]) -> Di
         FROM player_seasons ps
         JOIN games g ON g.season = ps.season AND g.week = %s AND g.status = 'COMPLETED'
             AND ps.team_id IN (g.home_team_id, g.away_team_id)
+            AND (ps.released_week IS NULL OR ps.released_week > g.week)
         JOIN teams opp ON opp.id = CASE WHEN g.home_team_id = ps.team_id THEN g.away_team_id ELSE g.home_team_id END
         WHERE ps.season = %s AND ps.player_id = ANY(%s) AND ps.team_id IS NOT NULL
         ORDER BY ps.player_id, ps.team_id
@@ -1114,6 +1115,7 @@ def get_league_user_team(league_id: int, week: Optional[int] = Query(None)):
                 LEFT JOIN games scheduled ON scheduled.season = %s AND scheduled.week = %s
                     AND scheduled.status IN ('SCHEDULED', 'COMPLETED')
                     AND (scheduled.home_team_id = ps.team_id OR scheduled.away_team_id = ps.team_id)
+                    AND (ps.released_week IS NULL OR ps.released_week > scheduled.week)   -- released: no game
                 LEFT JOIN teams opponent ON opponent.id = CASE
                     WHEN scheduled.home_team_id = ps.team_id THEN scheduled.away_team_id
                     WHEN scheduled.away_team_id = ps.team_id THEN scheduled.home_team_id
@@ -1375,6 +1377,7 @@ def get_league_matchup(
                 LEFT JOIN games scheduled ON scheduled.season = %s AND scheduled.week = %s
                     AND scheduled.status IN ('SCHEDULED', 'COMPLETED')
                     AND (scheduled.home_team_id = ps.team_id OR scheduled.away_team_id = ps.team_id)
+                    AND (ps.released_week IS NULL OR ps.released_week > scheduled.week)   -- released: no game
                 LEFT JOIN teams opponent ON opponent.id = CASE
                     WHEN scheduled.home_team_id = ps.team_id THEN scheduled.away_team_id
                     WHEN scheduled.away_team_id = ps.team_id THEN scheduled.home_team_id
@@ -1692,6 +1695,7 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
                 LEFT JOIN games scheduled ON scheduled.season = %s AND scheduled.week = %s
                     AND scheduled.status IN ('SCHEDULED', 'COMPLETED')
                     AND (scheduled.home_team_id = ps.team_id OR scheduled.away_team_id = ps.team_id)
+                    AND (ps.released_week IS NULL OR ps.released_week > scheduled.week)   -- released: no game
                 LEFT JOIN teams opponent ON opponent.id = CASE
                     WHEN scheduled.home_team_id = ps.team_id THEN scheduled.away_team_id
                     WHEN scheduled.away_team_id = ps.team_id THEN scheduled.home_team_id
