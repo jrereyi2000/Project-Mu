@@ -266,6 +266,6 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 - Per-week team history for stats splits. `transactions` holds it, but splits by team-at-the-time aren't built here.
 - Re-checking teams with no transactions (master §4: acceptable drift until the next Season scan).
 
-## 6. Open questions for JR
-1. **Hand-back timing:** the D5 re-scan runs before the "turn your controller back on" notice, which adds about 1–1.5 minutes per flagged team. Should there be a cap (for example 10 teams, with the rest left pending for next week)?
-2. **First-run backfill cutoff:** is applying effects only from `SEASON - WEEK 1` of the current season right, given the Season scan happened at week 1?
+## 6. Answered questions (JR, 2026-10-19)
+1. **Hand-back timing: capped at 8 teams a week.** Teams involved in a `TRADED` transaction are always re-scanned that week and don't count toward the cap. The others are taken oldest-request first. Any left over stay pending in `contract_rescan_requests` and go first next week.
+2. **First-run backfill cutoff: yes.** Effects apply only from `SEASON - WEEK 1` of the current season. Older rows are stored with `applied = false`, as history only.
