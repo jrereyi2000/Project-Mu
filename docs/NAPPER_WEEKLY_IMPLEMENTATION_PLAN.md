@@ -19,7 +19,7 @@ These facts came out of reading the code. They change the plan's scope.
 | The frontend already has injury UI: the `injury_status` type field, `napper-injury-pill` (`out`/`ques`/`ir`) CSS, an "Injured Reserve (IR)" section on the Team tab, and IR in the slot-type union. | `types/napper.ts:70`, `NapperTeamTab.tsx:135-137, 494`, `NapperMatchupTab.tsx:282, 353`, `napper.css:332-352` | G3 is mostly backend work. The UI only lights up once the API sends data. |
 | `IR` isn't a valid slot anywhere in the backend. It's missing from `roster_format`, from `ELIGIBLE_POSITIONS`, and from the slot-limit check. | `napper_api.py:313-323, 1404-1416`; the default `roster_format` in `2026_12_02_napper_fantasy.sql` | IR needs schema/config work first. |
 | Scoring counts every slot except `BN`: `nr.slot <> 'BN'`. | `_get_weekly_team_totals`, `napper_api.py:117` | An IR player would count as a starter. This has to become `NOT IN ('BN','IR')`. |
-| Accepted AI trades move the players with `slot = 'BN'` for `week >= W`. | `napper_trade_engine.py:967-980` | A trade can leave a starting slot empty. The lineup optimizer has to run **after** trades. |
+| Accepted AI trades move the players with `slot = 'BN'` for `week >= W`. | `napper_trade_engine.py`, `respond_trade` | **Fixed 2026-10-19:** `fill_empty_starter_slots` refills AI teams' emptied slots after both trade paths. Phase 4 should reuse it. The optimizer still runs after trades to re-rank whole lineups. |
 | Napper scoring already counts K/DEF points with the same formulas as the new projection code. | `_ACTUAL_PLAYER_POINTS_CTE`, `napper_api.py:69` | K/DEF projections and actual scores line up. The same `player_stats` double-count question applies to both. |
 | Weekly projections run in `game_stat_generator` (`project_upcoming_week`, then `simulate_season`), called by `step_engines` in `weekly_capture.py`. | `game_stat_generator.py:744-748` | The new Napper weekly step goes right after `simulate_season`. |
 | Draft finalize and the seeder copy one lineup into weeks 1–14. `_ensure_matchup_and_rosters` carries the latest week forward when a week has no rows. | `napper_draft_engine.py:1522-1590`, `napper_api.py:341` | The optimizer only needs to rewrite the target week. Later weeks fill in as they come. |
@@ -27,7 +27,7 @@ These facts came out of reading the code. They change the plan's scope.
 
 ---
 
-## Phase 1: Finish and land the K/DEF projections (G4)
+## Phase 1: Finish and land the K/DEF projections (G4) — DONE (commit 1709f23)
 
 The work is already in the uncommitted diff of `engines/fantasy_projection_engine.py`, together with the week-1 preseason projection change.
 
@@ -197,9 +197,9 @@ Phase 1 and Phase 2 can run in parallel; they touch different files except for t
 
 ---
 
-## Decisions needed
+## Decisions (all defaults accepted by the user, 2026-10-19)
 
-| # | Question | Default in this plan |
+| # | Question | Decision |
 |---|---|---|
 | D1 | Who can go to IR? | `is_ir` **or** `weeks_remaining >= 2`. A 1-week injury is benched, not IR'd. |
 | D2 | Can injured or IR players be traded? | No. AI excludes IR players from offers, and the user can't propose them. |

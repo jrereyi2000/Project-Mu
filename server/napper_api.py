@@ -19,6 +19,7 @@ from pydantic import BaseModel
 import psycopg
 from psycopg.rows import dict_row
 from engines import napper_draft_engine
+from engines.napper_trade_engine import fill_empty_starter_slots
 from engines.fantasy_projection_engine import DEF_POINTS_SQL, DEF_STATS_JOIN_SQL, KICKING_POINTS_SQL
 
 logger = logging.getLogger(__name__)
@@ -1803,6 +1804,10 @@ def respond_trade(league_id: int, trade_id: int, req: TradeRespondRequest):
                         SET team_id = %s, slot = 'BN'
                         WHERE league_id = %s AND team_id = %s AND week >= %s AND player_id = %s
                     """, (tr["proposer_team_id"], league_id, tr["target_team_id"], wk, pid))
+
+                # Traded players arrive on the bench; AI teams fill any starting slot the trade emptied.
+                for team in (tr["proposer_team_id"], tr["target_team_id"]):
+                    fill_empty_starter_slots(cur, league_id, team, wk)
 
                 # Query player names for chat message
                 all_pids = (tr["offered_player_ids"] or []) + (tr["requested_player_ids"] or [])
