@@ -26,6 +26,7 @@ class RunTest(unittest.TestCase):
             league_state=lambda: getattr(self, "league_state_val", (2035, 18)),
             step_engines=lambda season: self.calls.append(f"engines {season}"),
             step_preseason_engines=lambda season: self.calls.append(f"preseason_engines {season}"),
+            step_rookie_headshots=lambda season: self.calls.append(f"rookie_headshots {season}"),
             step_articles=lambda season, week=None: (self.calls.append(f"articles {week}" if week else "articles"),
                                                    {"status": "published", "week": week or 19})[1],
             set_current_week=lambda week: self.calls.append(f"current {week}"),
@@ -88,7 +89,7 @@ class RunTest(unittest.TestCase):
     def test_roster_scan_runs_capture_extract_load_and_skips_articles(self):
         os.makedirs(os.path.join(self.tmp, "ros1"))
         self.assertEqual(wc.run("ros1", articles=True, mode="roster"), 0)
-        self.assertEqual(self.calls, ["connect", "capture", "extract", "load"])
+        self.assertEqual(self.calls, ["connect", "capture", "extract", "load", "rookie_headshots 2035"])
         self.assertEqual(self.capture_mode, "roster")
         self.assertEqual(self.notices[0][0], "Mu: capture starting")
         self.assertIn("Roster scan", self.notices[0][1])
@@ -118,7 +119,7 @@ class RunTest(unittest.TestCase):
     def test_season_scan_runs_preseason_engines_and_skips_articles_when_no_articles(self):
         os.makedirs(os.path.join(self.tmp, "seas1"))
         self.assertEqual(wc.run("seas1", articles=False, mode="season"), 0)
-        self.assertEqual(self.calls, ["set_state 2036 1", "connect", "capture", "extract", "load", "preseason_engines 2036"])
+        self.assertEqual(self.calls, ["set_state 2036 1", "connect", "capture", "extract", "load", "rookie_headshots 2036", "preseason_engines 2036"])
         self.assertEqual(self.capture_mode, "season")
         self.assertEqual(self.notices[0][0], "Mu: capture starting")
         self.assertIn("Season scan", self.notices[0][1])
@@ -128,7 +129,7 @@ class RunTest(unittest.TestCase):
     def test_season_scan_runs_preseason_articles_when_requested(self):
         os.makedirs(os.path.join(self.tmp, "seas1_art"))
         self.assertEqual(wc.run("seas1_art", articles=True, mode="season"), 0)
-        self.assertEqual(self.calls, ["set_state 2036 1", "connect", "capture", "extract", "load", "preseason_engines 2036", "articles 1"])
+        self.assertEqual(self.calls, ["set_state 2036 1", "connect", "capture", "extract", "load", "rookie_headshots 2036", "preseason_engines 2036", "articles 1"])
 
     def test_game_scan_replaces_and_never_writes_articles(self):
         os.makedirs(os.path.join(self.tmp, "g1"))

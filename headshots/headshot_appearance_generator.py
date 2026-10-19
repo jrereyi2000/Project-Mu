@@ -130,7 +130,7 @@ FACIAL_QB_K_P = [65, 15, 15, 5]  # these positions skew clean-shaven
 
 # Attractiveness: normal distribution, most players land mid-range.
 # Raise ATTR_MEAN for a better-looking league, lower it for a plainer one.
-ATTR_MEAN, ATTR_SD = 8, 1.7
+ATTR_MEAN, ATTR_SD = 5.5, 1.7
 
 # (below average, average, above average) per feature
 ATTR_FEATURES = {
@@ -249,15 +249,12 @@ def appearance(name, team, pos, height_in, weight_lb, age,
     rng = make_rng(name, team, version)  # skin tone, hair, facial hair
 
     tone_w = TONE_W.get(pos, TONE_W["WR"])
-    # ti = rng.choices(range(5), weights=tone_w)[0]
-    ti = 1
+    ti = rng.choices(range(5), weights=tone_w)[0]
 
-    # hair = pick_hair(name, team, ti, age, hair_version)
-    hair = "wavy medium length sandy blond middle part curtains"
+    hair = pick_hair(name, team, ti, age, hair_version)
     fw = FACIAL_QB_K_P if pos in ("QB", "K", "P") else [x[1] for x in FACIAL]
     face = make_rng(name, team, "facial", version).choices(
         [x[0] for x in FACIAL], weights=fw)[0]
-    face="clean shaven"
 
     score, look = attractiveness(name, team, face_version)
 

@@ -321,6 +321,20 @@ def step_preseason_engines(season):
         raise WeekStopped(f"Preseason engines failed after the load: {e!r}")
 
 
+def step_rookie_headshots(season):
+    """Generate broadcast media-day headshots for rookies drafted/entering in season."""
+    from headshots.rookie_headshots import generate_rookie_headshots
+    try:
+        log("  Rookie headshots: generating media-day headshots for incoming rookie class...")
+        report = generate_rookie_headshots(season=season, log_fn=log)
+        log(f"  Rookie headshots done: {report.get('generated', 0)} generated, {report.get('already_had', 0)} pre-existing ({report.get('failed', 0)} failed)")
+        if report.get("failed", 0) > 0 and report.get("generated", 0) == 0:
+            raise RuntimeError(f"All {report.get('failed')} rookie headshot attempts failed: {report.get('errors')[:3]}")
+    except Exception as e:
+        traceback.print_exc()
+        raise WeekStopped(f"Rookie headshots failed after the roster load: {e!r}")
+
+
 def step_articles(season, week=None):
     from newsroom.weekly_run import run_weekly_swarm
     try:
@@ -471,6 +485,8 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
             log("Already loaded; skipping the load")
         if mode == "season":
             season, _ = league_state()
+            log(f"Step 6b: rookie headshots (season {season})")
+            step_rookie_headshots(season)
             log(f"Step 7: preseason engines (season {season})")
             step_preseason_engines(season)
             published = None
@@ -489,6 +505,9 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
             return 0
         if mode in ("roster", "prospects", "draft-results"):
             season, _ = league_state()
+            if mode == "roster":
+                log(f"Step 6b: rookie headshots (season {season})")
+                step_rookie_headshots(season)
             what_done = "Rosters" if mode == "roster" else (
                 "Draft prospects" if mode == "prospects" else "Draft results"
             )
