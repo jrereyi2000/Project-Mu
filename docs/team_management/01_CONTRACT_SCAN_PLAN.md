@@ -44,7 +44,7 @@ Phase 0 checks them with `madden_capture.py --test` and `--step none|down|right|
 | C5 | Down moves the highlight. Where does the list start scrolling under it (the roster scrolls at row 8)? Is the last page short or overlapping? Does L2 reset the list to the top row and the left edge? | Page overlap is harmless (merge dedupes). A list that doesn't reset needs `list_to_top()`-style Up presses before each team. | press Up to the top and traverse left before each team |
 | C6 | Which rows are listed: the 53-man roster only, or IR and practice squad too? Are released players with dead money listed? | Row-count bounds in the loader | `ROSTER_TEAMS_MIN/MAX` 45–56 (`load_capture.py:72`) |
 | C7 | How is NAME shown: `G.Crawford` (like the roster list) or a full name? | Matching uses `name_key()` either way, but the fixture must match | `G.Crawford` |
-| C8 | **The left `BONUS` and the right `BONUS`: are they the same number?** (For example, total signing bonus vs this year's prorated bonus.) | `merge_wide` treats same-named columns as one and counts a disagreement as a misaligned page. §2.1 has a single `bonus`. | treat them as different: rename the right-hand one `BONUS_R` before merging, keep it in the CSV, and store only the left one (Q1) |
+| C8 | **Answered (JR, 2026-10-19): the left and right `BONUS` are the same number.** | `merge_wide` treats same-named columns as one and counts a disagreement as a misaligned page. §2.1 has a single `bonus`. | treat them as different: rename the right-hand one `BONUS_R` before merging, keep it in the CSV, and store only the left one (Q1) |
 | C9 | What does a NO TRADE CLAUSE cell show (YES/NO, a check icon, blank)? INCENTIVE values besides `NONE`? CONV: an icon (as on the roster)? | Gemini note and parsing | NTC: YES → true, anything else false. CONV ignored. |
 | C10 | Do the header identities hold on screen: ADJUSTED CAP = CAP + ROLLOVER, TOTAL SPEND = SALARIES + CAP PENALTY, CAP SPACE = ADJUSTED CAP − TOTAL SPEND? | Used as a read check on the cap strip (within display rounding) | warnings only |
 | C11 | In the offseason (weeks 23–24, before the Season scan rolls `league_state`), does TEAM SALARY already read `37 CAP`? | The year check (Q2) | the loader stops on a mismatch |
@@ -109,8 +109,8 @@ Cost: about 32 teams × ~6 pages × 2 halves ≈ 400 half-size crops, about the 
 - `CapStrip` pydantic model (cap_label, cap, rollover_label, rollover, adjusted_cap, cap_space, salaries, cap_penalty, total_spend, rookie_res_label, rookie_res: all `str`, values as shown, labels like `36 CAP`, `35 ROLLOVER`, `37 ROOKIE RES`) and `SALARY_HEADER_BOX`. `read_cap_strip(team_dir)` reads the strip from `salary_000.png` and `salary_right_000.png`. If the two readings disagree, or a C10 identity fails by more than $0.2M, it reads `salary_001.png` and keeps the majority. With no majority it raises, and extract fails, so nothing half-read loads.
 - `extract_contracts(root)`, modelled on `extract_roster()` (`:509`):
   1. `prefetch` every page under `contracts/*/`.
-  2. Per team, `vote_misreads(team, lambda: merge_wide(left, right, team), both, ["NAME","POS"])`. Before merging, the per-page right header `BONUS` is renamed `BONUS_R` when C8 says the two differ. This is a small hook: `merge_wide` takes an optional `rename_right={"BONUS": "BONUS_R"}`, default none, so other callers are unchanged.
-  3. Write `contracts.csv`: `TEAM` + the merged columns (`NAME, POS, AGE, OVR, LEN, REM, TOTAL, BONUS, [BONUS_R,] SAVINGS, PENALTY, 2036…2040, INCENTIVE, NO TRADE CLAUSE`). Values stay raw strings. The loader parses them (the roster CSVs work the same way).
+  2. Per team, `vote_misreads(team, lambda: merge_wide(left, right, team), both, ["NAME","POS"])`. C8 is answered (same figure), so the shared `BONUS` header merges as one column, and a disagreement flags a misaligned row. `merge_wide` needs no change.
+  3. Write `contracts.csv`: `TEAM` + the merged columns (`NAME, POS, AGE, OVR, LEN, REM, TOTAL, BONUS, SAVINGS, PENALTY, 2036…2040, INCENTIVE, NO TRADE CLAUSE`). Values stay raw strings. The loader parses them (the roster CSVs work the same way).
   4. Write `team_cap.csv`: `TEAM, CAP_LABEL, CAP, ROLLOVER_LABEL, ROLLOVER, ADJUSTED_CAP, CAP_SPACE, SALARIES, CAP_PENALTY, TOTAL_SPEND, ROOKIE_RES_LABEL, ROOKIE_RES`, raw strings.
   5. Warnings (printed, not fatal): a team with < 40 rows; a year header list that isn't 5 consecutive years.
 - `main()`: call `extract_contracts(root)` after `extract_roster(root)`. Update the module docstring's "Writes" list.
@@ -118,7 +118,6 @@ Cost: about 32 teams × ~6 pages × 2 halves ≈ 400 half-size crops, about the 
 **Tests** (`tests/test_extract.py`, offline; seed `extract._cache` from the Phase 0 expected tables):
 - A Panthers left/right pair merges to the expected rows.
 - An overlapping last page doesn't duplicate rows.
-- The `BONUS_R` rename works, and `merge_wide` without `rename_right` is unchanged (the existing `MergeWideTest` still passes).
 - The cap strip: disagreement triggers a third read, majority wins, and no majority raises (mock `_generate`).
 - `_is_salary` / crop selection.
 
@@ -228,5 +227,5 @@ Cost: about 32 teams × ~6 pages × 2 halves ≈ 400 half-size crops, about the 
 - Fixing `load_team_overalls`' double `fetchall` (noted under the Survey table). That's a separate fix.
 
 ## 6. Open questions for JR
-- **Q1 (C8):** Are the left and right BONUS the same figure? If not, which one is `bonus` in §2.1? (Default: the left one, with the right kept in the CSV only.)
-- **Q2 (C11/S16):** When will the first scan load? `league_state` must equal the `36 CAP` year. If TEAM SALARY rolls to `37` during the offseason before the Season scan rolls `league_state`, a by-hand contracts scan in that window will stop. Is that acceptable (contracts load only in-season and in the Season scan)?
+- **Q1 (C8), answered:** the two BONUS columns are the same figure. `merge_wide` treats them as one column and uses them as the left/right row-alignment check. No `BONUS_R` rename is needed.
+- **Q2 (C11/S16), answered (JR, 2026-10-19):** accepted. Contracts load only in-season and in the Season scan. A by-hand scan in the offseason window stops on the year check by design.
