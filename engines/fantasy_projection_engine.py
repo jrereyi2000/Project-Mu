@@ -1,7 +1,11 @@
 """Weekly fantasy projections → fantasy_projections (PROJECT_SPEC §2.3, §3.4).
 
-For a target week w, every rostered QB/HB/FB/WR/TE gets a full-PPR projection built only from games before
-week w, so a projection for a past week is what the engine would have said before kickoff:
+For a target week w, every rostered QB/HB/FB/WR/TE, kicker (K) and team defense (DEF) gets a full-PPR projection
+built only from games before week w, so a projection for a past week is what the engine would have said before
+kickoff. Skill players score from player_stats.fantasy_points; kickers from game_stat_kicking (3 per FG, +1 at
+40–49 yds, +2 at 50+, 1 per XP); DEF from game_stat_defense summed per team (sack 1, INT/FR/safety/block 2, TD 6)
+plus a points-allowed tier (0 → 10, ≤6 → 7, ≤13 → 4, ≤20 → 1, ≤27 → 0, ≤34 → −1, else −4). The same SQL
+(KICKING_POINTS_SQL / DEF_POINTS_SQL) scores Napper matchups in server/napper_api.py.
 
 - Baseline: the player's PPR per team game to date (weeks the team played and the player had no stat line
   count as 0), shrunk toward a depth-chart prior by PRIOR_GAMES pseudo-games. The prior is the league's
@@ -12,10 +16,16 @@ week w, so a projection for a past week is what the engine would have said befor
 
 Also written per player: avg_points (PPR per appearance to date), delta (projected − avg_points),
 matchup_stars (1 = toughest … 5 = easiest; the opponent's allowed-per-game split into five even groups
-across the 32 defenses), pos_rank (QB/RB/WR/TE, RB = HB + FB), ros_total_points (sum of projections for weeks
+across the 32 defenses), pos_rank (QB/RB/WR/TE/K/DEF, RB = HB + FB), ros_total_points (sum of projections for weeks
 w..18 against each remaining opponent) with ros_rank, and adp_rank carried over from the season's week 1
 preseason ADP rows (engines/fantasy_adp_engine.py). Players on bye get a row with projected_points 0 and no
-pos_rank (so they still appear in ROS rankings but not in that week's rankings).
+pos_rank (so they still appear in ROS rankings but not in that week's rankings). Injured players (on IR, or
+weeks_remaining > 0 in the injuries table) project 0 with no pos_rank, and their ROS total skips the weeks out.
+
+Week 1 (no completed games yet) is projected from the prior season: each player's prior-season PPR per game
+shrunk toward the prior season's depth-slot average by PRESEASON_PRIOR_GAMES pseudo-games (no history: the
+slot average × an OVR adjustment; DEFAULT_SLOT_PRIORS when the prior season has no games), against the
+prior season's defense-vs-position factors.
 
 Backtest on 2035 (weeks 2–17, starters: QB1/RB1-2/WR1-3/TE1): mean absolute error ≈ 3.3 PPR, correlation
 ≈ 0.79 with actual points. Most of that comes from the per-game average; production in this league is very
@@ -24,7 +34,7 @@ stable week to week, and the matchup factor and recency weighting add little (re
 CLI:
     python3 -m engines.fantasy_projection_engine                       # current week from league_state
     python3 -m engines.fantasy_projection_engine --season 2035 --week 18
-    python3 -m engines.fantasy_projection_engine --season 2035 --all-weeks   # backfill weeks 2–18
+    python3 -m engines.fantasy_projection_engine --season 2035 --all-weeks   # backfill weeks 1–18
     python3 -m engines.fantasy_projection_engine --season 2035 --backtest    # accuracy only, no writes
 """
 
@@ -41,13 +51,23 @@ from db.db_handler import DatabaseHandler
 PRIOR_GAMES = 0.25
 DEF_SHRINK_GAMES = 16
 MATCHUP_EXPONENT = 0.5
+MIN_MATCHUP_RATIO = 0.25
 SEASON_WEEKS = 18
-POS_GROUP = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE"}
-GROUPS = ("QB", "RB", "WR", "TE")
+POS_GROUP = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE", "K": "K", "DEF": "DEF"}
+GROUPS = ("QB", "RB", "WR", "TE", "K", "DEF")
 # Depth slots below these share one prior (e.g. every WR4+ is "WR4").
-PRIOR_SLOTS = {"QB": 2, "RB": 3, "WR": 4, "TE": 2}
+PRIOR_SLOTS = {"QB": 2, "RB": 3, "WR": 4, "TE": 2, "K": 1, "DEF": 1}
 # Backtest population: fantasy starters by depth chart.
-STARTER_SLOTS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1}
+STARTER_SLOTS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "K": 1, "DEF": 1}
+PRESEASON_PRIOR_GAMES = 4.0
+DEFAULT_SLOT_PRIORS = {
+    ("QB", 1): 17.0, ("QB", 2): 7.5,
+    ("RB", 1): 12.0, ("RB", 2): 5.5, ("RB", 3): 1.8,
+    ("TE", 1): 8.5, ("TE", 2): 3.5,
+    ("WR", 1): 16.0, ("WR", 2): 13.5, ("WR", 3): 8.0, ("WR", 4): 4.5,
+    ("K", 1): 7.5,
+    ("DEF", 1): 6.5,
+}
 
 
 @dataclass
@@ -55,10 +75,71 @@ class SeasonData:
     season: int
     opponent: dict                    # (team_id, week) -> opponent team_id (scheduled or completed)
     completed_weeks: dict             # team_id -> set of weeks with a completed game
-    roster: dict                      # player_id -> {name, team_id, position, group, depth}
+    roster: dict                      # player_id -> {name, team_id, position, group, depth, ovr}
     points: dict = field(default_factory=lambda: defaultdict(dict))   # player_id -> {week: PPR}
     allowed: dict = field(default_factory=lambda: defaultdict(float)) # (def_team, group, week) -> PPR allowed
     injuries: dict = field(default_factory=dict)                      # (player_id, week) -> {weeks_remaining, is_ir}
+    prev_player_stats: dict = field(default_factory=dict)             # player_id -> {'games': int, 'total': float, 'ppg': float}
+    prev_slot_priors: dict = field(default_factory=dict)              # (group, slot) -> float
+    prev_def_factors: dict = field(default_factory=dict)              # (def_team_id, group) -> float
+    prev_def_stars: dict = field(default_factory=dict)                # group -> {def_team_id: int 1..5}
+
+
+# Skill positions score from player_stats.fantasy_points; K and DEF score from their own stat tables below.
+SKILL_POSITIONS = ("QB", "HB", "FB", "WR", "TE")
+# Kicker points for one game_stat_kicking row `k`: 3 per FG, +1 for 40–49 yds, +2 for 50+, 1 per XP.
+KICKING_POINTS_SQL = "(COALESCE(k.fgm, 0) * 3 + COALESCE(k.fgm_49, 0) + 2 * COALESCE(k.fgm_50, 0) + COALESCE(k.xpm, 0))"
+# Team defense points for one game: `def` is game_stat_defense summed per (game, team), `dst` the DEF
+# player_seasons row, `g` the game. Plays (sack 1, INT/FR/safety/block 2, TD 6) plus a points-allowed tier.
+_DEF_ALLOWED_SQL = "(CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END)"
+DEF_POINTS_SQL = f"""(COALESCE(def.sacks, 0) + 2 * COALESCE(def.ints, 0)
+    + 2 * COALESCE(def.fumble_recoveries, 0) + 6 * COALESCE(def.tds, 0)
+    + 2 * COALESCE(def.safeties, 0) + 2 * COALESCE(def.blocks, 0)
+    + CASE
+        WHEN {_DEF_ALLOWED_SQL} = 0 THEN 10
+        WHEN {_DEF_ALLOWED_SQL} <= 6 THEN 7
+        WHEN {_DEF_ALLOWED_SQL} <= 13 THEN 4
+        WHEN {_DEF_ALLOWED_SQL} <= 20 THEN 1
+        WHEN {_DEF_ALLOWED_SQL} <= 27 THEN 0
+        WHEN {_DEF_ALLOWED_SQL} <= 34 THEN -1
+        ELSE -4
+    END)"""
+# Joins that give DEF_POINTS_SQL its `def` alias (append after a `games g` / `player_seasons dst` join).
+DEF_STATS_JOIN_SQL = """LEFT JOIN (
+    SELECT game_id, team_id, SUM(sacks) AS sacks, SUM(ints) AS ints,
+           SUM(fumble_recoveries) AS fumble_recoveries, SUM(tds) AS tds,
+           SUM(safeties) AS safeties, SUM(blocks) AS blocks
+    FROM game_stat_defense GROUP BY game_id, team_id
+) def ON def.game_id = g.id AND def.team_id = dst.team_id"""
+
+
+def load_points_rows(cur, season: int) -> list:
+    """Every completed-game fantasy line of the season as (player_id, team_id, group, week, points):
+    skill players from player_stats, kickers from game_stat_kicking, team defenses from game_stat_defense."""
+    cur.execute("""
+        SELECT st.player_id, st.team_id, st.position, g.week, st.fantasy_points::float
+        FROM player_stats st
+        JOIN games g ON g.id = st.game_id
+        WHERE g.season = %s AND g.status = 'COMPLETED' AND st.position = ANY(%s)
+    """, (season, list(SKILL_POSITIONS)))
+    rows = [(pid, tid, POS_GROUP[pos], wk, pts or 0.0) for pid, tid, pos, wk, pts in cur.fetchall()]
+    cur.execute(f"""
+        SELECT k.player_id, k.team_id, g.week, {KICKING_POINTS_SQL}::float
+        FROM game_stat_kicking k
+        JOIN games g ON g.id = k.game_id
+        WHERE g.season = %s AND g.status = 'COMPLETED'
+    """, (season,))
+    rows += [(pid, tid, "K", wk, pts or 0.0) for pid, tid, wk, pts in cur.fetchall()]
+    cur.execute(f"""
+        SELECT dst.player_id, dst.team_id, g.week, {DEF_POINTS_SQL}::float
+        FROM player_seasons dst
+        JOIN games g ON g.season = dst.season AND g.status = 'COMPLETED'
+            AND (g.home_team_id = dst.team_id OR g.away_team_id = dst.team_id)
+        {DEF_STATS_JOIN_SQL}
+        WHERE dst.season = %s AND dst.position = 'DEF'
+    """, (season,))
+    rows += [(pid, tid, "DEF", wk, pts or 0.0) for pid, tid, wk, pts in cur.fetchall()]
+    return rows
 
 
 def load_season(cur, season: int) -> SeasonData:
@@ -80,7 +161,7 @@ def load_season(cur, season: int) -> SeasonData:
     roster = {}
     by_team_group = defaultdict(list)
     for pid, name, team_id, pos, ovr in cur.fetchall():
-        roster[pid] = {"name": name, "team_id": team_id, "position": pos, "group": POS_GROUP[pos]}
+        roster[pid] = {"name": name, "team_id": team_id, "position": pos, "group": POS_GROUP[pos], "ovr": ovr or 70}
         by_team_group[(team_id, POS_GROUP[pos])].append((-(ovr or 0), pid))
     for players in by_team_group.values():
         for depth, (_, pid) in enumerate(sorted(players), start=1):
@@ -100,20 +181,86 @@ def load_season(cur, season: int) -> SeasonData:
         }
 
     # each line's player is its stored player_id (abbreviated names collide across players)
-    cur.execute("""
-        SELECT st.player_id, st.team_id, st.position, g.week, st.fantasy_points::float
-        FROM player_stats st
-        JOIN games g ON g.id = st.game_id
-        WHERE g.season = %s AND g.status = 'COMPLETED' AND st.position = ANY(%s)
-    """, (season, list(POS_GROUP)))
-    for pid, team_id, pos, week, pts in cur.fetchall():
-        pts = pts or 0.0
+    for pid, team_id, group, week, pts in load_points_rows(cur, season):
         opp = opponent.get((team_id, week))
         if opp is not None:
-            data.allowed[(opp, POS_GROUP[pos], week)] += pts
+            data.allowed[(opp, group, week)] += pts
         if pid in roster and roster[pid]["team_id"] == team_id:
             data.points[pid][week] = data.points[pid].get(week, 0.0) + pts
+
+    # Prior season baseline data (for Week 1 projections and preseason calibration)
+    prev_season = season - 1
+    cur.execute("SELECT week, home_team_id, away_team_id FROM games WHERE season = %s AND status = 'COMPLETED'",
+                (prev_season,))
+    opp_map_prev = {}
+    team_games_prev = defaultdict(int)
+    for w, h, a in cur.fetchall():
+        opp_map_prev[(h, w)] = a
+        opp_map_prev[(a, w)] = h
+        team_games_prev[h] += 1
+        team_games_prev[a] += 1
+    if team_games_prev:
+        prev_rows = load_points_rows(cur, prev_season)
+
+        games_n, totals = defaultdict(int), defaultdict(float)
+        def_allowed_prev = defaultdict(float)
+        for pid, tid, grp, w, pts in prev_rows:
+            games_n[pid] += 1
+            totals[pid] += pts
+            opp = opp_map_prev.get((tid, w))
+            if opp is not None:
+                def_allowed_prev[(opp, grp)] += pts
+        data.prev_player_stats = {pid: {"games": n, "total": totals[pid], "ppg": totals[pid] / n}
+                                  for pid, n in games_n.items()}
+
+        cur.execute("""
+            SELECT p.id, ps.team_id, ps.position, ps.overall_rating
+            FROM player_seasons ps
+            JOIN players p ON p.id = ps.player_id
+            WHERE ps.season = %s AND ps.position = ANY(%s) AND ps.team_id IS NOT NULL
+        """, (prev_season, list(POS_GROUP)))
+        by_team_grp_prev = defaultdict(list)
+        roster_prev = {}
+        for pid, tid, pos, ovr in cur.fetchall():
+            grp = POS_GROUP[pos]
+            roster_prev[pid] = {"team_id": tid, "group": grp}
+            by_team_grp_prev[(tid, grp)].append((-(ovr or 0), pid))
+        for plist in by_team_grp_prev.values():
+            for depth, (_, pid) in enumerate(sorted(plist), start=1):
+                roster_prev[pid]["depth"] = depth
+
+        slot_sums = defaultdict(float)
+        slot_counts = defaultdict(int)
+        for pid, s in data.prev_player_stats.items():
+            if pid in roster_prev:
+                grp = roster_prev[pid]["group"]
+                slot = min(roster_prev[pid]["depth"], PRIOR_SLOTS[grp])
+                slot_sums[(grp, slot)] += s["total"]
+                slot_counts[(grp, slot)] += s["games"]
+        data.prev_slot_priors = {k: slot_sums[k] / slot_counts[k] for k in slot_sums if slot_counts[k] > 0}
+
+        prev_allowed_pg = {g: {} for g in GROUPS}
+        total_gms = sum(team_games_prev.values())
+        for g in GROUPS:
+            total_pts = sum(def_allowed_prev.get((t, g), 0.0) for t in team_games_prev)
+            lg = total_pts / total_gms if total_gms else 0.0
+            for t, gms in team_games_prev.items():
+                t_tot = def_allowed_prev.get((t, g), 0.0)
+                prev_allowed_pg[g][t] = t_tot / gms if gms else 0.0
+                data.prev_def_factors[(t, g)] = _matchup_factor(t_tot, gms, lg)
+        data.prev_def_stars = {g: _ntile5_ascending(prev_allowed_pg[g]) for g in GROUPS}
+
     return data
+
+
+def _matchup_factor(team_allowed: float, games: int, league_per_game: float) -> float:
+    """Opponent's allowed points per game relative to the league average, shrunk by DEF_SHRINK_GAMES and
+    dampened by MATCHUP_EXPONENT. D/ST can score negative points, so the league average can be ≤ 0 (neutral 1.0)
+    and a ratio can dip below zero (floored at MIN_MATCHUP_RATIO, the toughest possible matchup)."""
+    if league_per_game <= 0:
+        return 1.0
+    shrunk = (team_allowed + DEF_SHRINK_GAMES * league_per_game) / ((games + DEF_SHRINK_GAMES) * league_per_game)
+    return max(shrunk, MIN_MATCHUP_RATIO) ** MATCHUP_EXPONENT
 
 
 def _ntile5_ascending(values: dict) -> dict:
@@ -146,11 +293,81 @@ def get_player_injury(data: SeasonData, pid: int, week: int) -> Optional[dict]:
     return None
 
 
+def _project_week_1(data: SeasonData) -> list:
+    """Projection rows for Week 1 using prior season stats, depth chart priors, and prior defensive factors."""
+    rows = []
+    for pid, p in data.roster.items():
+        team, g, ovr = p["team_id"], p["group"], p.get("ovr", 70)
+        slot = min(p["depth"], PRIOR_SLOTS[g])
+        slot_prior = data.prev_slot_priors.get((g, slot)) or DEFAULT_SLOT_PRIORS.get((g, slot), 8.0)
+        s = data.prev_player_stats.get(pid)
+        if s:
+            baseline = (s["total"] + PRESEASON_PRIOR_GAMES * slot_prior) / (s["games"] + PRESEASON_PRIOR_GAMES)
+            avg_points = s["ppg"]
+        else:
+            ovr_adj = max(0.6, min(1.4, 1.0 + (ovr - 80) * 0.015))
+            baseline = slot_prior * ovr_adj
+            avg_points = None
+
+        opp = data.opponent.get((team, 1))
+        inj = get_player_injury(data, pid, 1)
+        is_ir = inj["is_ir"] if inj else False
+        weeks_rem = inj["weeks_remaining"] if inj else 0
+        is_out = is_ir or (weeks_rem > 0)
+
+        factor = data.prev_def_factors.get((opp, g), 1.0) if opp is not None else 1.0
+        stars = data.prev_def_stars.get(g, {}).get(opp, 3) if opp is not None else 3
+
+        if is_out or opp is None:
+            projected = 0.0
+        else:
+            projected = baseline * factor
+
+        ros_total = 0.0
+        for w in range(1, SEASON_WEEKS + 1):
+            if (team, w) not in data.opponent:
+                continue
+            if is_ir and weeks_rem == 0:
+                continue
+            if (w - 1) < weeks_rem:
+                continue
+            ros_opp = data.opponent[(team, w)]
+            ros_factor = data.prev_def_factors.get((ros_opp, g), 1.0)
+            ros_total += baseline * ros_factor
+
+        rows.append({
+            "player_id": pid,
+            "player_name": p["name"],
+            "position": p["position"],
+            "group": g,
+            "team_id": team,
+            "on_bye": opp is None,
+            "is_out": is_out,
+            "projected_points": round(projected, 2),
+            "avg_points": round(avg_points, 2) if avg_points is not None else None,
+            "delta": round(projected - avg_points, 2) if avg_points is not None and opp is not None and not is_out else None,
+            "matchup_stars": stars if opp is not None and not is_out else None,
+            "ros_total_points": round(ros_total, 2),
+        })
+
+    for g in GROUPS:
+        group_rows = [r for r in rows if r["group"] == g]
+        playing = sorted((r for r in group_rows if not r["on_bye"] and not r["is_out"]),
+                         key=lambda r: (-r["projected_points"], -r["ros_total_points"], r["player_id"]))
+        for i, r in enumerate(playing, start=1):
+            r["pos_rank"] = f"{g}{i}"
+        for i, r in enumerate(sorted(group_rows, key=lambda r: (-r["ros_total_points"], r["player_id"])), start=1):
+            r["ros_rank"] = f"{g}{i}"
+    return rows
+
+
 def project_week(data: SeasonData, week: int) -> list:
     """Projection rows for `week`, using only completed games before it. Empty if there is no earlier data."""
     prior_weeks = {t: {w for w in wks if w < week} for t, wks in data.completed_weeks.items()}
     if not any(prior_weeks.values()):
-        return []
+        if week != 1:
+            return []
+        return _project_week_1(data)
 
     # Depth-slot priors: league PPR per team game for each (group, slot).
     slot_sum, slot_n = defaultdict(float), defaultdict(int)
@@ -176,12 +393,8 @@ def project_week(data: SeasonData, week: int) -> list:
         league_allowed[g] = total / games if games else 0.0
         for team, wks in prior_weeks.items():
             lg = league_allowed[g]
-            if not lg:
-                factor[(team, g)] = 1.0
-                continue
             team_total = sum(data.allowed.get((team, g, w), 0.0) for w in wks)
-            shrunk = (team_total + DEF_SHRINK_GAMES * lg) / ((len(wks) + DEF_SHRINK_GAMES) * lg)
-            factor[(team, g)] = shrunk ** MATCHUP_EXPONENT
+            factor[(team, g)] = _matchup_factor(team_total, len(wks), lg)
     stars = {g: _ntile5_ascending(allowed_pg[g]) for g in GROUPS}
 
     rows = []
@@ -355,7 +568,7 @@ def main():
     parser = argparse.ArgumentParser(description="Weekly fantasy projections")
     parser.add_argument("--season", type=int)
     parser.add_argument("--week", type=int, help="Week to project (default: league_state current week)")
-    parser.add_argument("--all-weeks", action="store_true", help=f"Project weeks 2–{SEASON_WEEKS}")
+    parser.add_argument("--all-weeks", action="store_true", help=f"Project weeks 1–{SEASON_WEEKS}")
     parser.add_argument("--backtest", action="store_true", help="Score accuracy on completed weeks; no writes")
     args = parser.parse_args()
 
@@ -369,7 +582,7 @@ def main():
     if args.backtest:
         backtest(season)
         return
-    weeks = list(range(2, SEASON_WEEKS + 1)) if args.all_weeks else [week]
+    weeks = list(range(1, SEASON_WEEKS + 1)) if args.all_weeks else [week]
     print(f"🏈 Projecting fantasy points for {season}, week(s) {weeks[0]}–{weeks[-1]}...")
     project_weeks(season, weeks)
 

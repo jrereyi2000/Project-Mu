@@ -529,8 +529,10 @@ def load_week_data(cur, season: int) -> WeekData:
     from engines.fantasy_projection_engine import load_season
 
     sd = load_season(cur, season)
-    group_of = {pid: p["group"] for pid, p in sd.roster.items()}
-    team_of = {pid: p["team_id"] for pid, p in sd.roster.items()}
+    # The simulated leagues roster skill players only (no K/DEF slots or caps).
+    skill = {pid: p for pid, p in sd.roster.items() if p["group"] in SEASON_CAP}
+    group_of = {pid: p["group"] for pid, p in skill.items()}
+    team_of = {pid: p["team_id"] for pid, p in skill.items()}
     cur.execute("""
         SELECT week, player_id, projected_points::float, ros_total_points::float, avg_points::float
         FROM fantasy_projections

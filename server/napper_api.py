@@ -19,6 +19,7 @@ from pydantic import BaseModel
 import psycopg
 from psycopg.rows import dict_row
 from engines import napper_draft_engine
+from engines.fantasy_projection_engine import DEF_POINTS_SQL, DEF_STATS_JOIN_SQL, KICKING_POINTS_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -66,43 +67,24 @@ def _reception_adjustment(scoring_type: Optional[str]) -> float:
     return 0.0
 
 
-_ACTUAL_PLAYER_POINTS_CTE = """
+_ACTUAL_PLAYER_POINTS_CTE = f"""
     WITH raw_actual AS (
         SELECT ps.player_id, SUM(ps.fantasy_points) AS points, SUM(ps.receptions) AS receptions
         FROM player_stats ps JOIN games g ON g.id = ps.game_id
         WHERE g.season = %s AND g.week = %s AND g.status = 'COMPLETED' AND ps.player_id IS NOT NULL
+          AND ps.position NOT IN ('K', 'DEF')
         GROUP BY ps.player_id
         UNION ALL
-        SELECT k.player_id,
-               SUM(COALESCE(k.fgm, 0) * 3 + COALESCE(k.fgm_49, 0) + 2 * COALESCE(k.fgm_50, 0) + COALESCE(k.xpm, 0)),
-               0
+        SELECT k.player_id, SUM({KICKING_POINTS_SQL}), 0
         FROM game_stat_kicking k JOIN games g ON g.id = k.game_id
         WHERE g.season = %s AND g.week = %s AND g.status = 'COMPLETED'
         GROUP BY k.player_id
         UNION ALL
-        SELECT dst.player_id,
-               SUM(COALESCE(def.sacks, 0) + 2 * COALESCE(def.ints, 0)
-                   + 2 * COALESCE(def.fumble_recoveries, 0) + 6 * COALESCE(def.tds, 0)
-                   + 2 * COALESCE(def.safeties, 0) + 2 * COALESCE(def.blocks, 0)
-                   + CASE
-                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) = 0 THEN 10
-                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 6 THEN 7
-                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 13 THEN 4
-                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 20 THEN 1
-                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 27 THEN 0
-                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 34 THEN -1
-                       ELSE -4
-                   END),
-               0
+        SELECT dst.player_id, SUM({DEF_POINTS_SQL}), 0
         FROM player_seasons dst
         JOIN games g ON g.season = dst.season AND g.week = %s AND g.status = 'COMPLETED'
             AND (g.home_team_id = dst.team_id OR g.away_team_id = dst.team_id)
-        LEFT JOIN (
-            SELECT game_id, team_id, SUM(sacks) AS sacks, SUM(ints) AS ints,
-                   SUM(fumble_recoveries) AS fumble_recoveries, SUM(tds) AS tds,
-                   SUM(safeties) AS safeties, SUM(blocks) AS blocks
-            FROM game_stat_defense GROUP BY game_id, team_id
-        ) def ON def.game_id = g.id AND def.team_id = dst.team_id
+        {DEF_STATS_JOIN_SQL}
         WHERE dst.season = %s AND dst.position = 'DEF'
         GROUP BY dst.player_id
         UNION ALL
