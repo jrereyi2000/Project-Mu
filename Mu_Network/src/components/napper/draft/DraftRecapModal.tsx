@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import type { NapperDraftState, NapperDraftPick } from "../../../types/napper";
+import type { NapperDraftPlayer, NapperDraftState, NapperDraftPick } from "../../../types/napper";
 import { getPlayerHeadshotUrl, handleImageError } from "../napperUtils";
 
 interface DraftRecapModalProps {
@@ -7,6 +7,7 @@ interface DraftRecapModalProps {
   onClose: () => void;
   onRestartMock: () => void;
   onSaveAsLeague?: (leagueName: string) => void;
+  onSelectPlayer?: (player: NapperDraftPlayer) => void;
   isSaving?: boolean;
 }
 
@@ -15,6 +16,7 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
   onClose,
   onRestartMock,
   onSaveAsLeague,
+  onSelectPlayer,
   isSaving = false,
 }) => {
 
@@ -49,7 +51,7 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
     let biggestReachPick: { pick: NapperDraftPick; reachDiff: number } | null = null;
 
     for (const p of picks) {
-      if (!p.player) continue;
+      if (!p.player || p.player.adp_rank == null) continue;
       const diff = p.pick_overall - p.player.adp_rank; // Positive = drafted later than ADP = Value
       if (!bestValuePick || diff > bestValuePick.valueDiff) {
         bestValuePick = { pick: p, valueDiff: diff };
@@ -134,9 +136,14 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                       className="w-10 h-10 rounded-full border border-[#233758] object-cover bg-[#090e17]"
                       onError={handleImageError}
                     />
-                    <span className="text-[10px] font-bold text-white mt-1">
+                    <button
+                      type="button"
+                      className="text-[10px] font-bold text-white mt-1 hover:text-[#00ceb8]"
+                      onClick={() => onSelectPlayer?.(p)}
+                      title={`View ${p.name}`}
+                    >
                       {p.name.split(" ").pop()}
-                    </span>
+                    </button>
                   </div>
                 ))}
               </div>
@@ -155,11 +162,16 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                   <div className="text-[10px] font-black uppercase text-[#10b981] tracking-wider">
                     Best Value Pick (+{Math.max(0, analysis.bestValuePick.valueDiff)} slots)
                   </div>
-                  <div className="text-xs font-extrabold text-white truncate">
+                  <button
+                    type="button"
+                    className="text-xs font-extrabold text-white hover:text-[#00ceb8] truncate text-left"
+                    onClick={() => onSelectPlayer?.(analysis.bestValuePick!.pick.player!)}
+                    title={`View ${analysis.bestValuePick.pick.player.name}`}
+                  >
                     {analysis.bestValuePick.pick.player.name} ({analysis.bestValuePick.pick.player.position})
-                  </div>
+                  </button>
                   <div className="text-[10px] text-[#8a99ad]">
-                    Drafted at #{analysis.bestValuePick.pick.pick_overall} by {analysis.bestValuePick.pick.team_name} (ADP #{analysis.bestValuePick.pick.player.adp_rank})
+                    Drafted at #{analysis.bestValuePick.pick.pick_overall} by {analysis.bestValuePick.pick.team_name} (ADP #{analysis.bestValuePick.pick.player.adp_rank ?? "—"})
                   </div>
                 </div>
               </div>
@@ -175,11 +187,16 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                   <div className="text-[10px] font-black uppercase text-[#f43f5e] tracking-wider">
                     Biggest Reach ({analysis.biggestReachPick.reachDiff} slots)
                   </div>
-                  <div className="text-xs font-extrabold text-white truncate">
+                  <button
+                    type="button"
+                    className="text-xs font-extrabold text-white hover:text-[#00ceb8] truncate text-left"
+                    onClick={() => onSelectPlayer?.(analysis.biggestReachPick!.pick.player!)}
+                    title={`View ${analysis.biggestReachPick.pick.player.name}`}
+                  >
                     {analysis.biggestReachPick.pick.player.name} ({analysis.biggestReachPick.pick.player.position})
-                  </div>
+                  </button>
                   <div className="text-[10px] text-[#8a99ad]">
-                    Drafted at #{analysis.biggestReachPick.pick.pick_overall} by {analysis.biggestReachPick.pick.team_name} (ADP #{analysis.biggestReachPick.pick.player.adp_rank})
+                    Drafted at #{analysis.biggestReachPick.pick.pick_overall} by {analysis.biggestReachPick.pick.team_name} (ADP #{analysis.biggestReachPick.pick.player.adp_rank ?? "—"})
                   </div>
                 </div>
               </div>
@@ -239,7 +256,16 @@ export const DraftRecapModal: React.FC<DraftRecapModalProps> = ({
                         {gt.totalPts.toFixed(1)} <span className="text-[9px] text-[#64748b]">FPTS</span>
                       </div>
                       <div className="text-[10px] text-[#8a99ad]">
-                        {gt.team.roster[0] ? `R1: ${gt.team.roster[0].name}` : ""}
+                        {gt.team.roster[0] ? (
+                          <button
+                            type="button"
+                            className="hover:text-[#00ceb8]"
+                            onClick={() => onSelectPlayer?.(gt.team.roster[0])}
+                            title={`View ${gt.team.roster[0].name}`}
+                          >
+                            R1: {gt.team.roster[0].name}
+                          </button>
+                        ) : ""}
                       </div>
                     </div>
                   </div>

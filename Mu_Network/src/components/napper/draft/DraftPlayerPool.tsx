@@ -9,7 +9,7 @@ interface DraftPlayerPoolProps {
   isUserOnClock: boolean;
   onDraftPlayer: (player: NapperDraftPlayer) => void;
   onToggleQueue: (player: NapperDraftPlayer) => void;
-  onSelectPlayerNotes?: (player: NapperDraftPlayer) => void;
+  onSelectPlayer?: (player: NapperDraftPlayer) => void;
 }
 
 export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
@@ -19,7 +19,7 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
   isUserOnClock,
   onDraftPlayer,
   onToggleQueue,
-  onSelectPlayerNotes,
+  onSelectPlayer,
 }) => {
   const [search, setSearch] = useState("");
   const [selectedPos, setSelectedPos] = useState<string>("ALL");
@@ -289,7 +289,6 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
               <th style={{ width: "55px" }}>ADP</th>
               <th style={{ width: "40px" }}>BYE</th>
               <th style={{ width: "45px" }}>AGE</th>
-              <th style={{ width: "55px" }}>ROS%</th>
               <th style={{ width: "55px" }} title="Projected Season Total Fantasy Points (PPR)">PTS</th>
               <th style={{ width: "45px" }} title="Projected Points Per Game (PPG)">AVG</th>
               <th style={{ width: "50px" }}>RUSH</th>
@@ -303,7 +302,7 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
           <tbody>
             {filteredPlayers.length === 0 ? (
               <tr>
-                <td colSpan={15} className="py-12 text-center text-[#64748b]">
+                <td colSpan={14} className="py-12 text-center text-[#64748b]">
                   No matching players found in draft pool.
                 </td>
               </tr>
@@ -337,46 +336,53 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
                     </td>
 
                     {/* Rank */}
-                    <td className="font-bold text-[#8a99ad]">{player.adp_rank}</td>
+                    <td className="font-bold text-[#8a99ad]">{player.adp_rank ?? "—"}</td>
 
                     {/* Player Info with Headshot, Team Badge, Name, Subtitle, Star & Note */}
                     <td>
                       <div className="draft-player-cell-content">
-                        <div className="draft-table-avatar-box">
-                          <img
-                            src={getPlayerHeadshotUrl(player.player_id, player.headshot_url)}
-                            alt={player.name}
-                            className="draft-table-avatar"
-                            onError={handleImageError}
-                          />
-                          <div className="draft-table-team-badge">{player.team}</div>
-                        </div>
+                        <button
+                          type="button"
+                          className="draft-player-identity-button"
+                          onClick={() => onSelectPlayer?.(player)}
+                          title={`View ${player.name}`}
+                        >
+                          <div className="draft-table-avatar-box">
+                            <img
+                              src={getPlayerHeadshotUrl(player.player_id, player.headshot_url, player.espn_id)}
+                              alt={player.name}
+                              className="draft-table-avatar"
+                              onError={handleImageError}
+                            />
+                            <div className="draft-table-team-badge">{player.team}</div>
+                          </div>
 
-                        <div className="draft-table-name-block">
-                          <span className="draft-table-player-name">{player.name}</span>
-                          <span className="draft-table-player-sub">
-                            <span
-                              className="font-bold"
-                              style={{
-                                color:
-                                  player.position === "QB"
-                                    ? "#f43f5e"
-                                    : player.position === "RB"
-                                    ? "#10b981"
-                                    : player.position === "WR"
-                                    ? "#06b6d4"
-                                    : player.position === "TE"
-                                    ? "#f59e0b"
-                                    : "#8b5cf6",
-                              }}
-                            >
-                              {player.position}
+                          <div className="draft-table-name-block">
+                            <span className="draft-table-player-name">{player.name}</span>
+                            <span className="draft-table-player-sub">
+                              <span
+                                className="font-bold"
+                                style={{
+                                  color:
+                                    player.position === "QB"
+                                      ? "#f43f5e"
+                                      : player.position === "RB"
+                                      ? "#10b981"
+                                      : player.position === "WR"
+                                      ? "#06b6d4"
+                                      : player.position === "TE"
+                                      ? "#f59e0b"
+                                      : "#8b5cf6",
+                                }}
+                              >
+                                {player.position}
+                              </span>
+                              <span>•</span>
+                              <span>{player.team}</span>
+                              <span>({player.bye ?? "—"})</span>
                             </span>
-                            <span>•</span>
-                            <span>{player.team}</span>
-                            <span>({player.bye})</span>
-                          </span>
-                        </div>
+                          </div>
+                        </button>
 
                         {/* Star / Watchlist Toggle */}
                         <button
@@ -396,19 +402,17 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
                           </svg>
                         </button>
 
-                        {/* Player Notes Icon */}
+                        {/* Player Details Icon */}
                         <button
                           type="button"
-                          onClick={() => onSelectPlayerNotes?.(player)}
-                          title="View Scouting Notes"
+                          onClick={() => onSelectPlayer?.(player)}
+                          title="View Player Details"
                           className="w-5 h-5 rounded-md bg-[#1e2a3f] hover:bg-[#283854] text-[#818cf8] flex items-center justify-center p-0.5 transition-colors"
                         >
                           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                            <polyline points="10 9 9 9 8 9" />
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="11" x2="12" y2="16" />
+                            <circle cx="12" cy="7.5" r="0.7" fill="currentColor" />
                           </svg>
                         </button>
                       </div>
@@ -416,41 +420,38 @@ export const DraftPlayerPool: React.FC<DraftPlayerPoolProps> = ({
 
                     {/* ADP */}
                     <td>
-                      <span className="draft-adp-pill">{player.adp.toFixed(1)}</span>
+                      <span className="draft-adp-pill">{player.adp == null ? "—" : player.adp.toFixed(1)}</span>
                     </td>
 
                     {/* BYE */}
-                    <td className="text-[#94a3b8]">{player.bye}</td>
+                    <td className="text-[#94a3b8]">{player.bye ?? "—"}</td>
 
                     {/* AGE */}
-                    <td className="text-[#94a3b8]">{player.age.toFixed(1)}</td>
-
-                    {/* ROS% */}
-                    <td className="text-[#94a3b8]">{player.ros_pct.toFixed(1)}%</td>
+                    <td className="text-[#94a3b8]">{player.age == null ? "—" : player.age.toFixed(1)}</td>
 
                     {/* PROJ PTS */}
-                    <td className="font-bold text-white">{player.proj_pts.toFixed(1)}</td>
+                    <td className="font-bold text-white">{player.proj_pts == null ? "—" : player.proj_pts.toFixed(1)}</td>
 
                     {/* PROJ AVG */}
-                    <td className="text-[#94a3b8]">{player.proj_avg.toFixed(1)}</td>
+                    <td className="text-[#94a3b8]">{player.proj_avg == null ? "—" : player.proj_avg.toFixed(1)}</td>
 
                     {/* RUSH ATT */}
-                    <td className="text-[#94a3b8]">{(player.rush_att ?? 0).toFixed(1)}</td>
+                    <td className="text-[#94a3b8]">{player.rush_att == null ? "—" : player.rush_att.toFixed(1)}</td>
 
                     {/* RUSH YDS */}
-                    <td className="text-[#94a3b8]">{(player.rush_yds ?? 0).toFixed(1)}</td>
+                    <td className="text-[#94a3b8]">{player.rush_yds == null ? "—" : player.rush_yds.toFixed(1)}</td>
 
                     {/* RUSH TD */}
-                    <td className="text-[#94a3b8]">{(player.rush_td ?? 0).toFixed(1)}</td>
+                    <td className="text-[#94a3b8]">{player.rush_td == null ? "—" : player.rush_td.toFixed(1)}</td>
 
                     {/* REC */}
-                    <td className="text-[#94a3b8]">{(player.rec ?? 0).toFixed(1)}</td>
+                    <td className="text-[#94a3b8]">{player.rec == null ? "—" : player.rec.toFixed(1)}</td>
 
                     {/* REC YDS */}
-                    <td className="text-[#94a3b8]">{(player.rec_yds ?? 0).toFixed(1)}</td>
+                    <td className="text-[#94a3b8]">{player.rec_yds == null ? "—" : player.rec_yds.toFixed(1)}</td>
 
                     {/* REC TD */}
-                    <td className="text-[#94a3b8]">{(player.rec_td ?? 0).toFixed(1)}</td>
+                    <td className="text-[#94a3b8]">{player.rec_td == null ? "—" : player.rec_td.toFixed(1)}</td>
                   </tr>
                 );
               })

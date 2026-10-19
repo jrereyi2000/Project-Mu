@@ -140,3 +140,37 @@ def test_napper_create_league_cleans_seed_leagues():
         # Restore reference seed leagues without wiping user leagues
         seed_napper_database()
 
+
+
+def test_napper_delete_league_cascades():
+    res = client.post("/api/napper/leagues/create", json={
+        "name": "Delete Me League",
+        "teams_count": 8,
+        "scoring_type": "PPR",
+        "is_superflex": True,
+        "status": "IN_SEASON",
+    })
+    assert res.status_code == 200
+    league_id = res.json()["league"]["id"]
+    try:
+        del_res = client.delete(f"/api/napper/league/{league_id}")
+        assert del_res.status_code == 200
+        assert del_res.json()["status"] == "deleted"
+
+        assert client.get(f"/api/napper/league/{league_id}").status_code == 404
+        assert all(l["id"] != league_id for l in client.get("/api/napper/leagues").json()["leagues"])
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                for table in ("napper_teams", "napper_rosters", "napper_matchups", "napper_chat"):
+                    cur.execute(f"SELECT COUNT(*) AS cnt FROM {table} WHERE league_id = %s", (league_id,))
+                    assert cur.fetchone()["cnt"] == 0, table
+
+        assert client.delete(f"/api/napper/league/{league_id}").status_code == 404
+    finally:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM napper_leagues WHERE id = %s", (league_id,))
+            conn.commit()
+        # create_league wipes seed leagues; restore them without touching user leagues
+        from engines.napper_seeder import seed_napper_database
+        seed_napper_database()

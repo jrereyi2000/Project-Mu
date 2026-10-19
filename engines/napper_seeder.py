@@ -3,7 +3,7 @@
 Populates:
 1. User profile (@jrereyi2000 - 'The Straw Hat Pirates')
 2. 3 Reference leagues populated strictly with authentic simulation players:
-   - 'Solo 2026 8-Team SF PPR' (8-team, Superflex, season current-1, week 6, Straw Hats vs Team 3)
+   - 'Solo 8-Team SF PPR' (8-team, Superflex, active season, week 6, Straw Hats vs Team 3)
    - 'The Justice League' (12-team PPR, in-season)
    - 'The Avengers' (8-team Dynasty PPR, status: PRE_DRAFT)
 3. 14-week schedules and head-to-head matchups
@@ -24,14 +24,12 @@ from engines.napper_draft_engine import ensure_defenses_exist, ensure_kickers_ex
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
 
-def get_previous_season(cur) -> int:
-    cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+def get_current_season_week(cur) -> tuple[int, int]:
+    cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
     row = cur.fetchone()
-    if row:
-        cs = row["current_season"] if isinstance(row, dict) else row[0]
-        if cs:
-            return int(cs) - 1
-    return 2035
+    if not row or not row["current_season"]:
+        raise RuntimeError("The active NFL season is not configured in league_state")
+    return int(row["current_season"]), max(1, int(row["current_week"] or 1))
 
 
 def build_schedule(n_teams: int, weeks: int = 14) -> List[List[tuple]]:
@@ -120,24 +118,24 @@ def seed_napper_database(wipe_all: bool = False):
         cur.execute("SELECT setval('napper_user_profiles_id_seq', (SELECT GREATEST(MAX(id), 1) FROM napper_user_profiles));")
         print(f"👤 Created user profile: @jrereyi2000 (ID: {user_id})")
 
-        prev_season = get_previous_season(cur)
+        season, active_week = get_current_season_week(cur)
 
-        # 2. Ensure Team Defenses & Kickers exist for previous season
+        # 2. Use the current season's generated team-defense and kicker records.
         ensure_defenses_exist(cur)
-        ensure_kicker_projections(cur, prev_season)
+        ensure_kicker_projections(cur, season)
 
         # 3. Fetch authentic simulation player pools
         def get_pool(positions: tuple, limit: int = 50):
             cur.execute("""
                 SELECT p.id, p.player_name, p.full_name, ps.position, ps.overall_rating,
-                       COALESCE(fp.projected_points, 12.0) as proj
+                       fp.projected_points as proj
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 6
-                WHERE ps.position = ANY(%s)
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s AND ps.team_id IS NOT NULL
+                JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = %s
+                WHERE ps.position = ANY(%s) AND fp.projected_points IS NOT NULL
                 ORDER BY ps.overall_rating DESC, proj DESC
                 LIMIT %s;
-            """, (prev_season, prev_season, list(positions), limit))
+            """, (season, season, active_week, list(positions), limit))
             return [
                 {
                     "id": r["id"],
@@ -177,7 +175,7 @@ def seed_napper_database(wipe_all: bool = False):
             return None
 
         # 4. Seed Leagues
-        # League A: 'Solo 2026 8-Team SF PPR'
+        # League A: 'Solo 8-Team SF PPR'
         cur.execute(
             """
             INSERT INTO napper_leagues (id, name, season, teams_count, scoring_type, roster_format, status, avatar_url, current_week, is_seed)
@@ -185,8 +183,8 @@ def seed_napper_database(wipe_all: bool = False):
             RETURNING id
             """,
             (
-                "Solo 2026 8-Team SF PPR",
-                prev_season,
+                "Solo 8-Team SF PPR",
+                season,
                 8,
                 "PPR",
                 psycopg.types.json.Jsonb({
@@ -209,7 +207,7 @@ def seed_napper_database(wipe_all: bool = False):
             """,
             (
                 "The Justice League",
-                prev_season,
+                season,
                 12,
                 "PPR",
                 psycopg.types.json.Jsonb({
@@ -232,7 +230,7 @@ def seed_napper_database(wipe_all: bool = False):
             """,
             (
                 "The Avengers",
-                prev_season,
+                season,
                 8,
                 "PPR",
                 psycopg.types.json.Jsonb({

@@ -5,9 +5,10 @@ import { getPlayerHeadshotUrl, handleImageError } from "./napperUtils";
 
 interface NapperPlayersTabProps {
   leagueId: number;
+  onSelectPlayer?: (player: NapperWaiverPlayer) => void;
 }
 
-export function NapperPlayersTab({ leagueId }: NapperPlayersTabProps) {
+export function NapperPlayersTab({ leagueId, onSelectPlayer }: NapperPlayersTabProps) {
   const [position, setPosition] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
   const [players, setPlayers] = useState<NapperWaiverPlayer[]>([]);
@@ -144,9 +145,14 @@ export function NapperPlayersTab({ leagueId }: NapperPlayersTabProps) {
                 fontSize: "13px",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={() => onSelectPlayer?.(p)}
+                aria-label={`View ${p.name} player details`}
+                style={{ display: "flex", alignItems: "center", gap: "10px", textAlign: "left", background: "transparent", border: 0, padding: 0, cursor: "pointer", minWidth: 0 }}
+              >
                 <img
-                  src={getPlayerHeadshotUrl(p.name, `/static/players/${p.player_id}.webp`)}
+                  src={getPlayerHeadshotUrl(p.player_id, p.headshot_url, p.espn_id)}
                   alt=""
                   onError={handleImageError}
                   style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#202d40", objectFit: "cover" }}
@@ -155,13 +161,16 @@ export function NapperPlayersTab({ leagueId }: NapperPlayersTabProps) {
                   <div style={{ color: "#e2e8f0", fontWeight: "600" }}>{p.name}</div>
                   <div style={{ color: "#8a99ad", fontSize: "11px" }}>{p.position} · {p.team}</div>
                 </div>
+              </button>
+              <div style={{ color: "#8a99ad", fontSize: "11px" }}>
+                <div>{p.kickoff || "Kickoff TBD"}</div>
+                <div>{p.opponent || "Bye week / no matchup"}</div>
               </div>
-              <div style={{ color: "#8a99ad" }}>{p.opponent || "vs OPP"}</div>
               <div style={{ textAlign: "right", color: "var(--napper-teal)", fontWeight: "700" }}>
-                {(p.proj_fpts != null ? Number(p.proj_fpts) : 0).toFixed(1)}
+                {p.proj_fpts != null ? Number(p.proj_fpts).toFixed(1) : "—"}
               </div>
               <div style={{ textAlign: "right", color: "#cbd5e1" }}>
-                {(p.avg_fpts != null ? Number(p.avg_fpts) : 0).toFixed(1)}
+                {p.avg_fpts != null ? Number(p.avg_fpts).toFixed(1) : "—"}
               </div>
               <div style={{ textAlign: "center" }}>
                 <button

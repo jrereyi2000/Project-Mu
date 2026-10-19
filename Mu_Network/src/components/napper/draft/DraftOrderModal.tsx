@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { NapperDraftTeam, ARCHETYPE_METAS, NapperManagerArchetype } from "../../../types/napper";
+import { NapperDraftTeam, ARCHETYPE_METAS, NapperManagerArchetype, getArchetypeMeta } from "../../../types/napper";
 
 interface DraftOrderModalProps {
   isOpen: boolean;
@@ -84,6 +84,16 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
     setOrderedTeams(sorted);
   };
 
+  // Update archetype for a team
+  const handleArchetypeChange = (index: number, newArchetype: NapperManagerArchetype) => {
+    const updated = [...orderedTeams];
+    updated[index] = {
+      ...updated[index],
+      persona: newArchetype,
+    };
+    setOrderedTeams(updated);
+  };
+
   // Reverse 1-N order
   const handleReverse = () => {
     const reversed = [...orderedTeams].reverse();
@@ -103,7 +113,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
   return (
     <div className="draft-modal-overlay" onClick={onClose}>
       <div
-        className="draft-order-modal bg-[#121926] border border-[#223046] rounded-2xl w-[640px] max-w-[94vw] max-h-[90vh] flex flex-col shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden animate-fadeIn"
+        className="draft-order-modal bg-[#121926] border border-[#223046] rounded-2xl w-[680px] max-w-[94vw] max-h-[90vh] flex flex-col shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden animate-fadeIn"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -119,7 +129,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
               </span>
             </div>
             <p className="text-xs text-[#8a99ad]">
-              Reorder slots, swap positions, or manually assign draft spots for all teams.
+              Reorder slots, swap positions, or manually assign draft spots and archetypes for all teams.
             </p>
           </div>
           <button
@@ -180,8 +190,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2 napper-scrollbar">
           {orderedTeams.map((team, index) => {
             const isUser = !!team.is_user;
-            const personaKey = (team.persona || "ANALYTICS_NERD") as NapperManagerArchetype;
-            const meta = ARCHETYPE_METAS[personaKey];
+            const meta = getArchetypeMeta(team.persona);
             const isDragging = draggedIndex === index;
             const isDragOver = dragOverIndex === index;
 
@@ -208,7 +217,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
                   setDraggedIndex(null);
                   setDragOverIndex(null);
                 }}
-                className={`draft-order-row flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                className={`draft-order-row flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-all ${
                   isUser
                     ? "bg-[#00ceb8]/10 border-[#00ceb8]/40 shadow-[0_0_15px_rgba(0,206,184,0.12)]"
                     : "bg-[#162133] hover:bg-[#1a273c] border-[#223147]"
@@ -217,10 +226,10 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
                 }`}
               >
                 {/* Left: Drag Handle, Slot Badge, Avatar, Team Info */}
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   {/* Drag Handle */}
                   <span
-                    className="text-xs text-[#52647d] hover:text-[#8a99ad] cursor-grab active:cursor-grabbing select-none px-1"
+                    className="text-xs text-[#52647d] hover:text-[#8a99ad] cursor-grab active:cursor-grabbing select-none px-1 shrink-0"
                     title="Drag to reorder"
                   >
                     ⠿
@@ -246,7 +255,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
 
                   {/* Team Name & Handle */}
                   <div className="min-w-0 flex flex-col">
-                    <div className="flex items-center gap-2 truncate">
+                    <div className="flex items-center gap-2">
                       <span
                         className={`text-xs font-black truncate ${
                           isUser ? "text-white font-extrabold" : "text-[#d1d9e2]"
@@ -254,28 +263,57 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
                       >
                         {team.name}
                       </span>
-                      {isUser && (
-                        <span className="text-[10px] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/20 px-1.5 py-0.2 rounded border border-[#00ceb8]/40">
-                          YOU
-                        </span>
-                      )}
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-[#718299] truncate">
-                      <span>{team.manager_handle}</span>
-                      {!isUser && meta && (
-                        <span
-                          className="px-1.5 py-0.2 rounded text-[10px] font-extrabold tracking-wider uppercase border"
-                          style={{
-                            color: meta.color,
-                            backgroundColor: `${meta.color}15`,
-                            borderColor: `${meta.color}35`,
-                          }}
-                        >
-                          {meta.label}
-                        </span>
-                      )}
+                    <div className="text-[11px] text-[#718299] truncate font-medium">
+                      {team.manager_handle}
                     </div>
                   </div>
+                </div>
+
+                {/* Middle: Prominent AI Archetype Badge & Selector */}
+                <div className="shrink-0 flex items-center">
+                  {isUser ? (
+                    <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/15 border border-[#00ceb8]/40 shadow-sm flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ceb8]" />
+                      <span>YOU</span>
+                    </span>
+                  ) : (
+                    <div className="relative flex items-center">
+                      <select
+                        value={meta.key}
+                        onChange={(e) => handleArchetypeChange(index, e.target.value as NapperManagerArchetype)}
+                        className="appearance-none cursor-pointer pl-6 pr-6 py-1 rounded-lg text-[10px] font-black tracking-wider uppercase border outline-none transition-all hover:brightness-110 shadow-sm"
+                        style={{
+                          color: meta.color,
+                          backgroundColor: meta.bgColor,
+                          borderColor: meta.borderColor,
+                        }}
+                        title={`${meta.label} (${meta.tagline}): ${meta.description} (Click to customize archetype)`}
+                      >
+                        {Object.values(ARCHETYPE_METAS).map((aMeta) => (
+                          <option
+                            key={`opt-arch-${team.id || index}-${aMeta.key}`}
+                            value={aMeta.key}
+                            className="bg-[#121926] text-white py-1 text-xs"
+                          >
+                            {aMeta.label}
+                          </option>
+                        ))}
+                      </select>
+                      {/* Color Dot */}
+                      <span
+                        className="absolute left-2.5 w-1.5 h-1.5 rounded-full pointer-events-none"
+                        style={{ backgroundColor: meta.color }}
+                      />
+                      {/* Down Caret */}
+                      <span
+                        className="absolute right-2 text-[8px] pointer-events-none opacity-80"
+                        style={{ color: meta.color }}
+                      >
+                        ▼
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: Slot Selector & Arrow Steppers */}

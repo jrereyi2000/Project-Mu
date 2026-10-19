@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
-import type { NapperMatchupView, NapperStarterPlayer, NapperStarterSlot } from "../../types/napper";
+import type { NapperMatchupView, NapperStarterPlayer } from "../../types/napper";
 import {
   BlueRobotAvatar,
   PinkRobotAvatar,
@@ -12,474 +12,78 @@ import {
 interface NapperMatchupTabProps {
   leagueId: number;
   initialWeek?: number;
+  matchupId?: number;
+  showWeekSelector?: boolean;
   onSelectPlayer?: (player: NapperStarterPlayer) => void;
 }
 
-// Baseline mock data matching the Sleeper reference screenshot exactly (Week 6)
-const REFERENCE_MATCHUP: NapperMatchupView = {
-  league_id: 1,
-  week: 6,
-  left_team: {
-    id: 1,
-    league_id: 1,
-    user_id: 1,
-    team_name: "The Straw Hat Pirates",
-    manager_handle: "jrereyi2000",
-    avatar_url: "",
-    is_ai: false,
-    wins: 5,
-    losses: 0,
-    ties: 0,
-    points_for: 768.4,
-    points_against: 612.3,
-    score: 0.0,
-    proj: 152.14,
-    win_prob: 0.76,
-    yet_to_play_summary: "Yet to play (10)\n2 QB, 2 RB, 4 WR, 2 TE",
-  },
-  right_team: {
-    id: 3,
-    league_id: 1,
-    user_id: null,
-    team_name: "Team 3",
-    manager_handle: "-",
-    avatar_url: "",
-    is_ai: true,
-    persona: "TRASH_TALKER",
-    wins: 4,
-    losses: 1,
-    ties: 0,
-    points_for: 710.2,
-    points_against: 645.8,
-    score: 25.4,
-    proj: 113.95,
-    win_prob: 0.24,
-    yet_to_play_summary: "Yet to play (9)\n2 QB, 2 RB, 4 WR, TE",
-  },
-  starters: [
-    {
-      slot: "QB",
-      slot_label: "QB",
-      left_player: {
-        id: 101,
-        player_id: 3918298,
-        name: "J. Allen",
-        position: "QB",
-        team: "BUF",
-        opponent: "@ LV",
-        kickoff: "Sun 4:25 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3918298.png",
-        fpts: 0.0,
-        proj_fpts: 24.95,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 201,
-        player_id: 2577417,
-        name: "D. Prescott",
-        position: "QB",
-        team: "DAL",
-        opponent: "@ GB",
-        kickoff: "Sun 8:20 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/2577417.png",
-        fpts: 0.0,
-        proj_fpts: 18.45,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-    {
-      slot: "RB",
-      slot_label: "RB",
-      left_player: {
-        id: 102,
-        player_id: 4036378,
-        name: "J. Love",
-        position: "RB",
-        team: "ARI",
-        opponent: "@ LAR",
-        kickoff: "Sun 4:05 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4036378.png",
-        fpts: 0.0,
-        proj_fpts: 0.0,
-        is_yet_to_play: true,
-        injury_status: "O",
-      },
-      right_player: {
-        id: 202,
-        player_id: 4567048,
-        name: "K. Walker",
-        position: "RB",
-        team: "KC",
-        opponent: "vs LAC",
-        kickoff: "Sun 4:25 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4567048.png",
-        fpts: 0.0,
-        proj_fpts: 22.76,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-    {
-      slot: "RB",
-      slot_label: "RB",
-      left_player: {
-        id: 103,
-        player_id: 4259545,
-        name: "D. Swift",
-        position: "RB",
-        team: "CHI",
-        opponent: "@ ATL",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4259545.png",
-        fpts: 0.0,
-        proj_fpts: 16.69,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 203,
-        player_id: 4035538,
-        name: "D. Montgomery",
-        position: "RB",
-        team: "HOU",
-        opponent: "@ JAX",
-        kickoff: "Sun 9:30 AM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4035538.png",
-        fpts: 0.0,
-        proj_fpts: 0.0,
-        is_yet_to_play: true,
-        injury_status: "O",
-      },
-    },
-    {
-      slot: "WR",
-      slot_label: "WR",
-      left_player: {
-        id: 104,
-        player_id: 4258169,
-        name: "N. Collins",
-        position: "WR",
-        team: "HOU",
-        opponent: "@ JAX",
-        kickoff: "Sun 9:30 AM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4258169.png",
-        fpts: 0.0,
-        proj_fpts: 18.34,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 204,
-        player_id: 4430878,
-        name: "J. Smith-Njigba",
-        position: "WR",
-        team: "SEA",
-        opponent: "@ DEN",
-        kickoff: "Final L 14-17",
-        game_status: "12/16 REC, 134 YD",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4430878.png",
-        fpts: 25.4,
-        proj_fpts: 25.4,
-        is_yet_to_play: false,
-        injury_status: null,
-      },
-    },
-    {
-      slot: "WR",
-      slot_label: "WR",
-      left_player: {
-        id: 105,
-        player_id: 4426515,
-        name: "P. Nacua",
-        position: "WR",
-        team: "LAR",
-        opponent: "@ SF",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4426515.png",
-        fpts: 0.0,
-        proj_fpts: 17.5,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 205,
-        player_id: 4262921,
-        name: "J. Jefferson",
-        position: "WR",
-        team: "MIN",
-        opponent: "vs GB",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4262921.png",
-        fpts: 0.0,
-        proj_fpts: 19.8,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-    {
-      slot: "TE",
-      slot_label: "TE",
-      left_player: {
-        id: 106,
-        player_id: 4432665,
-        name: "B. Bowers",
-        position: "TE",
-        team: "LV",
-        opponent: "vs BUF",
-        kickoff: "Sun 4:25 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432665.png",
-        fpts: 0.0,
-        proj_fpts: 14.2,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 206,
-        player_id: 4430027,
-        name: "S. LaPorta",
-        position: "TE",
-        team: "DET",
-        opponent: "@ DAL",
-        kickoff: "Sun 4:25 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4430027.png",
-        fpts: 0.0,
-        proj_fpts: 13.5,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-    {
-      slot: "FLEX",
-      slot_label: "FLEX",
-      left_player: {
-        id: 107,
-        player_id: 4427366,
-        name: "B. Hall",
-        position: "RB",
-        team: "NYJ",
-        opponent: "vs NE",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4427366.png",
-        fpts: 0.0,
-        proj_fpts: 16.8,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 207,
-        player_id: 4380150,
-        name: "C. Lamb",
-        position: "WR",
-        team: "DAL",
-        opponent: "vs DET",
-        kickoff: "Sun 4:25 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4380150.png",
-        fpts: 0.0,
-        proj_fpts: 17.9,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-    {
-      slot: "SUPERFLEX",
-      slot_label: "SUPERFLEX",
-      left_player: {
-        id: 108,
-        player_id: 3139477,
-        name: "P. Mahomes",
-        position: "QB",
-        team: "KC",
-        opponent: "vs LAC",
-        kickoff: "Sun 4:25 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png",
-        fpts: 0.0,
-        proj_fpts: 21.4,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 208,
-        player_id: 3916387,
-        name: "L. Jackson",
-        position: "QB",
-        team: "BAL",
-        opponent: "@ CIN",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3916387.png",
-        fpts: 0.0,
-        proj_fpts: 22.1,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-  ],
-  bench: [
-    {
-      slot: "BN",
-      slot_label: "BN",
-      left_player: {
-        id: 109,
-        player_id: 3042519,
-        name: "A. Jones",
-        position: "RB",
-        team: "MIN",
-        opponent: "vs GB",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3042519.png",
-        fpts: 0.0,
-        proj_fpts: 14.8,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 209,
-        player_id: 4372016,
-        name: "J. Waddle",
-        position: "WR",
-        team: "MIA",
-        opponent: "@ IND",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4372016.png",
-        fpts: 0.0,
-        proj_fpts: 13.2,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-    {
-      slot: "BN",
-      slot_label: "BN",
-      left_player: {
-        id: 110,
-        player_id: 4431452,
-        name: "D. Maye",
-        position: "QB",
-        team: "NE",
-        opponent: "@ NYJ",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4431452.png",
-        fpts: 0.0,
-        proj_fpts: 15.6,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 210,
-        player_id: 4361528,
-        name: "T. McBride",
-        position: "TE",
-        team: "ARI",
-        opponent: "@ LAR",
-        kickoff: "Sun 4:05 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4361528.png",
-        fpts: 0.0,
-        proj_fpts: 12.8,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-    {
-      slot: "BN",
-      slot_label: "BN",
-      left_player: {
-        id: 111,
-        player_id: 4429022,
-        name: "G. Wilson",
-        position: "WR",
-        team: "NYJ",
-        opponent: "vs NE",
-        kickoff: "Sun 1:00 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4429022.png",
-        fpts: 0.0,
-        proj_fpts: 15.1,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-      right_player: {
-        id: 211,
-        player_id: 4432708,
-        name: "M. Harrison Jr.",
-        position: "WR",
-        team: "ARI",
-        opponent: "@ LAR",
-        kickoff: "Sun 4:05 PM",
-        game_status: "Yet to play",
-        headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432708.png",
-        fpts: 0.0,
-        proj_fpts: 14.5,
-        is_yet_to_play: true,
-        injury_status: null,
-      },
-    },
-  ],
-};
-
 export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
   leagueId,
-  initialWeek = 6,
+  initialWeek,
+  matchupId,
+  showWeekSelector = true,
   onSelectPlayer,
 }) => {
-  const [week, setWeek] = useState<number>(initialWeek);
+  const [week, setWeek] = useState<number | null>(initialWeek ?? null);
   const [weekMenuOpen, setWeekMenuOpen] = useState(false);
-  const [matchup, setMatchup] = useState<NapperMatchupView>(REFERENCE_MATCHUP);
+  const [matchup, setMatchup] = useState<NapperMatchupView | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [benchOpen, setBenchOpen] = useState(true);
 
-  // Fetch live matchup data from backend API with fallback
+  // Fetch the selected league's matchup from the backend
   useEffect(() => {
     let active = true;
     const fetchMatchup = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/napper/league/${leagueId}/matchup?week=${week}`);
-        if (!res.ok) throw new Error("Matchup fetch failed");
+        setLoading(true);
+        setLoadError(null);
+        const params = new URLSearchParams();
+        if (week != null) params.set("week", String(week));
+        if (matchupId != null) params.set("matchup_id", String(matchupId));
+        const query = params.toString();
+        const res = await fetch(`${API_BASE}/api/napper/league/${leagueId}/matchup${query ? `?${query}` : ""}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || "Could not load this league matchup.");
+        }
         const data = await res.json();
-        if (active && data?.left_team && data?.starters) {
+        if (active && data?.left_team && Array.isArray(data.starters)) {
           setMatchup(data);
+          setWeek(data.week);
+        } else if (active) {
+          throw new Error("No matchup is available for this league and week.");
         }
-      } catch {
-        // Fallback to reference matchup state
+      } catch (error) {
         if (active) {
-          setMatchup((prev) => ({
-            ...REFERENCE_MATCHUP,
-            league_id: leagueId,
-            week,
-          }));
+          setMatchup(null);
+          setLoadError(error instanceof Error ? error.message : "Could not load this league matchup.");
         }
+      } finally {
+        if (active) setLoading(false);
       }
     };
     fetchMatchup();
     return () => {
       active = false;
     };
-  }, [leagueId, week]);
+  }, [leagueId, week, matchupId]);
+
+  if (!matchup) {
+    return (
+      <div className="px-6 py-12 text-center text-sm text-[#8a99ad]" role={loadError ? "alert" : undefined}>
+        {loading ? "Loading this league’s matchup…" : loadError || "No matchup is available for this week."}
+      </div>
+    );
+  }
 
   const leftTeam = matchup.left_team;
   const rightTeam = matchup.right_team;
 
   // Calculate win percentage displays
-  const leftWinPct = Math.round((leftTeam.win_prob ?? 0.76) * 100);
+  const leftWinPct = Math.round((leftTeam.win_prob ?? 0.5) * 100);
   const rightWinPct = 100 - leftWinPct;
+  const formatRecord = (team: typeof leftTeam) => `${team.wins ?? 0}-${team.losses ?? 0}${team.ties ? `-${team.ties}` : ""}`;
 
   return (
     <div className="flex-1 px-5 py-4 max-w-6xl mx-auto w-full">
@@ -504,7 +108,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs font-black text-[#00ceb8]">{leftWinPct}%</span>
                 <span className="text-xs text-[#8a99ad] font-semibold">
-                  {leftTeam.wins}-{leftTeam.losses}
+                  {formatRecord(leftTeam)}
                 </span>
               </div>
             </div>
@@ -552,7 +156,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
               {/* Win Probability & Record */}
               <div className="flex items-center justify-end gap-2 mt-1">
                 <span className="text-xs text-[#8a99ad] font-semibold">
-                  {rightTeam.wins}-{rightTeam.losses}
+                  {formatRecord(rightTeam)}
                 </span>
                 <span className="text-xs font-black text-[#cbd5e1]">{rightWinPct}%</span>
               </div>
@@ -578,10 +182,10 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
           {/* Unplayed Player Count Summary ("Yet to play (10) 2 QB, 2 RB, 4 WR, 2 TE") */}
           <div className="flex items-start justify-between text-xs text-[#8a99ad] mt-2.5 font-medium leading-relaxed">
             <div className="whitespace-pre-line text-left">
-              {leftTeam.yet_to_play_summary || "Yet to play (10)\n2 QB, 2 RB, 4 WR, 2 TE"}
+              {leftTeam.yet_to_play_summary || ""}
             </div>
             <div className="whitespace-pre-line text-right">
-              {rightTeam.yet_to_play_summary || "Yet to play (9)\n2 QB, 2 RB, 4 WR, TE"}
+              {rightTeam.yet_to_play_summary || ""}
             </div>
           </div>
         </div>
@@ -598,13 +202,14 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
         </div>
 
         {/* Week Selector Dropdown */}
+        {showWeekSelector && (
         <div className="relative">
           <button
             type="button"
             onClick={() => setWeekMenuOpen(!weekMenuOpen)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#182333] border border-[#283850] text-xs font-bold text-white hover:bg-[#202d40] hover:border-[#00ceb8] transition-all cursor-pointer shadow-sm"
           >
-            <span>Wk. {week}</span>
+            <span>Wk. {week ?? matchup.week}</span>
             <svg
               className={`w-3.5 h-3.5 text-[#8a99ad] transition-transform ${weekMenuOpen ? "rotate-180" : ""}`}
               viewBox="0 0 24 24"
@@ -627,7 +232,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                     setWeekMenuOpen(false);
                   }}
                   className={`w-full text-left px-3 py-1.5 text-xs font-semibold cursor-pointer transition-colors ${
-                    w === week
+                    w === (week ?? matchup.week)
                       ? "bg-[#00ceb8] text-[#0d1722]"
                       : "text-[#e2e8f0] hover:bg-[#202d40]"
                   }`}
@@ -638,6 +243,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* =========================================================================
@@ -660,7 +266,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <img
-                      src={getPlayerHeadshotUrl(lp.name, lp.headshot_url)}
+                      src={getPlayerHeadshotUrl(lp.player_id, lp.headshot_url, lp.espn_id)}
                       alt={lp.name}
                       onError={handleImageError}
                       className="napper-headshot-crop"
@@ -701,10 +307,10 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                   {/* Left Player Scores */}
                   <div className="text-right pl-3 shrink-0">
                     <div className="text-sm font-black text-white font-mono leading-none">
-                      {lp.fpts > 0 ? lp.fpts.toFixed(2) : "-"}
+                      {!lp.is_yet_to_play ? lp.fpts.toFixed(2) : "-"}
                     </div>
                     <div className="text-[11px] text-[#8a99ad] font-mono mt-1 font-medium">
-                      {lp.proj_fpts.toFixed(2)}
+                      {lp.proj_fpts != null ? lp.proj_fpts.toFixed(2) : "—"}
                     </div>
                   </div>
                 </div>
@@ -731,13 +337,13 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                   <div className="text-left pr-3 shrink-0">
                     <div
                       className={`text-sm font-black font-mono leading-none ${
-                        rp.fpts > 0 ? "text-[#00ceb8]" : "text-white"
+                        !rp.is_yet_to_play ? "text-[#00ceb8]" : "text-white"
                       }`}
                     >
-                      {rp.fpts > 0 ? rp.fpts.toFixed(2) : "-"}
+                      {!rp.is_yet_to_play ? rp.fpts.toFixed(2) : "-"}
                     </div>
                     <div className="text-[11px] text-[#8a99ad] font-mono mt-1 font-medium">
-                      {rp.proj_fpts.toFixed(2)}
+                      {rp.proj_fpts != null ? rp.proj_fpts.toFixed(2) : "—"}
                     </div>
                   </div>
 
@@ -774,7 +380,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                       </div>
                     </div>
                     <img
-                      src={getPlayerHeadshotUrl(rp.name, rp.headshot_url)}
+                      src={getPlayerHeadshotUrl(rp.player_id, rp.headshot_url, rp.espn_id)}
                       alt={rp.name}
                       onError={handleImageError}
                       className="napper-headshot-crop"
@@ -833,7 +439,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <img
-                          src={getPlayerHeadshotUrl(lp.name, lp.headshot_url)}
+                          src={getPlayerHeadshotUrl(lp.player_id, lp.headshot_url, lp.espn_id)}
                           alt={lp.name}
                           onError={handleImageError}
                           className="napper-headshot-crop opacity-90"
@@ -852,10 +458,10 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                       </div>
                       <div className="text-right pl-3 shrink-0">
                         <div className="text-xs font-black text-white font-mono leading-none">
-                          {lp.fpts > 0 ? lp.fpts.toFixed(2) : "-"}
+                          {!lp.is_yet_to_play ? lp.fpts.toFixed(2) : "-"}
                         </div>
                         <div className="text-[10px] text-[#8a99ad] font-mono mt-1 font-medium">
-                          {lp.proj_fpts.toFixed(2)}
+                          {lp.proj_fpts != null ? lp.proj_fpts.toFixed(2) : "—"}
                         </div>
                       </div>
                     </div>
@@ -878,10 +484,10 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                     >
                       <div className="text-left pr-3 shrink-0">
                         <div className="text-xs font-black text-white font-mono leading-none">
-                          {rp.fpts > 0 ? rp.fpts.toFixed(2) : "-"}
+                          {!rp.is_yet_to_play ? rp.fpts.toFixed(2) : "-"}
                         </div>
                         <div className="text-[10px] text-[#8a99ad] font-mono mt-1 font-medium">
-                          {rp.proj_fpts.toFixed(2)}
+                          {rp.proj_fpts != null ? rp.proj_fpts.toFixed(2) : "—"}
                         </div>
                       </div>
                       <div className="flex items-center justify-end gap-3 min-w-0 flex-1">
@@ -897,7 +503,7 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
                           </div>
                         </div>
                         <img
-                          src={getPlayerHeadshotUrl(rp.name, rp.headshot_url)}
+                          src={getPlayerHeadshotUrl(rp.player_id, rp.headshot_url, rp.espn_id)}
                           alt={rp.name}
                           onError={handleImageError}
                           className="napper-headshot-crop opacity-90"

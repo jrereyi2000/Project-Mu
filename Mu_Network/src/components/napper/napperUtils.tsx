@@ -1,4 +1,5 @@
 import React from "react";
+import { API_BASE } from "../../api";
 
 // Known ESPN player IDs for headshots
 export const ESPN_PLAYER_IDS: Record<string, string> = {
@@ -41,30 +42,46 @@ export const ESPN_PLAYER_IDS: Record<string, string> = {
 };
 
 export const DEFAULT_AVATAR = "https://sleepercdn.com/images/v2/icons/player_default.webp";
+const HEADSHOT_VERSION = "2026-10-12-crop";
+const HEADSHOT_FALLBACKS = new Map<string, string>();
 
-export function getPlayerHeadshotUrl(nameOrId?: string | number, fallbackUrl?: string): string {
-  if (fallbackUrl && fallbackUrl.startsWith("http") && !fallbackUrl.includes("placeholder")) {
-    return fallbackUrl;
+export function getPlayerHeadshotUrl(nameOrId?: string | number, fallbackUrl?: string, espnId?: number | string | null): string {
+  const name = typeof nameOrId === "string" ? nameOrId.trim().toLowerCase() : "";
+  const playerEspnId = espnId || ESPN_PLAYER_IDS[name];
+  let localFallback = fallbackUrl;
+  if (!localFallback && typeof nameOrId === "number") {
+    localFallback = `/static/players/${nameOrId}.webp`;
+  } else if (!localFallback && typeof nameOrId === "string" && /^\d+$/.test(nameOrId.trim())) {
+    localFallback = `/static/players/${nameOrId.trim()}.webp`;
+  }
+  if (localFallback && localFallback.startsWith("/") && !localFallback.includes("placeholder")) {
+    const url = `${API_BASE}${localFallback}`;
+    localFallback = `${url}${url.includes("?") ? "&" : "?"}v=${HEADSHOT_VERSION}`;
+  }
+  if (playerEspnId) {
+    const espnUrl = `https://a.espncdn.com/i/headshots/nfl/players/full/${playerEspnId}.png`;
+    if (localFallback) HEADSHOT_FALLBACKS.set(new URL(espnUrl, window.location.href).href, localFallback);
+    return espnUrl;
+  }
+  if (fallbackUrl && !fallbackUrl.includes("placeholder") && !fallbackUrl.includes("player_default")) {
+    if (localFallback) return localFallback;
+    const url = fallbackUrl;
+    return `${url}${url.includes("?") ? "&" : "?"}v=${HEADSHOT_VERSION}`;
   }
   if (nameOrId === undefined || nameOrId === null) return DEFAULT_AVATAR;
-  if (typeof nameOrId === "number") {
-    return `/static/players/${nameOrId}.webp`;
-  }
-  const str = String(nameOrId).trim();
-  if (!str) return DEFAULT_AVATAR;
-  if (/^\d+$/.test(str)) {
-    return `/static/players/${str}.webp`;
-  }
-  const clean = str.toLowerCase();
-  const espnId = ESPN_PLAYER_IDS[clean];
-  if (espnId) {
-    return `https://a.espncdn.com/i/headshots/nfl/players/full/${espnId}.png`;
-  }
+  if (localFallback) return localFallback;
   return DEFAULT_AVATAR;
 }
 
 export function handleImageError(e: React.SyntheticEvent<HTMLImageElement>) {
   const img = e.currentTarget;
+  const key = new URL(img.src, window.location.href).href;
+  const fallback = HEADSHOT_FALLBACKS.get(key);
+  if (fallback && img.dataset.headshotFallback !== "tried") {
+    img.dataset.headshotFallback = "tried";
+    img.src = fallback;
+    return;
+  }
   if (img.src !== DEFAULT_AVATAR) {
     img.src = DEFAULT_AVATAR;
   }

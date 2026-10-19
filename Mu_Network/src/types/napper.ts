@@ -57,6 +57,7 @@ export interface NapperStarterPlayer {
   id: number;
   player_id: number;
   name: string;
+  espn_id?: number | string | null;
   position: string;
   team: string;
   opponent?: string;
@@ -64,7 +65,7 @@ export interface NapperStarterPlayer {
   game_status?: string;
   headshot_url: string;
   fpts: number;
-  proj_fpts: number;
+  proj_fpts: number | null;
   is_yet_to_play: boolean;
   injury_status?: string | null;
 }
@@ -112,6 +113,7 @@ export interface NapperChatMessage {
     subtitle: string;
     player?: {
       name: string;
+      espn_id?: number | string | null;
       position: string;
       team: string;
       stats: string;
@@ -146,35 +148,37 @@ export interface NapperTradeOffer {
 export interface NapperWaiverPlayer {
   player_id: number;
   name: string;
+  espn_id?: number | string | null;
   position: string;
   team: string;
   opponent?: string;
-  matchup_stars?: number;
-  proj_fpts: number;
-  avg_fpts: number;
+  kickoff?: string;
+  matchup_stars?: number | null;
+  proj_fpts: number | null;
+  avg_fpts: number | null;
   ros_rank?: string;
-  rostered_pct: number;
+  rostered_pct: number | null;
   headshot_url: string;
 }
 
 export interface NapperDraftPlayer {
   player_id: number;
+  espn_id?: number | string | null;
   name: string;
   position: "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | string;
   team: string;
-  bye: number;
-  age: number;
-  ros_pct: number;
-  adp: number;
-  adp_rank: number;
-  proj_pts: number;
-  proj_avg: number;
-  rush_att?: number;
-  rush_yds?: number;
-  rush_td?: number;
-  rec?: number;
-  rec_yds?: number;
-  rec_td?: number;
+  bye: number | null;
+  age: number | null;
+  adp: number | null;
+  adp_rank: number | null;
+  proj_pts: number | null;
+  proj_avg: number | null;
+  rush_att?: number | null;
+  rush_yds?: number | null;
+  rush_td?: number | null;
+  rec?: number | null;
+  rec_yds?: number | null;
+  rec_td?: number | null;
   pass_yds?: number;
   pass_td?: number;
   int?: number;
@@ -358,6 +362,18 @@ export const ARCHETYPE_METAS: Record<NapperManagerArchetype, ArchetypeMeta> = {
   },
 };
 
+export function getArchetypeMeta(persona?: string | null): ArchetypeMeta {
+  if (!persona) return ARCHETYPE_METAS.ANALYTICS_NERD;
+  const key = persona.toUpperCase().replace(/\s+/g, "_") as NapperManagerArchetype;
+  if (ARCHETYPE_METAS[key]) {
+    return ARCHETYPE_METAS[key];
+  }
+  if (key === ("ZERO_RB" as any)) return ARCHETYPE_METAS.ZERO_RB_ZEALOT;
+  if (key === ("ROBUST_RB" as any)) return ARCHETYPE_METAS.RB_HEAVY;
+  if (key === ("ANALYTICS" as any)) return ARCHETYPE_METAS.ANALYTICS_NERD;
+  return ARCHETYPE_METAS.ANALYTICS_NERD;
+}
+
 export interface NapperDraftComment {
   id: string;
   sender_name: string;
@@ -379,6 +395,8 @@ export interface NapperDraftState {
   title: string;
   teams_count: number;
   rounds_count: number;
+  scoring_type?: string;
+  settings?: { is_superflex?: boolean; [key: string]: unknown };
   seconds_per_pick: number;
   status: "NOT_STARTED" | "IN_PROGRESS" | "PAUSED" | "COMPLETED";
   current_pick_index: number; // 0 to (teams_count * rounds_count - 1)

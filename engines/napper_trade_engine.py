@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import random
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import psycopg
@@ -124,7 +125,7 @@ def ensure_napper_tables_exist(conn) -> None:
                 season INT DEFAULT 2035,
                 teams_count SMALLINT DEFAULT 8,
                 scoring_type VARCHAR(16) DEFAULT 'PPR',
-                roster_format JSONB DEFAULT '{"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6}'::jsonb,
+                roster_format JSONB DEFAULT '{"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6}'::jsonb,
                 current_week INT DEFAULT 1,
                 status VARCHAR(16) DEFAULT 'IN_SEASON',
                 avatar_url TEXT
@@ -838,7 +839,7 @@ def process_ai_to_ai_trades(
                 FROM napper_trades t
                 JOIN napper_teams tp ON t.proposer_team_id = tp.id
                 JOIN napper_teams tt ON t.target_team_id = tt.id
-                WHERE t.league_id = %s AND t.status = 'PENDING' AND tp.is_ai = TRUE AND tt.is_ai = TRUE
+                WHERE t.league_id = %s AND t.status = 'PENDING' AND tt.is_ai = TRUE
                 """,
                 (league_id,),
             )
@@ -919,12 +920,21 @@ def process_ai_to_ai_trades(
                 )
                 current_counts = {POS_NORMALIZATION.get(row[0], "WR"): row[1] for row in cur.fetchall()}
 
-                # Tally positions being sent away
-                leaves_orphan_starter = False
+                # Tally positions being sent away and received
+                outgoing_by_pos: Dict[str, int] = defaultdict(int)
                 for r in req_players:
-                    norm_pos = POS_NORMALIZATION.get(r[2], "WR")
-                    req_start = roster_req.get(norm_pos, 1)
-                    if current_counts.get(norm_pos, 0) - 1 < req_start:
+                    outgoing_by_pos[POS_NORMALIZATION.get(r[2], "WR")] += 1
+
+                incoming_by_pos: Dict[str, int] = defaultdict(int)
+                for r in off_players:
+                    incoming_by_pos[POS_NORMALIZATION.get(r[2], "WR")] += 1
+
+                leaves_orphan_starter = False
+                for pos, out_cnt in outgoing_by_pos.items():
+                    req_start = roster_req.get(pos, 1)
+                    in_cnt = incoming_by_pos.get(pos, 0)
+                    net_remaining = current_counts.get(pos, 0) - out_cnt + in_cnt
+                    if net_remaining < req_start:
                         leaves_orphan_starter = True
                         break
 

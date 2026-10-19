@@ -164,6 +164,15 @@
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
+.napper-league-matchup-card {
+  padding: 12px 20px;
+  border-radius: 16px;
+}
+
+.napper-league-matchup-gauge {
+  margin-top: 8px;
+}
+
 .napper-winprob-track {
   width: 100%;
   height: 6px;
@@ -422,4 +431,109 @@
   background-color: #22c55e;
   display: inline-block;
   animation: napper-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.napper-player-modal { position: fixed; z-index: 500; inset: 0; padding: 24px; display: grid; place-items: center; }
+.napper-player-modal .fantasy-modal-scrim { background: rgba(3, 8, 16, .82); backdrop-filter: blur(7px); }
+.napper-player-modal .napper-player-dialog { width: min(1080px, 100%); max-height: calc(100vh - 48px); overflow: auto; color: #e2e8f0; background: #121926; border: 1px solid #2b3a51; border-radius: 16px; box-shadow: 0 30px 90px #0009; scrollbar-color: #34465f #121926; }
+.napper-player-modal .fantasy-modal-close { color: #d7e2ee; background: #12192699; border-color: #ffffff45; }
+.napper-player-modal .fantasy-modal-close:hover { color: #fff; background: #00ceb833; }
+.napper-player-modal .napper-player-hero { min-height: 300px; grid-template-columns: 270px minmax(0, 1fr) 110px; color: #f8fafc; background-color: #172333; background-image: radial-gradient(circle at 15% 95%, #00ceb81c 0 22%, transparent 22%), linear-gradient(120deg, #1b2b40, #121926); }
+.napper-player-modal .fantasy-modal-portrait { min-height: 300px; }
+.napper-player-modal .fantasy-modal-portrait > span { border-color: #00ceb817; }
+.napper-player-modal .fantasy-modal-portrait img { width: 245px; max-height: 285px; object-fit: contain; }
+.napper-player-modal .fantasy-modal-identity { min-width: 0; padding: 45px 20px 30px 8px; }
+.napper-player-modal .fantasy-modal-identity h2 { color: #f8fafc; font-size: 42px; line-height: 1; letter-spacing: -.04em; }
+.napper-player-modal .fantasy-modal-bio { flex-wrap: wrap; color: #a9b8ca; }
+.napper-player-modal .fantasy-modal-bio strong, .napper-player-modal .fantasy-modal-bio b { color: #e2e8f0; font-size: 12px; }
+.napper-player-modal .fantasy-modal-bio span { color: #91a2b8; font-size: 11px; }
+.napper-player-modal .fantasy-modal-metrics { border-color: #ffffff2b; background: #08111d70; }
+.napper-player-modal .fantasy-modal-metrics > div { border-color: #ffffff20; }
+.napper-player-modal .fantasy-modal-metrics small { color: #91a2b8; font-size: 8px; }
+.napper-player-modal .fantasy-modal-metrics strong { color: #e2e8f0; font-size: 17px; }
+.napper-player-modal .fantasy-modal-metrics .napper-projection-value { color: #00ceb8; }
+.napper-player-modal .napper-modal-team { padding-top: 62px; }
+.napper-player-modal .fantasy-modal-team img { background: #fff; }
+.napper-player-modal .fantasy-modal-team span { color: #00ceb8; background: #00ceb81a; border-color: #00ceb84d; }
+.napper-player-modal .fantasy-modal-tabs { min-height: 63px; top: 0; background: #151f2d; border-color: #283850; box-shadow: 0 5px 18px #0002; }
+.napper-player-modal .fantasy-modal-tabs button, .napper-player-modal .fantasy-modal-tabs a { color: #91a2b8; font-size: 11px; }
+.napper-player-modal .fantasy-modal-tabs button:hover { color: #00ceb8; }
+.napper-player-modal .fantasy-modal-tabs button.active { color: #00ceb8; background: #00ceb817; box-shadow: 0 3px 10px #0002; }
+.napper-player-modal .fantasy-modal-tabs a { color: #00ceb8; }
+.napper-player-modal .fantasy-modal-content { min-height: 410px; padding: 34px; color: #e2e8f0; background: #121926; }
+.napper-player-modal .fantasy-modal-section-head { align-items: flex-end; }
+.napper-player-modal .fantasy-modal-section-head span { color: #00ceb8; font-size: 8px; }
+.napper-player-modal .fantasy-modal-section-head h3 { color: #f1f5f9; font-size: 24px; }
+.napper-player-modal .fantasy-modal-section-head > b { color: #8a99ad; font-size: 8px; }
+.napper-player-modal .fantasy-modal-log, .napper-player-modal .fantasy-modal-season-section, .napper-player-modal .fantasy-matchup-outlook { border-color: #283850; }
+.napper-player-modal .fantasy-modal-content > section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+.napper-player-modal .fantasy-expert-avatar > span { color: #0b171f; border-color: #00ceb8; background: #00ceb8; }
+.napper-player-modal .fantasy-expert-avatar strong { color: #e2e8f0; font-size: 13px; }
+.napper-player-modal .fantasy-expert-avatar small { color: #8a99ad; font-size: 9px; }
+.napper-player-modal .fantasy-expert-note > div:last-child > span { color: #00ceb8; font-size: 8px; }
+.napper-player-modal .fantasy-expert-note h3 { color: #f1f5f9; font-size: 25px; }
+.napper-player-modal .fantasy-expert-note p { color: #a9b8ca; font-size: 13px; line-height: 1.65; }
+.napper-player-modal .napper-player-news { min-height: 190px; }
+.napper-player-modal .napper-player-more-news { display: grid; gap: 9px; margin-top: 18px; }
+.napper-player-modal .napper-player-more-news article { padding: 12px 14px; background: #1a2332; border: 1px solid #283850; border-radius: 9px; }
+.napper-player-modal .napper-player-more-news small { color: #00ceb8; font-size: 8px; font-weight: 800; letter-spacing: .08em; }
+.napper-player-modal .napper-player-more-news strong { display: block; margin-top: 5px; color: #e2e8f0; font-size: 13px; }
+.napper-player-modal .napper-player-more-news p { margin-top: 5px; font-size: 11px; }
+.napper-player-modal .fantasy-season-groups { color: #d3deeb; }
+.napper-player-modal .fantasy-season-labels { color: #8a99ad; }
+.napper-player-modal .fantasy-season-values strong { color: #d7e1ed; background: #1a2332; border-color: #283850; }
+.napper-player-modal .fantasy-season-values strong.stat-highlight, .napper-player-modal .fantasy-season-values strong.napper-fpts-highlight { color: #00ceb8; background: #00ceb81c; }
+.napper-player-modal .fantasy-season-values strong.napper-season-points { color: #38bdf8; background: #38bdf81a; }
+.napper-player-modal .fantasy-season-values-wrap.expanded { scrollbar-color: #00ceb8 #202d40; }
+.napper-player-modal .fantasy-more-seasons { color: #00ceb8; background: #1a2332; }
+.napper-player-modal .fantasy-more-seasons:hover { color: #f8fafc; background: #202d40; }
+.napper-player-modal .fantasy-matchup-card { color: #e2e8f0; border-color: #283850; background: #1a2332; }
+.napper-player-modal .napper-outlook-banner { border-color: #00ceb8; background: linear-gradient(112deg, #142c3a 0 49.8%, #182a41 50.2%); }
+.napper-player-modal .fantasy-matchup-banner:before, .napper-player-modal .fantasy-matchup-banner:after { color: #ffffff08; }
+.napper-player-modal .fantasy-matchup-banner small { color: #7ce8d8; }
+.napper-player-modal .fantasy-matchup-banner > i { color: #00ceb8; }
+.napper-player-modal .fantasy-kickoff > span { background: #34465f; }
+.napper-player-modal .fantasy-kickoff strong { color: #d7e1ed; }
+.napper-player-modal .fantasy-outlook-metrics { border-color: #283850; }
+.napper-player-modal .fantasy-outlook-metrics > div { border-color: #283850; }
+.napper-player-modal .fantasy-outlook-metrics strong { color: #e2e8f0; }
+.napper-player-modal .fantasy-outlook-metrics > div > span { color: #8a99ad; }
+.napper-player-modal .fantasy-outlook-metrics .fantasy-stars { color: #f4c95d; }
+.napper-player-modal .fantasy-stars i { color: #3a4960; }
+.napper-player-modal .napper-estimate-note, .napper-player-modal .napper-bye-copy { margin: 10px 0; color: #91a2b8; text-align: center; font-size: 12px; }
+.napper-player-modal .napper-player-empty { padding: 30px 14px; color: #8a99ad; background: #1a2332; border: 1px solid #283850; border-radius: 10px; text-align: center; font-size: 13px; }
+.napper-player-modal .napper-player-loading { min-height: 180px; display: grid; place-content: center; text-align: center; }
+.napper-player-modal .napper-player-loading p { color: #00ceb8; font-weight: 700; }
+.napper-player-modal .napper-player-dialog .fantasy-modal-tabs button.active { color: #00ceb8; background: #00ceb817; }
+.napper-player-modal .napper-player-dialog .fantasy-modal-tabs button:hover, .napper-player-modal .napper-player-dialog .fantasy-modal-tabs a { color: #00ceb8; }
+.napper-player-modal .napper-player-dialog .fantasy-modal-section-head h3 { color: #f1f5f9; }
+.napper-player-modal .napper-player-dialog .fantasy-expert-note h3 { color: #f1f5f9; }
+.napper-player-modal .napper-player-dialog .fantasy-expert-note p { color: #a9b8ca; }
+.napper-player-modal .napper-player-dialog .fantasy-modal-metrics strong { color: #e2e8f0; }
+.napper-player-modal .napper-player-dialog .fantasy-season-groups { color: #d3deeb; }
+.napper-player-modal .napper-player-dialog .fantasy-season-labels { color: #8a99ad; }
+.napper-player-modal .napper-player-dialog .fantasy-season-values strong { color: #d7e1ed; background: #1a2332; border-color: #283850; }
+.napper-player-modal .napper-player-dialog .fantasy-season-values strong.stat-highlight { color: #00ceb8; background: #00ceb81c; }
+.napper-player-modal .napper-player-dialog .fantasy-season-values strong.napper-fpts-highlight { color: #00ceb8; background: #00ceb81c; }
+.napper-player-modal .napper-player-dialog .fantasy-season-values strong.napper-season-points { color: #38bdf8; background: #38bdf81a; }
+.napper-player-modal .napper-player-dialog .fantasy-more-seasons { color: #00ceb8; background: #1a2332; }
+.napper-player-modal .napper-player-dialog .fantasy-more-seasons:hover { color: #f8fafc; background: #202d40; }
+.napper-player-modal .napper-player-dialog .fantasy-matchup-card { color: #e2e8f0; border-color: #283850; background: #1a2332; }
+.napper-player-modal .napper-player-dialog .fantasy-kickoff strong { color: #d7e1ed; }
+.napper-player-modal .napper-player-dialog .fantasy-outlook-metrics strong { color: #e2e8f0; }
+.napper-player-modal .napper-player-dialog .fantasy-outlook-metrics > div > span { color: #8a99ad; }
+@media (max-width: 800px) {
+  .napper-player-modal { padding: 12px; }
+  .napper-player-modal .napper-player-dialog { max-height: calc(100vh - 24px); }
+  .napper-player-modal .napper-player-hero { min-height: 360px; grid-template-columns: 130px minmax(0, 1fr); }
+  .napper-player-modal .fantasy-modal-portrait { min-height: 210px; align-self: end; }
+  .napper-player-modal .fantasy-modal-portrait img { width: 150px; max-height: 200px; }
+  .napper-player-modal .fantasy-modal-identity { padding: 58px 48px 22px 5px; }
+  .napper-player-modal .fantasy-modal-identity h2 { font-size: 34px; }
+  .napper-player-modal .fantasy-modal-bio { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .napper-player-modal .fantasy-modal-bio i { display: none; }
+  .napper-player-modal .fantasy-modal-metrics { grid-column: 1 / 3; min-height: 72px; }
+  .napper-player-modal .fantasy-modal-team { display: none; }
+  .napper-player-modal .fantasy-modal-content { padding: 24px 20px; }
+  .napper-player-modal .fantasy-expert-note { grid-template-columns: 1fr; gap: 20px; }
+  .napper-player-modal .fantasy-expert-avatar { align-items: flex-start; text-align: left; }
 }

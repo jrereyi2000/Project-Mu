@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import type { NapperDraftState, NapperDraftPick } from "../../../types/napper";
-import { ARCHETYPE_METAS } from "../../../types/napper";
+import { ARCHETYPE_METAS, getArchetypeMeta } from "../../../types/napper";
 import { getPlayerHeadshotUrl, handleImageError } from "../napperUtils";
 
 interface DraftBoardGridProps {
@@ -107,8 +107,7 @@ export const DraftBoardGrid: React.FC<DraftBoardGridProps> = ({
               const team = teams.find((t) => t.slot === slotNum);
               const isClaimedByMe = user_slot === slotNum;
               const isDraftActive = status === "IN_PROGRESS" || status === "COMPLETED";
-              const persona = team?.persona as any;
-              const meta = persona && (persona in ARCHETYPE_METAS) ? (ARCHETYPE_METAS as any)[persona] : null;
+              const meta = getArchetypeMeta(team?.persona);
 
               return (
                 <div key={`col-head-${slotNum}`} className="draft-team-header-cell">

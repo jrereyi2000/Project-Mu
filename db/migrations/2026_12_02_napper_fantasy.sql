@@ -13,10 +13,10 @@ CREATE TABLE IF NOT EXISTS napper_user_profiles (
 CREATE TABLE IF NOT EXISTS napper_leagues (
     id SERIAL PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
-    season INT DEFAULT 2035,
+    season INT NOT NULL,
     teams_count INT NOT NULL,
     scoring_type VARCHAR(16) DEFAULT 'PPR',
-    roster_format JSONB NOT NULL DEFAULT '{"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 1, "K": 1, "DEF": 1, "BN": 6}'::jsonb,
+    roster_format JSONB NOT NULL DEFAULT '{"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6}'::jsonb,
     status VARCHAR(16) DEFAULT 'IN_SEASON',
     avatar_url TEXT,
     current_week INT DEFAULT 1,
@@ -101,7 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_napper_chat_league ON napper_chat(league_id, crea
 CREATE TABLE IF NOT EXISTS napper_drafts (
     id SERIAL PRIMARY KEY,
     league_id INT REFERENCES napper_leagues(id) ON DELETE CASCADE,
-    season INT DEFAULT 2035,
+    season INT NOT NULL,
     rounds INT DEFAULT 15,
     teams_count INT DEFAULT 10,
     scoring_type VARCHAR(16) DEFAULT 'PPR',

@@ -13,6 +13,7 @@ interface DraftRosterQueueProps {
   comments: NapperDraftComment[];
   isUserOnClock: boolean;
   onDraftPlayer: (player: NapperDraftPlayer) => void;
+  onSelectPlayer?: (player: NapperDraftPlayer) => void;
   onRemoveFromQueue: (playerId: number) => void;
   onMoveQueueItem: (index: number, direction: "UP" | "DOWN") => void;
   onSendChatMessage: (text: string) => void;
@@ -25,6 +26,7 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
   comments,
   isUserOnClock,
   onDraftPlayer,
+  onSelectPlayer,
   onRemoveFromQueue,
   onMoveQueueItem,
   onSendChatMessage,
@@ -233,14 +235,19 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
                     </div>
 
                     {item.player ? (
-                      <div className="flex flex-col">
-                        <span className="draft-slot-filled-name">
+                      <button
+                        type="button"
+                        className="flex flex-col text-left cursor-pointer group"
+                        onClick={() => onSelectPlayer?.(item.player!)}
+                        title={`View ${item.player.name}`}
+                      >
+                        <span className="draft-slot-filled-name group-hover:text-[#00ceb8]">
                           {item.player.name}
                         </span>
                         <span className="draft-slot-filled-meta">
-                          {item.player.team} • Bye {item.player.bye}
+                          {item.player.team} • Bye {item.player.bye ?? "—"}
                         </span>
-                      </div>
+                      </button>
                     ) : (
                       <span className="draft-slot-empty-label">Empty</span>
                     )}
@@ -248,7 +255,7 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
 
                   {item.player && (
                     <div className="draft-slot-filled-pts">
-                      {item.player.proj_pts.toFixed(1)} <span className="text-[9px] text-[#64748b]">pts</span>
+                      {item.player.proj_pts == null ? "—" : item.player.proj_pts.toFixed(1)} <span className="text-[9px] text-[#64748b]">pts</span>
                     </div>
                   )}
                 </div>
@@ -293,12 +300,19 @@ export const DraftRosterQueue: React.FC<DraftRosterQueueProps> = ({
                       {player.position}
                     </span>
                     <div className="min-w-0 truncate">
-                      <div className="text-xs font-bold text-white truncate">
-                        {player.name}
-                      </div>
-                      <div className="text-[10px] text-[#64748b]">
-                        {player.team} • ADP {player.adp.toFixed(1)} • {player.proj_pts.toFixed(1)} pts
-                      </div>
+                      <button
+                        type="button"
+                        className="block text-left truncate cursor-pointer group"
+                        onClick={() => onSelectPlayer?.(player)}
+                        title={`View ${player.name}`}
+                      >
+                        <div className="text-xs font-bold text-white group-hover:text-[#00ceb8] truncate">
+                          {player.name}
+                        </div>
+                        <div className="text-[10px] text-[#64748b]">
+                          {player.team} • ADP {player.adp == null ? "—" : player.adp.toFixed(1)} • {player.proj_pts == null ? "—" : player.proj_pts.toFixed(1)} pts
+                        </div>
+                      </button>
                     </div>
                   </div>
 

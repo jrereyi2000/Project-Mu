@@ -31,14 +31,14 @@ def get_db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
-def get_previous_season(cur) -> int:
+def get_current_season(cur) -> int:
     cur.execute("SELECT current_season FROM league_state WHERE id = 1")
     row = cur.fetchone()
     if row:
         cs = row["current_season"] if isinstance(row, dict) else row[0]
         if cs:
-            return int(cs) - 1
-    return 2035
+            return int(cs)
+    raise RuntimeError("The active NFL season is not configured in league_state")
 
 
 ARCHETYPE_MANAGERS = {
@@ -64,7 +64,7 @@ ARCHETYPE_MANAGERS = {
         {"name": "Expected Points HQ", "handle": "@xFP_Metrics", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
     ],
     "TRASH_TALKER": [
-        {"name": "Gridiron Dominance", "handle": "@Champ2035", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
+        {"name": "Gridiron Dominance", "handle": "@GridironDominance", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
         {"name": "Smashmouth Crew", "handle": "@HeavyHitter", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
         {"name": "Trophy Chasers", "handle": "@RingCollector", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
         {"name": "No Fear Fantasy", "handle": "@SwaggerKing", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
@@ -133,7 +133,7 @@ DEFAULT_MOCK_MANAGERS = [
     {"name": "Data Analytics", "handle": "@DataDog", "persona": "ANALYTICS_NERD", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Trade Block Titans", "handle": "@BlockBuster", "persona": "TRADE_FIEND", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Sleeper Syndicate", "handle": "@SleeperSteve", "persona": "UNDERDOG", "avatar": "/static/players/robot_avatar.webp"},
-    {"name": "Gridiron Dominance", "handle": "@Champ2035", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
+    {"name": "Gridiron Dominance", "handle": "@GridironDominance", "persona": "TRASH_TALKER", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Hero RB Squad", "handle": "@AnchorBack", "persona": "HERO_RB", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Waiver Wire Kings", "handle": "@WireHawk", "persona": "WAIVER_HAWK", "avatar": "/static/players/robot_avatar.webp"},
     {"name": "Franchise DieHards", "handle": "@DieHardFan", "persona": "DIE_HARD", "avatar": "/static/players/robot_avatar.webp"},
@@ -191,82 +191,13 @@ def build_ai_managers(
 
 
 def ensure_defenses_exist(cur):
-    """Ensures all 32 NFL team defenses exist in players and player_seasons for drafting."""
-    prev_season = get_previous_season(cur)
-    cur.execute("SELECT COUNT(*) as cnt FROM fantasy_projections WHERE season = %s AND position = 'DEF' AND adp_rank IS NOT NULL", (prev_season,))
-    row = cur.fetchone()
-    if row and (row["cnt"] if isinstance(row, dict) else row[0]) >= 32:
-        return
-
-    cur.execute("SELECT id, name, abbreviation FROM teams ORDER BY id")
-    nfl_teams = cur.fetchall()
-    for tm in nfl_teams:
-        p_name = f"{tm['abbreviation']} Defense"
-        f_name = f"{tm['name']} D/ST"
-        cur.execute("SELECT id FROM players WHERE player_name = %s OR full_name = %s LIMIT 1", (p_name, f_name))
-        row = cur.fetchone()
-        if not row:
-            cur.execute("""
-                INSERT INTO players (player_name, full_name, espn_id, player_number)
-                VALUES (%s, %s, %s, 0)
-                RETURNING id
-            """, (p_name, f_name, 99000 + tm["id"]))
-            p_id = cur.fetchone()["id"]
-        else:
-            p_id = row["id"]
-
-        for s in (prev_season, prev_season + 1):
-            cur.execute("""
-                INSERT INTO player_seasons (player_id, team_id, season, position, age, overall_rating)
-                VALUES (%s, %s, %s, 'DEF', 28, 83)
-                ON CONFLICT (player_id, season) DO NOTHING
-            """, (p_id, tm["id"], s))
-
-            for wk in range(1, 19):
-                cur.execute("""
-                    INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position, adp_rank)
-                    VALUES (%s, %s, %s, %s, %s, 7.5, 'DEF', %s)
-                    ON CONFLICT (season, week, player_id) DO UPDATE SET
-                        adp_rank = EXCLUDED.adp_rank,
-                        projected_points = EXCLUDED.projected_points,
-                        position = EXCLUDED.position
-                """, (s, wk, p_id, p_name, tm["id"], 140 + tm["id"]))
+    """Retained for callers; Napper consumes generated season data and never fabricates DST rows."""
+    return
 
 
 def ensure_kickers_exist(cur):
-    """Ensures simulation kickers have baseline fantasy projections and ADP ranks for drafting."""
-    prev_season = get_previous_season(cur)
-    cur.execute("SELECT COUNT(*) as cnt FROM fantasy_projections WHERE season = %s AND position = 'K' AND adp_rank IS NOT NULL", (prev_season,))
-    row = cur.fetchone()
-    if row and (row["cnt"] if isinstance(row, dict) else row[0]) >= 32:
-        return
-
-    for season in (prev_season, prev_season + 1):
-        cur.execute("""
-            SELECT p.id, p.player_name, ps.team_id, COALESCE(ps.overall_rating, 80) as ovr
-            FROM players p
-            JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-            WHERE ps.position = 'K'
-            ORDER BY ps.overall_rating DESC NULLS LAST, p.id ASC
-        """, (season,))
-        kickers = cur.fetchall()
-        for idx, k in enumerate(kickers, start=1):
-            adp = 150 + idx
-            avg_pts = round(7.0 + (float(k["ovr"]) / 99.0) * 2.5, 1)
-            for wk in range(1, 19):
-                ros_total = round(avg_pts * (19 - wk), 1)
-                cur.execute("""
-                    INSERT INTO fantasy_projections (season, week, player_id, player_name, team_id, projected_points, position, adp_rank, avg_points, ros_total_points)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'K', %s, %s, %s)
-                    ON CONFLICT (season, week, player_id) DO UPDATE SET
-                        player_name = EXCLUDED.player_name,
-                        team_id = EXCLUDED.team_id,
-                        projected_points = EXCLUDED.projected_points,
-                        position = EXCLUDED.position,
-                        adp_rank = EXCLUDED.adp_rank,
-                        avg_points = EXCLUDED.avg_points,
-                        ros_total_points = EXCLUDED.ros_total_points
-                """, (season, wk, k["id"], k["player_name"], k["team_id"], avg_pts, adp, avg_pts, ros_total))
+    """Retained for callers; kicker projections and ADP must come from the fantasy engines."""
+    return
 
 
 def create_draft_session(
@@ -282,6 +213,9 @@ def create_draft_session(
     settings: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Initializes a new draft session and pre-populates all snake pick slots."""
+    if league_id is None and is_mock:
+        raise ValueError("Standalone mock drafts are client-side and are not persisted")
+
     if settings is None:
         settings = {}
 
@@ -302,7 +236,7 @@ def create_draft_session(
             ensure_defenses_exist(cur)
             ensure_kickers_exist(cur)
 
-            is_superflex = settings.get("is_superflex", "SUPERFLEX" in scoring_type.upper() or scoring_type.upper() == "PPR")
+            is_superflex = bool(settings.get("is_superflex", False))
             settings["is_superflex"] = is_superflex
 
             teams_info = []
@@ -316,6 +250,9 @@ def create_draft_session(
 
                 teams_count = league["teams_count"] or teams_count
                 scoring_type = league["scoring_type"] or scoring_type
+                roster_format = league["roster_format"] or {}
+                is_superflex = int(roster_format.get("SUPERFLEX", 0) or 0) > 0
+                settings["is_superflex"] = is_superflex
 
                 cur.execute("""
                     SELECT id, team_name, manager_handle, avatar_url, is_ai, persona,
@@ -408,7 +345,7 @@ def create_draft_session(
 
             settings["teams_info"] = teams_info
 
-            prev_season = get_previous_season(cur)
+            current_season = get_current_season(cur)
 
             # Insert draft record
             cur.execute("""
@@ -420,7 +357,7 @@ def create_draft_session(
                           status, current_round, current_pick, is_mock, user_slot, settings, created_at
             """, (
                 league_id,
-                prev_season,
+                current_season,
                 rounds,
                 teams_count,
                 scoring_type,
@@ -476,6 +413,8 @@ def get_draft_state(draft_id: int) -> Dict[str, Any]:
             draft = cur.fetchone()
             if not draft:
                 raise ValueError(f"Draft {draft_id} not found")
+            if int(draft["season"]) != get_current_season(cur):
+                raise ValueError("This draft belongs to an old NFL season and must be restarted")
 
             total_picks = draft["rounds"] * draft["teams_count"]
             current_pick = draft["current_pick"]
@@ -485,26 +424,26 @@ def get_draft_state(draft_id: int) -> Dict[str, Any]:
             settings = draft["settings"] or {}
             teams_info = settings.get("teams_info", [])
 
-            prev_season = get_previous_season(cur)
+            current_season = get_current_season(cur)
 
             # Fetch all picks with drafted player details
             cur.execute("""
                 SELECT dp.id, dp.round_num, dp.pick_num, dp.overall_pick, dp.slot_num,
                        dp.team_id, dp.team_name, dp.player_id, dp.picked_by, dp.pick_notes,
-                       p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
-                       COALESCE(t.abbreviation, 'NFL') as team_abbr,
-                       COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
-                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg,
-                       COALESCE(fp.adp_rank, 150) as adp_rank
+                       p.player_name, p.full_name, ps.position,
+                       t.abbreviation as team_abbr,
+                       fp.ros_total_points as projected_points,
+                       fp.projected_points as ppg,
+                       fp.adp_rank
                 FROM napper_draft_picks dp
                 LEFT JOIN players p ON p.id = dp.player_id
                 LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                LEFT JOIN teams t ON t.id = ps.team_id
+                JOIN teams t ON t.id = ps.team_id
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
                 LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
                 WHERE dp.draft_id = %s
                 ORDER BY dp.overall_pick ASC
-            """, (prev_season, prev_season, prev_season, draft_id))
+            """, (current_season, current_season, current_season, draft_id))
             raw_picks = cur.fetchall()
 
             drafted_player_ids = set()
@@ -519,12 +458,12 @@ def get_draft_state(draft_id: int) -> Dict[str, Any]:
                         "id": rp["player_id"],
                         "name": rp["full_name"] or rp["player_name"],
                         "player_name": rp["player_name"],
-                        "position": rp["position"],
-                        "team": rp["team_abbr"],
+                        "position": rp["position"] or "",
+                        "team": rp["team_abbr"] or "",
                         "headshot_url": f"/static/players/{rp['player_id']}.webp",
-                        "projected_points": float(rp["projected_points"]),
-                        "ppg": float(rp["ppg"]),
-                        "adp": int(rp["adp_rank"]),
+                        "projected_points": float(rp["projected_points"]) if rp["projected_points"] is not None else None,
+                        "ppg": float(rp["ppg"]) if rp["ppg"] is not None else None,
+                        "adp": int(rp["adp_rank"]) if rp["adp_rank"] is not None else None,
                     }
                     roster_by_slot[rp["slot_num"]].append(player_data)
 
@@ -1030,6 +969,8 @@ def make_draft_pick(draft_id: int, player_id: int, picked_by: str = "USER") -> D
             draft = cur.fetchone()
             if not draft:
                 raise ValueError(f"Draft {draft_id} not found")
+            if int(draft["season"]) != get_current_season(cur):
+                raise ValueError("This draft belongs to an old NFL season and must be restarted")
             if draft["status"] != "IN_PROGRESS":
                 raise ValueError(f"Draft is not in progress (current status: {draft['status']})")
 
@@ -1059,24 +1000,25 @@ def make_draft_pick(draft_id: int, player_id: int, picked_by: str = "USER") -> D
             if not active_pick:
                 raise ValueError(f"No active pick found for overall #{current_pick}")
 
-            prev_season = get_previous_season(cur)
+            current_season = get_current_season(cur)
             # Get player info
             cur.execute("""
-                SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
-                       COALESCE(t.abbreviation, 'NFL') as team_abbr,
-                       COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
-                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg,
-                       COALESCE(fp.adp_rank, 150) as adp_rank
+                SELECT p.id, p.player_name, p.full_name, ps.position,
+                       t.abbreviation as team_abbr,
+                       fp.ros_total_points as projected_points,
+                       fp.projected_points as ppg,
+                       fp.adp_rank
                 FROM players p
-                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                 LEFT JOIN teams t ON t.id = ps.team_id
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
                 LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
-                WHERE p.id = %s
-            """, (prev_season, prev_season, prev_season, player_id))
+                WHERE p.id = %s AND ps.team_id IS NOT NULL
+                  AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
+            """, (current_season, current_season, current_season, player_id))
             player = cur.fetchone()
             if not player:
-                raise ValueError(f"Player {player_id} not found")
+                raise ValueError(f"Player {player_id} is not active at an eligible position in the current NFL season")
 
             settings = draft["settings"] or {}
             teams_info = settings.get("teams_info", [])
@@ -1088,8 +1030,8 @@ def make_draft_pick(draft_id: int, player_id: int, picked_by: str = "USER") -> D
                 player_name=p_name,
                 position=player["position"],
                 overall_pick=current_pick,
-                adp_rank=int(player["adp_rank"]),
-                proj=float(player["projected_points"]),
+                adp_rank=int(player["adp_rank"] or 999),
+                proj=float(player["projected_points"] or 0),
                 team_name=active_pick["team_name"],
                 persona=persona,
                 picked_by=picked_by
@@ -1143,6 +1085,8 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
             draft = cur.fetchone()
             if not draft:
                 raise ValueError(f"Draft {draft_id} not found")
+            if int(draft["season"]) != get_current_season(cur):
+                raise ValueError("This draft belongs to an old NFL season and must be restarted")
             if draft["status"] == "PENDING":
                 start_draft(draft_id)
                 cur.execute("SELECT * FROM napper_drafts WHERE id = %s", (draft_id,))
@@ -1170,7 +1114,7 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
             persona = team_meta.get("persona", "AI")
             is_superflex = settings.get("is_superflex", False)
 
-            prev_season = get_previous_season(cur)
+            current_season = get_current_season(cur)
 
             # Count positions already drafted by this team
             cur.execute("""
@@ -1179,7 +1123,7 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                 JOIN player_seasons ps ON ps.player_id = dp.player_id AND ps.season = %s
                 WHERE dp.draft_id = %s AND dp.slot_num = %s AND dp.player_id IS NOT NULL
                 GROUP BY ps.position
-            """, (prev_season, draft_id, slot_num))
+            """, (current_season, draft_id, slot_num))
             pos_counts = {r["pos"]: r["cnt"] for r in cur.fetchall()}
 
             qb_cnt = pos_counts.get("QB", 0)
@@ -1222,22 +1166,23 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
 
             # Fetch top 100 available players by ADP
             cur.execute("""
-                SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
-                       COALESCE(fp.adp_rank, 200) as adp_rank,
-                       COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
-                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg
+                SELECT p.id, p.player_name, p.full_name, ps.position,
+                       fp.adp_rank as adp_rank,
+                       fp.ros_total_points as projected_points,
+                       fp.projected_points as ppg
                 FROM players p
                 JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
-                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
+                JOIN teams t ON t.id = ps.team_id
                 WHERE p.id NOT IN (
                     SELECT player_id FROM napper_draft_picks
                     WHERE draft_id = %s AND player_id IS NOT NULL
                 )
+                AND ps.team_id IS NOT NULL
                 AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
-                ORDER BY COALESCE(fp.adp_rank, 200) ASC, ss.total_fantasy_points DESC NULLS LAST, projected_points DESC
+                ORDER BY fp.adp_rank ASC NULLS LAST, fp.ros_total_points DESC NULLS LAST, p.id ASC
                 LIMIT 100
-            """, (prev_season, prev_season, prev_season, draft_id))
+            """, (current_season, current_season, draft_id))
             candidates = cur.fetchall()
 
             if not candidates:
@@ -1281,8 +1226,8 @@ def simulate_ai_pick(draft_id: int) -> Dict[str, Any]:
                     if norm_pos == "DEF" and need_def == 0:
                         continue
 
-                adp = float(cand["adp_rank"])
-                proj = float(cand["projected_points"])
+                adp = float(cand["adp_rank"]) if cand["adp_rank"] is not None else 999.0
+                proj = float(cand["projected_points"]) if cand["projected_points"] is not None else 0.0
 
                 # Positional Weighting (aligned with fantasy_league_sim POS_WEIGHT: QB 0.4, TE 0.8, RB/WR 1.0)
                 pos_wt = 1.0 if is_superflex and norm_pos == "QB" else {"QB": 0.4, "RB": 1.0, "WR": 1.0, "TE": 0.8, "K": 0.2, "DEF": 0.2}.get(norm_pos, 0.7)
@@ -1419,27 +1364,30 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
             draft = cur.fetchone()
             if not draft:
                 raise ValueError(f"Draft {draft_id} not found")
+            if int(draft["season"]) != get_current_season(cur):
+                raise ValueError("This draft belongs to an old NFL season and must be restarted")
 
             # Mark COMPLETED
             cur.execute("UPDATE napper_drafts SET status = 'COMPLETED' WHERE id = %s", (draft_id,))
 
-            prev_season = get_previous_season(cur)
+            current_season = get_current_season(cur)
 
             # Fetch all picks with drafted player info
             cur.execute("""
                 SELECT dp.overall_pick, dp.slot_num, dp.team_id, dp.team_name, dp.player_id,
-                       p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
-                       COALESCE(NULLIF(ss.total_fantasy_points, 0), NULLIF(fp.ros_total_points, 0), fp.projected_points * 17, 180.0) as projected_points,
-                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points, 10.5) as ppg,
-                       COALESCE(fp.adp_rank, 150) as adp_rank
+                       p.player_name, p.full_name, ps.position,
+                       fp.ros_total_points as projected_points,
+                       fp.projected_points as ppg,
+                       fp.adp_rank
                 FROM napper_draft_picks dp
                 JOIN players p ON p.id = dp.player_id
-                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s AND ps.team_id IS NOT NULL
+                JOIN teams t ON t.id = ps.team_id
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
-                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
                 WHERE dp.draft_id = %s AND dp.player_id IS NOT NULL
+                  AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
                 ORDER BY dp.overall_pick ASC
-            """, (prev_season, prev_season, prev_season, draft_id))
+            """, (current_season, current_season, draft_id))
             picks = cur.fetchall()
 
             # Group by slot
@@ -1452,8 +1400,10 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
             for p in picks:
                 team_picks[p["slot_num"]].append(p)
                 p_name = p["full_name"] or p["player_name"]
-                adp = int(p["adp_rank"])
                 overall = int(p["overall_pick"])
+                if p["adp_rank"] is None:
+                    continue
+                adp = int(p["adp_rank"])
 
                 # Value: fell the most below ADP (overall > adp)
                 val_diff = overall - adp
@@ -1486,7 +1436,7 @@ def finalize_draft(draft_id: int) -> Dict[str, Any]:
             # Calculate team scores & letter grades
             team_scores = []
             for slot_num, p_list in team_picks.items():
-                total_proj = sum(float(x["projected_points"]) for x in p_list)
+                total_proj = sum(float(x["projected_points"]) for x in p_list if x["projected_points"] is not None)
                 positions = {x["position"] for x in p_list}
                 norm_pos = {"RB" if p in ("HB", "FB", "RB") else p for p in positions}
 
@@ -1727,7 +1677,7 @@ def save_draft_as_league(
 
     with get_db() as conn:
         with conn.cursor() as cur:
-            prev_season = get_previous_season(cur)
+            current_season = get_current_season(cur)
 
             # 1. Create league
             cur.execute("""
@@ -1736,7 +1686,7 @@ def save_draft_as_league(
                     status, avatar_url, current_week, is_seed
                 ) VALUES (%s, %s, %s, %s, %s, 'IN_SEASON', %s, 1, FALSE)
                 RETURNING id, name, season, teams_count, scoring_type, status, current_week, avatar_url
-            """, (clean_name, prev_season, actual_teams_count, clean_scoring, psycopg.types.json.Jsonb(roster_format), avatar))
+            """, (clean_name, current_season, actual_teams_count, clean_scoring, psycopg.types.json.Jsonb(roster_format), avatar))
             new_league = cur.fetchone()
             league_id = new_league["id"]
 
@@ -1816,8 +1766,11 @@ def save_draft_as_league(
 
             # 4. Link or Create Draft Record
             if draft_id:
-                cur.execute("SELECT id FROM napper_drafts WHERE id = %s", (draft_id,))
-                if cur.fetchone():
+                cur.execute("SELECT id, season FROM napper_drafts WHERE id = %s", (draft_id,))
+                source_draft = cur.fetchone()
+                if source_draft and int(source_draft["season"]) != current_season:
+                    raise ValueError("Cannot save a draft from an old NFL season")
+                if source_draft:
                     cur.execute("""
                         UPDATE napper_drafts
                         SET league_id = %s, status = 'COMPLETED'
@@ -1835,12 +1788,36 @@ def save_draft_as_league(
                     ) VALUES (%s, %s, 15, %s, %s, 'COMPLETED', 15, %s, FALSE, %s, %s)
                     RETURNING id
                 """, (
-                    league_id, prev_season, actual_teams_count, clean_scoring,
+                    league_id, current_season, actual_teams_count, clean_scoring,
                     actual_teams_count * 15, actual_user_slot, psycopg.types.json.Jsonb({"is_superflex": is_superflex})
                 ))
                 final_draft_id = cur.fetchone()["id"]
 
             # 5. Populate Draft Picks
+            submitted_player_ids = set()
+            for p in picks or []:
+                pid = p.get("player_id") or (p.get("player") or {}).get("player_id")
+                if pid:
+                    submitted_player_ids.add(int(pid))
+            for tm in teams or []:
+                for p in tm.get("roster") or []:
+                    pid = p.get("player_id") or p.get("id")
+                    if pid:
+                        submitted_player_ids.add(int(pid))
+            if submitted_player_ids:
+                cur.execute("""
+                    SELECT ps.player_id
+                    FROM player_seasons ps
+                    JOIN teams nfl_team ON nfl_team.id = ps.team_id
+                    WHERE ps.season = %s
+                      AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
+                      AND ps.player_id = ANY(%s)
+                """, (current_season, list(submitted_player_ids)))
+                eligible_ids = {r["player_id"] for r in cur.fetchall()}
+                invalid_ids = submitted_player_ids - eligible_ids
+                if invalid_ids:
+                    raise ValueError(f"Draft contains players not active at eligible positions in season {current_season}: {sorted(invalid_ids)}")
+
             if picks:
                 for idx, p in enumerate(picks):
                     overall = int(p.get("overall_pick") or p.get("pick_overall") or (idx + 1))
@@ -1878,19 +1855,21 @@ def save_draft_as_league(
                             team_player_lists[t_id].append({
                                 "player_id": pid,
                                 "pos": p.get("position") or p.get("pos"),
-                                "proj": float(p.get("proj_pts", 10.0)),
+                                "proj": p.get("proj_pts"),
                             })
 
             # If team_player_lists is empty, fallback to reading picks from napper_draft_picks
             if not team_player_lists and final_draft_id:
                 cur.execute("""
-                    SELECT dp.slot_num, dp.player_id, COALESCE(ps.position, 'FLEX') as position,
-                           COALESCE(fp.projected_points, 10.0) as proj
+                    SELECT dp.slot_num, dp.player_id, ps.position,
+                           fp.projected_points as proj
                     FROM napper_draft_picks dp
-                    LEFT JOIN player_seasons ps ON ps.player_id = dp.player_id AND ps.season = %s
+                    JOIN player_seasons ps ON ps.player_id = dp.player_id AND ps.season = %s AND ps.team_id IS NOT NULL
+                    JOIN teams nfl_team ON nfl_team.id = ps.team_id
                     LEFT JOIN fantasy_projections fp ON fp.player_id = dp.player_id AND fp.season = %s AND fp.week = 1
                     WHERE dp.draft_id = %s AND dp.player_id IS NOT NULL
-                """, (prev_season, prev_season, final_draft_id))
+                      AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
+                """, (current_season, current_season, final_draft_id))
                 for r in cur.fetchall():
                     s_num = r["slot_num"]
                     t_id = slot_to_team_id.get(s_num)
@@ -1899,19 +1878,21 @@ def save_draft_as_league(
                         team_player_lists[t_id].append({
                             "player_id": r["player_id"],
                             "pos": r["position"],
-                            "proj": float(r["proj"]),
+                            "proj": float(r["proj"]) if r["proj"] is not None else None,
                         })
 
             # Fetch DB metadata for accurate positions
             if all_roster_pids:
 
                 cur.execute("""
-                    SELECT p.id, ps.position, COALESCE(fp.projected_points, 10.0) as proj
+                    SELECT p.id, ps.position, fp.projected_points as proj
                     FROM players p
-                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                    JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s AND ps.team_id IS NOT NULL
+                    JOIN teams nfl_team ON nfl_team.id = ps.team_id
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
                     WHERE p.id = ANY(%s)
-                """, (prev_season, prev_season, list(all_roster_pids)))
+                      AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
+                """, (current_season, current_season, list(all_roster_pids)))
                 player_meta = {r["id"]: r for r in cur.fetchall()}
             else:
                 player_meta = {}
@@ -1921,9 +1902,11 @@ def save_draft_as_league(
                 resolved_players = []
                 for p in p_list:
                     meta = player_meta.get(p["player_id"])
-                    raw_pos = (meta["position"] if meta and meta["position"] else None) or p.get("pos") or "WR"
+                    if not meta:
+                        continue
+                    raw_pos = meta["position"]
                     norm_pos = "RB" if raw_pos in ("HB", "FB", "RB") else raw_pos
-                    proj = float(meta["proj"] if meta and meta["proj"] else p.get("proj", 10.0))
+                    proj = float(meta["proj"]) if meta["proj"] is not None else 0.0
                     resolved_players.append({
                         "player_id": p["player_id"],
                         "pos": norm_pos,

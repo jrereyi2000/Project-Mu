@@ -14,929 +14,9 @@ import DraftRecapModal from "./DraftRecapModal";
 import ArchetypeCompositionModal, { ARCHETYPE_PRESETS } from "./ArchetypeCompositionModal";
 import { DraftOrderModal } from "./DraftOrderModal";
 import { ARCHETYPE_METAS } from "../../../types/napper";
+import { getPlayerHeadshotUrl, handleImageError } from "../napperUtils";
+import NapperPlayerModal from "../NapperPlayerModal";
 import "./napperDraft.css";
-
-// Comprehensive Mock Player Dataset based on Season 2035 & NFL Consensus ADP
-const MOCK_DRAFT_PLAYERS: NapperDraftPlayer[] = [
-  {
-    player_id: 80,
-    name: "Trey'Mane Davis",
-    position: "WR",
-    team: "CAR",
-    bye: 6,
-    age: 24.0,
-    ros_pct: 99.8,
-    adp: 1.0,
-    adp_rank: 1,
-    proj_pts: 288.0,
-    proj_avg: 16.9,
-    rush_att: 0,
-    rush_yds: 0,
-    rush_td: 0,
-    rec: 107.0,
-    rec_yds: 2111.0,
-    rec_td: 29.0,
-    headshot_url: "/static/players/80.webp",
-    notes: "Consensus #1 overall fantasy pick in season 2035 with 2,111 yards and 29 TDs.",
-  },
-  {
-    player_id: 138,
-    name: "KC Concepcion Jr",
-    position: "WR",
-    team: "CLE",
-    bye: 9,
-    age: 30.0,
-    ros_pct: 99.5,
-    adp: 2.0,
-    adp_rank: 2,
-    proj_pts: 272.0,
-    proj_avg: 16.0,
-    rush_att: 2.0,
-    rush_yds: 12.0,
-    rush_td: 0,
-    rec: 102.0,
-    rec_yds: 1673.0,
-    rec_td: 14.0,
-    headshot_url: "/static/players/138.webp",
-    notes: "Elite route acrobat and target accumulator in Cleveland.",
-  },
-  {
-    player_id: 3,
-    name: "G. Crawford",
-    position: "QB",
-    team: "IND",
-    bye: 13,
-    age: 26.0,
-    ros_pct: 99.4,
-    adp: 3.0,
-    adp_rank: 3,
-    proj_pts: 335.0,
-    proj_avg: 19.7,
-    rush_att: 95.0,
-    rush_yds: 510.0,
-    rush_td: 8.0,
-    pass_yds: 4200,
-    pass_td: 28,
-    int: 10,
-    headshot_url: "/static/players/3.webp",
-    notes: "Top-ranked dual-threat quarterback in season 2035 with immense weekly ceiling.",
-  },
-  {
-    player_id: 1404,
-    name: "M. McBride",
-    position: "RB",
-    team: "DEN",
-    bye: 8,
-    age: 25.0,
-    ros_pct: 99.3,
-    adp: 4.0,
-    adp_rank: 4,
-    proj_pts: 258.0,
-    proj_avg: 15.2,
-    rush_att: 275.0,
-    rush_yds: 1340.0,
-    rush_td: 12.0,
-    rec: 48.0,
-    rec_yds: 390.0,
-    rec_td: 2.0,
-    headshot_url: "/static/players/1404.webp",
-    notes: "Season 2035 workhorse running back commanding true 3-down volume.",
-  },
-  {
-    player_id: 4430807,
-    name: "Bijan Robinson",
-    position: "RB",
-    team: "ATL",
-    bye: 11,
-    age: 24.7,
-    ros_pct: 99.7,
-    adp: 1.2,
-    adp_rank: 1,
-    proj_pts: 260.9,
-    proj_avg: 15.3,
-    rush_att: 280.0,
-    rush_yds: 1372.0,
-    rush_td: 9.0,
-    rec: 64.0,
-    rec_yds: 537.0,
-    rec_td: 3.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4430807.png",
-    notes: "Elite bellcow with unmatched target share and explosive open-field vision.",
-  },
-  {
-    player_id: 4429013,
-    name: "Jahmyr Gibbs",
-    position: "RB",
-    team: "DET",
-    bye: 6,
-    age: 24.5,
-    ros_pct: 99.8,
-    adp: 2.7,
-    adp_rank: 2,
-    proj_pts: 268.4,
-    proj_avg: 15.8,
-    rush_att: 255.0,
-    rush_yds: 1251.0,
-    rush_td: 12.0,
-    rec: 63.0,
-    rec_yds: 533.0,
-    rec_td: 3.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4429013.png",
-    notes: "Electric dual-threat running back in a top-3 scoring offense.",
-  },
-  {
-    player_id: 4242335,
-    name: "Jonathan Taylor",
-    position: "RB",
-    team: "IND",
-    bye: 13,
-    age: 27.7,
-    ros_pct: 99.7,
-    adp: 3.8,
-    adp_rank: 3,
-    proj_pts: 236.3,
-    proj_avg: 13.9,
-    rush_att: 287.0,
-    rush_yds: 1385.0,
-    rush_td: 11.0,
-    rec: 36.0,
-    rec_yds: 278.0,
-    rec_td: 1.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4242335.png",
-    notes: "Workhorse back with heavy goal-line volume behind an elite offensive line.",
-  },
-  {
-    player_id: 3117251,
-    name: "Christian McCaffrey",
-    position: "RB",
-    team: "SF",
-    bye: 8,
-    age: 30.3,
-    ros_pct: 99.7,
-    adp: 4.9,
-    adp_rank: 4,
-    proj_pts: 221.0,
-    proj_avg: 13.0,
-    rush_att: 240.0,
-    rush_yds: 984.0,
-    rush_td: 7.0,
-    rec: 70.0,
-    rec_yds: 606.0,
-    rec_td: 4.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3117251.png",
-    notes: "Premier PPR weapon when healthy, guaranteed red-zone and checkdown target.",
-  },
-  {
-    player_id: 4427366,
-    name: "Breece Hall",
-    position: "RB",
-    team: "NYJ",
-    bye: 12,
-    age: 25.1,
-    ros_pct: 99.6,
-    adp: 5.6,
-    adp_rank: 5,
-    proj_pts: 245.5,
-    proj_avg: 14.4,
-    rush_att: 260.0,
-    rush_yds: 1180.0,
-    rush_td: 8.0,
-    rec: 68.0,
-    rec_yds: 560.0,
-    rec_td: 4.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4427366.png",
-    notes: "Tremendous breakaway speed and elite receiving profile.",
-  },
-  {
-    player_id: 3929630,
-    name: "Saquon Barkley",
-    position: "RB",
-    team: "PHI",
-    bye: 5,
-    age: 29.2,
-    ros_pct: 99.5,
-    adp: 6.4,
-    adp_rank: 6,
-    proj_pts: 252.0,
-    proj_avg: 14.8,
-    rush_att: 275.0,
-    rush_yds: 1310.0,
-    rush_td: 13.0,
-    rec: 45.0,
-    rec_yds: 340.0,
-    rec_td: 2.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3929630.png",
-    notes: "Dominant back operating inside Philadelphia's high-efficiency rushing attack.",
-  },
-  {
-    player_id: 4380150,
-    name: "CeeDee Lamb",
-    position: "WR",
-    team: "DAL",
-    bye: 7,
-    age: 27.2,
-    ros_pct: 99.9,
-    adp: 7.2,
-    adp_rank: 7,
-    proj_pts: 278.4,
-    proj_avg: 16.4,
-    rush_att: 14.0,
-    rush_yds: 110.0,
-    rush_td: 1.0,
-    rec: 112.0,
-    rec_yds: 1480.0,
-    rec_td: 11.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4380150.png",
-    notes: "Alpha WR1 leading the NFL in slot routes and target funnel rate.",
-  },
-  {
-    player_id: 4262921,
-    name: "Justin Jefferson",
-    position: "WR",
-    team: "MIN",
-    bye: 6,
-    age: 27.0,
-    ros_pct: 99.8,
-    adp: 8.1,
-    adp_rank: 8,
-    proj_pts: 272.0,
-    proj_avg: 16.0,
-    rush_att: 4.0,
-    rush_yds: 25.0,
-    rush_td: 0.0,
-    rec: 104.0,
-    rec_yds: 1520.0,
-    rec_td: 10.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4262921.png",
-    notes: "The gold standard route runner with historic per-game receiving yard averages.",
-  },
-  {
-    player_id: 4362628,
-    name: "Ja'Marr Chase",
-    position: "WR",
-    team: "CIN",
-    bye: 12,
-    age: 26.3,
-    ros_pct: 99.8,
-    adp: 9.3,
-    adp_rank: 9,
-    proj_pts: 266.5,
-    proj_avg: 15.7,
-    rush_att: 8.0,
-    rush_yds: 45.0,
-    rush_td: 0.0,
-    rec: 98.0,
-    rec_yds: 1390.0,
-    rec_td: 12.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4362628.png",
-    notes: "Top-tier deep threat paired with quarterback Joe Burrow.",
-  },
-  {
-    player_id: 4374302,
-    name: "Amon-Ra St. Brown",
-    position: "WR",
-    team: "DET",
-    bye: 6,
-    age: 26.8,
-    ros_pct: 99.7,
-    adp: 10.2,
-    adp_rank: 10,
-    proj_pts: 258.0,
-    proj_avg: 15.2,
-    rush_att: 6.0,
-    rush_yds: 35.0,
-    rush_td: 0.0,
-    rec: 106.0,
-    rec_yds: 1280.0,
-    rec_td: 9.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4374302.png",
-    notes: "PPR monster with one of the most secure weekly target floors in football.",
-  },
-  {
-    player_id: 4426515,
-    name: "Puka Nacua",
-    position: "WR",
-    team: "LAR",
-    bye: 6,
-    age: 25.1,
-    ros_pct: 99.4,
-    adp: 11.5,
-    adp_rank: 11,
-    proj_pts: 248.0,
-    proj_avg: 14.6,
-    rush_att: 12.0,
-    rush_yds: 90.0,
-    rush_td: 0.0,
-    rec: 96.0,
-    rec_yds: 1320.0,
-    rec_td: 7.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4426515.png",
-    notes: "Physical YAC machine heavily targeted in Sean McVay's scheme.",
-  },
-  {
-    player_id: 4258169,
-    name: "Nico Collins",
-    position: "WR",
-    team: "HOU",
-    bye: 14,
-    age: 27.4,
-    ros_pct: 99.3,
-    adp: 12.8,
-    adp_rank: 12,
-    proj_pts: 242.0,
-    proj_avg: 14.2,
-    rush_att: 2.0,
-    rush_yds: 10.0,
-    rush_td: 0.0,
-    rec: 88.0,
-    rec_yds: 1310.0,
-    rec_td: 8.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4258169.png",
-    notes: "Dominant boundary target averaging over 3.0 yards per route run.",
-  },
-  {
-    player_id: 4432708,
-    name: "Marvin Harrison Jr.",
-    position: "WR",
-    team: "ARI",
-    bye: 11,
-    age: 24.1,
-    ros_pct: 98.9,
-    adp: 14.5,
-    adp_rank: 13,
-    proj_pts: 235.0,
-    proj_avg: 13.8,
-    rush_att: 3.0,
-    rush_yds: 20.0,
-    rush_td: 0.0,
-    rec: 84.0,
-    rec_yds: 1220.0,
-    rec_td: 9.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432708.png",
-    notes: "Generational size and hands with true top-5 overall receiver ceiling.",
-  },
-  {
-    player_id: 4595348,
-    name: "Malik Nabers",
-    position: "WR",
-    team: "NYG",
-    bye: 11,
-    age: 23.2,
-    ros_pct: 98.7,
-    adp: 16.0,
-    adp_rank: 14,
-    proj_pts: 231.0,
-    proj_avg: 13.6,
-    rush_att: 6.0,
-    rush_yds: 40.0,
-    rush_td: 0.0,
-    rec: 89.0,
-    rec_yds: 1190.0,
-    rec_td: 7.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4595348.png",
-    notes: "Dynamic open-field separator with extreme target commanding ability.",
-  },
-  {
-    player_id: 4432665,
-    name: "Brock Bowers",
-    position: "TE",
-    team: "LV",
-    bye: 10,
-    age: 23.6,
-    ros_pct: 99.1,
-    adp: 17.5,
-    adp_rank: 15,
-    proj_pts: 218.0,
-    proj_avg: 12.8,
-    rush_att: 8.0,
-    rush_yds: 55.0,
-    rush_td: 1.0,
-    rec: 88.0,
-    rec_yds: 1080.0,
-    rec_td: 7.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432665.png",
-    notes: "Positional cheat code who lines up across the formation as a receiver.",
-  },
-  {
-    player_id: 4361528,
-    name: "Trey McBride",
-    position: "TE",
-    team: "ARI",
-    bye: 11,
-    age: 26.8,
-    ros_pct: 98.8,
-    adp: 19.2,
-    adp_rank: 16,
-    proj_pts: 205.0,
-    proj_avg: 12.1,
-    rush_att: 1.0,
-    rush_yds: 5.0,
-    rush_td: 0.0,
-    rec: 85.0,
-    rec_yds: 980.0,
-    rec_td: 6.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4361528.png",
-    notes: "High-volume middle of the field weapon for Kyler Murray.",
-  },
-  {
-    player_id: 3918298,
-    name: "Josh Allen",
-    position: "QB",
-    team: "BUF",
-    bye: 12,
-    age: 30.1,
-    ros_pct: 99.8,
-    adp: 21.0,
-    adp_rank: 17,
-    proj_pts: 345.0,
-    proj_avg: 20.3,
-    rush_att: 105.0,
-    rush_yds: 520.0,
-    rush_td: 11.0,
-    pass_yds: 4100,
-    pass_td: 29,
-    int: 12,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3918298.png",
-    notes: "The consensus fantasy QB1 offering 10+ rushing touchdowns every single year.",
-  },
-  {
-    player_id: 3916387,
-    name: "Lamar Jackson",
-    position: "QB",
-    team: "BAL",
-    bye: 14,
-    age: 29.5,
-    ros_pct: 99.8,
-    adp: 22.8,
-    adp_rank: 18,
-    proj_pts: 340.0,
-    proj_avg: 20.0,
-    rush_att: 135.0,
-    rush_yds: 780.0,
-    rush_td: 6.0,
-    pass_yds: 3750,
-    pass_td: 26,
-    int: 8,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3916387.png",
-    notes: "Two-time MVP with unmatched quarterback rushing upside.",
-  },
-  {
-    player_id: 4040715,
-    name: "Jalen Hurts",
-    position: "QB",
-    team: "PHI",
-    bye: 5,
-    age: 28.1,
-    ros_pct: 99.5,
-    adp: 25.5,
-    adp_rank: 19,
-    proj_pts: 325.0,
-    proj_avg: 19.1,
-    rush_att: 130.0,
-    rush_yds: 560.0,
-    rush_td: 12.0,
-    pass_yds: 3600,
-    pass_td: 23,
-    int: 10,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4040715.png",
-    notes: "Brotherly Shove touchdown machine behind Philadelphia's dominant line.",
-  },
-  {
-    player_id: 3139477,
-    name: "Patrick Mahomes",
-    position: "QB",
-    team: "KC",
-    bye: 6,
-    age: 31.0,
-    ros_pct: 99.7,
-    adp: 28.0,
-    adp_rank: 20,
-    proj_pts: 315.0,
-    proj_avg: 18.5,
-    rush_att: 65.0,
-    rush_yds: 340.0,
-    rush_td: 2.0,
-    pass_yds: 4400,
-    pass_td: 32,
-    int: 11,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png",
-    notes: "Masterful playmaker with restored deep passing personnel in Kansas City.",
-  },
-  {
-    player_id: 4430027,
-    name: "Sam LaPorta",
-    position: "TE",
-    team: "DET",
-    bye: 6,
-    age: 25.4,
-    ros_pct: 98.4,
-    adp: 30.5,
-    adp_rank: 21,
-    proj_pts: 188.0,
-    proj_avg: 11.1,
-    rush_att: 1.0,
-    rush_yds: 4.0,
-    rush_td: 0.0,
-    rec: 74.0,
-    rec_yds: 840.0,
-    rec_td: 8.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4430027.png",
-    notes: "Lions red-zone favorite with exceptional hands and route discipline.",
-  },
-  {
-    player_id: 3040151,
-    name: "George Kittle",
-    position: "TE",
-    team: "SF",
-    bye: 8,
-    age: 32.8,
-    ros_pct: 98.0,
-    adp: 34.0,
-    adp_rank: 22,
-    proj_pts: 185.0,
-    proj_avg: 10.9,
-    rush_att: 2.0,
-    rush_yds: 15.0,
-    rush_td: 0.0,
-    rec: 68.0,
-    rec_yds: 920.0,
-    rec_td: 6.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3040151.png",
-    notes: "Explosive run-after-catch tight end capable of multi-touchdown spike weeks.",
-  },
-  {
-    player_id: 4430878,
-    name: "Jaxon Smith-Njigba",
-    position: "WR",
-    team: "SEA",
-    bye: 10,
-    age: 24.5,
-    ros_pct: 97.5,
-    adp: 38.0,
-    adp_rank: 23,
-    proj_pts: 215.0,
-    proj_avg: 12.6,
-    rush_att: 3.0,
-    rush_yds: 20.0,
-    rush_td: 0.0,
-    rec: 85.0,
-    rec_yds: 1050.0,
-    rec_td: 6.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4430878.png",
-    notes: "Breakout route-running specialist in Ryan Grubb's aggressive passing system.",
-  },
-  {
-    player_id: 4567048,
-    name: "Kenneth Walker III",
-    position: "RB",
-    team: "SEA",
-    bye: 10,
-    age: 25.8,
-    ros_pct: 97.9,
-    adp: 41.5,
-    adp_rank: 24,
-    proj_pts: 212.0,
-    proj_avg: 12.5,
-    rush_att: 220.0,
-    rush_yds: 1050.0,
-    rush_td: 9.0,
-    rec: 42.0,
-    rec_yds: 320.0,
-    rec_td: 2.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4567048.png",
-    notes: "Home-run hitter with expanded three-down pass game involvement.",
-  },
-  {
-    player_id: 4035538,
-    name: "David Montgomery",
-    position: "RB",
-    team: "DET",
-    bye: 6,
-    age: 29.1,
-    ros_pct: 96.5,
-    adp: 45.0,
-    adp_rank: 25,
-    proj_pts: 198.0,
-    proj_avg: 11.6,
-    rush_att: 215.0,
-    rush_yds: 980.0,
-    rush_td: 12.0,
-    rec: 25.0,
-    rec_yds: 180.0,
-    rec_td: 1.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4035538.png",
-    notes: "Automatic touchdown machine inside the opponent five-yard line.",
-  },
-  {
-    player_id: 4430737,
-    name: "Kyren Williams",
-    position: "RB",
-    team: "LAR",
-    bye: 6,
-    age: 26.0,
-    ros_pct: 97.0,
-    adp: 48.0,
-    adp_rank: 26,
-    proj_pts: 206.0,
-    proj_avg: 12.1,
-    rush_att: 225.0,
-    rush_yds: 1020.0,
-    rush_td: 10.0,
-    rec: 34.0,
-    rec_yds: 240.0,
-    rec_td: 2.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4430737.png",
-    notes: "High-volume runner trusted in all passing and goal-line situations.",
-  },
-  {
-    player_id: 4259545,
-    name: "D'Andre Swift",
-    position: "RB",
-    team: "CHI",
-    bye: 7,
-    age: 27.6,
-    ros_pct: 95.8,
-    adp: 52.0,
-    adp_rank: 27,
-    proj_pts: 192.0,
-    proj_avg: 11.3,
-    rush_att: 200.0,
-    rush_yds: 910.0,
-    rush_td: 6.0,
-    rec: 50.0,
-    rec_yds: 390.0,
-    rec_td: 2.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4259545.png",
-    notes: "Versatile space runner with solid receiving floor.",
-  },
-  {
-    player_id: 3042519,
-    name: "Aaron Jones",
-    position: "RB",
-    team: "MIN",
-    bye: 6,
-    age: 31.8,
-    ros_pct: 95.0,
-    adp: 56.0,
-    adp_rank: 28,
-    proj_pts: 186.0,
-    proj_avg: 10.9,
-    rush_att: 190.0,
-    rush_yds: 890.0,
-    rush_td: 6.0,
-    rec: 44.0,
-    rec_yds: 330.0,
-    rec_td: 2.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3042519.png",
-    notes: "Veteran efficiency leader with strong receiving upside.",
-  },
-  {
-    player_id: 4429022,
-    name: "Garrett Wilson",
-    position: "WR",
-    team: "NYJ",
-    bye: 12,
-    age: 26.2,
-    ros_pct: 98.2,
-    adp: 59.0,
-    adp_rank: 29,
-    proj_pts: 228.0,
-    proj_avg: 13.4,
-    rush_att: 4.0,
-    rush_yds: 25.0,
-    rush_td: 0.0,
-    rec: 92.0,
-    rec_yds: 1180.0,
-    rec_td: 7.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4429022.png",
-    notes: "Elite route acrobat and target accumulator.",
-  },
-  {
-    player_id: 4372016,
-    name: "Jaylen Waddle",
-    position: "WR",
-    team: "MIA",
-    bye: 6,
-    age: 27.8,
-    ros_pct: 96.0,
-    adp: 63.0,
-    adp_rank: 30,
-    proj_pts: 210.0,
-    proj_avg: 12.4,
-    rush_att: 3.0,
-    rush_yds: 20.0,
-    rush_td: 0.0,
-    rec: 80.0,
-    rec_yds: 1100.0,
-    rec_td: 6.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4372016.png",
-    notes: "Blazing speed merchant in Mike McDaniel's track-star offense.",
-  },
-  {
-    player_id: 4432770,
-    name: "Xavier Worthy",
-    position: "WR",
-    team: "KC",
-    bye: 6,
-    age: 23.3,
-    ros_pct: 94.5,
-    adp: 68.0,
-    adp_rank: 31,
-    proj_pts: 195.0,
-    proj_avg: 11.5,
-    rush_att: 10.0,
-    rush_yds: 75.0,
-    rush_td: 1.0,
-    rec: 65.0,
-    rec_yds: 950.0,
-    rec_td: 7.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432770.png",
-    notes: "4.21 combine speedster unleashed on designed deep posts and sweeps.",
-  },
-  {
-    player_id: 4432773,
-    name: "Brian Thomas Jr.",
-    position: "WR",
-    team: "JAX",
-    bye: 12,
-    age: 23.8,
-    ros_pct: 95.0,
-    adp: 72.0,
-    adp_rank: 32,
-    proj_pts: 202.0,
-    proj_avg: 11.9,
-    rush_att: 2.0,
-    rush_yds: 15.0,
-    rush_td: 0.0,
-    rec: 72.0,
-    rec_yds: 1060.0,
-    rec_td: 8.0,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432773.png",
-    notes: "Trevor Lawrence's big-bodied vertical separator.",
-  },
-  {
-    player_id: 4036378,
-    name: "Jordan Love",
-    position: "QB",
-    team: "GB",
-    bye: 10,
-    age: 27.9,
-    ros_pct: 96.0,
-    adp: 76.0,
-    adp_rank: 33,
-    proj_pts: 298.0,
-    proj_avg: 17.5,
-    rush_att: 50.0,
-    rush_yds: 240.0,
-    rush_td: 3.0,
-    pass_yds: 4150,
-    pass_td: 30,
-    int: 12,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4036378.png",
-    notes: "Prolific passer surrounded by a young, talented receiver group.",
-  },
-  {
-    player_id: 4431452,
-    name: "Drake Maye",
-    position: "QB",
-    team: "NE",
-    bye: 14,
-    age: 24.1,
-    ros_pct: 93.0,
-    adp: 82.0,
-    adp_rank: 34,
-    proj_pts: 285.0,
-    proj_avg: 16.8,
-    rush_att: 75.0,
-    rush_yds: 420.0,
-    rush_td: 4.0,
-    pass_yds: 3800,
-    pass_td: 24,
-    int: 13,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4431452.png",
-    notes: "Rocket-armed dual threat with immense second-year progression upside.",
-  },
-  {
-    player_id: 4432577,
-    name: "Brandon Aubrey",
-    position: "K",
-    team: "DAL",
-    bye: 7,
-    age: 31.3,
-    ros_pct: 99.0,
-    adp: 148.0,
-    adp_rank: 148,
-    proj_pts: 148.0,
-    proj_avg: 8.7,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432577.png",
-    notes: "60+ yard field goal machine with highest projected kicking total in the league.",
-  },
-  {
-    player_id: 579,
-    name: "Jesse Fernandez",
-    position: "K",
-    team: "DEN",
-    bye: 8,
-    age: 26.0,
-    ros_pct: 98.0,
-    adp: 151.0,
-    adp_rank: 151,
-    proj_pts: 171.0,
-    proj_avg: 10.1,
-    headshot_url: "/static/players/579.webp",
-    notes: "Elite 98 OVR franchise kicker with league-leading accuracy and leg strength.",
-  },
-  {
-    player_id: 311,
-    name: "Cam Little",
-    position: "K",
-    team: "IND",
-    bye: 13,
-    age: 23.0,
-    ros_pct: 97.5,
-    adp: 152.0,
-    adp_rank: 152,
-    proj_pts: 169.2,
-    proj_avg: 10.0,
-    headshot_url: "/static/players/311.webp",
-    notes: "Booming leg with 94 OVR rating providing steady high-volume scoring.",
-  },
-  {
-    player_id: 737,
-    name: "Brian Westbrook",
-    position: "K",
-    team: "BUF",
-    bye: 12,
-    age: 25.0,
-    ros_pct: 97.0,
-    adp: 153.0,
-    adp_rank: 153,
-    proj_pts: 167.4,
-    proj_avg: 9.8,
-    headshot_url: "/static/players/737.webp",
-    notes: "High-scoring offense multiplier in Buffalo with elite clutch rating.",
-  },
-  {
-    player_id: 523,
-    name: "Matthew Falk",
-    position: "K",
-    team: "NYJ",
-    bye: 12,
-    age: 27.0,
-    ros_pct: 96.5,
-    adp: 154.0,
-    adp_rank: 154,
-    proj_pts: 167.4,
-    proj_avg: 9.8,
-    headshot_url: "/static/players/523.webp",
-    notes: "Consistent 90 OVR kicker with automatic touchback distance.",
-  },
-  {
-    player_id: 15683,
-    name: "Justin Tucker",
-    position: "K",
-    team: "BAL",
-    bye: 14,
-    age: 36.9,
-    ros_pct: 97.0,
-    adp: 155.0,
-    adp_rank: 155,
-    proj_pts: 138.0,
-    proj_avg: 8.1,
-    headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/15683.png",
-    notes: "Clutch veteran in one of the highest scoring offenses in the AFC.",
-  },
-  {
-    player_id: 9901,
-    name: "San Francisco 49ers",
-    position: "DEF",
-    team: "SF",
-    bye: 8,
-    age: 27.0,
-    ros_pct: 98.0,
-    adp: 98.0,
-    adp_rank: 37,
-    proj_pts: 132.0,
-    proj_avg: 7.8,
-    headshot_url: "/static/players/robot_avatar.webp",
-    notes: "Nick Bosa-led front four creating constant strip-sacks and turnovers.",
-  },
-  {
-    player_id: 9902,
-    name: "Baltimore Ravens",
-    position: "DEF",
-    team: "BAL",
-    bye: 14,
-    age: 26.5,
-    ros_pct: 97.5,
-    adp: 104.0,
-    adp_rank: 38,
-    proj_pts: 129.0,
-    proj_avg: 7.6,
-    headshot_url: "/static/players/robot_avatar.webp",
-    notes: "Smash-mouth defense specializing in pressure rate and red-zone stops.",
-  },
-];
 
 interface NapperDraftRoomProps {
   leagueId?: number;
@@ -944,6 +24,7 @@ interface NapperDraftRoomProps {
   onBack: () => void;
   onLeagueCreated?: (newLeagueId: number) => void;
   onExitToMu?: () => void;
+  scoringType?: string;
 }
 
 const MOCK_ARCHETYPE_TEAMS: Record<string, Array<{ name: string; handle: string; persona: string }>> = {
@@ -969,7 +50,7 @@ const MOCK_ARCHETYPE_TEAMS: Record<string, Array<{ name: string; handle: string;
     { name: "Expected Points HQ", handle: "@xFP_Metrics", persona: "ANALYTICS_NERD" },
   ],
   TRASH_TALKER: [
-    { name: "Gridiron Dominance", handle: "@Champ2035", persona: "TRASH_TALKER" },
+    { name: "Gridiron Dominance", handle: "@GridironDominance", persona: "TRASH_TALKER" },
     { name: "Smashmouth Crew", handle: "@HeavyHitter", persona: "TRASH_TALKER" },
     { name: "Trophy Chasers", handle: "@RingCollector", persona: "TRASH_TALKER" },
     { name: "No Fear Fantasy", handle: "@SwaggerKing", persona: "TRASH_TALKER" },
@@ -1038,7 +119,7 @@ const DEFAULT_AI_TEAMS = [
   { name: "Data Analytics", handle: "@DataDog", persona: "ANALYTICS_NERD" },
   { name: "Trade Block Titans", handle: "@BlockBuster", persona: "TRADE_FIEND" },
   { name: "Sleeper Syndicate", handle: "@SleeperSteve", persona: "UNDERDOG" },
-  { name: "Gridiron Dominance", handle: "@Champ2035", persona: "TRASH_TALKER" },
+  { name: "Gridiron Dominance", handle: "@GridironDominance", persona: "TRASH_TALKER" },
   { name: "Hero RB Squad", handle: "@AnchorBack", persona: "HERO_RB" },
   { name: "Waiver Wire Kings", handle: "@WireHawk", persona: "WAIVER_HAWK" },
   { name: "Franchise DieHards", handle: "@DieHardFan", persona: "DIE_HARD" },
@@ -1151,6 +232,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
   initialSlot,
   onBack,
   onLeagueCreated,
+  scoringType = "PPR",
 }) => {
   const defaultTeamsCount = 10;
   const defaultRoundsCount = 15;
@@ -1194,7 +276,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     };
   });
 
-  const [availablePlayers, setAvailablePlayers] = useState<NapperDraftPlayer[]>(MOCK_DRAFT_PLAYERS);
+  const [availablePlayers, setAvailablePlayers] = useState<NapperDraftPlayer[]>([]);
   const [queuedIds, setQueuedIds] = useState<number[]>([]);
   const [comments, setComments] = useState<NapperDraftComment[]>([
     {
@@ -1211,7 +293,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
   const [simSpeedMs, setSimSpeedMs] = useState(600);
   const [timerSeconds, setTimerSeconds] = useState(120);
   const [isSimulatingAll, setIsSimulatingAll] = useState(false);
-  const [selectedNotesPlayer, setSelectedNotesPlayer] = useState<NapperDraftPlayer | null>(null);
+  const [selectedDetailPlayer, setSelectedDetailPlayer] = useState<NapperDraftPlayer | null>(null);
   const [assistantModalOpen, setAssistantModalOpen] = useState(false);
   const [recapModalOpen, setRecapModalOpen] = useState(false);
   const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -1225,8 +307,8 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     fetch(`${API_BASE}/api/napper/league/${leagueId}/draft`)
       .then((res) => res.json())
       .then((data) => {
-        if (data && data.draft_id) {
-          const serverTeams: NapperDraftTeam[] = (data.teams_info || []).map((t: any) => ({
+        if (data && (data.draft_id || data.id)) {
+          const serverTeams: NapperDraftTeam[] = (data.teams_info || data.teams || []).map((t: any) => ({
             id: t.slot_num,
             slot: t.slot_num,
             name: t.team_name,
@@ -1234,6 +316,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
             is_ai: !t.is_user,
             avatar_url: t.avatar_url || "/static/players/robot_avatar.webp",
             manager_handle: t.manager_handle || `@Team${t.slot_num}`,
+            persona: t.persona || t.archetype || (t.is_user ? "USER" : "ANALYTICS_NERD"),
             roster: data.rosters?.[String(t.slot_num)] || [],
           }));
 
@@ -1250,13 +333,12 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
                   name: p.player.name,
                   position: p.player.position,
                   team: p.player.team,
-                  bye: 7,
-                  age: 25,
-                  ros_pct: 95,
-                  adp: p.player.adp,
-                  adp_rank: p.player.adp,
-                  proj_pts: p.player.projected_points,
-                  proj_avg: p.player.projected_points / 17,
+                  bye: null,
+                  age: null,
+                  adp: p.player.adp ?? null,
+                  adp_rank: p.player.adp ?? null,
+                  proj_pts: p.player.projected_points ?? null,
+                  proj_avg: p.player.ppg ?? null,
                   headshot_url: p.player.headshot_url,
                   is_drafted: true,
                 }
@@ -1265,10 +347,12 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
 
           setDraftState((prev) => ({
             ...prev,
-            id: data.draft_id,
+            id: data.draft_id || data.id,
             status: data.status === "PENDING" ? "NOT_STARTED" : data.status,
             current_pick_index: Math.max(0, (data.current_pick || 1) - 1),
             user_slot: data.user_slot || prev.user_slot,
+            scoring_type: data.scoring_type || prev.scoring_type || "PPR",
+            settings: data.settings || prev.settings || { is_superflex: false },
             teams: serverTeams.length > 0 ? serverTeams : prev.teams,
             picks: serverPicks.length > 0 ? serverPicks : prev.picks,
           }));
@@ -1279,56 +363,47 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       });
   }, [leagueId]);
 
-  // Fetch real players for season 2035 from backend
+  // Load the pool from the Napper API, which resolves player eligibility and projections for league_state.current_season.
   useEffect(() => {
     let isMounted = true;
     const fetchPlayerPool = async () => {
+      setAvailablePlayers([]);
       try {
         const draftIdNum = Number(draftState.id);
-        const validDraftId = !isNaN(draftIdNum) && draftIdNum > 0 ? draftIdNum : 0;
-        let res = await fetch(`${API_BASE}/api/napper/draft/${validDraftId}/available_players?limit=600`);
-        if (!res.ok) {
-          res = await fetch(`${API_BASE}/api/fantasy/projections?season=2035&week=1&limit=600`);
-        }
-        if (res.ok) {
-          const data = await res.json();
-          const rawPlayers = data.players || [];
-          if (rawPlayers.length > 0 && isMounted) {
-            const mapped: NapperDraftPlayer[] = rawPlayers.map((p: any) => ({
-              player_id: p.id || p.player_id,
-              name: p.name || p.player_name,
-              position: p.position === "HB" || p.position === "FB" ? "RB" : p.position,
-              team: p.team || p.team_abbr || "NFL",
-              bye: p.bye ?? (p.team_id ? (p.team_id % 10) + 5 : 7),
-              age: p.age ?? 25,
-              ros_pct: p.ros_pct ?? 95,
-              adp: p.adp ?? 999,
-              adp_rank: p.adp ?? 999,
-              proj_pts: p.projections?.pts ?? p.proj_pts ?? 12.0,
-              proj_avg: p.projections?.avg ?? p.avg_pts ?? 11.5,
-              rush_att: p.rush?.rush ?? p.rush_att ?? 0,
-              rush_yds: p.rush?.yds ?? p.rush_yds ?? 0,
-              rush_td: p.rush?.td ?? p.rush_td ?? 0,
-              rec: p.rec?.rec ?? p.rec ?? 0,
-              rec_yds: p.rec?.yds ?? p.rec_yds ?? 0,
-              rec_td: p.rec?.td ?? p.rec_td ?? 0,
-              pass_yds: p.pass_yds ?? 0,
-              pass_td: p.pass_td ?? 0,
-              int: p.int ?? 0,
-              headshot_url: p.headshot_url || `/static/players/${p.id || p.player_id}.webp`,
-              is_drafted: false,
-            }));
-            setAvailablePlayers(mapped);
-          }
+        const validDraftId = Number.isInteger(draftIdNum) && draftIdNum > 0 ? draftIdNum : 0;
+        const res = await fetch(`${API_BASE}/api/napper/draft/${validDraftId}/available_players?limit=600`);
+        if (!res.ok) throw new Error(`Draft pool request failed (${res.status})`);
+        const data = await res.json();
+        const rawPlayers = data.players || [];
+        if (isMounted) {
+          const mapped: NapperDraftPlayer[] = rawPlayers.map((p: any) => ({
+            player_id: p.id || p.player_id,
+            name: p.name || p.player_name,
+            position: p.position === "HB" || p.position === "FB" ? "RB" : p.position,
+            team: p.team,
+            bye: p.bye ?? null,
+            age: p.age ?? null,
+            adp: p.adp ?? null,
+            adp_rank: p.adp ?? null,
+            proj_pts: p.projections?.pts ?? null,
+            proj_avg: p.projections?.avg ?? null,
+            rush_att: p.rush?.rush ?? null,
+            rush_yds: p.rush?.yds ?? null,
+            rush_td: p.rush?.td ?? null,
+            rec: p.rec?.rec ?? null,
+            rec_yds: p.rec?.yds ?? null,
+            rec_td: p.rec?.td ?? null,
+            headshot_url: p.headshot_url,
+            is_drafted: false,
+          }));
+          setAvailablePlayers(mapped);
         }
       } catch {
-        // Fallback to MOCK_DRAFT_PLAYERS
+        if (isMounted) setAvailablePlayers([]);
       }
     };
     fetchPlayerPool();
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [draftState.id]);
 
   // Web Audio Chime Generator
@@ -1458,14 +533,15 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       };
     });
 
-    const draftIdNum = Number(draftState.id);
-    if (!isNaN(draftIdNum) && draftIdNum > 0) {
-      fetch(`${API_BASE}/api/napper/draft/${draftIdNum}/claim_slot`, {
+    const liveDraftId = Number(draftState.id);
+    if (leagueId && Number.isInteger(liveDraftId) && liveDraftId > 0) {
+      fetch(`${API_BASE}/api/napper/draft/${liveDraftId}/claim_slot`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slot }),
       }).catch(() => {});
     }
+
   };
 
   // Randomize Order Action: Re-rolls draft spot and shuffles all opponents
@@ -1497,14 +573,15 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     }));
     setAvailablePlayers((prev) => prev.map((p) => ({ ...p, is_drafted: false })));
 
-    const draftIdNum = Number(draftState.id);
-    if (!isNaN(draftIdNum) && draftIdNum > 0) {
-      fetch(`${API_BASE}/api/napper/draft/${draftIdNum}/randomize_order`, {
+    const liveDraftId = Number(draftState.id);
+    if (leagueId && Number.isInteger(liveDraftId) && liveDraftId > 0) {
+      fetch(`${API_BASE}/api/napper/draft/${liveDraftId}/randomize_order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keep_user_slot: keepUser }),
       }).catch(() => {});
     }
+
   };
 
   // Apply customized archetype composition
@@ -1528,14 +605,15 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       current_pick_index: 0,
     }));
 
-    const draftIdNum = Number(draftState.id);
-    if (!isNaN(draftIdNum) && draftIdNum > 0) {
-      fetch(`${API_BASE}/api/napper/draft/${draftIdNum}/set_archetypes`, {
+    const liveDraftId = Number(draftState.id);
+    if (leagueId && Number.isInteger(liveDraftId) && liveDraftId > 0) {
+      fetch(`${API_BASE}/api/napper/draft/${liveDraftId}/set_archetypes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ archetype_composition: newComposition }),
       }).catch(() => {});
     }
+
   };
 
   // Apply manual draft order customization
@@ -1582,9 +660,9 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       },
     ]);
 
-    const draftIdNum = Number(draftState.id);
-    if (!isNaN(draftIdNum) && draftIdNum > 0) {
-      fetch(`${API_BASE}/api/napper/draft/${draftIdNum}/set_order`, {
+    const liveDraftId = Number(draftState.id);
+    if (leagueId && Number.isInteger(liveDraftId) && liveDraftId > 0) {
+      fetch(`${API_BASE}/api/napper/draft/${liveDraftId}/set_order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1601,6 +679,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         }),
       }).catch(() => {});
     }
+
   };
 
   // Switch Team Count (8, 10, 12 Teams) and regenerate snake picks
@@ -1629,25 +708,6 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
     setAvailablePlayers((prev) => prev.map((p) => ({ ...p, is_drafted: false })));
     setQueuedIds([]);
 
-    fetch(`${API_BASE}/api/napper/drafts/create_mock`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        teams_count: newCount,
-        scoring_type: "PPR",
-        user_slot: newSlot,
-        rounds: draftState.rounds_count,
-        is_superflex: true,
-        archetype_composition: newComp,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.id) {
-          setDraftState((prev) => ({ ...prev, id: String(data.id) }));
-        }
-      })
-      .catch(() => {});
   };
 
   // Customize Rounds Count (12, 14, 15, 16)
@@ -1717,9 +777,9 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
       const persona = pickingTeam?.persona || "AI";
       let commentText = `${targetPick.team_name} selects ${draftedPlayer.position} ${draftedPlayer.name} with pick ${targetPick.round}.${targetPick.round_pick} (Overall #${targetPick.pick_overall})`;
 
-      const diff = targetPick.pick_overall - draftedPlayer.adp;
-      const isSteal = diff >= 6;
-      const isReach = diff <= -6;
+      const diff = draftedPlayer.adp == null ? 0 : targetPick.pick_overall - draftedPlayer.adp;
+      const isSteal = draftedPlayer.adp != null && diff >= 6;
+      const isReach = draftedPlayer.adp != null && diff <= -6;
 
       if (pickingTeamSlot === prev.user_slot) {
         if (isSteal) {
@@ -1733,7 +793,9 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         if (draftedPlayer.position === "RB") {
           commentText = `Breaking my Zero-RB rule for ${draftedPlayer.name} at #${targetPick.pick_overall}. The value was simply unavoidable.`;
         } else {
-          commentText = `Zero-RB masterclass in progress. Locking down ${draftedPlayer.position} ${draftedPlayer.name} with projected ${draftedPlayer.proj_pts.toFixed(0)} FPTS.`;
+          commentText = draftedPlayer.proj_pts == null
+            ? `Zero-RB masterclass in progress. Locking down ${draftedPlayer.position} ${draftedPlayer.name}; projection unavailable.`
+            : `Zero-RB masterclass in progress. Locking down ${draftedPlayer.position} ${draftedPlayer.name} with projected ${draftedPlayer.proj_pts.toFixed(0)} FPTS.`;
         }
       } else if (persona === "HERO_RB") {
         if (draftedPlayer.position === "RB") {
@@ -1745,7 +807,9 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         if (isSteal) {
           commentText = `My VORP algorithms flagged ${draftedPlayer.name} as a +${diff} pick market inefficiency. Automatic trigger.`;
         } else {
-          commentText = `Optimal expected-value pick: ${draftedPlayer.name} projects for ${draftedPlayer.proj_pts.toFixed(0)} FPTS with an elite target/touch profile.`;
+          commentText = draftedPlayer.proj_pts == null
+            ? `Optimal expected-value pick: ${draftedPlayer.name}; projection unavailable.`
+            : `Optimal expected-value pick: ${draftedPlayer.name} projects for ${draftedPlayer.proj_pts.toFixed(0)} FPTS.`;
         }
       } else if (persona === "TRASH_TALKER") {
         if (isReach) {
@@ -1879,7 +943,10 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
 
         // Positional Weighting (aligned with fantasy_league_sim POS_WEIGHT: QB 0.4, TE 0.8, RB/WR 1.0)
         const posWeight = pos === "QB" ? 0.4 : pos === "TE" ? 0.8 : (pos === "K" || pos === "DEF") ? 0.2 : 1.0;
-        let score = 1000 - (player.adp * 2.0) + (player.proj_pts * posWeight * 3.5);
+        const adp = player.adp ?? 200;
+        const projectedPoints = player.proj_pts ?? 0;
+        const playerAge = player.age ?? 25;
+        let score = 1000 - (adp * 2.0) + (projectedPoints * posWeight * 3.5);
 
         // Backup penalties (aligned with fantasy_league_sim BACKUP_PENALTY)
         if (pos === "QB" && qbCount >= 1) {
@@ -1927,12 +994,12 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
             score += 300;
           }
         } else if (persona === "BPA" || persona === "ANALYTICS_NERD") {
-          if (player.adp < currentOverall) {
-            score += (currentOverall - player.adp) * 5.0;
+          if (adp < currentOverall) {
+            score += (currentOverall - adp) * 5.0;
           }
         } else if (persona === "TRASH_TALKER") {
           score += (Math.random() * 24 - 12);
-          if (player.proj_pts > 220) score *= 1.15;
+          if (projectedPoints > 220) score *= 1.15;
           if (currentRound <= 3 && (pos === "QB" || pos === "TE") && ((pos === "QB" && qbCount === 0) || (pos === "TE" && teCount === 0))) {
             score += 180;
           }
@@ -1943,15 +1010,15 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           if (currentRound <= 4 && pos === "RB") {
             if (rbCount < 2) score += 200;
           }
-          if (player.age >= 26) score *= 1.15;
+          if (playerAge >= 26) score *= 1.15;
           score += (Math.random() * 12 - 6);
         } else if (persona === "TRADE_FIEND") {
-          if (player.adp < currentOverall) {
-            score += (currentOverall - player.adp) * 4.5;
+          if (adp < currentOverall) {
+            score += (currentOverall - adp) * 4.5;
           }
-          if (player.proj_pts > 200) score *= 1.12;
+          if (projectedPoints > 200) score *= 1.12;
         } else if (persona === "UNDERDOG") {
-          if (player.age <= 24) score *= 1.25;
+          if (playerAge <= 24) score *= 1.25;
           score += (Math.random() * 16 - 4);
         }
 
@@ -2111,7 +1178,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         name: customTitle || draftState.title || "My Draft League",
         teams_count: draftState.teams_count,
         scoring_type: draftState.scoring_type,
-        is_superflex: draftState.settings?.is_superflex ?? true,
+        is_superflex: draftState.settings?.is_superflex ?? false,
         user_slot: draftState.user_slot,
         draft_id: validDraftId,
         teams: draftState.teams.map((t) => ({
@@ -2473,7 +1540,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         onClaimSlot={handleClaimSlot}
         onOpenSetOrder={() => setOrderModalOpen(true)}
         onSelectPick={(p) => {
-          if (p.player) setSelectedNotesPlayer(p.player);
+          if (p.player) setSelectedDetailPlayer(p.player);
         }}
         isSelectionBoxOpen={isSelectionBoxOpen}
         onToggleSelectionBox={() => setIsSelectionBoxOpen((prev) => !prev)}
@@ -2491,8 +1558,8 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           queueIds={queuedIds}
           isUserOnClock={isUserTurn}
           onDraftPlayer={(player) => executePick(player)}
+          onSelectPlayer={(player) => setSelectedDetailPlayer(player)}
           onToggleQueue={handleToggleQueue}
-          onSelectPlayerNotes={(player) => setSelectedNotesPlayer(player)}
         />
 
         {/* Right: Sleeper Roster / Queue / Chat Tabs */}
@@ -2503,87 +1570,12 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           comments={comments}
           isUserOnClock={isUserTurn}
           onDraftPlayer={(player) => executePick(player)}
+          onSelectPlayer={(player) => setSelectedDetailPlayer(player)}
           onRemoveFromQueue={handleRemoveFromQueue}
           onMoveQueueItem={handleMoveQueueItem}
           onSendChatMessage={handleSendChatMessage}
         />
       </div>
-
-      {/* 4. Scouting Notes Modal */}
-      {selectedNotesPlayer && (
-        <div className="draft-modal-overlay" onClick={() => setSelectedNotesPlayer(null)}>
-          <div
-            className="bg-[#0e1626] border border-[#233758] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-[#1f2d45] pb-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src={selectedNotesPlayer.headshot_url}
-                  alt={selectedNotesPlayer.name}
-                  className="w-12 h-12 rounded-full border border-[#2b3e60] object-cover bg-[#090e17]"
-                  onError={(e) => {
-                    e.currentTarget.src = "/static/players/robot_avatar.webp";
-                  }}
-                />
-                <div>
-                  <h3 className="text-base font-extrabold text-white">
-                    {selectedNotesPlayer.name}
-                  </h3>
-                  <div className="text-xs text-[#8a99ad]">
-                    {selectedNotesPlayer.position} • {selectedNotesPlayer.team} (Bye {selectedNotesPlayer.bye})
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedNotesPlayer(null)}
-                className="text-[#64748b] hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="text-xs text-[#cbd5e1] leading-relaxed">
-              {selectedNotesPlayer.notes || "High impact contributor with solid weekly volume."}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 bg-[#141f33] p-3 rounded-xl text-center">
-              <div>
-                <div className="text-[10px] text-[#64748b] font-bold">ADP</div>
-                <div className="text-sm font-black text-[#00ceb8]">
-                  {selectedNotesPlayer.adp.toFixed(1)}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] text-[#64748b] font-bold">PROJ PTS</div>
-                <div className="text-sm font-black text-white">
-                  {selectedNotesPlayer.proj_pts.toFixed(1)}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] text-[#64748b] font-bold">AGE</div>
-                <div className="text-sm font-black text-[#94a3b8]">
-                  {selectedNotesPlayer.age.toFixed(1)}
-                </div>
-              </div>
-            </div>
-
-            {isUserTurn && !selectedNotesPlayer.is_drafted && (
-              <button
-                type="button"
-                onClick={() => {
-                  executePick(selectedNotesPlayer);
-                  setSelectedNotesPlayer(null);
-                }}
-                className="w-full py-2.5 rounded-xl bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#090e17] text-xs font-black uppercase tracking-wider transition-all"
-              >
-                Draft {selectedNotesPlayer.name} Now
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 5. Assistant Tooltip Modal */}
       {assistantModalOpen && (
@@ -2614,24 +1606,30 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
                   Based on optimal value over replacement (VORP) and your current roster composition:
                 </p>
                 <div className="p-3 rounded-xl bg-[#14233a] border border-[#00ceb8]/40 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="flex items-center gap-3 text-left group"
+                    onClick={() => setSelectedDetailPlayer(topAssistantRecommendation)}
+                    title={`View ${topAssistantRecommendation.name}`}
+                  >
                     <img
-                      src={topAssistantRecommendation.headshot_url}
+                      src={getPlayerHeadshotUrl(topAssistantRecommendation.player_id, topAssistantRecommendation.headshot_url, topAssistantRecommendation.espn_id)}
                       alt={topAssistantRecommendation.name}
                       className="w-10 h-10 rounded-full object-cover bg-[#090e17]"
+                      onError={handleImageError}
                     />
                     <div>
-                      <div className="text-xs font-black text-white">
+                      <div className="text-xs font-black text-white group-hover:text-[#00ceb8]">
                         {topAssistantRecommendation.name}
                       </div>
                       <div className="text-[10px] text-[#00ceb8]">
-                        {topAssistantRecommendation.position} • {topAssistantRecommendation.team} (ADP #{topAssistantRecommendation.adp_rank})
+                        {topAssistantRecommendation.position} • {topAssistantRecommendation.team} (ADP #{topAssistantRecommendation.adp_rank ?? "—"})
                       </div>
                     </div>
-                  </div>
+                  </button>
                   <div className="text-right">
                     <div className="text-xs font-mono font-bold text-white">
-                      {topAssistantRecommendation.proj_pts.toFixed(1)}
+                      {topAssistantRecommendation.proj_pts == null ? "—" : topAssistantRecommendation.proj_pts.toFixed(1)}
                     </div>
                     <div className="text-[9px] text-[#64748b]">PROJ PTS</div>
                   </div>
@@ -2664,6 +1662,7 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
           onClose={() => setRecapModalOpen(false)}
           onRestartMock={handleRestartMock}
           onSaveAsLeague={handleSaveAsLeague}
+          onSelectPlayer={(player) => setSelectedDetailPlayer(player)}
           isSaving={isSavingLeague}
         />
 
@@ -2685,6 +1684,14 @@ export const NapperDraftRoom: React.FC<NapperDraftRoomProps> = ({
         teams={draftState.teams}
         onApplyOrder={handleApplyDraftOrder}
       />
+
+      {selectedDetailPlayer && (
+        <NapperPlayerModal
+          player={selectedDetailPlayer}
+          scoringType={scoringType || draftState.scoring_type}
+          onClose={() => setSelectedDetailPlayer(null)}
+        />
+      )}
     </div>
   );
 };

@@ -267,6 +267,77 @@ def test_process_ai_trade_bench_depth_rejection(db_conn):
         assert trade_res["status"] == "REJECTED"
 
 
+def test_process_ai_trade_positional_replacement_not_orphaned(db_conn):
+    """Verify that trading 1-for-1 at a position where target has the exact starter requirement does NOT trigger orphan starter rejection."""
+    cur = db_conn.cursor()
+    cur.execute("SELECT id FROM napper_teams WHERE league_id = 1 AND is_ai = TRUE ORDER BY id LIMIT 2")
+    ai_team_1, ai_team_2 = [r[0] for r in cur.fetchall()]
+
+    # Find 2 RBs on ai_team_2
+    cur.execute(
+        """
+        SELECT r.player_id FROM napper_rosters r
+        JOIN player_seasons ps ON ps.player_id = r.player_id AND ps.season = 2035
+        WHERE r.league_id = 1 AND r.team_id = %s AND r.week = 6 AND ps.position IN ('HB', 'RB')
+        LIMIT 2
+        """,
+        (ai_team_2,),
+    )
+    rbs_team_2 = [r[0] for r in cur.fetchall()]
+    if len(rbs_team_2) == 2:
+        # Delete any other RBs on ai_team_2 for week 6 so team_2 has exactly 2 RBs
+        cur.execute(
+            """
+            DELETE FROM napper_rosters
+            WHERE league_id = 1 AND team_id = %s AND week = 6
+              AND player_id NOT IN (%s, %s)
+              AND player_id IN (
+                  SELECT player_id FROM player_seasons WHERE season = 2035 AND position IN ('HB', 'RB')
+              )
+            """,
+            (ai_team_2, rbs_team_2[0], rbs_team_2[1]),
+        )
+
+        # Find 1 RB on ai_team_1 to offer
+        cur.execute(
+            """
+            SELECT r.player_id FROM napper_rosters r
+            JOIN player_seasons ps ON ps.player_id = r.player_id AND ps.season = 2035
+            WHERE r.league_id = 1 AND r.team_id = %s AND r.week = 6 AND ps.position IN ('HB', 'RB')
+            LIMIT 1
+            """,
+            (ai_team_1,),
+        )
+        rb_team_1_row = cur.fetchone()
+        if rb_team_1_row:
+            p_offered = rb_team_1_row[0]
+            p_requested = rbs_team_2[0]
+
+            # 1. Propose 1 RB for 1 RB (net count remains 2)
+            cur.execute(
+                """
+                INSERT INTO napper_trades (
+                    league_id, week, proposer_team_id, target_team_id,
+                    offered_player_ids, requested_player_ids, status, initiated_by_ai, ai_rationale
+                ) VALUES (1, 6, %s, %s, %s, %s, 'PENDING', TRUE, 'Fair 1-for-1 RB swap')
+                RETURNING id
+                """,
+                (ai_team_1, ai_team_2, [p_offered], [p_requested]),
+            )
+            trade_id_same_pos = cur.fetchone()[0]
+
+            results = process_ai_to_ai_trades(1, 6, conn=db_conn, random_seed=42)
+            trade_res = next((r for r in results if r["trade_id"] == trade_id_same_pos), None)
+            assert trade_res is not None
+
+            # Verify chat did NOT reject due to leaving an orphan starter
+            cur.execute("SELECT message_text FROM napper_chat WHERE league_id = 1 ORDER BY id DESC LIMIT 5")
+            recent_msgs = " ".join([r[0] for r in cur.fetchall() if r[0]])
+            assert "zero depth at that slot" not in recent_msgs
+            assert "leave a starting position vacated" not in recent_msgs
+
+
+
 # -----------------------------------------------------------------------------
 # 4. Weekly Awards Generation
 # -----------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { API_BASE } from "../../api";
 import type { NapperStarterPlayer } from "../../types/napper";
 import {
@@ -17,295 +17,8 @@ interface TeamRosterSlot {
 interface NapperTeamTabProps {
   leagueId: number;
   onSelectPlayer?: (player: NapperStarterPlayer) => void;
+  onTeamNameChanged?: (teamName: string) => void;
 }
-
-const INITIAL_ROSTER: TeamRosterSlot[] = [
-  // Starters
-  {
-    id: "s-qb1",
-    slot: "QB",
-    slot_label: "QB",
-    player: {
-      id: 101,
-      player_id: 3918298,
-      name: "Josh Allen",
-      position: "QB",
-      team: "BUF",
-      opponent: "@ LV",
-      kickoff: "Sun 4:25 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3918298.png",
-      fpts: 0.0,
-      proj_fpts: 24.95,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "s-rb1",
-    slot: "RB",
-    slot_label: "RB",
-    player: {
-      id: 102,
-      player_id: 4036378,
-      name: "Jordan Love",
-      position: "RB",
-      team: "ARI",
-      opponent: "@ LAR",
-      kickoff: "Sun 4:05 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4036378.png",
-      fpts: 0.0,
-      proj_fpts: 0.0,
-      is_yet_to_play: true,
-      injury_status: "O",
-    },
-  },
-  {
-    id: "s-rb2",
-    slot: "RB",
-    slot_label: "RB",
-    player: {
-      id: 103,
-      player_id: 4259545,
-      name: "D'Andre Swift",
-      position: "RB",
-      team: "CHI",
-      opponent: "@ ATL",
-      kickoff: "Sun 1:00 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4259545.png",
-      fpts: 0.0,
-      proj_fpts: 16.69,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "s-wr1",
-    slot: "WR",
-    slot_label: "WR",
-    player: {
-      id: 104,
-      player_id: 4258169,
-      name: "Nico Collins",
-      position: "WR",
-      team: "HOU",
-      opponent: "@ JAX",
-      kickoff: "Sun 9:30 AM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4258169.png",
-      fpts: 0.0,
-      proj_fpts: 18.34,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "s-wr2",
-    slot: "WR",
-    slot_label: "WR",
-    player: {
-      id: 105,
-      player_id: 4426515,
-      name: "Puka Nacua",
-      position: "WR",
-      team: "LAR",
-      opponent: "@ SF",
-      kickoff: "Sun 1:00 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4426515.png",
-      fpts: 0.0,
-      proj_fpts: 17.5,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "s-te1",
-    slot: "TE",
-    slot_label: "TE",
-    player: {
-      id: 106,
-      player_id: 4432665,
-      name: "Brock Bowers",
-      position: "TE",
-      team: "LV",
-      opponent: "vs BUF",
-      kickoff: "Sun 4:25 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4432665.png",
-      fpts: 0.0,
-      proj_fpts: 14.2,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "s-flex1",
-    slot: "FLEX",
-    slot_label: "FLEX",
-    player: {
-      id: 107,
-      player_id: 4427366,
-      name: "Breece Hall",
-      position: "RB",
-      team: "NYJ",
-      opponent: "vs NE",
-      kickoff: "Sun 1:00 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4427366.png",
-      fpts: 0.0,
-      proj_fpts: 16.8,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "s-sflex1",
-    slot: "SUPERFLEX",
-    slot_label: "SFLEX",
-    player: {
-      id: 108,
-      player_id: 3139477,
-      name: "Patrick Mahomes",
-      position: "QB",
-      team: "KC",
-      opponent: "vs LAC",
-      kickoff: "Sun 4:25 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png",
-      fpts: 0.0,
-      proj_fpts: 21.4,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-
-  // Bench
-  {
-    id: "b-1",
-    slot: "BN",
-    slot_label: "BN",
-    player: {
-      id: 109,
-      player_id: 3042519,
-      name: "Aaron Jones",
-      position: "RB",
-      team: "MIN",
-      opponent: "vs GB",
-      kickoff: "Sun 1:00 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3042519.png",
-      fpts: 0.0,
-      proj_fpts: 14.8,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "b-2",
-    slot: "BN",
-    slot_label: "BN",
-    player: {
-      id: 110,
-      player_id: 4431452,
-      name: "Drake Maye",
-      position: "QB",
-      team: "NE",
-      opponent: "@ NYJ",
-      kickoff: "Sun 1:00 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4431452.png",
-      fpts: 0.0,
-      proj_fpts: 15.6,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "b-3",
-    slot: "BN",
-    slot_label: "BN",
-    player: {
-      id: 111,
-      player_id: 4429022,
-      name: "Garrett Wilson",
-      position: "WR",
-      team: "NYJ",
-      opponent: "vs NE",
-      kickoff: "Sun 1:00 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4429022.png",
-      fpts: 0.0,
-      proj_fpts: 15.1,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "b-4",
-    slot: "BN",
-    slot_label: "BN",
-    player: {
-      id: 112,
-      player_id: 4361528,
-      name: "Trey McBride",
-      position: "TE",
-      team: "ARI",
-      opponent: "@ LAR",
-      kickoff: "Sun 4:05 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4361528.png",
-      fpts: 0.0,
-      proj_fpts: 13.9,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-  {
-    id: "b-5",
-    slot: "BN",
-    slot_label: "BN",
-    player: {
-      id: 113,
-      player_id: 4372016,
-      name: "Jaylen Waddle",
-      position: "WR",
-      team: "MIA",
-      opponent: "@ IND",
-      kickoff: "Sun 1:00 PM",
-      game_status: "Yet to play",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/4372016.png",
-      fpts: 0.0,
-      proj_fpts: 13.2,
-      is_yet_to_play: true,
-      injury_status: null,
-    },
-  },
-
-  // IR
-  {
-    id: "ir-1",
-    slot: "IR",
-    slot_label: "IR",
-    player: {
-      id: 114,
-      player_id: 3117251,
-      name: "Christian McCaffrey",
-      position: "RB",
-      team: "SF",
-      opponent: "vs LAR",
-      kickoff: "Out (IR)",
-      game_status: "Reserve/IR",
-      headshot_url: "https://a.espncdn.com/i/headshots/nfl/players/full/3117251.png",
-      fpts: 0.0,
-      proj_fpts: 0.0,
-      is_yet_to_play: false,
-      injury_status: "IR",
-    },
-  },
-];
 
 /** Check slot eligibility for swaps */
 function isSlotEligible(slotType: string, playerPosition?: string): boolean {
@@ -324,142 +37,153 @@ function isSlotEligible(slotType: string, playerPosition?: string): boolean {
 export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
   leagueId,
   onSelectPlayer,
+  onTeamNameChanged,
 }) => {
-  const [roster, setRoster] = useState<TeamRosterSlot[]>(INITIAL_ROSTER);
+  const [roster, setRoster] = useState<TeamRosterSlot[]>([]);
+  const [teamName, setTeamName] = useState<string>("My Team");
+  const [teamId, setTeamId] = useState<number | null>(null);
+  const [week, setWeek] = useState<number>(1);
+  const [record, setRecord] = useState<string>("0-0");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [nameDialogOpen, setNameDialogOpen] = useState<boolean>(false);
+  const [editedTeamName, setEditedTeamName] = useState<string>("");
+  const [savingTeamName, setSavingTeamName] = useState<boolean>(false);
+
+  const loadRoster = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/napper/league/${leagueId}/team`);
+      if (!response.ok) throw new Error("Could not load your league roster.");
+      const data = await response.json();
+      setRoster(data.roster || []);
+      setTeamName(data.team?.team_name || "My Team");
+      onTeamNameChanged?.(data.team?.team_name || "My Team");
+      setTeamId(data.team?.id ?? null);
+      setWeek(data.week || 1);
+      setRecord(data.team?.record || "0-0");
+    } catch (error) {
+      setRoster([]);
+      setFeedbackMessage(error instanceof Error ? error.message : "Could not load your league roster.");
+    } finally {
+      setLoading(false);
+    }
+  }, [leagueId, onTeamNameChanged]);
+
+  useEffect(() => {
+    void loadRoster();
+  }, [loadRoster]);
 
   const selectedSlot = roster.find((s) => s.id === selectedSlotId);
   const selectedPlayer = selectedSlot?.player;
 
+  const saveSlots = async (swaps: Array<{ player_id: number; new_slot: string }>) => {
+    if (!teamId || !swaps.length) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/napper/league/${leagueId}/lineup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team_id: teamId, week, swaps }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not save lineup changes.");
+      await loadRoster();
+      setFeedbackMessage("Lineup saved.");
+    } catch (error) {
+      await loadRoster();
+      setFeedbackMessage(error instanceof Error ? error.message : "Could not save lineup changes.");
+    } finally {
+      setSaving(false);
+      setSelectedSlotId(null);
+      setTimeout(() => setFeedbackMessage(null), 3000);
+    }
+  };
+
   // Handle slot click (Select or Swap)
   const handleSlotClick = (targetSlot: TeamRosterSlot) => {
-    // If no slot currently selected: select this slot
+    if (saving) return;
     if (!selectedSlotId) {
-      if (targetSlot.player) {
-        setSelectedSlotId(targetSlot.id);
-      }
+      if (targetSlot.player) setSelectedSlotId(targetSlot.id);
       return;
     }
-
-    // If clicking same slot, deselect
     if (selectedSlotId === targetSlot.id) {
       setSelectedSlotId(null);
       return;
     }
 
-    // Validate eligibility for both directions
-    const srcPlayer = selectedSlot?.player;
-    const tgtPlayer = targetSlot.player;
+    const source = selectedSlot;
+    const sourcePlayer = source?.player;
+    const targetPlayer = targetSlot.player;
+    if (!source || !sourcePlayer) return;
 
-    const canSrcFitTarget = isSlotEligible(targetSlot.slot, srcPlayer?.position);
-    const canTgtFitSrc = !tgtPlayer || isSlotEligible(selectedSlot!.slot, tgtPlayer.position);
-
-    if (!canSrcFitTarget || !canTgtFitSrc) {
-      setFeedbackMessage(
-        `Incompatible swap: ${srcPlayer?.name} (${srcPlayer?.position}) cannot move to ${targetSlot.slot_label}`
-      );
+    const canSourceMove = isSlotEligible(targetSlot.slot, sourcePlayer.position);
+    const canTargetMove = !targetPlayer || isSlotEligible(source.slot, targetPlayer.position);
+    if (!canSourceMove || !canTargetMove) {
+      setFeedbackMessage(`Incompatible move: ${sourcePlayer.name} cannot move to ${targetSlot.slot_label}.`);
       setTimeout(() => setFeedbackMessage(null), 3000);
       return;
     }
 
-    // Perform swap in roster state
-    setRoster((prev) =>
-      prev.map((item) => {
-        if (item.id === selectedSlotId) {
-          return { ...item, player: tgtPlayer };
-        }
-        if (item.id === targetSlot.id) {
-          return { ...item, player: srcPlayer || null };
-        }
-        return item;
-      })
-    );
-
-    setFeedbackMessage(`Swapped ${srcPlayer?.name} with ${tgtPlayer ? tgtPlayer.name : targetSlot.slot_label}!`);
-    setTimeout(() => setFeedbackMessage(null), 3000);
-    setSelectedSlotId(null);
-
-    // Call backend API if connected
-    try {
-      fetch(`${API_BASE}/api/napper/league/${leagueId}/lineup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          league_id: leagueId,
-          swaps: [
-            { slot_from: selectedSlot?.slot, slot_to: targetSlot.slot },
-          ],
-        }),
-      }).catch(() => {});
-    } catch {}
+    const swaps = [{ player_id: sourcePlayer.player_id, new_slot: targetSlot.slot }];
+    if (targetPlayer) swaps.push({ player_id: targetPlayer.player_id, new_slot: source.slot });
+    void saveSlots(swaps);
   };
 
-  // Lineup Optimizer: moves top projected bench players into starters
-  const handleOptimizeLineup = () => {
-    const starters = roster.filter((s) => s.slot !== "BN" && s.slot !== "IR");
-    const benchAndStarters = roster.filter((s) => s.slot !== "IR");
-
-    const allPlayers = benchAndStarters
-      .map((s) => s.player)
-      .filter((p): p is NapperStarterPlayer => Boolean(p))
-      .sort((a, b) => b.proj_fpts - a.proj_fpts);
-
-    // Greedily fill starters
-    const assignedPlayers = new Set<number>();
-    const newStarters: Record<string, NapperStarterPlayer | null> = {};
-
-    for (const s of starters) {
-      const best = allPlayers.find(
-        (p) => !assignedPlayers.has(p.id) && isSlotEligible(s.slot, p.position)
-      );
-      if (best) {
-        newStarters[s.id] = best;
-        assignedPlayers.add(best.id);
-      } else {
-        newStarters[s.id] = null;
-      }
-    }
-
-    const unassigned = allPlayers.filter((p) => !assignedPlayers.has(p.id));
-
-    setRoster((prev) => {
-      let bIdx = 0;
-      return prev.map((s) => {
-        if (s.slot === "IR") return s;
-        if (s.slot !== "BN") {
-          return { ...s, player: newStarters[s.id] ?? null };
-        }
-        const bPlayer = unassigned[bIdx] || null;
-        bIdx++;
-        return { ...s, player: bPlayer };
-      });
-    });
-
-    setFeedbackMessage("Lineup optimized for maximum projected points!");
-    setTimeout(() => setFeedbackMessage(null), 3500);
-    setSelectedSlotId(null);
-  };
-
-  // Compute total starter projected points
   const starters = roster.filter((s) => s.slot !== "BN" && s.slot !== "IR");
   const bench = roster.filter((s) => s.slot === "BN");
   const ir = roster.filter((s) => s.slot === "IR");
 
-  const totalStarterProj = starters.reduce(
-    (sum, s) => sum + (s.player?.proj_fpts || 0),
-    0
-  );
+  const saveTeamName = async () => {
+    const nextName = editedTeamName.trim();
+    if (!nextName || nextName.length > 64) {
+      setFeedbackMessage("Team name must be between 1 and 64 characters.");
+      return;
+    }
+    setSavingTeamName(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/napper/league/${leagueId}/team/name`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team_name: nextName }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not update team name.");
+      setTeamName(data.team.team_name);
+      onTeamNameChanged?.(data.team.team_name);
+      setNameDialogOpen(false);
+      setFeedbackMessage("Team name updated.");
+    } catch (error) {
+      setFeedbackMessage(error instanceof Error ? error.message : "Could not update team name.");
+    } finally {
+      setSavingTeamName(false);
+      setTimeout(() => setFeedbackMessage(null), 3000);
+    }
+  };
 
   return (
     <div className="flex-1 px-5 py-4 max-w-6xl mx-auto w-full">
       {/* Roster Controls & Stats Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 p-4 rounded-xl bg-[#1a2332] border border-[#283850]">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-extrabold text-white">The Straw Hat Pirates</h1>
+            <h1 className="text-lg font-extrabold text-white truncate">{teamName}</h1>
+            <button
+              type="button"
+              aria-label="Edit team name"
+              title="Edit team name"
+              onClick={() => { setEditedTeamName(teamName); setNameDialogOpen(true); }}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-[#283850] bg-[#121926] text-[#8a99ad] hover:border-[#00ceb8] hover:text-[#00ceb8] transition-colors"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.3a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 1 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9h-.3a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 1 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2v-.3a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 1 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.3a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z" />
+              </svg>
+            </button>
             <span className="text-xs px-2 py-0.5 rounded bg-[#00ceb8]/15 text-[#00ceb8] font-bold">
-              5-0
+              {record}
             </span>
           </div>
           <p className="text-xs text-[#8a99ad] mt-0.5">
@@ -467,28 +191,28 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-right px-3 py-1 bg-[#121926] rounded-lg border border-[#283850]">
-            <div className="text-[10px] uppercase font-bold text-[#8a99ad] tracking-wider">
-              Proj Points
-            </div>
-            <div className="text-base font-extrabold text-[#00ceb8] font-mono">
-              {totalStarterProj.toFixed(2)}
+      </div>
+
+      {nameDialogOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/65 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setNameDialogOpen(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="napper-team-name-title" className="w-full max-w-sm rounded-xl border border-[#283850] bg-[#1a2332] p-5 shadow-2xl">
+            <h2 id="napper-team-name-title" className="text-base font-extrabold text-white">Edit team name</h2>
+            <input
+              autoFocus
+              maxLength={64}
+              value={editedTeamName}
+              onChange={(event) => setEditedTeamName(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") void saveTeamName(); }}
+              aria-label="Team name"
+              className="mt-4 w-full rounded-lg border border-[#283850] bg-[#121926] px-3 py-2 text-sm text-white outline-none focus:border-[#00ceb8]"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setNameDialogOpen(false)} disabled={savingTeamName} className="rounded-lg border border-[#283850] px-3 py-2 text-xs font-bold text-[#8a99ad] hover:text-white disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={() => void saveTeamName()} disabled={savingTeamName} className="rounded-lg bg-[#00ceb8] px-3 py-2 text-xs font-extrabold text-[#0b141e] hover:bg-[#2bd9c6] disabled:opacity-50">{savingTeamName ? "Saving…" : "Save name"}</button>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={handleOptimizeLineup}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#00ceb8] hover:bg-[#2bd9c6] text-[#0b141e] font-extrabold text-xs transition-colors cursor-pointer shadow-lg shadow-[#00ceb8]/20"
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />
-            </svg>
-            <span>Optimize</span>
-          </button>
         </div>
-      </div>
+      )}
 
       {/* Dynamic Feedback Banner */}
       {feedbackMessage && (
@@ -509,7 +233,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
         <div className="mb-4 px-4 py-3 rounded-xl bg-[#202d40] border-2 border-[#00ceb8] flex items-center justify-between shadow-xl animate-pulse">
           <div className="flex items-center gap-3">
             <img
-              src={getPlayerHeadshotUrl(selectedPlayer.name, selectedPlayer.headshot_url)}
+              src={getPlayerHeadshotUrl(selectedPlayer.player_id, selectedPlayer.headshot_url, selectedPlayer.espn_id)}
               alt={selectedPlayer.name}
               onError={handleImageError}
               className="w-9 h-9 rounded-full object-cover border border-[#00ceb8]"
@@ -534,6 +258,11 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
         </div>
       )}
 
+      {loading ? (
+        <div className="py-12 text-center text-sm text-[#8a99ad]">Loading your roster…</div>
+      ) : roster.length === 0 ? (
+        <div className="py-12 text-center text-sm text-[#8a99ad]">No roster has been drafted for this league yet.</div>
+      ) : <>
       {/* Section 1: Starters */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2.5 px-1">
@@ -543,7 +272,6 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
             </h2>
             <span className="text-xs text-[#8a99ad]">({starters.length})</span>
           </div>
-          <span className="text-xs text-[#8a99ad]">Projected: {totalStarterProj.toFixed(2)}</span>
         </div>
 
         <div className="space-y-2">
@@ -577,7 +305,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                   {p ? (
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <img
-                        src={getPlayerHeadshotUrl(p.name, p.headshot_url)}
+                        src={getPlayerHeadshotUrl(p.player_id, p.headshot_url, p.espn_id)}
                         alt={p.name}
                         onError={handleImageError}
                         className="napper-headshot-crop"
@@ -616,20 +344,12 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                   )}
                 </div>
 
-                {/* Right: Swap Button / Projections */}
+                {/* Right: swap target indicator */}
                 <div className="flex items-center gap-3 pl-3 shrink-0">
                   {isEligibleTarget && (
                     <span className="text-[11px] font-extrabold px-2.5 py-1 rounded bg-[#00ceb8] text-[#0b141e] animate-pulse">
                       SWAP HERE
                     </span>
-                  )}
-                  {p && (
-                    <div className="text-right min-w-[50px]">
-                      <div className="text-xs font-bold text-white font-mono">
-                        {p.proj_fpts.toFixed(2)}
-                      </div>
-                      <div className="text-[9px] text-[#8a99ad] uppercase">Proj</div>
-                    </div>
                   )}
                 </div>
               </div>
@@ -676,7 +396,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                   {p ? (
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <img
-                        src={getPlayerHeadshotUrl(p.name, p.headshot_url)}
+                        src={getPlayerHeadshotUrl(p.player_id, p.headshot_url, p.espn_id)}
                         alt={p.name}
                         onError={handleImageError}
                         className="napper-headshot-crop grayscale-[25%]"
@@ -721,14 +441,6 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                       MOVE TO BENCH
                     </span>
                   )}
-                  {p && (
-                    <div className="text-right min-w-[50px]">
-                      <div className="text-xs font-bold text-white font-mono">
-                        {p.proj_fpts.toFixed(2)}
-                      </div>
-                      <div className="text-[9px] text-[#8a99ad] uppercase">Proj</div>
-                    </div>
-                  )}
                 </div>
               </div>
             );
@@ -768,7 +480,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                   {p && (
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <img
-                        src={getPlayerHeadshotUrl(p.name, p.headshot_url)}
+                        src={getPlayerHeadshotUrl(p.player_id, p.headshot_url, p.espn_id)}
                         alt={p.name}
                         onError={handleImageError}
                         className="napper-headshot-crop grayscale"
@@ -789,19 +501,12 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                   )}
                 </div>
 
-                {p && (
-                  <div className="text-right min-w-[50px] shrink-0">
-                    <div className="text-xs font-bold text-[#8a99ad] font-mono">
-                      {p.proj_fpts.toFixed(2)}
-                    </div>
-                    <div className="text-[9px] text-[#5c6c80] uppercase">Proj</div>
-                  </div>
-                )}
               </div>
             );
           })}
         </div>
       </div>
+      </>}
     </div>
   );
 };

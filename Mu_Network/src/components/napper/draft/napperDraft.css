@@ -829,6 +829,24 @@
   gap: 8px;
 }
 
+.draft-player-identity-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.draft-player-identity-button:hover .draft-table-player-name,
+.draft-player-identity-button:focus-visible .draft-table-player-name {
+  color: #00ceb8;
+}
+
 .draft-table-avatar-box {
   position: relative;
   width: 32px;

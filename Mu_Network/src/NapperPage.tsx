@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import "./napper.css";
 import { API_BASE } from "./api";
 import NapperMatchupTab from "./components/napper/NapperMatchupTab";
 import NapperTeamTab from "./components/napper/NapperTeamTab";
 import { NapperLeagueTab } from "./components/napper/NapperLeagueTab";
 import { NapperPlayersTab } from "./components/napper/NapperPlayersTab";
+import NapperPlayerModal from "./components/napper/NapperPlayerModal";
 import { NapperTradesTab } from "./components/napper/NapperTradesTab";
-import { NapperScoresTab } from "./components/napper/NapperScoresTab";
 import NapperDraftRoom from "./components/napper/draft/NapperDraftRoom";
 import ArchetypeCompositionModal, {
   ARCHETYPE_PRESETS,
@@ -25,69 +25,16 @@ import type {
   NapperLeagueSummary,
   NapperUserProfile,
   NapperManagerArchetype,
+  NapperWaiverPlayer,
 } from "./types/napper";
 import { ARCHETYPE_METAS } from "./types/napper";
 
 interface NapperPageProps {
   leagueId?: number;
   initialLeagueId?: number;
-  initialTab?: "MATCHUP" | "TEAM" | "LEAGUE" | "PLAYERS" | "TREND" | "TRADES" | "SCORES";
+  initialTab?: "MATCHUP" | "TEAM" | "LEAGUE" | "PLAYERS" | "TRADES";
   onBackToMu?: () => void;
 }
-
-const FALLBACK_LEAGUES: NapperLeagueSummary[] = [
-  {
-    id: 1,
-    name: "Solo 2026 8-Team SF PPR",
-    season: 2035,
-    teams_count: 8,
-    scoring_type: "PPR",
-    status: "IN_SEASON",
-    avatar_url: "",
-    user_team_id: 1,
-    user_team_name: "The Straw Hat Pirates",
-    user_score: 0.0,
-    user_proj: 152.14,
-    opponent_team_name: "Team 3",
-    opponent_score: 25.4,
-    opponent_proj: 113.95,
-    unplayed_count: 10,
-  },
-  {
-    id: 2,
-    name: "The Justice League",
-    season: 2035,
-    teams_count: 12,
-    scoring_type: "PPR",
-    status: "IN_SEASON",
-    avatar_url: "",
-    user_team_id: 3,
-    user_team_name: "The Straw Hat Pirates",
-    user_score: 0.0,
-    user_proj: 128.5,
-    opponent_team_name: "Gotham Dark Knights",
-    opponent_score: 0.0,
-    opponent_proj: 122.0,
-    unplayed_count: 9,
-  },
-  {
-    id: 3,
-    name: "The Avengers",
-    season: 2035,
-    teams_count: 8,
-    scoring_type: "PPR",
-    status: "PRE_DRAFT",
-    avatar_url: "",
-    user_team_id: 4,
-    user_team_name: "The Straw Hat Pirates",
-    user_score: 0.0,
-    user_proj: 0.0,
-    opponent_team_name: "Stark Industries",
-    opponent_score: 0.0,
-    opponent_proj: 0.0,
-    unplayed_count: 0,
-  },
-];
 
 export const NapperPage: React.FC<NapperPageProps> = ({
   leagueId,
@@ -95,18 +42,20 @@ export const NapperPage: React.FC<NapperPageProps> = ({
   initialTab = "MATCHUP",
   onBackToMu,
 }) => {
-  const effectiveLeagueId = leagueId ?? initialLeagueId ?? 1;
+  const effectiveLeagueId = leagueId ?? initialLeagueId ?? 0;
   const [activeTab, setActiveTab] = useState<
-    "MATCHUP" | "TEAM" | "LEAGUE" | "PLAYERS" | "TREND" | "TRADES" | "SCORES"
+    "MATCHUP" | "TEAM" | "LEAGUE" | "PLAYERS" | "TRADES"
   >(initialTab);
   const [selectedLeagueId, setSelectedLeagueId] = useState<number>(effectiveLeagueId);
   const [profile, setProfile] = useState<NapperUserProfile | null>(null);
   const [pendingTradesCount, setPendingTradesCount] = useState<number>(0);
-  const [leagues, setLeagues] = useState<NapperLeagueSummary[]>(FALLBACK_LEAGUES);
+  const [deletingLeagueId, setDeletingLeagueId] = useState<number | null>(null);
+  const [leagues, setLeagues] = useState<NapperLeagueSummary[]>([]);
+  const [leaguesLoaded, setLeaguesLoaded] = useState(false);
   const [chatMessages, setChatMessages] = useState<NapperChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState<boolean>(true);
   const [inputText, setInputText] = useState("");
-  const [selectedPlayer, setSelectedPlayer] = useState<NapperStarterPlayer | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<NapperStarterPlayer | NapperWaiverPlayer | null>(null);
   const [inDraftRoom, setInDraftRoom] = useState<boolean>(() => {
     return typeof window !== "undefined" && window.location.hash.includes("draft");
   });
@@ -134,7 +83,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
   const [createName, setCreateName] = useState("");
   const [createTeamsCount, setCreateTeamsCount] = useState<number>(8);
   const [createScoringType, setCreateScoringType] = useState<string>("PPR");
-  const [createSuperflex, setCreateSuperflex] = useState<boolean>(true);
+  const [createSuperflex, setCreateSuperflex] = useState<boolean>(false);
   const [createStatus, setCreateStatus] = useState<"IN_SEASON" | "PRE_DRAFT">("IN_SEASON");
   const [createArchetypePreset, setCreateArchetypePreset] = useState<string>("Balanced Mix");
   const [createArchetypeComposition, setCreateArchetypeComposition] = useState<Record<string, number>>(() =>
@@ -218,7 +167,42 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           }
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLeaguesLoaded(true));
+  };
+
+  const handleDeleteLeague = async (league: NapperLeagueSummary) => {
+    if (deletingLeagueId !== null) return;
+    if (!window.confirm(`Delete “${league.name}”? This permanently removes its teams, rosters, matchups, drafts, trades, and chat.`)) {
+      return;
+    }
+
+    setDeletingLeagueId(league.id);
+    setCreateError(null);
+    setCreateSuccessMsg(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/napper/league/${league.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not delete this league.");
+      }
+
+      const remainingLeagues = leagues.filter((item) => item.id !== league.id);
+      setLeagues(remainingLeagues);
+      if (selectedLeagueId === league.id) {
+        const nextLeagueId = remainingLeagues[0]?.id || 0;
+        setSelectedLeagueId(nextLeagueId);
+        setInDraftRoom(false);
+        if (window.location.hash.includes("napper")) {
+          window.location.hash = nextLeagueId ? `#napper-${nextLeagueId}` : "#napper";
+        }
+      }
+      setCreateSuccessMsg(`Deleted “${league.name}”.`);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Could not delete this league.");
+    } finally {
+      setDeletingLeagueId(null);
+    }
   };
 
   useEffect(() => {
@@ -257,7 +241,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
       })
       .then((data) => {
         setCreateSubmitting(false);
-        setCreateSuccessMsg(`🎉 League "${data.league.name}" created! Placeholder seed leagues have been removed.`);
+        setCreateSuccessMsg(`🎉 League "${data.league.name}" created.`);
         const newLid = data.league.id;
         loadLeagues(newLid);
         setTimeout(() => {
@@ -274,6 +258,11 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
   // 3. Fetch league chat stream
   const loadChat = () => {
+    if (!selectedLeagueId) {
+      setChatMessages([]);
+      setChatLoading(false);
+      return;
+    }
     setChatLoading(true);
     fetch(`${API_BASE}/api/napper/league/${selectedLeagueId}/chat?limit=50`)
       .then((res) => res.json())
@@ -330,12 +319,19 @@ export const NapperPage: React.FC<NapperPageProps> = ({
       });
   };
 
-  const currentLeague = leagues.find((l) => l.id === selectedLeagueId) || leagues[0] || FALLBACK_LEAGUES[0];
+  const currentLeague = leagues.find((l) => l.id === selectedLeagueId) || leagues[0] || null;
+  const isPreDraft = currentLeague?.status === "PRE_DRAFT";
+  const handleTeamNameChanged = useCallback((teamName: string) => {
+    setLeagues((current) => current.map((item) =>
+      item.id === selectedLeagueId ? { ...item, user_team_name: teamName } : item
+    ));
+  }, [selectedLeagueId]);
 
-  if (inDraftRoom) {
+  if (inDraftRoom && isPreDraft) {
     return (
       <NapperDraftRoom
         leagueId={selectedLeagueId}
+        scoringType={currentLeague?.scoring_type}
         onBack={() => {
           setInDraftRoom(false);
           if (window.location.hash.includes("draft")) {
@@ -432,21 +428,23 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             </div>
           </div>
 
-          <div
-            onClick={() => setInDraftRoom(true)}
-            className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-[#00ceb8] hover:bg-[#182333] transition-colors cursor-pointer group"
-          >
-            <div className="flex items-center gap-3">
-              <svg className="w-4 h-4 text-[#8a99ad] group-hover:text-[#00ceb8]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <circle cx="12" cy="11" r="3" />
-              </svg>
-              <span>Mock Draft Room</span>
+          {isPreDraft && (
+            <div
+              onClick={() => setInDraftRoom(true)}
+              className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-[#8a99ad] hover:text-[#00ceb8] hover:bg-[#182333] transition-colors cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 text-[#8a99ad] group-hover:text-[#00ceb8]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <circle cx="12" cy="11" r="3" />
+                </svg>
+                <span>Mock Draft Room</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/10 px-1.5 py-0.5 rounded">
+                Live
+              </span>
             </div>
-            <span className="text-[9px] font-black uppercase tracking-wider text-[#00ceb8] bg-[#00ceb8]/10 px-1.5 py-0.5 rounded">
-              Live
-            </span>
-          </div>
+          )}
         </div>
 
         {/* Leagues Header */}
@@ -581,19 +579,22 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-black tracking-tight text-white font-sans">
-                  {currentLeague.name}
+                  {currentLeague?.name || "Napper"}
                 </h1>
-                <span className="text-xs text-[#8a99ad] font-medium">
-                  {currentLeague.season} • {currentLeague.teams_count}-Team {currentLeague.scoring_type}
-                </span>
-                <span className="text-[10px] font-bold text-[#00ceb8] bg-[#00ceb8]/15 px-2 py-0.5 rounded-full border border-[#00ceb8]/30">
-                  {currentLeague.status}
-                </span>
+                {currentLeague && <>
+                  <span className="text-xs text-[#8a99ad] font-medium">
+                    {currentLeague.season} • {currentLeague.teams_count}-Team {currentLeague.scoring_type}
+                  </span>
+                  <span className="text-[10px] font-bold text-[#00ceb8] bg-[#00ceb8]/15 px-2 py-0.5 rounded-full border border-[#00ceb8]/30">
+                    {currentLeague.status}
+                  </span>
+                </>}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {isPreDraft && (
             <button
               type="button"
               onClick={() => setInDraftRoom(true)}
@@ -606,6 +607,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               </svg>
               <span>Draft Room</span>
             </button>
+            )}
 
             <button
               type="button"
@@ -632,17 +634,19 @@ export const NapperPage: React.FC<NapperPageProps> = ({
         {/* Sleeper Pill Nav Tabs Bar */}
         <div className="px-6 pt-4 pb-2">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            <button
-              type="button"
-              onClick={() => setInDraftRoom(true)}
-              className="napper-nav-tab hover:text-[#00ceb8] hover:border-[#00ceb8]/40"
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <circle cx="12" cy="11" r="3" />
-              </svg>
-              <span>Draft</span>
-            </button>
+            {isPreDraft && (
+              <button
+                type="button"
+                onClick={() => setInDraftRoom(true)}
+                className="napper-nav-tab hover:text-[#00ceb8] hover:border-[#00ceb8]/40"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <circle cx="12" cy="11" r="3" />
+                </svg>
+                <span>Draft</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -697,18 +701,6 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab("TREND")}
-              className={`napper-nav-tab ${activeTab === "TREND" ? "active" : ""}`}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-                <polyline points="17 6 23 6 23 12" />
-              </svg>
-              <span>Trend</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setActiveTab("TRADES")}
               className={`napper-nav-tab ${activeTab === "TRADES" ? "active" : ""}`}
             >
@@ -721,22 +713,22 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               <span>Trades</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("SCORES")}
-              className={`napper-nav-tab ${activeTab === "SCORES" ? "active" : ""}`}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              <span>Scores</span>
-            </button>
           </div>
         </div>
 
         {/* Tab Body View */}
         <div className="flex-1 pb-10">
+          {!currentLeague ? (
+            <div className="px-6 py-16 text-center">
+              <h2 className="text-lg font-bold text-white">{leaguesLoaded ? "No active leagues" : "Loading leagues…"}</h2>
+              <p className="mt-2 text-sm text-[#8a99ad]">{leaguesLoaded ? "Create a league or join one to see your roster, matchups, and scores." : ""}</p>
+              {leaguesLoaded && <button
+                type="button"
+                onClick={() => { setModalMode("CREATE"); setCreateError(null); setCreateModalOpen(true); }}
+                className="mt-4 px-4 py-2 rounded-lg bg-[#00ceb8] text-[#0d1722] text-sm font-bold"
+              >Create a league</button>}
+            </div>
+          ) : <>
           {activeTab === "MATCHUP" && (
             <NapperMatchupTab
               leagueId={selectedLeagueId}
@@ -748,6 +740,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
             <NapperTeamTab
               leagueId={selectedLeagueId}
               onSelectPlayer={(p) => setSelectedPlayer(p)}
+              onTeamNameChanged={handleTeamNameChanged}
             />
           )}
 
@@ -756,102 +749,17 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           )}
 
           {activeTab === "PLAYERS" && (
-            <NapperPlayersTab leagueId={selectedLeagueId} />
+            <NapperPlayersTab
+              leagueId={selectedLeagueId}
+              onSelectPlayer={(p) => setSelectedPlayer(p)}
+            />
           )}
 
           {activeTab === "TRADES" && (
             <NapperTradesTab leagueId={selectedLeagueId} />
           )}
 
-          {activeTab === "SCORES" && (
-            <NapperScoresTab leagueId={selectedLeagueId} />
-          )}
-
-          {activeTab === "TREND" && (
-            <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
-              <div className="bg-[#1a2332] border border-[#283850] rounded-2xl p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-9 h-9 rounded-xl bg-[#00ceb8]/15 border border-[#00ceb8]/30 flex items-center justify-center text-[#00ceb8]">
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-                      <polyline points="17 6 23 6 23 12" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-base font-extrabold text-white">Market Intelligence & Waiver Heatmap</h3>
-                    <p className="text-xs text-[#8a99ad]">Most added and trending free agents across Napper leagues over the last 48 hours.</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-[#141d2b] border border-[#223145] rounded-xl p-4">
-                    <div className="text-xs font-bold uppercase tracking-wider text-[#00ceb8] mb-3 flex items-center justify-between">
-                      <span>🔥 Top Added Players</span>
-                      <span className="text-[10px] text-[#8a99ad]">Net adds</span>
-                    </div>
-                    <div className="space-y-2.5">
-                      {[
-                        { name: "Kenneth Walker III", team: "SEA", pos: "RB", adds: "+42.5%", fpts: 22.8 },
-                        { name: "Jaxon Smith-Njigba", team: "SEA", pos: "WR", adds: "+31.2%", fpts: 15.6 },
-                        { name: "David Montgomery", team: "DET", pos: "RB", adds: "+18.9%", fpts: 13.9 },
-                        { name: "Sam LaPorta", team: "DET", pos: "TE", adds: "+14.0%", fpts: 12.8 },
-                      ].map((p, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono text-[#5c6c80] w-3">{idx + 1}</span>
-                            <span className="font-bold text-white">{p.name}</span>
-                            <span className="text-[10px] text-[#8a99ad]">{p.pos} • {p.team}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono text-emerald-400 text-[11px] font-semibold">{p.adds}</span>
-                            <span className="font-mono text-[#cbd5e1] text-[11px]">{p.fpts} pts</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-[#141d2b] border border-[#223145] rounded-xl p-4">
-                    <div className="text-xs font-bold uppercase tracking-wider text-[#ff4458] mb-3 flex items-center justify-between">
-                      <span>❄️ Most Dropped Players</span>
-                      <span className="text-[10px] text-[#8a99ad]">Net drops</span>
-                    </div>
-                    <div className="space-y-2.5">
-                      {[
-                        { name: "Dallas Goedert", team: "PHI", pos: "TE", drops: "-12.4%", fpts: 8.7 },
-                        { name: "Tyler Bass", team: "BUF", pos: "K", drops: "-15.2%", fpts: 8.0 },
-                        { name: "Brock Purdy", team: "SF", pos: "QB", drops: "-8.1%", fpts: 17.1 },
-                        { name: "Baker Mayfield", team: "TB", pos: "QB", drops: "-6.5%", fpts: 16.0 },
-                      ].map((p, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono text-[#5c6c80] w-3">{idx + 1}</span>
-                            <span className="font-bold text-white">{p.name}</span>
-                            <span className="text-[10px] text-[#8a99ad]">{p.pos} • {p.team}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono text-rose-400 text-[11px] font-semibold">{p.drops}</span>
-                            <span className="font-mono text-[#cbd5e1] text-[11px]">{p.fpts} pts</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-4 border-t border-[#223145] flex items-center justify-between">
-                  <span className="text-xs text-[#8a99ad]">Want to claim available talent? Jump directly to waivers.</span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("PLAYERS")}
-                    className="px-4 py-2 rounded-xl bg-[#00ceb8] text-[#0d1722] font-bold text-xs hover:bg-[#2bd9c6] transition-colors cursor-pointer"
-                  >
-                    Open Waiver Wire
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          </>}
         </div>
       </main>
 
@@ -924,7 +832,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
                     <div className="napper-chat-inner-player">
                       <img
-                        src={getPlayerHeadshotUrl(p.name, p.headshot_url)}
+                        src={getPlayerHeadshotUrl(p.name, p.headshot_url, p.espn_id)}
                         alt={p.name}
                         onError={handleImageError}
                         className="w-10 h-10 rounded-full object-cover border border-[#283850] shrink-0"
@@ -1122,11 +1030,6 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
             {modalMode === "CREATE" ? (
               <form onSubmit={handleCreateLeague} className="space-y-4">
-                {/* Seed removal notice */}
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] leading-relaxed">
-                  💡 <b>Auto-Cleanup:</b> Creating a new league will permanently remove all initial placeholder seed leagues, leaving only your active leagues.
-                </div>
-
                 {/* League Name */}
                 <div>
                   <label className="block text-xs font-bold text-[#8a99ad] uppercase tracking-wider mb-1.5">
@@ -1224,7 +1127,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                           : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:text-white"
                       }`}
                     >
-                      In-Season (Active Week 6)
+                      In-Season
                     </button>
                     <button
                       type="button"
@@ -1238,168 +1141,6 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                       Pre-Draft (Draft Room)
                     </button>
                   </div>
-                </div>
-
-                {/* AI Manager Strategies & Archetypes */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <label className="text-xs font-bold text-[#8a99ad] uppercase tracking-wider block">
-                        AI Manager Strategy
-                      </label>
-                      <span className="text-[10px] text-[#5c6c80]">
-                        Select suggested preset or pick exact strategies to draft with you
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 bg-[#111827] p-0.5 rounded-lg border border-[#223147]">
-                      <button
-                        type="button"
-                        onClick={() => setCreateStrategyTab("SUGGESTED")}
-                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
-                          createStrategyTab === "SUGGESTED"
-                            ? "bg-[#00ceb8] text-[#0d1722]"
-                            : "text-[#8a99ad] hover:text-white"
-                        }`}
-                      >
-                        Suggested
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCreateStrategyTab("CUSTOM")}
-                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
-                          createStrategyTab === "CUSTOM"
-                            ? "bg-[#00ceb8] text-[#0d1722]"
-                            : "text-[#8a99ad] hover:text-white"
-                        }`}
-                      >
-                        🎯 Pick Strategies
-                      </button>
-                    </div>
-                  </div>
-
-                  {createStrategyTab === "SUGGESTED" ? (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
-                        {ARCHETYPE_PRESETS.map((p) => {
-                          const isSelected = createArchetypePreset === p.name;
-                          return (
-                            <button
-                              key={p.name}
-                              type="button"
-                              onClick={() => handleSelectPreset(p.name)}
-                              className={`p-2.5 text-left rounded-xl border transition-all cursor-pointer ${
-                                isSelected
-                                  ? "bg-[#00ceb8]/15 border-[#00ceb8] text-white shadow-[0_0_12px_rgba(0,206,184,0.15)]"
-                                  : "bg-[#121926] border-[#223147] text-[#8a99ad] hover:border-[#334661] hover:text-white"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold leading-tight text-white">{p.name}</span>
-                                {isSelected && (
-                                  <span className="text-[10px] text-[#00ceb8] font-bold">✓ Active</span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-[#8a99ad] opacity-80 mt-1 leading-snug line-clamp-2">
-                                {p.description}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#121926] border border-[#223147] text-[11px]">
-                        <span className="text-[#8a99ad]">
-                          Want to pick exact strategies in the league?
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCreateStrategyTab("CUSTOM");
-                            setCreateCustomModalOpen(true);
-                          }}
-                          className="text-[#00ceb8] hover:text-[#2bd9c6] font-bold hover:underline cursor-pointer"
-                        >
-                          Pick Strategies ➜
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2.5 bg-[#121926] p-3 rounded-xl border border-[#223147]">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white">Picked Strategies</span>
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-[#00ceb8]/20 text-[#00ceb8] border border-[#00ceb8]/40">
-                            {Object.values(createArchetypeComposition).reduce((a, b) => a + b, 0)} / {createTeamsCount - 1} AI Slots
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setCreateCustomModalOpen(true)}
-                          className="px-2.5 py-1 rounded-lg bg-[#00ceb8]/20 hover:bg-[#00ceb8]/30 border border-[#00ceb8]/50 text-[#00ceb8] text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <span>⚙</span>
-                          <span>Full Strategy Picker</span>
-                        </button>
-                      </div>
-
-                      {/* Active strategy pills with quick stepper */}
-                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1 scrollbar-thin">
-                        {(Object.keys(ARCHETYPE_METAS) as NapperManagerArchetype[]).map((key) => {
-                          const meta = ARCHETYPE_METAS[key];
-                          const count = createArchetypeComposition[key] || 0;
-                          return (
-                            <div
-                              key={key}
-                              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-colors ${
-                                count > 0 ? "opacity-100" : "opacity-40 hover:opacity-80"
-                              }`}
-                              style={{
-                                color: meta?.color || "#fff",
-                                backgroundColor: meta?.bgColor || "rgba(255,255,255,0.05)",
-                                borderColor: meta?.borderColor || "#334661",
-                              }}
-                            >
-                              <span className="font-bold text-[11px]">{meta?.shortLabel || key}</span>
-                              <span className="px-1.5 py-0.2 bg-black/50 rounded text-[10px] font-mono font-bold text-white">
-                                {count}
-                              </span>
-                              <div className="flex items-center gap-0.5 ml-0.5">
-                                <button
-                                  type="button"
-                                  onClick={() => handleCreateDecrementStrategy(key)}
-                                  disabled={count <= 0}
-                                  className="w-4 h-4 rounded bg-black/40 hover:bg-black/70 text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center font-black text-[10px]"
-                                >
-                                  -
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCreateIncrementStrategy(key)}
-                                  className="w-4 h-4 rounded bg-black/40 hover:bg-black/70 text-white flex items-center justify-center font-black text-[10px]"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <div className="flex items-center justify-between text-[11px] text-[#8a99ad] pt-1 border-t border-[#1c2738]">
-                        <span>Allocate {createTeamsCount - 1} AI managers across strategies.</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCreateArchetypePreset("Balanced Mix");
-                            setCreateArchetypeComposition(ARCHETYPE_PRESETS[0].getCounts(createTeamsCount - 1));
-                            setCreateStrategyTab("SUGGESTED");
-                          }}
-                          className="text-[#8a99ad] hover:text-white underline cursor-pointer"
-                        >
-                          Reset to Balanced
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Submit buttons */}
@@ -1445,12 +1186,31 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                           {lg.teams_count} Teams • {lg.scoring_type} • {lg.status}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="px-3 py-1 rounded-lg bg-[#00ceb8] text-[#0d1722] text-xs font-bold"
-                      >
-                        Select
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedLeagueId(lg.id);
+                            setCreateModalOpen(false);
+                          }}
+                          className="px-3 py-1 rounded-lg bg-[#00ceb8] text-[#0d1722] text-xs font-bold"
+                        >
+                          Select
+                        </button>
+                        <button
+                          type="button"
+                          disabled={leagues.length <= 1 || deletingLeagueId !== null}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleDeleteLeague(lg);
+                          }}
+                          title={leagues.length <= 1 ? "Keep at least one league" : "Delete league"}
+                          className="px-3 py-1 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-300 text-xs font-bold hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {deletingLeagueId === lg.id ? "Deleting…" : "Delete"}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1469,17 +1229,13 @@ export const NapperPage: React.FC<NapperPageProps> = ({
         </div>
       )}
 
-      {/* Modal: Pick Strategies for League Creation */}
-      <ArchetypeCompositionModal
-        isOpen={createCustomModalOpen}
-        onClose={() => setCreateCustomModalOpen(false)}
-        teamsCount={createTeamsCount}
-        currentComposition={createArchetypeComposition}
-        onApply={handleApplyCustomStrategies}
-        title="Pick League Strategies"
-        subtitle={`Select what strategies and manager personas you want to have in the league with you (${createTeamsCount - 1} AI slots)`}
-        applyButtonText="Set League Strategies"
-      />
+      {selectedPlayer && (
+        <NapperPlayerModal
+          player={selectedPlayer}
+          scoringType={currentLeague?.scoring_type}
+          onClose={() => setSelectedPlayer(null)}
+        />
+      )}
     </div>
   );
 };

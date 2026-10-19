@@ -3,6 +3,7 @@ import { API_BASE } from "../../api";
 import { BlueRobotAvatar, PinkRobotAvatar } from "./napperUtils";
 import { ARCHETYPE_METAS, NapperManagerArchetype } from "../../types/napper";
 import ArchetypeCompositionModal from "./draft/ArchetypeCompositionModal";
+import { NapperScoresTab } from "./NapperScoresTab";
 
 interface NapperLeagueTabProps {
   leagueId: number;
@@ -36,6 +37,7 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
   const aiTeams = teams.filter((t) => t.is_ai);
   const aiSlots = aiTeams.length;
   const currentComposition: Record<string, number> = {};
+  const canEditStrategies = league?.status === "PRE_DRAFT";
   aiTeams.forEach((t) => {
     const p = t.persona || "ANALYTICS_NERD";
     currentComposition[p] = (currentComposition[p] || 0) + 1;
@@ -59,66 +61,7 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
 
   return (
     <div className="napper-league-tab" style={{ padding: "16px 24px" }}>
-      {/* League Strategies Card */}
-      <div style={{ marginBottom: "24px", background: "#1a2332", border: "1px solid #283850", borderRadius: "10px", padding: "14px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "16px" }}>🎯</span>
-            <span style={{ color: "#e2e8f0", fontSize: "14px", fontWeight: "700" }}>League Manager Strategies</span>
-            <span style={{ color: "var(--napper-teal)", fontSize: "11px", fontWeight: "700", background: "rgba(0, 206, 184, 0.15)", border: "1px solid rgba(0, 206, 184, 0.3)", padding: "1px 8px", borderRadius: "10px" }}>
-              {aiSlots} AI Managers
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setStrategyModalOpen(true)}
-            style={{
-              background: "rgba(0, 206, 184, 0.15)",
-              border: "1px solid var(--napper-teal)",
-              color: "var(--napper-teal)",
-              padding: "5px 12px",
-              borderRadius: "8px",
-              fontSize: "11px",
-              fontWeight: "700",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-            }}
-          >
-            <span>⚙</span>
-            <span>Customize League Strategies</span>
-          </button>
-        </div>
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {Object.entries(currentComposition).map(([key, count]) => {
-            const meta = ARCHETYPE_METAS[key as NapperManagerArchetype];
-            return (
-              <div
-                key={key}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  fontWeight: "600",
-                  color: meta?.color || "#e2e8f0",
-                  background: meta?.bgColor || "rgba(255, 255, 255, 0.05)",
-                  border: `1px solid ${meta?.borderColor || "#283850"}`,
-                }}
-              >
-                <span>{meta?.label || key}</span>
-                <span style={{ background: "rgba(0, 0, 0, 0.4)", padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "700" }}>
-                  {count}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <NapperScoresTab leagueId={leagueId} embedded />
 
       {/* Standings Table */}
       <div style={{ marginBottom: "32px" }}>
@@ -148,7 +91,7 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
                 background: t.is_user ? "rgba(0, 206, 184, 0.05)" : "transparent",
               }}
             >
-              <span style={{ color: idx < 6 ? "var(--napper-teal)" : "#8a99ad", fontWeight: "700" }}>{idx + 1}</span>
+              <span style={{ color: idx < 6 ? "var(--napper-teal)" : "#8a99ad", fontWeight: "700" }}>{t.seed ?? idx + 1}</span>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 {t.is_user ? <BlueRobotAvatar size={28} /> : <PinkRobotAvatar size={28} />}
                 <div>
@@ -181,7 +124,7 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
               <div style={{ textAlign: "center" }}>
                 {idx < 6 ? (
                   <span style={{ background: "#202d40", color: "var(--napper-teal)", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: "700" }}>
-                    #{idx + 1}
+                    #{t.seed ?? idx + 1}
                   </span>
                 ) : (
                   <span style={{ color: "#64748b", fontSize: "11px" }}>—</span>
@@ -233,16 +176,7 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
         </div>
       </div>
 
-      <ArchetypeCompositionModal
-        isOpen={strategyModalOpen}
-        onClose={() => setStrategyModalOpen(false)}
-        teamsCount={teams.length || 8}
-        currentComposition={currentComposition}
-        onApply={handleApplyStrategies}
-        title="Customize League Strategies"
-        subtitle={`Pick what strategies and manager personas you want in this league (${aiSlots} AI managers)`}
-        applyButtonText="Update League Strategies"
-      />
+
     </div>
   );
 }

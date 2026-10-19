@@ -219,7 +219,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                   <div style={{ color: "#8a99ad", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>You Receive:</div>
                   {trade.offered_players.map((p: any) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
-                      <img src={getPlayerHeadshotUrl(p.name, p.headshot_url || `/static/players/${p.id}.webp`)} alt="" onError={handleImageError} style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover" }} />
+                      <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover" }} />
                       <span style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: "600" }}>{p.name}</span>
                       <span style={{ color: "var(--napper-teal)", fontSize: "11px" }}>{p.position} · {p.proj_fpts != null ? `${Number(p.proj_fpts).toFixed(1)} proj` : ""}</span>
                     </div>
@@ -229,7 +229,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                   <div style={{ color: "#8a99ad", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", marginBottom: "6px" }}>You Give Up:</div>
                   {trade.requested_players.map((p: any) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
-                      <img src={getPlayerHeadshotUrl(p.name, p.headshot_url || `/static/players/${p.id}.webp`)} alt="" onError={handleImageError} style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover" }} />
+                      <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover" }} />
                       <span style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: "600" }}>{p.name}</span>
                       <span style={{ color: "#cbd5e1", fontSize: "11px" }}>{p.position} · {p.proj_fpts != null ? `${Number(p.proj_fpts).toFixed(1)} proj` : ""}</span>
                     </div>
@@ -341,7 +341,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                                 else setOfferedIds((prev) => prev.filter((id) => id !== p.id));
                               }}
                             />
-                            <img src={getPlayerHeadshotUrl(p.name, p.headshot_url || `/static/players/${p.id}.webp`)} alt="" onError={handleImageError} style={{ width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" }} />
+                            <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ color: "#e2e8f0", fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                               <div style={{ color: "#8a99ad", fontSize: "10px" }}>{p.position} · {Number(p.proj_fpts).toFixed(1)} proj</div>
@@ -383,7 +383,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
                                 else setRequestedIds((prev) => prev.filter((id) => id !== p.id));
                               }}
                             />
-                            <img src={getPlayerHeadshotUrl(p.name, p.headshot_url || `/static/players/${p.id}.webp`)} alt="" onError={handleImageError} style={{ width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" }} />
+                            <img src={getPlayerHeadshotUrl(p.player_id ?? p.id, p.headshot_url || `/static/players/${p.id}.webp`, p.espn_id)} alt="" onError={handleImageError} style={{ width: "22px", height: "22px", borderRadius: "50%", objectFit: "cover" }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ color: "#e2e8f0", fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                               <div style={{ color: "#8a99ad", fontSize: "10px" }}>{p.position} · {Number(p.proj_fpts).toFixed(1)} proj</div>

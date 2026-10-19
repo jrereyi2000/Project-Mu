@@ -11,9 +11,7 @@ Provides endpoints for the Napper interactive fantasy platform:
 
 import json
 import logging
-import math
 import os
-import random
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
@@ -32,14 +30,182 @@ def get_db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
-def get_previous_season(cur) -> int:
+def get_current_season(cur) -> int:
     cur.execute("SELECT current_season FROM league_state WHERE id = 1")
     row = cur.fetchone()
-    if row:
-        cs = row["current_season"] if isinstance(row, dict) else row[0]
-        if cs:
-            return int(cs) - 1
-    return 2035
+    if not row or not row["current_season"]:
+        raise RuntimeError("The active NFL season is not configured in league_state")
+    return int(row["current_season"])
+
+
+def get_current_season_week(cur) -> tuple[int, int]:
+    """Return the active simulation season and week used by analytics and games."""
+    cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
+    row = cur.fetchone()
+    if not row or not row["current_season"]:
+        raise RuntimeError("The active NFL season is not configured in league_state")
+    return int(row["current_season"]), max(1, int(row["current_week"] or 1))
+
+
+def require_current_season_league(cur, league_id: int) -> Dict[str, Any]:
+    cur.execute("SELECT id, season FROM napper_leagues WHERE id = %s", (league_id,))
+    league = cur.fetchone()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    season = get_current_season(cur)
+    if int(league["season"]) != season:
+        raise HTTPException(status_code=409, detail="This league belongs to an old NFL season and must be restarted")
+    return league
+
+
+def _reception_adjustment(scoring_type: Optional[str]) -> float:
+    if scoring_type == "HALF_PPR":
+        return 0.5
+    if scoring_type == "STANDARD":
+        return 1.0
+    return 0.0
+
+
+_ACTUAL_PLAYER_POINTS_CTE = """
+    WITH raw_actual AS (
+        SELECT ps.player_id, SUM(ps.fantasy_points) AS points, SUM(ps.receptions) AS receptions
+        FROM player_stats ps JOIN games g ON g.id = ps.game_id
+        WHERE g.season = %s AND g.week = %s AND g.status = 'COMPLETED' AND ps.player_id IS NOT NULL
+        GROUP BY ps.player_id
+        UNION ALL
+        SELECT k.player_id,
+               SUM(COALESCE(k.fgm, 0) * 3 + COALESCE(k.fgm_49, 0) + 2 * COALESCE(k.fgm_50, 0) + COALESCE(k.xpm, 0)),
+               0
+        FROM game_stat_kicking k JOIN games g ON g.id = k.game_id
+        WHERE g.season = %s AND g.week = %s AND g.status = 'COMPLETED'
+        GROUP BY k.player_id
+        UNION ALL
+        SELECT dst.player_id,
+               SUM(COALESCE(def.sacks, 0) + 2 * COALESCE(def.ints, 0)
+                   + 2 * COALESCE(def.fumble_recoveries, 0) + 6 * COALESCE(def.tds, 0)
+                   + 2 * COALESCE(def.safeties, 0) + 2 * COALESCE(def.blocks, 0)
+                   + CASE
+                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) = 0 THEN 10
+                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 6 THEN 7
+                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 13 THEN 4
+                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 20 THEN 1
+                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 27 THEN 0
+                       WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 34 THEN -1
+                       ELSE -4
+                   END),
+               0
+        FROM player_seasons dst
+        JOIN games g ON g.season = dst.season AND g.week = %s AND g.status = 'COMPLETED'
+            AND (g.home_team_id = dst.team_id OR g.away_team_id = dst.team_id)
+        LEFT JOIN (
+            SELECT game_id, team_id, SUM(sacks) AS sacks, SUM(ints) AS ints,
+                   SUM(fumble_recoveries) AS fumble_recoveries, SUM(tds) AS tds,
+                   SUM(safeties) AS safeties, SUM(blocks) AS blocks
+            FROM game_stat_defense GROUP BY game_id, team_id
+        ) def ON def.game_id = g.id AND def.team_id = dst.team_id
+        WHERE dst.season = %s AND dst.position = 'DEF'
+        GROUP BY dst.player_id
+        UNION ALL
+        SELECT NULL::INT, 0::NUMERIC, 0::NUMERIC WHERE FALSE
+    ), actual AS (
+        SELECT player_id, SUM(points) AS fantasy_points, SUM(receptions) AS receptions
+        FROM raw_actual GROUP BY player_id
+    )
+"""
+
+
+def _get_weekly_team_totals(cur, league_id: int, season: int, week: int, scoring_type: str):
+    """Calculate starter scores and projections from the actual player-week rows."""
+    cur.execute(f"""
+        {_ACTUAL_PLAYER_POINTS_CTE}
+        SELECT nr.team_id,
+               COALESCE(SUM(fp.projected_points), 0) AS projection,
+               COALESCE(SUM(COALESCE(actual.fantasy_points, 0)
+                   - COALESCE(actual.receptions, 0) * %s), 0) AS score,
+               COUNT(*) AS starters,
+               COUNT(actual.player_id) AS played_players
+        FROM napper_rosters nr
+        LEFT JOIN fantasy_projections fp
+          ON fp.player_id = nr.player_id AND fp.season = %s AND fp.week = %s
+        LEFT JOIN actual ON actual.player_id = nr.player_id
+        WHERE nr.league_id = %s AND nr.week = %s AND nr.slot <> 'BN'
+        GROUP BY nr.team_id
+    """, (season, week, season, week, week, season,
+          _reception_adjustment(scoring_type), season, week, league_id, week))
+    return {row["team_id"]: row for row in cur.fetchall()}
+
+
+def _is_nfl_week_complete(cur, season: int, week: int) -> bool:
+    cur.execute("""
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE status = 'COMPLETED') AS completed
+        FROM games
+        WHERE season = %s AND week = %s AND game_type = 'REGULAR_SEASON'
+    """, (season, week))
+    row = cur.fetchone()
+    return bool(row and row["total"] > 0 and row["completed"] == row["total"])
+
+
+def _get_league_standings(cur, league_id: int, season: int, scoring_type: str):
+    """Build season standings from weekly starter scores and scheduled opponents."""
+    _, active_week = get_current_season_week(cur)
+    cur.execute("""
+        SELECT id, team_name, manager_handle, is_ai, persona,
+               (user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)) AS is_user
+        FROM napper_teams WHERE league_id = %s
+    """, (league_id,))
+    teams = cur.fetchall()
+    stats = {
+        team["id"]: {**team, "wins": 0, "losses": 0, "ties": 0,
+                     "points_for": 0.0, "points_against": 0.0}
+        for team in teams
+    }
+    cur.execute("""
+        SELECT id, week, home_team_id, away_team_id
+        FROM napper_matchups
+        WHERE league_id = %s AND week <= %s AND week <= 14
+        ORDER BY week, id
+    """, (league_id, active_week))
+    matchups_by_week = defaultdict(list)
+    for matchup in cur.fetchall():
+        matchups_by_week[matchup["week"]].append(matchup)
+
+    for week, matchups in matchups_by_week.items():
+        weekly_totals = _get_weekly_team_totals(cur, league_id, season, week, scoring_type)
+        complete = week < active_week or _is_nfl_week_complete(cur, season, week)
+        for matchup in matchups:
+            home_id, away_id = matchup["home_team_id"], matchup["away_team_id"]
+            home_score = float((weekly_totals.get(home_id) or {}).get("score") or 0)
+            away_score = float((weekly_totals.get(away_id) or {}).get("score") or 0)
+            if home_id in stats:
+                stats[home_id]["points_for"] += home_score
+                stats[home_id]["points_against"] += away_score
+            if away_id in stats:
+                stats[away_id]["points_for"] += away_score
+                stats[away_id]["points_against"] += home_score
+            has_lineups = int((weekly_totals.get(home_id) or {}).get("starters") or 0) > 0 and int((weekly_totals.get(away_id) or {}).get("starters") or 0) > 0
+            if complete and has_lineups and home_id in stats and away_id in stats:
+                if home_score > away_score:
+                    stats[home_id]["wins"] += 1
+                    stats[away_id]["losses"] += 1
+                elif away_score > home_score:
+                    stats[away_id]["wins"] += 1
+                    stats[home_id]["losses"] += 1
+                else:
+                    stats[home_id]["ties"] += 1
+                    stats[away_id]["ties"] += 1
+
+    def rank_key(team):
+        games = team["wins"] + team["losses"] + team["ties"]
+        record_pct = (team["wins"] + 0.5 * team["ties"]) / games if games else 0.0
+        return (-record_pct, -team["points_for"], team["id"])
+
+    ordered = sorted(stats.values(), key=rank_key)
+    for seed, team in enumerate(ordered, 1):
+        team["seed"] = seed
+        team["points_for"] = round(team["points_for"], 2)
+        team["points_against"] = round(team["points_against"], 2)
+    return ordered
 
 
 # ──────────────────────────────── Models ────────────────────────────────
@@ -64,6 +230,10 @@ class LineupRequest(BaseModel):
     team_id: int
     swaps: List[LineupSwap]
     week: Optional[int] = None
+
+
+class TeamNameRequest(BaseModel):
+    team_name: str
 
 
 class WaiverClaimRequest(BaseModel):
@@ -155,8 +325,9 @@ ELIGIBLE_POSITIONS: Dict[str, set] = {
 
 def _get_slot_order(roster_fmt: Optional[Dict[str, int]]) -> List[str]:
     """Generates ordered starting slot names from league roster_format."""
+    standard_slots = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]
     if not roster_fmt:
-        return ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPERFLEX", "K", "DEF"]
+        return standard_slots
 
     order: List[str] = []
     for s in ["QB", "RB", "WR", "TE", "FLEX", "SUPERFLEX", "K", "DEF"]:
@@ -164,7 +335,7 @@ def _get_slot_order(roster_fmt: Optional[Dict[str, int]]) -> List[str]:
         for _ in range(count):
             order.append(s)
 
-    return order if order else ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPERFLEX", "K", "DEF"]
+    return order if order else standard_slots
 
 
 def _ensure_matchup_and_rosters(cur, league_id: int, week: int):
@@ -176,11 +347,14 @@ def _ensure_matchup_and_rosters(cur, league_id: int, week: int):
     )
     if cur.fetchone()["cnt"] == 0:
         # Check if rosters exist for any week in this league
-        cur.execute(
-            "SELECT week FROM napper_rosters WHERE league_id = %s ORDER BY ABS(week - %s) LIMIT 1",
-            (league_id, week)
-        )
-        src_row = cur.fetchone()
+        _, active_week = get_current_season_week(cur)
+        src_row = None
+        if week == active_week:
+            cur.execute(
+                "SELECT week FROM napper_rosters WHERE league_id = %s AND week < %s ORDER BY week DESC LIMIT 1",
+                (league_id, week)
+            )
+            src_row = cur.fetchone()
         if src_row:
             src_week = src_row["week"]
             cur.execute("""
@@ -190,34 +364,8 @@ def _ensure_matchup_and_rosters(cur, league_id: int, week: int):
                 WHERE league_id = %s AND week = %s
                 ON CONFLICT (team_id, week, player_id) DO NOTHING
             """, (week, league_id, src_week))
-        else:
-            # If this league has NO rosters at all (e.g. League 2 or 3), copy baseline rosters from League 1 or populate
-            cur.execute("SELECT id FROM napper_teams WHERE league_id = %s ORDER BY id", (league_id,))
-            target_teams = [t["id"] for t in cur.fetchall()]
-
-            # Fetch a sample template of rosters from League 1
-            cur.execute("""
-                SELECT team_id, player_id, slot
-                FROM napper_rosters
-                WHERE league_id = 1 AND week = 6
-                ORDER BY team_id, id
-            """)
-            template_rows = cur.fetchall()
-            if template_rows and target_teams:
-                # Group template by source team
-                tmpl_by_team = defaultdict(list)
-                for r in template_rows:
-                    tmpl_by_team[r["team_id"]].append((r["player_id"], r["slot"]))
-                tmpl_teams = list(tmpl_by_team.keys())
-
-                for idx, t_id in enumerate(target_teams):
-                    src_tid = tmpl_teams[idx % len(tmpl_teams)]
-                    for pid, slot in tmpl_by_team[src_tid]:
-                        cur.execute("""
-                            INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
-                            VALUES (%s, %s, %s, %s, %s)
-                            ON CONFLICT (team_id, week, player_id) DO NOTHING
-                        """, (league_id, t_id, week, pid, slot))
+        # If the league has no roster history, leave it empty. A different league's
+        # roster must never be presented as this league's team.
 
     # 2. Ensure matchups for this week
     cur.execute(
@@ -237,9 +385,9 @@ def _ensure_matchup_and_rosters(cur, league_id: int, week: int):
                 h_id = teams[i]
                 a_id = teams[n - 1 - i]
                 # Default projected points
-                h_proj = 135.50 - i * 4.0
-                a_proj = 125.00 - i * 3.5
-                win_prob = 0.55 if h_proj >= a_proj else 0.45
+                h_proj = 0.0
+                a_proj = 0.0
+                win_prob = 0.5
                 cur.execute("""
                     INSERT INTO napper_matchups (
                         league_id, week, home_team_id, away_team_id,
@@ -288,78 +436,75 @@ def get_user_profile():
 def get_user_leagues():
     with get_db() as conn:
         with conn.cursor() as cur:
-            # Query all 3 reference leagues with user's team joined
+            season, current_week = get_current_season_week(cur)
             cur.execute("""
-                SELECT l.id, l.name, l.season, l.teams_count, l.scoring_type, l.status, l.current_week, l.avatar_url,
+                SELECT l.id, l.name, l.teams_count, l.scoring_type, l.status, l.avatar_url,
                        t.id as user_team_id, t.team_name as user_team_name, t.wins, t.losses, t.ties,
                        t.points_for, t.points_against
                 FROM napper_leagues l
-                LEFT JOIN napper_teams t ON t.league_id = l.id AND t.user_id IS NOT NULL
+                JOIN napper_teams t ON t.league_id = l.id
+                    AND t.user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)
+                WHERE l.is_seed IS NOT TRUE AND l.season = %s
                 ORDER BY l.id
-            """)
+            """, (season,))
             leagues = cur.fetchall()
 
             results = []
             for lg in leagues:
                 lid = lg["id"]
-                cw = lg["current_week"] or 1
+                cw = current_week
                 u_tid = lg["user_team_id"]
+                _ensure_matchup_and_rosters(cur, lid, cw)
+                conn.commit()
 
                 wins = lg["wins"] if lg["wins"] is not None else 0
                 losses = lg["losses"] if lg["losses"] is not None else 0
                 ties = lg["ties"] if lg["ties"] is not None else 0
                 record = f"{wins}-{losses}" + (f"-{ties}" if ties else "")
 
-                # Query user matchup for current week
-                match = None
-                if u_tid:
-                    cur.execute("""
-                        SELECT m.home_team_id, m.away_team_id, m.home_score, m.away_score, m.home_proj, m.away_proj,
-                               th.team_name as home_name, ta.team_name as away_name
-                        FROM napper_matchups m
-                        JOIN napper_teams th ON th.id = m.home_team_id
-                        JOIN napper_teams ta ON ta.id = m.away_team_id
-                        WHERE m.league_id = %s AND m.week = %s AND (m.home_team_id = %s OR m.away_team_id = %s)
-                        LIMIT 1
-                    """, (lid, cw, u_tid, u_tid))
-                    match = cur.fetchone()
-
-                if match and u_tid:
-                    is_home = (match["home_team_id"] == u_tid)
-                    u_score = float(match["home_score"] if is_home else match["away_score"])
-                    o_score = float(match["away_score"] if is_home else match["home_score"])
-                    u_proj = float(match["home_proj"] if is_home else match["away_proj"])
-                    o_proj = float(match["away_proj"] if is_home else match["home_proj"])
+                cur.execute("""
+                    SELECT m.home_team_id, m.away_team_id,
+                           th.team_name AS home_name, ta.team_name AS away_name
+                    FROM napper_matchups m
+                    JOIN napper_teams th ON th.id = m.home_team_id
+                    JOIN napper_teams ta ON ta.id = m.away_team_id
+                    WHERE m.league_id = %s AND m.week = %s
+                      AND (m.home_team_id = %s OR m.away_team_id = %s)
+                    LIMIT 1
+                """, (lid, cw, u_tid, u_tid))
+                match = cur.fetchone()
+                totals = _get_weekly_team_totals(cur, lid, season, cw, lg["scoring_type"])
+                user_total = totals.get(u_tid, {})
+                opponent_id = None
+                if match:
+                    is_home = match["home_team_id"] == u_tid
+                    opponent_id = match["away_team_id"] if is_home else match["home_team_id"]
                     opp_name = match["away_name"] if is_home else match["home_name"]
                 else:
-                    # Find any opponent team in this league
-                    cur.execute("SELECT team_name FROM napper_teams WHERE league_id = %s AND id != %s LIMIT 1", (lid, u_tid or 0))
-                    opp_row = cur.fetchone()
-                    opp_name = opp_row["team_name"] if opp_row else "Team 2"
-                    u_score, o_score = 0.0, 0.0
-                    u_proj, o_proj = 0.0, 0.0
+                    opp_name = None
+                opponent_total = totals.get(opponent_id, {})
 
                 results.append({
                     "id": lg["id"],
                     "name": lg["name"],
-                    "season": lg["season"],
+                    "season": season,
                     "teams_count": lg["teams_count"],
                     "scoring_type": lg["scoring_type"],
                     "status": lg["status"],
                     "avatar_url": lg.get("avatar_url"),
                     "current_week": cw,
-                    "user_team_id": u_tid or 1,
-                    "user_team_name": lg["user_team_name"] or "The Straw Hat Pirates",
+                    "user_team_id": u_tid,
+                    "user_team_name": lg["user_team_name"],
                     "record": record,
                     "wins": wins,
                     "losses": losses,
                     "ties": ties,
-                    "user_score": u_score,
-                    "user_proj": u_proj,
+                    "user_score": round(float(user_total.get("score") or 0), 2),
+                    "user_proj": round(float(user_total.get("projection") or 0), 2),
                     "opponent_team_name": opp_name,
-                    "opponent_score": o_score,
-                    "opponent_proj": o_proj,
-                    "unplayed_count": 10 if lg["status"] == "IN_SEASON" else 0,
+                    "opponent_score": round(float(opponent_total.get("score") or 0), 2),
+                    "opponent_proj": round(float(opponent_total.get("projection") or 0), 2),
+                    "unplayed_count": max(0, int(user_total.get("starters") or 0) - int(user_total.get("played_players") or 0)),
                 })
 
             return {"leagues": results}
@@ -377,20 +522,29 @@ def get_league_detail(league_id: int):
             if not league:
                 raise HTTPException(status_code=404, detail="League not found")
 
-            # Standings
-            cur.execute("""
-                SELECT id, team_name, manager_handle, is_ai, persona, wins, losses, ties,
-                       points_for, points_against, seed, (user_id IS NOT NULL) as is_user
-                FROM napper_teams
-                WHERE league_id = %s
-                ORDER BY wins DESC, points_for DESC
-            """, (league_id,))
-            teams = cur.fetchall()
+            season, _ = get_current_season_week(cur)
+            require_current_season_league(cur, league_id)
+            teams = _get_league_standings(cur, league_id, season, league["scoring_type"])
 
             return {
                 "league": league,
                 "teams": teams,
             }
+
+
+@router.delete("/league/{league_id}")
+def delete_league(league_id: int):
+    """Deletes a league and its dependent teams, rosters, matchups, drafts, trades, and chat."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM napper_leagues WHERE id = %s RETURNING id",
+                (league_id,),
+            )
+            deleted = cur.fetchone()
+            if not deleted:
+                raise HTTPException(status_code=404, detail="League not found")
+            return {"deleted": True, "league_id": deleted["id"]}
 
 
 def resolve_archetype_preset_composition(preset_name: Optional[str], ai_slots: int) -> Dict[str, int]:
@@ -476,8 +630,7 @@ def resolve_archetype_preset_composition(preset_name: Optional[str], ai_slots: i
 def create_league(req: LeagueCreateRequest):
     """Creates a new fantasy league.
 
-    User Rule: When a new league is created, any existing seed leagues (is_seed = TRUE)
-    are permanently removed from the system.
+    Newly created in-season leagues start without fabricated rosters or scores.
     """
     name = (req.name or "").strip()
     if not name:
@@ -493,23 +646,19 @@ def create_league(req: LeagueCreateRequest):
         roster_format = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6}
 
     avatar = req.avatar_url or "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=256&h=256&q=80"
-    current_week = 6 if status == "IN_SEASON" else 1
-
     with get_db() as conn:
         with conn.cursor() as cur:
-            prev_season = get_previous_season(cur)
+            season, active_week = get_current_season_week(cur)
+            current_week = active_week if status == "IN_SEASON" else 1
 
-            # 1. Remove seed leagues if any exist
-            cur.execute("DELETE FROM napper_leagues WHERE is_seed = TRUE")
-
-            # 2. Insert new user league
+            # Seed leagues stay stored but are excluded from the active league list.
             cur.execute("""
                 INSERT INTO napper_leagues (
                     name, season, teams_count, scoring_type, roster_format,
                     status, avatar_url, current_week, is_seed
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, FALSE)
                 RETURNING id, name, season, teams_count, scoring_type, status, current_week, avatar_url
-            """, (name, prev_season, teams_count, scoring_type, psycopg.types.json.Jsonb(roster_format), status, avatar, current_week))
+            """, (name, season, teams_count, scoring_type, psycopg.types.json.Jsonb(roster_format), status, avatar, current_week))
             new_league = cur.fetchone()
             league_id = new_league["id"]
 
@@ -535,10 +684,7 @@ def create_league(req: LeagueCreateRequest):
                 RETURNING id
             """, (
                 league_id, user_id, user_prof["display_name"], user_prof["handle"], user_prof["avatar_url"],
-                5 if status == "IN_SEASON" else 0,
-                0 if status == "IN_SEASON" else 0,
-                785.4 if status == "IN_SEASON" else 0.0,
-                610.2 if status == "IN_SEASON" else 0.0
+                0, 0, 0.0, 0.0
             ))
             user_team_id = cur.fetchone()["id"]
 
@@ -556,11 +702,6 @@ def create_league(req: LeagueCreateRequest):
             team_ids = [user_team_id]
             for idx, cand in enumerate(ai_managers):
                 seed_num = idx + 2
-                w = max(0, 4 - (idx % 4)) if status == "IN_SEASON" else 0
-                l = (5 - w) if status == "IN_SEASON" else 0
-                pf = round(720.0 - (idx * 22.5), 1) if status == "IN_SEASON" else 0.0
-                pa = round(620.0 + (idx * 15.0), 1) if status == "IN_SEASON" else 0.0
-
                 cur.execute("""
                     INSERT INTO napper_teams (
                         league_id, user_id, team_name, manager_handle, avatar_url,
@@ -571,57 +712,13 @@ def create_league(req: LeagueCreateRequest):
                     league_id, cand["name"], cand["handle"],
                     cand.get("avatar") or f"https://api.dicebear.com/7.x/identicon/svg?seed={cand['name']}",
                     cand["persona"],
-                    w, l, pf, pa, seed_num
+                    0, 0, 0.0, 0.0, seed_num
                 ))
                 team_ids.append(cur.fetchone()["id"])
 
-            # 6. If IN_SEASON, populate reference rosters & schedule
+            # In-season leagues start with empty rosters; only a completed draft or
+            # explicit roster transaction can associate players with these teams.
             if status == "IN_SEASON":
-                cur.execute("""
-                    SELECT p.id, p.player_name, ps.position
-                    FROM players p
-                    JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                    ORDER BY p.id ASC
-                    LIMIT 300
-                """, (prev_season,))
-                avail = cur.fetchall()
-
-                pos_pools = defaultdict(list)
-                for p in avail:
-                    pos_pools[p["position"]].append(p["id"])
-
-                slots_needed = _get_slot_order(roster_format) + ["BN"] * int(roster_format.get("BN", 6))
-
-                used_pids = set()
-                for tid in team_ids:
-                    team_assigned = []
-                    for slot in slots_needed:
-                        eligible_poses = ELIGIBLE_POSITIONS.get(slot, {"WR", "RB"})
-                        picked_pid = None
-                        for ep in eligible_poses:
-                            for candidate in pos_pools.get(ep, []):
-                                if candidate not in used_pids:
-                                    picked_pid = candidate
-                                    break
-                            if picked_pid:
-                                break
-                        if not picked_pid and avail:
-                            for cand in avail:
-                                if cand["id"] not in used_pids:
-                                    picked_pid = cand["id"]
-                                    break
-                        if picked_pid:
-                            used_pids.add(picked_pid)
-                            team_assigned.append((picked_pid, slot))
-
-                    for w in range(1, 15):
-                        for pid, slot in team_assigned:
-                            cur.execute("""
-                                INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
-                                VALUES (%s, %s, %s, %s, %s)
-                                ON CONFLICT (team_id, week, player_id) DO NOTHING
-                            """, (league_id, tid, w, pid, slot))
-
                 n = len(team_ids)
                 t_list = list(team_ids)
                 for w in range(1, 15):
@@ -630,22 +727,19 @@ def create_league(req: LeagueCreateRequest):
                     for match_i in range(n // 2):
                         home = rotated[match_i]
                         away = rotated[n - 1 - match_i]
-                        is_final = (w < current_week)
-                        h_score = round(random.uniform(90.0, 140.0), 2) if is_final else 0.00
-                        a_score = round(random.uniform(85.0, 135.0), 2) if is_final else 0.00
                         cur.execute("""
                             INSERT INTO napper_matchups (
                                 league_id, week, home_team_id, away_team_id,
                                 home_score, away_score, home_proj, away_proj,
                                 win_prob_home, is_final
-                            ) VALUES (%s, %s, %s, %s, %s, %s, 118.5, 114.2, 0.520, %s)
-                        """, (league_id, w, home, away, h_score, a_score, is_final))
+                            ) VALUES (%s, %s, %s, %s, 0, 0, 0, 0, 0.500, FALSE)
+                        """, (league_id, w, home, away))
 
                 welcome_card = {
                     "type": "LEAGUE_CREATED",
                     "title": f"Welcome to {name}!",
                     "highlight": f"{teams_count} Teams · {scoring_type} · Superflex" if req.is_superflex else f"{teams_count} Teams · {scoring_type}",
-                    "commentary": "All rosters and matchups are locked in for Week 6. Make your waiver moves and set your lineups!",
+                    "commentary": f"Week {current_week} is underway. Draft or add players to build your roster.",
                 }
                 cur.execute("""
                     INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text, card_payload)
@@ -681,6 +775,8 @@ def set_league_strategies(league_id: int, req: SetArchetypesRequest):
             league = cur.fetchone()
             if not league:
                 raise HTTPException(status_code=404, detail="League not found")
+            if league["status"] != "PRE_DRAFT":
+                raise HTTPException(status_code=409, detail="League strategies can only be changed before the draft.")
 
             # Fetch existing AI teams
             cur.execute("""
@@ -745,41 +841,49 @@ def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
     """Returns all teams in a league and their active rosters for trading/proposals."""
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT current_week FROM napper_leagues WHERE id = %s", (league_id,))
+            cur.execute("SELECT current_week, season FROM napper_leagues WHERE id = %s", (league_id,))
             lg = cur.fetchone()
             if not lg:
                 raise HTTPException(status_code=404, detail="League not found")
-            wk = int(week) if week is not None else (lg["current_week"] or 6)
+            require_current_season_league(cur, league_id)
+            _, active_week = get_current_season_week(cur)
+            wk = int(week) if week is not None else active_week
+            _ensure_matchup_and_rosters(cur, league_id, wk)
+            conn.commit()
 
             cur.execute("""
-                SELECT id, team_name, manager_handle, avatar_url, (user_id IS NOT NULL) as is_user
+                SELECT id, team_name, manager_handle, avatar_url,
+                       (user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)) as is_user
                 FROM napper_teams
                 WHERE league_id = %s
-                ORDER BY (user_id IS NOT NULL) DESC, team_name ASC
+                ORDER BY (user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)) DESC, team_name ASC
             """, (league_id,))
             teams = cur.fetchall()
 
-            prev_season = get_previous_season(cur)
+            season, _ = get_current_season_week(cur)
             teams_data = []
             for tm in teams:
                 cur.execute("""
-                    SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
-                           nr.slot, COALESCE(fp.projected_points, 10.0) as proj_fpts
+                    SELECT p.id, p.player_name, p.full_name, p.espn_id, ps.position,
+                           nr.slot, NULLIF(fp.projected_points, 0.0) as proj_fpts
                     FROM napper_rosters nr
                     JOIN players p ON p.id = nr.player_id
-                    LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                    JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s AND ps.team_id IS NOT NULL
                     LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
                     WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s
+                      AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
                     ORDER BY nr.slot != 'BN' DESC, proj_fpts DESC
-                """, (prev_season, wk, prev_season, league_id, tm["id"], wk))
+                """, (season, wk, season, league_id, tm["id"], wk))
                 players = []
                 for p in cur.fetchall():
                     players.append({
                         "id": p["id"],
+                        "player_id": p["id"],
                         "name": p["player_name"] or p["full_name"],
+                        "espn_id": p["espn_id"],
                         "position": "RB" if p["position"] in ("HB", "RB", "FB") else p["position"],
                         "slot": p["slot"],
-                        "proj_fpts": float(p["proj_fpts"]),
+                        "proj_fpts": float(p["proj_fpts"]) if p["proj_fpts"] is not None else None,
                         "headshot_url": f"/static/players/{p['id']}.webp",
                     })
                 teams_data.append({
@@ -793,47 +897,255 @@ def get_league_teams_rosters(league_id: int, week: Optional[int] = Query(None)):
             return {"teams": teams_data}
 
 
-@router.get("/league/{league_id}/matchup")
-def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
+@router.get("/league/{league_id}/team")
+def get_league_user_team(league_id: int, week: Optional[int] = Query(None)):
+    """Returns the signed-in user's team and its saved lineup for one week."""
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT current_week, roster_format FROM napper_leagues WHERE id = %s", (league_id,))
+            cur.execute("""
+                SELECT l.season, l.current_week, l.roster_format, l.scoring_type,
+                       t.id AS team_id, t.team_name, t.wins, t.losses, t.ties,
+                       t.points_for, t.points_against
+                FROM napper_leagues l
+                JOIN napper_teams t ON t.league_id = l.id
+                    AND t.user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)
+                WHERE l.id = %s
+                LIMIT 1
+            """, (league_id,))
+            team = cur.fetchone()
+            if not team:
+                raise HTTPException(status_code=404, detail="User team not found in this league")
+
+            season, active_week = get_current_season_week(cur)
+            require_current_season_league(cur, league_id)
+            wk = max(1, min(17, int(week) if week is not None else active_week))
+            _ensure_matchup_and_rosters(cur, league_id, wk)
+            conn.commit()
+            cur.execute(_ACTUAL_PLAYER_POINTS_CTE + """
+                SELECT nr.player_id, nr.slot, p.player_name, p.full_name, p.espn_id,
+                       ps.position AS position,
+                       nfl_team.abbreviation AS nfl_team,
+                       opponent.abbreviation AS opponent_abbr,
+                       scheduled.game_time, scheduled.status AS nfl_game_status,
+                       NULLIF(fp.projected_points, 0.0) AS projected_points,
+                       COALESCE(week_stats.fantasy_points, 0) AS fantasy_points,
+                       COALESCE(week_stats.receptions, 0) AS receptions,
+                       (week_stats.player_id IS NOT NULL) AS has_played
+                FROM napper_rosters nr
+                JOIN players p ON p.id = nr.player_id
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s AND ps.team_id IS NOT NULL
+                JOIN teams nfl_team ON nfl_team.id = ps.team_id
+                LEFT JOIN games scheduled ON scheduled.season = %s AND scheduled.week = %s
+                    AND scheduled.status IN ('SCHEDULED', 'COMPLETED')
+                    AND (scheduled.home_team_id = ps.team_id OR scheduled.away_team_id = ps.team_id)
+                LEFT JOIN teams opponent ON opponent.id = CASE
+                    WHEN scheduled.home_team_id = ps.team_id THEN scheduled.away_team_id
+                    WHEN scheduled.away_team_id = ps.team_id THEN scheduled.home_team_id
+                    ELSE NULL END
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
+                LEFT JOIN actual week_stats ON week_stats.player_id = p.id
+                WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s
+                  AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
+                ORDER BY nr.slot, COALESCE(fp.projected_points, 0) DESC, p.id
+            """, (season, wk, season, wk, wk, season,
+                  season, season, wk, wk, season, league_id, team["team_id"], wk))
+
+            players = []
+            for row in cur.fetchall():
+                position = row["position"]
+                if position in ("HB", "FB"):
+                    position = "RB"
+                players.append({
+                    "id": row["player_id"],
+                    "player_id": row["player_id"],
+                    "espn_id": row["espn_id"],
+                    "name": row["player_name"] or row["full_name"],
+                    "position": position,
+                    "team": row["nfl_team"],
+                    "opponent": f"vs {row['opponent_abbr']}" if row["opponent_abbr"] else "Bye week / no matchup",
+                    "kickoff": row["game_time"] or ("Bye week" if not row["nfl_game_status"] else "Time TBD"),
+                    "game_status": "Final" if row["nfl_game_status"] == "COMPLETED" else ("Scheduled" if row["nfl_game_status"] == "SCHEDULED" else "Bye week"),
+                    "headshot_url": f"/static/players/{row['player_id']}.webp",
+                    "fpts": round(float(row["fantasy_points"] or 0) - float(row["receptions"] or 0) * _reception_adjustment(team["scoring_type"]), 2),
+                    "proj_fpts": float(row["projected_points"]) if row["projected_points"] is not None else None,
+                    "is_yet_to_play": row["nfl_game_status"] != "COMPLETED",
+                    "injury_status": None,
+                    "slot": row["slot"],
+                })
+
+            roster_format = team["roster_format"] or {}
+            slot_order = _get_slot_order(roster_format)
+            by_slot = defaultdict(list)
+            for player in players:
+                by_slot[player["slot"]].append(player)
+
+            roster = []
+            for slot in slot_order:
+                player = by_slot[slot].pop(0) if by_slot[slot] else None
+                roster.append({"id": f"{slot}-{len(roster) + 1}", "slot": slot, "slot_label": slot, "player": player})
+            for slot in list(by_slot):
+                if slot != "BN":
+                    by_slot["BN"].extend(by_slot.pop(slot))
+            bench_players = by_slot.get("BN", [])
+            bench_count = max(int(roster_format.get("BN", 0)), len(bench_players))
+            for index in range(bench_count):
+                player = bench_players[index] if index < len(bench_players) else None
+                roster.append({"id": f"BN-{index + 1}", "slot": "BN", "slot_label": "BN", "player": player})
+
+            wins, losses, ties = team["wins"] or 0, team["losses"] or 0, team["ties"] or 0
+            return {
+                "league_id": league_id,
+                "week": wk,
+                "team": {
+                    "id": team["team_id"],
+                    "team_name": team["team_name"],
+                    "wins": wins,
+                    "losses": losses,
+                    "ties": ties,
+                    "record": f"{wins}-{losses}" + (f"-{ties}" if ties else ""),
+                    "points_for": float(team["points_for"] or 0),
+                    "points_against": float(team["points_against"] or 0),
+                },
+                "roster": roster,
+            }
+
+
+@router.post("/league/{league_id}/team/name")
+def update_league_team_name(league_id: int, req: TeamNameRequest):
+    """Updates the signed-in user's team name in this league."""
+    team_name = req.team_name.strip()
+    if not team_name or len(team_name) > 64:
+        raise HTTPException(status_code=400, detail="Team name must be between 1 and 64 characters.")
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE napper_teams
+                SET team_name = %s
+                WHERE league_id = %s
+                  AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)
+                RETURNING id, team_name
+            """, (team_name, league_id))
+            team = cur.fetchone()
+            if not team:
+                raise HTTPException(status_code=404, detail="Your team was not found in this league.")
+        conn.commit()
+    return {"team": team}
+
+
+@router.get("/league/{league_id}/scores")
+def get_league_scores(league_id: int, week: Optional[int] = Query(None)):
+    """Returns the league's scheduled fantasy matchups and roster-derived scores."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT season, current_week, scoring_type FROM napper_leagues WHERE id = %s", (league_id,))
+            league = cur.fetchone()
+            if not league:
+                raise HTTPException(status_code=404, detail="League not found")
+            season, active_week = get_current_season_week(cur)
+            require_current_season_league(cur, league_id)
+            wk = max(1, min(17, int(week) if week is not None else active_week))
+            _ensure_matchup_and_rosters(cur, league_id, wk)
+            conn.commit()
+            cur.execute("""
+                SELECT m.id, m.home_team_id, m.away_team_id,
+                       home.team_name AS home_name, home.manager_handle AS home_manager,
+                       home.wins AS home_wins, home.losses AS home_losses,
+                       away.team_name AS away_name, away.manager_handle AS away_manager,
+                       away.wins AS away_wins, away.losses AS away_losses,
+                       (home.user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)) AS home_is_user,
+                       (away.user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)) AS away_is_user,
+                       m.is_final
+                FROM napper_matchups m
+                JOIN napper_teams home ON home.id = m.home_team_id
+                JOIN napper_teams away ON away.id = m.away_team_id
+                WHERE m.league_id = %s AND m.week = %s
+                ORDER BY m.id
+            """, (league_id, wk))
+            matchups = cur.fetchall()
+
+            totals = _get_weekly_team_totals(cur, league_id, season, wk, league["scoring_type"])
+            standings = {team["id"]: team for team in _get_league_standings(
+                cur, league_id, season, league["scoring_type"]
+            )}
+            _, active_week = get_current_season_week(cur)
+            week_complete = wk < active_week or _is_nfl_week_complete(cur, season, wk)
+
+            results = []
+            for row in matchups:
+                home = totals.get(row["home_team_id"], {})
+                away = totals.get(row["away_team_id"], {})
+                final = week_complete
+                results.append({
+                    "id": row["id"],
+                    "home": {"id": row["home_team_id"], "team_name": row["home_name"], "manager_handle": row["home_manager"], **{k: standings.get(row["home_team_id"], {}).get(k, 0) for k in ("wins", "losses", "ties", "seed")}, "is_user": row["home_is_user"]},
+                    "away": {"id": row["away_team_id"], "team_name": row["away_name"], "manager_handle": row["away_manager"], **{k: standings.get(row["away_team_id"], {}).get(k, 0) for k in ("wins", "losses", "ties", "seed")}, "is_user": row["away_is_user"]},
+                    "home_score": round(float(home.get("score") or 0), 2),
+                    "away_score": round(float(away.get("score") or 0), 2),
+                    "home_proj": round(float(home.get("projection") or 0), 2),
+                    "away_proj": round(float(away.get("projection") or 0), 2),
+                    "has_started": int(home.get("played_players") or 0) + int(away.get("played_players") or 0) > 0,
+                    "is_final": final,
+                })
+            return {"league_id": league_id, "week": wk, "current_week": active_week, "matchups": results}
+
+
+@router.get("/league/{league_id}/matchup")
+def get_league_matchup(
+    league_id: int,
+    week: Optional[int] = Query(None),
+    matchup_id: Optional[int] = Query(None),
+):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_week, roster_format, season, scoring_type FROM napper_leagues WHERE id = %s", (league_id,))
             lg = cur.fetchone()
             if not lg:
                 raise HTTPException(status_code=404, detail="League not found")
 
             # Support week switching 1 to 17
-            wk = int(week) if week is not None else (lg["current_week"] or 6)
+            season, active_week = get_current_season_week(cur)
+            require_current_season_league(cur, league_id)
+            wk = int(week) if week is not None else active_week
             wk = max(1, min(17, wk))
 
             # Ensure matchups and rosters exist for this week
             _ensure_matchup_and_rosters(cur, league_id, wk)
             conn.commit()
 
-            # Find user team
-            cur.execute("SELECT id FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
-            u_row = cur.fetchone()
-            user_team_id = u_row["id"] if u_row else None
-
-            # Find matchup for this week (prioritizing user's team matchup)
             match = None
-            if user_team_id:
+            if matchup_id is not None:
                 cur.execute("""
                     SELECT m.id, m.home_team_id, m.away_team_id, m.home_score, m.away_score,
                            m.home_proj, m.away_proj, m.win_prob_home, m.is_final
                     FROM napper_matchups m
-                    WHERE m.league_id = %s AND m.week = %s AND (m.home_team_id = %s OR m.away_team_id = %s)
-                    LIMIT 1
-                """, (league_id, wk, user_team_id, user_team_id))
+                    WHERE m.league_id = %s AND m.week = %s AND m.id = %s
+                """, (league_id, wk, matchup_id))
                 match = cur.fetchone()
+                if not match:
+                    raise HTTPException(status_code=404, detail=f"Matchup {matchup_id} was not found for Week {wk}")
+            else:
+                # Default to the active user's matchup for the main Matchup tab.
+                cur.execute("SELECT id FROM napper_teams WHERE league_id = %s AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1) LIMIT 1", (league_id,))
+                u_row = cur.fetchone()
+                user_team_id = u_row["id"] if u_row else None
 
-            if not match:
-                cur.execute("""
-                    SELECT m.id, m.home_team_id, m.away_team_id, m.home_score, m.away_score,
-                           m.home_proj, m.away_proj, m.win_prob_home, m.is_final
-                    FROM napper_matchups m WHERE m.league_id = %s AND m.week = %s LIMIT 1
-                """, (league_id, wk))
-                match = cur.fetchone()
+                if user_team_id:
+                    cur.execute("""
+                        SELECT m.id, m.home_team_id, m.away_team_id, m.home_score, m.away_score,
+                               m.home_proj, m.away_proj, m.win_prob_home, m.is_final
+                        FROM napper_matchups m
+                        WHERE m.league_id = %s AND m.week = %s AND (m.home_team_id = %s OR m.away_team_id = %s)
+                        LIMIT 1
+                    """, (league_id, wk, user_team_id, user_team_id))
+                    match = cur.fetchone()
+
+                if not match:
+                    cur.execute("""
+                        SELECT m.id, m.home_team_id, m.away_team_id, m.home_score, m.away_score,
+                               m.home_proj, m.away_proj, m.win_prob_home, m.is_final
+                        FROM napper_matchups m WHERE m.league_id = %s AND m.week = %s LIMIT 1
+                    """, (league_id, wk))
+                    match = cur.fetchone()
 
             if not match:
                 raise HTTPException(status_code=404, detail=f"No matchup found for Week {wk}")
@@ -850,21 +1162,33 @@ def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
             left_team_meta = teams_map.get(left_team_id, {})
             right_team_meta = teams_map.get(right_team_id, {})
 
-            prev_season = get_previous_season(cur)
-
             # Query rosters for both teams in this week
-            cur.execute("""
+            cur.execute(_ACTUAL_PLAYER_POINTS_CTE + """
                 SELECT nr.team_id, nr.slot, nr.player_id, p.player_name, p.full_name, p.espn_id,
-                       COALESCE(t.abbreviation, 'NFL') as nfl_team,
-                       COALESCE(ps.position, 'FLEX') as position,
-                       COALESCE(fp.projected_points, 12.0) as proj_pts
+                       t.abbreviation as nfl_team,
+                       ps.position as position,
+                       NULLIF(fp.projected_points, 0.0) as proj_pts,
+                       opponent.abbreviation AS opponent_abbr, scheduled.game_time,
+                       scheduled.status AS nfl_game_status,
+                       COALESCE(actual.fantasy_points, 0) AS fantasy_points,
+                       COALESCE(actual.receptions, 0) AS receptions
                 FROM napper_rosters nr
                 JOIN players p ON p.id = nr.player_id
-                LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                LEFT JOIN teams t ON t.id = ps.team_id
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s AND ps.team_id IS NOT NULL
+                JOIN teams t ON t.id = ps.team_id
+                LEFT JOIN games scheduled ON scheduled.season = %s AND scheduled.week = %s
+                    AND scheduled.status IN ('SCHEDULED', 'COMPLETED')
+                    AND (scheduled.home_team_id = ps.team_id OR scheduled.away_team_id = ps.team_id)
+                LEFT JOIN teams opponent ON opponent.id = CASE
+                    WHEN scheduled.home_team_id = ps.team_id THEN scheduled.away_team_id
+                    WHEN scheduled.away_team_id = ps.team_id THEN scheduled.home_team_id
+                    ELSE NULL END
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
+                LEFT JOIN actual ON actual.player_id = p.id
                 WHERE nr.league_id = %s AND nr.week = %s AND nr.team_id IN (%s, %s)
-            """, (prev_season, wk, prev_season, league_id, wk, left_team_id, right_team_id))
+                  AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
+            """, (season, wk, season, wk, wk, season,
+                  season, season, wk, wk, season, league_id, wk, left_team_id, right_team_id))
             roster_rows = cur.fetchall()
 
             left_roster = [r for r in roster_rows if r["team_id"] == left_team_id]
@@ -874,22 +1198,23 @@ def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
                 if not r:
                     return None
                 pid = r["player_id"]
-                proj = float(r["proj_pts"] or 0.0)
+                proj = float(r["proj_pts"]) if r["proj_pts"] is not None else None
                 return {
                     "id": pid,
                     "player_id": pid,
+                    "espn_id": r["espn_id"],
                     "name": r["player_name"] or r["full_name"],
                     "full_name": r["full_name"] or r["player_name"],
                     "position": "RB" if r["position"] in ("HB", "RB", "FB") else (r["position"] or "FLEX"),
                     "slot": r.get("slot"),
                     "team": r["nfl_team"] or "NFL",
-                    "opponent": "vs OPP",
-                    "kickoff": "Sun 1:00 PM",
-                    "game_status": "Final" if wk < 6 else "Yet to play",
+                    "opponent": f"vs {r['opponent_abbr']}" if r["opponent_abbr"] else "Bye week / no matchup",
+                    "kickoff": r["game_time"] or ("Bye week" if not r["nfl_game_status"] else "Time TBD"),
+                    "game_status": "Final" if r["nfl_game_status"] == "COMPLETED" else ("Scheduled" if r["nfl_game_status"] == "SCHEDULED" else "Bye week"),
                     "headshot_url": f"/static/players/{pid}.webp",
-                    "fpts": 0.0 if wk >= 6 else round(proj * 0.95, 2),
-                    "proj_fpts": round(proj, 2),
-                    "is_yet_to_play": (wk >= 6),
+                    "fpts": round(float(r["fantasy_points"] or 0) - float(r["receptions"] or 0) * _reception_adjustment(lg["scoring_type"]), 2),
+                    "proj_fpts": round(proj, 2) if proj is not None else None,
+                    "is_yet_to_play": r["nfl_game_status"] != "COMPLETED",
                     "injury_status": None,
                 }
 
@@ -915,6 +1240,19 @@ def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
                             if rem_list:
                                 found = rem_list.pop(0)
                                 break
+                        if not found and bench_pool:
+                            for b_idx, bp in enumerate(bench_pool):
+                                b_pos = bp.get("position") or ""
+                                b_norm = "RB" if b_pos in ("HB", "FB", "RB") else b_pos
+                                if s == "FLEX" and b_norm in ("RB", "WR", "TE"):
+                                    found = bench_pool.pop(b_idx)
+                                    break
+                                elif s == "SUPERFLEX" and b_norm in ("QB", "RB", "WR", "TE"):
+                                    found = bench_pool.pop(b_idx)
+                                    break
+                                elif b_norm == s:
+                                    found = bench_pool.pop(b_idx)
+                                    break
                         slot_assigned.append(found)
 
                 # Any leftovers in by_slot go to bench
@@ -938,7 +1276,7 @@ def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
                 })
 
             bench = []
-            max_bn = max(len(left_bench), len(right_bench), 6)
+            max_bn = max(len(left_bench), len(right_bench), int(roster_format.get("BN", 0)))
             for i in range(max_bn):
                 lp = left_bench[i] if i < len(left_bench) else None
                 rp = right_bench[i] if i < len(right_bench) else None
@@ -949,33 +1287,45 @@ def get_league_matchup(league_id: int, week: Optional[int] = Query(None)):
                     "right_player": make_player_dict(rp),
                 })
 
-            # Calculate total projected and live score from starters
-            left_proj_sum = sum((s["left_player"]["proj_fpts"] for s in starters if s["left_player"]), 0.0)
-            right_proj_sum = sum((s["right_player"]["proj_fpts"] for s in starters if s["right_player"]), 0.0)
+            totals = _get_weekly_team_totals(cur, league_id, season, wk, lg["scoring_type"])
+            standings = {team["id"]: team for team in _get_league_standings(
+                cur, league_id, season, lg["scoring_type"]
+            )}
+            left_total, right_total = totals.get(left_team_id, {}), totals.get(right_team_id, {})
+            h_proj = float(left_total.get("projection") or 0.0)
+            a_proj = float(right_total.get("projection") or 0.0)
+            left_score = float(left_total.get("score") or 0.0)
+            right_score = float(right_total.get("score") or 0.0)
+            # Display each side's share of available points: projections before kickoff,
+            # then actual starter points once any games have begun.
+            any_games_started = int(left_total.get("played_players") or 0) + int(right_total.get("played_players") or 0) > 0
+            left_basis, right_basis = (left_score, right_score) if any_games_started else (h_proj, a_proj)
+            total_basis = left_basis + right_basis
+            win_prob_home = left_basis / total_basis if total_basis > 0 else 0.5
+            win_prob_left = round(win_prob_home, 3)
+            win_prob_right = round(1.0 - win_prob_home, 3)
 
-            h_proj = float(match["home_proj"] or left_proj_sum or 130.0)
-            a_proj = float(match["away_proj"] or right_proj_sum or 120.0)
-
-            win_prob_home = float(match["win_prob_home"] or 0.50)
-            win_prob_left = round(win_prob_home * 100)
-            win_prob_right = 100 - win_prob_left
+            left_record = standings.get(left_team_id, {})
+            right_record = standings.get(right_team_id, {})
 
             return {
                 "league_id": league_id,
                 "week": wk,
                 "left_team": {
                     **left_team_meta,
-                    "score": float(match["home_score"] or 0.0),
+                    **{k: left_record.get(k, left_team_meta.get(k, 0)) for k in ("wins", "losses", "ties", "points_for", "points_against", "seed")},
+                    "score": round(left_score, 2),
                     "proj": round(h_proj, 2),
                     "win_prob": win_prob_left,
-                    "yet_to_play_summary": f"Yet to play ({len(slot_order)}) starters",
+                    "yet_to_play_summary": f"Yet to play ({max(0, int(left_total.get('starters') or 0) - int(left_total.get('played_players') or 0))}) starters",
                 },
                 "right_team": {
                     **right_team_meta,
-                    "score": float(match["away_score"] or 0.0),
+                    **{k: right_record.get(k, right_team_meta.get(k, 0)) for k in ("wins", "losses", "ties", "points_for", "points_against", "seed")},
+                    "score": round(right_score, 2),
                     "proj": round(a_proj, 2),
                     "win_prob": win_prob_right,
-                    "yet_to_play_summary": f"Yet to play ({len(slot_order)}) starters",
+                    "yet_to_play_summary": f"Yet to play ({max(0, int(right_total.get('starters') or 0) - int(right_total.get('played_players') or 0))}) starters",
                 },
                 "starters": starters,
                 "bench": bench,
@@ -991,26 +1341,29 @@ def update_lineup(league_id: int, req: LineupRequest):
     with get_db() as conn:
         with conn.cursor() as cur:
             # 1. Validate league
-            cur.execute("SELECT current_week, roster_format FROM napper_leagues WHERE id = %s", (league_id,))
+            cur.execute("SELECT current_week, roster_format, season, scoring_type FROM napper_leagues WHERE id = %s", (league_id,))
             lg = cur.fetchone()
             if not lg:
                 raise HTTPException(status_code=404, detail="League not found")
-            wk = req.week or lg["current_week"] or 6
+            _, active_week = get_current_season_week(cur)
+            wk = req.week or active_week
 
             # 2. Validate team belongs to league
             cur.execute("SELECT id FROM napper_teams WHERE id = %s AND league_id = %s", (req.team_id, league_id))
             if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Team not found in this league")
 
-            prev_season = get_previous_season(cur)
+            current_season, _ = get_current_season_week(cur)
 
             # 3. Fetch current team roster for this week
             cur.execute("""
-                SELECT nr.player_id, nr.slot, COALESCE(ps.position, 'FLEX') as position
+                SELECT nr.player_id, nr.slot, ps.position as position
                 FROM napper_rosters nr
-                LEFT JOIN player_seasons ps ON ps.player_id = nr.player_id AND ps.season = %s
+                JOIN player_seasons ps ON ps.player_id = nr.player_id AND ps.season = %s AND ps.team_id IS NOT NULL
+                JOIN teams nfl_team ON nfl_team.id = ps.team_id
                 WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s
-            """, (prev_season, league_id, req.team_id, wk))
+                  AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
+            """, (current_season, league_id, req.team_id, wk))
             current_roster = cur.fetchall()
             if not current_roster:
                 raise HTTPException(status_code=400, detail=f"No roster found for team {req.team_id} in week {wk}")
@@ -1055,7 +1408,7 @@ def update_lineup(league_id: int, req: LineupRequest):
                     slot_counts[s] += 1
 
             for s, count in slot_counts.items():
-                max_allowed = int(roster_format.get(s, 1))
+                max_allowed = int(roster_format.get(s, 0))
                 if count > max_allowed:
                     raise HTTPException(
                         status_code=400,
@@ -1071,26 +1424,19 @@ def update_lineup(league_id: int, req: LineupRequest):
                 """, (swap.new_slot.upper(), league_id, req.team_id, wk, swap.player_id))
 
             # 7. Recalculate team projected score for the matchup
-            cur.execute("""
-                SELECT COALESCE(SUM(fp.projected_points), 0.0) as new_proj
-                FROM napper_rosters nr
-                JOIN fantasy_projections fp ON fp.player_id = nr.player_id AND fp.week = %s AND fp.season = %s
-                WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s AND nr.slot != 'BN'
-            """, (wk, prev_season, league_id, req.team_id, wk))
-            new_proj_val = float(cur.fetchone()["new_proj"] or 0.0)
-
-            # Update matchup projections if available
+            # Refresh both matchup sides from their saved starters and current projections.
             cur.execute("""
                 SELECT id, home_team_id, away_team_id, home_proj, away_proj
                 FROM napper_matchups
                 WHERE league_id = %s AND week = %s AND (home_team_id = %s OR away_team_id = %s)
             """, (league_id, wk, req.team_id, req.team_id))
             match_row = cur.fetchone()
-            if match_row and new_proj_val > 0:
-                is_home = (match_row["home_team_id"] == req.team_id)
-                h_p = new_proj_val if is_home else float(match_row["home_proj"] or 120.0)
-                a_p = float(match_row["away_proj"] or 120.0) if is_home else new_proj_val
-                new_win_prob = round(1.0 / (1.0 + math.exp(-0.05 * (h_p - a_p))), 3)
+            if match_row:
+                totals = _get_weekly_team_totals(cur, league_id, current_season, wk, lg["scoring_type"])
+                h_p = float(totals.get(match_row["home_team_id"], {}).get("projection") or 0)
+                a_p = float(totals.get(match_row["away_team_id"], {}).get("projection") or 0)
+                points_total = h_p + a_p
+                new_win_prob = round(h_p / points_total, 3) if points_total > 0 else 0.5
 
                 cur.execute("""
                     UPDATE napper_matchups
@@ -1112,29 +1458,43 @@ def update_lineup(league_id: int, req: LineupRequest):
 def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str] = None):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT current_week FROM napper_leagues WHERE id = %s", (league_id,))
+            cur.execute("SELECT current_week, season FROM napper_leagues WHERE id = %s", (league_id,))
             lg = cur.fetchone()
-            wk = lg["current_week"] if lg else 6
-
-            prev_season = get_previous_season(cur)
+            if not lg:
+                raise HTTPException(status_code=404, detail="League not found")
+            current_season, wk = get_current_season_week(cur)
+            require_current_season_league(cur, league_id)
+            _ensure_matchup_and_rosters(cur, league_id, wk)
+            conn.commit()
 
             # Query all players not currently rostered in this league for this week
             sql = """
-                SELECT p.id as player_id, p.player_name, p.full_name, ps.position,
-                       COALESCE(fp.projected_points, 10.0) as proj_pts,
-                       COALESCE(fp.avg_points, 11.2) as avg_pts,
+                SELECT p.id as player_id, p.player_name, p.full_name, p.espn_id, ps.position,
+                       NULLIF(fp.projected_points, 0) as proj_pts,
+                       COALESCE(NULLIF(ss.ppg_fantasy_points, 0), fp.avg_points) as avg_pts,
                        fp.ros_rank,
-                       COALESCE(fp.matchup_stars, 3) as matchup_stars,
-                       COALESCE(t.abbreviation, 'NFL') as team_abbr
+                       fp.matchup_stars as matchup_stars,
+                       COALESCE(t.abbreviation, 'NFL') as team_abbr,
+                       opponent.abbreviation as opponent_abbr,
+                       scheduled.game_time, scheduled.status AS nfl_game_status
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                LEFT JOIN teams t ON t.id = ps.team_id
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s AND ps.team_id IS NOT NULL
+                JOIN teams t ON t.id = ps.team_id
+                LEFT JOIN games scheduled ON scheduled.season = %s AND scheduled.week = %s
+                    AND scheduled.status IN ('SCHEDULED', 'COMPLETED')
+                    AND (scheduled.home_team_id = ps.team_id OR scheduled.away_team_id = ps.team_id)
+                LEFT JOIN teams opponent ON opponent.id = CASE
+                    WHEN scheduled.home_team_id = ps.team_id THEN scheduled.away_team_id
+                    WHEN scheduled.away_team_id = ps.team_id THEN scheduled.home_team_id
+                    ELSE NULL END
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = ps.season
                 WHERE p.id NOT IN (
                     SELECT player_id FROM napper_rosters WHERE league_id = %s AND week = %s
                 )
+                AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
             """
-            params = [prev_season, wk, prev_season, league_id, wk]
+            params = [current_season, current_season, wk, wk, current_season, league_id, wk]
             if position and position != "ALL":
                 sql += " AND ps.position = %s"
                 params.append(position)
@@ -1142,7 +1502,7 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
                 sql += " AND (p.full_name ILIKE %s OR p.player_name ILIKE %s)"
                 params.extend([f"%{q}%", f"%{q}%"])
 
-            sql += " ORDER BY proj_pts DESC LIMIT 60"
+            sql += " ORDER BY proj_pts DESC NULLS LAST LIMIT 60"
             cur.execute(sql, params)
             rows = cur.fetchall()
 
@@ -1150,15 +1510,17 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
             for r in rows:
                 players.append({
                     "player_id": r["player_id"],
+                    "espn_id": r["espn_id"],
                     "name": r["player_name"] or r["full_name"],
-                    "position": r["position"] or "FLEX",
-                    "team": r["team_abbr"] or "NFL",
-                    "opponent": "vs OPP",
+                    "position": r["position"],
+                    "team": r["team_abbr"],
+                    "opponent": f"vs {r['opponent_abbr']}" if r["opponent_abbr"] else "Bye week / no matchup",
+                    "kickoff": r["game_time"] or ("Bye week" if not r["nfl_game_status"] else "Time TBD"),
                     "matchup_stars": r["matchup_stars"],
-                    "proj_fpts": float(r["proj_pts"]),
-                    "avg_fpts": float(r["avg_pts"]),
-                    "ros_rank": r["ros_rank"] or "FLEX24",
-                    "rostered_pct": 32.5,
+                    "proj_fpts": float(r["proj_pts"]) if r["proj_pts"] is not None else None,
+                    "avg_fpts": float(r["avg_pts"]) if r["avg_pts"] is not None else None,
+                    "ros_rank": r["ros_rank"],
+                    "rostered_pct": None,
                     "headshot_url": f"/static/players/{r['player_id']}.webp",
                 })
 
@@ -1174,17 +1536,20 @@ def claim_waiver_player(league_id: int, req: WaiverClaimRequest):
             lg = cur.fetchone()
             if not lg:
                 raise HTTPException(status_code=404, detail="League not found")
-            wk = req.week or lg["current_week"] or 6
+            _, active_week = get_current_season_week(cur)
+            wk = req.week or active_week
+            _ensure_matchup_and_rosters(cur, league_id, wk)
+            conn.commit()
 
             # Validate team
             if not req.team_id:
-                cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
+                cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE league_id = %s AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1) LIMIT 1", (league_id,))
                 tm = cur.fetchone()
             else:
                 cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE id = %s AND league_id = %s", (req.team_id, league_id))
                 tm = cur.fetchone()
                 if not tm:
-                    cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
+                    cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE league_id = %s AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1) LIMIT 1", (league_id,))
                     tm = cur.fetchone()
             if not tm:
                 raise HTTPException(status_code=404, detail="Team not found in this league")
@@ -1293,22 +1658,24 @@ def get_trades(league_id: int):
 
             players_map = {}
             if all_pids:
-                prev_season = get_previous_season(cur)
+                current_season, current_week = get_current_season_week(cur)
                 cur.execute("""
-                    SELECT p.id, p.player_name, p.full_name, COALESCE(ps.position, 'FLEX') as position,
-                           COALESCE(fp.projected_points, 12.0) as proj
+                    SELECT p.id, p.player_name, p.full_name, p.espn_id, ps.position,
+                           fp.projected_points as proj
                     FROM players p
                     LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                    LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = 6 AND fp.season = %s
+                    LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
                     WHERE p.id = ANY(%s)
-                """, (prev_season, prev_season, list(all_pids)))
+                """, (current_season, current_week, current_season, list(all_pids)))
                 for p in cur.fetchall():
                     players_map[p["id"]] = {
                         "id": p["id"],
+                        "player_id": p["id"],
                         "name": p["player_name"] or p["full_name"],
-                        "position": p["position"],
+                        "espn_id": p["espn_id"],
+                        "position": p["position"] or "",
                         "headshot_url": f"/static/players/{p['id']}.webp",
-                        "proj_fpts": float(p["proj"]),
+                        "proj_fpts": float(p["proj"]) if p["proj"] is not None else None,
                     }
 
             trades = []
@@ -1351,13 +1718,13 @@ def propose_trade(league_id: int, req: TradeProposeRequest):
 
             # Verify proposer and target teams belong to this league
             if not req.proposer_team_id:
-                cur.execute("SELECT id, team_name FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
+                cur.execute("SELECT id, team_name FROM napper_teams WHERE league_id = %s AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1) LIMIT 1", (league_id,))
                 prop_tm = cur.fetchone()
             else:
                 cur.execute("SELECT id, team_name FROM napper_teams WHERE id = %s AND league_id = %s", (req.proposer_team_id, league_id))
                 prop_tm = cur.fetchone()
                 if not prop_tm:
-                    cur.execute("SELECT id, team_name FROM napper_teams WHERE league_id = %s AND user_id IS NOT NULL LIMIT 1", (league_id,))
+                    cur.execute("SELECT id, team_name FROM napper_teams WHERE league_id = %s AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1) LIMIT 1", (league_id,))
                     prop_tm = cur.fetchone()
             cur.execute("SELECT id, team_name FROM napper_teams WHERE id = %s AND league_id = %s", (req.target_team_id, league_id))
             target_tm = cur.fetchone()
@@ -1555,25 +1922,11 @@ def send_chat_message(league_id: int, req: ChatMessageRequest):
 
 @router.post("/drafts/create_mock")
 def create_mock_draft(req: MockDraftCreateRequest):
-    """Creates a new mock draft session with pre-populated snake pick order."""
-    try:
-        return napper_draft_engine.create_draft_session(
-            league_id=None,
-            teams_count=req.teams_count,
-            scoring_type=req.scoring_type,
-            user_slot=req.user_slot,
-            rounds=req.rounds,
-            is_mock=True,
-            archetype_composition=req.archetype_composition,
-            archetypes=req.archetypes,
-            randomize_user_slot=req.randomize_user_slot,
-            settings={"is_superflex": req.is_superflex}
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error creating mock draft: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    """Standalone mocks are client-side and are persisted only when saved as a league."""
+    raise HTTPException(
+        status_code=410,
+        detail="Standalone mock drafts are managed in the client and are not persisted.",
+    )
 
 
 @router.post("/drafts/save_as_league")
@@ -1747,17 +2100,20 @@ def get_available_players(
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
-    """Returns available players ordered by ADP, with bye, age, ros_pct, projections, rush/rec stats, and draft count."""
+    """Returns active-season offensive players with sourced current-season data only."""
     with get_db() as conn:
         with conn.cursor() as cur:
-            prev_season = get_previous_season(cur)
+            current_season, projection_week = get_current_season_week(cur)
             where_clauses = []
-            params: Dict[str, Any] = {"limit": limit, "offset": offset, "prev_season": prev_season}
+            params: Dict[str, Any] = {"limit": limit, "offset": offset, "current_season": current_season, "projection_week": projection_week}
 
             if draft_id > 0:
-                cur.execute("SELECT id FROM napper_drafts WHERE id = %s", (draft_id,))
-                if not cur.fetchone():
+                cur.execute("SELECT id, season FROM napper_drafts WHERE id = %s", (draft_id,))
+                draft = cur.fetchone()
+                if not draft:
                     raise HTTPException(status_code=404, detail=f"Draft {draft_id} not found")
+                if int(draft["season"]) != current_season:
+                    raise HTTPException(status_code=409, detail="This draft belongs to an old NFL season and must be restarted")
                 where_clauses.append("""p.id NOT IN (
                     SELECT player_id FROM napper_draft_picks
                     WHERE draft_id = %(draft_id)s AND player_id IS NOT NULL
@@ -1773,6 +2129,7 @@ def get_available_players(
                     params["position"] = pos_upper
             else:
                 where_clauses.append("ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')")
+            where_clauses.append("ps.team_id IS NOT NULL")
 
             if search:
                 where_clauses.append("(p.full_name ILIKE %(search)s OR p.player_name ILIKE %(search)s)")
@@ -1783,102 +2140,70 @@ def get_available_players(
             cur.execute(f"""
                 SELECT COUNT(DISTINCT p.id) as total
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %(prev_season)s
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %(current_season)s
                 WHERE {where_sql}
             """, params)
             total = cur.fetchone()["total"]
 
             cur.execute(f"""
-                SELECT p.id, p.player_name, p.full_name, ps.position, ps.age, ps.team_id,
-                       COALESCE(t.abbreviation, 'NFL') as team_abbr,
-                       COALESCE(fp.adp_rank, 999) as adp,
-                       ss.total_fantasy_points as ss_total_pts,
-                       ss.ppg_fantasy_points as ss_ppg_pts,
+                SELECT p.id, p.player_name, p.full_name, p.espn_id, ps.position, ps.age, ps.team_id,
+                       t.abbreviation as team_abbr,
+                       fp.adp_rank as adp,
                        fp.ros_total_points,
-                       fp.avg_points as fp_avg_pts,
-                       NULLIF(fp.projected_points, 0) as fp_proj_pts,
-                       COALESCE(ss.rush_attempts, 0) as rush_att,
-                       COALESCE(ss.rush_yards, 0) as rush_yds,
-                       COALESCE(ss.rush_tds, 0) as rush_tds,
-                       COALESCE(ss.receptions, 0) as rec,
-                       COALESCE(ss.rec_yards, 0) as rec_yds,
-                       COALESCE(ss.rec_tds, 0) as rec_tds,
+                       fp.projected_points as weekly_projection,
+                       ps.age,
+                       ss.rush_attempts as rush_att,
+                       ss.rush_yards as rush_yds,
+                       ss.rush_tds as rush_tds,
+                       ss.receptions as rec,
+                       ss.rec_yards as rec_yds,
+                       ss.rec_tds as rec_tds,
+                       (SELECT MIN(w.week)
+                        FROM generate_series((SELECT GREATEST(current_week, 1) FROM league_state WHERE id = 1), 18) AS w(week)
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM games g
+                            WHERE g.season = %(current_season)s AND g.week = w.week
+                              AND (g.home_team_id = ps.team_id OR g.away_team_id = ps.team_id)
+                        )) AS bye_week,
                        (SELECT COUNT(*) FROM napper_draft_picks ndp WHERE ndp.player_id = p.id) as draft_count
                 FROM players p
-                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %(prev_season)s
-                LEFT JOIN teams t ON t.id = ps.team_id
-                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %(prev_season)s AND fp.week = 1
-                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %(prev_season)s
+                JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %(current_season)s
+                JOIN teams t ON t.id = ps.team_id
+                LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %(current_season)s AND fp.week = %(projection_week)s
+                LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %(current_season)s
                 WHERE {where_sql}
-                ORDER BY COALESCE(fp.adp_rank, 999) ASC, ss.total_fantasy_points DESC NULLS LAST, p.id ASC
+                ORDER BY fp.adp_rank ASC NULLS LAST, fp.ros_total_points DESC NULLS LAST, p.id ASC
                 LIMIT %(limit)s OFFSET %(offset)s
             """, params)
             rows = cur.fetchall()
 
             players = []
             for r in rows:
-                adp_val = int(r["adp"])
-                team_id = r["team_id"] or 1
-                bye_wk = (team_id % 10) + 5
-                ros_pct = round(max(5.0, min(100.0, 100.0 - (float(adp_val) * 0.45))), 1) if adp_val <= 200 else 5.0
-
-                ss_total = r["ss_total_pts"]
-                ss_ppg = r["ss_ppg_pts"]
-                ros_total = r["ros_total_points"]
-                fp_avg = r["fp_avg_pts"]
-                fp_proj = r["fp_proj_pts"]
-
-                # PTS must be season total points, and AVG must be ppg
-                if ss_total is not None and float(ss_total) > 10.0:
-                    tot_pts = round(float(ss_total), 1)
-                    avg_ppg = round(float(ss_ppg) if ss_ppg and float(ss_ppg) > 0 else (tot_pts / 17.0), 1)
-                elif ros_total is not None and float(ros_total) > 10.0:
-                    tot_pts = round(float(ros_total), 1)
-                    avg_ppg = round(tot_pts / 17.0, 1)
-                elif fp_avg is not None and float(fp_avg) > 0:
-                    avg_ppg = round(float(fp_avg), 1)
-                    tot_pts = round(avg_ppg * 17.0, 1)
-                elif fp_proj is not None and float(fp_proj) > 0:
-                    avg_ppg = round(float(fp_proj), 1)
-                    tot_pts = round(avg_ppg * 17.0, 1)
-                else:
-                    # Consensus projection scaled by ADP
-                    if adp_val <= 12:
-                        avg_ppg = round(18.0 - (adp_val * 0.3), 1)
-                    elif adp_val <= 36:
-                        avg_ppg = round(14.5 - ((adp_val - 12) * 0.15), 1)
-                    elif adp_val <= 75:
-                        avg_ppg = round(11.0 - ((adp_val - 36) * 0.08), 1)
-                    elif adp_val <= 150:
-                        avg_ppg = round(8.0 - ((adp_val - 75) * 0.03), 1)
-                    else:
-                        avg_ppg = round(max(3.5, 6.0 - ((adp_val - 150) * 0.01)), 1)
-                    tot_pts = round(avg_ppg * 17.0, 1)
-
                 players.append({
                     "id": r["id"],
+                    "player_id": r["id"],
+                    "espn_id": r["espn_id"],
                     "name": r["full_name"] or r["player_name"],
                     "player_name": r["player_name"],
                     "position": r["position"],
                     "team": r["team_abbr"],
                     "headshot_url": f"/static/players/{r['id']}.webp",
-                    "adp": adp_val,
-                    "bye": bye_wk,
-                    "age": r["age"] or 25,
-                    "ros_pct": ros_pct,
+                    "adp": int(r["adp"]) if r["adp"] is not None else None,
+                    "bye": r["bye_week"],
+                    "age": r["age"],
                     "projections": {
-                        "pts": tot_pts,
-                        "avg": avg_ppg,
+                        "pts": float(r["ros_total_points"]) if r["ros_total_points"] is not None else None,
+                        "avg": float(r["weekly_projection"]) if r["weekly_projection"] is not None else None,
                     },
                     "rush": {
-                        "rush": int(r["rush_att"]),
-                        "yds": int(r["rush_yds"]),
-                        "td": int(r["rush_tds"]),
+                        "rush": float(r["rush_att"]) if r["rush_att"] is not None else None,
+                        "yds": float(r["rush_yds"]) if r["rush_yds"] is not None else None,
+                        "td": float(r["rush_tds"]) if r["rush_tds"] is not None else None,
                     },
                     "rec": {
-                        "rec": int(r["rec"]),
-                        "yds": int(r["rec_yds"]),
-                        "td": int(r["rec_tds"]),
+                        "rec": float(r["rec"]) if r["rec"] is not None else None,
+                        "yds": float(r["rec_yds"]) if r["rec_yds"] is not None else None,
+                        "td": float(r["rec_tds"]) if r["rec_tds"] is not None else None,
                     },
                     "draft_count": int(r["draft_count"]),
                 })
@@ -1891,12 +2216,15 @@ def get_league_draft(league_id: int, rounds: int = Query(15, ge=1, le=25)):
     """Retrieves or creates a draft session for a league in PRE_DRAFT status."""
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, status FROM napper_leagues WHERE id = %s", (league_id,))
+            cur.execute("SELECT id, status, season FROM napper_leagues WHERE id = %s", (league_id,))
             league = cur.fetchone()
             if not league:
                 raise HTTPException(status_code=404, detail="League not found")
 
-            cur.execute("SELECT id FROM napper_drafts WHERE league_id = %s ORDER BY id DESC LIMIT 1", (league_id,))
+            active_season = get_current_season(cur)
+            if int(league["season"]) != active_season:
+                raise HTTPException(status_code=409, detail="This league belongs to an old NFL season and must be recreated")
+            cur.execute("SELECT id FROM napper_drafts WHERE league_id = %s AND season = %s ORDER BY id DESC LIMIT 1", (league_id, active_season))
             row = cur.fetchone()
 
     if row:

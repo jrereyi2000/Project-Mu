@@ -65,7 +65,7 @@ The app integrates with the canonical PostgreSQL database via RESTful JSON endpo
 | `#article-{articleId}` | Long-form article | News feed / Editorial |
 | `#fantasy` | Mu Fantasy dashboard | `/api/fantasy/dashboard` |
 | `#napper` | Napper Fantasy Platform | `/api/napper/profile`, `/api/napper/leagues` |
-| `#napper-{leagueId}` | Napper League Arena (3 panels, 7 tabs) | `/api/napper/league/{id}/*` |
+| `#napper-{leagueId}` | Napper League Arena (3 panels, 5 tabs) | `/api/napper/league/{id}/*` |
 | `#fantasy-rankings` | Weekly fantasy rankings | `/api/fantasy/rankings/weekly` |
 | `#fantasy-adp` | Preseason ADP board | `/api/fantasy/rankings/adp` |
 | `#fantasy-all` | All Mu Fantasy analysis for the week (front page + more analysis, week chips) | `/api/fantasy/articles` |
@@ -554,36 +554,37 @@ Fantasy screens use a separate light design system with navy, green, mint, and p
 
 Napper is an interactive Sleeper-style multi-league web application featuring real-time matchup simulation, roster manipulation, autonomous AI manager trade negotiations, and interactive league banter.
 
+Napper leagues, drafts, player eligibility, projections, and NFL team affiliations always use `league_state.current_season`. Draftable players must have a current-season player/team/eligible-position record; stale draft sessions are rejected and missing source values are shown as unavailable. Player-pool bye weeks come from the active season schedule, and no static player pool or fabricated projection fallback is used. Standalone mock drafts remain client-side and create no database rows; saving one as a league persists the league, draft, and picks. Player identities throughout the draft room open the same Napper-themed, Analytics-structured `NapperPlayerModal` used elsewhere in Napper.
+
 ### Visual System & Styling
 - Dark navy palette: background `#121926`, panel containers `#1a2332`, cards `#222f44`, accents `#00ceb8` (Sleeper cyan), warning/danger `#ff4458`.
-- Sleeper typography hierarchy, slot badges (`QB` crimson, `RB` emerald, `WR` royal blue, `TE` amber, `K` purple, `DEF` gray), robot manager avatars, and animated win probability gauges.
+- Sleeper typography hierarchy, slot badges (`QB` crimson, `RB` emerald, `WR` royal blue, `TE` amber, `K` purple, `DEF` gray), robot manager avatars, and matchup points-share gauges.
 
 ### 3-Panel Desktop Layout
 1. **Left Navigation Rail (Leagues & User Profile)**:
-   - League selector displaying user's active leagues. Clicking `+` opens the interactive Create League modal (supporting 8/10/12 teams, PPR/Half-PPR/Standard scoring, Superflex toggle, and In-Season/Pre-Draft mode); creating a new league automatically purges initial placeholder seed leagues (`is_seed = TRUE`).
+   - League selector displaying the active user's non-seed leagues. Clicking `+` opens the Create League modal (8/10/12 teams, PPR/Half-PPR/Standard scoring, Superflex toggle, and In-Season/Pre-Draft mode). New leagues use the active simulation season/week; new in-season leagues begin with empty rosters and zero scores instead of invented players. Seed leagues remain stored but are not shown. Any league can be deleted after confirmation, including the last active league. Draft room links appear only when the selected league is pre-draft.
    - Each league item renders avatar, league name, season, scoring format badge, user win-loss record, live user vs opponent score, and unplayed starters count.
    - User profile card pinned at the bottom showing user handle `@jrereyi2000`, display name "The Straw Hat Pirates", avatar, trophies counter (3), settings button, and pending trade notification counter badge.
-2. **Center Stage (7 Interactive Tabs)**:
+2. **Center Stage (5 Interactive Tabs)**:
    - **`MATCHUP` (`NapperMatchupTab.tsx`)**:
-     - Week selector supporting weeks 1 to 17 with live schedule cloning.
-     - Split matchup header with team names, manager handles, live scores, projected totals, and win probability percentage bar.
-     - Starter-by-starter comparison table matching reference screenshot specs: exactly 10 slots (`QB`, `RB`, `RB`, `WR`, `WR`, `TE`, `FLEX`, `SUPERFLEX`, `K`, `DEF`) pairing left team and right team players directly across each slot.
-     - Bench table with side-by-side player cards.
+     - Week selector supporting weeks 1 to 17. Only the active week can inherit a saved lineup from the preceding week; historical weeks do not clone rosters.
+     - Split matchup comparison from saved league rosters, with slots derived from `roster_format`, actual weekly points, active-season projections, actual opponent/kickoff/status, season records, and a points-share bar (projected points before kickoff, actual points after scoring starts). It can render any scheduled matchup selected from League in a modal. Standard leagues omit `SUPERFLEX`.
+     - Bench table uses the configured bench count and saved player cards.
+     - Selecting a starter or bench player opens `NapperPlayerModal.tsx`, which mirrors the Mu Fantasy Analytics player modal structure: portrait/identity hero with four metrics, sticky section tabs that scroll one continuous modal, and News, Game Logs, Season Stats, and Outlook sections. Its content comes from `GET /api/player/{player_id}` and uses Napper's navy/teal theme.
    - **`TEAM` (`NapperTeamTab.tsx`)**:
-     - Complete roster management with one-click slot swapping. Clicking a player initiates swap mode, highlighting eligible starter/bench positions; selecting the destination executes an atomic swap via `POST /api/napper/league/{id}/lineup`.
+     - Loads the active user's team and saved weekly roster from `GET /api/napper/league/{id}/team`. Player cards use database player IDs and ESPN IDs for player-specific headshots and show actual game details and weekly points, without projected-point labels or a lineup optimizer. Starters and bench reflect league configuration; slot swaps persist through `POST /api/napper/league/{id}/lineup`. A settings icon next to the team name opens a rename dialog backed by `POST /api/napper/league/{id}/team/name`.
    - **`PLAYERS` (`NapperPlayersTab.tsx`)**:
-     - Available free agents board with position filter pills (`ALL`, `QB`, `RB`, `WR`, `TE`, `K`, `DEF`), player headshots, null-safe projected points, and instant debounced search.
+     - Available active-season free agents with player-specific headshots, actual opponent/kickoff details, weekly projections and season averages. Missing values display as unavailable rather than fixed placeholder scores.
+     - Selecting a player identity opens the same Analytics-structured Napper modal used from Matchup, backed by real player detail API data.
      - Clicking "+" opens the Add/Drop modal, allowing user to pick a bench player to drop and confirm the waiver claim (`POST /api/napper/league/{id}/waivers/claim`).
    - **`LEAGUE` (`NapperLeagueTab.tsx`)**:
-     - League standings table with rank, team name, manager handle, W-L-T record, points for, and points against.
+     - Compact weekly matchup cards styled to match the Matchup banner's navy gradient, muted metadata, bold team typography, and teal points-share gauge, with a week selector, actual starter scores, projections, season record, and seed. Selecting a card opens a modal with that matchup's complete starters and bench, rendered by the Matchup view. The cards are followed by standings with rank, team name, manager handle, W-L-T record, points for, points against, and seed. Standings calculate PF/PA from weekly starter points, count only completed weeks in W-L-T, and seed by record percentage then PF.
+     - League manager strategy controls and the strategy modal appear only before the draft; strategy changes are rejected after draft start.
      - Interactive 6-team playoff bracket tree showing Quarterfinals (seeds 3 vs 6, 4 vs 5; seeds 1 and 2 bye), Semifinals, and Championship matchup.
-   - **`SCORES` (`NapperScoresTab.tsx`)**:
-     - Full league scoreboard grid for the selected week.
+     - The former separate Scores tab is removed; its scoreboard is embedded in League.
    - **`TRADES` (`NapperTradesTab.tsx`)**:
      - Active trade market displaying pending incoming offers with AI rationale pitches, net projected point impact, and Accept / Reject buttons (`POST /api/napper/league/{id}/trades/{id}/respond`).
      - "+ Propose New Trade" opens an interactive trade builder modal that queries `GET /api/napper/league/{id}/teams_rosters` to browse side-by-side rosters with checkboxes to assemble reciprocal multi-player trade offers (`POST /api/napper/league/{id}/trades/propose`).
-   - **`CHAT`**:
-     - Mobile / responsive full-screen chat tab.
 3. **Right Rail (Autonomous League Chat & Awards)**:
    - Stream of autonomous bot award cards generated by `engines/napper_chat_engine.py`:
      - "RB / WR / TE Benchwarmer of the Week" highlighting the manager who left top fantasy points on the bench.
