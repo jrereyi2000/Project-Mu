@@ -115,7 +115,7 @@ CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
 
 
 LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST", "INJURY_REPORT",
-                "DRAFT_BOARD", "HIGHLIGHTS", "DRAFT_RECAP", "TEAM_SALARY")
+                "DRAFT_BOARD", "HIGHLIGHTS", "DRAFT_RECAP", "TEAM_SALARY", "LEAGUE_TRANSACTIONS")
 TILE_SCREENS = ("SCHED_TILES", "STATS_TILES")
 HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER", "HUB_OPTIONS")
 
@@ -464,6 +464,9 @@ class Frame:
 WEEK_RE = re.compile(r"(PRESEASON WEEK ?[0-9TILO]{1,2}\b|SEASON WEEK ?[0-9TILO]{1,2}\b|POST SEASON (?:WILD ?CARD|DIVISIONAL|CONFERENCE|PRO ?BOWL|SUPER ?BOWL))")
 HUB_TABS = ["GAMEDAY", "WEEKLY HUB", "MANAGE ROSTER", "LEAGUE", "COACH CENTRAL", "OPTIONS"]
 LEAGUE_MENU = ["NFL STANDINGS", "SCHEDULE", "STATS & AWARDS", "LEAGUE TRANSACTIONS", "LEAGUE HISTORY", "RELOCATE OR REBUILD"]
+# The League items cross() may open (D7: read-only screens only, named one by one; RELOCATE OR REBUILD and
+# LEAGUE HISTORY stay refused)
+LEAGUE_CROSS_OK = ("STATS & AWARDS", "SCHEDULE", "LEAGUE TRANSACTIONS")
 SCHED_TILES = ["TEAM SCHEDULE", "LEAGUE SCHEDULE", "PLAYOFF PICTURE"]
 PLAYOFF_SCHED_TILES = ["PLAYOFF SCHEDULE", "TEAM SCHEDULE", "PLAYOFF PICTURE"]
 # Manage Roster tab's left-hand menu (mapped Oct 13; TRADE can show a lock icon)
@@ -519,6 +522,11 @@ def classify(f):
     if ("ROLLOVER" in t and "CAP SPACE" in t and ("ROOKIE RES" in t or "TOTAL SPEND" in t)
             and not ("GAMEDAY" in t and "COACH CENTRAL" in t)):
         return "TEAM_SALARY"
+    # League > League Transactions (team management step 2; title and chips unverified, plan §1 fact 1): a list
+    # of rows headed "2036 SEASON - WEEK 4" with SIGNED / RELEASE / TRADE text. The hub never counts.
+    if (TXN_HEADING_RE.search(t) and ("TRANSACTIONS" in t or re.search(r"\b(SIGN|RELEASE|TRADE)", t))
+            and not ("GAMEDAY" in t and "COACH CENTRAL" in t)):
+        return "LEAGUE_TRANSACTIONS"
     # Manage Roster > Roster (mapped Oct 13): also shows PLAYER NAME (sort chip) and VIEW
     # PLAYER CARD, so it must be told apart from Player Stats by its own columns. The button
     # bar blanks for a moment when it changes (rows with a contract action add SPEAK WITH
@@ -688,7 +696,12 @@ def cross(screen, frame=None):
         cur = (frame or Frame()).highlighted(OPTIONS_MENU)
         if cur != "USER TEAMS":
             raise Abort(f"Refusing Cross on the Options menu: {cur} is highlighted, not USER TEAMS")
-    elif screen not in ("HUB_LEAGUE", "SCHED_TILES", "STATS_TILES"):
+    elif screen == "HUB_LEAGUE":
+        cur = (frame or Frame()).highlighted(LEAGUE_MENU)
+        if cur not in LEAGUE_CROSS_OK:
+            raise Abort(f"Refusing Cross on the League menu: {cur} is highlighted, not STATS & AWARDS, SCHEDULE or "
+                        "LEAGUE TRANSACTIONS")
+    elif screen not in ("SCHED_TILES", "STATS_TILES"):
         raise Abort(f"Refusing to press Cross on screen {screen}")
     press("cross", wait=1.5)
 
@@ -1120,14 +1133,16 @@ def table_text(path, top=0.48, bottom=0.90):
 
 
 def capture_list(folder, prefix, rows_per_page=10, max_pages=250, stop_at_zeros=True, direction="down",
-                 text_end=False, zero_min=20, confirm_end=False):
+                 text_end=False, zero_min=20, confirm_end=False, stop=None, first_page=0):
     """confirm_end: a page that repeats the last one gets one more batch of presses before it
     counts as the end (Madden lists don't wrap; after a stream restart, Oct 16, a whole batch
-    of Down presses was dropped and a game's Defense stopped after 2 of 7 pages)."""
+    of Down presses was dropped and a game's Defense stopped after 2 of 7 pages).
+    stop(path) -> bool, checked after each saved page: True ends the list there (League Transactions'
+    week cutoff). first_page numbers the pages from there (a resumed list). Returns the next page number."""
     os.makedirs(folder, exist_ok=True)
     wait_table_loaded()
     prev, prev_text = None, None
-    for page in range(max_pages):
+    for page in range(first_page, first_page + max_pages):
         path = os.path.join(folder, f"{prefix}_{page:03d}.png")
         for attempt in range(2 if confirm_end else 1):
             if attempt:
@@ -1149,9 +1164,12 @@ def capture_list(folder, prefix, rows_per_page=10, max_pages=250, stop_at_zeros=
             if all_zero_rows(f, min_nums=zero_min):
                 log(f"  {prefix}: rest of list is zeros, stopping at page {page + 1}")
                 return page + 1
+        if stop and stop(path):
+            log(f"  {prefix}: stop condition met at page {page + 1}")
+            return page + 1
         press(direction, hold=0.07, wait=LIST_WAIT, times=rows_per_page)
     log(f"  {prefix}: hit max pages")
-    return max_pages
+    return first_page + max_pages
 
 
 # Categories whose table is wider than the screen (verified Oct 13 run): the right-hand
@@ -3030,6 +3048,126 @@ def run_contracts(out, target_teams=None, resume=False):
     return len(done)
 
 
+# --------------------------------------------------------- transactions ----
+# League > League Transactions (docs/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, master plan §3.3): a
+# newest-first list, L2 chip NFL, R2 type filter ALL, no week filter, about 4 rows on screen, each a heading
+# ("2036 SEASON - WEEK 4") over one line of text. Read-only: Cross on it is refused (D7). Unverified until
+# JR's --test / --step session (plan §1): the title, the opening chips, whether Down moves a highlight or
+# scrolls, and row wrapping; TXN_ROWS_PER_PAGE assumes ~4 rows show, so pages overlap by one row.
+TXN_HEADING_RE = re.compile(r"\b[0-9TILO]{4} ?(?:PRE ?|POST ?|OFF ?)?SEASON ?[-–—:]")
+TXN_ROWS_PER_PAGE = 3
+TXN_MAX_PAGES = 400            # a first-run backfill can be long (list depth: fact 10)
+
+
+def open_transactions():
+    """League tab > LEAGUE TRANSACTIONS, checked to be on the NFL / ALL chips when they can be read."""
+    f, s = look()
+    if s != "LEAGUE_TRANSACTIONS":
+        f = to_league_tab()
+        f = move_to(f, LEAGUE_MENU, "LEAGUE TRANSACTIONS", "up", "down", "League menu item")
+        f, s = cross_into("HUB_LEAGUE", ["LEAGUE_TRANSACTIONS"], timeout=8)
+    scope, kind = chip_labels(f)
+    log(f"Transactions chips (scope, type): {scope}, {kind}")
+    if scope and norm(scope) != "NFL":
+        raise Abort(f"League Transactions opened on {scope}, not NFL: set the L2 chip to NFL (console fact 2)")
+    if kind and norm(kind) != "ALL":
+        raise Abort(f"League Transactions filter is {kind}, not ALL: set the R2 filter to ALL (console fact 2)")
+    return f
+
+
+def transaction_headings(f):
+    """The cleaned headings OCR'd on a frame, top to bottom."""
+    from pipeline.transactions_parse import clean_heading
+    rows = sorted(((b[1], t) for t, b in f.items if TXN_HEADING_RE.search(t)), key=lambda r: r[0])
+    return [clean_heading(t) for _, t in rows]
+
+
+def older_than(headings, since):
+    """True when every heading on the page orders strictly before `since` (the newest heading already loaded):
+    the weekly scan has read past its cutoff. A page with no readable heading never stops it."""
+    from pipeline.transactions_parse import heading_ordinal
+    cut = heading_ordinal(since)
+    ords = [heading_ordinal(h) for h in headings]
+    if cut is None or not ords or any(o is None for o in ords):
+        return False
+    return all(o < cut for o in ords)
+
+
+def _page_frame(path):
+    f = Frame.__new__(Frame)
+    f.path, f.items, f.size = path, ocr(path), Image.open(path).size
+    f.text = " | ".join(t for t, _ in f.items)
+    return f
+
+
+def run_transactions(out, since=None):
+    """League Transactions pages into transactions/page_NNN.png, newest first, until a page lies wholly before
+    `since` (a heading such as '2036 SEASON - WEEK 4'), or to the end of the list without it (first-run
+    backfill). Writes transactions/meta.json and done.txt. Resume: done.txt skips; a weekly (since) run with
+    partial pages starts over (it's short); a backfill keeps its pages, scrolls back down to the last one and
+    carries on numbering."""
+    log("== League Transactions ==")
+    folder = os.path.join(out, "transactions")
+    done = os.path.join(folder, "done.txt")
+    if os.path.exists(done):
+        log(f"League transactions already captured ({done}). Skipping.")
+        return
+    pages = sorted(glob.glob(os.path.join(folder, "page_*.png")))
+    if pages and since:
+        log(f"Discarding {len(pages)} partial pages (weekly scan starts over)")
+        for p in pages:
+            os.remove(p)
+        pages = []
+    os.makedirs(folder, exist_ok=True)
+    open_transactions()
+    first = 0
+    if pages:
+        first = len(pages)
+        target = table_text(pages[-1])
+        log(f"Resuming the backfill after page {first}: scrolling back down to it")
+        for _ in range(TXN_MAX_PAGES):
+            if table_text(snap()) == target:
+                break
+            press("down", hold=0.07, wait=LIST_WAIT, times=TXN_ROWS_PER_PAGE)
+        else:
+            raise Abort("Couldn't find the last saved transactions page again; delete transactions/ and rerun")
+        press("down", hold=0.07, wait=LIST_WAIT, times=TXN_ROWS_PER_PAGE)
+    seen = {"stopped": False}
+
+    def stop(path):
+        if since and older_than(transaction_headings(_page_frame(path)), since):
+            seen["stopped"] = True
+            return True
+        return False
+
+    n = capture_list(folder, "page", rows_per_page=TXN_ROWS_PER_PAGE, max_pages=TXN_MAX_PAGES, stop_at_zeros=False,
+                     text_end=True, confirm_end=True, stop=stop, first_page=first)
+    saved = sorted(glob.glob(os.path.join(folder, "page_*.png")))
+    heads = [h for p in (saved[:1] + saved[-1:]) for h in transaction_headings(_page_frame(p))] if saved else []
+    meta = {"since": since, "first_heading": heads[0] if heads else None, "last_heading": heads[-1] if heads else None,
+            "pages": len(saved), "reached_end": not seen["stopped"] and n < first + TXN_MAX_PAGES}
+    with open(os.path.join(folder, "meta.json"), "w") as fh:
+        json.dump(meta, fh, indent=1)
+    with open(done, "w") as fh:
+        fh.write(f"{len(saved)} pages\n")
+    log(f"League transactions: {len(saved)} pages ({meta['first_heading']} .. {meta['last_heading']})")
+
+
+def run_transactions_optional(out, since=None):
+    """The weekly/playoff run's transactions phase. Until the screen is mapped (plan §1) a failure here mustn't
+    cost the week: it is logged, its partial folder removed (so extract and load skip it), and the run goes on."""
+    try:
+        run_mode("league transactions", lambda: run_transactions(out, since),
+                 lambda: shutil.rmtree(os.path.join(out, "transactions"), ignore_errors=True))
+    except Abort as e:
+        log(f"League transactions skipped: {e}")
+        try:
+            save_debug(Frame(), "transactions_skipped")
+        except Exception:
+            pass
+        shutil.rmtree(os.path.join(out, "transactions"), ignore_errors=True)
+
+
 # --------------------------------------------------------------- roster ----
 # Manage Roster > Roster (mapped Oct 13 with --step / --probe-l2):
 #  * The card on the right shows the highlighted row's player; Down moves the highlight one
@@ -3747,8 +3885,11 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings", "contracts"],
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings", "contracts", "transactions"],
                     help="roster, season-schedule, prospects, season, postgame, draft-results, team-overalls and contracts are never part of the default run")
+    ap.add_argument("--since", metavar="HEADING", help='League Transactions: the newest heading already loaded, '
+                    'e.g. "2036 SEASON - WEEK 4"; the scan stops after the first page wholly older than it '
+                    '(default: the whole list, a first-run backfill). Used by --only transactions and the weekly/playoff runs')
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
     ap.add_argument("--team-names", metavar="NAMES", help="--only contracts: only these teams, comma-separated "
@@ -3813,6 +3954,9 @@ def main():
                 print("Chips (scope, category):", chip_labels(f))
             if s == "SCHED_LIST":
                 print("Week:", week_label(f))
+            if s == "LEAGUE_TRANSACTIONS":
+                print("Chips (scope, type):", chip_labels(f))
+                print("Headings:", transaction_headings(f))
             if s == "TEAM_SALARY":
                 print("Team:", salary_team(f), "| left edge:", salary_at_edge(f, "left"),
                       "| right edge:", salary_at_edge(f, "right"))
@@ -3848,9 +3992,15 @@ def main():
             run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
         if a.only in (None, "injuries"):
             run_mode("the injury report", lambda: run_injuries(out))
+        if a.only is None:
+            run_transactions_optional(out, a.since)
+        if a.only == "transactions":
+            run_mode("league transactions", lambda: run_transactions(out, a.since),
+                     clear("transactions") if a.since else None)
         if a.only == "playoff":               # postseason week: no Season Stats / Team Stats (regular season only)
             run_mode("the schedule", lambda: run_schedule(out, a.week), clear("schedule", "schedule_next", "week_debug"))
             run_mode("the injury report", lambda: run_injuries(out))
+            run_transactions_optional(out, a.since)
             run_mode("the games", lambda: run_games(out, a.week, a.all_rows, a.games))   # resumes per game
         if a.only in ("season", "season-schedule"):
             sched_done = os.path.join(out, "season_schedule", "done.txt")
