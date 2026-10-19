@@ -1,10 +1,11 @@
 """
 Load an extracted capture folder into the database (docs/PIPELINE_MIGRATION.md, phase 3).
 
-  python3 -m pipeline.load_capture captures/<run> [--dry-run]
+  python3 -m pipeline.load_capture captures/<run> [--dry-run] [--apply-from "2036 SEASON - WEEK 3"]
 
 The mode is read from the folder: roster/ (roster), season_schedule/ (season schedule), contracts.csv alone
-(contracts: Team Salary, team management step 1), games/
+(contracts: Team Salary, team management step 1), transactions.csv without stats or games (transactions:
+League Transactions, step 2; a weekly or playoff run loads its transactions.csv before Season Stats), games/
 (games, recovery only), else stats/ + team_stats/ + schedule/ (weekly). One transaction per run:
 any failed check writes nothing, records the run as failed in `captures` and exits non-zero.
 --dry-run runs every check and prints what would change, then rolls back.
@@ -46,6 +47,10 @@ def read_csv(path):
 
 
 def detect_mode(folder):
+    weekly_or_games = any(os.path.exists(os.path.join(folder, f)) for f in ("stats_passing.csv", "game_scores.csv"))
+    if (os.path.exists(os.path.join(folder, "transactions.csv")) and not weekly_or_games
+            and not any(os.path.exists(os.path.join(folder, f)) for f in ("roster_cards.csv", "season_schedule.csv"))):
+        return "transactions"                # League Transactions alone (+ its D5 contracts re-scan)
     has_roster = os.path.exists(os.path.join(folder, "roster_cards.csv"))
     has_sched = os.path.exists(os.path.join(folder, "season_schedule.csv"))
     has_prosp = os.path.exists(os.path.join(folder, "prospects.csv"))
@@ -55,7 +60,7 @@ def detect_mode(folder):
         return "season"
     if has_roster:
         return "roster"
-    if has_contracts and not has_sched:
+    if has_contracts and not has_sched and not weekly_or_games:
         return "contracts"
     if has_sched:
         return "season_schedule"
@@ -190,7 +195,7 @@ def load_roster(cur, folder, season, report):
                        ON CONFLICT (player_id, season) DO UPDATE SET team_id = EXCLUDED.team_id,
                            position = EXCLUDED.position, age = EXCLUDED.age, overall_rating = EXCLUDED.overall_rating,
                            years_of_experience = EXCLUDED.years_of_experience, dev_trait = EXCLUDED.dev_trait,
-                           archetype = EXCLUDED.archetype, role = EXCLUDED.role""",
+                           archetype = EXCLUDED.archetype, role = EXCLUDED.role, released_week = NULL""",
                     (pid, season, p["team_id"], p["position"], p["age"], p["ovr"], p["experience"], p["dev"],
                      p["archetype"], p["role"]))
 
@@ -660,6 +665,11 @@ def load_weekly(cur, folder, season, report, season_stats=True):
             team_rows.setdefault(tid, {}).update(vals)
     if season_stats and len(team_rows) != 32:
         problems.append(f"team tabs cover {len(team_rows)} teams, not 32")
+
+    # 2b. League Transactions before Season Stats: a traded or signed player's line must find his new team
+    #     (roster() reads player_seasons.team_id; team management step 2)
+    if os.path.exists(os.path.join(folder, "transactions.csv")):
+        report["transactions_loaded"] = run_transactions(cur, folder, season, report)
 
     # 3. Season Stats -> season_stats (offense) and the category tables
     players = roster(cur, season)
@@ -1489,17 +1499,44 @@ def load_season(cur, folder, season, report):
     return rows
 
 
+# ----------------------------------------------------------- transactions ----
+def run_transactions(cur, folder, season, report):
+    """transactions.csv -> transactions + roster/contract effects (pipeline/load_transactions.py); a failed check
+    is a LoadError. --apply-from comes through report['apply_from_arg']."""
+    from pipeline.load_transactions import TransactionsError, load_transactions
+    try:
+        return load_transactions(cur, folder, season, report, apply_from=report.get("apply_from_arg"),
+                                 capture_id=report.get("capture_id"))
+    except TransactionsError as e:
+        raise LoadError(str(e))
+
+
+def load_transactions_standalone(cur, folder, season, report):
+    """A League Transactions run (weekly_capture --mode transactions / madden_capture --only transactions):
+    the transactions, then the flagged teams' Team Salary re-scan when the run captured one (after: the re-scan
+    supersedes the moved contracts)."""
+    cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+    report["week"] = cur.fetchone()[0]
+    n = run_transactions(cur, folder, season, report)
+    if os.path.exists(os.path.join(folder, "contracts.csv")):
+        n += load_contracts(cur, folder, season, report)
+    return n
+
+
 LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly, "playoff": load_playoff,
            "games": load_games, "injuries": load_injuries_standalone, "prospects": load_prospects, "season": load_season,
-           "team_overalls": load_team_overalls, "team-overalls": load_team_overalls, "contracts": load_contracts}
+           "team_overalls": load_team_overalls, "team-overalls": load_team_overalls, "contracts": load_contracts,
+           "transactions": load_transactions_standalone}
 
 
-def load(folder, dry_run=False, replace=False):
+def load(folder, dry_run=False, replace=False, apply_from=None):
     folder = folder.rstrip("/")
     mode = detect_mode(folder)
     if mode not in LOADERS:
         raise LoadError(f"mode {mode} isn't built yet")
     report = {"folder": folder, "mode": mode, "dry_run": dry_run}
+    if apply_from:
+        report["apply_from_arg"] = apply_from
     with psycopg.connect(DSN) as conn:
         cur = conn.cursor()
         cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
@@ -1539,9 +1576,12 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="run the checks and report, write nothing")
     ap.add_argument("--replace", action="store_true",
                     help="games: replace the backfill's rows for those games with the captured lines")
+    ap.add_argument("--apply-from", metavar="HEADING",
+                    help='League Transactions: apply effects only from this heading (e.g. "2036 SEASON - WEEK 3"); '
+                         "default: from <season> SEASON - WEEK 1 on a season's first load, else every new row")
     a = ap.parse_args()
     try:
-        report = load(a.folder, a.dry_run, a.replace)
+        report = load(a.folder, a.dry_run, a.replace, a.apply_from)
     except LoadError as e:
         print(f"LOAD STOPPED, nothing written: {e}")
         sys.exit(1)

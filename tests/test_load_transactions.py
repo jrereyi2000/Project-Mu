@@ -1,0 +1,197 @@
+"""pipeline/load_transactions.py: the pure effects planner (no database)."""
+import os, tempfile, unittest
+from unittest import mock
+
+from pipeline import load_transactions as L
+from pipeline.money import parse_money
+
+TEAMS = {"JAGUARS": 1, "BEARS": 2, "PACKERS": 3, "SAINTS": 4}
+W3, W4 = "2036 SEASON - WEEK 3", "2036 SEASON - WEEK 4"
+PRE = "2036 PRESEASON - WEEK 2"
+
+
+def player(i, first, last, team, pos, this_season=True, released=None):
+    return dict(id=i, player_name=f"{first[0]}. {last}", full_name=f"{first} {last}", team_id=team, position=pos,
+                released_week=released, this_season=this_season)
+
+
+def contract(cid, team, years=(1_000_000, 1_000_000, 0, 0, 0), length=2):
+    return dict(id=cid, team_id=team, length=length, years_remaining=length, total_value=sum(years), bonus=100,
+                cut_savings=1, cut_penalty=2, no_trade_clause=False, incentive=None,
+                years={2036 + i: y for i, y in enumerate(years)})
+
+
+def state(players=(), contracts=None, existing=(), counts=None, apply_from=None):
+    return L._new_state(2036, TEAMS, list(players), existing, counts, contracts, apply_from)
+
+
+def entries(*rows, meta=None):
+    """rows newest first: (heading, text)."""
+    return L.expand([{"heading": h, "text": t, "flags": []} for h, t in rows], meta)
+
+
+def ops(plan, kind=None):
+    return [o for e in plan for o in e["ops"] if kind is None or o["op"] == kind]
+
+
+class SignTest(unittest.TestCase):
+    def test_sign_known_free_agent(self):
+        st = state([player(10, "Devonta", "Taylor", 2, "WR", released=2), player(11, "Al", "Roe", 1, "CB")], contracts={})
+        plan, rep = L.plan_effects(entries((W4, "JAGUARS SIGNED FREE AGENT (WR) DEVONTA TAYLOR TO 1 YEAR, $3.93M CONTRACT")),
+                                   st, parse_money)
+        self.assertEqual(plan[0]["txn"]["player"], 10)
+        self.assertEqual(ops(plan, "move"), [{"op": "move", "player": 10, "team_id": 1, "position": "WR"}])
+        ins = ops(plan, "contract_insert")[0]
+        self.assertEqual((ins["team_id"], ins["length"], ins["total_value"]), (1, 1, 3_930_000))
+        self.assertEqual(ins["years"], {2036: 3_930_000, 2037: 0, 2038: 0, 2039: 0, 2040: 0})
+        self.assertEqual(plan[0]["txn"]["contract_value"], 3_930_000)
+        self.assertEqual(rep["teams_flagged"], [1])
+
+    def test_sign_unknown_creates_player(self):
+        plan, rep = L.plan_effects(entries((W4, "JAGUARS SIGNED FREE AGENT (WR) DEVONTA TAYLOR JR. TO 1 YEAR, $850K CONTRACT")),
+                                   state(), parse_money)
+        create = ops(plan, "create_player")[0]
+        self.assertEqual((create["player_name"], create["full_name"], create["team_id"]),
+                         ("D. Taylor Jr.", "Devonta Taylor Jr.", 1))
+        self.assertEqual(plan[0]["txn"]["player"], create["tmp"])
+        self.assertEqual(len(rep["created_players"]), 1)
+        self.assertEqual(ops(plan, "contract_insert"), [])      # no player_contracts table in this state
+
+    def test_sign_ambiguous_no_move(self):
+        st = state([player(10, "Jo", "Smith", 2, "CB", released=2), player(12, "Jo", "Smith", 3, "CB", released=1)])
+        plan, rep = L.plan_effects(entries((W4, "JAGUARS SIGNED FREE AGENT (CB) JO SMITH TO 1 YEAR, $1M CONTRACT")), st, parse_money)
+        self.assertIsNone(plan[0]["txn"]["player"])
+        self.assertEqual(ops(plan, "move"), [])
+        self.assertEqual(len(rep["ambiguous"]), 1)
+        self.assertIn("ambiguous", plan[0]["txn"]["flags"])
+
+    def test_sign_player_not_on_any_roster_this_season_needs_position(self):
+        st = state([player(20, "Bo", "Poe", None, "QB", this_season=False)])
+        plan, _ = L.plan_effects(entries((W4, "BEARS SIGNED FREE AGENT (WR) BO POE TO 1 YEAR, $1M CONTRACT")), st, parse_money)
+        self.assertEqual(len(ops(plan, "create_player")), 1)     # a QB of that name isn't this WR
+        st = state([player(20, "Bo", "Poe", None, "WR", this_season=False)])
+        plan, _ = L.plan_effects(entries((W4, "BEARS SIGNED FREE AGENT (WR) BO POE TO 1 YEAR, $1M CONTRACT")), st, parse_money)
+        self.assertEqual(plan[0]["txn"]["player"], 20)
+
+
+class ReleaseTradeTest(unittest.TestCase):
+    def test_release_keeps_team(self):
+        st = state([player(30, "Julius", "Slaton", 1, "WR")], contracts={30: contract(500, 1)})
+        plan, rep = L.plan_effects(entries((W4, "JAGUARS RELEASE (WR) JULIUS SLATON")), st, parse_money)
+        self.assertEqual(ops(plan, "release"), [{"op": "release", "player": 30, "week": 4}])
+        self.assertEqual(ops(plan, "move"), [])
+        self.assertEqual(ops(plan, "contract_status"), [{"op": "contract_status", "contract_id": 500, "status": "RELEASED"}])
+        self.assertEqual(plan[0]["txn"]["from_team_id"], 1)
+
+    def test_trade_copies_contract(self):
+        st = state([player(40, "John", "Doe", 2, "WR")], contracts={40: contract(600, 2)})
+        plan, rep = L.plan_effects(entries((W4, "BEARS TRADED (WR) JOHN DOE TO PACKERS FOR 2037 2ND ROUND PICK")),
+                                   st, parse_money)
+        self.assertEqual(len(plan), 2)                        # player leg + pick leg
+        self.assertEqual(ops(plan, "contract_status")[0]["status"], "TRADED")
+        ins = ops(plan, "contract_insert")[0]
+        self.assertEqual((ins["team_id"], ins["length"], ins["years"], ins["bonus"]),
+                         (3, 2, {2036: 1_000_000, 2037: 1_000_000, 2038: 0, 2039: 0, 2040: 0}, 100))
+        self.assertEqual(ops(plan, "move")[0]["team_id"], 3)
+        self.assertEqual(rep["teams_flagged"], [2, 3])
+        groups = {e["txn"]["trade_group"] for e in plan}
+        self.assertEqual(groups, {"2036:2036 SEASON - WEEK 4:BEARS-PACKERS:1"})
+        pick = [e["txn"] for e in plan if e["txn"]["player"] is None][0]
+        self.assertEqual((pick["player_name"], pick["from_team_id"], pick["to_team_id"]), ("2037 2ND ROUND PICK", 3, 2))
+
+    def test_sign_then_release_same_week_oldest_first(self):
+        st = state([player(10, "Devonta", "Taylor", 2, "WR", released=2)], contracts={})
+        plan, _ = L.plan_effects(entries((W4, "JAGUARS RELEASE (WR) DEVONTA TAYLOR"),                     # newer
+                                         (W4, "JAGUARS SIGNED FREE AGENT (WR) DEVONTA TAYLOR TO 1 YEAR, $1M CONTRACT")),
+                                 st, parse_money)
+        self.assertEqual([e["txn"]["type"] for e in plan], ["SIGNED", "RELEASED"])
+        self.assertEqual([o["op"] for o in ops(plan) if o["op"] in ("move", "release")], ["move", "release"])
+        self.assertEqual(ops(plan, "release")[0]["player"], 10)
+
+    def test_resign_flags_only(self):
+        st = state([player(50, "Tom", "Brady", 4, "QB")], contracts={50: contract(700, 4)})
+        plan, rep = L.plan_effects(entries((W4, "SAINTS RE-SIGNED (QB) TOM BRADY TO 4 YEARS, $120M CONTRACT")), st, parse_money)
+        self.assertEqual([o["op"] for o in ops(plan)], ["flag_team"])
+        self.assertEqual(plan[0]["txn"]["contract_value"], 120_000_000)
+
+
+class KeysAndCutoffTest(unittest.TestCase):
+    ROWS = ((W4, "JAGUARS RELEASE (WR) JULIUS SLATON"), (W3, "THE DRAFT CLASS HAS BEEN EDITED"))
+
+    def test_loading_twice_gives_no_ops(self):
+        st = state([player(30, "Julius", "Slaton", 1, "WR")])
+        es = entries(*self.ROWS)
+        plan, _ = L.plan_effects(es, st, parse_money)
+        self.assertEqual(len(plan), 2)
+        keys = {(e["txn"]["season"], e["txn"]["txn_date"], e["txn"]["row_key"], e["txn"]["seq"]) for e in plan}
+        st2 = state([player(30, "Julius", "Slaton", 1, "WR")], existing=keys, counts={(2036, W4): 1, (2036, W3): 1})
+        plan2, rep2 = L.plan_effects(entries(*self.ROWS), st2, parse_money)
+        self.assertEqual(plan2, [])
+        self.assertEqual(rep2["transactions_new"], 0)
+
+    def test_before_apply_from_is_history(self):
+        st = state([player(30, "Julius", "Slaton", 1, "WR")], apply_from="2036 SEASON - WEEK 1")
+        plan, rep = L.plan_effects(entries((W4, "JAGUARS RELEASE (WR) JULIUS SLATON"), (PRE, "JAGUARS RELEASE (WR) JULIUS SLATON")),
+                                   st, parse_money)
+        pre = [e for e in plan if e["txn"]["txn_date"] == PRE][0]
+        self.assertFalse(pre["txn"]["applied"])
+        self.assertEqual(pre["ops"], [])
+        self.assertEqual(rep["not_applied"], 1)
+
+    def test_older_season_rows_are_history(self):
+        plan, rep = L.plan_effects(entries(("2035 SEASON - WEEK 9", "JAGUARS RELEASE (WR) X Y")), state(), parse_money)
+        self.assertEqual((plan[0]["txn"]["season"], plan[0]["txn"]["applied"], plan[0]["ops"]), (2035, False, []))
+
+    def test_missing_rows_stop_the_load(self):
+        st = state(counts={(2036, W4): 3})
+        with self.assertRaises(L.TransactionsError):
+            L.plan_effects(entries((W4, "JAGUARS RELEASE (WR) X Y")), st, parse_money)
+
+    def test_future_year_stops(self):
+        with self.assertRaises(L.TransactionsError):
+            L.plan_effects(entries(("2037 SEASON - WEEK 1", "JAGUARS RELEASE (WR) X Y")), state(), parse_money)
+
+    def test_partial_oldest_group_left_out(self):
+        es = entries((W4, "JAGUARS RELEASE (WR) A B"), (W3, "JAGUARS RELEASE (WR) C D"),
+                     meta={"since": W4, "reached_end": False})
+        self.assertEqual([e["heading"] for e in es], [W4])
+        es = entries((W4, "JAGUARS RELEASE (WR) A B"), (W3, "JAGUARS RELEASE (WR) C D"), meta={"since": W4, "reached_end": True})
+        self.assertEqual(len(es), 2)
+
+
+class HookTest(unittest.TestCase):
+    def _done(self):
+        return [(1, {"type": "TRADED", "applied": True, "trade_group": "g1"}),
+                (2, {"type": "TRADED", "applied": True, "trade_group": "g1"})]
+
+    def test_hook_skipped_without_table(self):
+        cur = mock.Mock()
+        cur.fetchone.return_value = (False,)
+        rep = {}
+        L.gm_hook(cur, self._done(), rep)
+        self.assertNotIn("gm_proposals_matched", rep)
+
+    def test_hook_called_when_present(self):
+        cur = mock.Mock()
+        cur.fetchone.return_value = (True,)
+        fake = mock.Mock(match_executed_trade=mock.Mock(return_value=77))
+        with mock.patch.dict("sys.modules", {"pipeline.gm_proposals": fake}):
+            rep = {}
+            L.gm_hook(cur, self._done(), rep)
+        self.assertEqual(rep["gm_proposals_matched"], {"g1": 77})
+        fake.match_executed_trade.assert_called_once()
+
+    def test_read_rows_and_effective_week(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "transactions.csv"), "w") as fh:
+                fh.write("ORDER,PAGE,HEADING,TEXT,FLAGS\n1,0,2036 SEASON - WEEKT,B,\n0,0,2036 SEASON - WEEK 2,A,gap?\n")
+            rows = L.read_rows(d)
+        self.assertEqual([(r["heading"], r["text"], r["flags"]) for r in rows],
+                         [("2036 SEASON - WEEK 2", "A", ["gap?"]), ("2036 SEASON - WEEK 1", "B", [])])
+        self.assertEqual(L.effective_week(PRE), 0)
+        self.assertEqual(L.effective_week("2036 OFFSEASON - FREE AGENCY"), 24)
+        self.assertEqual(L.effective_week("2036 POST SEASON - WILD CARD"), 19)
+
+
+if __name__ == "__main__":
+    unittest.main()
