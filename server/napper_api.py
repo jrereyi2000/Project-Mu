@@ -1522,8 +1522,10 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
             """
             params = [current_season, current_season, wk, wk, current_season, league_id, league_id, wk]
             if position and position != "ALL":
-                sql += " AND ps.position = %s"
-                params.append(position)
+                # Rosters store running backs as HB/FB; the Players tab's RB filter means all of them.
+                positions = ["HB", "FB", "RB"] if position.upper() in ("RB", "HB") else [position.upper()]
+                sql += " AND ps.position = ANY(%s)"
+                params.append(positions)
             if q:
                 sql += " AND (p.full_name ILIKE %s OR p.player_name ILIKE %s)"
                 params.extend([f"%{q}%", f"%{q}%"])
