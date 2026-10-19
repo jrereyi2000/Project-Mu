@@ -14,7 +14,460 @@ def current_season() -> int:
     return int(pd.read_sql("SELECT current_season FROM league_state WHERE id = 1", engine).iloc[0, 0])
 
 
-def generate_team_and_player_stats(season_year: int | None = None, strict: bool = False):
+def _distribute_metric(target: int | float, weights: list[float], is_half_step: bool = False) -> list[int | float]:
+    """Distribute a numeric target across games according to game weights.
+    Ensures exact conservation: sum(allocations) == target.
+    If is_half_step is True (used for defensive sacks), distributes in 0.5 increments."""
+    if not weights or target <= 0:
+        return [0.0 if is_half_step else 0] * len(weights)
+    
+    scale = 2 if is_half_step else 1
+    int_target = int(round(target * scale))
+    
+    weight_sum = sum(weights)
+    if weight_sum <= 0.001:
+        weight_sum = float(len(weights))
+        weights = [1.0] * len(weights)
+        
+    remaining_target = int_target
+    remaining_weight = weight_sum
+    allocs = []
+    for w in weights:
+        if remaining_weight <= 0.001:
+            val = remaining_target
+        else:
+            val = int(round(remaining_target * (w / remaining_weight)))
+        val = max(0, min(val, remaining_target))
+        allocs.append(val)
+        remaining_target -= val
+        remaining_weight -= w
+        
+    if remaining_target > 0:
+        best_idx = weights.index(max(weights))
+        allocs[best_idx] += remaining_target
+        
+    if is_half_step:
+        return [round(v / 2.0, 1) for v in allocs]
+    return allocs
+
+
+def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.DataFrame):
+    """Backfills game_stat_{kicking,defense,punting,blocking,puntreturn,kickreturn}
+    from their respective season_stat_* tables for completed games missing game lines.
+    In weekly runs with 1 new game per team, the game line equals that week's exact change in season totals."""
+    import psycopg
+
+    if games_df.empty:
+        return
+
+    # 1. KICKING
+    try:
+        season_k_df = pd.read_sql(f"SELECT * FROM season_stat_kicking WHERE season = {season_year}", engine)
+        if not season_k_df.empty:
+            existing_k = pd.read_sql(f"""
+                SELECT gs.* FROM game_stat_kicking gs JOIN games g ON g.id = gs.game_id
+                WHERE g.season = {season_year} AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+            """, engine)
+            k_metrics = ['fgm_29', 'fga_29', 'fgm_39', 'fga_39', 'fgm_49', 'fga_49', 'fgm_50', 'fga_50',
+                         'fg_blocked', 'xpm', 'xpa', 'xp_blocked', 'kickoffs', 'touchbacks']
+            k_rows = []
+            for team_id in season_k_df['team_id'].unique():
+                if pd.isnull(team_id): continue
+                team_id = int(team_id)
+                team_games = games_df[(games_df['home_team_id'] == team_id) | (games_df['away_team_id'] == team_id)].sort_values('week')
+                if not existing_k.empty:
+                    recorded_games = existing_k[existing_k['team_id'] == team_id]['game_id'].unique()
+                    team_games = team_games[~team_games['id'].isin(recorded_games)]
+                if team_games.empty: continue
+
+                game_weights = []
+                for _, g in team_games.iterrows():
+                    is_home = (g['home_team_id'] == team_id)
+                    pts = g['home_score'] if is_home else g['away_score']
+                    game_weights.append(max(1.0, pts / 7.0))
+
+                for _, p_row in season_k_df[season_k_df['team_id'] == team_id].iterrows():
+                    pid = int(p_row['player_id'])
+                    p_existing = existing_k[existing_k['player_id'] == pid] if not existing_k.empty else pd.DataFrame()
+                    allocs = {}
+                    for m in k_metrics:
+                        target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
+                        if not p_existing.empty and m in p_existing.columns:
+                            target -= int(p_existing[m].fillna(0).sum())
+                        allocs[m] = _distribute_metric(max(0, target), game_weights)
+
+                    for idx, (_, g) in enumerate(team_games.iterrows()):
+                        fgm = allocs['fgm_29'][idx] + allocs['fgm_39'][idx] + allocs['fgm_49'][idx] + allocs['fgm_50'][idx]
+                        fga = max(fgm, allocs['fga_29'][idx] + allocs['fga_39'][idx] + allocs['fga_49'][idx] + allocs['fga_50'][idx])
+                        xpm = allocs['xpm'][idx]
+                        xpa = max(xpm, allocs['xpa'][idx])
+                        fg_pct = round((fgm / fga * 100.0), 1) if fga > 0 else 0.0
+                        xp_pct = round((xpm / xpa * 100.0), 1) if xpa > 0 else 0.0
+
+                        s_long = int(p_row['fg_long']) if pd.notnull(p_row.get('fg_long')) else 50
+                        if allocs['fgm_50'][idx] > 0: fg_long = min(s_long, 55)
+                        elif allocs['fgm_49'][idx] > 0: fg_long = min(s_long, 47)
+                        elif allocs['fgm_39'][idx] > 0: fg_long = min(s_long, 37)
+                        elif allocs['fgm_29'][idx] > 0: fg_long = min(s_long, 27)
+                        elif fgm > 0: fg_long = min(s_long, 30)
+                        else: fg_long = 0
+
+                        k_rows.append({
+                            'game_id': int(g['id']),
+                            'player_id': pid,
+                            'team_id': team_id,
+                            'position': p_row['position'] or 'K',
+                            'fgm': fgm, 'fga': fga, 'fg_pct': fg_pct, 'fg_long': fg_long,
+                            'fg_blocked': allocs['fg_blocked'][idx],
+                            'xpm': xpm, 'xpa': xpa, 'xp_pct': xp_pct, 'xp_blocked': allocs['xp_blocked'][idx],
+                            'fgm_29': allocs['fgm_29'][idx], 'fga_29': allocs['fga_29'][idx],
+                            'fgm_39': allocs['fgm_39'][idx], 'fga_39': allocs['fga_39'][idx],
+                            'fgm_49': allocs['fgm_49'][idx], 'fga_49': allocs['fga_49'][idx],
+                            'fgm_50': allocs['fgm_50'][idx], 'fga_50': allocs['fga_50'][idx],
+                            'kickoffs': allocs['kickoffs'][idx], 'touchbacks': allocs['touchbacks'][idx]
+                        })
+
+            if k_rows:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cols = list(k_rows[0].keys())
+                        placeholders = ', '.join(['%s'] * len(cols))
+                        query = f"INSERT INTO game_stat_kicking ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT (game_id, player_id) DO NOTHING"
+                        cur.executemany(query, [[r[c] for c in cols] for r in k_rows])
+                    conn.commit()
+                print(f"  [Kicking] Backfilled {len(k_rows)} game lines.")
+    except Exception as e:
+        print(f"  [WARN] Backfilling kicking failed: {e}")
+
+    # 2. DEFENSE
+    try:
+        season_def_df = pd.read_sql(f"SELECT * FROM season_stat_defense WHERE season = {season_year}", engine)
+        if not season_def_df.empty:
+            existing_def = pd.read_sql(f"""
+                SELECT gs.* FROM game_stat_defense gs JOIN games g ON g.id = gs.game_id
+                WHERE g.season = {season_year} AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+            """, engine)
+            def_metrics = ['solo', 'assists', 'tfl', 'sacks', 'ints', 'int_yds', 'deflections',
+                           'forced_fumbles', 'fumble_recoveries', 'fumble_yds', 'blocks', 'safeties', 'tds']
+            def_rows = []
+            for team_id in season_def_df['team_id'].unique():
+                if pd.isnull(team_id): continue
+                team_id = int(team_id)
+                team_games = games_df[(games_df['home_team_id'] == team_id) | (games_df['away_team_id'] == team_id)].sort_values('week')
+                if not existing_def.empty:
+                    recorded_games = existing_def[existing_def['team_id'] == team_id]['game_id'].unique()
+                    team_games = team_games[~team_games['id'].isin(recorded_games)]
+                if team_games.empty: continue
+
+                game_weights = []
+                for _, g in team_games.iterrows():
+                    is_home = (g['home_team_id'] == team_id)
+                    pts_allowed = g['away_score'] if is_home else g['home_score']
+                    game_weights.append(max(1.0, (50.0 - pts_allowed) / 10.0))
+
+                for _, p_row in season_def_df[season_def_df['team_id'] == team_id].iterrows():
+                    pid = int(p_row['player_id'])
+                    p_existing = existing_def[existing_def['player_id'] == pid] if not existing_def.empty else pd.DataFrame()
+                    allocs = {}
+                    for m in def_metrics:
+                        if m == 'sacks':
+                            target = float(p_row[m]) if pd.notnull(p_row[m]) else 0.0
+                            if not p_existing.empty and m in p_existing.columns:
+                                target -= float(p_existing[m].fillna(0).sum())
+                            allocs[m] = _distribute_metric(max(0.0, target), game_weights, is_half_step=True)
+                        else:
+                            target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
+                            if not p_existing.empty and m in p_existing.columns:
+                                target -= int(p_existing[m].fillna(0).sum())
+                            allocs[m] = _distribute_metric(max(0, target), game_weights)
+
+                    for idx, (_, g) in enumerate(team_games.iterrows()):
+                        solo = int(allocs['solo'][idx])
+                        assists = int(allocs['assists'][idx])
+                        tackles = solo + assists
+                        sacks = float(allocs['sacks'][idx])
+                        ints = int(allocs['ints'][idx])
+                        int_yds = int(allocs['int_yds'][idx])
+                        int_avg = round((int_yds / ints), 1) if ints > 0 else 0.0
+                        int_long = int_yds if ints > 0 else 0
+
+                        def_rows.append({
+                            'game_id': int(g['id']),
+                            'player_id': pid,
+                            'team_id': team_id,
+                            'position': p_row['position'] or 'DEF',
+                            'solo': solo, 'assists': assists, 'tackles': tackles,
+                            'tfl': int(allocs['tfl'][idx]),
+                            'sacks': sacks,
+                            'ints': ints, 'int_yds': int_yds, 'int_avg': int_avg, 'int_long': int_long,
+                            'deflections': int(allocs['deflections'][idx]),
+                            'forced_fumbles': int(allocs['forced_fumbles'][idx]),
+                            'fumble_recoveries': int(allocs['fumble_recoveries'][idx]),
+                            'fumble_yds': int(allocs['fumble_yds'][idx]),
+                            'blocks': int(allocs['blocks'][idx]),
+                            'safeties': int(allocs['safeties'][idx]),
+                            'tds': int(allocs['tds'][idx])
+                        })
+
+            if def_rows:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cols = list(def_rows[0].keys())
+                        placeholders = ', '.join(['%s'] * len(cols))
+                        query = f"INSERT INTO game_stat_defense ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT (game_id, player_id) DO NOTHING"
+                        cur.executemany(query, [[r[c] for c in cols] for r in def_rows])
+                    conn.commit()
+                print(f"  [Defense] Backfilled {len(def_rows)} game lines.")
+    except Exception as e:
+        print(f"  [WARN] Backfilling defense failed: {e}")
+
+    # 3. PUNTING
+    try:
+        season_punt_df = pd.read_sql(f"SELECT * FROM season_stat_punting WHERE season = {season_year}", engine)
+        if not season_punt_df.empty:
+            existing_punt = pd.read_sql(f"""
+                SELECT gs.* FROM game_stat_punting gs JOIN games g ON g.id = gs.game_id
+                WHERE g.season = {season_year} AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+            """, engine)
+            punt_metrics = ['punts', 'yards', 'net_yards', 'blocked', 'inside_20', 'touchbacks']
+            punt_rows = []
+            for team_id in season_punt_df['team_id'].unique():
+                if pd.isnull(team_id): continue
+                team_id = int(team_id)
+                team_games = games_df[(games_df['home_team_id'] == team_id) | (games_df['away_team_id'] == team_id)].sort_values('week')
+                if not existing_punt.empty:
+                    recorded_games = existing_punt[existing_punt['team_id'] == team_id]['game_id'].unique()
+                    team_games = team_games[~team_games['id'].isin(recorded_games)]
+                if team_games.empty: continue
+
+                game_weights = []
+                for _, g in team_games.iterrows():
+                    is_home = (g['home_team_id'] == team_id)
+                    pts = g['home_score'] if is_home else g['away_score']
+                    game_weights.append(max(1.0, (40.0 - pts) / 10.0))
+
+                for _, p_row in season_punt_df[season_punt_df['team_id'] == team_id].iterrows():
+                    pid = int(p_row['player_id'])
+                    p_existing = existing_punt[existing_punt['player_id'] == pid] if not existing_punt.empty else pd.DataFrame()
+                    allocs = {}
+                    for m in punt_metrics:
+                        target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
+                        if not p_existing.empty and m in p_existing.columns:
+                            target -= int(p_existing[m].fillna(0).sum())
+                        allocs[m] = _distribute_metric(max(0, target), game_weights)
+
+                    for idx, (_, g) in enumerate(team_games.iterrows()):
+                        punts = int(allocs['punts'][idx])
+                        yards = int(allocs['yards'][idx])
+                        net_yards = min(yards, int(allocs['net_yards'][idx]))
+                        average = round((yards / punts), 1) if punts > 0 else 0.0
+                        net_average = round((net_yards / punts), 1) if punts > 0 else 0.0
+                        s_long = int(p_row['longest']) if pd.notnull(p_row.get('longest')) else 60
+                        longest = min(s_long, int(round(average + 12))) if punts > 0 else 0
+
+                        punt_rows.append({
+                            'game_id': int(g['id']),
+                            'player_id': pid,
+                            'team_id': team_id,
+                            'position': p_row['position'] or 'P',
+                            'punts': punts, 'yards': yards, 'average': average,
+                            'net_yards': net_yards, 'net_average': net_average,
+                            'blocked': int(allocs['blocked'][idx]),
+                            'inside_20': int(allocs['inside_20'][idx]),
+                            'touchbacks': int(allocs['touchbacks'][idx]),
+                            'longest': longest
+                        })
+
+            if punt_rows:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cols = list(punt_rows[0].keys())
+                        placeholders = ', '.join(['%s'] * len(cols))
+                        query = f"INSERT INTO game_stat_punting ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT (game_id, player_id) DO NOTHING"
+                        cur.executemany(query, [[r[c] for c in cols] for r in punt_rows])
+                    conn.commit()
+                print(f"  [Punting] Backfilled {len(punt_rows)} game lines.")
+    except Exception as e:
+        print(f"  [WARN] Backfilling punting failed: {e}")
+
+    # 4. BLOCKING
+    try:
+        season_blk_df = pd.read_sql(f"SELECT * FROM season_stat_blocking WHERE season = {season_year}", engine)
+        if not season_blk_df.empty:
+            existing_blk = pd.read_sql(f"""
+                SELECT gs.* FROM game_stat_blocking gs JOIN games g ON g.id = gs.game_id
+                WHERE g.season = {season_year} AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+            """, engine)
+            blk_rows = []
+            for team_id in season_blk_df['team_id'].unique():
+                if pd.isnull(team_id): continue
+                team_id = int(team_id)
+                team_games = games_df[(games_df['home_team_id'] == team_id) | (games_df['away_team_id'] == team_id)].sort_values('week')
+                if not existing_blk.empty:
+                    recorded_games = existing_blk[existing_blk['team_id'] == team_id]['game_id'].unique()
+                    team_games = team_games[~team_games['id'].isin(recorded_games)]
+                if team_games.empty: continue
+
+                game_weights = [1.0] * len(team_games)
+                for _, p_row in season_blk_df[season_blk_df['team_id'] == team_id].iterrows():
+                    pid = int(p_row['player_id'])
+                    p_existing = existing_blk[existing_blk['player_id'] == pid] if not existing_blk.empty else pd.DataFrame()
+                    target = int(p_row['sacks_allowed']) if pd.notnull(p_row.get('sacks_allowed')) else 0
+                    if not p_existing.empty and 'sacks_allowed' in p_existing.columns:
+                        target -= int(p_existing['sacks_allowed'].fillna(0).sum())
+                    alloc = _distribute_metric(max(0, target), game_weights)
+
+                    for idx, (_, g) in enumerate(team_games.iterrows()):
+                        blk_rows.append({
+                            'game_id': int(g['id']),
+                            'player_id': pid,
+                            'team_id': team_id,
+                            'position': p_row['position'] or 'OL',
+                            'sacks_allowed': int(alloc[idx])
+                        })
+
+            if blk_rows:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cols = list(blk_rows[0].keys())
+                        placeholders = ', '.join(['%s'] * len(cols))
+                        query = f"INSERT INTO game_stat_blocking ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT (game_id, player_id) DO NOTHING"
+                        cur.executemany(query, [[r[c] for c in cols] for r in blk_rows])
+                    conn.commit()
+                print(f"  [Blocking] Backfilled {len(blk_rows)} game lines.")
+    except Exception as e:
+        print(f"  [WARN] Backfilling blocking failed: {e}")
+
+    # 5. PUNT RETURN
+    try:
+        season_pr_df = pd.read_sql(f"SELECT * FROM season_stat_puntreturn WHERE season = {season_year}", engine)
+        if not season_pr_df.empty:
+            existing_pr = pd.read_sql(f"""
+                SELECT gs.* FROM game_stat_puntreturn gs JOIN games g ON g.id = gs.game_id
+                WHERE g.season = {season_year} AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+            """, engine)
+            pr_metrics = ['returns', 'yards', 'tds']
+            pr_rows = []
+            for team_id in season_pr_df['team_id'].unique():
+                if pd.isnull(team_id): continue
+                team_id = int(team_id)
+                team_games = games_df[(games_df['home_team_id'] == team_id) | (games_df['away_team_id'] == team_id)].sort_values('week')
+                if not existing_pr.empty:
+                    recorded_games = existing_pr[existing_pr['team_id'] == team_id]['game_id'].unique()
+                    team_games = team_games[~team_games['id'].isin(recorded_games)]
+                if team_games.empty: continue
+
+                game_weights = []
+                for _, g in team_games.iterrows():
+                    is_home = (g['home_team_id'] == team_id)
+                    pts_allowed = g['away_score'] if is_home else g['home_score']
+                    game_weights.append(max(1.0, (40.0 - pts_allowed) / 10.0))
+
+                for _, p_row in season_pr_df[season_pr_df['team_id'] == team_id].iterrows():
+                    pid = int(p_row['player_id'])
+                    p_existing = existing_pr[existing_pr['player_id'] == pid] if not existing_pr.empty else pd.DataFrame()
+                    allocs = {}
+                    for m in pr_metrics:
+                        target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
+                        if not p_existing.empty and m in p_existing.columns:
+                            target -= int(p_existing[m].fillna(0).sum())
+                        allocs[m] = _distribute_metric(max(0, target), game_weights)
+
+                    for idx, (_, g) in enumerate(team_games.iterrows()):
+                        ret = int(allocs['returns'][idx])
+                        yds = int(allocs['yards'][idx])
+                        avg = round((yds / ret), 1) if ret > 0 else 0.0
+                        s_long = int(p_row['longest']) if pd.notnull(p_row.get('longest')) else yds
+                        longest = min(s_long, yds) if ret > 0 else 0
+
+                        pr_rows.append({
+                            'game_id': int(g['id']),
+                            'player_id': pid,
+                            'team_id': team_id,
+                            'position': p_row['position'] or 'WR',
+                            'returns': ret, 'yards': yds, 'average': avg,
+                            'tds': int(allocs['tds'][idx]),
+                            'longest': longest
+                        })
+
+            if pr_rows:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cols = list(pr_rows[0].keys())
+                        placeholders = ', '.join(['%s'] * len(cols))
+                        query = f"INSERT INTO game_stat_puntreturn ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT (game_id, player_id) DO NOTHING"
+                        cur.executemany(query, [[r[c] for c in cols] for r in pr_rows])
+                    conn.commit()
+                print(f"  [Punt Return] Backfilled {len(pr_rows)} game lines.")
+    except Exception as e:
+        print(f"  [WARN] Backfilling punt return failed: {e}")
+
+    # 6. KICK RETURN
+    try:
+        season_kr_df = pd.read_sql(f"SELECT * FROM season_stat_kickreturn WHERE season = {season_year}", engine)
+        if not season_kr_df.empty:
+            existing_kr = pd.read_sql(f"""
+                SELECT gs.* FROM game_stat_kickreturn gs JOIN games g ON g.id = gs.game_id
+                WHERE g.season = {season_year} AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
+            """, engine)
+            kr_metrics = ['returns', 'yards', 'tds']
+            kr_rows = []
+            for team_id in season_kr_df['team_id'].unique():
+                if pd.isnull(team_id): continue
+                team_id = int(team_id)
+                team_games = games_df[(games_df['home_team_id'] == team_id) | (games_df['away_team_id'] == team_id)].sort_values('week')
+                if not existing_kr.empty:
+                    recorded_games = existing_kr[existing_kr['team_id'] == team_id]['game_id'].unique()
+                    team_games = team_games[~team_games['id'].isin(recorded_games)]
+                if team_games.empty: continue
+
+                game_weights = []
+                for _, g in team_games.iterrows():
+                    is_home = (g['home_team_id'] == team_id)
+                    pts_allowed = g['away_score'] if is_home else g['home_score']
+                    game_weights.append(max(1.0, pts_allowed / 7.0))
+
+                for _, p_row in season_kr_df[season_kr_df['team_id'] == team_id].iterrows():
+                    pid = int(p_row['player_id'])
+                    p_existing = existing_kr[existing_kr['player_id'] == pid] if not existing_kr.empty else pd.DataFrame()
+                    allocs = {}
+                    for m in kr_metrics:
+                        target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
+                        if not p_existing.empty and m in p_existing.columns:
+                            target -= int(p_existing[m].fillna(0).sum())
+                        allocs[m] = _distribute_metric(max(0, target), game_weights)
+
+                    for idx, (_, g) in enumerate(team_games.iterrows()):
+                        ret = int(allocs['returns'][idx])
+                        yds = int(allocs['yards'][idx])
+                        avg = round((yds / ret), 1) if ret > 0 else 0.0
+                        s_long = int(p_row['longest']) if pd.notnull(p_row.get('longest')) else yds
+                        longest = min(s_long, yds) if ret > 0 else 0
+
+                        kr_rows.append({
+                            'game_id': int(g['id']),
+                            'player_id': pid,
+                            'team_id': team_id,
+                            'position': p_row['position'] or 'WR',
+                            'returns': ret, 'yards': yds, 'average': avg,
+                            'tds': int(allocs['tds'][idx]),
+                            'longest': longest
+                        })
+
+            if kr_rows:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cols = list(kr_rows[0].keys())
+                        placeholders = ', '.join(['%s'] * len(cols))
+                        query = f"INSERT INTO game_stat_kickreturn ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT (game_id, player_id) DO NOTHING"
+                        cur.executemany(query, [[r[c] for c in cols] for r in kr_rows])
+                    conn.commit()
+                print(f"  [Kick Return] Backfilled {len(kr_rows)} game lines.")
+    except Exception as e:
+        print(f"  [WARN] Backfilling kick return failed: {e}")
+
+
+def generate_team_and_player_stats(season_year: int | None = None, strict: bool = False, include_dst: bool = True):
     """Backfill the season's missing game lines, then run the analytics engines. strict=True (the weekly
     run, pipeline/weekly_capture.py) re-raises an engine failure so the week stops before any articles;
     otherwise the failure is printed and the run carries on."""
@@ -197,6 +650,16 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         conn.commit()
     print(f"Database sync complete: Tried to insert {len(team_stats_rows)} team rows and {len(player_stats_rows)} player rows.")
 
+    # 4. Defense and Special Teams: distribute season totals into game_stat_* for games missing game lines
+    if include_dst:
+        try:
+            print("-> Generating defense and special-teams game stats...")
+            generate_defense_and_special_teams_stats(season_year, games_df)
+        except Exception as e:
+            print(f"❌ Defense and special-teams game stats generation failed: {e}")
+            if strict:
+                raise
+
     # Per-game conversions, red zone and penalties: the season totals' remainder into every still-empty
     # team_stats cell (one new game per team in a weekly run, so exactly that week's change)
     try:
@@ -297,4 +760,6 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--season", type=int, help="default: league_state.current_season")
-    generate_team_and_player_stats(season_year=ap.parse_args().season)
+    ap.add_argument("--no-dst", action="store_true", help="Skip defense and special teams game stat backfill")
+    args = ap.parse_args()
+    generate_team_and_player_stats(season_year=args.season, include_dst=not args.no_dst)
