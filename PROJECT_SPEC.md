@@ -151,7 +151,10 @@ Project Mu/
 │   │                          #   2026_11_02_drop_coach_archetype.sql, 2026_11_03_whitfield_2034.sql,
 │   │                          #   2026_11_04_playoff_games.sql,
 │   │                          #   2026_11_27_whitfield_bears_coordinator_lore.sql, 2026_11_28_panthers_bears_coordinators_update.sql, 2026_11_29_panthers_shavon_bell_dc.sql, 2026_11_29_panthers_history_backfill.sql, 2026_11_30_panthers_2034_playoff_statlines.sql, 2026_12_01_coach_tenures_correction.sql, 2026_12_02_napper_fantasy.sql, 2026_12_03_napper_active_season.sql (apply SQL ones via
-│   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>)
+│   │                          #   docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < <file>);
+│   │                          #   Python data fixes run as modules with --dry-run: 2026_11_21_rename_colliding_players.py (renames 33 players
+│   │                          #   whose first initial + last name collided, breaking OCR/stat matching), 2026_11_22_rename_colliding_prospects.py
+│   │                          #   (renames 16 2036 draft prospects in draft_prospects and the prospects CSVs)
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation
 │   ├── headshot_appearance_generator.py, make_headshot.py
