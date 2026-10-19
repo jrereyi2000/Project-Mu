@@ -28,6 +28,7 @@ Writes, inside that capture folder:
                          NO TRADE CLAUSE), raw strings; left/right pages paired by row, the shared BONUS checks the pairing
   team_cap.csv           one row per team: the Team Salary cap strip (36 CAP ... 37 ROOKIE RES), read twice
   injuries.csv           the captured week's injury report across all 32 teams (Apple Vision OCR)
+  transactions.csv       League Transactions rows, newest first (Apple Vision OCR; flagged rows re-read by Gemini)
   draft_results.csv      --only draft-results: all 7 rounds of draft picks (Apple Vision OCR)
 """
 import csv, glob, io, os, re, sys, threading, time
@@ -1168,6 +1169,12 @@ def main():
             extract_injuries_ocr(root)
         except Exception as e:
             print(f"Error extracting injuries via Apple Vision: {e}")
+    if os.path.isdir(os.path.join(root, "transactions")):
+        try:
+            from pipeline.extract_transactions_ocr import extract_transactions_ocr
+            extract_transactions_ocr(root)
+        except Exception as e:
+            print(f"Error extracting league transactions via Apple Vision: {e}")
     if os.path.isdir(os.path.join(root, "draft_results")):
         try:
             from pipeline.extract_draft_results import extract_draft_results
