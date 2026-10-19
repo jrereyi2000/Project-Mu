@@ -24,6 +24,7 @@ from engines.napper_lineup_engine import (
     roster_capacity,
 )
 from engines.napper_injuries import IR_MIN_WEEKS, get_injury_map, is_ir_eligible
+from engines.napper_trade_engine import TRADE_DEADLINE_WEEK, expire_pending_trades, trades_open
 from engines.napper_playoffs import PLAYOFF_TEAMS, ROUNDS as PLAYOFF_ROUNDS, ROUND_LABELS, sync_playoffs, team_week_note
 from engines.fantasy_projection_engine import DEF_POINTS_SQL, DEF_STATS_JOIN_SQL, KICKING_POINTS_SQL
 
@@ -1902,6 +1903,10 @@ def cancel_waiver_claim(league_id: int, claim_id: int):
 def get_trades(league_id: int):
     with get_db() as conn:
         with conn.cursor() as cur:
+            _, active_week = get_current_season_week(cur)
+            is_open = trades_open(active_week)
+            if not is_open and expire_pending_trades(cur, league_id):
+                conn.commit()
             cur.execute("""
                 SELECT t.id, t.league_id, t.week, t.proposer_team_id, t.target_team_id,
                        t.offered_player_ids, t.requested_player_ids, t.status, t.initiated_by_ai,
@@ -1970,7 +1975,8 @@ def get_trades(league_id: int):
                     "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                 })
 
-            return {"trades": trades}
+            return {"trades": trades, "trade_deadline_week": TRADE_DEADLINE_WEEK, "trades_open": is_open,
+                    "current_week": active_week}
 
 
 def _reject_ir_trade_players(cur, league_id: int, week: int, player_ids: List[int]) -> None:
@@ -1993,6 +1999,10 @@ def propose_trade(league_id: int, req: TradeProposeRequest):
 
     with get_db() as conn:
         with conn.cursor() as cur:
+            _, active_week = get_current_season_week(cur)
+            if not trades_open(active_week):
+                raise HTTPException(status_code=400,
+                                    detail=f"The trade deadline (end of Week {TRADE_DEADLINE_WEEK}) has passed.")
             cur.execute("SELECT current_week FROM napper_leagues WHERE id = %s", (league_id,))
             lg = cur.fetchone()
             wk = lg["current_week"] if lg else 6
@@ -2067,6 +2077,12 @@ def respond_trade(league_id: int, trade_id: int, req: TradeRespondRequest):
             if not tr:
                 raise HTTPException(status_code=404, detail="Trade not found")
 
+            _, active_week = get_current_season_week(cur)
+            if tr["status"] == "PENDING" and not trades_open(active_week):
+                expire_pending_trades(cur, league_id)
+                conn.commit()
+                raise HTTPException(status_code=400, detail=f"The trade deadline (end of Week {TRADE_DEADLINE_WEEK}) "
+                                                            "has passed; this offer expired.")
             if tr["status"] != "PENDING":
                 raise HTTPException(status_code=400, detail=f"Trade is already {tr['status']}")
             if status == "ACCEPTED":

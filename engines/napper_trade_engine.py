@@ -6,6 +6,10 @@ and deficits. Autonomous AI managers proactively generate fair, reciprocal trade
 other AI teams and the user's team, and evaluate/execute AI-to-AI pending trades stochastically,
 mutating rosters and announcing updates in `napper_chat`.
 
+Trade deadline: trades are open through week TRADE_DEADLINE_WEEK (11). From week 12 no trade can be proposed or
+accepted (the engine generates and processes nothing, the API refuses), and pending offers are marked EXPIRED
+(expire_pending_trades) with one chat notice.
+
 CLI:
     python3 -m engines.napper_trade_engine --league 1 --week 6
     python3 -m engines.napper_trade_engine --league 1 --week 6 --process-ai
@@ -28,6 +32,31 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres"
 )
+
+TRADE_DEADLINE_WEEK = 11
+
+
+def trades_open(week: int) -> bool:
+    """Whether trades can be proposed or accepted in `week` (the deadline is the end of week 11)."""
+    return week <= TRADE_DEADLINE_WEEK
+
+
+def expire_pending_trades(cur, league_id: int, post_chat: bool = True) -> int:
+    """Marks the league's PENDING offers EXPIRED (after the deadline). Posts one chat notice the first time
+    offers expire. Returns how many expired; the caller commits."""
+    cur.execute("UPDATE napper_trades SET status = 'EXPIRED' WHERE league_id = %s AND status = 'PENDING'",
+                (league_id,))
+    n = cur.rowcount
+    if n and post_chat:
+        cur.execute("""
+            INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text, card_payload)
+            VALUES (%s, 'SYSTEM_BOT', 'Napper Trade Bot', '@NapperTrades', '/static/players/robot_avatar.webp', %s, %s)
+        """, (league_id,
+              f"⏰ The trade deadline (end of Week {TRADE_DEADLINE_WEEK}) has passed. "
+              f"{n} pending offer{'s' if n != 1 else ''} expired; rosters are set through the playoffs "
+              f"except for waivers and free agency.",
+              json.dumps({"type": "TRADE_DEADLINE", "expired": n, "deadline_week": TRADE_DEADLINE_WEEK})))
+    return n
 
 
 def get_previous_season(cur) -> int:
@@ -488,6 +517,8 @@ def generate_trade_proposals(
     natural language rationales. Saves proposals to `napper_trades` and announces them in `napper_chat`.
     """
     proposals_created: List[Dict[str, Any]] = []
+    if not trades_open(week):
+        return proposals_created
 
     with get_connection(conn_info=conn_info, conn=conn) as active_conn:
         ensure_napper_tables_exist(active_conn)
@@ -823,6 +854,8 @@ def process_ai_to_ai_trades(
         random.seed(random_seed)
 
     processed_trades: List[Dict[str, Any]] = []
+    if not trades_open(week):
+        return processed_trades
 
     with get_connection(conn_info=conn_info, conn=conn) as active_conn:
         ensure_napper_tables_exist(active_conn)

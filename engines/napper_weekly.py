@@ -8,7 +8,7 @@ the simulated leagues). For every IN_SEASON Napper league of the current season,
 1. AI lineups (engines/napper_lineup_engine): IR moves and starters, so waivers and trades see current rosters.
 2. Waiver run (engines/napper_waiver_engine.run_waivers), once per league and week, from week 2: the user's
    queued claims and AI pickups in reverse-standings order.
-3. AI trade proposals (engines/napper_trade_engine.generate_trade_proposals), once per league and week:
+3. AI trade proposals (through the week 11 trade deadline; from week 12 pending offers expire instead) (engines/napper_trade_engine.generate_trade_proposals), once per league and week:
    skipped when the league already has AI proposals for that week, so a re-run adds no duplicate offers
    or banter.
 4. Pending offers to AI teams are accepted or rejected (process_ai_to_ai_trades).
@@ -32,7 +32,9 @@ import psycopg
 
 from engines.napper_lineup_engine import DATABASE_URL, active_league_ids, optimize_league_lineups
 from engines.napper_playoffs import sync_playoffs
-from engines.napper_trade_engine import generate_trade_proposals, process_ai_to_ai_trades
+from engines.napper_trade_engine import (
+    expire_pending_trades, generate_trade_proposals, process_ai_to_ai_trades, trades_open,
+)
 from engines.napper_waiver_engine import run_waivers
 
 
@@ -47,7 +49,7 @@ def run_league_week(conn, league_id: int, week: int, trades: bool = True, waiver
     """The weekly step for one league on an open connection (the caller commits)."""
     summary = {"league": league_id, "week": week, "lineup_teams": 0, "ir_moves": 0, "waiver_adds": 0,
                "waivers_skipped": False, "proposals": 0, "trades_processed": 0, "trades_skipped": False,
-               "playoffs": None}
+               "playoffs": None, "trades_closed": False, "trades_expired": 0}
     waivers = waivers and week > 1
     with conn.cursor() as cur:
         po = sync_playoffs(cur, league_id)
@@ -59,6 +61,10 @@ def run_league_week(conn, league_id: int, week: int, trades: bool = True, waiver
             w = run_waivers(cur, league_id, week)
             summary["waivers_skipped"] = w["skipped"]
             summary["waiver_adds"] = len(w["transactions"])
+        if trades and not trades_open(week):
+            summary["trades_closed"] = True
+            summary["trades_expired"] = expire_pending_trades(cur, league_id)
+            trades = False
         if trades:
             cur.execute("SELECT 1 FROM napper_trades WHERE league_id = %s AND week = %s AND initiated_by_ai LIMIT 1",
                         (league_id, week))
@@ -74,6 +80,8 @@ def run_league_week(conn, league_id: int, week: int, trades: bool = True, waiver
         f"({summary['ir_moves']} to IR)"
         + ("" if not waivers else
            "; waivers already run" if summary["waivers_skipped"] else f"; {summary['waiver_adds']} waiver adds")
+        + (f"; trade deadline passed ({summary['trades_expired']} offers expired)"
+           if summary["trades_closed"] else "")
         + ("" if not trades else
            f"; {'proposals already made' if summary['trades_skipped'] else str(summary['proposals']) + ' proposals'}, "
            f"{summary['trades_processed']} offers to AI teams decided")

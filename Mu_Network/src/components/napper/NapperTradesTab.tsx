@@ -10,6 +10,7 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [deadline, setDeadline] = useState<{ week: number; open: boolean; current: number } | null>(null);
 
   // Propose Trade Modal State
   const [proposeOpen, setProposeOpen] = useState<boolean>(false);
@@ -28,6 +29,9 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
       .then((res) => res.json())
       .then((data) => {
         setTrades(data.trades || []);
+        if (data.trade_deadline_week) {
+          setDeadline({ week: data.trade_deadline_week, open: data.trades_open !== false, current: data.current_week });
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -146,18 +150,27 @@ export function NapperTradesTab({ leagueId }: NapperTradesTabProps) {
         <div>
           <h2 style={{ color: "#e2e8f0", margin: "0 0 4px 0", fontSize: "18px" }}>Trade Market</h2>
           <p style={{ color: "#8a99ad", margin: 0, fontSize: "12px" }}>Review incoming AI trade offers or initiate reciprocal trade proposals.</p>
+          {deadline && (
+            <p style={{ color: deadline.open ? "#ffc107" : "#ff8798", margin: "6px 0 0", fontSize: "12px", fontWeight: 700 }}>
+              {deadline.open
+                ? `⏰ Trade deadline: end of Week ${deadline.week}${deadline.current === deadline.week ? " (this week)" : ""}`
+                : `⏰ The trade deadline (end of Week ${deadline.week}) has passed. Rosters change only through waivers and free agency.`}
+            </p>
+          )}
         </div>
         <button
           onClick={openProposeModal}
+          disabled={deadline?.open === false}
+          title={deadline?.open === false ? "The trade deadline has passed" : undefined}
           style={{
-            background: "var(--napper-teal)",
-            color: "#0f1520",
+            background: deadline?.open === false ? "#273247" : "var(--napper-teal)",
+            color: deadline?.open === false ? "#64748b" : "#0f1520",
             border: "none",
             borderRadius: "6px",
             padding: "8px 16px",
             fontWeight: "700",
             fontSize: "13px",
-            cursor: "pointer",
+            cursor: deadline?.open === false ? "not-allowed" : "pointer",
           }}
         >
           + Propose New Trade

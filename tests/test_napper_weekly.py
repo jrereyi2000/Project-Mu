@@ -44,7 +44,8 @@ class RunLeagueWeekTest(unittest.TestCase):
              mock.patch.object(NW, "generate_trade_proposals", propose), \
              mock.patch.object(NW, "process_ai_to_ai_trades", process), \
              mock.patch.object(NW, "run_waivers", waive), \
-             mock.patch.object(NW, "sync_playoffs", lambda cur, league: calls.append(("playoffs", league)) or {"status": "PROJECTED"}):
+             mock.patch.object(NW, "sync_playoffs", lambda cur, league: calls.append(("playoffs", league)) or {"status": "PROJECTED"}), \
+             mock.patch.object(NW, "expire_pending_trades", lambda cur, league: calls.append(("expire", league)) or 3):
             summary = NW.run_league_week(conn, 15, week, trades=trades, waivers=waivers, log=lambda *_: None)
         return calls, summary, conn
 
@@ -71,6 +72,26 @@ class RunLeagueWeekTest(unittest.TestCase):
     def test_no_waiver_run_in_week_1(self):
         calls, _, _ = self._run(has_proposals=False, trades=False, week=1)
         self.assertEqual([c[0] for c in calls], ["playoffs", "lineups"])
+
+
+class TradeDeadlineTest(unittest.TestCase):
+    def test_week_11_still_trades(self):
+        calls, summary, _ = RunLeagueWeekTest._run(RunLeagueWeekTest(), has_proposals=False, week=11)
+        self.assertIn("propose", [c[0] for c in calls])
+        self.assertFalse(summary["trades_closed"])
+
+    def test_week_12_expires_offers_and_makes_no_trades(self):
+        calls, summary, _ = RunLeagueWeekTest._run(RunLeagueWeekTest(), has_proposals=False, week=12)
+        self.assertEqual([c[0] for c in calls], ["playoffs", "lineups", "waivers", "expire", "lineups"])
+        self.assertEqual((summary["trades_closed"], summary["trades_expired"], summary["proposals"]), (True, 3, 0))
+
+    def test_engine_refuses_after_the_deadline(self):
+        from engines import napper_trade_engine as TE
+        self.assertTrue(TE.trades_open(11))
+        self.assertFalse(TE.trades_open(12))
+        with mock.patch.object(TE, "get_connection", side_effect=AssertionError("no DB access expected")):
+            self.assertEqual(TE.generate_trade_proposals(15, 12), [])
+            self.assertEqual(TE.process_ai_to_ai_trades(15, 12), [])
 
 
 if __name__ == "__main__":
