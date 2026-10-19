@@ -168,3 +168,39 @@ class KickerDefenseProjectionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TeamChangeTest(unittest.TestCase):
+    """League Transactions (team management step 2): traded players keep their history, released ones project 0."""
+    def _data(self):
+        opp = {}
+        for w in (1, 2, 3):
+            opp.update({(1, w): 2, (2, w): 1, (3, w): 4, (4, w): 3})
+        data = FPE.SeasonData(
+            season=2036, opponent=opp, completed_weeks={t: {1, 2} for t in (1, 2, 3, 4)},
+            roster={
+                201: {"name": "Traded WR", "team_id": 3, "position": "WR", "group": "WR", "depth": 1, "ovr": 85,
+                      "released_week": None},
+                202: {"name": "Cut WR", "team_id": 1, "position": "WR", "group": "WR", "depth": 99, "ovr": 70,
+                      "released_week": 2},
+                203: {"name": "Stays WR", "team_id": 2, "position": "WR", "group": "WR", "depth": 1, "ovr": 85,
+                      "released_week": None},
+            })
+        data.points[201] = {1: 20.0, 2: 20.0}          # both weeks for his old team 1
+        data.points[202] = {1: 5.0}
+        data.points[203] = {1: 20.0, 2: 20.0}
+        return data
+
+    def test_traded_player_keeps_old_team_weeks(self):
+        data = self._data()
+        data.completed_weeks[3] = {2}                  # his new team played only week 2 so far
+        rows = {r["player_id"]: r for r in FPE.project_week(data, 3)}
+        self.assertEqual(rows[201]["avg_points"], 20.0)
+        self.assertEqual(FPE.player_weeks(data, 201, {2}, 3), {1, 2})
+
+    def test_released_player_projects_zero(self):
+        rows = {r["player_id"]: r for r in FPE.project_week(self._data(), 3)}
+        self.assertEqual(rows[202]["projected_points"], 0.0)
+        self.assertEqual(rows[202]["ros_total_points"], 0.0)
+        self.assertIsNone(rows[202].get("pos_rank"))
+        self.assertGreater(rows[203]["projected_points"], 0.0)

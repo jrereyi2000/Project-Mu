@@ -8,7 +8,8 @@ plus a points-allowed tier (0 → 10, ≤6 → 7, ≤13 → 4, ≤20 → 1, ≤2
 (KICKING_POINTS_SQL / DEF_POINTS_SQL) scores Napper matchups in server/napper_api.py.
 
 - Baseline: the player's PPR per team game to date (weeks the team played and the player had no stat line
-  count as 0), shrunk toward a depth-chart prior by PRIOR_GAMES pseudo-games. The prior is the league's
+  count as 0; a traded player also keeps every week he has a line for his old team), shrunk toward a
+  depth-chart prior by PRIOR_GAMES pseudo-games. The prior is the league's
   average PPR per team game for that depth slot (e.g. RB2 = a team's second-highest-OVR running back).
 - Matchup: the opponent's PPR allowed per game to the position group, relative to the league average,
   shrunk by DEF_SHRINK_GAMES pseudo-games and dampened by MATCHUP_EXPONENT.
@@ -21,6 +22,8 @@ w..18 against each remaining opponent) with ros_rank, and adp_rank carried over 
 preseason ADP rows (engines/fantasy_adp_engine.py). Players on bye get a row with projected_points 0 and no
 pos_rank (so they still appear in ROS rankings but not in that week's rankings). Injured players (on IR, or
 weeks_remaining > 0 in the injuries table) project 0 with no pos_rank, and their ROS total skips the weeks out.
+Released players (player_seasons.released_week set, League Transactions) have no team game: they project 0
+like a bye, hold no depth slot, and have no ROS total.
 
 Week 1 (no completed games yet) is projected from the prior season: each player's prior-season PPR per game
 shrunk toward the prior season's depth-slot average by PRESEASON_PRIOR_GAMES pseudo-games (no history: the
@@ -153,19 +156,23 @@ def load_season(cur, season: int) -> SeasonData:
             completed[away].add(week)
 
     cur.execute("""
-        SELECT p.id, COALESCE(p.full_name, p.player_name), ps.team_id, ps.position, ps.overall_rating
+        SELECT p.id, COALESCE(p.full_name, p.player_name), ps.team_id, ps.position, ps.overall_rating, ps.released_week
         FROM player_seasons ps
         JOIN players p ON p.id = ps.player_id
         WHERE ps.season = %s AND ps.position = ANY(%s) AND ps.team_id IS NOT NULL
     """, (season, list(POS_GROUP)))
     roster = {}
     by_team_group = defaultdict(list)
-    for pid, name, team_id, pos, ovr in cur.fetchall():
-        roster[pid] = {"name": name, "team_id": team_id, "position": pos, "group": POS_GROUP[pos], "ovr": ovr or 70}
-        by_team_group[(team_id, POS_GROUP[pos])].append((-(ovr or 0), pid))
+    for pid, name, team_id, pos, ovr, released in cur.fetchall():
+        roster[pid] = {"name": name, "team_id": team_id, "position": pos, "group": POS_GROUP[pos], "ovr": ovr or 70,
+                       "released_week": released}
+        if released is None:                 # a released player (League Transactions) holds no depth slot
+            by_team_group[(team_id, POS_GROUP[pos])].append((-(ovr or 0), pid))
     for players in by_team_group.values():
         for depth, (_, pid) in enumerate(sorted(players), start=1):
             roster[pid]["depth"] = depth
+    for p in roster.values():
+        p.setdefault("depth", 99)
 
     data = SeasonData(season, opponent, completed, roster)
 
@@ -180,12 +187,13 @@ def load_season(cur, season: int) -> SeasonData:
             "is_ir": bool(is_ir),
         }
 
-    # each line's player is its stored player_id (abbreviated names collide across players)
+    # each line's player is its stored player_id (abbreviated names collide across players). A traded player's
+    # lines count for him whatever team he had that week; the defense allowed is the line's own team's opponent.
     for pid, team_id, group, week, pts in load_points_rows(cur, season):
         opp = opponent.get((team_id, week))
         if opp is not None:
             data.allowed[(opp, group, week)] += pts
-        if pid in roster and roster[pid]["team_id"] == team_id:
+        if pid in roster:
             data.points[pid][week] = data.points[pid].get(week, 0.0) + pts
 
     # Prior season baseline data (for Week 1 projections and preseason calibration)
@@ -277,6 +285,18 @@ def _ntile5_ascending(values: dict) -> dict:
     return out
 
 
+def is_released(p: dict, week: int) -> bool:
+    """Released (League Transactions, player_seasons.released_week) by `week`: he has no team game, projects 0."""
+    rw = p.get("released_week")
+    return rw is not None and rw <= week
+
+
+def player_weeks(data: SeasonData, pid: int, team_weeks: set, week: int) -> set:
+    """The weeks before `week` that count for a player's baseline: his current team's completed weeks plus every
+    week he has a line (a traded player keeps his old team's games)."""
+    return set(team_weeks) | {w for w in data.points[pid] if w < week}
+
+
 def get_player_injury(data: SeasonData, pid: int, week: int) -> Optional[dict]:
     """Return injury status dict for player at target week: {'weeks_remaining': int, 'is_ir': bool} or None."""
     if (pid, week) in data.injuries:
@@ -309,7 +329,7 @@ def _project_week_1(data: SeasonData) -> list:
             baseline = slot_prior * ovr_adj
             avg_points = None
 
-        opp = data.opponent.get((team, 1))
+        opp = None if is_released(p, 1) else data.opponent.get((team, 1))
         inj = get_player_injury(data, pid, 1)
         is_ir = inj["is_ir"] if inj else False
         weeks_rem = inj["weeks_remaining"] if inj else 0
@@ -325,7 +345,7 @@ def _project_week_1(data: SeasonData) -> list:
 
         ros_total = 0.0
         for w in range(1, SEASON_WEEKS + 1):
-            if (team, w) not in data.opponent:
+            if (team, w) not in data.opponent or is_released(p, w):
                 continue
             if is_ir and weeks_rem == 0:
                 continue
@@ -372,6 +392,8 @@ def project_week(data: SeasonData, week: int) -> list:
     # Depth-slot priors: league PPR per team game for each (group, slot).
     slot_sum, slot_n = defaultdict(float), defaultdict(int)
     for pid, p in data.roster.items():
+        if p.get("released_week") is not None:
+            continue
         slot = (p["group"], min(p["depth"], PRIOR_SLOTS[p["group"]]))
         for w in prior_weeks.get(p["team_id"], ()):
             slot_sum[slot] += data.points[pid].get(w, 0.0)
@@ -400,7 +422,7 @@ def project_week(data: SeasonData, week: int) -> list:
     rows = []
     for pid, p in data.roster.items():
         team, g = p["team_id"], p["group"]
-        played = prior_weeks.get(team, set())
+        played = player_weeks(data, pid, prior_weeks.get(team, set()), week)
         player_pts = data.points[pid]
         prior = slot_prior.get((g, min(p["depth"], PRIOR_SLOTS[g])), 0.0)
         total = sum(player_pts.get(w, 0.0) for w in played)
@@ -409,7 +431,8 @@ def project_week(data: SeasonData, week: int) -> list:
         appearances = [player_pts[w] for w in played if w in player_pts]
         avg_points = sum(appearances) / len(appearances) if appearances else None
 
-        opp = data.opponent.get((team, week))
+        released = is_released(p, week)
+        opp = None if released else data.opponent.get((team, week))
         inj = get_player_injury(data, pid, week)
         is_ir = inj["is_ir"] if inj else False
         weeks_rem = inj["weeks_remaining"] if inj else 0
@@ -422,7 +445,7 @@ def project_week(data: SeasonData, week: int) -> list:
 
         ros_total = 0.0
         for w in range(week, SEASON_WEEKS + 1):
-            if (team, w) not in data.opponent:
+            if (team, w) not in data.opponent or is_released(p, w):
                 continue
             if is_ir and weeks_rem == 0:
                 continue

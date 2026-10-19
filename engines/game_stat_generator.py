@@ -51,6 +51,22 @@ def _distribute_metric(target: int | float, weights: list[float], is_half_step: 
     return allocs
 
 
+def released_weeks(season_year: int) -> dict:
+    """{player_id: released_week} for the season's released players (League Transactions, team management step 2)."""
+    df = pd.read_sql(f"SELECT player_id, released_week FROM player_seasons WHERE season = {season_year} "
+                     f"AND released_week IS NOT NULL", engine)
+    return {int(r.player_id): int(r.released_week) for r in df.itertuples()}
+
+
+def _player_weights(weights: list, weeks, released_week) -> list | None:
+    """The game weights a player's remainder is spread over: games from his release week on get 0 (he has no
+    line there, no zero line either). None when he was released before every one of these games."""
+    if released_week is None:
+        return list(weights)
+    out = [w if int(wk) < released_week else 0.0 for w, wk in zip(weights, weeks)]
+    return out if any(out) else None
+
+
 def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.DataFrame):
     """Backfills game_stat_{kicking,defense,punting,blocking,puntreturn,kickreturn}
     from their respective season_stat_* tables for completed games missing game lines.
@@ -59,6 +75,7 @@ def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.Data
 
     if games_df.empty:
         return
+    released = released_weeks(season_year)
 
     # 1. KICKING
     try:
@@ -88,15 +105,20 @@ def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.Data
 
                 for _, p_row in season_k_df[season_k_df['team_id'] == team_id].iterrows():
                     pid = int(p_row['player_id'])
+                    weights = _player_weights(game_weights, team_games['week'], released.get(pid))
+                    if weights is None:
+                        continue
                     p_existing = existing_k[existing_k['player_id'] == pid] if not existing_k.empty else pd.DataFrame()
                     allocs = {}
                     for m in k_metrics:
                         target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
                         if not p_existing.empty and m in p_existing.columns:
                             target -= int(p_existing[m].fillna(0).sum())
-                        allocs[m] = _distribute_metric(max(0, target), game_weights)
+                        allocs[m] = _distribute_metric(max(0, target), weights)
 
                     for idx, (_, g) in enumerate(team_games.iterrows()):
+                        if not weights[idx]:
+                            continue
                         fgm = allocs['fgm_29'][idx] + allocs['fgm_39'][idx] + allocs['fgm_49'][idx] + allocs['fgm_50'][idx]
                         fga = max(fgm, allocs['fga_29'][idx] + allocs['fga_39'][idx] + allocs['fga_49'][idx] + allocs['fga_50'][idx])
                         xpm = allocs['xpm'][idx]
@@ -167,6 +189,9 @@ def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.Data
 
                 for _, p_row in season_def_df[season_def_df['team_id'] == team_id].iterrows():
                     pid = int(p_row['player_id'])
+                    weights = _player_weights(game_weights, team_games['week'], released.get(pid))
+                    if weights is None:
+                        continue
                     p_existing = existing_def[existing_def['player_id'] == pid] if not existing_def.empty else pd.DataFrame()
                     allocs = {}
                     for m in def_metrics:
@@ -174,14 +199,16 @@ def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.Data
                             target = float(p_row[m]) if pd.notnull(p_row[m]) else 0.0
                             if not p_existing.empty and m in p_existing.columns:
                                 target -= float(p_existing[m].fillna(0).sum())
-                            allocs[m] = _distribute_metric(max(0.0, target), game_weights, is_half_step=True)
+                            allocs[m] = _distribute_metric(max(0.0, target), weights, is_half_step=True)
                         else:
                             target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
                             if not p_existing.empty and m in p_existing.columns:
                                 target -= int(p_existing[m].fillna(0).sum())
-                            allocs[m] = _distribute_metric(max(0, target), game_weights)
+                            allocs[m] = _distribute_metric(max(0, target), weights)
 
                     for idx, (_, g) in enumerate(team_games.iterrows()):
+                        if not weights[idx]:
+                            continue
                         solo = int(allocs['solo'][idx])
                         assists = int(allocs['assists'][idx])
                         tackles = solo + assists
@@ -248,15 +275,20 @@ def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.Data
 
                 for _, p_row in season_punt_df[season_punt_df['team_id'] == team_id].iterrows():
                     pid = int(p_row['player_id'])
+                    weights = _player_weights(game_weights, team_games['week'], released.get(pid))
+                    if weights is None:
+                        continue
                     p_existing = existing_punt[existing_punt['player_id'] == pid] if not existing_punt.empty else pd.DataFrame()
                     allocs = {}
                     for m in punt_metrics:
                         target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
                         if not p_existing.empty and m in p_existing.columns:
                             target -= int(p_existing[m].fillna(0).sum())
-                        allocs[m] = _distribute_metric(max(0, target), game_weights)
+                        allocs[m] = _distribute_metric(max(0, target), weights)
 
                     for idx, (_, g) in enumerate(team_games.iterrows()):
+                        if not weights[idx]:
+                            continue
                         punts = int(allocs['punts'][idx])
                         yards = int(allocs['yards'][idx])
                         net_yards = min(yards, int(allocs['net_yards'][idx]))
@@ -311,13 +343,18 @@ def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.Data
                 game_weights = [1.0] * len(team_games)
                 for _, p_row in season_blk_df[season_blk_df['team_id'] == team_id].iterrows():
                     pid = int(p_row['player_id'])
+                    weights = _player_weights(game_weights, team_games['week'], released.get(pid))
+                    if weights is None:
+                        continue
                     p_existing = existing_blk[existing_blk['player_id'] == pid] if not existing_blk.empty else pd.DataFrame()
                     target = int(p_row['sacks_allowed']) if pd.notnull(p_row.get('sacks_allowed')) else 0
                     if not p_existing.empty and 'sacks_allowed' in p_existing.columns:
                         target -= int(p_existing['sacks_allowed'].fillna(0).sum())
-                    alloc = _distribute_metric(max(0, target), game_weights)
+                    alloc = _distribute_metric(max(0, target), weights)
 
                     for idx, (_, g) in enumerate(team_games.iterrows()):
+                        if not weights[idx]:
+                            continue
                         blk_rows.append({
                             'game_id': int(g['id']),
                             'player_id': pid,
@@ -365,15 +402,20 @@ def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.Data
 
                 for _, p_row in season_pr_df[season_pr_df['team_id'] == team_id].iterrows():
                     pid = int(p_row['player_id'])
+                    weights = _player_weights(game_weights, team_games['week'], released.get(pid))
+                    if weights is None:
+                        continue
                     p_existing = existing_pr[existing_pr['player_id'] == pid] if not existing_pr.empty else pd.DataFrame()
                     allocs = {}
                     for m in pr_metrics:
                         target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
                         if not p_existing.empty and m in p_existing.columns:
                             target -= int(p_existing[m].fillna(0).sum())
-                        allocs[m] = _distribute_metric(max(0, target), game_weights)
+                        allocs[m] = _distribute_metric(max(0, target), weights)
 
                     for idx, (_, g) in enumerate(team_games.iterrows()):
+                        if not weights[idx]:
+                            continue
                         ret = int(allocs['returns'][idx])
                         yds = int(allocs['yards'][idx])
                         avg = round((yds / ret), 1) if ret > 0 else 0.0
@@ -429,15 +471,20 @@ def generate_defense_and_special_teams_stats(season_year: int, games_df: pd.Data
 
                 for _, p_row in season_kr_df[season_kr_df['team_id'] == team_id].iterrows():
                     pid = int(p_row['player_id'])
+                    weights = _player_weights(game_weights, team_games['week'], released.get(pid))
+                    if weights is None:
+                        continue
                     p_existing = existing_kr[existing_kr['player_id'] == pid] if not existing_kr.empty else pd.DataFrame()
                     allocs = {}
                     for m in kr_metrics:
                         target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
                         if not p_existing.empty and m in p_existing.columns:
                             target -= int(p_existing[m].fillna(0).sum())
-                        allocs[m] = _distribute_metric(max(0, target), game_weights)
+                        allocs[m] = _distribute_metric(max(0, target), weights)
 
                     for idx, (_, g) in enumerate(team_games.iterrows()):
+                        if not weights[idx]:
+                            continue
                         ret = int(allocs['returns'][idx])
                         yds = int(allocs['yards'][idx])
                         avg = round((yds / ret), 1) if ret > 0 else 0.0
@@ -499,6 +546,7 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
 
     team_stats_rows = []
     player_stats_rows = []
+    released = released_weeks(season_year)
 
     teams = season_p_df['team_id'].unique()
 
@@ -533,6 +581,7 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         player_ids = {(r['player_name'], r['position']): (int(r['player_id']) if pd.notnull(r['player_id']) else None)
                       for _, r in team_players.iterrows()}
         player_game_stats = {}
+        player_weights = {}
         
         # 1. Distribute stats for each player proportionally
         for _, p_row in team_players.iterrows():
@@ -552,8 +601,14 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
                     (existing_player_stats['position'] == p_tup[1])
                 ]
 
+            # a released player gets no line from his release week on (League Transactions)
+            weights = _player_weights(game_weights, team_games['week'], released.get(player_ids[p_tup]))
+            player_weights[p_tup] = weights or [0.0] * len(game_weights)
             allocs = {m: [] for m in metrics}
             for m in metrics:
+                if weights is None:
+                    allocs[m] = [0] * len(game_weights)
+                    continue
                 target = int(p_row[m]) if pd.notnull(p_row[m]) else 0
                 
                 # Deduct the lines already stored so only the remainder is distributed
@@ -561,9 +616,9 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
                     target -= int(p_existing[m].fillna(0).sum())
                         
                 remaining_target = max(0, target)
-                remaining_weight = weight_sum
-                
-                for w in game_weights:
+                remaining_weight = sum(weights)
+
+                for w in weights:
                     if remaining_weight <= 0.001:
                         val = remaining_target
                     else:
@@ -574,7 +629,7 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
                     remaining_weight -= w
                     
                 if remaining_target > 0:
-                    best_idx = game_weights.index(max(game_weights))
+                    best_idx = weights.index(max(weights))
                     allocs[m][best_idx] += remaining_target
                     
             for idx, (_, game) in enumerate(team_games.iterrows()):
@@ -585,6 +640,8 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         for idx, (_, game) in enumerate(team_games.iterrows()):
             g_id = game['id']
             for p_tup in players_list:
+                if not player_weights[p_tup][idx]:
+                    continue
                 p_stats = player_game_stats[(p_tup, g_id)]
                 player_stats_rows.append({
                     'game_id': g_id,
