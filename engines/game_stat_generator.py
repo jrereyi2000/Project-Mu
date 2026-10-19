@@ -746,6 +746,15 @@ def generate_team_and_player_stats(season_year: int | None = None, strict: bool 
         # Simulated fantasy leagues (rostered %, start %, standings); reads the projections just written
         print("-> Simulating fantasy leagues through the upcoming week...")
         simulate_season(season_year)
+
+        # Napper leagues: AI lineups (IR moves) and AI trades for the same upcoming week. Optional: a failure
+        # here never fails the stats sync.
+        print("-> Napper: AI lineups and trades for the upcoming week...")
+        try:
+            from engines.napper_weekly import run_napper_week
+            run_napper_week(season_year)
+        except Exception as e:
+            print(f"   [WARN] Napper weekly step skipped: {e!r}")
         print("\n✅ Stats sync and analytics engines complete.")
 
     except Exception as e:

@@ -302,7 +302,8 @@ def step_preseason_engines(season):
     """Preseason engines for start-of-season calibration (schedule, rosters, injuries loaded):
     1. Preseason Fantasy ADP (runs 100 simulated drafts, writes Week 1 ADP board).
     2. Scheduled Game Excitement Projections (pre-game E for all scheduled games).
-    3. Week 1 Fantasy Projections (points, matchup stars, pos ranks)."""
+    3. Week 1 Fantasy Projections (points, matchup stars, pos ranks).
+    Then (optional, never stops the run) Napper week 1 AI lineups (engines/napper_weekly.py, no trades)."""
     try:
         from engines.fantasy_adp_engine import generate_preseason_adp
         from engines.excitement_projection import project_scheduled_games
@@ -319,6 +320,13 @@ def step_preseason_engines(season):
     except Exception as e:
         traceback.print_exc()
         raise WeekStopped(f"Preseason engines failed after the load: {e!r}")
+    # Napper: week 1 AI lineups from the new projections (no trades before week 1). Optional, never stops the run.
+    try:
+        from engines.napper_weekly import run_napper_week
+        log("  Napper: week 1 AI lineups...")
+        run_napper_week(season, 1, trades=False, log=log)
+    except Exception as e:
+        log(f"  [WARN] Napper week 1 lineups skipped: {e!r}")
 
 
 def step_rookie_headshots(season):

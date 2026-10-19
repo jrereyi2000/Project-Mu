@@ -1122,23 +1122,35 @@ def process_ai_to_ai_trades(
 
 def main():
     parser = argparse.ArgumentParser(description="Napper Proactive Trade Engine")
-    parser.add_argument("--league", type=int, default=1, help="League ID")
-    parser.add_argument("--week", type=int, default=6, help="Week number")
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--league", type=int, help="League ID")
+    target.add_argument("--all-active", action="store_true", help="Every IN_SEASON league of the current season")
+    parser.add_argument("--week", type=int, help="Week number (default: league_state current week)")
     parser.add_argument(
         "--process-ai",
         action="store_true",
-        help="Process pending AI-to-AI trades instead of generating proposals",
+        help="Process pending offers to AI teams instead of generating proposals",
     )
     args = parser.parse_args()
 
-    if args.process_ai:
-        print(f"Processing AI-to-AI trades for League {args.league}, Week {args.week}...")
-        results = process_ai_to_ai_trades(args.league, args.week)
-        print(f"Processed {len(results)} pending trades: {results}")
-    else:
-        print(f"Generating trade proposals for League {args.league}, Week {args.week}...")
-        proposals = generate_trade_proposals(args.league, args.week)
-        print(f"Generated {len(proposals)} proposals: {proposals}")
+    from engines.napper_lineup_engine import active_league_ids
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            week = args.week
+            if week is None:
+                cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+                week = int(cur.fetchone()[0] or 1)
+            leagues = active_league_ids(cur) if args.all_active else [args.league]
+
+    for league in leagues:
+        if args.process_ai:
+            print(f"Processing offers to AI teams for League {league}, Week {week}...")
+            results = process_ai_to_ai_trades(league, week)
+            print(f"Processed {len(results)} pending trades: {results}")
+        else:
+            print(f"Generating trade proposals for League {league}, Week {week}...")
+            proposals = generate_trade_proposals(league, week)
+            print(f"Generated {len(proposals)} proposals: {proposals}")
 
 
 if __name__ == "__main__":

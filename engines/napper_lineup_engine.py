@@ -7,8 +7,10 @@ For each AI team and week, before that week's games:
    are no longer eligible come back to the bench.
 2. Roster limit. If the active roster (everyone not in IR) is larger than the starting slots plus BN,
    the lowest-ROS bench players are dropped (decision D3), never one the starting lineup needs.
-3. Optional free-agent pickup (--fill-ir-spots): each player moved to IR is replaced by the best free agent
-   at his position by ROS value, while the active roster has room.
+3. Free agents. A starting slot no rostered player can fill (say the only QB went to IR) is always filled
+   by signing the best free agent at that position by ROS value, dropping the lowest-ROS bench player first
+   if the active roster is full. With --fill-ir-spots, each player moved to IR is also replaced by the best
+   free agent at his position while the active roster has room.
 4. Starter pass. QB, RB, WR, TE, K, DEF, then FLEX, then SUPERFLEX are filled greedily with the highest
    projected_points among players who can play (not out, not on bye); a slot no one available can fill
    takes the best unavailable player rather than staying empty. Everyone else is benched.
@@ -100,6 +102,14 @@ def _pick_starters(players: List[dict], fmt: Dict[str, int]) -> Dict[int, Option
     return picks
 
 
+def unfillable_slot_groups(players: List[dict], fmt: Dict[str, int]) -> List[str]:
+    """Position groups to sign for starting slots no rostered player can fill (e.g. the only QB went to IR).
+    FLEX asks for a WR and SUPERFLEX for a QB."""
+    slots = _starter_slots(fmt)
+    fallback = {"FLEX": "WR", "SUPERFLEX": "QB"}
+    return [fallback.get(slots[i], slots[i]) for i, p in _pick_starters(players, fmt).items() if p is None]
+
+
 def plan_starters(players: List[dict], fmt: Dict[str, int]) -> Dict[int, str]:
     """{pid: slot} for every non-IR player: starting slots filled greedily, everyone else BN."""
     slots = _starter_slots(fmt)
@@ -164,6 +174,21 @@ def _best_free_agent(c, league_id: int, season: int, week: int, group: str) -> O
     return (row[0], row[1]) if row else None
 
 
+def _sign_free_agent(c, league_id: int, team_id: int, season: int, week: int, group: str) -> Optional[str]:
+    """Adds the best free agent of `group` to the team's bench for `week` and every later saved week."""
+    fa = _best_free_agent(c, league_id, season, week, group)
+    if not fa:
+        return None
+    c.execute("SELECT DISTINCT week FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week >= %s",
+              (league_id, team_id, week))
+    for (w,) in c.fetchall():
+        c.execute("""
+            INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
+            VALUES (%s, %s, %s, %s, 'BN') ON CONFLICT (team_id, week, player_id) DO NOTHING
+        """, (league_id, team_id, w, fa[0]))
+    return fa[1]
+
+
 def _post_chat(c, league_id: int, text: str) -> None:
     c.execute("""
         INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text)
@@ -223,21 +248,38 @@ def optimize_team_lineup(cur, league_id: int, team_id: int, week: int, fill_ir_s
             for pid in to_ir:
                 if len(active) >= capacity:
                     break
-                fa = _best_free_agent(c, league_id, season, week, by_pid[pid]["pos"])
+                fa = _sign_free_agent(c, league_id, team_id, season, week, by_pid[pid]["pos"])
                 if not fa:
                     continue
-                c.execute("SELECT DISTINCT week FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week >= %s",
-                          (league_id, team_id, week))
-                for (w,) in c.fetchall():
-                    c.execute("""
-                        INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
-                        VALUES (%s, %s, %s, %s, 'BN') ON CONFLICT (team_id, week, player_id) DO NOTHING
-                    """, (league_id, team_id, w, fa[0]))
-                adds.append(fa[1])
+                adds.append(fa)
                 players = _load_team_week(c, league_id, team_id, season, week)
                 by_pid = {p["pid"]: p for p in players}
+                names.update({p["pid"]: p["name"] for p in players})
                 active = [p for p in players if p["pid"] not in ir_now]
             players = [p for p in players if p["pid"] not in drops]
+
+        # Sign free agents for starting slots nobody on the active roster can fill (always, even without
+        # --fill-ir-spots): an AI manager doesn't leave a slot empty. Drop the lowest-ROS spare first if full.
+        ir_now = ({p["pid"] for p in players if p["slot"] == "IR"} - set(off_ir)) | set(to_ir)
+        capacity = len(_starter_slots(fmt)) + fmt.get("BN", 0)
+        for group in unfillable_slot_groups([p for p in players if p["pid"] not in ir_now], fmt):
+            active = [p for p in players if p["pid"] not in ir_now]
+            if len(active) >= capacity:
+                needed = {p["pid"] for p in _pick_starters(active, fmt).values() if p}
+                spare = sorted((p for p in active if p["pid"] not in needed), key=lambda p: (p["ros"], -p["pid"]))
+                if not spare:
+                    break
+                c.execute("DELETE FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week >= %s AND player_id = %s",
+                          (league_id, team_id, week, spare[0]["pid"]))
+                drops.append(spare[0]["pid"])
+            fa = _sign_free_agent(c, league_id, team_id, season, week, group)
+            if not fa:
+                continue
+            adds.append(fa)
+            players = [p for p in _load_team_week(c, league_id, team_id, season, week) if p["pid"] not in drops]
+            for p in players:
+                by_pid.setdefault(p["pid"], p)
+                names.setdefault(p["pid"], p["name"])
 
         plan = plan_lineup([dict(p, slot="IR" if p["pid"] in to_ir else p["slot"]) for p in players
                             if p["pid"] not in drops], fmt)

@@ -1,7 +1,7 @@
 """engines/napper_lineup_engine planning functions (no database)."""
 import unittest
 
-from engines.napper_lineup_engine import plan_ir, plan_lineup, plan_starters
+from engines.napper_lineup_engine import plan_ir, plan_lineup, plan_starters, unfillable_slot_groups
 
 FMT = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 3, "IR": 1}
 OUT_3 = {"status": "O", "weeks_remaining": 3, "is_ir": False}
@@ -87,6 +87,14 @@ class PlanLineupTest(unittest.TestCase):
         self.assertEqual(plan["slots"][11], "QB")
         self.assertEqual(plan["drops"], [])
 
+
+class UnfillableSlotsTest(unittest.TestCase):
+    def test_reports_groups_no_rostered_player_can_fill(self):
+        self.assertEqual(unfillable_slot_groups(roster(), FMT), [])
+        no_qb = [x for x in roster() if x["pos"] != "QB"]
+        self.assertEqual(unfillable_slot_groups(no_qb, FMT), ["QB"])
+        thin = [x for x in roster() if x["pid"] not in (7, 10, 12)]   # no spare RB/WR/TE left for FLEX
+        self.assertEqual(unfillable_slot_groups(thin, FMT), ["WR"])
 
 if __name__ == "__main__":
     unittest.main()

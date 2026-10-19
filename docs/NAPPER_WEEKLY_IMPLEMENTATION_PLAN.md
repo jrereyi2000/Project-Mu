@@ -148,7 +148,9 @@ CLI: python3 -m engines.napper_lineup_engine --league N --week W
 
 ---
 
-## Phase 5: Weekly cadence (G2 + G1 wired in)
+## Phase 5: Weekly cadence (G2 + G1 wired in) — DONE (2026-10-19)
+
+> Landed as planned in `engines/napper_weekly.py`, hooked into `game_stat_generator` after `simulate_season` and into the preseason step (week 1 lineups, no trades). Two differences: the optional `/advance` endpoint was skipped (`python3 -m engines.napper_weekly --league N` covers it), and the lineup engine now always signs a free agent when a starting slot can't be filled (found when Burden' Bridges' only QB went to IR). The trade engine CLI defaults to the current week and takes `--all-active`. Checked on leagues 1 and 15 in a rolled-back transaction: a second run of the week added no trades or chat.
 
 **New orchestrator** in `engines/napper_weekly.py`:
 
