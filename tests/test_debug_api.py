@@ -178,3 +178,22 @@ class JobsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TransactionsDebugTest(unittest.TestCase):
+    """League Transactions (team management step 2): the job kind and GET /api/debug/transactions, the latter
+    against a temporary database only when TX_TEST_DATABASE_URL is set (never the live one)."""
+    def test_job_kind(self):
+        self.assertEqual(dbg.JOB_KINDS["transactions_scan"],
+                         ("League transactions scan", ["--mode", "transactions", "--no-articles"]))
+        cmd = dbg.job_command("transactions_scan")
+        self.assertEqual(cmd[-4:], ["pipeline.weekly_capture", "--mode", "transactions", "--no-articles"])
+
+    @unittest.skipUnless(os.environ.get("TX_TEST_DATABASE_URL"), "needs a scratch database")
+    def test_endpoint_on_scratch_db(self):
+        app = FastAPI()
+        app.include_router(dbg.router)
+        with mock.patch.object(dbg, "CONN_INFO", os.environ["TX_TEST_DATABASE_URL"]):
+            body = TestClient(app).get("/api/debug/transactions?season=2036").json()
+        self.assertTrue(body["installed"])
+        self.assertIn("pending_rescans", body)

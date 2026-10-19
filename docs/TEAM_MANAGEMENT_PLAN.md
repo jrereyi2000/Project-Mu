@@ -128,7 +128,7 @@ The mock draft's board is the top 32 by OVR, and that isn't realistic. Step 4 st
 | Step | Sub-plan | Build |
 |---|---|---|
 | 1 Contract scan | written | Phases 1–5 built (2026-10-19); Phase 0 console check (C1–C7, C9–C10) and applying the migration are JR's, before the first live scan |
-| 2 League transactions | written | not started |
+| 2 League transactions | written | Phases 1–6 built (2026-10-19); the console checks (sub-plan §1) and applying `2026_12_08_transactions.sql` are JR's, before the first live scan |
 | 3 GM agents | not written | not started |
 | 4 Scouting and draft | design pass needed (§2.5) | not started |
 | 5 Newsroom integration | not written | not started |

@@ -1169,8 +1169,8 @@ def main():
             extract_injuries_ocr(root)
         except Exception as e:
             print(f"Error extracting injuries via Apple Vision: {e}")
-    if os.path.isdir(os.path.join(root, "transactions")):
-        try:
+    if os.path.isdir(os.path.join(root, "transactions")) and not os.path.exists(os.path.join(root, "transactions.csv")):
+        try:                           # the weekly run extracts it before the hand-back notice (D5 re-scan)
             from pipeline.extract_transactions_ocr import extract_transactions_ocr
             extract_transactions_ocr(root)
         except Exception as e:

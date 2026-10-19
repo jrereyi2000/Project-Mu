@@ -31,6 +31,10 @@ class RunTest(unittest.TestCase):
                                                    {"status": "published", "week": week or 19})[1],
             set_current_week=lambda week: self.calls.append(f"current {week}"),
             set_league_state=lambda s, w: (setattr(self, "league_state_val", (s, w)), self.calls.append(f"set_state {s} {w}")),
+            # League Transactions (team management step 2): no database here
+            since_heading=lambda season, weekly=True: None,
+            rescan_capture=lambda folder, log_path, season: [],
+            rescan_load=lambda folder, log_path, season: None,
         )
         p.start()
         self.addCleanup(p.stop)
