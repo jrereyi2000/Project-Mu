@@ -9,8 +9,10 @@ and executes it.
 Rows are keyed (season, txn_date, row_key, seq) and inserted ON CONFLICT DO NOTHING; effects (team moves,
 contracts, cap deltas) run only for rows inserted now, oldest first, so loading the same rows again changes
 nothing. There are no automatic Team Salary re-scans (JR, 2026-10-19): contracts and team_cap_seasons are kept
-current from the transactions themselves, and the next Season scan replaces all of it. Rows before the effects cutoff (first load of a season: '<season> SEASON - WEEK 1') and rows
-from earlier seasons are stored with applied = false, as history only.
+current from the transactions themselves, and the next Season scan replaces all of it. Trade rows and rows that
+aren't roster moves are skipped (JR, 2026-10-19: trades are made through the GM agents' approval flow, step 3).
+Rows before the effects cutoff (first load of a season: '<season> SEASON - WEEK 1') and rows from earlier
+seasons are stored with applied = false, as history only.
 """
 import csv, json, os
 
@@ -52,12 +54,13 @@ def read_meta(folder):
         return {}
 
 
-def expand(rows, meta=None, skipped=None):
+def expand(rows, meta=None, skipped=None, trades=None):
     """List rows -> transaction legs (newest first) with their key fields. A scan that stopped at --since (didn't
     reach the end of the list) read its oldest heading group only partly, which would shift that group's seq, so
     every row older than `since` is left out (it was loaded by an earlier scan). Rows that aren't roster moves
     (transactions_parse.is_move: the draft-class notice and the like) are skipped, not stored (JR, 2026-10-19);
-    their texts go into `skipped` when a list is passed."""
+    their texts go into `skipped` when a list is passed. Trade rows are skipped too (JR, 2026-10-19: the GM
+    agents' approval flow, step 3, makes the trade moves); their texts go into `trades`."""
     meta = meta or {}
     cut = heading_ordinal(meta["since"]) if meta.get("since") and not meta.get("reached_end") else None
     out = []
@@ -69,34 +72,19 @@ def expand(rows, meta=None, skipped=None):
                 skipped.append(r["text"])
             continue
         p = parse_row(r["text"])
+        if p["type"] == "TRADED":
+            if trades is not None:
+                trades.append(r["text"])
+            continue
         base = row_key(p, r["text"])
         for lg in legs(p):
-            kind = lg["type"] if (p["ok"] or p["type"] == "TRADED") else "OTHER"
+            kind = lg["type"] if p["ok"] else "OTHER"
             out.append({"heading": r["heading"], "text": p["text"], "row_key": base + lg["suffix"], "parsed": p,
                         "leg": dict(lg, type=kind), "parse_ok": p["ok"],
                         "flags": list(dict.fromkeys(r.get("flags", []) + p["flags"]))})
     for e, s in zip(out, assign_seq(out)):
         e["seq"] = s
-    _trade_groups(out)
     return out
-
-
-def _trade_groups(entries):
-    """Consecutive TRADED legs between the same two teams in one heading group share a trade_group
-    '{season}:{txn_date}:{A}-{B}:{n}' (teams sorted, n counts the heading's trades from 1)."""
-    n_by_heading, prev = {}, None
-    for e in entries:
-        lg = e["leg"]
-        if lg["type"] != "TRADED" or not (lg["from"] and lg["to"]):
-            prev = None
-            continue
-        pair = tuple(sorted((lg["from"], lg["to"])))
-        if prev and prev[0] == e["heading"] and prev[1] == pair:
-            e["trade_group"] = prev[2]
-            continue
-        n = n_by_heading[e["heading"]] = n_by_heading.get(e["heading"], 0) + 1
-        g = f"{heading_year(e['heading'])}:{e['heading']}:{pair[0]}-{pair[1]}:{n}"
-        e["trade_group"], prev = g, (e["heading"], pair, g)
 
 
 # ---------------------------------------------------------------- shares ----
@@ -211,7 +199,7 @@ def plan_effects(entries, state, money=None):
       create_player {tmp, player_name, full_name, team_id, position, released_week}
       move {player, team_id}                     (player_seasons.team_id, released_week NULL)
       release {player, week}                     (player_seasons.released_week; team_id kept)
-      contract_status {player, status}           (his ACTIVE contract -> SUPERSEDED / RELEASED / TRADED)
+      contract_status {player, status}           (his ACTIVE contract -> SUPERSEDED / RELEASED)
       contract_insert {player, team_id, length, years_remaining, total_value, bonus, cut_savings, cut_penalty,
                        no_trade_clause, incentive, years, projected}   (source TRANSACTION; projected = years)
       contract_extend {player, years, value, hits}  (re-sign / extension: terms on the ACTIVE contract, projected
@@ -272,15 +260,15 @@ def plan_effects(entries, state, money=None):
             except ValueError:
                 e["flags"].append("bad_amount")
         txn = {"season": y, "week": heading_week(e["heading"]), "txn_date": e["heading"], "type": kind,
-               "player": None, "player_name": lg["name"] if kind != "TRADED" or lg["name"] else lg["asset"],
+               "player": None, "player_name": lg["name"],
                "position": lg["pos"], "from_team_id": frm, "to_team_id": to, "contract_years": lg["years"],
                "contract_value": value, "raw_text": e["text"], "row_key": e["row_key"], "seq": e["seq"],
                "parse_ok": e["parse_ok"], "flags": e["flags"], "applied": applied,
-               "trade_group": e.get("trade_group")}
+               "trade_group": None}
         entry = {"txn": txn, "ops": []}
         plan.append(entry)
         report["transactions_new"] += 1
-        if not applied or kind == "OTHER" or not lg["name"] or (kind == "TRADED" and not e["parse_ok"]):
+        if not applied or kind == "OTHER" or not lg["name"]:
             continue
         _plan_one(state, entry, kind, lg, frm, to, e, report, value)
     report["contract_ops"] = sum(1 for en in plan for op in en["ops"] if op["op"].startswith("contract"))
@@ -299,7 +287,7 @@ def _plan_one(state, entry, kind, lg, frm, to, e, report, value):
     if kind == "SIGNED":
         p, why = _resolve_sign(state, lg["name"], lg["pos"])
     else:
-        p, why = _resolve_on_team(state, lg["name"], lg["pos"], frm if kind in ("RELEASED", "TRADED") else to)
+        p, why = _resolve_on_team(state, lg["name"], lg["pos"], frm if kind == "RELEASED" else to)
     if why:
         report["ambiguous"].append(f"{e['heading']}: {e['text']} ({why})")
         txn["flags"] = txn["flags"] + ["ambiguous"]
@@ -352,20 +340,6 @@ def _plan_one(state, entry, kind, lg, frm, to, e, report, value):
             ops.append({"op": "cap_delta", "team_id": active["team_id"], "salaries": -_hit(active, season),
                         "cap_penalty": active.get("cut_penalty") or 0})
             contracts.pop(pid, None)
-    elif kind == "TRADED":
-        ops.append({"op": "move", "player": pid, "team_id": to})
-        p.update(team_id=to, released_week=None)
-        if active:                                   # the same contract moves row for row (master §3.5)
-            ops.append({"op": "contract_status", "player": pid, "status": "TRADED"})
-            c = {k: active.get(k) for k in ("length", "years_remaining", "total_value", "bonus", "cut_savings",
-                                             "cut_penalty", "no_trade_clause", "incentive", "years", "projected")}
-            c["projected"] = list(c["projected"] or [])
-            ops.append(dict(c, op="contract_insert", player=pid, team_id=to))
-            hit = _hit(active, season)
-            if hit:
-                ops.append({"op": "cap_delta", "team_id": active["team_id"], "salaries": -hit, "cap_penalty": 0})
-                ops.append({"op": "cap_delta", "team_id": to, "salaries": hit, "cap_penalty": 0})
-            contracts[pid] = dict(c, id=None, team_id=to)
     else:                                            # RE_SIGNED / EXTENDED: this season is unchanged
         n, total = lg["years"], value
         if not active:
@@ -523,43 +497,18 @@ def execute(cur, plan, season, capture_id=None, stats=None):
     return done
 
 
-def gm_hook(cur, done, report):
-    """Optional step-3 hook: after a trade's legs are stored, let pipeline.gm_proposals match it to an approved
-    proposal (step 3 owns the rules and the EXECUTED state; step 2 only writes gm_proposal_id)."""
-    groups = {}
-    for tid, t in done:
-        if t["type"] == "TRADED" and t["applied"] and t["trade_group"]:
-            groups.setdefault(t["trade_group"], []).append(dict(t, id=tid))
-    if not groups:
-        return
-    cur.execute("SELECT to_regclass('gm_trade_proposals') IS NOT NULL")
-    if not cur.fetchone()[0]:
-        return
-    try:
-        from pipeline.gm_proposals import match_executed_trade
-    except ImportError:
-        return
-    matched = {}
-    for g, legs_ in groups.items():
-        prop = match_executed_trade(cur, legs_)
-        if prop is not None:
-            cur.execute("UPDATE transactions SET gm_proposal_id = %s WHERE id = ANY(%s)", (prop, [l["id"] for l in legs_]))
-            matched[g] = prop
-    report["gm_proposals_matched"] = matched
-
-
 def load_transactions(cur, folder, season, report, apply_from=None, capture_id=None):
     """transactions.csv in `folder` -> transactions (+ effects). Adds a 'transactions' dict to report. Raises
     TransactionsError (nothing written) on a failed check. Returns the number of new rows."""
     from pipeline.money import parse_money
-    skipped = []
-    entries = expand(read_rows(folder), read_meta(folder), skipped)
+    skipped, trades = [], []
+    entries = expand(read_rows(folder), read_meta(folder), skipped, trades)
     years = {heading_year(e["heading"]) for e in entries} - {None}
     state = read_state(cur, season, years, apply_from)
     plan, rep = plan_effects(entries, state, parse_money)
     done = execute(cur, plan, season, capture_id, rep)
     rep["apply_from"] = state["apply_from"]
-    gm_hook(cur, done, rep)
     rep["skipped_not_moves"] = skipped
+    rep["skipped_trades"] = trades
     report["transactions"] = rep
     return len(done)

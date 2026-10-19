@@ -44,7 +44,7 @@ JR's answers (2026-10-19), and what the code does with them:
 4. **Row layout:** no wrapping; the heading (the week) sits above the text. → matches `assemble_rows`.
 5. **Headings outside the regular season:** the offseason is scanned too. Offseason rows are believed to show the year of the season just finished. → already the assumption: `heading_year` = that season, and offseason orders after the postseason. The offseason stages' order among themselves is unknown, so all of them share one ordinal; a `--since` inside the offseason re-reads the offseason part of the list, which is short.
 6. **Week semantics:** `WEEK N` is the week the move happened. → the effects use it (a release sets `released_week = N`).
-7. **Trades:** open. CPU trades are off, so the only trade rows will be JR's own, made for approved GM proposals. JR asked whether the scan can skip them. The code still reads them: they're what moves the player and his contract, and what confirms the proposal was executed as approved (master §2.4). Their wording is still unverified.
+7. **Trades:** skipped (JR, 2026-10-19). CPU trades are off, so the only trades are JR's own, made for approved GM proposals. The GM agents' approval flow (step 3) makes the trade moves when JR confirms one. The scan skips trade rows and lists them as `skipped_trades`. Their wording doesn't matter for step 2.
 8. **Re-sign wording:** `TEAM RE-SIGN (POS) FULL NAME TO A N-YEAR, $AMT EXTENSION`. → parsed as `RE_SIGNED` with years and amount (an "EXTENSION" after RE-SIGN doesn't make it `EXTENDED`).
 9. **Other row kinds:** skip the rows we don't process. → a row with no move verb and no `(POS) NAME` group (`is_move`) is neither re-read by Gemini nor stored. The loader lists those rows under `skipped_not_moves`. A row that looks like a move but can't be parsed is kept as `OTHER` for review.
 10. **List depth:** in season the list goes back to the start of the season; in the offseason, to the start of the offseason. → a first-run backfill covers one season at most.
@@ -75,7 +75,6 @@ Matching uses `name_case` → `full_key`/`name_key` (S13). The "this season" ros
 |---|---|---|---|---|
 | `SIGNED` | 1) `full_key` among this season's rows that have `released_week` set, 2) `full_key` + position anywhere this season, 3) `full_key` + position in `players` with no row this season. Several hits are **ambiguous**: store `player_id` NULL, report it, and apply no move. No hit: **create** `players(player_name=db_player_name, full_name)` and a `player_seasons` row (`team_id = to_team`, `position`, the other card fields NULL), and report it under `created_players`. | Upsert `team_id = to_team`, `released_week = NULL`. | Any `ACTIVE` row for `(player, season)` → `SUPERSEDED`. Insert `ACTIVE`, `source = 'TRANSACTION'`, `length = years_remaining = N`, `total_value = parse_money(amount)`, bonus/savings/penalty NULL, plus `player_contract_years` for `season … season+4` (`cap_hit` = `total_value / N` for the years in the contract, 0 after). | `to_team`: `salaries` + this season's hit. |
 | `RELEASED` | `full_key` / `name_key` + position among `from_team`'s rows this season. If it isn't found there, look league-wide. If there's still no hit, create the player with `team_id = from_team`. | `released_week = week` (**`team_id` kept**, S12). | The `ACTIVE` row → `RELEASED`. | `from_team`: `salaries` − his hit, `cap_penalty` + the stored `cut_penalty` (dead money; NULL counts as 0). |
-| `TRADED` (one leg per player) | Same as RELEASED, on `from_team`. | `team_id = to_team`, `released_week = NULL`. | `ACTIVE` → `TRADED`, then insert a copy on `to_team` (`ACTIVE`, `source = 'TRANSACTION'`, same `length`/`years_remaining`/money and copied `player_contract_years`, `projected` flags kept), per master §3.5. | `from_team` − hit, `to_team` + hit. |
 | `RE_SIGNED` / `EXTENDED` | Same as RELEASED, on `team` (no player is created). | None. | The `ACTIVE` row keeps this season; it gets `extension_years`, `extension_value`, `extended_transaction_id`, and **projected** `player_contract_years` rows (`projected = true`) for the new deal's years, starting the season after the current deal ends (`season + years_remaining`). Hits = amount × `year_shares(N)` (below). | None. |
 | `OTHER` | None. | None. | None. | None. |
 
@@ -83,11 +82,11 @@ Every cap delta changes `salaries` and/or `cap_penalty`, moves `total_spend` by 
 
 **Re-signing shares** (`average_shares` / `year_shares` / `projected_hits`, pure). From the latest Season scan, take the `ACTIVE`, `SCAN` contracts whose every year is on screen (`years_remaining = length ≤ 5`). For each length, average each year's share of the total. A length backed by fewer than 10 contracts, or no scan at all, splits the amount evenly. The rounding remainder goes to the last year, so the hits sum to the amount.
 
-Pick legs and unparsed trade fragments are stored as `TRADED` with `player_id` NULL and the asset in `raw_text`. They have no effect. `trade_group` is set to `"{season}:{txn_date}:{teamA}-{teamB}:{n}"` (teams sorted) for consecutive TRADED legs between the same pair of teams in one heading group.
+**Trade rows are skipped** (JR, 2026-10-19): any row the grammar reads as a trade (`\bTRADE`, `\bACQUIRE`) is neither re-read by Gemini nor stored, and the loader lists it under `skipped_trades`. Trades are made through the GM agents' approval flow (master §2.4), and step 3 moves the players, their contracts and the cap rows when JR confirms a trade. `trade_group` and `gm_proposal_id` stay on `transactions` for step 3 to fill if it records confirmed trades there.
 
 **Effects cutoff (first run):** a backfill would otherwise replay preseason and offseason moves onto rosters that the Season scan already captured. So rows get `applied = false` and no effects when they order before `apply_from`. On the first load of a season, `apply_from` defaults to `"<season> SEASON - WEEK 1"`, and `--apply-from <heading>` overrides it. After that, every new row is applied. The roster scan stays authoritative and reconciles anything missed (master §4).
 
-**Optional step-3 hook:** after the TRADED legs of a `trade_group` are applied, if `to_regclass('gm_trade_proposals')` is set and `pipeline.gm_proposals.match_executed_trade` can be imported, call `match_executed_trade(cur, legs) -> proposal_id | None` and write `gm_proposal_id` on the legs. Step 3 owns the matching rules, the `EXECUTED` transition, and the "APPROVED but mismatched" flag (master §4). Step 2 owns only the call site and the column.
+(The optional step-3 hook that matched scanned trades to proposals was removed along with the trade rows.)
 
 ### 2.4 Extraction choice
 **Apple Vision first, Gemini only for flagged rows.** The rows are short, upper-case text with no table. Vision is free, runs on the device, and the injuries and prospects modes already rely on it (`extract.py:957`, `:594`). A first-run backfill can be hundreds of pages, which would cost real Gemini tokens. Vision's known weakness is the digit 1 (S7). A row goes to Gemini (one cropped row per request, the `extract.py` client, metered by `METER`) when any of these is true:
@@ -180,7 +179,7 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 **Files:**
 - `pipeline/load_transactions.py`:
   - `plan_effects(rows, state) -> [op]`: pure. `state` is the in-memory roster, contracts and existing keys; `op` is `move`, `release`, `create_player`, `contract_status`, `contract_insert`, `contract_extend` or `cap_delta`, grouped under the transactions row it belongs to.
-  - `load_transactions(cur, folder, season, report, apply_from=None)`: reads the DB state, runs `plan_effects`, executes the ops, then calls the optional step-3 hook.
+  - `load_transactions(cur, folder, season, report, apply_from=None)`: reads the DB state, runs `plan_effects`, executes the ops.
   - Report keys: `transactions_new`, `transactions_seen`, `unparsed` (list of text), `ambiguous`, `created_players`, `not_applied`, `contract_ops`, `cap_deltas`, `cap_rows_missing`.
   - Checks that raise `LoadError` (nothing written):
     - a heading's year isn't the current season (or the previous one, for offseason stages per fact 5);
@@ -195,14 +194,14 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 **Tests:** `tests/test_load_transactions.py` (pure, on `plan_effects`):
 - sign known FA (released elsewhere), sign unknown → create, sign ambiguous → no move;
 - release keeps `team_id` and sets `released_week`;
-- trade moves the contract copy with the same years, and both teams' cap rows;
+- trade rows are skipped and listed;
 - release charges the cut penalty as dead money;
 - re-sign projects the new deal's years after the current one (even split, and scanned shares);
 - sign then release the same week (applied oldest first);
 - the same rows loaded twice produce no ops;
 - rows before `apply_from` → `applied=false` with no ops;
 - contract ops are left out when the state has no `player_contracts`;
-- the step-3 hook is called only when it exists (both stubbed).
+- rows that aren't moves are skipped and listed.
 
 **Exit check:** `python3 -m pipeline.load_capture captures/tx_probe --dry-run` against a **restored test copy** (`DATABASE_URL`) prints a sensible report. JR approves before the first live load.
 
@@ -260,9 +259,9 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 
 ## 5. Out of scope
 - Contract tables, `parse_money`, the Team Salary capture and `--mode contracts` (step 1). Step 2 calls them as they are.
-- `gm_trade_proposals`, the proposal matching rules and the `EXECUTED` state (step 3). Step 2 only calls the optional hook and stores `gm_proposal_id`.
+- `gm_trade_proposals`, the proposal matching rules and the `EXECUTED` state (step 3). Step 2 skips trade rows; step 3 makes a confirmed trade's moves.
 - Turning transactions into articles, Agent Wire posts or writer tools (step 5).
-- Draft-pick ownership after trades (step 3/4). Pick legs are stored only as raw `TRADED` rows.
+- Draft-pick ownership after trades (step 3/4). Trade rows aren't stored by the scan.
 - Per-week team history for stats splits. `transactions` holds it, but splits by team-at-the-time aren't built here.
 - Re-checking teams with no transactions (master §4: acceptable drift until the next Season scan).
 
