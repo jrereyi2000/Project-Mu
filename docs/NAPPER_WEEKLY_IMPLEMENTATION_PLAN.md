@@ -104,7 +104,9 @@ The work is already in the uncommitted diff of `engines/fantasy_projection_engin
 
 ---
 
-## Phase 4: AI lineup optimizer (G1)
+## Phase 4: AI lineup optimizer (G1) — DONE (2026-10-19)
+
+> Landed as planned. The CLI is `--league N | --all-active`, `--week`, `--fill-ir-spots`, `--dry-run`. `fill_empty_starter_slots` and the slot table moved into this module, and the trade engine and API import them from here. The update-lineup endpoint now uses `refresh_matchup_projections`. A one-week injury is benched, not IR'd (D1). Dry run for week 4: 16 AI teams adjusted and 9 players moved to IR across leagues 1 and 15. A second run makes no changes.
 
 **New module `engines/napper_lineup_engine.py`.**
 

@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import psycopg
 
+from engines.napper_lineup_engine import fill_empty_starter_slots
+
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.environ.get(
@@ -103,73 +105,6 @@ def _safe_commit(conn) -> None:
         conn.commit()
     except psycopg.ProgrammingError:
         pass
-
-
-# Starting slots in fill order (fixed positions first, then the wider flex slots) and who may fill each.
-STARTER_SLOT_ELIGIBILITY = {
-    "QB": {"QB"}, "RB": {"RB"}, "WR": {"WR"}, "TE": {"TE"}, "K": {"K"}, "DEF": {"DEF"},
-    "FLEX": {"RB", "WR", "TE"}, "SUPERFLEX": {"QB", "RB", "WR", "TE"},
-}
-DEFAULT_ROSTER_FORMAT = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1}
-
-
-def fill_empty_starter_slots(cur, league_id: int, team_id: int, from_week: int) -> List[Tuple[int, int, str]]:
-    """Moves an AI team's best eligible bench players into starting slots left empty (e.g. by a trade, whose
-    players arrive on the bench) for every saved week >= from_week. Best = that week's projected_points, then
-    ros_total_points. Human teams are never changed. Returns the (week, player_id, slot) moves made."""
-    from psycopg.rows import tuple_row
-
-    moves: List[Tuple[int, int, str]] = []
-    with cur.connection.cursor(row_factory=tuple_row) as c:
-        c.execute("""
-            SELECT t.is_ai, l.season, l.roster_format
-            FROM napper_teams t JOIN napper_leagues l ON l.id = t.league_id
-            WHERE t.id = %s AND t.league_id = %s
-        """, (team_id, league_id))
-        row = c.fetchone()
-        if not row or not row[0]:
-            return moves
-        season, fmt = row[1], row[2]
-        if isinstance(fmt, str):
-            fmt = json.loads(fmt)
-        fmt = fmt or DEFAULT_ROSTER_FORMAT
-
-        c.execute("""
-            SELECT nr.week, nr.player_id, nr.slot, pos.position,
-                   COALESCE(fp.projected_points, 0)::float, COALESCE(fp.ros_total_points, 0)::float
-            FROM napper_rosters nr
-            LEFT JOIN LATERAL (
-                SELECT ps.position FROM player_seasons ps
-                WHERE ps.player_id = nr.player_id AND ps.season = %s
-                ORDER BY ps.team_id IS NULL LIMIT 1
-            ) pos ON TRUE
-            LEFT JOIN fantasy_projections fp
-              ON fp.player_id = nr.player_id AND fp.season = %s AND fp.week = nr.week
-            WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week >= %s
-        """, (season, season, league_id, team_id, from_week))
-        by_week: Dict[int, list] = defaultdict(list)
-        for week, pid, slot, pos, proj, ros in c.fetchall():
-            by_week[week].append((pid, slot, POS_NORMALIZATION.get(pos or "", None), proj, ros))
-
-        for week in sorted(by_week):
-            rows = by_week[week]
-            filled: Dict[str, int] = defaultdict(int)
-            for _, slot, _, _, _ in rows:
-                filled[slot] += 1
-            bench = sorted((r for r in rows if r[1] == "BN"), key=lambda r: (-r[3], -r[4], r[0]))
-            for slot, eligible in STARTER_SLOT_ELIGIBILITY.items():
-                for _ in range(int(fmt.get(slot, 0)) - filled[slot]):
-                    pick = next((r for r in bench if r[2] in eligible), None)
-                    if pick is None:
-                        break
-                    bench.remove(pick)
-                    filled[slot] += 1
-                    c.execute("""
-                        UPDATE napper_rosters SET slot = %s
-                        WHERE league_id = %s AND team_id = %s AND week = %s AND player_id = %s
-                    """, (slot, league_id, team_id, week, pick[0]))
-                    moves.append((week, pick[0], slot))
-    return moves
 
 
 def ensure_napper_tables_exist(conn) -> None:

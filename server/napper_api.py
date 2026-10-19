@@ -19,7 +19,7 @@ from pydantic import BaseModel
 import psycopg
 from psycopg.rows import dict_row
 from engines import napper_draft_engine
-from engines.napper_trade_engine import fill_empty_starter_slots
+from engines.napper_lineup_engine import fill_empty_starter_slots, refresh_matchup_projections
 from engines.napper_injuries import IR_MIN_WEEKS, get_injury_map, is_ir_eligible
 from engines.fantasy_projection_engine import DEF_POINTS_SQL, DEF_STATS_JOIN_SQL, KICKING_POINTS_SQL
 
@@ -1445,26 +1445,8 @@ def update_lineup(league_id: int, req: LineupRequest):
                     WHERE league_id = %s AND team_id = %s AND week = %s AND player_id = %s
                 """, (swap.new_slot.upper(), league_id, req.team_id, wk, swap.player_id))
 
-            # 7. Recalculate team projected score for the matchup
-            # Refresh both matchup sides from their saved starters and current projections.
-            cur.execute("""
-                SELECT id, home_team_id, away_team_id, home_proj, away_proj
-                FROM napper_matchups
-                WHERE league_id = %s AND week = %s AND (home_team_id = %s OR away_team_id = %s)
-            """, (league_id, wk, req.team_id, req.team_id))
-            match_row = cur.fetchone()
-            if match_row:
-                totals = _get_weekly_team_totals(cur, league_id, current_season, wk, lg["scoring_type"])
-                h_p = float(totals.get(match_row["home_team_id"], {}).get("projection") or 0)
-                a_p = float(totals.get(match_row["away_team_id"], {}).get("projection") or 0)
-                points_total = h_p + a_p
-                new_win_prob = round(h_p / points_total, 3) if points_total > 0 else 0.5
-
-                cur.execute("""
-                    UPDATE napper_matchups
-                    SET home_proj = %s, away_proj = %s, win_prob_home = %s
-                    WHERE id = %s
-                """, (h_p, a_p, new_win_prob, match_row["id"]))
+            # 7. Refresh the week's matchup projections and win odds from the saved starters.
+            refresh_matchup_projections(cur, league_id, current_season, wk)
 
         conn.commit()
 

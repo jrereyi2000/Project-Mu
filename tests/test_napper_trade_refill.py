@@ -1,7 +1,7 @@
 """fill_empty_starter_slots: AI teams refill starting slots a trade emptied (no database needed)."""
 import unittest
 
-from engines.napper_trade_engine import fill_empty_starter_slots
+from engines.napper_lineup_engine import fill_empty_starter_slots
 
 
 class _FakeCursor:
