@@ -3,6 +3,8 @@
 Run after the week's fantasy projections are written (engines/game_stat_generator.py calls it right after
 the simulated leagues). For every IN_SEASON Napper league of the current season, for the upcoming week:
 
+0. Playoffs (engines/napper_playoffs.sync_playoffs): from week 15, writes the round whose teams are now known
+   and crowns the champion once the week 17 final is final.
 1. AI lineups (engines/napper_lineup_engine): IR moves and starters, so waivers and trades see current rosters.
 2. Waiver run (engines/napper_waiver_engine.run_waivers), once per league and week, from week 2: the user's
    queued claims and AI pickups in reverse-standings order.
@@ -29,6 +31,7 @@ from typing import List, Optional
 import psycopg
 
 from engines.napper_lineup_engine import DATABASE_URL, active_league_ids, optimize_league_lineups
+from engines.napper_playoffs import sync_playoffs
 from engines.napper_trade_engine import generate_trade_proposals, process_ai_to_ai_trades
 from engines.napper_waiver_engine import run_waivers
 
@@ -43,9 +46,12 @@ def run_league_week(conn, league_id: int, week: int, trades: bool = True, waiver
                     log=print) -> dict:
     """The weekly step for one league on an open connection (the caller commits)."""
     summary = {"league": league_id, "week": week, "lineup_teams": 0, "ir_moves": 0, "waiver_adds": 0,
-               "waivers_skipped": False, "proposals": 0, "trades_processed": 0, "trades_skipped": False}
+               "waivers_skipped": False, "proposals": 0, "trades_processed": 0, "trades_skipped": False,
+               "playoffs": None}
     waivers = waivers and week > 1
     with conn.cursor() as cur:
+        po = sync_playoffs(cur, league_id)
+        summary["playoffs"] = po["status"]
         results = optimize_league_lineups(cur, league_id, week)
         summary["lineup_teams"] = len(results)
         summary["ir_moves"] = sum(len(r["to_ir"]) for r in results)
@@ -70,7 +76,8 @@ def run_league_week(conn, league_id: int, week: int, trades: bool = True, waiver
            "; waivers already run" if summary["waivers_skipped"] else f"; {summary['waiver_adds']} waiver adds")
         + ("" if not trades else
            f"; {'proposals already made' if summary['trades_skipped'] else str(summary['proposals']) + ' proposals'}, "
-           f"{summary['trades_processed']} offers to AI teams decided"))
+           f"{summary['trades_processed']} offers to AI teams decided")
+        + ("" if summary["playoffs"] in (None, "PROJECTED", "NONE") else f"; playoffs {summary['playoffs'].lower()}"))
     return summary
 
 

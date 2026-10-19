@@ -74,6 +74,21 @@ export const NapperMatchupTab: React.FC<NapperMatchupTabProps> = ({
     return (
       <div className="px-6 py-12 text-center text-sm text-[#8a99ad]" role={loadError ? "alert" : undefined}>
         {loading ? "Loading this league’s matchup…" : loadError || "No matchup is available for this week."}
+        {/* Keep weeks reachable when the selected one has no game (e.g. a playoff bye or elimination). */}
+        {!loading && showWeekSelector && week != null && (
+          <div className="mt-4">
+            <select
+              value={week}
+              onChange={(e) => setWeek(Number(e.target.value))}
+              aria-label="Matchup week"
+              className="bg-[#1f2a3c] border border-[#283850] text-[#e2e8f0] rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer"
+            >
+              {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+                <option key={w} value={w}>Week {w}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
     );
   }

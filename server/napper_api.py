@@ -24,6 +24,7 @@ from engines.napper_lineup_engine import (
     roster_capacity,
 )
 from engines.napper_injuries import IR_MIN_WEEKS, get_injury_map, is_ir_eligible
+from engines.napper_playoffs import PLAYOFF_TEAMS, ROUNDS as PLAYOFF_ROUNDS, ROUND_LABELS, sync_playoffs, team_week_note
 from engines.fantasy_projection_engine import DEF_POINTS_SQL, DEF_STATS_JOIN_SQL, KICKING_POINTS_SQL
 
 logger = logging.getLogger(__name__)
@@ -373,7 +374,10 @@ def _ensure_matchup_and_rosters(cur, league_id: int, week: int):
         # If the league has no roster history, leave it empty. A different league's
         # roster must never be presented as this league's team.
 
-    # 2. Ensure matchups for this week
+    # 2. Ensure matchups for this week. Playoff weeks (15–17) come only from the bracket.
+    if week in PLAYOFF_ROUNDS:
+        sync_playoffs(cur, league_id)
+        return
     cur.execute(
         "SELECT COUNT(*) as cnt FROM napper_matchups WHERE league_id = %s AND week = %s",
         (league_id, week)
@@ -535,6 +539,64 @@ def get_league_detail(league_id: int):
             return {
                 "league": league,
                 "teams": teams,
+            }
+
+
+@router.get("/league/{league_id}/playoffs")
+def get_league_playoffs(league_id: int):
+    """The playoff bracket (weeks 15–17): seeds, each round's games with scores and winners, and the champion.
+    Before week 14 is final, the seeds are the standings so far (status PROJECTED)."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT season, scoring_type FROM napper_leagues WHERE id = %s", (league_id,))
+            league = cur.fetchone()
+            if not league:
+                raise HTTPException(status_code=404, detail="League not found")
+            season, active_week = get_current_season_week(cur)
+            require_current_season_league(cur, league_id)
+            po = sync_playoffs(cur, league_id)
+            conn.commit()
+
+            teams = {t["id"]: t for t in po["standings"]}
+
+            def side(team_id: Optional[int], seed: Optional[int], score=None, proj=None) -> Dict[str, Any]:
+                t = teams.get(team_id) if team_id is not None else None
+                return {"team_id": team_id, "seed": seed, "team_name": t["team_name"] if t else None,
+                        "is_user": bool(t and t.get("is_user")), "score": score, "proj": proj}
+
+            by_seed = {s: t for t, s in po["seeds"].items()}
+            bracket = po["bracket"]
+            rounds = []
+            for week, rnd in PLAYOFF_ROUNDS.items():
+                games = []
+                if bracket and week in bracket["rounds"]:
+                    totals = _get_weekly_team_totals(cur, league_id, season, week, league["scoring_type"])
+                    started = week < active_week or (week == active_week and any(
+                        int(r.get("played_players") or 0) for r in totals.values()))
+                    for g in bracket["rounds"][week]:
+                        sides = []
+                        for t in (g["home"], g["away"]):
+                            row = totals.get(t, {})
+                            sides.append(side(t, po["seeds"][t],
+                                              round(float(row.get("score") or 0), 2) if started else None,
+                                              round(float(row.get("projection") or 0), 2)))
+                        games.append({"home": sides[0], "away": sides[1], "winner_team_id": g["winner"]})
+                elif week == 15 and len(by_seed) >= PLAYOFF_TEAMS:
+                    # Not seeded yet: the standings so far.
+                    games = [{"home": side(by_seed[a], a), "away": side(by_seed[b], b), "winner_team_id": None}
+                             for a, b in ((3, 6), (4, 5))]
+                rounds.append({"week": week, "round": rnd, "label": ROUND_LABELS[rnd], "games": games})
+
+            byes = [side(by_seed[s], s) for s in (1, 2) if s in by_seed]
+            finish = (bracket or {}).get("finish", {})
+            return {
+                "league_id": league_id,
+                "status": po["status"],
+                "playoff_teams": PLAYOFF_TEAMS,
+                "byes": byes,
+                "rounds": rounds,
+                "champion": side(po["champion"], po["seeds"].get(po["champion"])) if po["champion"] else None,
+                "finish": {str(t): f for t, f in finish.items()},
             }
 
 
@@ -1069,7 +1131,7 @@ def get_league_scores(league_id: int, week: Optional[int] = Query(None)):
                        away.wins AS away_wins, away.losses AS away_losses,
                        (home.user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)) AS home_is_user,
                        (away.user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)) AS away_is_user,
-                       m.is_final
+                       m.is_final, m.playoff_round
                 FROM napper_matchups m
                 JOIN napper_teams home ON home.id = m.home_team_id
                 JOIN napper_teams away ON away.id = m.away_team_id
@@ -1100,8 +1162,14 @@ def get_league_scores(league_id: int, week: Optional[int] = Query(None)):
                     "away_proj": round(float(away.get("projection") or 0), 2),
                     "has_started": int(home.get("played_players") or 0) + int(away.get("played_players") or 0) > 0,
                     "is_final": final,
+                    "playoff_round": row["playoff_round"],
                 })
-            return {"league_id": league_id, "week": wk, "current_week": active_week, "matchups": results}
+            note = None
+            if wk in PLAYOFF_ROUNDS and not results:
+                po = sync_playoffs(cur, league_id)
+                note = team_week_note(po["bracket"], po["seeds"], None, wk)
+            return {"league_id": league_id, "week": wk, "current_week": active_week, "matchups": results,
+                    "note": note}
 
 
 @router.get("/league/{league_id}/matchup")
@@ -1153,6 +1221,11 @@ def get_league_matchup(
                         LIMIT 1
                     """, (league_id, wk, user_team_id, user_team_id))
                     match = cur.fetchone()
+
+                if not match and wk in PLAYOFF_ROUNDS and user_team_id:
+                    po = sync_playoffs(cur, league_id)
+                    note = team_week_note(po["bracket"], po["seeds"], user_team_id, wk)
+                    raise HTTPException(status_code=404, detail=note or f"No matchup found for Week {wk}")
 
                 if not match:
                     cur.execute("""

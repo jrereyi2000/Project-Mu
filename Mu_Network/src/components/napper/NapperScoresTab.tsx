@@ -23,7 +23,10 @@ interface ScoreMatchup {
   away_proj: number;
   has_started: boolean;
   is_final: boolean;
+  playoff_round?: "QUARTERFINAL" | "SEMIFINAL" | "FINAL" | null;
 }
+
+const ROUND_TAGS: Record<string, string> = { QUARTERFINAL: "Quarterfinal", SEMIFINAL: "Semifinal", FINAL: "🏆 Championship" };
 
 interface NapperScoresTabProps {
   leagueId: number;
@@ -35,6 +38,7 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
   const [week, setWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<ScoreMatchup | null>(null);
 
   useEffect(() => {
@@ -51,6 +55,7 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
       .then((data) => {
         if (cancelled) return;
         setMatchups(data.matchups || []);
+        setNote(data.note || null);
         if (data.week) setWeek(data.week);
       })
       .catch((err) => {
@@ -95,7 +100,7 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
       ) : error ? (
         <div role="alert" style={{ color: "#ff8798", padding: "20px" }}>{error}</div>
       ) : matchups.length === 0 ? (
-        <div style={{ color: "#8a99ad", padding: "20px" }}>No matchups are scheduled for Week {week} in this league.</div>
+        <div style={{ color: "#8a99ad", padding: "20px" }}>{note || `No matchups are scheduled for Week ${week} in this league.`}</div>
       ) : (
         <div style={{ display: "grid", gap: "16px" }}>
           {matchups.map((matchup) => {
@@ -155,6 +160,11 @@ export function NapperScoresTab({ leagueId, embedded = false }: NapperScoresTabP
                   <div className="napper-winprob-fill-left" style={{ width: `${homePct}%` }} />
                   <div className="napper-winprob-fill-right" style={{ width: `${awayPct}%` }} />
                 </div>
+                {matchup.playoff_round && (
+                  <span style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", color: matchup.playoff_round === "FINAL" ? "#ffc107" : "#00ceb8", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: ".04em" }}>
+                    {ROUND_TAGS[matchup.playoff_round]} · #{matchup.home.seed} v #{matchup.away.seed}
+                  </span>
+                )}
                 <span style={{ position: "absolute", top: 10, right: 18, color: "#8392a8", fontSize: "10px", fontWeight: 800 }}>{matchup.is_final ? "FINAL" : "LIVE"}</span>
               </div>
             );

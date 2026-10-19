@@ -207,6 +207,32 @@ export interface NapperWaiversResponse {
   my_players?: NapperRosterPlayerLite[];
 }
 
+/** GET /playoffs: the weeks 15–17 bracket (seeds are the standings so far while status is PROJECTED). */
+export interface NapperPlayoffSide {
+  team_id: number | null;
+  seed: number | null;
+  team_name: string | null;
+  is_user: boolean;
+  score: number | null;
+  proj: number | null;
+}
+
+export interface NapperPlayoffGame {
+  home: NapperPlayoffSide;
+  away: NapperPlayoffSide;
+  winner_team_id: number | null;
+}
+
+export interface NapperPlayoffs {
+  league_id: number;
+  status: "PROJECTED" | "IN_PROGRESS" | "COMPLETE" | "NONE";
+  playoff_teams: number;
+  byes: NapperPlayoffSide[];
+  rounds: { week: number; round: "QUARTERFINAL" | "SEMIFINAL" | "FINAL"; label: string; games: NapperPlayoffGame[] }[];
+  champion: NapperPlayoffSide | null;
+  finish: Record<string, "MISSED" | "QUARTERFINAL" | "SEMIFINAL" | "RUNNER_UP" | "CHAMPION">;
+}
+
 export interface NapperDraftPlayer {
   player_id: number;
   espn_id?: number | string | null;
