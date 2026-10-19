@@ -194,6 +194,8 @@ Project Mu/
 │   ├── NAPPER_FANTASY_PLAN.md # Implementation plan for "Napper" Sleeper-style interactive multi-league platform (#napper) with proactive AI trade & banter engines
 │   ├── NAPPER_UPDATES.md      # Handoff that started the Napper weekly work (injuries, AI lineups with IR, weekly trades, K/DEF projections): original findings and goals, all done
 │   ├── NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md # Phased plan and record for NAPPER_UPDATES (Phases 1–7: K/DEF projections, IR slot, injury display, AI lineups, weekly step, cleanup, waivers), decisions D1–D5; all phases done
+│   ├── TEAM_MANAGEMENT_PLAN.md # Master plan (not built yet): contract scan (Team Salary), weekly League Transactions scan, GM agents deciding trades (JR makes them in Madden), a scouting architecture with live GM picks for picks 1–32, newsroom integration; decisions D1–D8, shared schemas, confirmed console facts
+│   ├── team_management/       #   Step sub-plans 01–05 referenced by TEAM_MANAGEMENT_PLAN.md (written per step before building)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
 │   ├── reference/             #   Source PDFs
@@ -477,7 +479,7 @@ The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`
 - **`players`**:
   - `id` (PK, int), `full_name` (varchar), `player_name` (varchar, e.g. 'G. Crawford'), `player_number` (int - jersey number, default 0), `height` (varchar), `weight` (int lbs), `espn_id` (int, nullable).
 - **`league_state`**:
-  - `id` (PK, int, default 1 — single row), `current_season` (int), `current_week` (int). Column defaults are 2024 / 1; the live league row is currently season 2035, week 18. `current_week` is Madden's current (next unplayed) week in `games.week` numbering, set by each weekly capture load from the captured week label (`pipeline/load_capture.py`); `current_season` is set by hand at a new season or automatically incremented (with `current_week` reset to 1) when starting a start-of-season cadence run (`--mode season`). The backfill, `pipeline/main.py`'s trigger and `DatabaseHandler.get_current_league_state()` read both and never infer or write them.
+  - `id` (PK, int, default 1 — single row), `current_season` (int), `current_week` (int). Column defaults are 2024 / 1; the live league row is currently season 2036, week 4 (2026-10-19). `current_week` is Madden's current (next unplayed) week in `games.week` numbering, set by each weekly capture load from the captured week label (`pipeline/load_capture.py`); `current_season` is set by hand at a new season or automatically incremented (with `current_week` reset to 1) when starting a start-of-season cadence run (`--mode season`). The backfill, `pipeline/main.py`'s trigger and `DatabaseHandler.get_current_league_state()` read both and never infer or write them.
 
 ### 3.2 Temporal Snapshot Ledgers
 - **`team_seasons`**:
