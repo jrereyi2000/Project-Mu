@@ -21,7 +21,9 @@ HEADING_RE = re.compile(r"\b[0-9TILO]{4} ?(?:PRE ?|POST ?|OFF ?)?SEASON ?[-â€“â€
 UI_TEXT = {"BACK", "SELECT", "R2", "L2", "R1", "L1", "NFL", "ALL", "SORT", "LEAGUE TRANSACTIONS", "TRANSACTIONS",
            "VIEW PLAYER CARD", "FILTER"}
 BOTTOM = 0.92            # the button bar sits below this fraction of the height
-EXPECTED_OVERLAP = 1     # madden_capture.TXN_ROWS_PER_PAGE = 3 with ~4 rows on screen (console fact 3)
+# Down moves a highlight before the list scrolls (JR, 2026-10-19; 4 rows show), so two pages can overlap by
+# 1 to 4 rows: pages are lined up on the longest overlap that fits.
+EXPECTED_OVERLAP = None
 
 
 def _band(items, tol):
@@ -63,8 +65,8 @@ def _key(r):
 
 def merge_pages(pages, expected=EXPECTED_OVERLAP):
     """Line pages of rows up on their overlap: the new page's first k rows repeat the merged list's last k.
-    The expected overlap wins when it fits (a page of identical rows also fits a longer overlap); otherwise the
-    longest that fits. No overlap at all means a dropped press may have skipped rows: the first new row is
+    `expected`, when set, wins when it fits (a page of identical rows also fits a longer overlap); otherwise
+    (and by default, since the highlight makes the overlap vary) the longest that fits. No overlap at all means a dropped press may have skipped rows: the first new row is
     flagged 'gap?'. Returns the merged rows, each with a 'flags' list."""
     out = []
     for page in pages:

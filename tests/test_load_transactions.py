@@ -158,7 +158,14 @@ class SharesTest(unittest.TestCase):
 
 
 class KeysAndCutoffTest(unittest.TestCase):
-    ROWS = ((W4, "JAGUARS RELEASE (WR) JULIUS SLATON"), (W3, "THE DRAFT CLASS HAS BEEN EDITED"))
+    ROWS = ((W4, "JAGUARS RELEASE (WR) JULIUS SLATON"), (W3, "JAGUARS RELEASE (K) X Y"))
+
+    def test_non_moves_skipped(self):
+        skipped = []
+        es = L.expand([{"heading": W4, "text": "THE DRAFT CLASS HAS BEEN EDITED", "flags": []},
+                       {"heading": W4, "text": "JAGUARS RELEASE (WR) JULIUS SLATON", "flags": []}], None, skipped)
+        self.assertEqual([e["text"] for e in es], ["JAGUARS RELEASE (WR) JULIUS SLATON"])
+        self.assertEqual(skipped, ["THE DRAFT CLASS HAS BEEN EDITED"])
 
     def test_loading_twice_gives_no_ops(self):
         st = state([player(30, "Julius", "Slaton", 1, "WR")])

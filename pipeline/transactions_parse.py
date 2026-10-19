@@ -106,7 +106,11 @@ def heading_week(h):
 # ------------------------------------------------------------------ rows ----
 POS = r"\((?P<pos>[A-Z]{1,5})\)"
 TEAM = r"(?P<team>[0-9A-Z]+)"
-TERMS = r"TO (?:AN? )?(?P<years>[0-9TILO]{1,2}) ?-? ?YEARS?,? ?(?P<amount>[$S]? ?[\d.,]+ ?[MK])(?: CONTRACT)?"
+# "TO 1 YEAR, $3.93M CONTRACT" (signing) and "TO A 4-YEAR, $120M EXTENSION" (re-sign, JR 2026-10-19)
+TERMS = r"TO (?:AN? )?(?P<years>[0-9TILO]{1,2}) ?-? ?YEARS?,? ?(?P<amount>[$S]? ?[\d.,]+ ?[MK])(?: CONTRACT| EXTENSION)?"
+# A roster move's verb. A row without one (draft-class notice and the like) isn't a move: it is skipped, not
+# stored (JR, 2026-10-19). A row with one that the grammar can't read is kept for review.
+MOVE_RE = re.compile(r"\b(?:RE ?- ?SIGN|SIGN|RELEASE|TRADE|ACQUIRE|EXTEN|WAIVE|CLAIM)")
 SIGN_RE = re.compile(rf"^{TEAM} SIGN(?:ED|S)? (?:(?:A )?FREE AGENT |FA )?{POS} (?P<name>.+?)(?: {TERMS})?$")
 RELEASE_RE = re.compile(rf"^{TEAM} RELEASE[DS]? {POS} (?P<name>.+)$")
 RESIGN_RE = re.compile(rf"^{TEAM} RE ?- ?SIGN(?:ED|S)? {POS} (?P<name>.+?)(?: {TERMS})?$")
@@ -139,8 +143,8 @@ def parse_row(text, teams=TEAM_NICKNAMES):
     if re.search(r"\bTRADE|\bACQUIRE", t):
         return _parse_trade(t, teams)
     rules = [("RE_SIGNED", RESIGN_RE), ("SIGNED", SIGN_RE), ("RELEASED", RELEASE_RE)]
-    if re.search(r"\bEXTEN(?:D|DED|DS|SION)\b", t):
-        rules = [("EXTENDED", EXTEND_RE)]
+    if re.search(r"\bEXTEN(?:D|DED|DS|SION)\b", t) and not re.search(r"\bRE ?- ?SIGN", t):
+        rules = [("EXTENDED", EXTEND_RE)]          # "RE-SIGN … EXTENSION" is a re-signing (JR's wording)
     for kind, rx in rules:
         m = rx.match(t)
         if not m:
@@ -161,6 +165,13 @@ def parse_row(text, teams=TEAM_NICKNAMES):
     d = _empty(t, first if first in teams else None)
     d["flags"].append("unparsed")
     return d
+
+
+def is_move(text):
+    """Does the row name a roster move: a move verb, or a '(POS) NAME' player group (so a verb OCR mangled still
+    counts)? Rows that don't are skipped by extraction's re-read and by the loader."""
+    t = fold(text)
+    return bool(MOVE_RE.search(t) or re.search(r"\([A-Z]{1,5}\) [A-Z]", t))
 
 
 def _parse_trade(t, teams):
@@ -276,5 +287,7 @@ def fix_heading_order(rows):
 def needs_reread(parsed, heading_flags=()):
     """Should this row go to Gemini (plan §2.4)? Grammar failure, heading out of order, missing length or
     amount on a signing, or a team that isn't one of the 32."""
+    if not is_move(parsed["text"]):
+        return False                                # not a move: skipped, never worth a Gemini call
     return (not parsed["ok"] or "heading_order" in heading_flags or "no_terms" in parsed["flags"]
             or "unknown_team" in parsed["flags"])

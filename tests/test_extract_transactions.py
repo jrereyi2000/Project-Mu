@@ -52,12 +52,21 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(rows[1]["flags"], ["gap?"])
 
     def test_identical_rows_survive(self):
-        # page 0: REL, REL ; page 1: REL, SIGN. The expected 1-row overlap is used, so the merged list keeps
-        # two RELs (a 2-row overlap would also need page 1 to start REL, REL, which it doesn't).
+        # page 0: REL, REL ; page 1: REL, SIGN. Only a 1-row overlap fits, so both RELs stay.
         rows = X.merge_pages([page(REL, REL), page(REL, SIGN, n=1)])
         self.assertEqual([r["text"] for r in rows], [REL, REL, SIGN])
+        # the highlight makes overlaps vary, so the longest that fits is taken by default ...
         rows = X.merge_pages([page(SIGN, REL, REL), page(REL, REL, n=1)])
+        self.assertEqual([r["text"] for r in rows], [SIGN, REL, REL])
+        # ... and an expected overlap still wins when one is given
+        rows = X.merge_pages([page(SIGN, REL, REL), page(REL, REL, n=1)], expected=1)
         self.assertEqual([r["text"] for r in rows], [SIGN, REL, REL, REL])
+
+    def test_highlight_only_page_is_a_full_overlap(self):
+        rows = X.merge_pages([page(REL, SIGN, "BEARS RELEASE (P) C D", "LIONS RELEASE (K) E F"),
+                              page(REL, SIGN, "BEARS RELEASE (P) C D", "LIONS RELEASE (K) E F", n=1),
+                              page("LIONS RELEASE (K) E F", "RAMS RELEASE (QB) G H", n=2)])
+        self.assertEqual(len(rows), 5)
 
     def test_ocr_variant_still_overlaps(self):
         rows = X.merge_pages([page(REL, SIGN), page(SIGN.replace("1 YEAR", "T YEAR"), "BEARS RELEASE (P) C D", n=1)])
@@ -92,7 +101,7 @@ class ExtractTest(unittest.TestCase):
             self.assertEqual((rows[2]["TYPE"], rows[2]["PARSE_OK"]), ("OTHER", "0"))
             self.assertEqual(rows[0]["WEEK"], "4")
             self.assertEqual(rows[0]["SEASON"], "2036")
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), 1)               # SOMETHING ODD isn't a move: no re-read
 
 
 if __name__ == "__main__":
