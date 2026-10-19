@@ -19,6 +19,7 @@ The project root is the Python import root. Every backend folder is a package, a
 Project Mu/
 ├── PROJECT_SPEC.md            # This document (system-level spec)
 ├── CLAUDE.md                  # Claude Code session rules (read this spec first; keep it updated)
+├── GEMINI.md                  # Same session rules for Gemini agents
 ├── NOTES.md                   # Feature documentation & engineering notes (draft prospects & OCR pipeline)
 ├── madden_capture.py          # Remote Play capture (macOS + chiaki-ng): drives Madden franchise menus with held keypresses,
 │                              #   checks every screen via Apple Vision OCR, screenshots Season Stats (NFL scope, all categories;
