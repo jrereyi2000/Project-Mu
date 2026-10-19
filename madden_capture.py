@@ -115,7 +115,7 @@ CHIAKI_HOST_IP = _env("CHIAKI_HOST_IP", "192.168.1.181")
 
 
 LIST_SCREENS = ("PLAYER_STATS", "TEAM_STATS", "SCHED_LIST", "GAME_STATS", "BOX_SCORE", "ROSTER_LIST", "INJURY_REPORT",
-                "DRAFT_BOARD", "HIGHLIGHTS", "DRAFT_RECAP")
+                "DRAFT_BOARD", "HIGHLIGHTS", "DRAFT_RECAP", "TEAM_SALARY")
 TILE_SCREENS = ("SCHED_TILES", "STATS_TILES")
 HUB_SCREENS = ("HUB", "HUB_LEAGUE", "HUB_ROSTER", "HUB_OPTIONS")
 
@@ -469,6 +469,8 @@ PLAYOFF_SCHED_TILES = ["PLAYOFF SCHEDULE", "TEAM SCHEDULE", "PLAYOFF PICTURE"]
 # Manage Roster tab's left-hand menu (mapped Oct 13; TRADE can show a lock icon)
 ROSTER_MENU = ["UPGRADE PLAYERS", "ADJUST LINEUP", "ROSTER", "CONTRACTS", "DEPTH CHART", "TEAM SALARY",
                "INJURY REPORT", "TRADE", "FREE AGENCY", "SCOUTING", "FORMATION SUBS", "AUTO SUBS", "TEAM SCHEMES"]
+# The Manage Roster items cross() may open (D7: read-only screens only, named one by one)
+ROSTER_CROSS_OK = ("ROSTER", "INJURY REPORT", "SCOUTING", "TEAM SALARY")
 # Options tab's left-hand menu
 OPTIONS_MENU = ["USER SETTINGS", "LEAGUE SETTINGS", "GAME OPTIONS", "XP RATE SLIDERS", "GAMEPLAY SLIDERS",
                 "USER TEAMS", "DEMAND RELEASE", "RETIRE"]
@@ -510,6 +512,13 @@ def classify(f):
     # Postgame highlights screen: VIEW PLAY / CHANGE QUARTER at bottom, TIME / PLAY in table
     if f.find("VIEW PLAY") and (f.find("CHANGE QUARTER") or (f.find("TIME") and f.find("RATING"))):
         return "HIGHLIGHTS"
+    # Manage Roster > Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md C3): its right edge shows
+    # SAVINGS and PENALTY too, so it is told apart by the cap strip over the table (36 CAP, 35 ROLLOVER,
+    # ADJUSTED CAP, CAP SPACE, SALARIES, CAP PENALTY, TOTAL SPEND, 37 ROOKIE RES), which every team shows.
+    # The hub (tabs showing) never counts, whatever tile it shows.
+    if ("ROLLOVER" in t and "CAP SPACE" in t and ("ROOKIE RES" in t or "TOTAL SPEND" in t)
+            and not ("GAMEDAY" in t and "COACH CENTRAL" in t)):
+        return "TEAM_SALARY"
     # Manage Roster > Roster (mapped Oct 13): also shows PLAYER NAME (sort chip) and VIEW
     # PLAYER CARD, so it must be told apart from Player Stats by its own columns. The button
     # bar blanks for a moment when it changes (rows with a contract action add SPEAK WITH
@@ -644,10 +653,12 @@ def cross(screen, frame=None):
         if not frame or not frame.bright("NO"):
             raise Abort("Quit prompt open but NO is not highlighted. Stopping. Please choose NO yourself.")
     elif screen == "HUB_ROSTER":
-        # Manage Roster's menu also holds Trade, Free Agency, Contracts: Cross only on Roster or Injury Report.
+        # Manage Roster's menu also holds Trade, Free Agency, Contracts: Cross only on the read-only screens
+        # (team management D7: TEAM SALARY is read-only; TRADE, FREE AGENCY, CONTRACTS stay refused).
         cur = (frame or Frame()).highlighted(ROSTER_MENU)
-        if cur not in ("ROSTER", "INJURY REPORT", "SCOUTING"):
-            raise Abort(f"Refusing Cross on the Manage Roster menu: {cur} is highlighted, not ROSTER, INJURY REPORT or SCOUTING")
+        if cur not in ROSTER_CROSS_OK:
+            raise Abort(f"Refusing Cross on the Manage Roster menu: {cur} is highlighted, not ROSTER, INJURY REPORT, "
+                        "SCOUTING or TEAM SALARY")
     elif screen == "SCOUTING":
         cur = (frame or Frame()).highlighted(SCOUTING_MENU)
         if cur != "PROSPECTS":
@@ -2819,6 +2830,206 @@ def run_injuries(out, target_teams=None):
     return len(seen)
 
 
+# ------------------------------------------------------- team salary ----
+# Manage Roster > Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md; master plan §3.1):
+#  * 11 rows a page. NAME/POS scroll away when the table moves right, so every page is captured at
+#    both edges at the same row position (capture_wide_list): left edge = NAME header showing,
+#    right edge = NO TRADE CLAUSE.
+#  * L2 cycles teams in place, like the Injury Report. The cap strip (36 CAP ... 37 ROOKIE RES) is
+#    in every screenshot; extract.py reads it.
+#  * Read-only. Cross on the table itself is refused (it would open a contract action).
+SALARY_ROWS = 11
+SALARY_MIN_PAGES = 3          # 53 rows need >= 5 pages; fewer than 3 means the list stopped early
+
+
+def open_team_salary():
+    f, s = look()
+    if s == "TEAM_SALARY":
+        return f
+    f, s = go_hub()
+    if s != "HUB_ROSTER":
+        log("Switching to MANAGE ROSTER tab")
+        move_to(f, HUB_TABS, "MANAGE ROSTER", "l1", "r1", "hub tab")
+        f, s = wait_for(["HUB_ROSTER"])
+    f = move_to(f, ROSTER_MENU, "TEAM SALARY", "up", "down", "Manage Roster menu item")
+    return cross_into("HUB_ROSTER", ["TEAM_SALARY"], timeout=8)[0]
+
+
+def salary_team(f):
+    """The team nickname on Team Salary. Until C2 is mapped this uses the Injury Report geometry
+    (top-left), falling back to any team name in the top 30% of the screen."""
+    return injury_team(f)
+
+
+def salary_at_edge(f, direction):
+    """Right edge: the last column, NO TRADE CLAUSE (OCR may cut it to NO TRADE), is showing.
+    Left edge: the NAME column header is visible (it scrolls away moving right)."""
+    if direction == "right":
+        return "NO TRADE" in f.text
+    return f.find("NAME") is not None
+
+
+def salary_traverse(direction, burst=6, max_rounds=12):
+    """traverse() with Team Salary's edges; Madden doesn't wrap, so overshooting is harmless."""
+    for _ in range(max_rounds):
+        f = Frame()
+        if salary_at_edge(f, direction):
+            return f
+        press(direction, hold=0.1, wait=0.5, times=burst)
+    f = Frame()
+    if salary_at_edge(f, direction):
+        return f
+    path = save_debug(f, f"salary_never_reached_{direction}_edge")
+    raise Abort(f"Never reached the {direction} edge of Team Salary (frame: {path})")
+
+
+def salary_to_top(max_pages=10):
+    """Put the list at its top row and left edge (C5: L2 may keep the old position)."""
+    salary_traverse("left")
+    prev = None
+    for _ in range(max_pages):
+        press("up", hold=0.07, wait=LIST_WAIT, times=SALARY_ROWS)
+        f = Frame()
+        sig = table_sig(f.path)
+        if prev is not None and same_table(prev, sig):
+            break
+        prev = sig
+    salary_traverse("left")
+
+
+def capture_team_salary(out, index, team):
+    """One team's Team Salary pages into contracts/<NN>_<team>/salary[_right]_NNN.png. Returns the page count."""
+    folder = os.path.join(out, "contracts", f"{index:02d}_{team.lower()}")
+    salary_to_top()
+    pages = capture_wide_list(folder, "salary", rows_per_page=SALARY_ROWS, traverse=salary_traverse,
+                              confirm_end=True)
+    if pages < SALARY_MIN_PAGES:
+        log(f"  WARNING: {team} Team Salary has only {pages} pages (53 rows need at least 5)")
+    return pages
+
+
+def read_done(path):
+    """done.txt lines 'NN TEAM' -> {TEAM: NN}."""
+    done = {}
+    if os.path.exists(path):
+        for line in open(path):
+            parts = line.split()
+            if len(parts) >= 2 and parts[0].isdigit() and parts[1].upper() in TEAMS:
+                done[parts[1].upper()] = int(parts[0])
+    return done
+
+
+def contract_targets(cdir, target_teams=None, resume=False):
+    """The teams this contracts run captures. The first run writes contracts/targets.txt; a resume
+    without names reads it back, so a resumed partial re-scan can't widen to 32 teams."""
+    tpath = os.path.join(cdir, "targets.txt")
+    saved = None
+    if os.path.exists(tpath):
+        saved = {t.strip().upper() for t in open(tpath) if t.strip()}
+    if target_teams:
+        want = {t.strip().upper() for t in target_teams if t.strip()}
+        bad = sorted(want - TEAMS)
+        if bad:
+            raise Abort(f"Unknown team names: {bad}")
+    elif saved is not None and resume:
+        want = saved
+    else:
+        want = set(TEAMS)
+    if saved is not None and saved != want:
+        raise Abort(f"{tpath} lists {sorted(saved)}, this run asks for {sorted(want)}; use a new run folder")
+    if saved is None:
+        os.makedirs(cdir, exist_ok=True)
+        with open(tpath, "w") as fh:
+            fh.write("".join(f"{t}\n" for t in sorted(want)))
+    return want
+
+
+def run_contracts(out, target_teams=None, resume=False):
+    """Team Salary for every target team (all 32 by default), cycling teams with L2 from the one the
+    screen opens on. contracts/done.txt ('NN TEAM') lists a team only once its pages are complete;
+    folders of unfinished teams are removed on start and after every failure. Stops if L2 comes back
+    round to the first team before every target is done."""
+    import shutil
+    log("== Team Salary (contracts) ==")
+    cdir = os.path.join(out, "contracts")
+    os.makedirs(cdir, exist_ok=True)
+    done_path = os.path.join(cdir, "done.txt")
+    targets = contract_targets(cdir, target_teams, resume)
+    done = read_done(done_path)
+    if targets <= set(done):
+        log(f"All {len(targets)} target teams already captured ({done_path}). Skipping.")
+        return len(done)
+
+    def clear_partial():
+        for d in glob.glob(os.path.join(cdir, "[0-9]*_*")):
+            if os.path.isdir(d) and os.path.basename(d).split("_", 1)[1].upper() not in done:
+                shutil.rmtree(d)
+
+    def reopen(e):
+        clear_partial()
+        recover_stream(e)                       # re-raises unless the stream was frozen/crashed and restarted
+        return salary_team(open_team_salary())
+
+    clear_partial()
+    first = salary_team(open_team_salary())
+    if not first:
+        raise Abort("Can't read the team on the Team Salary screen")
+    log(f"Starting at {first}; {len(targets - set(done))} of {len(targets)} target teams to capture")
+    team, visited = first, 0
+    while True:
+        if team in targets and team not in done:
+            idx = max(list(done.values()) + [0]) + 1
+            retries_left = 1
+            while True:
+                try:
+                    pages = capture_team_salary(out, idx, team)
+                    break
+                except Abort as e:
+                    clear_partial()
+                    if stream_frozen():
+                        team = reopen(e)
+                        idx = max(list(done.values()) + [0]) + 1
+                        if team in done or team not in targets:
+                            pages = None
+                            break
+                        continue
+                    if retries_left > 0:
+                        retries_left -= 1
+                        log(f"  {team} failed ({e}); stream not frozen, retrying the team from the top")
+                        continue
+                    raise
+            if pages is not None:
+                done[team] = idx
+                with open(done_path, "a") as dh:
+                    dh.write(f"{idx} {team}\n")
+                log(f"  [{len(targets & set(done))}/{len(targets)}] {team}: {pages} pages")
+        elif team in done:
+            log(f"  {team} (already captured)")
+        visited += 1
+        if targets <= set(done):
+            break
+        nxt = None
+        for attempt in range(1, 4):
+            press("l2", hold=0.15, wait=1.2)
+            t = salary_team(Frame())
+            if t and t != team:
+                nxt = t
+                break
+            log(f"  L2 didn't advance the team (attempt {attempt}/3, still on {team})")
+            time.sleep(0.5)
+        if not nxt:
+            if stream_frozen():
+                team = reopen(Abort("Stream frozen on Team Salary"))
+                continue
+            raise Abort(f"Could not advance the team from {team} after 3 tries (stream is not frozen)")
+        team = nxt
+        if team == first and visited > 1:
+            missing = sorted(targets - set(done))
+            raise Abort(f"Wrapped back to {first} with {len(missing)} target teams missing: {missing}")
+    log(f"Captured Team Salary for {len(targets)} teams")
+    return len(done)
+
+
 # --------------------------------------------------------------- roster ----
 # Manage Roster > Roster (mapped Oct 13 with --step / --probe-l2):
 #  * The card on the right shows the highlighted row's player; Down moves the highlight one
@@ -3536,17 +3747,19 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings"],
-                    help="roster, season-schedule, prospects, season, postgame, draft-results, and team-overalls are never part of the default run")
+    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings", "contracts"],
+                    help="roster, season-schedule, prospects, season, postgame, draft-results, team-overalls and contracts are never part of the default run")
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
     ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
+    ap.add_argument("--team-names", metavar="NAMES", help="--only contracts: only these teams, comma-separated "
+                    "nicknames (e.g. PANTHERS,SAINTS); a resume without it keeps the run's contracts/targets.txt")
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
     ap.add_argument("--all-prospects", action="store_true", help="--only prospects: capture the entire draft board until the end")
     ap.add_argument("--paged", action="store_true", default=True, help="--only draft-results: scroll rows_per_page (default 10) at a time page-by-page through all rounds (default)")
     ap.add_argument("--row-by-row", action="store_true", help="--only draft-results: capture row-by-row reading player cards instead of paged")
     ap.add_argument("--rows-per-page", type=int, default=10, help="--only draft-results (paged): rows to scroll down between captures (default 10)")
     ap.add_argument("--draft-picks", type=int, default=224, help="--only draft-results: maximum picks to capture (default 224 for all 7 rounds, 0 for all)")
-    ap.add_argument("--resume", metavar="RUN", help="continue a stopped run in captures/RUN (stats, roster, games, injuries, season); "
+    ap.add_argument("--resume", metavar="RUN", help="continue a stopped run in captures/RUN (stats, roster, games, injuries, contracts, season); "
                     "--scope: write into that (weekly) run's folder")
     ap.add_argument("--week", help='e.g. "SEASON WEEK 12" (default: the week before the current one)')
     ap.add_argument("--all-rows", action="store_true", help="don't stop stats lists at all-zero rows")
@@ -3556,6 +3769,14 @@ def main():
     ap.add_argument("--wait", type=float, default=1.5, help="--step: seconds to wait after the press")
     ap.add_argument("--allow-cross", action="store_true", help="--step cross: JR has OK'd Cross on this screen")
     a = ap.parse_args()
+    team_names = None
+    if a.team_names:
+        if a.only != "contracts":
+            sys.exit("--team-names needs --only contracts")
+        team_names = [norm(t) for t in a.team_names.split(",") if t.strip()]
+        bad = sorted(set(team_names) - TEAMS)
+        if bad:
+            sys.exit(f"Unknown team names: {bad} (use nicknames like PANTHERS)")
 
     if a.connect:
         try:
@@ -3592,6 +3813,9 @@ def main():
                 print("Chips (scope, category):", chip_labels(f))
             if s == "SCHED_LIST":
                 print("Week:", week_label(f))
+            if s == "TEAM_SALARY":
+                print("Team:", salary_team(f), "| left edge:", salary_at_edge(f, "left"),
+                      "| right edge:", salary_at_edge(f, "right"))
             print("Text:", f.text[:600])
             return
         if a.step:
@@ -3654,6 +3878,21 @@ def main():
                     return run_roster(out, a.teams, resume=bool(a.resume) or tries[0] > 1 or os.path.exists(roster_done))
                 run_mode("the rosters", rosters)
 
+            if a.only == "season":
+                log("Returning to the hub before contracts")
+                go_hub()
+        if a.only in ("season", "contracts"):
+            # Team Salary right after rosters (team management step 1), so every contract row matches a player
+            contracts_done = read_done(os.path.join(out, "contracts", "done.txt"))
+            if a.only == "season" and bool(a.resume) and len(contracts_done) >= 32:
+                log("All 32 team salaries already captured. Skipping.")
+            else:
+                ctries = [0]
+
+                def contracts():
+                    ctries[0] += 1                  # after a stream restart, continue the same run
+                    return run_contracts(out, team_names, resume=bool(a.resume) or ctries[0] > 1)
+                run_mode("team salaries", contracts)
             if a.only == "season":
                 log("Returning to the hub before team overalls")
                 go_hub()
