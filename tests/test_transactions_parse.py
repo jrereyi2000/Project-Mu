@@ -138,3 +138,22 @@ class HeadingOrderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConsoleWordingTest(unittest.TestCase):
+    """JR's console answers (2026-10-19)."""
+    def test_resign_extension_wording(self):
+        d = T.parse_row("SAINTS RE-SIGN (QB) TOM BRADY TO A 4-YEAR, $120M EXTENSION")
+        self.assertTrue(d["ok"], d)
+        self.assertEqual((d["type"], d["team"], d["pos"], d["name"], d["years"], d["amount_text"]),
+                         ("RE_SIGNED", "SAINTS", "QB", "TOM BRADY", 4, "120M"))
+
+    def test_non_moves_are_skipped(self):
+        self.assertFalse(T.is_move("THE DRAFT CLASS HAS BEEN EDITED BY THE COMMISSIONER"))
+        self.assertTrue(T.is_move("JAGUARS RELEASE (WR) JULIUS SLATON"))
+        self.assertTrue(T.is_move("JAGUARS SlGNED FREE AGENT (WR) DEVONTA TAYLOR"))   # OCR-mangled verb, player group
+        self.assertFalse(T.needs_reread(T.parse_row("THE DRAFT CLASS HAS BEEN EDITED")))
+
+    def test_offseason_heading_is_the_finished_season(self):
+        self.assertEqual(T.heading_year("2036 OFFSEASON - RE-SIGN PLAYERS"), 2036)
+        self.assertGreater(T.heading_ordinal("2036 OFFSEASON - RE-SIGN PLAYERS"), T.heading_ordinal("2036 POST SEASON - SUPER BOWL"))

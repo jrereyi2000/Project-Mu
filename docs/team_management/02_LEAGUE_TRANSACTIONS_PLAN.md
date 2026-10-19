@@ -36,19 +36,19 @@ Written 2026-10-19 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) s
 
 Confirmed (master §3.3): the screen is under League > LEAGUE TRANSACTIONS. It's a newest-first list, with the L2 chip on NFL and the R2 type filter on ALL. There is no week filter. Each row has a heading `2036 SEASON - WEEK 4`, and about 4 rows show at a time. Example lines are `… SIGNED FREE AGENT (WR) … TO 1 YEAR, $3.93M CONTRACT` and `… RELEASE (WR) …`. CPU free-agent deals are 1-year only, and re-signings appear in the list.
 
-Still to check (Phase 2 begins with a `--test` / `--step` session):
+JR's answers (2026-10-19), and what the code does with them:
 
-1. **Screen anchors for the classifier:** the exact title, the chip texts (`NFL`, `ALL`) and the button-bar labels. Is there a Cross action on a row (a player card)? Whatever it is, the capture never presses it.
-2. **Opening state:** does the screen open on the NFL chip and the ALL filter, or does it remember the user team or the last filter? If not NFL/ALL, find the L2/R2 press counts to get back there and how the chip reads.
-3. **Scrolling:** does Down move a highlight one row (like the Roster list) or scroll the list? Where does the highlight stick before the list scrolls? Does R1/L1 or a held Down page faster (this matters for the first-run backfill and for resume)? How long does a page take to settle after a burst?
-4. **Row layout:** is the body line ever wrapped onto two lines (long names, trades)? Where are the heading and body relative to the logo and headshot (needed for crop boxes)?
-5. **Headings outside the regular season:** preseason, postseason, offseason stages (re-sign window, free agency, draft) and the year shown in each. For example, is an offseason row headed `2036 …` or `2037 …`? This sets the ordinal and the `season` that offseason rows get.
-6. **Week semantics:** does a `WEEK N` heading mean the move happened while Madden's current week was N (that is, before week N's game)? And are JR's own trades, made at current week N, headed `WEEK N`? Phase 4 assumes yes: the player plays week N for his new team.
-7. **Trade wording (unverified):** is it one row per player or one row per trade? Which team is named first? How are picks written ("2037 1ST ROUND PICK")? Is there a "FOR …" clause? Make one test trade between two CPU teams through User Teams (D3) and read the rows.
-8. **Re-sign / extension wording:** for example `RE-SIGNED (QB) … TO 4 YEARS, $120M CONTRACT`. Is "EXTENSION" a separate verb? Does the amount show for re-signings?
-9. **Other row kinds:** release to IR or practice squad, retirement, the draft-class notice (S3), waiver claims, and rookie signings after the draft (possibly 224 rows a season).
-10. **How deep the list goes:** does it keep the whole league history, or only this season (or a cap)? This sets how long the first-run backfill is and whether last season's rows exist.
-11. **Amount format:** `$3.93M`, `$850K`, `$1.2M`. Is the comma after YEAR always there?
+1. **Screen anchors:** no screen title. The L2 chip reads NFL, the R2 chip ALL, and Circle goes back. Rows have no Cross action. → `classify()` takes a heading plus either a move verb or the NFL and ALL chips; the hub never counts.
+2. **Opening state:** it opens on NFL / ALL. → `open_transactions()` only checks the chips.
+3. **Scrolling:** Down moves a highlight, like the other lists, and 4 rows show. There's no faster way to page, and the settle time isn't known. → 3 presses a page with the usual `LIST_WAIT`. A batch that only moves the highlight reads as a repeat (same text) and gets one more batch (`confirm_end`). Pages are lined up on the longest overlap that fits, because the overlap varies from 1 to 4 rows (`merge_pages`).
+4. **Row layout:** no wrapping; the heading (the week) sits above the text. → matches `assemble_rows`.
+5. **Headings outside the regular season:** the offseason is scanned too. Offseason rows are believed to show the year of the season just finished. → already the assumption: `heading_year` = that season, and offseason orders after the postseason. The offseason stages' order among themselves is unknown, so all of them share one ordinal; a `--since` inside the offseason re-reads the offseason part of the list, which is short.
+6. **Week semantics:** `WEEK N` is the week the move happened. → the effects use it (a release sets `released_week = N`).
+7. **Trades:** open. CPU trades are off, so the only trade rows will be JR's own, made for approved GM proposals. JR asked whether the scan can skip them. The code still reads them: they're what moves the player and his contract, and what confirms the proposal was executed as approved (master §2.4). Their wording is still unverified.
+8. **Re-sign wording:** `TEAM RE-SIGN (POS) FULL NAME TO A N-YEAR, $AMT EXTENSION`. → parsed as `RE_SIGNED` with years and amount (an "EXTENSION" after RE-SIGN doesn't make it `EXTENDED`).
+9. **Other row kinds:** skip the rows we don't process. → a row with no move verb and no `(POS) NAME` group (`is_move`) is neither re-read by Gemini nor stored. The loader lists those rows under `skipped_not_moves`. A row that looks like a move but can't be parsed is kept as `OTHER` for review.
+10. **List depth:** in season the list goes back to the start of the season; in the offseason, to the start of the offseason. → a first-run backfill covers one season at most.
+11. **Amount format:** the wording above is consistent.
 
 ---
 

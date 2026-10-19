@@ -15,8 +15,8 @@ from earlier seasons are stored with applied = false, as history only.
 import csv, json, os
 
 from pipeline.capture_matching import db_player_name, full_key, name_case, name_key
-from pipeline.transactions_parse import (assign_seq, clean_heading, heading_ordinal, heading_week, heading_year, legs,
-                                         parse_row, row_key)
+from pipeline.transactions_parse import (assign_seq, clean_heading, heading_ordinal, heading_week, heading_year, is_move,
+                                         legs, parse_row, row_key)
 
 OFFSEASON_WEEK = 24          # docs/EDITORIAL_MATRIX.md: week 24 is the offseason (SB = 23)
 
@@ -52,15 +52,21 @@ def read_meta(folder):
         return {}
 
 
-def expand(rows, meta=None):
+def expand(rows, meta=None, skipped=None):
     """List rows -> transaction legs (newest first) with their key fields. A scan that stopped at --since (didn't
     reach the end of the list) read its oldest heading group only partly, which would shift that group's seq, so
-    every row older than `since` is left out (it was loaded by an earlier scan)."""
+    every row older than `since` is left out (it was loaded by an earlier scan). Rows that aren't roster moves
+    (transactions_parse.is_move: the draft-class notice and the like) are skipped, not stored (JR, 2026-10-19);
+    their texts go into `skipped` when a list is passed."""
     meta = meta or {}
     cut = heading_ordinal(meta["since"]) if meta.get("since") and not meta.get("reached_end") else None
     out = []
     for r in rows:
         if cut is not None and (heading_ordinal(r["heading"]) or cut) < cut:
+            continue
+        if not is_move(r["text"]):
+            if skipped is not None:
+                skipped.append(r["text"])
             continue
         p = parse_row(r["text"])
         base = row_key(p, r["text"])
@@ -546,12 +552,14 @@ def load_transactions(cur, folder, season, report, apply_from=None, capture_id=N
     """transactions.csv in `folder` -> transactions (+ effects). Adds a 'transactions' dict to report. Raises
     TransactionsError (nothing written) on a failed check. Returns the number of new rows."""
     from pipeline.money import parse_money
-    entries = expand(read_rows(folder), read_meta(folder))
+    skipped = []
+    entries = expand(read_rows(folder), read_meta(folder), skipped)
     years = {heading_year(e["heading"]) for e in entries} - {None}
     state = read_state(cur, season, years, apply_from)
     plan, rep = plan_effects(entries, state, parse_money)
     done = execute(cur, plan, season, capture_id, rep)
     rep["apply_from"] = state["apply_from"]
     gm_hook(cur, done, rep)
+    rep["skipped_not_moves"] = skipped
     report["transactions"] = rep
     return len(done)
