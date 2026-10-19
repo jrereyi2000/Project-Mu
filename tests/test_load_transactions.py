@@ -1,6 +1,5 @@
 """pipeline/load_transactions.py: the pure effects planner (no database)."""
 import os, tempfile, unittest
-from unittest import mock
 
 from pipeline import load_transactions as L
 from pipeline.money import parse_money
@@ -74,7 +73,7 @@ class SignTest(unittest.TestCase):
         self.assertEqual(plan[0]["txn"]["player"], 20)
 
 
-class ReleaseTradeTest(unittest.TestCase):
+class ReleaseResignTest(unittest.TestCase):
     def test_release_keeps_team(self):
         st = state([player(30, "Julius", "Slaton", 1, "WR")], contracts={30: contract(500, 1)})
         plan, rep = L.plan_effects(entries((W4, "JAGUARS RELEASE (WR) JULIUS SLATON")), st, parse_money)
@@ -84,22 +83,6 @@ class ReleaseTradeTest(unittest.TestCase):
         # his 2036 cap hit leaves the books; the stored cut penalty (2) stays as dead money
         self.assertEqual(ops(plan, "cap_delta"), [{"op": "cap_delta", "team_id": 1, "salaries": -1_000_000, "cap_penalty": 2}])
         self.assertEqual(plan[0]["txn"]["from_team_id"], 1)
-
-    def test_trade_copies_contract(self):
-        st = state([player(40, "John", "Doe", 2, "WR")], contracts={40: contract(600, 2)})
-        plan, rep = L.plan_effects(entries((W4, "BEARS TRADED (WR) JOHN DOE TO PACKERS FOR 2037 2ND ROUND PICK")),
-                                   st, parse_money)
-        self.assertEqual(len(plan), 2)                        # player leg + pick leg
-        self.assertEqual(ops(plan, "contract_status")[0]["status"], "TRADED")
-        ins = ops(plan, "contract_insert")[0]
-        self.assertEqual((ins["team_id"], ins["length"], ins["years"], ins["bonus"]),
-                         (3, 2, {2036: 1_000_000, 2037: 1_000_000, 2038: 0, 2039: 0, 2040: 0}, 100))
-        self.assertEqual(ops(plan, "move")[0]["team_id"], 3)
-        self.assertEqual([(o["team_id"], o["salaries"]) for o in ops(plan, "cap_delta")], [(2, -1_000_000), (3, 1_000_000)])
-        groups = {e["txn"]["trade_group"] for e in plan}
-        self.assertEqual(groups, {"2036:2036 SEASON - WEEK 4:BEARS-PACKERS:1"})
-        pick = [e["txn"] for e in plan if e["txn"]["player"] is None][0]
-        self.assertEqual((pick["player_name"], pick["from_team_id"], pick["to_team_id"]), ("2037 2ND ROUND PICK", 3, 2))
 
     def test_sign_then_release_same_week_oldest_first(self):
         st = state([player(10, "Devonta", "Taylor", 2, "WR", released=2)], contracts={})
@@ -128,15 +111,6 @@ class ReleaseTradeTest(unittest.TestCase):
         plan, _ = L.plan_effects(entries((W4, "SAINTS RE-SIGNED (QB) TOM BRADY TO 2 YEARS, $10M CONTRACT")), st, parse_money)
         self.assertEqual(ops(plan, "contract_extend")[0]["hits"], {2037: 4_000_000, 2038: 6_000_000})
 
-    def test_trade_keeps_projected_years(self):
-        c = contract(600, 2)
-        c["projected"] = [2038]
-        c["years"][2038] = 5
-        st = state([player(40, "John", "Doe", 2, "WR")], contracts={40: c})
-        plan, _ = L.plan_effects(entries((W4, "BEARS TRADED (WR) JOHN DOE TO PACKERS")), st, parse_money)
-        self.assertEqual(ops(plan, "contract_insert")[0]["projected"], [2038])
-
-
 class SharesTest(unittest.TestCase):
     def test_even_split_without_enough_scans(self):
         self.assertEqual(L.year_shares(3, {}), [1 / 3] * 3)
@@ -158,7 +132,21 @@ class SharesTest(unittest.TestCase):
 
 
 class KeysAndCutoffTest(unittest.TestCase):
-    ROWS = ((W4, "JAGUARS RELEASE (WR) JULIUS SLATON"), (W3, "THE DRAFT CLASS HAS BEEN EDITED"))
+    ROWS = ((W4, "JAGUARS RELEASE (WR) JULIUS SLATON"), (W3, "JAGUARS RELEASE (K) X Y"))
+
+    def test_trades_skipped(self):
+        trades = []
+        es = L.expand([{"heading": W4, "text": "BEARS TRADED (WR) JOHN DOE TO PACKERS", "flags": []},
+                       {"heading": W4, "text": "JAGUARS RELEASE (WR) JULIUS SLATON", "flags": []}], None, None, trades)
+        self.assertEqual([e["leg"]["type"] for e in es], ["RELEASED"])
+        self.assertEqual(trades, ["BEARS TRADED (WR) JOHN DOE TO PACKERS"])
+
+    def test_non_moves_skipped(self):
+        skipped = []
+        es = L.expand([{"heading": W4, "text": "THE DRAFT CLASS HAS BEEN EDITED", "flags": []},
+                       {"heading": W4, "text": "JAGUARS RELEASE (WR) JULIUS SLATON", "flags": []}], None, skipped)
+        self.assertEqual([e["text"] for e in es], ["JAGUARS RELEASE (WR) JULIUS SLATON"])
+        self.assertEqual(skipped, ["THE DRAFT CLASS HAS BEEN EDITED"])
 
     def test_loading_twice_gives_no_ops(self):
         st = state([player(30, "Julius", "Slaton", 1, "WR")])
@@ -201,28 +189,7 @@ class KeysAndCutoffTest(unittest.TestCase):
         self.assertEqual(len(es), 2)
 
 
-class HookTest(unittest.TestCase):
-    def _done(self):
-        return [(1, {"type": "TRADED", "applied": True, "trade_group": "g1"}),
-                (2, {"type": "TRADED", "applied": True, "trade_group": "g1"})]
-
-    def test_hook_skipped_without_table(self):
-        cur = mock.Mock()
-        cur.fetchone.return_value = (False,)
-        rep = {}
-        L.gm_hook(cur, self._done(), rep)
-        self.assertNotIn("gm_proposals_matched", rep)
-
-    def test_hook_called_when_present(self):
-        cur = mock.Mock()
-        cur.fetchone.return_value = (True,)
-        fake = mock.Mock(match_executed_trade=mock.Mock(return_value=77))
-        with mock.patch.dict("sys.modules", {"pipeline.gm_proposals": fake}):
-            rep = {}
-            L.gm_hook(cur, self._done(), rep)
-        self.assertEqual(rep["gm_proposals_matched"], {"g1": 77})
-        fake.match_executed_trade.assert_called_once()
-
+class ReadTest(unittest.TestCase):
     def test_read_rows_and_effective_week(self):
         with tempfile.TemporaryDirectory() as d:
             with open(os.path.join(d, "transactions.csv"), "w") as fh:

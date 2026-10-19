@@ -522,9 +522,10 @@ def classify(f):
     if ("ROLLOVER" in t and "CAP SPACE" in t and ("ROOKIE RES" in t or "TOTAL SPEND" in t)
             and not ("GAMEDAY" in t and "COACH CENTRAL" in t)):
         return "TEAM_SALARY"
-    # League > League Transactions (team management step 2; title and chips unverified, plan §1 fact 1): a list
-    # of rows headed "2036 SEASON - WEEK 4" with SIGNED / RELEASE / TRADE text. The hub never counts.
-    if (TXN_HEADING_RE.search(t) and ("TRANSACTIONS" in t or re.search(r"\b(SIGN|RELEASE|TRADE)", t))
+    # League > League Transactions (team management step 2; JR, 2026-10-19: no screen title, L2 chip NFL, R2 chip
+    # ALL, Circle back, no Cross on rows): rows headed "2036 SEASON - WEEK 4" over SIGNED / RELEASE / RE-SIGN text.
+    # The hub never counts.
+    if (TXN_HEADING_RE.search(t) and (re.search(r"\b(SIGN|RELEASE|TRADE|RE ?- ?SIGN)", t) or (f.find("NFL") and f.find("ALL")))
             and not ("GAMEDAY" in t and "COACH CENTRAL" in t)):
         return "LEAGUE_TRANSACTIONS"
     # Manage Roster > Roster (mapped Oct 13): also shows PLAYER NAME (sort chip) and VIEW
@@ -3064,10 +3065,11 @@ def run_contracts(out, target_teams=None, resume=False):
 
 # --------------------------------------------------------- transactions ----
 # League > League Transactions (docs/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, master plan §3.3): a
-# newest-first list, L2 chip NFL, R2 type filter ALL, no week filter, about 4 rows on screen, each a heading
-# ("2036 SEASON - WEEK 4") over one line of text. Read-only: Cross on it is refused (D7). Unverified until
-# JR's --test / --step session (plan §1): the title, the opening chips, whether Down moves a highlight or
-# scrolls, and row wrapping; TXN_ROWS_PER_PAGE assumes ~4 rows show, so pages overlap by one row.
+# newest-first list, L2 chip NFL, R2 type filter ALL, no week filter, no title. Confirmed by JR (2026-10-19): it
+# opens on NFL / ALL; 4 rows show, each a heading ("2036 SEASON - WEEK 4") over one unwrapped line of text; Down
+# moves a highlight like the other lists (so a batch of presses may only move it: capture_list's text check
+# treats that page as a repeat and presses again); no faster paging; rows have no Cross action. In season the
+# list goes back to the start of the season. Read-only: Cross on it is refused (D7).
 TXN_HEADING_RE = re.compile(r"\b[0-9TILO]{4} ?(?:PRE ?|POST ?|OFF ?)?SEASON ?[-–—:]")
 TXN_ROWS_PER_PAGE = 3
 TXN_MAX_PAGES = 400            # a first-run backfill can be long (list depth: fact 10)

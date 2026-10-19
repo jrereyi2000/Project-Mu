@@ -1021,6 +1021,9 @@ class LeagueTransactionsTest(unittest.TestCase):
 
     def test_screen_vs_hub(self):
         self.assertEqual(mc.classify(self.SCREEN), "LEAGUE_TRANSACTIONS")
+        # no title on screen (JR, 2026-10-19): the chips and a heading are enough
+        self.assertEqual(mc.classify(_Frame("NFL", "R2", "ALL", "2036 SEASON - WEEK 4", "SAINTS RE-SIGN (QB) TOM BRADY",
+                                            "2036 SEASON - WEEK 3", "BACK")), "LEAGUE_TRANSACTIONS")
         self.assertEqual(mc.classify(self.HUB), "HUB_LEAGUE")
 
     def test_league_menu_cross_by_name(self):
