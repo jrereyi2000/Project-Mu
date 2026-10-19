@@ -106,7 +106,7 @@ The work is already in the uncommitted diff of `engines/fantasy_projection_engin
 
 ## Phase 4: AI lineup optimizer (G1) — DONE (2026-10-19)
 
-> Landed as planned. The CLI is `--league N | --all-active`, `--week`, `--fill-ir-spots`, `--dry-run`. `fill_empty_starter_slots` and the slot table moved into this module, and the trade engine and API import them from here. The update-lineup endpoint now uses `refresh_matchup_projections`. A one-week injury is benched, not IR'd (D1). Dry run for week 4: 16 AI teams adjusted and 9 players moved to IR across leagues 1 and 15. A second run makes no changes.
+> Landed as planned. The CLI is `--league N | --all-active`, `--week`, `--dry-run` (`--fill-ir-spots` was later replaced by the waiver run, Phase 7). `fill_empty_starter_slots` and the slot table moved into this module, and the trade engine and API import them from here. The update-lineup endpoint now uses `refresh_matchup_projections`. A one-week injury is benched, not IR'd (D1). Dry run for week 4: 16 AI teams adjusted and 9 players moved to IR across leagues 1 and 15. A second run makes no changes.
 
 **New module `engines/napper_lineup_engine.py`.**
 
@@ -190,6 +190,19 @@ run_napper_week(season, week=None):
   - the trade engine CLI flags
 - Mark the goals done in `NAPPER_UPDATES.md`, or delete that file once all phases ship.
 - Commit each phase on its own, merging into `main` per CLAUDE.md. Stage only this work's hunks, since the shared checkout has unrelated uncommitted Napper edits.
+
+---
+
+## Phase 7: Waivers and free agency — DONE (2026-10-19)
+
+Designed with the user after Phase 5 (they declined to auto-sign a QB for Burden' Bridges until this existed). It replaced the lineup engine's free-agent signing (always-on for unfillable slots, plus `--fill-ir-spots`).
+
+- **Model:** a weekly waiver run (`engines/napper_waiver_engine.py`) in `run_league_week` after the first lineup pass, from week 2. Players dropped since the last run are on waivers and can only be claimed. Every other unrostered player is a free agent the user can add instantly. AI managers act only in the run.
+- **Priority:** reverse standings, the same order every round, one add per team per round.
+- **AI pickups:** NEED (a slot nobody can fill; always), STREAM (bye/out starters), UPGRADE (open spots, or ROS swaps past a 1.15× + 1 margin). STREAM + UPGRADE are capped at 2 a week (Waiver Hawks 3). Drops follow D3.
+- **Roster limit:** active roster (not IR) ≤ starters + BN. It's enforced on adds, queued claims and IR activation.
+- **UI:** the Players tab shows the roster count, waiver priority, a WAIVERS badge with a Claim button, a drop picker, pending claims (cancel) and the last run's results.
+- Schema: `db/migrations/2026_12_05_napper_waivers.sql`. Details are in `PROJECT_SPEC.md` §3.4b / §4.4b.
 
 ---
 

@@ -4,7 +4,7 @@ Provides endpoints for the Napper interactive fantasy platform:
 - Profiles & Leagues list (3 reference leagues with accurate scores and records)
 - Matchups supporting week switching (weeks 1 to 17) with ordered starter and bench slots
 - Atomic Lineup validation & starter swaps with matchup projection recalculation
-- Waivers with claim/drop execution and chat announcements
+- Free agency (instant adds), waiver claims queued for the weekly waiver run, drops, roster limit
 - Proactive Trades Hub with accept/reject responses, roster swaps, and chat announcements
 - League Chat & Automated Bot Awards stream
 """
@@ -17,9 +17,12 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import psycopg
-from psycopg.rows import dict_row
+from psycopg.rows import dict_row, tuple_row
 from engines import napper_draft_engine
-from engines.napper_lineup_engine import fill_empty_starter_slots, refresh_matchup_projections
+from engines.napper_lineup_engine import (
+    _roster_format, add_player, fill_empty_starter_slots, refresh_matchup_projections, release_player,
+    roster_capacity,
+)
 from engines.napper_injuries import IR_MIN_WEEKS, get_injury_map, is_ir_eligible
 from engines.fantasy_projection_engine import DEF_POINTS_SQL, DEF_STATS_JOIN_SQL, KICKING_POINTS_SQL
 
@@ -235,6 +238,12 @@ class WaiverClaimRequest(BaseModel):
     team_id: int
     add_player_id: int
     drop_player_id: Optional[int] = None
+    week: Optional[int] = None
+
+
+class WaiverDropRequest(BaseModel):
+    team_id: int
+    player_id: int
     week: Optional[int] = None
 
 
@@ -1437,6 +1446,17 @@ def update_lineup(league_id: int, req: LineupRequest):
                         detail=f"Slot limit exceeded for {s}: {count} assigned, maximum allowed is {max_allowed}"
                     )
 
+            # Active roster limit (starters + BN; IR doesn't count): activating a player from IR onto a full
+            # roster needs a drop first.
+            capacity = roster_capacity(_roster_format(roster_format))
+            old_active = sum(1 for r in roster_by_pid.values() if r["slot"] != "IR")
+            new_active = sum(1 for s in simulated_slots.values() if s != "IR")
+            if new_active > capacity and new_active > old_active:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Roster full ({capacity} active players): drop a player before activating one from IR",
+                )
+
             # 6. Atomically apply all swaps
             for swap in req.swaps:
                 cur.execute("""
@@ -1480,7 +1500,8 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
                        fp.matchup_stars as matchup_stars,
                        COALESCE(t.abbreviation, 'NFL') as team_abbr,
                        opponent.abbreviation as opponent_abbr,
-                       scheduled.game_time, scheduled.status AS nfl_game_status
+                       scheduled.game_time, scheduled.status AS nfl_game_status,
+                       ww.clears_week AS waiver_clears_week
                 FROM players p
                 JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s AND ps.team_id IS NOT NULL
                 JOIN teams t ON t.id = ps.team_id
@@ -1493,12 +1514,13 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
                     ELSE NULL END
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.week = %s AND fp.season = %s
                 LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = ps.season
+                LEFT JOIN napper_waiver_wire ww ON ww.league_id = %s AND ww.player_id = p.id
                 WHERE p.id NOT IN (
                     SELECT player_id FROM napper_rosters WHERE league_id = %s AND week = %s
                 )
                 AND ps.position IN ('QB', 'HB', 'FB', 'RB', 'WR', 'TE', 'K', 'DEF')
             """
-            params = [current_season, current_season, wk, wk, current_season, league_id, wk]
+            params = [current_season, current_season, wk, wk, current_season, league_id, league_id, wk]
             if position and position != "ALL":
                 sql += " AND ps.position = %s"
                 params.append(position)
@@ -1527,18 +1549,102 @@ def get_waivers(league_id: int, position: Optional[str] = None, q: Optional[str]
                     "ros_rank": r["ros_rank"],
                     "rostered_pct": None,
                     "headshot_url": f"/static/players/{r['player_id']}.webp",
+                    # On waivers = dropped since the last waiver run: claim only, decided in that week's run.
+                    "on_waivers": r["waiver_clears_week"] is not None,
+                    "waiver_week": r["waiver_clears_week"],
                     **_injury_fields(injuries, r["player_id"]),
                 })
 
-            return {"players": players}
+            return {"players": players, **_waiver_team_context(cur, league_id, current_season, wk)}
+
+
+def _waiver_team_context(cur, league_id: int, season: int, wk: int) -> Dict[str, Any]:
+    """The user's side of the Players tab: roster counts, waiver priority, claims and players they could drop."""
+    from engines.napper_waiver_engine import next_run_week, priority_order
+
+    try:
+        tm = _resolve_user_team(cur, league_id, None)
+    except HTTPException:
+        return {}
+    cur.execute("SELECT roster_format, scoring_type FROM napper_leagues WHERE id = %s", (league_id,))
+    lg = cur.fetchone()
+    order = priority_order(cur, league_id, season, lg["scoring_type"])
+    with cur.connection.cursor(row_factory=tuple_row) as tc:
+        run_week = next_run_week(tc, league_id)
+    cur.execute("""
+        SELECT nr.player_id, COALESCE(p.player_name, p.full_name) AS name, nr.slot, pos.position,
+               fp.projected_points, fp.ros_total_points, fp.ros_rank
+        FROM napper_rosters nr
+        JOIN players p ON p.id = nr.player_id
+        LEFT JOIN LATERAL (SELECT ps.position FROM player_seasons ps
+                           WHERE ps.player_id = nr.player_id AND ps.season = %s
+                           ORDER BY ps.team_id IS NULL LIMIT 1) pos ON TRUE
+        LEFT JOIN fantasy_projections fp ON fp.player_id = nr.player_id AND fp.season = %s AND fp.week = %s
+        WHERE nr.league_id = %s AND nr.team_id = %s AND nr.week = %s
+        ORDER BY fp.ros_total_points NULLS FIRST, nr.player_id
+    """, (season, season, wk, league_id, tm["id"], wk))
+    roster = [{
+        "player_id": r["player_id"], "name": r["name"], "slot": r["slot"], "position": r["position"],
+        "proj_fpts": float(r["projected_points"]) if r["projected_points"] is not None else None,
+        "ros_points": float(r["ros_total_points"]) if r["ros_total_points"] is not None else None,
+        "ros_rank": r["ros_rank"],
+    } for r in cur.fetchall()]
+    return {
+        "team_id": tm["id"],
+        "roster": _roster_counts(cur, league_id, tm["id"], wk, lg["roster_format"]),
+        "waiver_priority": {"position": order.index(tm["id"]) + 1 if tm["id"] in order else None,
+                            "teams": len(order), "next_run_week": run_week},
+        "claims": _claims_payload(cur, league_id, tm["id"]),
+        "my_players": roster,
+    }
+
+
+def _resolve_user_team(cur, league_id: int, team_id: Optional[int]):
+    """The requested team in the league, else the signed-in user's team there (team_id 0 = the user's)."""
+    tm = None
+    if team_id:
+        cur.execute("SELECT id, team_name, manager_handle, is_ai FROM napper_teams WHERE id = %s AND league_id = %s",
+                    (team_id, league_id))
+        tm = cur.fetchone()
+    if not tm:
+        cur.execute("""
+            SELECT id, team_name, manager_handle, is_ai FROM napper_teams
+            WHERE league_id = %s AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1) LIMIT 1
+        """, (league_id,))
+        tm = cur.fetchone()
+    if not tm:
+        raise HTTPException(status_code=404, detail="Team not found in this league")
+    return tm
+
+
+def _roster_counts(cur, league_id: int, team_id: int, week: int, roster_fmt) -> Dict[str, int]:
+    """{active, limit, ir, ir_limit}: active = players not in IR, limit = starting slots + BN."""
+    fmt = _roster_format(roster_fmt)
+    cur.execute("""
+        SELECT COUNT(*) FILTER (WHERE slot <> 'IR') AS active, COUNT(*) FILTER (WHERE slot = 'IR') AS ir
+        FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week = %s
+    """, (league_id, team_id, week))
+    row = cur.fetchone()
+    return {"active": int(row["active"]), "limit": roster_capacity(fmt), "ir": int(row["ir"]),
+            "ir_limit": fmt.get("IR", 0)}
+
+
+def _player_name(cur, player_id: int) -> str:
+    cur.execute("SELECT COALESCE(player_name, full_name) AS name FROM players WHERE id = %s", (player_id,))
+    row = cur.fetchone()
+    return row["name"] if row else str(player_id)
 
 
 @router.post("/league/{league_id}/waivers/claim")
 def claim_waiver_player(league_id: int, req: WaiverClaimRequest):
-    """Submits an add/drop transaction and announces in napper_chat."""
+    """Adds a player (with an optional drop). A free agent is added at once; a player on waivers (dropped since
+    the last waiver run) becomes a pending claim for the next run (engines/napper_waiver_engine). The active
+    roster (not IR) can't go over starting slots + BN."""
+    from engines.napper_waiver_engine import next_run_week
+
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT current_week FROM napper_leagues WHERE id = %s", (league_id,))
+            cur.execute("SELECT roster_format FROM napper_leagues WHERE id = %s", (league_id,))
             lg = cur.fetchone()
             if not lg:
                 raise HTTPException(status_code=404, detail="League not found")
@@ -1547,86 +1653,79 @@ def claim_waiver_player(league_id: int, req: WaiverClaimRequest):
             _ensure_matchup_and_rosters(cur, league_id, wk)
             conn.commit()
 
-            # Validate team
-            if not req.team_id:
-                cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE league_id = %s AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1) LIMIT 1", (league_id,))
-                tm = cur.fetchone()
-            else:
-                cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE id = %s AND league_id = %s", (req.team_id, league_id))
-                tm = cur.fetchone()
-                if not tm:
-                    cur.execute("SELECT id, team_name, manager_handle FROM napper_teams WHERE league_id = %s AND user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1) LIMIT 1", (league_id,))
-                    tm = cur.fetchone()
-            if not tm:
-                raise HTTPException(status_code=404, detail="Team not found in this league")
-            actual_team_id = tm["id"]
-
-            # Validate add player
-            cur.execute("SELECT id, player_name, full_name FROM players WHERE id = %s", (req.add_player_id,))
-            p_add = cur.fetchone()
-            if not p_add:
+            tm = _resolve_user_team(cur, league_id, req.team_id)
+            team_id = tm["id"]
+            add_name = _player_name(cur, req.add_player_id)
+            cur.execute("SELECT 1 FROM players WHERE id = %s", (req.add_player_id,))
+            if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Player to add not found")
-
-            # Check if add_player_id is already rostered in this league for this week
-            cur.execute("""
-                SELECT team_id FROM napper_rosters
-                WHERE league_id = %s AND week = %s AND player_id = %s
-            """, (league_id, wk, req.add_player_id))
+            cur.execute("SELECT 1 FROM napper_rosters WHERE league_id = %s AND week = %s AND player_id = %s",
+                        (league_id, wk, req.add_player_id))
             if cur.fetchone():
                 raise HTTPException(status_code=400, detail="Player is already rostered by a team in this league")
 
-            p_drop = None
+            drop_slot = None
             if req.drop_player_id:
-                # Validate drop player is on team's roster
                 cur.execute("""
-                    SELECT id FROM napper_rosters
+                    SELECT slot FROM napper_rosters
                     WHERE league_id = %s AND team_id = %s AND week = %s AND player_id = %s
-                """, (league_id, actual_team_id, wk, req.drop_player_id))
-                if not cur.fetchone():
+                """, (league_id, team_id, wk, req.drop_player_id))
+                row = cur.fetchone()
+                if not row:
                     raise HTTPException(status_code=400, detail="Player to drop is not on team roster")
+                drop_slot = row["slot"]
 
-                cur.execute("SELECT id, player_name, full_name FROM players WHERE id = %s", (req.drop_player_id,))
-                p_drop = cur.fetchone()
+            counts = _roster_counts(cur, league_id, team_id, wk, lg["roster_format"])
+            if counts["active"] + 1 - (1 if drop_slot and drop_slot != "IR" else 0) > counts["limit"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Roster full ({counts['active']}/{counts['limit']} active players): choose a player to drop",
+                )
 
-                # Drop player for this and subsequent weeks
+            cur.execute("SELECT clears_week FROM napper_waiver_wire WHERE league_id = %s AND player_id = %s",
+                        (league_id, req.add_player_id))
+            wire = cur.fetchone()
+            if wire:
                 cur.execute("""
-                    DELETE FROM napper_rosters
-                    WHERE league_id = %s AND team_id = %s AND week >= %s AND player_id = %s
-                """, (league_id, actual_team_id, wk, req.drop_player_id))
-
-            # Add player to bench for this and subsequent weeks
-            cur.execute("SELECT DISTINCT week FROM napper_rosters WHERE league_id = %s AND week >= %s", (league_id, wk))
-            weeks_to_add = [r["week"] for r in cur.fetchall()]
-            if not weeks_to_add:
-                weeks_to_add = [wk]
-
-            for w in weeks_to_add:
+                    SELECT 1 FROM napper_waiver_claims
+                    WHERE league_id = %s AND team_id = %s AND add_player_id = %s AND status = 'PENDING'
+                """, (league_id, team_id, req.add_player_id))
+                if cur.fetchone():
+                    raise HTTPException(status_code=400, detail=f"You already have a claim on {add_name}")
                 cur.execute("""
-                    INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
-                    VALUES (%s, %s, %s, %s, 'BN')
-                    ON CONFLICT (team_id, week, player_id) DO UPDATE SET slot = 'BN'
-                """, (league_id, actual_team_id, w, req.add_player_id))
+                    INSERT INTO napper_waiver_claims (league_id, team_id, add_player_id, drop_player_id, rank, reason)
+                    VALUES (%s, %s, %s, %s,
+                            (SELECT COALESCE(MAX(rank), 0) + 1 FROM napper_waiver_claims
+                             WHERE league_id = %s AND team_id = %s AND status = 'PENDING'), 'CLAIM')
+                    RETURNING id
+                """, (league_id, team_id, req.add_player_id, req.drop_player_id, league_id, team_id))
+                claim_id = cur.fetchone()["id"]
+                conn.commit()
+                return {
+                    "status": "queued",
+                    "claim_id": claim_id,
+                    "added_player_id": req.add_player_id,
+                    "dropped_player_id": req.drop_player_id,
+                    "waiver_week": int(wire["clears_week"]),
+                    "message": f"Claim on {add_name} placed for the week {int(wire['clears_week'])} waiver run.",
+                }
 
-            # Construct announcement message
-            team_title = tm["team_name"]
-            add_name = p_add["player_name"] or p_add["full_name"]
-            if p_drop:
-                drop_name = p_drop["player_name"] or p_drop["full_name"]
-                chat_msg = f"⚡ Waivers: {team_title} claimed {add_name} from free agency and dropped {drop_name}."
-            else:
-                chat_msg = f"⚡ Waivers: {team_title} claimed {add_name} from free agency."
+            with conn.cursor(row_factory=tuple_row) as tc:
+                drop_name = None
+                if req.drop_player_id:
+                    drop_name = _player_name(cur, req.drop_player_id)
+                    release_player(tc, league_id, team_id, req.drop_player_id, wk, next_run_week(tc, league_id))
+                add_player(tc, league_id, team_id, req.add_player_id, wk)
 
-            card_payload = {
-                "type": "WAIVER_CLAIM",
-                "team": team_title,
-                "added_player": add_name,
-                "dropped_player": (p_drop["player_name"] or p_drop["full_name"]) if p_drop else None,
-            }
-
+            chat_msg = (f"⚡ Free agency: {tm['team_name']} added {add_name}"
+                        + (f" and dropped {drop_name}." if drop_name else "."))
+            card_payload = {"type": "WAIVER_CLAIM", "team": tm["team_name"], "added_player": add_name,
+                            "dropped_player": drop_name, "reason": "FREE_AGENT"}
             cur.execute("""
                 INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text, card_payload)
                 VALUES (%s, 'SYSTEM_BOT', 'Waiver Bot', '@NapperWaivers', '/static/players/robot_avatar.webp', %s, %s)
             """, (league_id, chat_msg, json.dumps(card_payload)))
+            refresh_matchup_projections(cur, league_id, get_current_season(cur), wk)
 
         conn.commit()
 
@@ -1636,6 +1735,92 @@ def claim_waiver_player(league_id: int, req: WaiverClaimRequest):
         "dropped_player_id": req.drop_player_id,
         "message": chat_msg,
     }
+
+
+@router.post("/league/{league_id}/waivers/drop")
+def drop_roster_player(league_id: int, req: WaiverDropRequest):
+    """Drops a player from the user's team for this and later weeks; he goes on waivers until the next run."""
+    from engines.napper_waiver_engine import next_run_week
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            require_current_season_league(cur, league_id)
+            _, active_week = get_current_season_week(cur)
+            wk = req.week or active_week
+            _ensure_matchup_and_rosters(cur, league_id, wk)
+            tm = _resolve_user_team(cur, league_id, req.team_id)
+            cur.execute("SELECT 1 FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week = %s AND player_id = %s",
+                        (league_id, tm["id"], wk, req.player_id))
+            if not cur.fetchone():
+                raise HTTPException(status_code=400, detail="Player to drop is not on team roster")
+            name = _player_name(cur, req.player_id)
+            with conn.cursor(row_factory=tuple_row) as tc:
+                clears = next_run_week(tc, league_id)
+                release_player(tc, league_id, tm["id"], req.player_id, wk, clears)
+            cur.execute("""
+                INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text, card_payload)
+                VALUES (%s, 'SYSTEM_BOT', 'Waiver Bot', '@NapperWaivers', '/static/players/robot_avatar.webp', %s, %s)
+            """, (league_id, f"⚡ {tm['team_name']} dropped {name}.",
+                  json.dumps({"type": "WAIVER_CLAIM", "team": tm["team_name"], "added_player": None,
+                              "dropped_player": name, "reason": "DROP"})))
+            refresh_matchup_projections(cur, league_id, get_current_season(cur), wk)
+        conn.commit()
+    return {"status": "success", "dropped_player_id": req.player_id, "waiver_week": clears,
+            "message": f"Dropped {name}. He is on waivers until the week {clears} waiver run."}
+
+
+@router.get("/league/{league_id}/waivers/claims")
+def get_waiver_claims(league_id: int, team_id: Optional[int] = None):
+    """The user's pending claims (rank order) and the claims decided in the league's last waiver run."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            require_current_season_league(cur, league_id)
+            tm = _resolve_user_team(cur, league_id, team_id)
+            return _claims_payload(cur, league_id, tm["id"])
+
+
+def _claims_payload(cur, league_id: int, team_id: int) -> Dict[str, Any]:
+    cur.execute("""
+        SELECT c.id, c.team_id, t.team_name, c.add_player_id, COALESCE(a.player_name, a.full_name) AS add_name,
+               c.drop_player_id, COALESCE(d.player_name, d.full_name) AS drop_name, c.rank, c.status, c.reason,
+               c.note, c.week, ww.clears_week
+        FROM napper_waiver_claims c
+        JOIN napper_teams t ON t.id = c.team_id
+        JOIN players a ON a.id = c.add_player_id
+        LEFT JOIN players d ON d.id = c.drop_player_id
+        LEFT JOIN napper_waiver_wire ww ON ww.league_id = c.league_id AND ww.player_id = c.add_player_id
+        WHERE c.league_id = %s AND (
+              (c.status = 'PENDING' AND c.team_id = %s)
+           OR c.week = (SELECT MAX(week) FROM napper_waiver_runs WHERE league_id = %s))
+        ORDER BY c.status <> 'PENDING', c.rank, c.id
+    """, (league_id, team_id, league_id))
+    rows = cur.fetchall()
+    fmt = lambda r: {
+        "claim_id": r["id"], "team_id": r["team_id"], "team_name": r["team_name"],
+        "add_player_id": r["add_player_id"], "add_name": r["add_name"],
+        "drop_player_id": r["drop_player_id"], "drop_name": r["drop_name"], "rank": r["rank"],
+        "status": r["status"], "reason": r["reason"], "note": r["note"], "week": r["week"],
+        "waiver_week": r["clears_week"],
+    }
+    return {"pending": [fmt(r) for r in rows if r["status"] == "PENDING"],
+            "last_run": [fmt(r) for r in rows if r["status"] != "PENDING"]}
+
+
+@router.delete("/league/{league_id}/waivers/claims/{claim_id}")
+def cancel_waiver_claim(league_id: int, claim_id: int):
+    """Cancels one of the user's pending claims."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            tm = _resolve_user_team(cur, league_id, None)
+            cur.execute("""
+                UPDATE napper_waiver_claims SET status = 'CANCELLED', processed_at = NOW()
+                WHERE id = %s AND league_id = %s AND team_id = %s AND status = 'PENDING'
+                RETURNING id
+            """, (claim_id, league_id, tm["id"]))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="Pending claim not found")
+        conn.commit()
+    return {"status": "cancelled", "claim_id": claim_id}
 
 
 @router.get("/league/{league_id}/trades")

@@ -33,31 +33,42 @@ class _Conn:
 
 
 class RunLeagueWeekTest(unittest.TestCase):
-    def _run(self, has_proposals, trades=True):
+    def _run(self, has_proposals, trades=True, waivers=True, week=5):
         calls = []
+        waive = lambda cur, league, wk: calls.append(("waivers", league, wk)) or {"skipped": False, "transactions": [{}]}
         lineup = lambda cur, league, week: calls.append(("lineups", league, week)) or [{"to_ir": ["X"]}]
         propose = lambda league, week, conn=None: calls.append(("propose", league, week)) or [{}, {}]
         process = lambda league, week, conn=None: calls.append(("process", league, week)) or [{}]
         conn = _Conn(has_proposals)
         with mock.patch.object(NW, "optimize_league_lineups", lineup), \
              mock.patch.object(NW, "generate_trade_proposals", propose), \
-             mock.patch.object(NW, "process_ai_to_ai_trades", process):
-            summary = NW.run_league_week(conn, 15, 5, trades=trades, log=lambda *_: None)
+             mock.patch.object(NW, "process_ai_to_ai_trades", process), \
+             mock.patch.object(NW, "run_waivers", waive):
+            summary = NW.run_league_week(conn, 15, week, trades=trades, waivers=waivers, log=lambda *_: None)
         return calls, summary, conn
 
-    def test_order_lineups_trades_lineups_then_current_week(self):
+    def test_order_lineups_waivers_trades_lineups_then_current_week(self):
         calls, summary, conn = self._run(has_proposals=False)
-        self.assertEqual([c[0] for c in calls], ["lineups", "propose", "process", "lineups"])
+        self.assertEqual([c[0] for c in calls], ["lineups", "waivers", "propose", "process", "lineups"])
         self.assertEqual((summary["proposals"], summary["trades_processed"], summary["ir_moves"]), (2, 1, 1))
+        self.assertEqual(summary["waiver_adds"], 1)
         self.assertIn("UPDATE napper_leagues SET current_week = %s WHERE id = %s", conn.sql[-1])
 
     def test_rerun_skips_proposals_already_made_for_the_week(self):
         calls, summary, _ = self._run(has_proposals=True)
-        self.assertEqual([c[0] for c in calls], ["lineups", "process", "lineups"])
+        self.assertEqual([c[0] for c in calls], ["lineups", "waivers", "process", "lineups"])
         self.assertTrue(summary["trades_skipped"])
 
-    def test_lineups_only(self):
+    def test_waivers_without_trades_still_rebuild_lineups(self):
         calls, _, _ = self._run(has_proposals=False, trades=False)
+        self.assertEqual([c[0] for c in calls], ["lineups", "waivers", "lineups"])
+
+    def test_lineups_only(self):
+        calls, _, _ = self._run(has_proposals=False, trades=False, waivers=False)
+        self.assertEqual([c[0] for c in calls], ["lineups"])
+
+    def test_no_waiver_run_in_week_1(self):
+        calls, _, _ = self._run(has_proposals=False, trades=False, week=1)
         self.assertEqual([c[0] for c in calls], ["lineups"])
 
 

@@ -6,23 +6,20 @@ For each AI team and week, before that week's games:
    out IR_MIN_WEEKS+ weeks) fill the league's IR slots, best rest-of-season value first. Players in IR who
    are no longer eligible come back to the bench.
 2. Roster limit. If the active roster (everyone not in IR) is larger than the starting slots plus BN,
-   the lowest-ROS bench players are dropped (decision D3), never one the starting lineup needs.
-3. Free agents. A starting slot no rostered player can fill (say the only QB went to IR) is always filled
-   by signing the best free agent at that position by ROS value, dropping the lowest-ROS bench player first
-   if the active roster is full. With --fill-ir-spots, each player moved to IR is also replaced by the best
-   free agent at his position while the active roster has room.
-4. Starter pass. QB, RB, WR, TE, K, DEF, then FLEX, then SUPERFLEX are filled greedily with the highest
+   the lowest-ROS bench players are dropped (decision D3), never one the starting lineup needs. Dropped
+   players go on waivers (engines/napper_waiver_engine).
+3. Starter pass. QB, RB, WR, TE, K, DEF, then FLEX, then SUPERFLEX are filled greedily with the highest
    projected_points among players who can play (not out, not on bye); a slot no one available can fill
    takes the best unavailable player rather than staying empty. Everyone else is benched.
 
 The lineup is written to the target week and every later saved week (the weekly run re-optimizes each week
-before it is played), matchup projections for the week are refreshed, and IR moves, drops and pickups are
-posted to the league chat. Human teams are never changed (decision D5).
+before it is played), matchup projections for the week are refreshed, and IR moves and drops are posted to
+the league chat. Human teams are never changed (decision D5). Free-agent pickups (a starting slot nobody can
+fill, bye streaming, upgrades) are the weekly waiver run's job (engines/napper_waiver_engine.py).
 
 CLI:
     python3 -m engines.napper_lineup_engine --league 15                 # current week from league_state
     python3 -m engines.napper_lineup_engine --all-active --week 5
-    python3 -m engines.napper_lineup_engine --all-active --fill-ir-spots
     python3 -m engines.napper_lineup_engine --league 15 --dry-run       # print moves, write nothing
 """
 
@@ -59,6 +56,11 @@ def _starter_slots(fmt: Dict[str, int]) -> List[str]:
     return [slot for slot in STARTER_SLOT_ELIGIBILITY for _ in range(fmt.get(slot, 0))]
 
 
+def roster_capacity(fmt: Dict[str, int]) -> int:
+    """Active roster limit: starting slots + BN (players in IR don't count)."""
+    return len(_starter_slots(fmt)) + fmt.get("BN", 0)
+
+
 def _can_play(p: dict) -> bool:
     return not p.get("bye") and not (p.get("injury") or {}).get("status")
 
@@ -78,7 +80,7 @@ def plan_ir(players: List[dict], fmt: Dict[str, int]) -> Tuple[List[int], List[i
 
     in_ir_after = ({p["pid"] for p in in_ir} - set(off_ir)) | set(to_ir)
     active = [p for p in players if p["pid"] not in in_ir_after]
-    capacity = len(_starter_slots(fmt)) + fmt.get("BN", 0)
+    capacity = roster_capacity(fmt)
     drops: List[int] = []
     if len(active) > capacity:
         needed = {p["pid"] for p in _pick_starters(active, fmt).values() if p}
@@ -156,37 +158,30 @@ def _load_team_week(c, league_id: int, team_id: int, season: int, week: int) -> 
     } for pid, slot, name, pos, _team, proj, ros, has_game in rows]
 
 
-def _best_free_agent(c, league_id: int, season: int, week: int, group: str) -> Optional[Tuple[int, str]]:
-    positions = [p for p, g in POS_GROUP.items() if g == group]
+def release_player(c, league_id: int, team_id: int, player_id: int, from_week: int, clears_week: int) -> None:
+    """Drops a player from the team for `from_week` and every later saved week and puts him on waivers until
+    the waiver run for `clears_week` (engines/napper_waiver_engine)."""
+    c.execute("DELETE FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week >= %s AND player_id = %s",
+              (league_id, team_id, from_week, player_id))
     c.execute("""
-        SELECT ps.player_id, COALESCE(p.player_name, p.full_name)
-        FROM player_seasons ps
-        JOIN players p ON p.id = ps.player_id
-        JOIN fantasy_projections fp ON fp.player_id = ps.player_id AND fp.season = ps.season AND fp.week = %s
-        WHERE ps.season = %s AND ps.team_id IS NOT NULL AND ps.position = ANY(%s)
-          AND NOT EXISTS (SELECT 1 FROM napper_rosters nr
-                          WHERE nr.league_id = %s AND nr.week = %s AND nr.player_id = ps.player_id)
-          AND fp.projected_points > 0
-        ORDER BY fp.ros_total_points DESC NULLS LAST, ps.player_id
-        LIMIT 1
-    """, (week, season, positions, league_id, week))
-    row = c.fetchone()
-    return (row[0], row[1]) if row else None
+        INSERT INTO napper_waiver_wire (league_id, player_id, dropped_by_team_id, clears_week)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (league_id, player_id) DO UPDATE
+        SET dropped_by_team_id = EXCLUDED.dropped_by_team_id, clears_week = EXCLUDED.clears_week, dropped_at = NOW()
+    """, (league_id, player_id, team_id, clears_week))
 
 
-def _sign_free_agent(c, league_id: int, team_id: int, season: int, week: int, group: str) -> Optional[str]:
-    """Adds the best free agent of `group` to the team's bench for `week` and every later saved week."""
-    fa = _best_free_agent(c, league_id, season, week, group)
-    if not fa:
-        return None
+def add_player(c, league_id: int, team_id: int, player_id: int, from_week: int) -> None:
+    """Puts a player on the team's bench for `from_week` and every later saved week, and off waivers."""
     c.execute("SELECT DISTINCT week FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week >= %s",
-              (league_id, team_id, week))
-    for (w,) in c.fetchall():
+              (league_id, team_id, from_week))
+    weeks = sorted({r[0] for r in c.fetchall()} | {from_week})
+    for w in weeks:
         c.execute("""
             INSERT INTO napper_rosters (league_id, team_id, week, player_id, slot)
-            VALUES (%s, %s, %s, %s, 'BN') ON CONFLICT (team_id, week, player_id) DO NOTHING
-        """, (league_id, team_id, w, fa[0]))
-    return fa[1]
+            VALUES (%s, %s, %s, %s, 'BN') ON CONFLICT (team_id, week, player_id) DO UPDATE SET slot = 'BN'
+        """, (league_id, team_id, w, player_id))
+    c.execute("DELETE FROM napper_waiver_wire WHERE league_id = %s AND player_id = %s", (league_id, player_id))
 
 
 def _post_chat(c, league_id: int, text: str) -> None:
@@ -215,10 +210,9 @@ def refresh_matchup_projections(cur, league_id: int, season: int, week: int) -> 
                       (h, a, round(h / (h + a), 3) if h + a > 0 else 0.5, mid))
 
 
-def optimize_team_lineup(cur, league_id: int, team_id: int, week: int, fill_ir_spots: bool = False,
-                         post_chat: bool = True) -> dict:
+def optimize_team_lineup(cur, league_id: int, team_id: int, week: int, post_chat: bool = True) -> dict:
     """Plans and writes one AI team's lineup for `week` (and later saved weeks). Returns what changed:
-    {team, moves: [(pid, old, new)], to_ir, off_ir, drops, adds} (names for IR/drop/add lists)."""
+    {team, moves: [(pid, old, new)], to_ir, off_ir, drops} (names for the IR and drop lists)."""
     with cur.connection.cursor(row_factory=tuple_row) as c:
         c.execute("""
             SELECT t.is_ai, t.team_name, l.season, l.roster_format
@@ -234,68 +228,22 @@ def optimize_team_lineup(cur, league_id: int, team_id: int, week: int, fill_ir_s
         if not players:
             return {}
         by_pid = {p["pid"]: p for p in players}
-        names = {p["pid"]: p["name"] for p in players}
 
-        to_ir, off_ir, drops = plan_ir(players, fmt)
-        for pid in drops:
-            c.execute("DELETE FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week >= %s AND player_id = %s",
-                      (league_id, team_id, week, pid))
-        adds: List[str] = []
-        if fill_ir_spots and to_ir:
-            ir_now = ({p["pid"] for p in players if p["slot"] == "IR"} - set(off_ir)) | set(to_ir)
-            capacity = len(_starter_slots(fmt)) + fmt.get("BN", 0)
-            active = [p for p in players if p["pid"] not in ir_now and p["pid"] not in drops]
-            for pid in to_ir:
-                if len(active) >= capacity:
-                    break
-                fa = _sign_free_agent(c, league_id, team_id, season, week, by_pid[pid]["pos"])
-                if not fa:
-                    continue
-                adds.append(fa)
-                players = _load_team_week(c, league_id, team_id, season, week)
-                by_pid = {p["pid"]: p for p in players}
-                names.update({p["pid"]: p["name"] for p in players})
-                active = [p for p in players if p["pid"] not in ir_now]
-            players = [p for p in players if p["pid"] not in drops]
-
-        # Sign free agents for starting slots nobody on the active roster can fill (always, even without
-        # --fill-ir-spots): an AI manager doesn't leave a slot empty. Drop the lowest-ROS spare first if full.
-        ir_now = ({p["pid"] for p in players if p["slot"] == "IR"} - set(off_ir)) | set(to_ir)
-        capacity = len(_starter_slots(fmt)) + fmt.get("BN", 0)
-        for group in unfillable_slot_groups([p for p in players if p["pid"] not in ir_now], fmt):
-            active = [p for p in players if p["pid"] not in ir_now]
-            if len(active) >= capacity:
-                needed = {p["pid"] for p in _pick_starters(active, fmt).values() if p}
-                spare = sorted((p for p in active if p["pid"] not in needed), key=lambda p: (p["ros"], -p["pid"]))
-                if not spare:
-                    break
-                c.execute("DELETE FROM napper_rosters WHERE league_id = %s AND team_id = %s AND week >= %s AND player_id = %s",
-                          (league_id, team_id, week, spare[0]["pid"]))
-                drops.append(spare[0]["pid"])
-            fa = _sign_free_agent(c, league_id, team_id, season, week, group)
-            if not fa:
-                continue
-            adds.append(fa)
-            players = [p for p in _load_team_week(c, league_id, team_id, season, week) if p["pid"] not in drops]
-            for p in players:
-                by_pid.setdefault(p["pid"], p)
-                names.setdefault(p["pid"], p["name"])
-
-        plan = plan_lineup([dict(p, slot="IR" if p["pid"] in to_ir else p["slot"]) for p in players
-                            if p["pid"] not in drops], fmt)
+        plan = plan_lineup(players, fmt)
+        for pid in plan["drops"]:
+            release_player(c, league_id, team_id, pid, week, week + 1)
         moves = []
         for pid, new_slot in plan["slots"].items():
-            old = by_pid[pid]["slot"] if pid in by_pid else None
+            old = by_pid[pid]["slot"]
             if old != new_slot:
                 moves.append((pid, old, new_slot))
             c.execute("UPDATE napper_rosters SET slot = %s WHERE league_id = %s AND team_id = %s AND week >= %s AND player_id = %s",
                       (new_slot, league_id, team_id, week, pid))
 
-        name = lambda pid: names.get(pid, str(pid))
-        dropped_names = [name(pid) for pid in drops]
+        name = lambda pid: by_pid[pid]["name"]
         result = {
-            "team": team_name, "moves": moves, "to_ir": [name(p) for p in to_ir],
-            "off_ir": [name(p) for p in off_ir], "drops": dropped_names, "adds": adds,
+            "team": team_name, "moves": moves, "to_ir": [name(p) for p in plan["to_ir"]],
+            "off_ir": [name(p) for p in plan["off_ir"]], "drops": [name(p) for p in plan["drops"]],
         }
         if post_chat:
             notes = []
@@ -303,10 +251,8 @@ def optimize_team_lineup(cur, league_id: int, team_id: int, week: int, fill_ir_s
                 notes.append(f"moves {', '.join(result['to_ir'])} to IR")
             if result["off_ir"]:
                 notes.append(f"activates {', '.join(result['off_ir'])} from IR")
-            if adds:
-                notes.append(f"adds {', '.join(adds)}")
-            if dropped_names:
-                notes.append(f"drops {', '.join(dropped_names)}")
+            if result["drops"]:
+                notes.append(f"drops {', '.join(result['drops'])}")
             if notes:
                 _post_chat(c, league_id, f"📋 {team_name} {'; '.join(notes)} (week {week}).")
     return result
@@ -328,8 +274,7 @@ def _ensure_week_rosters(c, league_id: int, week: int) -> None:
         """, (week, league_id, src))
 
 
-def optimize_league_lineups(cur, league_id: int, week: int, fill_ir_spots: bool = False,
-                            post_chat: bool = True) -> List[dict]:
+def optimize_league_lineups(cur, league_id: int, week: int, post_chat: bool = True) -> List[dict]:
     """Optimizes every AI team in the league for `week`; returns each team's result."""
     with cur.connection.cursor(row_factory=tuple_row) as c:
         _ensure_week_rosters(c, league_id, week)
@@ -337,7 +282,7 @@ def optimize_league_lineups(cur, league_id: int, week: int, fill_ir_spots: bool 
         team_ids = [r[0] for r in c.fetchall()]
         c.execute("SELECT season FROM napper_leagues WHERE id = %s", (league_id,))
         season = c.fetchone()[0]
-    results = [r for r in (optimize_team_lineup(cur, league_id, t, week, fill_ir_spots, post_chat)
+    results = [r for r in (optimize_team_lineup(cur, league_id, t, week, post_chat)
                            for t in team_ids) if r]
     refresh_matchup_projections(cur, league_id, season, week)
     return results
@@ -413,7 +358,6 @@ def main():
     target.add_argument("--league", type=int, help="League id")
     target.add_argument("--all-active", action="store_true", help="Every IN_SEASON league of the current season")
     parser.add_argument("--week", type=int, help="Week to set (default: league_state current week)")
-    parser.add_argument("--fill-ir-spots", action="store_true", help="Replace players moved to IR with free agents")
     parser.add_argument("--dry-run", action="store_true", help="Print the moves and roll back")
     args = parser.parse_args()
 
@@ -425,11 +369,10 @@ def main():
                 week = int(cur.fetchone()[0] or 1)
             leagues = active_league_ids(cur) if args.all_active else [args.league]
             for league_id in leagues:
-                results = optimize_league_lineups(cur, league_id, week, args.fill_ir_spots,
-                                                  post_chat=not args.dry_run)
+                results = optimize_league_lineups(cur, league_id, week, post_chat=not args.dry_run)
                 print(f"League {league_id}, week {week}: {len(results)} AI teams")
                 for r in results:
-                    extra = "; ".join(f"{k}: {', '.join(r[k])}" for k in ("to_ir", "off_ir", "adds", "drops") if r[k])
+                    extra = "; ".join(f"{k}: {', '.join(r[k])}" for k in ("to_ir", "off_ir", "drops") if r[k])
                     print(f"   {r['team']}: {len(r['moves'])} slot changes" + (f" ({extra})" if extra else ""))
         if args.dry_run:
             conn.rollback()

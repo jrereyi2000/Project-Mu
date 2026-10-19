@@ -166,6 +166,45 @@ export interface NapperWaiverPlayer extends NapperInjuryInfo {
   ros_rank?: string;
   rostered_pct: number | null;
   headshot_url: string;
+  /** Dropped since the last waiver run: claim only, decided in the week `waiver_week` run. */
+  on_waivers?: boolean;
+  waiver_week?: number | null;
+}
+
+export interface NapperWaiverClaim {
+  claim_id: number;
+  team_id: number;
+  team_name: string;
+  add_player_id: number;
+  add_name: string;
+  drop_player_id: number | null;
+  drop_name: string | null;
+  rank: number;
+  status: "PENDING" | "WON" | "LOST" | "INVALID" | "CANCELLED";
+  reason: "CLAIM" | "NEED" | "STREAM" | "UPGRADE" | null;
+  note: string | null;
+  week: number | null;
+  waiver_week: number | null;
+}
+
+export interface NapperRosterPlayerLite {
+  player_id: number;
+  name: string;
+  slot: string;
+  position: string | null;
+  proj_fpts: number | null;
+  ros_points: number | null;
+  ros_rank: string | null;
+}
+
+/** GET /waivers: free agents plus the user's roster counts, waiver priority, claims and droppable players. */
+export interface NapperWaiversResponse {
+  players: NapperWaiverPlayer[];
+  team_id?: number;
+  roster?: { active: number; limit: number; ir: number; ir_limit: number };
+  waiver_priority?: { position: number | null; teams: number; next_run_week: number };
+  claims?: { pending: NapperWaiverClaim[]; last_run: NapperWaiverClaim[] };
+  my_players?: NapperRosterPlayerLite[];
 }
 
 export interface NapperDraftPlayer {
