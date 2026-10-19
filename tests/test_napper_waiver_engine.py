@@ -1,7 +1,10 @@
 """engines/napper_waiver_engine planning: AI pickups and claim rounds (no database)."""
 import unittest
 
-from engines.napper_waiver_engine import ai_next_claim, lowest_spare, resolve_waivers
+from engines.napper_waiver_engine import (
+    ACTIVITY, PERSONA_ACTIVITY, REACTIVITY, ai_next_claim, lowest_spare, manager_traits, player_value,
+    resolve_waivers, week_plan,
+)
 
 # 9 starters + 3 BN = 12 active players.
 FMT = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 3, "IR": 1}
@@ -11,6 +14,10 @@ OUT_1 = {"status": "O", "weeks_remaining": 1, "is_ir": False}
 def p(pid, pos, proj, ros=None, slot="BN", bye=False, injury=None):
     return {"pid": pid, "name": f"P{pid}", "pos": pos, "proj": proj, "ros": ros if ros is not None else proj * 10,
             "slot": slot, "bye": bye, "injury": injury}
+
+
+def ai(adds, stream=True, reactivity=0.0):
+    return {"adds": adds, "stream": stream, "reactivity": reactivity}
 
 
 def roster(full=True):
@@ -72,6 +79,32 @@ class AiNextClaimTest(unittest.TestCase):
     def test_injured_free_agents_are_not_upgrades(self):
         self.assertIsNone(ai_next_claim(roster(full=False), [p(301, "RB", 0, ros=90, injury=OUT_1)], FMT, 2))
 
+    def test_stream_skipped_in_weeks_the_manager_does_not_stream(self):
+        team = roster()
+        team[7]["bye"] = True
+        pool = [p(200, "K", 7, ros=60)]
+        self.assertIsNone(ai_next_claim(team, pool, FMT, adds_left=2, stream=False))
+        self.assertEqual(ai_next_claim(team, pool, FMT, adds_left=0)["reason"], "STREAM")   # not capped
+
+    def test_values_use_scaled_ros_and_reactivity(self):
+        cold = p(300, "WR", 3, ros=100)
+        cold.update(base=40, hot=-0.5)
+        hot = p(301, "WR", 3, ros=60)
+        hot.update(base=30, hot=1.0)
+        self.assertEqual(player_value(cold), 40)
+        self.assertEqual(player_value(hot, 0.5), 45)
+        team = roster(full=False)
+        self.assertEqual(ai_next_claim(team, [cold, hot], FMT, 2)["add"], 300)
+        self.assertEqual(ai_next_claim(team, [cold, hot], FMT, 2, reactivity=0.5)["add"], 301)
+
+    def test_reactivity_changes_who_is_dropped(self):
+        team = roster()
+        team[10].update(base=30, hot=-0.5)    # P11, backup QB
+        team[11].update(base=20, hot=1.0)     # P12
+        team[9].update(base=50, hot=0.0)      # P10
+        self.assertEqual(lowest_spare(team, FMT)["pid"], 12)
+        self.assertEqual(lowest_spare(team, FMT, reactivity=0.5)["pid"], 11)
+
     def test_lowest_spare_keeps_starters_and_this_runs_adds(self):
         team = roster()
         self.assertEqual(lowest_spare(team, FMT)["pid"], 12)
@@ -82,7 +115,7 @@ class ResolveWaiversTest(unittest.TestCase):
     def test_priority_order_decides_a_contested_player(self):
         rosters = {1: roster(full=False), 2: roster(full=False)}
         pool = {301: p(301, "RB", 5, ros=70)}
-        r = resolve_waivers([2, 1], rosters, pool, FMT, {1: 2}, {2: [{"id": 9, "add": 301, "drop": None}]})
+        r = resolve_waivers([2, 1], rosters, pool, FMT, {1: ai(2)}, {2: [{"id": 9, "add": 301, "drop": None}]})
         self.assertEqual(r["outcomes"], {9: ("WON", None)})
         self.assertEqual([(t["team"], t["add"], t["reason"]) for t in r["transactions"]], [(2, 301, "CLAIM")])
         self.assertIn(301, {x["pid"] for x in rosters[2]})
@@ -91,7 +124,7 @@ class ResolveWaiversTest(unittest.TestCase):
         rosters = {1: roster(full=False), 2: roster(full=False)}
         pool = {301: p(301, "RB", 5, ros=70), 302: p(302, "WR", 4, ros=30)}
         claims = {2: [{"id": 9, "add": 301, "drop": None}, {"id": 10, "add": 302, "drop": None}]}
-        r = resolve_waivers([1, 2], rosters, pool, FMT, {1: 1}, claims)
+        r = resolve_waivers([1, 2], rosters, pool, FMT, {1: ai(1)}, claims)
         self.assertEqual(r["outcomes"][9], ("LOST", "claimed by another team"))
         self.assertEqual(r["outcomes"][10], ("WON", None))
 
@@ -114,15 +147,37 @@ class ResolveWaiversTest(unittest.TestCase):
         rosters = {1: roster(full=False)}
         rosters[1] = rosters[1][:-1]                              # two open spots
         pool = {300 + i: p(300 + i, "RB", 5, ros=70 - i) for i in range(4)}
-        r = resolve_waivers([1], rosters, pool, FMT, {1: 2}, {})
+        r = resolve_waivers([1], rosters, pool, FMT, {1: ai(2)}, {})
         self.assertEqual([t["add"] for t in r["transactions"]], [300, 301])
 
     def test_dropped_players_are_not_claimable_in_the_same_run(self):
         rosters = {1: roster(), 2: roster(full=False)}
         pool = {301: p(301, "RB", 5, ros=70)}
-        r = resolve_waivers([1, 2], rosters, pool, FMT, {1: 1, 2: 2}, {})
+        r = resolve_waivers([1, 2], rosters, pool, FMT, {1: ai(1), 2: ai(2)}, {})
         # team 1 swaps P12 for 301; team 2 cannot pick up the dropped P12
         self.assertEqual([(t["team"], t["add"], t["drop"]) for t in r["transactions"]], [(1, 301, 12)])
+
+
+class ManagerTest(unittest.TestCase):
+    def test_traits_are_fixed_per_team_and_in_range(self):
+        self.assertEqual(manager_traits(42, "BPA"), manager_traits(42, "BPA"))
+        for tid in range(1, 200):
+            t = manager_traits(tid, None)
+            self.assertTrue(ACTIVITY[0] <= t["activity"] <= ACTIVITY[1])
+            self.assertTrue(REACTIVITY[0] <= t["reactivity"] <= REACTIVITY[1])
+            lo, hi = PERSONA_ACTIVITY["WAIVER_HAWK"]
+            self.assertTrue(lo <= manager_traits(tid, "WAIVER_HAWK")["activity"] <= hi)
+
+    def test_week_plan_budget_follows_activity(self):
+        plans = [week_plan(1, w, 7, None) for w in range(2, 200)]
+        self.assertEqual(week_plan(1, 5, 7, None), week_plan(1, 5, 7, None))
+        self.assertTrue(all(0 <= x["adds"] <= 2 for x in plans))
+        hawk = [week_plan(1, w, 7, "WAIVER_HAWK")["adds"] for w in range(2, 200)]
+        self.assertEqual(max(hawk), 3)
+        lazy = min(range(1, 400), key=lambda t: manager_traits(t, None)["activity"])
+        busy = max(range(1, 400), key=lambda t: manager_traits(t, None)["activity"])
+        avg = lambda t: sum(week_plan(1, w, t, None)["adds"] for w in range(2, 200)) / 198
+        self.assertLess(avg(lazy), avg(busy))
 
 
 if __name__ == "__main__":

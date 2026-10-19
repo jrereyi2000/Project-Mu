@@ -318,6 +318,21 @@ def lineup_values(data: WeekData, week: int) -> Optional[dict]:
     return {pid: row[0] for pid, row in data.proj[week].items()}
 
 
+def ros_base(projected: float, ros_total: float, week: int) -> float:
+    """Rest-of-season value going into `week`, over the fantasy weeks left: ros_total (through week 18) scaled
+    to weeks `week`..17; in playoff weeks, the next game × weeks left. Also used by the Napper waiver run."""
+    if week > REGULAR_WEEKS:
+        return projected * (LAST_FANTASY_WEEK - week + 1)
+    return ros_total * (LAST_FANTASY_WEEK - week + 1) / (SEASON_WEEKS - week + 1)
+
+
+def hot_signal(last: Optional[float], avg: Optional[float]) -> float:
+    """Last week's box score against the per-game average, −0.5..1 (0 when he didn't play or has no average)."""
+    if last is None or avg is None:
+        return 0.0
+    return max(-0.5, min(1.0, (last - avg) / (avg + 5.0)))
+
+
 def week_signals(data: WeekData, week: int) -> dict:
     """player_id -> (base, hot) before `week`: base = projection over the fantasy weeks left (playoffs: the next
     game × weeks left), hot = last week's box score against his per-game average (−0.5..1). Cached."""
@@ -325,13 +340,8 @@ def week_signals(data: WeekData, week: int) -> dict:
         after = week - 1
         out = {}
         for pid, (projected, ros_total, avg) in data.proj_at(week).items():
-            if week > REGULAR_WEEKS:
-                base = projected * (LAST_FANTASY_WEEK - week + 1)
-            else:
-                base = ros_total * (LAST_FANTASY_WEEK - week + 1) / (SEASON_WEEKS - week + 1)
             last = data.points.get(pid, {}).get(after) if data.plays(pid, after) else None
-            hot = 0.0 if last is None or avg is None else max(-0.5, min(1.0, (last - avg) / (avg + 5.0)))
-            out[pid] = (base, hot)
+            out[pid] = (ros_base(projected, ros_total, week), hot_signal(last, avg))
         data._signals[week] = out
     return data._signals[week]
 

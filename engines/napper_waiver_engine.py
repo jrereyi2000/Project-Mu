@@ -13,16 +13,23 @@ The run, once per league and week (the weekly step, engines/napper_weekly.py, be
      LOST, one whose drop is gone or that would put the active roster over the limit is INVALID;
    - an AI team: its next pickup, decided on its turn from what is left (ai_next_claim):
      NEED: a starting slot no rostered player can fill (e.g. the only QB is on IR) gets the best healthy free
-           agent at that position by ROS value; always made, even past the weekly cap;
+           agent at that position by value; always made;
      STREAM: a starting slot whose only candidates can't play this week (bye or out) gets the free agent with
-           the best projection this week who plays, if the player dropped for him has lower ROS value;
-     UPGRADE: an open roster spot gets the best healthy free agent by ROS value, or the lowest-ROS spare is
-           swapped for a free agent worth more than ros × SWAP_MARGIN[0] + SWAP_MARGIN[1]; only positions
-           under their cap (upgrade_cap: QB = QB slots + 2 × SUPERFLEX slots, RB/WR 7, TE 2, K/DEF 1);
-     STREAM and UPGRADE count against AI_ADDS_PER_WEEK (WAIVER_HAWK managers: WAIVER_HAWK_ADDS).
+           the best projection this week who plays, if the player dropped for him has lower value; only in
+           weeks the manager streams at all;
+     UPGRADE: an open roster spot gets the best healthy free agent by value, or the lowest-value spare is
+           swapped for a free agent worth more than value × SWAP_MARGIN[0] + SWAP_MARGIN[1]; only positions
+           under their cap (upgrade_cap: QB = QB slots + 2 × SUPERFLEX slots, RB/WR 7, TE 2, K/DEF 1); at most
+           the week's upgrade budget.
    Rounds repeat until no team adds anyone.
-   A full active roster (starters + BN, IR not counted) drops its lowest-ROS spare: a player outside this
+   A full active roster (starters + BN, IR not counted) drops its lowest-value spare: a player outside this
    week's best lineup and not added in this run (decision D3).
+   Managers (as engines/fantasy_league_sim.py's): each AI team has a fixed activity (0.2–1.0) and reactivity
+   (0–0.5), drawn from its team id (manager_traits; some personas lean one way). Each week its upgrade budget
+   is the number of AI_ADDS_PER_WEEK draws (WAIVER_HAWK: WAIVER_HAWK_ADDS) under its activity, and it streams
+   with probability min(1, activity + 0.5) (week_plan, seeded per league, week and team). A manager's value
+   of a player = ROS projection scaled to the fantasy weeks left (fantasy_league_sim.ros_base) × (1 +
+   reactivity × last week's PPR against his average, fantasy_league_sim.hot_signal).
 3. Adds land on the bench for this week and every later saved week. Players dropped in the run go on waivers
    until the next run, so they can't be claimed back in the same one. Unclaimed players whose waivers clear
    this week become free agents. Each add is posted to the league chat as a WAIVER_CLAIM card.
@@ -34,12 +41,14 @@ CLI:
 
 import argparse
 import json
+import random
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional
 
 import psycopg
 from psycopg.rows import dict_row, tuple_row
 
+from engines.fantasy_league_sim import hot_signal, ros_base
 from engines.napper_injuries import get_injury_map
 from engines.napper_lineup_engine import (
     DATABASE_URL, POS_GROUP, STARTER_SLOT_ELIGIBILITY, _can_play, _load_team_week, _pick_starters,
@@ -47,9 +56,14 @@ from engines.napper_lineup_engine import (
     unfillable_slot_groups,
 )
 
-AI_ADDS_PER_WEEK = 2          # STREAM + UPGRADE adds per AI team per run (as fantasy_league_sim's 2 add/drops)
+AI_ADDS_PER_WEEK = 2          # upgrade draws per AI team per run (as fantasy_league_sim's 2 add/drops)
 WAIVER_HAWK_ADDS = 3
-SWAP_MARGIN = (1.15, 1.0)     # upgrade when the free agent's ROS > the drop's ROS × 1.15 + 1.0
+SWAP_MARGIN = (1.15, 1.0)     # upgrade when the free agent's value > the drop's value × 1.15 + 1.0
+ACTIVITY = (0.2, 1.0)         # fantasy_league_sim's manager ranges
+REACTIVITY = (0.0, 0.5)
+# Personas that lean one way draw from part of the range (others use the whole range).
+PERSONA_ACTIVITY = {"WAIVER_HAWK": (0.7, 1.0), "DIE_HARD": (0.2, 0.5)}
+PERSONA_REACTIVITY = {"ANALYTICS_NERD": (0.0, 0.15), "TRASH_TALKER": (0.3, 0.5), "UNDERDOG": (0.25, 0.5)}
 # Most players of a position an AI roster collects through upgrades (streaming and NEED may go past it).
 # QB: one per QB slot plus two per SUPERFLEX slot (upgrade_cap), so 1-QB teams don't hoard backups whose
 # raw ROS points are high but who never start; a QB on bye or IR is covered by STREAM and NEED.
@@ -65,28 +79,54 @@ FANTASY_POSITIONS = ["QB", "HB", "FB", "RB", "WR", "TE", "K", "DEF"]
 
 # ─────────────────────────────── pure planning (no database) ───────────────────────────────
 
+def manager_traits(team_id: int, persona: Optional[str]) -> dict:
+    """An AI manager's fixed {activity, reactivity}, drawn from the team id (same every week and run)."""
+    rng = random.Random(f"napper-manager-{team_id}")
+    activity = rng.uniform(*PERSONA_ACTIVITY.get(persona, ACTIVITY))
+    reactivity = rng.uniform(*PERSONA_REACTIVITY.get(persona, REACTIVITY))
+    return {"activity": round(activity, 3), "reactivity": round(reactivity, 3)}
+
+
+def week_plan(league_id: int, week: int, team_id: int, persona: Optional[str]) -> dict:
+    """An AI manager's appetite this week: {adds (upgrade budget), stream (bool), reactivity}."""
+    traits = manager_traits(team_id, persona)
+    rng = random.Random(f"napper-waivers-{league_id}-{week}-{team_id}")
+    draws = WAIVER_HAWK_ADDS if persona == "WAIVER_HAWK" else AI_ADDS_PER_WEEK
+    adds = sum(rng.random() < traits["activity"] for _ in range(draws))
+    stream = rng.random() < min(1.0, traits["activity"] + 0.5)
+    return {"adds": adds, "stream": stream, "reactivity": traits["reactivity"]}
+
+
+def player_value(p: dict, reactivity: float = 0.0) -> float:
+    """A manager's read of a player: `base` (ROS over the fantasy weeks left; raw `ros` when absent) nudged by
+    last week's box score (`hot`, −0.5..1) by the manager's reactivity."""
+    return p.get("base", p["ros"]) * (1.0 + reactivity * p.get("hot", 0.0))
+
+
 def _healthy(p: dict) -> bool:
     return not (p.get("injury") or {}).get("status")
 
 
-def lowest_spare(roster: List[dict], fmt: Dict[str, int], keep=()) -> Optional[dict]:
-    """The player a full roster drops: lowest ROS among those outside this week's best lineup and not in keep."""
+def lowest_spare(roster: List[dict], fmt: Dict[str, int], keep=(), reactivity: float = 0.0) -> Optional[dict]:
+    """The player a full roster drops: lowest value among those outside this week's best lineup and not in keep."""
     needed = {p["pid"] for p in _pick_starters(roster, fmt).values() if p}
     spare = [p for p in roster if p["pid"] not in needed and p["pid"] not in keep]
-    return min(spare, key=lambda p: (p["ros"], -p["pid"])) if spare else None
+    return min(spare, key=lambda p: (player_value(p, reactivity), -p["pid"])) if spare else None
 
 
 def ai_next_claim(roster: List[dict], pool: List[dict], fmt: Dict[str, int], adds_left: int,
-                  keep=()) -> Optional[dict]:
+                  keep=(), stream: bool = True, reactivity: float = 0.0) -> Optional[dict]:
     """An AI team's next pickup. roster: its active (non-IR) players; pool: claimable players (dicts with pid,
-    pos, proj, ros, bye, injury). Returns {add, drop (pid or None), reason} or None."""
+    pos, proj, ros, bye, injury, optional base/hot); adds_left: upgrades left this week; stream: whether the
+    manager streams this week. Returns {add, drop (pid or None), reason} or None."""
     full = len(roster) >= roster_capacity(fmt)
+    value = lambda p: player_value(p, reactivity)
 
     def with_drop(add: dict, reason: str, must_beat: Optional[float] = None) -> Optional[dict]:
-        drop = lowest_spare(roster, fmt, keep) if full else None
+        drop = lowest_spare(roster, fmt, keep, reactivity) if full else None
         if full and drop is None:
             return None
-        if drop is not None and must_beat is not None and not must_beat > drop["ros"]:
+        if drop is not None and must_beat is not None and not must_beat > value(drop):
             return None
         return {"add": add["pid"], "drop": drop["pid"] if drop else None, "reason": reason}
 
@@ -94,45 +134,46 @@ def ai_next_claim(roster: List[dict], pool: List[dict], fmt: Dict[str, int], add
     for group in unfillable_slot_groups(roster, fmt):
         cands = [p for p in pool if p["pos"] == group and _healthy(p)]
         if cands:
-            best = min(cands, key=lambda p: (not _can_play(p), -p["ros"], p["pid"]))
+            best = min(cands, key=lambda p: (not _can_play(p), -value(p), p["pid"]))
             claim = with_drop(best, "NEED")
             if claim:
                 return claim
+
+    # STREAM: a starting slot whose only candidates can't play this week.
+    if stream:
+        slots = _starter_slots(fmt)
+        for i, pick in _pick_starters(roster, fmt).items():
+            if pick is None or _can_play(pick):
+                continue
+            cands = [p for p in pool if p["pos"] in STARTER_SLOT_ELIGIBILITY[slots[i]] and _can_play(p) and p["proj"] > 0]
+            if cands:
+                best = max(cands, key=lambda p: (p["proj"], value(p), -p["pid"]))
+                claim = with_drop(best, "STREAM", must_beat=value(best))
+                if claim:
+                    return claim
     if adds_left <= 0:
         return None
 
-    # STREAM: a starting slot whose only candidates can't play this week.
-    slots = _starter_slots(fmt)
-    for i, pick in _pick_starters(roster, fmt).items():
-        if pick is None or _can_play(pick):
-            continue
-        cands = [p for p in pool if p["pos"] in STARTER_SLOT_ELIGIBILITY[slots[i]] and _can_play(p) and p["proj"] > 0]
-        if cands:
-            best = max(cands, key=lambda p: (p["proj"], p["ros"], -p["pid"]))
-            claim = with_drop(best, "STREAM", must_beat=best["ros"])
-            if claim:
-                return claim
-
-    # UPGRADE: an open spot, or a clearly better player than the lowest-ROS spare.
+    # UPGRADE: an open spot, or a clearly better player than the lowest-value spare.
     counts = Counter(p["pos"] for p in roster)
-    drop = lowest_spare(roster, fmt, keep) if full else None
+    drop = lowest_spare(roster, fmt, keep, reactivity) if full else None
     if full and drop is None:
         return None
     room = lambda pos: counts[pos] - (1 if drop is not None and drop["pos"] == pos else 0) < upgrade_cap(pos, fmt)
-    cands = [p for p in pool if _healthy(p) and room(p["pos"]) and p["ros"] > 0]
+    cands = [p for p in pool if _healthy(p) and room(p["pos"]) and value(p) > 0]
     if not cands:
         return None
-    best = max(cands, key=lambda p: (p["ros"], p["proj"], -p["pid"]))
-    if drop is not None and best["ros"] <= drop["ros"] * SWAP_MARGIN[0] + SWAP_MARGIN[1]:
+    best = max(cands, key=lambda p: (value(p), p["proj"], -p["pid"]))
+    if drop is not None and value(best) <= value(drop) * SWAP_MARGIN[0] + SWAP_MARGIN[1]:
         return None
     return {"add": best["pid"], "drop": drop["pid"] if drop else None, "reason": "UPGRADE"}
 
 
 def resolve_waivers(order: List[int], rosters: Dict[int, List[dict]], pool: Dict[int, dict],
-                    fmt: Dict[str, int], ai_teams: Dict[int, int], human_claims: Dict[int, List[dict]],
+                    fmt: Dict[str, int], ai_teams: Dict[int, dict], human_claims: Dict[int, List[dict]],
                     max_rounds: int = 20) -> dict:
     """Runs the claim rounds in memory. order: team ids in priority order; rosters: {team: active players};
-    pool: {pid: claimable player}; ai_teams: {team: STREAM/UPGRADE adds allowed}; human_claims: {team:
+    pool: {pid: claimable player}; ai_teams: {team: week_plan dict (adds, stream, reactivity)}; human_claims: {team:
     [{id, add, drop}] in rank order}. Mutates rosters/pool. Returns {transactions: [{team, add, drop, reason,
     claim_id}], outcomes: {claim_id: (status, note)}}."""
     cap = roster_capacity(fmt)
@@ -159,10 +200,11 @@ def resolve_waivers(order: List[int], rosters: Dict[int, List[dict]], pool: Dict
             if roster is None:
                 continue
             if team in ai_teams:
-                claim = ai_next_claim(roster, list(pool.values()), fmt, ai_teams[team] - adds_used[team],
-                                      keep=added[team])
+                plan = ai_teams[team]
+                claim = ai_next_claim(roster, list(pool.values()), fmt, plan["adds"] - adds_used[team],
+                                      keep=added[team], stream=plan["stream"], reactivity=plan["reactivity"])
                 if claim:
-                    if claim["reason"] != "NEED":
+                    if claim["reason"] == "UPGRADE":
                         adds_used[team] += 1
                     apply(team, claim["add"], claim["drop"], claim["reason"])
                     progress = True
@@ -235,6 +277,29 @@ def _load_pool(c, league_id: int, season: int, week: int) -> Dict[int, dict]:
     return pool
 
 
+def _attach_values(c, season: int, week: int, players: List[dict]) -> None:
+    """Sets each player's `base` (ROS scaled to the fantasy weeks left) and `hot` (last week's PPR against his
+    average) in place."""
+    pids = list({p["pid"] for p in players})
+    if not pids:
+        return
+    from server.napper_api import _ACTUAL_PLAYER_POINTS_CTE
+    last_week = week - 1
+    c.execute("SELECT player_id, avg_points::float FROM fantasy_projections WHERE season = %s AND week = %s "
+              "AND player_id = ANY(%s)", (season, week, pids))
+    avg = dict(c.fetchall())
+    last = {}
+    if last_week >= 1:
+        c.execute(f"""
+            {_ACTUAL_PLAYER_POINTS_CTE}
+            SELECT player_id, fantasy_points::float FROM actual WHERE player_id = ANY(%s)
+        """, (season, last_week, season, last_week, last_week, season, pids))
+        last = dict(c.fetchall())
+    for p in players:
+        p["base"] = ros_base(p["proj"], p["ros"], week)
+        p["hot"] = hot_signal(last.get(p["pid"]), avg.get(p["pid"]))
+
+
 def _post_claim(c, league_id: int, team_name: str, add_name: str, drop_name: Optional[str], reason: str) -> None:
     how = "claimed" if reason == "CLAIM" else "picked up"
     text = f"⚡ Waivers: {team_name} {how} {add_name}" + (f" and dropped {drop_name}." if drop_name else ".")
@@ -273,7 +338,8 @@ def run_waivers(cur, league_id: int, week: int, post_chat: bool = True) -> dict:
         human_claims: Dict[int, List[dict]] = defaultdict(list)
         for cid, tid, add, drop in c.fetchall():
             human_claims[tid].append({"id": cid, "add": add, "drop": drop})
-        ai_teams = {t: (WAIVER_HAWK_ADDS if persona == "WAIVER_HAWK" else AI_ADDS_PER_WEEK)
+        _attach_values(c, season, week, [p for r in rosters.values() for p in r] + list(pool.values()))
+        ai_teams = {t: week_plan(league_id, week, t, persona)
                     for t, (_, is_ai, persona) in teams.items() if is_ai}
 
         result = resolve_waivers(order, rosters, pool, fmt, ai_teams, human_claims)
