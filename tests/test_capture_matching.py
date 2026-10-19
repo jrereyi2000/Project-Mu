@@ -42,6 +42,10 @@ class NumberTest(unittest.TestCase):
         self.assertEqual(num("7.0"), 7)
         self.assertIsNone(num(""))
         self.assertEqual(dec("97.7"), 97.7)
+        self.assertEqual(num("−2"), -2)
+        self.assertEqual(dec("−2.5"), -2.5)
+        self.assertEqual(num("–3"), -3)
+        self.assertEqual(num("5.0"), 5)
         with self.assertRaises(ValueError):
             num("5.5")
         with self.assertRaises(ValueError):

@@ -51,13 +51,17 @@ class MergeTest(unittest.TestCase):
 
     def test_merge_strips_sort_marks(self):
         extract._cache.update({
-            "p1.png": {"title": "", "columns": ["TEAM", "NAME", "▼DP"], "rows": [["DEN", "E.Roman", "80"]]},
+            "p1.png": {"title": "", "columns": ["TEAM", "NAME", "▼DP", "▼YARDS"], "rows": [["DEN", "E.Roman", "80", "100"]]},
         })
         try:
             columns, rows = extract.merge(["p1.png"], "test")
         finally:
             extract._cache.pop("p1.png")
-        self.assertEqual(columns, ["TEAM", "NAME", "DP"])
+        self.assertEqual(columns, ["TEAM", "NAME", "DP", "YARDS"])
+        self.assertEqual(extract._col("▼YARDS"), "YARDS")
+        self.assertEqual(extract._col("▼YPG"), "YPG")
+        self.assertEqual(extract._col("Y YARDS"), "YARDS")
+        self.assertEqual(extract._col("v YARDS"), "YARDS")
 
 
 class MergeWideTest(unittest.TestCase):

@@ -112,7 +112,7 @@ def db_player_name(first, last):
 
 def num(value):
     """A captured cell -> int or None ('5,121' -> 5121, '' -> None). '60%' -> 60."""
-    v = str(value or "").strip().replace(",", "").rstrip("%")
+    v = str(value or "").strip().replace(",", "").replace("\u2212", "-").replace("\u2013", "-").replace("\u2014", "-").rstrip("%")
     if v in ("", "-", "--"):
         return None
     try:
@@ -126,7 +126,7 @@ def num(value):
 
 def dec(value):
     """A captured cell -> float or None ('97.7', '60%' -> 60.0, '' -> None)."""
-    v = str(value or "").strip().replace(",", "").rstrip("%")
+    v = str(value or "").strip().replace(",", "").replace("\u2212", "-").replace("\u2013", "-").replace("\u2014", "-").rstrip("%")
     if v in ("", "-", "--"):
         return None
     try:

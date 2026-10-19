@@ -202,7 +202,8 @@ def _read_table_remote(path, retries=4):
                     ),
                 )
             t = Table.model_validate_json(resp.text)
-            return {"title": t.title, "columns": t.columns, "rows": [r.cells for r in t.rows]}
+            rows = [[c.replace("\u2212", "-").replace("\u2013", "-").replace("\u2014", "-") for c in r.cells] for r in t.rows]
+            return {"title": t.title, "columns": t.columns, "rows": rows}
         except Exception as e:
             if attempt == retries:
                 raise RuntimeError(f"Gemini couldn't read {os.path.basename(path)}: {e}") from e
@@ -260,7 +261,12 @@ def merge(paths, label, key_cols=None):
 
 def _col(c):
     """Column name without sort marks ("▼TAK", "*YARDS")."""
-    return c.strip().lstrip("*▼▲Yv ").upper() if c.strip()[:1] in "*▼▲" else c.strip().upper()
+    c = c.strip()
+    if c[:1] in "*▼▲":
+        c = c.lstrip("*▼▲ ")
+    elif c[:2].upper() in ("Y ", "V "):
+        c = c[2:].strip()
+    return c.upper()
 
 
 def merge_wide(left_paths, right_paths, label):
