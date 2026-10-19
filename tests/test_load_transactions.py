@@ -45,7 +45,7 @@ class SignTest(unittest.TestCase):
         self.assertEqual((ins["team_id"], ins["length"], ins["total_value"]), (1, 1, 3_930_000))
         self.assertEqual(ins["years"], {2036: 3_930_000, 2037: 0, 2038: 0, 2039: 0, 2040: 0})
         self.assertEqual(plan[0]["txn"]["contract_value"], 3_930_000)
-        self.assertEqual(rep["teams_flagged"], [1])
+        self.assertEqual(ops(plan, "cap_delta"), [{"op": "cap_delta", "team_id": 1, "salaries": 3_930_000, "cap_penalty": 0}])
 
     def test_sign_unknown_creates_player(self):
         plan, rep = L.plan_effects(entries((W4, "JAGUARS SIGNED FREE AGENT (WR) DEVONTA TAYLOR JR. TO 1 YEAR, $850K CONTRACT")),
@@ -80,7 +80,9 @@ class ReleaseTradeTest(unittest.TestCase):
         plan, rep = L.plan_effects(entries((W4, "JAGUARS RELEASE (WR) JULIUS SLATON")), st, parse_money)
         self.assertEqual(ops(plan, "release"), [{"op": "release", "player": 30, "week": 4}])
         self.assertEqual(ops(plan, "move"), [])
-        self.assertEqual(ops(plan, "contract_status"), [{"op": "contract_status", "contract_id": 500, "status": "RELEASED"}])
+        self.assertEqual(ops(plan, "contract_status"), [{"op": "contract_status", "player": 30, "status": "RELEASED"}])
+        # his 2036 cap hit leaves the books; the stored cut penalty (2) stays as dead money
+        self.assertEqual(ops(plan, "cap_delta"), [{"op": "cap_delta", "team_id": 1, "salaries": -1_000_000, "cap_penalty": 2}])
         self.assertEqual(plan[0]["txn"]["from_team_id"], 1)
 
     def test_trade_copies_contract(self):
@@ -93,7 +95,7 @@ class ReleaseTradeTest(unittest.TestCase):
         self.assertEqual((ins["team_id"], ins["length"], ins["years"], ins["bonus"]),
                          (3, 2, {2036: 1_000_000, 2037: 1_000_000, 2038: 0, 2039: 0, 2040: 0}, 100))
         self.assertEqual(ops(plan, "move")[0]["team_id"], 3)
-        self.assertEqual(rep["teams_flagged"], [2, 3])
+        self.assertEqual([(o["team_id"], o["salaries"]) for o in ops(plan, "cap_delta")], [(2, -1_000_000), (3, 1_000_000)])
         groups = {e["txn"]["trade_group"] for e in plan}
         self.assertEqual(groups, {"2036:2036 SEASON - WEEK 4:BEARS-PACKERS:1"})
         pick = [e["txn"] for e in plan if e["txn"]["player"] is None][0]
@@ -108,11 +110,51 @@ class ReleaseTradeTest(unittest.TestCase):
         self.assertEqual([o["op"] for o in ops(plan) if o["op"] in ("move", "release")], ["move", "release"])
         self.assertEqual(ops(plan, "release")[0]["player"], 10)
 
-    def test_resign_flags_only(self):
+    def test_resign_projects_years_after_current_deal(self):
+        # current deal: 2 years left (2036, 2037); the new 4-year $120M deal starts in 2038, split evenly
         st = state([player(50, "Tom", "Brady", 4, "QB")], contracts={50: contract(700, 4)})
         plan, rep = L.plan_effects(entries((W4, "SAINTS RE-SIGNED (QB) TOM BRADY TO 4 YEARS, $120M CONTRACT")), st, parse_money)
-        self.assertEqual([o["op"] for o in ops(plan)], ["flag_team"])
+        self.assertEqual([o["op"] for o in ops(plan)], ["contract_extend"])
+        ext = ops(plan, "contract_extend")[0]
+        self.assertEqual((ext["player"], ext["years"], ext["value"]), (50, 4, 120_000_000))
+        self.assertEqual(ext["hits"], {2038: 30_000_000, 2039: 30_000_000, 2040: 30_000_000, 2041: 30_000_000})
+        self.assertEqual(ops(plan, "cap_delta"), [])           # this season's cap is unchanged
         self.assertEqual(plan[0]["txn"]["contract_value"], 120_000_000)
+
+    def test_resign_uses_scanned_shares(self):
+        shares = L.average_shares([(2, [4_000_000, 6_000_000])] * 10)
+        st = state([player(50, "Tom", "Brady", 4, "QB")], contracts={50: contract(700, 4, years=(1, 0, 0, 0, 0), length=1)})
+        st["shares"] = shares
+        plan, _ = L.plan_effects(entries((W4, "SAINTS RE-SIGNED (QB) TOM BRADY TO 2 YEARS, $10M CONTRACT")), st, parse_money)
+        self.assertEqual(ops(plan, "contract_extend")[0]["hits"], {2037: 4_000_000, 2038: 6_000_000})
+
+    def test_trade_keeps_projected_years(self):
+        c = contract(600, 2)
+        c["projected"] = [2038]
+        c["years"][2038] = 5
+        st = state([player(40, "John", "Doe", 2, "WR")], contracts={40: c})
+        plan, _ = L.plan_effects(entries((W4, "BEARS TRADED (WR) JOHN DOE TO PACKERS")), st, parse_money)
+        self.assertEqual(ops(plan, "contract_insert")[0]["projected"], [2038])
+
+
+class SharesTest(unittest.TestCase):
+    def test_even_split_without_enough_scans(self):
+        self.assertEqual(L.year_shares(3, {}), [1 / 3] * 3)
+        few = L.average_shares([(3, [1, 1, 2])] * 9)
+        self.assertEqual(L.year_shares(3, few), [1 / 3] * 3)
+
+    def test_average_by_length(self):
+        sh = L.average_shares([(2, [1, 3])] * 6 + [(2, [3, 1])] * 4 + [(3, [1, 1, 1, 0, 0])] * 12
+                              + [(6, [1] * 5)] * 20 + [(2, [0, 0])])
+        self.assertEqual(sh[2][1], 10)
+        self.assertAlmostEqual(sh[2][0][0], (6 * 0.25 + 4 * 0.75) / 10)
+        self.assertNotIn(6, sh)                     # longer than the 5 visible years: never sampled
+        self.assertEqual(L.year_shares(2, sh), sh[2][0])
+
+    def test_projected_hits_sum_to_value(self):
+        hits = L.projected_hits(10_000_001, 3, 2037, {})
+        self.assertEqual(sorted(hits), [2037, 2038, 2039])
+        self.assertEqual(sum(hits.values()), 10_000_001)
 
 
 class KeysAndCutoffTest(unittest.TestCase):

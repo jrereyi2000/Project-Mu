@@ -34,19 +34,20 @@ CREATE INDEX IF NOT EXISTS idx_transactions_season_week ON transactions (season,
 CREATE INDEX IF NOT EXISTS idx_transactions_player ON transactions (player_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_trade_group ON transactions (trade_group);
 
--- Teams whose Team Salary screen must be captured again (D5): every team in a newly applied transaction.
--- The weekly run re-scans at most 8 a week (traded teams always, the rest oldest first) and marks them satisfied.
-CREATE TABLE IF NOT EXISTS contract_rescan_requests (
-    id SERIAL PRIMARY KEY,
-    season INT NOT NULL,
-    team_id INT NOT NULL REFERENCES teams(id),
-    transaction_id INT REFERENCES transactions(id) ON DELETE CASCADE,
-    requested_at TIMESTAMPTZ DEFAULT now(),
-    satisfied_capture_id INT REFERENCES captures(id),
-    satisfied_at TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_contract_rescan_pending ON contract_rescan_requests (season, team_id)
-    WHERE satisfied_at IS NULL;
+-- Contract and cap bookkeeping from transactions (no automatic Team Salary re-scans, JR 2026-10-19; the next
+-- Season scan replaces all of it). Needs step 1's 2026_12_07_contracts.sql.
+-- A re-signing / extension keeps the current contract and records the new deal's terms on it; its projected
+-- cap hits are player_contract_years rows marked projected (the years after the current deal ends).
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS extension_years SMALLINT;
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS extension_value BIGINT;
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS extended_transaction_id INT
+    REFERENCES transactions(id) ON DELETE SET NULL;
+ALTER TABLE player_contract_years ADD COLUMN IF NOT EXISTS projected BOOLEAN NOT NULL DEFAULT false;
+-- Cap rows kept current from transaction deltas (signing, release dead money, trade) between scans:
+-- derived_at after scanned_at means the row is derived, not read off the screen.
+ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_at TIMESTAMPTZ;
+ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_transaction_id INT
+    REFERENCES transactions(id) ON DELETE SET NULL;
 
 -- A released player keeps his last team (the engines assume every player_seasons row has one, JR Oct 14);
 -- released_week marks him a free agent since that week. NULL = on the team's roster.

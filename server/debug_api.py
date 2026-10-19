@@ -195,14 +195,13 @@ def get_news_summary():
 @router.get("/transactions")
 def get_transactions(season: Optional[int] = None, week: Optional[int] = None, limit: int = 200):
     """League Transactions (team management step 2, PROJECT_SPEC §3.3e): the season's rows (one week with
-    `week`), newest first, plus the unparsed and ambiguous rows to review and the teams waiting for a contracts
-    re-scan (D5)."""
+    `week`), newest first, plus the unparsed and ambiguous rows to review."""
     limit = max(1, min(limit, 1000))
     with connect() as conn:
         if season is None:
             season = conn.execute("SELECT current_season FROM league_state WHERE id = 1").fetchone()["current_season"]
         if not conn.execute("SELECT to_regclass('transactions') IS NOT NULL AS ok").fetchone()["ok"]:
-            return {"season": season, "installed": False, "rows": [], "unparsed": [], "ambiguous": [], "pending_rescans": []}
+            return {"season": season, "installed": False, "rows": [], "unparsed": [], "ambiguous": []}
         cols = """t.id, t.season, t.week, t.txn_date, t.type, t.player_id, t.player_name, t.position,
                   ft.abbreviation AS from_team, tt.abbreviation AS to_team, t.contract_years, t.contract_value,
                   t.raw_text, t.parse_ok, t.flags, t.applied, t.trade_group, t.gm_proposal_id, t.created_at"""
@@ -212,14 +211,7 @@ def get_transactions(season: Optional[int] = None, week: Optional[int] = None, l
                             (season, week, limit) if week is not None else (season, limit)).fetchall()
         unparsed = conn.execute(base + " AND NOT t.parse_ok ORDER BY t.id DESC LIMIT 100", (season,)).fetchall()
         ambiguous = conn.execute(base + " AND t.flags LIKE '%%ambiguous%%' ORDER BY t.id DESC LIMIT 100", (season,)).fetchall()
-        pending = conn.execute("""SELECT tm.abbreviation AS team, count(*)::int AS requests, min(r.requested_at) AS oldest,
-                                         bool_or(t.type = 'TRADED') AS traded
-                                  FROM contract_rescan_requests r JOIN teams tm ON tm.id = r.team_id
-                                  LEFT JOIN transactions t ON t.id = r.transaction_id
-                                  WHERE r.season = %s AND r.satisfied_at IS NULL
-                                  GROUP BY tm.abbreviation ORDER BY min(r.requested_at)""", (season,)).fetchall()
-    return {"season": season, "installed": True, "rows": rows, "unparsed": unparsed, "ambiguous": ambiguous,
-            "pending_rescans": pending}
+    return {"season": season, "installed": True, "rows": rows, "unparsed": unparsed, "ambiguous": ambiguous}
 
 
 @router.post("/news/clear")

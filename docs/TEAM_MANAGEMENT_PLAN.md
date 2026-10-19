@@ -14,7 +14,7 @@ Written 2026-10-19 from a design talk with JR. This plan ties the work together.
 | D2 | **Mu decides trades.** GM agents propose them, JR approves them and makes them by hand in Madden. CPU trades get turned off if Madden has a setting for it. | Madden's trade logic isn't realistic and the CPU trades too often. The NFL averages about 17 trades a season. |
 | D3 | **JR does not control all 32 teams permanently.** To make an approved trade, he switches one of the teams to user control (Options > User Teams), makes the trade, then switches it back. | User-controlled teams lose the CPU's signings, re-signings and depth-chart upkeep. |
 | D4 | **Draft: GM agents choose the first 32 picks, and JR makes each pick in Madden by controlling that team. Madden simulates the rest.** The choices are made one pick at a time, live, from a scouting board (step 4), not from the mock draft's top-32-by-OVR. | 224 picks made by hand is too many. If picks were fixed in advance, they'd break as soon as a pick went off-script. Ranking by overall isn't how real boards look. |
-| D5 | **Contracts are scanned once a season (Season scan), then kept current from transactions.** When a transaction scan sees a team change, that team's Team Salary screen is captured again. Teams are never patched by guessing. | One full scan takes ~40 min, and a single team takes ~1–1.5 min. A CPU signing's contract terms show up only on the Team Salary screen. |
+| D5 | **Contracts are scanned once a season (Season scan), then kept current from transactions.** No Team Salary screen is re-scanned automatically (JR, 2026-10-19, revised). A signing creates its contract from the row (1 year, this season's cap hit = the amount). A release marks the contract `RELEASED` and charges its stored cut penalty as dead money. A trade moves the contract row for row. `team_cap_seasons` follows these deltas and is marked derived. `--mode contracts --teams` stays a by-hand tool, e.g. before a trade that only just fits under the cap. | One full scan takes ~40 min. The signing row gives the length and amount, and the moves only change this season's cap; the next Season scan corrects any drift. |
 | D6 | **Agents are informed by data.** They make up no rationale that contradicts stored data. They may invent untracked narrative, such as front-office chatter, the way the newsroom does. | Same hallucination policy as the newsroom. |
 | D7 | **The automated capture never presses Cross on TRADE, FREE AGENCY or CONTRACTS, and never on a trade or sign/release confirmation.** It may open only the read-only TEAM SALARY and LEAGUE TRANSACTIONS screens. | The same safety rule as the existing Cross guard (`madden_capture.cross`). |
 
@@ -25,7 +25,7 @@ Written 2026-10-19 from a design talk with JR. This plan ties the work together.
 | Step | Sub-plan | Depends on | Delivers |
 |---|---|---|---|
 | 1 | [`team_management/01_CONTRACT_SCAN_PLAN.md`](team_management/01_CONTRACT_SCAN_PLAN.md) | (none) | Team Salary capture, extraction, contract and cap tables, Season scan phase, `--mode contracts` |
-| 2 | [`team_management/02_LEAGUE_TRANSACTIONS_PLAN.md`](team_management/02_LEAGUE_TRANSACTIONS_PLAN.md) | Step 1's schema (§2.1). Can be built in parallel against that schema. | A weekly transactions scan, the `transactions` table, roster and contract moves, per-team contract re-scans |
+| 2 | [`team_management/02_LEAGUE_TRANSACTIONS_PLAN.md`](team_management/02_LEAGUE_TRANSACTIONS_PLAN.md) | Step 1's schema (§2.1). Can be built in parallel against that schema. | A weekly transactions scan, the `transactions` table, roster and contract moves, team cap rows kept current from them |
 | 3 | [`team_management/03_GM_AGENTS_PLAN.md`](team_management/03_GM_AGENTS_PLAN.md) | Steps 1 and 2 loaded | GM agent personas, team direction, trade proposals → approval queue → confirmed by step 2 |
 | 4 | [`team_management/04_SCOUTING_AND_DRAFT_PLAN.md`](team_management/04_SCOUTING_AND_DRAFT_PLAN.md) (**needs a design pass first, §2.5**) | Step 3 (GM personas and team direction) | A scouting architecture shared by GM agents and JR (a living board, college storylines and performances, risers and fallers), plus live pick-by-pick GM decisions for picks 1–32 |
 | 5 | [`team_management/05_NEWSROOM_INTEGRATION_PLAN.md`](team_management/05_NEWSROOM_INTEGRATION_PLAN.md) | Step 1 for cap tools, step 2 for transaction stories | Writer tools (cap sheet, contract, transactions), trade/signing coverage in the slate and Agent Wire, and lifting the "no trades/signings" ban where it applies |
@@ -57,16 +57,24 @@ What happens on a re-scan: a team's new scan marks that team's earlier `ACTIVE` 
 ### 2.2 Transactions schema (owned by step 2, migration `2026_12_08_transactions.sql`)
 
 - **`transactions`**: `id` PK, `season`, `week` (games.week numbering), `txn_date` text (as Madden shows it), `type` (`SIGNED` | `RELEASED` | `TRADED` | `RE_SIGNED` | `EXTENDED` | `OTHER`), `player_id` FK nullable, `player_name`, `position`, `from_team_id`, `to_team_id`, `raw_text`, `trade_group` (links the legs of one trade), `gm_proposal_id` nullable (set when it matches a step-3 proposal), `capture_id`. A unique key on its natural fields (exact columns set by the step-2 sub-plan) makes a re-scan idempotent.
-- Loading a transaction moves `player_seasons.team_id`. It creates a `player_seasons` row (and a player) for a signing it doesn't recognize, marks the player's active contract `RELEASED`/`TRADED`, and records the affected teams in a re-scan list for D5.
+- Loading a transaction moves `player_seasons.team_id`. It creates a `player_seasons` row (and a player) for a signing it doesn't recognize. Contracts follow the move (D5):
+  - A signing inserts an `ACTIVE`, `source = TRANSACTION` contract from the row (bonus, savings and penalty NULL).
+  - A release marks the contract `RELEASED` and adds its `cut_penalty` to the team's `cap_penalty`.
+  - A trade marks it `TRADED` and copies it to the new team row for row.
+  - `team_cap_seasons` (`salaries`, `cap_penalty`, `total_spend`, `cap_space`) is adjusted by the same deltas and stamped `derived_at` / `derived_transaction_id`.
+- A re-signing or extension (D8) keeps the current contract and this season's cap hit. It records `extension_years`, `extension_value` and `extended_transaction_id` on the `ACTIVE` contract. It adds **projected** `player_contract_years` rows (`projected = true`) for the new deal's years, starting the season after the current deal ends.
+  - Each year's hit = amount × that year's share.
+  - The shares are the average per-year share of the total among the latest Season scan's fully visible contracts of that length. With fewer than 10 such contracts, or none, the amount is split evenly.
+  - The next Season scan supersedes them as usual.
 
 ### 2.3 Capture conventions (steps 1 and 2)
 - New modes in `madden_capture.py`: `--only contracts` and `--only transactions`. New folders `captures/<run>/contracts/<NN>_<team>/` and `captures/<run>/transactions/`. Each resumes with `done.txt` like the roster and injuries do.
 - New `ROSTER_MENU`/`LEAGUE_MENU` targets get added to the `cross()` guard **by name** (TEAM SALARY, LEAGUE TRANSACTIONS) per D7, each with its own screen classifier.
 - `extract.py` writes `contracts.csv`, `team_cap.csv` and `transactions.csv`. `pipeline/load_capture.py` loads them, picking the mode from the folder, as one transaction.
 - `pipeline/weekly_capture.py`:
-  - `--mode contracts` (all teams, or `--teams CAR,NO` for a re-scan).
+  - `--mode contracts` (all teams, or `--teams CAR,NO` for a by-hand re-scan; nothing triggers it automatically).
   - The Season scan gets a contracts phase **after rosters**, so every row matches a player.
-  - The weekly run gets a transactions phase, plus a contracts re-scan of only the teams step 2 flagged.
+  - The weekly run gets a transactions phase (no contracts re-scan, D5).
   - Matching `#debug` buttons.
 
 ### 2.4 GM interfaces (owned by step 3; step 4 and step 5 consume)
@@ -111,16 +119,16 @@ The mock draft's board is the top 32 by OVR, and that isn't realistic. Step 4 st
 
    The list is newest first. The capture scrolls down until it reaches a row older than the last week loaded, which keeps a weekly scan short. **The CPU only signs free agents to 1-year deals.** Contract re-signings also show up in the list.
 4. **CPU trades are now turned off.** Switching team control in the middle of a season is allowed, and the team keeps its CPU settings when switched back.
-5. **The receiving team takes on the same contract** in a trade. Step 2 moves the active `player_contracts` row (`TRADED` → a new `ACTIVE` row with `source = TRANSACTION` on the new team, same years). The D5 re-scan confirms it.
+5. **The receiving team takes on the same contract** in a trade. Step 2 moves the active `player_contracts` row (`TRADED` → a new `ACTIVE` row with `source = TRANSACTION` on the new team, same years). The next Season scan confirms it.
 6. **The draft:** JR can't pick for a team he doesn't control. He can control teams for the first 32 picks and then simulate the rest (see D4 and step 4).
 
-**Re-signings (decision D8): included.** Re-signings and extensions are stored as `RE_SIGNED`/`EXTENDED` transactions. They don't change the current season's contract row, but they flag the team for the D5 contracts re-scan. Why include them: they change future cap hits, which the GM agents' trade legality and future-cap reasoning depend on (step 3). They're also news (step 5). Leaving them out would mean the GM agents reason from stale future years until the next Season scan.
+**Re-signings (decision D8): included.** Re-signings and extensions are stored as `RE_SIGNED`/`EXTENDED` transactions. They don't change this season's cap hit. The new deal's terms go on the active contract, and its years get projected cap hits (§2.2), which the next Season scan replaces with the real ones (JR, 2026-10-19, revised: no re-scan). Why include them: they change future cap hits, which the GM agents' trade legality and future-cap reasoning depend on (step 3). They're also news (step 5). Leaving them out would mean the GM agents reason from stale future years until the next Season scan.
 
 ---
 
 ## 4. Risks
 - **Matching names after transactions:** a CPU signing brings in players the roster scan never saw. Step 2 creates them the same way the roster loader does (`capture_matching`), and the next roster scan reconciles them.
-- **Cap drift:** CPU re-signings and extensions change contracts without a trade. D5's per-team re-scan catches every team that shows up in that week's transactions. Teams with no moves can drift until the next season scan. That's acceptable for now.
+- **Cap drift:** this season's cap is derived from the moves (D5), and the future years of re-signings are projections (D8). So the numbers can drift from Madden's until the next Season scan. Three examples: how a signing's bonus is split, the exact dead money of a contract signed in-season (its penalty is unknown, so releasing that player charges nothing), and the real year-by-year shape of a re-signing. That's acceptable. `--mode contracts --teams` checks one team by hand when it matters.
 - **Making trades by hand:** JR may change a trade or skip it. The transaction scan is the source of truth, so a mismatch leaves the proposal `APPROVED` and flags it, without editing anything.
 - **Shared checkout:** other sessions edit `PROJECT_SPEC.md` and `init_db.sql` at the same time. Sub-agents stage only their own hunks, and migration dates are taken from §2.1/§2.2 so they don't collide.
 

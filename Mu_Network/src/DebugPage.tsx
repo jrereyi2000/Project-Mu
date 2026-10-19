@@ -51,13 +51,13 @@ const RUNS: { kind: string; title: string; note: string }[] = [
   { kind: "season_scan", title: "Season scan", note: "Annual start-of-season cadence: captures the 18-week schedule, all 32 team rosters, every team's contracts (Team Salary, right after rosters), and the draft prospect board (in that order; prospects last). No articles." },
   { kind: "roster_scan", title: "Roster scan", note: "Captures all 32 team rosters, extracts player cards, and updates players/seasons in the database (normally run once a season with schedule and draft board). No articles." },
   { kind: "contract_scan", title: "Contract scan", note: "Captures every team's Team Salary screen (contracts and cap), extracts and loads it; a re-scan supersedes the old contracts. ~40 min. Normally part of the Season scan; only loads in-season (the year on screen must match the league season). No articles." },
-  { kind: "transactions_scan", title: "League transactions scan", note: "Reads League > League Transactions from the newest week already loaded (the whole list the first time; moves before Week 1 are kept as history only), loads signings, releases and trades (team and contract moves), then re-scans the Team Salary of up to 8 teams that changed (traded teams always). Scan week does this too. No articles." },
+  { kind: "transactions_scan", title: "League transactions scan", note: "Reads League > League Transactions from the newest week already loaded (the whole list the first time; moves before Week 1 are kept as history only), loads signings, releases, trades and re-signings (team moves, contracts and cap kept current from them; no Team Salary re-scan). Scan week does this too. No articles." },
   { kind: "draft_scan", title: "Draft prospect scan", note: "Scans the scouting draft board line-by-line, extracts prospects via Apple Vision OCR, and syncs data/draft/ prospects board (normally run once a season with schedule and roster scans, after both). No articles." },
 ];
 
-// League Transactions (team management step 2): rows to review and teams waiting for a contracts re-scan
+// League Transactions (team management step 2): rows to review
 type TxRow = { id: number; txn_date: string; type: string; player_name: string | null; position: string | null; from_team: string | null; to_team: string | null; raw_text: string; flags: string | null; applied: boolean };
-type TxState = { season: number; installed: boolean; rows: TxRow[]; unparsed: TxRow[]; ambiguous: TxRow[]; pending_rescans: { team: string; requests: number; oldest: string; traded: boolean }[] };
+type TxState = { season: number; installed: boolean; rows: TxRow[]; unparsed: TxRow[]; ambiguous: TxRow[] };
 
 function TransactionsCard() {
   const [tx, setTx] = useState<TxState | null>(null);
@@ -79,13 +79,6 @@ function TransactionsCard() {
       {tx && !tx.installed && <p className="text-xs text-[var(--gray-500)]">The transactions migration isn't applied to this database yet.</p>}
       {tx?.installed && (
         <div className="grid gap-3 text-xs">
-          <div>
-            <span className={label}>Waiting for a contracts re-scan</span>
-            {tx.pending_rescans.length
-              ? <div className="flex flex-wrap gap-2">{tx.pending_rescans.map(p => (
-                  <span key={p.team} className="font-mono border border-[var(--gray-300)] px-1">{p.team}{p.traded ? " (trade)" : ""} ×{p.requests}</span>))}</div>
-              : <span className="text-[var(--gray-500)]">None.</span>}
-          </div>
           <div>
             <span className={label}>Unparsed rows ({tx.unparsed.length})</span>
             {tx.unparsed.length ? tx.unparsed.map(line) : <span className="text-[var(--gray-500)]">None.</span>}

@@ -196,4 +196,4 @@ class TransactionsDebugTest(unittest.TestCase):
         with mock.patch.object(dbg, "CONN_INFO", os.environ["TX_TEST_DATABASE_URL"]):
             body = TestClient(app).get("/api/debug/transactions?season=2036").json()
         self.assertTrue(body["installed"])
-        self.assertIn("pending_rescans", body)
+        self.assertIn("unparsed", body)

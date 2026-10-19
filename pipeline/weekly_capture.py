@@ -13,15 +13,12 @@ from the debug page (#debug, server/debug_api.py: Scan week / Backfill previous 
   python3 -m pipeline.weekly_capture --mode transactions
                                                       # League Transactions only: capture (from the newest loaded
                                                       # heading, or the whole list on the first run), extract,
-                                                      # D5 contracts re-scan, load; never engines or articles
+                                                      # load; never engines or articles
 
 League Transactions (team management step 2): the weekly and playoff captures also read League > LEAGUE
-TRANSACTIONS from the newest heading already loaded (--since). Before the hand-back notice, while Remote Play
-still has the console, the run extracts transactions.csv, works out the teams to re-scan (D5: teams in new
-transactions plus pending contract_rescan_requests; traded teams always, the rest oldest first up to
-RESCAN_CAP) and captures their Team Salary screens into the sibling folder <run>_contracts. After the run's
-load (transactions before Season Stats), that folder is extracted and loaded with step 1's contracts_phase and
-the teams' requests are marked satisfied. A re-scan that fails only logs: its requests stay pending.
+TRANSACTIONS from the newest heading already loaded (--since); the load applies the moves before Season Stats
+and keeps contracts and team cap rows current from them. Nothing re-scans Team Salary automatically (JR,
+2026-10-19): --mode contracts --teams stays a by-hand tool.
 
 Week 22 (league_state.current_week 22, Madden on Pro Bowl week): no games of ours, so Scan week is an
 articles-only run: engines, the Week 23 (Super Bowl week) slate, then current_week moves to 23. No console.
@@ -67,7 +64,6 @@ CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
 MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame", "draft-results", "team-overalls",
          "contracts", "transactions")
-RESCAN_CAP = 8             # D5 re-scans a week besides traded teams (JR, 2026-10-19: ~1-1.5 min a team)
 FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
 PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
 SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the Super Bowl postgame capture
@@ -439,8 +435,8 @@ def team_nicknames(abbrs):
 def contracts_phase(folder, log_path, teams=None):
     """Capture -> extract -> load of a Team Salary run in its own folder (team management step 1), each step
     skipped when already done. teams: abbreviations for a re-scan (None = all 32). Takes no lock and doesn't
-    connect: run(mode='contracts') holds the lock, and step 2's weekly phase calls it inside its own run after
-    its transactions load. Returns the load report (None when the folder was already loaded)."""
+    connect: run(mode='contracts') holds the lock. Nothing calls it automatically for League Transactions
+    (JR, 2026-10-19: no automatic re-scans). Returns the load report (None when the folder was already loaded)."""
     os.makedirs(folder, exist_ok=True)
     report = None
     if not capture_done(folder, "contracts"):
@@ -475,132 +471,6 @@ def since_heading(season, weekly=True):
     if heads:
         return max(heads, key=heading_ordinal)
     return f"{season} SEASON - WEEK 1" if weekly else None
-
-
-def pick_rescan(new_traded, new_other, pending, cap=RESCAN_CAP):
-    """The teams to re-scan this week (JR, 2026-10-19): every team in a trade (new, or a pending traded
-    request) always; then the others, oldest request first, up to `cap`. New teams from this scan count as
-    requested now (after every pending request). pending: [(team_id, requested_at, traded)].
-    Returns (team ids in order, team ids left pending)."""
-    traded = list(dict.fromkeys(list(new_traded) + [t for t, _, tr in sorted(pending, key=lambda p: p[1]) if tr]))
-    rest = []
-    for t, _, _ in sorted(pending, key=lambda p: p[1]):
-        if t not in traded and t not in rest:
-            rest.append(t)
-    for t in new_other:
-        if t not in traded and t not in rest:
-            rest.append(t)
-    return traded + rest[:cap], rest[cap:]
-
-
-def rescan_teams(folder, season):
-    """Teams to re-scan now (pick_rescan) from the run's transactions.csv against the DB (read-only: the plan
-    is computed, nothing is written) plus pending requests. Returns ([(team_id, abbreviation)], left pending)."""
-    import psycopg
-    from pipeline.load_capture import DSN
-    from pipeline.load_transactions import expand, plan_effects, read_meta, read_rows, read_state
-    from pipeline.money import parse_money
-    from pipeline.transactions_parse import heading_year
-    with psycopg.connect(DSN) as conn:
-        cur = conn.cursor()
-        traded, other = [], []
-        if os.path.exists(os.path.join(folder, "transactions.csv")):
-            entries = expand(read_rows(folder), read_meta(folder))
-            state = read_state(cur, season, {heading_year(e["heading"]) for e in entries} - {None})
-            plan, _ = plan_effects(entries, state, parse_money)
-            for en in plan:
-                ids = [op["team_id"] for op in en["ops"] if op["op"] == "flag_team" and op["team_id"]]
-                (traded if en["txn"]["type"] == "TRADED" else other).extend(ids)
-        cur.execute("""SELECT r.team_id, min(r.requested_at), bool_or(t.type = 'TRADED')
-                       FROM contract_rescan_requests r LEFT JOIN transactions t ON t.id = r.transaction_id
-                       WHERE r.season = %s AND r.satisfied_at IS NULL GROUP BY r.team_id""", (season,))
-        pending = cur.fetchall()
-        abbr = dict(cur.execute("SELECT id, abbreviation FROM teams").fetchall())
-        conn.rollback()
-    teams, left = pick_rescan(list(dict.fromkeys(traded)), list(dict.fromkeys(other)), pending)
-    return [(t, abbr[t]) for t in teams], left
-
-
-def contracts_sibling(folder):
-    return folder.rstrip("/") + "_contracts"
-
-
-def rescan_capture(folder, log_path, season):
-    """Before the hand-back notice (S17): extract transactions.csv and capture the chosen teams' Team Salary
-    screens into <run>_contracts (step 1's capture). Never stops the week; returns the team ids captured."""
-    import json
-    try:
-        if tx_pages(folder) and not os.path.exists(os.path.join(folder, "transactions.csv")):
-            log("Step 3b: extract League Transactions (for the contracts re-scan)")
-            from pipeline.extract_transactions_ocr import extract_transactions_ocr
-            extract_transactions_ocr(folder)
-        if "contracts" not in MODES:
-            log("Contracts re-scan skipped (step 1 not built); requests stay pending")
-            return []
-        teams, left = rescan_teams(folder, season)
-        if not teams:
-            log("No teams to re-scan")
-            return []
-        sib = contracts_sibling(folder)
-        os.makedirs(sib, exist_ok=True)
-        with open(os.path.join(sib, "rescan.json"), "w") as fh:
-            json.dump({"teams": [t for t, _ in teams], "left_pending": left}, fh)
-        log(f"Step 3c: contracts re-scan of {', '.join(a for _, a in teams)}"
-            + (f" ({len(left)} more stay pending)" if left else ""))
-        if not capture_done(sib, "contracts"):
-            step_capture(sib, log_path, "contracts", teams=team_nicknames([a for _, a in teams]))
-        return [t for t, _ in teams]
-    except Exception as e:                        # the week goes on; the requests stay pending
-        log(f"[WARN] Contracts re-scan skipped: {e}")
-        return []
-
-
-def mark_rescans_satisfied(season, team_ids, capture_folder):
-    """The teams' pending re-scan requests are satisfied by this contracts capture."""
-    import psycopg
-    from pipeline.load_capture import DSN
-    with psycopg.connect(DSN) as conn:
-        if not conn.execute("SELECT to_regclass('contract_rescan_requests') IS NOT NULL").fetchone()[0]:
-            return 0
-        cur = conn.execute("""UPDATE contract_rescan_requests SET satisfied_at = now(),
-                                  satisfied_capture_id = (SELECT id FROM captures WHERE folder = %s)
-                              WHERE season = %s AND team_id = ANY(%s) AND satisfied_at IS NULL""",
-                           (os.path.basename(os.path.normpath(capture_folder)), season, list(team_ids)))
-        return cur.rowcount
-
-
-def satisfy_contract_scan(folder, teams=None):
-    """After a standalone --mode contracts run: the scanned teams' (abbreviations; None = all 32) pending
-    League Transactions re-scan requests are satisfied by it. Never stops the run."""
-    try:
-        import psycopg
-        from pipeline.load_capture import DSN
-        season, _ = league_state()
-        want = [t.strip().upper() for t in teams] if teams else None
-        with psycopg.connect(DSN) as conn:
-            ids = [i for i, a in conn.execute("SELECT id, upper(abbreviation) FROM teams") if want is None or a in want]
-        n = mark_rescans_satisfied(season, ids, folder)
-        if n:
-            log(f"{n} League Transactions re-scan requests satisfied")
-    except Exception as e:
-        log(f"[WARN] Couldn't mark re-scan requests satisfied: {e}")
-
-
-def rescan_load(folder, log_path, season):
-    """After the run's load: extract + load <run>_contracts (step 1's contracts_phase; capture already done) and
-    mark the teams' requests satisfied. Never stops the week."""
-    import json
-    sib = contracts_sibling(folder)
-    if not os.path.exists(os.path.join(sib, "rescan.json")) or not capture_done(sib, "contracts"):
-        return
-    try:
-        teams = json.load(open(os.path.join(sib, "rescan.json")))["teams"]
-        contracts_phase(sib, log_path)
-        n = mark_rescans_satisfied(season, teams, sib)
-        log(f"Contracts re-scan loaded; {n} re-scan requests satisfied")
-        shrink(sib)
-    except Exception as e:
-        log(f"[WARN] Contracts re-scan load failed (requests stay pending): {e}")
 
 
 # ----------------------------------------------------------------- run ----
@@ -711,7 +581,6 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
                     log("Step 2: connect")
                     step_connect(log_path)
             report = contracts_phase(folder, log_path, teams)
-            satisfy_contract_scan(folder, teams)   # a standalone scan also satisfies re-scan requests (D5)
             log("Contracts loaded. Skipping weekly engines and articles.")
             log("Step 9: shrink")
             before, after = shrink(folder)
@@ -735,8 +604,6 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
                     log(f"[WARN] No League Transactions cutoff ({e}); the scan reads the whole list")
             log("Step 3: capture" + (f" (League Transactions since {since})" if since else ""))
             step_capture(folder, log_path, mode, week_label, **({"since": since} if since else {}))
-            if mode in ("weekly", "playoff", "transactions") and week_label != SUPER_BOWL_LABEL:
-                rescan_capture(folder, log_path, league_state()[0])     # D5, while Remote Play has the console
             mins = (time.time() - started) / 60
             notify(f"{what} done in {mins:.0f} min ({captured_week(folder) or 'last week'}). Turn your controller "
                    "back on and restart the broadcast.", title="Mu: your turn", priority="high",
@@ -753,8 +620,6 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             log(f"Loaded: {report.get('mode')} week {report.get('week')}")
         else:
             log("Already loaded; skipping the load")
-        if mode in ("weekly", "playoff", "transactions"):
-            rescan_load(folder, log_path, league_state()[0])
         if mode == "transactions":
             log("League transactions loaded. Skipping weekly engines and articles.")
             log("Step 9: shrink")
@@ -837,7 +702,7 @@ def main():
                          "prospects: draft board scan of college prospects; "
                          "draft-results: capture and load actual draft results into draft_prospects; "
                          "contracts: Team Salary for all 32 teams (or --teams), extracted and loaded; "
-                         "transactions: League Transactions alone (+ the D5 contracts re-scan), extracted and loaded")
+                         "transactions: League Transactions alone, extracted and loaded")
     ap.add_argument("--teams", metavar="ABBRS", help="--mode contracts: re-scan only these teams, e.g. CAR,NO")
     ap.add_argument("--no-connect", action="store_true",
                     help="skip the connect step (chiaki-ng is already streaming the franchise menus)")

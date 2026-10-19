@@ -2,7 +2,7 @@
 
 Written 2026-10-19 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) step 2. This plan owns master §2.2 (the `transactions` schema). It uses step 1's §2.1 contract tables, `pipeline/money.py` and `--mode contracts --teams` only through the interfaces the master plan fixes, and it never designs them.
 
-**Delivers:** `madden_capture.py --only transactions`, `transactions.csv`, migration `2026_12_08_transactions.sql`, a loader that moves players between teams and updates their contracts, a list of teams to re-scan for D5, a transactions phase in the weekly run that triggers step 1's per-team contract re-scan, and the changes the engines and Napper need once a player's team can change mid-season.
+**Delivers:** `madden_capture.py --only transactions`, `transactions.csv`, migration `2026_12_08_transactions.sql`, a loader that moves players between teams and keeps their contracts and the team cap rows current from the transactions (no automatic Team Salary re-scans, §6 answer 1), a transactions phase in the weekly run, and the changes the engines and Napper need once a player's team can change mid-season.
 
 ---
 
@@ -63,7 +63,7 @@ The list gives no date finer than the heading, and identical rows are legitimate
 - `row_key`: a normalized key. For a parsed row it is built **from the parsed fields** (`type|team|to_team|pos|full_key(name)|len|amount`), so two OCR readings of the same row that differ by a stray character still collide. An unparsed row uses `raw:` + the text upper-cased, with whitespace collapsed and homoglyphs folded.
 - `seq`: the 1-based count of rows with the same `(txn_date, row_key)`, **counted from the oldest row in that heading group upward**. New rows appear at the top (newest first), so older rows keep their `seq` when the list grows. The scan always covers whole heading groups (§2.2), so `seq` is stable across re-scans.
 
-The loader inserts with `ON CONFLICT DO NOTHING RETURNING id`. **Effects (team moves, contracts, re-scan flags) run only for rows inserted now**, so loading the same week again changes nothing.
+The loader inserts with `ON CONFLICT DO NOTHING RETURNING id`. **Effects (team moves, contracts, cap deltas) run only for rows inserted now**, so loading the same week again changes nothing.
 
 ### 2.2 Scan cutoff
 `--since "<heading>"` names the newest heading already loaded. The capture stops after the first page whose **every** visible heading orders strictly before `since`. Rows from the `since` week are therefore read again in full, which is what makes `seq` stable, and rows that are already loaded fall to the unique key. With no `--since`, the scan runs to the end of the list (first-run backfill). Headings are ordered by `heading_ordinal()` = `(year, phase_rank, week_or_stage)`. The ranks for preseason, regular season, postseason and offseason come from console fact 5.
@@ -71,13 +71,17 @@ The loader inserts with `ON CONFLICT DO NOTHING RETURNING id`. **Effects (team m
 ### 2.3 Effects (per inserted row, oldest first, inside the load transaction)
 Matching uses `name_case` → `full_key`/`name_key` (S13). The "this season" roster comes from `player_seasons` for `season`.
 
-| Type | Player resolution | `player_seasons` | Contracts (only if `to_regclass('player_contracts')` exists; step 1 may land later) | D5 flag |
+| Type | Player resolution | `player_seasons` | Contracts (only if `to_regclass('player_contracts')` exists; step 1 may land later) | `team_cap_seasons` (this season; skipped when the team has no row) |
 |---|---|---|---|---|
-| `SIGNED` | 1) `full_key` among this season's rows that have `released_week` set, 2) `full_key` + position anywhere this season, 3) `full_key` + position in `players` with no row this season. Several hits are **ambiguous**: store `player_id` NULL, report it, and apply no move. No hit: **create** `players(player_name=db_player_name, full_name)` and a `player_seasons` row (`team_id = to_team`, `position`, the other card fields NULL), and report it under `created_players`. | Upsert `team_id = to_team`, `released_week = NULL`. | Any `ACTIVE` row for `(player, season)` → `SUPERSEDED`. Insert `ACTIVE`, `source = 'TRANSACTION'`, `length = years_remaining = N`, `total_value = parse_money(amount)`, other money NULL, plus `player_contract_years` for `season … season+4` (`cap_hit` = `total_value / N` for the years in the contract, 0 after). | `to_team` |
-| `RELEASED` | `full_key` / `name_key` + position among `from_team`'s rows this season. If it isn't found there, look league-wide. If there's still no hit, create the player with `team_id = from_team` and flag it. | `released_week = week` (**`team_id` kept**, S12). | The `ACTIVE` row → `RELEASED`. | `from_team` |
-| `TRADED` (one leg per player) | Same as RELEASED, on `from_team`. | `team_id = to_team`, `released_week = NULL`. | `ACTIVE` → `TRADED`, then insert a copy on `to_team` (`ACTIVE`, `source = 'TRANSACTION'`, same `length`/`years_remaining`/money and copied `player_contract_years`), per master §3.5. | both teams |
-| `RE_SIGNED` / `EXTENDED` | Same as RELEASED, on `team`. | None. | None (D8). | `team` |
-| `OTHER` | None. | None. | None. | None |
+| `SIGNED` | 1) `full_key` among this season's rows that have `released_week` set, 2) `full_key` + position anywhere this season, 3) `full_key` + position in `players` with no row this season. Several hits are **ambiguous**: store `player_id` NULL, report it, and apply no move. No hit: **create** `players(player_name=db_player_name, full_name)` and a `player_seasons` row (`team_id = to_team`, `position`, the other card fields NULL), and report it under `created_players`. | Upsert `team_id = to_team`, `released_week = NULL`. | Any `ACTIVE` row for `(player, season)` → `SUPERSEDED`. Insert `ACTIVE`, `source = 'TRANSACTION'`, `length = years_remaining = N`, `total_value = parse_money(amount)`, bonus/savings/penalty NULL, plus `player_contract_years` for `season … season+4` (`cap_hit` = `total_value / N` for the years in the contract, 0 after). | `to_team`: `salaries` + this season's hit. |
+| `RELEASED` | `full_key` / `name_key` + position among `from_team`'s rows this season. If it isn't found there, look league-wide. If there's still no hit, create the player with `team_id = from_team`. | `released_week = week` (**`team_id` kept**, S12). | The `ACTIVE` row → `RELEASED`. | `from_team`: `salaries` − his hit, `cap_penalty` + the stored `cut_penalty` (dead money; NULL counts as 0). |
+| `TRADED` (one leg per player) | Same as RELEASED, on `from_team`. | `team_id = to_team`, `released_week = NULL`. | `ACTIVE` → `TRADED`, then insert a copy on `to_team` (`ACTIVE`, `source = 'TRANSACTION'`, same `length`/`years_remaining`/money and copied `player_contract_years`, `projected` flags kept), per master §3.5. | `from_team` − hit, `to_team` + hit. |
+| `RE_SIGNED` / `EXTENDED` | Same as RELEASED, on `team` (no player is created). | None. | The `ACTIVE` row keeps this season; it gets `extension_years`, `extension_value`, `extended_transaction_id`, and **projected** `player_contract_years` rows (`projected = true`) for the new deal's years, starting the season after the current deal ends (`season + years_remaining`). Hits = amount × `year_shares(N)` (below). | None. |
+| `OTHER` | None. | None. | None. | None. |
+
+Every cap delta changes `salaries` and/or `cap_penalty`, moves `total_spend` by their sum and `cap_space` by minus it, and stamps `derived_at` and `derived_transaction_id`. `derived_at` later than `scanned_at` means the row is derived, not read off the screen. The next Season scan overwrites all of it.
+
+**Re-signing shares** (`average_shares` / `year_shares` / `projected_hits`, pure). From the latest Season scan, take the `ACTIVE`, `SCAN` contracts whose every year is on screen (`years_remaining = length ≤ 5`). For each length, average each year's share of the total. A length backed by fewer than 10 contracts, or no scan at all, splits the amount evenly. The rounding remainder goes to the last year, so the hits sum to the amount.
 
 Pick legs and unparsed trade fragments are stored as `TRADED` with `player_id` NULL and the asset in `raw_text`. They have no effect. `trade_group` is set to `"{season}:{txn_date}:{teamA}-{teamB}:{n}"` (teams sorted) for consecutive TRADED legs between the same pair of teams in one heading group.
 
@@ -102,7 +106,7 @@ The Gemini reading is parsed again by the same grammar. A row that still fails i
 **Files**
 - `db/migrations/2026_12_08_transactions.sql`, folded into `db/init_db.sql` (stage only this hunk; the checkout is shared):
   - `transactions`: `id SERIAL PK`, `season INT NOT NULL`, `week INT NULL` (games.week; NULL for offseason stages), `txn_date TEXT NOT NULL`, `type VARCHAR(12) NOT NULL CHECK (type IN ('SIGNED','RELEASED','TRADED','RE_SIGNED','EXTENDED','OTHER'))`, `player_id INT REFERENCES players(id) ON DELETE SET NULL`, `player_name TEXT`, `position VARCHAR(6)`, `from_team_id`/`to_team_id INT REFERENCES teams(id)`, `contract_years SMALLINT`, `contract_value BIGINT`, `raw_text TEXT NOT NULL`, `row_key TEXT NOT NULL`, `seq SMALLINT NOT NULL DEFAULT 1`, `parse_ok BOOLEAN NOT NULL`, `flags TEXT`, `applied BOOLEAN NOT NULL DEFAULT TRUE`, `trade_group TEXT`, `gm_proposal_id INT NULL` (no FK; step 3 adds it), `capture_id INT REFERENCES captures(id) ON DELETE SET NULL`, `created_at TIMESTAMPTZ DEFAULT now()`, `UNIQUE (season, txn_date, row_key, seq)`. Indexes: `(season, week)`, `(player_id)`, `(trade_group)`.
-  - `contract_rescan_requests`: `id SERIAL PK`, `season INT`, `team_id INT REFERENCES teams(id)`, `transaction_id INT REFERENCES transactions(id) ON DELETE CASCADE`, `requested_at TIMESTAMPTZ DEFAULT now()`, `satisfied_capture_id INT REFERENCES captures(id)`, `satisfied_at TIMESTAMPTZ`. Partial index on pending (`satisfied_at IS NULL`).
+  - On step 1's tables (revised 2026-10-19, after JR dropped the re-scan queue): `player_contracts.extension_years SMALLINT`, `extension_value BIGINT`, `extended_transaction_id INT REFERENCES transactions(id) ON DELETE SET NULL`; `player_contract_years.projected BOOLEAN NOT NULL DEFAULT false`; `team_cap_seasons.derived_at TIMESTAMPTZ`, `derived_transaction_id INT REFERENCES transactions(id) ON DELETE SET NULL`.
   - `ALTER TABLE player_seasons ADD COLUMN IF NOT EXISTS released_week INT` (NULL = on the team's roster; set = free agent since that week).
 - `pipeline/transactions_parse.py` (pure, no imports from `madden_capture`):
   - `clean_heading(s)`: the `clean_week` digit fixes plus `SEASON - WEEK` spacing.
@@ -175,9 +179,9 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 ### Phase 4: Loader
 **Files:**
 - `pipeline/load_transactions.py`:
-  - `plan_effects(rows, state) -> [op]`: pure. `state` is the in-memory roster, contracts and existing keys; `op` is `insert_txn`, `move`, `release`, `create_player`, `contract_*`, `flag_team`, `ambiguous`.
+  - `plan_effects(rows, state) -> [op]`: pure. `state` is the in-memory roster, contracts and existing keys; `op` is `move`, `release`, `create_player`, `contract_status`, `contract_insert`, `contract_extend` or `cap_delta`, grouped under the transactions row it belongs to.
   - `load_transactions(cur, folder, season, report, apply_from=None)`: reads the DB state, runs `plan_effects`, executes the ops, then calls the optional step-3 hook.
-  - Report keys: `transactions_new`, `transactions_seen`, `unparsed` (list of text), `ambiguous`, `created_players`, `teams_flagged`, `not_applied`.
+  - Report keys: `transactions_new`, `transactions_seen`, `unparsed` (list of text), `ambiguous`, `created_players`, `not_applied`, `contract_ops`, `cap_deltas`, `cap_rows_missing`.
   - Checks that raise `LoadError` (nothing written):
     - a heading's year isn't the current season (or the previous one, for offseason stages per fact 5);
     - an unknown team nickname on a *parsed* row;
@@ -191,7 +195,9 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 **Tests:** `tests/test_load_transactions.py` (pure, on `plan_effects`):
 - sign known FA (released elsewhere), sign unknown → create, sign ambiguous → no move;
 - release keeps `team_id` and sets `released_week`;
-- trade moves the contract copy with the same years;
+- trade moves the contract copy with the same years, and both teams' cap rows;
+- release charges the cut penalty as dead money;
+- re-sign projects the new deal's years after the current one (even split, and scanned shares);
 - sign then release the same week (applied oldest first);
 - the same rows loaded twice produce no ops;
 - rows before `apply_from` → `applied=false` with no ops;
@@ -218,30 +224,24 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 
 **Exit check:** on the restored copy with Phase 4 loaded, `python3 -m engines.game_stat_generator --season <s>` runs clean. A traded player's projection row is on his new team with his history intact.
 
-### Phase 6: Weekly integration, D5 re-scan, `#debug`
+### Phase 6: Weekly integration, `#debug`
 **Files:**
 - `pipeline/weekly_capture.py`:
-  - `since_heading()` reads `max(txn_date by ordinal)` from `transactions` for the season and passes `--since` to the weekly/playoff `madden_capture` command (S17).
-  - After the capture step and **before** the "your turn" notice:
-    1. run `extract_transactions_ocr(folder)` (local Vision, seconds);
-    2. `flagged = teams of new rows` (compare `row_key`/`seq` with `transactions`, read-only) `∪ pending contract_rescan_requests`;
-    3. if any teams are flagged and step 1's `--mode contracts` exists, run step 1's contracts capture for `--teams <abbrs>` into the **same run folder** (`contracts/<NN>_<team>/`, master §2.3);
-    4. then send the notice.
-  - `extract_done` for weekly/playoff also requires `transactions.csv` when `transactions/` exists.
-  - The single load (one DB transaction) runs `load_transactions` → Season Stats → … → step 1's contracts loader when `contracts.csv` is present.
-  - After a successful load, mark the requests for the re-scanned teams satisfied (`satisfied_capture_id`). Do the same after a standalone `--mode contracts` run.
-  - Add `--mode transactions` (connect → `--only transactions` → extract → load → re-scan the flagged teams → shrink, no engines or articles) to `MODES`.
-  - If step 1 hasn't landed, log "contracts re-scan skipped" and leave the requests pending.
+  - `since_heading()` reads `max(txn_date by ordinal)` from `transactions` for the season and passes `--since` to the weekly/playoff `madden_capture` command (S17). With nothing loaded yet, the weekly run uses `<season> SEASON - WEEK 1`, and `--mode transactions` reads the whole list.
+  - `extract_done` for weekly/playoff also requires `transactions.csv` when transactions pages exist.
+  - The single load (one DB transaction) runs `load_transactions` → Season Stats → …
+  - Add `--mode transactions` (connect → `--only transactions` → extract → load → shrink, no engines or articles) to `MODES`.
+  - No contracts re-scan (§6 answer 1). Step 1's `--mode contracts --teams` stays a by-hand tool.
 - `server/debug_api.py`:
   - `JOB_KINDS["transactions_scan"] = ("League transactions scan", ["--mode", "transactions", "--no-articles"])`;
-  - `GET /api/debug/transactions?season&week` returns the rows, unparsed rows, ambiguous rows and pending re-scan teams.
-- `Mu_Network/src/DebugPage.tsx`: a button for the new job and a Transactions card that lists unparsed and ambiguous rows and pending re-scans.
+  - `GET /api/debug/transactions?season&week` returns the rows, unparsed rows and ambiguous rows.
+- `Mu_Network/src/DebugPage.tsx`: a button for the new job and a Transactions card that lists unparsed and ambiguous rows and the latest rows.
 
 **Tests:**
 - `tests/test_debug_api.py`: the new job kind starts with the right args (the existing job tests pattern; check it doesn't need the live DB, or else mock the connection);
-- `tests/test_weekly_capture*`: flagged-team union and command building with `run_cmd` mocked.
+- `tests/test_weekly_capture*`: command building with `--since` and `run_cmd` mocked, folder states, and the transactions run's step order.
 
-**Exit check:** one supervised Scan week. The log shows the transactions phase stopping at the cutoff, the re-scan for exactly the flagged teams, one notice, and a load whose report includes `transactions_new` and `teams_flagged`. `contract_rescan_requests` has no pending rows for those teams.
+**Exit check:** one supervised Scan week. The log shows the transactions phase stopping at the cutoff and one notice. The load's report includes `transactions_new`, `contract_ops` and `cap_deltas`, and the moved teams' `team_cap_seasons` rows carry `derived_at`.
 
 ---
 
@@ -249,12 +249,12 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 
 | Phase | Sections |
 |---|---|
-| 1 | §1.1 layout (migration, `pipeline/transactions_parse.py`); §3: a new **§3.3d Transactions** (`transactions`, `contract_rescan_requests`, `player_seasons.released_week` in §3.1's `player_seasons` entry) |
+| 1 | §1.1 layout (migration, `pipeline/transactions_parse.py`); §3: a new **§3.3d Transactions** (`transactions`, the derived/projected columns on step 1's tables, `player_seasons.released_week` in §3.1's `player_seasons` entry) |
 | 2 | §1.1 the `madden_capture.py` entry (`--only transactions`, `--since`, `LEAGUE_TRANSACTIONS` screen, the Cross guard now per League item); §1.2 commands |
 | 3 | §1.1 (`pipeline/extract_transactions_ocr.py`, `extract.py`'s `transactions.csv`); §6.0 extract step |
 | 4 | §1.1 (`pipeline/load_transactions.py`); §1.2 (`load_capture --apply-from`); §3.3d effects and key; §6.0 load order (transactions before Season Stats) |
 | 5 | §3.4 fantasy projections (traded-player history, released = 0); §3.4b / §4.4b Napper (has-game rule); §6.0 backfill note |
-| 6 | §1.2 (`--mode transactions`); §4.5 (job kind, `/api/debug/transactions`); §5 Debug page (and `Mu_Network/PROJECT_SPEC.md` if it describes the page); §6.0 weekly run (transactions phase, D5 re-scan before the hand-back notice) |
+| 6 | §1.2 (`--mode transactions`); §4.5 (job kind, `/api/debug/transactions`); §5 Debug page (and `Mu_Network/PROJECT_SPEC.md` if it describes the page); §6.0 weekly run (transactions phase) |
 
 ---
 
@@ -267,5 +267,5 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 - Re-checking teams with no transactions (master §4: acceptable drift until the next Season scan).
 
 ## 6. Answered questions (JR, 2026-10-19)
-1. **Hand-back timing: capped at 8 teams a week.** Teams involved in a `TRADED` transaction are always re-scanned that week and don't count toward the cap. The others are taken oldest-request first. Any left over stay pending in `contract_rescan_requests` and go first next week.
+1. **No automatic contracts re-scans** (revised 2026-10-19; this replaces the earlier answer of re-scans capped at 8 teams a week). Re-signings don't change this season's cap, and every move's effect on the books can be worked out from the row and the stored contract. So contracts and `team_cap_seasons` are kept current from the transactions (§2.3), and a re-signing's future years are projected from the scanned per-length shares. The next Season scan corrects any drift. `--mode contracts --teams` stays a by-hand tool, e.g. before a trade that only just fits under the cap. The `contract_rescan_requests` table and the weekly re-scan step were removed before the migration was ever applied.
 2. **First-run backfill cutoff: yes.** Effects apply only from `SEASON - WEEK 1` of the current season. Older rows are stored with `applied = false`, as history only.

@@ -50,7 +50,7 @@ def detect_mode(folder):
     weekly_or_games = any(os.path.exists(os.path.join(folder, f)) for f in ("stats_passing.csv", "game_scores.csv"))
     if (os.path.exists(os.path.join(folder, "transactions.csv")) and not weekly_or_games
             and not any(os.path.exists(os.path.join(folder, f)) for f in ("roster_cards.csv", "season_schedule.csv"))):
-        return "transactions"                # League Transactions alone (+ its D5 contracts re-scan)
+        return "transactions"                # League Transactions alone
     has_roster = os.path.exists(os.path.join(folder, "roster_cards.csv"))
     has_sched = os.path.exists(os.path.join(folder, "season_schedule.csv"))
     has_prosp = os.path.exists(os.path.join(folder, "prospects.csv"))
@@ -60,7 +60,7 @@ def detect_mode(folder):
         return "season"
     if has_roster:
         return "roster"
-    if has_contracts and not has_sched and not weekly_or_games:
+    if has_contracts and not has_sched:
         return "contracts"
     if has_sched:
         return "season_schedule"
@@ -1512,15 +1512,10 @@ def run_transactions(cur, folder, season, report):
 
 
 def load_transactions_standalone(cur, folder, season, report):
-    """A League Transactions run (weekly_capture --mode transactions / madden_capture --only transactions):
-    the transactions, then the flagged teams' Team Salary re-scan when the run captured one (after: the re-scan
-    supersedes the moved contracts)."""
+    """A League Transactions run (weekly_capture --mode transactions / madden_capture --only transactions)."""
     cur.execute("SELECT current_week FROM league_state WHERE id = 1")
     report["week"] = cur.fetchone()[0]
-    n = run_transactions(cur, folder, season, report)
-    if os.path.exists(os.path.join(folder, "contracts.csv")):
-        n += load_contracts(cur, folder, season, report)
-    return n
+    return run_transactions(cur, folder, season, report)
 
 
 LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly, "playoff": load_playoff,

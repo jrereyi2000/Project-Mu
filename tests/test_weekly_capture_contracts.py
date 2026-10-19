@@ -112,7 +112,6 @@ class RunContractsTest(unittest.TestCase):
             step_capture=fake_capture, step_extract=fake_extract, step_load=fake_load,
             load_status=lambda folder: self.status, team_nicknames=nicknames,
             league_state=lambda: (2036, 4),
-            satisfy_contract_scan=lambda folder, teams=None: None,     # step 2's D5 bookkeeping: no database
             step_engines=lambda season: self.calls.append(("engines",)),
             step_articles=lambda season, week=None: self.calls.append(("articles",)),
             run_cmd=lambda *a, **k: self.calls.append(("run_cmd",)) or (0, ""),
