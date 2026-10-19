@@ -287,7 +287,7 @@ def fix_heading_order(rows):
 def needs_reread(parsed, heading_flags=()):
     """Should this row go to Gemini (plan §2.4)? Grammar failure, heading out of order, missing length or
     amount on a signing, or a team that isn't one of the 32."""
-    if not is_move(parsed["text"]):
-        return False                                # not a move: skipped, never worth a Gemini call
+    if not is_move(parsed["text"]) or parsed["type"] == "TRADED":
+        return False                                # skipped by the loader (non-moves, trades): no Gemini call
     return (not parsed["ok"] or "heading_order" in heading_flags or "no_terms" in parsed["flags"]
             or "unknown_team" in parsed["flags"])
