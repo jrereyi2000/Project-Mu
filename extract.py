@@ -23,6 +23,10 @@ Writes, inside that capture folder:
   roster_cards.csv       roster/cards.csv (Apple Vision) with AGE/HT/WT/EXP re-read by Gemini from
                          the card crops, 20 per request; vision_* keep Vision's values and
                          vision_disagrees names the fields where the two differ
+  contracts.csv          --only contracts / --only season: TEAM + every Team Salary column (NAME, POS, AGE, OVR,
+                         LEN, REM, TOTAL, BONUS, SAVINGS, PENALTY, the five year columns, INCENTIVE,
+                         NO TRADE CLAUSE), raw strings; left/right pages paired by row, the shared BONUS checks the pairing
+  team_cap.csv           one row per team: the Team Salary cap strip (36 CAP ... 37 ROOKIE RES), read twice
   injuries.csv           the captured week's injury report across all 32 teams (Apple Vision OCR)
   draft_results.csv      --only draft-results: all 7 rounds of draft picks (Apple Vision OCR)
 """
@@ -125,6 +129,10 @@ def _labelled(label):
 
 
 TABLE_BOX = (0, 0.27, 1, 0.89)          # fractions of the screenshot
+# Team Salary (Phase 0 sets these from console frames): the table's headers and rows, not the player card on
+# the right; and the cap strip above the table
+SALARY_LIST_BOX = (0, 0.20, 0.735, 0.90)
+SALARY_HEADER_BOX = (0, 0.08, 1, 0.26)
 ROSTER_LIST_BOX = (0, 0.10, 0.735, 0.85)  # roster table only: chips + rows, not the player card
 
 
@@ -143,6 +151,11 @@ def prepare_image(path, box=TABLE_BOX):
 
 def _is_roster(path):
     return os.path.basename(os.path.dirname(os.path.dirname(path))) == "roster"
+
+
+def _is_salary(path):
+    """contracts/<NN>_<team>/salary[_right]_NNN.png (Team Salary pages, team management step 1)."""
+    return os.path.basename(os.path.dirname(os.path.dirname(path))) == "contracts"
 
 
 def _generate(contents, schema, label, retries=4):
@@ -175,6 +188,18 @@ def _read_table_remote(path, retries=4):
         t = _generate([PROMPT + GAME_NOTE, prepare_image(path, GAME_TABLE_BOX)], Table,
                       os.path.basename(path), retries)
         return {"title": t.title, "columns": t.columns, "rows": [r.cells for r in t.rows]}
+    if _is_salary(path):
+        # 11 rows a page; a short reading is read again (the roster's rule) and the fullest kept
+        best = None
+        for attempt in range(3):
+            t = _generate([PROMPT + SALARY_NOTE, prepare_image(path, SALARY_LIST_BOX)], Table,
+                          os.path.basename(path), retries)
+            if best is None or len(t.rows) > len(best.rows):
+                best = t
+            if len(best.rows) >= SALARY_PAGE_ROWS:
+                break
+        return {"title": best.title, "columns": [salary_col(c) for c in best.columns],
+                "rows": [[_dash(c) for c in r.cells] for r in best.rows]}
     if _is_roster(path):
         # A roster page shows 14 rows; Gemini sometimes returns fewer (Ravens, Oct 13: 31 of
         # 52 over 5 pages), so a short page is read again and the fullest reading kept.
@@ -552,6 +577,188 @@ def extract_roster(root):
         w.writerows(out)
     n_dis = sum(1 for r in out if r["vision_disagrees"])
     print(f"roster_cards.csv: {len(out)} cards; Gemini and Vision disagree on {n_dis}")
+
+
+# --------------------------------------------------------- team salary ----
+# Team management step 1 (docs/team_management/01_CONTRACT_SCAN_PLAN.md Phase 3). Read with Gemini through
+# merge_wide like every capture_wide_list table: Apple Vision drops the digit 1 in Madden's font, and money
+# cells are full of 1s.
+SALARY_PAGE_ROWS = 11
+SALARY_NOTE = """
+This is a Madden NFL Team Salary table (one team's contracts). Copy money exactly as shown, with its $ and
+suffix: $16.8M, $200K, $0, -$1.2M. The CONV column shows an icon, not text: return "" for it. Year column
+headers are 4-digit years (2036, 2037, ...). NO TRADE CLAUSE: return YES or NO as shown ("" if the cell is
+empty). INCENTIVE: the text shown, e.g. NONE. Ignore the player card on the right and the cap figures above
+the table."""
+
+
+def _dash(c):
+    return c.replace("\u2212", "-").replace("\u2013", "-").replace("\u2014", "-")
+
+
+def salary_col(c):
+    """Team Salary header, cleaned and made the same on every page (OCR cuts NO TRADE CLAUSE short)."""
+    c = _col(c)
+    if c.startswith("NO TRADE"):
+        return "NO TRADE CLAUSE"
+    if c.startswith("INCENTIVE"):
+        return "INCENTIVE"
+    return c
+
+
+class CapStrip(BaseModel):
+    cap_label: str              # e.g. 36 CAP
+    cap: str                    # values as shown, e.g. $305.2M
+    rollover_label: str         # e.g. 35 ROLLOVER
+    rollover: str
+    adjusted_cap: str
+    cap_space: str
+    salaries: str
+    cap_penalty: str
+    total_spend: str
+    rookie_res_label: str       # e.g. 37 ROOKIE RES
+    rookie_res: str
+
+
+CAP_FIELDS = list(CapStrip.model_fields)
+CAP_PROMPT = """This is the cap strip above a Madden NFL Team Salary table. Return each figure exactly as
+shown, with its $ and suffix ($305.2M, $200K, -$4.1M). The labels that carry a two-digit year (e.g. 36 CAP,
+35 ROLLOVER, 37 ROOKIE RES) are returned with that year exactly as shown."""
+CAP_TOLERANCE = 200_000         # C10 identities hold within display rounding
+
+
+def cap_identity_misses(strip):
+    """C10: ADJUSTED CAP = CAP + ROLLOVER, TOTAL SPEND = SALARIES + CAP PENALTY,
+    CAP SPACE = ADJUSTED CAP - TOTAL SPEND. Returns the identities that miss (or don't parse)."""
+    from pipeline.money import parse_money
+    try:
+        v = {k: parse_money(strip[k]) for k in ("cap", "rollover", "adjusted_cap", "cap_space", "salaries",
+                                                 "cap_penalty", "total_spend")}
+    except ValueError as e:
+        return [str(e)]
+    if any(x is None for x in v.values()):
+        return ["blank cap figure"]
+    misses = []
+    for name, got, want in (("ADJUSTED CAP", v["adjusted_cap"], v["cap"] + v["rollover"]),
+                            ("TOTAL SPEND", v["total_spend"], v["salaries"] + v["cap_penalty"]),
+                            ("CAP SPACE", v["cap_space"], v["adjusted_cap"] - v["total_spend"])):
+        if abs(got - want) > CAP_TOLERANCE:
+            misses.append(f"{name} {got} vs {want}")
+    return misses
+
+
+def _read_strip(path):
+    t = _generate([CAP_PROMPT, prepare_image(path, SALARY_HEADER_BOX)], CapStrip, "cap_" + os.path.basename(path))
+    return {k: _dash(getattr(t, k)).strip() for k in CAP_FIELDS}
+
+
+def read_cap_strip(team_dir):
+    """The team's cap strip, read from salary_000.png and salary_right_000.png. When the two disagree or a C10
+    identity misses, salary_001.png is read too and the majority kept; with no majority it raises, so nothing
+    half-read is loaded."""
+    team = os.path.basename(team_dir)
+    paths = [os.path.join(team_dir, "salary_000.png"), os.path.join(team_dir, "salary_right_000.png")]
+    reads = [_read_strip(p) for p in paths if os.path.exists(p)]
+    if len(reads) == 2 and reads[0] == reads[1] and not cap_identity_misses(reads[0]):
+        return reads[0]
+    third = os.path.join(team_dir, "salary_001.png")
+    if not os.path.exists(third):
+        third = paths[0]
+    reads.append(_read_strip(third))
+    counts = Counter(tuple(r[k] for k in CAP_FIELDS) for r in reads)
+    best, n = counts.most_common(1)[0]
+    if n < 2:
+        raise RuntimeError(f"{team}: the cap strip read {len(reads)} different ways, no majority: {reads}")
+    strip = dict(zip(CAP_FIELDS, best))
+    misses = cap_identity_misses(strip)
+    if misses:
+        print(f"  WARNING {team} cap strip: {'; '.join(misses)} (kept the majority reading)")
+    return strip
+
+
+def bonus_misaligned(lt, rt):
+    """Rows where the left and right halves of a page pair disagree. Both halves show BONUS (the same figure,
+    JR 2026-10-19), so a difference means the two screenshots weren't at the same row position."""
+    lc, rc = [salary_col(c) for c in lt["columns"]], [salary_col(c) for c in rt["columns"]]
+    if "BONUS" not in lc or "BONUS" not in rc:
+        return ["no BONUS column on both halves"]
+    if len(lt["rows"]) != len(rt["rows"]):
+        return [f"{len(lt['rows'])} left rows vs {len(rt['rows'])} right rows"]
+    li, ri = lc.index("BONUS"), rc.index("BONUS")
+    bad = []
+    for i, (lr, rr) in enumerate(zip(lt["rows"], rt["rows"])):
+        a = lr[li].replace(" ", "") if li < len(lr) else ""
+        b = rr[ri].replace(" ", "") if ri < len(rr) else ""
+        if a != b:
+            bad.append(f"row {i + 1}: BONUS {a!r} / {b!r}")
+    return bad
+
+
+def align_salary_pages(team, lefts, rights, tries=2):
+    """Every left/right page pair must agree on BONUS row by row. A pair that doesn't is read again (up to
+    `tries` more times); one that never agrees stops the extract."""
+    by_num = {os.path.basename(p).rsplit("_", 1)[1]: p for p in rights}
+    for lp in sorted(lefts):
+        num = os.path.basename(lp).rsplit("_", 1)[1]
+        rp = by_num.get(num)
+        if rp is None:
+            raise RuntimeError(f"{team}: {os.path.basename(lp)} has no right-hand page")
+        for attempt in range(tries + 1):
+            lt, rt = read_table(lp), read_table(rp)
+            for t in (lt, rt):                  # one header spelling on every page before merge_wide
+                t["columns"] = [salary_col(c) for c in t["columns"]]
+            bad = bonus_misaligned(lt, rt)
+            if not bad:
+                break
+            if attempt == tries:
+                raise RuntimeError(f"{team} {os.path.basename(lp)}: left and right halves don't line up "
+                                   f"({'; '.join(bad[:4])})")
+            print(f"  {team} {os.path.basename(lp)}: halves don't line up ({bad[0]}); reading the pair again")
+            _cache.pop(lp, None)
+            _cache.pop(rp, None)
+
+
+def _consecutive_years(cols):
+    years = [int(c) for c in cols if re.fullmatch(r"\d{4}", c)]
+    return len(years) == 5 and years == list(range(years[0], years[0] + 5)), years
+
+
+def extract_contracts(root):
+    """contracts/<NN>_<team>/salary[_right]_NNN.png -> contracts.csv (TEAM + the merged columns, raw strings)
+    and team_cap.csv (the cap strip per team). The loader parses and checks the values."""
+    team_dirs = sorted(d for d in glob.glob(os.path.join(root, "contracts", "[0-9]*_*")) if os.path.isdir(d))
+    if not team_dirs:
+        return
+    pages = {d: (sorted(glob.glob(os.path.join(d, "salary_[0-9]*.png"))),
+                 sorted(glob.glob(os.path.join(d, "salary_right_*.png")))) for d in team_dirs}
+    prefetch(sorted(p for l, r in pages.values() for p in l + r))
+    columns, rows, strips = [], [], {}
+    for d in team_dirs:
+        team = os.path.basename(d).split("_", 1)[1].upper()
+        lefts, rights = pages[d]
+
+        def team_merge(team=team, lefts=lefts, rights=rights):
+            align_salary_pages(team, lefts, rights)
+            return merge_wide(lefts, rights, team)
+        cols, trows = vote_misreads(team, team_merge, lefts + rights, ["NAME", "POS"])
+        for c in cols:
+            if c not in columns:
+                columns.append(c)
+        rows += [dict(zip(cols, r), TEAM=team) for r in trows]
+        ok, years = _consecutive_years(cols)
+        if not ok:
+            print(f"  WARNING {team}: year columns {years} aren't 5 consecutive years")
+        if len(trows) < 40:
+            print(f"  WARNING {team}: only {len(trows)} contract rows")
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        futures = {pool.submit(read_cap_strip, d): d for d in team_dirs}
+        for fut in as_completed(futures):
+            strips[os.path.basename(futures[fut]).split("_", 1)[1].upper()] = fut.result()
+    write_csv(os.path.join(root, "contracts.csv"), ["TEAM"] + columns,
+              [[r["TEAM"]] + [r.get(c, "") for c in columns] for r in rows])
+    write_csv(os.path.join(root, "team_cap.csv"), ["TEAM"] + [k.upper() for k in CAP_FIELDS],
+              [[t] + [strips[t][k] for k in CAP_FIELDS] for t in sorted(strips)])
+    print(f"contracts.csv: {len(rows)} rows over {len(team_dirs)} teams; team_cap.csv: {len(strips)} teams")
 
 
 # ------------------------------------------------------------ prospects ----
@@ -953,6 +1160,7 @@ def main():
             _sync_prospects_board(p_out)
 
     extract_roster(root)
+    extract_contracts(root)            # after the roster, as in the Season scan
     extract_games(root)
     if os.path.isdir(os.path.join(root, "injuries")):
         try:

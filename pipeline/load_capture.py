@@ -3,7 +3,8 @@ Load an extracted capture folder into the database (docs/PIPELINE_MIGRATION.md, 
 
   python3 -m pipeline.load_capture captures/<run> [--dry-run]
 
-The mode is read from the folder: roster/ (roster), season_schedule/ (season schedule), games/
+The mode is read from the folder: roster/ (roster), season_schedule/ (season schedule), contracts.csv alone
+(contracts: Team Salary, team management step 1), games/
 (games, recovery only), else stats/ + team_stats/ + schedule/ (weekly). One transaction per run:
 any failed check writes nothing, records the run as failed in `captures` and exits non-zero.
 --dry-run runs every check and prints what would change, then rolls back.
@@ -15,7 +16,8 @@ from datetime import datetime
 
 import psycopg
 
-from pipeline.capture_matching import all_caps, db_player_name, db_week, dec, full_key, match_roster, name_case, name_key, num
+from pipeline.capture_matching import (all_caps, db_player_name, db_week, dec, full_key, match_contract_rows, match_roster,
+                                       name_case, name_key, num)
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -48,10 +50,13 @@ def detect_mode(folder):
     has_sched = os.path.exists(os.path.join(folder, "season_schedule.csv"))
     has_prosp = os.path.exists(os.path.join(folder, "prospects.csv"))
     has_overalls = os.path.exists(os.path.join(folder, "team_overalls.csv"))
+    has_contracts = os.path.exists(os.path.join(folder, "contracts.csv"))
     if has_sched and has_roster:
         return "season"
     if has_roster:
         return "roster"
+    if has_contracts and not has_sched:
+        return "contracts"
     if has_sched:
         return "season_schedule"
     if has_overalls and not (has_sched or has_roster):
@@ -1308,13 +1313,167 @@ def load_prospects(cur, folder, season, report):
     return len(prospects)
 
 
+# --------------------------------------------------------------- contracts ----
+# Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md Phase 4; PROJECT_SPEC §3.3d)
+CAP_LABEL_RE = re.compile(r"^\s*(\d{2})\s*CAP\s*$", re.I)
+ROOKIE_LABEL_RE = re.compile(r"^\s*(\d{2})\s*ROOKIE", re.I)
+CONTRACT_MONEY = {"TOTAL": "total_value", "BONUS": "bonus", "SAVINGS": "cut_savings", "PENALTY": "cut_penalty"}
+CAP_MONEY = {"CAP": "cap", "ROLLOVER": "rollover", "ADJUSTED_CAP": "adjusted_cap", "CAP_SPACE": "cap_space",
+             "SALARIES": "salaries", "CAP_PENALTY": "cap_penalty", "TOTAL_SPEND": "total_spend",
+             "ROOKIE_RES": "next_rookie_reserve"}
+CAP_TOLERANCE = 200_000          # C10 identities, within display rounding
+ROW_ROUNDING = 50_000            # summed year-0 cap hits vs SALARIES: $0.05M display rounding per row
+
+
+def contract_candidates(cur, season):
+    """[(player_id, team_id, name_key, full_key, position, age, ovr)] of everyone on a team this season."""
+    cur.execute("""SELECT p.id, s.team_id, p.player_name, p.full_name, s.position, s.age, s.overall_rating
+                   FROM players p JOIN player_seasons s ON s.player_id = p.id AND s.season = %s
+                   WHERE s.team_id IS NOT NULL""", (season,))
+    return [(pid, t, name_key(pn), full_key(fn), pos, age, ovr) for pid, t, pn, fn, pos, age, ovr in cur.fetchall()]
+
+
+def _yy(label, rx):
+    m = rx.match(label or "")
+    return 2000 + int(m.group(1)) if m else None
+
+
+def load_contracts(cur, folder, season, report):
+    """contracts.csv + team_cap.csv -> player_contracts, player_contract_years, team_cap_seasons. Every check
+    runs first and any problem stops the load with nothing written: the year on screen must be the season,
+    the teams the run's targets, every cell must parse and every row match exactly one player (never guessed).
+    Then the scanned teams' ACTIVE rows are SUPERSEDED and fresh ones inserted."""
+    from pipeline.contracts import insert_contract, supersede_active, upsert_team_cap
+    from pipeline.money import parse_money
+
+    rows = read_csv(os.path.join(folder, "contracts.csv"))
+    caps = read_csv(os.path.join(folder, "team_cap.csv"))
+    cur.execute("SELECT id, upper(name) FROM teams")
+    team_ids = {n: i for i, n in cur.fetchall()}
+    problems, cap_warnings = [], []
+
+    # 1. year check (master §3.2): "36 CAP" is 2036; the year columns must be that year and the next four
+    headers = list(rows[0].keys()) if rows else []
+    year_cols = [h for h in headers if re.fullmatch(r"\d{4}", h)]
+    years = sorted({_yy(c.get("CAP_LABEL"), CAP_LABEL_RE) for c in caps})
+    if None in years:
+        problems.append(f"unreadable CAP label(s): {sorted({c.get('CAP_LABEL') for c in caps if not _yy(c.get('CAP_LABEL'), CAP_LABEL_RE)})}")
+    years = [y for y in years if y]
+    if len(years) > 1:
+        problems.append(f"teams disagree on the TEAM SALARY year: {years}")
+    year = years[0] if years else None
+    if year is not None:
+        if year != season:
+            problems.append(f"TEAM SALARY shows {year}, league_state is {season}")
+        want = [str(y) for y in range(year, year + 5)]
+        if year_cols != want:
+            problems.append(f"year columns {year_cols} aren't {want}")
+        for c in caps:
+            if _yy(c.get("ROOKIE_RES_LABEL"), ROOKIE_LABEL_RE) != year + 1:
+                problems.append(f"{c['TEAM']}: ROOKIE RES label {c.get('ROOKIE_RES_LABEL')!r} isn't {year + 1}")
+
+    # 2. teams: the cap strips' teams are the contracts' teams, and the run's targets (all 32 by default)
+    cap_teams, row_teams = {c["TEAM"].upper() for c in caps}, {r["TEAM"].upper() for r in rows}
+    tpath = os.path.join(folder, "contracts", "targets.txt")
+    targets = ({t.strip().upper() for t in open(tpath) if t.strip()} if os.path.exists(tpath) else set(team_ids))
+    for name, got in (("team_cap.csv", cap_teams), ("contracts.csv", row_teams)):
+        if got != targets:
+            problems.append(f"{name} teams differ from the run's targets: missing {sorted(targets - got)}, "
+                            f"extra {sorted(got - targets)}")
+    for t in sorted((cap_teams | row_teams) - set(team_ids)):
+        problems.append(f"unknown team {t!r}")
+
+    # 3. rows: counts, money, LEN/REM, AGE/OVR
+    per_team = {}
+    parsed = []
+    for i, r in enumerate(rows):
+        team = r["TEAM"].upper()
+        per_team[team] = per_team.get(team, 0) + 1
+        where = f"{team} {r.get('NAME', '')} {r.get('POS', '')}"
+        try:
+            money = {col: parse_money(r.get(h, "")) for h, col in CONTRACT_MONEY.items()}
+            hits = {int(y): parse_money(r.get(y, "")) or 0 for y in year_cols}
+            length, rem, age, ovr = num(r.get("LEN")), num(r.get("REM")), num(r.get("AGE")), num(r.get("OVR"))
+        except ValueError as e:
+            problems.append(f"{where}: {e}")
+            continue
+        if length is None or length < 1 or rem is None or not 0 <= rem <= length:
+            problems.append(f"{where}: LEN {r.get('LEN')!r} / REM {r.get('REM')!r} (need LEN >= 1, 0 <= REM <= LEN)")
+            continue
+        if not r.get("NAME", "").strip():
+            problems.append(f"{team} row {per_team[team]}: no NAME")
+            continue
+        incentive = (r.get("INCENTIVE") or "").strip()
+        parsed.append({"team": team, "team_id": team_ids.get(team), "NAME": r["NAME"].strip(), "POS": r.get("POS", ""),
+                       "AGE": age, "OVR": ovr, "length": length, "years_remaining": rem, **money,
+                       "no_trade_clause": (r.get("NO TRADE CLAUSE") or "").strip().upper() in ("YES", "Y", "TRUE"),
+                       "incentive": None if incentive.upper() in ("", "NONE") else incentive, "years": hits})
+    for team, n in sorted(per_team.items()):
+        if not ROSTER_TEAMS_MIN <= n <= ROSTER_TEAMS_MAX:
+            problems.append(f"{team}: {n} contract rows (expected {ROSTER_TEAMS_MIN}-{ROSTER_TEAMS_MAX})")
+
+    # cap strips
+    cap_values = {}
+    for c in caps:
+        team = c["TEAM"].upper()
+        try:
+            cap_values[team] = {col: parse_money(c.get(h, "")) for h, col in CAP_MONEY.items()}
+        except ValueError as e:
+            problems.append(f"{team} cap strip: {e}")
+
+    # 4. matching against the season's roster
+    matches, match_problems = match_contract_rows([p for p in parsed if p["team_id"]],
+                                                  contract_candidates(cur, season), season)
+    if match_problems:
+        problems += match_problems
+        problems.append("run the roster scan for players it hasn't seen, or the transactions scan for CPU signings")
+    if problems:
+        raise LoadError("contracts checks failed (nothing written):\n  " + "\n  ".join(problems))
+
+    # cap warnings (reported, not fatal): C10 identities and summed year-0 cap hits vs SALARIES
+    matched_rows = [p for p in parsed if p["team_id"]]
+    for team, v in sorted(cap_values.items()):
+        if None not in (v["cap"], v["rollover"], v["adjusted_cap"]) and abs(v["adjusted_cap"] - v["cap"] - v["rollover"]) > CAP_TOLERANCE:
+            cap_warnings.append(f"{team}: ADJUSTED CAP != CAP + ROLLOVER")
+        if None not in (v["total_spend"], v["salaries"], v["cap_penalty"]) and abs(v["total_spend"] - v["salaries"] - v["cap_penalty"]) > CAP_TOLERANCE:
+            cap_warnings.append(f"{team}: TOTAL SPEND != SALARIES + CAP PENALTY")
+        if None not in (v["cap_space"], v["adjusted_cap"], v["total_spend"]) and abs(v["cap_space"] - v["adjusted_cap"] + v["total_spend"]) > CAP_TOLERANCE:
+            cap_warnings.append(f"{team}: CAP SPACE != ADJUSTED CAP - TOTAL SPEND")
+        team_rows = [p for p in matched_rows if p["team"] == team]
+        y0 = sum(p["years"].get(season, 0) for p in team_rows)
+        if v["salaries"] is not None and abs(y0 - v["salaries"]) > len(team_rows) * ROW_ROUNDING:
+            cap_warnings.append(f"{team}: {season} cap hits sum to {y0}, SALARIES is {v['salaries']}")
+
+    # 5. writes
+    cid = report.get("capture_id")
+    scanned = sorted({team_ids[t] for t in row_teams | cap_teams})
+    report["superseded"] = supersede_active(cur, season, scanned, sorted(matches.values()))
+    for i, p in enumerate(matched_rows):
+        insert_contract(cur, player_id=matches[i], team_id=p["team_id"], season=season, length=p["length"],
+                        years_remaining=p["years_remaining"], total_value=p["total_value"], bonus=p["bonus"],
+                        cut_savings=p["cut_savings"], cut_penalty=p["cut_penalty"],
+                        no_trade_clause=p["no_trade_clause"], incentive=p["incentive"], years=p["years"],
+                        source="SCAN", capture_id=cid)
+    for team, v in sorted(cap_values.items()):
+        upsert_team_cap(cur, team_ids[team], season, v, cid)
+
+    # 6. report
+    report["contracts"] = len(matched_rows)
+    report["teams"] = len(scanned)
+    report["cap_warnings"] = cap_warnings
+    return len(matched_rows) + len(cap_values)
+
+
 def load_season(cur, folder, season, report):
-    """Full start-of-season setup: schedule, rosters + rookie linking, draft prospects board (after both), and injury report."""
+    """Full start-of-season setup: schedule, rosters + rookie linking, contracts (after rosters), draft prospects
+    board (after both), and injury report."""
     rows = 0
     if os.path.exists(os.path.join(folder, "season_schedule.csv")):
         rows += load_season_schedule(cur, folder, season, report)
     if os.path.exists(os.path.join(folder, "roster_cards.csv")):
         rows += load_roster(cur, folder, season, report)
+        if os.path.exists(os.path.join(folder, "contracts.csv")):
+            rows += load_contracts(cur, folder, season, report)      # after rosters: every row matches a player
     elif os.path.exists(os.path.join(folder, "prospects.csv")):
         rows += load_prospects(cur, folder, season, report)
     if os.path.exists(os.path.join(folder, "injuries.csv")):
@@ -1332,7 +1491,7 @@ def load_season(cur, folder, season, report):
 
 LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "weekly": load_weekly, "playoff": load_playoff,
            "games": load_games, "injuries": load_injuries_standalone, "prospects": load_prospects, "season": load_season,
-           "team_overalls": load_team_overalls, "team-overalls": load_team_overalls}
+           "team_overalls": load_team_overalls, "team-overalls": load_team_overalls, "contracts": load_contracts}
 
 
 def load(folder, dry_run=False, replace=False):
@@ -1352,6 +1511,7 @@ def load(folder, dry_run=False, replace=False):
         report["season"] = season
         cid = capture_row(cur, folder, mode, season, None if mode in ("roster", "prospects", "season_schedule", "season") else week, dry_run)
         conn.commit()                        # the run is recorded even if the load fails
+        report["capture_id"] = cid           # None on a dry run
         try:
             if mode == "games":
                 report["rows"] = load_games(cur, folder, season, report, replace=replace)

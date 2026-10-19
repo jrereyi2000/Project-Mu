@@ -7,6 +7,9 @@ from the debug page (#debug, server/debug_api.py: Scan week / Backfill previous 
   python3 -m pipeline.weekly_capture --mode games     # every game of last week: box scores + player stats, loaded
                                                       # with --replace over the backfill's lines; never articles
   python3 -m pipeline.weekly_capture --resume <run>   # continue captures/<run> from the step it stopped on
+  python3 -m pipeline.weekly_capture --mode contracts [--teams CAR,NO]
+                                                      # Team Salary for all 32 teams (or a re-scan of these),
+                                                      # extracted and loaded; never engines or articles
 
 Week 22 (league_state.current_week 22, Madden on Pro Bowl week): no games of ours, so Scan week is an
 articles-only run: engines, the Week 23 (Super Bowl week) slate, then current_week moves to 23. No console.
@@ -50,7 +53,8 @@ DEBUG_DIRS = ("stop_debug", "scope_debug", "week_debug", "team_debug", "probe", 
 CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice when it has to relaunch
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
-MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame", "draft-results", "team-overalls")
+MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame", "draft-results", "team-overalls",
+         "contracts")
 FIRST_PLAYOFF_WEEK = 19    # league_state.current_week is the week the next run captures (Wild Card = 19)
 PRO_BOWL_WEEK, FINAL_WEEK = 22, 23
 SUPER_BOWL_LABEL = "POST SEASON SUPER BOWL"   # named for the Super Bowl postgame capture
@@ -97,6 +101,9 @@ def folder_mode(folder):
         return "team-overalls"
     if os.path.isdir(os.path.join(folder, "season_schedule")) and (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "prospects"))):
         return "season"
+    if os.path.isdir(os.path.join(folder, "contracts")) and not any(
+            os.path.isdir(os.path.join(folder, d)) for d in ("roster", "season_schedule", "prospects")):
+        return "contracts"
     if os.path.isdir(os.path.join(folder, "prospects")):
         return "prospects"
     if os.path.isdir(os.path.join(folder, "roster")):
@@ -135,6 +142,8 @@ def extract_done(folder, mode="weekly"):
         if os.path.isdir(os.path.join(folder, "injuries")):
             ok = ok and os.path.exists(os.path.join(folder, "injuries.csv"))
         return ok
+    if mode == "contracts":
+        return all(os.path.exists(os.path.join(folder, f)) for f in ("contracts.csv", "team_cap.csv"))
     if mode == "roster":
         return all(os.path.exists(os.path.join(folder, f)) for f in ("roster_cards.csv", "roster_list.csv"))
     if mode == "prospects":
@@ -147,6 +156,8 @@ def extract_done(folder, mode="weekly"):
             ok = ok and os.path.exists(os.path.join(folder, "injuries.csv"))
         if os.path.isdir(os.path.join(folder, "team_overalls")):
             ok = ok and os.path.exists(os.path.join(folder, "team_overalls.csv"))
+        if os.path.isdir(os.path.join(folder, "contracts")):
+            ok = ok and all(os.path.exists(os.path.join(folder, f)) for f in ("contracts.csv", "team_cap.csv"))
         return ok
     weekly_ok = (os.path.exists(os.path.join(folder, "schedule.csv"))
                  and bool(glob.glob(os.path.join(folder, "stats_*.csv"))))
@@ -203,7 +214,8 @@ def step_connect(log_path):
         raise WeekStopped(f"Couldn't reach Madden's franchise menus over chiaki-ng: {last}. Nothing was pressed.")
 
 
-def step_capture(folder, log_path, mode="weekly", week_label=None):
+def step_capture(folder, log_path, mode="weekly", week_label=None, teams=None):
+    """teams: --mode contracts only, team nicknames (PANTHERS) for madden_capture --team-names."""
     name = os.path.basename(folder)
     named = ["--week", week_label] if week_label else []
     if mode == "games":                        # resumes per game (games/<NN>/DONE)
@@ -221,14 +233,19 @@ def step_capture(folder, log_path, mode="weekly", week_label=None):
     elif mode == "roster":
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "roster")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "roster", *where], CAPTURE_TIMEOUT
+    elif mode == "contracts":                  # ~40 min for 32 teams, resumes per team (contracts/done.txt)
+        where = ["--resume", name] if os.path.isdir(os.path.join(folder, "contracts")) else ["--out", name]
+        named_teams = ["--team-names", ",".join(teams)] if teams else []
+        args, timeout = [sys.executable, "madden_capture.py", "--only", "contracts", *where, *named_teams], CAPTURE_TIMEOUT
     elif mode == "prospects":
         args, timeout = [sys.executable, "madden_capture.py", "--only", "prospects", "--all-prospects", "--out", name], CAPTURE_TIMEOUT
     elif mode in ("team-overalls", "team_overalls"):
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "team_overalls")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "team-overalls", *where], CAPTURE_TIMEOUT
     elif mode == "season":
-        where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects")) or os.path.isdir(os.path.join(folder, "injuries")) or os.path.isdir(os.path.join(folder, "team_overalls"))) else ["--out", name]
-        args, timeout = [sys.executable, "madden_capture.py", "--only", "season", "--all-prospects", *where], CAPTURE_TIMEOUT * 2
+        where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects")) or os.path.isdir(os.path.join(folder, "injuries")) or os.path.isdir(os.path.join(folder, "team_overalls")) or os.path.isdir(os.path.join(folder, "contracts"))) else ["--out", name]
+        # schedule, rosters, contracts (~40 min), team overalls, injuries, prospects
+        args, timeout = [sys.executable, "madden_capture.py", "--only", "season", "--all-prospects", *where], CAPTURE_TIMEOUT * 3
     elif mode in ("draft-results", "draft_results"):
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "draft_results")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "draft-results", *where], CAPTURE_TIMEOUT
@@ -371,6 +388,42 @@ def shrink(folder):
     return before, size()
 
 
+def team_nicknames(abbrs):
+    """['CAR', 'NO'] -> ['PANTHERS', 'SAINTS'] (teams.abbreviation -> upper(teams.name)). An unknown
+    abbreviation raises WeekStopped before anything touches the console."""
+    import psycopg
+    from pipeline.load_capture import DSN
+    with psycopg.connect(DSN) as conn:
+        by_abbr = {a.upper(): n.upper() for a, n in conn.execute("SELECT abbreviation, name FROM teams").fetchall()}
+    want = [a.strip().upper() for a in abbrs if a.strip()]
+    bad = [a for a in want if a not in by_abbr]
+    if bad:
+        raise WeekStopped(f"Unknown team abbreviations {bad}; nothing was captured")
+    return [by_abbr[a] for a in want]
+
+
+def contracts_phase(folder, log_path, teams=None):
+    """Capture -> extract -> load of a Team Salary run in its own folder (team management step 1), each step
+    skipped when already done. teams: abbreviations for a re-scan (None = all 32). Takes no lock and doesn't
+    connect: run(mode='contracts') holds the lock, and step 2's weekly phase calls it inside its own run after
+    its transactions load. Returns the load report (None when the folder was already loaded)."""
+    os.makedirs(folder, exist_ok=True)
+    report = None
+    if not capture_done(folder, "contracts"):
+        nicknames = team_nicknames(teams) if teams else None
+        log(f"Contracts capture ({', '.join(nicknames) if nicknames else 'all 32 teams'})")
+        step_capture(folder, log_path, "contracts", teams=nicknames)
+    if not extract_done(folder, "contracts"):
+        log("Contracts extract")
+        step_extract(folder, log_path, "contracts")
+    if load_status(folder) != "loaded":
+        log("Contracts load")
+        report = step_load(folder, mode="contracts")
+        log(f"Loaded {report.get('contracts')} contracts for {report.get('teams')} teams "
+            f"({report.get('superseded')} superseded; cap warnings: {len(report.get('cap_warnings') or [])})")
+    return report
+
+
 # ----------------------------------------------------------------- run ----
 def set_league_state(season, week):
     import psycopg
@@ -412,12 +465,14 @@ def bye_run(articles=True):
         return 1
 
 
-def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
+def run(resume=None, articles=True, connect=True, mode="weekly", season=None, teams=None):
     """One weekly run (mode 'weekly'; 'playoff' for a postseason week, chosen automatically; or 'games' for
-    every game of last week, never with articles; 'season' for start-of-season calibration).
-    Returns 0 when the week went through, 1 when it stopped."""
+    every game of last week, never with articles; 'season' for start-of-season calibration; 'contracts' for
+    Team Salary, teams = abbreviations for a re-scan). Returns 0 when the week went through, 1 when it stopped."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
+    if teams and mode != "contracts":
+        raise ValueError("teams is only for mode 'contracts'")
     if mode == "weekly" and resume and os.path.isdir(os.path.join(CAPTURES, resume)):
         detected = folder_mode(os.path.join(CAPTURES, resume))
         if detected != "weekly":
@@ -444,7 +499,7 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
     if week_label == SUPER_BOWL_LABEL or mode == "postgame":
         what = "Super Bowl postgame capture"
     else:
-        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan", "draft-results": "Draft results scan", "team-overalls": "Team overalls scan"}.get(mode, "Weekly capture")
+        what = {"games": "Game scan", "playoff": "Playoff capture", "postgame": "Super Bowl postgame capture", "roster": "Roster scan", "prospects": "Draft prospect scan", "season": "Season scan", "draft-results": "Draft results scan", "team-overalls": "Team overalls scan", "contracts": "Contract scan"}.get(mode, "Weekly capture")
     os.makedirs(CAPTURES, exist_ok=True)
     lock = open(LOCK_PATH, "w")
     try:
@@ -467,6 +522,25 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None):
     log_path = os.path.join(folder, "weekly_run.log")
     started = time.time()
     try:
+        if mode == "contracts":
+            if teams:
+                team_nicknames(teams)            # an unknown abbreviation stops before the console is touched
+            if not capture_done(folder, mode):
+                notify(f"{what} starting ({name}). Remote Play is taking over the console.",
+                       title="Mu: capture starting", tags=("video_game",))
+                if connect:
+                    log("Step 2: connect")
+                    step_connect(log_path)
+            report = contracts_phase(folder, log_path, teams)
+            log("Contracts loaded. Skipping weekly engines and articles.")
+            log("Step 9: shrink")
+            before, after = shrink(folder)
+            log(f"Capture folder {before / 1e6:.0f} MB -> {after / 1e6:.0f} MB")
+            mins = (time.time() - started) / 60
+            n = f"{report.get('contracts')} contracts, {report.get('teams')} teams" if report else "already loaded"
+            notify(f"{what} done in {mins:.0f} min ({n}). Turn your controller back on and restart the broadcast.",
+                   title="Mu: contracts scan done", priority="high", tags=("white_check_mark",))
+            return 0
         if not capture_done(folder, mode):
             notify(f"{what} starting ({name}). Remote Play is taking over the console.",
                    title="Mu: capture starting", tags=("video_game",))
@@ -564,12 +638,18 @@ def main():
                          "season: start-of-season cadence scan (schedule, rosters, then draft board); "
                          "roster: season cadence scan of all 32 team rosters; "
                          "prospects: draft board scan of college prospects; "
-                         "draft-results: capture and load actual draft results into draft_prospects")
+                         "draft-results: capture and load actual draft results into draft_prospects; "
+                         "contracts: Team Salary for all 32 teams (or --teams), extracted and loaded")
+    ap.add_argument("--teams", metavar="ABBRS", help="--mode contracts: re-scan only these teams, e.g. CAR,NO")
     ap.add_argument("--no-connect", action="store_true",
                     help="skip the connect step (chiaki-ng is already streaming the franchise menus)")
     ap.add_argument("--season", type=int, help="explicitly target season for the run")
     a = ap.parse_args()
-    sys.exit(run(a.resume, articles=not a.no_articles, connect=not a.no_connect, mode=a.mode, season=a.season))
+    teams = [t for t in (a.teams or "").split(",") if t.strip()] or None
+    if teams and a.mode != "contracts":
+        ap.error("--teams needs --mode contracts")
+    sys.exit(run(a.resume, articles=not a.no_articles, connect=not a.no_connect, mode=a.mode, season=a.season,
+                 teams=teams))
 
 
 if __name__ == "__main__":

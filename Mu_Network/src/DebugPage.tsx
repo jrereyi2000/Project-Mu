@@ -48,8 +48,9 @@ const RUNS: { kind: string; title: string; note: string }[] = [
   { kind: "publish_articles", title: "Publish articles", note: "Runs the newsroom swarm for the next unpublished week (national, fantasy, and Agent Wire slates)." },
   { kind: "backfill_week", title: "Backfill previous week", note: "The same capture, extract, load and engines. No articles." },
   { kind: "game_scan", title: "Game scan", note: "Every game of last week: box scores and both teams' player stats (~7 min a game), loaded over the backfill's lines. No articles." },
-  { kind: "season_scan", title: "Season scan", note: "Annual start-of-season cadence: captures the 18-week schedule, all 32 team rosters, and the draft prospect board (in that order; prospects after both). No articles." },
+  { kind: "season_scan", title: "Season scan", note: "Annual start-of-season cadence: captures the 18-week schedule, all 32 team rosters, every team's contracts (Team Salary, right after rosters), and the draft prospect board (in that order; prospects last). No articles." },
   { kind: "roster_scan", title: "Roster scan", note: "Captures all 32 team rosters, extracts player cards, and updates players/seasons in the database (normally run once a season with schedule and draft board). No articles." },
+  { kind: "contract_scan", title: "Contract scan", note: "Captures every team's Team Salary screen (contracts and cap), extracts and loads it; a re-scan supersedes the old contracts. ~40 min. Normally part of the Season scan; only loads in-season (the year on screen must match the league season). No articles." },
   { kind: "draft_scan", title: "Draft prospect scan", note: "Scans the scouting draft board line-by-line, extracts prospects via Apple Vision OCR, and syncs data/draft/ prospects board (normally run once a season with schedule and roster scans, after both). No articles." },
 ];
 
