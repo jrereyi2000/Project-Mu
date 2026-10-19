@@ -64,7 +64,15 @@ class JobsTest(unittest.TestCase):
         job = wait_for(self.client, job_id, "done")
         self.assertEqual(job["exit_code"], 0)
         listed = self.client.get("/api/debug/jobs").json()
-        self.assertEqual(listed[0]["kind_label"], "Season scan (schedule, rosters, draft board)")
+        self.assertEqual(listed[0]["kind_label"], "Season scan (schedule, rosters, contracts, draft board)")
+
+    def test_contract_scan_job(self):
+        job_id = self.start(kind="contract_scan")
+        job = wait_for(self.client, job_id, "done")
+        self.assertEqual(job["exit_code"], 0)
+        listed = self.client.get("/api/debug/jobs").json()
+        self.assertEqual(listed[0]["kind_label"], "Contract scan (Team Salary, all 32 teams)")
+        self.assertEqual(dbg.JOB_KINDS["contract_scan"][1], ["--mode", "contracts", "--no-articles"])
 
     def test_draft_scan_job(self):
         job_id = self.start(kind="draft_scan")

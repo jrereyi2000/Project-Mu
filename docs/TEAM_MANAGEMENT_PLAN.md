@@ -127,7 +127,7 @@ The mock draft's board is the top 32 by OVR, and that isn't realistic. Step 4 st
 ## 5. Status
 | Step | Sub-plan | Build |
 |---|---|---|
-| 1 Contract scan | written | not started |
+| 1 Contract scan | written | Phases 1–5 built (2026-10-19); Phase 0 console check (C1–C7, C9–C10) and applying the migration are JR's, before the first live scan |
 | 2 League transactions | written | not started |
 | 3 GM agents | not written | not started |
 | 4 Scouting and draft | design pass needed (§2.5) | not started |
