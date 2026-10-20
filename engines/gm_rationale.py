@@ -76,11 +76,15 @@ def template(sheet):
     ga, gb = _gets(sheet, "a"), _gets(sheet, "b")
     star_a = next((a for a in ga if a["kind"] == "player"), ga[0] if ga else None)
     star_b = next((a for a in gb if a["kind"] == "player"), gb[0] if gb else None)
-    head = (f"{A['nickname']} acquire {star_a['name']} from the {B['nickname']}" if star_a and star_a["kind"] == "player"
-            else f"{A['nickname']} and {B['nickname']} swap {len(sheet['assets'])} assets")
+    if sheet.get("trigger") == "DRAFT":
+        head = f"{A['nickname']} trade up with the {B['nickname']}"
+    else:
+        head = (f"{A['nickname']} acquire {star_a['name']} from the {B['nickname']}" if star_a and star_a["kind"] == "player"
+                else f"{A['nickname']} and {B['nickname']} swap {len(sheet['assets'])} assets")
     need = GROUP_NAMES.get(star_a.get("group")) if star_a and star_a["kind"] == "player" else (
         A["needs"][0] if A["needs"] else None)
     why_a = {"INJURY": f"With an injury at {GROUP_NAMES.get(A['urgent'], 'a key spot')}, we needed an answer now",
+             "DRAFT": "We had a player we didn't think would last, so we moved up to get him",
              "SELL": f"We're in a {(A['direction'] or 'retool').lower()} year and this return fits our timeline",
              }.get(sheet["trigger"], f"We came into the week needing help at {need}" if need else "This makes us better")
     ra = (f"{A['gm']}: {why_a}. {_describe(star_a) if star_a else 'This return'} fits what the {A['nickname']} "

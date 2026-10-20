@@ -253,10 +253,18 @@ def ensure_team_seasons(cur, season):
     return cur.rowcount
 
 
+def picks_to_seed(existing, team_ids, season, years=PICK_YEARS):
+    """pick_seed_rows minus the picks that already have a row (traded or corrected picks are never touched).
+    existing: {(draft_season, round, original_team_id)}."""
+    return [r for r in pick_seed_rows(team_ids, season, years) if r[:3] not in existing]
+
+
 def seed_picks(cur, team_ids, season, years=PICK_YEARS):
     """Own picks for the next `years` drafts; existing rows (traded or corrected picks) are never overwritten."""
+    cur.execute("SELECT draft_season, round, original_team_id FROM draft_picks WHERE draft_season > %s", (season,))
+    existing = {tuple(r) for r in cur.fetchall()}
     n = 0
-    for row in pick_seed_rows(team_ids, season, years):
+    for row in picks_to_seed(existing, team_ids, season, years):
         cur.execute("""INSERT INTO draft_picks (draft_season, round, original_team_id, owner_team_id, source)
                        VALUES (%s, %s, %s, %s, 'SEED') ON CONFLICT DO NOTHING""", row)
         n += cur.rowcount

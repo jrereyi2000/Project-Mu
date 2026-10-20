@@ -53,8 +53,15 @@ INJURY_CLEAR_WEEKS = 2
 INJURY_FIRST_P = 0.35
 INJURY_EXTRA_P = 0.5
 RUMOR_SHARE = 0.4
-OFFSEASON_WEEK = 24
-DRAFT_WEEK = 25
+OFFSEASON_WEEK = 24                      # league week of every offseason / draft-day proposal
+# The offseason window runs post-Super Bowl through the preseason over these stages; the draft stage weighs 3x.
+OFFSEASON_STAGES = ("post-Super Bowl", "re-signing", "free agency", "draft", "preseason")
+DRAFT_STAGE = 4
+DRAFT_DAY_PICKS = 32                     # draft-day proposals: only while the GM agents make the Round 1 picks
+DRAFT_DAY_MAX_P = 0.5
+DRAFT_DAY_SHARE = 0.5                    # draft day gets half the draft stage's expected trades
+DRAFT_DAY_PREMIUM = 1.35                 # a team trading up covets the player on the board at that pick; step 4's
+                                         # board grade replaces this flat premium
 
 
 # ------------------------------------------------------------------ window ----
@@ -78,14 +85,32 @@ def roster_max(window):
     return ROSTER_MAX_IN_SEASON if window == "IN_SEASON" else ROSTER_MAX_OFFSEASON
 
 
-def expire_stale(open_props, week, window="IN_SEASON"):
-    """[(proposal_id, reason)] for PROPOSED/APPROVED proposals the league has moved past: their week is gone, or
-    the deadline passed. JR may still confirm an expired one he already made at the console."""
+def flag_value(p, key):
+    """An int stored as flag 'key:<n>' (offseason stage, draft-day pick), else None."""
+    for f in p.get("flags") or []:
+        if f.startswith(key + ":") and f[len(key) + 1:].isdigit():
+            return int(f[len(key) + 1:])
+    return None
+
+
+def expire_stale(open_props, week, window="IN_SEASON", stage=None, pick=None):
+    """[(proposal_id, reason)] for PROPOSED/APPROVED proposals the league has moved past: their week is gone, the
+    deadline passed, a later offseason stage started, or a later pick is on the clock (draft day). JR may still
+    confirm an expired one he already made at the console."""
     out = []
     for p in open_props:
         if p["status"] not in ("PROPOSED", "APPROVED"):
             continue
-        if p.get("trade_window", "IN_SEASON") == "IN_SEASON" and not trades_open(week, "IN_SEASON"):
+        pw = p.get("trade_window", "IN_SEASON")
+        if pw == "OFFSEASON" and stage is not None and (flag_value(p, "stage") or 0) < stage:
+            out.append((p["id"], f"offseason stage {flag_value(p, 'stage')} is over"))
+        elif pw == "DRAFT_DAY" and (pick is not None and (flag_value(p, "pick") or 0) < pick or
+                                    window == "OFFSEASON" and (stage or 0) > DRAFT_STAGE):
+            out.append((p["id"], "the pick was made"))
+        elif pw in ("OFFSEASON", "DRAFT_DAY"):
+            if window == "IN_SEASON":
+                out.append((p["id"], "the offseason is over"))
+        elif pw == "IN_SEASON" and not trades_open(week, "IN_SEASON"):
             out.append((p["id"], "trade deadline passed"))
         elif p.get("expires_week") is not None and week > p["expires_week"]:
             out.append((p["id"], f"expired after week {p['expires_week']}"))
@@ -138,10 +163,15 @@ def offseason_target(season):
     return random.Random(f"offseason:{season}").randint(*OFFSEASON_RANGE)
 
 
-def offseason_budget(season, stage, stages, executed, decided, open_count, target=None):
-    """The offseason uses the same pacing over its own stages (stage 1..stages, the draft stage weighted 3x)."""
+def offseason_shape(stage):
+    return DEADLINE_WEIGHT if stage == DRAFT_STAGE else 1
+
+
+def offseason_budget(season, stage, executed, decided, open_count, target=None, stages=len(OFFSEASON_STAGES)):
+    """The offseason uses the same pacing over its own stages (1..5, the draft stage weighted 3x); its target is
+    drawn from 15-20 per offseason and draft-day trades count toward it."""
     target = target if target is not None else offseason_target(season)
-    shape = lambda s: DEADLINE_WEIGHT if s == stages else 1
+    shape = offseason_shape
     remaining = sum(shape(s) for s in range(stage, stages + 1))
     e = max(0.0, target - executed) * shape(stage) / remaining if remaining else 0.0
     pe = p_exec(executed, decided)
@@ -167,7 +197,7 @@ def simulate_season(approval=0.6, seasons=2000, first_week=1, seed=0):
 
 
 # ------------------------------------------------------------------- books ----
-def read_books(cur, season, week, window="IN_SEASON"):
+def read_books(cur, season, week, window="IN_SEASON", stage=None):
     """Everything the engine needs, read-only."""
     from engines.gm_direction import read_injuries
     b = {"season": season, "week": week, "window": window}
@@ -201,11 +231,14 @@ def read_books(cur, season, week, window="IN_SEASON"):
     cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED'),
                           count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED')),
                           min(week) FILTER (WHERE origin = 'ENGINE')
-                   FROM gm_trade_proposals WHERE season = %s AND trade_window = %s""", (season, window))
+                   FROM gm_trade_proposals WHERE season = %s AND trade_window = ANY(%s)""",
+                (season, ["IN_SEASON"] if window == "IN_SEASON" else ["OFFSEASON", "DRAFT_DAY"]))
     ex, dec, first = cur.fetchone()
     b["executed"], b["decided"], b["first_week"] = ex or 0, dec or 0, min(first or week, week)
     cur.execute("""SELECT count(*) FROM gm_trade_proposals WHERE season = %s AND week = %s AND origin = 'ENGINE'
-                   AND trade_window = %s""", (season, week, window))
+                   AND trade_window = %s AND (%s::text IS NULL OR %s = ANY(flags))""",
+                (season, week, window, None if stage is None else f"stage:{stage}",
+                 None if stage is None else f"stage:{stage}"))
     b["made_this_week"] = cur.fetchone()[0]
     cur.execute("SELECT deal_hash FROM gm_trade_proposals WHERE season = %s", (season,))
     b["hashes"] = {r[0] for r in cur.fetchall()}
@@ -315,8 +348,11 @@ class Valuer:
                 self.cache[key] = tv.player_value(p, ctx, self.fits, season)["value"]
             else:
                 ds, rd, orig = asset["pick"]
-                self.cache[key] = tv.pick_value({"draft_season": ds, "round": rd, "original_team_id": orig}, ctx,
-                                                self.fits, season)
+                v = tv.pick_value({"draft_season": ds, "round": rd, "original_team_id": orig}, ctx, self.fits, season)
+                clock = self.b.get("on_clock")
+                if clock and tuple(asset["pick"]) == clock[0] and tid != clock[1]:
+                    v = round(v * DRAFT_DAY_PREMIUM)
+                self.cache[key] = v
         return self.cache[key]
 
     def dead(self, asset, tid):
@@ -600,7 +636,7 @@ def sell_deals(b, valuer, seller):
     return deals
 
 
-def packages(b, valuer, buyer, seller, core, trigger):
+def packages(b, valuer, buyer, seller, core, trigger, extras=True):
     """Every package of up to MAX_ASSETS from the buyer's top candidates (valued by the seller) against the core,
     plus up to MAX_ASSETS - len(core) extras from the seller's non-starters (valued by the buyer)."""
     give = package_assets(b, buyer)
@@ -611,7 +647,7 @@ def packages(b, valuer, buyer, seller, core, trigger):
     core_keys = {asset_key(x) for x in core}
     extra = [dict(x, to=buyer) for x in package_assets(b, seller) if asset_key(x) not in core_keys]
     extra.sort(key=lambda x: -valuer.value(x, buyer))
-    extra = extra[:TOP_CANDIDATES - 1]
+    extra = extra[:TOP_CANDIDATES - 1] if extras else []
     deals = []
     room = MAX_ASSETS - len(core)
     for k in range(1, MAX_ASSETS + 1):
@@ -810,10 +846,13 @@ def set_status(cur, pid, status, reason=None):
 
 
 # --------------------------------------------------------------------- run ----
-def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=print, window=None):
-    """One engine run. Returns a report dict; in a dry run nothing is written (the caller rolls back too)."""
+def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=print, window=None, stage=None):
+    """One engine run. Returns a report dict; in a dry run nothing is written (the caller rolls back too). In the
+    offseason (week 24) `stage` is the offseason stage 1-5 (OFFSEASON_STAGES; default 1)."""
     from engines import gm_direction
     window = window or window_for(week)
+    if window == "OFFSEASON":
+        stage = stage or 1
     rep = {"season": season, "week": week, "window": window, "expired": [], "proposals": [], "budget": None,
            "triggers": {}, "rechecked": []}
     if window is None:
@@ -825,11 +864,14 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         return rep
     if replace and not dry_run:
         cur.execute("""DELETE FROM gm_trade_proposals WHERE season = %s AND week = %s AND origin = 'ENGINE'
-                       AND status = 'PROPOSED' AND trade_window = %s""", (season, week, window))
+                       AND status = 'PROPOSED' AND trade_window = %s
+                       AND (%s::text IS NULL OR %s = ANY(flags))""",
+                    (season, week, window, None if stage is None else f"stage:{stage}",
+                     None if stage is None else f"stage:{stage}"))
         log(f"replaced: {cur.rowcount} of this week's PROPOSED proposals removed")
     # 1. expire stale
     open_props = read_proposals(cur, season, ("PROPOSED", "APPROVED"))
-    for pid, why in expire_stale(open_props, week, window):
+    for pid, why in expire_stale(open_props, week, window, stage):
         rep["expired"].append((pid, why))
         if not dry_run:
             set_status(cur, pid, "EXPIRED", why)
@@ -838,7 +880,7 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
     rows = gm_direction.compute(gm_direction.read_league(cur, season, min(dir_week, 23)), dir_week)
     if not dry_run:
         gm_direction.write(cur, season, dir_week, rows)
-    b = read_books(cur, season, week, window)
+    b = read_books(cur, season, week, window, stage)
     for tid, r in rows.items():                          # a dry run never wrote them: use them in memory
         ts = b["ts"].setdefault(tid, {})
         ts.update(direction=r["direction"], needs=r["needs"], surplus=r["surplus"], proj_wins=r["inputs"]["proj_wins"])
@@ -871,7 +913,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
     if window == "IN_SEASON":
         bud = weekly_budget(season, week, b["executed"], b["decided"], open_count, b["first_week"])
     else:
-        bud = offseason_budget(season, 1, 1, b["executed"], b["decided"], open_count)
+        bud = offseason_budget(season, stage, b["executed"], b["decided"], open_count)
+        bud["stage"] = f"{stage} {OFFSEASON_STAGES[stage - 1]}"
     n = max(0, bud["n"] - b["made_this_week"])
     rng = random.Random(f"{season}:{week}:{window}:search")
     order, urgent_first = initiator_order(b, rng)
@@ -905,6 +948,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         caps = cap_effects(pick, b)
         flags += [f"rescan:{abbr(b, t)}" for t, c in caps.items()
                   if c["derived"] and c["after"] is not None and c["after"] < RESCAN_HEADROOM]
+        if window == "OFFSEASON":
+            flags.append(f"stage:{stage}")
         rat = rationale_for(b, pick, llm)
         pid = None if dry_run else store(cur, b, pick, valuer, rat, flags)
         for x in pick["assets"]:                          # booked for the rest of this run
@@ -917,6 +962,66 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
                                  "steps": steps_text(b, pick), "caps": caps})
         print_proposal(b, pick, rat, caps, flags, log)
     rep["books"] = b
+    return rep
+
+
+def draft_day_p(season, executed, decided, open_count):
+    """Chance that a Round 1 pick on the clock draws a trade-up proposal: DRAFT_DAY_SHARE of the draft stage's
+    expected trades over the 32 picks, divided by the approval rate, capped at 0.5."""
+    bud = offseason_budget(season, DRAFT_STAGE, executed, decided, open_count)
+    pe = bud["p_exec"] or 1
+    return min(DRAFT_DAY_MAX_P, DRAFT_DAY_SHARE * bud["e_w"] / (pe * DRAFT_DAY_PICKS))
+
+
+def run_draft_day(cur, season, pick, dry_run=False, llm=None, log=print):
+    """Draft-day trades (step 4 calls this for each of the first 32 picks, live): the pick on the clock may draw
+    one pick-for-pick trade-up proposal from a team that values it more than its owner does. pick: {draft_season,
+    round, original_team_id, overall_pick}. Earlier picks' open draft-day proposals expire. Returns a report."""
+    overall = pick["overall_pick"]
+    rep = {"season": season, "pick": overall, "expired": [], "proposals": [], "p": None}
+    open_props = read_proposals(cur, season, ("PROPOSED", "APPROVED"))
+    for pid, why in expire_stale(open_props, OFFSEASON_WEEK, "DRAFT_DAY", pick=overall):
+        rep["expired"].append((pid, why))
+        if not dry_run:
+            set_status(cur, pid, "EXPIRED", why)
+    if overall > DRAFT_DAY_PICKS:
+        return rep
+    b = read_books(cur, season, OFFSEASON_WEEK, "DRAFT_DAY")
+    expired = {pid for pid, _ in rep["expired"]}
+    b["open"] = [p for p in b["open"] if p["id"] not in expired]
+    b = finish_books(b)
+    key = (pick["draft_season"], pick["round"], pick["original_team_id"])
+    owner = b["picks"].get(key)
+    if owner is None or not eligible_team(b, owner):
+        return rep
+    b["slots"][pick["original_team_id"]] = overall - (pick["round"] - 1) * 32   # the real slot, not a projection
+    b["on_clock"] = (key, owner)
+    p = draft_day_p(season, b["executed"], b["decided"], len(b["open"]))
+    rep["p"] = round(p, 3)
+    rng = random.Random(f"{season}:draft:{overall}")
+    if rng.random() >= p or len(b["open"]) >= MAX_OPEN:
+        return rep
+    valuer = Valuer(b, tv.fits_from_db(cur, season))
+    core = {"type": "PICK", "pick": key, "from": owner}
+    deals = []
+    for buyer in b["teams"]:
+        if buyer == owner or not eligible_team(b, buyer):
+            continue
+        x = dict(core, to=buyer)
+        if valuer.value(x, buyer) <= valuer.value(x, owner):
+            continue
+        deals += [d for d in packages(b, valuer, buyer, owner, [x], "DRAFT", extras=False)
+                  if all(a["type"] == "PICK" for a in d["assets"])]
+    cands = evaluate(deals, b, valuer)
+    best = choose(cands, rng)
+    if not best:
+        return rep
+    flags = [f"pick:{overall}"] + [f"advisory:{abbr(b, t)}" for t in (best["a"], best["b"])
+                                   if b["gm"].get(t, {}).get("user_controlled")]
+    rat = rationale_for(b, best, llm)
+    pid = None if dry_run else store(cur, b, best, valuer, rat, flags, trigger="DRAFT")
+    rep["proposals"].append({"id": pid, "deal": best, "rationale": rat, "flags": flags, "steps": steps_text(b, best)})
+    print_proposal(b, best, rat, cap_effects(best, b), flags, log)
     return rep
 
 
@@ -952,6 +1057,10 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true", help="read-only: print the proposals, write nothing")
     ap.add_argument("--replace", action="store_true", help="remove this week's PROPOSED proposals first")
     ap.add_argument("--no-llm", action="store_true", help="template rationale only")
+    ap.add_argument("--stage", type=int, choices=range(1, len(OFFSEASON_STAGES) + 1),
+                    help="offseason stage 1-5 (with --week 24): " + ", ".join(OFFSEASON_STAGES))
+    ap.add_argument("--draft-pick", type=int, metavar="OVERALL",
+                    help="draft day: the Round 1 pick on the clock (needs draft_picks.overall_pick set)")
     ap.add_argument("--simulate-season", action="store_true")
     ap.add_argument("--approval", type=float, default=0.6)
     ap.add_argument("--seasons", type=int, default=2000)
@@ -971,9 +1080,19 @@ def main(argv=None):
         cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
         s, w = cur.fetchone()
         season, week = a.season or s, a.week or w
-        rep = run_week(cur, season, week, dry_run=a.dry_run, replace=a.replace, llm=llm)
-        print(f"\nweek {week}: {len(rep['proposals'])} proposals, {len(rep['expired'])} expired, "
-              f"{len(rep['rechecked'])} no longer legal")
+        if a.draft_pick:
+            cur.execute("""SELECT draft_season, round, original_team_id FROM draft_picks
+                           WHERE draft_season = %s AND overall_pick = %s""", (season + 1, a.draft_pick))
+            row = cur.fetchone()
+            if not row:
+                raise SystemExit(f"no draft_picks row with overall_pick {a.draft_pick} for {season + 1}")
+            rep = run_draft_day(cur, season, {"draft_season": row[0], "round": row[1], "original_team_id": row[2],
+                                              "overall_pick": a.draft_pick}, dry_run=a.dry_run, llm=llm)
+            print(f"\npick {a.draft_pick}: p {rep['p']}, {len(rep['proposals'])} proposals, {len(rep['expired'])} expired")
+        else:
+            rep = run_week(cur, season, week, dry_run=a.dry_run, replace=a.replace, llm=llm, stage=a.stage)
+            print(f"\nweek {week}: {len(rep['proposals'])} proposals, {len(rep['expired'])} expired, "
+                  f"{len(rep['rechecked'])} no longer legal")
         if a.dry_run:
             conn.rollback()
             print("dry run: nothing written")
