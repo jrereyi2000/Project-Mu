@@ -202,12 +202,14 @@ def step_events(cls, cons, step, draft_season):
     """{key: [events]} for the step (scouting_events.generate per prospect; VISITs are added by the caller)."""
     from engines import scouting_events as se
     n = max(len(cls), 1)
+    first = min(p["first_step"] for p in cls) if cls else step
+    quiet = se.QUIET * sigma_at(step, first) / SIGMA_0
     out = {}
     for p in cls:
         if p["key"] not in cons:
             continue
         q = dict(p, v_pct=100.0 * (1 - (p["true_rank"] - 1) / n))
-        evs = se.generate(step, q, cons[p["key"]]["move"], cons[p["key"]]["rank"], draft_season)
+        evs = se.generate(step, q, cons[p["key"]]["move"], cons[p["key"]]["rank"], draft_season, quiet)
         if evs:
             out[p["key"]] = evs
     return out
