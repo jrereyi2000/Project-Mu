@@ -305,6 +305,7 @@ class StepScoutingTest(unittest.TestCase):
 
     def test_failure_only_warns(self):
         logs = []
-        with mock.patch.object(wc, "log", logs.append), mock.patch("psycopg.connect", side_effect=RuntimeError("no db")):
+        with mock.patch.object(wc, "log", logs.append), mock.patch("psycopg.connect", side_effect=RuntimeError("no db")), \
+             mock.patch("engines.gm_llm.make_llm", lambda *a, **k: None):
             self.assertEqual(wc.step_scouting(2036), [])
         self.assertTrue(any("[WARN] Scouting skipped" in m for m in logs))

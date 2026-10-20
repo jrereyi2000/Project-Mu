@@ -378,7 +378,7 @@ def _write_step(cur, draft_season, step, season, out, keep_llm=None):
     ids = {}
     for key, evs in out["events"].items():
         for e in evs:
-            head, blurb, src = e["headline"], e["blurb"], "TEMPLATE"
+            head, blurb, src = e["headline"], e["blurb"], e.get("text_source", "TEMPLATE")
             kept = (keep_llm or {}).get((key, e["kind"], e["seq"]))
             if kept:
                 head, blurb, src = kept
@@ -400,9 +400,10 @@ def _write_step(cur, draft_season, step, season, out, keep_llm=None):
     return n_events
 
 
-def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras=None):
+def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras=None, llm=None):
     """Store one scouting step (idempotent: a stored step is skipped unless replace, which redraws it with the same
-    seeds and keeps any LLM text). extras(cur, out) may add VISIT events and team boards (Phases 4, 6).
+    seeds and keeps any LLM text). extras(cur, out, step, season) adds VISIT events and team boards; llm (gm_llm,
+    label scouting_notes) rewrites up to 8 movers' notes (scouting_narrative; never in a dry run).
     Returns the computed step."""
     season = current_step(cur)[0]
     stored = step in stored_steps(cur, draft_season)
@@ -419,6 +420,11 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
     out["params"] = params()
     if extras:
         extras(cur, out, step, season)
+    if llm is not None and not dry_run:
+        from engines.scouting_narrative import write_notes
+        n = write_notes(out, llm, log=log)
+        if n:
+            log(f"  scouting notes: {n} written by Gemini")
     if dry_run:
         report(out, step, log)
         log("  dry run: nothing written")
@@ -540,7 +546,7 @@ def report(out, step, log=print, top=32):
         log(f"  [{e['kind']}] {e['headline']} | {e['blurb']}")
 
 
-def catch_up(cur, draft_season, to_step, log=print, extras=None, dry_run=False):
+def catch_up(cur, draft_season, to_step, log=print, extras=None, dry_run=False, llm=None):
     """Run every missing step from the class's first (or the last stored + 1) through to_step, in order."""
     steps = stored_steps(cur, draft_season)
     cls_first = None
@@ -552,7 +558,7 @@ def catch_up(cur, draft_season, to_step, log=print, extras=None, dry_run=False):
     start = (max(steps) + 1) if steps else cls_first
     done = []
     for s in range(start, to_step + 1):
-        run(cur, draft_season, s, dry_run=dry_run, log=log, extras=extras)
+        run(cur, draft_season, s, dry_run=dry_run, log=log, extras=extras, llm=llm)
         done.append(s)
     return done
 
