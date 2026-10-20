@@ -21,7 +21,7 @@ TEAM_NICKNAMES = frozenset({
     "GIANTS", "JAGUARS", "JETS", "LIONS", "PACKERS", "PANTHERS", "PATRIOTS", "RAIDERS",
     "RAMS", "RAVENS", "SAINTS", "SEAHAWKS", "STEELERS", "TEXANS", "TITANS", "VIKINGS"})
 
-TYPES = ("SIGNED", "RELEASED", "TRADED", "RE_SIGNED", "EXTENDED", "OTHER")
+TYPES = ("SIGNED", "RELEASED", "TRADED", "RE_SIGNED", "EXTENDED", "RESTRUCTURED", "OTHER")
 
 # Vision sometimes returns Cyrillic/Greek look-alikes inside Latin words (madden_capture.HOMOGLYPHS)
 HOMOGLYPHS = str.maketrans("АВСЕНІЈКМОРЅТХУаеорсухіјΑΒΕΗΙΚΜΝΟΡΤΧΥΖ",
@@ -107,13 +107,22 @@ def heading_week(h):
 POS = r"\((?P<pos>[A-Z]{1,5})\)"
 TEAM = r"(?P<team>[0-9A-Z]+)"
 # "TO 1 YEAR, $3.93M CONTRACT" (signing) and "TO A 4-YEAR, $120M EXTENSION" (re-sign, JR 2026-10-19)
-TERMS = r"TO (?:AN? )?(?P<years>[0-9TILO]{1,2}) ?-? ?YEARS?,? ?(?P<amount>[$S]? ?[\d.,]+ ?[MK])(?: CONTRACT| EXTENSION)?"
+TERMS = r"TO (?:AN? )?(?P<years>[0-9TILO]{1,2}) ?-? ?YEARS?[,.]? ?(?P<amount>[$S]? ?[\d.,]+ ?[MK])(?: CONTRACT| EXTENSION)?"
 # A roster move's verb. A row without one (draft-class notice and the like) isn't a move: it is skipped, not
 # stored (JR, 2026-10-19). A row with one that the grammar can't read is kept for review.
-MOVE_RE = re.compile(r"\b(?:RE ?- ?SIGN|SIGN|RELEASE|TRADE|ACQUIRE|EXTEN|WAIVE|CLAIM)")
-SIGN_RE = re.compile(rf"^{TEAM} SIGN(?:ED|S)? (?:(?:A )?FREE AGENT |FA )?{POS} (?P<name>.+?)(?: {TERMS})?$")
-RELEASE_RE = re.compile(rf"^{TEAM} RELEASE[DS]? {POS} (?P<name>.+)$")
+MOVE_RE = re.compile(r"\b(?:RE ?- ?SIGN|SIGN|RELEASE|TRADE|ACQUIRE|EXTEN|WAIVE|CLAIM|RESTRUCTURE)")
+# Rows seen on the console (2026-10-19) that are not roster moves, though they name a player: commissioner edits
+# ("(QB) GEORGE CRAWFORD WAS EDITED BY …"), draft-class access, position changes ("PANTHERS MOVE LT … TO (LG)";
+# the next roster scan has the new position).
+NOT_MOVE_RE = re.compile(r"\b(?:WAS EDITED BY|HAS BEEN ACCESSED BY|HAS BEEN EDITED)\b|^\S+ MOVE ")
+# "RAMS SIGN (LT) J.C. FRIEDMAN TO THEIR PRACTICE SQUAD" (seen 2026-10-19): a practice-squad signing, no terms
+PS = r"(?P<ps> (?:TO|FROM) (?:THEIR|THE) PRACTICE SQUAD)"
+SIGN_RE = re.compile(rf"^{TEAM} SIGN(?:ED|S)? (?:(?:A )?FREE AGENT |FA |FROM OTHER TEAM PRACTICE SQUAD )?{POS} (?P<name>.+?)(?: {TERMS}|{PS})?$")
+RELEASE_RE = re.compile(rf"^{TEAM} RELEASE[DS]? {POS} (?P<name>.+?){PS}?$")
 RESIGN_RE = re.compile(rf"^{TEAM} RE ?- ?SIGN(?:ED|S)? {POS} (?P<name>.+?)(?: {TERMS})?$")
+# "BEARS HAVE RESTRUCTURED THE CONTRACT OF (QB) TY SIMPSON GENERATING $11.3M IN ADDITIONAL CAP SPACE"
+RESTRUCTURE_RE = re.compile(rf"^{TEAM} (?:HAVE |HAS )?RESTRUCTURED THE CONTRACT OF {POS} (?P<name>.+?) GENERATING "
+                            r"(?P<amount>[$S]? ?[\d.,]+ ?[MK]) IN ADDITIONAL CAP SPACE$")
 EXTEND_RE = re.compile(rf"^{TEAM} .*?{POS} (?P<name>.+?)(?= TO |,|$)")    # any row that says EXTEN...
 LEG_RE = re.compile(r"\((?P<pos>[A-Z]{1,5})\) (?P<name>.+?)(?= TO | FROM | FOR | AND |, |;| \(|$)")
 PICK_RE = re.compile(r"\b(?P<pick>[0-9TILO]{4} (?:\w+ )?(?:ROUND|RD) (?:DRAFT )?PICK)S?\b")
@@ -142,6 +151,14 @@ def parse_row(text, teams=TEAM_NICKNAMES):
     first = t.split(" ", 1)[0] if t else ""
     if re.search(r"\bTRADE|\bACQUIRE", t):
         return _parse_trade(t, teams)
+    m = RESTRUCTURE_RE.match(t)
+    if m:
+        d = _empty(t, m.group("team"), "RESTRUCTURED")
+        d.update(pos=m.group("pos"), name=m.group("name").strip(" ,."), amount_text=norm_amount(m.group("amount")),
+                 ok=m.group("team") in teams)
+        if not d["ok"]:
+            d["flags"].append("unknown_team")
+        return d
     rules = [("RE_SIGNED", RESIGN_RE), ("SIGNED", SIGN_RE), ("RELEASED", RELEASE_RE)]
     if re.search(r"\bEXTEN(?:D|DED|DS|SION)\b", t) and not re.search(r"\bRE ?- ?SIGN", t):
         rules = [("EXTENDED", EXTEND_RE)]          # "RE-SIGN … EXTENSION" is a re-signing (JR's wording)
@@ -154,7 +171,9 @@ def parse_row(text, teams=TEAM_NICKNAMES):
         terms = m if "years" in rx.groupindex else re.search(TERMS, t)
         if terms and terms.group("years"):
             d["years"], d["amount_text"] = _years(terms.group("years")), norm_amount(terms.group("amount"))
-        if kind == "SIGNED" and not (d["years"] and d["amount_text"]):
+        if "ps" in rx.groupindex and m.group("ps"):
+            d["flags"].append("practice_squad")       # no contract terms on the row
+        elif kind == "SIGNED" and not (d["years"] and d["amount_text"]):
             d["flags"].append("no_terms")
         if d["team"] not in teams:
             d["flags"].append("unknown_team")
@@ -171,6 +190,8 @@ def is_move(text):
     """Does the row name a roster move: a move verb, or a '(POS) NAME' player group (so a verb OCR mangled still
     counts)? Rows that don't are skipped by extraction's re-read and by the loader."""
     t = fold(text)
+    if NOT_MOVE_RE.search(t):
+        return False
     return bool(MOVE_RE.search(t) or re.search(r"\([A-Z]{1,5}\) [A-Z]", t))
 
 
@@ -220,7 +241,8 @@ def legs(parsed):
             "amount_text": parsed["amount_text"], "asset": None, "suffix": ""}
     if kind != "TRADED":
         frm, to = {"SIGNED": (None, parsed["team"]), "RELEASED": (parsed["team"], None),
-                   "RE_SIGNED": (None, parsed["team"]), "EXTENDED": (None, parsed["team"])}.get(kind, (None, None))
+                   "RE_SIGNED": (None, parsed["team"]), "EXTENDED": (None, parsed["team"]),
+                   "RESTRUCTURED": (None, parsed["team"])}.get(kind, (None, None))
         return [dict(base, **{"from": frm, "to": to})]
     out = []
     for i, lg in enumerate(parsed["legs"]):
