@@ -74,13 +74,48 @@ class TransactionsRunTest(unittest.TestCase):
                 step_connect=lambda lp: calls.append(("connect",)), step_capture=capture, step_extract=extract,
                 load_status=lambda f: None, step_load=lambda f, replace=False, mode="weekly": calls.append(("load", mode)) or {},
                 league_state=lambda: (2036, 4), since_heading=lambda s, weekly=True: "2036 SEASON - WEEK 1",
-                step_engines=lambda s: calls.append(("engines",)), step_gm=lambda s: calls.append(("gm",)),
+                step_engines=lambda s: calls.append(("engines",)), step_gm=lambda s, next_stage=False: calls.append(("gm", next_stage)),
                 step_articles=lambda s, week=None: calls.append(("articles",))):
             os.makedirs(os.path.join(tmp, "tx1"))
             self.assertEqual(wc.run("tx1", mode="transactions"), 0)
         self.assertEqual([c[0] for c in calls], ["notify", "connect", "capture", "notify", "extract", "load", "notify"])
         self.assertEqual(calls[2], ("capture", "transactions", "2036 SEASON - WEEK 1"))   # first run: from Week 1
         self.assertEqual(calls[5], ("load", "transactions"))
+
+    def test_next_offseason_stage_runs_the_gm_step_after_the_load(self):
+        """--gm-next-stage (#debug Next offseason stage): the transactions scan, then the GM agents' next stage."""
+        tmp = tempfile.mkdtemp()
+        calls = []
+
+        def capture(folder, log_path, mode="weekly", week_label=None, **kw):
+            os.makedirs(os.path.join(folder, "transactions"), exist_ok=True)
+            open(os.path.join(folder, ".capture_done"), "w").close()
+
+        def extract(folder, log_path, mode="weekly"):
+            open(os.path.join(folder, "transactions.csv"), "w").close()
+
+        def load(f, replace=False, mode="weekly"):
+            calls.append(("load",))
+            if self.fail_load:
+                raise wc.WeekStopped("load failed")
+            return {}
+
+        for fail in (False, True):
+            self.fail_load = fail
+            calls.clear()
+            name = f"tx_gm_{fail}"
+            with mock.patch.multiple(
+                    wc, CAPTURES=tmp, LOCK_PATH=os.path.join(tmp, ".lock"), notify=lambda m, **kw: None,
+                    step_connect=lambda lp: None, step_capture=capture, step_extract=extract,
+                    load_status=lambda f: None, step_load=load, league_state=lambda: (2036, 23),
+                    since_heading=lambda s, weekly=True: "2036 SEASON - WEEK 1",
+                    step_gm=lambda s, next_stage=False: calls.append(("gm", s, next_stage))):
+                os.makedirs(os.path.join(tmp, name))
+                code = wc.run(name, mode="transactions", gm_stage=True)
+            if fail:                                       # a failed load stops before the GMs see stale books
+                self.assertEqual((code, calls), (1, [("load",)]))
+            else:
+                self.assertEqual((code, calls), (0, [("load",), ("gm", 2036, True)]))
 
 
 if __name__ == "__main__":

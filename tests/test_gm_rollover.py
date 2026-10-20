@@ -131,3 +131,48 @@ def test_offseason_moves_use_the_new_cap_year():
     assert next(o for o in ops if o["op"] == "txn")["txn_date"] == "2036 OFFSEASON"
     _, warnings = tm.plan_trade_ops(prop, dict(state, cap_rows=set()))
     assert any("no 2037 cap row" in w for w in warnings)
+
+
+def test_step_gm_next_stage(monkeypatch):
+    """weekly_capture.step_gm(next_stage=True): the stage after the last one, only in the offseason."""
+    import pipeline.weekly_capture as wc
+    from engines import gm_trade_engine as gte
+    runs, logs = [], []
+
+    class Cur:
+        def execute(self, q, a=None):
+            pass
+
+        def fetchone(self):
+            return (True,)
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def cursor(self):
+            return Cur()
+
+        def commit(self):
+            pass
+
+    monkeypatch.setattr("psycopg.connect", lambda *a, **k: Conn())
+    monkeypatch.setattr("engines.gm_llm.make_llm", lambda *a, **k: None)
+    monkeypatch.setattr(wc, "log", logs.append)
+    monkeypatch.setattr(wc, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(gte, "run_week", lambda cur, season, week, **kw: runs.append(kw["stage"]) or
+                        {"proposals": [], "expired": [], "rechecked": []})
+    state = {"window": (2036, 24, "OFFSEASON"), "stage": 2}
+    monkeypatch.setattr(gte, "league_window", lambda cur: state["window"])
+    monkeypatch.setattr(gte, "read_stage", lambda cur, season: state["stage"])
+    wc.step_gm(2036, next_stage=True)
+    assert runs == [3]
+    state["stage"] = 5
+    wc.step_gm(2036, next_stage=True)
+    state.update(stage=None, window=(2036, 5, "IN_SEASON"))
+    wc.step_gm(2036, next_stage=True)
+    assert runs == [3]                                                   # all done / not the offseason: nothing
+    assert any("all 5 stages have run" in m for m in logs) and any("isn't in the offseason" in m for m in logs)

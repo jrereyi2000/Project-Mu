@@ -348,10 +348,11 @@ def step_engines(season):
                           f"articles): {e!r}")
 
 
-def step_gm(season):
+def step_gm(season, next_stage=False):
     """GM trade proposals (team management step 3, engines/gm_trade_engine.py) for league_state's week, after the
     engines and before articles. After the Super Bowl scan the league is in the offseason: stage 1 (post-Super
-    Bowl) runs here once; JR runs stages 2-5 from #debug. Optional: a failure only logs a warning and the week goes on. Backfills Gemini
+    Bowl) runs here once; next_stage=True (the Next offseason stage run, right after its transactions load) runs
+    the stage after the last one. Optional: a failure only logs a warning and the run goes on. Backfills Gemini
     bios for GMs still on the template first. Returns the number of new proposals."""
     try:
         import psycopg
@@ -366,10 +367,19 @@ def step_gm(season):
             if not cur.fetchone()[0]:
                 log("  GM trade proposals skipped: the GM agents migration isn't applied")
                 return 0
-            from engines.gm_trade_engine import league_window, read_stage
+            from engines.gm_trade_engine import OFFSEASON_STAGES, league_window, next_stage as following, read_stage
             _, week, window = league_window(cur)
             stage = None
-            if window == "OFFSEASON":
+            if next_stage:
+                if window != "OFFSEASON":
+                    log(f"  GM offseason stage skipped: the league isn't in the offseason (week {week})")
+                    return 0
+                stage = following(read_stage(cur, season))
+                if stage is None:
+                    log(f"  GM offseason stage skipped: all {len(OFFSEASON_STAGES)} stages have run")
+                    return 0
+                log(f"  GM offseason stage {stage}: {OFFSEASON_STAGES[stage - 1]}")
+            elif window == "OFFSEASON":
                 done = read_stage(cur, season)
                 if done:
                     log(f"  GM trade proposals: offseason stage {done} already ran; run the next stage from #debug")
@@ -626,7 +636,7 @@ def bye_run(articles=True):
         return 1
 
 
-def run(resume=None, articles=True, connect=True, mode="weekly", season=None, teams=None):
+def run(resume=None, articles=True, connect=True, mode="weekly", season=None, teams=None, gm_stage=False):
     """One weekly run (mode 'weekly'; 'playoff' for a postseason week, chosen automatically; or 'games' for
     every game of last week, never with articles; 'season' for start-of-season calibration; 'contracts' for
     Team Salary, teams = abbreviations for a re-scan). Returns 0 when the week went through, 1 when it stopped."""
@@ -743,6 +753,9 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             log("Already loaded; skipping the load")
         if mode == "transactions":
             log("League transactions loaded. Skipping weekly engines and articles.")
+            if gm_stage:                                   # Next offseason stage: the moves are in, now the GMs
+                log("Step 7b: GM trade proposals (next offseason stage)")
+                step_gm(league_state()[0], next_stage=True)
             log("Step 9: shrink")
             before, after = shrink(folder)
             log(f"Capture folder {before / 1e6:.0f} MB -> {after / 1e6:.0f} MB")
@@ -831,12 +844,16 @@ def main():
     ap.add_argument("--no-connect", action="store_true",
                     help="skip the connect step (chiaki-ng is already streaming the franchise menus)")
     ap.add_argument("--season", type=int, help="explicitly target season for the run")
+    ap.add_argument("--gm-next-stage", action="store_true",
+                    help="--mode transactions in the offseason: then run the GM agents' next offseason stage")
     a = ap.parse_args()
     teams = [t for t in (a.teams or "").split(",") if t.strip()] or None
     if teams and a.mode != "contracts":
         ap.error("--teams needs --mode contracts")
+    if a.gm_next_stage and a.mode != "transactions":
+        ap.error("--gm-next-stage needs --mode transactions")
     sys.exit(run(a.resume, articles=not a.no_articles, connect=not a.no_connect, mode=a.mode, season=a.season,
-                 teams=teams))
+                 teams=teams, gm_stage=a.gm_next_stage))
 
 
 if __name__ == "__main__":
