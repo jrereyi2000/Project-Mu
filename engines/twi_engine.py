@@ -147,7 +147,7 @@ class TWIEngine:
                 cur.execute("""
                     SELECT ps.team_id, ps.position, ps.years_of_experience, ps.overall_rating
                     FROM player_seasons ps
-                    WHERE ps.season = %s AND ps.years_of_experience <= 2
+                    WHERE ps.season = %s AND ps.years_of_experience <= 2 AND ps.overall_rating IS NOT NULL
                     ORDER BY ps.years_of_experience ASC, ps.overall_rating DESC
                 """, (season,))
                 all_young = cur.fetchall()
@@ -197,7 +197,7 @@ class TWIEngine:
                 cur.execute("""
                     WITH ranked_players AS (
                         SELECT ps.team_id, ps.age,
-                               ROW_NUMBER() OVER (PARTITION BY ps.team_id ORDER BY ps.overall_rating DESC) as rnk
+                               ROW_NUMBER() OVER (PARTITION BY ps.team_id ORDER BY ps.overall_rating DESC NULLS LAST) as rnk
                         FROM player_seasons ps
                         WHERE ps.season = %s
                     )

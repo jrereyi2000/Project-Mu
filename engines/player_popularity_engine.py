@@ -32,6 +32,7 @@ DEF_WEIGHTS = {"def_tackles": 0.25, "def_tfl": 1.0, "def_sacks": 4.0, "def_ints"
                "def_forced_fumbles": 3.0, "def_fumble_recoveries": 2.0, "def_tds": 6.0, "def_safeties": 2.0}
 DEF_SCALE = 12.5
 OFF_SCALE = 3.5          # avg PPR per game × 3.5
+UNRATED_OVR = 65                 # R = max(0, 100 * (ovr - 65) / 34) = 0 for a player with no rating yet
 SPIKE_PPR = 24.0         # an offensive spike game: 24+ PPR
 SPLASH_FIELDS = ("def_sacks", "def_ints", "def_forced_fumbles", "def_fumble_recoveries")
 SPIKE_SPLASH = 2         # a defensive spike game: 2+ splash plays (sacks, INT, forced fumbles, recoveries) or a defensive TD
@@ -194,6 +195,8 @@ class PlayerPopularityEngine:
                 final_results = []
                 
                 for pid, full_name, pos, ovr, age, tid, pname, exp, player_id in players:
+                    if ovr is None:
+                        ovr = UNRATED_OVR       # a CPU free-agent signing, rated at the next roster scan: no R bonus
                     team_ctx = teams.get(tid, {"name": "Unknown", "pop": 50.0, "wins": 0, "losses": 0})
                     t_name = team_ctx["name"]
                     t_pop = team_ctx["pop"]

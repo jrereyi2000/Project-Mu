@@ -81,7 +81,9 @@ def fetch_game_player_rows(cur, game_ids: List[int]) -> list:
     rush_yards, rush_tds, rec_yards, rec_tds).
 
     Each line's player is its stored player_id (abbreviated names like 'A. Wright' collide across
-    players); OVR is that player's rating in the game's season. Lines with no rating that season are skipped.
+    players); OVR is that player's rating in the game's season (NULL for a free-agent signing not yet on a roster
+    scan: the line still counts for outliers, but not for the top-3 OVR). Lines with no player_seasons row that season
+    are skipped.
     """
     cur.execute("""
         SELECT pstat.game_id, pstat.team_id, rated.overall_rating,
@@ -156,8 +158,9 @@ class GotWEngine:
                 c_score = competitiveness_score(abs(home_score - away_score))
                 p_score = production_score(home_score + away_score, combined_yards)
 
-                top3_home_ovr = sorted([p[2] for p in players if p[1] == home_team_id], reverse=True)[:3]
-                top3_away_ovr = sorted([p[2] for p in players if p[1] == away_team_id], reverse=True)[:3]
+                # a CPU free-agent signing has no rating until the next roster scan (League Transactions show none)
+                top3_home_ovr = sorted([p[2] for p in players if p[1] == home_team_id and p[2] is not None], reverse=True)[:3]
+                top3_away_ovr = sorted([p[2] for p in players if p[1] == away_team_id and p[2] is not None], reverse=True)[:3]
                 mean_top3_home = sum(top3_home_ovr)/3 if top3_home_ovr else 80
                 mean_top3_away = sum(top3_away_ovr)/3 if top3_away_ovr else 80
                 s_outliers = sum(player_outlier_points(*p[3:9]) for p in players) \
