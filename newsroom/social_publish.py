@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from newsroom.social_desk import (REGULAR_SEASON_FINAL_WEEK, Week, format_plan, load_week_context, plan_replies,
                                   plan_social_week, plan_team_wakeup)
-from newsroom.social_writer import build_post_prompt, write_post
+from newsroom.social_writer import MONEY_PROBLEM, allowed_money, build_post_prompt, money_values, write_post
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEEKLY_SLOT = "Agent Wire"
@@ -126,7 +126,7 @@ def _post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.dateti
         return _between(rng, this_thu + dt.timedelta(days=1, hours=8), this_thu + dt.timedelta(days=3, hours=11))
     if kind == "COMPARISON":
         return _between(rng, tue + dt.timedelta(hours=9), this_thu + dt.timedelta(hours=20))
-    if kind == "TEAM_STORY":                              # Monday morning – Wednesday evening
+    if kind in ("TEAM_STORY", "MOVE_NEWS", "BEAT_MOVE", "MOVE_REACTION", "CAP_TAKE"):  # Monday morning – Wednesday evening
         return _between(rng, tue - dt.timedelta(hours=15), tue + dt.timedelta(days=1, hours=20))
     if kind == "STANDINGS":
         return _between(rng, tue + dt.timedelta(hours=10), tue + dt.timedelta(hours=22))
@@ -433,6 +433,8 @@ def publishable(post: dict, fantasy_active: bool = True) -> bool:
     if post.get("error") or not post.get("text"):
         return False
     blocking = ("empty", "mentions ratings or Madden", "mentions fantasy after season is over")
+    if any(p.startswith(MONEY_PROBLEM) for p in post.get("problems", [])):
+        return False                       # the money guard: still inventing a figure after its one rewrite
     if not fantasy_active and re.search(r"\b(?:fantasy|full-ppr|\bppr\b|start/sit|waiver\s*wire)\b", post.get("text", ""), re.I):
         return False
     return not any(p in blocking or "over 280" in p for p in post.get("problems", []))
@@ -471,7 +473,9 @@ class _Writer:
             a, (system, prompt) = args
             model = self.cfg.get("model_by_kind", {}).get(a["kind"], self.model)
             try:
-                return write_post(self.client, model, system, prompt, fantasy_active=fantasy_active)
+                return write_post(self.client, model, system, prompt, fantasy_active=fantasy_active,
+                                  allowed=allowed_money(a.get("facts"))
+                                  | money_values((a.get("parent") or {}).get("text", "")))
             except Exception as e:
                 return {"error": f"{type(e).__name__}: {e}", "text": "", "problems": ["call failed"]}
 

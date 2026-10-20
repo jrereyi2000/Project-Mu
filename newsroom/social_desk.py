@@ -152,7 +152,15 @@ BUZZ_ANGLES = {
     ("meme", True): ("make a meme about how absurd and unfair this performance was",),
 }
 # Bucket floors when a busy week has to trim to stay near TARGET_POSTS (last-added posts go first).
-TRIM_ORDER = (("PERFORMANCE", 10), ("COMPARISON", 7), ("BAD_GAME", 5), ("TEAM_STORY", 4))
+TRIM_ORDER = (("PERFORMANCE", 10), ("COMPARISON", 7), ("BAD_GAME", 5), ("TEAM_STORY", 4), ("MOVES", 1))
+
+# Roster moves (team management step 5, docs/team_management/05_NEWSROOM_INTEGRATION_PLAN.md §2.8): insiders break
+# the most notable moves of the week, the team's beat reporter files on them in place of a plain note, die-hards react
+# to the biggest, and one pundit takes a cap squeeze.
+INSIDER_ARCHETYPES = ("SCHEFTER_TWEET", "RAPOPORT")
+MOVE_NEWS_MAX = 3
+MOVE_REACTION_MAX = 2
+CAP_TAKE_DEAD_MONEY = 10_000_000   # a release leaving this much dead money (or a team over the cap) earns a cap take
 
 # Hot-take voices preferred for calling out bad games.
 HOT_TAKE_PUNDITS = ("STEPHEN_A", "SKIP_TWEET", "COWHERD", "SHANNON", "MCAFEE")
@@ -197,6 +205,10 @@ WINDOWS = {
     "MEME": "any time",
     "PLAYER": "Mon – Sat",
     "TEAM_STORY": "Mon – Wed",
+    "MOVE_NEWS": "Mon – Wed",
+    "BEAT_MOVE": "Mon – Wed",
+    "MOVE_REACTION": "Mon – Wed",
+    "CAP_TAKE": "Mon – Wed",
 }
 
 
@@ -375,6 +387,7 @@ def load_week_context(cur, season: int, week: int) -> dict:
         injs_by_team[tid].append(item)
     ctx["injuries"] = injs
     ctx["injuries_by_team"] = injs_by_team
+    ctx["moves"], ctx["team_caps"] = load_moves(cur, season, week)
     # Each recap game's canonical story (engines/game_script_engine.py, §2.14), read or built here
     from engines.game_script_engine import ensure_script
     ctx["game_scripts"] = {}
@@ -383,6 +396,41 @@ def load_week_context(cur, season: int, week: int) -> dict:
         if script:
             ctx["game_scripts"][g["id"]] = script
     return ctx
+
+
+def load_moves(cur, season: int, week: int) -> tuple:
+    """(moves new for publication week `week`, {team_id: cap snapshot}) for the move posts. Moves are annotated with
+    notability (newsroom/roster_moves.py) and carry their move line, the money strings in it, the player's new depth
+    slot and his seasons with the team. Missing contract/transaction tables -> nothing."""
+    from newsroom import roster_moves as rm
+    from newsroom.db_tools import fetch_cap_rows, fetch_moves
+    cur.execute("SAVEPOINT agent_wire_moves")
+    try:
+        rows = rm.annotate(rm.new_this_week(fetch_moves(cur, season, ctx=(season, week, True)), season, week))
+        caps = fetch_cap_rows(cur, season)
+        pids = [r["player_id"] for r in rows if r["player_id"]]
+        cur.execute("""SELECT player_id, team_id, COUNT(*) FROM player_seasons
+                       WHERE player_id = ANY(%s) AND season <= %s GROUP BY 1, 2;""", (pids, season))
+        tenure = {(p, t): n for p, t, n in cur.fetchall()}
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT agent_wire_moves")
+        return [], {}
+    moves = []
+    for r in rows:
+        if not r["player_id"]:
+            continue
+        tid = r["from_team_id"] if r["type"] == "RELEASED" else (r["to_team_id"] or r["from_team_id"])
+        line = rm.move_line(r, with_notable=False)
+        moves.append({
+            "id": r["id"], "type": r["type"], "week": r["week"], "team_id": tid, "player_id": r["player_id"],
+            "player_name": rm.display_name(r), "position": r["position"], "line": line,
+            "money": re.findall(r"-?\$[\d.]+[MK]?", line), "notable": r["notable"],
+            "notable_reasons": r["notable_reasons"], "rank_score": r["rank_score"], "depth_slot": r.get("depth_slot"),
+            "dead_money": r.get("dead_money"), "seasons_with_team": tenure.get((r["player_id"], tid)),
+        })
+    team_caps = {c["team_id"]: {"line": rm.cap_line(c["team"], c, c["basis"]), "cap_space": c["cap_space"],
+                                "dead_money": c["cap_penalty"], "basis": c["basis"]} for c in caps}
+    return moves, team_caps
 
 
 def load_record_book(cur, season: int):
@@ -675,6 +723,58 @@ class Week:
             "is_starting_qb": inj.get("is_starting_qb", False),
             "headline": f"Devastating injury news: {inj['player_name']} ({inj['position']}) {inj['duration']} with {inj['injury_type']}"
         }
+
+    # Roster moves (load_moves). Every term and figure in a move post comes from its move line or the cap line.
+    def team_moves(self, tid):
+        return [m for m in self.ctx.get("moves", []) if m["team_id"] == tid]
+
+    def notable_moves(self):
+        return sorted((m for m in self.ctx.get("moves", []) if m["notable"] and m["team_id"] in self.teams),
+                      key=lambda m: -m["rank_score"])
+
+    def move_facts(self, m):
+        facts = {"team": self.team_with_record(m["team_id"]), "move": m["line"],
+                 "grounding": "Every term and dollar figure is in `move`; don't add any. Who, what and the terms are "
+                              "fact; how talks went and why are yours to imagine."}
+        if m.get("depth_slot"):
+            facts["new_role"] = f"{norm_pos(m['position'])}{m['depth_slot']} on the depth chart"
+        return facts
+
+    def move_reaction_facts(self, m):
+        facts = self.move_facts(m)
+        n = m.get("seasons_with_team")
+        if m["type"] in ("RELEASED", "RE_SIGNED", "EXTENDED", "RESTRUCTURED") and n and n >= 2:
+            facts["seasons_with_your_team"] = n
+        return facts
+
+    def beat_move_facts(self, tid):
+        facts = {"team": self.team_with_record(tid),
+                 "moves_this_week": [m["line"] for m in sorted(self.team_moves(tid), key=lambda m: -m["rank_score"])]}
+        cap = self.ctx.get("team_caps", {}).get(tid)
+        if cap:
+            facts["cap"] = cap["line"]
+        return facts
+
+    def cap_take_subject(self):
+        """(team_id, release move or None) for the week's cap take: the deepest team over the cap, else the release
+        that left the most dead money (CAP_TAKE_DEAD_MONEY+), else None."""
+        caps = self.ctx.get("team_caps", {})
+        over = sorted((c["cap_space"], t) for t, c in caps.items() if t in self.teams and c.get("cap_space") is not None
+                      and c["cap_space"] < 0)
+        if over:
+            return over[0][1], None
+        big = sorted((m for m in self.ctx.get("moves", []) if m["type"] == "RELEASED"
+                      and (m.get("dead_money") or 0) >= CAP_TAKE_DEAD_MONEY and m["team_id"] in self.teams),
+                     key=lambda m: -m["dead_money"])
+        return (big[0]["team_id"], big[0]) if big else None
+
+    def cap_take_facts(self, tid, release=None):
+        facts = {"team": self.team_with_record(tid), "cap": self.ctx.get("team_caps", {}).get(tid, {}).get("line"),
+                 "grounding": "Cap figures only as given in `cap` (an 'estimated' figure is approximate); no other "
+                              "dollar amounts."}
+        if release:
+            facts["release"] = release["line"]
+        return facts
 
     def last_result(self, tid):
         for g in reversed(self.ctx["games"]):
@@ -1285,6 +1385,10 @@ class Accounts:
     def archetype(self, arch):
         return self._pick([a for a in self.all() if a["archetype"] == arch], cap_role="meme")
 
+    def insider(self):
+        """A news-breaking insider (Schefter, Rapoport) under the pundit cap."""
+        return self._pick([a for a in self.all() if a["archetype"] in INSIDER_ARCHETYPES], cap_role="pundit")
+
     def by_archetype_uncapped(self, arch):
         """The account that shares an article (shares never count against caps)."""
         for a in sorted(self.all(), key=lambda a: a["agent_id"]):
@@ -1405,7 +1509,7 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
     acc = Accounts(ctx["accounts"], seed=f"{season}-{week}", fantasy_enabled=fantasy_active)
     notes = []
     plan = collections.OrderedDict((k, []) for k in
-                                   ("SHARE", "REACTION", "PERFORMANCE", "BAD_GAME", "COMPARISON", "TEAM_STORY", "PLAYER", "BEAT",
+                                   ("SHARE", "REACTION", "PERFORMANCE", "BAD_GAME", "COMPARISON", "TEAM_STORY", "MOVES", "PLAYER", "BEAT",
                                     "STANDINGS", "PREVIEW", "MEME", "REPLY"))
 
     recap = sorted(ctx["recap_games"], key=lambda g: g["excitement_index"] or 0, reverse=True)
@@ -1436,6 +1540,23 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                                          {"type": "article", "id": art["id"], "label": art["headline"]},
                                          {k: art[k] for k in ("headline", "excerpt", "article_type", "slot")},
                                          filed_team=art["team_id"]))
+
+    # 1b. Roster moves (team management step 5): insiders break the week's most notable moves, and one pundit takes
+    # a cap squeeze (a team over the cap, or a release that left CAP_TAKE_DEAD_MONEY+ in dead money).
+    for m in W.notable_moves()[:MOVE_NEWS_MAX]:
+        account = acc.insider()
+        if not account:
+            break
+        plan["MOVES"].append(_assignment("MOVE_NEWS", account, {"type": "player", "id": m["player_id"], "team_id": m["team_id"],
+                                                                 "label": f"{m['player_name']} ({m['type'].lower().replace('_', '-')}, {W.teams[m['team_id']]['abbr']})"},
+                                         W.move_facts(m), filed_team=m["team_id"]))
+    cap_subject = W.cap_take_subject() if ctx.get("moves") else None
+    if cap_subject:
+        account = acc.pundit()
+        if account:
+            tid, release = cap_subject
+            plan["MOVES"].append(_assignment("CAP_TAKE", account, {"type": "team", "id": tid, "label": f"{W.team_label(tid)}: cap squeeze"},
+                                             W.cap_take_facts(tid, release), filed_team=tid))
 
     # 2. Player performances from the recap week: the top full-PPR offensive lines, with the 2nd, 5th, 8th ... ordinary
     # post a big defensive or kicking game where the game's box score was captured.
@@ -1639,6 +1760,9 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             top_inj = team_starter_injuries[0]
             plan["BEAT"].append(_assignment("BEAT_INJURY", account, {"type": "team", "id": tid, "label": f"{W.team_label(tid)}: {top_inj['player_name']} Injury"},
                                             W.beat_injury_facts(tid, top_inj), filed_team=tid))
+        elif any(m["notable"] for m in W.team_moves(tid)):
+            plan["BEAT"].append(_assignment("BEAT_MOVE", account, {"type": "team", "id": tid, "label": f"{W.team_label(tid)}: roster moves"},
+                                            W.beat_move_facts(tid), filed_team=tid))
         else:
             plan["BEAT"].append(_assignment("BEAT", account, {"type": "team", "id": tid, "label": W.team_label(tid)},
                                             W.beat_facts(tid), filed_team=tid))
@@ -1730,6 +1854,15 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             plan["REACTION"].append(_assignment("INJURY_SHOCK", account,
                                                 {"type": "team", "id": tid, "label": f"{W.team_label(tid)}: {inj['player_name']} Injury Shock"},
                                                 W.injury_shock_facts(tid, inj), filed_team=tid))
+
+    # 7c. Move reactions: a die-hard of the team on the week's biggest moves (like INJURY_SHOCK).
+    for m in W.notable_moves()[:MOVE_REACTION_MAX]:
+        account = acc.fan(m["team_id"])
+        if account:
+            plan["REACTION"].append(_assignment("MOVE_REACTION", account,
+                                                {"type": "player", "id": m["player_id"], "team_id": m["team_id"],
+                                                 "label": f"{W.team_label(m['team_id'])}: {m['player_name']} {m['type'].lower().replace('_', '-')}"},
+                                                W.move_reaction_facts(m), filed_team=m["team_id"]))
 
     # 8. Replies: parents are chosen after the rest is written and scored. Their number flexes within
     # REPLY_RANGE to keep the week near TARGET_POSTS.
@@ -1954,6 +2087,9 @@ def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=
             top_inj = starter_injuries[0]
             out.append(_assignment("BEAT_INJURY", b, {"type": "team", "id": team_id, "label": f"{W.team_label(team_id)}: {top_inj['player_name']} Injury"},
                                    W.beat_injury_facts(team_id, top_inj), filed_team=team_id))
+        elif idx == (1 if starter_injuries else 0) and any(m["notable"] for m in W.team_moves(team_id)):
+            out.append(_assignment("BEAT_MOVE", b, {"type": "team", "id": team_id, "label": f"{W.team_label(team_id)}: roster moves"},
+                                   W.beat_move_facts(team_id), filed_team=team_id))
         else:
             angle = BEAT_ANGLES[idx % len(BEAT_ANGLES)]
             out.append(_assignment("BEAT", b, {"type": "team", "id": team_id, "label": W.team_label(team_id)},

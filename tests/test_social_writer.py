@@ -96,3 +96,34 @@ class PromptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MoneyGuardTests(unittest.TestCase):
+    """A dollar figure in a post must be in its facts packet (team management step 5, phase 5)."""
+
+    def test_money_guard(self):
+        from newsroom.social_writer import MONEY_PROBLEM, allowed_money
+        allowed = allowed_money({"move": "Ravens re-signed LT Rich Hanson: 4 years, $118M total",
+                                 "cap": "Colts: -$29.5M in cap space"})
+        self.assertEqual(clean_post("Breaking: Hanson, 4 years, $118M.", allowed=allowed)["problems"], [])
+        self.assertEqual(clean_post("Hanson gets $118 million to stay", allowed=allowed)["problems"], [])
+        self.assertEqual(clean_post("Colts sit $29.5M over the cap", allowed=allowed)["problems"], [])
+        problems = clean_post("Hanson: $120M with $60M guaranteed", allowed=allowed)["problems"]
+        self.assertEqual(problems, [f"{MONEY_PROBLEM}: $120M, $60M"])
+        self.assertTrue(clean_post("$1,500,000 bonus", allowed=allowed_money({}))["problems"])
+        self.assertEqual(clean_post("no money at all", allowed=allowed_money({}))["problems"], [])
+        self.assertEqual(clean_post("$120M", allowed=None)["problems"], [])   # guard off without facts
+
+    def test_money_problem_blocks_publishing(self):
+        from newsroom.social_publish import publishable
+        from newsroom.social_writer import MONEY_PROBLEM
+        self.assertFalse(publishable({"text": "x", "problems": [f"{MONEY_PROBLEM}: $5M"]}))
+        self.assertTrue(publishable({"text": "x", "problems": []}))
+
+    def test_move_kinds_have_instructions(self):
+        from newsroom.social_writer import KIND_INSTRUCTIONS
+        for kind in ("MOVE_NEWS", "BEAT_MOVE", "MOVE_REACTION", "CAP_TAKE"):
+            self.assertIn("FACTS", KIND_INSTRUCTIONS[kind])
+        system, prompt = build_post_prompt({"kind": "MOVE_NEWS", "subject": {"type": "player", "id": 1, "label": "x"},
+                                            "facts": {"move": "Week 4 · SIGNED · ..."}}, ACCOUNT, "persona")
+        self.assertIn("POST TYPE: MOVE_NEWS", prompt)

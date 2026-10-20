@@ -71,7 +71,11 @@
     "REPLY": 0.25,
     "BAD_GAME": 1.3,
     "COMPARISON": 1.1,
-    "TEAM_STORY": 1.3
+    "TEAM_STORY": 1.3,
+    "MOVE_NEWS": 1.4,
+    "BEAT_MOVE": 1.0,
+    "MOVE_REACTION": 1.3,
+    "CAP_TAKE": 1.1
   },
   "share_slot_heat": {
     "Hero Slot": 1.4,

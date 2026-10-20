@@ -416,3 +416,84 @@ class NameTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def move(mid, team_id, mtype="SIGNED", notable=True, score=10.0, dead=None, line=None):
+    return {"id": mid, "type": mtype, "week": 9, "team_id": team_id, "player_id": 9000 + mid,
+            "player_name": f"Mover {mid}", "position": "WR",
+            "line": line or f"Week 9 · {mtype} · Team{team_id} signed WR Mover {mid} (free agent): 1 year, $3.93M",
+            "money": ["$3.93M"], "notable": notable, "notable_reasons": ["starter"] if notable else [],
+            "rank_score": score, "depth_slot": 2, "dead_money": dead, "seasons_with_team": 4}
+
+
+def moves_league(moves, caps=None, injuries=None):
+    ctx = league(week=9)
+    for arch in ("SCHEFTER_TWEET", "RAPOPORT"):
+        ctx["accounts"].append({"agent_id": arch.lower(), "archetype": arch, "team_id": None,
+                                "handle": f"@{arch.lower()}", "display_name": "x"})
+    ctx["moves"] = moves
+    ctx["team_caps"] = caps or {t: {"line": f"Team{t}: $10M in cap space (scanned Week 8)", "cap_space": 10_000_000,
+                                    "dead_money": 0, "basis": "scanned Week 8"} for t in range(1, 33)}
+    if injuries:
+        ctx["injuries_by_team"] = injuries
+    return ctx
+
+
+class AgentWireMoveTests(unittest.TestCase):
+    """Roster moves on the Agent Wire (team management step 5, phase 5)."""
+
+    def test_insiders_break_at_most_three_notable_moves(self):
+        moves = [move(i, i, score=20 - i) for i in range(1, 7)] + [move(50, 20, notable=False)]
+        plan = plan_social_week(moves_league(moves))
+        news = by_kind(plan)["MOVE_NEWS"]
+        self.assertEqual(len(news), 3)
+        self.assertEqual({a["archetype"] for a in news}, {"SCHEFTER_TWEET", "RAPOPORT"})
+        self.assertEqual([a["subject"]["id"] for a in news], [9001, 9002, 9003])   # most notable first
+        self.assertIn("$3.93M", news[0]["facts"]["move"])
+        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+
+    def test_no_moves_no_move_posts(self):
+        plan = plan_social_week(moves_league([]))
+        for kind in ("MOVE_NEWS", "BEAT_MOVE", "MOVE_REACTION", "CAP_TAKE"):
+            self.assertFalse(by_kind(plan)[kind], kind)
+        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+
+    def test_beat_move_replaces_the_note_but_not_a_starter_injury(self):
+        injury = {"team_id": 32, "player_name": "Hurt Guy", "position": "QB", "injury_type": "Knee", "duration": "4 weeks",
+                  "weeks_remaining": 4, "is_ir": False, "is_starter": True, "is_key_injury": False}
+        moves = [move(1, 16), move(2, 32)]
+        plan = plan_social_week(moves_league(moves, injuries={32: [injury]}))
+        beat = {a["team_id"]: a["kind"] for a in plan["assignments"] if a["kind"].startswith("BEAT")}
+        self.assertEqual(beat.get(16), "BEAT_MOVE")
+        self.assertEqual(beat.get(32), "BEAT_INJURY")
+        facts = next(a["facts"] for a in plan["assignments"] if a["kind"] == "BEAT_MOVE")
+        self.assertIn("Mover 1", facts["moves_this_week"][0])
+        self.assertIn("cap", facts)
+
+    def test_move_reactions_come_from_the_teams_die_hards(self):
+        plan = plan_social_week(moves_league([move(1, 5, "RELEASED", score=30), move(2, 6, score=20), move(3, 7, score=10)]))
+        reactions = by_kind(plan)["MOVE_REACTION"]
+        self.assertEqual([(a["archetype"], a["team_id"]) for a in reactions], [("DIE_HARD_FAN", 5), ("DIE_HARD_FAN", 6)])
+        self.assertEqual(reactions[0]["facts"]["seasons_with_your_team"], 4)
+
+    def test_cap_take_only_when_its_trigger_holds(self):
+        plan = plan_social_week(moves_league([move(1, 5)]))
+        self.assertFalse(by_kind(plan)["CAP_TAKE"])
+        caps = {t: {"line": f"Team{t}: $10M in cap space", "cap_space": 10_000_000, "dead_money": 0, "basis": "x"}
+                for t in range(1, 33)}
+        caps[9] = {"line": "Team9: -$29.5M in cap space, $37.8M dead money (scanned Week 8)", "cap_space": -29_500_000,
+                   "dead_money": 37_800_000, "basis": "scanned Week 8"}
+        take = by_kind(plan_social_week(moves_league([move(1, 5)], caps)))["CAP_TAKE"]
+        self.assertEqual(len(take), 1)
+        self.assertEqual(take[0]["team_id"], 9)
+        self.assertIn("-$29.5M", take[0]["facts"]["cap"])
+        released = move(2, 12, "RELEASED", dead=12_000_000,
+                        line="Week 9 · RELEASED · Team12 released WR Mover 2 · dead money $12M · free agent since Week 9")
+        take = by_kind(plan_social_week(moves_league([move(1, 5), released])))["CAP_TAKE"]
+        self.assertEqual([(a["team_id"], a["facts"]["release"][:6]) for a in take], [(12, "Week 9")])
+
+    def test_team_wakeup_beat_move(self):
+        plan = plan_team_wakeup(moves_league([move(1, 16)]), 16)
+        self.assertIn("BEAT_MOVE", [a["kind"] for a in plan["assignments"]])
+        plan = plan_team_wakeup(moves_league([move(1, 16, notable=False)]), 16)
+        self.assertNotIn("BEAT_MOVE", [a["kind"] for a in plan["assignments"]])
