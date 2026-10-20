@@ -96,26 +96,27 @@ class VisibilityTests(unittest.TestCase):
 
 
 class NotabilityTests(unittest.TestCase):
-    def test_reasons(self):
-        self.assertEqual(rm.notability(row(is_starter=True))[1], ["starter"])
+    def test_only_85_plus_players_are_notable(self):
+        """JR, 2026-10-20: notable = rated 85+; starters, popularity and big money only describe and rank."""
+        self.assertTrue(rm.notability(row(ovr=85))[0])
+        self.assertFalse(rm.notability(row(ovr=84, is_starter=True, popularity=80, contract_value=9_000_000))[0])
+        self.assertFalse(rm.notability(row(ovr=None))[0])          # an unrated CPU signing
+        self.assertFalse(rm.notability(row(type="RE_SIGNED", ovr=80, contract_value=40_000_000))[0])
+
+    def test_reasons_describe_the_move(self):
+        self.assertEqual(rm.notability(row(ovr=90, is_starter=True))[1], ["starter"])
         self.assertIn("popular", rm.notability(row(popularity=55))[1])
         self.assertIn("big signing", rm.notability(row(contract_value=5_000_000))[1])
-        self.assertFalse(rm.notability(row(contract_value=4_990_000))[0])
         self.assertIn("big new deal", rm.notability(row(type="RE_SIGNED", contract_value=20_000_000))[1])
-        self.assertFalse(rm.notability(row(type="RE_SIGNED", contract_value=19_000_000))[0])
         self.assertIn("big restructure", rm.notability(row(type="RESTRUCTURED", contract_value=5_000_000))[1])
         self.assertIn("big dead money", rm.notability(row(type="RELEASED", dead_money=5_000_000))[1])
-        self.assertFalse(rm.notability(row(type="RELEASED", dead_money=None))[0])
 
-    def test_ovr_ranks_but_is_never_a_reason(self):
-        notable, reasons, _ = rm.notability(row(ovr=90))
-        self.assertTrue(notable)
-        self.assertEqual(reasons, [])
+    def test_ovr_is_never_printed(self):
         self.assertNotIn("90", rm.move_line(dict(row(ovr=90), notable=True)))
 
     def test_annotate_puts_notable_first(self):
-        rows = rm.annotate([row(week=4), row(week=3, popularity=70), row(week=2, contract_value=9_000_000)])
-        self.assertEqual([r["notable"] for r in rows], [True, True, False])
+        rows = rm.annotate([row(week=4, ovr=70), row(week=3, ovr=92), row(week=2, ovr=86, contract_value=9_000_000)])
+        self.assertEqual([(r["notable"], r["week"]) for r in rows], [(True, 2), (True, 3), (False, 4)])  # the $9M deal ranks higher
 
 
 class MoveLineTests(unittest.TestCase):
@@ -168,7 +169,7 @@ class BriefBlockTests(unittest.TestCase):
         self.assertEqual(rm.brief_block([], 5, []), {})
 
     def test_team_block(self):
-        block = rm.team_block([row(type="RELEASED", dead_money=6_000_000)], "Jaguars: $4M in cap space ...")
+        block = rm.team_block([row(type="RELEASED", dead_money=6_000_000, ovr=88)], "Jaguars: $4M in cap space ...")
         self.assertIn("dead money $6M", block["moves_this_week"][0])
         self.assertIn("notable: yes", block["moves_this_week"][0])
         self.assertEqual(block["cap_snapshot"], "Jaguars: $4M in cap space ...")

@@ -139,4 +139,4 @@ The mock draft's board is the top 32 by OVR, and that isn't realistic. Step 4 st
 | 2 League transactions | written | Built and live. Migration applied 2026-10-19; first backfill loaded 2026-10-20 (capture 20: 181 transactions, Weeks 1–4); weekly scans continue from SEASON - WEEK 4 |
 | 3 GM agents | written | not started |
 | 4 Scouting and draft | design pass needed (§2.5) | not started |
-| 5 Newsroom integration | written | not started |
+| 5 Newsroom integration | written | Phases 1–7 built 2026-10-20 (writer tools, released players off team views, JR's R1–R14 rules, brief/beat blocks and directive lines, Agent Wire move posts, fantasy context, offseason signing candidates). Phase 8 (trades, rumors) waits on step 3; Phase 9 (draft risers/fallers) on step 4 |
