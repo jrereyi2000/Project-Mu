@@ -312,3 +312,42 @@ def cap_line(team_name, row, basis) -> str:
     """One team's cap snapshot: 'Colts: -$29.5M in cap space, $37.8M dead money, $398M total spend (scanned Week 4)'."""
     return (f"{team_name}: {money_text(row.get('cap_space'))} in cap space, {money_text(row.get('cap_penalty'))} dead "
             f"money, {money_text(row.get('total_spend'))} total spend ({basis})")
+
+
+CAP_WATCH_SPACE = 2_000_000
+
+
+def brief_block(rows, through_week, cap_rows=None, limit: int = 12) -> dict:
+    """The national brief's `league_transactions` block (§2.7) from the moves new this week (annotated or not) and
+    [{team, cap_space, cap_penalty, total_spend, basis}] cap rows. Empty dict when there are no new moves."""
+    if not rows:
+        return {}
+    ranked = annotate([dict(r) for r in rows])
+    watch = [cap_line(c["team"], c, c["basis"]) for c in sorted(cap_rows or [], key=lambda c: c.get("cap_space") or 0)
+             if c.get("cap_space") is not None and c["cap_space"] < CAP_WATCH_SPACE]
+    block = {
+        "through_week": through_week,
+        "notable_moves": [move_line(r) for r in ranked[:limit]],
+        "counts": counts_by_type(ranked),
+        "note": ("League moves new since last week's edition, most notable first. They feed the existing slots: use one "
+                 "only when it bears on your subject; most articles carry none. Terms and cap figures only from these "
+                 "lines or get_league_transactions / get_player_contract / get_team_cap_sheet. Invent the negotiation "
+                 "colour, never a term."),
+    }
+    if watch:
+        block["cap_watch"] = watch
+    return block
+
+
+def team_block(rows, cap_snapshot: str = "") -> dict:
+    """The beat brief's `team_transactions` block (§2.7): this team's moves new this week and its cap line."""
+    ranked = annotate([dict(r) for r in rows])
+    block = {
+        "moves_this_week": [move_line(r) for r in ranked],
+        "reporting_guidance": ("A notable move gets a paragraph: who it is, the role he leaves or fills, what it means "
+                               "for the depth chart. Terms only from these lines or get_player_contract; invent the "
+                               "negotiation colour, never a figure. Mention the cap only if it bears on the story."),
+    }
+    if cap_snapshot:
+        block["cap_snapshot"] = cap_snapshot
+    return block

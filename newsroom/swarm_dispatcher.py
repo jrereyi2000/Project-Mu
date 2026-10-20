@@ -11,7 +11,7 @@ from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
 from newsroom.entity_patterns import team_mention_pattern
 from newsroom.run_context import reset_article_context, set_article_context
-from newsroom.roster_moves import is_starter_rank
+from newsroom.roster_moves import brief_block, cap_line, is_starter_rank, new_this_week, team_block
 from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
 from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings, records_by_team
 from newsroom import agent_memory
@@ -78,6 +78,8 @@ from newsroom.db_tools import (
     get_team_cap_sheet,
     get_player_contract,
     get_league_transactions,
+    fetch_cap_rows,
+    fetch_moves,
 )
 from newsroom.fantasy_tools import FANTASY_TOOLS
 from newsroom.fantasy_desk import (
@@ -399,6 +401,16 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                     )
             except Exception as e:
                 pass
+
+            # 6. League roster moves new since last week's edition (newsroom/roster_moves.py; last, since a missing
+            # transactions table aborts the connection's transaction)
+            try:
+                moves = new_this_week(fetch_moves(cur, season, ctx=(season, week, True)), season, week)
+                block = brief_block(moves, week, fetch_cap_rows(cur, season))
+                if block:
+                    brief["league_transactions"] = block
+            except Exception as e:
+                print(f"⚠️  Could not load league transactions: {e}")
 
     return brief
 
@@ -1235,6 +1247,17 @@ EDITORIAL DESK ASSIGNMENT (MANDATORY):
                     }
             except Exception as e:
                 print(f"⚠️  Could not load beat injury report for team {assigned_team_id}: {e}")
+            try:
+                with psycopg.connect(self.db.db_conn_info) as tconn, tconn.cursor() as tcur:
+                    team_moves = new_this_week(fetch_moves(tcur, season, assigned_team_id, ctx=(season, week, True)),
+                                               season, week)
+                    if team_moves:
+                        cap = next((c for c in fetch_cap_rows(tcur, season) if c["team_id"] == assigned_team_id), None)
+                        brief_for_agent = dict(brief_for_agent)
+                        brief_for_agent["team_transactions"] = team_block(
+                            team_moves, cap_line(cap["team"], cap, cap["basis"]) if cap else "")
+            except Exception as e:
+                print(f"⚠️  Could not load beat roster moves for team {assigned_team_id}: {e}")
 
         task_instruction = f"""ASSIGNMENT BRIEF:
 {json.dumps(brief_for_agent, indent=2)}
