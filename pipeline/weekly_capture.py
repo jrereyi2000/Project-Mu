@@ -416,6 +416,8 @@ def step_scouting(season):
         import psycopg
         from pipeline.load_capture import DSN
         from engines import scouting_engine as se
+        from engines.gm_llm import flush, make_llm
+        llm = make_llm("scouting_notes")
         with psycopg.connect(DSN) as conn:
             cur = conn.cursor()
             if not se.installed(cur):
@@ -425,8 +427,9 @@ def step_scouting(season):
             if step is None:
                 log("  Scouting skipped: the draft has been held")
                 return []
-            done = se.catch_up(cur, s + 1, step, log=log, extras=se.default_extras)
+            done = se.catch_up(cur, s + 1, step, log=log, extras=se.default_extras, llm=llm)
             conn.commit()
+        flush(llm)
         log(f"  Scouting {s + 1}: steps stored {done or 'none (up to date or class not initialized)'}")
         return done
     except Exception as e:
