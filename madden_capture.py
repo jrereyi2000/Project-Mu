@@ -1202,13 +1202,32 @@ def traverse(direction, burst=6, max_rounds=12):
     raise Abort(f"Never reached the {direction} edge of the table (frame: {path})")
 
 
+def settle_list(timeout=6.0, gap=0.5):
+    """Wait until the list stops moving: Madden can fall behind on a burst of Down presses and apply
+    them seconds later (Team Salary, Oct 19: 1 of 11 applied when the left half was taken, the rest
+    before the right half). Two frames `gap` apart that match mean it has caught up."""
+    end = time.time() + timeout
+    prev = table_sig(snap())
+    while time.time() < end:
+        time.sleep(gap)
+        sig = table_sig(snap())
+        if same_table(prev, sig):
+            return True
+        prev = sig
+    log("  list still moving after the settle wait; capturing anyway")
+    return False
+
+
 def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=traverse, text_end=False,
-                      end_on_left=False, stop_at_zeros=False, confirm_end=False):
+                      end_on_left=False, stop_at_zeros=False, confirm_end=False, settle=False, pair_check=None):
     """Wide tables: NAME/POS are NOT pinned when the table scrolls right, so every page is
     captured at both edges at the same row position. Row N of {base}_NNN.png is row N of
     {base}_right_NNN.png. Zig-zags (left, right, down, right, left, down...) so each page
     needs one trip across the columns. end_on_left: judge the end of the list only by the
-    left (named) half; a game's right-hand pages are often all zeros and look alike (Oct 13)."""
+    left (named) half; a game's right-hand pages are often all zeros and look alike (Oct 13).
+    settle: wait for the list to stop moving after every scroll (settle_list). pair_check(left, right):
+    False when the two halves of a page aren't at the same row position; the pair is then shot again
+    (twice at most) and a pair that still disagrees is kept with a warning (extract.py checks it too)."""
     os.makedirs(folder, exist_ok=True)
     wait_table_loaded()
     traverse("left")                     # the column highlight can be left anywhere; start at the left edge
@@ -1234,6 +1253,8 @@ def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=tr
         if confirm_end and repeats(side, first, keep=False):
             # the list doesn't wrap: a repeat may be dropped Down presses (see capture_list)
             press("down", hold=0.07, wait=LIST_WAIT, times=rows_per_page)
+            if settle:
+                settle_list()
             f = traverse(side)
             subprocess.run(["cp", f.path, first])
         if repeats(side, first):
@@ -1246,6 +1267,16 @@ def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=tr
         f = traverse(other)
         second = path(other, page)
         subprocess.run(["cp", f.path, second])
+        for attempt in range(2 if pair_check else 0):
+            if pair_check(path("left", page), path("right", page)):
+                break
+            log(f"  {base} page {page}: the two halves aren't at the same row; shooting the pair again")
+            settle_list()
+            subprocess.run(["cp", traverse(side).path, first])
+            subprocess.run(["cp", traverse(other).path, second])
+        else:
+            if pair_check and not pair_check(path("left", page), path("right", page)):
+                log(f"  WARNING {base} page {page}: halves still don't line up (extract.py will stop on it)")
         if repeats(other, second) and end_on_left:   # Season Stats: only the first half ends it
             os.remove(first)
             os.remove(second)
@@ -1262,6 +1293,8 @@ def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=tr
                 return page + 1
         side = other
         press("down", hold=0.07, wait=LIST_WAIT, times=rows_per_page)
+        if settle:
+            settle_list()
     log(f"  {base}: hit max pages")
     return max_pages
 
@@ -2860,6 +2893,7 @@ def run_injuries(out, target_teams=None):
 #    37 ROOKIE RES.) is in every screenshot; extract.py reads it.
 #  * Read-only. Cross on the table itself is refused (the button bar offers RESTRUCTURE CONTRACT).
 SALARY_ROWS = 11
+SALARY_STEP = 10              # Down presses a page: 12 rows show, so pages overlap by 2 (merged away)
 SALARY_MIN_PAGES = 3          # 53 rows need >= 5 pages; fewer than 3 means the list stopped early
 
 
@@ -2898,6 +2932,47 @@ def salary_at_edge(f, direction):
     return f.find("NAME") is not None
 
 
+_OCR_DIGITS = str.maketrans({"O": "0", "I": "1", "L": "1"})
+
+
+def _bonus_column(items, size, side):
+    """{row y: BONUS cell} from a page's OCR. The left half's BONUS is its last column (x 55-72%; the player
+    card's own BONUS label is further right), the right half's its first (x < 20%)."""
+    W, H = size
+    lo, hi = (0.55 * W, 0.72 * W) if side == "left" else (0, 0.20 * W)
+    head = next((b for t, b in items if norm(t) == "BONUS" and lo <= b[0] <= hi), None)
+    if head is None:
+        return None
+    x0, x1 = head[0] - 0.03 * W, head[2] + 0.02 * W
+    cells = {}
+    for t, b in items:
+        cx = (b[0] + b[2]) / 2
+        if x0 <= cx <= x1 and head[3] < b[1] < 0.84 * H:
+            v = t.upper().replace(" ", "").translate(_OCR_DIGITS)
+            cells[(b[1] + b[3]) / 2] = "$" + v[1:] if v[:1] == "S" else v
+    return cells
+
+
+def salary_pair_aligned(left_path, right_path):
+    """True when both halves of a page show the same BONUS figure row by row (JR: they're the same
+    number), read with Apple Vision on the Mac. Too few readable rows to tell counts as aligned; the
+    extract checks every pair again with Gemini."""
+    sides = []
+    for p, side in ((left_path, "left"), (right_path, "right")):
+        f = Frame.__new__(Frame)
+        f.path, f.items, f.size = p, ocr(p), Image.open(p).size
+        sides.append(_bonus_column(f.items, f.size, side))
+    left, right = sides
+    if not left or not right:
+        return True
+    tol = 0.012 * Image.open(left_path).size[1]
+    pairs = [(v, next((rv for ry, rv in right.items() if abs(ry - y) < tol), None)) for y, v in left.items()]
+    pairs = [(a, b) for a, b in pairs if b is not None and not (a == b == "$0")]   # $0 rows tell nothing
+    if len(pairs) < 3:
+        return True
+    return sum(a == b for a, b in pairs) >= 0.6 * len(pairs)
+
+
 def salary_traverse(direction, burst=6, max_rounds=12):
     """traverse() with Team Salary's edges; Madden doesn't wrap, so overshooting is harmless."""
     for _ in range(max_rounds):
@@ -2933,8 +3008,8 @@ def capture_team_salary(out, index, team, to_top=True):
     folder = os.path.join(out, "contracts", f"{index:02d}_{team.lower()}")
     if to_top:
         salary_to_top()
-    pages = capture_wide_list(folder, "salary", rows_per_page=SALARY_ROWS, traverse=salary_traverse,
-                              confirm_end=True)
+    pages = capture_wide_list(folder, "salary", rows_per_page=SALARY_STEP, traverse=salary_traverse,
+                              confirm_end=True, settle=True, pair_check=salary_pair_aligned)
     if pages < SALARY_MIN_PAGES:
         log(f"  WARNING: {team} Team Salary has only {pages} pages (53 rows need at least 5)")
     return pages

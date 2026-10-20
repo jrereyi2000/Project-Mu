@@ -225,3 +225,80 @@ class RunContractsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PairAlignmentTest(unittest.TestCase):
+    """salary_pair_aligned on the real frames of one page (aligned), and with the right half's rows moved
+    down six rows, as in the 2026-10-19 Panthers run (page 2's right half was taken after the lagging Down
+    presses landed)."""
+    def setUp(self):
+        from PIL import Image
+        self.tmp = tempfile.TemporaryDirectory()
+        self.left, self.right = (os.path.join(self.tmp.name, n) for n in ("l.png", "r.png"))
+        for p in (self.left, self.right):
+            Image.new("L", (3024, 1888)).save(p)
+        self.items = {self.left: fixture("left_edge").items, self.right: fixture("right_edge").items}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def aligned(self):
+        with mock.patch.object(mc, "ocr", side_effect=lambda p: self.items[p]):
+            return mc.salary_pair_aligned(self.left, self.right)
+
+    def test_same_page_aligned(self):
+        self.assertTrue(self.aligned())
+
+    def test_right_half_six_rows_lower(self):
+        step = (1510 - 681) / 11                 # row pitch on these frames (first and 12th row tops)
+        shifted = []
+        for t, b in self.items[self.right]:
+            if b[0] < 400 and b[1] > 600 and t.startswith(("$", "S")):
+                b = (b[0], b[1] - 6 * step, b[2], b[3] - 6 * step)       # row 7 now shows at row 1
+                if b[1] < 640:
+                    continue
+            shifted.append((t, b))
+        self.items[self.right] = shifted
+        self.assertFalse(self.aligned())
+
+    def test_unreadable_counts_as_aligned(self):
+        self.items[self.right] = []
+        self.assertTrue(self.aligned())
+
+
+class SettleTest(unittest.TestCase):
+    def test_waits_until_two_frames_match(self):
+        sigs = iter(["a", "b", "c", "c"])
+        with mock.patch.object(mc, "snap", return_value="x"), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda p: next(sigs)), \
+                mock.patch.object(mc, "same_table", side_effect=lambda a, b: a == b), \
+                mock.patch.object(mc.time, "sleep"):
+            self.assertTrue(mc.settle_list())
+
+    def test_gives_up_after_timeout(self):
+        n = iter(range(1000))
+        with mock.patch.object(mc, "snap", return_value="x"), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda p: next(n)), \
+                mock.patch.object(mc, "same_table", side_effect=lambda a, b: a == b), \
+                mock.patch.object(mc.time, "sleep"), mock.patch.object(mc, "log"), \
+                mock.patch.object(mc.time, "time", side_effect=[0, 1, 2, 3, 99]):
+            self.assertFalse(mc.settle_list(timeout=5))
+
+
+class WideListPairCheckTest(unittest.TestCase):
+    def test_bad_pair_is_shot_again(self):
+        checks = iter([False, True, True])
+        frame = mock.Mock(path="/tmp/f.png")
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(mc, "wait_table_loaded"), mock.patch.object(mc, "press"), \
+                mock.patch.object(mc, "settle_list") as settle, mock.patch.object(mc, "log"), \
+                mock.patch.object(mc.subprocess, "run", side_effect=lambda a: open(a[2], "w").close()), \
+                mock.patch.object(mc, "table_sig", side_effect=lambda p: p.rsplit("_", 1)[1] if "_0" not in p else "same"), \
+                mock.patch.object(mc, "same_table", side_effect=lambda a, b: a == b), \
+                mock.patch.object(mc.os, "remove"):
+            trav = mock.Mock(return_value=frame)
+            pages = mc.capture_wide_list(folder, "salary", rows_per_page=10, traverse=trav, settle=True,
+                                         pair_check=lambda l, r: next(checks), max_pages=2)
+        self.assertEqual(pages, 1)
+        # first pair failed: one settle for the re-shoot, plus one after the page's Down presses
+        self.assertGreaterEqual(settle.call_count, 2)
