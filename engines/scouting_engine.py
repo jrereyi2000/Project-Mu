@@ -428,8 +428,91 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
     return out
 
 
+def team_contexts(cur, season):
+    """{team_id: scouting_boards.team_context} from the GM agents (step 3); {} without them."""
+    from engines import scouting_boards as sb
+    cur.execute("SELECT to_regclass('gm_profiles') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return {}
+    from engines.front_office import get_gm
+    cur.execute("SELECT id FROM teams ORDER BY id")
+    out = {}
+    for (tid,) in cur.fetchall():
+        g = get_gm(cur, tid, season)
+        if g:
+            out[tid] = sb.team_context(g)
+    return out
+
+
+def volatility(cur, draft_season, step, cons):
+    """{key: sd of the prospect's consensus moves} through `step` (stored history plus this step's move)."""
+    hist = {}
+    if installed(cur):
+        cur.execute("""SELECT prospect_key, step, err FROM scout_consensus WHERE draft_season = %s AND step < %s
+                       ORDER BY step""", (draft_season, step))
+        for k, _, e in cur.fetchall():
+            hist.setdefault(k, []).append(float(e))
+    out = {}
+    for k, r in cons.items():
+        errs = hist.get(k, []) + [r["err"]]
+        moves = [b - a for a, b in zip(errs, errs[1:])]
+        out[k] = math.sqrt(sum(m * m for m in moves) / len(moves)) if moves else 0.0
+    return out
+
+
+def stored_visits(cur, draft_season, step):
+    """{team_id: {key}} of VISIT events stored before `step`."""
+    out = {}
+    if installed(cur):
+        cur.execute("""SELECT team_id, prospect_key FROM scout_events
+                       WHERE draft_season = %s AND kind = 'VISIT' AND step < %s""", (draft_season, step))
+        for tid, k in cur.fetchall():
+            out.setdefault(tid, set()).add(k)
+    return out
+
+
+BOARD_POOL = 200                      # team boards look at the consensus top 200 and store their top 100
+
+
 def default_extras(cur, out, step, season):
-    """VISITs and team boards (filled in by later phases)."""
+    """Top-30 VISITs (steps 25-26) and the 32 team boards for the step (scouting_boards)."""
+    from engines import scouting_boards as sb
+    from engines import scouting_events as ev
+    cls, cons = out["cls"], out["cons"]
+    if not cls:
+        return out
+    draft_season = int(cls[0]["key"].split(":")[0])
+    ctxs = team_contexts(cur, season)
+    if not ctxs:
+        return out
+    by_key = {p["key"]: p for p in cls}
+    visited = stored_visits(cur, draft_season, step)
+    if step in (25, 26):
+        cands = [{"key": k, "group": sb.needs_group(by_key[k].get("position")), "full_name": by_key[k]["full_name"]}
+                 for k, r in sorted(cons.items(), key=lambda x: x[1]["rank"])[:100]]
+        cur.execute("SELECT id, abbreviation, name FROM teams")
+        names = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+        for tid, key in ev.visits(step, {t: {"need_groups": c["need_groups"]} for t, c in ctxs.items()}, cands,
+                                  draft_season):
+            evs = out["events"].setdefault(key, [])
+            e = dict(ev.visit_event(by_key[key], *names[tid]), team_id=tid)
+            e["seq"] = sum(1 for x in evs if x["kind"] == "VISIT")
+            evs.append(e)
+            visited.setdefault(tid, set()).add(key)
+    vols = volatility(cur, draft_season, step, cons)
+    knots = sv.grade_map([p["V"] for p in cls if p.get("status") != "WITHDRAWN"])
+    first = out["first_step"]
+    rows = []
+    for tid, ctx in ctxs.items():
+        b = sb.board(cls, cons, ctx, step, draft_season, first, visited.get(tid, ()), vols, limit=BOARD_POOL,
+                     draft_day=(step == STEP_DRAFT))
+        for rank, (key, total, err, fit, bias) in enumerate(b[:sb.STORED], start=1):
+            rows.append((draft_season, step, tid, key, sv.grade(total, knots), rank, round(fit, 2), round(bias, 2),
+                         round(err, 3)))
+    out["boards"] = rows
+    out["params"] = dict(out.get("params") or params(), boards={"sigma_base": sb.SIGMA_BASE, "rho": sb.RHO,
+                                                                "sigma_res": sb.SIGMA_RES, "phi": sb.PHI,
+                                                                "reach_limit": sb.REACH_LIMIT})
     return out
 
 
@@ -474,6 +557,47 @@ def catch_up(cur, draft_season, to_step, log=print, extras=None, dry_run=False):
     return done
 
 
+def chain_stats(cls, first_step, draft_season, sims=20):
+    """sd(e) by step and the mean count of prospects moving >= 5 ranks a step, over `sims` fresh chains."""
+    sd_by, moves_by = {}, {}
+    for i in range(sims):
+        sim = chain(cls, first_step, STEP_DRAFT, draft_season, salt=f"cal{i}")
+        for step, cons in sim.items():
+            errs = [r["err"] for r in cons.values()]
+            m = sum(errs) / len(errs)
+            sd_by.setdefault(step, []).append(math.sqrt(sum((e - m) ** 2 for e in errs) / len(errs)))
+            moves_by.setdefault(step, []).append(sum(1 for r in cons.values()
+                                                     if r["delta_rank"] is not None and abs(r["delta_rank"]) >= 5))
+    return ({s: sum(v) / len(v) for s, v in sd_by.items()}, {s: sum(v) / len(v) for s, v in moves_by.items()})
+
+
+def calibrate_cli(cur, draft_season=None, drafts=1000, q_mode="live", seed=0, log=print):
+    """--calibrate: the class from the DB (scouting rows, or built from draft_prospects), today's Round 1 owners
+    (draft_order_with_owners) and the 32 GMs' needs, personas and q. Prints aggregates only."""
+    from engines import scouting_boards as sb
+    from engines.draft_order import draft_order_with_owners
+    season = current_step(cur)[0]
+    draft_season = draft_season or season + 1
+    cls = load_class(cur, draft_season, dry_run=True)
+    ctxs = team_contexts(cur, season)
+    if q_mode == "spread":
+        ctxs = sb.spread_q(ctxs)
+    order = draft_order_with_owners(cur, draft_season)
+    r = sb.calibrate(cls, order, ctxs, drafts=drafts, seed=seed)
+    log(f"calibrate {draft_season}: {drafts} drafts, q {q_mode}")
+    log(f"  poor picks (true rank > slot + {sb.POOR_GAP}): {r['poor_rate']:.1%} "
+        f"(target {sb.CALIBRATION['target'][0]:.0%}-{sb.CALIBRATION['target'][1]:.0%})")
+    for band, v in r["bands"].items():
+        log(f"    q {band:<10} {v['poor_rate']:.1%} of {v['picks']} picks")
+    log(f"  mean |true rank - slot|: {r['mean_abs_gap']:.1f}")
+    log(f"  true top 32 drafted in Round 1: {r['r1_overlap_true_top32']:.1f}; in the draft-day consensus top 32: "
+        f"{r['consensus_overlap_true_top32']:.1f}")
+    sds, moves = chain_stats(cls, min(p["first_step"] for p in cls), draft_season)
+    log("  sd(e) by step: " + ", ".join(f"{s}:{v:.2f}" for s, v in sorted(sds.items())))
+    log("  prospects moving >= 5 ranks: " + ", ".join(f"{s}:{v:.0f}" for s, v in sorted(moves.items()) if s > min(sds)))
+    return r
+
+
 # -------------------------------------------------------------------- cli ----
 def _connect():
     import psycopg
@@ -490,6 +614,11 @@ def main(argv=None):
     p.add_argument("--dry-run", action="store_true")
     p = sub.add_parser("relink", help="re-link a class to draft_prospects after a board load")
     p.add_argument("--draft-season", type=int, required=True)
+    p = sub.add_parser("calibrate", help="simulate drafts and print the poor-pick rate (writes nothing)")
+    p.add_argument("--drafts", type=int, default=1000)
+    p.add_argument("--class", dest="klass", type=int)
+    p.add_argument("--q", choices=("live", "spread"), default="live")
+    p.add_argument("--seed", type=int, default=0)
     p = sub.add_parser("run", help="store one scouting step (default: the league's current step)")
     p.add_argument("--draft-season", type=int, help="default: league season + 1")
     p.add_argument("--week", type=int)
@@ -497,7 +626,21 @@ def main(argv=None):
     p.add_argument("--step", type=int)
     p.add_argument("--dry-run", action="store_true", help="compute and print, write nothing")
     p.add_argument("--replace", action="store_true", help="redraw a stored step (same seeds)")
+    ap.add_argument("--calibrate", action="store_true", help="simulate drafts: the poor-pick rate (no writes)")
+    ap.add_argument("--drafts", type=int, default=1000)
+    ap.add_argument("--class", dest="klass", type=int, help="draft class (default: league season + 1)")
+    ap.add_argument("--q", choices=("live", "spread"), default="live")
+    ap.add_argument("--seed", type=int, default=0)
+    if argv is None:
+        argv = sys.argv[1:]
+    if "--calibrate" in argv:                      # python3 -m engines.scouting_engine --calibrate [...]
+        argv = ["calibrate"] + [x for x in argv if x != "--calibrate"]
     a = ap.parse_args(argv)
+    if a.cmd == "calibrate":
+        with _connect() as conn:
+            calibrate_cli(conn.cursor(), a.klass, a.drafts, a.q, a.seed)
+            conn.rollback()
+        return 0
     with _connect() as conn:
         cur = conn.cursor()
         if a.cmd == "init":

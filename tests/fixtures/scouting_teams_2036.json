@@ -1,0 +1,2659 @@
+{
+ "_note": "Frozen 2036 week 4 read-only export: 2037 Round 1 slots (provisional standings through draft_picks owners) and the 32 GMs' needs/personas/q, for tests/test_scouting_calibration.py.",
+ "order": [
+  {
+   "pick": 1,
+   "original_team_id": 32,
+   "owner_team_id": 15
+  },
+  {
+   "pick": 2,
+   "original_team_id": 16,
+   "owner_team_id": 16
+  },
+  {
+   "pick": 3,
+   "original_team_id": 6,
+   "owner_team_id": 6
+  },
+  {
+   "pick": 4,
+   "original_team_id": 5,
+   "owner_team_id": 5
+  },
+  {
+   "pick": 5,
+   "original_team_id": 20,
+   "owner_team_id": 20
+  },
+  {
+   "pick": 6,
+   "original_team_id": 10,
+   "owner_team_id": 10
+  },
+  {
+   "pick": 7,
+   "original_team_id": 25,
+   "owner_team_id": 25
+  },
+  {
+   "pick": 8,
+   "original_team_id": 29,
+   "owner_team_id": 29
+  },
+  {
+   "pick": 9,
+   "original_team_id": 35,
+   "owner_team_id": 35
+  },
+  {
+   "pick": 10,
+   "original_team_id": 31,
+   "owner_team_id": 31
+  },
+  {
+   "pick": 11,
+   "original_team_id": 19,
+   "owner_team_id": 19
+  },
+  {
+   "pick": 12,
+   "original_team_id": 21,
+   "owner_team_id": 21
+  },
+  {
+   "pick": 13,
+   "original_team_id": 26,
+   "owner_team_id": 26
+  },
+  {
+   "pick": 14,
+   "original_team_id": 17,
+   "owner_team_id": 17
+  },
+  {
+   "pick": 15,
+   "original_team_id": 23,
+   "owner_team_id": 23
+  },
+  {
+   "pick": 16,
+   "original_team_id": 33,
+   "owner_team_id": 33
+  },
+  {
+   "pick": 17,
+   "original_team_id": 9,
+   "owner_team_id": 9
+  },
+  {
+   "pick": 18,
+   "original_team_id": 15,
+   "owner_team_id": 15
+  },
+  {
+   "pick": 19,
+   "original_team_id": 28,
+   "owner_team_id": 28
+  },
+  {
+   "pick": 20,
+   "original_team_id": 30,
+   "owner_team_id": 30
+  },
+  {
+   "pick": 21,
+   "original_team_id": 7,
+   "owner_team_id": 7
+  },
+  {
+   "pick": 22,
+   "original_team_id": 22,
+   "owner_team_id": 22
+  },
+  {
+   "pick": 23,
+   "original_team_id": 8,
+   "owner_team_id": 8
+  },
+  {
+   "pick": 24,
+   "original_team_id": 14,
+   "owner_team_id": 31
+  },
+  {
+   "pick": 25,
+   "original_team_id": 13,
+   "owner_team_id": 10
+  },
+  {
+   "pick": 26,
+   "original_team_id": 18,
+   "owner_team_id": 18
+  },
+  {
+   "pick": 27,
+   "original_team_id": 34,
+   "owner_team_id": 34
+  },
+  {
+   "pick": 28,
+   "original_team_id": 24,
+   "owner_team_id": 24
+  },
+  {
+   "pick": 29,
+   "original_team_id": 12,
+   "owner_team_id": 12
+  },
+  {
+   "pick": 30,
+   "original_team_id": 27,
+   "owner_team_id": 27
+  },
+  {
+   "pick": 31,
+   "original_team_id": 11,
+   "owner_team_id": 11
+  },
+  {
+   "pick": 32,
+   "original_team_id": 36,
+   "owner_team_id": 36
+  }
+ ],
+ "teams": {
+  "5": {
+   "abbreviation": "DAL",
+   "direction": "REBUILD",
+   "needs": [
+    {
+     "group": "DT",
+     "score": 9.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.6
+    },
+    {
+     "group": "IOL",
+     "score": 7.79,
+     "injury": 0.0,
+     "expiring": 2.25,
+     "slot_gap": 6.6
+    },
+    {
+     "group": "WR",
+     "score": 6.32,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.2
+    },
+    {
+     "group": "EDGE",
+     "score": 5.82,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.2
+    },
+    {
+     "group": "TE",
+     "score": 5.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "CB",
+     "score": 4.51,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 2.6
+    },
+    {
+     "group": "LB",
+     "score": 4.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "OT",
+     "score": 2.24,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "QB",
+     "score": 1.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "RB",
+     "score": 0.8,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "K",
+     "score": 0.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "IOL": 1.09
+   },
+   "youth_bias": -0.89,
+   "risk_appetite": 0.4,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "6": {
+   "abbreviation": "SEA",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "CB",
+     "score": 11.22,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 10.2
+    },
+    {
+     "group": "WR",
+     "score": 8.21,
+     "injury": 0.0,
+     "expiring": 6.45,
+     "slot_gap": 1.6
+    },
+    {
+     "group": "DT",
+     "score": 8.1,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 6.6
+    },
+    {
+     "group": "EDGE",
+     "score": 7.39,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.6
+    },
+    {
+     "group": "OT",
+     "score": 6.72,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "S",
+     "score": 3.28,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "P",
+     "score": 2.5,
+     "injury": 0.0,
+     "expiring": 3.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "K",
+     "score": 1.8,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "IOL",
+     "score": 1.41,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.6
+    },
+    {
+     "group": "QB",
+     "score": 1.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "LB",
+     "score": 0.85,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "RB",
+     "score": 0.8,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "WR": 0.95,
+    "EDGE": 1.13
+   },
+   "youth_bias": 0.8,
+   "risk_appetite": 0.24,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "7": {
+   "abbreviation": "NYG",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "EDGE",
+     "score": 18.14,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 16.2
+    },
+    {
+     "group": "WR",
+     "score": 10.4,
+     "injury": 0.0,
+     "expiring": 7.0,
+     "slot_gap": 3.2
+    },
+    {
+     "group": "CB",
+     "score": 7.81,
+     "injury": 0.0,
+     "expiring": 6.1,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "P",
+     "score": 6.62,
+     "injury": 0.0,
+     "expiring": 17.5,
+     "slot_gap": 9.0
+    },
+    {
+     "group": "K",
+     "score": 2.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "QB",
+     "score": 1.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "LB": 0.95,
+    "RB": 0.88
+   },
+   "youth_bias": 0.76,
+   "risk_appetite": 0.76,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "8": {
+   "abbreviation": "PHI",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "CB",
+     "score": 21.83,
+     "injury": 0.0,
+     "expiring": 5.25,
+     "slot_gap": 14.6
+    },
+    {
+     "group": "OT",
+     "score": 14.56,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 13.0
+    },
+    {
+     "group": "WR",
+     "score": 14.48,
+     "injury": 11.0,
+     "expiring": 0.0,
+     "slot_gap": 14.2
+    },
+    {
+     "group": "LB",
+     "score": 11.05,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 13.0
+    },
+    {
+     "group": "RB",
+     "score": 5.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "TE",
+     "score": 2.7,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "IOL",
+     "score": 2.64,
+     "injury": 0.0,
+     "expiring": 3.0,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "P",
+     "score": 1.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "S",
+     "score": 0.98,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.2
+    },
+    {
+     "group": "EDGE",
+     "score": 0.67,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    },
+    {
+     "group": "K",
+     "score": 0.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {},
+   "youth_bias": 0.41,
+   "risk_appetite": 0.57,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "9": {
+   "abbreviation": "TB",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "IOL",
+     "score": 13.29,
+     "injury": 3.0,
+     "expiring": 0.5,
+     "slot_gap": 14.6
+    },
+    {
+     "group": "LB",
+     "score": 12.75,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 15.0
+    },
+    {
+     "group": "P",
+     "score": 11.12,
+     "injury": 0.0,
+     "expiring": 39.5,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "OT",
+     "score": 5.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "EDGE",
+     "score": 5.15,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.6
+    },
+    {
+     "group": "WR",
+     "score": 3.67,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "S",
+     "score": 3.44,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.2
+    },
+    {
+     "group": "RB",
+     "score": 1.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "CB",
+     "score": 1.1,
+     "injury": 0.0,
+     "expiring": 1.0,
+     "slot_gap": 0.0
+    }
+   ],
+   "position_bias": {
+    "S": 1.05
+   },
+   "youth_bias": -0.5,
+   "risk_appetite": 0.38,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "10": {
+   "abbreviation": "GB",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "QB",
+     "score": 22.81,
+     "injury": 13.0,
+     "expiring": 5.25,
+     "slot_gap": 13.0
+    },
+    {
+     "group": "DT",
+     "score": 20.1,
+     "injury": 0.0,
+     "expiring": 10.5,
+     "slot_gap": 9.6
+    },
+    {
+     "group": "LB",
+     "score": 5.95,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "S",
+     "score": 5.08,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.2
+    },
+    {
+     "group": "OT",
+     "score": 4.48,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "IOL",
+     "score": 4.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "CB",
+     "score": 3.96,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "WR",
+     "score": 3.67,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "EDGE",
+     "score": 0.67,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    },
+    {
+     "group": "P",
+     "score": 0.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "CB": 1.04,
+    "IOL": 1.14,
+    "EDGE": 0.92
+   },
+   "youth_bias": -0.79,
+   "risk_appetite": 0.19,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "11": {
+   "abbreviation": "CAR",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "EDGE",
+     "score": 12.54,
+     "injury": 0.0,
+     "expiring": 4.0,
+     "slot_gap": 7.2
+    },
+    {
+     "group": "K",
+     "score": 1.95,
+     "injury": 0.0,
+     "expiring": 6.5,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "IOL",
+     "score": 1.76,
+     "injury": 0.0,
+     "expiring": 2.0,
+     "slot_gap": 0.0
+    }
+   ],
+   "position_bias": {
+    "WR": 1.14
+   },
+   "youth_bias": 0.7,
+   "risk_appetite": 0.67,
+   "fo_quality": 1.0,
+   "user_controlled": true
+  },
+  "12": {
+   "abbreviation": "MIN",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "WR",
+     "score": 13.46,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 13.2
+    },
+    {
+     "group": "DT",
+     "score": 10.6,
+     "injury": 0.0,
+     "expiring": 1.0,
+     "slot_gap": 9.6
+    },
+    {
+     "group": "EDGE",
+     "score": 8.06,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.2
+    },
+    {
+     "group": "RB",
+     "score": 5.2,
+     "injury": 0.0,
+     "expiring": 3.5,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "IOL",
+     "score": 4.05,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.6
+    },
+    {
+     "group": "LB",
+     "score": 1.7,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "K",
+     "score": 0.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    }
+   ],
+   "position_bias": {
+    "QB": 1.03,
+    "WR": 0.95
+   },
+   "youth_bias": -0.61,
+   "risk_appetite": 0.29,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "13": {
+   "abbreviation": "TEN",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "DT",
+     "score": 7.1,
+     "injury": 0.0,
+     "expiring": 2.5,
+     "slot_gap": 4.6
+    },
+    {
+     "group": "OT",
+     "score": 6.16,
+     "injury": 0.0,
+     "expiring": 4.5,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "IOL",
+     "score": 5.28,
+     "injury": 5.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "QB",
+     "score": 3.75,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "RB",
+     "score": 2.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "S",
+     "score": 1.64,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "P",
+     "score": 1.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "TE",
+     "score": 0.9,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "LB",
+     "score": 0.85,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "K",
+     "score": 0.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    }
+   ],
+   "position_bias": {
+    "CB": 0.96,
+    "DT": 1.04,
+    "LB": 0.97
+   },
+   "youth_bias": 0.04,
+   "risk_appetite": 0.13,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "14": {
+   "abbreviation": "CLE",
+   "direction": "REBUILD",
+   "needs": [
+    {
+     "group": "LB",
+     "score": 15.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 18.0
+    },
+    {
+     "group": "EDGE",
+     "score": 11.82,
+     "injury": 0.0,
+     "expiring": 4.95,
+     "slot_gap": 5.6
+    },
+    {
+     "group": "OT",
+     "score": 10.64,
+     "injury": 0.0,
+     "expiring": 4.5,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "K",
+     "score": 10.12,
+     "injury": 0.0,
+     "expiring": 33.75,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "S",
+     "score": 9.18,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 11.2
+    },
+    {
+     "group": "DT",
+     "score": 4.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.6
+    },
+    {
+     "group": "IOL",
+     "score": 4.05,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.6
+    },
+    {
+     "group": "RB",
+     "score": 3.2,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "WR",
+     "score": 2.65,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.6
+    }
+   ],
+   "position_bias": {
+    "DT": 0.96,
+    "QB": 0.94,
+    "WR": 0.89
+   },
+   "youth_bias": 0.13,
+   "risk_appetite": 0.87,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "15": {
+   "abbreviation": "PIT",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "EDGE",
+     "score": 22.34,
+     "injury": 8.6,
+     "expiring": 6.75,
+     "slot_gap": 13.2
+    },
+    {
+     "group": "LB",
+     "score": 14.45,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 17.0
+    },
+    {
+     "group": "CB",
+     "score": 13.42,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 12.2
+    },
+    {
+     "group": "IOL",
+     "score": 11.75,
+     "injury": 0.0,
+     "expiring": 3.75,
+     "slot_gap": 9.6
+    },
+    {
+     "group": "QB",
+     "score": 9.06,
+     "injury": 0.0,
+     "expiring": 5.25,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "RB",
+     "score": 4.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "S",
+     "score": 2.62,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.2
+    },
+    {
+     "group": "TE",
+     "score": 0.9,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "WR",
+     "score": 0.61,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    },
+    {
+     "group": "K",
+     "score": 0.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "EDGE": 0.91
+   },
+   "youth_bias": -0.74,
+   "risk_appetite": 0.62,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "16": {
+   "abbreviation": "BAL",
+   "direction": "REBUILD",
+   "needs": [
+    {
+     "group": "CB",
+     "score": 21.94,
+     "injury": 0.0,
+     "expiring": 9.75,
+     "slot_gap": 10.2
+    },
+    {
+     "group": "WR",
+     "score": 21.11,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 19.2
+    },
+    {
+     "group": "IOL",
+     "score": 11.75,
+     "injury": 0.0,
+     "expiring": 3.75,
+     "slot_gap": 9.6
+    },
+    {
+     "group": "EDGE",
+     "score": 11.03,
+     "injury": 0.0,
+     "expiring": 5.25,
+     "slot_gap": 4.6
+    },
+    {
+     "group": "QB",
+     "score": 10.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "P",
+     "score": 8.25,
+     "injury": 0.0,
+     "expiring": 33.0,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "TE",
+     "score": 1.8,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "S",
+     "score": 0.98,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.2
+    },
+    {
+     "group": "RB",
+     "score": 0.8,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "QB": 1.14
+   },
+   "youth_bias": 0.25,
+   "risk_appetite": 0.72,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "17": {
+   "abbreviation": "NE",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "CB",
+     "score": 32.12,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 29.2
+    },
+    {
+     "group": "DT",
+     "score": 13.35,
+     "injury": 0.0,
+     "expiring": 12.75,
+     "slot_gap": 0.6
+    },
+    {
+     "group": "WR",
+     "score": 12.75,
+     "injury": 0.0,
+     "expiring": 9.9,
+     "slot_gap": 2.6
+    },
+    {
+     "group": "IOL",
+     "score": 9.55,
+     "injury": 0.0,
+     "expiring": 2.25,
+     "slot_gap": 8.6
+    },
+    {
+     "group": "TE",
+     "score": 6.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "LB",
+     "score": 5.74,
+     "injury": 0.0,
+     "expiring": 6.75,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "RB",
+     "score": 0.8,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "QB": 0.93,
+    "IOL": 1.09
+   },
+   "youth_bias": -0.36,
+   "risk_appetite": 0.27,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "18": {
+   "abbreviation": "NYJ",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "EDGE",
+     "score": 10.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "LB",
+     "score": 7.65,
+     "injury": 0.0,
+     "expiring": 6.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "DT",
+     "score": 7.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "IOL",
+     "score": 3.96,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "CB",
+     "score": 0.99,
+     "injury": 0.0,
+     "expiring": 0.3,
+     "slot_gap": 0.6
+    },
+    {
+     "group": "WR",
+     "score": 0.61,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    }
+   ],
+   "position_bias": {
+    "CB": 1.06,
+    "LB": 1.08
+   },
+   "youth_bias": -0.7,
+   "risk_appetite": 0.75,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "19": {
+   "abbreviation": "MIA",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "DT",
+     "score": 21.6,
+     "injury": 10.0,
+     "expiring": 0.0,
+     "slot_gap": 21.6
+    },
+    {
+     "group": "CB",
+     "score": 18.92,
+     "injury": 0.0,
+     "expiring": 3.0,
+     "slot_gap": 14.2
+    },
+    {
+     "group": "S",
+     "score": 17.79,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 20.2
+    },
+    {
+     "group": "EDGE",
+     "score": 16.02,
+     "injury": 0.0,
+     "expiring": 11.7,
+     "slot_gap": 2.6
+    },
+    {
+     "group": "IOL",
+     "score": 11.97,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 13.6
+    },
+    {
+     "group": "K",
+     "score": 10.72,
+     "injury": 0.0,
+     "expiring": 27.75,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "WR",
+     "score": 6.07,
+     "injury": 0.0,
+     "expiring": 0.75,
+     "slot_gap": 5.2
+    },
+    {
+     "group": "LB",
+     "score": 3.82,
+     "injury": 0.0,
+     "expiring": 4.5,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "TE",
+     "score": 0.9,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "RB",
+     "score": 0.8,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "DT": 0.91
+   },
+   "youth_bias": -0.12,
+   "risk_appetite": 0.79,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "20": {
+   "abbreviation": "BUF",
+   "direction": "REBUILD",
+   "needs": [
+    {
+     "group": "OT",
+     "score": 23.52,
+     "injury": 8.0,
+     "expiring": 0.0,
+     "slot_gap": 21.0
+    },
+    {
+     "group": "DT",
+     "score": 22.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 22.6
+    },
+    {
+     "group": "WR",
+     "score": 18.82,
+     "injury": 0.0,
+     "expiring": 8.25,
+     "slot_gap": 10.2
+    },
+    {
+     "group": "CB",
+     "score": 16.72,
+     "injury": 0.0,
+     "expiring": 6.0,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "QB",
+     "score": 7.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "S",
+     "score": 5.08,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.2
+    },
+    {
+     "group": "RB",
+     "score": 4.8,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "LB",
+     "score": 3.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "IOL",
+     "score": 0.53,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    }
+   ],
+   "position_bias": {},
+   "youth_bias": -0.42,
+   "risk_appetite": 0.52,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "21": {
+   "abbreviation": "LAR",
+   "direction": "REBUILD",
+   "needs": [
+    {
+     "group": "DT",
+     "score": 24.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 24.6
+    },
+    {
+     "group": "K",
+     "score": 10.5,
+     "injury": 0.0,
+     "expiring": 30.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "CB",
+     "score": 9.35,
+     "injury": 0.0,
+     "expiring": 4.5,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "S",
+     "score": 7.54,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "IOL",
+     "score": 5.02,
+     "injury": 0.0,
+     "expiring": 5.7,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "QB",
+     "score": 5.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "EDGE",
+     "score": 4.7,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.2
+    },
+    {
+     "group": "OT",
+     "score": 3.92,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "WR",
+     "score": 3.67,
+     "injury": 0.0,
+     "expiring": 3.0,
+     "slot_gap": 0.6
+    },
+    {
+     "group": "RB",
+     "score": 2.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "P",
+     "score": 0.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {},
+   "youth_bias": 0.3,
+   "risk_appetite": 0.59,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "22": {
+   "abbreviation": "WAS",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "IOL",
+     "score": 11.97,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 13.6
+    },
+    {
+     "group": "K",
+     "score": 10.12,
+     "injury": 0.0,
+     "expiring": 33.75,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "QB",
+     "score": 10.0,
+     "injury": 6.0,
+     "expiring": 0.0,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "S",
+     "score": 6.72,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.2
+    },
+    {
+     "group": "RB",
+     "score": 6.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "CB",
+     "score": 5.72,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.2
+    },
+    {
+     "group": "EDGE",
+     "score": 4.03,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "TE",
+     "score": 2.7,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "DT",
+     "score": 1.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.6
+    },
+    {
+     "group": "P",
+     "score": 0.75,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    }
+   ],
+   "position_bias": {
+    "S": 1.05
+   },
+   "youth_bias": 0.66,
+   "risk_appetite": 0.55,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "23": {
+   "abbreviation": "AZ",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "DT",
+     "score": 15.1,
+     "injury": 0.0,
+     "expiring": 4.5,
+     "slot_gap": 10.6
+    },
+    {
+     "group": "WR",
+     "score": 8.16,
+     "injury": 0.0,
+     "expiring": 8.0,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "S",
+     "score": 5.49,
+     "injury": 0.0,
+     "expiring": 2.5,
+     "slot_gap": 4.2
+    },
+    {
+     "group": "TE",
+     "score": 5.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "CB",
+     "score": 5.06,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.6
+    },
+    {
+     "group": "OT",
+     "score": 4.48,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "EDGE",
+     "score": 1.79,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.6
+    },
+    {
+     "group": "LB",
+     "score": 0.85,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "P",
+     "score": 0.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    }
+   ],
+   "position_bias": {
+    "CB": 0.88,
+    "RB": 1.1
+   },
+   "youth_bias": 0.21,
+   "risk_appetite": 0.47,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "24": {
+   "abbreviation": "CIN",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "QB",
+     "score": 7.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "S",
+     "score": 7.38,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.0
+    },
+    {
+     "group": "WR",
+     "score": 6.12,
+     "injury": 0.0,
+     "expiring": 6.0,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "LB",
+     "score": 5.1,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "TE",
+     "score": 4.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "RB",
+     "score": 4.0,
+     "injury": 0.0,
+     "expiring": 4.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "IOL",
+     "score": 3.17,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "CB",
+     "score": 2.42,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.2
+    },
+    {
+     "group": "OT",
+     "score": 2.24,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "P",
+     "score": 1.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "DT",
+     "score": 0.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    }
+   ],
+   "position_bias": {
+    "OT": 0.92,
+    "EDGE": 1.07
+   },
+   "youth_bias": -0.27,
+   "risk_appetite": 0.31,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "25": {
+   "abbreviation": "ATL",
+   "direction": "REBUILD",
+   "needs": [
+    {
+     "group": "WR",
+     "score": 22.64,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 22.2
+    },
+    {
+     "group": "LB",
+     "score": 20.82,
+     "injury": 0.0,
+     "expiring": 7.5,
+     "slot_gap": 17.0
+    },
+    {
+     "group": "DT",
+     "score": 14.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 14.6
+    },
+    {
+     "group": "S",
+     "score": 10.82,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 13.2
+    },
+    {
+     "group": "OT",
+     "score": 6.44,
+     "injury": 0.0,
+     "expiring": 0.75,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "QB",
+     "score": 6.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "CB",
+     "score": 5.17,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 3.2
+    },
+    {
+     "group": "TE",
+     "score": 4.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "EDGE",
+     "score": 0.67,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    },
+    {
+     "group": "K",
+     "score": 0.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {},
+   "youth_bias": 0.86,
+   "risk_appetite": 0.82,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "26": {
+   "abbreviation": "JAX",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "LB",
+     "score": 17.64,
+     "injury": 0.0,
+     "expiring": 0.75,
+     "slot_gap": 20.0
+    },
+    {
+     "group": "QB",
+     "score": 12.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 10.0
+    },
+    {
+     "group": "CB",
+     "score": 12.04,
+     "injury": 0.0,
+     "expiring": 10.95,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "IOL",
+     "score": 10.21,
+     "injury": 0.0,
+     "expiring": 3.0,
+     "slot_gap": 8.6
+    },
+    {
+     "group": "WR",
+     "score": 9.79,
+     "injury": 0.0,
+     "expiring": 6.0,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "P",
+     "score": 8.69,
+     "injury": 0.0,
+     "expiring": 27.75,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "DT",
+     "score": 7.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.6
+    },
+    {
+     "group": "S",
+     "score": 7.54,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "EDGE",
+     "score": 5.66,
+     "injury": 0.0,
+     "expiring": 3.45,
+     "slot_gap": 1.6
+    },
+    {
+     "group": "RB",
+     "score": 4.8,
+     "injury": 0.0,
+     "expiring": 6.0,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "K",
+     "score": 0.9,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    }
+   ],
+   "position_bias": {
+    "TE": 0.92
+   },
+   "youth_bias": 0.5,
+   "risk_appetite": 0.48,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "27": {
+   "abbreviation": "SF",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "EDGE",
+     "score": 18.14,
+     "injury": 0.0,
+     "expiring": 2.0,
+     "slot_gap": 14.2
+    },
+    {
+     "group": "WR",
+     "score": 14.99,
+     "injury": 0.0,
+     "expiring": 2.5,
+     "slot_gap": 12.2
+    },
+    {
+     "group": "S",
+     "score": 10.82,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 13.2
+    },
+    {
+     "group": "IOL",
+     "score": 7.74,
+     "injury": 0.0,
+     "expiring": 4.8,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "P",
+     "score": 7.5,
+     "injury": 0.0,
+     "expiring": 14.0,
+     "slot_gap": 16.0
+    },
+    {
+     "group": "CB",
+     "score": 6.82,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.2
+    },
+    {
+     "group": "TE",
+     "score": 5.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "DT",
+     "score": 3.0,
+     "injury": 0.0,
+     "expiring": 1.0,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "K",
+     "score": 0.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    }
+   ],
+   "position_bias": {
+    "CB": 0.9,
+    "OT": 0.86
+   },
+   "youth_bias": -0.11,
+   "risk_appetite": 0.18,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "28": {
+   "abbreviation": "HOU",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "CB",
+     "score": 27.99,
+     "injury": 0.0,
+     "expiring": 11.25,
+     "slot_gap": 14.2
+    },
+    {
+     "group": "WR",
+     "score": 10.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 10.2
+    },
+    {
+     "group": "P",
+     "score": 8.62,
+     "injury": 0.0,
+     "expiring": 28.5,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "RB",
+     "score": 8.4,
+     "injury": 0.0,
+     "expiring": 10.5,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "OT",
+     "score": 7.56,
+     "injury": 0.0,
+     "expiring": 0.75,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "LB",
+     "score": 7.44,
+     "injury": 0.0,
+     "expiring": 0.75,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "TE",
+     "score": 7.2,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "QB",
+     "score": 3.75,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "IOL",
+     "score": 1.41,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.6
+    },
+    {
+     "group": "K",
+     "score": 0.9,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "S",
+     "score": 0.12,
+     "injury": 0.0,
+     "expiring": 0.15,
+     "slot_gap": 0.0
+    }
+   ],
+   "position_bias": {
+    "QB": 1.13
+   },
+   "youth_bias": -0.62,
+   "risk_appetite": 0.44,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "29": {
+   "abbreviation": "NO",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "WR",
+     "score": 14.74,
+     "injury": 0.0,
+     "expiring": 5.25,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "CB",
+     "score": 13.14,
+     "injury": 0.0,
+     "expiring": 6.75,
+     "slot_gap": 5.2
+    },
+    {
+     "group": "K",
+     "score": 10.28,
+     "injury": 0.0,
+     "expiring": 32.25,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "DT",
+     "score": 10.1,
+     "injury": 0.0,
+     "expiring": 7.5,
+     "slot_gap": 2.6
+    },
+    {
+     "group": "QB",
+     "score": 10.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "TE",
+     "score": 7.2,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "OT",
+     "score": 6.72,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.0
+    },
+    {
+     "group": "EDGE",
+     "score": 0.67,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    },
+    {
+     "group": "IOL",
+     "score": 0.53,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 0.6
+    }
+   ],
+   "position_bias": {
+    "DT": 1.12
+   },
+   "youth_bias": 0.09,
+   "risk_appetite": 0.1,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "30": {
+   "abbreviation": "IND",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "CB",
+     "score": 26.07,
+     "injury": 0.0,
+     "expiring": 4.5,
+     "slot_gap": 19.2
+    },
+    {
+     "group": "QB",
+     "score": 15.62,
+     "injury": 0.0,
+     "expiring": 7.5,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "EDGE",
+     "score": 10.58,
+     "injury": 0.0,
+     "expiring": 5.25,
+     "slot_gap": 4.2
+    },
+    {
+     "group": "S",
+     "score": 5.04,
+     "injury": 0.0,
+     "expiring": 6.15,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "IOL",
+     "score": 4.93,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.6
+    },
+    {
+     "group": "TE",
+     "score": 4.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "DT",
+     "score": 4.5,
+     "injury": 0.0,
+     "expiring": 4.5,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "OT",
+     "score": 3.36,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "P",
+     "score": 1.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "LB",
+     "score": 0.85,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {},
+   "youth_bias": -0.18,
+   "risk_appetite": 0.15,
+   "fo_quality": 1.0,
+   "user_controlled": true
+  },
+  "31": {
+   "abbreviation": "DEN",
+   "direction": "CONTEND",
+   "needs": [
+    {
+     "group": "IOL",
+     "score": 22.97,
+     "injury": 0.0,
+     "expiring": 0.5,
+     "slot_gap": 25.6
+    },
+    {
+     "group": "DT",
+     "score": 12.6,
+     "injury": 0.0,
+     "expiring": 2.0,
+     "slot_gap": 10.6
+    },
+    {
+     "group": "EDGE",
+     "score": 10.53,
+     "injury": 0.0,
+     "expiring": 5.8,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "WR",
+     "score": 9.38,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "LB",
+     "score": 9.35,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 11.0
+    },
+    {
+     "group": "S",
+     "score": 6.56,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "CB",
+     "score": 4.4,
+     "injury": 0.0,
+     "expiring": 4.0,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "OT",
+     "score": 2.24,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    },
+    {
+     "group": "P",
+     "score": 0.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    }
+   ],
+   "position_bias": {
+    "OT": 0.92,
+    "RB": 1.05
+   },
+   "youth_bias": -0.04,
+   "risk_appetite": 0.91,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "32": {
+   "abbreviation": "KC",
+   "direction": "REBUILD",
+   "needs": [
+    {
+     "group": "IOL",
+     "score": 16.37,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 18.6
+    },
+    {
+     "group": "S",
+     "score": 16.36,
+     "injury": 0.0,
+     "expiring": 6.75,
+     "slot_gap": 13.2
+    },
+    {
+     "group": "CB",
+     "score": 11.22,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 10.2
+    },
+    {
+     "group": "QB",
+     "score": 8.75,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "EDGE",
+     "score": 7.9,
+     "injury": 0.0,
+     "expiring": 3.45,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "WR",
+     "score": 7.24,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 5.6
+    },
+    {
+     "group": "TE",
+     "score": 6.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "LB",
+     "score": 3.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "DT",
+     "score": 1.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    },
+    {
+     "group": "K",
+     "score": 0.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {},
+   "youth_bias": -0.32,
+   "risk_appetite": 0.35,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "33": {
+   "abbreviation": "CHI",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "CB",
+     "score": 27.44,
+     "injury": 0.0,
+     "expiring": 3.75,
+     "slot_gap": 21.2
+    },
+    {
+     "group": "WR",
+     "score": 19.79,
+     "injury": 0.0,
+     "expiring": 14.4,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "K",
+     "score": 19.5,
+     "injury": 0.0,
+     "expiring": 60.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "OT",
+     "score": 11.48,
+     "injury": 0.0,
+     "expiring": 2.25,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "EDGE",
+     "score": 8.06,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.2
+    },
+    {
+     "group": "TE",
+     "score": 6.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "LB",
+     "score": 5.95,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "RB",
+     "score": 4.0,
+     "injury": 5.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "S",
+     "score": 0.98,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.2
+    },
+    {
+     "group": "P",
+     "score": 0.25,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 1.0
+    }
+   ],
+   "position_bias": {
+    "EDGE": 1.07
+   },
+   "youth_bias": 0.6,
+   "risk_appetite": 0.93,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "34": {
+   "abbreviation": "DET",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "LB",
+     "score": 9.35,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 11.0
+    },
+    {
+     "group": "TE",
+     "score": 9.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 10.0
+    },
+    {
+     "group": "S",
+     "score": 7.54,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "OT",
+     "score": 7.28,
+     "injury": 0.0,
+     "expiring": 1.5,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "RB",
+     "score": 5.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 7.0
+    },
+    {
+     "group": "DT",
+     "score": 5.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.6
+    },
+    {
+     "group": "IOL",
+     "score": 4.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "CB",
+     "score": 3.96,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.6
+    },
+    {
+     "group": "WR",
+     "score": 3.83,
+     "injury": 0.0,
+     "expiring": 3.75,
+     "slot_gap": 0.0
+    }
+   ],
+   "position_bias": {
+    "LB": 0.92,
+    "EDGE": 0.93
+   },
+   "youth_bias": -0.54,
+   "risk_appetite": 0.65,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "35": {
+   "abbreviation": "LV",
+   "direction": "REBUILD",
+   "needs": [
+    {
+     "group": "EDGE",
+     "score": 17.86,
+     "injury": 0.0,
+     "expiring": 9.75,
+     "slot_gap": 6.2
+    },
+    {
+     "group": "WR",
+     "score": 17.03,
+     "injury": 0.0,
+     "expiring": 10.5,
+     "slot_gap": 6.2
+    },
+    {
+     "group": "K",
+     "score": 11.25,
+     "injury": 0.0,
+     "expiring": 22.5,
+     "slot_gap": 15.0
+    },
+    {
+     "group": "S",
+     "score": 7.54,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "DT",
+     "score": 6.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 6.6
+    },
+    {
+     "group": "OT",
+     "score": 5.6,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 5.0
+    },
+    {
+     "group": "LB",
+     "score": 3.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    },
+    {
+     "group": "IOL",
+     "score": 2.64,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "QB",
+     "score": 2.5,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 2.0
+    }
+   ],
+   "position_bias": {
+    "QB": 1.14
+   },
+   "youth_bias": 0.35,
+   "risk_appetite": 0.85,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  },
+  "36": {
+   "abbreviation": "LAC",
+   "direction": "RETOOL",
+   "needs": [
+    {
+     "group": "WR",
+     "score": 23.66,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 23.2
+    },
+    {
+     "group": "CB",
+     "score": 23.32,
+     "injury": 0.0,
+     "expiring": 6.0,
+     "slot_gap": 15.2
+    },
+    {
+     "group": "EDGE",
+     "score": 10.3,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 9.2
+    },
+    {
+     "group": "K",
+     "score": 10.12,
+     "injury": 0.0,
+     "expiring": 33.75,
+     "slot_gap": 0.0
+    },
+    {
+     "group": "S",
+     "score": 9.59,
+     "injury": 2.0,
+     "expiring": 4.5,
+     "slot_gap": 7.2
+    },
+    {
+     "group": "LB",
+     "score": 8.71,
+     "injury": 0.0,
+     "expiring": 2.25,
+     "slot_gap": 8.0
+    },
+    {
+     "group": "IOL",
+     "score": 7.57,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 8.6
+    },
+    {
+     "group": "RB",
+     "score": 2.4,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 3.0
+    },
+    {
+     "group": "P",
+     "score": 1.0,
+     "injury": 0.0,
+     "expiring": 0.0,
+     "slot_gap": 4.0
+    }
+   ],
+   "position_bias": {
+    "DT": 1.14
+   },
+   "youth_bias": 0.56,
+   "risk_appetite": 0.07,
+   "fo_quality": 1.0,
+   "user_controlled": false
+  }
+ }
+}

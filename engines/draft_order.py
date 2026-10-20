@@ -138,3 +138,26 @@ def fetch_games(cur, season: int, before_week=None) -> list:
     cur.execute(sql, args)
     cols = ["home_team_id", "away_team_id", "home_score", "away_score", "status", "week", "game_type"]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def apply_owners(order: list, owners: dict, round_no: int = 1) -> list:
+    """order: compute_draft_order's round_1_order; owners: {(round, original_team_id): owner_team_id}. Returns the
+    round's slots [{pick (overall), round, round_pick, original_team_id, owner_team_id, locked}] (pure). A slot with
+    no draft_picks row stays with its original team."""
+    out = []
+    for e in order:
+        orig = e["team_id"]
+        out.append({"pick": (round_no - 1) * len(order) + e["pick"], "round": round_no, "round_pick": e["pick"],
+                    "original_team_id": orig, "owner_team_id": owners.get((round_no, orig), orig),
+                    "locked": e.get("locked", False)})
+    return out
+
+
+def draft_order_with_owners(cur, draft_season: int, rounds=(1,), before_week=None) -> list:
+    """The draft's slots for `rounds`, each mapped through draft_picks ownership (team management step 3): the
+    order comes from the season draft_season - 1 (compute_draft_order, every round the same order)."""
+    order = compute_draft_order(fetch_teams(cur), fetch_games(cur, draft_season - 1, before_week))["round_1_order"]
+    cur.execute("SELECT round, original_team_id, owner_team_id FROM draft_picks WHERE draft_season = %s",
+                (draft_season,))
+    owners = {(r, o): w for r, o, w in cur.fetchall()}
+    return [slot for rd in rounds for slot in apply_owners(order, owners, rd)]
