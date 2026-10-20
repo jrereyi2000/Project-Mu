@@ -271,6 +271,33 @@ def get_front_office(season: Optional[int] = None):
         return fo.front_office_state(conn.cursor(row_factory=tuple_row), season)
 
 
+@router.get("/front-office/players")
+def front_office_players(q: str, season: Optional[int] = None):
+    """The trade finder's player picker: rostered players matching q, best first."""
+    from psycopg.rows import tuple_row
+    from engines import front_office as fo
+    if len(q.strip()) < 2:
+        return []
+    with connect() as conn:
+        return fo.search_players(conn.cursor(row_factory=tuple_row), q.strip(), season)
+
+
+@router.get("/front-office/trade-finder")
+def front_office_trade_finder(player_id: int, team: Optional[str] = None, per_team: int = 3):
+    """Trade finder (read-only, nothing stored): every package the GM engine's rules can build for this player
+    from each other team, with both GMs' surplus, cap effects, checks, and why the nearest misses fail."""
+    from psycopg.rows import tuple_row
+    from engines import front_office as fo
+    with connect() as conn:
+        cur = conn.cursor(row_factory=tuple_row)
+        if not fo.installed(cur):
+            raise HTTPException(409, "the GM agents migration (2026_12_10_gm_agents.sql) isn't applied")
+        try:
+            return fo.trade_finder(cur, player_id, per_team=max(1, min(per_team, 10)), team=team)
+        except fo.FrontOfficeError as e:
+            raise HTTPException(e.status, e.message)
+
+
 @router.post("/front-office/proposals/{proposal_id}/{action}")
 def front_office_action(proposal_id: int, action: str, body: Optional[ReasonIn] = None,
                         x_debug_token: Optional[str] = Header(None)):

@@ -221,6 +221,68 @@ def legality_check(cur, season, week, team_a, team_b, assets, ignore_proposal=No
     return {"legal": ge.legal(checks), "checks": checks}
 
 
+def search_players(cur, q, season=None, limit=20):
+    """The trade finder's player picker: rostered players whose name contains q (case-insensitive)."""
+    season = season or current_state(cur)[0]
+    cur.execute("""SELECT ps.player_id, COALESCE(p.full_name, p.player_name), t.abbreviation, ps.position,
+                          ps.overall_rating, ps.age, ps.dev_trait
+                   FROM player_seasons ps JOIN players p ON p.id = ps.player_id JOIN teams t ON t.id = ps.team_id
+                   WHERE ps.season = %s AND ps.released_week IS NULL AND ps.position <> 'DEF'
+                     AND (COALESCE(p.full_name, '') ILIKE %s OR p.player_name ILIKE %s)
+                   ORDER BY ps.overall_rating DESC NULLS LAST LIMIT %s""",
+                (season, f"%{q}%", f"%{q}%", limit))
+    return [{"player_id": r[0], "name": r[1], "team": r[2], "pos": r[3], "ovr": r[4], "age": r[5], "dev": r[6]}
+            for r in cur.fetchall()]
+
+
+def trade_finder(cur, player_id, season=None, per_team=3, team=None):
+    """#debug Trade finder (read-only): gm_trade_engine.find_packages for one player against the league's books
+    for the current window, as JSON (asset labels, both GMs' surplus, cap before/after, checks, why the nearest
+    misses fail). team: an abbreviation to look at one buyer only."""
+    from engines import gm_trade_engine as ge
+    from engines import trade_value as tv
+    cur_season, week, window = ge.league_window(cur)
+    season = season or cur_season
+    window = window or "IN_SEASON"
+    b = ge.read_books(cur, season, week, window)
+    v = ge.Valuer(b, tv.fits_from_db(cur, season))
+    buyers = None
+    if team:
+        buyers = {t for t, info in b["teams"].items() if info["abbr"] == team.upper()}
+        if not buyers:
+            raise FrontOfficeError(400, f"unknown team {team!r}")
+    res = ge.find_packages(b, v, int(player_id), buyers, per_team)
+    if "error" in res:
+        raise FrontOfficeError(404, res["error"])
+    pl = res["player"]
+    c = pl.get("contract") or {}
+
+    def deal_json(d):
+        caps = ge.cap_effects(d, b)
+        return {"shape": d.get("shape"), "buyer_gets": [ge.asset_label(b, x) for x in d["assets"] if x["to"] == d["a"]],
+                "seller_gets": [ge.asset_label(b, x) for x in d["assets"] if x["to"] == d["b"]],
+                "buyer_surplus": d["da"], "seller_surplus": d["db"],
+                "cap_after": {ge.abbr(b, t): c2["after"] for t, c2 in caps.items()},
+                "dead_money": {ge.abbr(b, t): c2["dead"] for t, c2 in caps.items()},
+                "failed": d.get("failed", []),
+                "checks": {k: {"ok": x["ok"], "detail": x["detail"]} for k, x in d["legality"].items()},
+                "assets": [_json_asset(x, {t: i["abbr"] for t, i in b["teams"].items()}) for x in d["assets"]]}
+    return {"season": season, "week": week, "window": res["window"], "notes": res["notes"],
+            "player": {"player_id": pl["id"], "name": pl["name"], "team": ge.abbr(b, res["seller"]), "pos": pl["pos"],
+                       "ovr": pl["ovr"], "age": pl["age"], "dev": pl.get("dev"),
+                       "years_left": ge.years_left(pl, b["value_season"]) if c else None,
+                       "cap_hit": ge.cap_hit_now(pl, b["value_season"]) if c else None,
+                       "ladder": ge.ladder(pl, b["value_season"]) if res["window"] == "IN_SEASON" else None,
+                       "seller_record": b.get("records", {}).get(res["seller"]),
+                       "seller_direction": b["ctx"][res["seller"]]["direction"]},
+            "teams": [{"team": ge.abbr(b, t["team_id"]), "direction": b["ctx"][t["team_id"]]["direction"],
+                       "record": b.get("records", {}).get(t["team_id"]), "tried": t["tried"],
+                       "n_viable": t["n_viable"], "viable": [deal_json(dict(d, a=t["team_id"], b=res["seller"]))
+                                                             for d in t["viable"]],
+                       "best_miss": deal_json(t["best_miss"]) if t["best_miss"] else None,
+                       "misses": t["misses"], "notes": t["notes"]} for t in res["teams"]]}
+
+
 # -------------------------------------------------------------- sightings ----
 def pick_from_text(asset_text):
     """'2037 1ST ROUND PICK' -> (2037, 1); None when unreadable."""

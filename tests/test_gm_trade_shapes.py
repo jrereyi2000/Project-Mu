@@ -129,3 +129,26 @@ def test_pacing_reset_is_in_the_counting_queries():
     made = [q for q in cur.sql if "week = %s AND origin = 'ENGINE'" in q]
     assert counts and "counts_for_pacing" in counts[0]
     assert made and "counts_for_pacing" in made[0]
+
+
+def test_trade_finder_builds_and_judges_packages():
+    b = books(direction_b="REBUILD", extra=[p(82, age=29, end=2037)])
+    b["wl"] = {1: (3, 1), 2: (1, 3)}
+    b = ge.finish_books(b)
+    r = ge.find_packages(b, ge.Valuer(b, FITS), 900)
+    assert r["notes"] == [] and r["window"] == "IN_SEASON"
+    t = r["teams"][0]
+    assert t["team_id"] == 1 and t["tried"] > 0
+    for d in t["viable"]:
+        assert not d["failed"] and d["shape"] in ("RENTAL", "SWAP") and ge.legal(d["legality"])
+    if not t["viable"]:
+        assert t["best_miss"] and t["best_miss"]["failed"] and sum(t["misses"].values()) >= 1
+    assert ge.find_packages(b, ge.Valuer(b, FITS), 12345) == {"error": "player 12345 isn't on a roster this season"}
+
+
+def test_trade_finder_explains_a_star_outside_the_deadline_weeks():
+    b = books(direction_b="REBUILD", week=5, extra=[p(92, age=26, end=2038)])
+    r = ge.find_packages(b, ge.Valuer(b, FITS), 900)
+    t = r["teams"][0]
+    assert t["n_viable"] == 0 and t["tried"] > 0 and "shape" in t["best_miss"]["failed"]
+    assert "weeks 7-8" in t["best_miss"]["legality"]["shape"]["detail"]

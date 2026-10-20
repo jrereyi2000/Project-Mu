@@ -334,6 +334,80 @@ function FrontOfficeCard({ token }: { token: string }) {
   );
 }
 
+// Trade finder (team management step 3): every package the GM engine's rules allow for one player, read-only
+type TfPlayer = { player_id: number; name: string; team: string; pos: string; ovr: number | null; age: number | null; dev: string | null };
+type TfDeal = { shape: string | null; buyer_gets: string[]; seller_gets: string[]; buyer_surplus: number; seller_surplus: number; cap_after: Record<string, number | null>; dead_money: Record<string, number>; failed: string[]; checks: Record<string, { ok: boolean; detail: string }> };
+type TfTeam = { team: string; direction: string; record: string | null; tried: number; n_viable: number; viable: TfDeal[]; best_miss: TfDeal | null; misses: Record<string, number>; notes: string[] };
+type TfResult = { season: number; week: number; window: string; notes: string[]; player: TfPlayer & { years_left: number | null; cap_hit: number | null; ladder: [number, number] | null; seller_record: string | null; seller_direction: string }; teams: TfTeam[] };
+
+function TradeFinderCard() {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<TfPlayer[]>([]);
+  const [team, setTeam] = useState("");
+  const [res, setRes] = useState<TfResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [showMisses, setShowMisses] = useState(false);
+  useEffect(() => {
+    if (q.trim().length < 2) { setHits([]); return; }
+    const t = window.setTimeout(() => {
+      call<TfPlayer[]>(`/front-office/players?q=${encodeURIComponent(q.trim())}`).then(setHits).catch(() => setHits([]));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
+  const find = (pid: number) => {
+    setBusy(true); setError(""); setRes(null); setHits([]);
+    call<TfResult>(`/front-office/trade-finder?player_id=${pid}${team ? `&team=${encodeURIComponent(team.toUpperCase())}` : ""}`)
+      .then(setRes).catch(e => setError(String(e.message || e))).finally(() => setBusy(false));
+  };
+  const deal = (d: TfDeal, buyer: string, i: number) => (
+    <div key={i} className="pl-2 border-l-2 border-[var(--gray-300)] mb-1">
+      {d.shape && <b className="mr-2">{d.shape}</b>}
+      <span>{buyer} gets {d.buyer_gets.join(", ")} · {res?.player.team} gets {d.seller_gets.join(", ") || "nothing"}</span>
+      <div className="text-[var(--gray-500)]">surplus {buyer} {money(d.buyer_surplus)}, {res?.player.team} {money(d.seller_surplus)} · cap after {Object.entries(d.cap_after).map(([t, v]) => `${t} ${money(v)}`).join(", ")}</div>
+      {d.failed.length > 0 && <div className="text-[var(--red)]">fails: {d.failed.map(f => d.checks[f] ? `${f} (${d.checks[f].detail})` : f).join("; ")}</div>}
+    </div>
+  );
+  const p = res?.player;
+  return (
+    <section className={card}>
+      <h3 className="font-black uppercase tracking-wide mb-3">Trade finder</h3>
+      <p className="text-xs text-[var(--gray-500)] mb-2">Pick a player: every package the GM engine's rules allow for him from each other team, with both GMs' view and every check. Read-only: nothing is proposed or saved.</p>
+      <div className="grid grid-cols-3 gap-2">
+        <input className={`${input} col-span-2`} placeholder="Player name" value={q} onChange={e => setQ(e.target.value)} />
+        <input className={input} placeholder="Buyer (optional, e.g. CAR)" value={team} onChange={e => setTeam(e.target.value)} />
+      </div>
+      {hits.length > 0 && (
+        <div className="border border-[var(--gray-300)] mt-1 text-xs max-h-48 overflow-auto">
+          {hits.map(h => (
+            <button key={h.player_id} className="block w-full text-left px-2 py-1 hover:bg-[var(--gray-100)]" onClick={() => { setQ(h.name); find(h.player_id); }}>
+              <b>{h.name}</b> · {h.team} {h.pos} {h.ovr} · age {h.age}{h.dev ? ` · ${h.dev}` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+      {busy && <p className="text-xs mt-2">Searching…</p>}
+      {error && <p className="text-xs text-[var(--red)] mt-2">{error}</p>}
+      {res && p && (
+        <div className="grid gap-2 text-xs mt-3">
+          <div><b>{p.name}</b> · {p.team} {p.pos} {p.ovr} · age {p.age}{p.dev ? ` · ${p.dev}` : ""} · {p.years_left ?? "?"} yr left · hit {money(p.cap_hit)} · {p.team} {p.seller_record} {p.seller_direction}{p.ladder ? ` · ladder R${p.ladder[0]}${p.ladder[0] === p.ladder[1] ? "" : `–R${p.ladder[1]}`}` : p.ovr && p.ovr >= 88 && res.window === "IN_SEASON" ? " · blockbuster only (weeks 7–8)" : ""} · {res.window} week {res.week}</div>
+          {res.notes.map((n, i) => <div key={i} className="text-[var(--red)]">{n}</div>)}
+          <label><input type="checkbox" checked={showMisses} onChange={e => setShowMisses(e.target.checked)} /> show teams with no viable package (and why)</label>
+          {res.teams.filter(t => showMisses || t.n_viable > 0).map(t => (
+            <div key={t.team} className="border-b border-[var(--gray-100)] pb-1">
+              <b>{t.team}</b> <span className="text-[var(--gray-500)]">{t.direction} {t.record} · {t.n_viable} of {t.tried} packages work</span>
+              {t.notes.map((n, i) => <span key={i} className="ml-2 text-[var(--gray-500)]">({n})</span>)}
+              {t.viable.map((d, i) => deal(d, t.team, i))}
+              {t.n_viable === 0 && t.best_miss && <div><span className="text-[var(--gray-500)]">closest miss:</span>{deal(t.best_miss, t.team, 0)}<span className="text-[var(--gray-500)]">all misses: {Object.entries(t.misses).map(([k, v]) => `${k} ${v}`).join(", ")}</span></div>}
+            </div>
+          ))}
+          {!showMisses && res.teams.every(t => t.n_viable === 0) && <div className="text-[var(--gray-500)]">No team has a package that passes every check and both GMs. Tick the box to see each team's closest miss.</div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StatusPill({ status }: { status: string }) {
   const color = status === "running" ? "bg-amber-400 text-black" : status === "done" ? "bg-emerald-600 text-white" : status === "stopped" ? "bg-[var(--gray-500)] text-white" : "bg-[var(--red)] text-white";
   return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${color}`}>{status}</span>;
@@ -1076,6 +1150,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
         </section>
         <TransactionsCard />
         <FrontOfficeCard token={token} />
+        <TradeFinderCard />
         <DraftRoomCard token={token} />
       </div>
 

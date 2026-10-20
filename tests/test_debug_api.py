@@ -335,3 +335,28 @@ class DraftRoomApiTest(unittest.TestCase):
             r = self.client.post("/api/debug/draft-room/picks/7", json={"prospect_key": "k"}, headers=self.h)
         self.assertEqual((r.status_code, r.json()["detail"]), (409, "pick 2 is on the clock, not 7"))
         self.assertEqual(self.conn.rolled_back, 1)
+
+
+class TradeFinderTest(unittest.TestCase):
+    """#debug trade finder endpoints (read-only) with connect() and front_office mocked: no database."""
+
+    def setUp(self):
+        app = FastAPI()
+        app.include_router(dbg.router)
+        self.client = TestClient(app)
+        from engines import front_office as fo
+        conn = FrontOfficeTest.Conn()
+        patches = [mock.patch.object(dbg, "connect", lambda: conn),
+                   mock.patch.object(fo, "installed", lambda cur: True),
+                   mock.patch.object(fo, "search_players", lambda cur, q, season=None: [{"player_id": 1, "name": q}]),
+                   mock.patch.object(fo, "trade_finder", lambda cur, pid, per_team=3, team=None:
+                                     {"player": {"player_id": pid}, "team": team, "per_team": per_team})]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_player_search_and_finder_need_no_token(self):
+        self.assertEqual(self.client.get("/api/debug/front-office/players?q=ha").json(), [{"player_id": 1, "name": "ha"}])
+        self.assertEqual(self.client.get("/api/debug/front-office/players?q=h").json(), [])
+        r = self.client.get("/api/debug/front-office/trade-finder?player_id=7&team=CAR&per_team=50").json()
+        self.assertEqual(r, {"player": {"player_id": 7}, "team": "CAR", "per_team": 10})

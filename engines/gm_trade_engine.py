@@ -1575,6 +1575,69 @@ def llm_flags(rat):
     return [f"llm_rejected:{r}"[:120] for r in rat.get("rejected") or []]
 
 
+def find_packages(b, valuer, player_id, buyers=None, per_team=3):
+    """The trade finder (#debug, read-only): every package the engine's rules can build for one player from each
+    other team (in season the RENTAL / SWAP / BLOCKBUSTER shapes, otherwise the open search), each judged like an
+    engine proposal (both GMs' acceptance, every legality check). The engine's search filters (sellers losing or
+    REBUILD, buyers not selling, need groups) don't apply here; they come back as notes. Returns
+    {player, seller, window, notes, teams: [{team_id, viable: [deal...], best_miss, misses {reason: n}, notes}]},
+    teams with viable deals first."""
+    p = b["players"].get(player_id)
+    if p is None:
+        return {"error": f"player {player_id} isn't on a roster this season"}
+    seller = p["team_id"]
+    in_season = b["window"] == "IN_SEASON"
+    notes = []
+    ok, why = tv.tradeable(p, b["injured"], b["acquired"], b["value_season"], in_season)
+    if not ok:
+        notes.append(f"not tradeable: {why}")
+    if player_id in b["booked_players"]:
+        notes.append("already in an open proposal")
+    if in_season and not is_seller(b, seller):
+        notes.append(f"the {team_name(b, seller)} aren't sellers (winning record, not REBUILD): the engine wouldn't "
+                     "shop him in season")
+    if in_season and p["group"] == "QB" and player_id in b["ctx"][seller]["starter_ids"]:
+        notes.append("a starting QB: the engine never targets one in season")
+    out = []
+    for buyer in b["teams"]:
+        if buyer == seller or (buyers and buyer not in buyers):
+            continue
+        x = {"type": "PLAYER", "player_id": player_id, "from": seller, "to": buyer}
+        if in_season:
+            deals = rental_packages(b, buyer, seller, x) + swap_packages(b, valuer, buyer, seller, x)
+            if (p["ovr"] or 0) >= BLOCKBUSTER_OVR:
+                deals += blockbuster_packages(b, buyer, seller, x)
+        else:
+            deals = [dict(d, shape=None) for d in packages(b, valuer, buyer, seller, [x], "FINDER")]
+        viable, misses, best_miss = [], {}, None
+        for d in deals:
+            d = dict(d, a=buyer, b=seller)
+            acc, da, db = accepts(d, valuer, b)
+            checks = check_legality(d, b, valuer)
+            failed = [k for k, c in checks.items() if not c["ok"]]
+            if not acc:
+                failed.append(f"{'buyer' if da < threshold(b['ctx'][buyer], False, b['window']) else 'seller'} "
+                              "declines")
+            item = dict(d, da=da, db=db, joint=min(da, db), legality=checks, failed=failed,
+                        shape=d.get("shape") or (classify_shape(d, b)[0] if in_season else None))
+            if not failed:
+                viable.append(item)
+            else:
+                for f in failed:
+                    misses[f] = misses.get(f, 0) + 1
+                if best_miss is None or item["joint"] > best_miss["joint"]:
+                    best_miss = item
+        viable.sort(key=lambda d: -d["joint"])
+        tnotes = []
+        if in_season and (is_seller(b, buyer) or b["ctx"][buyer]["direction"] == "REBUILD"):
+            tnotes.append("selling this season: the engine wouldn't make them a buyer")
+        out.append({"team_id": buyer, "viable": viable[:per_team], "n_viable": len(viable), "tried": len(deals),
+                    "best_miss": None if viable else best_miss, "misses": misses, "notes": tnotes})
+    out.sort(key=lambda t: (-(t["n_viable"] > 0), -(t["viable"][0]["joint"] if t["viable"] else
+                                                   (t["best_miss"]["joint"] if t["best_miss"] else -1e12))))
+    return {"player": p, "seller": seller, "window": b["window"], "notes": notes, "teams": out}
+
+
 def recheck_open(cur, b, dry_run=False, log=None, valuer=None):
     """The weekly re-check of open (PROPOSED / APPROVED) proposals: any that fails a check now (the deadline aside)
     is EXPIRED with the failed checks as its status_reason; with a valuer, an ENGINE proposal either GM would now
