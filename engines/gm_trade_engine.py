@@ -209,6 +209,12 @@ def read_books(cur, season, week, window="IN_SEASON"):
     b["made_this_week"] = cur.fetchone()[0]
     cur.execute("SELECT deal_hash FROM gm_trade_proposals WHERE season = %s", (season,))
     b["hashes"] = {r[0] for r in cur.fetchall()}
+    cur.execute("SELECT team_id, wins, losses FROM team_seasons WHERE season = %s", (season,))
+    b["records"] = {r[0]: f"{r[1] or 0}-{r[2] or 0}" for r in cur.fetchall()}
+    cur.execute("""SELECT ct.team_id, c.coach_name FROM coach_tenures ct JOIN coaches c ON c.id = ct.coach_id
+                   WHERE ct.start_season <= %s AND (ct.end_season IS NULL OR ct.end_season >= %s)
+                   ORDER BY ct.start_season""", (season, season))
+    b["coaches"] = {r[0]: r[1] for r in cur.fetchall()}
     return finish_books(b)
 
 
@@ -915,8 +921,10 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
 
 
 def rationale_for(b, deal, llm):
-    from engines.gm_rationale import write_rationale
-    return write_rationale(fact_sheet(b, deal), llm)
+    from engines.gm_rationale import league_names, write_rationale
+    if llm is not None and "league_names" not in b:
+        b["league_names"] = league_names(b)
+    return write_rationale(fact_sheet(b, deal), llm, b.get("league_names"))
 
 
 def print_proposal(b, d, rat, caps, flags, log=print):
