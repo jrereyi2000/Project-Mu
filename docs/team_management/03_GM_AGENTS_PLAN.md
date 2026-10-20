@@ -108,7 +108,8 @@ Everything is in **dollars of surplus**, so players and picks compare directly.
 3. **Player value for team T:** `V_T = Σ_{y < horizon} d_T[y] × (W(ovr_y, group) × u_T(group, y) − cap_hit_y)`.
    - `cap_hit_y` comes from `player_contract_years`, including `projected` rows (flagged in the output).
    - After `contract_end_season` the term is 0, because the player re-signs at market.
-   - `u_T` = 1.0 for a starter for T, 1 + 0.5·(need score share) for a slot T needs, and 0.3 for a backup. `position_bias` scales it.
+   - `u_T` = 1.0 for a starter for T, 1 + 0.5·(need score share) for a slot T needs, 0.65 for the group's rotation player (the first past the slots; a team's own Superstar or X-Factor never ranks lower), and 0.3 for a deeper backup. `position_bias` scales it.
+   - **Dev premium (JR, 2026-10-20, after proposal #3 sent the Panthers' Superstar X-Factor 87 DT for an 80 Star):** worth × 1.1 Star, 1.25 Superstar, 1.5 X-Factor for the owning team; other teams and `V_L` see 60% of the premium. The re-check also expires an engine proposal either GM would no longer accept.
    - `d_T` by direction: CONTEND `[1, .55, .35, .25, .2]`, RETOOL `[.8, .75, .6, .5, .4]`, REBUILD `[.35, .8, .9, .9, .85]`.
    - `youth_bias` multiplies by `1 − 0.05·youth_bias·(age − 28)`, clamped to 0.7–1.3.
    - A neutral **league value** `V_L` (RETOOL discounts, `u = 1`) is stored for fairness checks and for step 5.

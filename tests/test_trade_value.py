@@ -125,3 +125,27 @@ def test_rookie_year_block():
     assert tradeable(rookie, rookie_year=True) == (False, "rookie season")
     assert tradeable(rookie) == (True, None)
     assert tradeable(dict(player(), yoe=1), rookie_year=True) == (True, None)
+
+
+def test_dev_premium_own_team_above_outside_view():
+    from engines.trade_value import DEV_PREMIUM, DEV_VISIBILITY, dev_premium
+    xf = dict(player(team=1), dev="Superstar X-Factor")
+    assert dev_premium(xf, own=True) == DEV_PREMIUM["Superstar X-Factor"]
+    assert dev_premium(xf, own=False) == 1 + DEV_VISIBILITY * (DEV_PREMIUM["Superstar X-Factor"] - 1)
+    assert dev_premium(dict(xf, dev="Hidden"), own=True) == dev_premium(dict(xf, dev=None), own=False) == 1.0
+    own_ctx = dict(ctx("RETOOL", team=1), starter_ids={1})
+    normal = dict(xf, dev="Normal")
+    gap_own = player_value(xf, own_ctx, FITS, 2036)["value"] - player_value(normal, own_ctx, FITS, 2036)["value"]
+    gap_out = player_value(xf, ctx("RETOOL"), FITS, 2036)["value"] - player_value(normal, ctx("RETOOL"), FITS, 2036)["value"]
+    assert gap_own > gap_out > 0                     # his own team values the X-Factor premium most
+
+
+def test_rotation_tier_between_starter_and_backup():
+    from engines.trade_value import BACKUP_U, ROTATION_U, utility
+    p = player(pid=5, team=1, ovr=85)
+    base = {"team_id": 1, "starter_ids": set(), "rotation_ids": set(), "needs": [], "position_bias": {}}
+    assert utility(p, base) == BACKUP_U
+    assert utility(p, dict(base, rotation_ids={5})) == ROTATION_U
+    assert utility(dict(p, dev="Superstar X-Factor"), base) == ROTATION_U   # an own X-Factor is never a deep backup
+    out = {"team_id": 2, "lines": {"WR": 90}, "rotation_lines": {"WR": 80}, "needs": [], "position_bias": {}}
+    assert utility(p, out) == ROTATION_U and utility(dict(p, ovr=75), out) == BACKUP_U
