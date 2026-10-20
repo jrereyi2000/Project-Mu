@@ -469,6 +469,40 @@ def step_preseason_engines(season):
         log(f"  [WARN] Napper week 1 lineups skipped: {e!r}")
     # GM agents (team management step 3): the season rollover. Optional, never stops the run.
     step_gm_rollover(season)
+    # Scouting (team management step 4): fo_quality from the drafts with real rookie ratings, the new class's rows.
+    step_scouting_season(season)
+
+
+def step_scouting_season(season):
+    """Season scan, after the GM rollover (team management step 4): engines/fo_quality.recompute for the new season
+    (this year's rookies scored at year 0, earlier classes a year on; JR's teams keep their q), then
+    scouting_engine init for the incoming class (season + 1) at the league's current step. Each part is optional:
+    skipped without its migration, a failure only logs a warning."""
+    out = {}
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from engines import fo_quality, scouting_engine as se
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT to_regclass('gm_team_seasons') IS NOT NULL")
+            if cur.fetchone()[0]:
+                res = fo_quality.recompute(cur, season, log=lambda *a: None)
+                out["fo_quality"] = {r["abbr"]: r["q"] for r in res.values() if not r["held"]}
+                log(f"  fo_quality {season}: {len(out['fo_quality'])} teams rescored from their draft records")
+            if se.installed(cur):
+                cur.execute("SELECT count(*) FROM draft_prospects WHERE draft_season = %s", (season + 1,))
+                if cur.fetchone()[0]:
+                    out["scouting_init"] = se.init(cur, season + 1, log=log)
+                else:
+                    log(f"  Scouting init skipped: no {season + 1} draft board loaded")
+            conn.commit()
+    except SystemExit as e:
+        log(f"  [WARN] Season scouting step skipped: {e}")
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] Season scouting step skipped: {e!r}")
+    return out
 
 
 def step_gm_rollover(season):
