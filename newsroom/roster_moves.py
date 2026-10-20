@@ -16,13 +16,15 @@ _STARTER_ONE = ("QB", "TE", "LT", "LG", "C", "RG", "RT", "FS", "SS", "K", "P", "
 _STARTER_TWO = ("HB", "DT", "LEDG", "REDG", "LE", "RE")
 _STARTER_THREE = ("WR", "CB", "MIKE", "SAM", "WILL", "MLB", "LOLB", "ROLB")
 
-# Notability thresholds (§2.3; JR accepted them as the starting point, 2026-10-20)
+# Notability (JR, 2026-10-20): only moves of players rated NOTABLE_OVR+ are notable, in line with the 90+ marquee
+# signings. An in-season free-agent pickup is never rated that high, so it never leads the briefs or the Agent Wire.
+# The context flags below only describe and rank a notable move; they never make one notable.
+NOTABLE_OVR = 85
 NOTABLE_POPULARITY = 50
 NOTABLE_RE_SIGN_TOTAL = 20_000_000
 NOTABLE_SIGNING_TOTAL = 5_000_000
 NOTABLE_RESTRUCTURE_FREED = 5_000_000
 NOTABLE_DEAD_MONEY = 5_000_000
-NOTABLE_OVR = 88
 
 OFFSEASON_WEEK = 24          # the offseason package's week (offseason rows have week NULL)
 NO_CUTOFF_WEEK = 99          # on_roster with no article context: every release counts
@@ -206,8 +208,9 @@ def free_agent_label(team_name, released_week) -> str:
 # ----------------------------------------------------------------------------------------------------------------
 
 def notability(row) -> tuple:
-    """(notable, reasons, rank_score) for a move row. Row keys used: type, contract_value, is_starter, popularity,
-    dead_money (stored cut_penalty of a released contract), ovr. OVR only ranks; it's never a printed reason."""
+    """(notable, reasons, rank_score) for a move row. Notable iff the player is rated NOTABLE_OVR+ (the rating is
+    never printed). reasons (starter, popular, big deal...) describe the move and rank it. Row keys used: type,
+    contract_value, is_starter, popularity, dead_money (stored cut_penalty of a released contract), ovr."""
     t = row.get("type")
     value = row.get("contract_value") or 0
     reasons = []
@@ -225,8 +228,7 @@ def notability(row) -> tuple:
         reasons.append("big dead money")
     if t == "TRADED":
         reasons.append("trade")
-    elite = (row.get("ovr") or 0) >= NOTABLE_OVR
-    notable = bool(reasons) or elite
+    notable = (row.get("ovr") or 0) >= NOTABLE_OVR
     score = (10 if notable else 0) + len(reasons) * 3 + (row.get("popularity") or 0) / 20 + (row.get("ovr") or 0) / 25 \
         + max(value, row.get("dead_money") or 0) / 10_000_000
     return notable, reasons, round(score, 3)

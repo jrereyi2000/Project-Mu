@@ -385,12 +385,12 @@ def _():
             rows = rm.annotate(db_tools.fetch_moves(cur, SEASON))
     reasons = {}
     for m in rows:
-        for x in m["notable_reasons"] or (["elite (OVR only)"] if m["notable"] else []):
-            reasons[x] = reasons.get(x, 0) + 1
+        if m["notable"]:
+            reasons[m["type"]] = reasons.get(m["type"], 0) + 1
     save("70_contract_tools.json", out)
     notable = sum(m["notable"] for m in rows)
-    return (f"{len(rows)} visible moves for a Week {PUB_WEEK} article; notable {notable} (aim 15-35, JR tunes "
-            f"roster_moves thresholds); by reason {reasons}")
+    return (f"{len(rows)} visible moves for a Week {PUB_WEEK} article; notable {notable} (players rated "
+            f"roster_moves.NOTABLE_OVR+); notable by type {reasons}")
 
 
 @check("roster moves: week cutoff hides later rows")

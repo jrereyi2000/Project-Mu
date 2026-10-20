@@ -2,7 +2,7 @@
 
 Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) step 5. This plan reads step 1's contract tables (§2.1) and step 2's `transactions` (§2.2) as they are. It **adds no tables and changes no schema**. Steps 3 (§2.4 `gm_trade_proposals`) and 4 (§2.5 risers and fallers) are used only in the phases marked as depending on them (Phases 8 and 9). Every other phase can ship now.
 
-**Status (2026-10-20):** Phases 1–7 are built and on main (see PROJECT_SPEC §7). Phase 6 is 6a only (JR dropped 6b). Projected yearly hits are shown labelled `est.` (§6 Q2). On the 2036 Weeks 1–4 data, 128 of 181 moves are notable (124 as starters), well above §2.3's 15–35 aim: the thresholds are constants in `newsroom/roster_moves.py` for JR to tune. Seams for Phase 8: `roster_moves.notability` already marks `TRADED` rows notable and `move_line` formats them; `txn_visible` treats a NULL `capture_id` as loaded in time; `get_league_transactions`'s note says trades appear once completed; the R6/R7 trade-package lift and `get_trade_rumors` are not built.
+**Status (2026-10-20):** Phases 1–7 are built and on main (see PROJECT_SPEC §7). Phase 6 is 6a only (JR dropped 6b). Projected yearly hits are shown labelled `est.` (§6 Q2). Notability was retuned by JR (2026-10-20): only players rated 85+ are notable; §2.3's other conditions now only describe and rank a move. On the 2036 Weeks 1–4 data that gives 17 of 181. Seams for Phase 8: `roster_moves.notability` tags `TRADED` rows with a "trade" reason (an 85+ player's trade is notable; whether every trade should be is a Phase 8 call) and `move_line` formats them; `txn_visible` treats a NULL `capture_id` as loaded in time; `get_league_transactions`'s note says trades appear once completed; the R6/R7 trade-package lift and `get_trade_rumors` are not built.
 
 **Delivers:**
 - Three writer tools in `newsroom/db_tools.py`: `get_team_cap_sheet`, `get_player_contract` and `get_league_transactions`. They respect the article's week cutoff, and they label every number as scanned, from a signing row, or derived. Projected numbers are kept away from writers.
@@ -80,7 +80,7 @@ The contract and cap tables have no per-week history. Like rosters, they show th
 
 ### 2.3 Notability (pure, `roster_moves.notability`)
 
-A move is **notable** when any of these holds:
+**JR's decision (2026-10-20): a move is notable only when the player is rated 85+.** The conditions below only describe and rank a move (OVR still never printed). The original proposal, kept for reference: a move is **notable** when any of these holds:
 - the player is a starter for his team (the shared `is_starter_rank` from S10);
 - his `popularity_index` is 50 or more;
 - a re-signing or extension totals $20M or more;
