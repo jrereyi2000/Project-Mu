@@ -97,6 +97,40 @@ SAMPLE_VALID_MANIFEST = {
 }
 
 
+class TestSigningCandidates(unittest.TestCase):
+    """Offseason signing candidates from League Transactions (team management step 5, phase 7). No database."""
+
+    ROWS = [
+        {"transaction_id": 1, "player_name": "Star Corner", "position": "CB", "new_team": "DET", "former_team": "DEN",
+         "contract_years": 4, "contract_value": 96_400_000, "ovr": 96},
+        {"transaction_id": 2, "player_name": "Good Tackle", "position": "DT", "new_team": "CHI", "former_team": None,
+         "contract_years": 3, "contract_value": 54_600_000, "ovr": 91},
+        {"transaction_id": 3, "player_name": "Depth Guy", "position": "WR", "new_team": "NYJ", "former_team": "BUF",
+         "contract_years": 1, "contract_value": 1_100_000, "ovr": 74},
+        {"transaction_id": 4, "player_name": "No Rating", "position": "TE", "new_team": "NYJ", "former_team": None,
+         "contract_years": 1, "contract_value": 900_000, "ovr": None},
+    ]
+
+    def test_candidates_are_90_plus_with_terms(self):
+        from newsroom.offseason_service import signing_candidates
+        out = signing_candidates(self.ROWS)
+        self.assertEqual([c["player_name"] for c in out], ["Star Corner", "Good Tackle"])
+        self.assertEqual(out[0]["terms"], "4 years, $96.4M total (from the signing)")
+        self.assertEqual(out[0]["qualitative_tier"], "Tier 1 superstar / elite franchise cornerstone")
+        self.assertEqual(out[1]["former_team"], "unknown (fill in)")
+        self.assertEqual(signing_candidates([]), [])
+
+    def test_packet_terms_never_inferred(self):
+        from newsroom.offseason_service import match_signing_terms, signing_terms
+        self.assertEqual(match_signing_terms({"player_name": "good tackle"}, self.ROWS),
+                         "3 years, $54.6M total (from the signing)")
+        self.assertEqual(match_signing_terms({"player_name": "Nobody"}, self.ROWS),
+                         "not recorded: state no contract terms")
+        self.assertEqual(signing_terms({"contract_years": None, "contract_value": None}),
+                         "not recorded: state no contract terms")
+        self.assertEqual(signing_terms({"contract_years": 1, "contract_value": None}), "1 year (from the signing)")
+
+
 class TestManifestValidation(unittest.TestCase):
     """Tests manifest parsing and schema enforcement."""
 
