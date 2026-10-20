@@ -81,6 +81,8 @@ from newsroom.db_tools import (
     get_league_transactions,
     get_trade_rumors,
     check_trade_package,
+    get_draft_risers_fallers,
+    get_team_draft_record,
     fetch_cap_rows,
     fetch_moves,
     fetch_rumors,
@@ -840,6 +842,8 @@ class SwarmDispatcher:
             get_league_transactions,
             get_trade_rumors,
             check_trade_package,
+            get_draft_risers_fallers,
+            get_team_draft_record,
         ]
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)

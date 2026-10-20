@@ -325,6 +325,7 @@ Phases 1–2 need no approval. Phases 3–7 come after JR rules on §2.6, and Ph
 - Tests: `tests/test_newsroom_trades.py` (pure and fake cursors). The exit check against a restored DB copy with a fake executed trade is JR's to run.
 
 ### Phase 9: Draft risers and fallers (**depends on step 4**)
+**Status (2026-10-20, built by step 4):** the data side and seam are on main. `engines/scouting_read.py` provides `risers_fallers` and `consensus_board` (with cutoff visibility), `engines/fo_quality.team_draft_record` provides the labels and streaks, and two registered writer tools exist: `get_draft_risers_fallers(season, limit)` and `get_team_draft_record(team, season)`. Both use pure formatters and are tested in `tests/test_mock_draft_tools.py`. Not done: the `@MockDraftMarty` `DRAFT` posts and the `OFFSEASON_MOCK_DRAFT` / `DRAFT_BLUEPRINT_ROSTER_AUDIT` / FSOTU directive lines, which need JR's approved text.
 **Interface request to step 4:** a weekly consensus board (season, week, prospect, grade, rank) and the per-team hit-rate inputs (`q_team`).
 
 **Files**

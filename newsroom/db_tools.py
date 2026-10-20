@@ -3000,6 +3000,79 @@ def get_trade_rumors(team_identifier: str = "", season: int = 0) -> str:
     }, indent=2)
 
 
+# ------------------------------------------------- draft scouting (team management step 4 / step 5 Phase 9) ----
+_STREAK_WORDS = {2: "two", 3: "three", 4: "four", 5: "five"}
+
+
+def draft_mover_line(r: dict) -> dict:
+    """One riser or faller for writers: public consensus fields and the stored events behind the move (pure)."""
+    return {"name": (r.get("full_name") or "").title(), "pos": r.get("position"), "college": r.get("college"),
+            "class_year": r.get("class_year"), "consensus_rank": r.get("rank"), "grade": r.get("grade"),
+            "round_label": r.get("round_label"), "rank_change": r.get("delta_rank"),
+            "grade_change": r.get("delta_grade"),
+            "why": [e["blurb"] or e["headline"] for e in r.get("events") or []][:3]}
+
+
+def draft_record_facts(rec: dict) -> dict:
+    """A team's draft track record for writers: each scored pick's label and the streak sentences (pure). Never a
+    quality score."""
+    picks = [{"draft": p["draft_season"], "round": p["round"], "pick": p["pick"], "player": p["name"],
+              "pos": p["position"], "verdict": p["label"], "seasons_since_draft": p["years"]} for p in rec["picks"]]
+    lines = []
+    for key, what in (("first_round_misses", "first-round misses"), ("first_round_hits", "first-round hits")):
+        n = (rec.get("streaks") or {}).get(key) or 0
+        if n >= 2:
+            lines.append(f"{_STREAK_WORDS.get(n, n)} straight {what}")
+        elif n == 1:
+            lines.append(f"last year's first-round pick: {'a miss' if 'misses' in key else 'a hit'}")
+    return {"picks": picks, "streaks": lines}
+
+
+@tool
+def get_draft_risers_fallers(season: int = 0, limit: int = 10) -> str:
+    """Fetch this week's draft-board risers and fallers for the incoming class (season + 1): each prospect's
+    consensus rank and grade (0-100), round label, how far he moved since the last board, and the college
+    storylines behind the move (games, injuries that never cost him time, all-star games, the combine, pro days,
+    visits). The college storylines are Mu's own scouting record: cite them as written, never invent stats beyond
+    them. Respects the article's week. No Madden ratings."""
+    try:
+        from engines.scouting_read import risers_fallers
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                rf = risers_fallers(cur, s_val, limit=max(1, min(int(limit or 10), 25)))
+    except Exception as e:
+        return f"Error: {str(e)}"
+    if not rf:
+        return f"No scouting board for the {resolve_season(season) + 1} draft class is visible yet."
+    return json.dumps({"draft_class": rf["draft_season"], "board_week": rf["week"], "offseason_stage": rf["stage"],
+                       "risers": [draft_mover_line(r) for r in rf["risers"]],
+                       "fallers": [draft_mover_line(r) for r in rf["fallers"]]}, indent=2)
+
+
+@tool
+def get_team_draft_record(team_identifier: str, season: int = 0) -> str:
+    """Fetch a team's recent draft track record: its Round 1-2 picks of the last three drafts, each judged HIT, OK,
+    MISS or BUST against what that draft slot usually produces (a rookie's hidden dev trait isn't judged until it's
+    revealed), and streaks such as "three straight first-round misses". Use the verdicts as written."""
+    try:
+        from engines.fo_quality import team_draft_record
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Team '{team_identifier}' not found."
+                cur.execute("SELECT to_regclass('gm_team_seasons') IS NOT NULL")
+                rec = team_draft_record(cur, team_id, s_val) if cur.fetchone()[0] else None
+    except Exception as e:
+        return f"Error: {str(e)}"
+    if not rec:
+        return f"No draft track record scored for '{team_identifier}' yet."
+    return json.dumps(dict(team=str(team_identifier).upper(), as_of_season=rec["season"], **draft_record_facts(rec)),
+                      indent=2)
+
+
 _PICK_TEXT = re.compile(r"^\s*(20\d\d)\s+(?:r(?:ound)?\s*([1-7])|([1-7])(?:st|nd|rd|th)(?:\s*-?\s*round)?)\b(?:\s*pick)?\s*\(?([^)]*)\)?\s*$",
                         re.I)
 
