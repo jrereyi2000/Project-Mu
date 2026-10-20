@@ -337,10 +337,10 @@ This answers step 5's interface request (Phase 9: a weekly consensus board with 
 ## 6. Open questions for JR
 Closed by JR's console answers (§1.1): **Q2** (credit the drafting team) and **Q7** (no re-scan).
 
-Still open, with the main session's recommendations:
-1. **Madden's board:** `V` stays ratings-based (κ = 0). Madden's PICK order seeds the **week-4 consensus**, so prospects Madden projects late start low and rarely reach Round 1 unless the noise lifts them. This fits K1.
-3. **Team boards:** consensus by default, with any team's board selectable on `#debug` (all 32 viewable).
-4. **CAR/IND picks:** don't count JR's own picks. While JR controls a team, its `fo_quality` holds at its last value.
+**Answered (JR, 2026-10-20), all as recommended:**
+1. **Madden's board:** `V` stays ratings-based (κ = 0). Madden's PICK order seeds the week-4 consensus.
+3. **Team boards:** consensus by default, with any team's board selectable on `#debug`.
+4. **CAR/IND picks:** JR's own picks don't count. `fo_quality` holds at its last value while JR controls a team.
 5. **Gemini:** yes, with the template fallback.
-6. **Writers and raw OVR:** show writers consensus grades only, never Madden's OVR.
-8. **Draft-day trades (new, from K5):** should GM agents propose pick swaps during Round 1 (e.g. at most 2–3, JR approves each), or none?
+6. **Writers and raw OVR:** writers see consensus grades only, never Madden's OVR.
+8. **Draft-day trades:** GM agents may propose **pick swaps** during Round 1. JR approves each one through step 3's proposal flow, and makes it in Madden with CPU trades on, since every Round 1 owner is user-controlled. At most 2–3 a draft.
