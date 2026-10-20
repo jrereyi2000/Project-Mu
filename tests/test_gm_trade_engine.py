@@ -289,3 +289,18 @@ def test_proposal_1_shape_is_expired_by_the_recheck():
     assert out[0][1].startswith("no longer legal: division same division (AFC East): Player 9001 (96 OVR) is elite")
     assert cur.sql and cur.sql[0][1][:2] == ("EXPIRED", out[0][1])
     assert ge.recheck_open(Cur(), b, dry_run=True) == out                    # a dry run reports the same, writes nothing
+
+
+def test_rookie_is_not_traded_in_his_rookie_season():
+    """JR, 2026-10-20 (proposal #2 offered his rookie Amari Anderson): no in-season trade of a rookie."""
+    b = star_books()
+    b["players"][STAR]["yoe"] = 0
+    chk = ge.check_legality(base_deal(), b)
+    assert not chk["tradeable"]["ok"] and "rookie season" in chk["tradeable"]["detail"]
+    assert not ge.free_player(b, STAR)
+    off = star_books()
+    off["players"][STAR]["yoe"] = 0
+    off["window"] = "OFFSEASON"                                             # his rookie year is over
+    assert ge.free_player(off, STAR)
+    b["players"][STAR]["yoe"] = 1                                           # a second-year player can move
+    assert ge.check_legality(base_deal(), b)["tradeable"]["ok"]

@@ -118,3 +118,10 @@ def test_league_value_is_neutral():
     p = player(ovr=85)
     assert league_value(p, FITS, 2036) == player_value(p, None, FITS, 2036)["value"]
     assert fit_market([])["b"] > 0
+
+
+def test_rookie_year_block():
+    rookie = dict(player(), yoe=0)
+    assert tradeable(rookie, rookie_year=True) == (False, "rookie season")
+    assert tradeable(rookie) == (True, None)
+    assert tradeable(dict(player(), yoe=1), rookie_year=True) == (True, None)

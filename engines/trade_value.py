@@ -200,10 +200,11 @@ def neutral_pick_value(pick, curve, market, offset=0):
 
 
 # ----------------------------------------------------------------- values ----
-def tradeable(p, injured=(), acquired=(), season=None):
+def tradeable(p, injured=(), acquired=(), season=None, rookie_year=False):
     """(ok, reason). Out: no group (the DEF row), no active contract, a contract that ends before `season` (an
     offseason trade: he's a free agent), a no-trade clause (C6), injured (C7: any injured player), acquired by
-    trade this season (no flipping)."""
+    trade this season (no flipping), and with rookie_year (an in-season trade) a player in his rookie season
+    (years_of_experience 0; JR, 2026-10-20: teams essentially never trade a player in his rookie year)."""
     if not p.get("group"):
         return False, "no position group"
     c = p.get("contract")
@@ -217,6 +218,8 @@ def tradeable(p, injured=(), acquired=(), season=None):
         return False, "injured"
     if p["id"] in acquired:
         return False, "acquired by trade this season"
+    if rookie_year and p.get("yoe") == 0:
+        return False, "rookie season"
     return True, None
 
 
