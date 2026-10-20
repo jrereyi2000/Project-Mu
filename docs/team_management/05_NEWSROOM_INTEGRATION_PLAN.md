@@ -153,6 +153,20 @@ The research blocks (`swarm_dispatcher.py` national `:990–1022`, beat `:1025�
 | R13 | PROJECT_SPEC §7 "Invented detail vs. data" | "…contract details … are never used" | Rewrite to §2.5 (spec edit, made in Phase 3). |
 | R14 | `tests/test_writer_config.py:204` `test_no_contract_asks` | Fails on any cap ask | → `test_contract_asks_name_the_cap_tools`: a type may ask for cap or contract content only if its `data_queried` / `curatorial_autonomy` names `get_team_cap_sheet` or `get_player_contract`. Personas still may not ask. |
 
+**JR's decisions (2026-10-20):**
+- **R1: approved, with a relevance rule.** Moves and cap figures appear **only when they matter to the article's subject**. Most articles should carry no cap numbers. The new Matrix section and every lifted directive say so, and the tools' docstrings tell writers to call them only when a move or contract bears on the story.
+- **R2, R3: narrowed** as proposed.
+- **R4: stays.**
+- **R5: approved** as proposed. Terms are cited from the tools.
+- **R6: salary lifted.** Trade packages are allowed too, by JR's question "shouldn't it be able to do real trade packages?". The R6/R7 trade-package rule is:
+  - **Real trades are always reportable.** Executed trades come from the transactions and `gm_trade_proposals` (Phase 8).
+  - **Hypothetical packages are allowed** when framed as the writer's idea ("a deal they could chase"), never as reported talks.
+  - Each package uses only real players and picks with real contract numbers from the tools, and has to pass step 3's legality check (cap, no-trade clause, roster limits, deadline). A helper tool for that check ships in Phase 8.
+  - Only `rumor_ok` proposals may be described as actual talks.
+  - Until step 3 lands, the packages part stays off: the lift ships in Phase 8, and salary/cap lifts ship in Phase 3.
+- **R7: cap numbers lifted.** Trade packages follow the same rule as R6 (Phase 8).
+- **Still open:** R8, R12, R14 (R13 follows R12), and §6 questions 2–7.
+
 ### 2.7 Coverage: transactions feed existing slots; no new regular-season slot
 
 - **National brief** (`build_weekly_assignment_brief`): `league_transactions` = {`through_week`, `notable_moves` (≤ 12 lines from `new_this_week`, notable first), `counts`, `cap_watch` (teams over the cap or under $2M), `note`}. It's omitted in a week with no visible new moves.
@@ -331,7 +345,7 @@ Phases 3–5 also edit `docs/EDITORIAL_MATRIX.md` / `docs/SOCIAL_MATRIX.md`, and
 - Gemini calls in tests or checks.
 
 ## 6. Open questions for JR
-1. **§2.6:** approve, change or reject R1–R3, R5–R8, R12 and R14. R4, R9, R10 and R11 stay as they are unless you say otherwise.
+1. **§2.6:** R1–R7 decided (see JR's decisions under §2.6). Still open: R8, R12 and R14. R9, R10 and R11 stay as they are unless JR says otherwise.
 2. **Projected numbers:** keep extension and restructure year-by-year projections away from writers (proposed), or show them as "est."?
 3. **Notability thresholds (§2.3):** fine as a start? Phase 1 prints the live count.
 4. **Beat coverage:** moves only feed existing beat articles (proposed), or add a `LOCAL_TRANSACTION_REPORT` to a team's portfolio in weeks with a notable move?
