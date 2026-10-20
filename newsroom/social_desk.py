@@ -165,6 +165,9 @@ CAP_TAKE_DEAD_MONEY = 10_000_000   # a release leaving this much dead money (or 
 # (TRADE_RUMOR, through the trade deadline only); a die-hard of each team reacts to each trade (TRADE_REACTION); a team
 # in a trade gets BEAT_MOVE. Trades come before rumors and moves for the insiders' pundit cap.
 TRADE_NEWS_MAX = 3
+# Draft board (step 5 Phase 9, JR 2026-10-20): @MockDraftMarty posts the week's biggest consensus-board mover, one a
+# week in the regular season and two (top riser and top faller) from the postseason on.
+DRAFT_BOARD_POSTS = {"regular": 1, "late": 2}
 TRADE_RUMOR_MAX = 2
 
 # Hot-take voices preferred for calling out bad games.
@@ -217,6 +220,7 @@ WINDOWS = {
     "TRADE_NEWS": "Mon – Wed",
     "TRADE_REACTION": "Mon – Wed",
     "TRADE_RUMOR": "Mon – Wed",
+    "DRAFT_BOARD": "Tue – Thu",
 }
 
 
@@ -397,6 +401,7 @@ def load_week_context(cur, season: int, week: int) -> dict:
     ctx["injuries_by_team"] = injs_by_team
     ctx["moves"], ctx["team_caps"] = load_moves(cur, season, week)
     ctx["trades"], ctx["rumors"] = load_trades(cur, season, week)
+    ctx["draft_movers"] = load_draft_movers(cur, season, week)
     # Each recap game's canonical story (engines/game_script_engine.py, §2.14), read or built here
     from engines.game_script_engine import ensure_script
     ctx["game_scripts"] = {}
@@ -440,6 +445,33 @@ def load_moves(cur, season: int, week: int) -> tuple:
     team_caps = {c["team_id"]: {"line": rm.cap_line(c["team"], c, c["basis"]), "cap_space": c["cap_space"],
                                 "dead_money": c["cap_penalty"], "basis": c["basis"]} for c in caps}
     return moves, team_caps
+
+
+def load_draft_movers(cur, season: int, week: int) -> dict:
+    """The consensus board's top risers and fallers visible to publication week `week` (engines/scouting_read,
+    public fields only, never Madden ratings) as writer lines: {"draft_class", "risers", "fallers"}. Missing step 4
+    tables or no visible board -> {}."""
+    from engines.scouting_read import risers_fallers
+    from newsroom.db_tools import draft_mover_line
+    cur.execute("SAVEPOINT agent_wire_draft")
+    try:
+        rf = risers_fallers(cur, season, week=week, limit=2)
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT agent_wire_draft")
+        return {}
+    if not rf:
+        return {}
+    return {"draft_class": rf["draft_season"], "risers": [draft_mover_line(r) for r in rf["risers"]],
+            "fallers": [draft_mover_line(r) for r in rf["fallers"]]}
+
+
+def draft_board_subjects(movers: dict, n: int) -> list:
+    """The n draft-board posts' subjects (pure): one post takes the bigger of the top riser and top faller; two take
+    both. Each is {"direction", "mover"}."""
+    top = [("riser", r) for r in (movers.get("risers") or [])[:1]] + \
+          [("faller", r) for r in (movers.get("fallers") or [])[:1]]
+    top.sort(key=lambda dm: -abs(dm[1].get("rank_change") or 0))
+    return [{"direction": d, "mover": m} for d, m in top[:n]]
 
 
 def load_trades(cur, season: int, week: int) -> tuple:
@@ -1920,6 +1952,17 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             _, loser = W.winner_loser(g)
             plan["MEME"].append(_assignment("MEME", acc.archetype("NFL_MEMES"), {"type": "game", "id": g["id"], "label": W.game_label(g)},
                                             {**W.game_facts(g), "target": W.team_label(loser) if loser else None}))
+
+    # The consensus board's biggest movers (step 5 Phase 9): extra posts from @MockDraftMarty, outside the meme count.
+    movers = ctx.get("draft_movers") or {}
+    for subj in draft_board_subjects(movers, DRAFT_BOARD_POSTS["late" if postseason else "regular"]):
+        account = acc.archetype("DRAFT_SICKO")
+        if not account:
+            break
+        m = subj["mover"]
+        plan["MEME"].append(_assignment("DRAFT_BOARD", account, {"type": "prospect", "id": None,
+                                                                 "label": f"Draft board {subj['direction']}: {m['name']}"},
+                                        {"draft_class": movers["draft_class"], "direction": subj["direction"], **m}))
 
     # 7. Reactions: one die-hard post for each team that played. Nobody else reacts to games; league-wide voices
     # post about players (performances, bad games, comparisons).

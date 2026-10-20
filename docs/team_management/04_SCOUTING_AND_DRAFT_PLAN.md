@@ -10,7 +10,7 @@ Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) s
 - **Calibration frozen 2026-10-20** (1000 drafts): `SIGMA_BASE` 5.5, `RHO` 0.5, `SIGMA_RES` 2.0, `PHI` 3.0. Poor picks: 24.3% under `live`, 25.2% under `spread` (q ≤ 0.85: 13.0%; ≥ 1.15: 34.5%).
 - **Bootstrap:** 2036 q runs 0.93–1.09 (dry run on live). CAR and IND hold at 1.00.
 - **Draft-day premiums:** `1 + 0.05 × (the buyer's best grade − the consensus's best)`, within 1.0–1.6. At most 3 proposals a draft.
-- **Writers:** `get_scouted_draft_board` and `get_mock_draft` dropped OVR (Q6). The step 5 Phase 9 data seam is built: `get_draft_risers_fallers` and `get_team_draft_record`. The Phase 9 posts and directive lines still wait for JR's text.
+- **Writers:** `get_scouted_draft_board` and `get_mock_draft` dropped OVR (Q6). The step 5 Phase 9 data seam is built: `get_draft_risers_fallers` and `get_team_draft_record`. The Phase 9 posts and directive lines were built on 2026-10-20 with JR's approved text.
 
 **Build state (live DB, read-only SELECTs, 2026-10-20):** `league_state` = (2036, 4). `draft_prospects` holds the **2037 class: 388 rows** (32 a round in Rounds 1–7 except 31 in Round 4, 165 UDFA). 387 have an OVR (one blank, `BEN MULLIGAN`, MIKE, pick 149). Age, college and height/weight are all filled. `archetype` and `notes` are empty on every row. In the top 64, OVR runs 61–80 (mean 69.5, sd 4.2) and age 21–24. The 2036 class (389 rows, 224 with `actual_pick`, 194 linked to players) is the only draft history. `draft_picks` has 224 rows each for 2037–2039, with `overall_pick` NULL. The main session is applying `2026_12_11_draft_pick_owners.sql` (JR's 24 CPU-era pick trades) right now.
 

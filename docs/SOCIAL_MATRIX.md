@@ -78,6 +78,7 @@ A new **Social Desk** (`newsroom/social_desk.py`) runs inside `weekly_run` **aft
 | 6 | Replies (`REPLY`) | Minutes to hours after the parent post | 20 | The most engaged posts from waves 1–5, 2–3 replies each | Accounts with a reason to answer: rival-team fans, the subject team's beat reporter, a contrarian pundit (e.g. Shannon → Skip), a same-team fan piling on |
 | 7 | Previews (`PREVIEW`) | Thu – Sat | 8 | The top 3 projected games (`rank_games_by_interest`); fantasy start/sit (W2–17) | Pundits, both fan bases, The Flex Spot / Berry / Yates |
 | 8 | Memes and draft (`MEME`) | Any time | 2 | Losing teams; teams sliding toward the top of the draft order | @GridironMemes, @MockDraftMarty |
+| 8b | Draft board (`DRAFT_BOARD`) | Every week once a board exists; the offseason too | 1 (2 in the offseason) | The week's biggest riser or faller on the consensus board | @MockDraftMarty |
 
 **Total: 100.** The number of article shares varies from week to week, so the planner trims or tops up the extra reaction posts (wave 1) to land on 100. Replies are planned **after** waves 1–5 are written and their engagement is computed, so replies gather on the posts that look biggest.
 
