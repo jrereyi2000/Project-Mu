@@ -139,3 +139,21 @@ def test_only_a_database_mock_can_be_saved():
     engine = MockDraftEngine(season=2035, prospects_path="unused.csv")
     with pytest.raises(ValueError, match="draft_prospects"):
         engine.save(None, 20, [{"pick": 1, "prospect": {"prospect_id": None}}])
+
+
+def test_consensus_grade_drives_bpa():
+    """Step 4: the media mock's value term is the public consensus grade, not OVR."""
+    from engines.mock_draft_engine import MockDraftEngine
+    from pipeline.ingest_prospects import Prospect
+    hi_ovr = Prospect(projected_pick=1, full_name="Big Ovr", position="WR", college="X", height=None, weight=None,
+                      age=22, overall_rating=80, prospect_id=1)
+    hi_grade = Prospect(projected_pick=40, full_name="Big Grade", position="WR", college="X", height=None,
+                        weight=None, age=22, overall_rating=70, prospect_id=2)
+    grades = {1: {"grade": 75.0, "consensus_rank": 50, "round_label": "2nd round"},
+              2: {"grade": 89.0, "consensus_rank": 2, "round_label": "1st round"}}
+    engine = MockDraftEngine(season=2036, grades=grades)
+    s1, _ = engine.evaluate_fit(hi_ovr, 5, [])
+    s2, why = engine.evaluate_fit(hi_grade, 5, [])
+    assert s2 > s1 and "consensus grade" in why and "OVR" not in why
+    plain = MockDraftEngine(season=2036)
+    assert plain.evaluate_fit(hi_ovr, 5, [])[0] > plain.evaluate_fit(hi_grade, 5, [])[0]   # no board: OVR fallback

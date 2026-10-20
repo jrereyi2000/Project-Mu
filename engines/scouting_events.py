@@ -20,7 +20,8 @@ import random
 
 from engines import scouting_value as sv
 
-QUIET = 0.6                     # |move| below this (OVR points): a quiet week, no event
+QUIET = 0.6                     # |move| below this (OVR points) at the first step: a quiet week, no event; the engine
+                                # scales it with the step's noise (quiet=QUIET * sigma_step / SIGMA_0)
 TEXTURE_RANK = 120              # the consensus top N gets a GAME line every playing week regardless
 PRODUCTION_BAND = 25
 INJURY_LAST_STEP = 21           # nothing injury-like after the bowls; the combine and draft week only clear players
@@ -239,14 +240,14 @@ def _who(p):
     return school, pos_words(p.get("position")), p["full_name"].title()
 
 
-def _game(p, step, move, rng, opponent, game_type, label):
+def _game(p, step, move, rng, opponent, game_type, label, quiet=QUIET):
     group = stat_group(p.get("position"))
     pct = production_pct(p["v_pct"], move, rng)
     stats = stat_line(group, pct, rng)
     school, pw, name = _who(p)
     line = GAME_LINE[group](stats)
-    good = move >= QUIET
-    bad = move <= -QUIET
+    good = move >= quiet
+    bad = move <= -quiet
     verb = "shines" if good else "struggles" if bad else "steady"
     head = (f"{name} {verb} vs {opponent}" if verb != "steady" else f"{name} steady vs {opponent}")
     tone = (" Scouts came away impressed." if good else " Evaluators left with questions." if bad else "")
@@ -291,12 +292,12 @@ def _story(p, step, move, rng):
     return {"kind": "STORYLINE", "payload": payload, "headline": f"{name} {head}", "blurb": text.format(**fmt)}
 
 
-def generate(step, p, move, consensus_rank, draft_season):
+def generate(step, p, move, consensus_rank, draft_season, quiet=QUIET):
     """Events (0+) for one prospect at one step. p: {key, full_name, position, college, school, age, class_year,
     height_in, weight, v_pct, conference}. Returns [{kind, payload, headline, blurb, impact, seq}]."""
     rng = _rng("event", draft_season, step, p["key"])
     ph = phase(step)
-    big = abs(move) >= QUIET
+    big = abs(move) >= quiet
     texture = consensus_rank <= TEXTURE_RANK
     school, pw, name = _who(p)
     out = []
@@ -305,22 +306,22 @@ def generate(step, p, move, consensus_rank, draft_season):
                        draft_season)
         opp = sch.get(step, "a non-conference opponent")
         if opp is not None and (big or texture):
-            out.append(_game(p, step, move, rng, opp, "REGULAR", f"college week {college_week(step)}"))
-        if big and (opp is None or abs(move) >= 2 * QUIET and rng.random() < 0.5):
+            out.append(_game(p, step, move, rng, opp, "REGULAR", f"college week {college_week(step)}", quiet))
+        if big and (opp is None or abs(move) >= 2 * quiet and rng.random() < 0.5):
             out.append(_story(p, step, move, rng))
     elif ph == "CONF_CHAMP":
         pair = title_game(p.get("conference"), draft_season)
         key = p["school"]["key"] if p.get("school") else None
         if key in pair and (big or texture):
             other = sv.colleges()["schools"][pair[0] if pair[1] == key else pair[1]]["display"]
-            out.append(_game(p, step, move, rng, other, "TITLE", f"{p['conference']} championship game"))
+            out.append(_game(p, step, move, rng, other, "TITLE", f"{p['conference']} championship game", quiet))
         elif big:
             out.append(_story(p, step, move, rng))
     elif ph == "BOWLS":
         post = postseason(p.get("school"), draft_season)
         if post and post[0] == step and (big or texture):
-            out.append(_game(p, step, move, rng, post[2], "BOWL", post[1]))
-        elif step in (15, 16) and move >= QUIET and consensus_rank <= 40:
+            out.append(_game(p, step, move, rng, post[2], "BOWL", post[1], quiet))
+        elif step in (15, 16) and move >= quiet and consensus_rank <= 40:
             award = AWARDS.get(stat_group(p.get("position")), "national")
             out.append({"kind": "AWARD", "payload": {"award": award, "result": "finalist"},
                         "headline": f"{name} named {award} finalist",
@@ -376,7 +377,7 @@ def generate(step, p, move, consensus_rank, draft_season):
                         "blurb": f"League sources say the {pw} is {'climbing' if move > 0 else 'sliding'} on "
                                  f"draft boards."})
     else:                                                    # DRAFT_WEEK
-        if move <= -QUIET and rng.random() < 0.5:
+        if move <= -quiet and rng.random() < 0.5:
             out.append({"kind": "MEDICAL", "payload": {"result": "cleared", "note": "old injury re-checked"},
                         "headline": f"{name} cleared after medical re-check",
                         "blurb": f"Teams re-checked an old, healed injury for {name} at the final medicals; he was "

@@ -171,3 +171,35 @@ def test_visible_step_rules():
     assert visible_step(steps, 2036, 24, 4) == 27
     assert visible_step(steps, 2036, None) == 27
     assert visible_step(steps, 2036, 3) is None
+
+
+def test_offseason_steps_map_to_24_27():
+    cur = mock.MagicMock()
+    with mock.patch("engines.gm_trade_engine.league_window", return_value=(2036, 24, "OFFSEASON")):
+        for stage, step in ((None, 23), (1, 24), (2, 25), (3, 26), (4, 27), (5, None)):
+            with mock.patch("engines.gm_trade_engine.read_stage", return_value=stage):
+                assert se.current_step(cur) == (2036, step)
+    with mock.patch("engines.gm_trade_engine.league_window", return_value=(2036, 9, "IN_SEASON")):
+        assert se.current_step(cur) == (2036, 9)
+    assert ev.phase(24) == "COMBINE" and ev.phase(25) == ev.phase(26) == "PRO_DAY" and ev.phase(27) == "DRAFT_WEEK"
+
+
+def test_visits_are_team_scoped(cls, season):
+    sim, events = season
+    from engines import scouting_boards as sb
+    ctxs = {tid: sb.team_context({"team_id": tid, "needs": [{"group": "QB", "score": 5, "slot_gap": 3}]})
+            for tid in (5, 6, 7)}
+    out = {"cls": cls, "cons": sim[25], "events": {}, "first_step": 4}
+    cur = mock.MagicMock()
+    cur.fetchall.return_value = [(5, "AAA", "Alphas"), (6, "BBB", "Betas"), (7, "CCC", "Gammas")]
+    with mock.patch.object(se, "team_contexts", return_value=ctxs), \
+         mock.patch.object(se, "stored_visits", return_value={}), \
+         mock.patch.object(se, "volatility", return_value={}):
+        se.default_extras(cur, out, 25, 2036)
+    visits = [e for evs in out["events"].values() for e in evs if e["kind"] == "VISIT"]
+    assert len(visits) == 3 * 6 and all(e["team_id"] in (5, 6, 7) for e in visits)
+    for evs in out["events"].values():                               # one seq per visit to the same prospect
+        seqs = [e["seq"] for e in evs if e["kind"] == "VISIT"]
+        assert seqs == list(range(len(seqs)))
+    assert {r[2] for r in out["boards"]} == {5, 6, 7} and len(out["boards"]) == 3 * 100
+    assert all(e["kind"] != "VISIT" for evs in events[25].values() for e in evs)

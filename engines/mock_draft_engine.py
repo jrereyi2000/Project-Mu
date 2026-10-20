@@ -6,6 +6,10 @@ Simulates an analytical 32-pick Round 1 NFL Mock Draft by pairing:
 3. Scouted prospect board (draft_prospects for class season + 1, via pipeline.draft_board; or a CSV with --file).
 4. Positional value weights (QB / OT / EDGE / CB draft premium).
 
+The board's value term is the public scouting consensus (team management step 4, engines/scouting_engine.py): BPA =
+(grade - 60) * 4 plus the slot delta against the consensus rank, so this stays the media's mock, which the GM agents'
+real draft can beat or miss. Without a visible consensus (no scouting layer yet, or a CSV board) it falls back to OVR.
+
 Each selection carries its pick's `locked` flag and `selection_status` from the draft order. A run from the
 database is saved to mock_draft_picks for its (season, week) by `save`, so every article in a week cites the
 same picks; newsroom.db_tools.get_mock_draft returns that saved run and only runs the engine when there is none.
@@ -59,10 +63,12 @@ POSITIONAL_PREMIUM = {
 }
 
 class MockDraftEngine:
-    def __init__(self, season: Optional[int] = None, prospects_path: Optional[str] = None):
+    def __init__(self, season: Optional[int] = None, prospects_path: Optional[str] = None,
+                 grades: Optional[Dict[int, Dict]] = None):
         self.season = season or self._resolve_current_season()
         self.draft_season = self.season + 1
         self.prospects_path = prospects_path          # None: the board comes from draft_prospects
+        self.grades = grades or {}                    # {prospect_id: {grade, consensus_rank, round_label}}
 
     def load_prospects(self) -> List[Prospect]:
         """The board: the CSV given to the constructor (read leniently), else draft_prospects."""
@@ -73,6 +79,12 @@ class MockDraftEngine:
         from pipeline.draft_board import read_board
         with psycopg.connect(DatabaseHandler().db_conn_info) as conn:
             board = read_board(conn.cursor(), self.draft_season)
+            if not self.grades:
+                try:
+                    from engines.scouting_read import public_grades
+                    self.grades = public_grades(conn.cursor(), self.season)
+                except Exception:
+                    self.grades = {}
         if not board:
             raise ValueError(f"No scouted board for the {self.draft_season} draft class in draft_prospects "
                              f"(load a Draft Board scan: python3 -m pipeline.load_capture captures/<run>)")
@@ -119,12 +131,17 @@ class MockDraftEngine:
         pos_group = POSITION_GROUP_MAP.get(prospect.position, prospect.position)
         prem = POSITIONAL_PREMIUM.get(pos_group, 1.0)
         ovr = prospect.overall_rating if prospect.overall_rating is not None else UNRATED_OVR
+        cons = self.grades.get(prospect.prospect_id) if getattr(self, "grades", None) else None
 
-        # 1. Base Player Value (BPA)
-        # OVR is normalized around 75-85 baseline.
-        bpa_score = (ovr - 70.0) * 4.0
-        # Value bonus/penalty relative to projected slot
-        slot_value = (pick_number - prospect.projected_pick) * 0.5
+        # 1. Base Player Value (BPA): the public consensus grade when the scouting layer has one, else OVR
+        if cons:
+            bpa_score = (cons["grade"] - 60.0) * 4.0
+            slot_value = (pick_number - cons["consensus_rank"]) * 0.5
+            elite = cons["grade"] >= 88.0
+        else:
+            bpa_score = (ovr - 70.0) * 4.0
+            slot_value = (pick_number - prospect.projected_pick) * 0.5
+            elite = bpa_score > 35
         bpa_score += slot_value
 
         # 2. Team Need Fit
@@ -156,8 +173,9 @@ class MockDraftEngine:
         elif need_match:
             rationale = (f"Addresses positional depth at {pos_group}. "
                          f"Adds blue-chip competition to {need_match.get('current_starter', 'unit')}.")
-        elif bpa_score > 35:
-            rationale = (f"Best Player Available: {prospect.full_name} ({prospect.overall_rating or '?'} OVR) represents "
+        elif elite:
+            label = f" ({cons['grade']:.1f} consensus grade)" if cons else ""      # writers never see OVR (Q6)
+            rationale = (f"Best Player Available: {prospect.full_name}{label} represents "
                          f"transcendent value too high to pass on at pick {pick_number}.")
         else:
             school = f"{prospect.college} standout" if prospect.college else "a polished prospect"

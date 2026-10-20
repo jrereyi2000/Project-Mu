@@ -1946,11 +1946,30 @@ def _draft_week(s_val: int) -> int:
     return db.get_current_league_state()[1]
 
 
+def _public_prospect(prospect: dict, grades: dict) -> dict:
+    """A mock pick's prospect for writers: the scouting consensus (grade, rank, round label) instead of Madden's
+    OVR, which writers never see (team management step 4, Q6)."""
+    out = {k: v for k, v in prospect.items() if k != "overall_rating"}
+    g = grades.get(prospect.get("prospect_id")) or {}
+    out.update(consensus_grade=g.get("grade"), consensus_rank=g.get("consensus_rank"),
+               round_label=g.get("round_label"))
+    return out
+
+
+def _scouting_grades(cur, s_val):
+    try:
+        from engines.scouting_read import public_grades
+        return public_grades(cur, s_val)
+    except Exception:
+        return {}
+
+
 @tool
 def get_mock_draft(season: int = 0, limit: int = 32) -> str:
-    """Fetch this week's Round 1 NFL Mock Draft: pick-by-pick selections from the scouted draft board, each with the
-    team, the prospect's scouting profile (blank fields are null), team-need fit and rationale, and whether the
-    pick is locked (that team's season is over) or provisional. Every article this week sees the same mock.
+    """Fetch this week's Round 1 NFL Mock Draft (the media's mock, built from the public scouting consensus):
+    pick-by-pick selections, each with the team, the prospect's scouting profile (consensus grade, rank and round
+    label; blank fields are null), team-need fit and rationale, and whether the pick is locked (that team's season
+    is over) or provisional. Every article this week sees the same mock. The real draft can differ.
 
     Args:
         season: Evaluation season for draft order and team needs (default: current season).
@@ -1965,14 +1984,15 @@ def get_mock_draft(season: int = 0, limit: int = 32) -> str:
             cur = conn.cursor()
             selections = read_mock(cur, s_val, week)
             source = "saved"
+            grades = _scouting_grades(cur, s_val)
             if not selections:
-                engine = MockDraftEngine(season=s_val)
+                engine = MockDraftEngine(season=s_val, grades=grades)
                 selections = engine.run_mock()
                 engine.save(cur, week, selections)
                 conn.commit()
                 source = "generated"
         limit_val = max(1, int(limit)) if limit else 32
-        picks = selections[:limit_val]
+        picks = [dict(p, prospect=_public_prospect(p.get("prospect") or {}, grades)) for p in selections[:limit_val]]
         return json.dumps({
             "evaluation_season": s_val,
             "draft_class_season": s_val + 1,
@@ -1988,9 +2008,11 @@ def get_mock_draft(season: int = 0, limit: int = 32) -> str:
 
 @tool
 def get_scouted_draft_board(season: int = 0, limit: int = 32, position: str = "") -> str:
-    """Fetch the scouted draft prospect board for the upcoming draft class (season + 1), in projected pick order:
-    projected pick and round, name, position, college, height, weight, age, scouted OVR, archetype and notes.
-    A field the scan couldn't read is null; never fill it in.
+    """Fetch the scouted draft prospect board for the upcoming draft class (season + 1): the public scouting
+    consensus (grade 0-100, consensus rank, round label, rank change this week) with Madden's projected pick and
+    round, name, position, college, height, weight, age, archetype and notes. In consensus order once the scouting
+    board exists, else projected pick order. A field the scan couldn't read is null; never fill it in. For risers,
+    fallers and the college storylines behind them use get_draft_risers_fallers.
 
     Args:
         season: League season (default: current); the class is season + 1.
@@ -2005,14 +2027,23 @@ def get_scouted_draft_board(season: int = 0, limit: int = 32, position: str = ""
             cur = conn.cursor()
             board = read_board(cur, draft_season)
             matching = read_board(cur, draft_season, position=position) if position else board
+            grades = _scouting_grades(cur, s_val)
         if not board:
             return f"No scouted draft board for the {draft_season} draft class yet."
         limit_val = max(1, int(limit)) if limit else 32
-        prospects = [{
-            "projected_pick": p.projected_pick, "projected_round": p.projected_round, "round_pick": p.round_pick,
-            "name": p.full_name, "pos": p.position, "college": p.college, "ht": p.height, "wt": p.weight,
-            "age": p.age, "ovr": p.overall_rating, "archetype": p.archetype, "notes": p.notes,
-        } for p in matching[:limit_val]]
+        if grades:
+            matching = sorted(matching, key=lambda p: (grades.get(p.prospect_id, {}).get("consensus_rank") or 9999,
+                                                       p.projected_pick))
+        prospects = []
+        for p in matching[:limit_val]:
+            g = grades.get(p.prospect_id) or {}
+            prospects.append({
+                "consensus_rank": g.get("consensus_rank"), "grade": g.get("grade"), "round_label": g.get("round_label"),
+                "rank_change": g.get("delta_rank"),
+                "projected_pick": p.projected_pick, "projected_round": p.projected_round, "round_pick": p.round_pick,
+                "name": p.full_name, "pos": p.position, "college": p.college, "ht": p.height, "wt": p.weight,
+                "age": p.age, "archetype": p.archetype, "notes": p.notes,
+            })
         return json.dumps({
             "season": s_val,
             "draft_season": draft_season,
@@ -2020,6 +2051,7 @@ def get_scouted_draft_board(season: int = 0, limit: int = 32, position: str = ""
             "total_prospects": len(board),
             "total_matching": len(matching),
             "returned_count": len(prospects),
+            "board": "scouting consensus" if grades else "Madden projected order (scouting board not built yet)",
             "prospects": prospects,
         }, indent=2)
     except Exception as e:

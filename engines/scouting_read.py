@@ -154,3 +154,21 @@ def prospect_story(cur, prospect_key, through_step=None):
     board = [_row(r) for r in cur.fetchall()]
     return {"prospect_key": prospect_key, "board": board,
             "events": events_for(cur, draft_season, [prospect_key], through_step=through_step).get(prospect_key, [])}
+
+
+def public_grades(cur, season, week=None):
+    """{draft_prospects.id: {grade, consensus_rank, round_label, delta_rank}} for the class season + 1 at the latest
+    step visible at the article's cutoff ({} before the scouting layer has a visible step)."""
+    if not installed(cur):
+        return {}
+    draft_season = season + 1
+    cut, stage = _context(season, week)
+    step = visible_step(_steps(cur, draft_season), season, cut, stage)
+    if step is None:
+        return {}
+    cur.execute("""SELECT sp.prospect_id, c.grade, c.rank, c.round_label, c.delta_rank
+                   FROM scout_consensus c JOIN scout_prospects sp
+                     ON sp.draft_season = c.draft_season AND sp.prospect_key = c.prospect_key
+                   WHERE c.draft_season = %s AND c.step = %s AND sp.prospect_id IS NOT NULL""", (draft_season, step))
+    return {pid: {"grade": float(g), "consensus_rank": r, "round_label": lb, "delta_rank": d}
+            for pid, g, r, lb, d in cur.fetchall()}

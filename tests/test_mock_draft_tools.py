@@ -41,12 +41,25 @@ def test_board_tool_shape_and_nulls(no_db):
         data = json.loads(get_scouted_draft_board.invoke({"limit": 10}))
     assert (data["season"], data["draft_season"], data["total_prospects"], data["returned_count"]) == (2035, 2036, 39, 10)
     first = data["prospects"][0]
-    assert set(first) == {"projected_pick", "projected_round", "round_pick", "name", "pos", "college", "ht", "wt",
-                          "age", "ovr", "archetype", "notes"}
+    assert set(first) == {"consensus_rank", "grade", "round_label", "rank_change", "projected_pick",
+                          "projected_round", "round_pick", "name", "pos", "college", "ht", "wt", "age", "archetype",
+                          "notes"}                       # no Madden OVR: writers see the consensus only (step 4, Q6)
     assert (first["projected_pick"], first["projected_round"], first["round_pick"]) == (1, "1", 1)
+    assert first["grade"] is None and data["board"].startswith("Madden projected order")
     # the scan's blanks come back as null for the writer, not guessed
     by_pick = {p["projected_pick"]: p for p in data["prospects"]}
-    assert by_pick[6]["ovr"] is None and by_pick[10]["ht"] is None
+    assert by_pick[10]["ht"] is None
+
+
+def test_board_tool_orders_by_consensus(no_db):
+    grades = {100 + i: {"grade": 90 - abs(i - 20), "consensus_rank": abs(i - 20) + 1 + (i > 20) * 0.5,
+                        "round_label": "1st round", "delta_rank": 2} for i in range(1, 40)}
+    with mock.patch("pipeline.draft_board.read_board", side_effect=fake_read_board), \
+         mock.patch("newsroom.db_tools._scouting_grades", return_value=grades):
+        data = json.loads(get_scouted_draft_board.invoke({"limit": 3}))
+    assert data["board"] == "scouting consensus"
+    assert [p["consensus_rank"] for p in data["prospects"]] == sorted(p["consensus_rank"] for p in data["prospects"])
+    assert data["prospects"][0]["projected_pick"] == 20 and "ovr" not in data["prospects"][0]
 
 
 def test_board_tool_position_filter(no_db):
@@ -93,6 +106,7 @@ def test_mock_tool_runs_saves_and_limits(no_db, engine_offline):
     assert (season, week, len(saved)) == (2035, 20, 32)
     assert not saved[24]["locked"]
     assert len({p["prospect"]["full_name"] for p in saved}) == 32
+    assert all("overall_rating" not in p["prospect"] and "consensus_grade" in p["prospect"] for p in picks)
 
 
 def test_mock_tool_returns_the_saved_run(no_db):
