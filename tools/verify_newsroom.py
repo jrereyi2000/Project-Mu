@@ -425,6 +425,19 @@ def _():
     return f"{len(released)} released players checked"
 
 
+@check("roster moves: fantasy waiver wire nfl_moves for the next edition")
+def _():
+    from newsroom import fantasy_tools
+    with article_run_context(SEASON, PUB_WEEK + 1):
+        out = tool(fantasy_tools.get_fantasy_waiver_wire)()
+    try:
+        moves = json.loads(out).get("nfl_moves", [])
+    except ValueError:
+        return f"waiver wire unavailable for Week {PUB_WEEK + 1}: {out[:120]}"
+    save("71_fantasy_nfl_moves.json", moves)
+    return f"Week {PUB_WEEK + 1}: {len(moves)} nfl_moves lines" + (f"; first: {moves[0]}" if moves else "")
+
+
 lines = [f"{s:5}  {n}\n       {d}" for s, n, d in results]
 summary = "\n".join(lines)
 save("99_summary.txt", summary)
