@@ -9,7 +9,8 @@ class NameTest(unittest.TestCase):
     def test_list_name_spellings_agree(self):
         for a, b in (("G.Crawford", "G. Crawford"), ("G.Crawford", "George Crawford"), ("T.Parker", "T.J. Parker"),
                      ("P.Van Buren", "P. Van Buren"), ("P.Van Buren", "Peter Van Buren"), ("A.Hill Jr.", "A. Hilljr."),
-                     ("W.Nolen III", "Walter Nolen Iii"), ("D.Gore", "D.J. Gore")):
+                     ("W.Nolen III", "Walter Nolen Iii"), ("D.Gore", "D.J. Gore"),
+                     ("Q.St. Louis", "Q. St. Louis"), ("Q.St. Louis", "Quentin St. Louis"), ("Q.St.Louis", "Q. St. Louis")):
             self.assertEqual(name_key(a), name_key(b), (a, b))
         self.assertNotEqual(name_key("R.Keaton"), name_key("P.Keaton"))
 

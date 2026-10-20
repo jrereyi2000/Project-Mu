@@ -64,10 +64,14 @@ SUFFIX_RE = re.compile(r"(?:\s+(?:JR\.?|SR\.?|II|III|IV|V)|(?<=[a-z])(?:JR|SR)\.
 
 def name_key(name):
     """The list-name key: first initial + last name, upper case, letters only, suffix dropped.
-    'G.Crawford', 'G. Crawford', 'George Crawford' -> 'GCRAWFORD'; 'T.J. Parker' -> 'TPARKER'."""
+    'G.Crawford', 'G. Crawford', 'George Crawford' -> 'GCRAWFORD'; 'T.J. Parker' -> 'TPARKER';
+    'Q.St. Louis', 'Q. St. Louis' -> 'QSTLOUIS'."""
     name = SUFFIX_RE.sub("", (name or "").strip())
     head = name.split(" ", 1)[0]
-    if "." in head and not head.endswith("."):        # "P.Van Buren", "G.Crawford": initial before the dot
+    initials = head.rstrip(".").split(".")
+    if "." in head and (not head.endswith(".") or any(len(x) > 1 for x in initials[1:])):
+        # "P.Van Buren", "G.Crawford": initial before the dot; "Q.St. Louis": the list name of Q. St. Louis,
+        # whose "St." is part of the last name, not a second initial like the J. in "T.J. Parker"
         first, rest = name.split(".", 1)
     elif " " in name:                                 # "G. Crawford", "T.J. Parker", "George Crawford"
         first, rest = name.split(" ", 1)
