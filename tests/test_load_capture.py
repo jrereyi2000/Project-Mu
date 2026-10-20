@@ -243,6 +243,9 @@ class ProspectsLoadTest(unittest.TestCase):
         def executemany(self, sql, rows):
             self.calls.append((" ".join(sql.split()), list(rows)))
 
+        def fetchone(self):
+            return (False,)                          # to_regclass: the scouting migration isn't applied
+
     def board(self, *rows):
         d = tempfile.mkdtemp()
         with open(os.path.join(d, "prospects.csv"), "w") as f:
@@ -263,7 +266,8 @@ class ProspectsLoadTest(unittest.TestCase):
         d = self.board("1,1,1,Caleb Williams,QB,USC,6'1\",215,22,81", "2,1,2,Marvin Harrison Jr,WR,Ohio State,6'4\",205,21,80")
         count, cur, report, export = self.load(d)
         self.assertEqual((count, report["prospects_loaded"], report["draft_season"]), (2, 2, 2036))
-        (delete, params), (insert, rows) = cur.calls
+        (delete, params), (insert, rows), (scouting, _) = cur.calls
+        self.assertIn("to_regclass('scout_prospects')", scouting)       # the scouting relink checks first
         self.assertTrue(delete.startswith("DELETE FROM draft_prospects") and params == (2036,))
         self.assertTrue(insert.startswith("INSERT INTO draft_prospects"))
         self.assertEqual(rows[0][:8], (2036, 1, "1", 1, "Caleb Williams", "QB", "USC", 73))

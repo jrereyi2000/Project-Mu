@@ -9,7 +9,8 @@ __pycache__/
 venv/
 
 # Large local data (videos, frames, headshot batch files) — see PROJECT_SPEC.md §1.1
-data/
+data/*
+!data/scouting/
 
 # Database dumps
 db/backups/

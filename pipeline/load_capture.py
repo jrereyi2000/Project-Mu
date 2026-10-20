@@ -1311,6 +1311,9 @@ def load_prospects(cur, folder, season, report):
 
     draft_season = season + 1
     write_board(cur, draft_season, prospects, os.path.basename(folder))
+    # scouting (team management step 4): re-point the class's scouting rows at the new ids (no-op before init)
+    from engines.scouting_engine import relink
+    report["scouting_relink"] = relink(cur, draft_season, log=lambda *a: None)
     dest = os.path.join("data", "draft", f"{draft_season}_prospects.csv")
     if not report.get("dry_run") and os.path.abspath(prospects_path) != os.path.abspath(dest):
         os.makedirs(os.path.dirname(dest), exist_ok=True)

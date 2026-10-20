@@ -53,7 +53,8 @@ Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) s
   - **No board re-scan is needed** (Q7 closed).
 - **K2:** Prospect screens show a dev trait only if JR clicks into each player's edit screen, which isn't worth it, so `V` has **no dev term** before the draft.
   - The **roster card shows the dev trait** (e.g. "Normal", "Superstar X-Factor | Omaha"), so a rookie's dev is known from the next Season scan's roster capture. The hit score's dev term uses that.
-  - Checked 2026-10-20: `player_seasons.dev_trait` is already filled for 1,658 of 1,750 rows in 2036, from the 2026-10-17 roster capture. The gaps: 47 cards whose dev Vision left blank, 12 in-season signings, and about 33 players not on the scan.
+  - Checked 2026-10-20: `player_seasons.dev_trait` is already filled for 1,658 of 1,750 rows in 2036, from the 2026-10-17 roster capture. The gaps: 47 cards with no dev shown, 12 in-season signings, and about 33 players not on the scan.
+  - **Madden hides a rookie's dev until he has played 500 snaps** (verified 2026-10-20). Until then the card reads e.g. "Hidden | 184/500 Snaps to reveal". The 47 blank cards above are all 2036 rookies (experience 0, `cards.csv` flag `missing_dev`; 148 of 195 rookies already show a dev). So a rookie's dev may stay unknown for a season or more. Since main `aa7dc14`, the card parser stores this as `dev_trait = 'Hidden'`, and the 47 live rookies are set to it. JR's reason: Star and Superstar rookies often start out hidden. The hit score treats `'Hidden'` as **unrevealed**, not Normal and not missing data: it scores on OVR alone and adds the dev bonus once a later roster scan reveals the trait (§2.4). A NULL dev (45 rows in 2036, players the start-of-season scan never saw, such as in-season signings) also gets no dev term.
 - **K3:** The draft order screen lists Round 1 owners after the CPU-era trades. It shows them only where the slot is known. Mid-season, the order isn't set yet.
 - **K4:** JR turns on user control for **every Round 1 pick owner before the draft**, makes each of the 32 picks by switching teams, then sims Rounds 2–7.
 - **K5:** With every team user-controlled, JR can turn CPU trades on during the draft without any CPU–CPU trades happening. Draft-day trades are possible **if the GM agents propose them** (open question 8).
@@ -103,7 +104,7 @@ Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) s
 - Stored for each team: the top 100 by `T`, each step. Private: shown only in the Draft Room's on-the-clock panel (Q3).
 
 ### 2.4 Front-office quality `q_team` (`engines/fo_quality.py`, pure core)
-- **Hit score** per Round 1–2 pick: `h = (OVR_now − E[OVR | slot, years since draft]) / sd_slot + DEV_BONUS` (Star +0.5, Superstar +1.0, X-Factor +1.5, once the dev is known).
+- **Hit score** per Round 1–2 pick: `h = (OVR_now − E[OVR | slot, years since draft]) / sd_slot + DEV_BONUS` (Star +0.5, Superstar +1.0, X-Factor +1.5, once the dev is known). A hidden dev (`'Hidden'` until 500 snaps, §1.1 K2; or NULL, never scanned) is unknown, not Normal: there's no dev term, and the pick is re-scored at every recompute, so the bonus applies once a roster scan reveals the dev.
   - `E` comes from `trade_value.fit_pick_curve` (S14), refitted on all drafted players in the data by slot and years.
   - Labels: HIT `h ≥ 0.5`, MISS `h ≤ −0.5`, BUST `h ≤ −1.2`, else OK.
   - A player who left the team still counts for the team that drafted him.
