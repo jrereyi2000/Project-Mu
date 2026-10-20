@@ -188,6 +188,77 @@ def check_player_all_pro_honors(conn, player_name: str) -> Dict[str, Any]:
             }
 
 
+# Offseason signing candidates (team management step 5, phase 7): the League Transactions scan's offseason SIGNED
+# rows of 90+ players, with their terms, for JR to pick the 2-3 marquee signings from. Nothing is picked here.
+SIGNING_CANDIDATE_MIN_OVR = 90
+
+
+def fetch_offseason_signings(conn, season: int) -> List[Dict[str, Any]]:
+    """The season's offseason SIGNED transactions (week NULL; offseason rows carry the finished season's year) with
+    the player's latest rating and the team that last released him, if any."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("""
+            SELECT t.id AS transaction_id, t.player_id, COALESCE(p.full_name, t.player_name) AS player_name,
+                   t.position, tt.abbreviation AS new_team, t.contract_years, t.contract_value,
+                   COALESCE(ft.abbreviation, (
+                       SELECT rt.abbreviation FROM transactions r JOIN teams rt ON rt.id = r.from_team_id
+                       WHERE r.player_id = t.player_id AND r.type = 'RELEASED' AND r.id < t.id
+                       ORDER BY r.id DESC LIMIT 1)) AS former_team,
+                   (SELECT ps.overall_rating FROM player_seasons ps
+                     WHERE ps.player_id = t.player_id AND ps.season IN (%s, %s)
+                     ORDER BY ps.season DESC LIMIT 1) AS ovr
+            FROM transactions t
+            LEFT JOIN players p ON p.id = t.player_id
+            LEFT JOIN teams tt ON tt.id = t.to_team_id
+            LEFT JOIN teams ft ON ft.id = t.from_team_id
+            WHERE t.season = %s AND t.week IS NULL AND t.type = 'SIGNED'
+            ORDER BY t.contract_value DESC NULLS LAST, t.id;
+        """, (season, season + 1, season))
+        return [dict(r) for r in cur.fetchall()]
+
+
+def signing_terms(row: Dict[str, Any]) -> str:
+    """A signing's headline terms as fact (R5), e.g. '3 years, $54.6M total (from the signing)'."""
+    from newsroom.roster_moves import money_text
+    years, value = row.get("contract_years"), row.get("contract_value")
+    if not years and value is None:
+        return "not recorded: state no contract terms"
+    parts = []
+    if years:
+        parts.append(f"{years} year{'s' if years != 1 else ''}")
+    if value is not None:
+        parts.append(f"{money_text(value)} total")
+    return ", ".join(parts) + " (from the signing)"
+
+
+def signing_candidates(rows: List[Dict[str, Any]], min_ovr: int = SIGNING_CANDIDATE_MIN_OVR) -> List[Dict[str, Any]]:
+    """Offseason signings of 90+ players as manifest candidates (JR picks 2-3), most expensive first."""
+    out = []
+    for r in rows:
+        if (r.get("ovr") or 0) < min_ovr:
+            continue
+        out.append({
+            "transaction_id": r.get("transaction_id"),
+            "player_name": r.get("player_name"),
+            "position": r.get("position"),
+            "former_team": r.get("former_team") or "unknown (fill in)",
+            "new_team": r.get("new_team"),
+            "ovr": r.get("ovr"),
+            "qualitative_tier": convert_ovr_to_qualitative_tier(r["ovr"]),
+            "terms": signing_terms(r),
+        })
+    return out
+
+
+def match_signing_terms(signing: Dict[str, Any], rows: List[Dict[str, Any]]) -> str:
+    """The terms of a manifest signing from its offseason SIGNED row (by player name), else 'not recorded'."""
+    name = str(signing.get("player_name") or "").strip().lower()
+    for r in rows:
+        if str(r.get("player_name") or "").strip().lower() == name:
+            return signing_terms(r)
+    return "not recorded: state no contract terms"
+
+
 def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: Optional[str] = None) -> Dict[str, Any]:
     """Generates a structured dry-run validation preview of the manifest:
     - Resolves teams, coaches, slants
@@ -206,6 +277,7 @@ def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: 
         "resolved_teams": [],
         "coaching_moves": [],
         "signings": [],
+        "signing_candidates": [],
         "draft_summary": {},
         "warnings": [],
         "summary": "",
@@ -264,6 +336,13 @@ def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: 
                 })
 
             preview["resolved_teams"] = sorted(list(resolved_team_set))
+
+            # 2b. Candidates for the marquee signings: the offseason's 90+ signings from League Transactions
+            try:
+                with conn.transaction():
+                    preview["signing_candidates"] = signing_candidates(fetch_offseason_signings(conn, manifest["season"]))
+            except Exception as ex:   # no transactions table yet: no candidates
+                preview["warnings"].append(f"Signing candidates unavailable: {ex}")
 
             # 3. Preview Draft Results
             draft_meta = manifest.get("draft_results")
@@ -742,6 +821,11 @@ def build_event_facts_packet(
 
             elif event_key in ("signings", "free_agency", "free_agency_signing_grades"):
                 signings_packet = []
+                try:
+                    with active_conn.transaction():
+                        txn_rows = fetch_offseason_signings(active_conn, season)
+                except Exception:
+                    txn_rows = []
                 for s in manifest_data.get("signings", []):
                     f_team = resolve_team(active_conn, s["former_team"])
                     n_team = resolve_team(active_conn, s["new_team"])
@@ -758,6 +842,7 @@ def build_event_facts_packet(
                         "qualitative_tier": qual_tier,
                         "all_pro_verification": all_pro_info,
                         "contract_notes": s.get("contract_notes"),
+                        "signing_terms": match_signing_terms(s, txn_rows),
                         "role_notes": s.get("role_notes"),
                     })
 
