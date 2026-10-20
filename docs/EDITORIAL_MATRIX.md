@@ -31,7 +31,7 @@ This document defines the official seasonal editorial matrix, weekly article quo
 
 ## Seasonal Feature Pool Definitions (Slots 3, 4, & 5)
 
-Each weekly generation dynamically selects **three non-repeating article types** from the phase's active pool:
+Each weekly generation dynamically selects **three non-repeating article types** from the phase's active pool (in a week after an executed trade, Slot 5 is `TRADE_GRADES` instead; see *Roster Moves & Contracts*):
 
 ### Phase 1: Early Identity & Overreactions (Weeks 1–5)
 * `PLAYER_DEEP_PROFILE`
@@ -108,9 +108,12 @@ All other slots are untargeted: the writer chooses the subject under the article
 Writers may report the season's signings, releases, re-signings and restructures, and cite contract terms and cap figures, from the writer tools (`get_league_transactions`, `get_player_contract`, `get_team_cap_sheet`) and the assignment brief.
 
 - **Relevance rule:** moves and cap figures appear **only when they matter to the article's subject**. Most articles carry no cap numbers at all. A move is worth a line when it changes the subject's lineup, depth chart or cap picture; otherwise leave it out.
-- **No slot of their own:** in Weeks 1–23, moves get no slate slot. They feed the existing slots: the national brief's notable moves, the beat brief's team moves, and the `CAP DATA:` / `ROSTER MOVES:` lines of the article types that use them.
+- **No slot of their own:** in Weeks 1–23, moves get no slate slot (the one exception is *Trade Grades* below). They feed the existing slots: the national brief's notable moves, the beat brief's team moves, and the `CAP DATA:` / `ROSTER MOVES:` lines of the article types that use them.
 - **Facts vs. colour:** that a move happened, its terms (years, total, this season's cap hit, bonus, cut savings, dead money, no-trade clause), team cap space, spend and dead money, rosters and contract end years come only from the tools and are never contradicted. Years and totals are stated as fact. A projected yearly figure (marked `est.`) is hedged in prose ("roughly", "projected", "about"); an estimated cap row is approximate. Never invented, even though untracked: guaranteed money, incentive details, option years. Free to invent: negotiation colour, anonymous front-office or agent quotes, motives, locker-room reaction, what the move means for the depth chart, and unnamed, unpriced interest from "other teams".
 - **Trades:** a trade is reported as done only when it was executed. Anything else is a rumor and is described as one.
+- **Rumors:** only from `get_trade_rumors` or the brief's `league_trades` (real talks between two front offices that didn't become a trade, through the Week 8 trade deadline). A rumor is reported only as talks, never as done, and never with a player's name or a figure it doesn't give. No other talks are described as actual talks.
+- **Hypothetical packages** (`PLAYOFF_AUTOPSY`, `FRANCHISE_ARCHITECTURE_BLUEPRINT`): a writer may propose a package only as their own idea ("a deal they could chase"), never as reported talks, built from real players and picks with the terms the tools show, and only if it passes `check_trade_package` (the GMs' own legality check).
+- **Trade Grades:** in Weeks 2–18, the edition after a week with an executed trade replaces Slot 5 of the Feature Trio with `TRADE_GRADES` (Mike Sando or Bill Barnwell), a letter grade for both sides of every trade executed the week before. Nothing else in the matrix changes.
 
 ---
 

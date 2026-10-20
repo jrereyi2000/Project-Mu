@@ -520,3 +520,28 @@ def trades_block(trades, rumors, team_names=None, through_week=None) -> dict:
         block["rumors"] = [rumor_line(r, team_names) for r in rumors]
         block["rumor_note"] = RUMOR_NOTE
     return block
+
+
+def trade_grades_target(trades, team_names=None, team_ids=None, gms=None) -> dict:
+    """The TRADE_GRADES slot's Editorial Desk target for an edition's new executed trades (new_trades): subject team =
+    the first trade's initiator, and a note listing every trade as a trade_line with each GM's stated thinking
+    (gm_trade_proposals.rationale_a/b, written to the deal's fact sheet). gms: {abbreviation: {gm_name, direction}}.
+    None without trades."""
+    if not trades:
+        return None
+    names, ids, gms = team_names or {}, team_ids or {}, gms or {}
+    nm = lambda abbr: names.get(abbr, abbr)
+    week = trades[0]["week"]
+    parts = [f"TRADE GRADES: grade every trade executed in Week {week} below, for both teams (a letter grade per "
+             "team), and no other. Each trade is fact exactly as written."]
+    for n, t in enumerate(trades, 1):
+        parts.append(f"Trade {n}: {trade_line(t, names)}.")
+        for abbr, why in ((t["team_a"], t.get("rationale_a")), (t["team_b"], t.get("rationale_b"))):
+            gm = gms.get(abbr) or {}
+            if why:
+                who = f"{nm(abbr)} GM {gm['gm_name']}" if gm.get("gm_name") else f"The {nm(abbr)} front office"
+                parts.append(f"{who} on the deal: \"{why}\"")
+    pairs = sorted({nm(x) for t in trades for x in (t["team_a"], t["team_b"])})
+    first = trades[0]["team_a"]
+    return {"team_id": ids.get(first), "team_name": " / ".join(pairs) if len(pairs) <= 4 else nm(first),
+            "kind": "TRADE_GRADES", "week": week, "trades": [t["proposal_id"] for t in trades], "note": " ".join(parts)}

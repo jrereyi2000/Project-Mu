@@ -12,7 +12,7 @@ from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
 from newsroom.entity_patterns import team_mention_pattern
 from newsroom.run_context import reset_article_context, set_article_context
 from newsroom.roster_moves import (brief_block, cap_line, is_starter_rank, new_this_week, new_trades, team_block,
-                                   trades_block)
+                                   trade_grades_due, trade_grades_target, trades_block)
 from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
 from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings, records_by_team
 from newsroom import agent_memory
@@ -1846,6 +1846,12 @@ If you need specific stats, use your database tools before producing your final 
                 else:
                     feature_slots.append((f"Slot {idx}", feature_type))
 
+            # The week after an executed trade, TRADE_GRADES takes the last Feature Trio slot (EDITORIAL_MATRIX
+            # "Trade Grades"; team management step 5, Phase 8).
+            grades = self._trade_grades_target(season, week) if "TRADE_GRADES" in self.article_types_data else None
+            if grades and feature_slots:
+                feature_slots[-1] = (feature_slots[-1][0], "TRADE_GRADES", None, grades)
+
             raw_slots = [
                 hero,
                 slot1,
@@ -1952,6 +1958,28 @@ If you need specific stats, use your database tools before producing your final 
             })
 
         return commissioned_slate
+
+    def _trade_grades_target(self, season: int, week: int):
+        """roster_moves.trade_grades_target for the edition's new executed trades; None without any (or without
+        step 3's tables)."""
+        from engines import front_office as fo
+        try:
+            with psycopg.connect(self.db.db_conn_info) as conn, conn.cursor() as cur:
+                trades = fetch_trades(cur, season, ctx=(season, week, True))
+                if not trade_grades_due(trades, week):
+                    return None
+                trades = new_trades(trades, week)
+                cur.execute("SELECT abbreviation, id FROM teams WHERE abbreviation IS NOT NULL;")
+                ids = dict(cur.fetchall())
+                gms = {}
+                for abbr in {x for t in trades for x in (t["team_a"], t["team_b"])}:
+                    gm = fo.get_gm(cur, ids[abbr], season)
+                    if gm:
+                        gms[abbr] = gm
+                return trade_grades_target(trades, _team_names(cur), ids, gms)
+        except Exception as e:
+            print(f"⚠️  Trade grades unavailable: {e}")
+            return None
 
     def _resolve_slot_targets(self, season: int, week: int, raw_slots: list) -> list:
         """Chooses each targeted slot's subject; falls back to writer-chosen subjects if league data is unavailable."""
