@@ -285,3 +285,53 @@ class FrontOfficeTest(unittest.TestCase):
         self.assertEqual(dbg.job_command("gm_proposals", week=5)[-2:], ["--week", "5"])
         self.assertEqual(dbg.job_command("gm_offseason_stage")[-6:],
                          ["-m", "pipeline.weekly_capture", "--mode", "transactions", "--no-articles", "--gm-next-stage"])
+
+
+class DraftRoomApiTest(unittest.TestCase):
+    """Draft Room endpoints (team management step 4) with connect() mocked: no database."""
+
+    def setUp(self):
+        app = FastAPI()
+        app.include_router(dbg.router)
+        self.client = TestClient(app)
+        self.conn = FrontOfficeTest.Conn()
+        self.calls = []
+        from engines import draft_room as dr
+        self.dr = dr
+        patches = [mock.patch.object(dbg, "connect", lambda: self.conn),
+                   mock.patch.object(dbg, "env", lambda k, d=None: "tok" if k == "DEBUG_TOKEN" else d),
+                   mock.patch("engines.gm_llm.make_llm", lambda *a, **k: None),
+                   mock.patch.object(dr, "installed", lambda cur: True),
+                   mock.patch.object(dr, "state", lambda cur, ds=None, team=None: {"installed": True, "team": team}),
+                   mock.patch.object(dr, "lock_order", lambda cur, ds, fixes=None: self.calls.append(("lock", fixes)) or {}),
+                   mock.patch.object(dr, "record", lambda cur, ds, n, key, llm=None: self.calls.append(("pick", n, key)) or {}),
+                   mock.patch.object(dr, "undo_last", lambda cur, ds, n=None: self.calls.append(("undo", n)) or {})]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        self.h = {"X-Debug-Token": "tok"}
+
+    def test_state_is_open(self):
+        self.assertEqual(self.client.get("/api/debug/draft-room?team=car").json(), {"installed": True, "team": "car"})
+
+    def test_writes_need_the_token(self):
+        for path, body in (("/api/debug/draft-room/lock-order", {}), ("/api/debug/draft-room/picks/1",
+                                                                       {"prospect_key": "k"}),
+                           ("/api/debug/draft-room/picks/1/undo", None)):
+            self.assertEqual(self.client.post(path, json=body).status_code, 401)
+        self.assertEqual(self.calls, [])
+
+    def test_actions(self):
+        self.client.post("/api/debug/draft-room/lock-order", json={"fixes": {"5": "DEN"}}, headers=self.h)
+        self.client.post("/api/debug/draft-room/picks/3", json={"prospect_key": "2037:X:WR"}, headers=self.h)
+        self.client.post("/api/debug/draft-room/picks/3/undo", headers=self.h)
+        self.assertEqual(self.calls, [("lock", {"5": "DEN"}), ("pick", 3, "2037:X:WR"), ("undo", 3)])
+        self.assertEqual(self.conn.committed, 3)
+
+    def test_refusal_rolls_back(self):
+        def refuse(cur, ds, n, key, llm=None):
+            raise self.dr.DraftRoomError(409, "pick 2 is on the clock, not 7")
+        with mock.patch.object(self.dr, "record", refuse):
+            r = self.client.post("/api/debug/draft-room/picks/7", json={"prospect_key": "k"}, headers=self.h)
+        self.assertEqual((r.status_code, r.json()["detail"]), (409, "pick 2 is on the clock, not 7"))
+        self.assertEqual(self.conn.rolled_back, 1)

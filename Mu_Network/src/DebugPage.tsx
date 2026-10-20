@@ -117,6 +117,99 @@ function parseLegs(text: string): Record<string, unknown>[] {
     : { type: "PLAYER", player_id: Number(w[1]), from: w[2]?.toUpperCase(), to: w[3]?.toUpperCase() });
 }
 
+// Draft Room (team management step 4): the GM agents choose picks 1-32 live, JR makes each one in Madden and records it.
+type DrProspect = { prospect_key: string; full_name: string; position: string; college: string; age: number; consensus_rank: number; grade: number; round_label: string; team_grade?: number | null; team_rank?: number | null; choice_source?: string; madden_match?: string | null };
+type DrSlot = { pick: number; team: string; original_team: string; user_controlled: boolean; selection: DrProspect | null };
+type DrClock = { pick: number; team: string; team_name: string; gm: string | null; original_team: string; user_controlled: boolean; recommendation: DrProspect | null; alternatives: DrProspect[]; rationale?: string; steps: string[] };
+type DrState = { installed: boolean; draft_season: number; error?: string; step?: number; locked?: boolean; before?: string; after?: string; slots?: DrSlot[]; on_clock?: DrClock | null; projected?: (DrProspect & { pick: number; team: string })[]; consensus?: DrProspect[]; team_board?: { team: string; rows: DrProspect[] }; trades?: { id: number; status: string; headline: string | null; pick: number | null }[] };
+
+function DraftRoomCard({ token }: { token: string }) {
+  const [dr, setDr] = useState<DrState | null>(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [view, setView] = useState("");                 // "" = consensus board, else a team abbreviation
+  const [search, setSearch] = useState("");
+  const [fixes, setFixes] = useState("");
+  const load = useCallback(() => {
+    call<DrState>(`/draft-room${view ? `?team=${view}` : ""}`).then(setDr).catch(e => setError(String(e.message || e)));
+  }, [view]);
+  useEffect(() => { load(); }, [load]);
+  const act = async (path: string, body?: unknown, confirmText?: string) => {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setMessage("");
+    try { setDr(await call<DrState>(path, { method: "POST", body: JSON.stringify(body || {}) }, token)); setMessage("Done."); load(); }
+    catch (e) { setMessage(String((e as Error).message || e)); }
+  };
+  const lock = () => {
+    const parsed: Record<string, string> = {};
+    fixes.split(",").map(x => x.trim()).filter(Boolean).forEach(x => { const [p, t] = x.split("="); if (p && t) parsed[p.trim()] = t.trim().toUpperCase(); });
+    act("/draft-room/lock-order", { fixes: Object.keys(parsed).length ? parsed : undefined }, "Lock the draft order? Check the Round 1 owners against Madden's draft order screen first.");
+  };
+  const oc = dr?.on_clock;
+  const recorded = (dr?.slots || []).filter(s => s.selection);
+  const last = recorded.length ? recorded[recorded.length - 1] : null;
+  const pool = (view && dr?.team_board ? dr.team_board.rows : dr?.consensus || []);
+  const hits = search.trim() ? (dr?.consensus || []).filter(p => `${p.full_name} ${p.position}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8) : [];
+  const line = (p: DrProspect) => `${p.full_name} · ${p.position} · ${p.college} · #${p.consensus_rank} (${p.grade})`;
+  return (
+    <section className={card}>
+      <h3 className="font-black uppercase tracking-wide mb-3">Draft room{dr ? ` · ${dr.draft_season}` : ""}</h3>
+      {error && <p className="text-xs text-[var(--red)]">{error}</p>}
+      {dr && !dr.installed && <p className="text-xs text-[var(--gray-500)]">The scouting migration (2026_12_12_scouting.sql) isn't applied to this database yet.</p>}
+      {dr?.error && <p className="text-xs text-[var(--gray-500)]">{dr.error}</p>}
+      {dr?.installed && dr.slots && (
+        <div className="grid gap-3 text-xs">
+          {message && <p className="text-[var(--red)]">{message}</p>}
+          {!dr.locked && (
+            <div className="grid gap-2">
+              <p>{dr.before}</p>
+              <label className={label}>Owner fixes before locking (pick=TEAM, comma-separated)</label>
+              <input className={input} value={fixes} onChange={e => setFixes(e.target.value)} placeholder="5=DEN, 18=GB" />
+              <button className={btnRed} disabled={!token} onClick={lock}>Lock draft order</button>
+            </div>
+          )}
+          {oc && (
+            <div className="border-2 border-[var(--ink)] p-2 grid gap-1">
+              <div className="text-sm"><b>Pick {oc.pick}: {oc.team_name}</b>{oc.original_team !== oc.team ? ` (via ${oc.original_team})` : ""} · {oc.gm || "GM"}{oc.user_controlled ? " · your team (advice only)" : ""}</div>
+              {oc.recommendation && <div className="text-sm">GM's pick: <b>{line(oc.recommendation)}</b>{oc.recommendation.team_rank ? ` · their board #${oc.recommendation.team_rank}` : ""}</div>}
+              {oc.rationale && <p><i>{oc.rationale}</i></p>}
+              {oc.alternatives.length > 0 && <div>Next: {oc.alternatives.map(line).join(" | ")}</div>}
+              <ol className="list-decimal pl-5">{oc.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+              <div className="flex flex-wrap gap-2">
+                {oc.recommendation && <button className={btnRed} disabled={!token} onClick={() => act(`/draft-room/picks/${oc.pick}`, { prospect_key: oc.recommendation!.prospect_key, source: "GM" })}>Made it</button>}
+                {last && <button className={btn} disabled={!token} onClick={() => act(`/draft-room/picks/${last.pick}/undo`, {}, `Undo pick ${last.pick}?`)}>Undo pick {last.pick}</button>}
+              </div>
+              <label className={label}>Different player (name or position)</label>
+              <input className={input} value={search} onChange={e => setSearch(e.target.value)} placeholder="e.g. Bodden or CB" />
+              {hits.map(p => <button key={p.prospect_key} className="text-left underline" disabled={!token} onClick={() => act(`/draft-room/picks/${oc.pick}`, { prospect_key: p.prospect_key, source: "OFF_SCRIPT" }, `Record ${p.full_name} at pick ${oc.pick}?`).then(() => setSearch(""))}>{line(p)}</button>)}
+            </div>
+          )}
+          {dr.locked && !oc && <p>{dr.after}</p>}
+          {(dr.trades || []).length > 0 && <div><span className={label}>Draft-day trades (approve and confirm them in Front office)</span>{dr.trades!.map(t => <div key={t.id}>#{t.id} pick {t.pick ?? "?"} · <b>{t.status}</b> · {t.headline}</div>)}</div>}
+          <div>
+            <span className={label}>Round 1</span>
+            {dr.slots.map(s => (
+              <div key={s.pick} className={`border-b border-[var(--gray-100)] py-0.5 ${oc?.pick === s.pick ? "font-bold" : ""}`}>
+                <span className="font-mono mr-2">{s.pick}</span><b>{s.team}</b>{s.original_team !== s.team ? ` (via ${s.original_team})` : ""}{s.user_controlled ? " · JR" : ""}
+                {s.selection && <span> · {s.selection.full_name} {s.selection.position} · {s.selection.choice_source}{s.selection.madden_match ? ` · ${s.selection.madden_match}` : ""}</span>}
+              </div>
+            ))}
+          </div>
+          {(dr.projected || []).length > 0 && <div><span className={label}>Projected rest of Round 1</span>{dr.projected!.map(p => <div key={p.pick}>{p.pick} {p.team}: {p.full_name} {p.position}</div>)}</div>}
+          <div>
+            <span className={label}>Board</span>
+            <select className={input} value={view} onChange={e => setView(e.target.value)}>
+              <option value="">Consensus</option>
+              {Array.from(new Set((dr.slots || []).map(s => s.team))).sort().map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            {pool.slice(0, 40).map(p => <div key={p.prospect_key}>{p.team_rank ? `${p.team_rank}. ` : `${p.consensus_rank}. `}{p.full_name} · {p.position} · {p.college} · {p.team_grade ?? p.grade}</div>)}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function FrontOfficeCard({ token }: { token: string }) {
   const [fo, setFo] = useState<FoState | null>(null);
   const [error, setError] = useState("");
@@ -983,6 +1076,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
         </section>
         <TransactionsCard />
         <FrontOfficeCard token={token} />
+        <DraftRoomCard token={token} />
       </div>
 
       <div className="grid gap-4 content-start">

@@ -66,8 +66,9 @@ DRAFT_STAGE = 4
 DRAFT_DAY_PICKS = 32                     # draft-day proposals: only while the GM agents make the Round 1 picks
 DRAFT_DAY_MAX_P = 0.5
 DRAFT_DAY_SHARE = 0.5                    # draft day gets half the draft stage's expected trades
-DRAFT_DAY_PREMIUM = 1.35                 # a team trading up covets the player on the board at that pick; step 4's
-                                         # board grade replaces this flat premium
+DRAFT_DAY_PREMIUM = 1.35                 # a team trading up covets the player on the board at that pick; when step 4's
+                                         # team boards exist, run_draft_day gets a per-buyer premium from them instead
+                                         # (engines/draft_room.draft_day_premiums)
 
 
 # ------------------------------------------------------------------ window ----
@@ -424,7 +425,7 @@ class Valuer:
                 v = tv.pick_value({"draft_season": ds, "round": rd, "original_team_id": orig}, ctx, self.fits, season)
                 clock = self.b.get("on_clock")
                 if clock and tuple(asset["pick"]) == clock[0] and tid != clock[1]:
-                    v = round(v * DRAFT_DAY_PREMIUM)
+                    v = round(v * (self.b.get("draft_premiums") or {}).get(tid, DRAFT_DAY_PREMIUM))
                 self.cache[key] = v
         return self.cache[key]
 
@@ -1083,10 +1084,12 @@ def draft_day_p(season, executed, decided, open_count):
     return min(DRAFT_DAY_MAX_P, DRAFT_DAY_SHARE * bud["e_w"] / (pe * DRAFT_DAY_PICKS))
 
 
-def run_draft_day(cur, season, pick, dry_run=False, llm=None, log=print):
+def run_draft_day(cur, season, pick, dry_run=False, llm=None, log=print, premiums=None):
     """Draft-day trades (step 4 calls this for each of the first 32 picks, live): the pick on the clock may draw
     one pick-for-pick trade-up proposal from a team that values it more than its owner does. pick: {draft_season,
-    round, original_team_id, overall_pick}. Earlier picks' open draft-day proposals expire. Returns a report."""
+    round, original_team_id, overall_pick}. Earlier picks' open draft-day proposals expire. premiums: {buyer team_id:
+    multiplier} from step 4's team boards (the buyer's grade for the best player left vs the slot); a team missing
+    from it, or premiums=None, uses the flat DRAFT_DAY_PREMIUM. Returns a report."""
     overall = pick["overall_pick"]
     rep = {"season": season, "pick": overall, "expired": [], "proposals": [], "p": None}
     open_props = read_proposals(cur, season, ("PROPOSED", "APPROVED"))
@@ -1106,6 +1109,8 @@ def run_draft_day(cur, season, pick, dry_run=False, llm=None, log=print):
         return rep
     b["slots"][pick["original_team_id"]] = overall - (pick["round"] - 1) * 32   # the real slot, not a projection
     b["on_clock"] = (key, owner)
+    if premiums:
+        b["draft_premiums"] = premiums
     p = draft_day_p(season, b["executed"], b["decided"], len(b["open"]))
     rep["p"] = round(p, 3)
     rng = random.Random(f"{season}:draft:{overall}")
