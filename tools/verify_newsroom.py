@@ -405,6 +405,26 @@ def _():
     return f"weeks seen: {seen}"
 
 
+@check("roster moves: released players are off their old team and show as free agents")
+def _():
+    with psycopg.connect(CONN) as conn, conn.cursor() as cur:
+        cur.execute("""SELECT ps.player_id, COALESCE(p.full_name, p.player_name), ps.team_id, ps.released_week
+                       FROM player_seasons ps JOIN players p ON p.id = ps.player_id
+                       WHERE ps.season = %s AND ps.released_week IS NOT NULL;""", (SEASON,))
+        released = cur.fetchall()
+    bad = []
+    with article_run_context(SEASON, PUB_WEEK + 1):
+        for pid, name, team_id, rel in released:
+            chart = tool(db_tools.get_team_roster_depth_chart)(str(team_id))
+            if f'"{name}"' in chart:
+                bad.append(f"{name} still on team {team_id}'s depth chart")
+            ctx = json.loads(tool(db_tools.get_player_context)(str(pid)))
+            if not str(ctx.get("team", "")).startswith("free agent"):
+                bad.append(f"{name}: team {ctx.get('team')!r}")
+    assert not bad, "; ".join(bad)
+    return f"{len(released)} released players checked"
+
+
 lines = [f"{s:5}  {n}\n       {d}" for s, n, d in results]
 summary = "\n".join(lines)
 save("99_summary.txt", summary)

@@ -258,7 +258,7 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                         overall_rating,
                         ROW_NUMBER() OVER (PARTITION BY team_id, position ORDER BY overall_rating DESC) as pos_rank
                     FROM player_seasons
-                    WHERE season = %s
+                    WHERE season = %s AND (released_week IS NULL OR released_week > %s)
                 )
                 SELECT 
                     i.team_id,
@@ -276,14 +276,14 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                 LEFT JOIN players p ON p.id = i.player_id
                 LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
                 LEFT JOIN ranked_roster rr ON rr.player_id = i.player_id
-                WHERE i.season = %s AND i.week = %s
+                WHERE i.season = %s AND i.week = %s AND (ps.released_week IS NULL OR ps.released_week > %s)
                   AND (
                       COALESCE(ps.overall_rating, i.ovr) >= 88
                       OR COALESCE(ps.popularity_index, 0.0) >= 50.0
                       OR (rr.pos_rank = 1 AND COALESCE(ps.position, i.position) = 'QB')
                   )
                 ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
-            """, (season, season, q_week))
+            """, (season, week, season, q_week, week))  # released players (roster_moves.on_roster) are off
             key_injuries_by_team = defaultdict(list)
             for tid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir, is_qb_star in cur.fetchall():
                 key_injuries_by_team[tid].append({
@@ -1190,7 +1190,7 @@ EDITORIAL DESK ASSIGNMENT (MANDATORY):
                                 overall_rating,
                                 ROW_NUMBER() OVER (PARTITION BY position ORDER BY overall_rating DESC) as pos_rank
                             FROM player_seasons
-                            WHERE team_id = %s AND season = %s
+                            WHERE team_id = %s AND season = %s AND (released_week IS NULL OR released_week > %s)
                         )
                         SELECT 
                             i.player_id,
@@ -1207,9 +1207,9 @@ EDITORIAL DESK ASSIGNMENT (MANDATORY):
                         LEFT JOIN players p ON p.id = i.player_id
                         LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
                         LEFT JOIN ranked_roster rr ON rr.player_id = i.player_id
-                        WHERE i.team_id = %s AND i.season = %s AND i.week = %s
+                        WHERE i.team_id = %s AND i.season = %s AND i.week = %s AND (ps.released_week IS NULL OR ps.released_week > %s)
                         ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
-                    """, (assigned_team_id, season, assigned_team_id, season, bq_week))
+                    """, (assigned_team_id, season, week, assigned_team_id, season, bq_week, week))
                     beat_rows = bcur.fetchall()
 
                     starter_injuries = []

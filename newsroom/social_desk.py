@@ -323,7 +323,7 @@ def load_week_context(cur, season: int, week: int) -> dict:
                 overall_rating,
                 ROW_NUMBER() OVER (PARTITION BY team_id, position ORDER BY overall_rating DESC) as pos_rank
             FROM player_seasons
-            WHERE season = %s
+            WHERE season = %s AND (released_week IS NULL OR released_week > %s)
         )
         SELECT 
             i.team_id,
@@ -351,9 +351,9 @@ def load_week_context(cur, season: int, week: int) -> dict:
         LEFT JOIN players p ON p.id = i.player_id
         LEFT JOIN player_seasons ps ON ps.player_id = i.player_id AND ps.season = i.season
         LEFT JOIN ranked_roster rr ON rr.player_id = i.player_id
-        WHERE i.season = %s AND i.week = %s
+        WHERE i.season = %s AND i.week = %s AND (ps.released_week IS NULL OR ps.released_week > %s)
         ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
-    """, (season, season, q_week))
+    """, (season, week, season, q_week, week))  # released players (roster_moves.on_roster) leave the report
     injs = []
     injs_by_team = collections.defaultdict(list)
     for tid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir, is_qb_star, is_key, is_star in cur.fetchall():
