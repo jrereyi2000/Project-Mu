@@ -77,7 +77,7 @@ class ReleaseResignTest(unittest.TestCase):
     def test_release_keeps_team(self):
         st = state([player(30, "Julius", "Slaton", 1, "WR")], contracts={30: contract(500, 1)})
         plan, rep = L.plan_effects(entries((W4, "JAGUARS RELEASE (WR) JULIUS SLATON")), st, parse_money)
-        self.assertEqual(ops(plan, "release"), [{"op": "release", "player": 30, "week": 4}])
+        self.assertEqual(ops(plan, "release"), [{"op": "release", "player": 30, "week": 4, "team_id": 1, "position": "WR"}])
         self.assertEqual(ops(plan, "move"), [])
         self.assertEqual(ops(plan, "contract_status"), [{"op": "contract_status", "player": 30, "status": "RELEASED"}])
         # his 2036 cap hit leaves the books; the stored cut penalty (2) stays as dead money
@@ -216,3 +216,23 @@ class ReadTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RestructureTest(unittest.TestCase):
+    def test_restructure_frees_this_season_and_spreads_the_rest(self):
+        c = contract(800, 4, years=(10_000_000, 10_000_000, 10_000_000, 0, 0), length=3)
+        st = state([player(60, "Ty", "Simpson", 4, "QB")], contracts={60: c})
+        plan, _ = L.plan_effects(entries((W4, "SAINTS HAVE RESTRUCTURED THE CONTRACT OF (QB) TY SIMPSON GENERATING "
+                                              "$3M IN ADDITIONAL CAP SPACE")), st, parse_money)
+        self.assertEqual(plan[0]["txn"]["type"], "RESTRUCTURED")
+        self.assertEqual(ops(plan, "contract_restructure")[0]["shift"], {2036: -3_000_000, 2037: 1_500_000, 2038: 1_500_000})
+        self.assertEqual(ops(plan, "cap_delta"), [{"op": "cap_delta", "team_id": 4, "salaries": -3_000_000, "cap_penalty": 0}])
+
+
+class FormerPlayerTest(unittest.TestCase):
+    def test_release_finds_a_player_with_no_row_this_season(self):
+        st = state([player(480, "Kurt", "Campanaro", None, "QB", this_season=False)])
+        plan, rep = L.plan_effects(entries((W4, "BEARS RELEASE (QB) KURT CAMPANARO")), st, parse_money)
+        self.assertEqual(plan[0]["txn"]["player"], 480)
+        self.assertEqual(rep["created_players"], [])
+        self.assertEqual(ops(plan, "release")[0]["team_id"], 2)          # his row this season goes to the Bears

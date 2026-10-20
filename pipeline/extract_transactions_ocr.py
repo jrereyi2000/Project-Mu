@@ -6,21 +6,23 @@ Each row is a heading ("2036 SEASON - WEEK 4") over one line of text; the rows o
 up on their overlap (not de-duplicated: identical rows are legitimate). Rows the grammar can't place, whose
 heading breaks the newest-first order, whose signing has no length or amount, or whose team isn't one of the 32
 are re-read by Gemini, one cropped row per request (plan §2.4). A row that still fails is written with
-PARSE_OK=0 (the loader stores it as OTHER); no row is dropped.
+PARSE_OK=0 (the loader stores it as OTHER). Rows that aren't roster moves (transactions_parse.is_move: notices,
+commissioner edits, position changes) are dropped before the pages are lined up; the loader would skip them.
 
 The loader re-parses HEADING/TEXT, so the parsed columns are for review and a parser fix needs no re-extract.
 """
 import csv, glob, os, re
 
-from pipeline.transactions_parse import (clean_heading, fix_heading_order, heading_week, heading_year, needs_reread,
-                                         parse_row, row_key)
+from pipeline.transactions_parse import (clean_heading, fix_heading_order, heading_ordinal, heading_week,
+                                         heading_year, is_move, needs_reread, parse_row, row_key)
 
 COLUMNS = ["ORDER", "PAGE", "HEADING", "SEASON", "WEEK", "TEXT", "TYPE", "TEAM", "TO_TEAM", "POS", "NAME", "YEARS",
            "AMOUNT", "PARSE_OK", "FLAGS"]
 HEADING_RE = re.compile(r"\b[0-9TILO]{4} ?(?:PRE ?|POST ?|OFF ?)?SEASON ?[-–—:]")
 UI_TEXT = {"BACK", "SELECT", "R2", "L2", "R1", "L1", "NFL", "ALL", "SORT", "LEAGUE TRANSACTIONS", "TRANSACTIONS",
            "VIEW PLAYER CARD", "FILTER"}
-BOTTOM = 0.92            # the button bar sits below this fraction of the height
+BOTTOM = 0.845           # the list ends ~0.82 of the height; the News Center ticker (~0.88) and the button bar
+LEFT = 0.10              # sit below it, faint background text sits left of the list (x < ~0.05; list from ~0.115)
 # Down moves a highlight before the list scrolls (JR, 2026-10-19; 4 rows show), so two pages can overlap by
 # 1 to 4 rows: pages are lined up on the longest overlap that fits.
 EXPECTED_OVERLAP = None
@@ -39,16 +41,20 @@ def _band(items, tol):
 
 def assemble_rows(items, size, page=0):
     """One page's Vision items [(text, (x0, y0, x1, y1))] -> rows [{heading, text, page, box}], top to bottom.
-    A row is a heading plus every text line below it down to the next heading; a wrapped body is joined. Text
-    above the first heading (the title, the chips, or a row whose heading scrolled off) and a last heading with no
-    body yet (cut off at the bottom) are left out: the neighbouring page has them whole."""
+    A row is a heading plus the one text line right under it (rows never wrap, JR 2026-10-19). Anything further
+    down before the next heading is a half-visible row at the screen's bottom edge (its heading misread, e.g.
+    "99- 208 SEASON - W 0K2") and is dropped. Text above the first heading (the chips, the status bar, or a row
+    whose heading scrolled off) and a last heading with no body yet are left out: the neighbouring page has them
+    whole."""
     W, H = size
-    items = [(t.strip(), b) for t, b in items if t.strip() and b[1] < H * BOTTOM and t.strip().upper() not in UI_TEXT]
+    items = [(t.strip(), b) for t, b in items if t.strip() and b[1] < H * BOTTOM and b[0] >= W * LEFT
+             and t.strip().upper() not in UI_TEXT]
     heads = sorted(((t, b) for t, b in items if HEADING_RE.search(t.upper())), key=lambda i: i[1][1])
     rows = []
     for i, (h, hb) in enumerate(heads):
         top = hb[3] - 2
         bottom = heads[i + 1][1][1] if i + 1 < len(heads) else H * BOTTOM
+        bottom = min(bottom, hb[3] + 1.2 * (hb[3] - hb[1]))        # the body line starts right under the heading
         body = [(t, b) for t, b in items if top <= b[1] < bottom and (t, b) != (h, hb) and not HEADING_RE.search(t.upper())]
         if not body:
             continue
@@ -63,6 +69,18 @@ def _key(r):
     return (r["heading"], row_key(parse_row(r["text"]), r["text"]))
 
 
+def _same(a, b):
+    """The same list row read on two pages: same heading, and the same key or nearly the same text (OCR reads
+    'SQUAD' as 'SOUAD', '2-YEAR,' as '2-YEAR.')."""
+    from difflib import SequenceMatcher
+    if a["heading"] != b["heading"]:
+        return False
+    if _key(a) == _key(b):
+        return True
+    ta, tb = re.sub(r"[^A-Z0-9]", "", a["text"].upper()), re.sub(r"[^A-Z0-9]", "", b["text"].upper())
+    return SequenceMatcher(None, ta, tb).ratio() >= 0.92
+
+
 def merge_pages(pages, expected=EXPECTED_OVERLAP):
     """Line pages of rows up on their overlap: the new page's first k rows repeat the merged list's last k.
     `expected`, when set, wins when it fits (a page of identical rows also fits a longer overlap); otherwise
@@ -74,13 +92,23 @@ def merge_pages(pages, expected=EXPECTED_OVERLAP):
         if not out:
             out.extend(page)
             continue
-        fits = [k for k in range(min(len(out), len(page)), 0, -1)
-                if [_key(r) for r in out[-k:]] == [_key(r) for r in page[:k]]]
+        fits = [k for k in range(min(len(out), len(page)), 0, -1) if _fits(out[-k:], page[:k])]
         k = expected if expected in fits else (fits[0] if fits else 0)
         if not k and page:
             page[0]["flags"].append("gap?")
+        for a, b in zip(out[len(out) - k:], page[:k]):   # a row misread on one page: keep the reading that parses
+            if not _same(a, b) and parse_row(b["text"])["ok"] and not parse_row(a["text"])["ok"]:
+                a["text"] = b["text"]
+                a["flags"].append("overlap_reread")
         out.extend(page[k:])
     return out
+
+
+def _fits(tail, head):
+    """An overlap of k rows fits when every row matches, or, for k >= 3, all but one row after a matching first
+    row (a row Vision garbled on one of the two pages, seen on the 2026-10-19 capture)."""
+    misses = sum(1 for a, b in zip(tail, head) if not _same(a, b))
+    return misses == 0 or (len(tail) >= 3 and misses == 1 and _same(tail[0], head[0]))
 
 
 def gemini_reader(root):
@@ -113,7 +141,7 @@ def reread_flagged(rows, reader):
     """Send flagged rows to `reader` and keep its reading when it parses better. Rows are updated in place."""
     for r in rows:
         p = parse_row(r["text"])
-        if not needs_reread(p, r["flags"]):
+        if not needs_reread(p, r["flags"]) or (heading_ordinal(r["heading"]) or (0, 1))[1] == 0:
             continue
         try:
             heading, text = reader(r)
@@ -157,9 +185,13 @@ def extract_transactions_ocr(root, reader=None, ocr=None):
         with Image.open(path) as im:
             size = im.size
         pages.append(assemble_rows(ocr(path), size, n))
-    rows = merge_pages(pages)
+    # rows that aren't roster moves are skipped by the loader anyway; dropping them before the pages are lined up
+    # keeps a notice one page misread from breaking the overlap (seen 2026-10-19)
+    rows = merge_pages([[r for r in pg if is_move(r["text"])] for pg in pages])
     fix_heading_order(rows)
-    flagged = [r for r in rows if needs_reread(parse_row(r["text"]), r["flags"])]
+    # preseason rows are skipped by the loader (the Week 1 roster already has them): never worth a re-read
+    flagged = [r for r in rows if needs_reread(parse_row(r["text"]), r["flags"])
+               and (heading_ordinal(r["heading"]) or (0, 1))[1] != 0]
     if flagged:
         try:
             reread_flagged(rows, reader or gemini_reader(root))

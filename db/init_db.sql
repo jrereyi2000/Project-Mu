@@ -479,7 +479,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     season INT NOT NULL,
     week INT,                                          -- games.week; NULL for preseason / offseason headings
     txn_date TEXT NOT NULL,                            -- the heading after OCR clean-up, as Madden shows it
-    type VARCHAR(12) NOT NULL CHECK (type IN ('SIGNED', 'RELEASED', 'TRADED', 'RE_SIGNED', 'EXTENDED', 'OTHER')),
+    type VARCHAR(12) NOT NULL CHECK (type IN ('SIGNED', 'RELEASED', 'TRADED', 'RE_SIGNED', 'EXTENDED', 'RESTRUCTURED', 'OTHER')),
     player_id INT REFERENCES players(id) ON DELETE SET NULL,
     player_name TEXT,                                  -- as the row spells it ("DEVONTA TAYLOR")
     position VARCHAR(6),

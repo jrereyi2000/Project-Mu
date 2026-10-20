@@ -26,12 +26,12 @@ def page(*texts, n=0):
 
 
 class AssembleTest(unittest.TestCase):
-    def test_rows_and_wrapped_body(self):
+    def test_rows_take_one_line(self):
         rows = X.assemble_rows(items((W4, SIGN), (W4, "BEARS TRADED (WR) JOHN DOE TO PACKERS FOR", "(CB) AL ROE"),
                                      ("2036 SEASON - WEEKT", REL)), SIZE, page=2)
         self.assertEqual([r["heading"] for r in rows], [W4, W4, "2036 SEASON - WEEK 1"])
         self.assertEqual(rows[0]["text"], SIGN)
-        self.assertEqual(rows[1]["text"], "BEARS TRADED (WR) JOHN DOE TO PACKERS FOR (CB) AL ROE")
+        self.assertEqual(rows[1]["text"], "BEARS TRADED (WR) JOHN DOE TO PACKERS FOR")   # rows never wrap: one line
         self.assertEqual(rows[2]["page"], 2)
 
     def test_cut_off_heading_left_out(self):
@@ -92,13 +92,12 @@ class ExtractTest(unittest.TestCase):
 
             n = X.extract_transactions_ocr(root, reader=reader,
                                            ocr=lambda p: pages[int(p[-7:-4])])
-            self.assertEqual(n, 3)
+            self.assertEqual(n, 2)                        # SOMETHING ODD isn't a move: dropped
             with open(os.path.join(root, "transactions.csv")) as fh:
                 rows = list(csv.DictReader(fh))
-            self.assertEqual([r["ORDER"] for r in rows], ["0", "1", "2"])
+            self.assertEqual([r["ORDER"] for r in rows], ["0", "1"])
             self.assertEqual(rows[1]["AMOUNT"], "1.10M")
             self.assertIn("from_gemini", rows[1]["FLAGS"])
-            self.assertEqual((rows[2]["TYPE"], rows[2]["PARSE_OK"]), ("OTHER", "0"))
             self.assertEqual(rows[0]["WEEK"], "4")
             self.assertEqual(rows[0]["SEASON"], "2036")
             self.assertEqual(len(calls), 1)               # SOMETHING ODD isn't a move: no re-read
@@ -106,3 +105,13 @@ class ExtractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GarbledOverlapTest(unittest.TestCase):
+    def test_one_garbled_row_in_a_long_overlap(self):
+        bad = "TEXANS SIGNED FRFF AGENT (FR) MORGAN WASHINGTON TA 1 YFAR $1.39M CONTRACT"
+        good = "TEXANS SIGNED FREE AGENT (FB) MORGAN WASHINGTON TO 1 YEAR, $1.39M CONTRACT"
+        a, b, c = "COWBOYS RELEASE (C) JOHNNIE EDWARDS", "COWBOYS RELEASE (CB) MATT BEASON", "LIONS RELEASE (K) E F"
+        rows = X.merge_pages([page(SIGN, a, b, bad), page(a, b, good, c, n=1)])
+        self.assertEqual([r["text"] for r in rows], [SIGN, a, b, good, c])
+        self.assertIn("overlap_reread", rows[3]["flags"])

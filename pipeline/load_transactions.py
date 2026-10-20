@@ -182,7 +182,8 @@ def _resolve_sign(state, name, pos):
 
 def _resolve_on_team(state, name, pos, team_id):
     """full name, then list name (initial + last), narrowed by position: on the team this season first, then
-    league-wide this season."""
+    league-wide this season, then (full name + position) a player with no row this season (on the 2026-10-19
+    capture the Jets released a QB last rostered in 2035)."""
     fk, nk = full_key(name), name_key(name)
     for scope in (lambda p: p["this_season"] and p["team_id"] == team_id, lambda p: p["this_season"]):
         for key, val in (("full_key", fk), ("name_key", nk)):
@@ -191,6 +192,12 @@ def _resolve_on_team(state, name, pos, team_id):
                 return hits[0], None
             if len(hits) > 1:
                 return None, f"{len(hits)} players named {name}"
+    hits = [p for p in state["players"].values() if not p["this_season"] and p["full_key"] == fk
+            and (not pos or p["position"] == pos)]
+    if len(hits) == 1:
+        return hits[0], None
+    if len(hits) > 1:
+        return None, f"{len(hits)} former players named {name}"
     return None, None
 
 
@@ -209,6 +216,8 @@ def plan_effects(entries, state, money=None):
       contract_status {player, status}           (his ACTIVE contract -> SUPERSEDED / RELEASED)
       contract_insert {player, team_id, length, years_remaining, total_value, bonus, cut_savings, cut_penalty,
                        no_trade_clause, incentive, years, projected}   (source TRANSACTION; projected = years)
+      contract_restructure {player, shift}       (restructure: {year: cap hit change}; this season −amount, the
+                                                 deal's later years +amount spread evenly, marked projected)
       contract_extend {player, years, value, hits}  (re-sign / extension: terms on the ACTIVE contract, projected
                                                  cap hits for the new deal's years)
       cap_delta {team_id, salaries, cap_penalty} (team_cap_seasons for the season, marked derived)
@@ -217,7 +226,7 @@ def plan_effects(entries, state, money=None):
     Raises TransactionsError on a failed check (nothing may be written)."""
     season = state["season"]
     report = {"transactions_seen": len(entries), "transactions_new": 0, "unparsed": [], "ambiguous": [],
-              "created_players": [], "not_applied": 0, "older_seasons": 0, "contract_ops": 0, "cap_deltas": 0}
+              "created_players": [], "no_contract": [], "not_applied": 0, "older_seasons": 0, "contract_ops": 0, "cap_deltas": 0}
     problems = []
 
     # checks
@@ -258,7 +267,7 @@ def plan_effects(entries, state, money=None):
         if not e["parse_ok"]:
             report["unparsed"].append(e["text"])
         frm, to = teams.get(lg["from"]), teams.get(lg["to"])
-        if kind in ("RE_SIGNED", "EXTENDED"):
+        if kind in ("RE_SIGNED", "EXTENDED", "RESTRUCTURED"):
             frm = None
         value = None
         if lg["amount_text"] and money:
@@ -299,7 +308,7 @@ def _plan_one(state, entry, kind, lg, frm, to, e, report, value):
         report["ambiguous"].append(f"{e['heading']}: {e['text']} ({why})")
         txn["flags"] = txn["flags"] + ["ambiguous"]
         return
-    if p is None and kind in ("RE_SIGNED", "EXTENDED"):
+    if p is None and kind in ("RE_SIGNED", "EXTENDED", "RESTRUCTURED"):
         report["ambiguous"].append(f"{e['heading']}: {e['text']} (no such player)")
         return
     if p is None:                                    # a player the roster scan never saw
@@ -340,17 +349,33 @@ def _plan_one(state, entry, kind, lg, frm, to, e, report, value):
                 if years[season]:
                     ops.append({"op": "cap_delta", "team_id": to, "salaries": years[season], "cap_penalty": 0})
     elif kind == "RELEASED":
-        ops.append({"op": "release", "player": pid, "week": week})
+        ops.append({"op": "release", "player": pid, "week": week, "team_id": frm, "position": lg["pos"]})
         p.update(released_week=week)
         if active:                                   # his cap hit leaves; the stored cut penalty is dead money
             ops.append({"op": "contract_status", "player": pid, "status": "RELEASED"})
             ops.append({"op": "cap_delta", "team_id": active["team_id"], "salaries": -_hit(active, season),
                         "cap_penalty": active.get("cut_penalty") or 0})
             contracts.pop(pid, None)
+    elif kind == "RESTRUCTURED":                     # this season's hit drops by the amount freed ...
+        if not active or value is None:
+            report["no_contract"].append(f"{e['heading']}: {e['text']}")
+            return
+        end = season + max(1, active.get("years_remaining") or 1) - 1
+        later = list(range(season + 1, end + 1))
+        shift = {season: -value}
+        for i, y in enumerate(later):                # ... and is spread over the deal's later years (projected)
+            shift[y] = shift.get(y, 0) + value // len(later) + (value % len(later) if i == len(later) - 1 else 0)
+        ops.append({"op": "contract_restructure", "player": pid, "shift": shift})
+        ops.append({"op": "cap_delta", "team_id": active["team_id"], "salaries": -value, "cap_penalty": 0})
+        years = dict(active.get("years") or {})
+        for y, d in shift.items():
+            years[y] = (years.get(y) or 0) + d
+        active["years"] = years
+        active["projected"] = sorted(set(active.get("projected") or []) | set(later))
     else:                                            # RE_SIGNED / EXTENDED: this season is unchanged
         n, total = lg["years"], value
         if not active:
-            report["ambiguous"].append(f"{e['heading']}: {e['text']} (no ACTIVE contract to extend)")
+            report["no_contract"].append(f"{e['heading']}: {e['text']}")
             return
         if not (n and total is not None):
             ops.append({"op": "contract_extend", "player": pid, "years": n, "value": total, "hits": {}})
@@ -463,8 +488,10 @@ def execute(cur, plan, season, capture_id=None, stats=None):
                                ON CONFLICT (player_id, season) DO UPDATE SET team_id = EXCLUDED.team_id,
                                released_week = NULL""", (pid(op["player"]), season, op["team_id"], op.get("position")))
             elif kind == "release":
-                cur.execute("UPDATE player_seasons SET released_week = %s WHERE player_id = %s AND season = %s",
-                            (op["week"], pid(op["player"]), season))
+                cur.execute("""INSERT INTO player_seasons (player_id, season, team_id, position, released_week)
+                               VALUES (%s, %s, %s, %s, %s) ON CONFLICT (player_id, season)
+                               DO UPDATE SET released_week = EXCLUDED.released_week""",
+                            (pid(op["player"]), season, op.get("team_id"), op.get("position"), op["week"]))
             elif kind == "contract_status":
                 cur.execute("UPDATE player_contracts SET status = %s WHERE player_id = %s AND season = %s "
                             "AND status = 'ACTIVE'", (op["status"], pid(op["player"]), season))
@@ -492,6 +519,16 @@ def execute(cur, plan, season, capture_id=None, stats=None):
                     cur.execute("""INSERT INTO player_contract_years (contract_id, year, cap_hit, projected)
                                    VALUES (%s, %s, %s, true) ON CONFLICT (contract_id, year)
                                    DO UPDATE SET cap_hit = EXCLUDED.cap_hit, projected = true""", (row[0], year, hit))
+            elif kind == "contract_restructure":
+                cur.execute("SELECT id FROM player_contracts WHERE player_id = %s AND season = %s AND status = 'ACTIVE'",
+                            (pid(op["player"]), season))
+                row = cur.fetchone()
+                for year, d in sorted(op["shift"].items()) if row else ():
+                    cur.execute("""INSERT INTO player_contract_years (contract_id, year, cap_hit, projected)
+                                   VALUES (%s, %s, %s, %s) ON CONFLICT (contract_id, year)
+                                   DO UPDATE SET cap_hit = player_contract_years.cap_hit + EXCLUDED.cap_hit,
+                                                 projected = player_contract_years.projected OR EXCLUDED.projected""",
+                                (row[0], year, d, year != season))
             elif kind == "cap_delta" and op["team_id"]:
                 d = op["salaries"] + op["cap_penalty"]
                 cur.execute("""UPDATE team_cap_seasons SET salaries = salaries + %s, cap_penalty = cap_penalty + %s,

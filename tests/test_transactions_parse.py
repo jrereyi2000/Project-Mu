@@ -154,6 +154,19 @@ class ConsoleWordingTest(unittest.TestCase):
         self.assertTrue(T.is_move("JAGUARS SlGNED FREE AGENT (WR) DEVONTA TAYLOR"))   # OCR-mangled verb, player group
         self.assertFalse(T.needs_reread(T.parse_row("THE DRAFT CLASS HAS BEEN EDITED")))
 
+    def test_real_capture_rows(self):
+        d = T.parse_row("SEAHAWKS SIGNED FROM OTHER TEAM PRACTICE SQUAD (LT) CONNOR REEVES TO 1 YEAR, $2.06M CONTRACT")
+        self.assertEqual((d["type"], d["name"], d["years"], d["amount_text"]), ("SIGNED", "CONNOR REEVES", 1, "2.06M"))
+        d = T.parse_row("RAMS SIGN (LT) J.C. FRIEDMAN TO THEIR PRACTICE SQUAD")
+        self.assertEqual((d["type"], d["name"], d["flags"]), ("SIGNED", "J.C. FRIEDMAN", ["practice_squad"]))
+        d = T.parse_row("TITANS RE-SIGN (P) MAX HOGAN TO A 2-YEAR. $4.16M EXTENSION")
+        self.assertEqual((d["years"], d["amount_text"]), (2, "4.16M"))
+        d = T.parse_row("RAMS HAVE RESTRUCTURED THE CONTRACT OF (QB) TY SIMPSON GENERATING $11.3M IN ADDITIONAL CAP SPACE")
+        self.assertEqual((d["type"], d["team"], d["name"], d["amount_text"]), ("RESTRUCTURED", "RAMS", "TY SIMPSON", "11.3M"))
+        for t in ("(QB) GEORGE CRAWFORD WAS EDITED BY RAAHHFAAAHHH", "DRAFT CLASS HAS BEEN ACCESSED BY RAAHHFAAAHHH",
+                  "PANTHERS MOVE LT NOAH JOHNSON TO (LG)"):
+            self.assertFalse(T.is_move(t), t)
+
     def test_offseason_heading_is_the_finished_season(self):
         self.assertEqual(T.heading_year("2036 OFFSEASON - RE-SIGN PLAYERS"), 2036)
         self.assertGreater(T.heading_ordinal("2036 OFFSEASON - RE-SIGN PLAYERS"), T.heading_ordinal("2036 POST SEASON - SUPER BOWL"))
