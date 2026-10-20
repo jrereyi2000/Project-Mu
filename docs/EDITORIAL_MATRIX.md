@@ -103,6 +103,17 @@ All other slots are untargeted: the writer chooses the subject under the article
 
 ---
 
+# Roster Moves & Contracts
+
+Writers may report the season's signings, releases, re-signings and restructures, and cite contract terms and cap figures, from the writer tools (`get_league_transactions`, `get_player_contract`, `get_team_cap_sheet`) and the assignment brief.
+
+- **Relevance rule:** moves and cap figures appear **only when they matter to the article's subject**. Most articles carry no cap numbers at all. A move is worth a line when it changes the subject's lineup, depth chart or cap picture; otherwise leave it out.
+- **No slot of their own:** in Weeks 1–23, moves get no slate slot. They feed the existing slots: the national brief's notable moves, the beat brief's team moves, and the `CAP DATA:` / `ROSTER MOVES:` lines of the article types that use them.
+- **Facts vs. colour:** that a move happened, its terms (years, total, this season's cap hit, bonus, cut savings, dead money, no-trade clause), team cap space, spend and dead money, rosters and contract end years come only from the tools and are never contradicted. Years and totals are stated as fact. A projected yearly figure (marked `est.`) is hedged in prose ("roughly", "projected", "about"); an estimated cap row is approximate. Never invented, even though untracked: guaranteed money, incentive details, option years. Free to invent: negotiation colour, anonymous front-office or agent quotes, motives, locker-room reaction, what the move means for the depth chart, and unnamed, unpriced interest from "other teams".
+- **Trades:** a trade is reported as done only when it was executed. Anything else is a rumor and is described as one.
+
+---
+
 # NFL Offseason Editorial Package (Week 24: "Offseason")
 
 The Offseason Editorial Package bridges the completed NFL season from the Super Bowl through the first round of the NFL Draft. All six articles publish together as a unified package in the single interseason publication week after Week 23 and before the next season's Week 1 (internal database marker: **Week 24**, displayed as **“Offseason”** in the UI).
@@ -135,10 +146,10 @@ To preserve historical authenticity, prevent chronological leakage, and enforce 
 ```
 [Super Bowl (Week 23)]
         │
-        ▼  (Sees season + SB game; NO coaching, signings, or draft)
+        ▼  (Sees season + SB game; NO coaching, offseason signings, or draft)
    [1. SB Recap, 2. Champion Retro, 3. Runner-Up Postmortem]
         │
-        ▼  (Sees SB + coaching moves; NO signings or draft)
+        ▼  (Sees SB + coaching moves; NO offseason signings or draft)
    [4. Coaching Carousel Audit]
         │
         ▼  (Sees SB + coaching moves + signings; NO draft)
@@ -152,13 +163,13 @@ To preserve historical authenticity, prevent chronological leakage, and enforce 
 
 1. **Super Bowl Articles (Recap, Champion Retrospective, Runner-Up Postmortem):**
    - Access concluded season data through Week 23 only.
-   - Forbidden from referencing head coach firings, hires, coordinator movements, free-agent departures/signings, or draft selections as completed facts.
+   - Forbidden from referencing head coach firings, hires, coordinator movements, offseason free-agent departures/signings (moves after Week 23), or draft selections as completed facts. In-season signings and releases are part of the season and may be cited (e.g. a Week 9 signing who started in the Super Bowl).
 2. **Coaching Carousel Audit:**
    - Access concluded season records, team situational efficiency, coach career profiles, and submitted coaching moves.
-   - Forbidden from referencing free-agent signings, trades, or rookie draft selections.
+   - Forbidden from referencing offseason free-agent signings, offseason trades, or rookie draft selections. In-season moves are season history and may be cited.
    - **Coordinator & Scheme Rules:** Evaluates coordinator origins (promotions vs. outside hires) and coaching slants (`OFFENSIVE`, `DEFENSIVE`, `CEO`). Applies scheme inheritance rules: an offensive-slant hire imports offensive scheme/playbook while retaining defensive scheme continuity; a defensive-slant hire imports defensive scheme/playbook while retaining offensive scheme continuity; a CEO-slant hire delegates play-calling and schemes to retained/hired coordinators.
 3. **Marquee Signing Grades:**
-   - Access concluded season records, updated coaching/coordinator scheme context, and submitted marquee signing facts.
+   - Access concluded season records, updated coaching/coordinator scheme context, and submitted marquee signing facts. Contract terms are cited from `get_player_contract` or the signing row; a term that's missing is never inferred.
    - Forbidden from referencing actual draft selections or rookie acquisitions.
    - **Strict Numeric OVR Ban:** Articles must NEVER state, quote, or cite numeric OVR ratings. Players are evaluated strictly through qualitative tiers:
      - **95–99 OVR:** *“Tier 1 superstar / elite franchise cornerstone”*

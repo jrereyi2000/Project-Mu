@@ -211,15 +211,41 @@ class WriterConfigTests(unittest.TestCase):
         self.assertTrue({"ROUNDTABLE_PANEL", "SKIP_BAYLESS", "LOCAL_BEAT_REPORTER"} <= excluded)
         self.assertNotIn("SKIP_TWEET", excluded)  # Skip still tweets, once, through his tweet account
 
-    def test_no_contract_asks(self):
-        # Contracts aren't modelled; prompts may forbid citing them but must not ask for them.
-        asks = ("contract-year", "analyzing the salary cap", "cap space", "cap investment", "extension value", "to their contract")
-        texts = {f"persona {k}": v for k, v in self.personas.items()}
+    def test_contract_asks_name_the_cap_tools(self):
+        """Contracts and the cap are modelled (team management step 5, JR's R14): a type may ask for cap or contract
+        content only if its data_queried or curatorial_autonomy names get_team_cap_sheet or get_player_contract.
+        Personas still may not ask."""
+        asks = ("contract-year", "contract year", "analyzing the salary cap", "salary cap", "cap space",
+                "cap investment", "extension value", "to their contract", "cap pressures", "dead money",
+                "cap figures", "cap numbers", "salary figures", "rookie reserve")
         for at_id, info in self.article_types.items():
-            texts[at_id] = " ".join(str(v) for v in info.values())
-        for name, text in texts.items():
+            text = " ".join(str(v) for v in info.values()).lower()
+            hits = [phrase for phrase in asks if phrase in text]
+            if hits:
+                named = " ".join(map(str, info.get("data_queried", []))) + info.get("curatorial_autonomy", "")
+                self.assertTrue("get_team_cap_sheet" in named or "get_player_contract" in named,
+                                f"{at_id} asks about {hits} without naming the cap tools")
+        for name, text in self.personas.items():
             for phrase in asks:
-                self.assertNotIn(phrase, text.lower(), f"{name} asks about '{phrase}'")
+                self.assertNotIn(phrase, text.lower(), f"persona {name} asks about '{phrase}'")
+
+    def test_rumor_and_trade_wording(self):
+        """No directive lets a trade be reported unless it was executed; anything else is a rumor."""
+        import re
+        texts = {f"type {k}": " ".join(str(v) for v in info.values()) for k, info in self.article_types.items()}
+        texts.update({f"persona {k}": v for k, v in self.personas.items()})
+        for rel in (("newsroom", "swarm_dispatcher.py"), ("newsroom", "social_writer.py"), ("docs", "EDITORIAL_MATRIX.md"),
+                    ("docs", "SOCIAL_MATRIX.md")):
+            with open(os.path.join(ROOT, *rel)) as f:
+                texts[rel[-1]] = f.read()
+        for name, text in texts.items():
+            for sentence in re.split(r"(?<=[.!?])\s+|\n|;", text):
+                if re.search(r"\btrades?\b", sentence, re.I) and re.search(
+                        r"\b(report(ed)?|as fact|done|completed|confirmed)\b", sentence, re.I):
+                    self.assertRegex(sentence, r"(?i)executed|never|rumou?r|\bnot\b|\bno\b",
+                                     f"{name}: {sentence.strip()[:160]}")
+        with open(os.path.join(ROOT, "docs", "EDITORIAL_MATRIX.md")) as f:
+            self.assertIn("a trade is reported as done only when it was executed", f.read())
 
     def test_historical_comparisons_are_optional(self):
         with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
