@@ -315,6 +315,69 @@ def front_office_team(abbr: str, body: ControlIn, x_debug_token: Optional[str] =
     return _front_office("set_team_control", row["id"], body.user_controlled, body.suggestions_on)
 
 
+class LockIn(BaseModel):
+    fixes: Optional[dict[str, str]] = None           # {pick: team abbreviation} owner corrections (K3)
+
+
+class PickIn(BaseModel):
+    prospect_key: str
+    source: Optional[str] = None                     # informational: the room derives GM / OFF_SCRIPT / JR_TEAM
+
+
+def _draft_room(action, *args, **kwargs):
+    """Run a draft_room action in one DB transaction (tuple rows); DraftRoomError -> HTTP error."""
+    from psycopg.rows import tuple_row
+    from engines import draft_room as dr
+    with connect() as conn:
+        cur = conn.cursor(row_factory=tuple_row)
+        if not dr.installed(cur):
+            raise HTTPException(409, "the scouting migration (2026_12_12_scouting.sql) isn't applied")
+        try:
+            out = getattr(dr, action)(cur, *args, **kwargs)
+        except dr.DraftRoomError as e:
+            conn.rollback()
+            raise HTTPException(e.status, e.message)
+        conn.commit()
+    return out
+
+
+@router.get("/draft-room")
+def get_draft_room(team: Optional[str] = None, draft_season: Optional[int] = None):
+    """Draft Room (team management step 4): the 32 Round 1 slots, the pick on the clock with the GM's
+    recommendation, alternatives, rationale and Madden steps, the projected rest of Round 1, the consensus board,
+    any team's board (?team=ABBR), and draft-day trade proposals."""
+    from psycopg.rows import tuple_row
+    from engines import draft_room as dr
+    with connect() as conn:
+        return dr.state(conn.cursor(row_factory=tuple_row), draft_season, team)
+
+
+@router.post("/draft-room/lock-order")
+def draft_room_lock(body: Optional[LockIn] = None, x_debug_token: Optional[str] = Header(None)):
+    """Lock the draft order (overall_pick for every round), with JR's Round 1 owner fixes."""
+    require_token(x_debug_token)
+    return _draft_room("lock_order", None, (body.fixes if body else None))
+
+
+@router.post("/draft-room/picks/{n}")
+def draft_room_pick(n: int, body: PickIn, x_debug_token: Optional[str] = Header(None)):
+    """JR made pick n in Madden: record who he took (the GM's recommendation or a different player)."""
+    require_token(x_debug_token)
+    from engines.gm_llm import flush, make_llm
+    llm = make_llm("draft_rationale")
+    try:
+        return _draft_room("record", None, n, body.prospect_key, llm)
+    finally:
+        flush(llm)
+
+
+@router.post("/draft-room/picks/{n}/undo")
+def draft_room_undo(n: int, x_debug_token: Optional[str] = Header(None)):
+    """Undo the last recorded pick (only the last: n must be it)."""
+    require_token(x_debug_token)
+    return _draft_room("undo_last", None, n)
+
+
 @router.post("/news/clear")
 def clear_news(body: ClearNewsIn, x_debug_token: Optional[str] = Header(None)):
     require_token(x_debug_token)
