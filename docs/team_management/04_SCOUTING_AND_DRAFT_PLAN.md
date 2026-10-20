@@ -46,6 +46,20 @@ Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) s
 
 ---
 
+### 1.1 JR's answers (2026-10-20)
+- **K1:** EDIT DRAFT CLASS shows the **true** rating. Neither the OVR nor Madden's PICK column changes during the season, so some high-OVR prospects carry low projections.
+  - Madden's sim uses its projections when it autodrafts. In the 2036 draft, Bobby Lowell (a top-20 OVR) was projected undrafted and went 221st, and Oscar Espinosa was projected R7P32 and went 196th. So sleepers exist, but they still go earlier than projected.
+  - Mu only picks Round 1, and a prospect Madden projects very late shouldn't realistically go in Round 1.
+  - **No board re-scan is needed** (Q7 closed).
+- **K2:** Prospect screens show a dev trait only if JR clicks into each player's edit screen, which isn't worth it, so `V` has **no dev term** before the draft.
+  - The **roster card shows the dev trait** (e.g. "Normal", "Superstar X-Factor | Omaha"), so a rookie's dev is known from the next Season scan's roster capture. The hit score's dev term uses that.
+  - Checked 2026-10-20: `player_seasons.dev_trait` is already filled for 1,658 of 1,750 rows in 2036, from the 2026-10-17 roster capture. The gaps: 47 cards whose dev Vision left blank, 12 in-season signings, and about 33 players not on the scan.
+- **K3:** The draft order screen lists Round 1 owners after the CPU-era trades. It shows them only where the slot is known. Mid-season, the order isn't set yet.
+- **K4:** JR turns on user control for **every Round 1 pick owner before the draft**, makes each of the 32 picks by switching teams, then sims Rounds 2–7.
+- **K5:** With every team user-controlled, JR can turn CPU trades on during the draft without any CPU–CPU trades happening. Draft-day trades are possible **if the GM agents propose them** (open question 8).
+- **K6:** Prospects can be found quickly, and the pick clock can be turned off.
+- **K7:** The Draft Recap shows the **team that made the pick**, so `fo_quality` credits the drafting team (Q2 closed: `drafted`).
+
 ## 2. Design
 
 ### 2.1 True value `V` (hidden; `engines/scouting_value.py`, pure)
@@ -321,10 +335,3 @@ This answers step 5's interface request (Phase 9: a weekly consensus board with 
 - Trading down by the GM on the clock beyond what `run_draft_day` proposes.
 
 ## 6. Open questions for JR
-1. **Madden's board in `V`:** Madden's PICK order diverges from OVR (S3) and is likely its hidden-potential read. Should `V` blend it in (κ > 0), and should the week-4 consensus start near Madden's board?
-2. **Bootstrap credit:** 110 of 182 2036 draftees are on a team other than `drafted_team_id` (S5). Credit the team that drafted him (`drafted`) or his 2036 roster team (`roster`)?
-3. **Team boards:** should JR see the on-the-clock team's private board only (proposed), or all 32 boards?
-4. **CAR/IND picks:** do JR's own picks for teams he controls count toward their `fo_quality`?
-5. **Gemini:** OK for ~8 weekly blurbs plus 32 pick rationales, or templates only?
-6. **Writers and raw OVR:** `get_scouted_draft_board` shows writers Madden's OVR today. Keep it, or show only consensus grades, so the board's noise is the story?
-7. **Pre-draft board re-scan:** if K1 says prospect ratings or Madden's PICK column move during the season, should the Season scan's board be re-scanned at offseason stage 3?
