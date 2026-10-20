@@ -2549,9 +2549,11 @@ def fetch_depth_ranks(cur, season: int, on_roster_week) -> tuple:
     return ranks(lambda rel: rm.on_roster(rel, on_roster_week)), ranks(lambda rel: True)
 
 
-def fetch_moves(cur, season: int, team_id=None, visible_only: bool = True) -> list:
+def fetch_moves(cur, season: int, team_id=None, visible_only: bool = True, ctx=None) -> list:
     """This season's transactions as dicts for roster_moves (newest first), with the facts notability and move
-    lines need, filtered to what the current article may see."""
+    lines need, filtered to what the current article may see. ctx = (season, week, offseason signings visible)
+    overrides the thread's article context (the briefs are built outside it)."""
+    ctx = ctx or _txn_context()
     cur.execute("""
         SELECT t.id, t.season, t.week, c.week, t.type, t.player_id, t.player_name, p.full_name, t.position,
                t.from_team_id, t.to_team_id, ft.name, tt.name, t.contract_years, t.contract_value, t.flags,
@@ -2570,7 +2572,7 @@ def fetch_moves(cur, season: int, team_id=None, visible_only: bool = True) -> li
             "raw_text", "popularity", "ovr", "current_team_id", "released_week")
     rows = [dict(zip(keys, r)) for r in cur.fetchall()]
     if visible_only:
-        rows = rm.visible_rows(rows, *_txn_context())
+        rows = rm.visible_rows(rows, *ctx)
     if not rows:
         return rows
 
@@ -2585,7 +2587,8 @@ def fetch_moves(cur, season: int, team_id=None, visible_only: bool = True) -> li
         WHERE extended_transaction_id = ANY(%s) AND status = 'ACTIVE';
     """, ([r["id"] for r in rows],))
     starts = dict(cur.fetchall())
-    current, with_released = fetch_depth_ranks(cur, season, rm.roster_week(cutoff_week(season)))
+    cut = ctx[1] if ctx[0] == season else cutoff_week(season)
+    current, with_released = fetch_depth_ranks(cur, season, rm.roster_week(cut))
 
     signed_after = {}
     for r in sorted(rows, key=lambda r: (r["week"] if r["week"] is not None else 99, r["id"])):

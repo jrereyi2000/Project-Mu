@@ -155,6 +155,28 @@ class WriterConfigTests(unittest.TestCase):
         self.assertEqual(src.count("most articles carry no cap numbers"), 2)
         self.assertEqual(src.count("hedge it in prose"), 2)
 
+    def test_cap_and_move_lines_name_their_tools(self):
+        cap = {"FRANCHISE_STATE_OF_THE_UNION": "get_team_cap_sheet", "SEASON_PROGRESS_AUDIT": "get_team_cap_sheet",
+               "PLAYOFF_AUTOPSY": "get_team_cap_sheet", "SUPER_BOWL_RUNNER_UP_POSTMORTEM": "get_team_cap_sheet",
+               "FRANCHISE_ARCHITECTURE_BLUEPRINT": "get_team_cap_sheet", "DRAFT_BLUEPRINT_ROSTER_AUDIT": "get_team_cap_sheet",
+               "PLAYER_DEEP_PROFILE": "get_player_contract", "LOCAL_SEASON_PROGRESS_REPORT": "get_team_cap_sheet",
+               "LOCAL_PLAYER_SPOTLIGHT": "get_player_contract"}
+        for name, tool in cap.items():
+            info = self.article_types[name]
+            self.assertIn("CAP DATA:", info["curatorial_autonomy"], name)
+            self.assertIn(tool, info["curatorial_autonomy"], name)
+            self.assertIn(tool, " ".join(info["data_queried"]), name)
+            self.assertIn("Only when it bears on the story", info["curatorial_autonomy"], name)
+        for name in ("POWER_RANKINGS", "SEASON_PROGRESS_AUDIT", "LOCAL_MATCHUP_PRIMER", "LOCAL_POSTGAME_REPORT_CARD"):
+            info = self.article_types[name]
+            self.assertIn("ROSTER MOVES:", info["curatorial_autonomy"], name)
+            self.assertIn("get_league_transactions", " ".join(info["data_queried"]), name)
+            self.assertIn("Never invent a move", info["curatorial_autonomy"], name)
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            src = f.read()
+        self.assertIn('brief["league_transactions"]', src)
+        self.assertIn('brief_for_agent["team_transactions"]', src)
+
     def test_playoff_autopsy_audits_the_coaching_staff(self):
         """Section 4 is a coaching-staff accountability audit with a concrete verdict (Agent 2)."""
         entry = self.article_types["PLAYOFF_AUTOPSY"]

@@ -147,6 +147,34 @@ class MoveLineTests(unittest.TestCase):
         self.assertEqual(rm.counts_by_type([row(), row(type="RELEASED"), row()]), {"RELEASED": 1, "SIGNED": 2})
 
 
+class BriefBlockTests(unittest.TestCase):
+    def test_brief_block(self):
+        rows = [row(week=5, player_name=f"PLAYER {i}", contract_value=1_000_000 + i) for i in range(15)]
+        rows.append(row(week=5, player_name="STAR GUY", popularity=80, ovr=97))
+        caps = [{"team": "Colts", "cap_space": -29_500_000, "cap_penalty": 37_800_000, "total_spend": 398_000_000,
+                 "basis": "scanned Week 4"},
+                {"team": "Panthers", "cap_space": 161_000_000, "cap_penalty": 7_260_000, "total_spend": 250_000_000,
+                 "basis": "scanned Week 4"}]
+        block = rm.brief_block(rows, 5, caps)
+        self.assertEqual(len(block["notable_moves"]), 12)
+        self.assertIn("Star Guy", block["notable_moves"][0])
+        self.assertEqual(block["counts"], {"SIGNED": 16})
+        self.assertEqual(block["cap_watch"], ["Colts: -$29.5M in cap space, $37.8M dead money, $398M total spend "
+                                              "(scanned Week 4)"])
+        self.assertNotIn("97", " ".join(block["notable_moves"]))
+        self.assertIn("most articles carry none", block["note"])
+
+    def test_brief_block_omitted_without_moves(self):
+        self.assertEqual(rm.brief_block([], 5, []), {})
+
+    def test_team_block(self):
+        block = rm.team_block([row(type="RELEASED", dead_money=6_000_000)], "Jaguars: $4M in cap space ...")
+        self.assertIn("dead money $6M", block["moves_this_week"][0])
+        self.assertIn("notable: yes", block["moves_this_week"][0])
+        self.assertEqual(block["cap_snapshot"], "Jaguars: $4M in cap space ...")
+        self.assertIn("never a figure", block["reporting_guidance"])
+
+
 class OnRosterTests(unittest.TestCase):
     def test_on_roster(self):
         self.assertTrue(rm.on_roster(None, 5))
