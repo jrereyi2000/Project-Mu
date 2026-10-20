@@ -81,6 +81,52 @@ def window_for(week):
     return None
 
 
+SUPER_BOWL_WEEK = 23
+
+
+def league_window(cur):
+    """(season, engine week, window) for league_state. The league stays at week 23 from the Super Bowl until the
+    Season scan starts the next season, so week 23 with its game COMPLETED is the offseason (engine week 24);
+    week 24+ is the offseason too. Otherwise window_for(week) (None = closed)."""
+    cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
+    season, week = cur.fetchone()
+    if week >= OFFSEASON_WEEK:
+        return season, week, "OFFSEASON"
+    if week == SUPER_BOWL_WEEK:
+        cur.execute("SELECT 1 FROM games WHERE season = %s AND week = %s AND status = 'COMPLETED' LIMIT 1",
+                    (season, SUPER_BOWL_WEEK))
+        if cur.fetchone():
+            return season, OFFSEASON_WEEK, "OFFSEASON"
+    return season, week, window_for(week)
+
+
+def value_season(season, window):
+    """The season whose contracts and cap a trade changes: the next one in the offseason (Madden's cap year has
+    turned over), else this one."""
+    return season + 1 if window in ("OFFSEASON", "DRAFT_DAY") else season
+
+
+def next_stage(current):
+    """The offseason stage after `current` (None = none run yet); None after the last one."""
+    n = (current or 0) + 1
+    return n if n <= len(OFFSEASON_STAGES) else None
+
+
+def read_stage(cur, season):
+    cur.execute("SELECT to_regclass('gm_offseason_state') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return None
+    cur.execute("SELECT stage FROM gm_offseason_state WHERE season = %s", (season,))
+    r = cur.fetchone()
+    return r[0] if r else None
+
+
+def write_stage(cur, season, stage, proposals):
+    cur.execute("""INSERT INTO gm_offseason_state (season, stage, stage_run_at, proposals)
+                   VALUES (%s, %s, now(), %s) ON CONFLICT (season) DO UPDATE SET stage = EXCLUDED.stage,
+                   stage_run_at = now(), proposals = EXCLUDED.proposals""", (season, stage, proposals))
+
+
 def roster_max(window):
     return ROSTER_MAX_IN_SEASON if window == "IN_SEASON" else ROSTER_MAX_OFFSEASON
 
@@ -200,7 +246,7 @@ def simulate_season(approval=0.6, seasons=2000, first_week=1, seed=0):
 def read_books(cur, season, week, window="IN_SEASON", stage=None):
     """Everything the engine needs, read-only."""
     from engines.gm_direction import read_injuries
-    b = {"season": season, "week": week, "window": window}
+    b = {"season": season, "week": week, "window": window, "value_season": value_season(season, window)}
     cur.execute("SELECT id, abbreviation, city, name FROM teams WHERE abbreviation IS NOT NULL")
     b["teams"] = {r[0]: {"abbr": r[1], "city": r[2], "name": r[3]} for r in cur.fetchall()}
     cur.execute("""SELECT g.team_id, g.id, g.gm_name, g.aggressiveness, g.risk_appetite, g.pick_affinity, g.youth_bias,
@@ -214,11 +260,10 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
                    WHERE season = %s""", (season,))
     b["ts"] = {r[0]: {"direction": r[1], "needs": r[2] or [], "surplus": r[3] or [], "urgent_need": r[4],
                       "proj_wins": (r[5] or {}).get("proj_wins")} for r in cur.fetchall()}
-    cur.execute("""SELECT team_id, cap_space, (derived_at IS NOT NULL AND derived_at > scanned_at)
-                   FROM team_cap_seasons WHERE season = %s""", (season,))
-    b["cap"] = {r[0]: {"cap_space": r[1], "derived": bool(r[2])} for r in cur.fetchall()}
+    b["cap"] = read_cap(cur, season, b["value_season"])
     b["players"] = tv.read_players(cur, season)
-    b["injuries"] = read_injuries(cur, season, week if window == "IN_SEASON" else 99)
+    # Madden heals the season's injuries over the offseason: the injury report only blocks in-season trades
+    b["injuries"] = read_injuries(cur, season, week) if window == "IN_SEASON" else {}
     cur.execute("""SELECT a.player_id FROM gm_trade_assets a JOIN gm_trade_proposals p ON p.id = a.proposal_id
                    WHERE p.season = %s AND p.status = 'EXECUTED' AND a.asset_type = 'PLAYER'
                    UNION SELECT player_id FROM transactions WHERE season = %s AND type = 'TRADED'
@@ -251,6 +296,26 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     return finish_books(b)
 
 
+def read_cap(cur, season, cap_season):
+    """{team_id: {cap_space, derived, projected}} for the season a trade changes. In the offseason the new year's
+    row doesn't exist until the Season scan, so it is projected: this season's adjusted cap - the new year's
+    ACTIVE cap hits (projected re-signing years included) - next season's rookie reserve; counted as derived."""
+    cur.execute("""SELECT team_id, cap_space, (derived_at IS NOT NULL AND derived_at > scanned_at)
+                   FROM team_cap_seasons WHERE season = %s""", (cap_season,))
+    out = {r[0]: {"cap_space": r[1], "derived": bool(r[2]), "projected": False} for r in cur.fetchall()}
+    if cap_season == season or out:
+        return out
+    cur.execute("""SELECT tc.team_id, COALESCE(tc.adjusted_cap, tc.cap) - COALESCE(h.hits, 0)
+                          - COALESCE(tc.next_rookie_reserve, 0)
+                   FROM team_cap_seasons tc
+                   LEFT JOIN (SELECT c.team_id, sum(y.cap_hit) AS hits FROM player_contracts c
+                              JOIN player_contract_years y ON y.contract_id = c.id AND y.year = %s
+                              WHERE c.season = %s AND c.status = 'ACTIVE' GROUP BY c.team_id) h ON h.team_id = tc.team_id
+                   WHERE tc.season = %s""", (cap_season, season, season))
+    return {r[0]: {"cap_space": int(r[1]) if r[1] is not None else None, "derived": True, "projected": True}
+            for r in cur.fetchall()}
+
+
 def finish_books(b):
     """Derived parts of the books: rosters, injured sets, booked assets, team contexts."""
     b["roster"] = {}
@@ -260,6 +325,7 @@ def finish_books(b):
     b["injured"] = {pid for pid, i in inj.items() if i["is_ir"] or (i["weeks_remaining"] or 0) > 0}
     b["out"] = {pid for pid, i in inj.items() if i["is_ir"] or (i["weeks_remaining"] or 0) >= 3}
     b.setdefault("acquired", set())
+    b.setdefault("value_season", b["season"])
     b["booked_players"], b["booked_picks"] = set(), set()
     for p in b.get("open", []):
         for a in p["assets"]:
@@ -345,7 +411,7 @@ class Valuer:
             ctx = self.b["ctx"][tid]
             if asset["type"] == "PLAYER":
                 p = dict(self.b["players"][asset["player_id"]])
-                self.cache[key] = tv.player_value(p, ctx, self.fits, season)["value"]
+                self.cache[key] = tv.player_value(p, ctx, self.fits, self.b["value_season"])["value"]
             else:
                 ds, rd, orig = asset["pick"]
                 v = tv.pick_value({"draft_season": ds, "round": rd, "original_team_id": orig}, ctx, self.fits, season)
@@ -367,7 +433,8 @@ class Valuer:
         if key not in self.cache:
             season = self.b["season"]
             if asset["type"] == "PLAYER":
-                self.cache[key] = tv.league_value(self.b["players"][asset["player_id"]], self.fits, season)
+                self.cache[key] = tv.league_value(self.b["players"][asset["player_id"]], self.fits,
+                                                  self.b["value_season"])
             else:
                 ds, rd, orig = asset["pick"]
                 self.cache[key] = tv.pick_value({"draft_season": ds, "round": rd, "original_team_id": orig}, None,
@@ -416,7 +483,7 @@ def dead_money(p):
 def cap_effects(deal, b):
     """{team_id: {before, after, dead, derived, incoming, outgoing}} for this season."""
     out = {}
-    season = b["season"]
+    season = b["value_season"]
     for t in (deal["a"], deal["b"]):
         cap = b["cap"].get(t) or {}
         before = cap.get("cap_space")
@@ -428,6 +495,7 @@ def cap_effects(deal, b):
                    if x["type"] == "PLAYER" and x["from"] == t)
         after = None if before is None else before - inc + outg - dead
         out[t] = {"before": before, "after": after, "dead": dead, "derived": bool(cap.get("derived")),
+                  "projected": bool(cap.get("projected")),
                   "incoming": inc, "outgoing": outg}
     return out
 
@@ -499,7 +567,7 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
             if p is None or p["team_id"] != x["from"]:
                 bad.append(f"player {x['player_id']} not on {abbr(b, x['from'])}")
                 continue
-            ok, why = tv.tradeable(p, b["injured"], b["acquired"])
+            ok, why = tv.tradeable(p, b["injured"], b["acquired"], b["value_season"])
             if not ok and why != "no-trade clause":
                 bad.append(f"{p['name']}: {why}")
     res["tradeable"] = {"ok": not bad, "detail": "; ".join(bad) or "ok"}
@@ -561,7 +629,7 @@ def eligible_team(b, tid):
 def free_player(b, pid):
     p = b["players"].get(pid)
     return (p is not None and pid not in b["booked_players"]
-            and tv.tradeable(p, b["injured"], b["acquired"])[0])
+            and tv.tradeable(p, b["injured"], b["acquired"], b["value_season"])[0])
 
 
 def package_assets(b, tid, exclude_groups=()):
@@ -835,7 +903,7 @@ def store(cur, b, deal, valuer, rationale, flags=(), origin="ENGINE", status="PR
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (pid, x["from"], x["to"], x["type"], x.get("player_id"),
                      ((p or {}).get("contract") or {}).get("contract_id"), pick[0], pick[1], pick[2],
-                     cap_hit_now(p, season) if p else None,
+                     cap_hit_now(p, b["value_season"]) if p else None,
                      valuer.value(x, x["from"]) if valuer else None, valuer.value(x, x["to"]) if valuer else None,
                      valuer.league(x) if valuer else None))
     return pid
@@ -946,7 +1014,7 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         used.update((pick["a"], pick["b"]))
         flags = [f"advisory:{abbr(b, t)}" for t in (pick["a"], pick["b"]) if b["gm"].get(t, {}).get("user_controlled")]
         caps = cap_effects(pick, b)
-        flags += [f"rescan:{abbr(b, t)}" for t, c in caps.items()
+        flags += [f"{'projected_cap' if c['projected'] else 'rescan'}:{abbr(b, t)}" for t, c in caps.items()
                   if c["derived"] and c["after"] is not None and c["after"] < RESCAN_HEADROOM]
         if window == "OFFSEASON":
             flags.append(f"stage:{stage}")
@@ -961,6 +1029,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         rep["proposals"].append({"id": pid, "deal": pick, "rationale": rat, "flags": flags,
                                  "steps": steps_text(b, pick), "caps": caps})
         print_proposal(b, pick, rat, caps, flags, log)
+    if window == "OFFSEASON" and not dry_run:
+        write_stage(cur, season, stage, len(rep["proposals"]))
     rep["books"] = b
     return rep
 
@@ -1059,6 +1129,8 @@ def main(argv=None):
     ap.add_argument("--no-llm", action="store_true", help="template rationale only")
     ap.add_argument("--stage", type=int, choices=range(1, len(OFFSEASON_STAGES) + 1),
                     help="offseason stage 1-5 (with --week 24): " + ", ".join(OFFSEASON_STAGES))
+    ap.add_argument("--next-stage", action="store_true",
+                    help="the offseason: run the stage after the last one run (stage 1 if none has)")
     ap.add_argument("--draft-pick", type=int, metavar="OVERALL",
                     help="draft day: the Round 1 pick on the clock (needs draft_picks.overall_pick set)")
     ap.add_argument("--simulate-season", action="store_true")
@@ -1077,9 +1149,18 @@ def main(argv=None):
     dsn = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
     with psycopg.connect(dsn) as conn:
         cur = conn.cursor()
-        cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
-        s, w = cur.fetchone()
+        s, w, win = league_window(cur)
         season, week = a.season or s, a.week or w
+        stage = a.stage
+        if a.next_stage:
+            if (window_for(week) if a.week else win) != "OFFSEASON":
+                raise SystemExit(f"--next-stage: the league isn't in the offseason (week {week})")
+            stage = next_stage(read_stage(cur, season))
+            if stage is None:
+                raise SystemExit(f"--next-stage: all {len(OFFSEASON_STAGES)} offseason stages have run")
+            print(f"offseason stage {stage}: {OFFSEASON_STAGES[stage - 1]}")
+        elif stage is None and (window_for(week) if a.week else win) == "OFFSEASON":
+            stage = read_stage(cur, season) or 1                 # re-run the current stage
         if a.draft_pick:
             cur.execute("""SELECT draft_season, round, original_team_id FROM draft_picks
                            WHERE draft_season = %s AND overall_pick = %s""", (season + 1, a.draft_pick))
@@ -1090,7 +1171,7 @@ def main(argv=None):
                                               "overall_pick": a.draft_pick}, dry_run=a.dry_run, llm=llm)
             print(f"\npick {a.draft_pick}: p {rep['p']}, {len(rep['proposals'])} proposals, {len(rep['expired'])} expired")
         else:
-            rep = run_week(cur, season, week, dry_run=a.dry_run, replace=a.replace, llm=llm, stage=a.stage)
+            rep = run_week(cur, season, week, dry_run=a.dry_run, replace=a.replace, llm=llm, stage=stage)
             print(f"\nweek {week}: {len(rep['proposals'])} proposals, {len(rep['expired'])} expired, "
                   f"{len(rep['rechecked'])} no longer legal")
         if a.dry_run:

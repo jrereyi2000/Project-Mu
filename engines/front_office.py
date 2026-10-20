@@ -89,7 +89,8 @@ def trade_value(cur, season, team_id=None, player_id=None, pick=None):
     value without one. pick = (draft_season, round, original_team_id)."""
     from engines import gm_trade_engine as ge
     from engines import trade_value as tv
-    b = ge.read_books(cur, season, current_state(cur)[1], ge.window_for(current_state(cur)[1]) or "IN_SEASON")
+    _, week, window = ge.league_window(cur)
+    b = ge.read_books(cur, season, week, window or "IN_SEASON")
     v = ge.Valuer(b, tv.fits_from_db(cur, season))
     asset = ({"type": "PLAYER", "player_id": player_id} if player_id is not None else
              {"type": "PICK", "pick": tuple(pick)})
@@ -388,7 +389,8 @@ def approve(cur, pid):
     p = _proposal(cur, pid)
     if p["status"] != "PROPOSED":
         raise FrontOfficeError(409, f"proposal {pid} is {p['status']}")
-    season, week = current_state(cur)
+    from engines import gm_trade_engine as ge
+    season, week, _ = ge.league_window(cur)
     chk = legality_check(cur, p["season"], week, p["team_a_id"], p["team_b_id"], p["assets"], ignore_proposal=pid)
     if not chk["legal"]:
         why = "no longer legal: " + "; ".join(f"{k} {v['detail']}" for k, v in chk["checks"].items() if not v["ok"])
@@ -418,8 +420,10 @@ def could_not_make(cur, pid, reason=None):
 
 
 def _execute(cur, proposal, executed_as):
+    from engines import gm_trade_engine as ge
     from pipeline.trade_moves import TradeError, execute_trade, plan_trade_ops, read_state
-    state = read_state(cur, proposal["season"], proposal)
+    cap_season = ge.value_season(proposal["season"], ge.window_for(proposal["week"]))
+    state = read_state(cur, proposal["season"], proposal, cap_season)
     try:
         ops, warnings = plan_trade_ops(proposal, state, executed_as)
     except TradeError as e:
@@ -434,7 +438,8 @@ def confirm(cur, pid):
     p = _proposal(cur, pid)
     if p["status"] not in ("APPROVED", "PROPOSED", "EXPIRED"):
         raise FrontOfficeError(409, f"proposal {pid} is {p['status']}")
-    season, week = current_state(cur)
+    from engines import gm_trade_engine as ge
+    season, week, _ = ge.league_window(cur)
     chk = legality_check(cur, p["season"], week, p["team_a_id"], p["team_b_id"], p["assets"], ignore_proposal=pid)
     res = _execute(cur, dict(p, week=week if p["season"] == season else p["week"]), "PROPOSED")
     return {"id": pid, "status": "EXECUTED", "legality": chk, **res}
@@ -444,7 +449,8 @@ def record(cur, team_a, team_b, assets, proposal_id=None, note=None):
     """"Record a trade" (a trade JR made himself, origin USER) or "Made a different trade" on a proposal's card
     (its assets are replaced by JR's and it executes as JR_EDITED). assets: Front Office JSON. Legality is a
     warning, never a block."""
-    season, week = current_state(cur)
+    from engines import gm_trade_engine as ge
+    season, week, _ = ge.league_window(cur)
     ids = _team_ids(cur)
     a, b = _team(ids, team_a), _team(ids, team_b)
     eng = to_engine_assets(cur, assets)
@@ -525,7 +531,8 @@ def apply_sighting(cur, sighting_id, assets=None):
     teams = sorted({x["from"] for x in eng} | {x["to"] for x in eng})
     if len(teams) != 2:
         raise FrontOfficeError(400, "a trade is between exactly two teams")
-    cur_season, week = current_state(cur)
+    from engines import gm_trade_engine as ge
+    _, week, _ = ge.league_window(cur)
     a = eng[0]["from"]
     b = teams[1] if teams[0] == a else teams[0]
     chk = legality_check(cur, season, week, a, b, eng)
@@ -555,11 +562,11 @@ def front_office_state(cur, season=None):
     """The #debug Front Office card: window, deadline, budget pace, 32 directions with needs and GMs, proposals
     (assets, cap effects, legality, steps, status), flags, unmatched sightings."""
     from engines import gm_trade_engine as ge
-    cur_season, week = current_state(cur)
-    season = season or cur_season
     if not installed(cur):
-        return {"season": season, "installed": False}
-    window = ge.window_for(week) if season == cur_season else None
+        return {"season": season or current_state(cur)[0], "installed": False}
+    cur_season, week, window = ge.league_window(cur)
+    season = season or cur_season
+    window = window if season == cur_season else None
     cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED' AND trade_window = 'IN_SEASON'),
                           count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED') AND trade_window = 'IN_SEASON'),
                           count(*) FILTER (WHERE status IN ('PROPOSED', 'APPROVED')),
@@ -573,6 +580,10 @@ def front_office_state(cur, season=None):
               "p_exec": round(ge.p_exec(ex or 0, dec or 0), 3), "max_open": ge.MAX_OPEN,
               "max_new_per_week": ge.MAX_NEW_PER_WEEK, "offseason_target": ge.offseason_target(season),
               "offseason_executed": ex_off or 0}
+    stage = ge.read_stage(cur, season)
+    nxt = ge.next_stage(stage)
+    budget["offseason_stage"] = {"done": stage, "done_name": ge.OFFSEASON_STAGES[stage - 1] if stage else None,
+                                 "next": nxt, "next_name": ge.OFFSEASON_STAGES[nxt - 1] if nxt else None}
     cur.execute("""SELECT t.id, t.abbreviation, t.city, t.name, g.gm_name, g.aggressiveness, s.direction,
                           s.direction_score, s.needs, s.urgent_need, COALESCE(st.user_controlled, false),
                           COALESCE(st.suggestions_on, true), s.fo_quality

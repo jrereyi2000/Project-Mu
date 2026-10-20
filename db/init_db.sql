@@ -673,6 +673,15 @@ CREATE TABLE IF NOT EXISTS gm_trade_sightings (
     UNIQUE (season, txn_date, raw_text)
 );
 
+-- The offseason stage the GM engine last ran (engines/gm_trade_engine.OFFSEASON_STAGES 1-5), per season just
+-- finished: stage 1 runs on its own after the Super Bowl scan, JR runs the rest from #debug (Next offseason stage).
+CREATE TABLE IF NOT EXISTS gm_offseason_state (
+    season INT PRIMARY KEY,
+    stage SMALLINT NOT NULL CHECK (stage BETWEEN 1 AND 5),
+    stage_run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    proposals INT NOT NULL DEFAULT 0
+);
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'draft_picks_acquired_proposal_fk') THEN
