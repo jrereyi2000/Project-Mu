@@ -119,12 +119,17 @@ def prompt(sheet):
         f"GM B: {B['gm']} of the {B['team']} (voice: {B['voice'] or 'plain'}).\n"
         "FACT SHEET (JSON; the only facts you may state):\n"
         f"{json.dumps(sheet, indent=1, default=str)}\n"
+        "years_left is how many seasons are left on each player's contract, this one included (1 = his last "
+        "year); never call a contract expiring unless years_left is 1.\n"
         "Rules: invent untracked colour freely (front-office chatter, how long he has liked a player, what the "
         "building feels like). Never state a number, dollar amount, player, team, record or contract fact that "
         "isn't on the fact sheet. Don't call the trade final or completed: it still has to go through.\n"
         'Answer with JSON only: {"headline": "...", "rationale_a": "...", "rationale_b": "..."}')
 
 
+# Contract-status claims in words: allowed only when a player in the deal really is in his last year
+EXPIRING_RE = re.compile(r"\b(expiring|final year|last year of (?:his|the|a) (?:deal|contract)|walk year|contract year|"
+                         r"rental|pending free agen\w*|about to hit free agency)\b", re.I)
 MONEY_RE = re.compile(r"\$\s?(\d+(?:\.\d+)?)\s?([MK])?", re.I)
 NUM_RE = re.compile(r"(?<![\w.$])(\d+(?:\.\d+)?)(?![\w.]*\d)")
 
@@ -170,6 +175,9 @@ def validate_rationale(text, sheet, league=None):
         d = _dollars(m)
         if not any(abs(d - x) <= 0.051e6 for x in money_vals):
             return False, f"amount {m.group(0)} not on the sheet"
+    m = EXPIRING_RE.search(text)
+    if m and not any(a["kind"] == "player" and (a.get("years_left") or 99) <= 1 for a in sheet["assets"]):
+        return False, f"'{m.group(0)}' but no player in the deal is in his last year"
     plain = MONEY_RE.sub(" ", text)
     for n in NUM_RE.findall(plain):
         if float(n) not in nums:

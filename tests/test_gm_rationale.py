@@ -96,3 +96,9 @@ def test_template_pick_wording_and_rejection_flags():
     r = write_rationale(SHEET, llm=lambda p: answer(rationale_a="He had 14 sacks."), league=LEAGUE)
     assert llm_flags(r) == ["llm_rejected:number 14 not on the sheet"]
     assert llm_flags(template(SHEET)) == []
+
+
+def test_expiring_claim_needs_a_last_year_player():
+    assert not ok("Moving Robbie Sellers on an expiring contract is simple risk management.")   # 2 years left
+    last = dict(SHEET, assets=[dict(SHEET["assets"][0], years_left=1), SHEET["assets"][1]])
+    assert validate_rationale("Sellers is a rental, and we're fine with that.", last, LEAGUE)[0]
