@@ -165,7 +165,12 @@ The research blocks (`swarm_dispatcher.py` national `:990–1022`, beat `:1025�
   - Only `rumor_ok` proposals may be described as actual talks.
   - Until step 3 lands, the packages part stays off: the lift ships in Phase 8, and salary/cap lifts ship in Phase 3.
 - **R7: cap numbers lifted.** Trade packages follow the same rule as R6 (Phase 8).
-- **Still open:** R8, R12, R14 (R13 follows R12), and §6 questions 2–7.
+- **R8: salaries lifted** (including `next_rookie_reserve`). Its "no speculative trades" rule stays.
+- **R9, R10, R11: stay.**
+- **R12: approved** as proposed (Agent Wire may use real contract figures and state real moves as fact).
+- **R13: spec rewrite** (Phase 3).
+- **R14: test updated** to `test_contract_asks_name_the_cap_tools` (Phase 3).
+- **Still open:** §6 questions 2–7.
 
 ### 2.7 Coverage: transactions feed existing slots; no new regular-season slot
 
@@ -345,7 +350,7 @@ Phases 3–5 also edit `docs/EDITORIAL_MATRIX.md` / `docs/SOCIAL_MATRIX.md`, and
 - Gemini calls in tests or checks.
 
 ## 6. Open questions for JR
-1. **§2.6:** R1–R7 decided (see JR's decisions under §2.6). Still open: R8, R12 and R14. R9, R10 and R11 stay as they are unless JR says otherwise.
+1. **§2.6:** all of R1–R14 decided (see JR's decisions under §2.6).
 2. **Projected numbers:** keep extension and restructure year-by-year projections away from writers (proposed), or show them as "est."?
 3. **Notability thresholds (§2.3):** fine as a start? Phase 1 prints the live count.
 4. **Beat coverage:** moves only feed existing beat articles (proposed), or add a `LOCAL_TRANSACTION_REPORT` to a team's portfolio in weeks with a notable move?
