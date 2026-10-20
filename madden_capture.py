@@ -1299,37 +1299,32 @@ def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=tr
     return max_pages
 
 
-def prior_category_pages(out, cat):
-    """Find the page count for category from the most recent prior weekly capture."""
+# A stats list page shows LIST_VISIBLE_ROWS rows and each Down batch moves it at most rows_per_page rows (dropped
+# presses over Remote Play only move it less), so n pages can't cover more than (n - 1) * rows_per_page + visible rows.
+LIST_VISIBLE_ROWS = 11
+LIST_ROW_SLACK = 5
+
+
+def prior_category_rows(out, cat):
+    """Rows in this category's list in the most recent earlier capture (its extracted stats_<cat>.csv), else the
+    last loaded weekly capture's row count in the DB; None when neither exists. Page counts can't be compared week
+    to week: the same 250-row Defense list took 26 to 37 pages (2026-10-13 to 10-20) as Down presses drop."""
     cat_norm = norm(cat).lower()
     out_dir = os.path.abspath(out)
-    root = os.path.dirname(out_dir)
-    cur_base = os.path.basename(out_dir)
+    root, cur_base = os.path.dirname(out_dir), os.path.basename(out_dir)
     if os.path.isdir(root):
-        candidates = []
         for d in sorted(os.listdir(root), reverse=True):
             if d >= cur_base:
                 continue
-            p = os.path.join(root, d)
-            if not os.path.isdir(p):
-                continue
-            if os.path.isdir(os.path.join(p, "stats")) or os.path.exists(os.path.join(p, f"stats_{cat_norm}.csv")):
-                candidates.append(p)
-        for p in candidates:
-            sdir = os.path.join(p, "stats")
-            if os.path.isdir(sdir):
-                imgs = [f for f in os.listdir(sdir) if f"_{cat_norm}_" in f and "_right_" not in f and (f.endswith(".png") or f.endswith(".webp"))]
-                if imgs:
-                    return len(imgs)
-            csv_file = os.path.join(p, f"stats_{cat_norm}.csv")
+            csv_file = os.path.join(root, d, f"stats_{cat_norm}.csv")
             if os.path.exists(csv_file):
                 try:
                     with open(csv_file) as fh:
                         rows = max(0, sum(1 for _ in fh) - 1)
-                    if rows > 0:
-                        return (rows + 9) // 10
-                except Exception:
-                    pass
+                except OSError:
+                    continue
+                if rows > 0:
+                    return rows
     try:
         import psycopg
         dsn = _env("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -1339,12 +1334,18 @@ def prior_category_pages(out, cat):
                 r = cur.fetchone()
                 if r and r[0]:
                     counts = r[0] if isinstance(r[0], dict) else json.loads(r[0])
-                    csv_key = f"stats_{cat_norm}.csv"
-                    if csv_key in counts and counts[csv_key]:
-                        return (counts[csv_key] + 9) // 10
+                    return counts.get(f"stats_{cat_norm}.csv") or None
     except Exception:
         pass
     return None
+
+
+def min_pages_for(rows, rows_per_page=10):
+    """The fewest pages that can cover `rows` list rows (less LIST_ROW_SLACK), or 0 when rows is unknown."""
+    if not rows:
+        return 0
+    need = rows - LIST_ROW_SLACK - LIST_VISIBLE_ROWS
+    return 1 + max(0, -(-need // rows_per_page))
 
 
 def list_to_top(rows_per_page=10, max_pages=35):
@@ -1365,7 +1366,8 @@ def capture_category(out, index, cat, all_rows, max_attempts=2):
     folder = os.path.join(out, "stats")
     cat_norm = norm(cat).lower()
     base = f"{index:02d}_{cat_norm}"
-    prior_pages = prior_category_pages(out, cat)
+    prior_rows = prior_category_rows(out, cat)
+    min_pages = min_pages_for(prior_rows)
 
     for attempt in range(max_attempts):
         if norm(cat) in WIDE_CATEGORIES:
@@ -1373,8 +1375,9 @@ def capture_category(out, index, cat, all_rows, max_attempts=2):
         else:
             pages = capture_list(folder, base, stop_at_zeros=not all_rows, confirm_end=True)
 
-        if prior_pages is not None and prior_pages >= 3 and pages < prior_pages - 2:
-            log(f"WARNING: {cat} captured {pages} pages, but prior week had {prior_pages}. Possible dropped input.")
+        if pages < min_pages:
+            log(f"WARNING: {cat} captured {pages} pages, too few to cover the {prior_rows} rows of its last capture "
+                f"(needs {min_pages}+). Possible dropped input.")
             if attempt < max_attempts - 1:
                 log(f"Re-attempting {cat}...")
                 for p in glob.glob(os.path.join(folder, f"{base}_*")):
@@ -1385,7 +1388,7 @@ def capture_category(out, index, cat, all_rows, max_attempts=2):
                 list_to_top()
                 continue
             # still short on the last attempt: don't let run_stats mark it done
-            raise Abort(f"{cat} came up short twice ({pages} pages, prior week {prior_pages}); "
+            raise Abort(f"{cat} came up short twice ({pages} pages, {min_pages}+ needed for {prior_rows} rows); "
                         f"re-run with --resume to capture it again")
         return pages
 

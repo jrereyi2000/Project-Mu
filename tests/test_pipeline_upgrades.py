@@ -46,7 +46,7 @@ class MaddenCaptureCategoryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.object(MC, "capture_wide_list", return_value=25) as mock_wide, \
                  patch.object(MC, "capture_list", return_value=15) as mock_list, \
-                 patch.object(MC, "prior_category_pages", side_effect=[25, 15]):
+                 patch.object(MC, "prior_category_rows", side_effect=[250, 120]):
                 # Defense is wide category
                 MC.capture_category(tmpdir, 5, "DEFENSE", all_rows=True)
                 mock_wide.assert_called_once()
@@ -60,9 +60,9 @@ class MaddenCaptureCategoryTest(unittest.TestCase):
     def test_capture_category_reattempts_on_significantly_fewer_pages(self):
         """When category captures significantly fewer pages than prior week, it warns and re-attempts."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # First attempt returns 21 pages (prior was 26), second attempt returns 26 pages
+            # First attempt returns 21 pages (too few for 250 rows: 25+ needed), second attempt returns 26 pages
             with patch.object(MC, "capture_wide_list", side_effect=[21, 26]) as mock_wide, \
-                 patch.object(MC, "prior_category_pages", return_value=26), \
+                 patch.object(MC, "prior_category_rows", return_value=250), \
                  patch.object(MC, "list_to_top") as mock_top, \
                  patch.object(MC, "log") as mock_log:
                 pages = MC.capture_category(tmpdir, 5, "DEFENSE", all_rows=True)
@@ -73,11 +73,35 @@ class MaddenCaptureCategoryTest(unittest.TestCase):
                 warn_logs = [call[0][0] for call in mock_log.call_args_list if "WARNING" in str(call[0][0])]
                 self.assertTrue(len(warn_logs) > 0)
 
+    def test_fewer_pages_than_last_week_is_fine_when_they_cover_the_rows(self):
+        """2026-10-20: 26 and 27 pages after a 31-page week were thrown away; 26 pages can hold a 250-row list."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(MC, "capture_wide_list", return_value=26) as mock_wide, \
+                 patch.object(MC, "prior_category_rows", return_value=250), \
+                 patch.object(MC, "list_to_top") as mock_top, \
+                 patch.object(MC, "log"):
+                self.assertEqual(MC.capture_category(tmpdir, 5, "DEFENSE", all_rows=True), 26)
+                self.assertEqual(mock_wide.call_count, 1)
+                mock_top.assert_not_called()
+
+    def test_min_pages_for(self):
+        self.assertEqual(MC.min_pages_for(250), 25)      # (25 - 1) * 10 + 11 = 251 >= 245
+        self.assertEqual(MC.min_pages_for(None), 0)
+        self.assertEqual(MC.min_pages_for(8), 1)
+
+    def test_prior_category_rows_reads_the_last_earlier_csv(self):
+        with tempfile.TemporaryDirectory() as root:
+            for name, rows in (("2026-10-18_1345", 250), ("2026-10-20_1258", 249), ("2026-10-20_1406", 0)):
+                os.makedirs(os.path.join(root, name))
+                with open(os.path.join(root, name, "stats_defense.csv"), "w") as fh:
+                    fh.write("NAME,POS\n" + "X,LB\n" * rows)
+            self.assertEqual(MC.prior_category_rows(os.path.join(root, "2026-10-20_1406"), "DEFENSE"), 249)
+
     def test_capture_category_aborts_when_retry_also_short(self):
         """If the retry is still short, capture_category raises Abort so run_stats never marks it done."""
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.object(MC, "capture_wide_list", side_effect=[20, 13]) as mock_wide, \
-                 patch.object(MC, "prior_category_pages", return_value=26), \
+                 patch.object(MC, "prior_category_rows", return_value=250), \
                  patch.object(MC, "list_to_top"), \
                  patch.object(MC, "log"):
                 with self.assertRaises(MC.Abort):

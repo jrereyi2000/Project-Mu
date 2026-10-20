@@ -1,6 +1,7 @@
 """Console- and network-free checks of extract.py's roster helpers."""
 import os
 import unittest
+from unittest import mock
 
 import extract
 
@@ -126,3 +127,35 @@ class PostgameColumnsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CategoryExtractTest(unittest.TestCase):
+    """`extract.py <run> --category defense` re-extracts one Season Stats list (2026-10-20)."""
+
+    def _run(self, names):
+        import tempfile
+        root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(root, "stats"))
+        for n in names:
+            open(os.path.join(root, "stats", n), "w").close()
+        return root
+
+    def test_groups_limited_to_the_category_with_both_halves(self):
+        root = self._run(["01_passing_000.png", "05_defense_000.png", "05_defense_right_000.png",
+                          "08_kickreturn_000.png"])
+        self.assertEqual(sorted(extract.stats_groups(root, ["DEFENSE"])), ["05_defense", "05_defense_right"])
+        self.assertEqual(sorted(extract.stats_groups(root, ["kick return"])), ["08_kickreturn"])
+        self.assertEqual(len(extract.stats_groups(root)), 4)
+
+    def test_category_run_writes_only_that_csv(self):
+        root = self._run(["01_passing_000.png", "05_defense_000.png", "05_defense_right_000.png"])
+        with mock.patch.object(extract, "prefetch"), \
+                mock.patch.object(extract, "vote_misreads", return_value=(["NAME", "POS"], [("A.B", "LB")])), \
+                mock.patch.object(extract, "METER", None):
+            extract.extract_categories(root, ["defense"])
+        self.assertEqual(sorted(f for f in os.listdir(root) if f.endswith(".csv")), ["stats_defense.csv"])
+
+    def test_unknown_category_stops(self):
+        root = self._run(["01_passing_000.png"])
+        with self.assertRaises(SystemExit):
+            extract.extract_categories(root, ["defense"])

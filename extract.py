@@ -3,6 +3,8 @@
 Turn madden_capture.py screenshots into CSVs with Gemini vision.
 
   python3 extract.py captures/2026-10-13_1100
+  python3 extract.py captures/2026-10-13_1100 --category defense [--category kicking]
+      re-extracts only those Season Stats categories (stats/NN_<cat>_*.png -> stats_<cat>.csv), nothing else
 
 Uses GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment, falling back to the
 project-root .env, the same way the newsroom does. Model: gemini-3.8-flash, the one
@@ -1082,10 +1084,56 @@ def write_csv(path, columns, rows):
         w.writerows(rows)
 
 
+def stats_groups(root, categories=None):
+    """Season Stats screenshots by list: {"05_defense": [paths], "05_defense_right": [paths], ...}, limited to
+    `categories` (names like "defense", any case) when given."""
+    want = {c.lower().replace(" ", "") for c in categories} if categories else None
+    groups = {}
+    for p in glob.glob(os.path.join(root, "stats", "*.png")):
+        key = os.path.basename(p).rsplit("_", 1)[0]          # e.g. 01_passing, 05_defense_right
+        cat = key.split("_", 1)[1].removesuffix("_right")
+        if want is None or cat in want:
+            groups.setdefault(key, []).append(p)
+    return groups
+
+
+def extract_stats(root, groups):
+    """Season Stats lists -> stats_<category>.csv (wide lists merge their left and right pages)."""
+    for key, paths in sorted(groups.items()):
+        if key.endswith("_right"):
+            continue
+        if key + "_right" in groups:
+            both = paths + groups[key + "_right"]
+            cols, rows = vote_misreads(key, lambda: merge_wide(paths, groups[key + "_right"], key), both, ["NAME", "POS"])
+        else:
+            cols, rows = vote_misreads(key, lambda: merge(paths, key), paths, ["NAME", "POS"])
+        write_csv(os.path.join(root, f"stats_{key.split('_', 1)[1]}.csv"), cols, rows)
+
+
+def extract_categories(root, categories):
+    """Re-extract only the named Season Stats categories (e.g. a Defense list re-captured with --resume)."""
+    groups = stats_groups(root, categories)
+    if not groups:
+        sys.exit(f"No Season Stats screenshots for {', '.join(categories)} in {os.path.join(root, 'stats')}")
+    prefetch(sorted(p for paths in groups.values() for p in paths))
+    extract_stats(root, groups)
+    if METER is not None:
+        t = METER.record("extract", model=MODEL, capture_folder=os.path.basename(os.path.normpath(root)), mode="weekly")
+        print(f"Gemini: {t['calls']} calls, {t['input_tokens']:,} input ({t['cached_tokens']:,} cached), "
+              f"{t['output_tokens']:,} output, {t['thinking_tokens']:,} thinking tokens")
+    print("Done.")
+
+
 def main():
-    if len(sys.argv) != 2:
-        sys.exit(__doc__)
-    root = sys.argv[1]
+    import argparse
+    ap = argparse.ArgumentParser(usage=__doc__)
+    ap.add_argument("root")
+    ap.add_argument("--category", action="append", metavar="CAT",
+                    help="re-extract only this Season Stats category (repeatable); everything else is left alone")
+    a = ap.parse_args()
+    root = a.root
+    if a.category:
+        return extract_categories(root, a.category)
     try:
         from pipeline.extract_prospects_ocr import find_prospect_frames
         has_prosp_lines = bool(find_prospect_frames(root))
@@ -1102,19 +1150,7 @@ def main():
                     glob.glob(os.path.join(root, "season_schedule", "*.png")) +
                     legacy_prosp +
                     glob.glob(os.path.join(root, "stats_scope", "*.png"))))
-    groups = {}
-    for p in glob.glob(os.path.join(root, "stats", "*.png")):
-        key = os.path.basename(p).rsplit("_", 1)[0]          # e.g. 01_passing
-        groups.setdefault(key, []).append(p)
-    for key, paths in sorted(groups.items()):
-        if key.endswith("_right"):
-            continue
-        if key + "_right" in groups:
-            both = paths + groups[key + "_right"]
-            cols, rows = vote_misreads(key, lambda: merge_wide(paths, groups[key + "_right"], key), both, ["NAME", "POS"])
-        else:
-            cols, rows = vote_misreads(key, lambda: merge(paths, key), paths, ["NAME", "POS"])
-        write_csv(os.path.join(root, f"stats_{key.split('_', 1)[1]}.csv"), cols, rows)
+    extract_stats(root, stats_groups(root))
 
     # team-scoped Season Stats (--only stats --scope TEAM): stats_scope/<team>_<category>_NNN.png
     scoped = {}
