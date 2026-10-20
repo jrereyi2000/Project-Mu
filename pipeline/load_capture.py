@@ -1435,8 +1435,9 @@ def load_contracts(cur, folder, season, report):
             problems.append(f"{team} cap strip: {e}")
 
     # 4. matching against the season's roster
+    fuzzy = []
     matches, match_problems = match_contract_rows([p for p in parsed if p["team_id"]],
-                                                  contract_candidates(cur, season), season)
+                                                  contract_candidates(cur, season), season, fuzzy)
     if match_problems:
         problems += match_problems
         problems.append("run the roster scan for players it hasn't seen, or the transactions scan for CPU signings")
@@ -1474,6 +1475,7 @@ def load_contracts(cur, folder, season, report):
     report["contracts"] = len(matched_rows)
     report["teams"] = len(scanned)
     report["cap_warnings"] = cap_warnings
+    report["fuzzy_matches"] = fuzzy          # names matched across one OCR slip: worth a glance
     # C9: Madden shows only the incentive's name; JR looks each one up by hand after a scan
     report["incentives"] = [f"{p['team']} {p['NAME']} {p['POS']}: {p['incentive']}" for p in matched_rows if p["incentive"]]
     return len(matched_rows) + len(cap_values)
