@@ -137,6 +137,6 @@ The mock draft's board is the top 32 by OVR, and that isn't realistic. Step 4 st
 |---|---|---|
 | 1 Contract scan | written | Built and live. Migration applied 2026-10-19; first full scan loaded 2026-10-20 (capture 21: 1,695 active 2036 contracts, 32 cap rows) |
 | 2 League transactions | written | Built and live. Migration applied 2026-10-19; first backfill loaded 2026-10-20 (capture 20: 181 transactions, Weeks 1–4); weekly scans continue from SEASON - WEEK 4 |
-| 3 GM agents | written | Built (phases 1–7 on main, 2026-10-20). Migration `2026_12_10_gm_agents.sql` **not applied yet** (JR, after a backup); then seed personas, dry-run the engine; C8 (trade row wording) checked after the first real trade |
+| 3 GM agents | written | Built (phases 1–7 on main, 2026-10-20). Live: migration `2026_12_10_gm_agents.sql` applied 2026-10-20 after a backup. 32 GMs were seeded, 31 with Gemini bios and SEA on the template (`backfill-bios` retries it), plus 672 draft picks for 2037–2039. A week 4 dry run proposed 1 trade (NYJ↔NE) and wrote nothing. C8 (trade row wording) is checked after the first real trade |
 | 4 Scouting and draft | design pass needed (§2.5) | not started |
 | 5 Newsroom integration | written | Phases 1–7 built 2026-10-20 (writer tools, released players off team views, JR's R1–R14 rules, brief/beat blocks and directive lines, Agent Wire move posts, fantasy context, offseason signing candidates). Phase 8 (trades, rumors) waits on step 3; Phase 9 (draft risers/fallers) on step 4 |
