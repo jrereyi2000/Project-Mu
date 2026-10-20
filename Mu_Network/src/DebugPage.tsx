@@ -53,6 +53,7 @@ const RUNS: { kind: string; title: string; note: string }[] = [
   { kind: "contract_scan", title: "Contract scan", note: "Captures every team's Team Salary screen (contracts and cap), extracts and loads it; a re-scan supersedes the old contracts. ~40 min. Normally part of the Season scan; only loads in-season (the year on screen must match the league season). No articles." },
   { kind: "transactions_scan", title: "League transactions scan", note: "Reads League > League Transactions from the newest week already loaded (from Week 1 the first time; preseason moves are already in the Week 1 roster), loads signings, releases and re-signings (team moves, contracts and cap kept current from them; no Team Salary re-scan). Trade rows are skipped: trades go through the GM agents' approval flow. Scan week does this too. No articles." },
   { kind: "gm_proposals", title: "GM trade proposals", note: "One run of the GM agents' trade engine for this week (no console): expires stale proposals, updates directions and needs, and adds this week's proposals to the Front Office card. Scan week runs it too, after the engines." },
+  { kind: "gm_offseason_stage", title: "Next offseason stage (GM trades)", note: "After the Super Bowl: runs the GM agents' trade engine for the next offseason stage (1 post-Super Bowl runs on its own with the Super Bowl scan; then re-signing, free agency, draft, preseason). Run a League transactions scan first so the CPU's re-signings and signings are in. No console." },
   { kind: "draft_scan", title: "Draft prospect scan", note: "Scans the scouting draft board line-by-line, extracts prospects via Apple Vision OCR, and syncs data/draft/ prospects board (normally run once a season with schedule and roster scans, after both). No articles." },
 ];
 
@@ -105,7 +106,7 @@ type FoProposal = { id: number; week: number; status: string; status_reason: str
 type FoTeam = { team_id: number; abbr: string; team: string; gm_name: string | null; direction: string | null; direction_score: number | null; needs: { group: string; score: number }[]; urgent_need: { group: string } | null; user_controlled: boolean; suggestions_on: boolean };
 type FoSighting = { id: number; txn_date: string; raw_text: string; match_status: string; proposal_id: number | null; resolved?: Record<string, unknown>[]; unresolved?: string[] };
 type FoFlag = { kind: string; detail: string; proposal_id?: number; sighting_id?: number };
-type FoState = { season: number; installed: boolean; week?: number; window?: string | null; budget?: { executed: number; target: number; season_target: number; open: number; max_open: number; deadline_week: number; p_exec: number; offseason_target: number; offseason_executed: number }; teams?: FoTeam[]; proposals?: FoProposal[]; flags?: FoFlag[]; sightings?: FoSighting[] };
+type FoState = { season: number; installed: boolean; week?: number; window?: string | null; budget?: { executed: number; target: number; season_target: number; open: number; max_open: number; deadline_week: number; p_exec: number; offseason_target: number; offseason_executed: number; offseason_stage?: { done: number | null; done_name: string | null; next: number | null; next_name: string | null } }; teams?: FoTeam[]; proposals?: FoProposal[]; flags?: FoFlag[]; sightings?: FoSighting[] };
 
 const money = (v: number | null | undefined) => v === null || v === undefined ? "?" : `$${(v / 1e6).toFixed(2)}M`;
 
@@ -155,7 +156,7 @@ function FrontOfficeCard({ token }: { token: string }) {
             <span>deadline: week {b.deadline_week}</span>
             <span>window: {fo.window || "closed"}</span>
             <span>JR approval rate {Math.round(b.p_exec * 100)}%</span>
-            <span>offseason {b.offseason_executed} / {b.offseason_target}</span>
+            <span>offseason {b.offseason_executed} / {b.offseason_target}{b.offseason_stage?.done ? ` · stage ${b.offseason_stage.done} (${b.offseason_stage.done_name}) done` : ""}{b.offseason_stage?.next && fo.window === "OFFSEASON" ? ` · next: ${b.offseason_stage.next_name}` : ""}</span>
           </div>
           {message && <p className="text-[var(--red)]">{message}</p>}
           <div>

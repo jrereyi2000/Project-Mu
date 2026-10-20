@@ -283,3 +283,4 @@ class FrontOfficeTest(unittest.TestCase):
         self.assertEqual(dbg.JOB_KINDS["gm_proposals"][0], "GM trade proposals (this week)")
         self.assertEqual(dbg.job_command("gm_proposals")[-2:], ["-m", "engines.gm_trade_engine"])
         self.assertEqual(dbg.job_command("gm_proposals", week=5)[-2:], ["--week", "5"])
+        self.assertEqual(dbg.job_command("gm_offseason_stage")[-3:], ["-m", "engines.gm_trade_engine", "--next-stage"])

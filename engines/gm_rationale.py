@@ -27,7 +27,7 @@ def money(v):
 def build_fact_sheet(b, deal):
     """The deal's facts as a plain dict (JSON-safe)."""
     from engines.gm_trade_engine import abbr, cap_effects, cap_hit_now, pick_label, team_name
-    season = b["season"]
+    season = b.get("value_season", b["season"])
     caps = cap_effects(deal, b)
     teams = {}
     for side, t in (("a", deal["a"]), ("b", deal["b"])):

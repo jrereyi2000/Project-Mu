@@ -80,3 +80,54 @@ def test_draft_day_probability_is_capped_and_paced():
     p = ge.draft_day_p(2036, 0, 0, 0)
     assert 0 < p <= ge.DRAFT_DAY_MAX_P
     assert ge.draft_day_p(2036, 20, 20, 0) == 0                          # target met: no more trades
+
+
+class WindowCursor:
+    def __init__(self, week, sb_played):
+        self.week, self.sb, self.q = week, sb_played, None
+
+    def execute(self, q, args=None):
+        self.q = q
+
+    def fetchone(self):
+        if "league_state" in self.q:
+            return (2036, self.week)
+        return (1,) if self.sb else None
+
+
+def test_league_window_after_the_super_bowl():
+    assert ge.league_window(WindowCursor(4, False)) == (2036, 4, "IN_SEASON")
+    assert ge.league_window(WindowCursor(12, False)) == (2036, 12, None)
+    assert ge.league_window(WindowCursor(23, False)) == (2036, 23, None)            # Super Bowl still to play
+    assert ge.league_window(WindowCursor(23, True)) == (2036, ge.OFFSEASON_WEEK, "OFFSEASON")
+    assert ge.league_window(WindowCursor(24, False)) == (2036, 24, "OFFSEASON")
+
+
+def test_offseason_trades_the_next_seasons_contracts_and_cap():
+    from engines.trade_value import tradeable
+    assert ge.value_season(2036, "OFFSEASON") == ge.value_season(2036, "DRAFT_DAY") == 2037
+    assert ge.value_season(2036, "IN_SEASON") == 2036
+    p = {"id": 1, "group": "WR", "contract": {"end_season": 2036, "no_trade_clause": False}}
+    assert tradeable(p, season=2036) == (True, None)
+    assert tradeable(p, season=2037) == (False, "contract expired")              # a free agent now
+
+
+def test_next_stage():
+    assert ge.next_stage(None) == 1 and ge.next_stage(4) == 5 and ge.next_stage(5) is None
+
+
+def test_offseason_moves_use_the_new_cap_year():
+    from pipeline import trade_moves as tm
+    c = {"contract_id": 9, "season": 2036, "length": 3, "years_remaining": 3, "total_value": 9, "bonus": 0,
+         "cut_savings": 0, "cut_penalty": 0, "no_trade_clause": False, "incentive": None,
+         "years": {2036: (1_000_000, False), 2037: (4_000_000, False)}}
+    state = {"teams": {1: {"name": "A"}, 2: {"name": "B"}}, "players": {7: {"team_id": 1, "pos": "WR", "name": "X Y",
+                                                                           "contract": c}},
+             "cap_rows": {1, 2}, "picks": {}, "cap_season": 2037}
+    prop = {"id": 3, "season": 2036, "week": 24, "assets": [{"type": "PLAYER", "player_id": 7, "from": 1, "to": 2}]}
+    ops, _ = tm.plan_trade_ops(prop, state)
+    caps = {o["team_id"]: o for o in ops if o["op"] == "cap_delta"}
+    assert caps[2]["salaries"] == 4_000_000 and caps[2]["season"] == 2037
+    assert next(o for o in ops if o["op"] == "txn")["txn_date"] == "2036 OFFSEASON"
+    _, warnings = tm.plan_trade_ops(prop, dict(state, cap_rows=set()))
+    assert any("no 2037 cap row" in w for w in warnings)

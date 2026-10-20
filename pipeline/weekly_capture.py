@@ -350,7 +350,8 @@ def step_engines(season):
 
 def step_gm(season):
     """GM trade proposals (team management step 3, engines/gm_trade_engine.py) for league_state's week, after the
-    engines and before articles. Optional: a failure only logs a warning and the week goes on. Backfills Gemini
+    engines and before articles. After the Super Bowl scan the league is in the offseason: stage 1 (post-Super
+    Bowl) runs here once; JR runs stages 2-5 from #debug. Optional: a failure only logs a warning and the week goes on. Backfills Gemini
     bios for GMs still on the template first. Returns the number of new proposals."""
     try:
         import psycopg
@@ -365,21 +366,29 @@ def step_gm(season):
             if not cur.fetchone()[0]:
                 log("  GM trade proposals skipped: the GM agents migration isn't applied")
                 return 0
-            cur.execute("SELECT current_week FROM league_state WHERE id = 1")
-            week = cur.fetchone()[0]
+            from engines.gm_trade_engine import league_window, read_stage
+            _, week, window = league_window(cur)
+            stage = None
+            if window == "OFFSEASON":
+                done = read_stage(cur, season)
+                if done:
+                    log(f"  GM trade proposals: offseason stage {done} already ran; run the next stage from #debug")
+                    return 0
+                stage = 1                                     # right after the Super Bowl scan: post-Super Bowl
             bio_llm = make_llm("gm_persona")
             if bio_llm is not None:
                 n = backfill_bios(cur, season, bio_llm, log=log)
                 if n:
                     log(f"  GM bios: {n} written by Gemini")
                 flush(bio_llm)
-            rep = run_week(cur, season, week, llm=llm, log=log)
+            rep = run_week(cur, season, week, llm=llm, log=log, stage=stage)
             conn.commit()
         flush(llm)
         n = len(rep["proposals"])
         log(f"  GM trade proposals: {n} new, {len(rep['expired'])} expired, {len(rep['rechecked'])} no longer legal")
         if n:
-            notify(f"{n} new trade proposal{'s' if n != 1 else ''} for JR (week {week}). Review them on #debug > "
+            when = f"offseason stage {stage}" if stage else f"week {week}"
+            notify(f"{n} new trade proposal{'s' if n != 1 else ''} for JR ({when}). Review them on #debug > "
                    "Front office.", title="Mu: trade proposals", tags=("handshake",))
         return n
     except Exception as e:

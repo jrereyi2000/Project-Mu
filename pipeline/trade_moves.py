@@ -11,7 +11,8 @@ caller's DB transaction (nothing here commits):
   - player_seasons.team_id -> the receiver (released_week cleared);
   - the ACTIVE contract -> TRADED, and a row-for-row copy on the new team (source TRANSACTION, every
     player_contract_years row with its projected flag, the extension terms) through contracts.insert_contract;
-  - both teams' team_cap_seasons: salaries -/+ this season's hit, the sender's cap_penalty + dead money
+  - both teams' team_cap_seasons (the new season's in the offseason, when the Season scan has made it): salaries
+    -/+ that season's hit, the sender's cap_penalty + dead money
     (TRADE_DEAD_MONEY: the contract's cut_penalty, C4), total_spend and cap_space to match, derived_at stamped;
   - draft_picks.owner_team_id -> the receiver, source TRADE, acquired_proposal_id;
   - one transactions row per leg (type TRADED, trade_group gm:<id>, row_key gm:<id>:<n>, capture_id NULL);
@@ -49,6 +50,7 @@ def plan_trade_ops(proposal, state, executed_as="PROPOSED"):
     players {id: {team_id, pos, name, contract | None}}, cap_rows {team_id}, picks {(ds, rd, orig): owner}}.
     Returns (ops, warnings). Warnings never stop a confirmed trade (Madden is the truth once JR made it)."""
     pid, season, week = proposal["id"], proposal["season"], proposal["week"]
+    cap_season = state.get("cap_season", season)            # the offseason trades the new year's cap
     ops, warnings = [], []
     caps = {}
     if not proposal.get("assets"):
@@ -66,7 +68,7 @@ def plan_trade_ops(proposal, state, executed_as="PROPOSED"):
             ops.append({"op": "move", "player": x["player_id"], "team_id": to})
             c = p.get("contract")
             if c:
-                hit = (c.get("years") or {}).get(season, (0, False))[0] or 0
+                hit = (c.get("years") or {}).get(cap_season, (0, False))[0] or 0
                 dead = (c.get("cut_penalty") or 0) if TRADE_DEAD_MONEY == "cut_penalty" else 0
                 ops.append({"op": "contract_trade", "player": x["player_id"], "old_contract_id": c["contract_id"],
                             "team_id": to, "copy": {k: c.get(k) for k in (
@@ -95,15 +97,18 @@ def plan_trade_ops(proposal, state, executed_as="PROPOSED"):
                     "from_team_id": frm, "to_team_id": to, "raw_text": leg_text(x, state)})
     for t, d in sorted(caps.items()):
         if t not in state.get("cap_rows", set()):
-            warnings.append(f"team {t} has no {season} cap row (no cap delta)")
+            warnings.append(f"team {t} has no {cap_season} cap row (no cap delta; the Season scan sets it)")
             continue
-        ops.append({"op": "cap_delta", "team_id": t, "salaries": d["salaries"], "cap_penalty": d["cap_penalty"]})
+        ops.append({"op": "cap_delta", "team_id": t, "season": cap_season, "salaries": d["salaries"],
+                    "cap_penalty": d["cap_penalty"]})
     ops.append({"op": "proposal_status", "id": pid, "executed_as": executed_as})
     return ops, warnings
 
 
-def read_state(cur, season, proposal):
-    """plan_trade_ops' state for the proposal's teams, players and picks (read-only)."""
+def read_state(cur, season, proposal, cap_season=None):
+    """plan_trade_ops' state for the proposal's teams, players and picks (read-only). cap_season: the season whose
+    cap rows the trade moves (the next one in the offseason; default `season`)."""
+    cap_season = cap_season or season
     teams_ids = {x["from"] for x in proposal["assets"]} | {x["to"] for x in proposal["assets"]}
     cur.execute("SELECT id, abbreviation, name FROM teams WHERE id = ANY(%s)", (list(teams_ids),))
     teams = {r[0]: {"abbr": r[1], "name": r[2]} for r in cur.fetchall()}
@@ -131,7 +136,7 @@ def read_state(cur, season, proposal):
                             (c["contract_id"],))
                 c["years"] = {y: (h, bool(pr)) for y, h, pr in cur.fetchall()}
     cur.execute("SELECT team_id FROM team_cap_seasons WHERE season = %s AND team_id = ANY(%s)",
-                (season, list(teams_ids)))
+                (cap_season, list(teams_ids)))
     cap_rows = {r[0] for r in cur.fetchall()}
     picks = {}
     keys = [tuple(x["pick"]) for x in proposal["assets"] if x["type"] == "PICK"]
@@ -141,7 +146,7 @@ def read_state(cur, season, proposal):
         row = cur.fetchone()
         if row:
             picks[(ds, rd, orig)] = row[0]
-    return {"teams": teams, "players": players, "cap_rows": cap_rows, "picks": picks}
+    return {"teams": teams, "players": players, "cap_rows": cap_rows, "picks": picks, "cap_season": cap_season}
 
 
 def execute_trade(cur, ops, season):
@@ -192,7 +197,7 @@ def execute_trade(cur, ops, season):
                                   total_spend = total_spend + %s, cap_space = cap_space - %s,
                                   derived_at = now(), derived_transaction_id = %s
                            WHERE team_id = %s AND season = %s""",
-                        (op["salaries"], op["cap_penalty"], d, d, first_txn, op["team_id"], season))
+                        (op["salaries"], op["cap_penalty"], d, d, first_txn, op["team_id"], op.get("season", season)))
         elif kind == "pick_owner":
             ds, rd, orig = op["pick"]
             cur.execute("""INSERT INTO draft_picks (draft_season, round, original_team_id, owner_team_id, source,

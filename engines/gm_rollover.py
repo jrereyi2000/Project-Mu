@@ -6,7 +6,7 @@ only warns) for the new season, or by hand:
 
   python3 -m engines.gm_rollover [--season NEW] [--dry-run] [--no-llm]
 
-In order: the automatic hot seat (each GM's score from last season; up to MAX_FIRES CPU-run teams replace their
+In order: last season's still-open proposals expire (the offseason is over), the automatic hot seat (each GM's score from last season; up to MAX_FIRES CPU-run teams replace their
 GM: the tenure closes at the season just finished and a new persona is seeded), the new season's gm_team_seasons
 rows with a preseason direction (last season's wins and this season's team_ovr) and needs, fo_quality carried
 forward until step 4 writes it, own picks seeded for the new third draft out, and the draft just held marked used.
@@ -104,6 +104,9 @@ def rollover(cur, season, llm=None, log=print):
     prior = season - 1
     acts = rollover_actions(read_state(cur, season))
     rep = {"season": season, "fired": [], "team_rows": 0, "directions": 0, "fo_carried": 0, "picks": 0, "used": 0}
+    cur.execute("""UPDATE gm_trade_proposals SET status = 'EXPIRED', status_reason = 'the offseason is over'
+                   WHERE season = %s AND status IN ('PROPOSED', 'APPROVED')""", (prior,))
+    rep["expired"] = cur.rowcount
     if acts["hot_seat"] is not None:
         for tid, h in acts["hot_seat"].items():
             cur.execute("UPDATE gm_team_seasons SET hot_seat_score = %s, hot_seat_inputs = %s "
