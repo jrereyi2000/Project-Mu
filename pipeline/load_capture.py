@@ -18,7 +18,7 @@ from datetime import datetime
 import psycopg
 
 from pipeline.capture_matching import (all_caps, db_player_name, db_week, dec, full_key, match_contract_rows, match_roster,
-                                       name_case, name_key, num)
+                                       name_case, name_key, num, one_slip)
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -468,6 +468,8 @@ def resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, 
     for (key, pos), rs in groups.items():
         cands = by_key.get((key, pos), [])
         values = [parse_row(r, cmap, f"{cat} {r['NAME']}") for r in rs]
+        if not cands and len(rs) == 1:
+            cands = slip_candidate(cur, season, table, cat, rs[0], values[0], key, pos, by_key, groups)
         diff = misread_copies(rs, cmap)
         if diff:
             problems.append(f"{cat}: {rs[0]['NAME']} {pos} appears {len(rs)} times, differing only in {diff}: one row "
@@ -588,6 +590,29 @@ def resolve_season_rows(cur, season, cat, rows, cmap, table, players, problems, 
     return out
 
 
+def slip_candidate(cur, season, table, cat, row, values, key, pos, by_key, groups):
+    """A Season Stats name no player has, read one letter off a real one: Gemini's list read turns M.Feralta into
+    M.Peralta and O.Jones into D.Jones every week (2026-10-20). It is that player only when he is the league's single
+    player at the position whose name key is one OCR slip away, his own name isn't also on this list, and his stored
+    totals fit (none goes down; no stored row is fine). Returns [(player_id, team_id)] or [], and records the match
+    in NAME_SLIPS for the load report."""
+    near = [c for (k2, p2), cs in by_key.items() if p2 == pos and k2 != key and one_slip(k2, key)
+            and (k2, pos) not in groups for c in cs]
+    if len(near) != 1:
+        return []
+    pid, team = near[0]
+    counters = counters_of(values)
+    cur.execute(f"SELECT {', '.join(counters)} FROM {table} WHERE season = %s AND player_id = %s", (season, pid))
+    prev = cur.fetchone()
+    if prev and any((values.get(k) or 0) < (v or 0) for k, v in zip(counters, prev)):
+        return []
+    NAME_SLIPS.append(f"{cat}: {row['NAME']} {pos} read as player {pid} (name one letter off, totals fit)")
+    return [(pid, team)]
+
+
+# Season Stats names matched across one OCR slip (slip_candidate), reported as name_slips: worth a glance
+NAME_SLIPS = []
+
 # (table, player id) whose row a team-scoped capture settled: the team's own list is direct
 # evidence, so a total going down there corrects earlier data (the old ingestion had given Billy
 # Thompson's 86 catches to Brenen Thompson) and is reported, not refused
@@ -598,6 +623,7 @@ def load_weekly(cur, folder, season, report, season_stats=True):
     """Last week's schedule (scores) and, with season_stats, Season Stats and Team Stats. A postseason run
     passes season_stats=False: those screens are regular season only and don't change in the playoffs."""
     SCOPE_SETTLED.clear()
+    NAME_SLIPS.clear()
     by_name, by_abbr = team_index(cur)
     problems, unmatched = [], []
 
@@ -743,6 +769,7 @@ def load_weekly(cur, folder, season, report, season_stats=True):
     if problems:
         raise LoadError("weekly checks failed:\n  " + "\n  ".join(problems))
     report["unmatched_other_categories"] = unmatched
+    report["name_slips"] = list(NAME_SLIPS)
 
     # writes
     for gid, hs, as_ in scores:
