@@ -58,6 +58,11 @@ def context_season():
     return ctx["season"] if ctx else None
 
 
+def context_week():
+    ctx = _run_context.get()
+    return ctx["week"] if ctx else None
+
+
 def context_offseason_event() -> str | None:
     ctx = _run_context.get()
     return ctx.get("offseason_event") if ctx else None

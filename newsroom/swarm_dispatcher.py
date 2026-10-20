@@ -11,6 +11,7 @@ from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
 from newsroom.entity_patterns import team_mention_pattern
 from newsroom.run_context import reset_article_context, set_article_context
+from newsroom.roster_moves import is_starter_rank
 from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
 from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings, records_by_team
 from newsroom import agent_memory
@@ -74,6 +75,9 @@ from newsroom.db_tools import (
     get_player_articles,
     get_team_injury_report,
     get_record_book,
+    get_team_cap_sheet,
+    get_player_contract,
+    get_league_transactions,
 )
 from newsroom.fantasy_tools import FANTASY_TOOLS
 from newsroom.fantasy_desk import (
@@ -802,6 +806,9 @@ class SwarmDispatcher:
             get_player_articles,
             get_team_injury_report,
             get_record_book,
+            get_team_cap_sheet,
+            get_player_contract,
+            get_league_transactions,
         ]
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)
@@ -1013,6 +1020,10 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need draft pick trade points (Jimmy Johnson model) and trade package scenarios, call `get_draft_trade_value`.
 - If you need a franchise's rebuild lifecycle stage and draft posture, call `get_franchise_rebuild_status`.
 - If you need the all-time NFL record book, all-time top 10 leaderboards, previous record holders, franchise records, or records set this season, call `get_record_book`.
+- If a roster move bears on your story (a signing, release, re-signing or restructure this season), call `get_league_transactions` (filter by team, week, type or notable_only).
+- If a team's cap situation bears on your story (cap space, dead money, contract-year players, committed money), call `get_team_cap_sheet` (no team = all 32 by cap space).
+- If a player's contract bears on your story (term, the year it runs through, cap hit, a new deal), call `get_player_contract`.
+- CONTRACT FACTS RULE: moves, contract terms and cap figures come only from these three tools or the Assignment Brief, and only when they matter to your subject: most articles carry no cap numbers at all. Years and totals are fact. A figure marked `est.` is a projected year of a new deal: hedge it in prose ("roughly", "projected", "about"). An estimated cap row is approximate. Never fill in what a tool says is "not known" (no guaranteed money, incentive details or option years). Invent the colour freely (how talks went, an agent's stance, unnamed, unpriced interest from other teams, locker-room reaction) but never a term, a figure or a move.
 
 3. DEFENSIVE DATA: Defense and special teams now have real season numbers: tackles, sacks, tackles for loss, interceptions, pass deflections, forced fumbles and recoveries, defensive TDs, kicking, punting and returns, plus sacks allowed for linemen and sacks taken for quarterbacks. Use them to back defensive claims with named players. The limits: Madden lists only its leaders in each category, so a player with no line has unknown numbers (not zeros); listed defenders don't add up to a team total, so never sum them into team sacks or takeaways; and pressures, blitzes, coverage, snap counts and targets aren't recorded, so never give them as numbers or rates. Describing them in words is fine when it fits the box score and the game script: a pass rush that lived in the backfield, a corner who blanketed his man, a defense that brought more heat after halftime. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and three tendencies (pass lean, fourth-down aggressiveness, man coverage) as Low / Medium / High against the league. Pass lean and fourth-down aggressiveness are measured from this league's results (allowing for the score), so you can state them as what the team does ("one of the league's most aggressive fourth-down teams"). Man coverage is the staff's real-world philosophy, not measured here: present it as reputation ("a staff known for zone"), never as what the defense has done this season. There is no blitz data, so never put a number on how often a defense blitzes or call it a season-long habit. Never turn a tier into a percentage, and never put a count or rate on how often a team blitzed or played man in a specific game; describing in words what a defense did in one game is fine when it fits the game script. Team situational numbers work the same way: season third-down, red-zone and penalty rates come from `get_team_efficiency_profile`, and a single game's come only from its box score's `team_situational` line. If a game has no such line, don't invent its third-down or red-zone totals. Third-down defense has no season total, so never cite a season third-down rate allowed beyond what the tool shows, and down-and-distance splits (third-and-short, third-and-long) aren't recorded. Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
 
@@ -1036,6 +1047,7 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 - Query your team's and quarterback's late-game record (fourth-quarter comebacks, game-winning drives, blown leads, record when trailing at halftime) with `get_clutch_profile`.
 - Query your team's and the opponent's third-down, red-zone and penalty rates with league ranks with `get_team_efficiency_profile`; a single game's come only from its box score's `team_situational` line, so don't invent them for a game without one.
 - Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
+- Query your team's roster moves with `get_league_transactions`, its cap sheet with `get_team_cap_sheet`, and a player's deal with `get_player_contract`, only when a move or contract bears on the story. CONTRACT FACTS RULE: moves, contract terms and cap figures come only from these three tools or the Assignment Brief, and only when they matter to your subject: most articles carry no cap numbers at all. Years and totals are fact. A figure marked `est.` is a projected year of a new deal: hedge it in prose ("roughly", "projected", "about"). An estimated cap row is approximate. Never fill in what a tool says is "not known" (no guaranteed money, incentive details or option years). Invent the colour freely (how talks went, an agent's stance, unnamed, unpriced interest from other teams, locker-room reaction) but never a term, a figure or a move.
 - Query your team's and the opponent's defensive and special-teams leaders (sacks, interceptions, tackles for loss, forced fumbles, kicking, returns) with `get_defense_special_teams_leaders` and the team name. Madden lists only its leaders, so a player with no line has unknown numbers, not zeros; don't add them up into team totals. Pressures, snap counts, targets and blitz or coverage rates aren't recorded, so never give them as numbers; in words, consistent with the game script, they're fine.
 3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the locker room. Quote coaching staff sentiment, cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
 """
@@ -1199,17 +1211,6 @@ EDITORIAL DESK ASSIGNMENT (MANDATORY):
                         ORDER BY COALESCE(ps.overall_rating, i.ovr) DESC;
                     """, (assigned_team_id, season, assigned_team_id, season, bq_week))
                     beat_rows = bcur.fetchall()
-
-                    def is_starter_rank(pos, rank):
-                        if not rank:
-                            return False
-                        if pos in ("QB", "TE", "LT", "LG", "C", "RG", "RT", "FS", "SS", "K", "P", "FB"):
-                            return rank == 1
-                        if pos in ("HB", "DT", "LEDG", "REDG", "LE", "RE"):
-                            return rank <= 2
-                        if pos in ("WR", "CB", "MIKE", "SAM", "WILL", "MLB", "LOLB", "ROLB"):
-                            return rank <= 3
-                        return rank == 1
 
                     starter_injuries = []
                     for pid, pname, pos, ovr, pop, inj_type, dur, w_rem, is_ir, pos_rank in beat_rows:
