@@ -135,8 +135,8 @@ The mock draft's board is the top 32 by OVR, and that isn't realistic. Step 4 st
 ## 5. Status
 | Step | Sub-plan | Build |
 |---|---|---|
-| 1 Contract scan | written | Phases 1–5 built (2026-10-19); C1–C2, C4–C10 answered; left before the first live scan: C3 frames (`--step none`), screen-box fixtures, and applying the migration |
-| 2 League transactions | written | Phases 1–6 built (2026-10-19); the console checks (sub-plan §1) and applying `2026_12_08_transactions.sql` are JR's, before the first live scan |
+| 1 Contract scan | written | Built and live. Migration applied 2026-10-19; first full scan loaded 2026-10-20 (capture 21: 1,695 active 2036 contracts, 32 cap rows) |
+| 2 League transactions | written | Built and live. Migration applied 2026-10-19; first backfill loaded 2026-10-20 (capture 20: 181 transactions, Weeks 1–4); weekly scans continue from SEASON - WEEK 4 |
 | 3 GM agents | not written | not started |
 | 4 Scouting and draft | design pass needed (§2.5) | not started |
 | 5 Newsroom integration | not written | not started |
