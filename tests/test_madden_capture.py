@@ -386,6 +386,18 @@ class CardParseTest(unittest.TestCase):
         self.assertEqual(c["experience"], 0)
         self.assertEqual(mc.card_flags(c), [])
 
+    def test_hidden_rookie_dev(self):
+        # Madden hides a rookie's dev until 500 snaps (JR, 2026-10-20): store it as Hidden, not blank
+        items = [("ENRIQUE", (46, 54, 150, 82)), ("VALLES", (42, 86, 232, 156)),
+                 ("#77 DT | NOSE TACKLE | PROJECT PLAYER", (48, 166, 515, 190)),
+                 ("HIDDEN | 0/500 SNAPS TO REVEAL", (118, 238, 490, 266)),
+                 ("AGE", (42, 312, 90, 342)), ("22", (44, 346, 86, 386)), ("HT", (178, 312, 212, 344)),
+                 ("6'1\"", (178, 344, 242, 386)), ("WT", (312, 314, 350, 344)), ("332", (310, 346, 371, 386)),
+                 ("EXP", (443, 312, 489, 342)), ("ROOKIE", (441, 346, 527, 386)), ("MORALE", (579, 312, 659, 342))]
+        c = mc.parse_card(items)
+        self.assertEqual((c["dev"], c["experience"]), ("Hidden", 0))
+        self.assertNotIn("missing_dev", mc.card_flags(c))
+
     def test_value_without_its_label(self):
         c = mc.parse_card(DAVIS)
         self.assertEqual((c["height"], c["experience"], c["role"]), ("6'4\"", 3, "Elite Player"))

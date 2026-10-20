@@ -3279,7 +3279,7 @@ CARD_BOX = (0.740, 0.339, 0.980, 0.561)      # fractions of the window: card tex
 LIST_BOX = (0.015, 0.245, 0.715, 0.830)      # roster table rows
 CARD_FIELDS = ["first", "last", "number", "position", "archetype", "role", "dev",
                "age", "height", "weight", "experience"]
-DEV_TRAITS = ["SUPERSTAR X-FACTOR", "SUPERSTAR", "STAR", "NORMAL"]
+DEV_TRAITS = ["SUPERSTAR X-FACTOR", "SUPERSTAR", "STAR", "NORMAL", "HIDDEN"]   # HIDDEN: a rookie's dev until 500 snaps
 HT_RE = re.compile(r"^([4-7])'(\d{1,2})\"$")
 VALUE_LABELS = ("AGE", "HT", "WT", "EXP", "MORALE")
 POSITIONS = {"QB", "HB", "FB", "WR", "TE", "LT", "LG", "C", "RG", "RT", "LEDG", "REDG", "DT",
