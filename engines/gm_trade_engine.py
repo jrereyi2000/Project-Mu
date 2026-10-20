@@ -1097,6 +1097,30 @@ def run_draft_day(cur, season, pick, dry_run=False, llm=None, log=print):
     return rep
 
 
+def rewrite_rationale(cur, proposal_id, llm, log=print):
+    """Write a stored proposal's headline and rationale again from its current fact sheet (the deal never
+    changes). Replaces any old llm_rejected flags. Returns the new rationale dict."""
+    cur.execute("SELECT season FROM gm_trade_proposals WHERE id = %s", (proposal_id,))
+    row = cur.fetchone()
+    if not row:
+        raise SystemExit(f"no proposal {proposal_id}")
+    p = read_proposals(cur, row[0], ids=[proposal_id])[0]
+    b = read_books(cur, p["season"], p["week"], p["trade_window"])
+    missing = [x["player_id"] for x in p["assets"] if x["type"] == "PLAYER" and x["player_id"] not in b["players"]]
+    if missing:
+        raise SystemExit(f"proposal {proposal_id}: players no longer on a roster: {missing}")
+    deal = {"a": p["team_a_id"], "b": p["team_b_id"], "assets": p["assets"], "trigger": p["trigger_kind"]}
+    rat = rationale_for(b, deal, llm)
+    flags = [f for f in (p["flags"] or []) if not f.startswith("llm_rejected:")] + llm_flags(rat)
+    cur.execute("""UPDATE gm_trade_proposals SET headline = %s, rationale_a = %s, rationale_b = %s,
+                       rationale_source = %s, flags = %s WHERE id = %s""",
+                (rat["headline"], rat["rationale_a"], rat["rationale_b"], rat.get("source", "TEMPLATE"), flags,
+                 proposal_id))
+    log(f"#{proposal_id} [{rat.get('source')}] {rat['headline']}\n  A: {rat['rationale_a']}\n  B: {rat['rationale_b']}"
+        + (f"\n  rejected: {rat['rejected']}" if rat.get("rejected") else ""))
+    return rat
+
+
 def llm_flags(rat):
     """Why the LLM's rationale was thrown out (flag 'llm_rejected:<reason>'), so a too-strict check shows."""
     return [f"llm_rejected:{r}"[:120] for r in rat.get("rejected") or []]
@@ -1140,6 +1164,8 @@ def main(argv=None):
                     help="the offseason: run the stage after the last one run (stage 1 if none has)")
     ap.add_argument("--draft-pick", type=int, metavar="OVERALL",
                     help="draft day: the Round 1 pick on the clock (needs draft_picks.overall_pick set)")
+    ap.add_argument("--rewrite-rationale", type=int, metavar="ID",
+                    help="write proposal ID's headline and rationale again (Gemini, else the template)")
     ap.add_argument("--simulate-season", action="store_true")
     ap.add_argument("--approval", type=float, default=0.6)
     ap.add_argument("--seasons", type=int, default=2000)
@@ -1152,8 +1178,19 @@ def main(argv=None):
         return
     import psycopg
     from engines.gm_llm import flush, make_llm
-    llm = None if (a.dry_run or a.no_llm) else make_llm("gm_rationale")
+    llm = None if (a.dry_run or a.no_llm or a.rewrite_rationale) else make_llm("gm_rationale")
     dsn = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
+    if a.rewrite_rationale:
+        llm = None if a.no_llm else make_llm("gm_rationale")
+        with psycopg.connect(dsn) as conn:
+            rewrite_rationale(conn.cursor(), a.rewrite_rationale, llm)
+            if a.dry_run:
+                conn.rollback()
+                print("dry run: nothing written")
+            else:
+                conn.commit()
+        flush(llm)
+        return
     with psycopg.connect(dsn) as conn:
         cur = conn.cursor()
         s, w, win = league_window(cur)
