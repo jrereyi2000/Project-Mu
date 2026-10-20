@@ -417,6 +417,36 @@ def step_preseason_engines(season):
         run_napper_week(season, 1, trades=False, log=log)
     except Exception as e:
         log(f"  [WARN] Napper week 1 lineups skipped: {e!r}")
+    # GM agents (team management step 3): the season rollover. Optional, never stops the run.
+    step_gm_rollover(season)
+
+
+def step_gm_rollover(season):
+    """engines/gm_rollover.py for the new season: the automatic hot seat, gm_team_seasons rows with a preseason
+    direction, fo_quality carried forward, picks seeded for the new third draft, the draft just held marked
+    used. Skipped when the GM migration isn't applied; a failure only logs a warning."""
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from engines.gm_llm import flush, make_llm
+        from engines.gm_rollover import rollover
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT to_regclass('gm_team_seasons') IS NOT NULL")
+            if not cur.fetchone()[0]:
+                log("  GM rollover skipped: the GM agents migration isn't applied")
+                return None
+            llm = make_llm("gm_persona")
+            rep = rollover(cur, season, llm, log=log)
+            conn.commit()
+        flush(llm)
+        log(f"  GM rollover {season}: {len(rep['fired'])} GM(s) replaced, {rep['directions']} directions, "
+            f"{rep['picks']} picks seeded, {rep['used']} picks marked used")
+        return rep
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] GM rollover skipped: {e!r}")
+        return None
 
 
 def step_rookie_headshots(season):
