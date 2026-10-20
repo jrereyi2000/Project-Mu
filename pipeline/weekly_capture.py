@@ -407,6 +407,34 @@ def step_gm(season, next_stage=False):
         return 0
 
 
+def step_scouting(season):
+    """Scouting (team management step 4, engines/scouting_engine.py), Step 7c: the draft class's consensus board,
+    events and team boards for league_state's step (the week about to be played, or 23 + the GM offseason stage
+    just run), catching up any missing steps in order. Optional: skipped without the migration or before the class
+    is initialized, and a failure only logs a warning. Returns the steps stored."""
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from engines import scouting_engine as se
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            if not se.installed(cur):
+                log("  Scouting skipped: the scouting migration isn't applied")
+                return []
+            s, step = se.current_step(cur)
+            if step is None:
+                log("  Scouting skipped: the draft has been held")
+                return []
+            done = se.catch_up(cur, s + 1, step, log=log, extras=se.default_extras)
+            conn.commit()
+        log(f"  Scouting {s + 1}: steps stored {done or 'none (up to date or class not initialized)'}")
+        return done
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] Scouting skipped: {e!r}")
+        return []
+
+
 def step_preseason_engines(season):
     """Preseason engines for start-of-season calibration (schedule, rosters, injuries loaded):
     1. Preseason Fantasy ADP (runs 100 simulated drafts, writes Week 1 ADP board).
@@ -756,6 +784,8 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             if gm_stage:                                   # Next offseason stage: the moves are in, now the GMs
                 log("Step 7b: GM trade proposals (next offseason stage)")
                 step_gm(league_state()[0], next_stage=True)
+                log("Step 7c: scouting")
+                step_scouting(league_state()[0])
             log("Step 9: shrink")
             before, after = shrink(folder)
             log(f"Capture folder {before / 1e6:.0f} MB -> {after / 1e6:.0f} MB")
@@ -802,6 +832,8 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
         if mode in ("weekly", "playoff"):
             log("Step 7b: GM trade proposals")
             step_gm(season)
+            log("Step 7c: scouting")
+            step_scouting(season)
         published = None
         if articles:
             log("Step 8: articles")
