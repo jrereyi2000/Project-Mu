@@ -287,8 +287,10 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
                 (season, ["IN_SEASON"] if window == "IN_SEASON" else ["OFFSEASON", "DRAFT_DAY"]))
     ex, dec, first = cur.fetchone()
     b["executed"], b["decided"], b["first_week"] = ex or 0, dec or 0, min(first or week, week)
+    # this week's proposals already made (a re-run doesn't add more); one the re-check found illegal doesn't count
     cur.execute("""SELECT count(*) FROM gm_trade_proposals WHERE season = %s AND week = %s AND origin = 'ENGINE'
-                   AND trade_window = %s AND (%s::text IS NULL OR %s = ANY(flags))""",
+                   AND trade_window = %s AND (%s::text IS NULL OR %s = ANY(flags))
+                   AND NOT (status = 'EXPIRED' AND COALESCE(status_reason, '') LIKE 'no longer legal%%')""",
                 (season, week, window, None if stage is None else f"stage:{stage}",
                  None if stage is None else f"stage:{stage}"))
     b["made_this_week"] = cur.fetchone()[0]
