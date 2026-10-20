@@ -61,7 +61,7 @@ Every money figure a tool prints carries its **basis**. The pure helper `roster_
 | `team_cap_seasons` otherwise | `scanned <date>` | As fact. |
 | A gm proposal that isn't `EXECUTED` (Phase 8) | `RUMOR, not a done deal` | Only as a rumor (§2.8). |
 
-Why projected hits are withheld rather than labelled: a writer drops a hedge like "est." in its prose, and these numbers are a formula (master §2.2), not Madden's. The next Season scan replaces them with real ones. (Open question 2.)
+**JR's decision (2026-10-20): projected year-by-year hits *are* shown, each labelled `est.`** (overrides the withholding in the two rows above). The tools print them as `2037: $14.2M est.`. The CONTRACT FACTS RULE in the research blocks and the R1 Matrix section tell writers: when a writer cites a projected yearly figure, the prose must hedge it ("roughly", "projected", "about"); headline terms (years, total) are stated as fact. A Phase 1 test checks that every projected value in tool output carries `est.`.
 
 ### 2.2 Week cutoff (`newsroom/roster_moves.py`, pure)
 
@@ -276,7 +276,7 @@ Phases 1–2 need no approval. Phases 3–7 come after JR rules on §2.6, and Ph
 
 **Exit check:** `python3 -m newsroom.social_desk --season 2036 --week 5` (the dry plan, no model call) shows the move posts.
 
-### Phase 6: Fantasy (6a) and Napper card (6b, optional)
+### Phase 6: Fantasy (6a; the 6b Napper card was dropped by JR)
 **Files**
 - 6a: `fantasy_tools.py` (`nfl_moves`, `team_moves`), `fantasy_desk.py` (the guideline), and the `FANTASY_WAIVER_WIRE` curatorial line.
 - 6b: `engines/napper_weekly.py` and the Napper chat card in Mu_Network.
@@ -287,7 +287,7 @@ Phases 1–2 need no approval. Phases 3–7 come after JR rules on §2.6, and Ph
 
 **Exit check:** `verify_newsroom.py` prints the W5 `nfl_moves`. For 6b, JR sees a card in a test league after a weekly step he runs himself.
 
-### Phase 7: Offseason signings from transactions (optional, open question 6)
+### Phase 7: Offseason signings from transactions (in scope, §6 Q6)
 **Files:** `offseason_service.py`. `preview` lists offseason `SIGNED` rows of 90+ players with their terms as candidates, and JR still picks 2–3 for the manifest. The packet cites terms per R5.
 
 **Tests:** extend `tests/test_offseason_service.py` with fake rows.
@@ -349,11 +349,11 @@ Phases 3–5 also edit `docs/EDITORIAL_MATRIX.md` / `docs/SOCIAL_MATRIX.md`, and
 - Per-week contract or roster history.
 - Gemini calls in tests or checks.
 
-## 6. Open questions for JR
-1. **§2.6:** all of R1–R14 decided (see JR's decisions under §2.6).
-2. **Projected numbers:** keep extension and restructure year-by-year projections away from writers (proposed), or show them as "est."?
-3. **Notability thresholds (§2.3):** fine as a start? Phase 1 prints the live count.
-4. **Beat coverage:** moves only feed existing beat articles (proposed), or add a `LOCAL_TRANSACTION_REPORT` to a team's portfolio in weeks with a notable move?
-5. **Napper `NFL_MOVE` cards (6b):** wanted?
-6. **Offseason signing grades (Phase 7):** build the candidate list from transactions, or keep it fully hand-entered?
-7. **Trades (Phase 8, for when step 3 lands):** step 3's ~40% `rumor_ok` rate, rumors only through the trade deadline, and a `TRADE_GRADES` Feature Trio slot the week after an executed trade. Yes or no to each?
+## 6. Open questions, answered (JR, 2026-10-20)
+1. **§2.6 rule changes:** all of R1–R14 decided (see JR's decisions under §2.6).
+2. **Projected numbers:** shown year by year, labelled `est.` (§2.1).
+3. **Notability thresholds (§2.3):** accepted as the starting point.
+4. **Beat coverage:** moves feed the existing beat articles. No new beat article type.
+5. **Napper `NFL_MOVE` cards (6b):** dropped. They aren't needed as long as every move, trades included, updates the player's team. Signings and releases already do this through the transactions load; step 3's trade confirmation does it for trades. Phase 6 is 6a only.
+6. **Offseason signing grades (Phase 7):** in scope. The candidate list is built from transactions.
+7. **Trades (Phase 8):** yes to all three: rumors from `rumor_ok` proposals (about 40%), rumors only through the Week 8 deadline, and a `TRADE_GRADES` Feature Trio slot the week after an executed trade.
