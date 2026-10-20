@@ -193,3 +193,40 @@ class PackageToolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TradeGradesTests(unittest.TestCase):
+    def test_target_lists_every_trade_with_gm_thinking(self):
+        t1 = {**trade(week=4, pid=1), "rationale_a": "We win now.", "rationale_b": "Picks for later."}
+        t2 = {**trade(week=4, pid=2), "team_a": "BUF", "team_b": "MIA", "legs": [], "rationale_a": None}
+        target = rm.trade_grades_target([t1, t2], NAMES, {"NYJ": 18, "NE": 17}, {"NYJ": {"gm_name": "Pierce Gallagher"}})
+        self.assertEqual((target["team_id"], target["kind"], target["trades"]), (18, "TRADE_GRADES", [1, 2]))
+        self.assertIn("grade every trade executed in Week 4", target["note"])
+        self.assertIn("Trade 1: Week 4 · TRADE (executed) · Jets acquired WR Rich Hanson", target["note"])
+        self.assertIn('Jets GM Pierce Gallagher on the deal: "We win now."', target["note"])
+        self.assertIn('The Patriots front office on the deal: "Picks for later."', target["note"])
+        self.assertEqual(target["team_name"], "Bills / Dolphins / Jets / Patriots")
+        self.assertIsNone(rm.trade_grades_target([]))
+
+    def _slate(self, target, week=5):
+        from newsroom import swarm_dispatcher as sd
+        d = sd.SwarmDispatcher(api_key="test", debug_mode=False)
+        with mock.patch.object(d, "_trade_grades_target", return_value=target), \
+                mock.patch.object(d, "_resolve_slot_targets", side_effect=lambda s, w, slots: [None] * len(slots)), \
+                mock.patch.object(d, "get_agent_record", side_effect=lambda a: (a, a, "", "@x", a, None)), \
+                mock.patch.object(d, "_get_distinct_beat_reporter",
+                                  return_value=("b", "LOCAL_BEAT_REPORTER", "", "@b", "B", None)), \
+                mock.patch.object(sd.psycopg, "connect", side_effect=RuntimeError("offline")):
+            return d.commission_weekly_editorial_slate(2036, week)
+
+    def test_trade_grades_takes_slot_5_only_after_a_trade(self):
+        target = {"team_id": 18, "team_name": "Jets / Patriots", "kind": "TRADE_GRADES", "note": "grade it"}
+        slate = self._slate(target)
+        by_slot = {s["slot"]: s for s in slate}
+        self.assertEqual(by_slot["Slot 5"]["article_type_id"], "TRADE_GRADES")
+        self.assertIn(by_slot["Slot 5"]["archetype"], ("SANDO", "BARNWELL"))
+        self.assertIs(by_slot["Slot 5"]["target"], target)
+        self.assertEqual(sum(s["article_type_id"] == "TRADE_GRADES" for s in slate), 1)
+        self.assertNotIn("TRADE_GRADES", {by_slot[k]["article_type_id"] for k in ("Slot 3", "Slot 4")})
+        self.assertEqual(len(slate), len(self._slate(None)))          # same slate size, one slot swapped
+        self.assertNotIn("TRADE_GRADES", [s["article_type_id"] for s in self._slate(None)])
