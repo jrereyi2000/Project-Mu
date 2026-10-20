@@ -197,3 +197,89 @@ class TransactionsDebugTest(unittest.TestCase):
             body = TestClient(app).get("/api/debug/transactions?season=2036").json()
         self.assertTrue(body["installed"])
         self.assertIn("unparsed", body)
+
+
+class FrontOfficeTest(unittest.TestCase):
+    """Front Office endpoints (team management step 3) with connect() mocked: no database."""
+
+    class Conn:
+        def __init__(self):
+            self.committed = self.rolled_back = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def cursor(self, row_factory=None):
+            return object()
+
+        def commit(self):
+            self.committed += 1
+
+        def rollback(self):
+            self.rolled_back += 1
+
+    def setUp(self):
+        app = FastAPI()
+        app.include_router(dbg.router)
+        self.client = TestClient(app)
+        self.conn = self.Conn()
+        self.calls = []
+        from engines import front_office as fo
+        self.fo = fo
+        patches = [mock.patch.object(dbg, "connect", lambda: self.conn),
+                   mock.patch.object(dbg, "env", lambda k, d=None: "tok" if k == "DEBUG_TOKEN" else d),
+                   mock.patch.object(fo, "installed", lambda cur: True),
+                   mock.patch.object(fo, "front_office_state", lambda cur, season=None: {"installed": True, "season": season}),
+                   mock.patch.object(fo, "approve", lambda cur, pid: self.calls.append(("approve", pid)) or {"id": pid}),
+                   mock.patch.object(fo, "reject", lambda cur, pid, r=None: self.calls.append(("reject", pid, r)) or {}),
+                   mock.patch.object(fo, "confirm", lambda cur, pid: self.calls.append(("confirm", pid)) or {"warnings": []}),
+                   mock.patch.object(fo, "could_not_make", lambda cur, pid, r=None: self.calls.append(("cnm", pid, r)) or {}),
+                   mock.patch.object(fo, "record", lambda cur, a, b, assets, pid=None, note=None:
+                                     self.calls.append(("record", a, b, len(assets), pid)) or {}),
+                   mock.patch.object(fo, "apply_sighting", lambda cur, sid, assets=None:
+                                     self.calls.append(("apply", sid, assets)) or {})]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        self.h = {"X-Debug-Token": "tok"}
+
+    def test_state_is_open(self):
+        self.assertEqual(self.client.get("/api/debug/front-office?season=2036").json(), {"installed": True, "season": 2036})
+
+    def test_writes_need_the_token(self):
+        for path in ("/api/debug/front-office/proposals/3/approve", "/api/debug/front-office/proposals/3/confirm",
+                     "/api/debug/front-office/sightings/1/apply"):
+            self.assertEqual(self.client.post(path).status_code, 401)
+        self.assertEqual(self.client.post("/api/debug/front-office/record",
+                                          json={"team_a": "CAR", "team_b": "NO", "assets": []}).status_code, 401)
+        self.assertEqual(self.calls, [])
+
+    def test_actions(self):
+        for action in ("approve", "confirm"):
+            self.assertEqual(self.client.post(f"/api/debug/front-office/proposals/3/{action}", headers=self.h).status_code, 200)
+        self.client.post("/api/debug/front-office/proposals/3/reject", json={"reason": "no"}, headers=self.h)
+        self.client.post("/api/debug/front-office/proposals/3/could-not-make", json={"reason": "refused"}, headers=self.h)
+        self.client.post("/api/debug/front-office/record", headers=self.h,
+                         json={"team_a": "CAR", "team_b": "NO", "assets": [{"type": "PLAYER", "player_id": 1,
+                                                                            "from": "CAR", "to": "NO"}]})
+        self.client.post("/api/debug/front-office/sightings/5/apply", headers=self.h)
+        self.assertEqual(self.calls, [("approve", 3), ("confirm", 3), ("reject", 3, "no"), ("cnm", 3, "refused"),
+                                      ("record", "CAR", "NO", 1, None), ("apply", 5, None)])
+        self.assertEqual(self.client.post("/api/debug/front-office/proposals/3/explode", headers=self.h).status_code, 404)
+        self.assertGreaterEqual(self.conn.committed, 6)
+
+    def test_refused_action_rolls_back(self):
+        def refuse(cur, pid):
+            raise self.fo.FrontOfficeError(409, "proposal 3 is EXECUTED")
+        with mock.patch.object(self.fo, "confirm", refuse):
+            r = self.client.post("/api/debug/front-office/proposals/3/confirm", headers=self.h)
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(self.conn.rolled_back, 1)
+
+    def test_gm_proposals_job_command(self):
+        self.assertEqual(dbg.JOB_KINDS["gm_proposals"][0], "GM trade proposals (this week)")
+        self.assertEqual(dbg.job_command("gm_proposals")[-2:], ["-m", "engines.gm_trade_engine"])
+        self.assertEqual(dbg.job_command("gm_proposals", week=5)[-2:], ["--week", "5"])

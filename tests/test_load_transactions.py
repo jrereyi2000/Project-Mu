@@ -236,3 +236,41 @@ class FormerPlayerTest(unittest.TestCase):
         self.assertEqual(plan[0]["txn"]["player"], 480)
         self.assertEqual(rep["created_players"], [])
         self.assertEqual(ops(plan, "release")[0]["team_id"], 2)          # his row this season goes to the Bears
+
+
+class TradeSightingsTest(unittest.TestCase):
+    """Trade rows are skipped as moves and become step 3's sightings, only when that table exists."""
+
+    class Cur:
+        def __init__(self, installed):
+            self.installed, self.sql, self.rowcount = installed, [], 1
+
+        def execute(self, q, args=None):
+            self.sql.append(" ".join(q.split()))
+
+        def fetchone(self):
+            return (self.installed,)
+
+        def fetchall(self):
+            return []
+
+    ROW = "PANTHERS TRADE (WR) ANN ABLE TO SAINTS FOR 2037 2ND ROUND PICK"
+
+    def test_expand_collects_trade_rows_with_headings(self):
+        trades, trade_rows = [], []
+        out = L.expand([{"heading": W4, "text": self.ROW, "flags": []}], trades=trades, trade_rows=trade_rows)
+        self.assertEqual(out, [])
+        self.assertEqual(trades, [self.ROW])
+        self.assertEqual(trade_rows, [{"heading": W4, "text": self.ROW}])
+
+    def test_sightings_only_when_table_exists(self):
+        cur = self.Cur(False)
+        self.assertEqual(L.record_sightings(cur, 2036, [{"heading": W4, "text": self.ROW}]),
+                         {"new": 0, "installed": False})
+        self.assertFalse(any(q.startswith("INSERT") for q in cur.sql))
+        cur = self.Cur(True)
+        rep = L.record_sightings(cur, 2036, [{"heading": W4, "text": self.ROW}])
+        self.assertEqual(rep["new"], 1)
+        self.assertEqual(sum(q.startswith("INSERT INTO gm_trade_sightings") for q in cur.sql), 1)
+        self.assertFalse(any("player_seasons" in q and q.startswith("UPDATE") for q in cur.sql))
+        self.assertEqual(L.record_sightings(self.Cur(True), 2036, []), {"new": 0})
