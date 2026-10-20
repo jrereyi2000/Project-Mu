@@ -2,7 +2,7 @@
 
 Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) step 5. This plan reads step 1's contract tables (§2.1) and step 2's `transactions` (§2.2) as they are. It **adds no tables and changes no schema**. Steps 3 (§2.4 `gm_trade_proposals`) and 4 (§2.5 risers and fallers) are used only in the phases marked as depending on them (Phases 8 and 9). Every other phase can ship now.
 
-**Status (2026-10-20):** Phases 1–7 are built and on main (see PROJECT_SPEC §7). Phase 6 is 6a only (JR dropped 6b). Projected yearly hits are shown labelled `est.` (§6 Q2). Notability was retuned by JR (2026-10-20): only players rated 85+ are notable; §2.3's other conditions now only describe and rank a move. On the 2036 Weeks 1–4 data that gives 17 of 181. Seams for Phase 8: `roster_moves.notability` tags `TRADED` rows with a "trade" reason (an 85+ player's trade is notable; whether every trade should be is a Phase 8 call) and `move_line` formats them; `txn_visible` treats a NULL `capture_id` as loaded in time; `get_league_transactions`'s note says trades appear once completed; the R6/R7 trade-package lift and `get_trade_rumors` are not built.
+**Status (2026-10-20):** Phases 1–8 are built and on main (see PROJECT_SPEC §7); Phase 9 waits on step 4. Phase 6 is 6a only (JR dropped 6b). Projected yearly hits are shown labelled `est.` (§6 Q2). Notability was retuned by JR (2026-10-20): only players rated 85+ are notable; §2.3's other conditions now only describe and rank a move. On the 2036 Weeks 1–4 data that gives 17 of 181. Phase 8 decisions made while building it (see "Phase 8 as built" below): every executed trade is notable and travels as a whole trade, never as legs; the Week N+1 edition is the first to report a Week N trade; rumors come from proposals made before the edition's week, so the Week 8 edition is the last with rumors and Week 8's own proposals never become rumors.
 
 **Delivers:**
 - Three writer tools in `newsroom/db_tools.py`: `get_team_cap_sheet`, `get_player_contract` and `get_league_transactions`. They respect the article's week cutoff, and they label every number as scanned, from a signing row, or derived. Projected numbers are kept away from writers.
@@ -314,6 +314,15 @@ Phases 1–2 need no approval. Phases 3–7 come after JR rules on §2.6, and Ph
 **Tests:** pure tests for the rumor and trade formatters on hand-built proposals: never an `EXECUTED` proposal as a rumor, never a pending one worded as done, nothing at or after the article's week.
 
 **Exit check:** the dry social plan and a dry FSOTU prompt for a week with a fake executed trade, against a restored DB copy only.
+
+**Phase 8 as built (2026-10-20):**
+- `newsroom/roster_moves.py`: `trade_line` (fact: players with cap hits, picks, each team's cap change; never OVR), `rumor_line` (always `RUMOR, not a done deal`; teams, who made the call and why, positions or "a draft pick", `talks stalled, no deal` or `outcome not known`), `trade_visible`, `rumor_visible` (proposal week < edition week ≤ 8), `rumor_outcome`, `new_trades` (last week's trades: the weekly run writes Week N's articles right after the GM step proposes Week N's trades, so Week N+1 is the first edition to see them), `trade_grades_due`, `trade_grades_target`, `trades_block`. `TRADED` rows are always notable and are left out of the move blocks and move posts.
+- `newsroom/db_tools.py`: `get_league_transactions` gains `trades`; new `get_trade_rumors` and `check_trade_package` (step 3's `legality_check` on a writer's package; checked at the article's week through the deadline, at the coming offseason from Week 9 to Week 23; its output never shows league values, cap margins or which asset another proposal has booked); `fetch_trades`, `fetch_rumors`, `new_week_trades`.
+- Briefs: `league_trades` (national) and `team_trades` (beat). Research blocks name the two new tools.
+- `TRADE_GRADES` (Sando or Barnwell) takes Slot 5 of the Feature Trio in a Weeks 2–18 edition after a week with an executed trade; its target lists every trade and each GM's stored rationale. EDITORIAL_MATRIX *Roster Moves & Contracts* has the rumor, package and Trade Grades rules.
+- R6/R7: `PLAYOFF_AUTOPSY` and `FRANCHISE_ARCHITECTURE_BLUEPRINT` carry a `TRADE PACKAGES:` rule (the writer's idea only, never reported talks, must pass `check_trade_package`).
+- Agent Wire: `TRADE_NEWS` (insiders, ≤ 3), `TRADE_RUMOR` (insiders, ≤ 2, through the deadline, with a rumor guard on done-deal wording), `TRADE_REACTION` (a die-hard of each team), `BEAT_MOVE` for both teams.
+- Tests: `tests/test_newsroom_trades.py` (pure and fake cursors). The exit check against a restored DB copy with a fake executed trade is JR's to run.
 
 ### Phase 9: Draft risers and fallers (**depends on step 4**)
 **Interface request to step 4:** a weekly consensus board (season, week, prospect, grade, rank) and the per-team hit-rate inputs (`q_team`).
