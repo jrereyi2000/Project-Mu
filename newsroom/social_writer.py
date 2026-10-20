@@ -21,7 +21,7 @@ MAX_HASHTAGS = 2
 
 SOCIAL_RULES = """AGENT WIRE POSTING RULES (MANDATORY):
 - Write ONE social post, at most 280 characters. Output only the post text: no quotes around it, no label, no markdown, no links, no explanations.
-- Every number (scores, records, stats, ranks) must come from the FACTS below. Never invent an injury, a contract figure or a betting line, and never state a trade or signing as fact. If FACTS has how_it_happened, that is how the game went: never contradict it.
+- Every number (scores, records, stats, ranks) must come from the FACTS below. Never invent an injury or a betting line. Contract figures, signings, releases and trades only from FACTS; a trade is done only if FACTS says it was executed; a rumor stays a rumor; never invent a contract figure. If FACTS has how_it_happened, that is how the game went: never contradict it.
 - Facts are factual boundaries, not a checklist: do NOT try to cram every number from FACTS into the post. Mentioning 0, 1, or 2 key numbers naturally (or focusing purely on a moment, momentum, or the feeling of the game) makes for a much better post than a dense box-score summary. Never cite decimal fantasy points unless you are an explicit fantasy analyst.
 - CADENCE & SYNTAX VARIETY: Avoid stock three-sentence templates (Exclamation! -> Stats list -> Catchphrase). Vary your syntax: try a punchy one-liner, a provocative question, a fragmented real-time reaction, a sharp contrast, or a vivid observation.
 - Real people post about what they saw from the stands or the couch, a play they can't stop thinking about, sideline body language, a hot take, an overreaction, a joke, or a grudge. Fans can be wrong in their opinions, never about the score.

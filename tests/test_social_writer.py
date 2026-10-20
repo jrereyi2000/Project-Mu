@@ -16,6 +16,17 @@ ACCOUNT = {"agent_id": "@fan", "archetype": "DIE_HARD_FAN", "persistent_memory":
            "handle": "@ChiefsKingdom_Tre97", "display_name": "Tre"}
 
 
+class SocialRulesTests(unittest.TestCase):
+    def test_contract_and_trade_grounding(self):
+        """JR's R12: real moves and contract figures from FACTS; a trade is done only if executed; rumors stay rumors."""
+        from newsroom.social_writer import SOCIAL_RULES
+        self.assertIn("Contract figures, signings, releases and trades only from FACTS", SOCIAL_RULES)
+        self.assertIn("a trade is done only if FACTS says it was executed", SOCIAL_RULES)
+        self.assertIn("a rumor stays a rumor", SOCIAL_RULES)
+        self.assertIn("never invent a contract figure", SOCIAL_RULES)
+        self.assertNotIn("never state a trade or signing as fact", SOCIAL_RULES)
+
+
 class CleanPostTests(unittest.TestCase):
     def test_strips_quotes_labels_and_markdown(self):
         self.assertEqual(clean_post('Tweet: "**What** a game"')["text"], "What a game")

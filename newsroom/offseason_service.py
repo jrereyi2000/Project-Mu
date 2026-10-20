@@ -614,7 +614,7 @@ def build_event_facts_packet(
     """Generates an anti-leakage facts bundle for each offseason story type:
     - super_bowl: Concluded season & Super Bowl game stats; NO post-game events.
     - coaching: Outgoing coach record, incoming coach slant/background/coordinator origin,
-                scheme changes vs retained unit schemes; NO signings or draft.
+                scheme changes vs retained unit schemes; NO offseason signings or draft.
     - signings: 90+ OVR signings with OVR converted to qualitative tiers. Checks awards table
                 for actual AP All-Pro honors before allowing the term. NO draft picks.
     - draft: Actual Round 1 picks from draft_prospects comparing actual_pick vs projected_pick.
@@ -679,7 +679,7 @@ def build_event_facts_packet(
                         "super_bowl_score": runner_score,
                     },
                     "box_score": box_score_data,
-                    "anti_leakage_boundary": "Concluded season through Super Bowl Sunday only. Strictly no offseason transactions, coaching moves, free-agent arrivals/departures, or draft picks.",
+                    "anti_leakage_boundary": "Concluded season through Super Bowl Sunday only. Strictly no offseason transactions, coaching moves, offseason free-agent arrivals/departures, or draft picks. In-season signings and releases are part of the season.",
                 }
 
             elif event_key in ("coaching", "coaching_carousel", "coaching_carousel_audit"):
@@ -737,7 +737,7 @@ def build_event_facts_packet(
                     "season": season,
                     "publication_week": 24,
                     "coaching_moves": coaching_packet,
-                    "anti_leakage_boundary": "Concluded season and submitted coaching moves only. Strictly no free-agency signings or draft selections.",
+                    "anti_leakage_boundary": "Concluded season and submitted coaching moves only. Strictly no offseason free-agency signings, offseason trades or draft selections. In-season moves are season history.",
                 }
 
             elif event_key in ("signings", "free_agency", "free_agency_signing_grades"):
@@ -766,7 +766,7 @@ def build_event_facts_packet(
                     "season": season,
                     "publication_week": 24,
                     "marquee_signings": signings_packet,
-                    "anti_leakage_boundary": "Concluded season, coaching carousel updates, and submitted marquee 90+ signings (qualitative tiers only). Strictly no draft selections.",
+                    "anti_leakage_boundary": "Concluded season, coaching carousel updates, and submitted marquee 90+ signings (qualitative tiers only). Contract terms only as cited from the signing terms or get_player_contract; never infer a missing term. Strictly no draft selections.",
                 }
 
             elif event_key in ("draft", "draft_class", "nfl_draft_class_recap"):
