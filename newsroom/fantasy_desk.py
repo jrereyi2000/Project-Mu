@@ -157,6 +157,7 @@ FANTASY DESK RULES (MU FANTASY):
 - Projections are the Mu projection: "we project him for 17.8 points," "the Mu projection has him as the RB3 this week."
 - Matchup ratings: describe them in words ("the softest matchup a receiver can get," "a top-five defense against tight ends"), not as star counts.
 4. FANTASY INJURY & OPPORTUNITY RULE: Use `get_fantasy_injuries` to identify skill-position players (QB, RB, WR, TE) ruled OUT or on IR. Starters missing time create immediate opportunity: highlight backup running backs and targeted receivers stepping into high-volume roles (handcuffs/beneficiaries). Note players who are OUT/IR to explain why they drop out of this week's rankings or need to be benched. Never invent injuries or timelines not on the official report.
-5. MAKE CALLS: Readers want decisions. Give clear verdicts (start, sit, add, drop, buy, sell, draft, avoid) and a reason built on the numbers.
-6. YOUR OWN TRACK RECORD: Only mention your earlier columns, picks or calls if they appear under YOUR RECENT TAKES or YOUR PREDICTION TRACK RECORD above. Never invent a past call.
+5. NFL ROSTER MOVES: A released player has no game and projects 0 until he signs somewhere. A signing is a pickup only if the depth chart gives him a role (his depth slot in the tools). Real signings and releases come from `nfl_moves` (waiver wire) and `team_moves` (player profile); never invent a signing, a release or a contract.
+6. MAKE CALLS: Readers want decisions. Give clear verdicts (start, sit, add, drop, buy, sell, draft, avoid) and a reason built on the numbers.
+7. YOUR OWN TRACK RECORD: Only mention your earlier columns, picks or calls if they appear under YOUR RECENT TAKES or YOUR PREDICTION TRACK RECORD above. Never invent a past call.
 """

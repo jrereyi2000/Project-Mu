@@ -12,9 +12,9 @@ from typing import Optional
 import psycopg
 from langchain_core.tools import tool
 
-from newsroom.db_tools import db, resolve_season
+from newsroom.db_tools import db, fetch_moves, resolve_season
 from newsroom.run_context import context_season, cutoff_week
-from newsroom.roster_moves import on_roster
+from newsroom.roster_moves import move_line, on_roster, week_label
 
 GROUP = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE"}
 GROUPS = ("QB", "RB", "WR", "TE")
@@ -91,6 +91,31 @@ def _roster(cur, season: int) -> dict:
         for depth, (_, pid) in enumerate(sorted(players), start=1):
             roster[pid]["depth"] = f"{roster[pid]['group']}{depth}"
     return roster
+
+
+SKILL_MOVE_POSITIONS = ("QB", "HB", "FB", "WR", "TE")
+
+
+def nfl_move_lines(moves, roster, rostered, week: int) -> list:
+    """The waiver wire's `nfl_moves`: skill players signed in the last 2 visible weeks (`week` and `week` - 1) with
+    their new team, depth slot and rostered %, then released players still on fantasy rosters (drop candidates, no
+    game until they sign). moves: db_tools.fetch_moves rows (already cut off for the article); roster: _roster;
+    rostered: {player_id: rostered %}."""
+    out = []
+    for m in moves:
+        pid = m.get("player_id")
+        if m.get("type") != "SIGNED" or m.get("position") not in SKILL_MOVE_POSITIONS or pid not in roster \
+                or m.get("week") is None or m["week"] < week - 1 or m.get("practice_squad"):
+            continue
+        r = roster[pid]
+        out.append(f"SIGNED · {r['name']} (ID {pid}, {r['position']}) signed with {m.get('team')} ({week_label(m)}): "
+                   f"now {r['depth']}, rostered {rostered.get(pid, 0.0):.0f}%")
+    for pid, r in sorted(roster.items(), key=lambda kv: -rostered.get(kv[0], 0.0)):
+        if r.get("free_agent") and rostered.get(pid, 0.0) > 0:
+            out.append(f"RELEASED · {r['name']} (ID {pid}, {r['position']}) released by {r['team']} "
+                       f"({week_label({'week': r.get('released_week')})}): no team, projects 0 until he signs; "
+                       f"rostered {rostered[pid]:.0f}% (drop candidate)")
+    return out
 
 
 def _lines(cur, season: int, through_week: int) -> list:
@@ -392,6 +417,7 @@ def get_fantasy_waiver_wire(week: int = 0, position: str = "ALL", max_rostered_p
                 return f"No simulated-league rosters stored for Season {s}, Week {w}."
             proj, roster, opp = _projections(cur, s, w), _roster(cur, s), _opponents(cur, s)
             lines = _lines(cur, s, w - 1)
+            moves = fetch_moves(cur, s)
         recent = defaultdict(list)
         for l in sorted(lines, key=lambda l: l["week"]):
             if l["pid"] in roster and l["team_id"] == roster[l["pid"]]["team_id"]:
@@ -422,6 +448,10 @@ def get_fantasy_waiver_wire(week: int = 0, position: str = "ALL", max_rostered_p
             "candidates": [fmt(pid) for pid in cands[:n]],
             "most_added": [fmt(pid) for pid in sorted(pool, key=lambda p: -change[p])[:10] if change[pid] > 0],
             "most_dropped": [fmt(pid) for pid in sorted(pool, key=lambda p: change[p])[:10] if change[pid] < 0],
+            "nfl_moves": nfl_move_lines(moves, roster, {pid: v[0] for pid, v in now.items()}, w),
+            "nfl_moves_note": "Real NFL signings of skill players in the last two weeks and released players still on "
+                              "fantasy rosters. A signing is a pickup only if his depth slot gives him a role; a "
+                              "released player has no game and projects 0 until he signs.",
         }, indent=2)
     except Exception as e:
         return _err(e)
@@ -538,6 +568,7 @@ def get_fantasy_player_profile(player_identifier: str, season: int = 0) -> str:
             adp = _adp(cur, s).get(pid)
             now = _projections(cur, s, min(max(pub, 2), SEASON_WEEKS)).get(pid, {})
             opp = _opponents(cur, s)
+            team_moves = [move_line(m, with_notable=False) for m in fetch_moves(cur, s) if m["player_id"] == pid]
         by_week = {l["week"]: l for l in lines}
         log = []
         for w in range(1, last + 1):
@@ -569,6 +600,9 @@ def get_fantasy_player_profile(player_identifier: str, season: int = 0) -> str:
                                 "this_week_projection": now.get("proj"), "this_week_rank": now.get("pos_rank")}
                                if now else None),
             "scoring": summary, "game_log": log,
+            **({"team_moves": team_moves} if team_moves else {}),
+            **({"status": f"released by {r['team']} ({week_label({'week': r.get('released_week')})}): no team, "
+                          "projects 0 until he signs"} if r.get("free_agent") else {}),
         }, indent=2)
     except Exception as e:
         return _err(e)
