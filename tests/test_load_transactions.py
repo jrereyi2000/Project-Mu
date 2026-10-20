@@ -134,6 +134,18 @@ class SharesTest(unittest.TestCase):
 class KeysAndCutoffTest(unittest.TestCase):
     ROWS = ((W4, "JAGUARS RELEASE (WR) JULIUS SLATON"), (W3, "JAGUARS RELEASE (K) X Y"))
 
+    def test_rows_before_week_1_skipped(self):
+        before = [0]
+        es = L.expand([{"heading": W4, "text": "JAGUARS RELEASE (WR) JULIUS SLATON", "flags": []},
+                       {"heading": PRE, "text": "JAGUARS RELEASE (WR) A B", "flags": []},
+                       {"heading": "2035 OFFSEASON - FREE AGENCY", "text": "BEARS RELEASE (K) C D", "flags": []}],
+                      None, None, None, "2036 SEASON - WEEK 1", before)
+        self.assertEqual([e["heading"] for e in es], [W4])
+        self.assertEqual(before, [2])
+        es = L.expand([{"heading": "2036 OFFSEASON - FREE AGENCY", "text": "BEARS RELEASE (K) C D", "flags": []}],
+                      None, None, None, "2036 SEASON - WEEK 1")
+        self.assertEqual(len(es), 1)                  # the season's own offseason is kept
+
     def test_trades_skipped(self):
         trades = []
         es = L.expand([{"heading": W4, "text": "BEARS TRADED (WR) JOHN DOE TO PACKERS", "flags": []},

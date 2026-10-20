@@ -84,7 +84,7 @@ Every cap delta changes `salaries` and/or `cap_penalty`, moves `total_spend` by 
 
 **Trade rows are skipped** (JR, 2026-10-19): any row the grammar reads as a trade (`\bTRADE`, `\bACQUIRE`) is neither re-read by Gemini nor stored, and the loader lists it under `skipped_trades`. Trades are made through the GM agents' approval flow (master §2.4), and step 3 moves the players, their contracts and the cap rows when JR confirms a trade. `trade_group` and `gm_proposal_id` stay on `transactions` for step 3 to fill if it records confirmed trades there.
 
-**Effects cutoff (first run):** a backfill would otherwise replay preseason and offseason moves onto rosters that the Season scan already captured. So rows get `applied = false` and no effects when they order before `apply_from`. On the first load of a season, `apply_from` defaults to `"<season> SEASON - WEEK 1"`, and `--apply-from <heading>` overrides it. After that, every new row is applied. The roster scan stays authoritative and reconciles anything missed (master §4).
+**Week 1 floor** (JR, 2026-10-19, replacing the first-run `applied = false` history): rows before `<season> SEASON - WEEK 1` are neither captured nor stored. The Week 1 roster and the Season scan already hold every preseason move, and the preseason cut-downs to 53 are over half the list. The capture's `--since` defaults to that heading when nothing is loaded yet, and the loader skips older rows (`skipped_before_week_1`). The season's own offseason rows (after the Super Bowl) order later and are kept. `--apply-from <heading>` can still mark rows between Week 1 and that heading `applied = false`.
 
 (The optional step-3 hook that matched scanned trades to proposals was removed along with the trade rows.)
 
