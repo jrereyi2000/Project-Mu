@@ -124,3 +124,24 @@ def test_tools_registered_in_dispatcher():
     names = [t.name for t in dispatcher.tools_for("OFFSEASON_MOCK_DRAFT")]
     assert {"get_mock_draft", "get_scouted_draft_board", "get_draft_order", "get_team_draft_needs"} <= set(names)
     assert "get_draft_prospects" not in names
+
+
+def test_draft_mover_and_record_formatters():
+    """Step 5 Phase 9 seam (team management step 4): pure formatters, no hidden values."""
+    from newsroom.db_tools import draft_mover_line, draft_record_facts
+    row = {"full_name": "JAMAR BODDEN", "position": "CB", "college": "ILLINOIS", "class_year": "senior", "rank": 12,
+           "grade": 84.1, "round_label": "1st round", "delta_rank": 9, "delta_grade": 2.3, "err": 1.0,
+           "events": [{"headline": "h", "blurb": "Bodden shut down Penn State."}]}
+    line = draft_mover_line(row)
+    assert line["name"] == "Jamar Bodden" and line["rank_change"] == 9 and line["why"] == ["Bodden shut down Penn State."]
+    assert not {"err", "true_value", "ovr", "impact"} & set(line)
+    rec = {"picks": [{"draft_season": 2036, "round": 1, "pick": 29, "name": "Bobby Long", "position": "WR",
+                      "label": "BUST", "years": 0, "h": -1.4}], "streaks": {"first_round_misses": 3}}
+    facts = draft_record_facts(rec)
+    assert facts["streaks"] == ["three straight first-round misses"] and "h" not in facts["picks"][0]
+    assert draft_record_facts(dict(rec, streaks={"first_round_hits": 1}))["streaks"] == ["last year's first-round pick: a hit"]
+
+
+def test_draft_tools_registered():
+    names = [t.name for t in SwarmDispatcher().tools_for("OFFSEASON_MOCK_DRAFT")]
+    assert {"get_draft_risers_fallers", "get_team_draft_record"} <= set(names)

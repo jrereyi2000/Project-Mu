@@ -4,6 +4,14 @@ Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) s
 
 **Delivers:** a hidden true value for every prospect; a weekly consensus board that moves with stored, invented college events (games, storylines, all-star games, then the combine, pro days and visits); 32 private team boards; `fo_quality` (`q_team`) from draft track records, bootstrapped from the 2036 draft; a `--calibrate` harness and a test that locks the poor-pick band; weekly risers and fallers for step 5 Phase 9; a `#debug` **Draft Room** where JR records each Round 1 pick as he makes it; post-draft validation against the Draft Recap scan; and feedback into `fo_quality` once the rookies have real ratings.
 
+**Status (2026-10-20): Phases 1–8 built and on main** (PROJECT_SPEC §2.18, §3.3g). The migration `2026_12_12_scouting.sql` is **not applied to live** (validated twice on a throwaway copy, then dropped). As built, deviating from or settling this plan:
+- **Consensus seed (Q1):** the first error is `0.75 × gap + σ·z`, where gap = the V at Madden's PICK rank minus the prospect's V (sd 5.3 for 2037). It decays by (1 − λ) a step, λ = 0.05, so about 31% is left on draft day. The noise part's sd runs 3.0 → 1.5 (`SIGMA_0`, `SIGMA_DRAFT`). The quiet-week threshold scales with the step's noise.
+- **Team boards:** a Round 1 pick must sit inside the consensus top 80 (`REACH_LIMIT`, K1). Six visits per team at each of steps 25 and 26.
+- **Calibration frozen 2026-10-20** (1000 drafts): `SIGMA_BASE` 5.5, `RHO` 0.5, `SIGMA_RES` 2.0, `PHI` 3.0. Poor picks: 24.3% under `live`, 25.2% under `spread` (q ≤ 0.85: 13.0%; ≥ 1.15: 34.5%).
+- **Bootstrap:** 2036 q runs 0.93–1.09 (dry run on live). CAR and IND hold at 1.00.
+- **Draft-day premiums:** `1 + 0.05 × (the buyer's best grade − the consensus's best)`, within 1.0–1.6. At most 3 proposals a draft.
+- **Writers:** `get_scouted_draft_board` and `get_mock_draft` dropped OVR (Q6). The step 5 Phase 9 data seam is built: `get_draft_risers_fallers` and `get_team_draft_record`. The Phase 9 posts and directive lines still wait for JR's text.
+
 **Build state (live DB, read-only SELECTs, 2026-10-20):** `league_state` = (2036, 4). `draft_prospects` holds the **2037 class: 388 rows** (32 a round in Rounds 1–7 except 31 in Round 4, 165 UDFA). 387 have an OVR (one blank, `BEN MULLIGAN`, MIKE, pick 149). Age, college and height/weight are all filled. `archetype` and `notes` are empty on every row. In the top 64, OVR runs 61–80 (mean 69.5, sd 4.2) and age 21–24. The 2036 class (389 rows, 224 with `actual_pick`, 194 linked to players) is the only draft history. `draft_picks` has 224 rows each for 2037–2039, with `overall_pick` NULL. The main session is applying `2026_12_11_draft_pick_owners.sql` (JR's 24 CPU-era pick trades) right now.
 
 ---
