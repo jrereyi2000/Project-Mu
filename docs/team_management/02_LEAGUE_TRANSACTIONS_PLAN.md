@@ -199,7 +199,7 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 - re-sign projects the new deal's years after the current one (even split, and scanned shares);
 - sign then release the same week (applied oldest first);
 - the same rows loaded twice produce no ops;
-- rows before `apply_from` → `applied=false` with no ops;
+- rows before `apply_from` → `applied=false` with no ops; rows before Week 1 skipped;
 - contract ops are left out when the state has no `player_contracts`;
 - rows that aren't moves are skipped and listed.
 
@@ -226,7 +226,7 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 ### Phase 6: Weekly integration, `#debug`
 **Files:**
 - `pipeline/weekly_capture.py`:
-  - `since_heading()` reads `max(txn_date by ordinal)` from `transactions` for the season and passes `--since` to the weekly/playoff `madden_capture` command (S17). With nothing loaded yet, the weekly run uses `<season> SEASON - WEEK 1`, and `--mode transactions` reads the whole list.
+  - `since_heading()` reads `max(txn_date by ordinal)` from `transactions` for the season and passes `--since` to the weekly/playoff `madden_capture` command (S17). With nothing loaded yet, both the weekly run and `--mode transactions` use `<season> SEASON - WEEK 1`.
   - `extract_done` for weekly/playoff also requires `transactions.csv` when transactions pages exist.
   - The single load (one DB transaction) runs `load_transactions` → Season Stats → …
   - Add `--mode transactions` (connect → `--only transactions` → extract → load → shrink, no engines or articles) to `MODES`.
@@ -267,4 +267,4 @@ CSV columns: `ORDER` (0 = newest), `PAGE`, `HEADING`, `SEASON`, `WEEK`, `TEXT`, 
 
 ## 6. Answered questions (JR, 2026-10-19)
 1. **No automatic contracts re-scans** (revised 2026-10-19; this replaces the earlier answer of re-scans capped at 8 teams a week). Re-signings don't change this season's cap, and every move's effect on the books can be worked out from the row and the stored contract. So contracts and `team_cap_seasons` are kept current from the transactions (§2.3), and a re-signing's future years are projected from the scanned per-length shares. The next Season scan corrects any drift. `--mode contracts --teams` stays a by-hand tool, e.g. before a trade that only just fits under the cap. The `contract_rescan_requests` table and the weekly re-scan step were removed before the migration was ever applied.
-2. **First-run backfill cutoff: yes.** Effects apply only from `SEASON - WEEK 1` of the current season. Older rows are stored with `applied = false`, as history only.
+2. **First-run cutoff: Week 1** (revised 2026-10-19). Nothing before `SEASON - WEEK 1` of the current season is captured or stored, because the Week 1 roster already has every preseason move. This replaces the earlier rule of storing older rows as `applied = false` history.
