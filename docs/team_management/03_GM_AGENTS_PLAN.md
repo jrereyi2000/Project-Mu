@@ -134,16 +134,22 @@ Everything is in **dollars of surplus**, so players and picks compare directly.
 10. Store.
 
 **Budget (JR, 2026-10-20):**
-- Two targets: `IN_SEASON_TARGET = 17` executed through the Week 8 deadline, and `OFFSEASON_TARGET = 17` (drawn from the range 15–20 each offseason) including draft day. The offseason uses the same pacing over its own stages.
+- Two targets: `IN_SEASON_TARGET = 20` (JR, 2026-10-20; was 17) executed through the Week 8 deadline, and `OFFSEASON_TARGET = 17` (drawn from the range 15–20 each offseason) including draft day. The offseason uses the same pacing over its own stages.
 - `TRADE_DEADLINE_WEEK = 8` is the NFL deadline. It is separate from Napper's fantasy `TRADE_DEADLINE_WEEK = 11` in `engines/napper_trade_engine.py`, so don't import that one.
-- The in-season weekly shape is flat, with the last two weeks before the deadline weighted 3×.
+- The in-season weekly shape: weeks 1–6 weigh 1, week 7 3, deadline week 8 6, so 60% of the target lands in weeks 7–8 (2025: 13 of 22 trades in the final 8 days). Caps: 4 new a week, 8 in week 7, 14 in week 8, 16 open.
 - This week's expected executions: `e_w = (in-season target − executed so far) × shape_w / Σ remaining shape`.
 - `p_exec` = executed ÷ decided proposals, as a Beta(3,2) posterior. It starts at 0.6 and falls if JR rejects a lot.
 - New proposals this week: `n_w ~ Poisson(e_w / p_exec)`, using a seeded RNG `random.Random(f"{season}:{week}")`, so a re-run gives the same draw.
-- Caps: at most 4 new proposals a week, at most 6 open proposals (PROPOSED or APPROVED), and each team in at most 1 new proposal a week.
+- Caps (offseason): at most 4 new proposals a stage, at most 6 open; each team in at most 1 new proposal a week. Proposals with `counts_for_pacing = false` (2026_12_13_gm_pacing.sql; the week 4–5 proposals made under the old search, JR 2026-10-20) are left out of `p_exec` and of "already made this week".
 - For 2036, the in-season target is scaled by the remaining shape (week 4 onward, up to the Week 8 deadline; §7 Q2).
 
-**Search:**
+**In-season trade shapes (JR, 2026-10-20, from Spotrac's 2025 in-season trades; replaces the open search below in season):**
+- RENTAL (~80%): one player for 1–2 picks on the price ladder, optionally with one later late pick back. Ladder by OVR: under 75 R6–R7, 75–79 R5–R6, 80–84 R4–R5, 85–87 R3 (R2 if 26 or younger with 2+ years left), 88+ blockbuster only; one step for age/contract (30+ or expiring cheaper; young with 2+ years dearer).
+- SWAP (~15%): one player for one, same or adjacent group, within 4 OVR, plus at most one late pick.
+- BLOCKBUSTER: at most 2 a season, weeks 7–8 only, an 88+ player 28 or under from a losing REBUILD/RETOOL team to a CONTEND team, for R1/R2 picks plus at most one young player.
+- No R1/R2 outside a blockbuster (the 85–87 R2 aside); at most 2 assets a side (a blockbuster buyer 3); at most 1 player a side outside a swap. Sellers have a losing record or are REBUILD; targets favour veterans with 1–2 years left; no starting QBs. The ladder sets the price and the GM traits nudge within it (both GMs still clear $300K × (1 − aggressiveness)). A buyer at 53 releases its lowest depth player to make room. The division rule stays.
+
+**Search (offseason and draft day; in season before the shapes):**
 - Initiators are drawn with weight `need_score × aggressiveness × direction factor` (CONTEND 1.5, RETOOL 1.0, REBUILD 0.6 as buyer; REBUILD also sells).
 - For the initiator's top 2 needs, targets are players on other teams who would start for the initiator and whose own team values them below the initiator's value (`V_seller < V_buyer`). Directions make most of this gap: a REBUILD seller discounts this year.
 - Packages come from the initiator's surplus players, picks and backups. There are at most 3 assets a side, the search is exhaustive over the top 8 candidates a side, and every deal is two-team.

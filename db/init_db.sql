@@ -631,6 +631,7 @@ CREATE TABLE IF NOT EXISTS gm_trade_proposals (
     executed_at TIMESTAMPTZ,
     executed_as VARCHAR(9) CHECK (executed_as IN ('PROPOSED', 'JR_EDITED', 'SIGHTING')),
     rumor_ok BOOLEAN NOT NULL DEFAULT false,          -- step 5 may use a non-executed proposal as a rumor
+    counts_for_pacing BOOLEAN NOT NULL DEFAULT true,  -- false: left out of the budget's pacing (2026_12_13_gm_pacing.sql)
     flags TEXT[] NOT NULL DEFAULT '{}',
     deal_hash TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -567,8 +567,9 @@ def front_office_state(cur, season=None):
     cur_season, week, window = ge.league_window(cur)
     season = season or cur_season
     window = window if season == cur_season else None
-    cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED' AND trade_window = 'IN_SEASON'),
-                          count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED') AND trade_window = 'IN_SEASON'),
+    cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED' AND trade_window = 'IN_SEASON' AND counts_for_pacing),
+                          count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED') AND trade_window = 'IN_SEASON'
+                                           AND counts_for_pacing),
                           count(*) FILTER (WHERE status IN ('PROPOSED', 'APPROVED')),
                           min(week) FILTER (WHERE origin = 'ENGINE' AND trade_window = 'IN_SEASON'),
                           count(*) FILTER (WHERE status = 'EXECUTED' AND trade_window <> 'IN_SEASON')
@@ -577,8 +578,8 @@ def front_office_state(cur, season=None):
     first = min(first or week, week) if window == "IN_SEASON" else (first or 1)
     budget = {"executed": ex or 0, "decided": dec or 0, "open": open_n or 0, "deadline_week": ge.TRADE_DEADLINE_WEEK,
               "target": round(ge.scaled_target(ge.IN_SEASON_TARGET, first), 1), "season_target": ge.IN_SEASON_TARGET,
-              "p_exec": round(ge.p_exec(ex or 0, dec or 0), 3), "max_open": ge.MAX_OPEN,
-              "max_new_per_week": ge.MAX_NEW_PER_WEEK, "offseason_target": ge.offseason_target(season),
+              "p_exec": round(ge.p_exec(ex or 0, dec or 0), 3), "max_open": ge.IN_SEASON_MAX_OPEN,
+              "max_new_per_week": ge.max_new(week), "offseason_target": ge.offseason_target(season),
               "offseason_executed": ex_off or 0}
     stage = ge.read_stage(cur, season)
     nxt = ge.next_stage(stage)
@@ -662,7 +663,12 @@ def steps_for(p, legs, names, control):
     get = [lab(l) for l in legs if l["from_team_id"] == b]
     s1 = (f"Options > User Teams: you already control the {names.get(a)}." if control.get(a) else
           f"Options > User Teams: switch the {names.get(a)} to user control.")
-    return [s1,
+    pre = []
+    for f in p.get("flags") or []:
+        if f.startswith("release:"):
+            _, ab, nm = (f.split(":", 2) + ["", ""])[:3]
+            pre.append(f"{ab} are at the roster max: release {nm or 'a depth player'} first.")
+    return pre + [s1,
             f"Trade with the {names.get(b)}. Send: {', '.join(send) or 'nothing'}. Receive: {', '.join(get) or 'nothing'}.",
             f"Submit the offer, then switch to the {names.get(b)} to accept it" +
             ("." if control.get(b) else " (switch them to user control for this, or turn CPU trades on just for this trade)."),

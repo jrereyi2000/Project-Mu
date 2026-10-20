@@ -86,7 +86,7 @@ def pk(rd, orig, frm, to, season=2037):
 
 
 def base_deal():
-    return deal([pl(STAR, 2, 1), pk(1, 1, 1, 2)])
+    return deal([pl(STAR, 2, 1), pk(4, 1, 1, 2)])      # an 82 OVR veteran on an expiring deal: a 4th (the ladder)
 
 
 def test_legal_baseline():
@@ -112,6 +112,15 @@ def test_roster_fails_over_max():
         pid = 5000 + len(b["roster"][1])
         b["players"][pid] = make_player(pid, 1, "LB", 60)
         b["roster"][1].append(pid)
+    chk = ge.check_legality(base_deal(), b)["roster"]                   # at 53, taking one more: release first
+    assert chk["ok"] and chk["release"] == {"AAA": b["players"][min(
+        (pid for pid in b["roster"][1] if pid not in b["ctx"][1]["starter_ids"]
+         and pid not in b["ctx"][1]["rotation_ids"] and b["players"][pid]["group"] not in ("QB", "K", "P")),
+        key=lambda pid: (b["players"][pid]["ovr"], -b["players"][pid]["age"]))]["name"]}
+    assert ge.steps_text(b, dict(base_deal(), legality={"roster": chk}))[0].startswith("The Alpha Ants are at the roster max")
+    pid = 5999
+    b["players"][pid] = make_player(pid, 1, "LB", 60)
+    b["roster"][1].append(pid)                                            # 54 already: one more is two over
     assert not ge.check_legality(base_deal(), b)["roster"]["ok"]
     # a team already over the max may still trade one-for-one
     swap = deal([pl(STAR, 2, 1), pl(b["roster"][1][-1], 1, 2)])
@@ -132,7 +141,7 @@ def test_deadline_fails():
 
 def test_pick_ownership_fails():
     b = star_books()
-    b["picks"][(2037, 1, 1)] = 2                           # AAA's first already belongs to BBB
+    b["picks"][(2037, 4, 1)] = 2                           # AAA's 4th already belongs to BBB
     assert not ge.check_legality(base_deal(), b)["picks"]["ok"]
 
 
@@ -187,17 +196,23 @@ def test_injury_trigger_only_for_contend_starter():
 
 
 def test_budget_mean_over_seeded_seasons():
-    # caps (4 new a week) bind in the 3x deadline weeks, so a full season lands near 12.8, below the 17 target
-    m = ge.simulate_season(0.6, 2000)
-    assert 11.3 <= m <= 14.3
+    # 60% approval: a full season lands near the 20 target, ~60% of it in weeks 7-8, mostly rentals
+    r = ge.simulate_season(0.6, 2000, detail=True)
+    assert 17.5 <= r["mean"] <= 21
+    late = r["by_week"][7] + r["by_week"][8]
+    assert 0.5 <= late / r["mean"] <= 0.7
+    assert r["by_shape"]["RENTAL"] > 4 * r["by_shape"]["SWAP"] > 0
+    assert r["by_shape"]["BLOCKBUSTER"] <= ge.MAX_BLOCKBUSTERS
     assert ge.simulate_season(0.6, 300) == ge.simulate_season(0.6, 300)
 
 
 def test_budget_is_seeded_and_capped():
     a = ge.weekly_budget(2036, 7, 0, 0, 0)
     assert a == ge.weekly_budget(2036, 7, 0, 0, 0)
-    assert a["n"] <= ge.MAX_NEW_PER_WEEK
-    assert ge.weekly_budget(2036, 7, 0, 0, ge.MAX_OPEN)["n"] == 0
+    assert a["n"] <= ge.max_new(7)
+    assert ge.weekly_budget(2036, 7, 0, 0, ge.IN_SEASON_MAX_OPEN)["n"] == 0
+    assert ge.max_new(8) > ge.max_new(7) > ge.max_new(5) == ge.MAX_NEW_PER_WEEK
+    assert ge.week_shape(8) == 6 and ge.week_shape(7) == 3 and ge.week_shape(3) == 1
     assert ge.scaled_target(17, 4) < 17 and ge.scaled_target(17, 1) == 17
 
 
@@ -325,7 +340,7 @@ def test_recheck_expires_a_deal_a_gm_no_longer_accepts():
     wagner = make_player(9101, 1, "DT", 87, age=25, hit=8_390_000, end=2039)
     wagner["dev"] = "Superstar X-Factor"
     roseman = make_player(9102, 2, "EDGE", 80, age=23, hit=3_280_000, end=2038)
-    assets = [pl(9102, 2, 1), pk(2, 2, 2, 1), pk(6, 2, 2, 1), pl(9101, 1, 2)]
+    assets = [pl(9101, 1, 2), pk(2, 2, 2, 1)]                 # a ladder-priced rental: R2 for a young 87
     open_ = [{"id": 3, "status": "PROPOSED", "origin": "ENGINE", "team_a_id": 1, "team_b_id": 2,
               "trade_window": "IN_SEASON", "expires_week": 4, "assets": assets}]
     b = books(extra=[wagner, roseman, make_player(9103, 1, "DT", 90), make_player(9104, 1, "DT", 89)], open_=open_)

@@ -27,6 +27,7 @@ import os
 DISCOUNTS = {"CONTEND": (1.0, 0.55, 0.35, 0.25, 0.2), "RETOOL": (0.8, 0.75, 0.6, 0.5, 0.4),
              "REBUILD": (0.35, 0.8, 0.9, 0.9, 0.85)}
 HORIZON = 5
+SELLER_THIS_YEAR = 0.15               # a losing / rebuilding team in season: this year's games matter little
 MIN_GROUP_ROWS = 15
 OVR_PIVOT = 75
 MARKET_PREMIUM = 1.3
@@ -276,6 +277,8 @@ def player_value(p, ctx, fits, season):
     projected: bool}."""
     neutral = ctx is None
     d = DISCOUNTS["RETOOL" if neutral else (ctx.get("direction") or "RETOOL")]
+    if not neutral and ctx.get("selling"):
+        d = (SELLER_THIS_YEAR,) + tuple(d[1:])
     u = 1.0 if neutral else utility(p, ctx)
     ym = 1.0 if neutral else youth_mult(p.get("age"), ctx.get("youth_bias"))
     ym *= dev_premium(p, own=not neutral and p.get("team_id") == ctx.get("team_id"))

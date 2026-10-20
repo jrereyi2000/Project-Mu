@@ -23,7 +23,7 @@ from engines.gm_direction import (SLOTS, TRADE_DEADLINE_WEEK, TRADE_POS_WEIGHT, 
                                   starter_slots)
 
 # Budget (JR, 2026-10-20)
-IN_SEASON_TARGET = 17
+IN_SEASON_TARGET = 20                    # JR, 2026-10-20 (was 17), with the 2025 trade shapes below
 OFFSEASON_RANGE = (15, 20)               # drawn per offseason: random.Random(f"offseason:{season}")
 DEADLINE_WEIGHT = 3                      # the last two weeks before the deadline weigh 3x
 PRIOR_EXEC = (3, 2)                      # Beta(3, 2): p_exec starts at 0.6
@@ -43,7 +43,8 @@ ELITE_OVR = 88                           # 215 of ~1,700 rostered players (13%, 
 DIVISION_TAX = 0.5                       # share of V_L the sender pays to strengthen a division rival
 CONFERENCE_TAX = 0.1                     # same conference, other division: a small playoff-race tax
 # Acceptance
-THETA = 1_500_000                        # theta_T = $1.5M x (1 - aggressiveness)
+THETA = 1_500_000                        # theta_T = $1.5M x (1 - aggressiveness) (offseason, draft day)
+THETA_SHAPED = 300_000                   # in season, where the price ladder sets the price
 URGENT_OVERPAY = 2_000_000               # a CONTEND team with an urgent need accepts down to -$2M x risk
 SOFTMAX_TEMP = 1_000_000
 # Search
@@ -53,6 +54,20 @@ TOP_TARGETS = 6
 TRADE_NEED_MIN_WEIGHT = 0.5              # K and P needs are left to the CPU's signings
 BUYER_FACTOR = {"CONTEND": 1.5, "RETOOL": 1.0, "REBUILD": 0.6}
 SELL_AGE = 28
+# In-season trade shapes (JR, 2026-10-20, from Spotrac's 2025 in-season trades: 22, ~18 of them one player for
+# one or two Day-3 picks; player-for-player rare and like-for-like; two deadline-day blockbusters for elite
+# prime-age players; no multi-player packages, no starting QBs).
+SHAPE_MIX = {"RENTAL": 80, "SWAP": 15, "BLOCKBUSTER": 5}
+BLOCKBUSTER_WEEKS = (TRADE_DEADLINE_WEEK - 1, TRADE_DEADLINE_WEEK)
+MAX_BLOCKBUSTERS = 2
+BLOCKBUSTER_OVR, BLOCKBUSTER_MAX_AGE = 88, 28
+BLOCKBUSTER_YOUNG_AGE = 25               # the at-most-one player a blockbuster buyer adds
+LATE_ROUNDS = (5, 6, 7)                  # sweeteners and pick swaps
+SWAP_OVR_GAP = 4
+ADJACENT_GROUPS = {"EDGE": {"DT", "LB"}, "DT": {"EDGE"}, "LB": {"EDGE", "S"}, "CB": {"S"}, "S": {"CB", "LB"},
+                   "OT": {"IOL"}, "IOL": {"OT"}, "WR": {"TE"}, "TE": {"WR"}, "RB": set(), "QB": set()}
+VETERAN_YEARS_LEFT = 2                   # targets favour veterans with 1-2 contract years left
+VETERAN_WEIGHT = 1.5
 # Injury trigger (§2.5)
 INJURY_TRIGGER_WEEKS = 4
 INJURY_CLEAR_WEEKS = 2
@@ -171,8 +186,19 @@ def expire_stale(open_props, week, window="IN_SEASON", stage=None, pick=None):
 
 
 # ------------------------------------------------------------------ budget ----
+# In-season weekly shape (2025: 13 of 22 trades in the final 8 days, 8 on deadline day): weeks 1-6 weigh 1, the
+# week before the deadline 3, deadline week 6, so weeks 7-8 carry 9/15 = 60% of the target.
+IN_SEASON_SHAPE = {TRADE_DEADLINE_WEEK - 1: 3, TRADE_DEADLINE_WEEK: 6}
+IN_SEASON_MAX_NEW = {TRADE_DEADLINE_WEEK - 1: 8, TRADE_DEADLINE_WEEK: 14}    # other weeks: MAX_NEW_PER_WEEK
+IN_SEASON_MAX_OPEN = 16
+
+
 def week_shape(week):
-    return DEADLINE_WEIGHT if week >= TRADE_DEADLINE_WEEK - 1 else 1
+    return IN_SEASON_SHAPE.get(week, 1)
+
+
+def max_new(week):
+    return IN_SEASON_MAX_NEW.get(week, MAX_NEW_PER_WEEK)
 
 
 def scaled_target(target, first_week):
@@ -200,15 +226,15 @@ def poisson(rng, lam):
 
 def weekly_budget(season, week, executed, decided, open_count, first_week=1, target=IN_SEASON_TARGET):
     """{n, e_w, p_exec, target}: this week's new proposals. e_w = (target - executed) x shape_w / remaining shape;
-    n ~ Poisson(e_w / p_exec), seeded random.Random(f"{season}:{week}"), capped at MAX_NEW_PER_WEEK and by
-    MAX_OPEN open proposals."""
+    n ~ Poisson(e_w / p_exec), seeded random.Random(f"{season}:{week}"), capped at max_new(week) (4; 8 and 14 in
+    the two deadline weeks) and by IN_SEASON_MAX_OPEN open proposals."""
     tgt = scaled_target(target, first_week)
     remaining = sum(week_shape(w) for w in range(week, TRADE_DEADLINE_WEEK + 1))
     e_w = max(0.0, tgt - executed) * week_shape(week) / remaining if remaining else 0.0
     pe = p_exec(executed, decided)
     rng = random.Random(f"{season}:{week}")
     n = poisson(rng, e_w / pe if pe else 0)
-    n = max(0, min(n, MAX_NEW_PER_WEEK, MAX_OPEN - open_count))
+    n = max(0, min(n, max_new(week), IN_SEASON_MAX_OPEN - open_count))
     return {"n": n, "e_w": round(e_w, 3), "p_exec": round(pe, 3), "target": round(tgt, 2), "executed": executed}
 
 
@@ -233,20 +259,40 @@ def offseason_budget(season, stage, executed, decided, open_count, target=None, 
     return {"n": n, "e_w": round(e, 3), "p_exec": round(pe, 3), "target": target, "executed": executed}
 
 
-def simulate_season(approval=0.6, seasons=2000, first_week=1, seed=0):
+def simulate_season(approval=0.6, seasons=2000, first_week=1, seed=0, detail=False):
     """Replay the in-season budget with JR approving (and making) each proposal with probability `approval`;
-    every proposal is decided in its week. Returns the mean executed count."""
+    every proposal is decided in its week and gets a shape from SHAPE_MIX (a blockbuster only in the two deadline
+    weeks, at most MAX_BLOCKBUSTERS a season). Returns the mean executed count, or with detail {mean, by_week,
+    by_shape} (means per season)."""
     rng = random.Random(seed)
     total = 0
+    by_week = {w: 0 for w in range(first_week, TRADE_DEADLINE_WEEK + 1)}
+    by_shape = {k: 0 for k in SHAPE_MIX}
     for s in range(seasons):
-        executed = decided = 0
+        executed = decided = blockbusters = 0
         for w in range(first_week, TRADE_DEADLINE_WEEK + 1):
             n = weekly_budget(10_000 + s, w, executed, decided, 0, first_week)["n"]
             for _ in range(n):
                 decided += 1
-                executed += rng.random() < approval
+                shapes = [k for k in SHAPE_MIX if k != "BLOCKBUSTER" or
+                          (w in BLOCKBUSTER_WEEKS and blockbusters < MAX_BLOCKBUSTERS)]
+                r = rng.random() * sum(SHAPE_MIX[k] for k in shapes)
+                shape = shapes[-1]
+                for k in shapes:
+                    r -= SHAPE_MIX[k]
+                    if r <= 0:
+                        shape = k
+                        break
+                if rng.random() < approval:
+                    executed += 1
+                    by_week[w] += 1
+                    by_shape[shape] += 1
+                    blockbusters += shape == "BLOCKBUSTER"
         total += executed
-    return total / seasons
+    if not detail:
+        return total / seasons
+    return {"mean": total / seasons, "by_week": {w: v / seasons for w, v in by_week.items()},
+            "by_shape": {k: v / seasons for k, v in by_shape.items()}}
 
 
 # ------------------------------------------------------------------- books ----
@@ -281,8 +327,8 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
                    WHERE NOT used AND draft_season > %s""", (season,))
     b["picks"] = {(r[0], r[1], r[2]): r[3] for r in cur.fetchall()}
     b["open"] = read_proposals(cur, season, ("PROPOSED", "APPROVED"))
-    cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED'),
-                          count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED')),
+    cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED' AND counts_for_pacing),
+                          count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED') AND counts_for_pacing),
                           min(week) FILTER (WHERE origin = 'ENGINE')
                    FROM gm_trade_proposals WHERE season = %s AND trade_window = ANY(%s)""",
                 (season, ["IN_SEASON"] if window == "IN_SEASON" else ["OFFSEASON", "DRAFT_DAY"]))
@@ -290,7 +336,7 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     b["executed"], b["decided"], b["first_week"] = ex or 0, dec or 0, min(first or week, week)
     # this week's proposals already made (a re-run doesn't add more); one the re-check found illegal doesn't count
     cur.execute("""SELECT count(*) FROM gm_trade_proposals WHERE season = %s AND week = %s AND origin = 'ENGINE'
-                   AND trade_window = %s AND (%s::text IS NULL OR %s = ANY(flags))
+                   AND trade_window = %s AND (%s::text IS NULL OR %s = ANY(flags)) AND counts_for_pacing
                    AND NOT (status = 'EXPIRED' AND (COALESCE(status_reason, '') LIKE 'no longer legal%%'
                                                     OR COALESCE(status_reason, '') LIKE 'no longer accepted%%'))""",
                 (season, week, window, None if stage is None else f"stage:{stage}",
@@ -299,7 +345,12 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     cur.execute("SELECT deal_hash FROM gm_trade_proposals WHERE season = %s", (season,))
     b["hashes"] = {r[0] for r in cur.fetchall()}
     cur.execute("SELECT team_id, wins, losses FROM team_seasons WHERE season = %s", (season,))
-    b["records"] = {r[0]: f"{r[1] or 0}-{r[2] or 0}" for r in cur.fetchall()}
+    rows = cur.fetchall()
+    b["records"] = {r[0]: f"{r[1] or 0}-{r[2] or 0}" for r in rows}
+    b["wl"] = {r[0]: (r[1] or 0, r[2] or 0) for r in rows}
+    cur.execute("""SELECT count(*) FROM gm_trade_proposals WHERE season = %s AND 'shape:BLOCKBUSTER' = ANY(flags)
+                   AND (status IN ('PROPOSED', 'APPROVED', 'EXECUTED'))""", (season,))
+    b["blockbusters"] = cur.fetchone()[0]
     cur.execute("""SELECT ct.team_id, c.coach_name FROM coach_tenures ct JOIN coaches c ON c.id = ct.coach_id
                    WHERE ct.start_season <= %s AND (ct.end_season IS NULL OR ct.end_season >= %s)
                    ORDER BY ct.start_season""", (season, season))
@@ -367,7 +418,18 @@ def team_ctx(b, tid):
             "rotation_ids": rotation_ids, "rotation_lines": rotation_lines,
             "position_bias": gm.get("position_bias") or {}, "youth_bias": gm.get("youth_bias", 0.0),
             "pick_affinity": gm.get("pick_affinity", 1.0), "slots": b["slots"],
-            "aggressiveness": gm.get("aggressiveness", 0.5), "risk_appetite": gm.get("risk_appetite", 0.5)}
+            "aggressiveness": gm.get("aggressiveness", 0.5), "risk_appetite": gm.get("risk_appetite", 0.5),
+            "selling": b.get("window") == "IN_SEASON" and is_seller(b, tid)}
+
+
+def losing(b, tid):
+    w, l = (b.get("wl") or {}).get(tid, (0, 0))
+    return l > w
+
+
+def is_seller(b, tid):
+    """In season a team sells when it has a losing record or is REBUILD (2025: sellers are losing teams)."""
+    return losing(b, tid) or (b.get("ts", {}).get(tid, {}).get("direction") == "REBUILD")
 
 
 def read_proposals(cur, season, statuses=None, ids=None):
@@ -563,15 +625,22 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
            and (b["players"][x["player_id"]].get("contract") or {}).get("no_trade_clause")]
     res["ntc"] = {"ok": not ntc, "detail": ", ".join(ntc) or "none"}
     rost = roster_after(deal, b)
-    bad = []
+    bad, release = [], {}
     mx = roster_max(window)
     for t, n in rost.items():
         before = len(b["roster"].get(t, []))
         if n > mx and n > before:
-            bad.append(f"{abbr(b, t)} {n} > {mx}")
+            if n == before + 1 and before <= mx:             # one over: he releases a depth player first (2025)
+                cand = release_candidate(b, t, deal)
+                release[t] = cand["name"] if cand else "a depth player"
+            else:
+                bad.append(f"{abbr(b, t)} {n} > {mx}")
         if n < ROSTER_MIN and n < before:
             bad.append(f"{abbr(b, t)} {n} < {ROSTER_MIN}")
-    res["roster"] = {"ok": not bad, "detail": "; ".join(bad) or ", ".join(f"{abbr(b, t)} {n}" for t, n in rost.items())}
+    detail = "; ".join(bad) or ", ".join(f"{abbr(b, t)} {n}" for t, n in rost.items())
+    if release and not bad:
+        detail += "; " + "; ".join(f"{abbr(b, t)} releases {nm} first (roster at {mx})" for t, nm in release.items())
+    res["roster"] = {"ok": not bad, "detail": detail, "release": {abbr(b, t): nm for t, nm in release.items()}}
     bad = []
     for t in (deal["a"], deal["b"]):
         for g, need in MIN_SLOT_GROUPS.items():
@@ -585,6 +654,9 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
     res["slots"] = {"ok": not bad, "detail": "; ".join(bad) or "ok"}
     res["deadline"] = {"ok": trades_open(b["week"], window), "detail": f"week {b['week']} ({window})"}
     res["division"] = division_check(deal, b)
+    if window == "IN_SEASON":
+        sc = shape_check(deal, b)
+        res["shape"] = {"ok": sc["ok"], "detail": sc["detail"]}
     bad = []
     for x in deal["assets"]:
         if x["type"] == "PICK":
@@ -608,7 +680,9 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
             if not ok and why != "no-trade clause":
                 bad.append(f"{p['name']}: {why}")
     res["tradeable"] = {"ok": not bad, "detail": "; ".join(bad) or "ok"}
-    if valuer is not None:
+    if valuer is not None and window == "IN_SEASON" and res["shape"]["ok"] and classify_shape(deal, b)[0] != "SWAP":
+        res["fairness"] = {"ok": True, "detail": "the price ladder sets the price"}
+    elif valuer is not None:
         _, _, la, lb = deltas(deal, valuer)
         gap, limit = abs(la - lb), max(FAIRNESS_SHARE * max(abs(la), abs(lb)), FAIRNESS_FLOOR)
         res["fairness"] = {"ok": gap <= limit,
@@ -636,15 +710,326 @@ def division_check(deal, b):
     return {"ok": True, "detail": f"same conference ({div}): a {CONFERENCE_TAX:.0%} rival discount"}
 
 
+# ------------------------------------------------------------ trade shapes ----
+def years_left(p, season):
+    c = p.get("contract") or {}
+    return (c.get("end_season", season) - season + 1) if c else 0
+
+
+def ladder(p, season):
+    """The in-season price in pick rounds for a player: (earliest, latest) round of the buyer's main pick, or None
+    (88+: blockbuster only). Under 75 R6-R7, 75-79 R5-R6, 80-84 R4-R5, 85-87 R3 (R2 if 26 or younger with 2+
+    years left); then at most one step: older (30+) or expiring = one round cheaper, young (26 or under) with 2+
+    years left = one round dearer (never earlier than R3, but for the 85-87 exception)."""
+    ovr, age, yl = p.get("ovr") or 0, p.get("age") or 27, years_left(p, season)
+    if ovr >= BLOCKBUSTER_OVR:
+        return None
+    young = age <= 26 and yl >= 2
+    cheap = age >= 30 or yl <= 1
+    if ovr >= 85:
+        return (2, 2) if young else ((3, 4) if cheap else (3, 3))
+    lo, hi = (4, 5) if ovr >= 80 else (5, 6) if ovr >= 75 else (6, 7)
+    if young:
+        lo = max(3, lo - 1)
+    elif cheap:
+        hi = min(7, hi + 1)
+    return lo, hi
+
+
+def _sides(deal):
+    out = {}
+    for x in deal["assets"]:
+        out.setdefault(x["from"], []).append(x)
+    return out
+
+
+def classify_shape(deal, b):
+    """(shape, ok, detail) for an in-season deal: RENTAL (one player, optionally with one later pick back, for 1-2
+    picks on the price ladder), SWAP (one player each, same or adjacent group, OVR within 4, at most one late
+    pick), BLOCKBUSTER (an 88+ player 28 or under from a losing REBUILD/RETOOL team to a CONTEND team in the two
+    deadline weeks, at most 2 a season, for 1-2 R1/R2 picks plus at most one player 25 or under). Anything else:
+    (None, False, why). No R1/R2 pick outside a blockbuster (the ladder's 85-87 R2 aside), at most 2 assets a side
+    (a blockbuster buyer 3), at most 1 player a side."""
+    season = b["value_season"]
+    sides = _sides(deal)
+    teams = [deal["a"], deal["b"]]
+    players = {t: [x for x in sides.get(t, []) if x["type"] == "PLAYER"] for t in teams}
+    picks = {t: [x for x in sides.get(t, []) if x["type"] == "PICK"] for t in teams}
+    rnd = lambda x: x["pick"][1]
+    pl = lambda x: b["players"].get(x["player_id"], {})
+    if any(len(players[t]) > 1 for t in teams):
+        return None, False, "more than one player a side: in-season trades move one player"
+    star_side = next((t for t in teams if players[t] and (pl(players[t][0]).get("ovr") or 0) >= BLOCKBUSTER_OVR),
+                     None)
+    if star_side is None and all(players[t] for t in teams):                   # SWAP
+        p1, p2 = pl(players[teams[0]][0]), pl(players[teams[1]][0])
+        allp = picks[teams[0]] + picks[teams[1]]
+        if any((q.get("ovr") or 0) >= BLOCKBUSTER_OVR for q in (p1, p2)):
+            return "SWAP", False, "an 88+ player only moves in a blockbuster"
+        if p1.get("group") != p2.get("group") and p2.get("group") not in ADJACENT_GROUPS.get(p1.get("group"), ()):
+            return "SWAP", False, f"swap of unlike positions ({p1.get('group')} for {p2.get('group')})"
+        if abs((p1.get("ovr") or 0) - (p2.get("ovr") or 0)) > SWAP_OVR_GAP:
+            return "SWAP", False, f"swap of unlike players ({p1.get('ovr')} vs {p2.get('ovr')} OVR)"
+        if len(allp) > 1 or any(rnd(x) not in LATE_ROUNDS for x in allp):
+            return "SWAP", False, "a swap adds at most one late (R5-R7) pick"
+        return "SWAP", True, f"SWAP: {p1.get('pos')} {p1.get('ovr')} for {p2.get('pos')} {p2.get('ovr')}"
+    seller = star_side or next((t for t in teams if players[t]), None)
+    if seller is None:
+        return None, False, "a pick-for-pick trade isn't an in-season shape"
+    buyer = teams[1] if seller == teams[0] else teams[0]
+    star = pl(players[seller][0])
+    if (star.get("ovr") or 0) >= BLOCKBUSTER_OVR:                              # BLOCKBUSTER
+        why = []
+        if (star.get("age") or 99) > BLOCKBUSTER_MAX_AGE:
+            why.append(f"an 88+ player over {BLOCKBUSTER_MAX_AGE} isn't traded in season")
+        if b["week"] not in BLOCKBUSTER_WEEKS:
+            why.append(f"blockbusters only in weeks {BLOCKBUSTER_WEEKS[0]}-{BLOCKBUSTER_WEEKS[1]}")
+        if b.get("blockbusters", 0) >= MAX_BLOCKBUSTERS:
+            why.append(f"already {MAX_BLOCKBUSTERS} blockbusters this season")
+        if not (losing(b, seller) and b["ctx"][seller]["direction"] in ("REBUILD", "RETOOL")):
+            why.append("the seller must be a losing REBUILD/RETOOL team")
+        if b["ctx"][buyer]["direction"] != "CONTEND":
+            why.append("the buyer must be a contender")
+        if picks[seller]:
+            why.append("the seller sends the star alone")
+        bp, bpl = picks[buyer], players[buyer]
+        if not (1 <= len(bp) <= 2 and all(rnd(x) <= 2 for x in bp) and any(rnd(x) == 1 for x in bp)):
+            why.append("the price is one or two R1/R2 picks, at least one a first")
+        if bpl and ((pl(bpl[0]).get("age") or 99) > BLOCKBUSTER_YOUNG_AGE or
+                    (pl(bpl[0]).get("ovr") or 0) >= BLOCKBUSTER_OVR):
+            why.append(f"the player added must be {BLOCKBUSTER_YOUNG_AGE} or younger (and under {BLOCKBUSTER_OVR})")
+        if why:
+            return "BLOCKBUSTER", False, "; ".join(why)
+        return "BLOCKBUSTER", True, f"BLOCKBUSTER: {star.get('pos')} {star.get('ovr')} (age {star.get('age')})"
+    # RENTAL
+    if players[buyer]:
+        return "RENTAL", False, "the buyer sends picks, not players"
+    bp, back = picks[buyer], picks[seller]
+    if not 1 <= len(bp) <= 2:
+        return "RENTAL", False, "one or two picks for a player"
+    if len(back) > 1:
+        return "RENTAL", False, "at most one pick sent back"
+    lad = ladder(star, season)
+    main = min(rnd(x) for x in bp)
+    if main < lad[0] or main > lad[1]:
+        return "RENTAL", False, (f"price off the ladder: R{main} for a {star.get('ovr')} OVR "
+                                 f"(R{lad[0]}{'' if lad[0] == lad[1] else f'-R{lad[1]}'})")
+    if any(rnd(x) <= 2 for x in bp) and lad != (2, 2):
+        return "RENTAL", False, "no R1/R2 pick outside a blockbuster"
+    if len(bp) == 2 and max(rnd(x) for x in bp) <= main:
+        return "RENTAL", False, "a second pick must be a later round"
+    if back and (rnd(back[0]) <= max(rnd(x) for x in bp) or rnd(back[0]) not in LATE_ROUNDS):
+        return "RENTAL", False, "the pick back must be a later, late-round pick"
+    return "RENTAL", True, (f"RENTAL: {star.get('pos')} {star.get('ovr')} for R{main} "
+                            f"(ladder R{lad[0]}{'' if lad[0] == lad[1] else f'-R{lad[1]}'})")
+
+
+def shape_check(deal, b):
+    shape, ok, detail = classify_shape(deal, b)
+    return {"ok": ok, "detail": detail, "shape": shape}
+
+
+def shaped_picks(b, tid, rounds):
+    """A team's free picks in the given rounds, the nearest draft first, one per (round): [{type, pick, from}]."""
+    best = {}
+    for key, owner in sorted(b["picks"].items()):
+        if owner == tid and key not in b["booked_picks"] and key[1] in rounds and key[0] <= b["season"] + 2:
+            best.setdefault(key[1], key)
+    return [{"type": "PICK", "pick": k, "from": tid} for _, k in sorted(best.items())]
+
+
+def rental_packages(b, buyer, seller, target):
+    """Every ladder-priced rental of `target`: the buyer's main pick in the ladder's rounds, optionally a second
+    later pick, optionally a later late-round pick sent back."""
+    lad = ladder(b["players"][target["player_id"]], b["value_season"])
+    if lad is None:
+        return []
+    mains = shaped_picks(b, buyer, range(lad[0], lad[1] + 1))
+    out = []
+    for m in mains:
+        seconds = [None] + shaped_picks(b, buyer, range(m["pick"][1] + 1, 8))
+        for sec in seconds:
+            give = [dict(m, to=seller)] + ([dict(sec, to=seller)] if sec else [])
+            last = max(x["pick"][1] for x in give)
+            backs = [None] + shaped_picks(b, seller, [r for r in LATE_ROUNDS if r > last])
+            for bk in backs:
+                assets = [target] + give + ([dict(bk, to=buyer)] if bk else [])
+                out.append({"a": buyer, "b": seller, "assets": assets, "shape": "RENTAL"})
+    return out
+
+
+def swap_packages(b, valuer, buyer, seller, target):
+    """Like-for-like swaps for `target`: one buyer player in the same or an adjacent group within 4 OVR (not his
+    starting QB), alone or with one late pick either way."""
+    t = b["players"][target["player_id"]]
+    groups = {t["group"]} | ADJACENT_GROUPS.get(t["group"], set())
+    bctx = b["ctx"][buyer]
+    mine = [b["players"][pid] for pid in b["roster"].get(buyer, [])]
+    cands = [q for q in mine if q["group"] in groups and abs((q["ovr"] or 0) - (t["ovr"] or 0)) <= SWAP_OVR_GAP
+             and (q["ovr"] or 0) < BLOCKBUSTER_OVR and free_player(b, q["id"])
+             and not (q["group"] == "QB" and q["id"] in bctx["starter_ids"])]
+    cands.sort(key=lambda q: -abs(valuer.league({"type": "PLAYER", "player_id": q["id"]})))
+    out = []
+    for q in cands[:TOP_CANDIDATES]:
+        x = {"type": "PLAYER", "player_id": q["id"], "from": buyer, "to": seller}
+        out.append({"a": buyer, "b": seller, "assets": [target, x], "shape": "SWAP"})
+        for pk in shaped_picks(b, buyer, LATE_ROUNDS)[:1]:
+            out.append({"a": buyer, "b": seller, "assets": [target, x, dict(pk, to=seller)], "shape": "SWAP"})
+        for pk in shaped_picks(b, seller, LATE_ROUNDS)[:1]:
+            out.append({"a": buyer, "b": seller, "assets": [target, x, dict(pk, to=buyer)], "shape": "SWAP"})
+    return out
+
+
+def blockbuster_packages(b, buyer, seller, target):
+    """1-2 R1/R2 picks (at least one a first), optionally with one buyer player 25 or under."""
+    firsts = shaped_picks_all(b, buyer, (1,))
+    seconds = shaped_picks_all(b, buyer, (2,))
+    pairs = [[f] for f in firsts] + [list(c) for c in itertools.combinations(firsts, 2)] + \
+            [[f, s2] for f in firsts for s2 in seconds]
+    young = [b["players"][pid] for pid in b["roster"].get(buyer, [])
+             if (b["players"][pid]["age"] or 99) <= BLOCKBUSTER_YOUNG_AGE and free_player(b, pid)
+             and (b["players"][pid]["ovr"] or 0) < BLOCKBUSTER_OVR and b["players"][pid]["group"] not in ("K", "P")]
+    young.sort(key=lambda q: -(q["ovr"] or 0))
+    out = []
+    for pr in pairs:
+        give = [dict(x, to=seller) for x in pr]
+        out.append({"a": buyer, "b": seller, "assets": [target] + give, "shape": "BLOCKBUSTER"})
+        for q in young[:3]:
+            out.append({"a": buyer, "b": seller, "shape": "BLOCKBUSTER", "assets": [target] + give + [
+                {"type": "PLAYER", "player_id": q["id"], "from": buyer, "to": seller}]})
+    return out
+
+
+def shaped_picks_all(b, tid, rounds):
+    """Every free pick of a team in these rounds (all tradeable drafts)."""
+    return [{"type": "PICK", "pick": k, "from": tid} for k, o in sorted(b["picks"].items())
+            if o == tid and k not in b["booked_picks"] and k[1] in rounds]
+
+
+def target_weight(p, season):
+    return VETERAN_WEIGHT if years_left(p, season) <= VETERAN_YEARS_LEFT else 1.0
+
+
+def shaped_buy_deals(b, valuer, buyer, groups=None, trigger="NEED"):
+    """In-season deals for a buyer's top needs: targets on selling teams (losing or REBUILD) who'd start for the
+    buyer, valued higher by the buyer than by their team (veterans with 1-2 years left favoured; no starting QBs),
+    each as rentals and swaps; in the deadline weeks a CONTEND buyer also looks at blockbuster targets."""
+    ctx = b["ctx"][buyer]
+    if ctx["direction"] == "REBUILD" or is_seller(b, buyer):
+        return []
+    groups = groups or [n["group"] for n in trade_needs(ctx)]
+    season = b["value_season"]
+    deals = []
+    for g in groups:
+        line = ctx["lines"].get(g)
+        targets, stars = [], []
+        for pid, p in b["players"].items():
+            seller = p["team_id"]
+            if p["group"] != g or seller == buyer or not eligible_team(b, seller) or not is_seller(b, seller):
+                continue
+            if line is not None and (p["ovr"] or 0) <= line:
+                continue
+            if g == "QB" and pid in b["ctx"][seller]["starter_ids"]:
+                continue                                   # no starting QBs as targets
+            if not free_player(b, pid):
+                continue
+            x = {"type": "PLAYER", "player_id": pid, "from": seller, "to": buyer}
+            gain = valuer.value(x, buyer) - valuer.value(x, seller)
+            if gain <= 0:
+                continue
+            if (p["ovr"] or 0) >= BLOCKBUSTER_OVR:
+                stars.append((gain, x))
+            else:
+                targets.append((gain * target_weight(p, season), x))
+        targets.sort(key=lambda t: -t[0])
+        for _, x in targets[:TOP_TARGETS]:
+            deals += [dict(d, trigger=trigger) for d in rental_packages(b, buyer, x["from"], x)]
+            deals += [dict(d, trigger=trigger) for d in swap_packages(b, valuer, buyer, x["from"], x)]
+        if b["week"] in BLOCKBUSTER_WEEKS and ctx["direction"] == "CONTEND" and b.get("blockbusters", 0) < MAX_BLOCKBUSTERS:
+            stars.sort(key=lambda t: -t[0])
+            for _, x in stars[:2]:
+                deals += [dict(d, trigger=trigger) for d in blockbuster_packages(b, buyer, x["from"], x)]
+    return deals
+
+
+def shaped_sell_deals(b, valuer, seller):
+    """A selling team's veterans (27+, or 1-2 years left; no starting QB, under 88) offered as rentals to teams
+    that need the group and would start them."""
+    if not is_seller(b, seller):
+        return []
+    season = b["value_season"]
+    ctx = b["ctx"][seller]
+    vets = [b["players"][pid] for pid in b["roster"].get(seller, [])
+            if free_player(b, pid) and (b["players"][pid]["ovr"] or 0) < BLOCKBUSTER_OVR
+            and ((b["players"][pid]["age"] or 0) >= 27 or years_left(b["players"][pid], season) <= VETERAN_YEARS_LEFT)
+            and TRADE_POS_WEIGHT.get(b["players"][pid]["group"], 0) >= TRADE_NEED_MIN_WEIGHT
+            and not (b["players"][pid]["group"] == "QB" and pid in ctx["starter_ids"])]
+    scored = []
+    for p in vets:
+        for buyer in b["teams"]:
+            if buyer == seller or not eligible_team(b, buyer) or is_seller(b, buyer):
+                continue
+            bctx = b["ctx"][buyer]
+            if p["group"] not in [n["group"] for n in trade_needs(bctx, 3)]:
+                continue
+            line = bctx["lines"].get(p["group"])
+            if line is not None and (p["ovr"] or 0) <= line:
+                continue
+            x = {"type": "PLAYER", "player_id": p["id"], "from": seller, "to": buyer}
+            gain = valuer.value(x, buyer) - valuer.value(x, seller)
+            if gain > 0:
+                scored.append((gain * target_weight(p, season), buyer, x))
+    scored.sort(key=lambda t: -t[0])
+    deals = []
+    for _, buyer, x in scored[:TOP_TARGETS]:
+        for d in rental_packages(b, buyer, seller, x):
+            deals.append(dict(d, a=seller, b=buyer, trigger="SELL"))
+    return deals
+
+
+def choose_shaped(cands, rng):
+    """Pick a shape first (SHAPE_MIX among the shapes that have candidates), then a deal within it (choose)."""
+    by = {}
+    for c in cands:
+        by.setdefault(c["shape"], []).append(c)
+    shapes = [k for k in SHAPE_MIX if k in by]
+    if not shapes:
+        return None
+    r = rng.random() * sum(SHAPE_MIX[k] for k in shapes)
+    pick = shapes[-1]
+    for k in shapes:
+        r -= SHAPE_MIX[k]
+        if r <= 0:
+            pick = k
+            break
+    return choose(by[pick], rng)
+
+
+def release_candidate(b, tid, deal):
+    """The depth player a team at the roster max would release to take one more: its lowest-rated non-starter,
+    not in the deal, outside the rotation, and not in a group at its minimum (QB, K, P)."""
+    ctx = b["ctx"][tid]
+    moving = {x["player_id"] for x in deal["assets"] if x["type"] == "PLAYER"}
+    pool = [b["players"][pid] for pid in b["roster"].get(tid, []) if pid not in moving
+            and pid not in ctx["starter_ids"] and pid not in ctx.get("rotation_ids", ())
+            and b["players"][pid]["group"] not in MIN_SLOT_GROUPS]
+    return min(pool, key=lambda p: ((p["ovr"] or 0), -(p["age"] or 0)), default=None)
+
+
+def release_flags(checks, b):
+    return [f"release:{t}:{nm}" for t, nm in (checks.get("roster", {}).get("release") or {}).items()]
+
+
 def legal(checks):
     return all(c["ok"] for c in checks.values())
 
 
 # -------------------------------------------------------------- acceptance ----
-def threshold(ctx, urgent=False):
+def threshold(ctx, urgent=False, window="IN_SEASON"):
+    """theta_T. In season the ladder sets the price, so the bar is THETA_SHAPED (picks are small money)."""
     if urgent and ctx["direction"] == "CONTEND":
         return -URGENT_OVERPAY * ctx["risk_appetite"]
-    return THETA * (1 - ctx["aggressiveness"])
+    return (THETA_SHAPED if window == "IN_SEASON" else THETA) * (1 - ctx["aggressiveness"])
 
 
 def accepts(deal, valuer, b):
@@ -657,7 +1042,7 @@ def accepts(deal, valuer, b):
         urgent = ctx.get("urgent_need") and any(
             x["type"] == "PLAYER" and x["to"] == t and b["players"][x["player_id"]]["group"] == ctx["urgent_need"].get("group")
             for x in deal["assets"])
-        res.append(d >= threshold(ctx, bool(urgent)))
+        res.append(d >= threshold(ctx, bool(urgent), b.get("window", "IN_SEASON")))
     return all(res), da, db
 
 
@@ -797,7 +1182,8 @@ def evaluate(deals, b, valuer):
         checks = check_legality(d, b, valuer)
         if not legal(checks):
             continue
-        out.append(dict(d, hash=h, da=da, db=db, joint=min(da, db), legality=checks))
+        out.append(dict(d, hash=h, da=da, db=db, joint=min(da, db), legality=checks,
+                        shape=d.get("shape") or (classify_shape(d, b)[0] if b.get("window") == "IN_SEASON" else None)))
     return out
 
 
@@ -900,7 +1286,10 @@ def steps_text(b, deal):
     get = [asset_label(b, x) for x in deal["assets"] if x["from"] == bt]
     s1 = (f"Options > User Teams: you already control the {team_name(b, a)}." if ua else
           f"Options > User Teams: switch the {team_name(b, a)} to user control.")
-    steps = [s1,
+    rel = (deal.get("legality") or {}).get("roster", {}).get("release") or {}
+    pre = [f"The {next((team_name(b, t) for t in (a, bt) if abbr(b, t) == ab), ab)} are at the roster max: release "
+           f"{nm} first." for ab, nm in rel.items()]
+    steps = pre + [s1,
              f"Trade with the {team_name(b, bt)}. Send: {', '.join(send)}. Receive: {', '.join(get)}.",
              f"Submit the offer, then switch to the {team_name(b, bt)} to accept it" +
              ("." if ub else " (switch them to user control for this, or turn CPU trades on just for this trade)."),
@@ -1039,7 +1428,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         n, bud["injury_extra"] = 1, True
     rep["budget"] = dict(bud, new=n, made_before=b["made_this_week"])
     log(f"budget: target {bud['target']} executed {bud['executed']} e_w {bud['e_w']} p_exec {bud['p_exec']} "
-        f"-> {n} new (open {open_count}, cap {MAX_NEW_PER_WEEK}/week, {MAX_OPEN} open)")
+        f"-> {n} new (open {open_count}, cap {max_new(week) if window == 'IN_SEASON' else MAX_NEW_PER_WEEK}/week, "
+        f"{IN_SEASON_MAX_OPEN if window == 'IN_SEASON' else MAX_OPEN} open)")
     # 5-8. search, legality, acceptance, choice
     used = set()
     for tid in order:
@@ -1049,15 +1439,17 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
             continue
         ctx = b["ctx"][tid]
         u = ctx.get("urgent_need")
+        shaped = window == "IN_SEASON"
+        buy = shaped_buy_deals if shaped else buy_deals
         if tid in urgent_first and u:
-            deals, trigger = buy_deals(b, valuer, tid, [u["group"]], "INJURY"), "INJURY"
-        elif ctx["direction"] == "REBUILD" and rng.random() < 0.5:
-            deals = sell_deals(b, valuer, tid)
+            deals = buy(b, valuer, tid, [u["group"]], "INJURY")
+        elif (is_seller(b, tid) if shaped else ctx["direction"] == "REBUILD") and rng.random() < 0.5:
+            deals = (shaped_sell_deals if shaped else sell_deals)(b, valuer, tid)
         else:
-            deals = buy_deals(b, valuer, tid)
+            deals = buy(b, valuer, tid)
         deals = [d for d in deals if d["b"] not in used and d["a"] not in used]
         cands = evaluate(deals, b, valuer)
-        pick = choose(cands, rng)
+        pick = choose_shaped(cands, rng) if shaped else choose(cands, rng)
         if not pick:
             continue
         used.update((pick["a"], pick["b"]))
@@ -1067,6 +1459,10 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
                   if c["derived"] and c["after"] is not None and c["after"] < RESCAN_HEADROOM]
         if window == "OFFSEASON":
             flags.append(f"stage:{stage}")
+        flags += release_flags(pick.get("legality") or {}, b)
+        if pick.get("shape"):
+            flags.append(f"shape:{pick['shape']}")
+            b["blockbusters"] = b.get("blockbusters", 0) + (pick["shape"] == "BLOCKBUSTER")
         rat = rationale_for(b, pick, llm)
         flags += llm_flags(rat)
         pid = None if dry_run else store(cur, b, pick, valuer, rat, flags)
@@ -1196,7 +1592,7 @@ def recheck_open(cur, b, dry_run=False, log=None, valuer=None):
             ok, da, db = accepts(deal, valuer, b)
             if not ok:
                 who = [f"{abbr(b, t)} surplus ${d / 1e6:+.2f}M" for t, d in ((deal["a"], da), (deal["b"], db))
-                       if d < threshold(b["ctx"][t])]
+                       if d < threshold(b["ctx"][t], False, b.get("window", "IN_SEASON"))]
                 why = "no longer accepted: " + ", ".join(who) + " (below the GM's threshold)"
         if why:
             out.append((p["id"], why))
@@ -1255,9 +1651,11 @@ def main(argv=None):
     ap.add_argument("--first-week", type=int, default=1)
     a = ap.parse_args(argv)
     if a.simulate_season:
-        m = simulate_season(a.approval, a.seasons, a.first_week)
+        r = simulate_season(a.approval, a.seasons, a.first_week, detail=True)
         print(f"in-season target {IN_SEASON_TARGET} (scaled {scaled_target(IN_SEASON_TARGET, a.first_week):.1f} from "
-              f"week {a.first_week}), JR approval {a.approval}: mean executed {m:.2f} over {a.seasons} seasons")
+              f"week {a.first_week}), JR approval {a.approval}: mean executed {r['mean']:.2f} over {a.seasons} seasons")
+        print("  by week:  " + "  ".join(f"W{w} {v:.2f}" for w, v in r["by_week"].items()))
+        print("  by shape: " + "  ".join(f"{k} {v:.2f}" for k, v in r["by_shape"].items()))
         return
     import psycopg
     from engines.gm_llm import flush, make_llm
