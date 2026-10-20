@@ -213,6 +213,9 @@ The card also shows each team's cap after the trade, and a flag when the cap row
 - `front_office.match_sightings` links each sighting to an EXECUTED proposal by teams and name keys, and sets only `match_status`/`proposal_id` on the sighting.
 - Flags:
   - **Unmatched sighting:** Madden logged a trade nobody confirmed.
+    - **Every trade must move its players (JR, 2026-10-20).** Step 5 dropped Napper move cards because trades always update player data, so a flag alone isn't enough. An unmatched sighting gets an **"Apply this trade"** action on Front Office. It shows the parsed legs for JR to check, then runs the same execution ops as a confirmed proposal: team moves, contracts moved row for row, cap deltas, pick ownership. It records a proposal with `origin = 'USER'` and status `EXECUTED`.
+    - Front Office also has a **"Record a trade"** form for a trade JR made himself (e.g. Panthers/Colts deals) before any scan sees it. It uses the same ops and the same legality check, shown as a warning, not a block.
+    - The engine never applies an unmatched trade on its own.
   - **Not yet seen:** an EXECUTED proposal with no sighting after the next transactions scan.
   - **Moved since:** a later roster scan puts a traded player on a different team, i.e. `player_seasons.team_id ≠` the receiver, or the contract's team ≠ the roster's team.
   - **Picks:** a pick count that disagrees with C5's screen, when JR records one.
