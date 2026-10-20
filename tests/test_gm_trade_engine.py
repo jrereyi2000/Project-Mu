@@ -1,0 +1,237 @@
+"""GM trade proposal engine (docs/team_management/03_GM_AGENTS_PLAN.md Phase 4). Synthetic books: no database."""
+import math
+
+from engines import gm_trade_engine as ge
+from engines import trade_value as tv
+from engines.gm_direction import SLOTS
+
+SEASON, WEEK = 2036, 4
+
+
+def fits():
+    rows = [(g, o, math.exp(15 + 0.09 * (o - 75))) for g in ("QB", "WR", "CB", "EDGE", "OT") for o in range(65, 98)]
+    draft = [(p, 78 - 4 * math.log(p), 13e6 * p ** -0.55 + 6e5) for p in range(1, 225)]
+    return tv.build_fits(rows, [], draft)
+
+
+FITS = fits()
+
+
+def make_player(pid, tid, group, ovr, age=27, hit=2_000_000, end=2037, ntc=False, penalty=0):
+    pos = {"EDGE": "LEDG", "OT": "LT", "IOL": "LG", "LB": "MIKE", "S": "FS", "RB": "HB"}.get(group, group)
+    return {"id": pid, "team_id": tid, "pos": pos, "group": group, "ovr": ovr, "age": age, "dev": "Normal",
+            "name": f"Player {pid}",
+            "contract": {"contract_id": pid * 10, "end_season": end, "no_trade_clause": ntc, "cut_penalty": penalty,
+                         "years": {y: (hit, False) for y in range(SEASON, end + 1)}}}
+
+
+def roster(tid, base, ovr=75):
+    """Starters at `ovr`, one backup per group 5 below, padded to 50 with low LBs."""
+    out = {}
+    pid = base
+    for g, n in SLOTS.items():
+        for k in range(n + 1):
+            pid += 1
+            out[pid] = make_player(pid, tid, g, ovr if k < n else ovr - 5)
+    while len(out) < 50:
+        pid += 1
+        out[pid] = make_player(pid, tid, "LB", 55)
+    return out
+
+
+def books(direction_a="CONTEND", direction_b="REBUILD", cap_a=20_000_000, cap_b=20_000_000, week=WEEK, extra=None,
+          open_=None, injuries=None, gm_a=None):
+    players = {}
+    players.update(roster(1, 100))
+    players.update(roster(2, 200))
+    for p in (extra or []):
+        players[p["id"]] = p
+    b = {"season": SEASON, "week": week, "window": "IN_SEASON",
+         "teams": {1: {"abbr": "AAA", "city": "Alpha", "name": "Ants"}, 2: {"abbr": "BBB", "city": "Beta", "name": "Bees"}},
+         "gm": {1: dict({"gm_id": 1, "gm_name": "Ann A", "aggressiveness": 0.6, "risk_appetite": 0.5,
+                         "pick_affinity": 1.0, "youth_bias": 0.0, "position_bias": {}, "voice": "", "user_controlled": False,
+                         "suggestions_on": True}, **(gm_a or {})),
+                2: {"gm_id": 2, "gm_name": "Bob B", "aggressiveness": 0.6, "risk_appetite": 0.5, "pick_affinity": 1.0,
+                    "youth_bias": 0.0, "position_bias": {}, "voice": "", "user_controlled": False,
+                    "suggestions_on": True}},
+         "ts": {1: {"direction": direction_a, "needs": [{"group": "WR", "score": 10}], "surplus": [], "urgent_need": None,
+                    "proj_wins": 11},
+                2: {"direction": direction_b, "needs": [{"group": "CB", "score": 5}], "surplus": [], "urgent_need": None,
+                    "proj_wins": 4}},
+         "cap": {1: {"cap_space": cap_a, "derived": False}, 2: {"cap_space": cap_b, "derived": False}},
+         "players": players, "injuries": injuries or {}, "acquired": set(),
+         "picks": {(2037, r, t): t for r in range(1, 8) for t in (1, 2)},
+         "open": open_ or [], "executed": 0, "decided": 0, "first_week": 1, "made_this_week": 0, "hashes": set()}
+    return ge.finish_books(b)
+
+
+STAR = 900
+
+
+def star_books(**kw):
+    star = make_player(STAR, 2, "WR", 82, age=30, hit=5_000_000, end=2036)
+    return books(extra=[star] + kw.pop("extra", []), **kw)
+
+
+def deal(assets, a=1, b=2):
+    return {"a": a, "b": b, "assets": assets, "trigger": "NEED"}
+
+
+def pl(pid, frm, to):
+    return {"type": "PLAYER", "player_id": pid, "from": frm, "to": to}
+
+
+def pk(rd, orig, frm, to, season=2037):
+    return {"type": "PICK", "pick": (season, rd, orig), "from": frm, "to": to}
+
+
+def base_deal():
+    return deal([pl(STAR, 2, 1), pk(1, 1, 1, 2)])
+
+
+def test_legal_baseline():
+    b = star_books()
+    checks = ge.check_legality(base_deal(), b, ge.Valuer(b, FITS))
+    assert ge.legal(checks), checks
+
+
+def test_cap_fails():
+    b = star_books(cap_a=3_000_000)
+    assert not ge.check_legality(base_deal(), b)["cap"]["ok"]
+
+
+def test_ntc_fails():
+    b = star_books()
+    b["players"][STAR]["contract"]["no_trade_clause"] = True
+    assert not ge.check_legality(base_deal(), b)["ntc"]["ok"]
+
+
+def test_roster_fails_over_max():
+    b = star_books()
+    while len(b["roster"][1]) < ge.ROSTER_MAX_IN_SEASON:
+        pid = 5000 + len(b["roster"][1])
+        b["players"][pid] = make_player(pid, 1, "LB", 60)
+        b["roster"][1].append(pid)
+    assert not ge.check_legality(base_deal(), b)["roster"]["ok"]
+    # a team already over the max may still trade one-for-one
+    swap = deal([pl(STAR, 2, 1), pl(b["roster"][1][-1], 1, 2)])
+    assert ge.check_legality(swap, b)["roster"]["ok"]
+
+
+def test_qb_slot_minimum():
+    b = star_books()
+    qbs = [pid for pid in b["roster"][2] if b["players"][pid]["group"] == "QB"]
+    d = deal([pl(q, 2, 1) for q in qbs] + [pk(1, 1, 1, 2)])
+    assert not ge.check_legality(d, b)["slots"]["ok"]
+
+
+def test_deadline_fails():
+    b = star_books(week=ge.TRADE_DEADLINE_WEEK + 1)
+    assert not ge.check_legality(base_deal(), b)["deadline"]["ok"]
+
+
+def test_pick_ownership_fails():
+    b = star_books()
+    b["picks"][(2037, 1, 1)] = 2                           # AAA's first already belongs to BBB
+    assert not ge.check_legality(base_deal(), b)["picks"]["ok"]
+
+
+def test_double_booking_fails():
+    other = {"id": 77, "status": "PROPOSED", "assets": [pl(STAR, 2, 1)]}
+    b = star_books(open_=[other])
+    assert not ge.check_legality(base_deal(), b)["booking"]["ok"]
+    assert ge.check_legality(base_deal(), b, ignore_booking={("P", STAR)})["booking"]["ok"]
+
+
+def test_fairness_fails():
+    b = books(extra=[make_player(STAR, 2, "WR", 92, age=25, hit=1_000_000, end=2039)])
+    lopsided = deal([pl(STAR, 2, 1), pk(7, 1, 1, 2)])
+    assert not ge.check_legality(lopsided, b, ge.Valuer(b, FITS))["fairness"]["ok"]
+
+
+def test_injured_player_not_tradeable():
+    b = star_books(injuries={STAR: {"weeks_remaining": 1, "is_ir": False, "week": 4, "team_id": 2}})
+    assert not ge.check_legality(base_deal(), b)["tradeable"]["ok"]
+
+
+def test_acceptance_needs_both_sides():
+    b = star_books()
+    v = ge.Valuer(b, FITS)
+    gift = deal([pl(STAR, 2, 1)])                          # nothing back: B says no
+    ok, da, db = ge.accepts(gift, v, b)
+    assert da > 0 and db < 0 and not ok
+    swap = deal([pl(STAR, 2, 1), pk(1, 1, 1, 2), pk(2, 1, 1, 2)])
+    ok, da, db = ge.accepts(swap, v, b)
+    assert ok == (da >= ge.threshold(b["ctx"][1]) and db >= ge.threshold(b["ctx"][2]))
+
+
+def test_dead_money_counts_against_the_sender():
+    b = star_books()
+    v = ge.Valuer(b, FITS)
+    _, db0, _, _ = ge.deltas(base_deal(), v)
+    b2 = star_books()
+    b2["players"][STAR]["contract"]["cut_penalty"] = 10_000_000
+    _, db1, _, _ = ge.deltas(base_deal(), ge.Valuer(b2, FITS))
+    assert db1 < db0
+
+
+def test_injury_trigger_only_for_contend_starter():
+    qb = 101                                               # AAA's starting QB
+    inj = {qb: {"weeks_remaining": 6, "is_ir": False, "week": 4, "team_id": 1}}
+    b = books(injuries=inj)
+    assert ge.injury_triggers(b)[1]["group"] == "QB"
+    b = books(direction_a="RETOOL", injuries=inj)
+    assert 1 not in ge.injury_triggers(b)
+    short = {qb: {"weeks_remaining": 2, "is_ir": False, "week": 4, "team_id": 1}}
+    assert 1 not in ge.injury_triggers(books(injuries=short))
+
+
+def test_budget_mean_over_seeded_seasons():
+    # caps (4 new a week) bind in the 3x deadline weeks, so a full season lands near 12.8, below the 17 target
+    m = ge.simulate_season(0.6, 2000)
+    assert 11.3 <= m <= 14.3
+    assert ge.simulate_season(0.6, 300) == ge.simulate_season(0.6, 300)
+
+
+def test_budget_is_seeded_and_capped():
+    a = ge.weekly_budget(2036, 7, 0, 0, 0)
+    assert a == ge.weekly_budget(2036, 7, 0, 0, 0)
+    assert a["n"] <= ge.MAX_NEW_PER_WEEK
+    assert ge.weekly_budget(2036, 7, 0, 0, ge.MAX_OPEN)["n"] == 0
+    assert ge.scaled_target(17, 4) < 17 and ge.scaled_target(17, 1) == 17
+
+
+def test_rerun_same_seed_no_duplicate():
+    b = star_books()
+    v = ge.Valuer(b, FITS)
+    d = base_deal()
+    first = ge.evaluate([d], b, v)
+    b["hashes"].add(ge.deal_hash(d["a"], d["b"], d["assets"]))
+    assert ge.evaluate([d], b, v) == []
+    assert ge.deal_hash(1, 2, d["assets"]) == ge.deal_hash(2, 1, list(reversed(d["assets"])))
+    del first
+
+
+def test_expiry_after_week_and_at_deadline():
+    props = [{"id": 1, "status": "PROPOSED", "expires_week": 4, "trade_window": "IN_SEASON"},
+             {"id": 2, "status": "APPROVED", "expires_week": 5, "trade_window": "IN_SEASON"},
+             {"id": 3, "status": "EXECUTED", "expires_week": 3, "trade_window": "IN_SEASON"}]
+    assert [p for p, _ in ge.expire_stale(props, 5)] == [1]
+    assert [p for p, _ in ge.expire_stale(props, ge.TRADE_DEADLINE_WEEK + 1)] == [1, 2]
+
+
+def test_search_finds_legal_accepted_deal():
+    b = star_books()
+    v = ge.Valuer(b, FITS)
+    cands = ge.evaluate(ge.buy_deals(b, v, 1), b, v)
+    assert cands and all(ge.legal(c["legality"]) for c in cands)
+    best = ge.choose(cands, __import__("random").Random(1))
+    assert any(x.get("player_id") == STAR for x in best["assets"])
+    assert ge.steps_text(b, best)[-1] == "Click Made it."
+
+
+def test_user_team_with_suggestions_off_is_left_out():
+    b = star_books()
+    b["gm"][2]["user_controlled"], b["gm"][2]["suggestions_on"] = True, False
+    v = ge.Valuer(b, FITS)
+    assert ge.buy_deals(b, v, 1) == []
