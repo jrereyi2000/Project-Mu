@@ -44,7 +44,8 @@ JOB_KINDS = {
     "custom_commission": ("Commission custom article", []),
     "offseason_run": ("Offseason run (editorial package)", []),
     "gm_proposals": ("GM trade proposals (this week)", []),
-    "gm_offseason_stage": ("GM trade proposals: next offseason stage", ["--next-stage"]),
+    "gm_offseason_stage": ("Next offseason stage (transactions scan + GM trades)",
+                           ["--mode", "transactions", "--no-articles", "--gm-next-stage"]),
 }
 
 router = APIRouter(prefix="/api/debug")
@@ -657,8 +658,8 @@ def job_command(kind, resume=None, week=None):
         if week is not None:
             args.extend(["--week", str(week)])
         return args
-    if kind in ("gm_proposals", "gm_offseason_stage"):   # team management step 3: one engine run, no console
-        args = [sys.executable, "-u", "-m", "engines.gm_trade_engine", *JOB_KINDS[kind][1]]
+    if kind == "gm_proposals":                       # team management step 3: one engine run, no console
+        args = [sys.executable, "-u", "-m", "engines.gm_trade_engine"]
         if week is not None:
             args.extend(["--week", str(week)])
         return args
