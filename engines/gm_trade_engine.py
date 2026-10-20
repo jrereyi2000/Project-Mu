@@ -266,14 +266,14 @@ def read_proposals(cur, season, statuses=None, ids=None):
                            p.league_value_b, p.cap_space_before_a, p.cap_space_before_b, p.cap_space_after_a,
                            p.cap_space_after_b, p.dead_money_a, p.dead_money_b, p.roster_after_a, p.roster_after_b,
                            p.cap_derived_a, p.cap_derived_b, p.status_reason, p.executed_as, p.created_at,
-                           p.approved_at, p.executed_at
+                           p.approved_at, p.executed_at, p.season
                     FROM gm_trade_proposals p WHERE {' AND '.join(where)} ORDER BY p.id""", args)
     cols = ("id", "status", "week", "expires_week", "trade_window", "team_a_id", "team_b_id", "origin",
             "trigger_kind", "deal_hash", "rumor_ok", "flags", "headline", "rationale_a", "rationale_b",
             "rationale_source", "legality", "value_a", "value_b", "league_value_a", "league_value_b",
             "cap_space_before_a", "cap_space_before_b", "cap_space_after_a", "cap_space_after_b", "dead_money_a",
             "dead_money_b", "roster_after_a", "roster_after_b", "cap_derived_a", "cap_derived_b", "status_reason",
-            "executed_as", "created_at", "approved_at", "executed_at")
+            "executed_as", "created_at", "approved_at", "executed_at", "season")
     props = [dict(zip(cols, r), assets=[]) for r in cur.fetchall()]
     by = {p["id"]: p for p in props}
     if by:

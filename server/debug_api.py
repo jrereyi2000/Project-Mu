@@ -43,6 +43,7 @@ JOB_KINDS = {
     "publish_articles": ("Publish articles (newsroom run)", []),
     "custom_commission": ("Commission custom article", []),
     "offseason_run": ("Offseason run (editorial package)", []),
+    "gm_proposals": ("GM trade proposals (this week)", []),
 }
 
 router = APIRouter(prefix="/api/debug")
@@ -212,6 +213,104 @@ def get_transactions(season: Optional[int] = None, week: Optional[int] = None, l
         unparsed = conn.execute(base + " AND NOT t.parse_ok ORDER BY t.id DESC LIMIT 100", (season,)).fetchall()
         ambiguous = conn.execute(base + " AND t.flags LIKE '%%ambiguous%%' ORDER BY t.id DESC LIMIT 100", (season,)).fetchall()
     return {"season": season, "installed": True, "rows": rows, "unparsed": unparsed, "ambiguous": ambiguous}
+
+
+# ------------------------------------------------------- front office ----
+# Team management step 3 (docs/team_management/03_GM_AGENTS_PLAN.md §2.7; PROJECT_SPEC §3.3f): the GM agents'
+# proposals, JR's approve / reject / confirm, recorded trades and the trade rows the transactions scan saw.
+class ReasonIn(BaseModel):
+    reason: Optional[str] = None
+
+
+class RecordIn(BaseModel):
+    team_a: str
+    team_b: str
+    assets: list[dict[str, Any]]
+    proposal_id: Optional[int] = None
+    note: Optional[str] = None
+
+
+class ApplyIn(BaseModel):
+    assets: Optional[list[dict[str, Any]]] = None
+
+
+class ControlIn(BaseModel):
+    user_controlled: Optional[bool] = None
+    suggestions_on: Optional[bool] = None
+
+
+def _front_office(action, *args, **kwargs):
+    """Run a front_office action in one DB transaction (tuple rows); FrontOfficeError -> HTTP error."""
+    from psycopg.rows import tuple_row
+    from engines import front_office as fo
+    with connect() as conn:
+        cur = conn.cursor(row_factory=tuple_row)
+        if not fo.installed(cur):
+            raise HTTPException(409, "the GM agents migration (2026_12_10_gm_agents.sql) isn't applied")
+        try:
+            out = getattr(fo, action)(cur, *args, **kwargs)
+        except fo.FrontOfficeError as e:
+            if e.status == 409 and action == "approve":
+                conn.commit()                        # an approve that found the deal illegal expired it
+            else:
+                conn.rollback()
+            raise HTTPException(e.status, e.message)
+        conn.commit()
+    return out
+
+
+@router.get("/front-office")
+def get_front_office(season: Optional[int] = None):
+    """Front Office (team management step 3): window, deadline, budget pace, 32 directions with needs,
+    proposals with assets, cap effects, legality, Madden steps and status chips, flags, sightings."""
+    from psycopg.rows import tuple_row
+    from engines import front_office as fo
+    with connect() as conn:
+        return fo.front_office_state(conn.cursor(row_factory=tuple_row), season)
+
+
+@router.post("/front-office/proposals/{proposal_id}/{action}")
+def front_office_action(proposal_id: int, action: str, body: Optional[ReasonIn] = None,
+                        x_debug_token: Optional[str] = Header(None)):
+    """approve | reject {reason} | confirm (Made it) | could-not-make {reason}. confirm re-checks legality and
+    warns but never blocks: Madden is the truth once JR made the trade."""
+    require_token(x_debug_token)
+    reason = body.reason if body else None
+    if action == "approve":
+        return _front_office("approve", proposal_id)
+    if action == "reject":
+        return _front_office("reject", proposal_id, reason)
+    if action == "confirm":
+        return _front_office("confirm", proposal_id)
+    if action == "could-not-make":
+        return _front_office("could_not_make", proposal_id, reason)
+    raise HTTPException(404, "action must be approve, reject, confirm or could-not-make")
+
+
+@router.post("/front-office/record")
+def front_office_record(body: RecordIn, x_debug_token: Optional[str] = Header(None)):
+    """A trade JR made himself (or, with proposal_id, a different trade than the proposal): its moves are made
+    like a confirmed proposal's; legality is a warning."""
+    require_token(x_debug_token)
+    return _front_office("record", body.team_a, body.team_b, body.assets, body.proposal_id, body.note)
+
+
+@router.post("/front-office/sightings/{sighting_id}/apply")
+def front_office_apply(sighting_id: int, body: Optional[ApplyIn] = None, x_debug_token: Optional[str] = Header(None)):
+    """Apply this trade: a trade row Madden logged that no proposal matches becomes an executed trade."""
+    require_token(x_debug_token)
+    return _front_office("apply_sighting", sighting_id, body.assets if body else None)
+
+
+@router.put("/front-office/teams/{abbr}")
+def front_office_team(abbr: str, body: ControlIn, x_debug_token: Optional[str] = Header(None)):
+    """JR controls this team in Madden (its GM only advises) and/or its GM's suggestions are on or off."""
+    require_token(x_debug_token)
+    with connect() as conn:
+        row = conn.execute("SELECT id FROM teams WHERE abbreviation = %s", (abbr.upper(),)).fetchone()
+    if not row:
+        raise HTTPException(404, f"no team {abbr}")
+    return _front_office("set_team_control", row["id"], body.user_controlled, body.suggestions_on)
 
 
 @router.post("/news/clear")
@@ -554,6 +653,11 @@ def job_command(kind, resume=None, week=None):
     """The weekly run for a job kind."""
     if kind == "publish_articles":
         args = [sys.executable, "-u", "-m", "newsroom.weekly_run"]
+        if week is not None:
+            args.extend(["--week", str(week)])
+        return args
+    if kind == "gm_proposals":                       # team management step 3: one engine run, no console
+        args = [sys.executable, "-u", "-m", "engines.gm_trade_engine"]
         if week is not None:
             args.extend(["--week", str(week)])
         return args

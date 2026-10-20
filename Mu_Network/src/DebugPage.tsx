@@ -52,6 +52,7 @@ const RUNS: { kind: string; title: string; note: string }[] = [
   { kind: "roster_scan", title: "Roster scan", note: "Captures all 32 team rosters, extracts player cards, and updates players/seasons in the database (normally run once a season with schedule and draft board). No articles." },
   { kind: "contract_scan", title: "Contract scan", note: "Captures every team's Team Salary screen (contracts and cap), extracts and loads it; a re-scan supersedes the old contracts. ~40 min. Normally part of the Season scan; only loads in-season (the year on screen must match the league season). No articles." },
   { kind: "transactions_scan", title: "League transactions scan", note: "Reads League > League Transactions from the newest week already loaded (from Week 1 the first time; preseason moves are already in the Week 1 roster), loads signings, releases and re-signings (team moves, contracts and cap kept current from them; no Team Salary re-scan). Trade rows are skipped: trades go through the GM agents' approval flow. Scan week does this too. No articles." },
+  { kind: "gm_proposals", title: "GM trade proposals", note: "One run of the GM agents' trade engine for this week (no console): expires stale proposals, updates directions and needs, and adds this week's proposals to the Front Office card. Scan week runs it too, after the engines." },
   { kind: "draft_scan", title: "Draft prospect scan", note: "Scans the scouting draft board line-by-line, extracts prospects via Apple Vision OCR, and syncs data/draft/ prospects board (normally run once a season with schedule and roster scans, after both). No articles." },
 ];
 
@@ -90,6 +91,148 @@ function TransactionsCard() {
           <div>
             <span className={label}>Latest rows</span>
             {tx.rows.length ? tx.rows.map(line) : <span className="text-[var(--gray-500)]">Nothing loaded yet.</span>}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Front Office (team management step 3): the GM agents' trade proposals, JR's approve / confirm, recorded trades
+type FoLeg = { type: string; from: string; to: string; player_id?: number; player_name?: string; position?: string; ovr?: number; cap_hit_now?: number; label?: string };
+type FoCheck = { ok: boolean; detail: string };
+type FoProposal = { id: number; week: number; status: string; status_reason: string | null; chip: string | null; origin: string; trigger: string; window: string; team_a: string; team_b: string; headline: string | null; rationale_a: string | null; rationale_b: string | null; rationale_source: string | null; value_a: number | null; value_b: number | null; cap: { a: { before: number | null; after: number | null; dead: number | null; derived: boolean | null }; b: { before: number | null; after: number | null; dead: number | null; derived: boolean | null } }; legality: Record<string, FoCheck>; flags: string[]; legs: FoLeg[]; steps: string[]; executed_as: string | null };
+type FoTeam = { team_id: number; abbr: string; team: string; gm_name: string | null; direction: string | null; direction_score: number | null; needs: { group: string; score: number }[]; urgent_need: { group: string } | null; user_controlled: boolean; suggestions_on: boolean };
+type FoSighting = { id: number; txn_date: string; raw_text: string; match_status: string; proposal_id: number | null; resolved?: Record<string, unknown>[]; unresolved?: string[] };
+type FoFlag = { kind: string; detail: string; proposal_id?: number; sighting_id?: number };
+type FoState = { season: number; installed: boolean; week?: number; window?: string | null; budget?: { executed: number; target: number; season_target: number; open: number; max_open: number; deadline_week: number; p_exec: number; offseason_target: number; offseason_executed: number }; teams?: FoTeam[]; proposals?: FoProposal[]; flags?: FoFlag[]; sightings?: FoSighting[] };
+
+const money = (v: number | null | undefined) => v === null || v === undefined ? "?" : `$${(v / 1e6).toFixed(2)}M`;
+
+// "PLAYER 1234 CAR NO" or "PICK 2037 1 CAR CAR NO" (season, round, original team, from, to): one leg a line
+function parseLegs(text: string): Record<string, unknown>[] {
+  return text.split("\n").map(l => l.trim().split(/\s+/)).filter(w => w[0]).map(w => w[0].toUpperCase() === "PICK"
+    ? { type: "PICK", draft_season: Number(w[1]), round: Number(w[2]), original_team: w[3]?.toUpperCase(), from: w[4]?.toUpperCase(), to: w[5]?.toUpperCase() }
+    : { type: "PLAYER", player_id: Number(w[1]), from: w[2]?.toUpperCase(), to: w[3]?.toUpperCase() });
+}
+
+function FrontOfficeCard({ token }: { token: string }) {
+  const [fo, setFo] = useState<FoState | null>(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [open, setOpen] = useState<number | null>(null);
+  const [rec, setRec] = useState({ team_a: "", team_b: "", legs: "", proposal_id: "" });
+  const load = useCallback(() => {
+    call<FoState>("/front-office").then(setFo).catch(e => setError(String(e.message || e)));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  const act = async (path: string, body?: unknown, confirmText?: string) => {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setMessage("");
+    try {
+      const r = await call<{ warnings?: string[]; legality?: { legal: boolean } }>(path, { method: "POST", body: JSON.stringify(body || {}) }, token);
+      const warn = [...(r.warnings || []), ...(r.legality && !r.legality.legal ? ["legality warning (see the proposal's checks)"] : [])];
+      setMessage(warn.length ? `Done, with warnings: ${warn.join("; ")}` : "Done.");
+      load();
+    } catch (e) { setMessage(String((e as Error).message || e)); }
+  };
+  const setControl = async (abbr: string, body: { user_controlled?: boolean; suggestions_on?: boolean }) => {
+    try { await call(`/front-office/teams/${abbr}`, { method: "PUT", body: JSON.stringify(body) }, token); load(); }
+    catch (e) { setMessage(String((e as Error).message || e)); }
+  };
+  const legText = (l: FoLeg) => l.type === "PICK" ? l.label : `${l.position} ${l.player_name} ${l.ovr ?? ""}`;
+  const b = fo?.budget;
+  return (
+    <section className={card}>
+      <h3 className="font-black uppercase tracking-wide mb-3">Front office{fo ? ` · ${fo.season}` : ""}</h3>
+      {error && <p className="text-xs text-[var(--red)]">{error}</p>}
+      {fo && !fo.installed && <p className="text-xs text-[var(--gray-500)]">The GM agents migration (2026_12_10_gm_agents.sql) isn't applied to this database yet.</p>}
+      {fo?.installed && b && (
+        <div className="grid gap-3 text-xs">
+          <div className="flex flex-wrap gap-3">
+            <span><b>{b.executed}</b> / {b.target} executed (season target {b.season_target})</span>
+            <span>{b.open} open (max {b.max_open})</span>
+            <span>deadline: week {b.deadline_week}</span>
+            <span>window: {fo.window || "closed"}</span>
+            <span>JR approval rate {Math.round(b.p_exec * 100)}%</span>
+            <span>offseason {b.offseason_executed} / {b.offseason_target}</span>
+          </div>
+          {message && <p className="text-[var(--red)]">{message}</p>}
+          <div>
+            <span className={label}>Proposals</span>
+            {(fo.proposals || []).length === 0 && <span className="text-[var(--gray-500)]">None yet.</span>}
+            {(fo.proposals || []).map(p => (
+              <div key={p.id} className="border-b border-[var(--gray-100)] py-1">
+                <button className="text-left w-full" onClick={() => setOpen(open === p.id ? null : p.id)}>
+                  <span className="font-mono text-[var(--gray-500)] mr-2">#{p.id} wk {p.week}</span>
+                  <b className="mr-2">{p.status}</b>{p.chip && <span className="mr-2 px-1 bg-[var(--gray-100)]">{p.chip}</span>}
+                  <b>{p.team_a} ↔ {p.team_b}</b>: {p.headline || p.origin}
+                  {p.flags.length > 0 && <span className="ml-2 text-[var(--gray-500)]">[{p.flags.join(", ")}]</span>}
+                </button>
+                {open === p.id && (
+                  <div className="grid gap-1 mt-1 pl-2 border-l-2 border-[var(--gray-300)]">
+                    {[p.team_a, p.team_b].map((t, i) => (
+                      <div key={t}><b>{t}</b> gets {p.legs.filter(l => l.to === t).map(legText).join(", ") || "nothing"} · cap {money((i ? p.cap.b : p.cap.a).before)} → {money((i ? p.cap.b : p.cap.a).after)}{(i ? p.cap.b : p.cap.a).dead ? ` (dead ${money((i ? p.cap.b : p.cap.a).dead)})` : ""}{(i ? p.cap.b : p.cap.a).derived ? " · derived cap row" : ""} · surplus {money(i ? p.value_b : p.value_a)}</div>
+                    ))}
+                    {p.rationale_a && <p><i>{p.rationale_a}</i></p>}
+                    {p.rationale_b && <p><i>{p.rationale_b}</i></p>}
+                    <div>{Object.entries(p.legality || {}).map(([k, c]) => <span key={k} className={`mr-2 ${c.ok ? "" : "text-[var(--red)] font-bold"}`}>{k}: {c.detail}</span>)}</div>
+                    {p.status_reason && <div className="text-[var(--gray-500)]">{p.status_reason}</div>}
+                    {(p.status === "APPROVED" || p.status === "PROPOSED") && <ol className="list-decimal pl-5">{p.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>}
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {p.status === "PROPOSED" && <button className={btn} disabled={!token} onClick={() => act(`/front-office/proposals/${p.id}/approve`)}>Approve</button>}
+                      {(p.status === "PROPOSED" || p.status === "APPROVED") && <button className={btn} disabled={!token} onClick={() => act(`/front-office/proposals/${p.id}/reject`, { reason: window.prompt("Why? (optional)") || undefined })}>Reject</button>}
+                      {["APPROVED", "EXPIRED"].includes(p.status) && <button className={btnRed} disabled={!token} onClick={() => act(`/front-office/proposals/${p.id}/confirm`, {}, "You made exactly this trade in Madden? Its players, contracts, cap rows and picks will move.")}>Made it</button>}
+                      {p.status === "APPROVED" && <button className={btn} disabled={!token} onClick={() => act(`/front-office/proposals/${p.id}/could-not-make`, { reason: window.prompt("What did Madden say?") || undefined })}>Couldn't make it</button>}
+                      {["APPROVED", "EXPIRED", "PROPOSED"].includes(p.status) && <button className={btn} disabled={!token} onClick={() => setRec({ team_a: p.team_a, team_b: p.team_b, legs: "", proposal_id: String(p.id) })}>Made a different trade</button>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div>
+            <span className={label}>{rec.proposal_id ? `Made a different trade (proposal #${rec.proposal_id})` : "Record a trade (one you made yourself)"}</span>
+            <div className="grid grid-cols-2 gap-2">
+              <input className={input} placeholder="Team A (CAR)" value={rec.team_a} onChange={e => setRec({ ...rec, team_a: e.target.value })} />
+              <input className={input} placeholder="Team B (IND)" value={rec.team_b} onChange={e => setRec({ ...rec, team_b: e.target.value })} />
+            </div>
+            <textarea className={`${input} mt-2 font-mono`} rows={3} placeholder={"PLAYER <player_id> <FROM> <TO>\nPICK <season> <round> <ORIGINAL> <FROM> <TO>"} value={rec.legs} onChange={e => setRec({ ...rec, legs: e.target.value })} />
+            <div className="flex gap-2 mt-1">
+              <button className={btnRed} disabled={!token || !rec.team_a || !rec.team_b || !rec.legs.trim()} onClick={() => act("/front-office/record", { team_a: rec.team_a.toUpperCase(), team_b: rec.team_b.toUpperCase(), assets: parseLegs(rec.legs), proposal_id: rec.proposal_id ? Number(rec.proposal_id) : undefined }, "Record this trade? Its players, contracts, cap rows and picks will move.").then(() => setRec({ team_a: "", team_b: "", legs: "", proposal_id: "" }))}>Record trade</button>
+              {rec.proposal_id && <button className={btn} onClick={() => setRec({ team_a: "", team_b: "", legs: "", proposal_id: "" })}>Cancel</button>}
+            </div>
+          </div>
+          <div>
+            <span className={label}>Flags ({(fo.flags || []).length})</span>
+            {(fo.flags || []).length ? fo.flags!.map((f, i) => <div key={i}><b className="mr-2">{f.kind}</b>{f.detail}</div>) : <span className="text-[var(--gray-500)]">None.</span>}
+          </div>
+          <div>
+            <span className={label}>Trade rows seen in Madden's log</span>
+            {(fo.sightings || []).length === 0 && <span className="text-[var(--gray-500)]">None.</span>}
+            {(fo.sightings || []).map(s => (
+              <div key={s.id} className="border-b border-[var(--gray-100)] pb-1">
+                <span className="font-mono text-[var(--gray-500)] mr-2">{s.txn_date}</span><b className="mr-2">{s.match_status}</b>{s.raw_text}
+                {s.match_status !== "MATCHED" && (
+                  <div className="pl-2">
+                    <div>Parsed legs: {(s.resolved || []).map(x => JSON.stringify(x)).join(" · ") || "none"}{(s.unresolved || []).length ? ` · unresolved: ${s.unresolved!.join(", ")}` : ""}</div>
+                    <button className={btnRed} disabled={!token || !(s.resolved || []).length || (s.unresolved || []).length > 0} onClick={() => act(`/front-office/sightings/${s.id}/apply`, {}, "Apply this trade? Check the parsed legs first: its players, contracts, cap rows and picks will move.")}>Apply this trade</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div>
+            <span className={label}>Directions, needs and who runs each team</span>
+            {(fo.teams || []).map(t => (
+              <div key={t.team_id} className="flex flex-wrap gap-2 items-center border-b border-[var(--gray-100)]">
+                <b className="w-10">{t.abbr}</b><span className="w-20">{t.direction || "-"}</span>
+                <span className="w-40 truncate">{t.gm_name}</span>
+                <span className="flex-1">{t.needs.slice(0, 3).map(n => n.group).join(", ")}{t.urgent_need ? ` · urgent ${t.urgent_need.group}` : ""}</span>
+                <label><input type="checkbox" disabled={!token} checked={t.user_controlled} onChange={e => setControl(t.abbr, { user_controlled: e.target.checked })} /> JR controls</label>
+                <label><input type="checkbox" disabled={!token} checked={t.suggestions_on} onChange={e => setControl(t.abbr, { suggestions_on: e.target.checked })} /> suggestions</label>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -838,6 +981,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
           </div>
         </section>
         <TransactionsCard />
+        <FrontOfficeCard token={token} />
       </div>
 
       <div className="grid gap-4 content-start">
