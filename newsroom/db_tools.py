@@ -179,6 +179,19 @@ def _resolve_team_id(cur, identifier: str) -> int:
         return row[0]
     return None
 
+def on_roster_n(season: int) -> int:
+    """N in `(ps.released_week IS NULL OR ps.released_week > N)`, the SQL form of roster_moves.on_roster: a player
+    is on his team for the article unless released by its cutoff week (any release with no article context)."""
+    return rm.roster_week(cutoff_week(season))
+
+
+def team_label(team_name, released_week, season: int):
+    """A player's team for the article, or 'free agent (released by the X, Week N)'."""
+    if released_week is not None and not rm.on_roster(released_week, cutoff_week(season)):
+        return rm.free_agent_label(team_name, released_week)
+    return team_name
+
+
 @tool
 def get_game_box_score(game_id: int) -> str:
     """Fetch the full box score, excitement index, and top player performances for a specific game: passing, rushing and receiving, plus defensive playmakers (tackles, sacks, TFL, INT, pass deflections, forced fumbles, defensive TDs) and kickers when the game's player stats were captured, and each team's third/fourth-down and two-point conversions, red zone, penalties, quarter-by-quarter scoring and time of possession where they were recorded for this game. It ends with the game_script: the game's official story shared by every writer (quarter scores, every scoring play in order with scorer, yardage, drive and clock, lead changes, the winning score, key moments, adjustments and defensive standouts), which you must not contradict."""
@@ -377,7 +390,7 @@ def get_player_season_stats(player_identifier: str) -> str:
                         fp.adp_rank,
                         ps.age, ps.years_of_experience, p.height, p.weight,
                         ps.spike_index, ps.r_rating, ps.f_platform, ps.t_success,
-                        ps.a_awards, ps.e_exposure, ps.s_playoff, ss.pass_sacks
+                        ps.a_awards, ps.e_exposure, ps.s_playoff, ss.pass_sacks, ps.released_week
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     LEFT JOIN teams t ON ps.team_id = t.id
@@ -434,7 +447,7 @@ def get_player_season_stats(player_identifier: str) -> str:
                     "player_id": target_id,
                     "name": row[0],
                     "position": row[1],
-                    "team": row[2] or "Free Agent",
+                    "team": team_label(row[2], row[26], s_val) or "Free Agent",
                     "age": row[14],
                     "years_of_experience": row[15],
                     "height": row[16] or "N/A",
@@ -518,10 +531,10 @@ def get_team_context(team_identifier: str) -> str:
                     SELECT COALESCE(p.full_name, p.player_name), ps.position, ps.overall_rating
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
-                    WHERE ps.team_id = %s AND ps.season = %s
+                    WHERE ps.team_id = %s AND ps.season = %s AND (ps.released_week IS NULL OR ps.released_week > %s)
                     ORDER BY ps.overall_rating DESC
                     LIMIT 3;
-                """, (team_id, s_val))
+                """, (team_id, s_val, on_roster_n(s_val)))
 
                 top_players = [f"{r[0]} ({r[1]} - {r[2]} OVR)" for r in cur.fetchall()]
                 coach = fetch_team_coach(cur, team_id, s_val)
@@ -776,10 +789,10 @@ def get_advanced_team_analytics(team_identifier: str, season: int = 0) -> str:
                 # Same starter definition as the Purgatory Penalty: the 22 highest-rated players
                 cur.execute("""
                     SELECT AVG(age) FROM (
-                        SELECT age FROM player_seasons WHERE team_id = %s AND season = %s
+                        SELECT age FROM player_seasons ps WHERE team_id = %s AND season = %s AND (ps.released_week IS NULL OR ps.released_week > %s)
                         ORDER BY overall_rating DESC LIMIT 22
                     ) s;
-                """, (team_id, s_val))
+                """, (team_id, s_val, on_roster_n(s_val)))
                 starter_age = cur.fetchone()[0]
 
                 def num(v):
@@ -1314,7 +1327,7 @@ def get_top_rated_players(limit: int = 200, season: int = 0) -> str:
                            ss.pass_yards, ss.pass_tds, ss.interceptions, ss.rush_yards, ss.rush_tds,
                            ss.receptions, ss.rec_yards, ss.rec_tds,
                            l.def_tackles, l.def_sacks, l.def_ints, l.def_forced_fumbles,
-                           l.kick_fgm, l.kick_fga, l.punt_net_average
+                           l.kick_fgm, l.kick_fga, l.punt_net_average, ps.released_week
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     JOIN teams t ON ps.team_id = t.id
@@ -1332,7 +1345,8 @@ def get_top_rated_players(limit: int = 200, season: int = 0) -> str:
                 lines = []
                 for i, r in enumerate(rows, 1):
                     (pid, name, pos, team, ovr, age, exp, py, ptd, ints, ry, rtd, rec, rcy, rctd,
-                     tkl, sacks, d_ints, ff, fgm, fga, net_avg) = r
+                     tkl, sacks, d_ints, ff, fgm, fga, net_avg, rel) = r
+                    team = team_label(team, rel, s_val)
                     stats = []
                     if py:
                         stats.append(f"{py} pass yds, {ptd or 0} TD, {ints or 0} INT")
@@ -1462,7 +1476,7 @@ def get_top_popular_players(limit: int = 20, season: int = 0) -> str:
                         ps.position, t.name as team, t.id as team_id,
                         ps.overall_rating,
                         ROUND(ps.popularity_index::numeric, 2) as pop,
-                        ps.age, ps.years_of_experience
+                        ps.age, ps.years_of_experience, ps.released_week
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     JOIN teams t ON ps.team_id = t.id
@@ -1480,8 +1494,8 @@ def get_top_popular_players(limit: int = 20, season: int = 0) -> str:
                         "player_id": r[0],
                         "name": r[1],
                         "position": r[2],
-                        "team": r[3],
-                        "team_id": r[4],
+                        "team": team_label(r[3], r[9], s_val),
+                        "team_id": r[4] if team_label(r[3], r[9], s_val) == r[3] else None,
                         "overall_rating": r[5],
                         "popularity_index": float(r[6]) if r[6] is not None else 0.0,
                         "age": r[7],
@@ -1622,8 +1636,9 @@ def get_team_draft_needs(team_identifier: str, season: int = 0) -> str:
                         ps.years_of_experience
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
-                    WHERE ps.team_id = %s AND ps.season = %s;
-                """, (team_id, s_val))
+                    WHERE ps.team_id = %s AND ps.season = %s AND (ps.released_week IS NULL OR ps.released_week > %s)
+                      AND ps.overall_rating IS NOT NULL AND ps.age IS NOT NULL;  -- CPU signings are unrated until a roster scan
+                """, (team_id, s_val, on_roster_n(s_val)))
                 rows = cur.fetchall()
                 if not rows:
                     return f"No roster data found for {team_name} in Season {s_val}."
@@ -1733,9 +1748,9 @@ def get_team_roster_depth_chart(team_identifier: str, season: int = 0) -> str:
                         ps.years_of_experience
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
-                    WHERE ps.team_id = %s AND ps.season = %s
+                    WHERE ps.team_id = %s AND ps.season = %s AND (ps.released_week IS NULL OR ps.released_week > %s)
                     ORDER BY ps.overall_rating DESC;
-                """, (team_id, s_val))
+                """, (team_id, s_val, on_roster_n(s_val)))
                 players = cur.fetchall()
                 if not players:
                     return f"No roster data found for {team_name} in Season {s_val}."
@@ -1749,8 +1764,16 @@ def get_team_roster_depth_chart(team_identifier: str, season: int = 0) -> str:
                 youth_count = 0
                 tot_age = 0
 
+                aged = 0
                 for name, pos, ovr, age, exp in players:
-                    tot_age += age
+                    # a player created by a CPU signing (pipeline/load_transactions) has no rating or age until the
+                    # next roster scan
+                    ovr = ovr or 0
+                    if age is not None:
+                        tot_age += age
+                        aged += 1
+                    else:
+                        age = 26
                     if ovr >= 85:
                         blue_chips += 1
                     if age <= 24:
@@ -1770,7 +1793,7 @@ def get_team_roster_depth_chart(team_identifier: str, season: int = 0) -> str:
                         "age_bracket": age_flag
                     })
 
-                avg_age = round(tot_age / len(players), 1)
+                avg_age = round(tot_age / aged, 1) if aged else None
 
                 result = {
                     "team": team_name,
@@ -1856,9 +1879,9 @@ def get_franchise_rebuild_status(team_identifier: str, season: int = 0) -> str:
                         COUNT(CASE WHEN overall_rating >= 85 THEN 1 END) as blue_chips,
                         COUNT(CASE WHEN age <= 24 THEN 1 END) as youth_count,
                         COUNT(*) as total_roster
-                    FROM player_seasons
-                    WHERE team_id = %s AND season = %s;
-                """, (team_id, s_val))
+                    FROM player_seasons ps
+                    WHERE team_id = %s AND season = %s AND (ps.released_week IS NULL OR ps.released_week > %s);
+                """, (team_id, s_val, on_roster_n(s_val)))
                 roster_stats = cur.fetchone()
                 avg_age = float(roster_stats[0] or 26.5)
                 blue_chips = int(roster_stats[1] or 0)
@@ -1872,8 +1895,8 @@ def get_franchise_rebuild_status(team_identifier: str, season: int = 0) -> str:
                     FROM player_seasons ps
                     JOIN players p ON ps.player_id = p.id
                     JOIN season_stats ss ON p.player_name = ss.player_name AND ss.season = ps.season
-                    WHERE ps.team_id = %s AND ps.season = %s;
-                """, (team_id, s_val))
+                    WHERE ps.team_id = %s AND ps.season = %s AND (ps.released_week IS NULL OR ps.released_week > %s);
+                """, (team_id, s_val, on_roster_n(s_val)))
                 y_row = cur.fetchone()
                 y_share = round(float(y_row[0] or 0) / float(y_row[1] or 1) * 100, 1) if y_row and y_row[1] else 0.0
 

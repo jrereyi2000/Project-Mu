@@ -147,6 +147,23 @@ class MoveLineTests(unittest.TestCase):
         self.assertEqual(rm.counts_by_type([row(), row(type="RELEASED"), row()]), {"RELEASED": 1, "SIGNED": 2})
 
 
+class OnRosterTests(unittest.TestCase):
+    def test_on_roster(self):
+        self.assertTrue(rm.on_roster(None, 5))
+        self.assertTrue(rm.on_roster(6, 5))      # released after the article's week
+        self.assertFalse(rm.on_roster(5, 5))     # released in Week 5 (before its games): gone for a Week 5 article
+        self.assertFalse(rm.on_roster(2, 5))
+        self.assertFalse(rm.on_roster(0, 5))     # preseason release
+        self.assertFalse(rm.on_roster(24, None))  # no article context: every release counts
+        self.assertEqual(rm.roster_week(None), rm.NO_CUTOFF_WEEK)
+        self.assertEqual(rm.roster_week(4), 4)
+
+    def test_free_agent_label(self):
+        self.assertEqual(rm.free_agent_label("Texans", 3), "free agent (released by the Texans, Week 3)")
+        self.assertEqual(rm.free_agent_label("Texans", 24), "free agent (released by the Texans, the offseason)")
+        self.assertEqual(rm.free_agent_label("Texans", 0), "free agent (released by the Texans, the preseason)")
+
+
 class StarterRankTests(unittest.TestCase):
     def test_slots(self):
         self.assertTrue(rm.is_starter_rank("QB", 1))

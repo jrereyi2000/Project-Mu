@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 
 from newsroom.db_tools import db, resolve_season
 from newsroom.run_context import context_season, cutoff_week
+from newsroom.roster_moves import on_roster
 
 GROUP = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE"}
 GROUPS = ("QB", "RB", "WR", "TE")
@@ -65,20 +66,26 @@ def _check_forward_week(cur, season: int, week: int) -> Optional[str]:
 
 
 def _roster(cur, season: int) -> dict:
-    """player_id -> skill-player profile, with depth = OVR order within team and position group."""
+    """player_id -> skill-player profile, with depth = OVR order within team and position group. A player released
+    by the article's week (roster_moves.on_roster) keeps his old team (his past lines are with it) but has depth
+    'released' and free_agent True, and is out of the depth order."""
     cur.execute("""
         SELECT p.id, COALESCE(p.full_name, p.player_name), p.player_name, ps.position, ps.team_id, t.abbreviation,
-               ps.overall_rating, ps.age, ps.years_of_experience
+               ps.overall_rating, ps.age, ps.years_of_experience, ps.released_week
         FROM player_seasons ps
         JOIN players p ON p.id = ps.player_id
         JOIN teams t ON t.id = ps.team_id
         WHERE ps.season = %s AND ps.position IN ('QB', 'HB', 'FB', 'WR', 'TE')
     """, (season,))
     roster, by_slot = {}, defaultdict(list)
-    for pid, name, short, pos, team_id, abbr, ovr, age, exp in cur.fetchall():
+    cut = cutoff_week(season)
+    for pid, name, short, pos, team_id, abbr, ovr, age, exp, released in cur.fetchall():
         g = GROUP[pos]
         roster[pid] = {"name": name, "short": short, "position": pos, "group": g, "team_id": team_id,
                        "team": abbr, "ovr": ovr, "age": age, "exp": exp}
+        if not on_roster(released, cut):
+            roster[pid].update(depth="released", free_agent=True, released_week=released)
+            continue
         by_slot[(team_id, g)].append((-(ovr or 0), pid))
     for players in by_slot.values():
         for depth, (_, pid) in enumerate(sorted(players), start=1):
