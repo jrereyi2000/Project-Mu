@@ -2,7 +2,7 @@
 
 Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) step 3. This plan owns master §2.4 (`gm_profiles`, `gm_trade_proposals`, the Front Office surface). It reads step 1's contract tables (§2.1) and step 2's `transactions` (§2.2) only through the interfaces the master plan fixes.
 
-**Delivers:** 32 stable GM personas, a per-season team direction and positional needs, a data-fitted trade value model, a weekly proposal engine that paces toward ~17 executed trades a season, draft-pick ownership, a Front Office section on `#debug` where JR approves, rejects and confirms trades, the moves a confirmed trade makes (players, contracts, cap rows, picks, `transactions` rows), and read helpers that steps 4 and 5 consume.
+**Delivers:** 32 stable GM personas, a per-season team direction and positional needs, a data-fitted trade value model, a weekly proposal engine that paces toward ~17 in-season and 15–20 offseason executed trades a season, draft-pick ownership, a Front Office section on `#debug` where JR approves, rejects and confirms trades, the moves a confirmed trade makes (players, contracts, cap rows, picks, `transactions` rows), and read helpers that steps 4 and 5 consume.
 
 **Build state this plan starts from (checked against the live DB, 2026-10-20):** `league_state` = (2036, 4), and week 4 is the next week to play (`games` week 3 COMPLETED, week 4 SCHEDULED). 1,695 `ACTIVE` 2036 contracts, 7 with `no_trade_clause`, every one with `cut_penalty`. 32 `team_cap_seasons` rows. 181 `transactions` (113 RE_SIGNED, 32 SIGNED, 24 RELEASED, 12 RESTRUCTURED). The transactions load (capture 20) ran **before** the contract scan (capture 21), so there are no `derived_at` cap rows and **no `projected` contract-year rows yet**. Both appear once weekly scans run on top of the contract baseline, and the value model handles both from day one.
 
@@ -53,6 +53,21 @@ Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) s
 | C11 | CAR shows $161M cap space (adjusted cap $411M). Is that what Team Salary shows? | Phase 2 exit check |
 
 ---
+
+### 1.1 JR's answers (2026-10-20)
+These replace the matching assumptions and placeholders everywhere in this plan.
+- **C1:** The trade deadline is **Week 8**: the last trade happens before simming into Week 9. Madden enforces it for user trades too. `TRADE_DEADLINE_WEEK = 8`.
+- **C2:** CPU trades stay off. JR turns them on only to push a trade through, so the CPU never makes a move of its own. **Treat any agreed trade as one JR can complete.** Madden's approval meter is not a constraint.
+- **C3:** Roster minimum is **46** in every phase of the season. Maximum is **53** in season and **65** in the offseason.
+- **C4:** Yes. The sending team takes a cap penalty on a trade, and the receiving team's cap hit equals the year column.
+- **C5:** Picks in the **next three drafts** can be traded (from 2036: 2037–2039).
+- **C6:** Yes. A no-trade clause blocks a trade outright.
+- **C7:** Players signed or re-signed this season **can** be traded. Injured players **can't**.
+- **C8:** Still open. It can't be checked until the first trade goes through.
+- **C9:** JR currently controls the **Panthers and the Colts**. JR can **take GM control of any team** at any time, and that team's GM agent then acts as an **advisor** only.
+- **C10:** Yes. JR switches to the other team to accept.
+- **C11:** Yes. CAR's $161M cap space matches Team Salary.
+- **Trade volume:** about **17 trades in the regular season** and **15–20 in the offseason**.
 
 ## 2. Design
 
@@ -117,14 +132,15 @@ Everything is in **dollars of surplus**, so players and picks compare directly.
 9. Write the rationale.
 10. Store.
 
-**Budget (pacing to ~17 executed):**
-- The season target is `SEASON_TARGET = 17`, split `IN_SEASON_SHARE = 0.6`: about 10 in season and 7 in the offseason including draft day.
+**Budget (JR, 2026-10-20):**
+- Two targets: `IN_SEASON_TARGET = 17` executed through the Week 8 deadline, and `OFFSEASON_TARGET = 17` (drawn from the range 15–20 each offseason) including draft day. The offseason uses the same pacing over its own stages.
+- `TRADE_DEADLINE_WEEK = 8` is the NFL deadline. It is separate from Napper's fantasy `TRADE_DEADLINE_WEEK = 11` in `engines/napper_trade_engine.py`, so don't import that one.
 - The in-season weekly shape is flat, with the last two weeks before the deadline weighted 3×.
 - This week's expected executions: `e_w = (in-season target − executed so far) × shape_w / Σ remaining shape`.
 - `p_exec` = executed ÷ decided proposals, as a Beta(3,2) posterior. It starts at 0.6 and falls if JR rejects a lot.
 - New proposals this week: `n_w ~ Poisson(e_w / p_exec)`, using a seeded RNG `random.Random(f"{season}:{week}")`, so a re-run gives the same draw.
 - Caps: at most 4 new proposals a week, at most 6 open proposals (PROPOSED or APPROVED), and each team in at most 1 new proposal a week.
-- For 2036, the in-season target is scaled by the remaining shape (week 4 onward; §6 Q2).
+- For 2036, the in-season target is scaled by the remaining shape (week 4 onward, up to the Week 8 deadline; §7 Q2).
 
 **Search:**
 - Initiators are drawn with weight `need_score × aggressiveness × direction factor` (CONTEND 1.5, RETOOL 1.0, REBUILD 0.6 as buyer; REBUILD also sells).
@@ -364,10 +380,10 @@ The card also shows each team's cap after the trade, and a flag when the cap row
   - `trade_value.pick_value` and `run_draft_day` for draft-day trades.
 - **Step 5 consumes:** `executed_trades` (and the `TRADED` rows in `transactions`), `trade_rumors` (only `rumor_ok` non-executed proposals, never presented as done), `deadline_summary`, `get_gm` (names, voice, tenure), and the stored `rationale_a/b` and `headline`. Step 5 must not leak APPROVED-but-unconfirmed trades as completed.
 
-## 7. Open questions for JR
-1. Do you permanently control a team (C9)? If so, should its GM only *suggest* trades to you, or sit out?
-2. 2036 started before step 3. Do you want the in-season target scaled to the weeks left (about 6 trades), or a deadline burst toward 10?
-3. Should rejected or expired proposals ever be rumor material for step 5 (`rumor_ok` ≈ 40%), or should only executed trades be public?
-4. GM turnover: by hand only (`--replace`), or an automatic hot seat after repeated losing REBUILD seasons, decided at the offseason rollover?
-5. Should the rationale and GM bios use Gemini (a few cents a week), or templates only?
-6. The master plan §2.5 names `draft_selections`, which no longer exists (results are in `draft_prospects`). Can the master plan say so?
+## 7. Open questions, answered (JR, 2026-10-20)
+1. **User-controlled teams:** each user-controlled team's GM agent acts as an advisor and suggests trades to JR. JR can turn the suggestions off for each team. The setting is stored per team.
+2. **2036 in-season target:** scaled to the weeks left before the Week 8 deadline.
+3. **Rumors:** rejected and expired proposals can be rumor material (`rumor_ok`). They're never reported as done.
+4. **GM turnover:** an automatic hot seat, decided at the offseason rollover.
+5. **Rationale and GM bios:** Gemini. Bios are written once and stored; rationale is written for each proposal.
+6. **`draft_selections`:** fixed in the master plan (ee69a59). Draft history is in `draft_prospects`.
