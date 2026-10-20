@@ -2,6 +2,8 @@
 
 Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) step 5. This plan reads step 1's contract tables (§2.1) and step 2's `transactions` (§2.2) as they are. It **adds no tables and changes no schema**. Steps 3 (§2.4 `gm_trade_proposals`) and 4 (§2.5 risers and fallers) are used only in the phases marked as depending on them (Phases 8 and 9). Every other phase can ship now.
 
+**Status (2026-10-20):** Phases 1–7 are built and on main (see PROJECT_SPEC §7). Phase 6 is 6a only (JR dropped 6b). Projected yearly hits are shown labelled `est.` (§6 Q2). On the 2036 Weeks 1–4 data, 128 of 181 moves are notable (124 as starters), well above §2.3's 15–35 aim: the thresholds are constants in `newsroom/roster_moves.py` for JR to tune. Seams for Phase 8: `roster_moves.notability` already marks `TRADED` rows notable and `move_line` formats them; `txn_visible` treats a NULL `capture_id` as loaded in time; `get_league_transactions`'s note says trades appear once completed; the R6/R7 trade-package lift and `get_trade_rumors` are not built.
+
 **Delivers:**
 - Three writer tools in `newsroom/db_tools.py`: `get_team_cap_sheet`, `get_player_contract` and `get_league_transactions`. They respect the article's week cutoff, and they label every number as scanned, from a signing row, or derived. Projected numbers are kept away from writers.
 - Released players drop off team views in the writer tools.

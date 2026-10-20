@@ -215,7 +215,7 @@ Project Mu/
 │   ├── NAPPER_UPDATES.md      # Handoff that started the Napper weekly work (injuries, AI lineups with IR, weekly trades, K/DEF projections): original findings and goals, all done
 │   ├── NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md # Phased plan and record for NAPPER_UPDATES (Phases 1–7: K/DEF projections, IR slot, injury display, AI lineups, weekly step, cleanup, waivers), decisions D1–D5; all phases done
 │   ├── TEAM_MANAGEMENT_PLAN.md # Master plan (step 1 contract scan built, awaiting JR's console check and migration; the rest not built yet): contract scan (Team Salary), weekly League Transactions scan, GM agents deciding trades (JR makes them in Madden), a scouting architecture with live GM picks for picks 1–32, newsroom integration; decisions D1–D8, shared schemas, confirmed console facts
-│   ├── team_management/       #   Step sub-plans 01–05 referenced by TEAM_MANAGEMENT_PLAN.md (written per step before building): 01_CONTRACT_SCAN_PLAN.md, 02_LEAGUE_TRANSACTIONS_PLAN.md
+│   ├── team_management/       #   Step sub-plans 01–05 referenced by TEAM_MANAGEMENT_PLAN.md (written per step before building): 01_CONTRACT_SCAN_PLAN.md, 02_LEAGUE_TRANSACTIONS_PLAN.md, 05_NEWSROOM_INTEGRATION_PLAN.md (Phases 1–7 built; 8 trades/rumors and 9 draft risers wait on steps 3 and 4)
 │   ├── models/                #   Index specifications (TWI, popularity, market gravity, legacy floor, GOTW, seasons played);
 │                              #   proposed_metric_definitions.md = decision record for metrics writers were told to use (built / rejected)
 │   ├── reference/             #   Source PDFs
