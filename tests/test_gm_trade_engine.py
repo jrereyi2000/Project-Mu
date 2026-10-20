@@ -235,3 +235,57 @@ def test_user_team_with_suggestions_off_is_left_out():
     b["gm"][2]["user_controlled"], b["gm"][2]["suggestions_on"] = True, False
     v = ge.Valuer(b, FITS)
     assert ge.buy_deals(b, v, 1) == []
+
+
+# ---------------------------------------------------------------- division rivals (JR, 2026-10-20) ----
+def rivals(div_b="AFC East", conf_b="AFC", **kw):
+    b = kw.pop("books", None) or star_books(**kw)
+    b["teams"][1].update(conference="AFC", division="AFC East")
+    b["teams"][2].update(conference=conf_b, division=div_b)
+    return b
+
+
+def test_elite_player_never_moves_inside_the_division():
+    b = rivals(books=books(extra=[make_player(STAR, 2, "WR", 92, age=27, hit=5_000_000, end=2037)]))
+    d = deal([pl(STAR, 2, 1), pk(1, 1, 1, 2), pk(2, 1, 1, 2)])
+    chk = ge.check_legality(d, b)
+    assert not chk["division"]["ok"] and "elite" in chk["division"]["detail"] and "AFC East" in chk["division"]["detail"]
+    other = rivals(div_b="AFC North", books=books(extra=[make_player(STAR, 2, "WR", 92, age=27, hit=5_000_000, end=2037)]))
+    assert ge.check_legality(d, other)["division"]["ok"]                    # same conference: allowed
+
+
+def test_depth_player_inside_the_division_is_allowed_but_discounted():
+    d = base_deal()                                                         # an 82 OVR receiver, below the elite line
+    same, apart, conf = rivals(), rivals(div_b="NFC East", conf_b="NFC"), rivals(div_b="AFC West")
+    assert ge.check_legality(d, same)["division"]["ok"]
+    _, db_same, _, _ = ge.deltas(d, ge.Valuer(same, FITS))
+    _, db_conf, _, _ = ge.deltas(d, ge.Valuer(conf, FITS))
+    _, db_apart, _, lb = ge.deltas(d, ge.Valuer(apart, FITS))
+    league_sent = ge.Valuer(apart, FITS).league(pl(STAR, 2, 1))
+    assert round(db_apart - db_same) == round(ge.DIVISION_TAX * league_sent)    # the sender pays the rival tax
+    assert round(db_apart - db_conf) == round(ge.CONFERENCE_TAX * league_sent)
+    assert db_same < db_conf < db_apart
+
+
+def test_proposal_1_shape_is_expired_by_the_recheck():
+    """Jets get MIKE Jerome Pearman (96) from the Patriots for CB James Streets (76) and two firsts: AFC East."""
+    pearman = make_player(9001, 2, "LB", 96, age=30, hit=2_400_000, end=2036)
+    streets = make_player(9002, 1, "CB", 76, age=23, hit=2_700_000, end=2037)
+    open_ = [{"id": 1, "status": "PROPOSED", "team_a_id": 1, "team_b_id": 2, "trade_window": "IN_SEASON",
+              "expires_week": 4, "assets": [pl(9001, 2, 1), pl(9002, 1, 2), pk(1, 1, 1, 2),
+                                            pk(1, 1, 1, 2, season=2038)]}]
+    b = rivals(books=books(extra=[pearman, streets], open_=open_))
+    b["picks"][(2038, 1, 1)] = 1
+
+    class Cur:
+        def __init__(self):
+            self.sql = []
+
+        def execute(self, q, a=None):
+            self.sql.append((q, a))
+    cur = Cur()
+    out = ge.recheck_open(cur, b)
+    assert len(out) == 1 and out[0][0] == 1
+    assert out[0][1].startswith("no longer legal: division same division (AFC East): Player 9001 (96 OVR) is elite")
+    assert cur.sql and cur.sql[0][1][:2] == ("EXPIRED", out[0][1])
+    assert ge.recheck_open(Cur(), b, dry_run=True) == out                    # a dry run reports the same, writes nothing

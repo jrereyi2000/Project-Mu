@@ -154,10 +154,12 @@ Everything is in **dollars of surplus**, so players and picks compare directly.
 - **Deadline:** `trades_open(week)`.
 - **Picks:** the sender owns each pick in `draft_picks`, and the pick isn't already in another open proposal.
 - **No double booking:** no asset appears in another PROPOSED or APPROVED proposal.
+- **Division rivals (JR, 2026-10-20, after proposal #1: Jets get Pearman from the Patriots, both AFC East: "very unlikely they're getting traded in division", especially elite players):** a `division` check blocks any player with OVR ≥ 88 (`ELITE_OVR`; 215 of ~1,700 rostered players, ~6–7 a team, the Pro Bowl tier) moving to a division rival. Anything else between division rivals is legal but taxed in acceptance (below), so it stays rare. The writer tool's package check (step 5 phase 8) runs the same check through `front_office.legality_check`.
 - **Fairness guard:** `|V_L(give) − V_L(get)| ≤ max(25%, $4M)`. This keeps deals Madden's trade screen would plausibly allow (C2) and stops step 5's "fleeced" angle from being absurd.
 
 **Acceptance:** both GMs must want the deal.
 - `Δ_T = Σ V_T(in) − Σ V_T(out) ≥ θ_T`, with `θ_T = $1.5M × (1 − aggressiveness)`.
+- **Rival tax:** a GM sending an asset to a division rival also pays 50% of its league value (`DIVISION_TAX`); to a same-conference team in another division, 10% (`CONFERENCE_TAX`); other conference, nothing. A depth player or late pick can still cross a division line when the deal is otherwise good; an R1 pick rarely does.
 - A CONTEND team with an urgent need may accept down to `−$2M × risk_appetite`, which models a deadline overpay.
 - Among candidates that pass both sides, the engine picks the best joint surplus `min(Δ_A, Δ_B)`. A seeded softmax draw gives some variety.
 

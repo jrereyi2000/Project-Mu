@@ -36,6 +36,12 @@ CAP_MARGIN, CAP_MARGIN_DERIVED = 1_000_000, 3_000_000
 RESCAN_HEADROOM = 3_000_000
 FAIRNESS_SHARE, FAIRNESS_FLOOR = 0.25, 4_000_000
 MIN_SLOT_GROUPS = {"QB": 1, "K": 1, "P": 1}
+# Division rivals (JR, 2026-10-20: "very unlikely they're getting traded in division", proposal #1). An elite player
+# never moves inside his division (a hard legality block); anything else sent to a rival costs the sender a share of
+# its league value on top of what he gives up, so in-division deals stay rare and small.
+ELITE_OVR = 88                           # 215 of ~1,700 rostered players (13%, ~6-7 a team): the Pro Bowl tier
+DIVISION_TAX = 0.5                       # share of V_L the sender pays to strengthen a division rival
+CONFERENCE_TAX = 0.1                     # same conference, other division: a small playoff-race tax
 # Acceptance
 THETA = 1_500_000                        # theta_T = $1.5M x (1 - aggressiveness)
 URGENT_OVERPAY = 2_000_000               # a CONTEND team with an urgent need accepts down to -$2M x risk
@@ -247,8 +253,9 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     """Everything the engine needs, read-only."""
     from engines.gm_direction import read_injuries
     b = {"season": season, "week": week, "window": window, "value_season": value_season(season, window)}
-    cur.execute("SELECT id, abbreviation, city, name FROM teams WHERE abbreviation IS NOT NULL")
-    b["teams"] = {r[0]: {"abbr": r[1], "city": r[2], "name": r[3]} for r in cur.fetchall()}
+    cur.execute("SELECT id, abbreviation, city, name, conference, division FROM teams WHERE abbreviation IS NOT NULL")
+    b["teams"] = {r[0]: {"abbr": r[1], "city": r[2], "name": r[3], "conference": r[4], "division": r[5]}
+                  for r in cur.fetchall()}
     cur.execute("""SELECT g.team_id, g.id, g.gm_name, g.aggressiveness, g.risk_appetite, g.pick_affinity, g.youth_bias,
                           g.position_bias, g.voice, COALESCE(st.user_controlled, false), COALESCE(st.suggestions_on, true)
                    FROM gm_profiles g LEFT JOIN gm_team_settings st ON st.team_id = g.team_id
@@ -428,6 +435,12 @@ class Valuer:
         d0 = tv.DISCOUNTS[self.b["ctx"][tid]["direction"]][0]
         return round(dead_money(self.b["players"][asset["player_id"]]) * d0)
 
+    def rival(self, asset, sender, receiver):
+        """What strengthening a rival costs the sender: DIVISION_TAX (or CONFERENCE_TAX) x the asset's league
+        value (a negative-value contract dumped on a rival costs nothing extra)."""
+        tax = rival_tax(self.b, sender, receiver)
+        return round(tax * max(0, self.league(asset))) if tax else 0
+
     def league(self, asset):
         key = (asset_key(asset), None)
         if key not in self.cache:
@@ -451,6 +464,20 @@ def deal_hash(team_a, team_b, assets):
     return hashlib.sha1(f"{min(team_a, team_b)}|{max(team_a, team_b)}|{'|'.join(parts)}".encode()).hexdigest()[:16]
 
 
+def rivalry(b, t1, t2):
+    """'division' | 'conference' | None for two teams (None when the teams table has no division data)."""
+    a, c = b["teams"].get(t1, {}), b["teams"].get(t2, {})
+    if a.get("division") and a.get("division") == c.get("division"):
+        return "division"
+    if a.get("conference") and a.get("conference") == c.get("conference"):
+        return "conference"
+    return None
+
+
+def rival_tax(b, sender, receiver):
+    return {"division": DIVISION_TAX, "conference": CONFERENCE_TAX}.get(rivalry(b, sender, receiver), 0.0)
+
+
 def deltas(deal, valuer):
     """(Δ_A, Δ_B, league value A receives, league value B receives). The sender of a player also pays his dead
     money this season (C4), discounted like any this-season dollar for its direction."""
@@ -459,11 +486,11 @@ def deltas(deal, valuer):
     for x in deal["assets"]:
         if x["to"] == a:
             da += valuer.value(x, a)
-            db -= valuer.value(x, b) + valuer.dead(x, b)
+            db -= valuer.value(x, b) + valuer.dead(x, b) + valuer.rival(x, b, a)
             la += valuer.league(x)
         else:
             db += valuer.value(x, b)
-            da -= valuer.value(x, a) + valuer.dead(x, a)
+            da -= valuer.value(x, a) + valuer.dead(x, a) + valuer.rival(x, a, b)
             lb += valuer.league(x)
     return da, db, la, lb
 
@@ -549,6 +576,7 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
                 bad.append(f"{abbr(b, t)} no {g}")
     res["slots"] = {"ok": not bad, "detail": "; ".join(bad) or "ok"}
     res["deadline"] = {"ok": trades_open(b["week"], window), "detail": f"week {b['week']} ({window})"}
+    res["division"] = division_check(deal, b)
     bad = []
     for x in deal["assets"]:
         if x["type"] == "PICK":
@@ -578,6 +606,25 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
                            "detail": f"league value ${la / 1e6:.1f}M vs ${lb / 1e6:.1f}M (gap ${gap / 1e6:.1f}M, "
                                      f"limit ${limit / 1e6:.1f}M)"}
     return res
+
+
+def division_check(deal, b):
+    """{ok, detail}: an elite player (OVR >= ELITE_OVR) never moves to a division rival; anything else between
+    rivals passes with the rival tax noted (acceptance pays it)."""
+    rel = rivalry(b, deal["a"], deal["b"])
+    if rel is None:
+        return {"ok": True, "detail": "different conferences"}
+    div = b["teams"].get(deal["a"], {}).get(rel)
+    if rel == "division":
+        elite = [b["players"][x["player_id"]] for x in deal["assets"] if x["type"] == "PLAYER"
+                 and (b["players"].get(x["player_id"], {}).get("ovr") or 0) >= ELITE_OVR]
+        if elite:
+            names = ", ".join(f"{p['name']} ({p['ovr']} OVR)" for p in elite)
+            return {"ok": False, "detail": f"same division ({div}): {names} is elite (OVR {ELITE_OVR}+), and teams "
+                                           f"don't trade elite players to a division rival"}
+        return {"ok": True, "detail": f"same division ({div}): allowed, the sender pays a "
+                                      f"{DIVISION_TAX:.0%} rival discount"}
+    return {"ok": True, "detail": f"same conference ({div}): a {CONFERENCE_TAX:.0%} rival discount"}
 
 
 def legal(checks):
@@ -958,15 +1005,7 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
     fits = tv.fits_from_db(cur, season)
     valuer = Valuer(b, fits)
     # re-check what's still open
-    for p in list(b["open"]):
-        deal = {"a": p["team_a_id"], "b": p["team_b_id"], "assets": p["assets"]}
-        checks = check_legality(deal, b, None, ignore_booking={asset_key(x) for x in p["assets"]})
-        checks.pop("deadline", None)
-        if not legal(checks):
-            why = "no longer legal: " + "; ".join(f"{k} {v['detail']}" for k, v in checks.items() if not v["ok"])
-            rep["rechecked"].append((p["id"], why))
-            if not dry_run:
-                set_status(cur, p["id"], "EXPIRED", why)
+    rep["rechecked"] = recheck_open(cur, b, dry_run)
     # 3. injury triggers
     trig = injury_triggers(b)
     rep["triggers"] = trig
@@ -1126,6 +1165,24 @@ def llm_flags(rat):
     return [f"llm_rejected:{r}"[:120] for r in rat.get("rejected") or []]
 
 
+def recheck_open(cur, b, dry_run=False, log=None):
+    """The weekly re-check of open (PROPOSED / APPROVED) proposals: any that fails a check now (the deadline aside)
+    is EXPIRED with the failed checks as its status_reason. Returns [(proposal_id, reason)]."""
+    out = []
+    for p in list(b["open"]):
+        deal = {"a": p["team_a_id"], "b": p["team_b_id"], "assets": p["assets"]}
+        checks = check_legality(deal, b, None, ignore_booking={asset_key(x) for x in p["assets"]})
+        checks.pop("deadline", None)
+        if not legal(checks):
+            why = "no longer legal: " + "; ".join(f"{k} {v['detail']}" for k, v in checks.items() if not v["ok"])
+            out.append((p["id"], why))
+            if log:
+                log(f"  #{p['id']} {why}")
+            if not dry_run:
+                set_status(cur, p["id"], "EXPIRED", why)
+    return out
+
+
 def rationale_for(b, deal, llm):
     from engines.gm_rationale import league_names, write_rationale
     if llm is not None and "league_names" not in b:
@@ -1166,6 +1223,8 @@ def main(argv=None):
                     help="draft day: the Round 1 pick on the clock (needs draft_picks.overall_pick set)")
     ap.add_argument("--rewrite-rationale", type=int, metavar="ID",
                     help="write proposal ID's headline and rationale again (Gemini, else the template)")
+    ap.add_argument("--recheck-only", action="store_true",
+                    help="only the weekly re-check of open proposals (illegal ones expire); nothing else is written")
     ap.add_argument("--simulate-season", action="store_true")
     ap.add_argument("--approval", type=float, default=0.6)
     ap.add_argument("--seasons", type=int, default=2000)
@@ -1178,8 +1237,23 @@ def main(argv=None):
         return
     import psycopg
     from engines.gm_llm import flush, make_llm
-    llm = None if (a.dry_run or a.no_llm or a.rewrite_rationale) else make_llm("gm_rationale")
+    llm = None if (a.dry_run or a.no_llm or a.rewrite_rationale or a.recheck_only) else make_llm("gm_rationale")
     dsn = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
+    if a.recheck_only:
+        with psycopg.connect(dsn) as conn:
+            cur = conn.cursor()
+            s, w, win = league_window(cur)
+            season, week = a.season or s, a.week or w
+            b = read_books(cur, season, week, win or "IN_SEASON")
+            print(f"re-check: {len(b['open'])} open proposals (season {season}, week {week})")
+            out = recheck_open(cur, b, a.dry_run, log=print)
+            print(f"{len(out)} no longer legal")
+            if a.dry_run:
+                conn.rollback()
+                print("dry run: nothing written")
+            else:
+                conn.commit()
+        return
     if a.rewrite_rationale:
         llm = None if a.no_llm else make_llm("gm_rationale")
         with psycopg.connect(dsn) as conn:
