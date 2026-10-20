@@ -258,7 +258,17 @@ def contract_pos(p):
     return POS_FIXES.get(p, p)
 
 
-def match_contract_rows(rows, candidates, season=None):
+def one_slip(a, b):
+    """Name keys one OCR slip apart: one letter changed, added or dropped ('DWILSON' / 'DWILBON')."""
+    if a == b or abs(len(a) - len(b)) > 1:
+        return a == b
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a, b)) == 1
+    short, long_ = sorted((a, b), key=len)
+    return any(long_[:i] + long_[i + 1:] == short for i in range(len(long_)))
+
+
+def match_contract_rows(rows, candidates, season=None, notes=None):
     """Team Salary rows -> players, never guessing (team management step 1; the roster load's rule).
 
     rows: [{"team": name, "team_id": id, "NAME": list name, "POS": .., "AGE": int|None, "OVR": int|None}]
@@ -266,6 +276,9 @@ def match_contract_rows(rows, candidates, season=None):
     Per row: same team and name key (narrowed by the full name when the screen shows one), then the same
     position, then AGE, then OVR; a step that would leave nobody is skipped. Exactly one candidate is a
     match; none or several, or two rows on one player, is a problem. Returns ({row index: player_id}, problems).
+    A name no player on the team has is matched only to the team's single player with the same position and
+    age whose name is one OCR slip away (Giants 'D.Wilson' for D. Wilbon, 2026-10-19); each such match is
+    appended to `notes`.
     """
     by_team = {}
     for c in candidates:
@@ -276,6 +289,13 @@ def match_contract_rows(rows, candidates, season=None):
         label = f"{r['team']} {r['NAME']} {r.get('POS', '')}".strip()
         nk = name_key(r["NAME"])
         cands = [c for c in by_team.get(r["team_id"], []) if c[2] == nk]
+        if not cands and r.get("AGE") is not None:
+            slips = [c for c in by_team.get(r["team_id"], []) if one_slip(c[2], nk)
+                     and contract_pos(c[4]) == contract_pos(r.get("POS")) and c[5] == r.get("AGE")]
+            if len(slips) == 1:
+                cands = slips
+                if notes is not None:
+                    notes.append(f"{label}: read as player {slips[0][0]} (name one letter off, same position and age)")
         if len(cands) > 1 and "." not in r["NAME"] and " " in r["NAME"].strip():
             fk = full_key(r["NAME"])                    # a full name on screen (C7)
             cands = [c for c in cands if c[3] == fk] or cands

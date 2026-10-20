@@ -177,3 +177,35 @@ class ContractMatchTest(unittest.TestCase):
     def test_ocr_position_slip(self):
         m, p = self.match([self.row("B.Young", "OB")], self.CANDS)
         self.assertEqual((m, p), ({0: 1}, []))
+
+
+class ContractSlipTest(unittest.TestCase):
+    from pipeline.capture_matching import match_contract_rows as _m, one_slip as _s
+    match, slip = staticmethod(_m), staticmethod(_s)
+    CANDS = [(1, 7, name_key("D. Wilbon"), full_key("Dan Wilbon"), "TE", 30, 87),
+             (2, 7, name_key("J. Harris"), full_key("Jo Harris"), "TE", 26, 76)]
+
+    def row(self, name, pos="TE", age=30):
+        return {"team": "GIANTS", "team_id": 7, "NAME": name, "POS": pos, "AGE": age, "OVR": 85}
+
+    def test_one_slip(self):
+        self.assertTrue(self.slip("DWILSON", "DWILBON"))
+        self.assertTrue(self.slip("DWILBON", "DWILBONN"))
+        self.assertFalse(self.slip("DWILSON", "DWATSON"))
+
+    def test_slip_matched_and_noted(self):
+        notes = []
+        m, p = self.match([self.row("D.Wilson")], self.CANDS, 2036, notes)
+        self.assertEqual((m, p), ({0: 1}, []))
+        self.assertIn("player 1", notes[0])
+
+    def test_slip_needs_same_position_and_age(self):
+        for row in (self.row("D.Wilson", pos="WR"), self.row("D.Wilson", age=29)):
+            m, p = self.match([row], self.CANDS, 2036, [])
+            self.assertEqual(m, {})
+            self.assertIn("not on the team's 2036 roster", p[0])
+
+    def test_two_slips_is_a_problem(self):
+        cands = self.CANDS + [(3, 7, name_key("D. Wilton"), full_key("Del Wilton"), "TE", 30, 70)]
+        m, p = self.match([self.row("D.Wilson")], cands, 2036, [])
+        self.assertEqual(m, {})
