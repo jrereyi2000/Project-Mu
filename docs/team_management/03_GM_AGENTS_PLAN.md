@@ -115,7 +115,7 @@ Everything is in **dollars of surplus**, so players and picks compare directly.
 4. **Pick value:** the expected OVR by overall pick is fitted from the 2036 draft (`draft_prospects.ovr` by `actual_pick`, smoothed). The rookie hit by slot comes from the 2036 rookies' contracts (S12).
    - `V(pick) = Σ_{k<4} d[k] × (W(ovr_k) × u − rookie_hit_k)`, × `pick_affinity`, × 1.2 for REBUILD or × 0.8 for CONTEND.
    - The slot is projected from a team's `proj_wins` rank for next year's draft. Picks a year further out use the middle slot of their round, with one more year of discount.
-5. **Excluded assets:** `no_trade_clause`, the `DEF` row, players acquired by trade this season (no flipping), injured players with `weeks_remaining ≥ 4`, and anything C7 rules out.
+5. **Excluded assets:** `no_trade_clause`, the `DEF` row, players acquired by trade this season (no flipping), rookies during their rookie season (`years_of_experience = 0`, in-season trades; JR, 2026-10-20, after proposal #2 offered his rookie Amari Anderson), injured players with `weeks_remaining ≥ 4`, and anything C7 rules out.
 
 ### 2.4 Proposal generation (`engines/gm_trade_engine.py`)
 **When:** after step 7 (engines) in a weekly or playoff run, as a non-fatal step like the Napper lineups (`weekly_capture.py:375`), and on demand from `#debug`. It runs for `week = league_state.current_week` (the week about to be played) while `trades_open(week)` holds: `1 ≤ week ≤ TRADE_DEADLINE_WEEK`. The offseason window comes in Phase 7.

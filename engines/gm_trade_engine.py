@@ -597,7 +597,8 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
             if p is None or p["team_id"] != x["from"]:
                 bad.append(f"player {x['player_id']} not on {abbr(b, x['from'])}")
                 continue
-            ok, why = tv.tradeable(p, b["injured"], b["acquired"], b["value_season"])
+            ok, why = tv.tradeable(p, b["injured"], b["acquired"], b["value_season"],
+                                 b["window"] == "IN_SEASON")
             if not ok and why != "no-trade clause":
                 bad.append(f"{p['name']}: {why}")
     res["tradeable"] = {"ok": not bad, "detail": "; ".join(bad) or "ok"}
@@ -678,7 +679,8 @@ def eligible_team(b, tid):
 def free_player(b, pid):
     p = b["players"].get(pid)
     return (p is not None and pid not in b["booked_players"]
-            and tv.tradeable(p, b["injured"], b["acquired"], b["value_season"])[0])
+            and tv.tradeable(p, b["injured"], b["acquired"], b["value_season"],
+                                 b["window"] == "IN_SEASON")[0])
 
 
 def package_assets(b, tid, exclude_groups=()):
