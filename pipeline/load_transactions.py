@@ -11,8 +11,8 @@ contracts, cap deltas) run only for rows inserted now, oldest first, so loading 
 nothing. There are no automatic Team Salary re-scans (JR, 2026-10-19): contracts and team_cap_seasons are kept
 current from the transactions themselves, and the next Season scan replaces all of it. Trade rows and rows that
 aren't roster moves are skipped (JR, 2026-10-19: trades are made through the GM agents' approval flow, step 3).
-Rows before the effects cutoff (first load of a season: '<season> SEASON - WEEK 1') and rows from earlier
-seasons are stored with applied = false, as history only.
+Rows before '<season> SEASON - WEEK 1' are skipped too (JR, 2026-10-19: the Week 1 roster already has every
+preseason move). With --apply-from, rows between Week 1 and that heading are stored with applied = false.
 """
 import csv, json, os
 
@@ -54,18 +54,25 @@ def read_meta(folder):
         return {}
 
 
-def expand(rows, meta=None, skipped=None, trades=None):
+def expand(rows, meta=None, skipped=None, trades=None, floor=None, before=None):
     """List rows -> transaction legs (newest first) with their key fields. A scan that stopped at --since (didn't
     reach the end of the list) read its oldest heading group only partly, which would shift that group's seq, so
     every row older than `since` is left out (it was loaded by an earlier scan). Rows that aren't roster moves
     (transactions_parse.is_move: the draft-class notice and the like) are skipped, not stored (JR, 2026-10-19);
     their texts go into `skipped` when a list is passed. Trade rows are skipped too (JR, 2026-10-19: the GM
-    agents' approval flow, step 3, makes the trade moves); their texts go into `trades`."""
+    agents' approval flow, step 3, makes the trade moves); their texts go into `trades`. Rows ordering before
+    `floor` (the loader passes '<season> SEASON - WEEK 1': the Week 1 roster already holds every preseason move)
+    are skipped too and counted in `before` (a one-item list)."""
+    low = heading_ordinal(floor) if floor else None
     meta = meta or {}
     cut = heading_ordinal(meta["since"]) if meta.get("since") and not meta.get("reached_end") else None
     out = []
     for r in rows:
         if cut is not None and (heading_ordinal(r["heading"]) or cut) < cut:
+            continue
+        if low is not None and heading_ordinal(r["heading"]) and heading_ordinal(r["heading"]) < low:
+            if before is not None:
+                before[0] += 1
             continue
         if not is_move(r["text"]):
             if skipped is not None:
@@ -501,8 +508,8 @@ def load_transactions(cur, folder, season, report, apply_from=None, capture_id=N
     """transactions.csv in `folder` -> transactions (+ effects). Adds a 'transactions' dict to report. Raises
     TransactionsError (nothing written) on a failed check. Returns the number of new rows."""
     from pipeline.money import parse_money
-    skipped, trades = [], []
-    entries = expand(read_rows(folder), read_meta(folder), skipped, trades)
+    skipped, trades, before = [], [], [0]
+    entries = expand(read_rows(folder), read_meta(folder), skipped, trades, f"{season} SEASON - WEEK 1", before)
     years = {heading_year(e["heading"]) for e in entries} - {None}
     state = read_state(cur, season, years, apply_from)
     plan, rep = plan_effects(entries, state, parse_money)
@@ -510,5 +517,6 @@ def load_transactions(cur, folder, season, report, apply_from=None, capture_id=N
     rep["apply_from"] = state["apply_from"]
     rep["skipped_not_moves"] = skipped
     rep["skipped_trades"] = trades
+    rep["skipped_before_week_1"] = before[0]
     report["transactions"] = rep
     return len(done)

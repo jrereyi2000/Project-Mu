@@ -73,12 +73,12 @@ class TransactionsRunTest(unittest.TestCase):
                 wc, CAPTURES=tmp, LOCK_PATH=os.path.join(tmp, ".lock"), notify=lambda m, **kw: calls.append(("notify", kw.get("title"))),
                 step_connect=lambda lp: calls.append(("connect",)), step_capture=capture, step_extract=extract,
                 load_status=lambda f: None, step_load=lambda f, replace=False, mode="weekly": calls.append(("load", mode)) or {},
-                league_state=lambda: (2036, 4), since_heading=lambda s, weekly=True: None if not weekly else "x",
+                league_state=lambda: (2036, 4), since_heading=lambda s, weekly=True: "2036 SEASON - WEEK 1",
                 step_engines=lambda s: calls.append(("engines",)), step_articles=lambda s, week=None: calls.append(("articles",))):
             os.makedirs(os.path.join(tmp, "tx1"))
             self.assertEqual(wc.run("tx1", mode="transactions"), 0)
         self.assertEqual([c[0] for c in calls], ["notify", "connect", "capture", "notify", "extract", "load", "notify"])
-        self.assertEqual(calls[2], ("capture", "transactions", None))       # first run: whole list
+        self.assertEqual(calls[2], ("capture", "transactions", "2036 SEASON - WEEK 1"))   # first run: from Week 1
         self.assertEqual(calls[5], ("load", "transactions"))
 
 

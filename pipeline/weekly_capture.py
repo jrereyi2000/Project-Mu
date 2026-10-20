@@ -12,7 +12,7 @@ from the debug page (#debug, server/debug_api.py: Scan week / Backfill previous 
                                                       # extracted and loaded; never engines or articles
   python3 -m pipeline.weekly_capture --mode transactions
                                                       # League Transactions only: capture (from the newest loaded
-                                                      # heading, or the whole list on the first run), extract,
+                                                      # heading, or SEASON - WEEK 1 on the first run), extract,
                                                       # load; never engines or articles
 
 League Transactions (team management step 2): the weekly and playoff captures also read League > LEAGUE
@@ -457,9 +457,10 @@ def contracts_phase(folder, log_path, teams=None):
 # ---------------------------------------------------------- transactions ----
 def since_heading(season, weekly=True):
     """The newest League Transactions heading loaded for the season (by heading order), for --since. A season
-    with nothing loaded yet gives '<season> SEASON - WEEK 1' in the weekly run (rows before it are history only,
-    plan §6 answer 2, so the weekly capture needn't read the whole list) and None for --mode transactions (the
-    first-run backfill reads the whole list). None too when the transactions table doesn't exist."""
+    with nothing loaded yet gives '<season> SEASON - WEEK 1' (JR, 2026-10-19: the Week 1 roster already has every
+    preseason move, and the preseason cut-downs to 53 are over half the list, so neither the weekly run nor
+    --mode transactions reads them). `weekly` is kept for callers; both modes behave the same. None when the
+    transactions table doesn't exist."""
     import psycopg
     from pipeline.load_capture import DSN
     from pipeline.transactions_parse import heading_ordinal
@@ -470,7 +471,7 @@ def since_heading(season, weekly=True):
     heads = [h for h in heads if heading_ordinal(h)]
     if heads:
         return max(heads, key=heading_ordinal)
-    return f"{season} SEASON - WEEK 1" if weekly else None
+    return f"{season} SEASON - WEEK 1"
 
 
 # ----------------------------------------------------------------- run ----
