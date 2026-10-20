@@ -75,7 +75,10 @@
     "MOVE_NEWS": 1.4,
     "BEAT_MOVE": 1.0,
     "MOVE_REACTION": 1.3,
-    "CAP_TAKE": 1.1
+    "CAP_TAKE": 1.1,
+    "TRADE_NEWS": 1.5,
+    "TRADE_REACTION": 1.3,
+    "TRADE_RUMOR": 1.2
   },
   "share_slot_heat": {
     "Hero Slot": 1.4,

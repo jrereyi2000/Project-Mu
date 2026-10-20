@@ -161,6 +161,11 @@ INSIDER_ARCHETYPES = ("SCHEFTER_TWEET", "RAPOPORT")
 MOVE_NEWS_MAX = 3
 MOVE_REACTION_MAX = 2
 CAP_TAKE_DEAD_MONEY = 10_000_000   # a release leaving this much dead money (or a team over the cap) earns a cap take
+# Trades and rumors (Phase 8): insiders break last week's executed trades (TRADE_NEWS) and at most two rumors
+# (TRADE_RUMOR, through the trade deadline only); a die-hard of each team reacts to each trade (TRADE_REACTION); a team
+# in a trade gets BEAT_MOVE. Trades come before rumors and moves for the insiders' pundit cap.
+TRADE_NEWS_MAX = 3
+TRADE_RUMOR_MAX = 2
 
 # Hot-take voices preferred for calling out bad games.
 HOT_TAKE_PUNDITS = ("STEPHEN_A", "SKIP_TWEET", "COWHERD", "SHANNON", "MCAFEE")
@@ -209,6 +214,9 @@ WINDOWS = {
     "BEAT_MOVE": "Mon – Wed",
     "MOVE_REACTION": "Mon – Wed",
     "CAP_TAKE": "Mon – Wed",
+    "TRADE_NEWS": "Mon – Wed",
+    "TRADE_REACTION": "Mon – Wed",
+    "TRADE_RUMOR": "Mon – Wed",
 }
 
 
@@ -388,6 +396,7 @@ def load_week_context(cur, season: int, week: int) -> dict:
     ctx["injuries"] = injs
     ctx["injuries_by_team"] = injs_by_team
     ctx["moves"], ctx["team_caps"] = load_moves(cur, season, week)
+    ctx["trades"], ctx["rumors"] = load_trades(cur, season, week)
     # Each recap game's canonical story (engines/game_script_engine.py, §2.14), read or built here
     from engines.game_script_engine import ensure_script
     ctx["game_scripts"] = {}
@@ -417,7 +426,7 @@ def load_moves(cur, season: int, week: int) -> tuple:
         return [], {}
     moves = []
     for r in rows:
-        if not r["player_id"]:
+        if not r["player_id"] or r["type"] == "TRADED":       # trades post as whole trades (load_trades)
             continue
         tid = r["from_team_id"] if r["type"] == "RELEASED" else (r["to_team_id"] or r["from_team_id"])
         line = rm.move_line(r, with_notable=False)
@@ -431,6 +440,34 @@ def load_moves(cur, season: int, week: int) -> tuple:
     team_caps = {c["team_id"]: {"line": rm.cap_line(c["team"], c, c["basis"]), "cap_space": c["cap_space"],
                                 "dead_money": c["cap_penalty"], "basis": c["basis"]} for c in caps}
     return moves, team_caps
+
+
+def load_trades(cur, season: int, week: int) -> tuple:
+    """(executed trades, rumors) new for publication week `week` (swarm_dispatcher.new_week_trades: last week's
+    executed GM trades, rumors from last week's rumor_ok proposals through the deadline), as facts for the trade
+    posts: team ids, the trade or rumor line, the money strings in it and each GM's stated thinking. Missing step 3
+    tables -> nothing."""
+    from newsroom import roster_moves as rm
+    from newsroom.db_tools import _team_names, new_week_trades
+    cur.execute("SAVEPOINT agent_wire_trades")
+    try:
+        trades, rumors = new_week_trades(cur, season, week)
+        names = _team_names(cur)
+        cur.execute("SELECT abbreviation, id FROM teams WHERE abbreviation IS NOT NULL;")
+        ids = dict(cur.fetchall())
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT agent_wire_trades")
+        return [], []
+    out_t = []
+    for t in trades:
+        line = rm.trade_line(t, names)
+        out_t.append({"id": t["proposal_id"], "week": t["week"], "teams": [ids[t["team_a"]], ids[t["team_b"]]],
+                      "line": line, "money": re.findall(r"-?\$[\d.]+[MK]?", line),
+                      "players": [l["player_name"] for l in t["legs"] if l.get("type") == "PLAYER"],
+                      "gm_said": {ids[t["team_a"]]: t.get("rationale_a"), ids[t["team_b"]]: t.get("rationale_b")}})
+    out_r = [{"id": r["rumor_id"], "week": r["week"], "teams": [ids[x] for x in r["teams"]],
+              "line": rm.rumor_line(r, names), "outcome": r["outcome"]} for r in rumors]
+    return out_t, out_r
 
 
 def load_record_book(cur, season: int):
@@ -750,10 +787,38 @@ class Week:
     def beat_move_facts(self, tid):
         facts = {"team": self.team_with_record(tid),
                  "moves_this_week": [m["line"] for m in sorted(self.team_moves(tid), key=lambda m: -m["rank_score"])]}
+        trades = self.team_trades(tid)
+        if trades:
+            facts["trades_this_week"] = [t["line"] for t in trades]
         cap = self.ctx.get("team_caps", {}).get(tid)
         if cap:
             facts["cap"] = cap["line"]
         return facts
+
+    # Trades and rumors (load_trades). A trade post's terms come only from its trade line; a rumor post never says
+    # a trade happened.
+    def team_trades(self, tid):
+        return [t for t in self.ctx.get("trades", []) if tid in t["teams"]]
+
+    def trade_facts(self, t):
+        a, b = t["teams"]
+        return {"teams": [self.team_with_record(a), self.team_with_record(b)], "trade": t["line"],
+                "grounding": "This trade was executed: who went where, the picks and every dollar figure are in "
+                             "`trade`; don't add any. How it came together is yours to imagine."}
+
+    def trade_reaction_facts(self, t, tid):
+        facts = self.trade_facts(t)
+        facts["your_team"] = self.team_label(tid)
+        if t.get("gm_said", {}).get(tid):
+            facts["your_gm_said"] = t["gm_said"][tid]
+        return facts
+
+    def rumor_facts(self, r):
+        a, b = r["teams"]
+        return {"teams": [self.team_with_record(a), self.team_with_record(b)], "rumor": r["line"],
+                "grounding": "A RUMOR, not a done deal: these two front offices talked; no trade happened. Say "
+                             "'talks', 'discussed', 'sources say'. Never say a trade was made or agreed, never name "
+                             "a player, and no dollar figures."}
 
     def cap_take_subject(self):
         """(team_id, release move or None) for the week's cap take: the deepest team over the cap, else the release
@@ -1541,6 +1606,25 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                                          {k: art[k] for k in ("headline", "excerpt", "article_type", "slot")},
                                          filed_team=art["team_id"]))
 
+    # 1a. Trades (team management step 5, Phase 8): insiders break last week's executed trades, then at most
+    # TRADE_RUMOR_MAX rumors (only through the deadline; load_trades already cuts them off).
+    for t in ctx.get("trades", [])[:TRADE_NEWS_MAX]:
+        account = acc.insider()
+        if not account:
+            break
+        a, b = t["teams"]
+        plan["MOVES"].append(_assignment("TRADE_NEWS", account, {"type": "trade", "id": t["id"], "team_id": a,
+                                                                  "label": f"{W.teams[a]['abbr']}-{W.teams[b]['abbr']} trade"},
+                                         W.trade_facts(t), filed_team=a))
+    for r in ctx.get("rumors", [])[:TRADE_RUMOR_MAX]:
+        account = acc.insider()
+        if not account:
+            break
+        a, b = r["teams"]
+        plan["MOVES"].append(_assignment("TRADE_RUMOR", account, {"type": "rumor", "id": r["id"], "team_id": a,
+                                                                   "label": f"{W.teams[a]['abbr']}-{W.teams[b]['abbr']} trade talks"},
+                                         W.rumor_facts(r), filed_team=a))
+
     # 1b. Roster moves (team management step 5): insiders break the week's most notable moves, and one pundit takes
     # a cap squeeze (a team over the cap, or a release that left CAP_TAKE_DEAD_MONEY+ in dead money).
     for m in W.notable_moves()[:MOVE_NEWS_MAX]:
@@ -1743,10 +1827,11 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             a["buzz_tier"] = story["tier"]
             plan["TEAM_STORY"].append(with_angle(a, role, roles, i, story["positive"]))
 
-    # 3. Beat notes: teams from the most exciting games, then the most popular teams that played.
+    # 3. Beat notes: teams in last week's trades (their BEAT_MOVE), teams from the most exciting games, then the most
+    # popular teams that played.
     beat_n = BUCKET_SIZES["BEAT"]
     beat_teams = []
-    for t in played + sorted(W.teams, key=lambda t: W.teams[t]["popularity"], reverse=True):
+    for t in [x for t_ in ctx.get("trades", []) for x in t_["teams"]] + played + sorted(W.teams, key=lambda t: W.teams[t]["popularity"], reverse=True):
         if t not in beat_teams:
             beat_teams.append(t)
     for tid in beat_teams:
@@ -1760,7 +1845,7 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
             top_inj = team_starter_injuries[0]
             plan["BEAT"].append(_assignment("BEAT_INJURY", account, {"type": "team", "id": tid, "label": f"{W.team_label(tid)}: {top_inj['player_name']} Injury"},
                                             W.beat_injury_facts(tid, top_inj), filed_team=tid))
-        elif any(m["notable"] for m in W.team_moves(tid)):
+        elif any(m["notable"] for m in W.team_moves(tid)) or W.team_trades(tid):
             plan["BEAT"].append(_assignment("BEAT_MOVE", account, {"type": "team", "id": tid, "label": f"{W.team_label(tid)}: roster moves"},
                                             W.beat_move_facts(tid), filed_team=tid))
         else:
@@ -1863,6 +1948,16 @@ def plan_social_week(ctx: dict, use_expected_articles: bool = False) -> dict:
                                                 {"type": "player", "id": m["player_id"], "team_id": m["team_id"],
                                                  "label": f"{W.team_label(m['team_id'])}: {m['player_name']} {m['type'].lower().replace('_', '-')}"},
                                                 W.move_reaction_facts(m), filed_team=m["team_id"]))
+
+    # 7d. Trade reactions: a die-hard of each team on each trade insiders broke.
+    for t in ctx.get("trades", [])[:TRADE_NEWS_MAX]:
+        for tid in t["teams"]:
+            account = acc.fan(tid)
+            if account:
+                plan["REACTION"].append(_assignment("TRADE_REACTION", account,
+                                                    {"type": "trade", "id": t["id"], "team_id": tid,
+                                                     "label": f"{W.team_label(tid)}: trade reaction"},
+                                                    W.trade_reaction_facts(t, tid), filed_team=tid))
 
     # 8. Replies: parents are chosen after the rest is written and scored. Their number flexes within
     # REPLY_RANGE to keep the week near TARGET_POSTS.
@@ -2087,7 +2182,8 @@ def plan_team_wakeup(ctx: dict, team_id: int, already_posted=(), local_articles=
             top_inj = starter_injuries[0]
             out.append(_assignment("BEAT_INJURY", b, {"type": "team", "id": team_id, "label": f"{W.team_label(team_id)}: {top_inj['player_name']} Injury"},
                                    W.beat_injury_facts(team_id, top_inj), filed_team=team_id))
-        elif idx == (1 if starter_injuries else 0) and any(m["notable"] for m in W.team_moves(team_id)):
+        elif idx == (1 if starter_injuries else 0) and (any(m["notable"] for m in W.team_moves(team_id))
+                                                        or W.team_trades(team_id)):
             out.append(_assignment("BEAT_MOVE", b, {"type": "team", "id": team_id, "label": f"{W.team_label(team_id)}: roster moves"},
                                    W.beat_move_facts(team_id), filed_team=team_id))
         else:
