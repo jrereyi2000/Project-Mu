@@ -19,6 +19,7 @@ PRICES = {
 MAX_CHARS = 280
 MAX_HASHTAGS = 2
 MONEY_PROBLEM = "dollar figure not in FACTS"
+RUMOR_PROBLEM = "rumor worded as a done deal"
 
 SOCIAL_RULES = """AGENT WIRE POSTING RULES (MANDATORY):
 - Write ONE social post, at most 280 characters. Output only the post text: no quotes around it, no label, no markdown, no links, no explanations.
@@ -52,6 +53,9 @@ KIND_INSTRUCTIONS = {
     "BEAT_MOVE": "Post a beat reporter's note on your team's roster moves in FACTS: who is in or out and what it means for the depth chart or the lineup this week. Terms and figures only as FACTS gives them; mention the cap only if it is part of the story.",
     "MOVE_REACTION": "You are a fan of this team. React to the roster move in FACTS: relief, outrage, a goodbye to a longtime favourite, or excitement about a new face. If FACTS has seasons_with_your_team, he's been with your team that many seasons. Never invent a contract figure.",
     "CAP_TAKE": "Give your take on this team's salary-cap situation in FACTS: boxed in, paying for old mistakes, or a front office that has to get creative. Cap figures only as FACTS gives them (an 'estimated' figure is approximate: say 'roughly'). Never invent a contract figure or a trade.",
+    "TRADE_NEWS": "Break the executed trade in FACTS like a news-breaking insider: who goes where and the picks, exactly as FACTS gives them (\"Breaking:\" or \"Trade:\" style fits). You may add colour no data records (how quickly it came together, who made the first call). Never add a player, a pick, a dollar figure or a team that isn't in FACTS.",
+    "TRADE_REACTION": "You are a fan of your_team in FACTS. React to this executed trade: thrilled, furious, sad to see a favourite go, or sold on the picks. If FACTS has your_gm_said, that is your GM's stated thinking: you can quote it, mock it or back it. Never invent a contract figure, a player or a pick.",
+    "TRADE_RUMOR": "Post the trade RUMOR in FACTS like an insider: two front offices have talked. It is NOT a done deal: say talks, discussions, 'sources say'. Never say a trade was made, agreed or completed, never name a player (only the position or 'a pick' FACTS gives), and no dollar figures. If FACTS says talks stalled, say they went nowhere.",
     "SHARE": "Share your own new article. Write one line that makes people want to read it, in your voice; don't summarize the whole piece and don't include a link (the card is attached).",
     "REPLY": "Reply to the post below. Start with the author's handle. React to what they actually said: agree, push back or clown them, as your persona would.",
 }
@@ -138,12 +142,15 @@ def allowed_money(facts) -> set:
     """The dollar amounts a post may use: those in its facts packet (social_desk move and cap facts)."""
     return money_values(json.dumps(facts or {}, ensure_ascii=False, default=str))
 _HASHTAG = re.compile(r"(?<!\w)#\w+")
+# A rumor post that says the deal happened (TRADE_RUMOR's guard).
+_DONE = re.compile(r"\b(?:traded|acquired|agreed to|finali[sz]ed|completed|shipped|(?<!not a )done deal)\b", re.I)
 
 
-def clean_post(text: str, fantasy_active: bool = True, allowed=None) -> dict:
+def clean_post(text: str, fantasy_active: bool = True, allowed=None, rumor: bool = False) -> dict:
     """{"text", "hashtags", "problems"} from raw model output. Problems are kept for review, not fixed silently
     beyond formatting: over-length posts are flagged so the caller can ask for a rewrite. `allowed` (allowed_money
-    of the facts packet) turns on the money guard: a dollar amount not in FACTS is a problem."""
+    of the facts packet) turns on the money guard: a dollar amount not in FACTS is a problem. `rumor` (a TRADE_RUMOR
+    post) turns on the rumor guard: wording that says the trade happened is a problem."""
     problems = []
     t = (text or "").strip()
     t = re.sub(r"^(?:tweet|post|reply)\s*:\s*", "", t, flags=re.I)
@@ -176,6 +183,10 @@ def clean_post(text: str, fantasy_active: bool = True, allowed=None) -> dict:
                           if _money_value(m.group(1), m.group(2)) not in allowed)
         if invented:
             problems.append(f"{MONEY_PROBLEM}: {', '.join(invented)}")
+    if rumor:
+        done = _DONE.search(t)
+        if done:
+            problems.append(f"{RUMOR_PROBLEM}: {done.group(0)}")
     return {"text": t, "hashtags": [x[1:] for x in tags], "problems": problems}
 
 
@@ -192,9 +203,9 @@ def cost_usd(model: str, usage: dict) -> float:
 
 
 def write_post(client, model: str, system: str, prompt: str, temperature: float = 0.9, fantasy_active: bool = True,
-               allowed=None) -> dict:
-    """One Gemini call (no tools). If the post runs over 280 characters or names a dollar figure that isn't in its
-    facts (`allowed`, the money guard), asks once for a rewrite.
+               allowed=None, rumor: bool = False) -> dict:
+    """One Gemini call (no tools). If the post runs over 280 characters, names a dollar figure that isn't in its
+    facts (`allowed`, the money guard) or words a rumor as a done deal (`rumor`), asks once for a rewrite.
     Returns {"raw", "text", "hashtags", "problems", "usage", "cost_usd", "seconds", "calls"}."""
     from google.genai import types
 
@@ -209,11 +220,12 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
         return resp.text or ""
 
     raw = call(prompt)
-    post = clean_post(raw, fantasy_active=fantasy_active, allowed=allowed)
+    post = clean_post(raw, fantasy_active=fantasy_active, allowed=allowed, rumor=rumor)
     calls = 1
     too_long = any("over 280" in p for p in post["problems"])
     money = [p for p in post["problems"] if p.startswith(MONEY_PROBLEM)]
-    if too_long or money:
+    done = [p for p in post["problems"] if p.startswith(RUMOR_PROBLEM)]
+    if too_long or money or done:
         turn = lambda role, text: types.Content(role=role, parts=[types.Part(text=text)])
         asks = []
         if too_long:
@@ -221,11 +233,13 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
         if money:
             asks.append(f"It names a dollar figure that isn't in FACTS ({money[0].split(': ', 1)[1]}). Use only the "
                         "figures in FACTS, or none.")
+        if done:
+            asks.append("It says the trade happened, but this is a rumor: only talks. Word it as talks, not a deal.")
         raw2 = call([turn("user", prompt), turn("model", raw),
                      turn("user", " ".join(asks) + " Same voice. Output only the post.")])
         calls = 2
-        post2 = clean_post(raw2, fantasy_active=fantasy_active, allowed=allowed)
-        post2["problems"] = [f"rewritten once for {' and '.join(x for x, on in (('length', too_long), ('money', money)) if on)}"] + post2["problems"]
+        post2 = clean_post(raw2, fantasy_active=fantasy_active, allowed=allowed, rumor=rumor)
+        post2["problems"] = [f"rewritten once for {' and '.join(x for x, on in (('length', too_long), ('money', money), ('rumor wording', done)) if on)}"] + post2["problems"]
         raw, post = raw2, post2
     return {"raw": raw, **post, "usage": usage_total, "cost_usd": cost_usd(model, usage_total),
             "seconds": round(time.time() - start, 2), "calls": calls}

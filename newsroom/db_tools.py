@@ -2924,6 +2924,18 @@ def fetch_rumors(cur, season: int, ctx=None) -> list:
     return out
 
 
+def new_week_trades(cur, season: int, week: int, team_abbr: str = None) -> tuple:
+    """(executed trades, rumors) new for the Week `week` edition: last week's executed trades and the rumors from
+    last week's proposals (roster_moves.new_trades / rumor_visible), optionally only those of one team."""
+    ctx = (season, week, True)
+    trades = rm.new_trades(fetch_trades(cur, season, ctx=ctx), week)
+    rumors = [r for r in fetch_rumors(cur, season, ctx=ctx) if r["week"] == week - 1]
+    if team_abbr:
+        trades = [t for t in trades if team_abbr in (t["team_a"], t["team_b"])]
+        rumors = [r for r in rumors if team_abbr in r["teams"]]
+    return trades, rumors
+
+
 @tool
 def get_trade_rumors(team_identifier: str = "", season: int = 0) -> str:
     """Fetch this season's trade rumors: real talks between two front offices that did not become a trade, through the Week 8 trade deadline. Each gives the two teams, who made the call, the kinds of assets (positions or draft picks, never names or figures) and whether talks stalled. A rumor is never a done deal: report it only as talks. Optional team filter. Call it only when trade talk bears on your story; executed trades are in get_league_transactions."""

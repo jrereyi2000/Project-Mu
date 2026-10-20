@@ -230,3 +230,98 @@ class TradeGradesTests(unittest.TestCase):
         self.assertNotIn("TRADE_GRADES", {by_slot[k]["article_type_id"] for k in ("Slot 3", "Slot 4")})
         self.assertEqual(len(slate), len(self._slate(None)))          # same slate size, one slot swapped
         self.assertNotIn("TRADE_GRADES", [s["article_type_id"] for s in self._slate(None)])
+
+
+def wire_league(trades=(), rumors=(), moves=()):
+    from tests.test_social_desk import moves_league
+    ctx = moves_league(list(moves))
+    ctx["trades"], ctx["rumors"] = list(trades), list(rumors)
+    return ctx
+
+
+def wire_trade(tid, a, b):
+    line = f"Week 8 · TRADE (executed) · Team{a} acquired WR X ($12.5M cap hit this season) from the Team{b}"
+    return {"id": tid, "week": 8, "teams": [a, b], "line": line, "money": ["$12.5M"], "players": ["X"],
+            "gm_said": {a: "We win now.", b: None}}
+
+
+def wire_rumor(rid, a, b):
+    return {"id": rid, "week": 8, "teams": [a, b], "outcome": "stalled",
+            "line": f"Week 8 · RUMOR, not a done deal · the Team{a} and the Team{b} discussed a trade · talks stalled, no deal"}
+
+
+class AgentWireTradeTests(unittest.TestCase):
+    def kinds(self, plan):
+        from tests.test_social_desk import by_kind
+        return by_kind(plan)
+
+    def test_trade_news_reactions_and_beat(self):
+        from newsroom.social_desk import TARGET_POSTS, plan_social_week
+        plan = plan_social_week(wire_league(trades=[wire_trade(1, 3, 4)]))
+        k = self.kinds(plan)
+        self.assertEqual(len(k["TRADE_NEWS"]), 1)
+        self.assertIn(k["TRADE_NEWS"][0]["archetype"], ("SCHEFTER_TWEET", "RAPOPORT"))
+        self.assertIn("$12.5M", k["TRADE_NEWS"][0]["facts"]["trade"])
+        self.assertEqual(sorted((a["archetype"], a["team_id"]) for a in k["TRADE_REACTION"]),
+                         [("DIE_HARD_FAN", 3), ("DIE_HARD_FAN", 4)])
+        mine = next(a for a in k["TRADE_REACTION"] if a["team_id"] == 3)
+        self.assertEqual(mine["facts"]["your_gm_said"], "We win now.")
+        self.assertNotIn("your_gm_said", next(a for a in k["TRADE_REACTION"] if a["team_id"] == 4)["facts"])
+        beat = {a["team_id"]: a for a in plan["assignments"] if a["kind"] == "BEAT_MOVE"}
+        self.assertEqual(set(beat), {3, 4})
+        self.assertIn("TRADE (executed)", beat[3]["facts"]["trades_this_week"][0])
+        self.assertEqual(sum(plan["counts"].values()), TARGET_POSTS)
+
+    def test_rumors_capped_never_worded_as_done(self):
+        from newsroom.social_desk import TRADE_RUMOR_MAX, plan_social_week
+        plan = plan_social_week(wire_league(rumors=[wire_rumor(i, i, i + 10) for i in range(1, 5)]))
+        rumors = self.kinds(plan)["TRADE_RUMOR"]
+        self.assertEqual(len(rumors), TRADE_RUMOR_MAX)
+        for a in rumors:
+            self.assertIn(a["archetype"], ("SCHEFTER_TWEET", "RAPOPORT"))
+            self.assertIn("RUMOR, not a done deal", a["facts"]["rumor"])
+            self.assertIn("no trade happened", a["facts"]["grounding"])
+        self.assertFalse(self.kinds(plan)["TRADE_NEWS"])
+        self.assertFalse(self.kinds(plan)["TRADE_REACTION"])          # nobody reacts to a rumor as a trade
+
+    def test_no_trades_no_trade_posts(self):
+        from newsroom.social_desk import plan_social_week
+        k = self.kinds(plan_social_week(wire_league()))
+        for kind in ("TRADE_NEWS", "TRADE_REACTION", "TRADE_RUMOR"):
+            self.assertFalse(k[kind], kind)
+
+    def test_trades_come_before_moves_for_the_insiders(self):
+        from newsroom.social_desk import plan_social_week
+        from tests.test_social_desk import move
+        plan = plan_social_week(wire_league(trades=[wire_trade(i, i, i + 10) for i in range(1, 4)],
+                                            rumors=[wire_rumor(9, 5, 6)], moves=[move(i, 20 + i) for i in range(1, 4)]))
+        k = self.kinds(plan)
+        self.assertEqual((len(k["TRADE_NEWS"]), len(k["TRADE_RUMOR"])), (3, 1))
+        moves_bucket = [a["kind"] for a in plan["assignments"] if a["kind"] in ("TRADE_NEWS", "TRADE_RUMOR", "MOVE_NEWS")]
+        self.assertEqual(moves_bucket[:4], ["TRADE_NEWS"] * 3 + ["TRADE_RUMOR"])
+
+    def test_team_wakeup_beat_move_for_a_trade(self):
+        from newsroom.social_desk import plan_team_wakeup
+        plan = plan_team_wakeup(wire_league(trades=[wire_trade(1, 16, 4)]), 16)
+        self.assertIn("BEAT_MOVE", [a["kind"] for a in plan["assignments"]])
+
+
+class RumorGuardTests(unittest.TestCase):
+    def test_rumor_guard(self):
+        from newsroom.social_writer import KIND_INSTRUCTIONS, RUMOR_PROBLEM, allowed_money, clean_post
+        allowed = allowed_money({"rumor": "Week 8 · RUMOR, not a done deal · ..."})
+        ok = clean_post("Sources: Bills and Dolphins have discussed a TE deal. Not a done deal.", allowed=allowed, rumor=True)
+        self.assertEqual(ok["problems"], [])
+        for bad in ("Bills have acquired a TE from Miami", "Done deal: TE to Buffalo", "The Bills traded for a TE",
+                    "Bills and Dolphins agreed to terms"):
+            problems = clean_post(bad, allowed=allowed, rumor=True)["problems"]
+            self.assertTrue(any(p.startswith(RUMOR_PROBLEM) for p in problems), bad)
+        self.assertTrue(clean_post("TE talks, $10M ask", allowed=allowed, rumor=True)["problems"])   # no figures
+        self.assertEqual(clean_post("Bills acquired a TE", allowed=allowed)["problems"], [])        # guard off
+        for kind in ("TRADE_NEWS", "TRADE_REACTION", "TRADE_RUMOR"):
+            self.assertIn("FACTS", KIND_INSTRUCTIONS[kind])
+
+    def test_rumor_problem_blocks_publishing(self):
+        from newsroom.social_publish import publishable
+        from newsroom.social_writer import RUMOR_PROBLEM
+        self.assertFalse(publishable({"text": "x", "problems": [f"{RUMOR_PROBLEM}: acquired"]}))

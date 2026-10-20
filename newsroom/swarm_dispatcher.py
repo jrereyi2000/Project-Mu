@@ -85,6 +85,7 @@ from newsroom.db_tools import (
     fetch_moves,
     fetch_rumors,
     fetch_trades,
+    new_week_trades,
     _team_names,
 )
 from newsroom.fantasy_tools import FANTASY_TOOLS
@@ -429,17 +430,6 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
 
     return brief
 
-
-def new_week_trades(cur, season: int, week: int, team_abbr: str = None) -> tuple:
-    """(executed trades, rumors) new for the Week `week` edition: last week's executed trades and the rumors from
-    last week's proposals (roster_moves.new_trades / rumor_visible), optionally only those of one team."""
-    ctx = (season, week, True)
-    trades = new_trades(fetch_trades(cur, season, ctx=ctx), week)
-    rumors = [r for r in fetch_rumors(cur, season, ctx=ctx) if r["week"] == week - 1]
-    if team_abbr:
-        trades = [t for t in trades if team_abbr in (t["team_a"], t["team_b"])]
-        rumors = [r for r in rumors if team_abbr in r["teams"]]
-    return trades, rumors
 
 # ==============================================================================
 # NFL EDITORIAL MATRIX CONFIGURATION (18-Week Regular Season & 5-Week Postseason)
