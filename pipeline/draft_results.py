@@ -382,8 +382,15 @@ def resolve_and_load_picks(
                         ),
                     )
 
+            # 3. Team management step 4: check the Draft Room's Round 1 picks against the recap (MATCH / MISMATCH
+            # on scout_draft_picks only; the recap stays the truth for actual_*), and mark the class DRAFTED / UDFA
+            from engines.draft_room import validate as validate_draft_room
+            room_report = validate_draft_room(cursor, target_season)
+
             if opened_conn and hasattr(opened_conn, "commit"):
                 opened_conn.commit()
+        else:
+            room_report = None
 
         return {
             "status": "dry_run" if dry_run else "success",
@@ -392,6 +399,7 @@ def resolve_and_load_picks(
             "matched_prospects": matched_count,
             "warnings": warnings,
             "selections": resolved_selections,
+            "draft_room": room_report,
         }
     finally:
         if should_close and opened_conn:

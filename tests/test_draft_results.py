@@ -36,6 +36,9 @@ class FakeCursor:
     def fetchall(self):
         return self.results.pop(0) if self.results else []
 
+    def fetchone(self):
+        return (False,)                    # to_regclass: the scouting migration (Draft Room) isn't applied
+
 
 def sample_32_picks():
     """Generate 32 distinct picks for testing."""
