@@ -1,7 +1,7 @@
 """Read-only verification of the newsroom changes against the live database. No Gemini calls, no writes.
 
-Run from the project root:  python tools/verify_newsroom.py
-Writes a summary to stdout and full detail to verify_output/.
+Run from the project root:  python tools/verify_newsroom.py [--only TEXT]
+Writes a summary to stdout and full detail to verify_output/. --only runs just the checks whose name contains TEXT.
 """
 import io
 import json
@@ -19,8 +19,13 @@ os.makedirs(OUT, exist_ok=True)
 results = []  # (status, name, detail)
 
 
+ONLY = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
+
+
 def check(name):
     def wrap(fn):
+        if ONLY and ONLY.lower() not in name.lower():
+            return fn
         try:
             detail = fn()
             results.append(("PASS", name, detail or ""))
@@ -359,6 +364,45 @@ def _():
         assert cur.fetchone()[0] == 0, "rollback failed: test rows remain"
     save("61_memory_write_path.txt", detail.get("block", ""))
     return "parsed/stored 1 prediction, 4 takes, 1 summary; cutoff held; block graded the pick; all rolled back"
+
+
+@check("roster moves: contract tools return JSON for a team, a re-signed player and the league")
+def _():
+    from newsroom import roster_moves as rm
+    with psycopg.connect(CONN) as conn, conn.cursor() as cur:
+        cur.execute("""SELECT p.id FROM transactions t JOIN players p ON p.id = t.player_id
+                       WHERE t.season = %s AND t.type = 'RE_SIGNED' AND t.week = 1 ORDER BY t.contract_value DESC LIMIT 1;""",
+                    (SEASON,))
+        r = cur.fetchone()
+    out = {}
+    with article_run_context(SEASON, PUB_WEEK):
+        out["cap_IND"] = json.loads(tool(db_tools.get_team_cap_sheet)("IND"))
+        out["cap_league"] = json.loads(tool(db_tools.get_team_cap_sheet)(""))
+        out["txns_league"] = json.loads(tool(db_tools.get_league_transactions)(limit=200))
+        if r:
+            out["contract_re_signed"] = json.loads(tool(db_tools.get_player_contract)(str(r[0])))
+        with psycopg.connect(CONN) as conn, conn.cursor() as cur:
+            rows = rm.annotate(db_tools.fetch_moves(cur, SEASON))
+    reasons = {}
+    for m in rows:
+        for x in m["notable_reasons"] or (["elite (OVR only)"] if m["notable"] else []):
+            reasons[x] = reasons.get(x, 0) + 1
+    save("70_contract_tools.json", out)
+    notable = sum(m["notable"] for m in rows)
+    return (f"{len(rows)} visible moves for a Week {PUB_WEEK} article; notable {notable} (aim 15-35, JR tunes "
+            f"roster_moves thresholds); by reason {reasons}")
+
+
+@check("roster moves: week cutoff hides later rows")
+def _():
+    seen = {}
+    for wk in (3, 4):
+        with article_run_context(SEASON, wk):
+            moves = json.loads(tool(db_tools.get_league_transactions)(limit=200))["moves"]
+        seen[wk] = sorted({int(m.split(" · ")[0].split()[1]) for m in moves if m.startswith("Week ")})
+    assert all(w < 3 for w in seen[3]), f"Week 3 article sees weeks {seen[3]}"
+    assert 4 in seen[4], f"Week 4 article misses Week 4 moves: {seen[4]}"
+    return f"weeks seen: {seen}"
 
 
 lines = [f"{s:5}  {n}\n       {d}" for s, n, d in results]

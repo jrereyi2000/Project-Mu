@@ -15,7 +15,8 @@ from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_s
                                    player_lines, stat_group, STATS as SPLIT_STATS)
 import json
 
-from newsroom.run_context import context_season, cutoff_week, is_visible_week
+from newsroom.run_context import context_season, context_week, cutoff_week, is_offseason_event_visible, is_visible_week
+from newsroom import roster_moves as rm
 
 db = DatabaseHandler()
 
@@ -2475,3 +2476,358 @@ def get_record_book(category: str = None, team_identifier: str = None, season: i
 
 
 
+
+
+
+# ================================================================================================================
+# Roster moves, contracts and the cap (docs/team_management/05_NEWSROOM_INTEGRATION_PLAN.md §2.4). Each tool is a
+# fetch_*(cur, ...) plus the pure formatters in newsroom/roster_moves.py. The contract and cap tables have no
+# per-week history, so like rosters they show the current books; transactions follow the week cutoff (§2.2).
+# ================================================================================================================
+
+ACTING_TEAM = {"RELEASED": "from"}       # every other type acts as its to_team (signing, re-sign, restructure, trade)
+
+
+def _resolve_player_id(cur, identifier: str):
+    ident = str(identifier).strip()
+    if ident.isdigit():
+        return int(ident)
+    cur.execute("""
+        SELECT id FROM players WHERE player_name ILIKE %s OR full_name ILIKE %s
+        ORDER BY LENGTH(player_name) ASC LIMIT 1;
+    """, (f"%{ident}%", f"%{ident}%"))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _txn_context():
+    """(article season, article week, offseason signings visible) for txn_visible."""
+    return context_season(), context_week(), is_offseason_event_visible("signings")
+
+
+def fetch_depth_ranks(cur, season: int, on_roster_week) -> tuple:
+    """({player_id: rank among on-roster players at his position on his team}, {player_id: rank counting released
+    players on their old team}). Rank 1 = best OVR."""
+    cur.execute("""
+        SELECT player_id, team_id, position, overall_rating, released_week
+        FROM player_seasons WHERE season = %s AND team_id IS NOT NULL;
+    """, (season,))
+    rows = cur.fetchall()
+    def ranks(keep):
+        groups = {}
+        for pid, tid, pos, ovr, rel in rows:
+            if keep(rel):
+                groups.setdefault((tid, pos), []).append((-(ovr or 0), pid))
+        out = {}
+        for members in groups.values():
+            for i, (_, pid) in enumerate(sorted(members), 1):
+                out[pid] = i
+        return out
+    return ranks(lambda rel: rm.on_roster(rel, on_roster_week)), ranks(lambda rel: True)
+
+
+def fetch_moves(cur, season: int, team_id=None, visible_only: bool = True) -> list:
+    """This season's transactions as dicts for roster_moves (newest first), with the facts notability and move
+    lines need, filtered to what the current article may see."""
+    cur.execute("""
+        SELECT t.id, t.season, t.week, c.week, t.type, t.player_id, t.player_name, p.full_name, t.position,
+               t.from_team_id, t.to_team_id, ft.name, tt.name, t.contract_years, t.contract_value, t.flags,
+               t.raw_text, ps.popularity_index, ps.overall_rating, ps.team_id, ps.released_week
+        FROM transactions t
+        LEFT JOIN captures c ON c.id = t.capture_id
+        LEFT JOIN players p ON p.id = t.player_id
+        LEFT JOIN player_seasons ps ON ps.player_id = t.player_id AND ps.season = t.season
+        LEFT JOIN teams ft ON ft.id = t.from_team_id
+        LEFT JOIN teams tt ON tt.id = t.to_team_id
+        WHERE t.season = %s AND (%s::int IS NULL OR t.from_team_id = %s OR t.to_team_id = %s)
+        ORDER BY t.week DESC NULLS FIRST, t.id DESC;
+    """, (season, team_id, team_id, team_id))
+    keys = ("id", "season", "week", "capture_week", "type", "player_id", "player_name", "full_name", "position",
+            "from_team_id", "to_team_id", "from_team", "to_team", "contract_years", "contract_value", "flags",
+            "raw_text", "popularity", "ovr", "current_team_id", "released_week")
+    rows = [dict(zip(keys, r)) for r in cur.fetchall()]
+    if visible_only:
+        rows = rm.visible_rows(rows, *_txn_context())
+    if not rows:
+        return rows
+
+    pids = [r["player_id"] for r in rows if r["player_id"]]
+    cur.execute("""
+        SELECT DISTINCT ON (player_id) player_id, cut_penalty FROM player_contracts
+        WHERE season = %s AND status = 'RELEASED' AND player_id = ANY(%s) ORDER BY player_id, id DESC;
+    """, (season, pids))
+    dead = dict(cur.fetchall())
+    cur.execute("""
+        SELECT extended_transaction_id, season + years_remaining FROM player_contracts
+        WHERE extended_transaction_id = ANY(%s) AND status = 'ACTIVE';
+    """, ([r["id"] for r in rows],))
+    starts = dict(cur.fetchall())
+    current, with_released = fetch_depth_ranks(cur, season, rm.roster_week(cutoff_week(season)))
+
+    signed_after = {}
+    for r in sorted(rows, key=lambda r: (r["week"] if r["week"] is not None else 99, r["id"])):
+        if r["type"] == "SIGNED" and r["player_id"]:
+            signed_after.setdefault(r["player_id"], []).append(r)
+    for r in rows:
+        r["team"] = r["from_team"] if ACTING_TEAM.get(r["type"]) == "from" else (r["to_team"] or r["from_team"])
+        r["from_team"] = r["from_team"] if r["type"] in ("SIGNED", "TRADED") else None
+        r["practice_squad"] = "practice_squad" in (r["flags"] or "")
+        pid = r["player_id"]
+        if r["type"] == "RELEASED":
+            r["dead_money"] = dead.get(pid)
+            rank = with_released.get(pid)
+            later = [s for s in signed_after.get(pid, [])
+                     if (s["week"] if s["week"] is not None else 99) >= (r["week"] if r["week"] is not None else 99)
+                     and s["id"] > r["id"]]
+            if later:
+                r["later_team"], r["later_week"] = later[0]["to_team"], later[0]["week"]
+        else:
+            rank = current.get(pid) if r["current_team_id"] == r["to_team_id"] else None
+            if r["type"] == "SIGNED" and rank:
+                r["depth_slot"] = rank
+        r["is_starter"] = rm.is_starter_rank(r["position"], rank)
+        if r["type"] in ("RE_SIGNED", "EXTENDED") and r["id"] in starts:
+            r["new_deal_start"] = starts[r["id"]]
+    return rows
+
+
+def fetch_cap_rows(cur, season: int) -> list:
+    """Every team's team_cap_seasons row for the season with its basis label."""
+    cur.execute("""
+        SELECT t.id, t.name, t.abbreviation, c.cap, c.adjusted_cap, c.cap_space, c.salaries, c.cap_penalty,
+               c.total_spend, c.next_rookie_reserve, c.scanned_at, c.derived_at, cap.week,
+               (SELECT COUNT(*) FROM transactions x
+                 WHERE x.season = c.season AND (x.from_team_id = t.id OR x.to_team_id = t.id)
+                   AND c.scanned_at IS NOT NULL AND x.created_at > c.scanned_at)
+        FROM team_cap_seasons c JOIN teams t ON t.id = c.team_id
+        LEFT JOIN captures cap ON cap.id = c.capture_id
+        WHERE c.season = %s ORDER BY c.cap_space DESC NULLS LAST;
+    """, (season,))
+    keys = ("team_id", "team", "abbreviation", "cap", "adjusted_cap", "cap_space", "salaries", "cap_penalty",
+            "total_spend", "next_rookie_reserve", "scanned_at", "derived_at", "capture_week", "moves_since")
+    out = []
+    for i, r in enumerate(cur.fetchall(), 1):
+        row = dict(zip(keys, r))
+        row["cap_space_rank"] = i
+        row["derived"] = rm.cap_is_derived(row["scanned_at"], row["derived_at"])
+        row["basis"] = rm.cap_basis(rm.scan_label(row["capture_week"], row["scanned_at"]), row["derived"],
+                                    row["moves_since"])
+        out.append(row)
+    return out
+
+
+def fetch_team_contracts(cur, season: int, team_id=None, contract_id=None) -> list:
+    """A team's ACTIVE contracts (or one contract by id) with every year's hit and projected flag."""
+    cur.execute("""
+        SELECT pc.id, pc.player_id, COALESCE(p.full_name, p.player_name), ps.position, pc.length, pc.years_remaining,
+               pc.total_value, pc.bonus, pc.cut_savings, pc.cut_penalty, pc.no_trade_clause, pc.incentive, pc.source,
+               pc.scanned_at, cap.week, pc.extension_years, pc.extension_value, pc.extended_transaction_id
+        FROM player_contracts pc
+        JOIN players p ON p.id = pc.player_id
+        LEFT JOIN player_seasons ps ON ps.player_id = pc.player_id AND ps.season = pc.season
+        LEFT JOIN captures cap ON cap.id = pc.capture_id
+        WHERE pc.season = %s AND ((%s::int IS NOT NULL AND pc.id = %s)
+                                  OR (%s::int IS NULL AND pc.team_id = %s AND pc.status = 'ACTIVE'));
+    """, (season, contract_id, contract_id, contract_id, team_id))
+    keys = ("contract_id", "player_id", "name", "position", "length", "years_remaining", "total_value", "bonus",
+            "cut_savings", "cut_penalty", "no_trade_clause", "incentive", "source", "scanned_at", "capture_week",
+            "extension_years", "extension_value", "extended_transaction_id")
+    contracts = [dict(zip(keys, r)) for r in cur.fetchall()]
+    if contracts:
+        cur.execute("SELECT contract_id, year, cap_hit, projected FROM player_contract_years WHERE contract_id = ANY(%s);",
+                    ([c["contract_id"] for c in contracts],))
+        years = {}
+        for cid, yr, hit, proj in cur.fetchall():
+            years.setdefault(cid, []).append((yr, hit, bool(proj)))
+        for c in contracts:
+            c["years"] = years.get(c["contract_id"], [])
+    return contracts
+
+
+def contract_summary(c, season: int) -> dict:
+    """One contract as writer facts (§2.1): scanned or signing basis, NULLs as 'not known', projected years `est.`."""
+    this_year = next(((h, p) for y, h, p in c.get("years", []) if y == season), (None, False))
+    out = {
+        "player": f"{c['name']} ({c.get('position') or '?'})",
+        "cap_hit_this_season": rm.est_text(this_year[0]) if this_year[1] else rm.money_text(this_year[0]),
+        "length": c["length"],
+        "years_remaining": c["years_remaining"],
+        "through": season + (c["years_remaining"] or 1) - 1,
+        "total_value": rm.money_text(c["total_value"]),
+        "bonus": rm.money_text(c["bonus"]),
+        "cut_savings": rm.money_text(c["cut_savings"]),
+        "cut_penalty": rm.money_text(c["cut_penalty"]),
+        "no_trade_clause": bool(c["no_trade_clause"]),
+        "incentive": "yes (details not known)" if c.get("incentive") else "none",
+        "basis": rm.contract_basis(c["source"], rm.scan_label(c.get("capture_week"), c.get("scanned_at"))),
+    }
+    yh = rm.year_hits([y for y in c.get("years", []) if y[0] > season])
+    if yh:
+        out["future_cap_hits"] = yh
+    return out
+
+
+def _extension_visible(cur, txn_id) -> bool:
+    if not txn_id:
+        return False
+    cur.execute("""
+        SELECT t.season, t.week, c.week FROM transactions t LEFT JOIN captures c ON c.id = t.capture_id
+        WHERE t.id = %s;
+    """, (txn_id,))
+    r = cur.fetchone()
+    return bool(r) and rm.txn_visible(r[0], r[1], r[2], *_txn_context())
+
+
+@tool
+def get_team_cap_sheet(team_identifier: str = "", season: int = 0, limit: int = 20) -> str:
+    """Fetch a team's salary cap sheet: cap space and its league rank, adjusted cap, salaries, dead money, total spend and next year's rookie reserve; its largest cap hits with contract terms (through year, total, bonus, cut savings, dead money if cut, no-trade clause); its contract-year players (expiring deals); committed cap by future year; and a count of its moves this season. No team = all 32 teams by cap space. Call it only when the cap or a contract genuinely bears on your story; most articles need no cap numbers. Every figure carries its basis: 'est.' and 'estimated' figures are approximate, 'not known' is never filled in."""
+    try:
+        s_val = resolve_season(season)
+        lim = max(1, min(int(limit or 20), 60))
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                caps = fetch_cap_rows(cur, s_val)
+                if not str(team_identifier or "").strip():
+                    if not caps:
+                        return json.dumps({"season": s_val, "note": "No cap data recorded for this season. Don't cite cap figures."})
+                    return json.dumps({
+                        "season": s_val,
+                        "teams_by_cap_space": [
+                            f"{c['cap_space_rank']}. {c['team']}: {rm.money_text(c['cap_space'])} in space, "
+                            f"{rm.money_text(c['total_spend'])} total spend, {rm.money_text(c['cap_penalty'])} dead money "
+                            f"({c['basis']})" for c in caps],
+                        "note": rm.MONEY_NOTE,
+                    }, indent=2)
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Team '{team_identifier}' not found."
+                cap = next((c for c in caps if c["team_id"] == team_id), None)
+                if not cap:
+                    return json.dumps({"season": s_val, "note": "No cap data recorded for this team. Don't cite cap figures."})
+                contracts = fetch_team_contracts(cur, s_val, team_id)
+                def hit(c):
+                    return next((h for y, h, p in c.get("years", []) if y == s_val), 0) or 0
+                top = sorted(contracts, key=hit, reverse=True)[:lim]
+                moves = fetch_moves(cur, s_val, team_id)
+                return json.dumps({
+                    "team": cap["team"],
+                    "season": s_val,
+                    "cap_basis": cap["basis"],
+                    "cap": rm.money_text(cap["cap"]),
+                    "adjusted_cap": rm.money_text(cap["adjusted_cap"]),
+                    "cap_space": rm.money_text(cap["cap_space"]),
+                    "cap_space_rank": f"{cap['cap_space_rank']} of {len(caps)} (1 = most space)",
+                    "salaries": rm.money_text(cap["salaries"]),
+                    "dead_money": rm.money_text(cap["cap_penalty"]),
+                    "total_spend": rm.money_text(cap["total_spend"]),
+                    "next_rookie_reserve": rm.money_text(cap["next_rookie_reserve"]),
+                    "top_contracts": [contract_summary(c, s_val) for c in top],
+                    "expiring": [f"{c['name']} ({c.get('position') or '?'}): {rm.money_text(hit(c))} this season"
+                                 for c in sorted(contracts, key=hit, reverse=True) if c["years_remaining"] == 1],
+                    "committed_by_year": rm.committed_by_year(
+                        [y for c in contracts for y in c.get("years", [])], s_val),
+                    "recent_moves": f"{len(moves)} moves this season; call get_league_transactions with this team for them.",
+                    "note": rm.MONEY_NOTE + " 'expiring' players are in a contract year.",
+                }, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@tool
+def get_player_contract(player_identifier: str, season: int = 0) -> str:
+    """Fetch a player's contract: team, length, years remaining, the year it runs through, total value, bonus, cut savings, dead money if cut, no-trade clause, incentive flag, this season's and future cap hits, any new deal he signed (re-signing or extension terms), how his contract changed this season (released, traded, replaced) and his moves this season. Accepts player name or ID. Call it only when his contract bears on the story. Figures marked 'est.' are projected; 'not known' is never filled in."""
+    try:
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                pid = _resolve_player_id(cur, player_identifier)
+                if not pid:
+                    return f"Player '{player_identifier}' not found in database."
+                cur.execute("""
+                    SELECT COALESCE(p.full_name, p.player_name), ps.position, t.name, ps.released_week
+                    FROM players p LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
+                    LEFT JOIN teams t ON t.id = ps.team_id WHERE p.id = %s;
+                """, (s_val, pid))
+                name, pos, team, released_week = cur.fetchone() or (str(pid), None, None, None)
+                moves = [r for r in fetch_moves(cur, s_val) if r["player_id"] == pid]
+                cur.execute("""
+                    SELECT pc.id, pc.status, t.name, pc.total_value, pc.source FROM player_contracts pc
+                    JOIN teams t ON t.id = pc.team_id
+                    WHERE pc.player_id = %s AND pc.season = %s ORDER BY pc.id;
+                """, (pid, s_val))
+                history = cur.fetchall()
+                result = {"player": name, "position": pos, "season": s_val}
+                if not rm.on_roster(released_week, rm.roster_week(cutoff_week(s_val))):
+                    result["status"] = rm.free_agent_label(team, released_week)
+                else:
+                    result["team"] = team or "free agent"
+                active = next((h for h in history if h[1] == "ACTIVE"), None)
+                if active:
+                    c = fetch_team_contracts(cur, s_val, contract_id=active[0])[0]
+                    ext_ok = _extension_visible(cur, c["extended_transaction_id"])
+                    if c["extended_transaction_id"] and not ext_ok:
+                        # an old week being regenerated must not see a later re-signing's projected years
+                        c["years"] = [y for y in c["years"] if not y[2]]
+                    result["contract"] = contract_summary(c, s_val)
+                    result["contract"]["team"] = active[2]
+                    if c["extension_years"] and ext_ok:
+                        start = s_val + (c["years_remaining"] or 0)
+                        result["new_deal"] = rm.extension_text(c["extension_years"], c["extension_value"], start)
+                else:
+                    result["contract"] = "No contract on file. Don't invent one."
+                labels = {"SUPERSEDED": "replaced by a newer record", "RELEASED": "ended by his release",
+                          "TRADED": "moved in a trade"}
+                changes = [f"{tname} deal worth {rm.money_text(total)} ({'from the signing' if src == 'TRANSACTION' else 'scanned'}): "
+                           f"{labels.get(status, status.lower())}"
+                           for _, status, tname, total, src in history if status != "ACTIVE"]
+                if changes:
+                    result["contract_changes_this_season"] = changes
+                result["moves_this_season"] = [rm.move_line(r, with_notable=False) for r in moves]
+                result["note"] = rm.MONEY_NOTE
+                return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@tool
+def get_league_transactions(team_identifier: str = "", week: int = 0, types: str = "", position: str = "",
+                            notable_only: bool = False, limit: int = 40, season: int = 0) -> str:
+    """Fetch the league's roster moves this season (signings, releases, re-signings, extensions, restructures), newest week first, one line each with the terms, dead money for releases, the new depth-chart slot for signings and a notable flag. Filter by team, a single week, types (comma list: SIGNED,RELEASED,RE_SIGNED,EXTENDED,RESTRUCTURED), position, or notable_only. Call it only when a move bears on your story; most articles mention none."""
+    try:
+        s_val = resolve_season(season)
+        lim = max(1, min(int(limit or 40), 200))
+        ctx_season, ctx_week, _ = _txn_context()
+        if week and ctx_season == s_val and ctx_week is not None and int(week) > ctx_week:
+            return f"Week {week} moves aren't visible yet: this article is published before Week {ctx_week}'s games."
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = None
+                if str(team_identifier or "").strip():
+                    team_id = _resolve_team_id(cur, team_identifier)
+                    if not team_id:
+                        return f"Team '{team_identifier}' not found."
+                rows = fetch_moves(cur, s_val, team_id)
+    except Exception as e:
+        return f"Error: {str(e)}"
+    if week:
+        rows = [r for r in rows if r["week"] == int(week)]
+    wanted = {t.strip().upper().replace("-", "_") for t in str(types or "").split(",") if t.strip()}
+    if wanted:
+        rows = [r for r in rows if r["type"] in wanted]
+    if position:
+        rows = [r for r in rows if (r["position"] or "").upper() == position.strip().upper()]
+    rm.annotate(rows)
+    if notable_only:
+        rows = [r for r in rows if r["notable"]]
+    rows.sort(key=lambda r: (-(r["week"] if r["week"] is not None else 99), -int(r["notable"]), -r["rank_score"]))
+    unmatched = [f"{rm.week_label(r)} · {r['type']} · {rm.display_name(r)} ({r['position'] or '?'})"
+                 for r in rows if not r["player_id"]]
+    return json.dumps({
+        "season": s_val,
+        "count": len(rows),
+        "counts": rm.counts_by_type(rows),
+        "moves": [rm.move_line(r) for r in rows if r["player_id"]][:lim],
+        "rows_with_no_player": unmatched,
+        "note": ("Moves headed Week N happened before Week N's games. Trades are reported only once completed; "
+                 "none appear here yet. " + rm.MONEY_NOTE),
+    }, indent=2)

@@ -145,6 +145,16 @@ class WriterConfigTests(unittest.TestCase):
             for o in overrides[name]:
                 self.assertIn("coaching_matchup", o["curatorial_autonomy_override"], o["override_name"])
 
+    def test_contract_tools_are_registered_and_hooked_up(self):
+        with open(os.path.join(ROOT, "newsroom", "swarm_dispatcher.py")) as f:
+            src = f.read()
+        for name in ("get_team_cap_sheet", "get_player_contract", "get_league_transactions"):
+            self.assertIn(f"            {name},", src)       # registered as a writer tool
+            self.assertGreaterEqual(src.count(f"`{name}`"), 2, name)  # named in both research blocks
+        self.assertEqual(src.count("CONTRACT FACTS RULE:"), 2)
+        self.assertEqual(src.count("most articles carry no cap numbers"), 2)
+        self.assertEqual(src.count("hedge it in prose"), 2)
+
     def test_playoff_autopsy_audits_the_coaching_staff(self):
         """Section 4 is a coaching-staff accountability audit with a concrete verdict (Agent 2)."""
         entry = self.article_types["PLAYOFF_AUTOPSY"]
