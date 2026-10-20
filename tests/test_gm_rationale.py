@@ -78,3 +78,21 @@ def test_prompt_states_the_rule_and_the_sheet():
 def test_league_names_from_books():
     b = {"players": {1: {"name": "Robbie Sellers"}}, "teams": {11: {"abbr": "CAR", "name": "Panthers", "city": "Carolina"}}}
     assert league_names(b) == {"players": {"ROBBIE SELLERS"}, "teams": {"CAR", "PANTHERS", "CAROLINA"}}
+
+
+def test_multi_word_city_of_a_deal_team_passes():
+    sheet = dict(SHEET, teams={"a": dict(SHEET["teams"]["a"], abbr="NYJ", nickname="Jets", team="New York Jets"),
+                               "b": SHEET["teams"]["b"]})
+    league = {"players": set(), "teams": {"NYJ", "JETS", "NEW YORK", "NYG", "GIANTS", "NO", "SAINTS", "NEW ORLEANS"}}
+    assert validate_rationale("New York finally gets its rusher.", sheet, league)[0]
+    assert validate_rationale("New Orleans moves on.", sheet, league)[0]
+    assert not validate_rationale("The Giants were in on him too.", sheet, league)[0]
+
+
+def test_template_pick_wording_and_rejection_flags():
+    from engines.gm_trade_engine import llm_flags
+    t = template(SHEET)
+    assert "a 2037 first-round pick" in t["rationale_b"]
+    r = write_rationale(SHEET, llm=lambda p: answer(rationale_a="He had 14 sacks."), league=LEAGUE)
+    assert llm_flags(r) == ["llm_rejected:number 14 not on the sheet"]
+    assert llm_flags(template(SHEET)) == []
