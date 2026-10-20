@@ -18,6 +18,7 @@ PRICES = {
 
 MAX_CHARS = 280
 MAX_HASHTAGS = 2
+MONEY_PROBLEM = "dollar figure not in FACTS"
 
 SOCIAL_RULES = """AGENT WIRE POSTING RULES (MANDATORY):
 - Write ONE social post, at most 280 characters. Output only the post text: no quotes around it, no label, no markdown, no links, no explanations.
@@ -47,6 +48,10 @@ KIND_INSTRUCTIONS = {
     "FANTASY_PREVIEW": "Post this week's start/sit calls for full-PPR fantasy using the projections in FACTS. Name specific players and make clear calls.",
     "MEME": "Write a meme-page post roasting the target in FACTS. Punch at teams and fan bases, never at real-world tragedies, injuries or anyone's personal life.",
     "DRAFT": "Post about the top of the draft order using FACTS. Celebrate the tank, look ahead to April.",
+    "MOVE_NEWS": "Break the roster move in FACTS like a news-breaking insider: who, what, and the terms exactly as FACTS gives them (\"Breaking:\" or \"Source:\" style fits). You may add colour no data records (a source's read on why, how quickly it came together, interest that other teams showed, unnamed and unpriced). Never add a term, a dollar figure or a team that isn't in FACTS.",
+    "BEAT_MOVE": "Post a beat reporter's note on your team's roster moves in FACTS: who is in or out and what it means for the depth chart or the lineup this week. Terms and figures only as FACTS gives them; mention the cap only if it is part of the story.",
+    "MOVE_REACTION": "You are a fan of this team. React to the roster move in FACTS: relief, outrage, a goodbye to a longtime favourite, or excitement about a new face. If FACTS has seasons_with_your_team, he's been with your team that many seasons. Never invent a contract figure.",
+    "CAP_TAKE": "Give your take on this team's salary-cap situation in FACTS: boxed in, paying for old mistakes, or a front office that has to get creative. Cap figures only as FACTS gives them (an 'estimated' figure is approximate: say 'roughly'). Never invent a contract figure or a trade.",
     "SHARE": "Share your own new article. Write one line that makes people want to read it, in your voice; don't summarize the whole piece and don't include a link (the card is attached).",
     "REPLY": "Reply to the post below. Start with the author's handle. React to what they actually said: agree, push back or clown them, as your persona would.",
 }
@@ -114,12 +119,31 @@ def build_post_prompt(assignment: dict, account: dict, persona: str, team_name: 
 
 
 _URL = re.compile(r"https?://\S+|www\.\S+")
+_MONEY = re.compile(r"\$\s?(\d[\d,]*(?:\.\d+)?)\s?(m|mil|million|k|thousand|b|billion)?\b", re.I)
+
+
+def _money_value(num: str, unit: str):
+    v = float(num.replace(",", ""))
+    unit = (unit or "").lower()
+    mult = 1_000_000 if unit.startswith("m") else 1_000 if unit.startswith(("k", "t")) else 1_000_000_000 if unit.startswith("b") else 1
+    return round(v * mult / 10_000)            # compared to the nearest $10K
+
+
+def money_values(text: str) -> set:
+    """Dollar amounts in a text ('$16.8M', '$16.8 million', '$200K') as comparable values."""
+    return {_money_value(n, u) for n, u in _MONEY.findall(text or "")}
+
+
+def allowed_money(facts) -> set:
+    """The dollar amounts a post may use: those in its facts packet (social_desk move and cap facts)."""
+    return money_values(json.dumps(facts or {}, ensure_ascii=False, default=str))
 _HASHTAG = re.compile(r"(?<!\w)#\w+")
 
 
-def clean_post(text: str, fantasy_active: bool = True) -> dict:
+def clean_post(text: str, fantasy_active: bool = True, allowed=None) -> dict:
     """{"text", "hashtags", "problems"} from raw model output. Problems are kept for review, not fixed silently
-    beyond formatting: over-length posts are flagged so the caller can ask for a rewrite."""
+    beyond formatting: over-length posts are flagged so the caller can ask for a rewrite. `allowed` (allowed_money
+    of the facts packet) turns on the money guard: a dollar amount not in FACTS is a problem."""
     problems = []
     t = (text or "").strip()
     t = re.sub(r"^(?:tweet|post|reply)\s*:\s*", "", t, flags=re.I)
@@ -147,6 +171,11 @@ def clean_post(text: str, fantasy_active: bool = True) -> dict:
         problems.append("mentions fantasy after season is over")
     if re.search(r"\bexpeditiously\b", t, re.I):
         problems.append("contained 'expeditiously'")
+    if allowed is not None:
+        invented = sorted(m.group(0).strip() for m in _MONEY.finditer(t)
+                          if _money_value(m.group(1), m.group(2)) not in allowed)
+        if invented:
+            problems.append(f"{MONEY_PROBLEM}: {', '.join(invented)}")
     return {"text": t, "hashtags": [x[1:] for x in tags], "problems": problems}
 
 
@@ -162,8 +191,10 @@ def cost_usd(model: str, usage: dict) -> float:
     return (usage["input"] * pin + (usage["output"] + usage["thinking"]) * pout) / 1_000_000
 
 
-def write_post(client, model: str, system: str, prompt: str, temperature: float = 0.9, fantasy_active: bool = True) -> dict:
-    """One Gemini call (no tools). If the post runs over 280 characters, asks once for a shorter version.
+def write_post(client, model: str, system: str, prompt: str, temperature: float = 0.9, fantasy_active: bool = True,
+               allowed=None) -> dict:
+    """One Gemini call (no tools). If the post runs over 280 characters or names a dollar figure that isn't in its
+    facts (`allowed`, the money guard), asks once for a rewrite.
     Returns {"raw", "text", "hashtags", "problems", "usage", "cost_usd", "seconds", "calls"}."""
     from google.genai import types
 
@@ -178,16 +209,23 @@ def write_post(client, model: str, system: str, prompt: str, temperature: float 
         return resp.text or ""
 
     raw = call(prompt)
-    post = clean_post(raw, fantasy_active=fantasy_active)
+    post = clean_post(raw, fantasy_active=fantasy_active, allowed=allowed)
     calls = 1
-    if any("over 280" in p for p in post["problems"]):
+    too_long = any("over 280" in p for p in post["problems"])
+    money = [p for p in post["problems"] if p.startswith(MONEY_PROBLEM)]
+    if too_long or money:
         turn = lambda role, text: types.Content(role=role, parts=[types.Part(text=text)])
+        asks = []
+        if too_long:
+            asks.append(f"That is {len(post['text'])} characters. Rewrite it in under 260 characters.")
+        if money:
+            asks.append(f"It names a dollar figure that isn't in FACTS ({money[0].split(': ', 1)[1]}). Use only the "
+                        "figures in FACTS, or none.")
         raw2 = call([turn("user", prompt), turn("model", raw),
-                     turn("user", f"That is {len(post['text'])} characters. Rewrite it in under 260 characters, "
-                                  "same voice. Output only the post.")])
+                     turn("user", " ".join(asks) + " Same voice. Output only the post.")])
         calls = 2
-        post2 = clean_post(raw2, fantasy_active=fantasy_active)
-        post2["problems"] = ["rewritten once for length"] + post2["problems"]
+        post2 = clean_post(raw2, fantasy_active=fantasy_active, allowed=allowed)
+        post2["problems"] = [f"rewritten once for {' and '.join(x for x, on in (('length', too_long), ('money', money)) if on)}"] + post2["problems"]
         raw, post = raw2, post2
     return {"raw": raw, **post, "usage": usage_total, "cost_usd": cost_usd(model, usage_total),
             "seconds": round(time.time() - start, 2), "calls": calls}
