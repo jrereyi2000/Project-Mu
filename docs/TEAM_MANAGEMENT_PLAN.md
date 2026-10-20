@@ -98,7 +98,7 @@ The mock draft's board is the top 32 by OVR, and that isn't realistic. Step 4 st
 - **Each team's grade `T = V + e_team + fit + bias`.** Every front office has its own error, scaled by **front office quality**: `σ_team = σ_base × q_team`.
   - `q_team` comes from the team's **recent draft track record**. Each Round 1–2 pick in the last 3 drafts gets a hit score: the player's real OVR and dev after 1–3 seasons compared with what's expected for that pick slot. More recent drafts weigh more.
   - Recent hits push `q` down (less noise), and recent misses push it up. `q` is clamped to about 0.7–1.4, so even the best front office stays noisy on draft day.
-  - Starting values: whatever `draft_selections` + `player_seasons` history exists, and neutral (`q = 1`) where there's none.
+  - Starting values: whatever draft history exists in `draft_prospects` (`actual_pick`, `drafted_team_id`, added by `2026_11_26_draft_selections.sql`) + `player_seasons`, and neutral (`q = 1`) where there's none.
   - After each draft, the rookie class's real Madden ratings feed back into `q` for the next year.
   - The same hit rates are writer facts, e.g. "three straight first-round misses" (step 5).
   - `fit` comes from needs and scheme, and `bias` from the GM persona (both step 3).
@@ -137,6 +137,6 @@ The mock draft's board is the top 32 by OVR, and that isn't realistic. Step 4 st
 |---|---|---|
 | 1 Contract scan | written | Built and live. Migration applied 2026-10-19; first full scan loaded 2026-10-20 (capture 21: 1,695 active 2036 contracts, 32 cap rows) |
 | 2 League transactions | written | Built and live. Migration applied 2026-10-19; first backfill loaded 2026-10-20 (capture 20: 181 transactions, Weeks 1–4); weekly scans continue from SEASON - WEEK 4 |
-| 3 GM agents | not written | not started |
+| 3 GM agents | written | not started |
 | 4 Scouting and draft | design pass needed (§2.5) | not started |
-| 5 Newsroom integration | not written | not started |
+| 5 Newsroom integration | written | not started |
