@@ -92,7 +92,7 @@ ORDER = ["PANTHERS", "SAINTS", "BUCCANEERS", "FALCONS"] + sorted(mc.TEAMS - {"PA
 class FakeConsole:
     """L2 steps through ORDER and wraps; capture_team_salary writes a folder (or fails once if asked)."""
     def __init__(self, out, fail_on=None):
-        self.i, self.out, self.fail_on, self.captured, self.to_top = 0, out, set(fail_on or ()), [], []
+        self.i, self.out, self.fail_on, self.captured = 0, out, set(fail_on or ()), []
 
     def press(self, key, **kw):
         if key == "l2":
@@ -105,8 +105,7 @@ class FakeConsole:
         self.i = 0
         return object()
 
-    def capture(self, out, index, team, to_top=True):
-        self.to_top.append((team, to_top))
+    def capture(self, out, index, team):
         folder = os.path.join(out, "contracts", f"{index:02d}_{team.lower()}")
         os.makedirs(folder, exist_ok=True)
         open(os.path.join(folder, "salary_000.png"), "w").close()
@@ -149,9 +148,6 @@ class RunContractsTest(unittest.TestCase):
             self.assertEqual(len(done), 32)
             targets = open(os.path.join(out, "contracts", "targets.txt")).read().split()
             self.assertEqual(len(targets), 32)
-            # only the team the screen opened on is scrolled to the top; L2 opens the next at the top (C5)
-            self.assertEqual(c.to_top[0], ("PANTHERS", True))
-            self.assertTrue(all(not t for _, t in c.to_top[1:]))
 
     def test_subset_stops_when_targets_done(self):
         with tempfile.TemporaryDirectory() as out:
@@ -201,7 +197,6 @@ class RunContractsTest(unittest.TestCase):
             c = FakeConsole(out, fail_on={"SAINTS"})
             run(c, out, ["SAINTS"])
             self.assertEqual(c.captured, ["SAINTS"])
-            self.assertEqual(c.to_top, [("SAINTS", False), ("SAINTS", True)])     # the retry scrolls up first
             self.assertEqual(os.listdir(os.path.join(out, "contracts", "01_saints")), ["salary_000.png"])
 
     def test_wrap_before_done_raises(self):
@@ -302,3 +297,37 @@ class WideListPairCheckTest(unittest.TestCase):
         self.assertEqual(pages, 1)
         # first pair failed: one settle for the re-shoot, plus one after the page's Down presses
         self.assertGreaterEqual(settle.call_count, 2)
+
+
+class ShortListTest(unittest.TestCase):
+    """2026-10-19 full run: 23 teams opened at the bottom of their list after L2, so Down did nothing and
+    the capture stopped after 1-2 pages, marking them done. A short list is now a failure."""
+    def run_capture(self, pages):
+        with tempfile.TemporaryDirectory() as out, mock.patch.object(mc, "salary_to_top") as top, \
+                mock.patch.object(mc, "capture_wide_list", return_value=pages):
+            if pages < mc.SALARY_MIN_PAGES:
+                with self.assertRaises(mc.Abort):
+                    mc.capture_team_salary(out, 2, "PATRIOTS")
+            else:
+                self.assertEqual(mc.capture_team_salary(out, 2, "PATRIOTS"), pages)
+            top.assert_called_once()                     # every team is scrolled to the top first
+
+    def test_short_list_raises(self):
+        self.run_capture(1)
+
+    def test_full_list(self):
+        self.run_capture(6)
+
+    def test_short_list_retried_then_stops(self):
+        with tempfile.TemporaryDirectory() as out:
+            c = FakeConsole(out)
+            calls = []
+
+            def short(out_, index, team):
+                calls.append(team)
+                raise mc.Abort(f"{team} Team Salary ended after 1 page(s)")
+            c.capture = short
+            with self.assertRaises(mc.Abort):
+                run(c, out, ["SAINTS"])
+            self.assertEqual(calls, ["SAINTS", "SAINTS"])           # one retry, then the run stops
+            self.assertEqual(mc.read_done(os.path.join(out, "contracts", "done.txt")), {})
