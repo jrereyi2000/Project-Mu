@@ -304,3 +304,38 @@ def test_rookie_is_not_traded_in_his_rookie_season():
     assert ge.free_player(off, STAR)
     b["players"][STAR]["yoe"] = 1                                           # a second-year player can move
     assert ge.check_legality(base_deal(), b)["tradeable"]["ok"]
+
+
+def test_team_keeps_its_x_factor_rotation_player():
+    """JR, 2026-10-20 (proposal #3): the Panthers wouldn't send their Superstar X-Factor 87 DT (a third DT on a deep
+    line) for an 80 Star edge and late picks. Same shape: AAA's 87 X-Factor DT behind two better DTs."""
+    wagner = make_player(9101, 1, "DT", 87, age=25, hit=8_390_000, end=2039)
+    wagner["dev"] = "Superstar X-Factor"
+    roseman = make_player(9102, 2, "EDGE", 80, age=23, hit=3_280_000, end=2038)
+    roseman["dev"] = "Star"
+    b = books(extra=[wagner, roseman, make_player(9103, 1, "DT", 90), make_player(9104, 1, "DT", 89)])
+    d = deal([pl(9102, 2, 1), pk(2, 2, 2, 1), pk(6, 2, 2, 1), pl(9101, 1, 2)])
+    v = ge.Valuer(b, FITS)
+    assert 9101 in b["ctx"][1]["rotation_ids"] or tv.utility(wagner, b["ctx"][1]) == tv.ROTATION_U
+    ok, da, db = ge.accepts(d, v, b)
+    assert not ok and da < ge.threshold(b["ctx"][1])
+
+
+def test_recheck_expires_a_deal_a_gm_no_longer_accepts():
+    wagner = make_player(9101, 1, "DT", 87, age=25, hit=8_390_000, end=2039)
+    wagner["dev"] = "Superstar X-Factor"
+    roseman = make_player(9102, 2, "EDGE", 80, age=23, hit=3_280_000, end=2038)
+    assets = [pl(9102, 2, 1), pk(2, 2, 2, 1), pk(6, 2, 2, 1), pl(9101, 1, 2)]
+    open_ = [{"id": 3, "status": "PROPOSED", "origin": "ENGINE", "team_a_id": 1, "team_b_id": 2,
+              "trade_window": "IN_SEASON", "expires_week": 4, "assets": assets}]
+    b = books(extra=[wagner, roseman, make_player(9103, 1, "DT", 90), make_player(9104, 1, "DT", 89)], open_=open_)
+
+    class Cur:
+        def execute(self, q, a=None):
+            pass
+    out = ge.recheck_open(Cur(), b, valuer=ge.Valuer(b, FITS))
+    assert out and out[0][0] == 3 and out[0][1].startswith("no longer accepted: AAA surplus")
+    assert ge.recheck_open(Cur(), b) == []                          # without a valuer: legality only
+    user = [dict(open_[0], origin="USER")]
+    b2 = books(extra=[wagner, roseman, make_player(9103, 1, "DT", 90), make_player(9104, 1, "DT", 89)], open_=user)
+    assert ge.recheck_open(Cur(), b2, valuer=ge.Valuer(b2, FITS)) == []   # JR's own trades aren't second-guessed

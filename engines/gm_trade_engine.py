@@ -290,7 +290,8 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     # this week's proposals already made (a re-run doesn't add more); one the re-check found illegal doesn't count
     cur.execute("""SELECT count(*) FROM gm_trade_proposals WHERE season = %s AND week = %s AND origin = 'ENGINE'
                    AND trade_window = %s AND (%s::text IS NULL OR %s = ANY(flags))
-                   AND NOT (status = 'EXPIRED' AND COALESCE(status_reason, '') LIKE 'no longer legal%%')""",
+                   AND NOT (status = 'EXPIRED' AND (COALESCE(status_reason, '') LIKE 'no longer legal%%'
+                                                    OR COALESCE(status_reason, '') LIKE 'no longer accepted%%'))""",
                 (season, week, window, None if stage is None else f"stage:{stage}",
                  None if stage is None else f"stage:{stage}"))
     b["made_this_week"] = cur.fetchone()[0]
@@ -351,14 +352,18 @@ def finish_books(b):
 def team_ctx(b, tid):
     players = [b["players"][p] for p in b["roster"].get(tid, [])]
     slots = starter_slots(players, b["out"])
-    lines = {}
+    lines, rotation_lines, rotation_ids = {}, {}, set()
     for g, n in SLOTS.items():
         lines[g] = min((p["ovr"] or 0) for p in slots[g]) if len(slots[g]) == n else None
+        depth = slots["_depth"][g]
+        rotation_lines[g] = (depth[0]["ovr"] or 0) if depth else None
+        rotation_ids |= {depth[0]["id"]} if depth else set()
     gm = b["gm"].get(tid, {})
     ts = b.get("ts", {}).get(tid, {})
     return {"team_id": tid, "direction": ts.get("direction") or "RETOOL", "needs": ts.get("needs") or [],
             "surplus": ts.get("surplus") or [], "urgent_need": ts.get("urgent_need"),
             "starter_ids": {p["id"] for g in SLOTS for p in slots[g]}, "lines": lines,
+            "rotation_ids": rotation_ids, "rotation_lines": rotation_lines,
             "position_bias": gm.get("position_bias") or {}, "youth_bias": gm.get("youth_bias", 0.0),
             "pick_affinity": gm.get("pick_affinity", 1.0), "slots": b["slots"],
             "aggressiveness": gm.get("aggressiveness", 0.5), "risk_appetite": gm.get("risk_appetite", 0.5)}
@@ -1009,7 +1014,7 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
     fits = tv.fits_from_db(cur, season)
     valuer = Valuer(b, fits)
     # re-check what's still open
-    rep["rechecked"] = recheck_open(cur, b, dry_run)
+    rep["rechecked"] = recheck_open(cur, b, dry_run, valuer=valuer)
     # 3. injury triggers
     trig = injury_triggers(b)
     rep["triggers"] = trig
@@ -1169,16 +1174,26 @@ def llm_flags(rat):
     return [f"llm_rejected:{r}"[:120] for r in rat.get("rejected") or []]
 
 
-def recheck_open(cur, b, dry_run=False, log=None):
+def recheck_open(cur, b, dry_run=False, log=None, valuer=None):
     """The weekly re-check of open (PROPOSED / APPROVED) proposals: any that fails a check now (the deadline aside)
-    is EXPIRED with the failed checks as its status_reason. Returns [(proposal_id, reason)]."""
+    is EXPIRED with the failed checks as its status_reason; with a valuer, an ENGINE proposal either GM would now
+    refuse (values, needs and the model move week to week) is EXPIRED as no longer accepted. Returns
+    [(proposal_id, reason)]."""
     out = []
     for p in list(b["open"]):
         deal = {"a": p["team_a_id"], "b": p["team_b_id"], "assets": p["assets"]}
         checks = check_legality(deal, b, None, ignore_booking={asset_key(x) for x in p["assets"]})
         checks.pop("deadline", None)
+        why = None
         if not legal(checks):
             why = "no longer legal: " + "; ".join(f"{k} {v['detail']}" for k, v in checks.items() if not v["ok"])
+        elif valuer is not None and p.get("origin", "ENGINE") == "ENGINE":
+            ok, da, db = accepts(deal, valuer, b)
+            if not ok:
+                who = [f"{abbr(b, t)} surplus ${d / 1e6:+.2f}M" for t, d in ((deal["a"], da), (deal["b"], db))
+                       if d < threshold(b["ctx"][t])]
+                why = "no longer accepted: " + ", ".join(who) + " (below the GM's threshold)"
+        if why:
             out.append((p["id"], why))
             if log:
                 log(f"  #{p['id']} {why}")
@@ -1250,7 +1265,7 @@ def main(argv=None):
             season, week = a.season or s, a.week or w
             b = read_books(cur, season, week, win or "IN_SEASON")
             print(f"re-check: {len(b['open'])} open proposals (season {season}, week {week})")
-            out = recheck_open(cur, b, a.dry_run, log=print)
+            out = recheck_open(cur, b, a.dry_run, log=print, valuer=Valuer(b, tv.fits_from_db(cur, season)))
             print(f"{len(out)} no longer legal")
             if a.dry_run:
                 conn.rollback()

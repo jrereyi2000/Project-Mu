@@ -31,9 +31,16 @@ MIN_GROUP_ROWS = 15
 OVR_PIVOT = 75
 MARKET_PREMIUM = 1.3
 STARTER_U, BACKUP_U, NEED_U = 1.0, 0.3, 0.5
+ROTATION_U = 0.65                     # the first player past a group's starter slots plays real snaps
 YOUTH_PIVOT_AGE = 28
 YOUTH_CLAMP = (0.7, 1.3)
 DEV_BONUS = {"Star": 1, "Superstar": 2, "Superstar X-Factor": 2}
+# Dev trait premium on worth (JR, 2026-10-20: "no way the Panthers trade their Superstar X-Factor 87 for an 80 Star").
+# The owning team knows its player best and feels the full premium; other teams see the trait but discount the
+# premium (DEV_VISIBILITY of it), so a team values its own Superstars above what the market offers. Hidden (a
+# rookie whose trait isn't revealed yet) and blank count as Normal.
+DEV_PREMIUM = {"Normal": 1.0, "Star": 1.1, "Superstar": 1.25, "Superstar X-Factor": 1.5}
+DEV_VISIBILITY = 0.6
 DEV_MAX_AGE = 26
 AGE_BANDS = ((0, 23), (24, 26), (27, 29), (30, 31), (32, 33), (34, 99))
 GENERIC_AGING = (1.5, 0.5, -0.3, -1.2, -2.2, -3.0)    # OVR a year by band, the prior the fit shrinks toward
@@ -224,22 +231,37 @@ def tradeable(p, injured=(), acquired=(), season=None, rookie_year=False):
 
 
 def utility(p, ctx):
-    """u_T(group): 1 + 0.5 x need share if he'd start in a slot T needs, 1.0 if he'd start, 0.3 as a backup;
-    x position_bias. ctx: {team_id, starter_ids, lines {group: weakest starter OVR or None}, needs, position_bias}."""
+    """u_T(group): 1 + 0.5 x need share if he'd start in a slot T needs, 1.0 if he'd start, 0.65 as the group's
+    rotation player (the first past the starter slots), 0.3 as a deeper backup; x position_bias. A team's own
+    Superstar or X-Factor is never valued below rotation. ctx: {team_id, starter_ids, rotation_ids, lines {group:
+    weakest starter OVR or None}, rotation_lines {group: first depth player's OVR or None}, needs, position_bias}."""
     g = p["group"]
+    ovr = p.get("ovr") or 0
     if p.get("team_id") == ctx.get("team_id"):
         starts = p["id"] in ctx.get("starter_ids", ())
+        rotates = p["id"] in ctx.get("rotation_ids", ()) or p.get("dev") in ("Superstar", "Superstar X-Factor")
     else:
         line = ctx.get("lines", {}).get(g)
-        starts = line is None or (p.get("ovr") or 0) > line
+        starts = line is None or ovr > line
+        rline = ctx.get("rotation_lines", {}).get(g)
+        rotates = rline is None or ovr > rline
     if starts:
         needs = ctx.get("needs") or []
         total = sum(n["score"] for n in needs)
         score = next((n["score"] for n in needs if n["group"] == g), 0)
         u = STARTER_U + (NEED_U * score / total if total and score else 0.0)
+    elif rotates:
+        u = ROTATION_U
     else:
         u = BACKUP_U
     return u * (ctx.get("position_bias") or {}).get(g, 1.0)
+
+
+def dev_premium(p, own):
+    """The dev trait's premium on worth: full for the owning team, DEV_VISIBILITY of it for everyone else (and the
+    neutral league value)."""
+    prem = DEV_PREMIUM.get(p.get("dev") or "Normal", 1.0)
+    return prem if own else 1 + DEV_VISIBILITY * (prem - 1)
 
 
 def youth_mult(age, youth_bias):
@@ -256,6 +278,7 @@ def player_value(p, ctx, fits, season):
     d = DISCOUNTS["RETOOL" if neutral else (ctx.get("direction") or "RETOOL")]
     u = 1.0 if neutral else utility(p, ctx)
     ym = 1.0 if neutral else youth_mult(p.get("age"), ctx.get("youth_bias"))
+    ym *= dev_premium(p, own=not neutral and p.get("team_id") == ctx.get("team_id"))
     c = p.get("contract") or {}
     end = c.get("end_season", season)
     path = ovr_path(p.get("ovr"), p.get("age"), p["group"], p.get("dev"), fits["aging"])
