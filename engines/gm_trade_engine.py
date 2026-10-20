@@ -1271,7 +1271,7 @@ def main(argv=None):
             b = read_books(cur, season, week, win or "IN_SEASON")
             print(f"re-check: {len(b['open'])} open proposals (season {season}, week {week})")
             out = recheck_open(cur, b, a.dry_run, log=print, valuer=Valuer(b, tv.fits_from_db(cur, season)))
-            print(f"{len(out)} no longer legal")
+            print(f"{len(out)} expired (no longer legal or no longer accepted)")
             if a.dry_run:
                 conn.rollback()
                 print("dry run: nothing written")
