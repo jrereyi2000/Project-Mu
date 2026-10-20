@@ -75,7 +75,7 @@ class TransactionsRunTest(unittest.TestCase):
                 load_status=lambda f: None, step_load=lambda f, replace=False, mode="weekly": calls.append(("load", mode)) or {},
                 league_state=lambda: (2036, 4), since_heading=lambda s, weekly=True: "2036 SEASON - WEEK 1",
                 step_engines=lambda s: calls.append(("engines",)), step_gm=lambda s, next_stage=False: calls.append(("gm", next_stage)),
-                step_articles=lambda s, week=None: calls.append(("articles",))):
+                step_scouting=lambda s: calls.append(("scouting",)), step_articles=lambda s, week=None: calls.append(("articles",))):
             os.makedirs(os.path.join(tmp, "tx1"))
             self.assertEqual(wc.run("tx1", mode="transactions"), 0)
         self.assertEqual([c[0] for c in calls], ["notify", "connect", "capture", "notify", "extract", "load", "notify"])
@@ -109,13 +109,14 @@ class TransactionsRunTest(unittest.TestCase):
                     step_connect=lambda lp: None, step_capture=capture, step_extract=extract,
                     load_status=lambda f: None, step_load=load, league_state=lambda: (2036, 23),
                     since_heading=lambda s, weekly=True: "2036 SEASON - WEEK 1",
-                    step_gm=lambda s, next_stage=False: calls.append(("gm", s, next_stage))):
+                    step_gm=lambda s, next_stage=False: calls.append(("gm", s, next_stage)),
+                    step_scouting=lambda s: calls.append(("scouting", s))):
                 os.makedirs(os.path.join(tmp, name))
                 code = wc.run(name, mode="transactions", gm_stage=True)
             if fail:                                       # a failed load stops before the GMs see stale books
                 self.assertEqual((code, calls), (1, [("load",)]))
             else:
-                self.assertEqual((code, calls), (0, [("load",), ("gm", 2036, True)]))
+                self.assertEqual((code, calls), (0, [("load",), ("gm", 2036, True), ("scouting", 2036)]))
 
 
 if __name__ == "__main__":

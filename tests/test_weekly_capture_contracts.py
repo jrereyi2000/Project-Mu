@@ -115,6 +115,7 @@ class RunContractsTest(unittest.TestCase):
             league_state=lambda: (2036, 4),
             step_engines=lambda season: self.calls.append(("engines",)),
             step_gm=lambda season: self.calls.append(("gm",)),
+            step_scouting=lambda season: self.calls.append(("scouting",)),
             step_articles=lambda season, week=None: self.calls.append(("articles",)),
             run_cmd=lambda *a, **k: self.calls.append(("run_cmd",)) or (0, ""),
         )

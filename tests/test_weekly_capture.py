@@ -26,6 +26,7 @@ class RunTest(unittest.TestCase):
             league_state=lambda: getattr(self, "league_state_val", (2035, 18)),
             step_engines=lambda season: self.calls.append(f"engines {season}"),
             step_gm=lambda season: self.calls.append(f"gm {season}"),   # GM trade proposals (step 3)
+            step_scouting=lambda season: self.calls.append(f"scouting {season}"),   # Step 7c (step 4)
             step_preseason_engines=lambda season: self.calls.append(f"preseason_engines {season}"),
             step_rookie_headshots=lambda season: self.calls.append(f"rookie_headshots {season}"),
             step_articles=lambda season, week=None: (self.calls.append(f"articles {week}" if week else "articles"),
@@ -80,7 +81,7 @@ class RunTest(unittest.TestCase):
     def test_full_run_in_order_and_shrunk(self):
         self.assertEqual(self.start("r1"), 0)
         self.assertEqual(self.capture_mode, "weekly")
-        self.assertEqual(self.calls, ["connect", "capture", "extract", "load", "engines 2035", "gm 2035", "articles"])
+        self.assertEqual(self.calls, ["connect", "capture", "extract", "load", "engines 2035", "gm 2035", "scouting 2035", "articles"])
         folder = os.path.join(self.tmp, "r1")
         self.assertTrue(os.path.exists(os.path.join(folder, "stats", "01_passing_000.webp")))
         self.assertFalse(os.path.exists(os.path.join(folder, "stats", "01_passing_000.png")))
@@ -147,7 +148,7 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(wc, "league_state", lambda: (2035, 19)):
             self.assertEqual(self.start("p1"), 0)
         self.assertEqual(self.capture_mode, "playoff")
-        self.assertEqual(self.calls, ["connect", "capture", "extract", "load", "engines 2035", "gm 2035", "articles"])
+        self.assertEqual(self.calls, ["connect", "capture", "extract", "load", "engines 2035", "gm 2035", "scouting 2035", "articles"])
         self.assertFalse(self.replace)
         self.assertIn("Playoff capture", self.notices[0][1])
 
@@ -223,7 +224,7 @@ class RunTest(unittest.TestCase):
         self.calls.clear()
         self.status = "loaded"
         self.assertEqual(wc.run("r3"), 0)
-        self.assertEqual(self.calls, ["engines 2035", "gm 2035", "articles"])
+        self.assertEqual(self.calls, ["engines 2035", "gm 2035", "scouting 2035", "articles"])
 
     def test_resume_of_a_missing_folder_is_refused(self):
         self.assertEqual(wc.run("nope"), 1)
@@ -297,3 +298,13 @@ class StepGmTest(unittest.TestCase):
              mock.patch("psycopg.connect", side_effect=RuntimeError("no db")):
             self.assertEqual(wc.step_gm(2036), 0)
         self.assertTrue(any("[WARN] GM trade proposals skipped" in m for m in logs))
+
+
+class StepScoutingTest(unittest.TestCase):
+    """Scouting (Step 7c) never stops the week."""
+
+    def test_failure_only_warns(self):
+        logs = []
+        with mock.patch.object(wc, "log", logs.append), mock.patch("psycopg.connect", side_effect=RuntimeError("no db")):
+            self.assertEqual(wc.step_scouting(2036), [])
+        self.assertTrue(any("[WARN] Scouting skipped" in m for m in logs))
