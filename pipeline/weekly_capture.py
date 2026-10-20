@@ -61,6 +61,8 @@ CAPTURE_DIRS = ("stats", "team_stats", "schedule", "injuries", "stop_debug", "sc
 DEBUG_DIRS = ("stop_debug", "scope_debug", "week_debug", "team_debug", "probe", "explore")
 CONNECT_TIMEOUT = 6 * 60       # madden_capture --connect: up to 2 min, twice when it has to relaunch
 CAPTURE_TIMEOUT = 75 * 60      # the weekly capture takes ~20 min
+CONTRACTS_TIMEOUT = 150 * 60   # Team Salary: ~3 min a team (scroll to top, settle, pair checks), ~100 min for 32
+CONTINUE_WINDOW = 24 * 60 * 60 # a contracts run without --resume continues an unfinished one this recent
 GAMES_TIMEOUT = 4 * 60 * 60    # --only games: ~7 min a game, 16 games
 MODES = ("weekly", "games", "playoff", "roster", "prospects", "season", "postgame", "draft-results", "team-overalls",
          "contracts", "transactions")
@@ -263,7 +265,7 @@ def step_capture(folder, log_path, mode="weekly", week_label=None, teams=None, s
     elif mode == "contracts":                  # ~40 min for 32 teams, resumes per team (contracts/done.txt)
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "contracts")) else ["--out", name]
         named_teams = ["--team-names", ",".join(teams)] if teams else []
-        args, timeout = [sys.executable, "madden_capture.py", "--only", "contracts", *where, *named_teams], CAPTURE_TIMEOUT
+        args, timeout = [sys.executable, "madden_capture.py", "--only", "contracts", *where, *named_teams], CONTRACTS_TIMEOUT
     elif mode == "transactions":
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "transactions")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "transactions", *where, *since_args], CAPTURE_TIMEOUT
@@ -275,7 +277,8 @@ def step_capture(folder, log_path, mode="weekly", week_label=None, teams=None, s
     elif mode == "season":
         where = ["--resume", name] if (os.path.isdir(os.path.join(folder, "roster")) or os.path.isdir(os.path.join(folder, "season_schedule")) or os.path.isdir(os.path.join(folder, "prospects")) or os.path.isdir(os.path.join(folder, "injuries")) or os.path.isdir(os.path.join(folder, "team_overalls")) or os.path.isdir(os.path.join(folder, "contracts"))) else ["--out", name]
         # schedule, rosters, contracts (~40 min), team overalls, injuries, prospects
-        args, timeout = [sys.executable, "madden_capture.py", "--only", "season", "--all-prospects", *where], CAPTURE_TIMEOUT * 3
+        args, timeout = ([sys.executable, "madden_capture.py", "--only", "season", "--all-prospects", *where],
+                         CAPTURE_TIMEOUT * 2 + CONTRACTS_TIMEOUT)
     elif mode in ("draft-results", "draft_results"):
         where = ["--resume", name] if os.path.isdir(os.path.join(folder, "draft_results")) else ["--out", name]
         args, timeout = [sys.executable, "madden_capture.py", "--only", "draft-results", *where], CAPTURE_TIMEOUT
@@ -432,6 +435,35 @@ def team_nicknames(abbrs):
     return [by_abbr[a] for a in want]
 
 
+def unfinished_contracts_run(targets=None, now=None):
+    """The run folder a contracts run without --resume should continue: one whose capture was cut off (no
+    .capture_done, so not a finished capture whose extract or load failed) from the last CONTINUE_WINDOW whose contracts/targets.txt is the same team set (targets: nicknames, None = all 32).
+    The one with the most finished teams wins, then the newest. None when there is nothing to continue."""
+    now = now or time.time()
+    best = None
+    for d in sorted(glob.glob(os.path.join(CAPTURES, "*", "contracts", "targets.txt"))):
+        folder = os.path.dirname(os.path.dirname(d))
+        touched = max(os.path.getmtime(p) for p in (folder, d, os.path.join(folder, "contracts", "done.txt"),
+                                                    os.path.join(folder, "weekly_run.log")) if os.path.exists(p))
+        if (folder_mode(folder) != "contracts" or now - touched > CONTINUE_WINDOW
+                or capture_done(folder, "contracts")):
+            continue
+        saved = {t.strip().upper() for t in open(d) if t.strip()}
+        if (targets is None and len(saved) != 32) or (targets is not None and saved != {t.upper() for t in targets}):
+            continue
+        try:
+            if load_status(folder) == "loaded":
+                continue
+        except Exception:
+            continue
+        done_path = os.path.join(folder, "contracts", "done.txt")
+        n_done = sum(1 for line in open(done_path) if line.strip()) if os.path.exists(done_path) else 0
+        key = (n_done, touched)
+        if best is None or key > best[0]:
+            best = (key, os.path.basename(folder))
+    return best[1] if best else None
+
+
 def contracts_phase(folder, log_path, teams=None):
     """Capture -> extract -> load of a Team Salary run in its own folder (team management step 1), each step
     skipped when already done. teams: abbreviations for a re-scan (None = all 32). Takes no lock and doesn't
@@ -563,6 +595,15 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
             lock.close()
+    if mode == "contracts" and not resume:
+        # a Contract scan started again (by hand or from #debug) continues the unfinished one instead of
+        # starting over (Oct 20: a run killed after 24 teams was restarted from team 1)
+        try:
+            resume = unfinished_contracts_run(team_nicknames(teams) if teams else None)
+        except Exception:
+            resume = None
+        if resume:
+            log(f"Continuing the unfinished contract scan in captures/{resume}")
     name = resume or datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
     folder = os.path.join(CAPTURES, name)
     if resume and not os.path.isdir(folder):

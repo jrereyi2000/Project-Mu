@@ -3,6 +3,7 @@ league_state, the teams query and every step after capture are replaced; no cons
 import os
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -68,7 +69,7 @@ class StepCaptureTest(unittest.TestCase):
         (args, timeout), = self.capture(folder, ["PANTHERS", "SAINTS"])
         self.assertEqual(args[1:], ["madden_capture.py", "--only", "contracts", "--resume", "2036-10-19_1200",
                                     "--team-names", "PANTHERS,SAINTS"])
-        self.assertEqual(timeout, wc.CAPTURE_TIMEOUT)
+        self.assertEqual(timeout, wc.CONTRACTS_TIMEOUT)
         self.assertTrue(os.path.exists(os.path.join(folder, ".capture_done")))
 
     def test_new_full_run(self):
@@ -84,7 +85,7 @@ class StepCaptureTest(unittest.TestCase):
             wc.step_capture(folder, os.path.join(folder, "log"), "season")
         args, timeout = calls[0]
         self.assertIn("--resume", args)
-        self.assertEqual(timeout, wc.CAPTURE_TIMEOUT * 3)
+        self.assertEqual(timeout, wc.CAPTURE_TIMEOUT * 2 + wc.CONTRACTS_TIMEOUT)
 
 
 class RunContractsTest(unittest.TestCase):
@@ -172,3 +173,62 @@ class CliTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContinueUnfinishedTest(unittest.TestCase):
+    """Oct 20: a contracts run killed after 24 teams was started again without --resume and began a new
+    32-team run. A run without --resume now continues the unfinished one."""
+    TEAMS32 = [f"T{i}" for i in range(32)]
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.status = {}
+        p = mock.patch.multiple(wc, CAPTURES=self.tmp, load_status=lambda f: self.status.get(os.path.basename(f)))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def make(self, name, targets, done=0, age=0):
+        cdir = os.path.join(self.tmp, name, "contracts")
+        os.makedirs(cdir)
+        with open(os.path.join(cdir, "targets.txt"), "w") as fh:
+            fh.write("".join(t + "\n" for t in targets))
+        with open(os.path.join(cdir, "done.txt"), "w") as fh:
+            fh.write("".join(f"{i + 1} {t}\n" for i, t in enumerate(targets[:done])))
+        if age:
+            t = time.time() - age
+            for p in (os.path.join(self.tmp, name), cdir, os.path.join(cdir, "targets.txt"), os.path.join(cdir, "done.txt")):
+                os.utime(p, (t, t))
+
+    def test_most_finished_run_wins(self):
+        self.make("2026-10-19_2312", self.TEAMS32, done=24, age=3600)
+        self.make("2026-10-20_0038", self.TEAMS32, done=0)
+        self.assertEqual(wc.unfinished_contracts_run(), "2026-10-19_2312")
+
+    def test_loaded_old_or_other_targets_are_skipped(self):
+        self.make("loaded", self.TEAMS32, done=32)
+        self.status["loaded"] = "loaded"
+        self.make("old", self.TEAMS32, done=10, age=2 * 24 * 3600)
+        self.make("subset", ["PANTHERS"], done=0)
+        self.make("captured", self.TEAMS32, done=32)                   # capture finished, load failed
+        open(os.path.join(self.tmp, "captured", ".capture_done"), "w").close()
+        self.assertIsNone(wc.unfinished_contracts_run())
+        self.assertEqual(wc.unfinished_contracts_run(["PANTHERS"]), "subset")
+        self.assertIsNone(wc.unfinished_contracts_run(["SAINTS"]))
+
+    def test_run_continues_it(self):
+        self.make("2026-10-19_2312", self.TEAMS32, done=24)
+        seen = []
+        with mock.patch.multiple(wc, LOCK_PATH=os.path.join(self.tmp, ".lock"), notify=lambda *a, **k: None,
+                                 step_connect=lambda log_path: None,
+                                 contracts_phase=lambda folder, log_path, teams=None: seen.append(folder) or None,
+                                 shrink=lambda folder: (0, 0)):
+            self.assertEqual(wc.run(mode="contracts"), 0)
+        self.assertEqual([os.path.basename(f) for f in seen], ["2026-10-19_2312"])
+
+    def test_contracts_timeout(self):
+        folder = tempfile.mkdtemp()
+        calls = []
+        with mock.patch.object(wc, "run_cmd", side_effect=lambda a, l, t: (calls.append(t), (0, ""))[1]):
+            wc.step_capture(folder, os.path.join(folder, "log"), "contracts")
+        self.assertEqual(calls, [wc.CONTRACTS_TIMEOUT])
+        self.assertGreaterEqual(wc.CONTRACTS_TIMEOUT, 120 * 60)
