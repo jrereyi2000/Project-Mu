@@ -1019,6 +1019,7 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
         if window == "OFFSEASON":
             flags.append(f"stage:{stage}")
         rat = rationale_for(b, pick, llm)
+        flags += llm_flags(rat)
         pid = None if dry_run else store(cur, b, pick, valuer, rat, flags)
         for x in pick["assets"]:                          # booked for the rest of this run
             if x["type"] == "PLAYER":
@@ -1089,10 +1090,16 @@ def run_draft_day(cur, season, pick, dry_run=False, llm=None, log=print):
     flags = [f"pick:{overall}"] + [f"advisory:{abbr(b, t)}" for t in (best["a"], best["b"])
                                    if b["gm"].get(t, {}).get("user_controlled")]
     rat = rationale_for(b, best, llm)
+    flags += llm_flags(rat)
     pid = None if dry_run else store(cur, b, best, valuer, rat, flags, trigger="DRAFT")
     rep["proposals"].append({"id": pid, "deal": best, "rationale": rat, "flags": flags, "steps": steps_text(b, best)})
     print_proposal(b, best, rat, cap_effects(best, b), flags, log)
     return rep
+
+
+def llm_flags(rat):
+    """Why the LLM's rationale was thrown out (flag 'llm_rejected:<reason>'), so a too-strict check shows."""
+    return [f"llm_rejected:{r}"[:120] for r in rat.get("rejected") or []]
 
 
 def rationale_for(b, deal, llm):

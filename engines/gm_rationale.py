@@ -64,10 +64,24 @@ def _gets(sheet, side):
     return [a for a in sheet["assets"] if a["to"] == me]
 
 
+ORDINALS = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth", 7: "seventh"}
+
+
 def _describe(a):
+    """'CB James Streets (76 OVR)', 'a 2038 first-round pick', 'a 2037 second-round pick (via NE)'."""
     if a["kind"] == "pick":
-        return f"the {a['name']} pick"
+        m = re.match(r"(\d{4}) R(\d) \((\w+)\)", a["name"] or "")
+        if not m:
+            return f"the {a['name']} pick"
+        year, rd, orig = m.group(1), int(m.group(2)), m.group(3)
+        via = "" if orig == a.get("from") else f" (via {orig})"
+        return f"a {year} {ORDINALS.get(rd, rd)}-round pick{via}"
     return f"{a['pos']} {a['name']} ({a['ovr']} OVR)"
+
+
+def _join(items):
+    items = list(items)
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1] if items else ""
 
 
 def template(sheet):
@@ -89,7 +103,7 @@ def template(sheet):
              }.get(sheet["trigger"], f"We came into the week needing help at {need}" if need else "This makes us better")
     ra = (f"{A['gm']}: {why_a}. {_describe(star_a) if star_a else 'This return'} fits what the {A['nickname']} "
           f"are building, and our cap goes from {A['cap_before']} to {A['cap_after']}.")
-    rb = (f"{B['gm']}: We like what {', '.join(_describe(a) for a in gb) or 'this'} brings the {B['nickname']}. "
+    rb = (f"{B['gm']}: We like what we get back: {_join(_describe(a) for a in gb) or 'this return'}. "
           f"It suits a {(B['direction'] or 'retool').lower()} plan, with our cap at {B['cap_after']} after the deal.")
     return {"headline": head, "rationale_a": ra, "rationale_b": rb, "source": "TEMPLATE"}
 
@@ -167,12 +181,16 @@ def validate_rationale(text, sheet, league=None):
         if name and name not in on_sheet_players and f" {name} " in up:
             return False, f"player {name.title()} isn't in the deal"
     mine = set()
+    full = []
     for t in sheet["teams"].values():
         mine |= {str(t.get("abbr") or "").upper(), str(t.get("nickname") or "").upper(),
                  str(t.get("team") or "").upper()}
-        mine |= set(str(t.get("team") or "").upper().split())
+        full.append(" " + str(t.get("team") or "").upper() + " ")
     for team in league.get("teams", ()):
-        if team and team not in mine and f" {team} " in up:
+        # a deal team's city ("New York" in "New York Jets") is the deal team, however many words it has
+        if not team or team in mine or any(f" {team} " in f for f in full):
+            continue
+        if f" {team} " in up:
             return False, f"team {team.title()} isn't in the deal"
     return True, None
 
