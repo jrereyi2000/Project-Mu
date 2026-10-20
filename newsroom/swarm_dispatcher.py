@@ -11,7 +11,8 @@ from db.db_handler import DatabaseHandler
 from newsroom.slot_targets import load_league_snapshot, resolve_slot_targets
 from newsroom.entity_patterns import team_mention_pattern
 from newsroom.run_context import reset_article_context, set_article_context
-from newsroom.roster_moves import brief_block, cap_line, is_starter_rank, new_this_week, team_block
+from newsroom.roster_moves import (brief_block, cap_line, is_starter_rank, new_this_week, new_trades, team_block,
+                                   trades_block)
 from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
 from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings, records_by_team
 from newsroom import agent_memory
@@ -78,8 +79,13 @@ from newsroom.db_tools import (
     get_team_cap_sheet,
     get_player_contract,
     get_league_transactions,
+    get_trade_rumors,
+    check_trade_package,
     fetch_cap_rows,
     fetch_moves,
+    fetch_rumors,
+    fetch_trades,
+    _team_names,
 )
 from newsroom.fantasy_tools import FANTASY_TOOLS
 from newsroom.fantasy_desk import (
@@ -412,7 +418,28 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
             except Exception as e:
                 print(f"⚠️  Could not load league transactions: {e}")
 
+            # 7. Executed trades and trade rumors new this edition (team management step 5, Phase 8)
+            try:
+                trades, rumors = new_week_trades(cur, season, week)
+                block = trades_block(trades, rumors, _team_names(cur), week)
+                if block:
+                    brief["league_trades"] = block
+            except Exception as e:
+                print(f"⚠️  Could not load trades: {e}")
+
     return brief
+
+
+def new_week_trades(cur, season: int, week: int, team_abbr: str = None) -> tuple:
+    """(executed trades, rumors) new for the Week `week` edition: last week's executed trades and the rumors from
+    last week's proposals (roster_moves.new_trades / rumor_visible), optionally only those of one team."""
+    ctx = (season, week, True)
+    trades = new_trades(fetch_trades(cur, season, ctx=ctx), week)
+    rumors = [r for r in fetch_rumors(cur, season, ctx=ctx) if r["week"] == week - 1]
+    if team_abbr:
+        trades = [t for t in trades if team_abbr in (t["team_a"], t["team_b"])]
+        rumors = [r for r in rumors if team_abbr in r["teams"]]
+    return trades, rumors
 
 # ==============================================================================
 # NFL EDITORIAL MATRIX CONFIGURATION (18-Week Regular Season & 5-Week Postseason)
@@ -821,6 +848,8 @@ class SwarmDispatcher:
             get_team_cap_sheet,
             get_player_contract,
             get_league_transactions,
+            get_trade_rumors,
+            check_trade_package,
         ]
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)
@@ -1032,7 +1061,9 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 - If you need draft pick trade points (Jimmy Johnson model) and trade package scenarios, call `get_draft_trade_value`.
 - If you need a franchise's rebuild lifecycle stage and draft posture, call `get_franchise_rebuild_status`.
 - If you need the all-time NFL record book, all-time top 10 leaderboards, previous record holders, franchise records, or records set this season, call `get_record_book`.
-- If a roster move bears on your story (a signing, release, re-signing or restructure this season), call `get_league_transactions` (filter by team, week, type or notable_only).
+- If a roster move bears on your story (a signing, release, re-signing, restructure or trade this season), call `get_league_transactions` (filter by team, week, type or notable_only). Its `trades` are executed trades: fact.
+- If trade talk bears on your story, call `get_trade_rumors`: real talks that never became a trade, through the Week 8 deadline. A rumor is only ever reported as a rumor, never as done; only these rumors may be described as actual talks.
+- If your article type's directive allows a hypothetical trade package, run it through `check_trade_package` first: only a package that passes may appear, built from real players and picks with the terms the tool shows, and framed as your own idea, never as reported talks.
 - If a team's cap situation bears on your story (cap space, dead money, contract-year players, committed money), call `get_team_cap_sheet` (no team = all 32 by cap space).
 - If a player's contract bears on your story (term, the year it runs through, cap hit, a new deal), call `get_player_contract`.
 - CONTRACT FACTS RULE: moves, contract terms and cap figures come only from these three tools or the Assignment Brief, and only when they matter to your subject: most articles carry no cap numbers at all. Years and totals are fact. A figure marked `est.` is a projected year of a new deal: hedge it in prose ("roughly", "projected", "about"). An estimated cap row is approximate. Never fill in what a tool says is "not known" (no guaranteed money, incentive details or option years). Invent the colour freely (how talks went, an agent's stance, unnamed, unpriced interest from other teams, locker-room reaction) but never a term, a figure or a move.
@@ -1059,6 +1090,7 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 - Query your team's and quarterback's late-game record (fourth-quarter comebacks, game-winning drives, blown leads, record when trailing at halftime) with `get_clutch_profile`.
 - Query your team's and the opponent's third-down, red-zone and penalty rates with league ranks with `get_team_efficiency_profile`; a single game's come only from its box score's `team_situational` line, so don't invent them for a game without one.
 - Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
+- Query your team's executed trades and trade rumors with `get_league_transactions` and `get_trade_rumors` when they bear on the story: an executed trade is fact; a rumor is only ever reported as a rumor, never as done, and never with a player's name or a figure it doesn't give.
 - Query your team's roster moves with `get_league_transactions`, its cap sheet with `get_team_cap_sheet`, and a player's deal with `get_player_contract`, only when a move or contract bears on the story. CONTRACT FACTS RULE: moves, contract terms and cap figures come only from these three tools or the Assignment Brief, and only when they matter to your subject: most articles carry no cap numbers at all. Years and totals are fact. A figure marked `est.` is a projected year of a new deal: hedge it in prose ("roughly", "projected", "about"). An estimated cap row is approximate. Never fill in what a tool says is "not known" (no guaranteed money, incentive details or option years). Invent the colour freely (how talks went, an agent's stance, unnamed, unpriced interest from other teams, locker-room reaction) but never a term, a figure or a move.
 - Query your team's and the opponent's defensive and special-teams leaders (sacks, interceptions, tackles for loss, forced fumbles, kicking, returns) with `get_defense_special_teams_leaders` and the team name. Madden lists only its leaders, so a player with no line has unknown numbers, not zeros; don't add them up into team totals. Pressures, snap counts, targets and blitz or coverage rates aren't recorded, so never give them as numbers; in words, consistent with the game script, they're fine.
 3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the locker room. Quote coaching staff sentiment, cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
@@ -1258,6 +1290,17 @@ EDITORIAL DESK ASSIGNMENT (MANDATORY):
                             team_moves, cap_line(cap["team"], cap, cap["basis"]) if cap else "")
             except Exception as e:
                 print(f"⚠️  Could not load beat roster moves for team {assigned_team_id}: {e}")
+            try:
+                with psycopg.connect(self.db.db_conn_info) as tconn, tconn.cursor() as tcur:
+                    tcur.execute("SELECT abbreviation FROM teams WHERE id = %s;", (assigned_team_id,))
+                    abbr = tcur.fetchone()[0]
+                    trades, rumors = new_week_trades(tcur, season, week, abbr)
+                    block = trades_block(trades, rumors, _team_names(tcur), week)
+                    if block:
+                        brief_for_agent = dict(brief_for_agent)
+                        brief_for_agent["team_trades"] = block
+            except Exception as e:
+                print(f"⚠️  Could not load beat trades for team {assigned_team_id}: {e}")
 
         task_instruction = f"""ASSIGNMENT BRIEF:
 {json.dumps(brief_for_agent, indent=2)}

@@ -14,6 +14,7 @@ from engines import clutch_engine as clutch
 from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_splits, defense_groups,
                                    player_lines, stat_group, STATS as SPLIT_STATS)
 import json
+import re
 
 from newsroom.run_context import context_season, context_week, cutoff_week, is_offseason_event_visible, is_visible_week
 from newsroom import roster_moves as rm
@@ -2818,7 +2819,7 @@ def get_player_contract(player_identifier: str, season: int = 0) -> str:
 @tool
 def get_league_transactions(team_identifier: str = "", week: int = 0, types: str = "", position: str = "",
                             notable_only: bool = False, limit: int = 40, season: int = 0) -> str:
-    """Fetch the league's roster moves this season (signings, releases, re-signings, extensions, restructures), newest week first, one line each with the terms, dead money for releases, the new depth-chart slot for signings and a notable flag. Filter by team, a single week, types (comma list: SIGNED,RELEASED,RE_SIGNED,EXTENDED,RESTRUCTURED), position, or notable_only. Call it only when a move bears on your story; most articles mention none."""
+    """Fetch the league's roster moves this season (signings, releases, re-signings, extensions, restructures) and its executed trades, newest week first, one line each with the terms, dead money for releases, the new depth-chart slot for signings and a notable flag; each executed trade is one line with the players and picks that moved, their cap hits and each team's cap change. Filter by team, a single week, types (comma list: SIGNED,RELEASED,RE_SIGNED,EXTENDED,RESTRUCTURED,TRADED), position, or notable_only. Call it only when a move bears on your story; most articles mention none."""
     try:
         s_val = resolve_season(season)
         lim = max(1, min(int(limit or 40), 200))
@@ -2832,28 +2833,250 @@ def get_league_transactions(team_identifier: str = "", week: int = 0, types: str
                     team_id = _resolve_team_id(cur, team_identifier)
                     if not team_id:
                         return f"Team '{team_identifier}' not found."
-                rows = fetch_moves(cur, s_val, team_id)
+                rows = [r for r in fetch_moves(cur, s_val, team_id) if r["type"] != "TRADED"]
+                trades, names = fetch_trades(cur, s_val), _team_names(cur)
+                if team_id:
+                    cur.execute("SELECT abbreviation FROM teams WHERE id = %s;", (team_id,))
+                    abbr = cur.fetchone()[0]
+                    trades = [t for t in trades if abbr in (t["team_a"], t["team_b"])]
     except Exception as e:
         return f"Error: {str(e)}"
     if week:
         rows = [r for r in rows if r["week"] == int(week)]
+        trades = [t for t in trades if t["week"] == int(week)]
     wanted = {t.strip().upper().replace("-", "_") for t in str(types or "").split(",") if t.strip()}
     if wanted:
         rows = [r for r in rows if r["type"] in wanted]
+        if "TRADED" not in wanted:
+            trades = []
     if position:
         rows = [r for r in rows if (r["position"] or "").upper() == position.strip().upper()]
+        trades = [t for t in trades if any((l.get("position") or "").upper() == position.strip().upper()
+                                           for l in t["legs"])]
     rm.annotate(rows)
     if notable_only:
         rows = [r for r in rows if r["notable"]]
     rows.sort(key=lambda r: (-(r["week"] if r["week"] is not None else 99), -int(r["notable"]), -r["rank_score"]))
     unmatched = [f"{rm.week_label(r)} · {r['type']} · {rm.display_name(r)} ({r['position'] or '?'})"
                  for r in rows if not r["player_id"]]
+    counts = rm.counts_by_type(rows)
+    if trades:
+        counts["TRADED"] = len(trades)
     return json.dumps({
         "season": s_val,
-        "count": len(rows),
-        "counts": rm.counts_by_type(rows),
+        "count": len(rows) + len(trades),
+        "counts": counts,
+        "trades": [rm.trade_line(t, names) for t in sorted(trades, key=lambda t: -(t["week"] or 99))][:lim],
         "moves": [rm.move_line(r) for r in rows if r["player_id"]][:lim],
         "rows_with_no_player": unmatched,
-        "note": ("Moves headed Week N happened before Week N's games. Trades are reported only once completed; "
-                 "none appear here yet. " + rm.MONEY_NOTE),
+        "note": ("Moves headed Week N happened before Week N's games. `trades` lists executed trades only: each is "
+                 "fact. Talks that never became a trade are rumors (get_trade_rumors), never reported as done. "
+                 + rm.TRADE_NOTE + " " + rm.MONEY_NOTE),
+    }, indent=2)
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Trades and rumors (05_NEWSROOM_INTEGRATION_PLAN.md Phase 8): step 3's read helpers (engines/front_office.py),
+# cut off for the article's week and formatted by roster_moves. Nothing here writes.
+# ----------------------------------------------------------------------------------------------------------------
+
+def _team_names(cur) -> dict:
+    cur.execute("SELECT abbreviation, name FROM teams WHERE abbreviation IS NOT NULL;")
+    return dict(cur.fetchall())
+
+
+def fetch_trades(cur, season: int, ctx=None) -> list:
+    """Executed GM trades of the season the article may see (front_office.executed_trades, oldest first). [] before
+    step 3's tables exist."""
+    from engines import front_office as fo
+    ctx = ctx or _txn_context()
+    if not fo.installed(cur):
+        return []
+    return [t for t in fo.executed_trades(cur, season) if rm.trade_visible(season, t["week"], *ctx)]
+
+
+def fetch_rumors(cur, season: int, ctx=None) -> list:
+    """Rumor material the article may see: rumor_ok proposals that were never executed (front_office.trade_rumors),
+    made before the article's week, only through the deadline, each with its `outcome` ('stalled' or 'open').
+    Another season's article gets none (rumors are live news)."""
+    from engines import front_office as fo
+    ctx_season, ctx_week, _ = ctx or _txn_context()
+    if not fo.installed(cur):
+        return []
+    if ctx_season is not None and ctx_week is not None:
+        if ctx_season != season or not rm.rumor_visible(ctx_week - 1, ctx_week):
+            return []
+        upto = ctx_week - 1
+    else:
+        ctx_week, upto = None, rm.REGULAR_SEASON_LAST_WEEK
+    rows = fo.trade_rumors(cur, season, upto)
+    if not rows:
+        return []
+    cur.execute("SELECT id, status, expires_week FROM gm_trade_proposals WHERE id = ANY(%s);",
+                ([r["rumor_id"] for r in rows],))
+    info = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+    out = []
+    for r in rows:
+        status, expires = info.get(r["rumor_id"], ("EXECUTED", None))
+        if status == "EXECUTED" or not rm.rumor_visible(r["week"], ctx_week):
+            continue
+        out.append({**r, "outcome": rm.rumor_outcome(status, expires, ctx_week)})
+    return out
+
+
+@tool
+def get_trade_rumors(team_identifier: str = "", season: int = 0) -> str:
+    """Fetch this season's trade rumors: real talks between two front offices that did not become a trade, through the Week 8 trade deadline. Each gives the two teams, who made the call, the kinds of assets (positions or draft picks, never names or figures) and whether talks stalled. A rumor is never a done deal: report it only as talks. Optional team filter. Call it only when trade talk bears on your story; executed trades are in get_league_transactions."""
+    try:
+        s_val = resolve_season(season)
+        ctx_season, ctx_week, _ = _txn_context()
+        if ctx_season == s_val and ctx_week is not None and ctx_week > rm.RUMOR_LAST_EDITION_WEEK:
+            return json.dumps({"season": s_val, "rumors": [], "note": (
+                f"The Week {rm.TRADE_DEADLINE_WEEK} trade deadline has passed: rumors run only through it. Executed "
+                "trades are in get_league_transactions.")}, indent=2)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                abbr = None
+                if str(team_identifier or "").strip():
+                    team_id = _resolve_team_id(cur, team_identifier)
+                    if not team_id:
+                        return f"Team '{team_identifier}' not found."
+                    cur.execute("SELECT abbreviation FROM teams WHERE id = %s;", (team_id,))
+                    abbr = cur.fetchone()[0]
+                rumors, names = fetch_rumors(cur, s_val), _team_names(cur)
+    except Exception as e:
+        return f"Error: {str(e)}"
+    if abbr:
+        rumors = [r for r in rumors if abbr in r["teams"]]
+    return json.dumps({
+        "season": s_val,
+        "count": len(rumors),
+        "rumors": [rm.rumor_line(r, names) for r in sorted(rumors, key=lambda r: -r["week"])],
+        "note": rm.RUMOR_NOTE,
+    }, indent=2)
+
+
+_PICK_TEXT = re.compile(r"^\s*(20\d\d)\s+(?:r(?:ound)?\s*([1-7])|([1-7])(?:st|nd|rd|th)(?:\s*-?\s*round)?)\b(?:\s*pick)?\s*\(?([^)]*)\)?\s*$",
+                        re.I)
+
+
+def parse_package_item(text: str):
+    """One package item: ('PICK', draft_season, round, original team text or '') for '2037 R2', '2037 2nd-round pick
+    (Bills)'; else ('PLAYER', name)."""
+    m = _PICK_TEXT.match(text or "")
+    if m:
+        return ("PICK", int(m.group(1)), int(m.group(2) or m.group(3)), (m.group(4) or "").strip())
+    return ("PLAYER", (text or "").strip())
+
+
+def package_check_week(ctx_week):
+    """The league week a hypothetical package is checked at: the article's week through the deadline; after it
+    (Weeks 9-23) the coming offseason (week 24), the first window the deal could happen in."""
+    if ctx_week is None:
+        return None
+    if rm.TRADE_DEADLINE_WEEK < ctx_week < rm.OFFSEASON_WEEK:
+        return rm.OFFSEASON_WEEK
+    return ctx_week
+
+
+PACKAGE_CHECK_LABELS = {
+    "cap": "fits under both teams' caps", "ntc": "no no-trade clause", "roster": "roster limits",
+    "slots": "each team keeps a QB, K and P", "deadline": "trade window open", "picks": "each pick is owned by its sender",
+    "booking": "every asset is available", "tradeable": "every player can be traded now",
+    "fairness": "balanced enough for both GMs to sign off", "players": "every player is on a roster",
+}
+
+
+def package_check_lines(checks: dict) -> list:
+    """legality_check's checks as writer lines, without the numbers behind them (league values, cap margins) and
+    without naming what another proposal has booked (that would leak pending talks)."""
+    out = []
+    for key, c in checks.items():
+        label = PACKAGE_CHECK_LABELS.get(key, key)
+        if c["ok"]:
+            out.append(f"pass · {label}")
+        elif key == "cap":
+            teams = sorted({part.split(":")[0].strip() for part in str(c["detail"]).split(";") if ":" in part})
+            out.append(f"FAIL · {label}: {', '.join(teams) or 'a team'} would be over the cap or too close to it")
+        elif key == "booking":
+            out.append(f"FAIL · {label}: an asset in it isn't available for a hypothetical package right now")
+        elif key == "fairness":
+            out.append(f"FAIL · {label}: too lopsided")
+        elif key == "deadline":
+            out.append(f"FAIL · {label}: the trade window is closed")
+        else:
+            out.append(f"FAIL · {label}: {c['detail']}")
+    return out
+
+
+@tool
+def check_trade_package(team_a: str, team_b: str, team_a_sends: str, team_b_sends: str, season: int = 0) -> str:
+    """Check a hypothetical trade package you want to propose as your own idea (only in article types whose directive allows one): the same legality checks the league's GMs use (cap, no-trade clauses, roster limits, the trade deadline, pick ownership, and whether it is balanced enough for both GMs). team_a_sends / team_b_sends are comma lists of players (names, on that team now) and picks ('2037 R2', or '2037 R2 Bills' for a pick the team holds from another team). Shows each player's real cap hit and contract term. Only a package that passes may appear in an article, framed as your idea, never as reported talks."""
+    from engines import front_office as fo
+    try:
+        s_val = resolve_season(season)
+        ctx_season, ctx_week, _ = _txn_context()
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                if not fo.installed(cur):
+                    return "Trade checks aren't available yet."
+                a_id, b_id = _resolve_team_id(cur, team_a), _resolve_team_id(cur, team_b)
+                if not a_id or not b_id or a_id == b_id:
+                    return f"Need two different teams (got '{team_a}', '{team_b}')."
+                if ctx_season == s_val and ctx_week is not None:
+                    week = package_check_week(ctx_week)
+                else:
+                    cur.execute("SELECT current_week FROM league_state WHERE id = 1;")
+                    week = package_check_week(cur.fetchone()[0])
+                assets, package, unresolved = [], [], []
+                for frm, to, text in ((a_id, b_id, team_a_sends), (b_id, a_id, team_b_sends)):
+                    for item in [x for x in str(text or "").split(",") if x.strip()]:
+                        parsed = parse_package_item(item)
+                        if parsed[0] == "PICK":
+                            orig = _resolve_team_id(cur, parsed[3]) if parsed[3] else frm
+                            if not orig:
+                                unresolved.append(item.strip())
+                                continue
+                            assets.append({"type": "PICK", "pick": (parsed[1], parsed[2], orig), "from": frm, "to": to})
+                            cur.execute("SELECT abbreviation FROM teams WHERE id = %s;", (orig,))
+                            package.append(f"{parsed[1]} round {parsed[2]} pick ({cur.fetchone()[0]} original)")
+                            continue
+                        cur.execute("""
+                            SELECT p.id, COALESCE(p.full_name, p.player_name), ps.position,
+                                   pc.total_value, pc.length, pc.season + pc.years_remaining - 1, pcy.cap_hit,
+                                   pc.no_trade_clause
+                            FROM player_seasons ps JOIN players p ON p.id = ps.player_id
+                            LEFT JOIN player_contracts pc ON pc.player_id = p.id AND pc.status = 'ACTIVE' AND pc.season = ps.season
+                            LEFT JOIN player_contract_years pcy ON pcy.contract_id = pc.id AND pcy.year = %s
+                            WHERE ps.season = %s AND ps.team_id = %s AND ps.released_week IS NULL
+                              AND (p.full_name ILIKE %s OR p.player_name ILIKE %s)
+                            ORDER BY ps.overall_rating DESC NULLS LAST LIMIT 1;
+                        """, (s_val, s_val, frm, f"%{parsed[1]}%", f"%{parsed[1]}%"))
+                        r = cur.fetchone()
+                        if not r:
+                            unresolved.append(item.strip())
+                            continue
+                        assets.append({"type": "PLAYER", "player_id": r[0], "from": frm, "to": to})
+                        terms = (f"{rm.money_text(r[6])} cap hit this season, {r[4]}-year deal worth "
+                                 f"{rm.money_text(r[3])} through {r[5]}" if r[3] is not None else "no contract on file")
+                        package.append(f"{r[2]} {rm.display_name({'full_name': r[1]})}: {terms}"
+                                       + (", no-trade clause" if r[7] else ""))
+                if unresolved:
+                    return json.dumps({"legal": False, "not_found": unresolved, "note": (
+                        "Each player must be on the sending team's roster now (name as listed); each pick as "
+                        "'2037 R2' or '2037 R2 Bills'. Fix these and check again.")}, indent=2)
+                if not assets or not any(x["from"] == a_id for x in assets) or not any(x["from"] == b_id for x in assets):
+                    return "Both teams must send at least one player or pick."
+                res = fo.legality_check(cur, s_val, week, a_id, b_id, assets)
+    except Exception as e:
+        return f"Error: {str(e)}"
+    legal = bool(res["legal"])
+    return json.dumps({
+        "legal": legal,
+        "checked_for": (f"Week {week}" if week and week <= rm.REGULAR_SEASON_LAST_WEEK else "the coming offseason"),
+        "package": package,
+        "checks": package_check_lines(res["checks"]),
+        "note": ("Legal. You may pitch it only as your own idea ('a deal they could chase', 'a trade I'd make'), never "
+                 "as talks anyone reported or a rumor, and cite only the terms shown here." if legal else
+                 "Not legal: don't pitch this package. Change what failed and check again, or leave it out."),
     }, indent=2)

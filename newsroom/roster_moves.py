@@ -9,6 +9,9 @@ Wire (social_desk.py) and the fantasy tools fetch rows and pass them through her
 - `txn_visible` is the week cutoff for `transactions` rows (§2.2); `on_roster` is the has-a-team rule for a Week N
   article (`released_week` IS NULL or later than N).
 - `notability` decides which moves the briefs and the Agent Wire carry (§2.3). OVR only ranks, it's never printed.
+- Trades and rumors (Phase 8): an executed GM trade (engines/front_office.executed_trades) is one `trade_line`, fact;
+  a rumor_ok proposal that was never executed (front_office.trade_rumors) is one `rumor_line`, always labelled a
+  rumor, with teams and asset types/positions only. `trade_visible` / `rumor_visible` are their week cutoffs.
 """
 
 # Depth slots that count as starters (also the beat injury block's rule).
@@ -228,7 +231,7 @@ def notability(row) -> tuple:
         reasons.append("big dead money")
     if t == "TRADED":
         reasons.append("trade")
-    notable = (row.get("ovr") or 0) >= NOTABLE_OVR
+    notable = (row.get("ovr") or 0) >= NOTABLE_OVR or t == "TRADED"     # every executed trade is news (Phase 8)
     score = (10 if notable else 0) + len(reasons) * 3 + (row.get("popularity") or 0) / 20 + (row.get("ovr") or 0) / 25 \
         + max(value, row.get("dead_money") or 0) / 10_000_000
     return notable, reasons, round(score, 3)
@@ -294,8 +297,10 @@ def move_line(row, with_notable: bool = True) -> str:
         parts.append(line)
     elif t == "RESTRUCTURED":
         parts.append(f"{team} restructured {pos} {name}'s contract: freed {money_text(value)} in cap space this season")
+    elif t == "TRADED" and not row.get("player_id"):
+        parts.append(f"{row.get('from_team') or 'A team'} traded a draft pick to the {team} (executed trade)")
     elif t == "TRADED":
-        parts.append(f"{row.get('from_team') or 'A team'} traded {pos} {name} to the {team}")
+        parts.append(f"{row.get('from_team') or 'A team'} traded {pos} {name} to the {team} (executed trade)")
     else:
         parts.append(row.get("raw_text") or f"{team} {pos} {name}")
     if with_notable:
@@ -321,7 +326,9 @@ CAP_WATCH_SPACE = 2_000_000
 
 def brief_block(rows, through_week, cap_rows=None, limit: int = 12) -> dict:
     """The national brief's `league_transactions` block (§2.7) from the moves new this week (annotated or not) and
-    [{team, cap_space, cap_penalty, total_spend, basis}] cap rows. Empty dict when there are no new moves."""
+    [{team, cap_space, cap_penalty, total_spend, basis}] cap rows. Empty dict when there are no new moves. Trade legs
+    are left out: trades are whole-trade lines in `league_trades` (trades_block)."""
+    rows = [r for r in rows if r.get("type") != "TRADED"]
     if not rows:
         return {}
     ranked = annotate([dict(r) for r in rows])
@@ -342,8 +349,9 @@ def brief_block(rows, through_week, cap_rows=None, limit: int = 12) -> dict:
 
 
 def team_block(rows, cap_snapshot: str = "") -> dict:
-    """The beat brief's `team_transactions` block (§2.7): this team's moves new this week and its cap line."""
-    ranked = annotate([dict(r) for r in rows])
+    """The beat brief's `team_transactions` block (§2.7): this team's moves new this week and its cap line (trade
+    legs left out: the beat brief's trades come from trades_block)."""
+    ranked = annotate([dict(r) for r in rows if r.get("type") != "TRADED"])
     block = {
         "moves_this_week": [move_line(r) for r in ranked],
         "reporting_guidance": ("A notable move gets a paragraph: who it is, the role he leaves or fills, what it means "
@@ -352,4 +360,163 @@ def team_block(rows, cap_snapshot: str = "") -> dict:
     }
     if cap_snapshot:
         block["cap_snapshot"] = cap_snapshot
+    return block
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Trades and rumors (Phase 8; step 3's engines/front_office.py read helpers feed these)
+# ----------------------------------------------------------------------------------------------------------------
+
+TRADE_DEADLINE_WEEK = 8      # engines/gm_trade_engine.TRADE_DEADLINE_WEEK (the last trades before Week 9's games)
+# Rumors run only through the deadline (JR, §6 Q7): the Week 8 edition is the last to carry them.
+RUMOR_LAST_EDITION_WEEK = TRADE_DEADLINE_WEEK
+REGULAR_SEASON_LAST_WEEK = 18
+
+RUMOR_TRIGGERS = {"INJURY": "after an injury at the position", "SELL": "a seller shopping a veteran",
+                  "NEED": "to fill a need", "DRAFT": "around the draft"}
+
+TRADE_NOTE = ("An executed trade is fact: who went where, the picks, and the cap hits as given. Invent the colour "
+              "(how talks went, who called whom, locker-room reaction), never a player, a pick, a figure or a team.")
+RUMOR_NOTE = ("A rumor is never a done deal. These are real conversations between two front offices (teams and the "
+              "kinds of assets only): report them only as talks ('discussed', 'sources say', 'kicked the tires'), never "
+              "as a trade that happened or was agreed. Don't name a player or give a figure the rumor doesn't give. "
+              "'Talks stalled' means no deal came of it. A rumor never outranks the facts: if get_league_transactions "
+              "shows an executed trade, that is the story.")
+
+
+def trade_week(week):
+    """A trade's league week for the cutoff: its regular-season week, else None (an offseason trade)."""
+    return week if week and 1 <= week <= REGULAR_SEASON_LAST_WEEK else None
+
+
+def trade_visible(season, week, ctx_season, ctx_week, offseason_event_ok=True) -> bool:
+    """May a Week `ctx_week` article see an executed trade? Its transactions rows have no capture, so a Week N trade
+    (confirmed before Week N's games) is visible from the Week N edition on (txn_visible); offseason trades follow
+    the offseason signings rule."""
+    return txn_visible(season, trade_week(week), None, ctx_season, ctx_week, offseason_event_ok)
+
+
+def new_trades(trades, ctx_week) -> list:
+    """The executed trades an edition reports as new: those of the previous week. The weekly run writes Week N's
+    articles right after the GM step proposes Week N's trades, and JR makes them in Madden after that, so the Week
+    N+1 edition is the first to see them (a regenerated Week N edition still sees them through the tools)."""
+    if ctx_week is None:
+        return []
+    return [t for t in trades if trade_week(t.get("week")) is not None and t["week"] == ctx_week - 1]
+
+
+def trade_grades_due(trades, week) -> bool:
+    """A TRADE_GRADES feature takes a Feature Trio slot in a regular-season week right after an executed trade."""
+    return 2 <= (week or 0) <= REGULAR_SEASON_LAST_WEEK and bool(new_trades(trades, week))
+
+
+def rumor_visible(proposal_week, ctx_week) -> bool:
+    """May a Week `ctx_week` edition carry a rumor from a proposal made for `proposal_week`? Only proposals from
+    earlier weeks (the status timestamps are wall-clock, so the proposal's week is the cutoff), and only through
+    the trade deadline. No article context: visible."""
+    if ctx_week is None:
+        return True
+    return proposal_week is not None and proposal_week < ctx_week <= RUMOR_LAST_EDITION_WEEK
+
+
+def rumor_outcome(status, expires_week, ctx_week) -> str:
+    """'stalled' when the proposal was rejected or expired before this edition's week, else 'open' (the outcome
+    isn't for the writer to state). An EXECUTED proposal is never a rumor."""
+    if status == "EXECUTED":
+        raise ValueError("an executed trade is not a rumor")
+    if status in ("REJECTED", "EXPIRED") and (ctx_week is None or (expires_week is not None and expires_week < ctx_week)):
+        return "stalled"
+    return "open"
+
+
+def _pick_text(leg, team_names) -> str:
+    pick = leg.get("pick") or {}
+    orig = team_names.get(pick.get("original_team"), pick.get("original_team"))
+    rd = pick.get("round")
+    ordinal = {1: "1st", 2: "2nd", 3: "3rd"}.get(rd, f"{rd}th")
+    own = leg.get("from") == pick.get("original_team")
+    return f"the {orig}' {pick.get('draft_season')} {ordinal}-round pick" if own else \
+        f"the {orig}' {pick.get('draft_season')} {ordinal}-round pick (held by the {team_names.get(leg.get('from'), leg.get('from'))})"
+
+
+def _player_text(leg) -> str:
+    name = display_name({"full_name": leg.get("player_name")})
+    hit = leg.get("cap_hit_now")
+    cap = f" ({money_text(hit)} cap hit this season)" if hit else ""
+    return f"{leg.get('position') or ''} {name}{cap}".strip()
+
+
+def _join(items) -> str:
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def trade_line(trade, team_names=None) -> str:
+    """One executed trade as a line (fact), e.g. 'Week 4 · TRADE (executed) · Jets acquired WR Garrett Wilson
+    ($12.5M cap hit this season) from the Patriots; Patriots acquired CB Sauce Gardner ($9M cap hit this season) and
+    the Jets' 2037 2nd-round pick from the Jets · cap this season: Jets +$3.5M, Patriots -$3.5M'. trade: an
+    executed_trades row ({week, team_a, team_b, legs}); team_names: {abbreviation: name}. OVR is never printed."""
+    names = team_names or {}
+    nm = lambda abbr: names.get(abbr, abbr)
+    week = trade_week(trade.get("week"))
+    parts = [f"Week {week}" if week else "Offseason", "TRADE (executed)"]
+    sides, cap = [], {}
+    for receiver in (trade["team_a"], trade["team_b"]):
+        legs = [l for l in trade.get("legs") or [] if l.get("to") == receiver]
+        if not legs:
+            continue
+        sender = next(l["from"] for l in legs)
+        items = [_player_text(l) if l.get("type") == "PLAYER" else _pick_text(l, names) for l in legs]
+        sides.append(f"{nm(receiver)} acquired {_join(items)} from the {nm(sender)}")
+    for l in trade.get("legs") or []:
+        if l.get("type") == "PLAYER" and l.get("cap_hit_now") is not None:
+            cap[l["to"]] = cap.get(l["to"], 0) + l["cap_hit_now"]
+            cap[l["from"]] = cap.get(l["from"], 0) - l["cap_hit_now"]
+    parts.append("; ".join(sides))
+    if cap:
+        parts.append("cap this season: " + ", ".join(
+            f"{nm(t)} {'+' if v > 0 else ''}{money_text(v)}" for t, v in sorted(cap.items(), key=lambda kv: -kv[1])))
+    return " · ".join(parts)
+
+
+def rumor_line(rumor, team_names=None) -> str:
+    """One rumor as a line, always labelled: 'Week 5 · RUMOR, not a done deal · the Jets and the Patriots discussed a
+    trade (the Jets made the call, to fill a need): a WR to the Jets; a draft pick to the Patriots · talks stalled,
+    no deal'. rumor: a trade_rumors row ({week, teams, initiator, trigger, assets, outcome}). No player names, no
+    figures."""
+    names = team_names or {}
+    nm = lambda abbr: names.get(abbr, abbr)
+    a, b = rumor["teams"]
+    why = RUMOR_TRIGGERS.get(rumor.get("trigger"))
+    head = f"the {nm(a)} and the {nm(b)} discussed a trade (the {nm(rumor.get('initiator') or a)} made the call" \
+           + (f", {why})" if why else ")")
+    flows = []
+    for receiver in (a, b):
+        kinds = []
+        for x in rumor.get("assets") or []:
+            if x.get("to") != receiver:
+                continue
+            kinds.append(f"a {x['position']}" if x.get("type") == "PLAYER" and x.get("position") else
+                         "a draft pick" if x.get("type") == "PICK" else "a player")
+        if kinds:
+            flows.append(f"{_join(kinds)} to the {nm(receiver)}")
+    line = head + (": " + "; ".join(flows) if flows else "")
+    outcome = ("talks stalled, no deal" if rumor.get("outcome") == "stalled"
+               else "outcome not known: report it only as talks")
+    return " · ".join([f"Week {rumor['week']}", "RUMOR, not a done deal", line, outcome])
+
+
+def trades_block(trades, rumors, team_names=None, through_week=None) -> dict:
+    """The briefs' `league_trades` block: executed trades new this edition (fact) and rumors new this edition.
+    Empty dict when there is neither."""
+    if not trades and not rumors:
+        return {}
+    block = {"through_week": through_week}
+    if trades:
+        block["executed_trades"] = [trade_line(t, team_names) for t in trades]
+        block["trade_note"] = TRADE_NOTE
+    if rumors:
+        block["rumors"] = [rumor_line(r, team_names) for r in rumors]
+        block["rumor_note"] = RUMOR_NOTE
     return block
