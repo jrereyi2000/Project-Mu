@@ -74,7 +74,8 @@ class TransactionsRunTest(unittest.TestCase):
                 step_connect=lambda lp: calls.append(("connect",)), step_capture=capture, step_extract=extract,
                 load_status=lambda f: None, step_load=lambda f, replace=False, mode="weekly": calls.append(("load", mode)) or {},
                 league_state=lambda: (2036, 4), since_heading=lambda s, weekly=True: "2036 SEASON - WEEK 1",
-                step_engines=lambda s: calls.append(("engines",)), step_articles=lambda s, week=None: calls.append(("articles",))):
+                step_engines=lambda s: calls.append(("engines",)), step_gm=lambda s: calls.append(("gm",)),
+                step_articles=lambda s, week=None: calls.append(("articles",))):
             os.makedirs(os.path.join(tmp, "tx1"))
             self.assertEqual(wc.run("tx1", mode="transactions"), 0)
         self.assertEqual([c[0] for c in calls], ["notify", "connect", "capture", "notify", "extract", "load", "notify"])

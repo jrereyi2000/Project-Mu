@@ -348,6 +348,46 @@ def step_engines(season):
                           f"articles): {e!r}")
 
 
+def step_gm(season):
+    """GM trade proposals (team management step 3, engines/gm_trade_engine.py) for league_state's week, after the
+    engines and before articles. Optional: a failure only logs a warning and the week goes on. Backfills Gemini
+    bios for GMs still on the template first. Returns the number of new proposals."""
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from engines.gm_llm import flush, make_llm
+        from engines.gm_personas import backfill_bios
+        from engines.gm_trade_engine import run_week
+        llm = make_llm("gm_rationale")
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT to_regclass('gm_trade_proposals') IS NOT NULL")
+            if not cur.fetchone()[0]:
+                log("  GM trade proposals skipped: the GM agents migration isn't applied")
+                return 0
+            cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+            week = cur.fetchone()[0]
+            bio_llm = make_llm("gm_persona")
+            if bio_llm is not None:
+                n = backfill_bios(cur, season, bio_llm, log=log)
+                if n:
+                    log(f"  GM bios: {n} written by Gemini")
+                flush(bio_llm)
+            rep = run_week(cur, season, week, llm=llm, log=log)
+            conn.commit()
+        flush(llm)
+        n = len(rep["proposals"])
+        log(f"  GM trade proposals: {n} new, {len(rep['expired'])} expired, {len(rep['rechecked'])} no longer legal")
+        if n:
+            notify(f"{n} new trade proposal{'s' if n != 1 else ''} for JR (week {week}). Review them on #debug > "
+                   "Front office.", title="Mu: trade proposals", tags=("handshake",))
+        return n
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] GM trade proposals skipped: {e!r}")
+        return 0
+
+
 def step_preseason_engines(season):
     """Preseason engines for start-of-season calibration (schedule, rosters, injuries loaded):
     1. Preseason Fantasy ADP (runs 100 simulated drafts, writes Week 1 ADP board).
@@ -707,6 +747,9 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
         season, current_week = league_state()
         log(f"Step 7: backfill + engines (season {season})")
         step_engines(season)
+        if mode in ("weekly", "playoff"):
+            log("Step 7b: GM trade proposals")
+            step_gm(season)
         published = None
         if articles:
             log("Step 8: articles")

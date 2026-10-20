@@ -90,6 +90,123 @@ def template(sheet):
     return {"headline": head, "rationale_a": ra, "rationale_b": rb, "source": "TEMPLATE"}
 
 
-def write_rationale(sheet, llm=None):
-    """Template unless the LLM path is enabled (Phase 6)."""
-    return template(sheet)
+# ------------------------------------------------------------------ LLM ----
+def prompt(sheet):
+    """The rationale prompt: the fact sheet, each GM's voice, the hallucination rule, JSON out."""
+    A, B = sheet["teams"]["a"], sheet["teams"]["b"]
+    return (
+        "You write for a simulated NFL league's front-office wire. Two general managers have agreed a trade in "
+        "principle. Write a headline and each GM's own 2-3 sentence explanation, in his voice.\n"
+        f"GM A: {A['gm']} of the {A['team']} (voice: {A['voice'] or 'plain'}).\n"
+        f"GM B: {B['gm']} of the {B['team']} (voice: {B['voice'] or 'plain'}).\n"
+        "FACT SHEET (JSON; the only facts you may state):\n"
+        f"{json.dumps(sheet, indent=1, default=str)}\n"
+        "Rules: invent untracked colour freely (front-office chatter, how long he has liked a player, what the "
+        "building feels like). Never state a number, dollar amount, player, team, record or contract fact that "
+        "isn't on the fact sheet. Don't call the trade final or completed: it still has to go through.\n"
+        'Answer with JSON only: {"headline": "...", "rationale_a": "...", "rationale_b": "..."}')
+
+
+MONEY_RE = re.compile(r"\$\s?(\d+(?:\.\d+)?)\s?([MK])?", re.I)
+NUM_RE = re.compile(r"(?<![\w.$])(\d+(?:\.\d+)?)(?![\w.]*\d)")
+
+
+def _sheet_numbers(sheet):
+    """(ints/floats allowed as plain numbers, money values in dollars) from the sheet."""
+    nums, money_vals = set(), set()
+
+    def walk(v):
+        if isinstance(v, bool) or v is None:
+            return
+        if isinstance(v, (int, float)):
+            nums.add(float(v))
+        elif isinstance(v, str):
+            for m in MONEY_RE.finditer(v):
+                money_vals.add(_dollars(m))
+            for n in re.findall(r"\d+(?:\.\d+)?", v):
+                nums.add(float(n))
+        elif isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, (list, tuple)):
+            for x in v:
+                walk(x)
+    walk(sheet)
+    return nums, money_vals
+
+
+def _dollars(m):
+    v = float(m.group(1))
+    unit = (m.group(2) or "").upper()
+    return v * (1e6 if unit == "M" else 1e3 if unit == "K" else 1)
+
+
+def validate_rationale(text, sheet, league=None):
+    """(ok, why). Rejects a dollar amount or number that isn't on the sheet, and a league player or team that
+    isn't in the deal (league: {"players": {NAME}, "teams": {NICKNAME / CITY / ABBR}}, upper case). Invented colour
+    without facts passes."""
+    if not text or not text.strip():
+        return False, "empty"
+    nums, money_vals = _sheet_numbers(sheet)
+    for m in MONEY_RE.finditer(text):
+        d = _dollars(m)
+        if not any(abs(d - x) <= 0.051e6 for x in money_vals):
+            return False, f"amount {m.group(0)} not on the sheet"
+    plain = MONEY_RE.sub(" ", text)
+    for n in NUM_RE.findall(plain):
+        if float(n) not in nums:
+            return False, f"number {n} not on the sheet"
+    up = " " + re.sub(r"[^A-Z0-9' ]", " ", text.upper()) + " "
+    league = league or {}
+    on_sheet_players = {(a.get("name") or "").upper() for a in sheet["assets"] if a["kind"] == "player"}
+    for name in league.get("players", ()):
+        if name and name not in on_sheet_players and f" {name} " in up:
+            return False, f"player {name.title()} isn't in the deal"
+    mine = set()
+    for t in sheet["teams"].values():
+        mine |= {str(t.get("abbr") or "").upper(), str(t.get("nickname") or "").upper(),
+                 str(t.get("team") or "").upper()}
+        mine |= set(str(t.get("team") or "").upper().split())
+    for team in league.get("teams", ()):
+        if team and team not in mine and f" {team} " in up:
+            return False, f"team {team.title()} isn't in the deal"
+    return True, None
+
+
+def parse_answer(text):
+    m = re.search(r"\{.*\}", text or "", re.S)
+    try:
+        d = json.loads(m.group(0) if m else text)
+    except (ValueError, TypeError, AttributeError):
+        return None
+    if not all(isinstance(d.get(k), str) and d.get(k).strip() for k in ("headline", "rationale_a", "rationale_b")):
+        return None
+    return {k: d[k].strip() for k in ("headline", "rationale_a", "rationale_b")}
+
+
+def write_rationale(sheet, llm=None, league=None):
+    """The LLM's headline and rationale when it answers and every field validates; else the template. The
+    result's source says which (rationale_source)."""
+    from engines.gm_llm import call
+    got = parse_answer(call(llm, prompt(sheet))) if llm is not None else None
+    if got and all(validate_rationale(got[k], sheet, league)[0] for k in got):
+        return dict(got, source="LLM")
+    out = template(sheet)
+    if got:
+        out["rejected"] = [validate_rationale(got[k], sheet, league)[1] for k in got
+                           if not validate_rationale(got[k], sheet, league)[0]]
+    return out
+
+
+def write_rationales(sheets, llm=None, league=None):
+    """write_rationale for several sheets (the LLM's calls are metered by the gm_llm client; flush it after)."""
+    return [write_rationale(s, llm, league) for s in sheets]
+
+
+def league_names(b):
+    """The validator's league: every rostered player's name and every team's nickname, city and abbreviation."""
+    players = {(p.get("name") or "").upper() for p in b["players"].values() if p.get("name")}
+    teams = set()
+    for t in b["teams"].values():
+        teams |= {str(t.get("abbr") or "").upper(), str(t.get("name") or "").upper(), str(t.get("city") or "").upper()}
+    return {"players": players - {""}, "teams": teams - {""}}
