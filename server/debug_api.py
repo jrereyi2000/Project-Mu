@@ -331,6 +331,89 @@ def front_office_apply(sighting_id: int, body: Optional[ApplyIn] = None, x_debug
     return _front_office("apply_sighting", sighting_id, body.assets if body else None)
 
 
+class NegotiateIn(BaseModel):
+    user_team: str
+    gm_team: str
+    assets: list[dict[str, Any]]
+    note: Optional[str] = None
+
+
+class OfferIn(BaseModel):
+    assets: list[dict[str, Any]]
+    note: Optional[str] = None
+
+
+class NoteIn(BaseModel):
+    note: Optional[str] = None
+
+
+def _negotiation(action, *args, llm=False):
+    """Run a gm_negotiation action in one DB transaction (tuple rows); the GM's replies through Gemini
+    (label gm_negotiation) when llm, else templates. FrontOfficeError -> HTTP error."""
+    from psycopg.rows import tuple_row
+    from engines import gm_negotiation as gn
+    from engines.front_office import FrontOfficeError
+    from engines.gm_llm import flush, make_llm
+    client = make_llm("gm_negotiation") if llm else None
+    try:
+        with connect() as conn:
+            cur = conn.cursor(row_factory=tuple_row)
+            if not gn.installed(cur):
+                raise HTTPException(409, "the negotiations migration (2026_12_21_gm_negotiations.sql) isn't applied")
+            try:
+                out = getattr(gn, action)(cur, *args, **({"llm": client} if llm else {}))
+            except FrontOfficeError as e:
+                conn.rollback()
+                raise HTTPException(e.status, e.message)
+            conn.commit()
+        return out
+    finally:
+        flush(client)
+
+
+@router.get("/front-office/negotiations")
+def front_office_negotiations(season: Optional[int] = None):
+    """Trade negotiations with the GM agents, newest first, with every turn (the GM's surplus is never shown)."""
+    return _negotiation("negotiations_state", season)
+
+
+@router.get("/front-office/negotiations/assets")
+def front_office_negotiation_assets(user_team: str, gm_team: str):
+    """The offer builder: both teams' players (tradeable or why not) and picks, the GM's direction and needs."""
+    return _negotiation("team_assets", user_team.upper(), gm_team.upper())
+
+
+@router.post("/front-office/negotiations")
+def front_office_negotiate(body: NegotiateIn, x_debug_token: Optional[str] = Header(None)):
+    """Open talks: JR's first offer from a team he controls to another team's GM; returns the GM's answer
+    (ACCEPT, COUNTER, REJECT or WALK_AWAY). An accepted deal becomes an APPROVED USER proposal."""
+    require_token(x_debug_token)
+    return _negotiation("open_negotiation", body.user_team.upper(), body.gm_team.upper(), body.assets, body.note,
+                        llm=True)
+
+
+@router.post("/front-office/negotiations/{negotiation_id}/offer")
+def front_office_negotiation_offer(negotiation_id: int, body: OfferIn, x_debug_token: Optional[str] = Header(None)):
+    """JR's next offer in open talks; returns the GM's answer."""
+    require_token(x_debug_token)
+    return _negotiation("offer", negotiation_id, body.assets, body.note, llm=True)
+
+
+@router.post("/front-office/negotiations/{negotiation_id}/accept")
+def front_office_negotiation_accept(negotiation_id: int, x_debug_token: Optional[str] = Header(None)):
+    """JR takes the GM's counter (re-judged first) -> an APPROVED USER proposal."""
+    require_token(x_debug_token)
+    return _negotiation("accept_counter", negotiation_id, llm=True)
+
+
+@router.post("/front-office/negotiations/{negotiation_id}/close")
+def front_office_negotiation_close(negotiation_id: int, body: Optional[NoteIn] = None,
+                                   x_debug_token: Optional[str] = Header(None)):
+    """JR ends the talks."""
+    require_token(x_debug_token)
+    return _negotiation("close", negotiation_id, body.note if body else None)
+
+
 @router.put("/front-office/teams/{abbr}")
 def front_office_team(abbr: str, body: ControlIn, x_debug_token: Optional[str] = Header(None)):
     """JR controls this team in Madden (its GM only advises) and/or its GM's suggestions are on or off."""

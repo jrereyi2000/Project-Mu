@@ -408,6 +408,149 @@ function TradeFinderCard() {
   );
 }
 
+// Negotiate (team management step 3): JR offers a trade from a team he controls to another team's GM, who
+// accepts, counters, rejects or walks away (engines/gm_negotiation.py). An agreed deal lands on the Front office
+// card as an APPROVED proposal.
+type NgPlayer = { player_id: number; name: string; pos: string; ovr: number | null; age: number | null; starter: boolean; cap_hit: number; years_left: number | null; tradeable: boolean; why_not: string | null };
+type NgPick = { draft_season: number; round: number; original_team: string; label: string; booked: boolean };
+type NgTeam = { abbr: string; name: string; gm_name: string | null; direction: string; needs: string[]; record: string | null; cap_space: number | null; players: NgPlayer[]; picks: NgPick[] };
+type NgAssets = { window: string; week: number; teams: Record<string, NgTeam> };
+type NgAsset = { type: string; player_id?: number; draft_season?: number; round?: number; original_team?: string; from: string; to: string };
+type NgTurn = { turn_no: number; actor: string; action: string; legs: (NgAsset & { label: string })[] | null; assets: NgAsset[] | null; surplus_user: number | null; mood: string | null; failed_checks: Record<string, string>; message: string | null; message_source: string | null };
+type Negotiation = { id: number; week: number; window: string; status: string; status_reason: string | null; user_team: string; gm_team: string; gm_name: string | null; patience: number; patience_left: number; proposal_id: number | null; on_table: NgTurn | null; turns: NgTurn[] };
+
+const assetKey = (a: NgAsset) => a.type === "PLAYER" ? `P:${a.player_id}` : `K:${a.draft_season}:${a.round}:${a.original_team}`;
+
+function NegotiateCard({ token }: { token: string }) {
+  const [teams, setTeams] = useState<FoTeam[]>([]);
+  const [userTeam, setUserTeam] = useState("");
+  const [gmTeam, setGmTeam] = useState("");
+  const [assets, setAssets] = useState<NgAssets | null>(null);
+  const [picked, setPicked] = useState<Record<string, NgAsset>>({});
+  const [note, setNote] = useState("");
+  const [negs, setNegs] = useState<Negotiation[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const loadNegs = useCallback(() => { call<Negotiation[]>("/front-office/negotiations").then(setNegs).catch(e => setMessage(String(e.message || e))); }, []);
+  useEffect(() => {
+    call<FoState>("/front-office").then(s => {
+      const ts = s.teams || [];
+      setTeams(ts);
+      setUserTeam(prev => prev || ts.find(t => t.user_controlled)?.abbr || "");
+    }).catch(() => {});
+    loadNegs();
+  }, [loadNegs]);
+  useEffect(() => {
+    setAssets(null); setPicked({});
+    if (!userTeam || !gmTeam) return;
+    call<NgAssets>(`/front-office/negotiations/assets?user_team=${userTeam}&gm_team=${gmTeam}`).then(setAssets).catch(e => setMessage(String(e.message || e)));
+  }, [userTeam, gmTeam]);
+  const open = negs.find(n => n.status === "OPEN" && n.user_team === userTeam && n.gm_team === gmTeam);
+  const thread = open || negs.find(n => n.user_team === userTeam && n.gm_team === gmTeam);
+  const toggle = (a: NgAsset) => setPicked(p => { const k = assetKey(a); const n = { ...p }; if (n[k]) delete n[k]; else n[k] = a; return n; });
+  const send = async () => {
+    setBusy(true); setMessage("");
+    try {
+      const body = { assets: Object.values(picked), note: note.trim() || undefined };
+      const n = open
+        ? await call<Negotiation>(`/front-office/negotiations/${open.id}/offer`, { method: "POST", body: JSON.stringify(body) }, token)
+        : await call<Negotiation>("/front-office/negotiations", { method: "POST", body: JSON.stringify({ ...body, user_team: userTeam, gm_team: gmTeam }) }, token);
+      setNote("");
+      if (n.status === "AGREED") setMessage(`Agreed: proposal #${n.proposal_id} is on the Front office card, approved and ready to make in Madden.`);
+      loadNegs();
+    } catch (e) { setMessage(String((e as Error).message || e)); }
+    setBusy(false);
+  };
+  const act = async (path: string, body?: unknown) => {
+    setBusy(true); setMessage("");
+    try {
+      const n = await call<Negotiation>(path, { method: "POST", body: JSON.stringify(body || {}) }, token);
+      if (n.status === "AGREED") setMessage(`Agreed: proposal #${n.proposal_id} is on the Front office card, approved and ready to make in Madden.`);
+      loadNegs();
+    } catch (e) { setMessage(String((e as Error).message || e)); }
+    setBusy(false);
+  };
+  const loadCounter = (t: NgTurn) => setPicked(Object.fromEntries((t.assets || []).map(a => [assetKey(a), a])));
+  const side = (t: NgTeam | undefined, from: string, to: string) => t && (
+    <div className="min-w-0">
+      <span className={label}>{from === userTeam ? `You send (${from})` : `You get (${from}, ${t.gm_name || "GM"})`}</span>
+      <div className="text-[var(--gray-500)] mb-1">{t.direction} {t.record ?? ""} · needs {t.needs.join(", ") || "-"} · cap {money(t.cap_space)}</div>
+      <div className="max-h-56 overflow-auto border border-[var(--gray-100)]">
+        {t.players.map(p => {
+          const a: NgAsset = { type: "PLAYER", player_id: p.player_id, from, to };
+          return (
+            <label key={p.player_id} className={`flex gap-1 px-1 ${p.tradeable ? "" : "text-[var(--gray-500)]"}`} title={p.why_not || ""}>
+              <input type="checkbox" disabled={!p.tradeable} checked={!!picked[assetKey(a)]} onChange={() => toggle(a)} />
+              <span className="truncate">{p.pos} {p.name} {p.ovr} · {p.age} · {money(p.cap_hit)} {p.years_left ?? "?"}y{p.starter ? " · starter" : ""}{p.why_not ? ` · ${p.why_not}` : ""}</span>
+            </label>
+          );
+        })}
+        {t.picks.map(k => {
+          const a: NgAsset = { type: "PICK", draft_season: k.draft_season, round: k.round, original_team: k.original_team, from, to };
+          return (
+            <label key={k.label} className={`flex gap-1 px-1 ${k.booked ? "text-[var(--gray-500)]" : ""}`}>
+              <input type="checkbox" disabled={k.booked} checked={!!picked[assetKey(a)]} onChange={() => toggle(a)} />
+              <span>{k.label}{k.booked ? " · in an open proposal" : ""}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+  const gmTeams = teams.filter(t => !t.user_controlled && t.gm_name);
+  return (
+    <section className={card}>
+      <h3 className="font-black uppercase tracking-wide mb-3">Negotiate with a GM</h3>
+      <p className="text-xs text-[var(--gray-500)] mb-2">Offer a trade from a team you control. The GM accepts, counters, or turns it down, and walks away if you keep wasting his time. A deal you both agree on lands on the Front office card, approved.</p>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <select className={input} value={userTeam} onChange={e => setUserTeam(e.target.value)}>
+          <option value="">Your team</option>
+          {teams.filter(t => t.user_controlled).map(t => <option key={t.abbr} value={t.abbr}>{t.abbr} · {t.team}</option>)}
+        </select>
+        <select className={input} value={gmTeam} onChange={e => setGmTeam(e.target.value)}>
+          <option value="">GM to call</option>
+          {gmTeams.map(t => <option key={t.abbr} value={t.abbr}>{t.abbr} · {t.gm_name} ({t.direction || "-"})</option>)}
+        </select>
+      </div>
+      {message && <p className="text-xs text-[var(--red)] mt-2">{message}</p>}
+      {thread && (
+        <div className="text-xs mt-3 grid gap-1">
+          <div><b>#{thread.id} {thread.status}</b> · week {thread.week} · {thread.gm_name}'s patience {"●".repeat(thread.patience_left)}{"○".repeat(Math.max(0, thread.patience - thread.patience_left))}{thread.status_reason ? ` · ${thread.status_reason}` : ""}{thread.proposal_id ? ` · proposal #${thread.proposal_id}` : ""}</div>
+          {thread.turns.map(t => (
+            <div key={t.turn_no} className={`pl-2 border-l-2 ${t.actor === "GM" ? "border-[var(--red)]" : "border-[var(--gray-300)]"}`}>
+              <b className="mr-2">{t.actor === "GM" ? thread.gm_name : "You"} · {t.action}</b>
+              {t.mood && t.actor === "JR" && <span className="mr-2 px-1 bg-[var(--gray-100)]">{t.mood === "INSULTED" ? "insulting" : t.mood === "APART" ? "far apart" : "close"}</span>}
+              {t.legs && <span>you get {t.legs.filter(l => l.to === thread.user_team).map(l => l.label).join(", ") || "nothing"} · they get {t.legs.filter(l => l.to === thread.gm_team).map(l => l.label).join(", ") || "nothing"}</span>}
+              {t.surplus_user !== null && t.legs && <span className="text-[var(--gray-500)]"> · your surplus {money(t.surplus_user)}</span>}
+              {t.message && <p className={t.actor === "GM" ? "" : "italic text-[var(--gray-500)]"}>{t.message}</p>}
+              {Object.keys(t.failed_checks).length > 0 && t.actor === "JR" && <div className="text-[var(--red)]">{Object.entries(t.failed_checks).map(([k, v]) => `${k}: ${v}`).join("; ")}</div>}
+            </div>
+          ))}
+          {thread.on_table && (
+            <div className="flex flex-wrap gap-2 mt-1">
+              <button className={btnRed} disabled={!token || busy} onClick={() => act(`/front-office/negotiations/${thread.id}/accept`)}>Accept counter</button>
+              <button className={btn} disabled={busy} onClick={() => loadCounter(thread.on_table!)}>Edit the counter</button>
+            </div>
+          )}
+          {thread.status === "OPEN" && <button className={`${btn} justify-self-start`} disabled={!token || busy} onClick={() => act(`/front-office/negotiations/${thread.id}/close`)}>Walk away</button>}
+        </div>
+      )}
+      {assets && !(thread?.status === "WALKED_AWAY" && thread.week === assets.week) && (
+        <div className="text-xs mt-3 grid gap-2">
+          <div className="grid gap-2">
+            {side(assets.teams[userTeam], userTeam, gmTeam)}
+            {side(assets.teams[gmTeam], gmTeam, userTeam)}
+          </div>
+          <input className={input} placeholder="What you tell him (optional)" value={note} onChange={e => setNote(e.target.value)} />
+          <button className={`${btnRed} justify-self-start`} disabled={!token || busy || Object.keys(picked).length === 0} onClick={send}>
+            {busy ? "Waiting for the GM…" : open ? "Make another offer" : "Make offer"}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StatusPill({ status }: { status: string }) {
   const color = status === "running" ? "bg-amber-400 text-black" : status === "done" ? "bg-emerald-600 text-white" : status === "stopped" ? "bg-[var(--gray-500)] text-white" : "bg-[var(--red)] text-white";
   return <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${color}`}>{status}</span>;
@@ -1151,6 +1294,7 @@ function Control({ token, data, reload }: { token: string; data: DebugState | nu
         <TransactionsCard />
         <FrontOfficeCard token={token} />
         <TradeFinderCard />
+        <NegotiateCard token={token} />
         <DraftRoomCard token={token} />
       </div>
 

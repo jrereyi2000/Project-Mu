@@ -688,6 +688,45 @@ CREATE TABLE IF NOT EXISTS gm_offseason_state (
     proposals INT NOT NULL DEFAULT 0
 );
 
+-- Trade negotiations with the GM agents (engines/gm_negotiation.py; 2026_12_21_gm_negotiations.sql): JR offers
+-- from a user-controlled team, the GM accepts, counters, rejects or walks away; an agreed deal becomes an
+-- APPROVED USER proposal (flag negotiated:<id>).
+CREATE TABLE IF NOT EXISTS gm_trade_negotiations (
+    id SERIAL PRIMARY KEY,
+    season INT NOT NULL,
+    week INT NOT NULL,                                -- engine week when opened (offseason 24)
+    trade_window VARCHAR(10) NOT NULL CHECK (trade_window IN ('IN_SEASON', 'OFFSEASON')),
+    offseason_stage SMALLINT,                         -- the offseason stage it was opened in (expires when it moves)
+    user_team_id INT NOT NULL REFERENCES teams(id),   -- JR's team
+    gm_team_id INT NOT NULL REFERENCES teams(id),     -- the GM agent's team
+    status VARCHAR(11) NOT NULL DEFAULT 'OPEN'
+        CHECK (status IN ('OPEN', 'AGREED', 'WALKED_AWAY', 'CLOSED', 'EXPIRED')),
+    status_reason TEXT,
+    patience SMALLINT NOT NULL,                       -- rounds the GM started with
+    patience_left SMALLINT NOT NULL,
+    proposal_id INT REFERENCES gm_trade_proposals(id) ON DELETE SET NULL,   -- the agreed deal
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS gm_trade_negotiations_season ON gm_trade_negotiations (season, status);
+
+CREATE TABLE IF NOT EXISTS gm_trade_negotiation_turns (
+    id SERIAL PRIMARY KEY,
+    negotiation_id INT NOT NULL REFERENCES gm_trade_negotiations(id) ON DELETE CASCADE,
+    turn_no SMALLINT NOT NULL,
+    actor VARCHAR(2) NOT NULL CHECK (actor IN ('JR', 'GM')),
+    action VARCHAR(9) NOT NULL CHECK (action IN ('OFFER', 'COUNTER', 'ACCEPT', 'REJECT', 'WALK_AWAY', 'CLOSE')),
+    assets JSONB,                                     -- Front Office JSON assets of the package on the table
+    surplus_user BIGINT,                              -- JR's team's surplus by the model
+    surplus_gm BIGINT,                                -- the GM's surplus (never shown to JR)
+    mood VARCHAR(8),                                  -- the GM's read of an offer: CLOSE | APART | INSULTED
+    legality JSONB,
+    message TEXT,                                     -- JR's note, or the GM's reply
+    message_source VARCHAR(8) CHECK (message_source IN ('JR', 'LLM', 'TEMPLATE')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (negotiation_id, turn_no)
+);
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'draft_picks_acquired_proposal_fk') THEN
