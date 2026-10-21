@@ -11,10 +11,13 @@ first roster card (years_of_experience 0), not the draft board, since the board-
 play a snap. The 2035 card was scanned at the end of 2035, so the 2035 -> 2036 window is one offseason only and is
 left out (FIRST_START_SEASON) unless include_partial.
 
-Player score: r = (delta - E[delta]) / sd + 0.5 * (dev steps gained, both ends revealed).
+Player score: r = (delta - E[delta]) / sd_band + 0.5 * (dev steps gained, both ends revealed).
   E[delta] is a ridge least-squares fit over every window in the league that season (age buckets at the start card,
-  start OVR, start dev trait with Hidden/NULL as its own 'unknown' level, rookie flag); sd = its residual sd,
-  floor 1. Labels: DEVELOPED r >= 1 with a gain, REGRESSED r <= -2 with a drop, STALLED r <= -1 with no gain,
+  start-OVR bands <70 / 70-79 / 80-84 / 85-89 / 90-94 / 95+ so a 92 is compared with other 90-94s, start dev trait
+  with Hidden/NULL as its own 'unknown' level, rookie flag). sd_band = the residual sd within the player's start-OVR
+  band (the league's when the band has under 20 players), floor 0.75: a surprise is judged against how much players
+  at that level normally move. Cap rule: a player who starts at 99 and stays at 99 can't score below 0 (he can't go
+  up; ON TRACK at worst). Labels: DEVELOPED r >= 1 with a gain, REGRESSED r <= -2 with a drop, STALLED r <= -1 with no gain,
   else ON TRACK (a label never contradicts the ratings).
 Team: weight 1.0 for the 22 best start-card OVRs on the team, 0.5 for the rest; windows ending S, S-1, S-2 weigh
 1.0 / 0.6 / 0.35. D = sum W w r / sum W w, n = sum W w, D* = D n / (n + 20). Teams JR controls are fitted but never
@@ -32,13 +35,15 @@ FIRST_START_SEASON = 2036               # first card from a preseason scan (2035
 STARTERS = 22
 DEPTH_WEIGHT = 0.5
 SHRINK_K = 20
-SD_FLOOR = 1.0
+SD_FLOOR = 0.75
+MIN_BAND_N = 20
+OVR_CAP = 99
 RIDGE = 1.0
 DEV_STEP_BONUS = 0.5
 DEVELOPED, STALLED, REGRESSED = 1.0, -1.0, -2.0
 AGE_BUCKETS = (22, 23, 24, 25, 26, 28, 29, 30, 31, 32, 33)   # <= 22 ... 33+; 27 is the base (no column)
 DEV_RANK = {"NORMAL": 0, "STAR": 1, "SUPERSTAR": 2, "X-FACTOR": 3, "SUPERSTAR X-FACTOR": 3}
-OVR_CENTER = 70
+OVR_BANDS = (70, 80, 85, 90, 95)      # lower edges: <70, 70-79 (base, no column), 80-84, 85-89, 90-94, 95+
 
 
 # ------------------------------------------------------------------ pure ----
@@ -72,39 +77,57 @@ def age_bucket(age):
     return 27 if a == 27 else a
 
 
+def ovr_band(ovr):
+    """0 (<70), 1 (70-79), 2 (80-84), 3 (85-89), 4 (90-94), 5 (95+)."""
+    return sum(1 for edge in OVR_BANDS if ovr >= edge)
+
+
 def features(w):
-    """Design row for one window: intercept, age buckets, start OVR, start dev (Star/Superstar/X-Factor/unknown),
-    rookie."""
+    """Design row for one window: intercept, age buckets, start-OVR bands (70-79 the base), start dev
+    (Star/Superstar/X-Factor/unknown), rookie."""
     b = age_bucket(w["age"])
     rank = dev_rank(w["dev_start"])
-    return ([1.0] + [1.0 if b == a else 0.0 for a in AGE_BUCKETS] + [(w["ovr_start"] - OVR_CENTER) / 10.0]
+    return ([1.0] + [1.0 if b == a else 0.0 for a in AGE_BUCKETS] + [1.0 if ovr_band(w["ovr_start"]) == k else 0.0 for k in (0, 2, 3, 4, 5)]
             + [1.0 if rank == k else 0.0 for k in (1, 2, 3)] + [1.0 if rank is None else 0.0]
             + [1.0 if w["rookie"] else 0.0])
 
 
 def fit_expected(windows):
-    """Ridge least squares of delta on features -> (coefficients, residual sd). The intercept is not penalized."""
+    """Ridge least squares of delta on features -> (coefficients, {band: residual sd, None: league sd}). The intercept
+    is not penalized; a band with under MIN_BAND_N players uses the league sd."""
     import numpy as np
     X = np.array([features(w) for w in windows], dtype=float)
     y = np.array([w["ovr_end"] - w["ovr_start"] for w in windows], dtype=float)
     pen = RIDGE * np.eye(X.shape[1])
     pen[0, 0] = 0.0
     beta = np.linalg.solve(X.T @ X + pen, X.T @ y)
-    res = y - X @ beta
-    sd = math.sqrt(float(res @ res) / max(len(y) - 1, 1)) if len(y) else SD_FLOOR
-    return beta, max(sd, SD_FLOOR)
+    res = [float(v) for v in y - X @ beta]
+
+    def sd(rs):
+        return max(math.sqrt(sum(v * v for v in rs) / max(len(rs) - 1, 1)), SD_FLOOR) if rs else SD_FLOOR
+    league = sd(res)
+    by = {}
+    for w, v in zip(windows, res):
+        by.setdefault(ovr_band(w["ovr_start"]), []).append(v)
+    sds = {b: sd(rs) if len(rs) >= MIN_BAND_N else league for b, rs in by.items()}
+    sds[None] = league
+    return beta, sds
 
 
 def expected_delta(beta, w):
     return float(sum(b * x for b, x in zip(beta, features(w))))
 
 
-def player_score(w, beta, sd):
+def player_score(w, beta, sds):
+    """-> (r, expected delta, dev steps). sds from fit_expected."""
     delta = w["ovr_end"] - w["ovr_start"]
     exp = expected_delta(beta, w)
+    sd = sds.get(ovr_band(w["ovr_start"]), sds[None])
     a, b = dev_rank(w["dev_start"]), dev_rank(w["dev_end"])
     steps = b - a if a is not None and b is not None else 0
     r = (delta - exp) / sd + DEV_STEP_BONUS * steps
+    if w["ovr_start"] >= OVR_CAP and w["ovr_end"] >= OVR_CAP:
+        r = max(r, 0.0)                     # held at the cap: never a penalty
     return round(r, 3), round(exp, 2), steps
 
 
@@ -125,11 +148,11 @@ def score_window(windows):
     age, ovr_start, ovr_end, dev_start, dev_end, rookie}. -> scored rows (fit on all of them)."""
     if not windows:
         return []
-    beta, sd = fit_expected(windows)
+    beta, sds = fit_expected(windows)
     starters = starter_flags(windows)
     out = []
     for w in windows:
-        r, exp, steps = player_score(w, beta, sd)
+        r, exp, steps = player_score(w, beta, sds)
         out.append(dict(w, r=r, expected=exp, delta=w["ovr_end"] - w["ovr_start"], dev_steps=steps,
                         starter=starters[w["player_id"]], label=label(r, w["ovr_end"] - w["ovr_start"])))
     return out

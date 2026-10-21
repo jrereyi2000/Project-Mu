@@ -36,9 +36,50 @@ def test_dev_upgrade_bonus_needs_both_ends_revealed():
     rows = league()
     rows[0] = dict(rows[0], dev_start="Normal", dev_end="Star")
     rows[1] = dict(rows[1], dev_start="Hidden", dev_end="Superstar")
-    beta, sd = dq.fit_expected(rows)
-    assert dq.player_score(rows[0], beta, sd)[2] == 1
-    assert dq.player_score(rows[1], beta, sd)[2] == 0
+    beta, sds = dq.fit_expected(rows)
+    assert dq.player_score(rows[0], beta, sds)[2] == 1
+    assert dq.player_score(rows[1], beta, sds)[2] == 0
+
+
+def test_ovr_bands():
+    assert [dq.ovr_band(o) for o in (55, 69, 70, 79, 80, 84, 85, 90, 94, 95, 99)] == [0, 0, 1, 1, 2, 2, 3, 4, 4, 5, 5]
+
+
+def tiered():
+    """60 players in the 70s who move +-1 and 60 in the 90s who move +-3: the same +3 surprise is rarer in the 70s."""
+    rows = []
+    for i in range(120):
+        top = i >= 60
+        swing = (3 if top else 1) * (1 if i % 2 else -1)
+        start = 92 if top else 75
+        rows.append(win(i, 1 + i % 2, 27, start, start + swing))
+    return rows
+
+
+def test_per_band_spread():
+    rows = tiered()
+    beta, sds = dq.fit_expected(rows)
+    assert sds[4] > 2 * sds[1]
+    low = dq.player_score(win(900, 1, 27, 75, 78), beta, sds)[0]
+    high = dq.player_score(win(901, 1, 27, 92, 95), beta, sds)[0]
+    assert low > 2 * high > 0
+
+
+def test_small_band_uses_league_spread():
+    rows = tiered() + [win(500 + i, 1, 27, 60, 60 + (i % 3) - 1) for i in range(5)]
+    _, sds = dq.fit_expected(rows)
+    assert sds[0] == sds[None]
+
+
+def test_cap_rule_holds_99s_at_zero_or_better():
+    rows = tiered() + [win(700 + i, 1, 27, 99, 99 - (i % 2)) for i in range(30)]   # 99s usually slip
+    beta, sds = dq.fit_expected(rows)
+    held = win(800, 1, 27, 99, 99)
+    assert dq.player_score(held, beta, sds)[0] >= 0
+    slipped = dq.player_score(win(801, 1, 27, 99, 96), beta, sds)[0]
+    assert slipped < 0                                              # dropping off the cap still counts
+    capped = [p for p in dq.score_window(rows + [held]) if p["ovr_start"] == 99 and p["ovr_end"] == 99]
+    assert capped and all(p["r"] >= 0 and p["label"] == "ON TRACK" for p in capped)
 
 
 def test_labels_never_contradict_ratings():
