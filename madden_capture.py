@@ -1133,14 +1133,27 @@ def table_text(path, top=0.48, bottom=0.90):
             if H * top < b[1] < H * bottom]
 
 
+def clear_pages(folder, prefix, first_page=0):
+    """Delete {prefix}_NNN.png pages numbered first_page or later, left by an earlier attempt at
+    this list. A recapture that ends sooner would otherwise sit beside them and extract.py merges
+    the lot (Oct 21: a stream-blanked schedule run left 34 week-picker pages behind 3 good ones)."""
+    pat = re.compile(rf"^{re.escape(prefix)}_(\d{{3}})\.png$")
+    for name in os.listdir(folder):
+        m = pat.match(name)
+        if m and int(m.group(1)) >= first_page:
+            os.remove(os.path.join(folder, name))
+
+
 def capture_list(folder, prefix, rows_per_page=10, max_pages=250, stop_at_zeros=True, direction="down",
                  text_end=False, zero_min=20, confirm_end=False, stop=None, first_page=0):
     """confirm_end: a page that repeats the last one gets one more batch of presses before it
     counts as the end (Madden lists don't wrap; after a stream restart, Oct 16, a whole batch
     of Down presses was dropped and a game's Defense stopped after 2 of 7 pages).
     stop(path) -> bool, checked after each saved page: True ends the list there (League Transactions'
-    week cutoff). first_page numbers the pages from there (a resumed list). Returns the next page number."""
+    week cutoff). first_page numbers the pages from there (a resumed list); pages from first_page on
+    left by an earlier attempt are deleted first. Returns the next page number."""
     os.makedirs(folder, exist_ok=True)
+    clear_pages(folder, prefix, first_page)
     wait_table_loaded()
     prev, prev_text = None, None
     for page in range(first_page, first_page + max_pages):
@@ -1227,8 +1240,11 @@ def capture_wide_list(folder, base, rows_per_page=10, max_pages=250, traverse=tr
     left (named) half; a game's right-hand pages are often all zeros and look alike (Oct 13).
     settle: wait for the list to stop moving after every scroll (settle_list). pair_check(left, right):
     False when the two halves of a page aren't at the same row position; the pair is then shot again
-    (twice at most) and a pair that still disagrees is kept with a warning (extract.py checks it too)."""
+    (twice at most) and a pair that still disagrees is kept with a warning (extract.py checks it too).
+    Both halves' pages left by an earlier attempt are deleted first."""
     os.makedirs(folder, exist_ok=True)
+    clear_pages(folder, base)
+    clear_pages(folder, f"{base}_right")
     wait_table_loaded()
     traverse("left")                     # the column highlight can be left anywhere; start at the left edge
     side = "left"
