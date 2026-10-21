@@ -164,6 +164,15 @@ def _dollars(m):
     return v * (1e6 if unit == "M" else 1e3 if unit == "K" else 1)
 
 
+def names_team(text, up, team):
+    """Does text name this league team (upper case)? up: text upper-cased with punctuation as spaces. A team
+    abbreviation (three letters or fewer) counts only written in capitals, so the words "was" and "no" aren't
+    Washington and New Orleans."""
+    if len(team) <= 3:
+        return re.search(rf"(?<![A-Za-z0-9]){re.escape(team)}(?![A-Za-z0-9])", text) is not None
+    return f" {team} " in up
+
+
 def validate_rationale(text, sheet, league=None):
     """(ok, why). Rejects a dollar amount or number that isn't on the sheet, and a league player or team that
     isn't in the deal (league: {"players": {NAME}, "teams": {NICKNAME / CITY / ABBR}}, upper case). Invented colour
@@ -198,7 +207,7 @@ def validate_rationale(text, sheet, league=None):
         # a deal team's city ("New York" in "New York Jets") is the deal team, however many words it has
         if not team or team in mine or any(f" {team} " in f for f in full):
             continue
-        if f" {team} " in up:
+        if names_team(text, up, team):
             return False, f"team {team.title()} isn't in the deal"
     return True, None
 

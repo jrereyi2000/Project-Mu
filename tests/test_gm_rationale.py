@@ -36,6 +36,17 @@ def test_validator_rejects_invented_number_player_team():
     assert validate_rationale("", SHEET, LEAGUE) == (False, "empty")
 
 
+def test_team_abbreviation_only_in_capitals():
+    # "was" is not Washington, "no" is not New Orleans: an abbreviation counts only written in capitals
+    league = {"players": set(), "teams": {"CAR", "PANTHERS", "CAROLINA", "WAS", "COMMANDERS", "WASHINGTON", "IND"}}
+    sheet = dict(SHEET, teams={"a": SHEET["teams"]["a"],
+                               "b": dict(SHEET["teams"]["b"], abbr="ATL", nickname="Falcons", team="Atlanta Falcons")})
+    assert validate_rationale("Sellers was the piece we needed, no question; indeed he was.", sheet, league)[0]
+    assert not validate_rationale("WAS called about him too.", sheet, league)[0]
+    assert not validate_rationale("Washington called about him too.", sheet, league)[0]
+    assert not validate_rationale("The commanders called about him too.", sheet, league)[0]
+
+
 def answer(**kw):
     d = {"headline": "Panthers land Robbie Sellers", "rationale_a": "Silas Jessup: We needed an edge rusher.",
          "rationale_b": "Vera Greer: The 2037 R1 (CAR) pick fits our rebuild."}

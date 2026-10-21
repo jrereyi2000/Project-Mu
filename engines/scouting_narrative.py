@@ -97,13 +97,14 @@ def validate_scout_text(text, sheet, league=None):
             continue
         if f" {school} " in up:
             return False, f"school {school.title()} isn't on the sheet"
+    from engines.gm_rationale import names_team
     team = sheet.get("team")
     mine_t = {str(x).upper() for x in (team or ()) if x}
     full_t = " ".join(mine_t)
     for t in league.get("teams", ()):
         if not t or t in mine_t or t in full_t:
             continue
-        if f" {t} " in up:
+        if names_team(text, up, t):
             return False, f"team {t.title()} isn't on the sheet"
     return True, None
 
