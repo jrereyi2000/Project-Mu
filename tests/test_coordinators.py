@@ -253,7 +253,7 @@ class TestDatabaseCoordinatorsAndSlants(unittest.TestCase):
             with conn.cursor() as cur:
                 cur.execute("SELECT coach_name, slant FROM coaches ORDER BY coach_name;")
                 rows = cur.fetchall()
-                self.assertEqual(len(rows), 33)
+                self.assertGreaterEqual(len(rows), 33)  # offseason hires add coaches
 
                 slants = dict(rows)
                 # Verify key anchors from §3.1
@@ -347,6 +347,8 @@ class TestDatabaseCoordinatorsAndSlants(unittest.TestCase):
             with conn.cursor() as cur:
                 res1 = seed_all_coordinators_and_slants(cur)
                 res2 = seed_all_coordinators_and_slants(cur)
+                # The seeder reopens baseline tenures; never commit it over the live staffs
+                conn.rollback()
                 self.assertEqual(res1["slants_updated"], res2["slants_updated"])
                 self.assertEqual(res1["coordinators_seeded"], res2["coordinators_seeded"])
                 self.assertEqual(res1["tenures_seeded"], res2["tenures_seeded"])

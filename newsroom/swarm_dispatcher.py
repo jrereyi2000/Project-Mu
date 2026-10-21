@@ -43,6 +43,7 @@ from newsroom.award_winners import (
 from engines.gotw_engine import display_excitement
 from engines.game_script_engine import get_scripts, script_summary
 from engines.records_engine import find_records_broken_in_week
+from engines.coach_profile import league_staff_directory
 from newsroom.db_tools import (
     get_game_box_score,
     get_player_season_stats,
@@ -960,6 +961,22 @@ Example Prompt Hook: {article_type_info.get('example_prompt_hook', '')}
         except Exception as e:
             print(f"⚠️  [MEMORY UNAVAILABLE] {agent_id}: {e}")
 
+        # This league's coaching staffs (engines/coach_profile.py), so writers never fall back on real-life coaches
+        staff_block = ""
+        try:
+            with psycopg.connect(self.db.db_conn_info) as sconn, sconn.cursor() as scur:
+                lines = league_staff_directory(scur, season)
+            if lines:
+                staff_block = f"""
+LEAGUE COACHING STAFFS (Season {season}):
+This league's head coaches and coordinators differ from the real NFL: coaches have been fired, hired and promoted
+here. Whenever you name a team's head coach, offensive coordinator or defensive coordinator, use only the names
+below, never one you remember from real life. "unnamed" means the job is filled but the coach has no recorded
+name: call him "the offensive coordinator" / "the defensive coordinator" and never supply a name.
+""" + "\n".join(f"- {line}" for line in lines) + "\n"
+        except Exception as e:
+            print(f"⚠️  [STAFF DIRECTORY UNAVAILABLE] {agent_id}: {e}")
+
         system_instruction = f"""ROLE & PERSONA:
 {base_archetype_prompt}
 
@@ -978,7 +995,7 @@ You have autonomous access to query the simulation database using these function
 WEEK CONTEXT:
 Calendar Week: Season {season} | Week {week}
 Assigned Team ID: {assigned_team_id if assigned_team_id is not None else 'National Coverage'}
-"""
+{staff_block}"""
 
         # Determine Temporal Mode (RETROSPECTIVE, PROSPECTIVE, or CUMULATIVE)
         at_id = article_type_info.get("id") if article_type_info else None

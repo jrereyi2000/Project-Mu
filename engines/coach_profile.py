@@ -7,6 +7,8 @@ coach per team per season). This mirrors the `coach_records` view, but only coun
 (`visible(season, week)`), so a rerun of an old week never sees later results.
 """
 
+import re
+
 TIERS = ("Low", "Medium", "High")
 
 TENDENCY_WORDS = {
@@ -31,6 +33,10 @@ MEASURED = ("pass_lean", "fourth_down_aggressiveness")
 OBSERVED_COLS = {"pass_lean": "observed_pass_lean", "fourth_down_aggressiveness": "observed_fourth_down"}
 REAL_WORLD_SOURCE = "real-world 2026 staff tendency; not yet measured in this league"
 PHILOSOPHY_SOURCE = "real-world staff philosophy; not measured in this league"
+
+# Stand-ins the offseason package creates when a coordinator leaves (newsroom/offseason_service.py): no real name.
+PLACEHOLDER_COORDINATOR = re.compile(r" (Interim (OC|DC)|Offensive Lieutenant|Defensive Lieutenant)$")
+UNNAMED_NOTE = "not named in league records; refer to him only by title and never supply a name"
 
 REGULAR = "REGULAR_SEASON"
 FULL_SEASON_GAMES = 17
@@ -201,11 +207,15 @@ def fetch_team_staff(cur, team_id: int, season: int) -> dict | None:
         FROM coordinator_tenures ct
         JOIN coordinators c ON c.id = ct.coordinator_id
         WHERE ct.team_id = %s AND ct.start_season <= %s AND COALESCE(ct.end_season, 9999) >= %s
+        ORDER BY ct.start_season, ct.id
     """, (team_id, season, season))
     coords = {}
-    for r in cur.fetchall():
+    for r in cur.fetchall():  # latest tenure per role wins
         role = r[0]
         coord_dict = dict(zip(("role", "name", "scheme", "playbook", "pass_lean", "blitz_rate", "man_coverage"), r))
+        if PLACEHOLDER_COORDINATOR.search(coord_dict["name"] or ""):
+            coord_dict["name"] = None
+            coord_dict["name_note"] = UNNAMED_NOTE
         coord_dict["coordinator_name"] = coord_dict["name"]
         coords[role] = coord_dict
 
@@ -239,6 +249,23 @@ def fetch_team_staff(cur, team_id: int, season: int) -> dict | None:
             staff[k] = v
 
     return staff
+
+
+def league_staff_directory(cur, season: int) -> list[str]:
+    """One line per team naming its head coach and coordinators in `season`, for the writer prompts."""
+    cur.execute("SELECT id, city, name, abbreviation FROM teams ORDER BY city, name")
+    lines = []
+    for team_id, city, name, abbr in cur.fetchall():
+        staff = fetch_team_staff(cur, team_id, season)
+        if not staff:
+            continue
+        parts = [f"HC {staff['head_coach']['coach_name']}"]
+        for role, key in (("OC", "offensive_coordinator"), ("DC", "defensive_coordinator")):
+            coord = staff.get(key)
+            if coord:
+                parts.append(f"{role} {coord['name'] or 'unnamed'}")
+        lines.append(f"{city} {name} ({abbr}): " + "; ".join(parts))
+    return lines
 
 
 def fetch_previous_coach(cur, team_id: int, start_season: int):
