@@ -476,6 +476,8 @@ def step_preseason_engines(season):
 def step_scouting_season(season):
     """Season scan, after the GM rollover (team management step 4): engines/fo_quality.recompute for the new season
     (this year's rookies scored at year 0, earlier classes a year on; JR's teams keep their q), then
+    engines/dev_quality.recompute (player development from last season's card to this one; skipped without its
+    columns), then
     scouting_engine init for the incoming class (season + 1) at the league's current step. Each part is optional:
     skipped without its migration, a failure only logs a warning."""
     out = {}
@@ -490,6 +492,13 @@ def step_scouting_season(season):
                 res = fo_quality.recompute(cur, season, log=lambda *a: None)
                 out["fo_quality"] = {r["abbr"]: r["q"] for r in res.values() if not r["held"]}
                 log(f"  fo_quality {season}: {len(out['fo_quality'])} teams rescored from their draft records")
+                cur.execute("""SELECT 1 FROM information_schema.columns
+                               WHERE table_name = 'gm_team_seasons' AND column_name = 'dev_quality'""")
+                if cur.fetchone():
+                    from engines import dev_quality
+                    res = dev_quality.recompute(cur, season, log=lambda *a: None)
+                    out["dev_quality"] = {r["abbr"]: r["D_star"] for r in res.values() if not r["held"]}
+                    log(f"  dev_quality {season}: {len(out['dev_quality'])} teams scored on player development")
             if se.installed(cur):
                 cur.execute("SELECT count(*) FROM draft_prospects WHERE draft_season = %s", (season + 1,))
                 if cur.fetchone()[0]:

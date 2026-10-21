@@ -572,6 +572,9 @@ CREATE TABLE IF NOT EXISTS gm_team_seasons (
     fo_quality NUMERIC(4,2) NOT NULL DEFAULT 1.00 CHECK (fo_quality BETWEEN 0.5 AND 1.6),
     fo_quality_inputs JSONB,
     fo_quality_at TIMESTAMPTZ,
+    dev_quality NUMERIC(5,3),                         -- player development D* (engines/dev_quality, §2.18)
+    dev_quality_inputs JSONB,
+    dev_quality_at TIMESTAMPTZ,
     hot_seat_score NUMERIC(6,3),                      -- offseason rollover (sub-plan §7 Q4)
     hot_seat_inputs JSONB,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
