@@ -12,8 +12,8 @@ Read helpers (the hand-off surface for steps 4 and 5; all read-only, plain tuple
   deadline_summary(cur, season)                    buyers / sellers by direction, executed trades by week
   legality_check(cur, season, week, team_a, team_b, assets)
   front_office_state(cur, season)                  everything the #debug Front Office card shows
-Sightings: store_sightings (called by the transactions load), match_sightings (sets only match_status /
-proposal_id), consistency_flags (computed, never written). Actions (JR on #debug, inside the caller's
+Sightings: store_sightings (called by the transactions load), match_sightings (a heading's rows per team pair
+as one trade; sets match_status / proposal_id, refreshes parsed), consistency_flags (computed, never written). Actions (JR on #debug, inside the caller's
 transaction): approve, reject, could_not_make, confirm ("Made it"), record ("Record a trade" / "Made a different
 trade"), apply_sighting ("Apply this trade"), set_team_control.
 """
@@ -285,11 +285,12 @@ def trade_finder(cur, player_id, season=None, per_team=3, team=None):
 
 # -------------------------------------------------------------- sightings ----
 def pick_from_text(asset_text):
-    """'2037 1ST ROUND PICK' -> (2037, 1); None when unreadable."""
-    m = re.match(r"(\d{4}) (?:(\w+) )?(?:ROUND|RD)", asset_text or "")
+    """'2037 1ST ROUND PICK' or Madden's '2037 ROUND 5 (155) DRAFT PICK' -> (2037, 1) / (2037, 5); None when
+    unreadable."""
+    m = re.match(r"(\d{4}) (?:(\w+) )?(?:ROUND|RD)(?: (\d{1,2})\b)?", asset_text or "")
     if not m:
         return None
-    word = (m.group(2) or "").upper()
+    word = (m.group(2) or m.group(3) or "").upper()
     rd = ROUND_WORDS.get(word) or (int(word) if word.isdigit() else None)
     return (int(m.group(1)), rd) if rd else None
 
@@ -311,30 +312,56 @@ def store_sightings(cur, season, rows, capture_id=None):
     return n
 
 
+def merge_sightings(parsed_rows):
+    """Madden logs a trade one row per asset ('PACKERS TRADE (FS) X TO BENGALS', 'BENGALS TRADE 2037 ROUND 5 (155)
+    DRAFT PICK TO PACKERS'): the rows of one heading between the same two teams, as one parsed trade (every row's
+    legs and assets)."""
+    rows = [p for p in parsed_rows if p]
+    if not rows:
+        return {}
+    return {"team": rows[0].get("team"), "to_team": rows[0].get("to_team"),
+            "legs": [l for p in rows for l in p.get("legs") or []],
+            "assets": [a for p in rows for a in p.get("assets") or []]}
+
+
+def sighting_group(parsed):
+    """The two teams a trade row is between (rows of one heading with the same pair are one trade)."""
+    return frozenset({(parsed or {}).get("team"), (parsed or {}).get("to_team")} - {None})
+
+
 def match_sighting(parsed, candidates, nick_to_abbr):
-    """Pure. parsed: transactions_parse's trade dict {team, to_team, legs [{name}], assets}. candidates: EXECUTED
-    proposals [{id, teams {abbr, abbr}, player_keys {full_key}}] not matched yet. Returns (status, proposal_id):
-    MATCHED (same teams, every player leg in the proposal and as many players), PARTIAL (same teams, some
-    players), UNMATCHED."""
+    """Pure. parsed: a trade dict {team, to_team, legs [{name}], assets [{asset, from}]} (one row, or a heading's
+    rows merged by merge_sightings). candidates: EXECUTED proposals [{id, teams {abbr, abbr}, player_keys
+    {full_key}, pick_keys {(season, round, from abbr)}}] not matched yet. Returns (status, proposal_id): MATCHED
+    (same teams, the same players and the same picks), PARTIAL (same teams, some players or picks, or neither side
+    names a player and the picks can't be read), UNMATCHED."""
     from pipeline.capture_matching import full_key
     teams = {nick_to_abbr.get(parsed.get("team")), nick_to_abbr.get(parsed.get("to_team"))} - {None}
     keys = {full_key(l["name"]) for l in parsed.get("legs") or []}
+    picks = set()
+    for a in parsed.get("assets") or []:
+        pk = pick_from_text(a.get("asset"))
+        if pk:
+            picks.add((pk[0], pk[1], nick_to_abbr.get(a.get("from"))))
     best = ("UNMATCHED", None)
     for c in candidates:
         if teams != set(c["teams"]):
             continue
-        hit = keys & c["player_keys"]
-        if keys and hit == keys and len(keys) == len(c["player_keys"]):
+        c_picks = set(c.get("pick_keys") or ())
+        if (keys or picks) and keys == c["player_keys"] and picks == c_picks:
             return "MATCHED", c["id"]
-        if (hit or (not keys and not c["player_keys"])) and best[0] == "UNMATCHED":
+        if ((keys & c["player_keys"]) or (picks & c_picks) or (not keys and not c["player_keys"])) \
+                and best[0] == "UNMATCHED":
             best = ("PARTIAL", c["id"])
     return best
 
 
 def match_sightings(cur, season):
-    """Link UNMATCHED/PARTIAL sightings to EXECUTED proposals (sets only match_status and proposal_id). Returns
-    {MATCHED: n, PARTIAL: n, UNMATCHED: n}."""
+    """Link sightings to EXECUTED proposals: a heading's rows between the same two teams are matched as one trade
+    and all get its status and proposal_id. Each row is re-read with the current grammar first (its parsed JSON is
+    refreshed when that reads it differently). Returns {MATCHED: n, PARTIAL: n, UNMATCHED: n} rows."""
     from pipeline.capture_matching import full_key
+    from pipeline.transactions_parse import parse_row
     cur.execute("SELECT to_regclass('gm_trade_sightings') IS NOT NULL")
     if not cur.fetchone()[0]:
         return {}
@@ -342,24 +369,40 @@ def match_sightings(cur, season):
     nick = {r[0].upper(): r[1] for r in cur.fetchall()}
     cur.execute("""SELECT p.id, ta.abbreviation, tb.abbreviation FROM gm_trade_proposals p
                    JOIN teams ta ON ta.id = p.team_a_id JOIN teams tb ON tb.id = p.team_b_id
-                   WHERE p.season = %s AND p.status = 'EXECUTED'
-                     AND NOT EXISTS (SELECT 1 FROM gm_trade_sightings s WHERE s.proposal_id = p.id
-                                     AND s.match_status = 'MATCHED')""", (season,))
+                   WHERE p.season = %s AND p.status = 'EXECUTED'""", (season,))
     props = cur.fetchall()
     legs = _legs(cur, [r[0] for r in props])
     cands = [{"id": r[0], "teams": {r[1], r[2]},
-              "player_keys": {full_key(l["player_name"]) for l in legs.get(r[0], []) if l["type"] == "PLAYER"}}
+              "player_keys": {full_key(l["player_name"]) for l in legs.get(r[0], []) if l["type"] == "PLAYER"},
+              "pick_keys": {(l["pick"]["draft_season"], l["pick"]["round"], l["from"])
+                            for l in legs.get(r[0], []) if l["type"] == "PICK"}}
              for r in props]
-    cur.execute("""SELECT id, parsed FROM gm_trade_sightings WHERE season = %s AND match_status <> 'MATCHED'
-                   ORDER BY id""", (season,))
+    cur.execute("""SELECT id, txn_date, raw_text, parsed, match_status, proposal_id FROM gm_trade_sightings
+                   WHERE season = %s ORDER BY id""", (season,))
+    groups = {}
+    for sid, date, text, parsed, status, pid in cur.fetchall():
+        fresh = parse_row(text)
+        if fresh != parsed:
+            cur.execute("UPDATE gm_trade_sightings SET parsed = %s WHERE id = %s", (json.dumps(fresh), sid))
+        groups.setdefault((date, sighting_group(fresh)), []).append((sid, fresh, status, pid))
+    taken = {}                                     # proposal -> the group its MATCHED rows belong to
+    for g, rows in groups.items():
+        for _, _, status, pid in rows:
+            if status == "MATCHED" and pid:
+                taken.setdefault(pid, g)
     counts = {"MATCHED": 0, "PARTIAL": 0, "UNMATCHED": 0}
-    for sid, parsed in cur.fetchall():
-        status, pid = match_sighting(parsed or {}, cands, nick)
-        counts[status] += 1
-        cur.execute("UPDATE gm_trade_sightings SET match_status = %s, proposal_id = %s WHERE id = %s",
-                    (status, pid, sid))
+    for g, rows in groups.items():
+        free = [c for c in cands if taken.get(c["id"], g) == g]
+        status, pid = match_sighting(merge_sightings([r[1] for r in rows]), free, nick)
+        if status != "MATCHED" and all(r[2] == "MATCHED" for r in rows):
+            status, pid = "MATCHED", rows[0][3]    # applied or matched before: never downgraded
         if status == "MATCHED":
-            cands = [c for c in cands if c["id"] != pid]
+            taken[pid] = g
+        for sid, _, old_status, old_pid in rows:
+            counts[status] += 1
+            if (old_status, old_pid) != (status, pid):
+                cur.execute("UPDATE gm_trade_sightings SET match_status = %s, proposal_id = %s WHERE id = %s",
+                            (status, pid, sid))
     return counts
 
 
@@ -575,14 +618,23 @@ def _store_user(cur, season, week, a, b, assets, chk, pid, note, executed_as, tr
 def apply_sighting(cur, sighting_id, assets=None):
     """"Apply this trade": an unmatched trade row Madden logged becomes an EXECUTED USER proposal and its moves are
     made (the same ops as a confirmed proposal). assets: JR's checked legs (Front Office JSON); without them the
-    resolved legs are used, and any unresolved leg refuses the apply."""
-    cur.execute("SELECT season, parsed, match_status, raw_text FROM gm_trade_sightings WHERE id = %s", (sighting_id,))
+    resolved legs are used, and any unresolved leg refuses the apply. The trade is every unmatched row of the
+    sighting's heading between the same two teams (Madden logs one row per asset); they're all marked MATCHED."""
+    cur.execute("SELECT season, parsed, match_status, raw_text, txn_date FROM gm_trade_sightings WHERE id = %s",
+                (sighting_id,))
     r = cur.fetchone()
     if not r:
         raise FrontOfficeError(404, f"no sighting {sighting_id}")
-    season, parsed, status, text = r
+    season, parsed, status, text, date = r
     if status == "MATCHED":
         raise FrontOfficeError(409, "this sighting already matches a trade")
+    cur.execute("""SELECT id, parsed, raw_text FROM gm_trade_sightings WHERE season = %s AND txn_date = %s
+                   AND match_status <> 'MATCHED' ORDER BY id""", (season, date))
+    rows = [x for x in cur.fetchall() if sighting_group(x[1]) == sighting_group(parsed)] or \
+        [(sighting_id, parsed, text)]
+    ids = [x[0] for x in rows]
+    parsed = merge_sightings([x[1] for x in rows])
+    text = "; ".join(x[2] for x in rows)
     if assets:
         eng = to_engine_assets(cur, assets)
     else:
@@ -601,8 +653,8 @@ def apply_sighting(cur, sighting_id, assets=None):
     pid = _store_user(cur, season, week, a, b, eng, chk, None, f"applied from the scan: {text}", "SIGHTING")
     p = _proposal(cur, pid)
     res = _execute(cur, dict(p, week=week), "SIGHTING")
-    cur.execute("UPDATE gm_trade_sightings SET match_status = 'MATCHED', proposal_id = %s WHERE id = %s",
-                (pid, sighting_id))
+    cur.execute("UPDATE gm_trade_sightings SET match_status = 'MATCHED', proposal_id = %s WHERE id = ANY(%s)",
+                (pid, ids))
     return {"id": pid, "status": "EXECUTED", "legality": chk, **res}
 
 
@@ -666,7 +718,9 @@ def front_office_state(cur, season=None):
     legs = _legs(cur, [p["id"] for p in props])
     cur.execute("""SELECT proposal_id, match_status FROM gm_trade_sightings WHERE season = %s
                    AND proposal_id IS NOT NULL""", (season,))
-    seen = {r[0]: r[1] for r in cur.fetchall()}
+    seen = {}
+    for spid, st in cur.fetchall():                # one row per asset: MATCHED wins
+        seen[spid] = "MATCHED" if "MATCHED" in (st, seen.get(spid)) else st
     cur.execute("SELECT max(created_at) FROM transactions WHERE season = %s AND capture_id IS NOT NULL", (season,))
     last_scan = cur.fetchone()[0]
     abbr = {t["team_id"]: t["abbr"] for t in teams}

@@ -125,7 +125,7 @@ RESTRUCTURE_RE = re.compile(rf"^{TEAM} (?:HAVE |HAS )?RESTRUCTURED THE CONTRACT 
                             r"(?P<amount>[$S]? ?[\d.,]+ ?[MK]) IN ADDITIONAL CAP SPACE$")
 EXTEND_RE = re.compile(rf"^{TEAM} .*?{POS} (?P<name>.+?)(?= TO |,|$)")    # any row that says EXTEN...
 LEG_RE = re.compile(r"\((?P<pos>[A-Z]{1,5})\) (?P<name>.+?)(?= TO | FROM | FOR | AND |, |;| \(|$)")
-PICK_RE = re.compile(r"\b(?P<pick>[0-9TILO]{4} (?:\w+ )?(?:ROUND|RD) (?:DRAFT )?PICK)S?\b")
+PICK_RE = re.compile(r"\b(?P<pick>[0-9TILO]{4} (?:\w+ )?(?:ROUND|RD)(?: [0-9TILO]{1,2})?(?: \([0-9TILO]+\))? (?:DRAFT )?PICK)S?\b")
 
 
 def norm_amount(a):
@@ -198,7 +198,8 @@ def is_move(text):
 def _parse_trade(t, teams):
     """Tolerant trade grammar (wording unverified, console fact 7): the first nickname is the team giving the
     players named before 'FOR', 'TO <TEAM>' (or 'FROM <TEAM>' after ACQUIRE) is the other side, every
-    '(POS) NAME' is a player leg and every 'YYYY <N> ROUND PICK' an asset leg. Legs after 'FOR' go the other
+    '(POS) NAME' is a player leg and every 'YYYY <N> ROUND PICK' or 'YYYY ROUND N (overall) DRAFT PICK' (Madden's
+    wording, C8) an asset leg. Legs after 'FOR' go the other
     way. Anything it can't place is flagged; one row can hold several legs."""
     d = _empty(t, kind="TRADED")
     named = [w for w in re.findall(r"[0-9A-Z]+", t) if w in teams]

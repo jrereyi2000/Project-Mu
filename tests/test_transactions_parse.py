@@ -90,6 +90,9 @@ class RowTest(unittest.TestCase):
         self.assertTrue(d["ok"], d)
         self.assertEqual(d["assets"], [{"asset": "2037 2ND ROUND PICK", "from": "PACKERS", "to": "BEARS"}])
         self.assertEqual([l["suffix"] for l in T.legs(d)], ["#P1", "#A1"])
+        d = T.parse_row("BENGALS TRADE 2037 ROUND 5 (155) DRAFT PICK TO PACKERS")   # Madden's wording (C8)
+        self.assertTrue(d["ok"], d)
+        self.assertEqual(d["assets"], [{"asset": "2037 ROUND 5 (155) DRAFT PICK", "from": "BENGALS", "to": "PACKERS"}])
         d = T.parse_row("PACKERS ACQUIRED (WR) JOHN DOE FROM BEARS")
         self.assertEqual([(l["name"], l["from"], l["to"]) for l in d["legs"]], [("JOHN DOE", "BEARS", "PACKERS")])
         for weird in ("TRADE COMPLETED", "BEARS TRADE", "BEARS TRADED (WR) TO"):

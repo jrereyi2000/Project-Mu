@@ -21,7 +21,26 @@ def test_matcher_matched_partial_unmatched():
     assert fo.match_sighting(parsed(names=("CY DOE",)), CANDS, NICK) == ("UNMATCHED", None)
 
 
+def test_matcher_merges_one_row_per_asset():
+    # Madden's week-5 Packers/Bengals log: one row per asset, so no single row is the whole trade
+    nick = {"PACKERS": "GB", "BENGALS": "CIN"}
+    cands = [{"id": 9, "teams": {"GB", "CIN"}, "player_keys": {"MIKEKEATON", "MITCHROBY"},
+              "pick_keys": {(2037, 5, "CIN")}}]
+    rows = [{"team": "BENGALS", "to_team": "PACKERS", "legs": [],
+             "assets": [{"asset": "2037 ROUND 5 (155) DRAFT PICK", "from": "BENGALS", "to": "PACKERS"}]},
+            {"team": "PACKERS", "to_team": "BENGALS", "legs": [{"name": "MIKE KEATON", "from": "PACKERS"}],
+             "assets": []},
+            {"team": "BENGALS", "to_team": "PACKERS", "legs": [{"name": "MITCH ROBY", "from": "BENGALS"}],
+             "assets": []}]
+    assert len({fo.sighting_group(r) for r in rows}) == 1
+    assert fo.match_sighting(rows[1], cands, nick) == ("PARTIAL", 9)
+    assert fo.match_sighting(fo.merge_sightings(rows), cands, nick) == ("MATCHED", 9)
+    assert fo.match_sighting(fo.merge_sightings(rows[1:]), cands, nick) == ("PARTIAL", 9)   # the pick is missing
+    assert fo.match_sighting(rows[0], cands, nick) == ("PARTIAL", 9)
+
+
 def test_pick_from_text():
+    assert fo.pick_from_text("2037 ROUND 5 (155) DRAFT PICK") == (2037, 5)
     assert fo.pick_from_text("2037 1ST ROUND PICK") == (2037, 1)
     assert fo.pick_from_text("2038 SEVENTH ROUND DRAFT PICK") == (2038, 7)
     assert fo.pick_from_text("garbage") is None
