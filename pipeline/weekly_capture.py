@@ -496,9 +496,13 @@ def step_scouting_season(season):
                                WHERE table_name = 'gm_team_seasons' AND column_name = 'dev_quality'""")
                 if cur.fetchone():
                     from engines import dev_quality
-                    res = dev_quality.recompute(cur, season, log=lambda *a: None)
-                    out["dev_quality"] = {r["abbr"]: r["D_star"] for r in res.values() if not r["held"]}
-                    log(f"  dev_quality {season}: {len(out['dev_quality'])} teams scored on player development")
+                    try:
+                        with conn.transaction():        # a savepoint: a failure here never blocks scouting init
+                            res = dev_quality.recompute(cur, season, log=lambda *a: None)
+                        out["dev_quality"] = {r["abbr"]: r["D_star"] for r in res.values() if not r["held"]}
+                        log(f"  dev_quality {season}: {len(out['dev_quality'])} teams scored on player development")
+                    except Exception as e:
+                        log(f"  [WARN] dev_quality {season} skipped: {e!r}")
             if se.installed(cur):
                 cur.execute("SELECT count(*) FROM draft_prospects WHERE draft_season = %s", (season + 1,))
                 if cur.fetchone()[0]:
