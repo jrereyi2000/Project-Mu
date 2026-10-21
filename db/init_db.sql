@@ -531,6 +531,7 @@ CREATE TABLE IF NOT EXISTS gm_profiles (
     voice TEXT,                                       -- style notes for the rationale writer
     bio_source VARCHAR(8) NOT NULL DEFAULT 'TEMPLATE' CHECK (bio_source IN ('LLM', 'TEMPLATE')),
     start_season INT NOT NULL CHECK (start_season >= 2030),   -- invented tenure start
+    first_draft_season INT,                           -- first class he picks (a hot-seat hire: start + 1)
     end_season INT,
     end_reason TEXT,                                  -- why the tenure closed (hot seat, by hand)
     risk_appetite NUMERIC(3,2) NOT NULL CHECK (risk_appetite BETWEEN 0 AND 1),

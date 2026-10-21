@@ -3073,6 +3073,75 @@ def get_team_draft_record(team_identifier: str, season: int = 0) -> str:
                       indent=2)
 
 
+def development_record_facts(rec: dict) -> dict:
+    """A team's player-development record for writers (pure): risers and fallers with their ratings and verdicts.
+    Never a score."""
+    def line(p):
+        return {"player": p["name"], "pos": p["position"], "age": p["age"],
+                "ovr": f"{p['ovr_start']} -> {p['ovr_end']}", "verdict": p["label"], "rookie_year": bool(p.get("rookie"))}
+    return {"window": rec.get("window"), "risers": [line(p) for p in rec.get("risers", [])],
+            "fallers": [line(p) for p in rec.get("fallers", [])]}
+
+
+def _front_office_rows(cur, season):
+    cur.execute("SELECT to_regclass('gm_team_seasons') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return []
+    from engines.fo_standing import stored
+    return stored(cur, season)
+
+
+@tool
+def get_front_office_standing(team_identifier: str, season: int = 0) -> str:
+    """Fetch how a team's front office is regarded around the league: its GM, years in the job, its front-office
+    rank of 32 and reputation, how its drafting and player development compare with the league (judged only on the
+    current GM's own tenure, so a new GM is "not judged yet"), its recent draft verdicts, the players who developed
+    or stalled under it, and how hot the GM's seat is after the last season. early_read means the standing rests on a
+    couple of picks: call it a first impression, not a verdict. Use the ranks and verdicts as written; there is no
+    numeric grade to quote."""
+    try:
+        from engines.dev_quality import team_development_record
+        from engines.fo_quality import team_draft_record
+        from engines.fo_standing import standing_facts
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Team '{team_identifier}' not found."
+                row = next((r for r in _front_office_rows(cur, s_val) if r["team_id"] == team_id), None)
+                draft = team_draft_record(cur, team_id, s_val) if row else None
+                dev = team_development_record(cur, team_id, s_val) if row else None
+    except Exception as e:
+        return f"Error: {str(e)}"
+    if not row:
+        return f"No front-office standing for '{team_identifier}' yet."
+    out = standing_facts(row, s_val)
+    if draft:
+        out["draft_record"] = draft_record_facts(draft)
+    if dev:
+        out["development_record"] = development_record_facts(dev)
+    return json.dumps(out, indent=2)
+
+
+@tool
+def get_front_office_rankings(season: int = 0) -> str:
+    """Fetch the league's front offices ranked 1-32: each team's GM, years in the job, reputation, how its drafting
+    and player development compare with the league, and the GM's hot-seat temperature. The general consensus on
+    which front offices are best and worst run. Use the ranks and words as written; there is no numeric grade."""
+    try:
+        from engines.fo_standing import standing_facts
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                rows = _front_office_rows(cur, s_val)
+    except Exception as e:
+        return f"Error: {str(e)}"
+    if not rows:
+        return "No front-office standings yet."
+    return json.dumps({"season": s_val, "front_offices": [standing_facts(r, s_val) for r in rows]}, indent=2)
+
+
 _PICK_TEXT = re.compile(r"^\s*(20\d\d)\s+(?:r(?:ound)?\s*([1-7])|([1-7])(?:st|nd|rd|th)(?:\s*-?\s*round)?)\b(?:\s*pick)?\s*\(?([^)]*)\)?\s*$",
                         re.I)
 

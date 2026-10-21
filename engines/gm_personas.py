@@ -232,11 +232,13 @@ def read_open(cur):
 
 
 def insert_gm(cur, team_id, p, traits, seed):
-    cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, bio_source, start_season, risk_appetite,
-                                            aggressiveness, pick_affinity, youth_bias, position_bias, seed)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, bio_source, start_season,
+                                            first_draft_season, risk_appetite, aggressiveness, pick_affinity,
+                                            youth_bias, position_bias, seed)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (team_id) WHERE end_season IS NULL DO NOTHING RETURNING id""",
                 (team_id, p["gm_name"], p["bio"], p["voice"], p["bio_source"], p["start_season"],
+                 p.get("first_draft_season") or p["start_season"],
                  traits["risk_appetite"], traits["aggressiveness"], traits["pick_affinity"], traits["youth_bias"],
                  json.dumps(traits["position_bias"]), seed))
     row = cur.fetchone()
@@ -295,6 +297,8 @@ def seed(cur, season, llm=None, replace=None, log=print):
         key = f"gm:{abbr}:{season}" if abbr == replace else "gm:" + abbr
         p = make_persona(abbr, ctx, traits[abbr], season, llm, taken, seed_key=key,
                          start=season if abbr == replace else None)
+        if abbr == replace:
+            p = dict(p, first_draft_season=season + 1)   # hired after this year's draft (Season scan or by hand)
         gid = insert_gm(cur, ctx["id"], p, traits[abbr], key)
         if gid:
             taken.append(p["gm_name"])

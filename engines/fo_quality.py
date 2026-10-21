@@ -11,8 +11,12 @@ Hit score per Round 1-2 pick: h = (OVR_now - E[OVR | slot, years since draft]) /
   drafted him (the Draft Recap shows the drafting team, K7).
 Team: H = sum_d w_d sum h / sum_d w_d n_d over the last 3 drafts (w 1.0, 0.6, 0.35, newest first), shrunk
 H* = H n / (n + 4), q = clamp(1 - 0.25 H*, 0.7, 1.4). No picks: q = 1.
-JR's own picks don't count (Q4): picks by a team he controls now, and Draft Room picks recorded JR_TEAM; a team he
-controls keeps its last q (not rewritten).
+Scores follow the GM, not the team: only drafts from the current GM's first_draft_season on count, so a new GM
+starts at q = 1 (the baseline) and builds his own record.
+Two scores per team. The board q (fo_quality, scales scouting error): JR's own picks don't count (Q4), picks by a team
+he controls now and Draft Room picks recorded JR_TEAM, and a team he controls keeps its last q (not rewritten). The
+public q (fo_quality_inputs.q, for front-office standings, the hot seat and writers; JR, 2026-10-21): every pick of
+the GM's tenure, JR's included, for all 32 teams.
 
 CLI: python3 -m engines.fo_quality --season 2036 [--credit drafted|roster] [--dry-run]
 """
@@ -105,6 +109,11 @@ def streaks(picks):
     return out
 
 
+def in_tenure(picks, first_draft):
+    """Only the drafts the current GM made (first_draft None: all)."""
+    return [p for p in picks if first_draft is None or p["draft_season"] >= first_draft]
+
+
 def score_all(rows, season, credit="drafted", excluded_teams=(), jr_picks=()):
     """rows: drafted players with a season row: {draft_season, overall_pick, drafted_team_id, roster_team_id,
     player_id, name, position, ovr, dev}. Returns {team_id: [scored pick]} for Round 1-2 picks in the window.
@@ -164,40 +173,71 @@ def jr_draft_picks(cur):
     return set(cur.fetchall())
 
 
-def recompute(cur, season, credit="drafted", dry_run=False, log=print):
-    """q for every team from its Round 1-2 picks in the last 3 drafts, written to gm_team_seasons(season)
-    (fo_quality, fo_quality_inputs, fo_quality_at). Teams JR controls keep their q. Idempotent: same inputs,
-    same values. Returns {team_id: result}."""
-    cur.execute("""SELECT t.id, t.abbreviation, COALESCE(st.user_controlled, false), s.fo_quality
-                   FROM teams t JOIN gm_team_seasons s ON s.team_id = t.id AND s.season = %s
-                   LEFT JOIN gm_team_settings st ON st.team_id = t.id ORDER BY t.abbreviation""", (season,))
-    teams = cur.fetchall()
-    if not teams:
-        raise SystemExit(f"no gm_team_seasons rows for {season}")
-    held = {t[0] for t in teams if t[2]}
-    scored = score_all(fetch_rows(cur, season), season, credit, held, jr_draft_picks(cur))
+def current_gms(cur):
+    """{team_id: {abbr, gm_id, gm_name, start_season, first_draft, held}} for every team's open GM tenure."""
+    cur.execute("""SELECT t.id, t.abbreviation, g.id, g.gm_name, g.start_season,
+                          COALESCE(g.first_draft_season, g.start_season), COALESCE(st.user_controlled, false)
+                   FROM teams t JOIN gm_profiles g ON g.team_id = t.id AND g.end_season IS NULL
+                   LEFT JOIN gm_team_settings st ON st.team_id = t.id ORDER BY t.abbreviation""")
+    return {r[0]: {"abbr": r[1], "gm_id": r[2], "gm_name": r[3], "start_season": r[4], "first_draft": r[5],
+                   "held": r[6]} for r in cur.fetchall()}
+
+
+def compute(cur, season, credit="drafted"):
+    """Both scores for every team with an open GM, from the current GMs' tenures; writes nothing (the hot seat calls
+    it before the season's gm_team_seasons rows exist). {team_id: {abbr, held, gm_id, first_draft, q, H, H_star, n,
+    picks (board), public {q, H, H_star, n, picks}}}."""
+    gms = current_gms(cur)
+    rows = fetch_rows(cur, season)
+    held = {t for t, g in gms.items() if g["held"]}
+    board = score_all(rows, season, credit, held, jr_draft_picks(cur))
+    public = score_all(rows, season, credit)
     out = {}
-    for tid, abbr, user, old_q in teams:
-        picks = sorted(scored.get(tid, []), key=lambda p: (p["draft_season"], p["pick"]))
-        res = team_q(picks, season)
-        res.update(abbr=abbr, held=user, old_q=float(old_q) if old_q is not None else None, picks=picks)
+    for tid, g in gms.items():
+        def scored(by):
+            picks = sorted(in_tenure(by.get(tid, []), g["first_draft"]), key=lambda p: (p["draft_season"], p["pick"]))
+            return dict(team_q(picks, season), picks=picks)
+        res = scored(board)
+        res.update(abbr=g["abbr"], held=g["held"], gm_id=g["gm_id"], first_draft=g["first_draft"],
+                   public=scored(public))
         out[tid] = res
-        tag = "held (JR controls the team)" if user else f"q {res['q']:.2f}"
-        log(f"  {abbr:<4} {tag:<28} n={res['n']} H*={res['H_star']}  " +
+    return out
+
+
+def recompute(cur, season, credit="drafted", dry_run=False, log=print):
+    """Both scores for every team, written to gm_team_seasons(season): fo_quality (the board q; teams JR controls keep
+    theirs), fo_quality_inputs (the public q and its picks, for all 32 teams), fo_quality_at. Idempotent: same inputs,
+    same values. Returns {team_id: result}."""
+    cur.execute("SELECT team_id, fo_quality FROM gm_team_seasons WHERE season = %s", (season,))
+    have = {r[0]: r[1] for r in cur.fetchall()}
+    if not have:
+        raise SystemExit(f"no gm_team_seasons rows for {season}")
+    out = {t: r for t, r in compute(cur, season, credit).items() if t in have}
+    for tid, res in sorted(out.items(), key=lambda kv: kv[1]["abbr"]):
+        old_q = have[tid]
+        res["old_q"] = float(old_q) if old_q is not None else None
+        pub = res["public"]
+        tag = f"held board q, public q {pub['q']:.2f}" if res["held"] else f"q {res['q']:.2f}"
+        log(f"  {res['abbr']:<4} {tag:<28} n={pub['n']} H*={pub['H_star']}  " +
             ", ".join(f"#{p['pick']} {p['name']} {p['label']}{'' if p['dev_known'] else ' (dev hidden)'}"
-                      for p in picks))
-    log(f"fo_quality {season} ({credit} credit): {sum(1 for r in out.values() if r['n'])} teams scored, "
+                      for p in pub["picks"]))
+    log(f"fo_quality {season} ({credit} credit): {sum(1 for r in out.values() if r['public']['n'])} teams scored, "
         f"{unlinked_count(cur, season)} R1-R2 picks unlinked (skipped)")
     if dry_run:
         log("  dry run: nothing written")
         return out
     for tid, res in out.items():
+        pub = res["public"]
+        inputs = {"season": season, "credit": credit, "gm_id": res["gm_id"], "first_draft_season": res["first_draft"],
+                  "q": pub["q"], "H": pub["H"], "H_star": pub["H_star"], "n": pub["n"], "weights": WEIGHTS,
+                  "picks": pub["picks"], "streaks": streaks(pub["picks"]), "board_q_held": res["held"],
+                  "board": {"q": res["q"], "H_star": res["H_star"], "n": res["n"]}}
         if res["held"]:
-            continue
-        inputs = {"season": season, "credit": credit, "H": res["H"], "H_star": res["H_star"], "n": res["n"],
-                  "weights": WEIGHTS, "picks": res["picks"], "streaks": streaks(res["picks"])}
-        cur.execute("""UPDATE gm_team_seasons SET fo_quality = %s, fo_quality_inputs = %s, fo_quality_at = now()
-                       WHERE team_id = %s AND season = %s""", (res["q"], json.dumps(inputs), tid, season))
+            cur.execute("""UPDATE gm_team_seasons SET fo_quality_inputs = %s, fo_quality_at = now()
+                           WHERE team_id = %s AND season = %s""", (json.dumps(inputs), tid, season))
+        else:
+            cur.execute("""UPDATE gm_team_seasons SET fo_quality = %s, fo_quality_inputs = %s, fo_quality_at = now()
+                           WHERE team_id = %s AND season = %s""", (res["q"], json.dumps(inputs), tid, season))
     return out
 
 

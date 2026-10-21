@@ -17,16 +17,20 @@ import json
 import os
 import random
 
+from engines.fo_standing import hot_seat_term
+
 EXPECTED_WINS = {"CONTEND": 10.5, "RETOOL": 8.5, "REBUILD": 6.0}
 MIN_TENURE = 2                     # a GM gets at least two seasons
 HOT_SEAT_LINE = 1.0
 MAX_FIRES = 4                      # the NFL changes a handful of GMs a year
+FO_WEIGHT = 1.5                    # front-office standing score (about +-0.3) -> about +-0.45 hot-seat points
 
 
 def hot_seat(rows, season, max_fires=MAX_FIRES):
-    """Pure. rows: [{team_id, abbr, start_season, direction (last season), wins, wins_before, user_controlled}] for
-    the season just finished (`season`). score = (expected wins for the direction - wins)/3, +0.5 for two
-    straight seasons of 6 wins or fewer, +0.25 after 4+ seasons in the job. A GM is fired when his tenure is at
+    """Pure. rows: [{team_id, abbr, start_season, direction (last season), wins, wins_before, user_controlled,
+    fo_score, fo_rank}] for the season just finished (`season`). score = (expected wins for the direction - wins)/3,
+    +0.5 for two straight seasons of 6 wins or fewer, +0.25 after 4+ seasons in the job, - FO_WEIGHT * fo_score
+    (engines/fo_standing: the GM's own drafting and player development; None counts as 0). A GM is fired when his tenure is at
     least 2 seasons, score >= 1.0 and a seeded draw (random.Random(f"hotseat:{season}:{abbr}")) falls under
     min(0.9, 0.35 + 0.3 (score - 1)); the worst scores first, at most max_fires; JR's teams never fire their GM.
     Returns {team_id: {score, inputs, fire}}."""
@@ -36,13 +40,16 @@ def hot_seat(rows, season, max_fires=MAX_FIRES):
         wins = r.get("wins") or 0
         tenure = season - (r.get("start_season") or season) + 1
         two_bad = wins <= 6 and r.get("wins_before") is not None and r["wins_before"] <= 6
-        score = (exp - wins) / 3 + (0.5 if two_bad else 0) + (0.25 if tenure >= 4 else 0)
+        fo_pts = hot_seat_term(r.get("fo_score"), FO_WEIGHT)
+        score = (exp - wins) / 3 + (0.5 if two_bad else 0) + (0.25 if tenure >= 4 else 0) + fo_pts
         p = min(0.9, 0.35 + 0.3 * (score - HOT_SEAT_LINE))
         draw = random.Random(f"hotseat:{season}:{r['abbr']}").random()
         eligible = tenure >= MIN_TENURE and score >= HOT_SEAT_LINE and not r.get("user_controlled")
         out[r["team_id"]] = {"score": round(score, 3), "fire": eligible and draw < p,
                              "inputs": {"direction": r.get("direction"), "expected_wins": exp, "wins": wins,
                                         "wins_before": r.get("wins_before"), "tenure": tenure, "p": round(p, 3),
+                                        "fo_score": r.get("fo_score"), "fo_rank": r.get("fo_rank"),
+                                        "fo_points": fo_pts,
                                         "user_controlled": bool(r.get("user_controlled"))}}
     fired = sorted((t for t, v in out.items() if v["fire"]), key=lambda t: -out[t]["score"])
     for t in fired[max_fires:]:
@@ -82,6 +89,9 @@ def read_state(cur, season):
                    WHERE g.end_season IS NULL AND g.start_season <= %s""", (prior, prior, prior - 1, prior))
     rows = [{"team_id": r[0], "abbr": r[1], "start_season": r[2], "direction": r[3], "wins": r[4],
              "wins_before": r[5], "user_controlled": r[6]} for r in cur.fetchall()]
+    if n and not decided:
+        for r, f in zip(rows, front_office_scores(cur, season, [r["team_id"] for r in rows])):
+            r.update(f)
     cur.execute("SELECT team_id, direction IS NULL, fo_quality_at IS NULL FROM gm_team_seasons WHERE season = %s",
                 (season,))
     cur_rows = cur.fetchall()
@@ -95,6 +105,21 @@ def read_state(cur, season):
             "team_rows": {r[0] for r in cur_rows}, "direction_missing": {r[0] for r in cur_rows if r[1]},
             "fo_carry": {r[0] for r in cur_rows if r[2]} & prior_fo, "picks_existing": existing,
             "unused_past": unused}
+
+
+def front_office_scores(cur, season, team_ids):
+    """[{fo_score, fo_rank}] per team id, computed now for the GMs about to be judged (engines/fo_standing.live,
+    with this season's roster cards loaded). A failure leaves them unscored (the term counts 0)."""
+    try:
+        cur.execute("SAVEPOINT fo_standing")
+        from engines import fo_standing
+        by = {r["team_id"]: r for r in fo_standing.live(cur, season)}
+        cur.execute("RELEASE SAVEPOINT fo_standing")
+    except Exception as e:
+        cur.execute("ROLLBACK TO SAVEPOINT fo_standing")
+        print(f"  [WARN] front-office standings for the hot seat skipped: {e!r}")
+        by = {}
+    return [{"fo_score": by[t]["score"], "fo_rank": by[t]["rank"]} if t in by else {} for t in team_ids]
 
 
 def rollover(cur, season, llm=None, log=print):
@@ -122,6 +147,8 @@ def rollover(cur, season, llm=None, log=print):
                                        ORDER BY id DESC LIMIT 1)""",
                         (prior, f"hot seat after {prior}: score {h['score']}", tid))
             rep["fired"].append({"team": abbr, "score": h["score"]})
+            if tid in acts["fo_carry"]:
+                acts["fo_carry"].remove(tid)      # the new GM starts at the baseline, not his predecessor's q
             log(f"  hot seat: {abbr} replaces its GM (score {h['score']})")
     rep["team_rows"] = ensure_team_seasons(cur, season) if acts["team_rows"] else 0
     if acts["directions"]:

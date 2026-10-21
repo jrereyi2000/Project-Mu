@@ -20,8 +20,9 @@ Player score: r = (delta - E[delta]) / sd_band + 0.5 * (dev steps gained, both e
   up; ON TRACK at worst). Labels: DEVELOPED r >= 1 with a gain, REGRESSED r <= -2 with a drop, STALLED r <= -1 with no gain,
   else ON TRACK (a label never contradicts the ratings).
 Team: weight 1.0 for the 22 best start-card OVRs on the team, 0.5 for the rest; windows ending S, S-1, S-2 weigh
-1.0 / 0.6 / 0.35. D = sum W w r / sum W w, n = sum W w, D* = D n / (n + 20). Teams JR controls are fitted but never
-written (their development is his). Stored on gm_team_seasons(S).
+1.0 / 0.6 / 0.35. D = sum W w r / sum W w, n = sum W w, D* = D n / (n + 20). Scores follow the GM: only windows
+starting at or after the current GM's start_season count, so a new GM starts at D* 0. All 32 teams are scored and
+ranked, JR's included. Stored on gm_team_seasons(S).
 
 CLI: python3 -m engines.dev_quality --season 2037 [--include-partial] [--dry-run]
 """
@@ -207,16 +208,18 @@ def windows_for(season, include_partial=False):
             if include_partial or season - i - 1 >= FIRST_START_SEASON]
 
 
-def recompute(cur, season, include_partial=False, dry_run=False, log=print):
-    """dev_quality for every team from its players' windows ending season, season-1, season-2, written to
-    gm_team_seasons(season) (dev_quality, dev_quality_inputs, dev_quality_at). Teams JR controls are not written.
-    Idempotent. Returns {team_id: result}; empty when no window counts yet."""
-    cur.execute("""SELECT t.id, t.abbreviation, COALESCE(st.user_controlled, false)
-                   FROM teams t JOIN gm_team_seasons s ON s.team_id = t.id AND s.season = %s
-                   LEFT JOIN gm_team_settings st ON st.team_id = t.id ORDER BY t.abbreviation""", (season,))
-    teams = cur.fetchall()
-    if not teams:
-        raise SystemExit(f"no gm_team_seasons rows for {season}")
+def in_tenure(windows_by_age, season, start_season):
+    """Only the windows the current GM ran: a window ending E starts at the E-1 card, so it counts when
+    E - 1 >= start_season. A new GM starts at the baseline (D* 0)."""
+    return {age: rows for age, rows in windows_by_age.items()
+            if start_season is None or season - age - 1 >= start_season}
+
+
+def compute(cur, season, include_partial=False, log=print):
+    """dev_quality for every team with an open GM, from the current GMs' tenures, ranked over all 32 (JR's teams
+    included, JR 2026-10-21); writes nothing (the hot seat calls it before the season's gm_team_seasons rows
+    exist). {} when no window counts yet."""
+    from engines.fo_quality import current_gms
     wins = windows_for(season, include_partial)
     if not wins:
         log(f"dev_quality {season}: no full window yet (the first starts at the {FIRST_START_SEASON} card)")
@@ -231,33 +234,50 @@ def recompute(cur, season, include_partial=False, dry_run=False, log=print):
         for p in scored:
             by_team.setdefault(p["team_id"], {}).setdefault(age, []).append(p)
     out = {}
-    for tid, abbr, user in teams:
-        res = team_score(by_team.get(tid, {}))
-        res.update(abbr=abbr, held=user, windows=by_team.get(tid, {}))
+    for tid, g in current_gms(cur).items():
+        mine = in_tenure(by_team.get(tid, {}), season, g["start_season"])
+        res = team_score(mine)
+        res.update(abbr=g["abbr"], held=g["held"], gm_id=g["gm_id"], start_season=g["start_season"],
+                   windows=mine, used=used)
         out[tid] = res
-    ranked = sorted((r for r in out.values() if not r["held"] and r["D_star"] is not None),
-                    key=lambda r: -r["D_star"])
+    ranked = sorted((r for r in out.values() if r["D_star"] is not None), key=lambda r: -r["D_star"])
     for i, r in enumerate(ranked, 1):
         r["rank"] = i
+        r["teams_ranked"] = len(ranked)
+    return out
+
+
+def recompute(cur, season, include_partial=False, dry_run=False, log=print):
+    """dev_quality for every team (JR's included), written to gm_team_seasons(season) (dev_quality,
+    dev_quality_inputs, dev_quality_at). Idempotent. Returns {team_id: result}; empty when no window counts yet."""
+    cur.execute("SELECT team_id FROM gm_team_seasons WHERE season = %s", (season,))
+    have = {r[0] for r in cur.fetchall()}
+    if not have:
+        raise SystemExit(f"no gm_team_seasons rows for {season}")
+    out = {t: r for t, r in compute(cur, season, include_partial, log).items() if t in have}
+    if not out:
+        return {}
     for res in sorted(out.values(), key=lambda r: r.get("rank") or 99):
         newest = res["windows"].get(min(res["windows"]), []) if res["windows"] else []
         best = sorted(newest, key=lambda p: -p["r"])[:2]
-        tag = "held (JR controls the team)" if res["held"] else f"#{res.get('rank', '-')} D* {res['D_star']}"
+        tag = f"#{res.get('rank', '-')} D* {res['D_star']}" + (" (JR)" if res["held"] else "")
         log(f"  {res['abbr']:<4} {tag:<28} n={res['n']}  " +
             ", ".join(f"{p['name']} {p['ovr_start']}->{p['ovr_end']} {p['label']}" for p in best))
-    log(f"dev_quality {season}: {len(ranked)} teams scored over {len(used)} window(s)")
+    used = next(iter(out.values()))["used"]
+    log(f"dev_quality {season}: {sum(1 for r in out.values() if r.get('rank'))} teams scored over "
+        f"{len(used)} window(s)")
     if dry_run:
         log("  dry run: nothing written")
         return out
     for tid, res in out.items():
-        if res["held"]:
-            continue
         players = [{k: p[k] for k in ("player_id", "name", "position", "age", "ovr_start", "ovr_end", "delta",
                                       "expected", "dev_start", "dev_end", "dev_steps", "rookie", "starter", "r",
                                       "label")} | {"window": f"{season - age - 1}-{season - age}"}
                    for age, rows in sorted(res["windows"].items()) for p in rows]
-        inputs = {"season": season, "D": res["D"], "D_star": res["D_star"], "n": res["n"], "rank": res.get("rank"),
-                  "teams_ranked": len(ranked), "windows": [f"{e - 1}-{e}" for e in used],
+        inputs = {"season": season, "gm_id": res["gm_id"], "gm_start_season": res["start_season"], "D": res["D"],
+                  "D_star": res["D_star"], "n": res["n"], "rank": res.get("rank"),
+                  "teams_ranked": res.get("teams_ranked"),
+                  "windows": [f"{e - 1}-{e}" for e in used if season - e in res["windows"]],
                   "weights": WINDOW_WEIGHTS, "players": players}
         cur.execute("""UPDATE gm_team_seasons SET dev_quality = %s, dev_quality_inputs = %s, dev_quality_at = now()
                        WHERE team_id = %s AND season = %s""",

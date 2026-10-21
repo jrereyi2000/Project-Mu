@@ -499,7 +499,7 @@ def step_scouting_season(season):
                     try:
                         with conn.transaction():        # a savepoint: a failure here never blocks scouting init
                             res = dev_quality.recompute(cur, season, log=lambda *a: None)
-                        out["dev_quality"] = {r["abbr"]: r["D_star"] for r in res.values() if not r["held"]}
+                        out["dev_quality"] = {r["abbr"]: r["D_star"] for r in res.values()}
                         log(f"  dev_quality {season}: {len(out['dev_quality'])} teams scored on player development")
                     except Exception as e:
                         log(f"  [WARN] dev_quality {season} skipped: {e!r}")
