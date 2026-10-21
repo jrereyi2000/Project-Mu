@@ -174,13 +174,15 @@ def jr_draft_picks(cur):
 
 
 def current_gms(cur):
-    """{team_id: {abbr, gm_id, gm_name, start_season, first_draft, held}} for every team's open GM tenure."""
+    """{team_id: {abbr, gm_id, gm_name, start_season, first_draft, held, coach_gm}} for every team's open GM tenure
+    (coach_gm: the head coach also serves as GM, gm_profiles.coach_id)."""
     cur.execute("""SELECT t.id, t.abbreviation, g.id, g.gm_name, g.start_season,
-                          COALESCE(g.first_draft_season, g.start_season), COALESCE(st.user_controlled, false)
+                          COALESCE(g.first_draft_season, g.start_season), COALESCE(st.user_controlled, false),
+                          g.coach_id IS NOT NULL
                    FROM teams t JOIN gm_profiles g ON g.team_id = t.id AND g.end_season IS NULL
                    LEFT JOIN gm_team_settings st ON st.team_id = t.id ORDER BY t.abbreviation""")
     return {r[0]: {"abbr": r[1], "gm_id": r[2], "gm_name": r[3], "start_season": r[4], "first_draft": r[5],
-                   "held": r[6]} for r in cur.fetchall()}
+                   "held": r[6], "coach_gm": r[7]} for r in cur.fetchall()}
 
 
 def compute(cur, season, credit="drafted"):

@@ -84,3 +84,9 @@ def test_writer_tools_are_registered():
     facts = development_record_facts(rec)
     assert facts["risers"][0] == {"player": "A", "pos": "WR", "age": 23, "ovr": "70 -> 75", "verdict": "DEVELOPED",
                                   "rookie_year": True}
+
+
+def test_coach_gm_role():
+    r = fs.combine([dict(team(1, draft=0.1), coach_gm=True), team(2, draft=-0.1)])
+    roles = {x["abbr"]: fs.standing_facts(x, 2036)["role"] for x in r}
+    assert roles == {"T1": "head coach and general manager (full control)", "T2": "general manager"}

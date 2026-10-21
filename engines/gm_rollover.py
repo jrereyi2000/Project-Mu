@@ -139,13 +139,17 @@ def rollover(cur, season, llm=None, log=print):
         for tid, h in sorted(acts["hot_seat"].items(), key=lambda kv: -kv[1]["score"]):
             if not h["fire"]:
                 continue
-            cur.execute("SELECT abbreviation FROM teams WHERE id = %s", (tid,))
-            abbr = cur.fetchone()[0]
+            cur.execute("""SELECT t.abbreviation, g.coach_id IS NOT NULL FROM teams t
+                           LEFT JOIN gm_profiles g ON g.team_id = t.id AND g.end_season IS NULL WHERE t.id = %s""",
+                        (tid,))
+            abbr, coach_gm = cur.fetchone()
             seed(cur, season, llm, replace=abbr, log=log)
+            # A head coach who was also GM loses the GM job only: Madden decides who coaches.
+            why = f"hot seat after {prior}: score {h['score']}" + ("; stays head coach" if coach_gm else "")
             cur.execute("""UPDATE gm_profiles SET end_season = %s, end_reason = %s
                            WHERE id = (SELECT id FROM gm_profiles WHERE team_id = %s AND end_season IS NOT NULL
                                        ORDER BY id DESC LIMIT 1)""",
-                        (prior, f"hot seat after {prior}: score {h['score']}", tid))
+                        (prior, why, tid))
             rep["fired"].append({"team": abbr, "score": h["score"]})
             if tid in acts["fo_carry"]:
                 acts["fo_carry"].remove(tid)      # the new GM starts at the baseline, not his predecessor's q

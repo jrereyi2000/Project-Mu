@@ -70,6 +70,7 @@ def standing_facts(r, season):
     """Writer facts for one front office (pure): ranks and words, never a score. early_read: the standing rests on
     fewer than 4 judged picks and no development window yet, so it is a first impression."""
     return {"team": r["abbr"], "gm": r.get("gm_name"),
+            "role": "head coach and general manager (full control)" if r.get("coach_gm") else "general manager",
             "seasons_in_job": season - r["start_season"] + 1 if r.get("start_season") else None,
             "new_gm": bool(r.get("start_season")) and r["start_season"] >= season,
             "front_office_rank": f"{r['rank']} of {r['teams']}",
@@ -107,7 +108,7 @@ def stored(cur, season):
         have[tid] = ((inputs or {}).get("H_star"), float(dev) if dev is not None else None, (inputs or {}).get("n"))
     seat = _last_hot_seat(cur, season)
     rows = [{"team_id": t, "abbr": g["abbr"], "gm_name": g["gm_name"], "start_season": g["start_season"],
-             "held": g["held"], "draft": have.get(t, (None,) * 3)[0], "dev": have.get(t, (None,) * 3)[1],
+             "held": g["held"], "coach_gm": g.get("coach_gm"), "draft": have.get(t, (None,) * 3)[0], "dev": have.get(t, (None,) * 3)[1],
              "draft_n": have.get(t, (None,) * 3)[2], "hot_seat": seat.get(t)} for t, g in gms.items()]
     return combine(rows)
 
@@ -119,7 +120,7 @@ def live(cur, season):
     dev = dev_quality.compute(cur, season, log=lambda *a: None)
     gms = _gm_rows(cur)
     rows = [{"team_id": t, "abbr": g["abbr"], "gm_name": g["gm_name"], "start_season": g["start_season"],
-             "held": g["held"], "draft": fo.get(t, {}).get("public", {}).get("H_star"),
+             "held": g["held"], "coach_gm": g.get("coach_gm"), "draft": fo.get(t, {}).get("public", {}).get("H_star"),
              "draft_n": fo.get(t, {}).get("public", {}).get("n"), "dev": dev.get(t, {}).get("D_star"),
              "hot_seat": None} for t, g in gms.items()]
     return combine(rows)
