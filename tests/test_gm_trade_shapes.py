@@ -152,3 +152,70 @@ def test_trade_finder_explains_a_star_outside_the_deadline_weeks():
     t = r["teams"][0]
     assert t["n_viable"] == 0 and t["tried"] > 0 and "shape" in t["best_miss"]["failed"]
     assert "weeks 7-8" in t["best_miss"]["legality"]["shape"]["detail"]
+
+
+# ------------------------------------------------- pick depth (JR, 2026-10-22, week 8: SF and PHI) ----
+def test_third_own_pick_out_of_a_draft_is_blocked():
+    b = books(extra=[p(82)])
+    b["picks"][(2037, 4, 1)] = 2                             # two of team 1's 2037 picks already traded away
+    b["picks"][(2037, 5, 1)] = 2
+    d = deal([pl(900, 2, 1), pk(6, 1, 1, 2)])
+    chk = ge.pick_depth_check(d, b)
+    assert not chk["ok"] and "3 of its 2037 picks" in chk["detail"]
+    assert ge.pick_depth_check(deal([pl(900, 2, 1), pk(6, 1, 1, 2, season=2038)]), b)["ok"]   # another draft
+    b["ts"][1]["direction_score"] = ge.STRONG_CONTEND_D                  # a strong contender may go all in
+    assert ge.pick_depth_check(d, b)["ok"]
+
+
+def test_open_proposals_count_toward_the_pick_limit():
+    open_ = [{"id": 7, "status": "PROPOSED", "origin": "ENGINE", "team_a_id": 1, "team_b_id": 2,
+              "trade_window": "IN_SEASON", "expires_week": 4, "assets": [pk(4, 1, 1, 2), pk(5, 1, 1, 2)]}]
+    b = books(extra=[p(82)], open_=open_)
+    assert not ge.pick_depth_check(deal([pl(900, 2, 1), pk(6, 1, 1, 2)]), b)["ok"]
+    own = {ge.asset_key(x) for x in open_[0]["assets"]}           # the open proposal's own re-check
+    assert ge.pick_depth_check(deal(open_[0]["assets"]), b, ignore_booking=own)["ok"]
+
+
+def test_picks_get_dearer_as_a_draft_thins():
+    b = books()
+    v0, r0 = ge.Valuer(b, FITS).value(pk(6, 1, 1, 2), 1), ge.Valuer(b, FITS).value(pk(6, 1, 1, 2), 2)
+    b["picks"][(2037, 4, 1)] = 2
+    b["picks"][(2037, 5, 1)] = 2
+    v2 = ge.Valuer(b, FITS).value(pk(6, 1, 1, 2), 1)
+    assert v2 == round(v0 * (1 + 2 * ge.PICK_SCARCITY))
+    assert ge.Valuer(b, FITS).value(pk(6, 1, 1, 2), 2) == r0     # the receiver feels no scarcity
+
+
+def test_smallest_accepted_package_is_chosen():
+    big = {"assets": [1, 2, 3], "joint": 5e6}
+    small = {"assets": [1, 2], "joint": 1e6}
+    assert ge.choose([big, small], __import__("random").Random(1)) is small
+
+
+# ---------------------------------------------- starter depth (JR, 2026-10-22, Teddy Higgins) ----
+def test_starter_without_a_healthy_backup_stays():
+    b = books(extra=[p(82)])
+    dts = [pid for pid in b["roster"][1] if b["players"][pid]["group"] == "DT"]
+    backup = min(dts, key=lambda pid: b["players"][pid]["ovr"])
+    starter = max(dts, key=lambda pid: b["players"][pid]["ovr"])
+    ok = ge.depth_check(deal([pl(900, 2, 1), pl(starter, 1, 2)]), b)
+    assert ok["ok"]                                              # his backup takes the slot
+    inj = {backup: {"weeks_remaining": 4, "is_ir": True}}
+    b = books(extra=[p(82)], injuries=inj)
+    chk = ge.depth_check(deal([pl(900, 2, 1), pl(starter, 1, 2)]), b)
+    assert not chk["ok"] and "AAA 1 healthy DT for 2 starter slots" in chk["detail"]
+    edge = make_player(901, 2, "DT", 76)
+    b = books(extra=[edge], injuries=inj)                        # a DT back fills the slot
+    assert ge.depth_check(deal([pl(901, 2, 1), pl(starter, 1, 2)]), b)["ok"]
+
+
+def test_last_healthy_center_stays():
+    c1, c2 = make_player(950, 1, "IOL", 79), make_player(951, 1, "IOL", 77)
+    c1["pos"] = c2["pos"] = "C"
+    rt = make_player(952, 2, "OT", 79)
+    b = books(extra=[c1, c2, rt])
+    d = deal([pl(952, 2, 1), pl(951, 1, 2)])
+    assert ge.depth_check(d, b)["ok"]                            # Giamello healthy: Higgins can go
+    b = books(extra=[c1, c2, rt], injuries={950: {"weeks_remaining": 1, "is_ir": True}})
+    chk = ge.depth_check(d, b)
+    assert not chk["ok"] and "AAA no healthy C left" in chk["detail"]

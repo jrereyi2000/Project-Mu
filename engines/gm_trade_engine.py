@@ -36,6 +36,15 @@ CAP_MARGIN, CAP_MARGIN_DERIVED = 1_000_000, 3_000_000
 RESCAN_HEADROOM = 3_000_000
 FAIRNESS_SHARE, FAIRNESS_FLOOR = 0.25, 4_000_000
 MIN_SLOT_GROUPS = {"QB": 1, "K": 1, "P": 1}
+# Pick depth (JR, 2026-10-22, week 8: SF and PHI kept bleeding Day-3 picks over a series of trades). A team that
+# isn't a strong contender never has more than MAX_PICKS_OUT of its own picks in one draft traded away (executed
+# trades and open proposals); every own pick already gone from a draft makes its remaining picks there dearer.
+MAX_PICKS_OUT = 2
+STRONG_CONTEND_D = 1.5                   # direction score D of a CONTEND team exempt from MAX_PICKS_OUT
+PICK_SCARCITY = 0.35                     # owner's pick value x (1 + 0.35 x own picks gone from that draft)
+# Starter depth (JR, 2026-10-22, Teddy Higgins): in season a team never sends a starter without a healthy player
+# left to take his slot, and never its last healthy player at a Madden position the group's slots can't cover.
+MIN_HEALTHY_POS = {"C": 1}
 # Division rivals (JR, 2026-10-20: "very unlikely they're getting traded in division", proposal #1). An elite player
 # never moves inside his division (a hard legality block); anything else sent to a rival costs the sender a share of
 # its league value on top of what he gives up, so in-division deals stay rare and small.
@@ -310,10 +319,11 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     b["gm"] = {r[0]: {"gm_id": r[1], "gm_name": r[2], "aggressiveness": float(r[3]), "risk_appetite": float(r[4]),
                       "pick_affinity": float(r[5]), "youth_bias": float(r[6]), "position_bias": r[7] or {},
                       "voice": r[8], "user_controlled": r[9], "suggestions_on": r[10]} for r in cur.fetchall()}
-    cur.execute("""SELECT team_id, direction, needs, surplus, urgent_need, direction_inputs FROM gm_team_seasons
-                   WHERE season = %s""", (season,))
+    cur.execute("""SELECT team_id, direction, needs, surplus, urgent_need, direction_inputs, direction_score
+                   FROM gm_team_seasons WHERE season = %s""", (season,))
     b["ts"] = {r[0]: {"direction": r[1], "needs": r[2] or [], "surplus": r[3] or [], "urgent_need": r[4],
-                      "proj_wins": (r[5] or {}).get("proj_wins")} for r in cur.fetchall()}
+                      "proj_wins": (r[5] or {}).get("proj_wins"),
+                      "direction_score": float(r[6]) if r[6] is not None else None} for r in cur.fetchall()}
     b["cap"] = read_cap(cur, season, b["value_season"])
     b["players"] = tv.read_players(cur, season)
     # Madden heals the season's injuries over the offseason: the injury report only blocks in-season trades
@@ -495,6 +505,8 @@ class Valuer:
                 clock = self.b.get("on_clock")
                 if clock and tuple(asset["pick"]) == clock[0] and tid != clock[1]:
                     v = round(v * (self.b.get("draft_premiums") or {}).get(tid, DRAFT_DAY_PREMIUM))
+                if self.b["picks"].get(tuple(asset["pick"])) == tid:       # his own draft class is thinning
+                    v = round(v * (1 + PICK_SCARCITY * len(own_picks_gone(self.b, tid, ds, booked=False))))
                 self.cache[key] = v
         return self.cache[key]
 
@@ -652,6 +664,10 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
             if have < need:
                 bad.append(f"{abbr(b, t)} no {g}")
     res["slots"] = {"ok": not bad, "detail": "; ".join(bad) or "ok"}
+    if window == "IN_SEASON":
+        res["depth"] = depth_check(deal, b)
+    if window != "DRAFT_DAY":
+        res["pick_depth"] = pick_depth_check(deal, b, ignore_booking)
     res["deadline"] = {"ok": trades_open(b["week"], window), "detail": f"week {b['week']} ({window})"}
     res["division"] = division_check(deal, b)
     if window == "IN_SEASON":
@@ -689,6 +705,70 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
                            "detail": f"league value ${la / 1e6:.1f}M vs ${lb / 1e6:.1f}M (gap ${gap / 1e6:.1f}M, "
                                      f"limit ${limit / 1e6:.1f}M)"}
     return res
+
+
+def healthy_after(deal, b, tid):
+    """The team's healthy players (not out: IR or 3+ weeks) once the deal is done."""
+    moving = {x["player_id"]: x for x in deal["assets"] if x["type"] == "PLAYER"}
+    ids = [pid for pid in b["roster"].get(tid, []) if pid not in moving or moving[pid]["to"] == tid]
+    ids += [pid for pid, x in moving.items() if x["to"] == tid and pid not in ids]
+    return [b["players"][pid] for pid in ids if pid not in b["out"]]
+
+
+def depth_check(deal, b):
+    """{ok, detail}: each team keeps a healthy player for every starter slot it fills now (sending a starter needs
+    a backup or a player back in his group), and a healthy player at each MIN_HEALTHY_POS position it has now."""
+    bad = []
+    for t in (deal["a"], deal["b"]):
+        if not any(x["type"] == "PLAYER" and x["from"] == t for x in deal["assets"]):
+            continue
+        before = [b["players"][pid] for pid in b["roster"].get(t, []) if pid not in b["out"]]
+        after = healthy_after(deal, b, t)
+        for g, n in SLOTS.items():
+            had = min(n, sum(1 for p in before if p["group"] == g))
+            have = sum(1 for p in after if p["group"] == g)
+            if have < had:
+                bad.append(f"{abbr(b, t)} {have} healthy {g} for {had} starter slots")
+        for pos, n in MIN_HEALTHY_POS.items():
+            had = min(n, sum(1 for p in before if p.get("pos") == pos))
+            if sum(1 for p in after if p.get("pos") == pos) < had:
+                bad.append(f"{abbr(b, t)} no healthy {pos} left")
+    return {"ok": not bad, "detail": "; ".join(bad) or "every starter slot covered"}
+
+
+def strong_contender(b, tid):
+    ts = b.get("ts", {}).get(tid, {})
+    return ts.get("direction") == "CONTEND" and (ts.get("direction_score") or 0) >= STRONG_CONTEND_D
+
+
+def own_picks_gone(b, tid, draft, exclude=(), booked=True):
+    """The team's own picks in a draft it no longer owns, plus (booked) those in open proposals, not `exclude`."""
+    gone = {k for k, o in b["picks"].items() if k[0] == draft and k[2] == tid and o != tid}
+    if not booked:
+        return gone
+    gone |= {k for k in b["booked_picks"] if k[0] == draft and k[2] == tid and b["picks"].get(k) == tid
+             and k not in exclude}
+    return gone
+
+
+def pick_depth_check(deal, b, ignore_booking=()):
+    """{ok, detail}: a team that isn't a strong contender never ends with more than MAX_PICKS_OUT of its own picks
+    in one draft traded away."""
+    bad = []
+    keys = {tuple(x["pick"]) for x in deal["assets"] if x["type"] == "PICK"}
+    for t in (deal["a"], deal["b"]):
+        sent = {tuple(x["pick"]) for x in deal["assets"] if x["type"] == "PICK" and x["from"] == t
+                and x["pick"][2] == t}
+        if not sent or strong_contender(b, t):
+            continue
+        for draft in sorted({k[0] for k in sent}):
+            out = own_picks_gone(b, t, draft, keys | {k[1:] for k in ignore_booking if k[0] == "K"}) | \
+                {k for k in sent if k[0] == draft}
+            if len(out) > MAX_PICKS_OUT:
+                rounds = ", ".join(f"R{k[1]}" for k in sorted(out, key=lambda k: k[1]))
+                bad.append(f"{abbr(b, t)} would have {len(out)} of its {draft} picks traded away ({rounds}; "
+                           f"max {MAX_PICKS_OUT} unless a strong contender)")
+    return {"ok": not bad, "detail": "; ".join(bad) or "ok"}
 
 
 def division_check(deal, b):
@@ -1047,10 +1127,13 @@ def accepts(deal, valuer, b):
 
 
 def choose(cands, rng):
-    """Seeded softmax over the joint surplus min(Δ_A, Δ_B) of the best candidates."""
+    """The smallest package both GMs accept (fewest assets; JR, 2026-10-22: maximising min(Δ_A, Δ_B) padded every
+    deal with picks the buyer barely values), then a seeded softmax over the joint surplus min(Δ_A, Δ_B) of the best
+    of those."""
     if not cands:
         return None
-    cands = sorted(cands, key=lambda c: -c["joint"])[:5]
+    fewest = min(len(c["assets"]) for c in cands)
+    cands = sorted((c for c in cands if len(c["assets"]) == fewest), key=lambda c: -c["joint"])[:5]
     top = cands[0]["joint"]
     ws = [math.exp((c["joint"] - top) / SOFTMAX_TEMP) for c in cands]
     r = rng.random() * sum(ws)
@@ -1397,7 +1480,8 @@ def run_week(cur, season, week, dry_run=False, replace=False, llm=None, log=prin
     b = read_books(cur, season, week, window, stage)
     for tid, r in rows.items():                          # a dry run never wrote them: use them in memory
         ts = b["ts"].setdefault(tid, {})
-        ts.update(direction=r["direction"], needs=r["needs"], surplus=r["surplus"], proj_wins=r["inputs"]["proj_wins"])
+        ts.update(direction=r["direction"], needs=r["needs"], surplus=r["surplus"], proj_wins=r["inputs"]["proj_wins"],
+                  direction_score=r["D"])
     expired_ids = {pid for pid, _ in rep["expired"]}
     b["open"] = [p for p in b["open"] if p["id"] not in expired_ids]
     b = finish_books(b)
