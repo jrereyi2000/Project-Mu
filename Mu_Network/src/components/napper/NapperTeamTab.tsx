@@ -53,6 +53,8 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
   const [nameDialogOpen, setNameDialogOpen] = useState<boolean>(false);
   const [editedTeamName, setEditedTeamName] = useState<string>("");
   const [savingTeamName, setSavingTeamName] = useState<boolean>(false);
+  const [dropTarget, setDropTarget] = useState<NapperStarterPlayer | null>(null);
+  const [dropping, setDropping] = useState<boolean>(false);
 
   const loadRoster = useCallback(async () => {
     setLoading(true);
@@ -101,6 +103,30 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
       setSaving(false);
       setSelectedSlotId(null);
       setTimeout(() => setFeedbackMessage(null), 3000);
+    }
+  };
+
+  // Drops the player for this and later weeks; he goes on waivers until the next waiver run.
+  const dropPlayer = async (player: NapperStarterPlayer) => {
+    if (!teamId) return;
+    setDropping(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/napper/league/${leagueId}/waivers/drop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team_id: teamId, player_id: player.player_id, week }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || `Could not drop ${player.name}.`);
+      setFeedbackMessage(data.message || `Dropped ${player.name}.`);
+    } catch (error) {
+      setFeedbackMessage(error instanceof Error ? error.message : `Could not drop ${player.name}.`);
+    } finally {
+      await loadRoster();
+      setDropping(false);
+      setDropTarget(null);
+      setSelectedSlotId(null);
+      setTimeout(() => setFeedbackMessage(null), 4000);
     }
   };
 
@@ -193,7 +219,7 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
             </span>
           </div>
           <p className="text-xs text-[#8a99ad] mt-0.5">
-            Click any player to initiate a lineup swap into eligible positions
+            Click any player to swap them into an eligible slot or drop them
           </p>
         </div>
 
@@ -249,18 +275,42 @@ export const NapperTeamTab: React.FC<NapperTeamTabProps> = ({
                 Swapping: <span className="text-[#00ceb8]">{selectedPlayer.name}</span> ({selectedPlayer.position} - {selectedPlayer.team})
               </div>
               <div className="text-[11px] text-[#8a99ad]">
-                Click any highlighted target slot below to complete swap
+                Click a highlighted slot below to complete the swap, or drop him
               </div>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setSelectedSlotId(null)}
-            className="px-3 py-1.5 rounded-md bg-[#161f2e] border border-[#283850] text-xs font-bold text-[#8a99ad] hover:text-white cursor-pointer"
-          >
-            Cancel
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setDropTarget(selectedPlayer)}
+              className="px-3 py-1.5 rounded-md bg-[#ff4a6e]/10 border border-[#ff4a6e]/60 text-xs font-bold text-[#ff6b87] hover:bg-[#ff4a6e]/20 cursor-pointer"
+            >
+              Drop
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedSlotId(null)}
+              className="px-3 py-1.5 rounded-md bg-[#161f2e] border border-[#283850] text-xs font-bold text-[#8a99ad] hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {dropTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/65 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !dropping) setDropTarget(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="napper-drop-title" className="w-full max-w-sm rounded-xl border border-[#283850] bg-[#1a2332] p-5 shadow-2xl">
+            <h2 id="napper-drop-title" className="text-base font-extrabold text-white">Drop {dropTarget.name}?</h2>
+            <p className="mt-2 text-xs text-[#8a99ad]">
+              {dropTarget.position} - {dropTarget.team}. He leaves your roster from week {week} on and goes on waivers until the next waiver run.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setDropTarget(null)} disabled={dropping} className="rounded-lg border border-[#283850] px-3 py-2 text-xs font-bold text-[#8a99ad] hover:text-white disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={() => void dropPlayer(dropTarget)} disabled={dropping} className="rounded-lg bg-[#ff4a6e] px-3 py-2 text-xs font-extrabold text-white hover:bg-[#ff6b87] disabled:opacity-50">{dropping ? "Dropping…" : "Drop player"}</button>
+            </div>
+          </div>
         </div>
       )}
 
