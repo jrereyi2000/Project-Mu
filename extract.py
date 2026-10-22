@@ -45,6 +45,13 @@ from pydantic import BaseModel
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 MODEL = os.environ.get("MADDEN_EXTRACT_MODEL", "gemini-3.8-flash")
 WORKERS = int(os.environ.get("MADDEN_EXTRACT_WORKERS", "8"))   # parallel Gemini requests
+# Thinking level for every read (low | medium | high; "default" leaves the model's own; 3.8 Flash refuses minimal). Reading a
+# table off a screenshot needs no reasoning, and thinking was ~60% of extract cost (usage audit, Oct 22).
+THINKING = os.environ.get("MADDEN_EXTRACT_THINKING", "low").lower()
+
+
+def _thinking():
+    return None if THINKING == "default" else types.ThinkingConfig(thinking_level=THINKING.upper())
 
 
 def _api_key():
@@ -162,8 +169,16 @@ def _is_salary(path):
     return os.path.basename(os.path.dirname(os.path.dirname(path))) == "contracts"
 
 
+def _garbled(t):
+    """A table read at low thinking that went wrong: a row the wrong length or a cell holding prose (Oct 22 A/B: one
+    rushing page reasoned inside a cell and lost its last rows). Such a page is read again with full thinking."""
+    return isinstance(t, Table) and any(len(r.cells) != len(t.columns) or any(len(c) > 40 for c in r.cells)
+                                        for r in t.rows)
+
+
 def _generate(contents, schema, label, retries=4):
     client = _get_client()
+    think = _thinking()
     for attempt in range(1, retries + 1):
         try:
             with _labelled(label):
@@ -174,9 +189,14 @@ def _generate(contents, schema, label, retries=4):
                         response_mime_type="application/json",
                         response_schema=schema,
                         temperature=0.1,
+                        thinking_config=think,
                     ),
                 )
-            return schema.model_validate_json(resp.text)
+            t = schema.model_validate_json(resp.text)
+            if think is not None and _garbled(t):
+                think = None
+                raise ValueError("garbled table; reading again with full thinking")
+            return t
         except Exception as e:
             if attempt == retries:
                 raise RuntimeError(f"Gemini couldn't read {label}: {e}") from e
@@ -218,6 +238,7 @@ def _read_table_remote(path, retries=4):
         return {"title": best.title, "columns": best.columns, "rows": [r.cells for r in best.rows]}
     client = _get_client()
     part = prepare_image(path)
+    think = _thinking()
     for attempt in range(1, retries + 1):
         try:
             with _labelled(os.path.basename(path)):
@@ -228,9 +249,13 @@ def _read_table_remote(path, retries=4):
                         response_mime_type="application/json",
                         response_schema=Table,
                         temperature=0.1,
+                        thinking_config=think,
                     ),
                 )
             t = Table.model_validate_json(resp.text)
+            if think is not None and _garbled(t):
+                think = None
+                raise ValueError("garbled table; reading again with full thinking")
             rows = [[c.replace("\u2212", "-").replace("\u2013", "-").replace("\u2014", "-") for c in r.cells] for r in t.rows]
             return {"title": t.title, "columns": t.columns, "rows": rows}
         except Exception as e:

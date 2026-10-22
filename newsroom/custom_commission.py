@@ -195,6 +195,8 @@ Your task is to analyze an article assignment prompt and assign:
         contents=user_query,
         config=config,
     )
+    from db.llm_usage import log_response
+    log_response("custom_commission", "classify_prompt", model, resp)
 
     raw_text = resp.text or "{}"
     data = json.loads(raw_text)

@@ -5,6 +5,7 @@ JSON file for side-by-side review. Reads the database; writes nothing to it. Nee
 
   python3 tools/social_model_compare.py                      # 2035 Week 9, 3.8 Flash vs 3.5 Flash-Lite
   python3 tools/social_model_compare.py --week 18 --models gemini-3.8-flash gemini-3.5-flash-lite
+  python3 tools/social_model_compare.py --models gemini-3.8-flash gemini-3.8-flash:low   # model:thinking level
 """
 import argparse
 import collections

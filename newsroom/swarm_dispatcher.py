@@ -1717,7 +1717,8 @@ If you need specific stats, use your database tools before producing your final 
                     n_preds = agent_memory.store_predictions(cur, agent_id, season, compiled_prompt.get("preview_week") or week,
                                                              article_id, preds)
                 conn.commit()
-                raw = agent_memory.gemini_text(self.api_key, model, agent_memory.takes_extraction_prompt(display, headline, text))
+                raw = agent_memory.gemini_text(self.api_key, model, agent_memory.takes_extraction_prompt(display, headline, text),
+                                               label=f"takes #{article_id}")
                 n_takes = agent_memory.store_takes(cur, agent_id, season, week, article_id,
                                                    agent_memory.parse_takes_json(raw), team_index)
                 conn.commit()

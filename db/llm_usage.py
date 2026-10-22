@@ -6,6 +6,9 @@ Gemini token logging (docs/PIPELINE_MIGRATION.md, phase 3) into the llm_usage ta
       client.models.generate_content(...)
   meter.record("extract", capture_folder="2026-10-14_0146")
 
+  resp = client.models.generate_content(...)
+  log_response("agent_memory", "summary @handle", model, resp)   # a one-off call, no meter
+
 The meter wraps the client's per-request method, so the calls the SDK makes inside automatic
 function calling (a newsroom article's tool loop) are counted too; the response a chat returns
 only carries the last call's usage. Logging never breaks a run: without a database it warns and
@@ -23,6 +26,21 @@ def _usage(resp):
     get = (lambda k: getattr(u, k, None) or 0) if u else (lambda k: 0)
     return {"input_tokens": get("prompt_token_count"), "cached_tokens": get("cached_content_token_count"),
             "output_tokens": get("candidates_token_count"), "thinking_tokens": get("thoughts_token_count")}
+
+
+def log_response(source, label, model, resp):
+    """Write one response's tokens to llm_usage, for a single call made outside a UsageMeter. Never raises."""
+    row = _usage(resp)
+    try:
+        import psycopg
+        with psycopg.connect(DSN, connect_timeout=5) as conn:
+            conn.execute("INSERT INTO llm_usage (source, label, model, input_tokens, cached_tokens, output_tokens, "
+                         "thinking_tokens) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                         (source, (label or "")[:255], (model or "")[:64], row["input_tokens"], row["cached_tokens"],
+                          row["output_tokens"], row["thinking_tokens"]))
+    except Exception as e:
+        print(f"  (token usage not logged: {e})")
+    return row
 
 
 class UsageMeter:

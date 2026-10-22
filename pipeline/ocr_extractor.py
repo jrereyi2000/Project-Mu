@@ -114,6 +114,11 @@ class BoxScoreExtractor:
                     temperature=0.1
                 )
             )
+            try:                                    # token log; db/ isn't importable when run as a script
+                from db.llm_usage import log_response
+                log_response("ocr_extractor", getattr(schema, "__name__", ""), "gemini-3.8-flash", response)
+            except ImportError:
+                pass
             return schema.model_validate_json(response.text)
         except Exception as e:
             print(f"[API Worker] Error during VLM extraction: {e}")

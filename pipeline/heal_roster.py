@@ -112,6 +112,11 @@ def heal_roster(video_path, file_uri, db_conn):
                 model='gemini-3.8-flash',
                 contents=batch + [prompt]
             )
+            try:                                    # token log; db/ isn't importable when run as a script
+                from db.llm_usage import log_response
+                log_response("heal_roster", f"batch {idx + 1}", "gemini-3.8-flash", response)
+            except ImportError:
+                pass
             
             json_str = response.text
             if "```json" in json_str:

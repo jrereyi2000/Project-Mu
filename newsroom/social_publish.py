@@ -11,6 +11,7 @@ Posts are saved with content_type 'TWEET' and slot 'Agent Wire' (weekly) or 'Age
 The pure helpers (calendar, engagement, trends) need no database and are unit-tested in tests/test_social_publish.py.
 """
 import collections
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -453,6 +454,12 @@ class _Writer:
             self.personas = json.load(f)["archetypes"]
         self.usage = collections.Counter()
         self.cost = 0.0
+        try:                                            # every post's calls -> llm_usage (source agent_wire)
+            from db.llm_usage import UsageMeter
+            self.meter = getattr(client, "_usage_meter", None) or UsageMeter(client)
+            client._usage_meter = self.meter            # one meter per client, so a reused client isn't counted twice
+        except Exception:                               # a test's fake client has no request method to wrap
+            self.meter = None
 
     def prompt(self, a):
         acct = self.accounts[a["agent_id"]]
@@ -474,10 +481,11 @@ class _Writer:
             a, (system, prompt) = args
             model = self.cfg.get("model_by_kind", {}).get(a["kind"], self.model)
             try:
-                return write_post(self.client, model, system, prompt, fantasy_active=fantasy_active,
-                                  allowed=allowed_money(a.get("facts"))
-                                  | money_values((a.get("parent") or {}).get("text", "")),
-                                  rumor=a["kind"] == "TRADE_RUMOR")
+                with self.meter.labelled(f"{a['agent_id']} {a['kind']}") if self.meter else contextlib.nullcontext():
+                    return write_post(self.client, model, system, prompt, fantasy_active=fantasy_active,
+                                      allowed=allowed_money(a.get("facts"))
+                                      | money_values((a.get("parent") or {}).get("text", "")),
+                                      rumor=a["kind"] == "TRADE_RUMOR")
             except Exception as e:
                 return {"error": f"{type(e).__name__}: {e}", "text": "", "problems": ["call failed"]}
 
@@ -487,6 +495,8 @@ class _Writer:
             for k, v in (r.get("usage") or {}).items():
                 self.usage[k] += v
             self.cost += r.get("cost_usd", 0.0)
+        if self.meter:
+            self.meter.record("agent_wire")
         return results
 
 

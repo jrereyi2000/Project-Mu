@@ -284,12 +284,14 @@ def store_predictions(cur, agent_id: str, season: int, preview_week: int, articl
 
 # ---------------------------------------------------------------- model calls
 
-def gemini_text(api_key: str, model: str, prompt: str) -> str:
+def gemini_text(api_key: str, model: str, prompt: str, label: str = "") -> str:
     from google import genai
     from google.genai import types
+    from db.llm_usage import log_response
     client = genai.Client(api_key=api_key)
     resp = client.models.generate_content(model=model, contents=prompt,
                                           config=types.GenerateContentConfig(temperature=0.3))
+    log_response("agent_memory", label, model, resp)
     return (resp.text or "").strip()
 
 
@@ -312,7 +314,8 @@ def refresh_season_summaries(conn_info: str, api_key: str, model: str, season: i
             with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
                 inp = summary_inputs(cur, agent_id, season, week, last_tw)
                 text = gemini_text(api_key, model, summary_prompt(inp["name"], inp["identity"], inp["previous"],
-                                                                  inp["takes"], inp["predictions"], through))
+                                                                  inp["takes"], inp["predictions"], through),
+                                   label=f"summary {agent_id}")
                 if not text:
                     return 0
                 store_summary(cur, agent_id, season, through, text)

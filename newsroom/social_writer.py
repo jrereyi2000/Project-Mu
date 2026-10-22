@@ -205,12 +205,15 @@ def cost_usd(model: str, usage: dict) -> float:
 
 def write_post(client, model: str, system: str, prompt: str, temperature: float = 0.9, fantasy_active: bool = True,
                allowed=None, rumor: bool = False) -> dict:
-    """One Gemini call (no tools). If the post runs over 280 characters, names a dollar figure that isn't in its
+    """One Gemini call (no tools); `model` may carry a thinking level ("gemini-3.8-flash:low"). If the post runs over 280 characters, names a dollar figure that isn't in its
     facts (`allowed`, the money guard) or words a rumor as a done deal (`rumor`), asks once for a rewrite.
     Returns {"raw", "text", "hashtags", "problems", "usage", "cost_usd", "seconds", "calls"}."""
     from google.genai import types
 
-    config = types.GenerateContentConfig(system_instruction=system, temperature=temperature)
+    model, _, thinking = model.partition(":")      # "gemini-3.8-flash:low" sets the thinking level
+    config = types.GenerateContentConfig(system_instruction=system, temperature=temperature,
+                                         thinking_config=types.ThinkingConfig(thinking_level=thinking.upper())
+                                         if thinking else None)
     start = time.time()
     usage_total = {"input": 0, "cached": 0, "output": 0, "thinking": 0}
 
