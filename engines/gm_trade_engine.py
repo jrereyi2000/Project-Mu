@@ -356,10 +356,19 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     cur.execute("""SELECT count(*) FROM gm_trade_proposals WHERE season = %s AND week = %s AND origin = 'ENGINE'
                    AND trade_window = %s AND (%s::text IS NULL OR %s = ANY(flags)) AND counts_for_pacing
                    AND NOT (status = 'EXPIRED' AND (COALESCE(status_reason, '') LIKE 'no longer legal%%'
-                                                    OR COALESCE(status_reason, '') LIKE 'no longer accepted%%'))""",
+                                                    OR COALESCE(status_reason, '') LIKE 'no longer accepted%%'
+                                                    OR COALESCE(status_reason, '') LIKE 'rejected this week%%'))""",
                 (season, week, window, None if stage is None else f"stage:{stage}",
                  None if stage is None else f"stage:{stage}"))
     b["made_this_week"] = cur.fetchone()[0]
+    # JR, 2026-10-22 (#21 then #24, Otis Jones): a player in a proposal JR rejected this week (offseason: this
+    # stage) isn't offered again until the week moves
+    cur.execute("""SELECT DISTINCT a.player_id FROM gm_trade_assets a JOIN gm_trade_proposals p ON p.id = a.proposal_id
+                   WHERE p.season = %s AND p.week = %s AND p.trade_window = %s AND p.status = 'REJECTED'
+                   AND a.asset_type = 'PLAYER' AND (%s::text IS NULL OR %s = ANY(p.flags))""",
+                (season, week, window, None if stage is None else f"stage:{stage}",
+                 None if stage is None else f"stage:{stage}"))
+    b["rejected_players"] = {r[0] for r in cur.fetchall()}
     cur.execute("SELECT deal_hash FROM gm_trade_proposals WHERE season = %s", (season,))
     b["hashes"] = {r[0] for r in cur.fetchall()}
     cur.execute("SELECT team_id, wins, losses FROM team_seasons WHERE season = %s", (season,))
@@ -1268,12 +1277,18 @@ def packages(b, valuer, buyer, seller, core, trigger, extras=True):
     return deals
 
 
+def rejected_players(deal, b):
+    """Names of the deal's players JR rejected in a proposal this week."""
+    return [b["players"][x["player_id"]]["name"] for x in deal["assets"]
+            if x["type"] == "PLAYER" and x["player_id"] in b.get("rejected_players", ())]
+
+
 def evaluate(deals, b, valuer):
     """Candidates that are legal (fairness included) and accepted by both GMs, with their numbers."""
     out = []
     for d in deals:
         h = deal_hash(d["a"], d["b"], d["assets"])
-        if h in b["hashes"]:
+        if h in b["hashes"] or rejected_players(d, b):
             continue
         ok, da, db = accepts(d, valuer, b)
         if not ok:
@@ -1749,8 +1764,11 @@ def recheck_open(cur, b, dry_run=False, log=None, valuer=None):
         checks = check_legality(deal, b, None, ignore_booking={asset_key(x) for x in p["assets"]})
         checks.pop("deadline", None)
         why = None
+        rejected = rejected_players(deal, b) if p.get("origin", "ENGINE") == "ENGINE" else []
         if not legal(checks):
             why = "no longer legal: " + "; ".join(f"{k} {v['detail']}" for k, v in checks.items() if not v["ok"])
+        elif rejected:
+            why = f"rejected this week: {', '.join(rejected)} was in a proposal JR rejected"
         elif valuer is not None and p.get("origin", "ENGINE") == "ENGINE":
             ok, da, db = accepts(deal, valuer, b)
             if not ok:

@@ -354,3 +354,22 @@ def test_recheck_expires_a_deal_a_gm_no_longer_accepts():
     user = [dict(open_[0], origin="USER")]
     b2 = books(extra=[wagner, roseman, make_player(9103, 1, "DT", 90), make_player(9104, 1, "DT", 89)], open_=user)
     assert ge.recheck_open(Cur(), b2, valuer=ge.Valuer(b2, FITS)) == []   # JR's own trades aren't second-guessed
+
+
+def test_player_jr_rejected_this_week_is_not_offered_again():
+    b = star_books()
+    b["rejected_players"] = {STAR}
+    v = ge.Valuer(b, FITS)
+    assert not any(any(x.get("player_id") == STAR for x in c["assets"]) for c in ge.evaluate(ge.buy_deals(b, v, 1), b, v))
+    open_ = [{"id": 24, "status": "PROPOSED", "origin": "ENGINE", "team_a_id": 1, "team_b_id": 2,
+              "trade_window": "IN_SEASON", "expires_week": 4, "assets": base_deal()["assets"]}]
+    b = star_books(open_=open_)
+    b["rejected_players"] = {STAR}
+
+    class Cur:
+        def execute(self, q, a=None):
+            pass
+    out = ge.recheck_open(Cur(), b)
+    assert out == [(24, f"rejected this week: Player {STAR} was in a proposal JR rejected")]
+    b["open"] = [dict(open_[0], origin="USER")]                 # JR's own deals aren't second-guessed
+    assert ge.recheck_open(Cur(), b) == []
