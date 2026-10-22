@@ -40,6 +40,7 @@ MIN_SLOT_GROUPS = {"QB": 1, "K": 1, "P": 1}
 # isn't a strong contender never has more than MAX_PICKS_OUT of its own picks in one draft traded away (executed
 # trades and open proposals); every own pick already gone from a draft makes its remaining picks there dearer.
 MAX_PICKS_OUT = 2
+MAX_PICKS_OUT_SEASON = 4                 # own picks sent in one season's trades, every draft together
 STRONG_CONTEND_D = 1.5                   # direction score D of a CONTEND team exempt from MAX_PICKS_OUT
 PICK_SCARCITY = 0.35                     # owner's pick value x (1 + 0.35 x own picks gone from that draft)
 # Starter depth (JR, 2026-10-22, Teddy Higgins): in season a team never sends a starter without a healthy player
@@ -336,6 +337,13 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
     cur.execute("""SELECT draft_season, round, original_team_id, owner_team_id FROM draft_picks
                    WHERE NOT used AND draft_season > %s""", (season,))
     b["picks"] = {(r[0], r[1], r[2]): r[3] for r in cur.fetchall()}
+    cur.execute("""SELECT a.from_team_id, a.pick_draft_season, a.pick_round, a.pick_original_team_id
+                   FROM gm_trade_assets a JOIN gm_trade_proposals p ON p.id = a.proposal_id
+                   WHERE p.season = %s AND p.status = 'EXECUTED' AND a.asset_type = 'PICK'
+                     AND a.from_team_id = a.pick_original_team_id""", (season,))
+    b["picks_sent"] = {}
+    for tid, ds, rd, orig in cur.fetchall():
+        b["picks_sent"].setdefault(tid, set()).add((ds, rd, orig))
     b["open"] = read_proposals(cur, season, ("PROPOSED", "APPROVED"))
     cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED' AND counts_for_pacing),
                           count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED') AND counts_for_pacing),
@@ -753,21 +761,29 @@ def own_picks_gone(b, tid, draft, exclude=(), booked=True):
 
 def pick_depth_check(deal, b, ignore_booking=()):
     """{ok, detail}: a team that isn't a strong contender never ends with more than MAX_PICKS_OUT of its own picks
-    in one draft traded away."""
+    in one draft traded away, nor sends more than MAX_PICKS_OUT_SEASON of its own picks in one season's trades
+    (executed and open, every draft together)."""
     bad = []
     keys = {tuple(x["pick"]) for x in deal["assets"] if x["type"] == "PICK"}
+    mine = {k[1:] for k in ignore_booking if k[0] == "K"}
     for t in (deal["a"], deal["b"]):
         sent = {tuple(x["pick"]) for x in deal["assets"] if x["type"] == "PICK" and x["from"] == t
                 and x["pick"][2] == t}
         if not sent or strong_contender(b, t):
             continue
         for draft in sorted({k[0] for k in sent}):
-            out = own_picks_gone(b, t, draft, keys | {k[1:] for k in ignore_booking if k[0] == "K"}) | \
+            out = own_picks_gone(b, t, draft, keys | mine) | \
                 {k for k in sent if k[0] == draft}
             if len(out) > MAX_PICKS_OUT:
                 rounds = ", ".join(f"R{k[1]}" for k in sorted(out, key=lambda k: k[1]))
                 bad.append(f"{abbr(b, t)} would have {len(out)} of its {draft} picks traded away ({rounds}; "
                            f"max {MAX_PICKS_OUT} unless a strong contender)")
+        season_out = b.get("picks_sent", {}).get(t, set()) | sent | {
+            k for k in b["booked_picks"] if k[2] == t and b["picks"].get(k) == t and k not in keys | mine}
+        if len(season_out) > MAX_PICKS_OUT_SEASON:
+            labels = ", ".join(f"{k[0]} R{k[1]}" for k in sorted(season_out))
+            bad.append(f"{abbr(b, t)} would have sent {len(season_out)} of its own picks this season ({labels}; "
+                       f"max {MAX_PICKS_OUT_SEASON} unless a strong contender)")
     return {"ok": not bad, "detail": "; ".join(bad) or "ok"}
 
 

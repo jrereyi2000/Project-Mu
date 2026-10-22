@@ -176,6 +176,18 @@ def test_open_proposals_count_toward_the_pick_limit():
     assert ge.pick_depth_check(deal(open_[0]["assets"]), b, ignore_booking=own)["ok"]
 
 
+def test_season_cap_on_own_picks_across_drafts():
+    b = books(extra=[p(82)])
+    for k in ((2037, 5, 1), (2037, 6, 1), (2038, 3, 1), (2038, 5, 1)):     # PHI: #10 and #15
+        b["picks"][k] = 2
+    b["picks_sent"] = {1: {(2037, 5, 1), (2037, 6, 1), (2038, 3, 1), (2038, 5, 1)}}
+    chk = ge.pick_depth_check(deal([pl(900, 2, 1), pk(6, 1, 1, 2, season=2039)]), b)
+    assert not chk["ok"] and "sent 5 of its own picks this season" in chk["detail"]
+    b["picks_sent"][1].discard((2038, 5, 1))                              # four sent so far: one more is the cap
+    assert ge.pick_depth_check(deal([pl(900, 2, 1), pk(6, 1, 1, 2, season=2039)]), b)["ok"]
+    assert ge.pick_depth_check(deal([pl(900, 2, 1), pk(7, 2, 1, 2, season=2039)]), b)["ok"]   # an acquired pick
+
+
 def test_picks_get_dearer_as_a_draft_thins():
     b = books()
     v0, r0 = ge.Valuer(b, FITS).value(pk(6, 1, 1, 2), 1), ge.Valuer(b, FITS).value(pk(6, 1, 1, 2), 2)
