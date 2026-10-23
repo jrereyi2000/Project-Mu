@@ -5829,7 +5829,9 @@ function App() {
                     const primers = newsData?.slotted?.local_primers;
                     if (Array.isArray(primers) && primers.length > 0) {
                       return primers.map((story: any, index: number) => {
-                        const primaryTeam = story.tagged_teams?.find((t: any) => t.mention_type === 'PRIMARY') || story.tagged_teams?.[0];
+                        // Label by the team the primer is filed under; the opponent is often mentioned more
+                        const primaryTeam = story.tagged_teams?.find((t: any) => t.id === story.team_id)
+                          || story.tagged_teams?.find((t: any) => t.mention_type === 'PRIMARY') || story.tagged_teams?.[0];
                         const teamAbbr = primaryTeam?.abbr?.toLowerCase() || "nfl";
                         const teamName = primaryTeam?.name || "Local";
                         const author = story.author?.display_name || "Franchise Beat";

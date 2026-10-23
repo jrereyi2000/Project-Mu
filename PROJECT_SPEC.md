@@ -986,7 +986,7 @@ Navigation uses a lightweight hash router (`window.location.hash`):
 6. **Team Hub Beat Coverage & Article Feed (`TeamPage`)**:
    - Queries `GET /api/team/{abbr}/news?season={season}` to populate the team spotlight hero card and a horizontally scrollable feed displaying all beat reports and national articles covering the franchise across the season, strictly excluding opposing teams' beat reporters, with seamless fallback to positional template beats.
 7. **Live Newsroom Front Page (`App.tsx`)**:
-   - Fetches `GET /api/news/week/{week}` to bind the Hero Slot story, secondary analysis cards, feature trios, and trending local coverage primers directly to autonomous newsroom outputs. The sidebar Power Rankings card shows the top 3 from `GET /api/power_rankings` (latest stored week), or a placeholder when none is stored.
+   - Fetches `GET /api/news/week/{week}` to bind the Hero Slot story, secondary analysis cards, feature trios, and trending local coverage primers directly to autonomous newsroom outputs. Each Trending Local Coverage primer is labeled "{Team} Beat" with the team the article is filed under (`team_id`), falling back to the first `PRIMARY` tag (the opponent is often mentioned more). The sidebar Power Rankings card shows the top 3 from `GET /api/power_rankings` (latest stored week), or a placeholder when none is stored.
 8. **Team & League Logos**:
    - Pulls high-resolution official SVG/PNG logos from ESPN's global CDN (`https://a.espncdn.com/i/teamlogos/nfl/500/${abbr}.png`), normalized across all 32 franchises.
 9. **Napper Interactive Multi-League Experience (`NapperPage`, `src/components/napper/`)**:
