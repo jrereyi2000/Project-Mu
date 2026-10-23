@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, type CSSPropert
 import { API_BASE } from "./api";
 import DebugPage from "./DebugPage";
 import { NapperPage } from "./NapperPage";
+import FrontOfficeTab from "./components/team/FrontOfficeTab";
 export const SystemContext = createContext<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
 
 /** "Oct 15 · 8:03 AM" for the Stats page's Updated stamp (the latest capture load). */
@@ -249,7 +250,7 @@ function getTeamPosition(abbr: string) {
 
 function TeamPage({ team }: { team: Team }) {
   const systemStatus = useContext(SystemContext);
-  const [tab, setTab] = useState<"main" | "roster" | "stats">("main");
+  const [tab, setTab] = useState<"main" | "roster" | "stats" | "front office">("main");
   const [teamData, setTeamData] = useState<any>(null);
   const [standings, setStandings] = useState<any[]>([]);
   const [schedule, setSchedule] = useState<any[]>([]);
@@ -352,7 +353,7 @@ function TeamPage({ team }: { team: Team }) {
       </section>
 
       <nav className="team-tabs" aria-label={`${team.name} sections`}>
-        {(["main", "roster", "stats"] as const).map((item) => (
+        {(["main", "roster", "stats", "front office"] as const).map((item) => (
           <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>
             {item}
           </button>
@@ -549,6 +550,8 @@ function TeamPage({ team }: { team: Team }) {
             </div>
           </section>
       )}
+
+      {tab === "front office" && <FrontOfficeTab abbr={team.abbr} season={systemStatus.season} />}
     </main>
   );
 }

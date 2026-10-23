@@ -1,0 +1,76 @@
+/* Team hub Front Office tab (components/team/FrontOfficeTab.tsx). Same paper / ink / team-colour language as the
+   rest of the Team page (index.css .team-data-view, .stats-grid, .league-stats-table). */
+.fo-view { max-width: 1240px; }
+.fo-block + .fo-block { margin-top: 64px; }
+.fo-state { padding: 40px 0; color: var(--gray-500); font: 600 11px var(--font-mono); }
+.fo-basis { margin: 12px 0 0; color: var(--gray-500); font: 500 9px/1.6 var(--font-mono); }
+.fo-basis em, .fo-projected em, .fo-cap-tiles em { font-style: italic; color: var(--gray-500); }
+
+/* Cap sheet */
+.fo-cap-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.fo-cap-tiles article { min-height: 140px; padding: 22px; display: flex; flex-direction: column; background: var(--white); border-top: 3px solid var(--ink); }
+.fo-cap-tiles article:first-child { border-top-color: var(--team-color, var(--red)); }
+.fo-cap-tiles article.over strong { color: var(--red); }
+.fo-cap-tiles span { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.fo-cap-tiles strong { margin: auto 0 6px; font: 700 30px var(--font-mono); letter-spacing: -.05em; }
+.fo-cap-tiles strong em { margin-left: 6px; font: italic 500 10px var(--font-mono); letter-spacing: 0; }
+.fo-cap-tiles small { color: var(--gray-500); font: 600 8px var(--font-mono); text-transform: uppercase; letter-spacing: .05em; }
+
+.fo-cap-bar { height: 14px; margin-top: 22px; display: flex; background: var(--gray-100); overflow: hidden; }
+.fo-cap-bar i, .fo-cap-legend i { display: block; }
+.fo-cap-legend { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px 22px; font: 600 9px var(--font-mono); color: var(--gray-500); }
+.fo-cap-legend span { display: flex; align-items: center; gap: 7px; }
+.fo-cap-legend i { width: 10px; height: 10px; }
+.fo-cap-bar .salaries, .fo-cap-legend .salaries { background: var(--ink); }
+.fo-cap-bar .dead, .fo-cap-legend .dead { background: var(--red); }
+.fo-cap-bar .space, .fo-cap-legend .space { background: var(--team-color, var(--red)); opacity: .35; }
+
+/* Contracts */
+.fo-chips { margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+.fo-chips button { height: 30px; padding: 0 14px; border: 1px solid var(--gray-100); border-radius: 15px; color: var(--gray-500); background: var(--white); font: 700 9px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
+.fo-chips button:hover { color: var(--ink); }
+.fo-chips button.active { color: var(--white); background: var(--ink); border-color: var(--ink); }
+
+.fo-table-scroll { overflow-x: auto; border-top: 3px solid var(--ink); box-shadow: 0 10px 30px #11111109; }
+.fo-table { width: 100%; min-width: 1060px; border-collapse: collapse; background: var(--white); font-family: var(--font-mono); }
+.fo-table th { height: 44px; padding: 0 12px; color: var(--gray-500); background: #ebeae7; border-right: 1px solid #d9d7d2; font-size: 8px; letter-spacing: .04em; text-align: right; white-space: nowrap; text-transform: uppercase; }
+.fo-table th:first-child { text-align: left; min-width: 230px; position: sticky; left: 0; z-index: 1; }
+.fo-table th button { width: 100%; height: 100%; padding: 0; border: 0; color: inherit; background: transparent; display: flex; align-items: center; justify-content: flex-end; gap: 5px; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.fo-table th:first-child button { justify-content: flex-start; }
+.fo-table th button:hover { color: var(--ink); }
+.fo-table th button i { color: var(--gray-300); font-size: 8px; font-style: normal; }
+.fo-table th[aria-sort="ascending"] button, .fo-table th[aria-sort="descending"] button,
+.fo-table th[aria-sort="ascending"] button i, .fo-table th[aria-sort="descending"] button i { color: var(--team-color, var(--red)); }
+.fo-table th.fo-current { background: #e2e0dc; }
+
+.fo-table td { height: 56px; padding: 6px 12px; border-right: 1px solid var(--gray-100); border-bottom: 1px solid var(--gray-100); color: #55575d; font-size: 10px; text-align: right; white-space: nowrap; vertical-align: middle; }
+.fo-table td:first-child { color: var(--ink); text-align: left; position: sticky; left: 0; background: var(--white); z-index: 1; }
+.fo-table td:nth-child(3) { color: var(--ink); font-weight: 700; background: #faf9f7; }
+.fo-table tbody tr:hover td { background: #f5f4f1; }
+.fo-table td a strong, .fo-table td > strong { font: 700 12px var(--font-sans); }
+.fo-table td a:hover strong { color: var(--team-color, var(--red)); }
+.fo-table td small { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; color: var(--gray-500); font-size: 8px; text-transform: uppercase; }
+.fo-table td:not(:first-child) small { justify-content: flex-end; }
+.fo-table td.fo-empty { color: var(--gray-300); }
+.fo-table td.fo-projected, .fo-table em.fo-projected { font-style: italic; color: var(--gray-500); }
+.fo-table em.fo-projected { display: block; font-size: 8px; }
+
+.fo-tag { padding: 2px 6px; border-radius: 3px; color: var(--gray-500); background: var(--gray-100); font: 700 7px var(--font-mono); letter-spacing: .05em; }
+.fo-tag.contract-year { color: var(--white); background: var(--team-color, var(--red)); }
+.fo-tag.new-deal { color: var(--ink); background: #e6efe4; }
+.fo-tag.signing { color: var(--gray-500); background: transparent; border: 1px solid var(--gray-100); }
+
+.fo-table tfoot td { height: 64px; color: var(--ink); font-weight: 700; background: #ebeae7; border-top: 2px solid var(--ink); }
+.fo-table tfoot td:first-child { background: #ebeae7; }
+.fo-table tfoot td:nth-child(3) { background: #e2e0dc; }
+
+@media (max-width: 800px) {
+  .fo-cap-tiles { grid-template-columns: repeat(2, 1fr); }
+  .fo-cap-tiles strong { font-size: 24px; }
+  .fo-block + .fo-block { margin-top: 44px; }
+}
+@media (max-width: 560px) {
+  .fo-cap-tiles article { min-height: 110px; padding: 16px; }
+  .fo-cap-tiles strong { font-size: 20px; }
+  .fo-table th:first-child, .fo-table td:first-child { min-width: 170px; }
+}

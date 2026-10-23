@@ -1,0 +1,96 @@
+"""server/front_office_api.py: the Team hub Front Office tab's cap and contracts blocks. The shaping tests need no
+database; the endpoint test only reads the live one (skipped when Postgres is down) and writes nothing."""
+import datetime
+import unittest
+
+import psycopg
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from server import front_office_api as fo
+
+
+def contract(**kw):
+    c = {"contract_id": 1, "player_id": 10, "name": "A Player", "position": "QB", "length": 4, "years_remaining": 2,
+         "total_value": 40_000_000, "bonus": None, "cut_savings": 1_000_000, "cut_penalty": 2_000_000,
+         "no_trade_clause": True, "incentive": "YES", "source": "SCAN",
+         "scanned_at": datetime.datetime(2026, 10, 20), "capture_week": 4,
+         "extension_years": None, "extension_value": None,
+         "years": [(2037, 12_000_000, False), (2036, 10_000_000, False), (2038, 0, False)]}
+    c.update(kw)
+    return c
+
+
+class ShapeTest(unittest.TestCase):
+    def test_contract_terms_and_years(self):
+        c = fo.shape_contract(contract(), 2036)
+        self.assertEqual(c["cap_hit"], 10_000_000)
+        self.assertEqual(c["through"], 2037)
+        self.assertFalse(c["expiring"])
+        self.assertIsNone(c["bonus"])                      # not known stays null, never $0
+        self.assertTrue(c["no_trade_clause"] and c["incentive"])
+        self.assertEqual([y["year"] for y in c["years"]], [2036, 2037, 2038])
+        self.assertEqual(c["basis"], "scanned Week 4")
+        self.assertIsNone(c["new_deal"])
+
+    def test_contract_year_and_new_deal(self):
+        c = fo.shape_contract(contract(years_remaining=1, extension_years=3, extension_value=30_000_000,
+                                       years=[(2036, 5_000_000, False), (2037, 9_000_000, True)]), 2036)
+        self.assertTrue(c["expiring"])
+        self.assertEqual(c["new_deal"], {"years": 3, "total_value": 30_000_000, "starts": 2037})
+        self.assertTrue(c["years"][1]["projected"])
+
+    def test_signing_basis(self):
+        c = fo.shape_contract(contract(source="TRANSACTION"), 2036)
+        self.assertIn("from the signing", c["basis"])
+
+    def test_committed_keeps_projected_apart(self):
+        a = fo.shape_contract(contract(), 2036)
+        b = fo.shape_contract(contract(player_id=11, years=[(2036, 1_000_000, False), (2037, 3_000_000, True)]), 2036)
+        rows = {r["year"]: r for r in fo.committed([a, b], 2036)}
+        self.assertEqual(len(rows), fo.YEAR_COLUMNS)
+        self.assertEqual(rows[2036], {"year": 2036, "scanned": 11_000_000, "projected": 0, "players": 2})
+        self.assertEqual(rows[2037], {"year": 2037, "scanned": 12_000_000, "projected": 3_000_000, "players": 2})
+        self.assertEqual(rows[2038]["players"], 0)        # a $0 year isn't a commitment
+
+    def test_cap_block(self):
+        row = {"cap": 1, "adjusted_cap": 2, "cap_space": -3, "cap_space_rank": 32, "salaries": 4, "cap_penalty": 5,
+               "total_spend": 6, "next_rookie_reserve": 7, "derived": True, "basis": "estimated: ..."}
+        cap = fo.shape_cap(row, 32)
+        self.assertEqual((cap["cap_space"], cap["dead_money"], cap["teams"]), (-3, 5, 32))
+        self.assertTrue(cap["estimated"])
+
+
+def db_up():
+    try:
+        psycopg.connect(fo.CONN_INFO, connect_timeout=2).close()
+        return True
+    except psycopg.OperationalError:
+        return False
+
+
+@unittest.skipUnless(db_up(), "Postgres not reachable")
+class EndpointTest(unittest.TestCase):
+    def setUp(self):
+        app = FastAPI()
+        app.include_router(fo.router)
+        self.client = TestClient(app)
+
+    def test_team_payload(self):
+        r = self.client.get("/api/team/car/front-office")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["team"]["abbreviation"], "CAR")
+        self.assertEqual(len(data["year_columns"]), fo.YEAR_COLUMNS)
+        if data["contracts"]:
+            hits = [c["cap_hit"] or 0 for c in data["contracts"]]
+            self.assertEqual(hits, sorted(hits, reverse=True))
+            self.assertEqual(data["committed"][0]["year"], data["season"])
+
+    def test_alias_and_unknown_team(self):
+        self.assertEqual(self.client.get("/api/team/ARI/front-office").json()["team"]["abbreviation"], "AZ")
+        self.assertEqual(self.client.get("/api/team/XYZ/front-office").status_code, 404)
+
+
+if __name__ == "__main__":
+    unittest.main()

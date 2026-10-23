@@ -1754,7 +1754,8 @@ footer > div:last-child { margin-left: auto; display: flex; gap: 22px; font-size
   .team-identity h1 { font-size: 36px; }
   .team-standing { gap: 8px; align-items: flex-start; flex-direction: column; }
   .team-standing i { display: none; }
-  .team-tabs { gap: 12px; }
+  .team-tabs { gap: 12px; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+  .team-tabs button, .team-tabs > a { min-width: 0; flex: 0 0 auto; padding: 0 6px; white-space: nowrap; }
   .team-content-grid { padding-top: 26px; }
   .team-hero-image { height: 280px; }
   .team-hero-copy { padding: 21px 20px; }

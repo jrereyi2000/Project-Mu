@@ -11,7 +11,7 @@ from typing import Optional
 import re
 
 from engines.gotw_engine import display_excitement
-from server import debug_api, social_api, napper_api
+from server import debug_api, social_api, napper_api, front_office_api
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -120,6 +120,7 @@ class RevalidatedStaticFiles(StaticFiles):
 
 app.include_router(debug_api.router)   # /api/debug/*: the #debug page (state, tables, endpoints, docs, run jobs)
 app.include_router(napper_api.router)  # /api/napper/*: Napper interactive fantasy leagues platform
+app.include_router(front_office_api.router)  # /api/team/{abbr}/front-office: the Team hub's Front Office tab
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 os.makedirs(_STATIC_DIR, exist_ok=True)
