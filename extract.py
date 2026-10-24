@@ -169,10 +169,22 @@ def _is_salary(path):
     return os.path.basename(os.path.dirname(os.path.dirname(path))) == "contracts"
 
 
+_NUMERIC_CHARS = re.compile(r"[\d,.%+\-−–— ]*\d[\d,.%+\-−–— ]*")
+_NUMBER = re.compile(r"[-+]?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?%?|\d+( ?- ?\d+)+")   # 5,121 / -2 / 97.7 / 60% / scores, records 5-3-1
+
+
+def _bad_number(c):
+    """A cell made only of number characters that still isn't a number ('--2', '1..5', '3-')."""
+    c = c.strip().replace("−", "-").replace("–", "-").replace("—", "-")
+    return bool(_NUMERIC_CHARS.fullmatch(c)) and not _NUMBER.fullmatch(c)
+
+
 def _garbled(t):
-    """A table read at low thinking that went wrong: a row the wrong length or a cell holding prose (Oct 22 A/B: one
-    rushing page reasoned inside a cell and lost its last rows). Such a page is read again with full thinking."""
-    return isinstance(t, Table) and any(len(r.cells) != len(t.columns) or any(len(c) > 40 for c in r.cells)
+    """A table read at low thinking that went wrong: a row the wrong length, a cell holding prose (Oct 22 A/B: one
+    rushing page reasoned inside a cell and lost its last rows), or a malformed number (Oct 24: FMBYDS '-2' read as
+    '--2', which stopped the load). Such a page is read again with full thinking."""
+    return isinstance(t, Table) and any(len(r.cells) != len(t.columns)
+                                        or any(len(c) > 40 or _bad_number(c) for c in r.cells)
                                         for r in t.rows)
 
 
