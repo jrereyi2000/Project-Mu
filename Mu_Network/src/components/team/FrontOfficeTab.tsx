@@ -1,10 +1,11 @@
-// The Team hub's Front Office tab (PROJECT_SPEC §5.1/§5.2): the cap sheet, the active contracts, the season's
-// moves and the draft capital, from GET /api/team/{abbr}/front-office (server/front_office_api.py). Every figure
+// The Team hub's Front Office tab (PROJECT_SPEC §5.1/§5.2): the staff, the cap sheet, the active contracts, the
+// season's moves and the draft capital, from GET /api/team/{abbr}/front-office (server/front_office_api.py). Every figure
 // keeps its basis: projected years read "est.", an estimated cap row says so, and a term that isn't recorded
 // shows "—" (never $0).
 import { useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../../api";
 import DraftCapital, { type DraftPicks } from "./DraftCapital";
+import StaffCards, { type Staff } from "./StaffCards";
 import TransactionsTimeline, { type Transactions } from "./TransactionsTimeline";
 import { money, ordinal } from "./format";
 import "./frontOffice.css";
@@ -54,6 +55,7 @@ type FrontOffice = {
   committed: Committed[] | null;
   transactions: Transactions | null;
   draft_picks: DraftPicks | null;
+  staff: Staff | null;
 };
 
 const GROUPS: Record<string, string[]> = {
@@ -218,6 +220,7 @@ export default function FrontOfficeTab({ abbr, season }: { abbr: string; season:
   if (!data) return <section className="team-data-view"><p className="fo-state">Loading the books…</p></section>;
   return (
     <section className="team-data-view fo-view">
+      {data.staff && <StaffCards staff={data.staff} season={data.season} />}
       {data.cap
         ? <CapSheet cap={data.cap} />
         : <p className="fo-state">No cap sheet recorded for {data.season}.</p>}

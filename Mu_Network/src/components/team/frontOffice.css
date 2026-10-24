@@ -132,3 +132,59 @@
 @media (max-width: 560px) {
   .fo-trade-sides { grid-template-columns: 1fr; }
 }
+
+/* Staff */
+.fo-direction { margin-bottom: 14px; display: grid; grid-template-columns: 240px 1fr; gap: 12px; }
+.fo-direction-badge, .fo-needs { padding: 20px 22px; background: var(--white); border-top: 3px solid var(--ink); }
+.fo-direction-badge { display: flex; flex-direction: column; gap: 6px; border-top-color: var(--team-color, var(--red)); }
+.fo-direction-badge span, .fo-needs > span { display: flex; align-items: center; gap: 8px; color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.fo-direction-badge strong { font: 700 28px var(--font-sans); letter-spacing: -.04em; text-transform: uppercase; }
+.fo-direction-badge small { color: var(--gray-500); font: 600 9px var(--font-mono); }
+.fo-needs ol { margin: 12px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; counter-reset: need; }
+.fo-needs li { padding-left: 26px; position: relative; display: flex; flex-direction: column; gap: 4px; counter-increment: need; }
+.fo-needs li::before { content: counter(need); position: absolute; left: 0; top: 0; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; color: var(--white); background: var(--ink); font: 700 9px var(--font-mono); }
+.fo-needs li strong { font: 700 13px var(--font-sans); }
+.fo-needs li small { color: var(--gray-500); font: 500 9px/1.4 var(--font-mono); }
+
+.fo-staff { display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; }
+.fo-card { padding: 22px; display: flex; flex-direction: column; gap: 16px; background: var(--white); border-top: 3px solid var(--ink); }
+.fo-card.fo-hc { grid-row: span 2; border-top-color: var(--team-color, var(--red)); }
+.fo-card.fo-gm { grid-column: 1 / -1; }
+.fo-card header { display: flex; flex-direction: column; gap: 5px; }
+.fo-card header > span { color: var(--team-color, var(--red)); font: 700 8px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.fo-card h3 { margin: 0; font: 700 22px var(--font-sans); letter-spacing: -.03em; }
+.fo-card.fo-hc h3 { font-size: 30px; }
+.fo-card header small { color: var(--gray-500); font: 600 9px/1.5 var(--font-mono); }
+.fo-card > p { margin: 0; color: #55575d; font: 400 13px/1.6 var(--font-sans); }
+.fo-titles { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; }
+
+.fo-stats { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--gray-100); border-bottom: 1px solid var(--gray-100); }
+.fo-stat { padding: 14px 12px 14px 0; display: flex; flex-direction: column; gap: 4px; }
+.fo-stat + .fo-stat { padding-left: 14px; border-left: 1px solid var(--gray-100); }
+.fo-stat span, .fo-schemes dt, .fo-tendencies li > span { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.fo-stat strong { font: 700 22px var(--font-mono); letter-spacing: -.04em; }
+.fo-stat small { color: var(--gray-500); font: 600 8px/1.4 var(--font-mono); }
+
+.fo-schemes { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fo-schemes dd { margin: 4px 0 0; font: 700 13px var(--font-sans); }
+
+.fo-tendencies { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.fo-tendencies li { display: grid; grid-template-columns: 90px 64px 1fr; gap: 10px; align-items: center; }
+.fo-tendencies p { margin: 0; display: flex; flex-direction: column; gap: 2px; color: #55575d; font: 500 10px/1.4 var(--font-mono); }
+.fo-tendencies p small { color: var(--gray-300); font-size: 8px; text-transform: uppercase; letter-spacing: .05em; }
+.fo-tier { padding: 3px 0; border-radius: 3px; text-align: center; font: 700 8px var(--font-mono); text-transform: uppercase; letter-spacing: .05em; }
+.fo-tier.low { color: var(--gray-500); background: var(--gray-100); }
+.fo-tier.medium { color: var(--ink); background: #e2e0dc; }
+.fo-tier.high { color: var(--white); background: var(--ink); }
+
+@media (max-width: 800px) {
+  .fo-direction, .fo-staff { grid-template-columns: 1fr; }
+  .fo-card.fo-hc { grid-row: auto; }
+  .fo-needs ol { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .fo-stats { grid-template-columns: 1fr; }
+  .fo-stat + .fo-stat { padding-left: 0; border-left: 0; border-top: 1px solid var(--gray-100); }
+  .fo-tendencies li { grid-template-columns: 74px 56px 1fr; }
+  .fo-card.fo-hc h3 { font-size: 24px; }
+}

@@ -1,4 +1,4 @@
-"""server/front_office_api.py: the Team hub Front Office tab's cap, contracts, moves and draft-pick blocks. The shaping tests need no
+"""server/front_office_api.py: the Team hub Front Office tab's cap, contracts, moves, draft-pick and staff blocks. The shaping tests need no
 database; the endpoint test only reads the live one (skipped when Postgres is down) and writes nothing."""
 import datetime
 import unittest
@@ -89,6 +89,36 @@ class ShapeTest(unittest.TestCase):
         self.assertEqual(cin["sent"][0], {"type": "PICK", "draft_season": 2037, "round": 5, "original_team": "CIN"})
 
 
+class StaffShapeTest(unittest.TestCase):
+    def test_needs_in_words_without_scores(self):
+        needs = [{"group": "IOL", "score": 8.8, "injury": 3.0, "expiring": 4.0, "slot_gap": 6.0},
+                 {"group": "QB", "score": 7.5, "injury": 0.0, "expiring": 0.0, "slot_gap": 6.0},
+                 {"group": "S", "score": 5.7, "injury": 0.0, "expiring": 0.0, "slot_gap": 7.0},
+                 {"group": "LB", "score": 5.1, "injury": 0.0, "expiring": 0.0, "slot_gap": 6.0}]
+        top, urgent = fo.shape_needs(needs, {"group": "QB", "player_id": 3, "weeks_remaining": 4})
+        self.assertEqual([n["group"] for n in top], ["IOL", "QB", "S"])
+        self.assertEqual(top[0], {"group": "IOL", "label": "Interior line",
+                                  "reasons": ["thin at the starting spots", "injuries", "expiring deals"]})
+        self.assertEqual(top[1]["reasons"], ["thin at the starting spots"])
+        self.assertEqual(urgent, {"group": "QB", "label": "Quarterback"})
+        self.assertEqual(fo.shape_needs([], None), ([], None))
+
+    def test_head_coach_tendencies(self):
+        profile = {"coach": "A Coach", "slant": "DEFENSIVE", "with_team_since": 2034, "season_with_team": 3,
+                   "replaced": None, "schemes": {"offense": "Spread", "defensive_front": "4-3"},
+                   "this_season": {"regular_season": "5-4", "playoffs": None}, "record_with_team": None,
+                   "playoff_record_with_team": None, "career": None, "super_bowls_with_team": [],
+                   "coach_of_the_year": []}
+        coach = {"pass_lean": "High", "fourth_down_aggressiveness": None, "man_coverage": "Low",
+                 "observed": {"fourth_down_aggressiveness": ("Low", "measured in this league: 9 games this season")}}
+        hc = fo.shape_head_coach(profile, coach)
+        self.assertEqual(hc["tendencies"]["pass_lean"]["tier"], "High")
+        self.assertFalse(hc["tendencies"]["pass_lean"]["measured"])     # the real-world tier, not measured here
+        self.assertTrue(hc["tendencies"]["fourth_down_aggressiveness"]["measured"])
+        self.assertEqual(hc["tendencies"]["man_coverage"]["meaning"], "zone-first coverage")
+        self.assertIsNone(hc["record_with_team"])
+
+
 def db_up():
     try:
         psycopg.connect(fo.CONN_INFO, connect_timeout=2).close()
@@ -131,6 +161,18 @@ class EndpointTest(unittest.TestCase):
                 self.assertEqual(len(own_or_gone), 7)        # every round of its own pick, kept or traded away
             for p in picks:
                 self.assertEqual(p["status"] == "ACQUIRED", p["owner_team"] == "CIN" and p["original_team"] != "CIN")
+
+    def test_staff(self):
+        staff = self.client.get("/api/team/CAR/front-office").json()["staff"]
+        if not staff:
+            return
+        self.assertTrue(staff["head_coach"]["name"])
+        self.assertLessEqual(len(staff["needs"]), fo.TOP_NEEDS)
+        for n in staff["needs"]:
+            self.assertEqual(set(n), {"group", "label", "reasons"})       # no need scores
+        if staff["gm"]:
+            self.assertEqual(set(staff["gm"]), {"name", "bio", "since", "head_coach_too"})   # no persona dials
+        self.assertIn(staff["direction"], (None, "CONTEND", "RETOOL", "REBUILD"))
 
     def test_alias_and_unknown_team(self):
         self.assertEqual(self.client.get("/api/team/ARI/front-office").json()["team"]["abbreviation"], "AZ")

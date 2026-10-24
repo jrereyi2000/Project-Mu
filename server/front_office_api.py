@@ -1,12 +1,14 @@
 """Team hub Front Office tab backend (/api/team/{abbr}/front-office; docs/team_management, PROJECT_SPEC §4.2).
 
-Read-only, public. It serves the cap sheet and the active contracts (phase 1), and the season's moves and draft
-capital (phase 2); a later phase adds the staff. The rows come from the same fetch helpers the writer tools use (newsroom/db_tools.py),
+Read-only, public. It serves the cap sheet and the active contracts (phase 1), the season's moves and draft capital
+(phase 2), and the staff: head coach, coordinators, GM, the team's direction and its top needs (phase 3). The rows come from the same fetch helpers the writer tools use (newsroom/db_tools.py),
 but go out as raw numbers for the page to format, each carrying its basis (scanned, estimated, from a signing,
 projected). A block is null when its table doesn't exist yet (contract migration not applied) or has no rows.
 
 Nothing here reads the GM queue: no proposals, rumors or front-office scores (JR, 2026-10-22 defaults). Executed
-trades are served as their assets only, without the GMs' rationale. The page shows the league as it stands, so every
+trades are served as their assets only, without the GMs' rationale. The GM card carries his persona and tenure, the
+direction and the need groups with their reasons in words: no direction or need scores, no persona dials, no
+fo_quality / dev_quality / hot-seat numbers, and not who controls the team in Madden. The page shows the league as it stands, so every
 loaded move of the season is visible (no article week cutoff).
 """
 import os
@@ -17,6 +19,8 @@ from fastapi import APIRouter, HTTPException
 
 from newsroom import roster_moves as rm
 from engines import front_office
+from engines.coach_profile import (PLACEHOLDER_COORDINATOR, TENDENCY_WORDS, coach_profile, effective_tendencies,
+                                  fetch_observed, fetch_team_coach)
 from newsroom.db_tools import fetch_cap_rows, fetch_moves, fetch_team_contracts, fetch_trades
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -24,6 +28,11 @@ YEAR_COLUMNS = 5          # this season and the four after it, the Team Salary s
 ABBR_ALIASES = {"ARI": "AZ", "CRD": "AZ", "WSH": "WAS", "WTC": "WAS"}
 DRAFTS_AHEAD = 3          # draft_picks seeds the next three drafts
 NO_CUTOFF = (None, None, True)   # fetch_moves / fetch_trades context: everything loaded is visible
+TOP_NEEDS = 3
+NEED_GROUPS = {"QB": "Quarterback", "RB": "Running back", "WR": "Receiver", "TE": "Tight end", "OT": "Offensive tackle",
+               "IOL": "Interior line", "EDGE": "Edge rusher", "DT": "Defensive tackle", "IDL": "Interior defensive line",
+               "LB": "Linebacker", "CB": "Cornerback", "S": "Safety", "K": "Kicker", "P": "Punter"}
+NEED_REASONS = (("slot_gap", "thin at the starting spots"), ("injury", "injuries"), ("expiring", "expiring deals"))
 
 router = APIRouter()
 
@@ -155,6 +164,75 @@ def fetch_picks(cur, team_id: int, season: int) -> list:
     return out
 
 
+def shape_needs(needs: list, urgent: dict | None) -> tuple:
+    """(top needs, urgent need) in words: the ranked gm_team_seasons needs, each with the reasons whose component is
+    above zero, and the injury trigger's group. No scores."""
+    def label(g):
+        return NEED_GROUPS.get(g, g)
+    top = [{"group": n["group"], "label": label(n["group"]),
+            "reasons": [words for key, words in NEED_REASONS if (n.get(key) or 0) > 0]}
+           for n in (needs or [])[:TOP_NEEDS]]
+    urgent_out = {"group": urgent["group"], "label": label(urgent["group"])} if urgent and urgent.get("group") else None
+    return top, urgent_out
+
+
+def shape_head_coach(profile: dict, coach: dict) -> dict:
+    """coach_profile's facts the card shows, with tendencies as {tier, meaning, measured}."""
+    tendencies = {}
+    for key, value in effective_tendencies(coach).items():
+        if value:
+            tier, source = value
+            tendencies[key] = {"tier": tier, "meaning": TENDENCY_WORDS[key][tier],
+                               "measured": source.startswith("measured")}
+    return {
+        "name": profile["coach"],
+        "slant": profile["slant"],
+        "since": profile["with_team_since"],
+        "season_with_team": profile["season_with_team"],
+        "replaced": profile["replaced"],
+        "offense": profile["schemes"]["offense"],
+        "defensive_front": profile["schemes"]["defensive_front"],
+        "tendencies": tendencies,
+        "this_season": profile["this_season"],
+        "record_with_team": profile["record_with_team"],
+        "playoff_record_with_team": profile["playoff_record_with_team"],
+        "career": profile["career"],
+        "super_bowls_with_team": profile["super_bowls_with_team"],
+        "coach_of_the_year": profile["coach_of_the_year"],
+    }
+
+
+def fetch_staff(cur, team_id: int, season: int) -> dict | None:
+    """Head coach, OC/DC (a stand-in coordinator has no name), GM, direction and top needs; None without a coach."""
+    profile = coach_profile(cur, team_id, season, lambda s, w: True, awards_visible=False)
+    if not profile:
+        return None
+    coach = fetch_team_coach(cur, team_id, season)
+    coach["observed"] = fetch_observed(cur, team_id, season, coach["id"])
+    cur.execute("""
+        SELECT ct.role, c.coordinator_name, c.scheme, c.playbook, ct.start_season
+        FROM coordinator_tenures ct JOIN coordinators c ON c.id = ct.coordinator_id
+        WHERE ct.team_id = %s AND ct.start_season <= %s AND COALESCE(ct.end_season, 9999) >= %s
+        ORDER BY ct.start_season, ct.id;
+    """, (team_id, season, season))
+    coords = {}
+    for role, name, scheme, playbook, since in cur.fetchall():   # latest tenure per role wins (fetch_team_staff)
+        coords[role] = {"role": role, "name": None if PLACEHOLDER_COORDINATOR.search(name or "") else name,
+                        "scheme": scheme, "playbook": playbook, "since": since}
+    out = {"head_coach": shape_head_coach(profile, coach),
+           "coordinators": [coords[r] for r in ("OC", "DC") if r in coords],
+           "gm": None, "direction": None, "needs": [], "urgent_need": None}
+    if front_office.installed(cur):
+        gm = front_office.get_gm(cur, team_id, season)
+        if gm:
+            cur.execute("SELECT coach_id FROM gm_profiles WHERE id = %s;", (gm["gm_id"],))
+            out["gm"] = {"name": gm["gm_name"], "bio": gm["bio"], "since": gm["start_season"],
+                         "head_coach_too": cur.fetchone()[0] is not None}
+            out["direction"] = gm["direction"]
+            out["needs"], out["urgent_need"] = shape_needs(gm["needs"], gm["urgent_need"])
+    return out
+
+
 def _regclass(cur, table: str) -> bool:
     cur.execute("SELECT to_regclass(%s) IS NOT NULL;", (table,))
     return bool(cur.fetchone()[0])
@@ -183,9 +261,12 @@ def team_front_office(abbr: str, season: Optional[int] = None):
                 season = row[0] if row else None
             out = {"season": season, "team": {"id": team_id, "name": name, "abbreviation": team_abbr},
                    "year_columns": list(range(season, season + YEAR_COLUMNS)) if season else [],
-                   "cap": None, "contracts": None, "committed": None, "transactions": None, "draft_picks": None}
+                   "cap": None, "contracts": None, "committed": None, "transactions": None, "draft_picks": None,
+                   "staff": None}
             if not season:
                 return out
+            if _regclass(cur, "coach_tenures"):
+                out["staff"] = fetch_staff(cur, team_id, season)
             if front_office.installed(cur) and _regclass(cur, "draft_picks"):
                 picks = fetch_picks(cur, team_id, season)
                 out["draft_picks"] = {"drafts": list(range(season + 1, season + 1 + DRAFTS_AHEAD)), "picks": picks}
