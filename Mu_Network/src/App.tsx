@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, type CSSPropert
 import { API_BASE } from "./api";
 import DebugPage from "./DebugPage";
 import { NapperPage } from "./NapperPage";
-import FrontOfficeTab from "./components/team/FrontOfficeTab";
+import FrontOfficeTab, { type ContractFocus } from "./components/team/FrontOfficeTab";
 export const SystemContext = createContext<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
 
 /** "Oct 15 · 8:03 AM" for the Stats page's Updated stamp (the latest capture load). */
@@ -251,6 +251,8 @@ function getTeamPosition(abbr: string) {
 function TeamPage({ team }: { team: Team }) {
   const systemStatus = useContext(SystemContext);
   const [tab, setTab] = useState<"main" | "roster" | "stats" | "front office">("main");
+  // A Roster row's "Contract" link opens the Front Office tab on that player's contract row.
+  const [contractFocus, setContractFocus] = useState<ContractFocus | null>(null);
   const [teamData, setTeamData] = useState<any>(null);
   const [standings, setStandings] = useState<any[]>([]);
   const [schedule, setSchedule] = useState<any[]>([]);
@@ -354,7 +356,7 @@ function TeamPage({ team }: { team: Team }) {
 
       <nav className="team-tabs" aria-label={`${team.name} sections`}>
         {(["main", "roster", "stats", "front office"] as const).map((item) => (
-          <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>
+          <button className={tab === item ? "active" : ""} onClick={() => { setTab(item); setContractFocus(null); }} key={item}>
             {item}
           </button>
         ))}
@@ -503,8 +505,8 @@ function TeamPage({ team }: { team: Team }) {
       {tab === "roster" && (
         <section className="team-data-view">
           <div className="team-section-title"><span>Active Players</span><h2>{team.name} Roster</h2></div>
-          <div className="roster-table">
-            <div className="data-row data-head"><span>Player</span><span>Pos</span><span>No.</span><span>Experience</span></div>
+          <div className="roster-table with-contract">
+            <div className="data-row data-head"><span>Player</span><span>Pos</span><span>No.</span><span>Experience</span><span>Contract</span></div>
             {roster.map((player: any) => (
               <div className="data-row" key={player.id}>
                 <span>
@@ -514,6 +516,12 @@ function TeamPage({ team }: { team: Team }) {
                 <span>{player.position}</span>
                 <span>{player.player_number}</span>
                 <span>{player.years_of_experience} yrs</span>
+                <span>
+                  {player.position !== "DEF" && <button className="roster-contract-link" aria-label={`${player.name}'s contract`}
+                    onClick={() => { setContractFocus({ playerId: player.id, name: player.name, nonce: Date.now() }); setTab("front office"); }}>
+                    View →
+                  </button>}
+                </span>
               </div>
             ))}
           </div>
@@ -551,7 +559,7 @@ function TeamPage({ team }: { team: Team }) {
           </section>
       )}
 
-      {tab === "front office" && <FrontOfficeTab abbr={team.abbr} season={systemStatus.season} />}
+      {tab === "front office" && <FrontOfficeTab abbr={team.abbr} season={systemStatus.season} focus={contractFocus} />}
     </main>
   );
 }

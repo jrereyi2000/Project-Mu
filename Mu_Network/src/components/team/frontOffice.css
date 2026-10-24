@@ -188,3 +188,8 @@
   .fo-tendencies li { grid-template-columns: 74px 56px 1fr; }
   .fo-card.fo-hc h3 { font-size: 24px; }
 }
+
+/* Roster → contract row */
+.fo-table tbody tr.fo-focus td { background: #fff4d6; animation: foFocus 2.6s ease-out; }
+@keyframes foFocus { 0%, 60% { background: #ffe6a3; } 100% { background: #fff4d6; } }
+.fo-notice { margin: 0 0 14px; padding: 12px 16px; color: var(--ink); background: #fff4d6; border-left: 3px solid #e0a800; font: 600 10px var(--font-mono); }

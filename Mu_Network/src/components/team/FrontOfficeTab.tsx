@@ -2,7 +2,7 @@
 // season's moves and the draft capital, from GET /api/team/{abbr}/front-office (server/front_office_api.py). Every figure
 // keeps its basis: projected years read "est.", an estimated cap row says so, and a term that isn't recorded
 // shows "—" (never $0).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "../../api";
 import DraftCapital, { type DraftPicks } from "./DraftCapital";
 import StaffCards, { type Staff } from "./StaffCards";
@@ -64,6 +64,9 @@ const GROUPS: Record<string, string[]> = {
   "Special Teams": ["K", "P", "LS"],
 };
 type SortKey = "cap_hit" | "total_value" | "years_remaining" | "name";
+// From the Roster tab's "Contract" link: scroll to that player's row (nonce re-runs it for the same player).
+export type ContractFocus = { playerId: number; name: string; nonce: number };
+const HIGHLIGHT_MS = 2600;
 
 function CapSheet({ cap }: { cap: Cap }) {
   const base = cap.adjusted_cap || cap.cap || 0;
@@ -110,10 +113,35 @@ function YearCell({ y }: { y: ContractYear | undefined }) {
     : <td>{money(y.cap_hit)}</td>;
 }
 
-function Contracts({ contracts, committed, years }: { contracts: Contract[]; committed: Committed[]; years: number[] }) {
+function Contracts({ contracts, committed, years, focus }:
+  { contracts: Contract[]; committed: Committed[]; years: number[]; focus?: ContractFocus | null }) {
   const [group, setGroup] = useState<string>("All");
   const [sort, setSort] = useState<SortKey>("cap_hit");
   const [desc, setDesc] = useState(true);
+  const [highlight, setHighlight] = useState<number | null>(null);
+  const [missing, setMissing] = useState<string | null>(null);
+  const notice = useRef<HTMLParagraphElement>(null);
+  const scrolledFor = useRef<number | null>(null);        // the focus nonce already scrolled to (once per click)
+
+  useEffect(() => {
+    if (!focus) return;
+    const found = contracts.some((c) => c.player_id === focus.playerId);
+    setGroup("All");                                   // a filtered-out row can't be scrolled to
+    setMissing(found ? null : focus.name);
+    setHighlight(found ? focus.playerId : null);
+    const timer = window.setTimeout(() => setHighlight(null), HIGHLIGHT_MS);
+    return () => window.clearTimeout(timer);
+  }, [focus, contracts]);
+
+  // After the render that shows the row's highlight or the notice: bring it to the middle of the screen.
+  useEffect(() => {
+    if (!focus || scrolledFor.current === focus.nonce) return;
+    const found = contracts.some((c) => c.player_id === focus.playerId);   // not `missing`: it may be last click's
+    const target = found ? document.getElementById(`fo-contract-${focus.playerId}`) : notice.current;
+    if (!target) return;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    scrolledFor.current = focus.nonce;
+  }, [focus, contracts, missing, highlight]);
 
   const rows = useMemo(() => {
     const list = group === "All" ? contracts : contracts.filter((c) => GROUPS[group]?.includes(c.position || ""));
@@ -136,6 +164,7 @@ function Contracts({ contracts, committed, years }: { contracts: Contract[]; com
   return (
     <section className="fo-block">
       <div className="team-section-title"><span>{contracts.length} Active Deals</span><h2>Contracts</h2></div>
+      {missing && <p className="fo-notice" ref={notice}>No active contract on file for {missing} this season.</p>}
       <div className="fo-chips" role="group" aria-label="Position group">
         {["All", ...Object.keys(GROUPS)].map((g) => (
           <button key={g} className={group === g ? "active" : ""} onClick={() => setGroup(g)}>{g}</button>
@@ -156,7 +185,7 @@ function Contracts({ contracts, committed, years }: { contracts: Contract[]; com
           </thead>
           <tbody>
             {rows.map((c) => (
-              <tr key={c.contract_id}>
+              <tr key={c.contract_id} id={`fo-contract-${c.player_id}`} className={highlight === c.player_id ? "fo-focus" : undefined}>
                 <td>
                   <a href={`#player-${c.player_id}`}><strong>{c.name}</strong></a>
                   <small>
@@ -203,7 +232,7 @@ function Contracts({ contracts, committed, years }: { contracts: Contract[]; com
   );
 }
 
-export default function FrontOfficeTab({ abbr, season }: { abbr: string; season: number }) {
+export default function FrontOfficeTab({ abbr, season, focus }: { abbr: string; season: number; focus?: ContractFocus | null }) {
   const [data, setData] = useState<FrontOffice | null>(null);
   const [error, setError] = useState(false);
 
@@ -225,7 +254,7 @@ export default function FrontOfficeTab({ abbr, season }: { abbr: string; season:
         ? <CapSheet cap={data.cap} />
         : <p className="fo-state">No cap sheet recorded for {data.season}.</p>}
       {data.contracts && data.committed
-        ? <Contracts contracts={data.contracts} committed={data.committed} years={data.year_columns} />
+        ? <Contracts contracts={data.contracts} committed={data.committed} years={data.year_columns} focus={focus} />
         : <p className="fo-state">No contracts recorded for {data.season}.</p>}
       {data.transactions
         ? <TransactionsTimeline data={data.transactions} season={data.season} />

@@ -2509,3 +2509,34 @@ a.social-follow-row:hover { background: #171c22; }
   color: #4b5563;
 }
 
+
+/* Phone nav: the six section links don't fit beside the brand at 375px, so they get a row of their own under the
+   brand and search (the header is 52 + 42 = 94px tall; the menus and scrim below it move down to match). */
+@media (max-width: 560px) {
+  .nav-inner { height: auto; padding: 0 16px; flex-wrap: wrap; }
+  .brand { height: 52px; margin-right: 0; }
+  .brand > span:last-child { display: flex; }
+  .brand small { display: none; }
+  .brand b { font-size: 17px; }
+  .brand-mark { width: 28px; height: 32px; font-size: 21px; }
+  .nav-tools { height: 52px; }
+  .nav-tools button { display: grid; width: 34px; height: 34px; }
+  .nav-links { order: 3; width: 100%; height: 42px; gap: 0; justify-content: space-between; border-top: 1px solid var(--gray-100); font-size: 9px; }
+  .nav-links > a, .teams-trigger, .stats-trigger { font-size: 9px; gap: 4px; }
+  .nav-links > div { height: 100%; font-size: 9px; font-weight: 750; }
+  .fantasy-trigger { height: 100%; text-transform: uppercase; letter-spacing: .03em; }
+  /* the Fantasy menu (inline-positioned for desktop) opens from the right edge instead of past it */
+  .nav-links > div > div { left: auto !important; right: 0; }
+  .teams-trigger svg, .stats-trigger svg, .fantasy-trigger svg { width: 10px; height: 10px; }
+  .mega-wrap, .stats-dropdown-wrap { top: 94px; }
+  .mega-scrim { inset: 142px 0 0; }
+}
+
+/* Team hub Roster: the Contract column opens the Front Office tab on that player's row */
+.roster-table.with-contract .data-row { grid-template-columns: 2fr repeat(3, 1fr) 1fr; }
+.roster-contract-link { padding: 6px 10px; border: 1px solid var(--gray-100); border-radius: 14px; color: var(--ink); background: var(--white); font: 700 8px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+.roster-contract-link:hover { color: var(--white); background: var(--team-color, var(--red)); border-color: var(--team-color, var(--red)); }
+@media (max-width: 560px) {
+  .roster-table.with-contract .data-row { grid-template-columns: 1.6fr .6fr .5fr .7fr .8fr; gap: 6px; }
+  .roster-contract-link { padding: 5px 8px; }
+}
