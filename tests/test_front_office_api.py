@@ -174,6 +174,20 @@ class EndpointTest(unittest.TestCase):
             self.assertEqual(set(staff["gm"]), {"name", "bio", "since", "head_coach_too"})   # no persona dials
         self.assertIn(staff["direction"], (None, "CONTEND", "RETOOL", "REBUILD"))
 
+    def test_team_roster_drops_released_players(self):
+        """server/api.py GET /api/team/{abbr} (the Roster tab): nobody with released_week set is listed."""
+        from server.api import app
+        with psycopg.connect(fo.CONN_INFO) as conn, conn.cursor() as cur:
+            cur.execute("""SELECT t.abbreviation, array_agg(ps.player_id) FROM player_seasons ps JOIN teams t ON t.id = ps.team_id
+                           WHERE ps.season = (SELECT current_season FROM league_state LIMIT 1)
+                             AND ps.released_week IS NOT NULL GROUP BY 1 LIMIT 1;""")
+            row = cur.fetchone()
+        if not row:
+            return
+        roster = TestClient(app).get(f"/api/team/{row[0]}").json()["roster"]
+        self.assertTrue(roster)
+        self.assertFalse(set(row[1]) & {p["id"] for p in roster})
+
     def test_alias_and_unknown_team(self):
         self.assertEqual(self.client.get("/api/team/ARI/front-office").json()["team"]["abbreviation"], "AZ")
         self.assertEqual(self.client.get("/api/team/XYZ/front-office").status_code, 404)

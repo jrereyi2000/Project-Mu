@@ -544,6 +544,19 @@ def execute(cur, plan, season, capture_id=None, stats=None):
     return done
 
 
+def carry_experience(cur, season):
+    """Fill a blank years_of_experience this season from the player's previous-season card + 1 (0 = rookie,
+    1 = second-year). The rows execute() creates for CPU signings carry only team, position and release week, so
+    a veteran pickup the roster scan hasn't seen yet would show no experience. A player with no earlier card stays
+    blank until the next roster scan; fantasy D/ST rows (DEF) are left alone. Idempotent; returns rows filled."""
+    cur.execute("""UPDATE player_seasons cur SET years_of_experience = prev.years_of_experience + 1
+                   FROM player_seasons prev
+                   WHERE cur.season = %s AND prev.season = %s - 1 AND prev.player_id = cur.player_id
+                     AND cur.years_of_experience IS NULL AND prev.years_of_experience IS NOT NULL
+                     AND cur.position IS DISTINCT FROM 'DEF'""", (season, season))
+    return cur.rowcount
+
+
 def record_sightings(cur, season, trade_rows, capture_id=None):
     """Skipped trade rows -> step 3's gm_trade_sightings (when that migration is applied), then matched to the
     confirmed trades. They never move anyone: JR confirms or applies trades on #debug. Returns the counts."""
@@ -573,5 +586,6 @@ def load_transactions(cur, folder, season, report, apply_from=None, capture_id=N
     rep["skipped_trades"] = trades
     rep["skipped_before_week_1"] = before[0]
     rep["trade_sightings"] = record_sightings(cur, season, trade_rows, capture_id)
+    rep["experience_carried"] = carry_experience(cur, season)
     report["transactions"] = rep
     return len(done)

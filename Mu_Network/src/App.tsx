@@ -515,7 +515,9 @@ function TeamPage({ team }: { team: Team }) {
                 </span>
                 <span>{player.position}</span>
                 <span>{player.player_number}</span>
-                <span>{player.years_of_experience} yrs</span>
+                <span>{player.years_of_experience == null ? "—"
+                  : player.years_of_experience === 0 ? "Rookie"
+                  : `${player.years_of_experience} yr${player.years_of_experience === 1 ? "" : "s"}`}</span>
                 <span>
                   {player.position !== "DEF" && <button className="roster-contract-link" aria-label={`${player.name}'s contract`}
                     onClick={() => { setContractFocus({ playerId: player.id, name: player.name, nonce: Date.now() }); setTab("front office"); }}>

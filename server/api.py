@@ -226,12 +226,13 @@ def get_team(abbr: str, season: Optional[int] = None):
                 return {"error": "Team not found"}
             team_info["abbreviation"] = display_team_abbr(team_info["abbreviation"])
             
-            # Get Roster
+            # Get Roster: a released player keeps team_id with released_week set (pipeline/load_transactions.py), so he
+            # leaves the roster from his release on; a signing elsewhere moves him and clears released_week.
             cur.execute("""
                 SELECT p.id, p.full_name as name, p.player_number, p.espn_id, ps.position, ps.years_of_experience, ps.overall_rating
                 FROM players p
                 JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                WHERE ps.team_id = %s
+                WHERE ps.team_id = %s AND ps.released_week IS NULL
                 ORDER BY ps.overall_rating DESC
             """, (season, team_info['id']))
             roster = cur.fetchall()

@@ -274,3 +274,24 @@ class TradeSightingsTest(unittest.TestCase):
         self.assertEqual(sum(q.startswith("INSERT INTO gm_trade_sightings") for q in cur.sql), 1)
         self.assertFalse(any("player_seasons" in q and q.startswith("UPDATE") for q in cur.sql))
         self.assertEqual(L.record_sightings(self.Cur(True), 2036, []), {"new": 0})
+
+
+class CarryExperienceTest(unittest.TestCase):
+    """A signing's new player_seasons row gets last season's experience + 1; nothing else is touched."""
+
+    class Cur:
+        def __init__(self):
+            self.calls, self.rowcount = [], 3
+
+        def execute(self, q, args=None):
+            self.calls.append((" ".join(q.split()), args))
+
+    def test_only_blank_rows_from_previous_card(self):
+        cur = self.Cur()
+        self.assertEqual(L.carry_experience(cur, 2036), 3)
+        (q, args), = cur.calls
+        self.assertTrue(q.startswith("UPDATE player_seasons cur SET years_of_experience = prev.years_of_experience + 1"))
+        self.assertIn("cur.years_of_experience IS NULL", q)
+        self.assertIn("prev.season = %s - 1", q)
+        self.assertIn("IS DISTINCT FROM 'DEF'", q)            # fantasy D/ST rows aren't players
+        self.assertEqual(args, (2036, 2036))
