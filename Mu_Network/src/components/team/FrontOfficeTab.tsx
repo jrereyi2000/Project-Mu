@@ -1,8 +1,12 @@
-// The Team hub's Front Office tab (PROJECT_SPEC §5.1/§5.2): the cap sheet and the active contracts, from
-// GET /api/team/{abbr}/front-office (server/front_office_api.py). Every figure keeps its basis: projected years
-// read "est.", an estimated cap row says so, and a term that isn't recorded shows "—" (never $0).
+// The Team hub's Front Office tab (PROJECT_SPEC §5.1/§5.2): the cap sheet, the active contracts, the season's
+// moves and the draft capital, from GET /api/team/{abbr}/front-office (server/front_office_api.py). Every figure
+// keeps its basis: projected years read "est.", an estimated cap row says so, and a term that isn't recorded
+// shows "—" (never $0).
 import { useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../../api";
+import DraftCapital, { type DraftPicks } from "./DraftCapital";
+import TransactionsTimeline, { type Transactions } from "./TransactionsTimeline";
+import { money, ordinal } from "./format";
 import "./frontOffice.css";
 
 type ContractYear = { year: number; cap_hit: number | null; projected: boolean };
@@ -43,10 +47,13 @@ type Cap = {
 type Committed = { year: number; scanned: number; projected: number; players: number };
 type FrontOffice = {
   season: number;
+  team: { id: number; name: string; abbreviation: string };
   year_columns: number[];
   cap: Cap | null;
   contracts: Contract[] | null;
   committed: Committed[] | null;
+  transactions: Transactions | null;
+  draft_picks: DraftPicks | null;
 };
 
 const GROUPS: Record<string, string[]> = {
@@ -55,20 +62,6 @@ const GROUPS: Record<string, string[]> = {
   "Special Teams": ["K", "P", "LS"],
 };
 type SortKey = "cap_hit" | "total_value" | "years_remaining" | "name";
-
-export function money(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "—";
-  const sign = value < 0 ? "-" : "";
-  const a = Math.abs(value);
-  if (a >= 1_000_000) return `${sign}$${(a / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}M`;
-  if (a >= 1_000) return `${sign}$${(a / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
-  return `${sign}$${a}`;
-}
-
-function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"], v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-}
 
 function CapSheet({ cap }: { cap: Cap }) {
   const base = cap.adjusted_cap || cap.cap || 0;
@@ -231,6 +224,12 @@ export default function FrontOfficeTab({ abbr, season }: { abbr: string; season:
       {data.contracts && data.committed
         ? <Contracts contracts={data.contracts} committed={data.committed} years={data.year_columns} />
         : <p className="fo-state">No contracts recorded for {data.season}.</p>}
+      {data.transactions
+        ? <TransactionsTimeline data={data.transactions} season={data.season} />
+        : <p className="fo-state">No roster moves recorded for {data.season}.</p>}
+      {data.draft_picks
+        ? <DraftCapital data={data.draft_picks} abbr={data.team.abbreviation} />
+        : <p className="fo-state">No draft picks recorded yet.</p>}
     </section>
   );
 }

@@ -1,4 +1,4 @@
-"""server/front_office_api.py: the Team hub Front Office tab's cap and contracts blocks. The shaping tests need no
+"""server/front_office_api.py: the Team hub Front Office tab's cap, contracts, moves and draft-pick blocks. The shaping tests need no
 database; the endpoint test only reads the live one (skipped when Postgres is down) and writes nothing."""
 import datetime
 import unittest
@@ -60,6 +60,34 @@ class ShapeTest(unittest.TestCase):
         self.assertEqual((cap["cap_space"], cap["dead_money"], cap["teams"]), (-3, 5, 32))
         self.assertTrue(cap["estimated"])
 
+    def move(self, **kw):
+        r = {"id": 5, "week": 3, "type": "SIGNED", "player_id": 10, "player_name": "JOHN DOE", "full_name": None,
+             "position": "WR", "from_team_id": 2, "to_team_id": 1, "contract_years": 1, "contract_value": 900_000,
+             "depth_slot": 4, "is_starter": False, "practice_squad": False, "notable": False}
+        r.update(kw)
+        return r
+
+    def test_move_direction_and_origin(self):
+        abbrs = {1: "CAR", 2: "ATL"}
+        m = fo.shape_move(self.move(), 1, abbrs)
+        self.assertEqual((m["direction"], m["from_team"], m["name"]), ("in", "ATL", "John Doe"))
+        m = fo.shape_move(self.move(type="RELEASED", from_team_id=1, to_team_id=None, dead_money=2_000_000), 1, abbrs)
+        self.assertEqual((m["direction"], m["from_team"], m["dead_money"]), ("out", None, 2_000_000))
+        m = fo.shape_move(self.move(type="RE_SIGNED", from_team_id=None, new_deal_start=2037), 1, abbrs)
+        self.assertEqual((m["direction"], m["new_deal_start"]), ("in", 2037))
+
+    def test_trade_from_either_side(self):
+        t = {"proposal_id": 9, "week": 5, "team_a": "CIN", "team_b": "GB", "legs": [
+            {"type": "PLAYER", "from": "GB", "to": "CIN", "player_id": 60, "player_name": "Mike Keaton",
+             "position": "FS", "cap_hit_now": 1_330_000},
+            {"type": "PICK", "from": "CIN", "to": "GB", "pick": {"draft_season": 2037, "round": 5,
+                                                                 "original_team": "CIN"}}]}
+        cin, gb = fo.shape_trade(t, "CIN"), fo.shape_trade(t, "GB")
+        self.assertEqual((cin["partner"], gb["partner"]), ("GB", "CIN"))
+        self.assertEqual(cin["received"][0]["name"], "Mike Keaton")
+        self.assertEqual(cin["sent"], gb["received"])
+        self.assertEqual(cin["sent"][0], {"type": "PICK", "draft_season": 2037, "round": 5, "original_team": "CIN"})
+
 
 def db_up():
     try:
@@ -86,6 +114,23 @@ class EndpointTest(unittest.TestCase):
             hits = [c["cap_hit"] or 0 for c in data["contracts"]]
             self.assertEqual(hits, sorted(hits, reverse=True))
             self.assertEqual(data["committed"][0]["year"], data["season"])
+
+    def test_moves_and_picks(self):
+        data = self.client.get("/api/team/CIN/front-office").json()
+        if data["transactions"]:
+            weeks = [m["week"] if m["week"] is not None else -1 for m in data["transactions"]["moves"]]
+            self.assertEqual(weeks, sorted(weeks, reverse=True))
+            self.assertNotIn("TRADED", {m["type"] for m in data["transactions"]["moves"]})
+            for t in data["transactions"]["trades"]:
+                self.assertNotEqual(t["partner"], "CIN")
+                self.assertTrue(t["received"] or t["sent"])
+        if data["draft_picks"]:
+            picks = data["draft_picks"]["picks"]
+            for d in data["draft_picks"]["drafts"]:
+                own_or_gone = [p for p in picks if p["draft_season"] == d and p["status"] != "ACQUIRED"]
+                self.assertEqual(len(own_or_gone), 7)        # every round of its own pick, kept or traded away
+            for p in picks:
+                self.assertEqual(p["status"] == "ACQUIRED", p["owner_team"] == "CIN" and p["original_team"] != "CIN")
 
     def test_alias_and_unknown_team(self):
         self.assertEqual(self.client.get("/api/team/ARI/front-office").json()["team"]["abbreviation"], "AZ")

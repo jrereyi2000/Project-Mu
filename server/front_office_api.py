@@ -1,11 +1,13 @@
 """Team hub Front Office tab backend (/api/team/{abbr}/front-office; docs/team_management, PROJECT_SPEC §4.2).
 
-Read-only, public. Phase 1 serves the cap sheet and the active contracts; later phases add the season's moves,
-draft capital and the staff. The rows come from the same fetch helpers the writer tools use (newsroom/db_tools.py),
+Read-only, public. It serves the cap sheet and the active contracts (phase 1), and the season's moves and draft
+capital (phase 2); a later phase adds the staff. The rows come from the same fetch helpers the writer tools use (newsroom/db_tools.py),
 but go out as raw numbers for the page to format, each carrying its basis (scanned, estimated, from a signing,
 projected). A block is null when its table doesn't exist yet (contract migration not applied) or has no rows.
 
-Nothing here reads the GM queue: no proposals, rumors or front-office scores (JR, 2026-10-22 defaults).
+Nothing here reads the GM queue: no proposals, rumors or front-office scores (JR, 2026-10-22 defaults). Executed
+trades are served as their assets only, without the GMs' rationale. The page shows the league as it stands, so every
+loaded move of the season is visible (no article week cutoff).
 """
 import os
 from typing import Optional
@@ -14,11 +16,14 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 
 from newsroom import roster_moves as rm
-from newsroom.db_tools import fetch_cap_rows, fetch_team_contracts
+from engines import front_office
+from newsroom.db_tools import fetch_cap_rows, fetch_moves, fetch_team_contracts, fetch_trades
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 YEAR_COLUMNS = 5          # this season and the four after it, the Team Salary screen's year columns
 ABBR_ALIASES = {"ARI": "AZ", "CRD": "AZ", "WSH": "WAS", "WTC": "WAS"}
+DRAFTS_AHEAD = 3          # draft_picks seeds the next three drafts
+NO_CUTOFF = (None, None, True)   # fetch_moves / fetch_trades context: everything loaded is visible
 
 router = APIRouter()
 
@@ -83,6 +88,78 @@ def committed(contracts: list, season: int) -> list:
     return out
 
 
+def shape_move(r: dict, team_id: int, abbrs: dict) -> dict:
+    """One fetch_moves row (annotated) as a timeline entry. direction: 'in' (he joins or stays: signed, re-signed,
+    extended, restructured) or 'out' (released)."""
+    out = r["type"] == "RELEASED" and r["from_team_id"] == team_id
+    return {
+        "id": r["id"],
+        "week": r["week"],
+        "type": r["type"],
+        "direction": "out" if out else "in",
+        "player_id": r["player_id"],
+        "name": rm.display_name(r),
+        "position": r["position"],
+        "from_team": abbrs.get(r["from_team_id"]) if r["type"] == "SIGNED" else None,
+        "contract_years": r["contract_years"],
+        "contract_value": r["contract_value"],
+        "dead_money": r.get("dead_money"),
+        "depth_slot": r.get("depth_slot"),
+        "is_starter": bool(r.get("is_starter")),
+        "practice_squad": bool(r.get("practice_squad")),
+        "new_deal_start": r.get("new_deal_start"),
+        "later_team": r.get("later_team"),
+        "later_week": r.get("later_week"),
+        "notable": bool(r.get("notable")),
+    }
+
+
+def shape_trade(t: dict, abbr: str) -> dict:
+    """One executed trade from this team's side: the partner and what moved each way (players with their cap hit
+    now, picks by draft, round and original team)."""
+    def leg(l):
+        if l["type"] == "PLAYER":
+            return {"type": "PLAYER", "player_id": l["player_id"], "name": l["player_name"],
+                    "position": l["position"], "cap_hit": l.get("cap_hit_now")}
+        p = l["pick"]
+        return {"type": "PICK", "draft_season": p["draft_season"], "round": p["round"],
+                "original_team": p["original_team"]}
+    return {
+        "proposal_id": t["proposal_id"],
+        "week": t["week"],
+        "partner": t["team_b"] if t["team_a"] == abbr else t["team_a"],
+        "received": [leg(l) for l in t["legs"] if l["to"] == abbr],
+        "sent": [leg(l) for l in t["legs"] if l["from"] == abbr],
+    }
+
+
+def fetch_picks(cur, team_id: int, season: int) -> list:
+    """Every unused pick of the next DRAFTS_AHEAD drafts this team owns or originally held, with the week of the
+    trade that moved it (when a GM trade did)."""
+    cur.execute("""
+        SELECT d.draft_season, d.round, d.overall_pick, d.source, o.abbreviation, w.abbreviation,
+               d.original_team_id = %s, d.owner_team_id = %s, g.week
+        FROM draft_picks d
+        JOIN teams o ON o.id = d.original_team_id JOIN teams w ON w.id = d.owner_team_id
+        LEFT JOIN gm_trade_proposals g ON g.id = d.acquired_proposal_id
+        WHERE (d.owner_team_id = %s OR d.original_team_id = %s) AND NOT d.used
+          AND d.draft_season > %s AND d.draft_season <= %s
+        ORDER BY d.draft_season, d.round, d.overall_pick NULLS LAST, o.abbreviation;
+    """, (team_id, team_id, team_id, team_id, season, season + DRAFTS_AHEAD))
+    out = []
+    for ds, rnd, overall, source, orig, owner, is_orig, is_owner, week in cur.fetchall():
+        out.append({"draft_season": ds, "round": rnd, "overall_pick": overall, "original_team": orig,
+                    "owner_team": owner,
+                    "status": "OWN" if is_orig and is_owner else ("ACQUIRED" if is_owner else "TRADED_AWAY"),
+                    "source": source, "trade_week": week})
+    return out
+
+
+def _regclass(cur, table: str) -> bool:
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL;", (table,))
+    return bool(cur.fetchone()[0])
+
+
 def _tables_present(cur) -> bool:
     cur.execute("SELECT to_regclass('team_cap_seasons') IS NOT NULL AND to_regclass('player_contracts') IS NOT NULL "
                 "AND to_regclass('player_contract_years') IS NOT NULL;")
@@ -106,8 +183,23 @@ def team_front_office(abbr: str, season: Optional[int] = None):
                 season = row[0] if row else None
             out = {"season": season, "team": {"id": team_id, "name": name, "abbreviation": team_abbr},
                    "year_columns": list(range(season, season + YEAR_COLUMNS)) if season else [],
-                   "cap": None, "contracts": None, "committed": None}
-            if not season or not _tables_present(cur):
+                   "cap": None, "contracts": None, "committed": None, "transactions": None, "draft_picks": None}
+            if not season:
+                return out
+            if front_office.installed(cur) and _regclass(cur, "draft_picks"):
+                picks = fetch_picks(cur, team_id, season)
+                out["draft_picks"] = {"drafts": list(range(season + 1, season + 1 + DRAFTS_AHEAD)), "picks": picks}
+            if _regclass(cur, "transactions"):
+                cur.execute("SELECT id, abbreviation FROM teams;")
+                abbrs = dict(cur.fetchall())
+                moves = rm.annotate([r for r in fetch_moves(cur, season, team_id, ctx=NO_CUTOFF)
+                                     if r["type"] != "TRADED"])
+                moves.sort(key=lambda r: (-(r["week"] if r["week"] is not None else -1), -r["id"]))
+                trades = [shape_trade(t, team_abbr) for t in fetch_trades(cur, season, ctx=NO_CUTOFF)
+                          if team_abbr in (t["team_a"], t["team_b"])]
+                trades.sort(key=lambda t: -(t["week"] or 0))
+                out["transactions"] = {"moves": [shape_move(r, team_id, abbrs) for r in moves], "trades": trades}
+            if not _tables_present(cur):
                 return out
             caps = fetch_cap_rows(cur, season)
             row = next((c for c in caps if c["team_id"] == team_id), None)
