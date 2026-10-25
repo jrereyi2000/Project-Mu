@@ -123,89 +123,86 @@ type DrSlot = { pick: number; team: string; original_team: string; user_controll
 type DrClock = { pick: number; team: string; team_name: string; gm: string | null; original_team: string; user_controlled: boolean; recommendation: DrProspect | null; alternatives: DrProspect[]; rationale?: string; steps: string[] };
 type DrState = { installed: boolean; draft_season: number; error?: string; step?: number; locked?: boolean; before?: string; after?: string; slots?: DrSlot[]; on_clock?: DrClock | null; projected?: (DrProspect & { pick: number; team: string })[]; consensus?: DrProspect[]; team_board?: { team: string; rows: DrProspect[] }; trades?: { id: number; status: string; headline: string | null; pick: number | null }[] };
 
-function DraftRoomCard({ token }: { token: string }) {
+function DraftRoomCard({ token: _token }: { token: string }) {
   const [dr, setDr] = useState<DrState | null>(null);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [view, setView] = useState("");                 // "" = consensus board, else a team abbreviation
-  const [search, setSearch] = useState("");
-  const [fixes, setFixes] = useState("");
-  const load = useCallback(() => {
-    call<DrState>(`/draft-room${view ? `?team=${view}` : ""}`).then(setDr).catch(e => setError(String(e.message || e)));
-  }, [view]);
-  useEffect(() => { load(); }, [load]);
-  const act = async (path: string, body?: unknown, confirmText?: string) => {
-    if (confirmText && !window.confirm(confirmText)) return;
-    setMessage("");
-    try { setDr(await call<DrState>(path, { method: "POST", body: JSON.stringify(body || {}) }, token)); setMessage("Done."); load(); }
-    catch (e) { setMessage(String((e as Error).message || e)); }
-  };
-  const lock = () => {
-    const parsed: Record<string, string> = {};
-    fixes.split(",").map(x => x.trim()).filter(Boolean).forEach(x => { const [p, t] = x.split("="); if (p && t) parsed[p.trim()] = t.trim().toUpperCase(); });
-    act("/draft-room/lock-order", { fixes: Object.keys(parsed).length ? parsed : undefined }, "Lock the draft order? Check the Round 1 owners against Madden's draft order screen first.");
-  };
+  useEffect(() => {
+    call<DrState>("/draft-room").then(setDr).catch(e => setError(String(e.message || e)));
+  }, []);
   const oc = dr?.on_clock;
-  const recorded = (dr?.slots || []).filter(s => s.selection);
-  const last = recorded.length ? recorded[recorded.length - 1] : null;
-  const pool = (view && dr?.team_board ? dr.team_board.rows : dr?.consensus || []);
-  const hits = search.trim() ? (dr?.consensus || []).filter(p => `${p.full_name} ${p.position}`.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8) : [];
-  const line = (p: DrProspect) => `${p.full_name} · ${p.position} · ${p.college} · #${p.consensus_rank} (${p.grade})`;
+  const recorded = (dr?.slots || []).filter(s => s.selection).length;
+  const totalSlots = (dr?.slots || []).length || 32;
+  const top3 = (dr?.consensus || []).slice(0, 3);
   return (
     <section className={card}>
-      <h3 className="font-black uppercase tracking-wide mb-3">Draft room{dr ? ` · ${dr.draft_season}` : ""}</h3>
-      {error && <p className="text-xs text-[var(--red)]">{error}</p>}
-      {dr && !dr.installed && <p className="text-xs text-[var(--gray-500)]">The scouting migration (2026_12_12_scouting.sql) isn't applied to this database yet.</p>}
-      {dr?.error && <p className="text-xs text-[var(--gray-500)]">{dr.error}</p>}
-      {dr?.installed && dr.slots && (
-        <div className="grid gap-3 text-xs">
-          {message && <p className="text-[var(--red)]">{message}</p>}
-          {!dr.locked && (
-            <div className="grid gap-2">
-              <p>{dr.before}</p>
-              <label className={label}>Owner fixes before locking (pick=TEAM, comma-separated)</label>
-              <input className={input} value={fixes} onChange={e => setFixes(e.target.value)} placeholder="5=DEN, 18=GB" />
-              <button className={btnRed} disabled={!token} onClick={lock}>Lock draft order</button>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-[.2em] text-[#b48a2c] block">Mu Scouting &amp; Draft Bureau</span>
+          <h3 className="font-black uppercase tracking-wide text-lg leading-tight">
+            Draft Central{dr?.draft_season ? ` · ${dr.draft_season} Class` : ""}
+          </h3>
+        </div>
+        {dr?.step !== undefined && (
+          <span className="text-[11px] font-mono font-bold px-2 py-0.5 bg-[var(--ink)] text-white">
+            STEP {dr.step}/24
+          </span>
+        )}
+      </div>
+      {error && <p className="text-xs text-[var(--red)] mb-2">{error}</p>}
+      {dr && !dr.installed && (
+        <p className="text-xs text-[var(--gray-500)] mb-3">
+          The scouting migration (2026_12_12_scouting.sql) isn't applied to this database yet.
+        </p>
+      )}
+      {dr?.error && <p className="text-xs text-[var(--gray-500)] mb-3">{dr.error}</p>}
+      {dr?.installed && (
+        <div className="grid gap-2.5 text-xs mb-4">
+          <div className="grid grid-cols-3 gap-2 bg-[var(--paper)] border border-[var(--gray-200)] p-2.5">
+            <div>
+              <span className={label}>Draft Order</span>
+              <div className="font-mono font-bold text-sm">
+                {dr.locked ? "LOCKED" : "PROVISIONAL"}
+              </div>
+            </div>
+            <div>
+              <span className={label}>Round 1 Picks</span>
+              <div className="font-mono font-bold text-sm">
+                {recorded} / {totalSlots}
+              </div>
+            </div>
+            <div>
+              <span className={label}>On The Clock</span>
+              <div className="font-mono font-bold text-sm">
+                {oc ? `#${oc.pick} ${oc.team}` : dr.locked ? "COMPLETE" : "PRE-DRAFT"}
+              </div>
+            </div>
+          </div>
+          {top3.length > 0 && (
+            <div className="border-t border-[var(--gray-200)] pt-2">
+              <span className={label}>Consensus Top 3 Prospects</span>
+              <div className="grid gap-1 mt-1">
+                {top3.map(p => (
+                  <div key={p.prospect_key} className="flex items-center justify-between text-xs">
+                    <span>
+                      <b className="font-mono mr-1.5">#{p.consensus_rank}</b>
+                      <b>{p.full_name}</b> · {p.position} · <span className="text-[var(--gray-500)]">{p.college}</span>
+                    </span>
+                    <span className="font-mono font-bold">{p.grade.toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          {oc && (
-            <div className="border-2 border-[var(--ink)] p-2 grid gap-1">
-              <div className="text-sm"><b>Pick {oc.pick}: {oc.team_name}</b>{oc.original_team !== oc.team ? ` (via ${oc.original_team})` : ""} · {oc.gm || "GM"}{oc.user_controlled ? " · your team (advice only)" : ""}</div>
-              {oc.recommendation && <div className="text-sm">GM's pick: <b>{line(oc.recommendation)}</b>{oc.recommendation.team_rank ? ` · their board #${oc.recommendation.team_rank}` : ""}</div>}
-              {oc.rationale && <p><i>{oc.rationale}</i></p>}
-              {oc.alternatives.length > 0 && <div>Next: {oc.alternatives.map(line).join(" | ")}</div>}
-              <ol className="list-decimal pl-5">{oc.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
-              <div className="flex flex-wrap gap-2">
-                {oc.recommendation && <button className={btnRed} disabled={!token} onClick={() => act(`/draft-room/picks/${oc.pick}`, { prospect_key: oc.recommendation!.prospect_key, source: "GM" })}>Made it</button>}
-                {last && <button className={btn} disabled={!token} onClick={() => act(`/draft-room/picks/${last.pick}/undo`, {}, `Undo pick ${last.pick}?`)}>Undo pick {last.pick}</button>}
-              </div>
-              <label className={label}>Different player (name or position)</label>
-              <input className={input} value={search} onChange={e => setSearch(e.target.value)} placeholder="e.g. Bodden or CB" />
-              {hits.map(p => <button key={p.prospect_key} className="text-left underline" disabled={!token} onClick={() => act(`/draft-room/picks/${oc.pick}`, { prospect_key: p.prospect_key, source: "OFF_SCRIPT" }, `Record ${p.full_name} at pick ${oc.pick}?`).then(() => setSearch(""))}>{line(p)}</button>)}
-            </div>
-          )}
-          {dr.locked && !oc && <p>{dr.after}</p>}
-          {(dr.trades || []).length > 0 && <div><span className={label}>Draft-day trades (approve and confirm them in Front office)</span>{dr.trades!.map(t => <div key={t.id}>#{t.id} pick {t.pick ?? "?"} · <b>{t.status}</b> · {t.headline}</div>)}</div>}
-          <div>
-            <span className={label}>Round 1</span>
-            {dr.slots.map(s => (
-              <div key={s.pick} className={`border-b border-[var(--gray-100)] py-0.5 ${oc?.pick === s.pick ? "font-bold" : ""}`}>
-                <span className="font-mono mr-2">{s.pick}</span><b>{s.team}</b>{s.original_team !== s.team ? ` (via ${s.original_team})` : ""}{s.user_controlled ? " · JR" : ""}
-                {s.selection && <span> · {s.selection.full_name} {s.selection.position} · {s.selection.choice_source}{s.selection.madden_match ? ` · ${s.selection.madden_match}` : ""}</span>}
-              </div>
-            ))}
-          </div>
-          {(dr.projected || []).length > 0 && <div><span className={label}>Projected rest of Round 1</span>{dr.projected!.map(p => <div key={p.pick}>{p.pick} {p.team}: {p.full_name} {p.position}</div>)}</div>}
-          <div>
-            <span className={label}>Board</span>
-            <select className={input} value={view} onChange={e => setView(e.target.value)}>
-              <option value="">Consensus</option>
-              {Array.from(new Set((dr.slots || []).map(s => s.team))).sort().map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            {pool.slice(0, 40).map(p => <div key={p.prospect_key}>{p.team_rank ? `${p.team_rank}. ` : `${p.consensus_rank}. `}{p.full_name} · {p.position} · {p.college} · {p.team_grade ?? p.grade}</div>)}
-          </div>
         </div>
       )}
+      <p className="text-xs text-[var(--gray-600)] mb-3">
+        Explore the Consensus Big Board, College Box Score Game Logs, Combine RAS Cards, Heisman &amp; National Awards, 32-Team Draft Capital Matrix, Media Mock Draft, and the Live Broadcast War Room.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <a href="#draft" className={`${btnRed} inline-block text-center no-underline`}>
+          Enter Draft Central →
+        </a>
+      </div>
     </section>
   );
 }

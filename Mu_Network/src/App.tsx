@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type CSSPropert
 
 import { API_BASE } from "./api";
 import DebugPage from "./DebugPage";
+import { DraftPage } from "./DraftPage";
 import { NapperPage } from "./NapperPage";
 import FrontOfficeTab, { type ContractFocus } from "./components/team/FrontOfficeTab";
 export const SystemContext = createContext<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
@@ -5354,6 +5355,8 @@ function App() {
         }}
       />
     );
+  } else if (route === "#draft" || route.startsWith("#draft?")) {
+    content = <DraftPage />;
   } else if (route === "#social") {
     content = <SocialFeedPage />;
   } else if (route === "#social-explore") {
