@@ -221,6 +221,7 @@ Project Mu/
 │   └── vision_cells.py        #   Per-cell Apple Vision OCR experiment from cell_plan.json → vision_cells.json (read-only)
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
+│   ├── DRAFT_CENTRAL_PLAN.md  # Implementation plan & design for Draft Central (#draft via #debug): consensus big board, prospect dossier (college stats & game logs, combine radar), honors/awards, team needs & draft capital, media mock, broadcast war room
 │   ├── USAGE_GUIDE.md         # Comprehensive end-to-end usage and operational guide
 │   ├── HEADSHOT_PIPELINE.md   # Deterministic appearance synthesis, Gemini batch generation, rembg cutout pipeline
 │   ├── EDITORIAL_MATRIX.md
