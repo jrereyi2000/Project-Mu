@@ -9,7 +9,10 @@ Each front office sees T = V + e_team, plus fit and bias:
   per (team, prospect); m = VISIT_M after a top-30 visit; q = fo_quality (sharper front offices err less).
   fit = PHI * the team's normalized need for the group (x1.2 for a CONTEND team with a starter gap there; a REBUILD
   team leans young); bias = position_bias scaling (T - 60), youth_bias * (22 - age) * 0.75, risk_appetite on the
-  prospect's volatility; the QB rule: a team whose QB slot isn't a need marks QBs down QB_PENALTY.
+  prospect's volatility. QBs instead get the QB rule, graded by how secure the starter is (qb_security, s in 0-1:
+  his rank among the league's QB1s x an age factor x a contract factor): fit = QB_PHI * (1 - s) and
+  bias -= QB_PENALTY * s, so a team with a weak, old or expiring starter pushes QBs up and only a team with a
+  young, top-tier, signed starter marks them all the way down.
 A Round 1 pick is argmax(T + fit + bias) over the prospects still available inside the consensus top REACH_LIMIT
 (a prospect Madden and the media project far later doesn't go in Round 1, K1).
 """
@@ -18,14 +21,19 @@ import random
 
 from engines import scouting_value as sv
 
-# Frozen by --calibrate (2026-10-20, 1000 drafts on the 2037 class at 2036 week 4; see CALIBRATION).
+# Frozen by --calibrate (2026-10-20, 1000 drafts on the 2037 class at 2036 week 4; see CALIBRATION). The graded QB
+# rule (QB_PHI, QB_PENALTY, qb_security) was re-checked against the same band on 2026-10-24 (spec §2.18).
 SIGMA_BASE = 5.5
 RHO = 0.5
 SIGMA_RES = 2.0
 PHI = 3.0
 LAMBDA_TEAM = 0.15
 VISIT_M = 0.75
-QB_PENALTY = 8.0
+QB_PENALTY = 8.0                    # marked down this much at s = 1 (a young, top-tier, signed starter)
+QB_PHI = 4.0                        # QB fit at s = 0 (no starter, or a bottom-quarter one)
+QB_RANK_LO, QB_RANK_HI = 0.25, 0.85 # QB1 league percentile: at or under LO counts 0, at or over HI counts 1
+QB_AGE_FULL, QB_AGE_ZERO = 30, 36   # age factor 1 through 30, 0 from 36
+QB_CONTRACT = {0: 0.6, 1: 0.9}      # contract years left after this season (no row counts as 0); 2+ = 1.0
 RISK_W = 1.5
 REACH_LIMIT = 80
 STORED = 100
@@ -38,16 +46,38 @@ def needs_group(position):
     return position_group(position)
 
 
-def team_context(gm):
-    """gm: front_office.get_gm (or the fixture's subset). -> the board's view of the team."""
+def qb_security(qb):
+    """How secure a team's QB1 makes it, 0 (no starter, or a bottom-quarter, old or unsigned one) to 1 (young,
+    top-tier, signed for 2+ more seasons). qb: {ovr, age, pct (his percentile among the 32 QB1s, 0-1),
+    years_left (contract seasons after this one, extension included; None = no contract row, counted as 0)};
+    None or {} = no QB1."""
+    if not qb:
+        return 0.0
+    quality = min(1.0, max(0.0, (float(qb.get("pct") or 0) - QB_RANK_LO) / (QB_RANK_HI - QB_RANK_LO)))
+    age = qb.get("age")
+    age_f = 1.0 if age is None else min(1.0, max(0.0, (QB_AGE_ZERO - int(age)) / (QB_AGE_ZERO - QB_AGE_FULL)))
+    yl = qb.get("years_left")
+    contract = QB_CONTRACT[0] if yl is None else QB_CONTRACT.get(max(int(yl), 0), 1.0)
+    return round(quality * age_f * contract, 3)
+
+
+def team_context(gm, qb=None):
+    """gm: front_office.get_gm (or the fixture's subset); qb: the team's QB1 (qb_security), falling back to
+    gm["qb"]. -> the board's view of the team. Without QB1 facts, s is 1 unless QB is a top-4 need with a
+    starter gap (then 0)."""
     needs = gm.get("needs") or []
     top = max((float(n.get("score") or 0) for n in needs), default=0.0) or 1.0
     norm = {n["group"]: (max(float(n.get("score") or 0), 0.0) / top, float(n.get("slot_gap") or 0)) for n in needs}
     ranked = [n["group"] for n in needs]
-    qb = norm.get("QB")
-    qb_need = bool(qb and qb[1] > 0 and "QB" in ranked[:4])
+    qb = qb if qb is not None else gm.get("qb")
+    if qb is not None:
+        sec = qb_security(qb)
+    else:
+        n = norm.get("QB")
+        sec = 0.0 if n and n[1] > 0 and "QB" in ranked[:4] else 1.0
     return {"team_id": gm.get("team_id"), "abbr": gm.get("abbreviation"), "q": float(gm.get("fo_quality") or 1.0),
-            "direction": gm.get("direction") or "RETOOL", "needs": norm, "need_groups": ranked, "qb_need": qb_need,
+            "direction": gm.get("direction") or "RETOOL", "needs": norm, "need_groups": ranked, "qb": qb,
+            "qb_security": sec,
             "position_bias": {k: float(v) for k, v in (gm.get("position_bias") or {}).items()},
             "youth_bias": float(gm.get("youth_bias") or 0.0), "risk": float(gm.get("risk_appetite") or 0.5),
             "user_controlled": bool(gm.get("user_controlled"))}
@@ -58,13 +88,17 @@ def fit_bias(p, T, ctx, vol=0.0, vol_ref=0.0):
     g = needs_group(p.get("position"))
     age = int(p.get("age") or 22)
     need, gap = ctx["needs"].get(g, (0.0, 0.0))
-    fit = PHI * need * (1.2 if ctx["direction"] == "CONTEND" and gap > 0 else 1.0)
+    sec = ctx.get("qb_security", 1.0)
+    if g == "QB":
+        fit = QB_PHI * (1.0 - sec)
+    else:
+        fit = PHI * need * (1.2 if ctx["direction"] == "CONTEND" and gap > 0 else 1.0)
     if ctx["direction"] == "REBUILD":
         fit += 0.5 * (22 - age)
     pb = ctx["position_bias"].get(g, ctx["position_bias"].get(sv.group_of(p.get("position")), 1.0))
     bias = (T - 60.0) * (pb - 1.0) + ctx["youth_bias"] * (22 - age) * 0.75 + (ctx["risk"] - 0.5) * RISK_W * (vol - vol_ref)
-    if g == "QB" and not ctx["qb_need"]:
-        bias -= QB_PENALTY
+    if g == "QB":
+        bias -= QB_PENALTY * sec
     return fit, bias
 
 

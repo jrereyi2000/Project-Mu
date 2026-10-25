@@ -48,16 +48,40 @@ def test_visit_lowers_team_error():
     assert all(s == pytest.approx(p * sb.VISIT_M) for s, p in zip(seen, plain))
 
 
-def test_qb_rule(setup):
+def test_qb_rule_is_graded_by_starter_security(setup):
     _, _, ctxs = setup
-    ctx = next(c for c in ctxs.values() if not c["qb_need"])
     qb = {"position": "QB", "age": 22, "V": 80}
     wr = {"position": "WR", "age": 22, "V": 80}
-    f_qb, b_qb = sb.fit_bias(qb, 80, dict(ctx, position_bias={}, youth_bias=0.0))
-    f_wr, b_wr = sb.fit_bias(wr, 80, dict(ctx, position_bias={}, youth_bias=0.0))
-    assert b_qb == pytest.approx(b_wr - sb.QB_PENALTY)
-    needy = dict(ctx, qb_need=True, position_bias={}, youth_bias=0.0)
-    assert sb.fit_bias(qb, 80, needy)[1] == pytest.approx(0.0)
+    base = dict(next(iter(ctxs.values())), position_bias={}, youth_bias=0.0, direction="RETOOL")
+    for s in (0.0, 0.4, 1.0):
+        ctx = dict(base, qb_security=s)
+        f_qb, b_qb = sb.fit_bias(qb, 80, ctx)
+        b_wr = sb.fit_bias(wr, 80, ctx)[1]
+        assert f_qb == pytest.approx(sb.QB_PHI * (1 - s))
+        assert b_qb == pytest.approx(b_wr - sb.QB_PENALTY * s)
+    # a team with no QB1 pushes QBs up more than any non-QB need can
+    assert sb.fit_bias(qb, 80, dict(base, qb_security=0.0))[0] > sb.PHI * 1.2
+
+
+def test_qb_security_factors():
+    elite = {"ovr": 95, "age": 26, "pct": 0.95, "years_left": 4}
+    assert sb.qb_security(elite) == pytest.approx(1.0)
+    assert sb.qb_security(None) == 0.0 and sb.qb_security({}) == 0.0
+    assert sb.qb_security(dict(elite, pct=0.2)) == 0.0                     # bottom-quarter starter
+    assert sb.qb_security(dict(elite, age=33)) == pytest.approx(0.5)        # aging starter
+    assert sb.qb_security(dict(elite, age=36)) == 0.0
+    assert sb.qb_security(dict(elite, years_left=0)) == pytest.approx(sb.QB_CONTRACT[0])
+    assert sb.qb_security(dict(elite, years_left=None)) == pytest.approx(sb.QB_CONTRACT[0])
+    assert sb.qb_security(dict(elite, years_left=1)) == pytest.approx(sb.QB_CONTRACT[1])
+    mid = sb.qb_security(dict(elite, pct=0.55))
+    assert 0 < mid < 1
+
+
+def test_team_context_without_qb_facts_falls_back_to_needs():
+    needy = sb.team_context({"needs": [{"group": "QB", "score": 5, "slot_gap": 3}]})
+    set_ = sb.team_context({"needs": [{"group": "WR", "score": 5, "slot_gap": 3}]})
+    assert needy["qb_security"] == 0.0 and set_["qb_security"] == 1.0
+    assert sb.team_context({"needs": []}, {})["qb_security"] == 0.0           # no QB on the roster
 
 
 def test_team_z_is_seeded_unit_ar1():

@@ -436,19 +436,43 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
     return out
 
 
+def qb_starters(cur, season):
+    """{team_id: QB1 facts for scouting_boards.qb_security}: each team's top-OVR rostered QB (injuries ignored: the
+    draft is about the seasons ahead), his age, contract seasons left after this one (extension included; None
+    without an active contract row) and his percentile among the league's QB1s (0 worst, 1 best). A team without a
+    QB maps to {}."""
+    cur.execute("""SELECT DISTINCT ON (ps.team_id) ps.team_id, ps.overall_rating, ps.age,
+                          pc.years_remaining, pc.extension_years
+                   FROM player_seasons ps
+                   LEFT JOIN player_contracts pc ON pc.player_id = ps.player_id AND pc.season = ps.season
+                        AND pc.status = 'ACTIVE'
+                   WHERE ps.season = %s AND ps.position = 'QB' AND ps.released_week IS NULL
+                     AND ps.team_id IS NOT NULL AND ps.overall_rating IS NOT NULL
+                   ORDER BY ps.team_id, ps.overall_rating DESC, ps.player_id""", (season,))
+    rows = cur.fetchall()
+    ovrs = [r[1] for r in rows]
+    out = {}
+    for tid, ovr, age, yr, ext in rows:
+        below = sum(o < ovr for o in ovrs) + 0.5 * (sum(o == ovr for o in ovrs) - 1)
+        out[tid] = {"ovr": ovr, "age": age, "pct": round(below / max(len(ovrs) - 1, 1), 3),
+                    "years_left": None if yr is None else yr + (ext or 0) - 1}
+    return out
+
+
 def team_contexts(cur, season):
-    """{team_id: scouting_boards.team_context} from the GM agents (step 3); {} without them."""
+    """{team_id: scouting_boards.team_context} from the GM agents (step 3) and each team's QB1; {} without them."""
     from engines import scouting_boards as sb
     cur.execute("SELECT to_regclass('gm_profiles') IS NOT NULL")
     if not cur.fetchone()[0]:
         return {}
     from engines.front_office import get_gm
+    qbs = qb_starters(cur, season)
     cur.execute("SELECT id FROM teams ORDER BY id")
     out = {}
     for (tid,) in cur.fetchall():
         g = get_gm(cur, tid, season)
         if g:
-            out[tid] = sb.team_context(g)
+            out[tid] = sb.team_context(g, qbs.get(tid, {}))
     return out
 
 

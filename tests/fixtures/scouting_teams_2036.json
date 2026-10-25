@@ -1,5 +1,5 @@
 {
- "_note": "Frozen 2036 week 4 read-only export: 2037 Round 1 slots (provisional standings through draft_picks owners) and the 32 GMs' needs/personas/q, for tests/test_scouting_calibration.py.",
+ "_note": "Frozen 2036 week 4 read-only export: 2037 Round 1 slots (provisional standings through draft_picks owners) and the 32 GMs' needs/personas/q, for tests/test_scouting_calibration.py. Each team's \"qb\" (QB1 facts for scouting_boards.qb_security) was added from the 2036 week 15 rosters and contracts (engines.scouting_engine.qb_starters).",
  "order": [
   {
    "pick": 1,
@@ -251,7 +251,13 @@
    "youth_bias": -0.89,
    "risk_appetite": 0.4,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 86,
+    "age": 33,
+    "pct": 0.484,
+    "years_left": 2
+   }
   },
   "6": {
    "abbreviation": "SEA",
@@ -349,7 +355,13 @@
    "youth_bias": 0.8,
    "risk_appetite": 0.24,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 86,
+    "age": 29,
+    "pct": 0.484,
+    "years_left": 1
+   }
   },
   "7": {
    "abbreviation": "NYG",
@@ -405,7 +417,13 @@
    "youth_bias": 0.76,
    "risk_appetite": 0.76,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 86,
+    "age": 28,
+    "pct": 0.484,
+    "years_left": 1
+   }
   },
   "8": {
    "abbreviation": "PHI",
@@ -493,7 +511,13 @@
    "youth_bias": 0.41,
    "risk_appetite": 0.57,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 87,
+    "age": 28,
+    "pct": 0.565,
+    "years_left": 3
+   }
   },
   "9": {
    "abbreviation": "TB",
@@ -569,7 +593,13 @@
    "youth_bias": -0.5,
    "risk_appetite": 0.38,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 92,
+    "age": 29,
+    "pct": 0.839,
+    "years_left": 4
+   }
   },
   "10": {
    "abbreviation": "GB",
@@ -654,7 +684,13 @@
    "youth_bias": -0.79,
    "risk_appetite": 0.19,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 90,
+    "age": 25,
+    "pct": 0.694,
+    "years_left": 1
+   }
   },
   "11": {
    "abbreviation": "CAR",
@@ -688,7 +724,13 @@
    "youth_bias": 0.7,
    "risk_appetite": 0.67,
    "fo_quality": 1.0,
-   "user_controlled": true
+   "user_controlled": true,
+   "qb": {
+    "ovr": 99,
+    "age": 23,
+    "pct": 0.984,
+    "years_left": 1
+   }
   },
   "12": {
    "abbreviation": "MIN",
@@ -751,7 +793,13 @@
    "youth_bias": -0.61,
    "risk_appetite": 0.29,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 91,
+    "age": 31,
+    "pct": 0.758,
+    "years_left": 4
+   }
   },
   "13": {
    "abbreviation": "TEN",
@@ -836,7 +884,13 @@
    "youth_bias": 0.04,
    "risk_appetite": 0.13,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 84,
+    "age": 29,
+    "pct": 0.306,
+    "years_left": 4
+   }
   },
   "14": {
    "abbreviation": "CLE",
@@ -914,7 +968,13 @@
    "youth_bias": 0.13,
    "risk_appetite": 0.87,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 87,
+    "age": 30,
+    "pct": 0.565,
+    "years_left": 4
+   }
   },
   "15": {
    "abbreviation": "PIT",
@@ -997,7 +1057,13 @@
    "youth_bias": -0.74,
    "risk_appetite": 0.62,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 85,
+    "age": 29,
+    "pct": 0.387,
+    "years_left": 0
+   }
   },
   "16": {
    "abbreviation": "BAL",
@@ -1073,7 +1139,13 @@
    "youth_bias": 0.25,
    "risk_appetite": 0.72,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 79,
+    "age": 25,
+    "pct": 0.048,
+    "years_left": 2
+   }
   },
   "17": {
    "abbreviation": "NE",
@@ -1136,7 +1208,13 @@
    "youth_bias": -0.36,
    "risk_appetite": 0.27,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 91,
+    "age": 34,
+    "pct": 0.758,
+    "years_left": 3
+   }
   },
   "18": {
    "abbreviation": "NYJ",
@@ -1192,7 +1270,13 @@
    "youth_bias": -0.7,
    "risk_appetite": 0.75,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 93,
+    "age": 27,
+    "pct": 0.919,
+    "years_left": 3
+   }
   },
   "19": {
    "abbreviation": "MIA",
@@ -1275,7 +1359,13 @@
    "youth_bias": -0.12,
    "risk_appetite": 0.79,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 99,
+    "age": 30,
+    "pct": 0.984,
+    "years_left": 5
+   }
   },
   "20": {
    "abbreviation": "BUF",
@@ -1349,7 +1439,13 @@
    "youth_bias": -0.42,
    "risk_appetite": 0.52,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 81,
+    "age": 24,
+    "pct": 0.145,
+    "years_left": 2
+   }
   },
   "21": {
    "abbreviation": "LAR",
@@ -1437,7 +1533,13 @@
    "youth_bias": 0.3,
    "risk_appetite": 0.59,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 83,
+    "age": 33,
+    "pct": 0.258,
+    "years_left": 1
+   }
   },
   "22": {
    "abbreviation": "WAS",
@@ -1520,7 +1622,13 @@
    "youth_bias": 0.66,
    "risk_appetite": 0.55,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 85,
+    "age": 30,
+    "pct": 0.387,
+    "years_left": 3
+   }
   },
   "23": {
    "abbreviation": "AZ",
@@ -1597,7 +1705,13 @@
    "youth_bias": 0.21,
    "risk_appetite": 0.47,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 88,
+    "age": 33,
+    "pct": 0.613,
+    "years_left": 3
+   }
   },
   "24": {
    "abbreviation": "CIN",
@@ -1688,7 +1802,13 @@
    "youth_bias": -0.27,
    "risk_appetite": 0.31,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 81,
+    "age": 29,
+    "pct": 0.145,
+    "years_left": 2
+   }
   },
   "25": {
    "abbreviation": "ATL",
@@ -1769,7 +1889,13 @@
    "youth_bias": 0.86,
    "risk_appetite": 0.82,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 82,
+    "age": 29,
+    "pct": 0.21,
+    "years_left": 3
+   }
   },
   "26": {
    "abbreviation": "JAX",
@@ -1859,7 +1985,13 @@
    "youth_bias": 0.5,
    "risk_appetite": 0.48,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 77,
+    "age": 25,
+    "pct": 0.0,
+    "years_left": 2
+   }
   },
   "27": {
    "abbreviation": "SF",
@@ -1936,7 +2068,13 @@
    "youth_bias": -0.11,
    "risk_appetite": 0.18,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 92,
+    "age": 28,
+    "pct": 0.839,
+    "years_left": 5
+   }
   },
   "28": {
    "abbreviation": "HOU",
@@ -2026,7 +2164,13 @@
    "youth_bias": -0.62,
    "risk_appetite": 0.44,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 84,
+    "age": 29,
+    "pct": 0.306,
+    "years_left": 1
+   }
   },
   "29": {
    "abbreviation": "NO",
@@ -2102,7 +2246,13 @@
    "youth_bias": 0.09,
    "risk_appetite": 0.1,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 79,
+    "age": 24,
+    "pct": 0.048,
+    "years_left": 3
+   }
   },
   "30": {
    "abbreviation": "IND",
@@ -2183,7 +2333,13 @@
    "youth_bias": -0.18,
    "risk_appetite": 0.15,
    "fo_quality": 1.0,
-   "user_controlled": true
+   "user_controlled": true,
+   "qb": {
+    "ovr": 82,
+    "age": 32,
+    "pct": 0.21,
+    "years_left": 0
+   }
   },
   "31": {
    "abbreviation": "DEN",
@@ -2260,7 +2416,13 @@
    "youth_bias": -0.04,
    "risk_appetite": 0.91,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 90,
+    "age": 31,
+    "pct": 0.694,
+    "years_left": 2
+   }
   },
   "32": {
    "abbreviation": "KC",
@@ -2341,7 +2503,13 @@
    "youth_bias": -0.32,
    "risk_appetite": 0.35,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 80,
+    "age": 30,
+    "pct": 0.097,
+    "years_left": 2
+   }
   },
   "33": {
    "abbreviation": "CHI",
@@ -2424,7 +2592,13 @@
    "youth_bias": 0.6,
    "risk_appetite": 0.93,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 92,
+    "age": 34,
+    "pct": 0.839,
+    "years_left": 2
+   }
   },
   "34": {
    "abbreviation": "DET",
@@ -2501,7 +2675,13 @@
    "youth_bias": -0.54,
    "risk_appetite": 0.65,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 89,
+    "age": 25,
+    "pct": 0.645,
+    "years_left": 1
+   }
   },
   "35": {
    "abbreviation": "LV",
@@ -2577,7 +2757,13 @@
    "youth_bias": 0.35,
    "risk_appetite": 0.85,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 85,
+    "age": 26,
+    "pct": 0.387,
+    "years_left": 4
+   }
   },
   "36": {
    "abbreviation": "LAC",
@@ -2653,7 +2839,13 @@
    "youth_bias": 0.56,
    "risk_appetite": 0.07,
    "fo_quality": 1.0,
-   "user_controlled": false
+   "user_controlled": false,
+   "qb": {
+    "ovr": 93,
+    "age": 26,
+    "pct": 0.919,
+    "years_left": 5
+   }
   }
  }
 }
