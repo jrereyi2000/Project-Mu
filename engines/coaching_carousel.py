@@ -10,9 +10,10 @@ hand:
 
 Each run does what is ready, once: the head-coach hot seat (Black Monday, then each playoff team once it is out), the
 coordinator review of every team whose head coach kept his job (decided with him), and, once the Super Bowl is
-complete and every team is decided, the hiring cycle for season + 1. JR's teams (gm_team_settings.user_controlled)
-are never touched: no firings, no poaching from them. coordinator_seat() and pick() are pure; a second run changes
-nothing (seeded draws).
+complete and every team is decided, the hiring cycle for season + 1, most attractive opening first (opening_appeal).
+Mu never fires anyone on JR's teams (gm_team_settings.user_controlled), but other teams can poach their
+coordinators; JR's team then promotes from within. coordinator_seat(), opening_appeal() and pick() are pure; a second
+run changes nothing (seeded draws).
 """
 import argparse
 import json
@@ -23,6 +24,8 @@ import random
 from engines import coach_hot_seat as chs
 from engines.staff_names import background, new_name, taken_names
 
+APPEAL_WEIGHTS = {"qb": 0.30, "roster": 0.20, "draft": 0.15, "market": 0.15, "front_office": 0.10, "cap": 0.10}
+CHURN_PENALTY = 0.05               # per extra head coach the team went through in the last 5 seasons
 MAX_COORD_FIRES = 8                # coordinators turn over far more than head coaches
 COORD_LINE = 1.0
 FIRST_YEAR_LINE = 1.5              # a coordinator in his first season needs a worse year
@@ -185,6 +188,73 @@ def review_coordinators(cur, season, log=print):
 
 
 # --------------------------------------------------------------------------------------------- hiring cycle ----
+def percentiles(values):
+    """{key: 0..1 percentile (0 lowest, 1 highest, ties shared)} of {key: value}; None values get 0.5."""
+    known = {k: v for k, v in values.items() if v is not None}
+    n = len(known)
+    out = {k: 0.5 for k in values}
+    for k, v in known.items():
+        below = sum(o < v for o in known.values()) + 0.5 * (sum(o == v for o in known.values()) - 1)
+        out[k] = round(below / max(n - 1, 1), 3)
+    return out
+
+
+def opening_appeal(parts):
+    """Pure. parts: {qb, roster, draft, market, front_office, cap} each 0..1 (missing = 0.5) plus churn (extra head
+    coaches in the last 5 seasons). appeal = sum(APPEAL_WEIGHTS[k] * part) - CHURN_PENALTY * churn: the QB first
+    (a franchise quarterback sells a job), then the roster, draft capital, market and prestige, a well-run front
+    office, and cap room; an owner who keeps firing coaches scares candidates off."""
+    base = sum(w * (parts.get(k) if parts.get(k) is not None else 0.5) for k, w in APPEAL_WEIGHTS.items())
+    return round(base - CHURN_PENALTY * (parts.get("churn") or 0), 3)
+
+
+def opening_parts(cur, season, team_ids):
+    """{team_id: opening_appeal parts} for openings after `season`, each a league percentile: qb =
+    scouting_boards.qb_security of the QB1 (scouting_engine.qb_starters), roster = team_ovr, draft = next draft's
+    Round 1-2 picks owned, weighted by slot (draft_order.draft_order_with_owners; Round 2 counts half), market =
+    market_constants B, front_office = fo_standing.live score, cap = cap space (team_cap_seasons, season + 1 else
+    season); a part that can't be read is 0.5. churn = head coaches who started in the last 5 seasons, minus one."""
+    from engines.draft_order import draft_order_with_owners
+    from engines.market_constants import TEAM_MARKET
+    from engines.scouting_boards import qb_security
+    from engines.scouting_engine import qb_starters
+    allt = teams(cur)
+    qbs = qb_starters(cur, season)
+    qb = percentiles({t: qb_security(qbs.get(t)) for t in allt})
+    cur.execute("SELECT team_id, team_ovr FROM team_seasons WHERE season = %s", (season,))
+    roster = percentiles({**{t: None for t in allt}, **{t: v for t, v in cur.fetchall() if t in allt}})
+    value = {t: 0.0 for t in allt}
+    try:
+        cur.execute("SAVEPOINT appeal_draft")
+        for slot in draft_order_with_owners(cur, season + 1, rounds=(1, 2)):
+            if slot["owner_team_id"] in value:
+                value[slot["owner_team_id"]] += (33 - slot["round_pick"]) / 32 * (1.0 if slot["round"] == 1 else 0.5)
+        cur.execute("RELEASE SAVEPOINT appeal_draft")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT appeal_draft")
+        value = {t: None for t in allt}
+    draft = percentiles(value)
+    market = percentiles({t: TEAM_MARKET.get(allt[t]["name"], {}).get("B") for t in allt})
+    fo = {t: None for t in allt}
+    try:
+        cur.execute("SAVEPOINT appeal_fo")
+        from engines import fo_standing
+        fo.update({r["team_id"]: r.get("score") for r in fo_standing.live(cur, season) if r["team_id"] in fo})
+        cur.execute("RELEASE SAVEPOINT appeal_fo")
+    except Exception:
+        cur.execute("ROLLBACK TO SAVEPOINT appeal_fo")
+    fo = percentiles(fo)
+    cur.execute("""SELECT DISTINCT ON (team_id) team_id, cap_space FROM team_cap_seasons
+                   WHERE season IN (%s, %s) ORDER BY team_id, season DESC""", (season, season + 1))
+    cap = percentiles({**{t: None for t in allt}, **{t: float(c) if c is not None else None
+                                                     for t, c in cur.fetchall() if t in allt}})
+    cur.execute("""SELECT team_id, count(*) FROM coach_tenures WHERE start_season > %s AND start_season <= %s
+                   GROUP BY team_id""", (season - 5, season))
+    churn = {t: max(n - 1, 0) for t, n in cur.fetchall()}
+    return {t: {"qb": qb[t], "roster": roster[t], "draft": draft[t], "market": market[t], "front_office": fo[t],
+                "cap": cap[t], "churn": churn.get(t, 0)} for t in team_ids}
+
+
 def gumbel(key):
     u = random.Random(f"hire:{key}").random()
     return -NOISE * math.log(-math.log(min(max(u, 1e-12), 1 - 1e-12)))
@@ -246,24 +316,22 @@ def _move(cur, season, team_id, role, action, person, **kw):
 
 
 def hiring_cycle(cur, season, log=print):
-    """Fill every opening for season + 1 inside the caller's transaction: head coaches first (worst record first),
+    """Fill every opening for season + 1 inside the caller's transaction: head coaches first (most attractive
+    opening first, opening_appeal),
     each poach's vacancy by an internal promotion, the new head coach's own coordinator on his side (OFFENSIVE: the
-    OC, DEFENSIVE: the DC, CEO: none), then the coordinator openings left (worst record first). Returns
-    {head_coaches: [...], coordinators: [...]}."""
+    OC, DEFENSIVE: the DC, CEO: none), then the coordinator openings left (most attractive team first).
+    Returns {head_coaches: [...], coordinators: [...], jr_losses: [...] (JR's coordinators poached)}."""
     nxt = season + 1
     tm, mine = teams(cur), jr_teams(cur)
     ranks, res = unit_ranks(cur, season), chs.playoff_results(cur, season)
     staff, hcs = staff_in(cur, season), head_coaches(cur, season)
     years, taken = _coordinator_years(cur, season), taken_names(cur)
-    cur.execute("SELECT team_id, wins, expected_wins FROM team_seasons WHERE season = %s", (season,))
-    record = {r[0]: (r[1] or 0, -(r[2] or 0)) for r in cur.fetchall()}
-    order = lambda tids: sorted(tids, key=lambda t: (record.get(t, (0, 0)), t))
     cur.execute("""SELECT h.team_id, h.coach_id, c.coach_name FROM coach_hot_seat h JOIN coaches c ON c.id = h.coach_id
                    WHERE h.season = %s AND h.fired""", (season,))
     fired_hc = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
     cur.execute("SELECT team_id, role, coordinator_id FROM coordinator_hot_seat WHERE season = %s AND fired", (season,))
     fired_coord = {(r[0], r[1]): r[2] for r in cur.fetchall()}
-    report = {"head_coaches": [], "coordinators": []}
+    report = {"head_coaches": [], "coordinators": [], "jr_losses": []}
 
     def promote(team_id, role, prev, why):
         """An internal promotion who keeps the system (prev: the coordinator he replaces)."""
@@ -282,7 +350,7 @@ def hiring_cycle(cur, season, log=print):
     # Head-coach candidates: other teams' coordinators (poach), former head coaches (retread), one invented outsider.
     cands = []
     for (tid, role), c in staff.items():
-        if tid in mine or (tid, role) in fired_coord:
+        if (tid, role) in fired_coord:              # JR's coordinators can be poached too
             continue
         ur, tr = unit_of(ranks, tid, role)
         cands.append({"key": f"coord:{c['coordinator_id']}", "kind": "POACHED", "team_id": tid, "role": role, **c,
@@ -303,7 +371,10 @@ def hiring_cycle(cur, season, log=print):
                       "offensive_scheme": off, "defensive_scheme": de, "pass_lean": pl, "blitz_rate": br,
                       "man_coverage": mc, "score": round((pct - 0.5) * 4 + (0.3 if pw else 0) - RETREAD_PENALTY, 3)})
 
-    for tid in order(fired_hc):
+    parts = opening_parts(cur, season, list(fired_hc))
+    appeal = {t: opening_appeal(p) for t, p in parts.items()}
+    ranked = sorted(fired_hc, key=lambda t: (-appeal[t], t))           # the best job gets first pick
+    for rank, tid in enumerate(ranked, 1):
         old_id, old_name = fired_hc[tid]
         abbr = tm[tid]["abbr"]
         seed = f"{season}:{abbr}:HC"
@@ -354,10 +425,13 @@ def hiring_cycle(cur, season, log=print):
         src = c["kind"]
         _move(cur, season, tid, "HC", "HIRED", name, coach_id=coach_id, source=src,
               from_team_id=c.get("team_id"), from_role=c.get("role"), slant=slant, score=c["score"],
-              notes=f"replaces {old_name}; {origin}")
+              notes=f"replaces {old_name}; {origin}",
+              inputs=json.dumps({"opening_rank": rank, "openings": len(ranked), "appeal": appeal[tid],
+                                 "parts": parts[tid]}))
         report["head_coaches"].append({"team": abbr, "coach": name, "slant": slant, "source": src, "from": origin,
-                                       "replaces": old_name})
-        log(f"  hiring: {abbr} hires {name} ({slant}, {src.lower()}: {origin}) to replace {old_name}")
+                                       "replaces": old_name, "opening_rank": rank, "appeal": appeal[tid]})
+        log(f"  hiring: {abbr} (opening #{rank}, appeal {appeal[tid]}) hires {name} ({slant}, {src.lower()}: "
+            f"{origin}) to replace {old_name}")
 
         # A poached coordinator leaves his job; his team promotes from within (unless it is the hiring team).
         if src == "POACHED":
@@ -369,7 +443,10 @@ def hiring_cycle(cur, season, log=print):
             _move(cur, season, ft, fr, "LEFT", name, coordinator_id=c["coordinator_id"],
                   notes=f"hired as {tm[tid]['city']} {tm[tid]['name']} head coach")
             if ft != tid:
-                promote(ft, fr, c, f"after {name} left to coach the {tm[tid]['name']}")
+                promoted = promote(ft, fr, c, f"after {name} left to coach the {tm[tid]['name']}")
+                if ft in mine:
+                    report["jr_losses"].append({"team": tm[ft]["abbr"], "role": fr, "lost": name, "to": abbr,
+                                                "promoted": promoted})
         # The new head coach brings his own coordinator on his side of the ball.
         if slant in ("OFFENSIVE", "DEFENSIVE"):
             role = "OC" if slant == "OFFENSIVE" else "DC"
@@ -410,7 +487,9 @@ def hiring_cycle(cur, season, log=print):
     out_of_work = {r[0]: dict(zip(("coordinator_id", "name", "scheme", "playbook", "pass_lean", "blitz_rate",
                                    "man_coverage"), r)) for r in cur.fetchall()}
     where = {v: k for k, v in fired_coord.items()}
-    for tid in order(t for t in tm if t not in mine):
+    cpu = [t for t in tm if t not in mine]
+    cparts = opening_parts(cur, season, cpu)
+    for tid in sorted(cpu, key=lambda t: (-opening_appeal(cparts[t]), t)):     # best job first
         for role in ("OC", "DC"):
             if (tid, role) in nstaff:
                 continue
@@ -449,7 +528,8 @@ def hiring_cycle(cur, season, log=print):
             report["coordinators"].append({"team": abbr, "role": role, "coordinator": name, "source": c["kind"]})
             log(f"  hiring: {abbr} {role} {name} ({c['kind'].lower()})")
 
-    check_staffs(cur, nxt, set(tm) - mine)
+    cur.execute("SELECT DISTINCT team_id FROM staff_moves WHERE season = %s", (season,))
+    check_staffs(cur, nxt, (set(tm) - mine) | {r[0] for r in cur.fetchall()})
     return report
 
 

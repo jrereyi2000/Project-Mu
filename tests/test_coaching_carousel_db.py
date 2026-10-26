@@ -53,10 +53,22 @@ class Rehearse2035(unittest.TestCase):
     def test_every_cpu_team_fully_staffed_next_season(self):
         cc.check_staffs(self.cur, SEASON + 1, set(cc.teams(self.cur)) - cc.jr_teams(self.cur))
 
-    def test_jr_teams_untouched(self):
-        self.cur.execute("""SELECT count(*) FROM staff_moves m JOIN gm_team_settings s ON s.team_id = m.team_id
-                            WHERE m.season = %s AND s.user_controlled""", (SEASON,))
+    def test_jr_teams_never_fire_or_hire_head_coaches(self):
+        # JR's coordinators can be poached (then his team promotes from within), but Mu fires and hires nobody there.
+        self.cur.execute("""SELECT count(*) FROM coach_hot_seat h JOIN gm_team_settings s ON s.team_id = h.team_id
+                            WHERE h.season = %s AND s.user_controlled AND h.fired""", (SEASON,))
         self.assertEqual(self.cur.fetchone()[0], 0)
+        self.cur.execute("""SELECT count(*) FROM staff_moves m JOIN gm_team_settings s ON s.team_id = m.team_id
+                            WHERE m.season = %s AND s.user_controlled
+                              AND NOT (m.action = 'LEFT' OR m.source = 'PROMOTED')""", (SEASON,))
+        self.assertEqual(self.cur.fetchone()[0], 0)
+
+    def test_most_attractive_opening_hires_first(self):
+        self.cur.execute("""SELECT inputs FROM staff_moves WHERE season = %s AND role = 'HC' AND action = 'HIRED'
+                            ORDER BY id""", (SEASON,))
+        rows = [r[0] for r in self.cur.fetchall()]
+        self.assertEqual([r["opening_rank"] for r in rows], list(range(1, len(rows) + 1)))
+        self.assertEqual([r["appeal"] for r in rows], sorted((r["appeal"] for r in rows), reverse=True))
 
     def test_a_second_run_changes_nothing(self):
         self.assertEqual(self.again["hot_seat"]["fired"], [])

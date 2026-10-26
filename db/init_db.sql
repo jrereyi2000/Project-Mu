@@ -1224,7 +1224,8 @@ CREATE TABLE IF NOT EXISTS staff_moves (
     slant VARCHAR(10),
     score NUMERIC(6,3),
     notes TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    inputs JSONB                                      -- HC hires: opening_rank, openings, appeal, parts
 );
 CREATE INDEX IF NOT EXISTS staff_moves_season ON staff_moves (season);
 

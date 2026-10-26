@@ -330,6 +330,13 @@ def mu_coaching_packet(cur, season: int) -> Dict[str, Any]:
             "incoming_coach": m["person"], "incoming_slant": m["slant"],
             "hire_type": {"POACHED": "poached coordinator", "RETREAD": "former head coach",
                           "OUTSIDE": "outside hire"}.get(m["source"], m["source"]),
+            "opening": ({"rank": m["inputs"]["opening_rank"], "of": m["inputs"]["openings"],
+                         "selling_points": [k for k, v in sorted(m["inputs"]["parts"].items(), key=lambda kv: -kv[1])
+                                            if k != "churn" and v >= 0.75][:3],
+                         "drawbacks": [k for k, v in sorted(m["inputs"]["parts"].items(), key=lambda kv: kv[1])
+                                       if k != "churn" and v <= 0.25][:3]
+                                      + (["coaching churn"] if m["inputs"]["parts"].get("churn") else [])}
+                        if m.get("inputs") else None),
             "origin": (f"{m['from_role']} with {m['from_team']}" if m["from_team"] else m["notes"]),
             "scheme_inheritance": {"offensive_scheme": m["offensive_scheme"], "defensive_scheme": m["defensive_scheme"]},
             "notes": m["notes"]})

@@ -8,7 +8,8 @@ import random
 import unittest
 
 from engines.coach_hot_seat import MAX_EXIT_FIRES, MAX_FIRES, contender_seat, hot_seat
-from engines.coaching_carousel import coordinator_candidacy, coordinator_seat, pick
+from engines.coaching_carousel import (APPEAL_WEIGHTS, coordinator_candidacy, coordinator_seat, opening_appeal,
+                                      percentiles, pick)
 from newsroom.offseason_service import hot_seat_warnings
 
 SEASON = 2036
@@ -136,6 +137,24 @@ class HiringTests(unittest.TestCase):
         self.assertGreater(good, 1.5)
         self.assertLess(bad, -1.5)
         self.assertEqual(coordinator_candidacy(None, None), 0.0)
+
+
+class OpeningAppealTests(unittest.TestCase):
+    def test_weights_and_missing_parts(self):
+        self.assertAlmostEqual(sum(APPEAL_WEIGHTS.values()), 1.0)
+        self.assertEqual(opening_appeal({}), 0.5)                         # nothing known: middling
+        best = {k: 1.0 for k in APPEAL_WEIGHTS}
+        self.assertEqual(opening_appeal(best), 1.0)
+
+    def test_quarterback_matters_most_and_churn_hurts(self):
+        qb_job = opening_appeal({"qb": 1.0, "cap": 0.0})
+        cap_job = opening_appeal({"qb": 0.0, "cap": 1.0})
+        self.assertGreater(qb_job, cap_job)
+        self.assertAlmostEqual(opening_appeal({"churn": 2}), 0.4)
+
+    def test_percentiles(self):
+        self.assertEqual(percentiles({"a": 1, "b": 2, "c": 3, "d": None}), {"a": 0.0, "b": 0.5, "c": 1.0, "d": 0.5})
+        self.assertEqual(percentiles({"a": 0, "b": 0}), {"a": 0.5, "b": 0.5})
 
 
 class ManifestReconcileTests(unittest.TestCase):
