@@ -1,4 +1,5 @@
-"""Unit tests for the coach hot seat (engines/coach_hot_seat.py) and its offseason-manifest reconciliation
+"""Unit tests for the coaching carousel: the coach hot seat (engines/coach_hot_seat.py: Black Monday and playoff
+exits), coordinator firings and hiring picks (engines/coaching_carousel.py), and the offseason-manifest warnings
 (newsroom/offseason_service.hot_seat_warnings). Pure: no database.
 
 Run: python3 -m unittest tests.test_coach_hot_seat
@@ -6,7 +7,8 @@ Run: python3 -m unittest tests.test_coach_hot_seat
 import random
 import unittest
 
-from engines.coach_hot_seat import MAX_FIRES, hot_seat
+from engines.coach_hot_seat import MAX_EXIT_FIRES, MAX_FIRES, contender_seat, hot_seat
+from engines.coaching_carousel import coordinator_candidacy, coordinator_seat, pick
 from newsroom.offseason_service import hot_seat_warnings
 
 SEASON = 2036
@@ -67,15 +69,87 @@ class FiringTests(unittest.TestCase):
         self.assertTrue(all(out[t]["inputs"].get("capped") for t in ids[:2]))
 
 
+class ContenderTests(unittest.TestCase):
+    def row(self, **kw):
+        r = coach(1, 12, 10.5, start_season=2030, made_playoffs=True, playoff_wins=0, champion=False, flops_before=1)
+        r.update(kw)
+        return r
+
+    def test_one_and_done_contender_again(self):
+        h = contender_seat([self.row()], SEASON)[1]
+        self.assertEqual(h["inputs"]["terms"], {"no_playoff_win": 0.5, "contender": 0.5, "flops_before": 0.5,
+                                                "shortfall": 0.0, "super_bowl": 0.0})
+        self.assertEqual(h["inputs"]["p"], 0.35)
+
+    def test_a_playoff_win_or_a_title_protects(self):
+        self.assertEqual(contender_seat([self.row(playoff_wins=1)], SEASON)[1]["score"], 1.0)
+        self.assertEqual(contender_seat([self.row(champion=True)], SEASON)[1]["inputs"]["safe"], "won the Super Bowl")
+        self.assertEqual(contender_seat([self.row(super_bowl_win=SEASON - 1)], SEASON)[1]["score"], 0.5)
+
+    def test_not_a_contender_and_short_tenure(self):
+        self.assertEqual(contender_seat([self.row(wins=10, expected_wins=9.0, flops_before=0)], SEASON)[1]["score"], 0.5)
+        self.assertEqual(contender_seat([self.row(start_season=SEASON - 1)], SEASON)[1]["inputs"]["safe"],
+                         "tenure under 3 seasons")
+
+    def test_cap_counts_earlier_exits(self):
+        rows = [self.row(team_id=t, abbr=f"T{t}", flops_before=2) for t in range(40)]
+        out = contender_seat(rows, SEASON, max_fires=0)
+        self.assertFalse(any(v["fire"] for v in out.values()))
+        self.assertLessEqual(sum(v["fire"] for v in contender_seat(rows, SEASON).values()), MAX_EXIT_FIRES)
+
+
+class CoordinatorTests(unittest.TestCase):
+    def row(self, **kw):
+        r = {"team_id": 1, "abbr": "T1", "role": "DC", "coordinator_id": 9, "name": "DC Nine", "start_season": 2030,
+             "unit_rank": 28, "talent_rank": 10, "unit_rank_before": 24, "hc_slant": "OFFENSIVE", "hc_score": 1.2,
+             "playoff_wins": 0, "user_controlled": False}
+        r.update(kw)
+        return r
+
+    def test_terms(self):
+        t = coordinator_seat([self.row()], SEASON)[(1, "DC")]["inputs"]["terms"]
+        self.assertEqual(t, {"gap": 1.8, "bottom_unit": 0.5, "bottom_again": 0.25, "scapegoat": 0.5,
+                             "playoff_win": 0.0})
+
+    def test_head_coach_on_that_side_takes_half_the_blame(self):
+        t = coordinator_seat([self.row(hc_slant="DEFENSIVE")], SEASON)[(1, "DC")]["inputs"]["terms"]
+        self.assertEqual(t["gap"], 0.9)
+
+    def test_first_year_line_and_jr(self):
+        r = self.row(start_season=SEASON, unit_rank=20, talent_rank=8, hc_score=0)     # 1.2 < 1.5 in year one
+        self.assertEqual(coordinator_seat([r], SEASON)[(1, "DC")]["inputs"]["safe"], "below the line")
+        r = self.row(user_controlled=True)
+        self.assertEqual(coordinator_seat([r], SEASON)[(1, "DC")]["inputs"]["safe"], "JR's team")
+
+
+class HiringTests(unittest.TestCase):
+    def test_pick_is_seeded(self):
+        cands = [{"key": "a", "score": 1.0}, {"key": "b", "score": 0.9}, {"key": "c", "score": -2.0}]
+        self.assertEqual(pick(cands, "x")["key"], pick(cands, "x")["key"])
+        picks = [pick(cands, f"k{i}")["key"] for i in range(400)]
+        self.assertEqual(set(picks) & {"a", "b"}, {"a", "b"})             # noise: the close call goes both ways
+        self.assertLess(picks.count("c"), 20)                             # a long shot almost never wins
+
+    def test_candidacy(self):
+        good = coordinator_candidacy(3, 15, playoff_wins=2, champion=True, years=5)
+        bad = coordinator_candidacy(30, 5, years=1)
+        self.assertGreater(good, 1.5)
+        self.assertLess(bad, -1.5)
+        self.assertEqual(coordinator_candidacy(None, None), 0.0)
+
+
 class ManifestReconcileTests(unittest.TestCase):
-    def test_warnings(self):
-        firings = [{"team": "ATL", "coach": "Kevin Stefanski"}, {"team": "KC", "coach": "Ron Leonard"}]
-        moves = [{"team": "ATL", "incoming_coach": "X"}, {"team": "DEN", "incoming_coach": "Y"}]
-        w = hot_seat_warnings(firings, moves)
+    def test_before_the_hiring_cycle(self):
+        firings = [{"team": "KC", "coach": "Ron Leonard"}]
+        moves = [{"team": "CAR", "incoming_coach": "X"}, {"team": "DEN", "incoming_coach": "Y"}]
+        w = hot_seat_warnings(firings, moves, hired=False, jr_teams={"CAR", "IND"})
         self.assertEqual(len(w), 2)
-        self.assertTrue(w[0].startswith("KC: the hot seat fired Ron Leonard"))
-        self.assertTrue(w[1].startswith("DEN: a head-coach hire the hot seat didn't fire for"))
-        self.assertEqual(hot_seat_warnings([], []), [])
+        self.assertTrue(w[0].startswith("KC: the hot seat fired Ron Leonard; Mu names his replacement"))
+        self.assertTrue(w[1].startswith("DEN: Mu runs the coaching carousel for CPU teams"))
+
+    def test_after_the_hiring_cycle(self):
+        w = hot_seat_warnings([{"team": "KC", "coach": "Ron Leonard"}], [{"team": "IND"}], True, {"CAR", "IND"})
+        self.assertEqual(w, [])
 
 
 if __name__ == "__main__":

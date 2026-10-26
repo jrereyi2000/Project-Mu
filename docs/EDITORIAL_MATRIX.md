@@ -168,7 +168,7 @@ To preserve historical authenticity, prevent chronological leakage, and enforce 
    - Access concluded season data through Week 23 only.
    - Forbidden from referencing head coach firings, hires, coordinator movements, offseason free-agent departures/signings (moves after Week 23), or draft selections as completed facts. In-season signings and releases are part of the season and may be cited (e.g. a Week 9 signing who started in the Super Bowl).
 2. **Coaching Carousel Audit:**
-   - Access concluded season records, team situational efficiency, coach career profiles, and submitted coaching moves.
+   - Access concluded season records, team situational efficiency, coach career profiles, and the season's coaching moves: from Mu's coaching carousel (PROJECT_SPEC §2.19: head-coach hires with how the predecessor was fired, coordinator firings, poaching departures, promotions and hires) plus any manifest moves for JR's teams.
    - Forbidden from referencing offseason free-agent signings, offseason trades, or rookie draft selections. In-season moves are season history and may be cited.
    - **Coordinator & Scheme Rules:** Evaluates coordinator origins (promotions vs. outside hires) and coaching slants (`OFFENSIVE`, `DEFENSIVE`, `CEO`). Applies scheme inheritance rules: an offensive-slant hire imports offensive scheme/playbook while retaining defensive scheme continuity; a defensive-slant hire imports defensive scheme/playbook while retaining offensive scheme continuity; a CEO-slant hire delegates play-calling and schemes to retained/hired coordinators.
 3. **Marquee Signing Grades:**

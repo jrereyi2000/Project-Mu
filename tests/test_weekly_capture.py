@@ -27,6 +27,7 @@ class RunTest(unittest.TestCase):
             step_engines=lambda season: self.calls.append(f"engines {season}"),
             step_gm=lambda season: self.calls.append(f"gm {season}"),   # GM trade proposals (step 3)
             step_scouting=lambda season: self.calls.append(f"scouting {season}"),   # Step 7c (step 4)
+            step_coach_hot_seat=lambda season: None,   # Step 7d: never the live coaching carousel
             step_preseason_engines=lambda season: self.calls.append(f"preseason_engines {season}"),
             step_rookie_headshots=lambda season: self.calls.append(f"rookie_headshots {season}"),
             step_articles=lambda season, week=None: (self.calls.append(f"articles {week}" if week else "articles"),

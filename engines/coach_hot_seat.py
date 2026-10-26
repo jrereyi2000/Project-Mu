@@ -1,15 +1,17 @@
 """
-Coach hot seat (PROJECT_SPEC §2.19, §3.3a): Mu fires head coaches on Black Monday and JR mirrors each firing in Madden.
+Coach hot seat (PROJECT_SPEC §2.19, §3.3a): Mu fires head coaches and JR mirrors each firing in Madden.
 
-Run by the weekly run's Step 7d (pipeline/weekly_capture.step_coach_hot_seat, optional: a failure only warns) or by hand:
+Run through engines/coaching_carousel.run (the weekly run's Step 7d) or by hand:
 
   python3 -m engines.coach_hot_seat [--season S] [--dry-run]
 
-It decides once per season, when every regular-season game is complete and the Wild Card matchups are loaded (the
-Week 18 run), so the Week 19 articles already see the firings. Every head coach gets a coach_hot_seat row; a fired
-coach's tenure closes at the season just finished. The replacement is whoever JR hires in Madden, recorded through
-the offseason manifest's coaching_moves (newsroom/offseason_service.py). hot_seat() is pure; a second run changes
-nothing.
+Two phases, each decided once per team:
+- BLACK_MONDAY: when every regular-season game is complete and the Wild Card matchups are loaded (the Week 18 run),
+  the teams that missed the playoffs (hot_seat), so the Week 19 articles already see the firings.
+- PLAYOFF_EXIT: each playoff team once it is eliminated or wins the Super Bowl (the playoff and postgame runs): a
+  contender that went out early, again, can lose its coach (contender_seat).
+A fired coach's tenure closes at the season just finished; the hiring cycle (engines/coaching_carousel.py) names his
+replacement after the Super Bowl. hot_seat() and contender_seat() are pure; a second run changes nothing.
 """
 import argparse
 import json
@@ -21,6 +23,10 @@ MIN_TENURE = 2                     # a coach gets at least two seasons
 MAX_FIRES = 5                      # the NFL changes five or six head coaches a year
 BAD_RECORD_WINS = 5                # a record this bad costs a coach his job whatever the roster
 SUPER_BOWL_YEARS = 3               # a Super Bowl win with the team protects him this many seasons
+MAX_EXIT_FIRES = 2                 # playoff coaches are fired far less often
+EXIT_MIN_TENURE = 3                # a playoff coach gets at least three seasons
+CONTENDER_EXPECTED_WINS = 10.0     # a contender: this many expected wins or CONTENDER_WINS wins
+CONTENDER_WINS = 12
 
 
 def hot_seat(rows, season, max_fires=MAX_FIRES):
@@ -63,6 +69,78 @@ def hot_seat(rows, season, max_fires=MAX_FIRES):
     for t in fired[max_fires:]:
         out[t]["fire"] = False
         out[t]["inputs"]["capped"] = True
+    return out
+
+
+def contender_seat(rows, season, max_fires=MAX_EXIT_FIRES):
+    """Pure. rows: playoff teams of `season` that are out (eliminated or champion): hot_seat's fields plus
+    playoff_wins, champion and flops_before (earlier playoff trips under him, with complete playoff data, that won no
+    playoff game). score = 0.5 for no playoff win + 0.5 for a contender (CONTENDER_EXPECTED_WINS expected wins or
+    CONTENDER_WINS wins) + 0.5 per earlier one-and-done (at most 2) + any regular-season shortfall (expected - wins)/2
+    - 1.0 within SUPER_BOWL_YEARS seasons of a Super Bowl win with the team. Fired when he isn't the champion, his
+    tenure is at least EXIT_MIN_TENURE, score >= 1.0, JR doesn't run the team, he isn't also its GM, and the seeded
+    draw (random.Random(f"coachexit:{season}:{abbr}")) falls under min(0.6, 0.2 + 0.3 (score - 1)); worst first, at
+    most max_fires. Returns {team_id: {coach_id, score, fire, inputs}}."""
+    out = {}
+    for r in rows:
+        wins = r.get("wins") or 0
+        exp = r.get("expected_wins")
+        tenure = season - (r.get("start_season") or season) + 1
+        contender = (exp is not None and exp >= CONTENDER_EXPECTED_WINS) or wins >= CONTENDER_WINS
+        terms = {"no_playoff_win": 0.5 if not r.get("playoff_wins") else 0.0,
+                 "contender": 0.5 if contender else 0.0,
+                 "flops_before": 0.5 * min(r.get("flops_before") or 0, 2),
+                 "shortfall": round(max(0.0, (exp - wins) / 2), 3) if exp is not None else 0.0,
+                 "super_bowl": -1.0 if (r.get("super_bowl_win") is not None
+                                        and season - r["super_bowl_win"] < SUPER_BOWL_YEARS) else 0.0}
+        score = sum(terms.values())
+        p = min(0.6, max(0.0, 0.2 + 0.3 * (score - HOT_SEAT_LINE)))
+        draw = random.Random(f"coachexit:{season}:{r['abbr']}").random()
+        why_not = ("won the Super Bowl" if r.get("champion") else
+                   "tenure under 3 seasons" if tenure < EXIT_MIN_TENURE else
+                   "JR's team" if r.get("user_controlled") else
+                   "also the GM" if r.get("coach_gm") else
+                   "below the line" if score < HOT_SEAT_LINE else None)
+        out[r["team_id"]] = {"coach_id": r["coach_id"], "score": round(score, 3),
+                             "fire": why_not is None and draw < p,
+                             "inputs": {"coach": r.get("coach_name"), "wins": wins, "losses": r.get("losses") or 0,
+                                        "expected_wins": exp, "tenure": tenure, "terms": terms,
+                                        "playoff_wins": r.get("playoff_wins") or 0, "made_playoffs": True,
+                                        "p": round(p, 3), "draw": round(draw, 3), "safe": why_not}}
+    fired = sorted((t for t, v in out.items() if v["fire"]), key=lambda t: -out[t]["score"])
+    for t in fired[max(0, max_fires):]:
+        out[t]["fire"] = False
+        out[t]["inputs"]["capped"] = True
+    return out
+
+
+def playoff_results(cur, season):
+    """{team_id: {wins, out, champion}} for the teams in `season`'s completed playoff games: out = lost a game or
+    won the Super Bowl."""
+    cur.execute("""SELECT game_type, home_team_id, away_team_id, home_score, away_score FROM games
+                   WHERE season = %s AND game_type <> 'REGULAR_SEASON' AND status = 'COMPLETED'""", (season,))
+    res = {}
+    for gt, h, a, hs, as_ in cur.fetchall():
+        if hs is None or as_ is None or hs == as_:
+            continue
+        w, l = (h, a) if hs > as_ else (a, h)
+        res.setdefault(w, {"wins": 0, "out": False, "champion": False})["wins"] += 1
+        res.setdefault(l, {"wins": 0, "out": False, "champion": False})["out"] = True
+        if gt == "SUPER_BOWL":
+            res[w]["out"] = res[w]["champion"] = True
+    return res
+
+
+def flops_before(cur, season, tenures):
+    """{team_id: earlier seasons under the current coach (tenures: {team_id: start_season}) in which the team made the
+    playoffs and won no playoff game}, counting only seasons whose Wild Card round is stored."""
+    cur.execute("SELECT DISTINCT season FROM games WHERE game_type = 'WILD_CARD' AND season < %s", (season,))
+    out = {t: 0 for t in tenures}
+    for s in (r[0] for r in cur.fetchall()):
+        made, res = playoff_teams(cur, s), playoff_results(cur, s)
+        for t, start in tenures.items():
+            if start <= s and t in made and not res.get(t, {}).get("wins"):
+                out[t] += 1
     return out
 
 
@@ -125,47 +203,64 @@ def read_rows(cur, season):
     return rows
 
 
-def decided(cur, season):
-    cur.execute("SELECT count(*) FROM coach_hot_seat WHERE season = %s", (season,))
+def decided(cur, season, phase="BLACK_MONDAY"):
+    cur.execute("SELECT count(*) FROM coach_hot_seat WHERE season = %s AND phase = %s", (season, phase))
     return cur.fetchone()[0] > 0
 
 
-def run(cur, season, log=print):
-    """Decide `season`'s hot seat inside the caller's transaction, once. Returns a report:
-    {season, status: 'decided' | 'already decided' | 'not ready', fired: [{team, coach, score}]}."""
-    rep = {"season": season, "fired": []}
-    if decided(cur, season):
-        rep["status"] = "already decided"
-        rep["fired"] = fired(cur, season)
-        return rep
-    if not ready(cur, season):
-        rep["status"] = "not ready"
-        return rep
-    rows = read_rows(cur, season)
+def _store(cur, season, phase, rows, decisions, rep, log):
     by_team = {r["team_id"]: r for r in rows}
-    for tid, h in sorted(hot_seat(rows, season).items(), key=lambda kv: -kv[1]["score"]):
-        cur.execute("""INSERT INTO coach_hot_seat (season, team_id, coach_id, score, fired, inputs)
-                       VALUES (%s, %s, %s, %s, %s, %s)""",
-                    (season, tid, h["coach_id"], h["score"], h["fire"], json.dumps(h["inputs"])))
+    for tid, h in sorted(decisions.items(), key=lambda kv: -kv[1]["score"]):
+        cur.execute("""INSERT INTO coach_hot_seat (season, team_id, coach_id, score, fired, inputs, phase)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (season, tid, h["coach_id"], h["score"], h["fire"], json.dumps(h["inputs"]), phase))
         if not h["fire"]:
             continue
-        # He coached this season; the new coach's tenure starts next season (offseason manifest).
+        # He coached this season; the hiring cycle names his successor, whose tenure starts next season.
         cur.execute("""UPDATE coach_tenures SET end_season = %s
                        WHERE coach_id = %s AND team_id = %s AND (end_season IS NULL OR end_season > %s)""",
                     (season, h["coach_id"], tid, season))
         r = by_team[tid]
-        rep["fired"].append({"team": r["abbr"], "coach": r["coach_name"], "score": h["score"]})
-        log(f"  coach hot seat: {r['abbr']} fires {r['coach_name']} (score {h['score']})")
-    rep["status"] = "decided"
+        rep["fired"].append({"team": r["abbr"], "coach": r["coach_name"], "score": h["score"], "phase": phase})
+        log(f"  coach hot seat ({phase}): {r['abbr']} fires {r['coach_name']} (score {h['score']})")
+    rep["decided"] += [by_team[t]["team_id"] for t in decisions]
+
+
+def run(cur, season, log=print):
+    """Decide what is ready of `season`'s hot seat inside the caller's transaction: Black Monday once, then each
+    playoff team once it is out. Returns {season, status, fired: [{team, coach, score, phase}] (new this run),
+    decided: [team ids decided this run]}; status 'not ready' before Black Monday."""
+    rep = {"season": season, "fired": [], "decided": []}
+    if not decided(cur, season):
+        if not ready(cur, season):
+            rep["status"] = "not ready"
+            return rep
+        rows = [r for r in read_rows(cur, season) if not r["made_playoffs"]]
+        _store(cur, season, "BLACK_MONDAY", rows, hot_seat(rows, season), rep, log)
+    cur.execute("SELECT team_id FROM coach_hot_seat WHERE season = %s", (season,))
+    done = {r[0] for r in cur.fetchall()}
+    res = playoff_results(cur, season)
+    rows = [r for r in read_rows(cur, season) if r["made_playoffs"] and r["team_id"] not in done
+            and res.get(r["team_id"], {}).get("out")]
+    if rows:
+        flops = flops_before(cur, season, {r["team_id"]: r["start_season"] for r in rows})
+        for r in rows:
+            r.update(playoff_wins=res[r["team_id"]]["wins"], champion=res[r["team_id"]]["champion"],
+                     flops_before=flops[r["team_id"]])
+        cur.execute("SELECT count(*) FROM coach_hot_seat WHERE season = %s AND phase = 'PLAYOFF_EXIT' AND fired",
+                    (season,))
+        left = MAX_EXIT_FIRES - cur.fetchone()[0]
+        _store(cur, season, "PLAYOFF_EXIT", rows, contender_seat(rows, season, left), rep, log)
+    rep["status"] = "decided" if rep["decided"] else "up to date"
     return rep
 
 
 def fired(cur, season):
-    """[{team, coach, score}] for the coaches the hot seat fired after `season`."""
-    cur.execute("""SELECT t.abbreviation, c.coach_name, h.score FROM coach_hot_seat h
+    """[{team, coach, score, phase}] for the coaches the hot seat fired after `season`."""
+    cur.execute("""SELECT t.abbreviation, c.coach_name, h.score, h.phase FROM coach_hot_seat h
                    JOIN teams t ON t.id = h.team_id JOIN coaches c ON c.id = h.coach_id
-                   WHERE h.season = %s AND h.fired ORDER BY h.score DESC""", (season,))
-    return [{"team": a, "coach": c, "score": float(s)} for a, c, s in cur.fetchall()]
+                   WHERE h.season = %s AND h.fired ORDER BY h.phase, h.score DESC""", (season,))
+    return [{"team": a, "coach": c, "score": float(s), "phase": p} for a, c, s, p in cur.fetchall()]
 
 
 def installed(cur):
@@ -186,7 +281,14 @@ def main(argv=None):
         season = a.season or cur.fetchone()[0]
         if a.dry_run:
             rows = read_rows(cur, season)
-            for tid, h in sorted(hot_seat(rows, season).items(), key=lambda kv: -kv[1]["score"]):
+            res = playoff_results(cur, season)
+            flops = flops_before(cur, season, {r["team_id"]: r["start_season"] for r in rows})
+            for r in rows:
+                r.update(playoff_wins=res.get(r["team_id"], {}).get("wins", 0),
+                         champion=res.get(r["team_id"], {}).get("champion", False), flops_before=flops[r["team_id"]])
+            out = hot_seat([r for r in rows if not r["made_playoffs"]], season)
+            out.update(contender_seat([r for r in rows if r["made_playoffs"]], season))
+            for tid, h in sorted(out.items(), key=lambda kv: -kv[1]["score"]):
                 i = h["inputs"]
                 print(f"{i['coach']:<24} {h['score']:>6.2f}  p {i['p']:.2f} draw {i['draw']:.2f}  "
                       f"{'FIRE' if h['fire'] else i['safe'] or ('capped' if i.get('capped') else 'survives draw')}")
@@ -196,7 +298,7 @@ def main(argv=None):
             conn.rollback()
             return
         rep = run(cur, season)
-        print(json.dumps(rep, indent=1))
+        print(json.dumps(rep, indent=1, default=str))
         conn.commit()
 
 

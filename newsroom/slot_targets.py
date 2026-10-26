@@ -56,6 +56,8 @@ class LeagueSnapshot:
     losing_streaks: dict = field(default_factory=dict)
     # team_id -> head coach the coach hot seat fired after this season (engines/coach_hot_seat.py; Black Monday)
     coach_firings: dict = field(default_factory=dict)
+    # team_id -> ["OC Name", ...]: coordinators fired on Black Monday (engines/coaching_carousel.py)
+    coordinator_firings: dict = field(default_factory=dict)
 
 
 def _popularity(snap: LeagueSnapshot, team_id: int) -> float:
@@ -454,8 +456,11 @@ def _hot_seat_targets(snap: LeagueSnapshot, count: int, used: set) -> list:
             note += " Other eliminated teams fired today or below " + f"{HOT_SEAT_WINS_ABOVE_EXPECTED:+.1f}: " + "; ".join(
                 f"{_team_label(snap, t)}, {shortfall(t)}"
                 + (f" (fired {snap.coach_firings[t]} today)" if t in snap.coach_firings else "") for t in others) + "."
-        note += (" Report the firings named here as news; no other head coach was fired." if snap.coach_firings
-                 else " No head coach was fired today.")
+        if snap.coordinator_firings:
+            note += " Coordinators fired today: " + "; ".join(
+                f"{_team_label(snap, t)}: {', '.join(c)}" for t, c in snap.coordinator_firings.items()) + "."
+        note += (" Report the firings named here as news; no other head coach or coordinator was fired."
+                 if snap.coach_firings or snap.coordinator_firings else " No head coach was fired today.")
         targets.append(_team_target(snap, "HOT_SEAT", team_id, note))
     return targets
 
@@ -652,7 +657,16 @@ def load_league_snapshot(db_conn_info: str, season: int, week: int) -> LeagueSna
             if cur.fetchone()[0]:
                 cur.execute("""
                     SELECT h.team_id, c.coach_name FROM coach_hot_seat h JOIN coaches c ON c.id = h.coach_id
-                    WHERE h.season = %s AND h.fired ORDER BY h.score DESC;
+                    WHERE h.season = %s AND h.fired AND h.phase = 'BLACK_MONDAY' ORDER BY h.score DESC;
                 """, (season,))
                 snap.coach_firings = dict(cur.fetchall())
+            cur.execute("SELECT to_regclass('coordinator_hot_seat') IS NOT NULL")
+            if cur.fetchone()[0]:
+                cur.execute("""
+                    SELECT h.team_id, h.role || ' ' || c.coordinator_name FROM coordinator_hot_seat h
+                    JOIN coordinators c ON c.id = h.coordinator_id
+                    WHERE h.season = %s AND h.fired AND h.phase = 'BLACK_MONDAY' ORDER BY h.team_id, h.role;
+                """, (season,))
+                for tid, who in cur.fetchall():
+                    snap.coordinator_firings.setdefault(tid, []).append(who)
     return snap

@@ -439,33 +439,44 @@ def step_scouting(season):
 
 
 def step_coach_hot_seat(season):
-    """engines/coach_hot_seat.py: Black Monday. Once the regular season is complete and the Wild Card matchups are
-    loaded (the Week 18 run), Mu fires up to MAX_FIRES CPU-run teams' head coaches, before the Week 19 articles; JR
-    mirrors each firing in Madden. Every other run finds it not ready or already decided. Skipped without the
-    migration; a failure only logs a warning. Returns the report."""
+    """engines/coaching_carousel.py (Step 7d): whatever of the coaching carousel is ready, once each: Black Monday
+    head-coach firings (the Week 18 run, before the Week 19 articles), a playoff team's coach once it is out, the
+    coordinator review of every team whose coach kept his job, and the hiring cycle once the Super Bowl is complete.
+    Runs for league_state's season and the one before it (the league may already have rolled over). JR mirrors
+    head-coach changes in Madden: one notice lists the coaches to fire, another the openings to fill (hire any coach;
+    Mu's hire stands for him). Skipped without the migrations; a failure only logs a warning."""
     try:
         import psycopg
         from pipeline.load_capture import DSN
-        from engines import coach_hot_seat as chs
+        from engines import coaching_carousel as cc
+        reports = []
         with psycopg.connect(DSN) as conn:
             cur = conn.cursor()
-            if not chs.installed(cur):
-                log("  Coach hot seat skipped: the coach hot seat migration isn't applied")
+            if not cc.installed(cur):
+                log("  Coaching carousel skipped: the coach hot seat / coaching carousel migrations aren't applied")
                 return None
-            rep = chs.run(cur, season, log=log)
+            for s in (season - 1, season):
+                reports.append(cc.run(cur, s, log=log))
             conn.commit()
-        if rep["status"] != "decided":
-            log(f"  Coach hot seat {season}: {rep['status']}")
-            return rep
-        log(f"  Coach hot seat {season}: {len(rep['fired'])} head coach(es) fired")
-        if rep["fired"]:
-            who = "; ".join(f"{f['team']}: {f['coach']}" for f in rep["fired"])
-            notify(f"Black Monday: fire these head coaches in Madden: {who}. Record each replacement in the offseason "
-                   "manifest's coaching_moves.", title="Mu: coaches fired", tags=("door",))
-        return rep
+        for rep in reports:
+            s, hs = rep["season"], rep["hot_seat"]
+            hires = rep["hires"]
+            log(f"  Coaching carousel {s}: hot seat {hs['status']}, {len(hs['fired'])} head coach(es) and "
+                f"{len(rep['coordinators_fired'])} coordinator(s) fired"
+                + (f", {len(hires['head_coaches'])} head coach(es) hired" if hires else ""))
+            if hs["fired"]:
+                who = "; ".join(f"{f['team']}: {f['coach']}" for f in hs["fired"])
+                notify(f"Fire these head coaches in Madden: {who}. Mu names their replacements after the Super Bowl.",
+                       title="Mu: coaches fired", tags=("door",))
+            if hires and hires["head_coaches"]:
+                who = "; ".join(f"{h['team']}: {h['coach']} ({h['slant'].lower()}, {h['from']})"
+                                for h in hires["head_coaches"])
+                notify(f"Hire a head coach in Madden for each opening (any coach; Mu's hire stands for him): {who}.",
+                       title="Mu: coaches hired", tags=("handshake",))
+        return reports
     except Exception as e:
         traceback.print_exc()
-        log(f"  [WARN] Coach hot seat skipped: {e!r}")
+        log(f"  [WARN] Coaching carousel skipped: {e!r}")
         return None
 
 
@@ -915,7 +926,8 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             step_gm(season)
             log("Step 7c: scouting")
             step_scouting(season)
-            log("Step 7d: coach hot seat")
+        if mode in ("weekly", "playoff", "postgame"):
+            log("Step 7d: coaching carousel")
             step_coach_hot_seat(season)
         published = None
         if articles:

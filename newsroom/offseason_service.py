@@ -272,15 +272,75 @@ def coach_hot_seat_firings(conn, season: int) -> Optional[List[Dict[str, Any]]]:
         return [dict(r) for r in cur.fetchall()]
 
 
-def hot_seat_warnings(firings: List[Dict[str, Any]], moves: List[Dict[str, Any]]) -> List[str]:
-    """Pure. Fired teams with no coaching move, and head-coach hires at teams the hot seat didn't fire."""
-    fired = {f["team"]: f["coach"] for f in firings}
-    hired = {m["team"] for m in moves}             # every coaching move installs a new head coach
-    out = [f"{t}: the hot seat fired {c}; add the replacement you hired in Madden to coaching_moves"
-           for t, c in sorted(fired.items()) if t not in hired]
-    out += [f"{t}: a head-coach hire the hot seat didn't fire for; did Madden fire this coach on its own?"
-            for t in sorted(hired - set(fired))]
+def jr_team_abbrs(conn) -> set:
+    with conn.cursor() as cur:
+        cur.execute("""SELECT t.abbreviation AS abbr FROM gm_team_settings s JOIN teams t ON t.id = s.team_id
+                       WHERE s.user_controlled""")
+        return {r["abbr"] for r in cur.fetchall()}
+
+
+def mu_runs_carousel(conn, season: int) -> bool:
+    """True when Mu's coaching carousel (engines/coaching_carousel.py) decided `season`: then Mu owns every CPU
+    team's head-coach and coordinator moves, and the manifest's coaching_moves apply to JR's teams only."""
+    try:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute("SELECT EXISTS (SELECT 1 FROM coach_hot_seat WHERE season = %s) AS mu", (season,))
+            return bool(cur.fetchone()["mu"])
+    except Exception:   # no coach_hot_seat table yet
+        return False
+
+
+def hot_seat_warnings(firings: List[Dict[str, Any]], moves: List[Dict[str, Any]], hired: bool,
+                      jr_teams: set) -> List[str]:
+    """Pure. For a season Mu's carousel decided: fired coaches still waiting on the hiring cycle, and manifest coaching
+    moves at CPU teams (ignored: Mu makes those)."""
+    out = [] if hired else [f"{f['team']}: the hot seat fired {f['coach']}; Mu names his replacement once the Super "
+                            "Bowl is loaded" for f in firings]
+    out += [f"{m['team']}: Mu runs the coaching carousel for CPU teams; this coaching move is ignored"
+            for m in moves if m["team"] not in jr_teams]
     return out
+
+
+def mu_coaching_packet(cur, season: int) -> Dict[str, Any]:
+    """The Coaching Carousel facts from Mu's carousel: each head-coach hire with the coach he replaces (record, how
+    he was fired), the coordinators fired, and every other staff move (dict_row cursor)."""
+    from engines.coach_profile import season_record
+    cur.execute("""SELECT season, week, home_team_id, away_team_id, home_score, away_score, game_type
+                   FROM games WHERE completed_at IS NOT NULL AND season = %s""", (season,))
+    games_list = [dict(r) for r in cur.fetchall()]
+    cur.execute("""SELECT h.team_id, c.coach_name, h.phase FROM coach_hot_seat h JOIN coaches c ON c.id = h.coach_id
+                   WHERE h.season = %s AND h.fired""", (season,))
+    fired = {r["team_id"]: r for r in cur.fetchall()}
+    cur.execute("""SELECT m.*, t.abbreviation AS team, t.city || ' ' || t.name AS team_name, f.abbreviation AS from_team,
+                          c.offensive_scheme, c.defensive_scheme
+                   FROM staff_moves m JOIN teams t ON t.id = m.team_id LEFT JOIN teams f ON f.id = m.from_team_id
+                   LEFT JOIN coaches c ON c.id = m.coach_id WHERE m.season = %s ORDER BY m.id""", (season,))
+    moves = [dict(r) for r in cur.fetchall()]
+    hires = []
+    for m in (m for m in moves if m["role"] == "HC" and m["action"] == "HIRED"):
+        out = fired.get(m["team_id"])
+        rec = season_record(games_list, m["team_id"], season) if out else {}
+        hires.append({
+            "team": m["team"], "team_name": m["team_name"],
+            "outgoing_coach": {"coach_name": out["coach_name"] if out else None,
+                               "fired": "on Black Monday" if out and out["phase"] == "BLACK_MONDAY" else
+                                        "after his team's playoff exit" if out else None,
+                               "final_season_record": rec.get("regular_season"),
+                               "final_playoff_record": rec.get("playoffs")},
+            "incoming_coach": m["person"], "incoming_slant": m["slant"],
+            "hire_type": {"POACHED": "poached coordinator", "RETREAD": "former head coach",
+                          "OUTSIDE": "outside hire"}.get(m["source"], m["source"]),
+            "origin": (f"{m['from_role']} with {m['from_team']}" if m["from_team"] else m["notes"]),
+            "scheme_inheritance": {"offensive_scheme": m["offensive_scheme"], "defensive_scheme": m["defensive_scheme"]},
+            "notes": m["notes"]})
+    cur.execute("""SELECT t.abbreviation AS team, h.role, c.coordinator_name AS coordinator, h.phase
+                   FROM coordinator_hot_seat h JOIN teams t ON t.id = h.team_id
+                   JOIN coordinators c ON c.id = h.coordinator_id WHERE h.season = %s AND h.fired""", (season,))
+    coord_fired = [dict(r) for r in cur.fetchall()]
+    staff = [{"team": m["team"], "role": m["role"], "action": m["action"], "person": m["person"],
+              "source": m["source"], "from": f"{m['from_role']} with {m['from_team']}" if m["from_team"] else None,
+              "notes": m["notes"]} for m in moves if m["role"] != "HC"]
+    return {"head_coach_hires": hires, "coordinators_fired": coord_fired, "coordinator_moves": staff}
 
 
 def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: Optional[str] = None) -> Dict[str, Any]:
@@ -301,6 +361,7 @@ def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: 
         "resolved_teams": [],
         "coaching_moves": [],
         "hot_seat_firings": [],
+        "mu_coaching_moves": None,
         "signings": [],
         "signing_candidates": [],
         "draft_summary": {},
@@ -338,16 +399,18 @@ def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: 
                     "notes": m.get("notes"),
                 })
 
-            # 1b. Reconcile with the coach hot seat: every team Mu fired a coach for needs its Madden replacement, and a
-            # head-coach change Mu didn't make means Madden fired someone on its own.
-            try:
-                with conn.transaction():
-                    firings = coach_hot_seat_firings(conn, manifest["season"])
-            except Exception:   # no coach_hot_seat table yet
-                firings = None
-            if firings is not None:
+            # 1b. Mu's coaching carousel: from the season it decided, Mu fires and hires for every CPU team (JR mirrors
+            # head coaches in Madden) and the manifest's coaching_moves apply to JR's teams only.
+            if mu_runs_carousel(conn, manifest["season"]):
+                firings = coach_hot_seat_firings(conn, manifest["season"]) or []
+                with conn.cursor() as cur:
+                    cur.execute("SELECT count(*) AS n FROM staff_moves WHERE season = %s", (manifest["season"],))
+                    hired = cur.fetchone()["n"] > 0
+                    packet = mu_coaching_packet(cur, manifest["season"]) if hired else None
                 preview["hot_seat_firings"] = firings
-                preview["warnings"].extend(hot_seat_warnings(firings, preview["coaching_moves"]))
+                preview["mu_coaching_moves"] = packet
+                preview["warnings"].extend(hot_seat_warnings(firings, preview["coaching_moves"], hired,
+                                                             jr_team_abbrs(conn)))
 
             # 2. Preview Signings with Qualitative Conversion & All-Pro Check
             for s in manifest.get("signings", []):
@@ -478,8 +541,13 @@ def apply_coaching_moves(
     def _execute_moves(c):
         with c.cursor() as cur:
             touched_team_ids = set()
+            moves_here = moves
+            if mu_runs_carousel(c, concluded_season):
+                jr = jr_team_abbrs(c)
+                moves_here = [m for m in moves if resolve_team(c, m["team"])["abbreviation"] in jr]
+                results["skipped_moves"] = [m["team"] for m in moves if m not in moves_here]
 
-            for move in moves:
+            for move in moves_here:
                 team_info = resolve_team(c, move["team"])
                 team_id = team_info["id"]
                 touched_team_ids.add(team_id)
@@ -799,7 +867,12 @@ def build_event_facts_packet(
 
             elif event_key in ("coaching", "coaching_carousel", "coaching_carousel_audit"):
                 coaching_packet = []
-                for move in manifest_data.get("coaching_moves", []):
+                mu = mu_runs_carousel(active_conn, season)
+                manifest_moves = manifest_data.get("coaching_moves", [])
+                if mu:
+                    jr = jr_team_abbrs(active_conn)
+                    manifest_moves = [m for m in manifest_moves if resolve_team(active_conn, m["team"])["abbreviation"] in jr]
+                for move in manifest_moves:
                     t_info = resolve_team(active_conn, move["team"])
                     team_id = t_info["id"]
                     out_name = move.get("outgoing_coach")
@@ -847,11 +920,15 @@ def build_event_facts_packet(
                         "notes": move.get("notes"),
                     })
 
+                mu_packet = mu_coaching_packet(cur, season) if mu else {}
+                coaching_packet = mu_packet.get("head_coach_hires", []) + coaching_packet
                 return {
                     "event_type": "coaching",
                     "season": season,
                     "publication_week": 24,
                     "coaching_moves": coaching_packet,
+                    "coordinators_fired": mu_packet.get("coordinators_fired", []),
+                    "coordinator_moves": mu_packet.get("coordinator_moves", []),
                     "anti_leakage_boundary": "Concluded season and submitted coaching moves only. Strictly no offseason free-agency signings, offseason trades or draft selections. In-season moves are season history.",
                 }
 

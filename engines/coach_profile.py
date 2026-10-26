@@ -252,13 +252,19 @@ def fetch_team_staff(cur, team_id: int, season: int) -> dict | None:
 
 
 def league_staff_directory(cur, season: int) -> list[str]:
-    """One line per team naming its head coach and coordinators in `season`, for the writer prompts. A head coach the
-    coach hot seat fired after `season` (engines/coach_hot_seat.py, Black Monday) is marked fired."""
-    fired = set()
-    cur.execute("SELECT to_regclass('coach_hot_seat') IS NOT NULL")
-    if cur.fetchone()[0]:
-        cur.execute("SELECT team_id, coach_id FROM coach_hot_seat WHERE season = %s AND fired", (season,))
-        fired = set(cur.fetchall())
+    """One line per team naming its head coach and coordinators in `season`, for the writer prompts. A head coach or
+    coordinator fired after `season` (engines/coaching_carousel.py: Black Monday or a playoff exit) is marked fired;
+    the hiring cycle's moves start next season, so they never show here."""
+    fired, fired_coord = {}, set()
+    cur.execute("SELECT to_regclass('coach_hot_seat') IS NOT NULL, to_regclass('coordinator_hot_seat') IS NOT NULL")
+    has_hc, has_coord = cur.fetchone()
+    if has_hc:
+        cur.execute("SELECT team_id, coach_id, phase FROM coach_hot_seat WHERE season = %s AND fired", (season,))
+        fired = {(t, c): p for t, c, p in cur.fetchall()}
+    if has_coord:
+        cur.execute("""SELECT h.team_id, h.role, c.coordinator_name FROM coordinator_hot_seat h
+                       JOIN coordinators c ON c.id = h.coordinator_id WHERE h.season = %s AND h.fired""", (season,))
+        fired_coord = set(cur.fetchall())
     cur.execute("SELECT id, city, name, abbreviation FROM teams ORDER BY city, name")
     lines = []
     for team_id, city, name, abbr in cur.fetchall():
@@ -266,13 +272,16 @@ def league_staff_directory(cur, season: int) -> list[str]:
         if not staff:
             continue
         hc = staff["head_coach"]
+        phase = fired.get((team_id, hc.get("id")))
         parts = [f"HC {hc['coach_name']}"
-                 + (f" (fired on Black Monday after the {season} season)" if (team_id, hc.get("id")) in fired
-                    else "")]
+                 + (f" (fired on Black Monday after the {season} season)" if phase == "BLACK_MONDAY" else
+                    f" (fired after the {season} playoffs)" if phase else "")]
         for role, key in (("OC", "offensive_coordinator"), ("DC", "defensive_coordinator")):
             coord = staff.get(key)
             if coord:
-                parts.append(f"{role} {coord['name'] or 'unnamed'}")
+                parts.append(f"{role} {coord['name'] or 'unnamed'}"
+                             + (f" (fired after the {season} season)" if (team_id, role, coord["name"]) in fired_coord
+                                else ""))
         lines.append(f"{city} {name} ({abbr}): " + "; ".join(parts))
     return lines
 
