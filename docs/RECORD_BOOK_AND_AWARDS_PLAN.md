@@ -46,7 +46,7 @@ Defaults are marked. Items marked **JR** need your call before the phase that us
 | D2 | Public or operator-only | **Public.** Records and awards are facts the newsroom already publishes; nothing here is hidden scouting or GM-queue data. |
 | D3 | Current-season marks | Shown with an "In progress · through Week N" tag while `league_state.current_season` has unplayed regular-season games. After Week 18 they read as final. |
 | D4 | Mu marks vs. NFL history | A "Set in this league" badge on any entry with `source IN ('BOOK','LEAGUE')`. A **Mu Era** filter (2026+) on every list, defaulting to *All-time*. |
-| D5 | All-Pro before 2035 (**JR**) | Show 2035 only, with a note. *Option:* backfill 2026–2034 from the game's All-Pro history. `AP All Pro.pdf` in the repo root turned out to be the 2035 team (already stored), so there is no source for 2026–2034. Generated First and Second Teams from the history backfill's season lines are an option there (`docs/HISTORY_BACKFILL_PLAN.md` §5), with JR's go-ahead (phase 5). |
+| D5 | All-Pro before 2035 (**JR**) | Show 2035 only, with a note. *Option:* backfill 2026–2034 from the game's All-Pro history. `AP All Pro.pdf` (since deleted) turned out to be the 2035 team (already stored), so there is no source for 2026–2034. Generated First and Second Teams from the history backfill's season lines are an option there (`docs/HISTORY_BACKFILL_PLAN.md` §5), with JR's go-ahead (phase 5). |
 | D6 | Coach history | COTY winners and Super Bowl-winning coaches only (from `awards` and `coach_tenures`). No coach career leaderboard until `coach_seasons` covers more seasons. |
 | D7 | Records on the Team hub | A small **Records** panel inside the existing Main or Stats tab, not a sixth tab. It links to `#records?team=ABBR`. |
 | D8 | Writer tool | Leave `get_record_book` alone. The new API shares the engine helpers, not the tool. |
@@ -133,7 +133,7 @@ Every endpoint is read-only and public. Numbers come back raw (the frontend form
 | **2. Awards & Champions** | `/api/awards`, `/api/awards/all-pro`; `#awards` with champions strip, award table, leaders, All-Pro 2035. | Ten champions with scores, SB MVPs and coaches; every award row present (unlinked names shown plain); All-Pro shows 62 selections in slot order and earlier seasons show the D5 note. |
 | **3. Hooks** | `awards` on `/api/player/{id}` and the Honors row; Team hub Records panel. | Crawford's page shows 2× MVP, 2035 First Team All-Pro (QB) and 2035 SB MVP; the Panthers hub lists their Mu-era records and titles. |
 | **4. Record Watch** | `/api/records/watch` and the panel on `#records` (in season only). | During a regular season it lists each leader's percentage of the record and 17-game pace; it disappears after Week 18. |
-| **5. All-Pro backfill (optional, JR)** | No source yet: `AP All Pro.pdf` is the site's own 2035 All-Pro article (#article-224), whose 62 picks match the stored 2035 rows. Needs a 2026–2034 source JR names, or generated teams from the history backfill (D5); either is stored through the existing All-Pro storage path. | JR approves the source and the parsed rows before anything is written. |
+| **5. All-Pro backfill (optional, JR)** | No source yet: `AP All Pro.pdf` (since deleted) was the site's own 2035 All-Pro article (#article-224), whose 62 picks match the stored 2035 rows. Needs a 2026–2034 source JR names, or generated teams from the history backfill (D5); either is stored through the existing All-Pro storage path. | JR approves the source and the parsed rows before anything is written. |
 
 ---
 
