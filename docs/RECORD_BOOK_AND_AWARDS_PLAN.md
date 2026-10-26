@@ -1,6 +1,6 @@
 # Record Book & Awards Page: Implementation Plan
 
-**Status (2026-10-26):** Phases 1 (Record Book, `#records`), 2 (Awards & Champions, `#awards`) 3 (player Honors row, Team hub Records & Titles panel on the Stats tab) and 4 (Record Watch on `#records`) built; phase 5 not started. Nothing here changes the database schema. Phase 1 adds a Rookie scope chip (the `rookie_*` categories) and ranks categories without an NFL list from their franchise records; phase 2 applies the `#awards` team and award filters on the page rather than as `/api/awards` parameters (PROJECT_SPEC §4.7); phase 4's watch rows list every tied leader (`leaders`) and round the 17-game pace to a whole number, with no pace for longest field goal.
+**Status (2026-10-26):** Phases 1 (Record Book, `#records`), 2 (Awards & Champions, `#awards`) 3 (player Honors row, Team hub Records & Titles panel on the Stats tab) and 4 (Record Watch on `#records`) built; phase 5 has no source yet (D5). Nothing here changes the database schema. Phase 1 adds a Rookie scope chip (the `rookie_*` categories) and ranks categories without an NFL list from their franchise records; phase 2 applies the `#awards` team and award filters on the page rather than as `/api/awards` parameters (PROJECT_SPEC §4.7); phase 4's watch rows list every tied leader (`leaders`) and round the 17-game pace to a whole number, with no pace for longest field goal.
 **Scope:** A public **Record Book** (`#records`) and **Awards & Champions** (`#awards`) page, plus two small hooks: award badges on player pages and a Records panel on the Team hub.
 **Reference specs:** `PROJECT_SPEC.md` §2.9 (Record Book), §2.11 (Coach of the Year), §3.3a (coaches), §7.6b–§7.6d (stored All-Pro, award winners, Super Bowl MVP).
 
@@ -133,7 +133,7 @@ Every endpoint is read-only and public. Numbers come back raw (the frontend form
 | **2. Awards & Champions** | `/api/awards`, `/api/awards/all-pro`; `#awards` with champions strip, award table, leaders, All-Pro 2035. | Ten champions with scores, SB MVPs and coaches; every award row present (unlinked names shown plain); All-Pro shows 62 selections in slot order and earlier seasons show the D5 note. |
 | **3. Hooks** | `awards` on `/api/player/{id}` and the Honors row; Team hub Records panel. | Crawford's page shows 2× MVP, 2035 First Team All-Pro (QB) and 2035 SB MVP; the Panthers hub lists their Mu-era records and titles. |
 | **4. Record Watch** | `/api/records/watch` and the panel on `#records` (in season only). | During a regular season it lists each leader's percentage of the record and 17-game pace; it disappears after Week 18. |
-| **5. All-Pro backfill (optional, JR)** | Read `AP All Pro.pdf` (or another source JR names), store 2026–2034 teams through the existing All-Pro storage path. | JR approves the source and the parsed rows before anything is written. |
+| **5. All-Pro backfill (optional, JR)** | No source yet: `AP All Pro.pdf` is the site's own 2035 All-Pro article (#article-224), whose 62 picks match the stored 2035 rows. Needs a 2026–2034 source JR names, or generated teams from the history backfill (D5); either is stored through the existing All-Pro storage path. | JR approves the source and the parsed rows before anything is written. |
 
 ---
 
