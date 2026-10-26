@@ -11,8 +11,8 @@ Facts (hard; load_facts, check_facts):
   Bowl W-L. Every team had one head coach for 2026-2034 except Carolina (Canales 2026-2033, Whitfield 2034). A coach
   with no 2034 snapshot (Canales) gets the league's remainder (every season is 272-272 and 13 playoff games), which is
   exact: Carolina 2026-2030 is forced to 18-67 with no playoff games. Bowles (TB) is adjusted (BOWLES): Madden started
-  him one regular-season loss and one winning season away from his stored real row (his difference is 82-72, 154
-  games; 82 wins with one winning season is impossible: 8 x 8 + 17 = 81). The AFC's coach differences add up to 64
+  him one regular-season loss above his stored real row (his difference is 82-72, 154 games) and with no winning
+  seasons (a 2025 save lists none, so his 5 by 2034 all come from 2026-2034, not 5 - 4 = 1). The AFC's coach differences add up to 64
   playoff trips, one more than 7 x 9: one AFC coach with a real pre-2026 record started in Madden one playoff loss
   above his stored row. The data can't say who, so the solver picks him (offset) and the report names him; pin him
   with "playoff_loss_offset": ["PIT"] in pins.json.
@@ -72,8 +72,10 @@ WC_PAIRS = ((2, 7), (3, 6), (4, 5))
 ROUND_FLAGS = ("WC", "DIV", "CONF", "CC")
 LOST_IN = {"WC": "WILD_CARD", "DIV": "DIVISIONAL", "CONF": "CONFERENCE"}
 
-# Madden started Todd Bowles (coach 38) away from his stored real 2025 row (PROJECT_SPEC §3.3a; plan §1, B8).
-BOWLES = {38: {"losses": -1, "winning_seasons": 1}}
+# Madden started Todd Bowles (coach 38) away from his stored real 2025 row (PROJECT_SPEC §3.3a; plan §1, B8): one
+# more loss, and no winning seasons (JR checked a 2025 save, 2026-10-26: Madden lists none before 2026, so all five
+# of his 2034 count are 2026-2034; his stored row's 4 is real-life history).
+BOWLES = {38: {"losses": -1, "winning_seasons": 4}}
 
 # Panthers Full History.pdf and team_seasons (plan §1: numbers it states are hard).
 CANON = {
