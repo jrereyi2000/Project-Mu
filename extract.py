@@ -295,7 +295,11 @@ def prefetch(paths):
 def read_table(path):
     if path not in _cache:
         _cache[path] = _read_table_remote(path)
-    return _cache[path]
+    t = _cache[path]
+    # Gemini pads some cells: the same Rushing row came back as " -3" on one page and "-3" on the
+    # next (2026-10-25), so the overlap merge kept both and the load stopped on the duplicates
+    t["rows"] = [[c.strip() for c in r] for r in t["rows"]]
+    return t
 
 
 def merge(paths, label, key_cols=None):
