@@ -13,7 +13,7 @@
 | D1 | **Retirements are scanned in the offseason.** A player on last season's rosters who is not on this season's and **is not recorded as retiring** is a **free agent**. There is no age- or rating-based guessing. |
 | D2 | **Coach records start in 2035.** 2035 is the first season with every game on record, and every 2035 head coach has a career snapshot through 2034. |
 | D3 | **Napper stays one-season redraft.** League history is kept, and a finished league can be **restarted for the new season** with the same name, managers and settings. |
-| D4 | **Capture forward, don't rebuild the past** (memory: design for real weekly data). Nothing here reconstructs 2026–2034 beyond what's already stored. |
+| D4 | **Capture forward here; 2026–2034 is rebuilt separately.** (JR, revised 2026-10-26.) Nothing in this plan reconstructs 2026–2034. `docs/HISTORY_BACKFILL_PLAN.md` generates it at season level, every row marked `source = 'SYNTH'` and fit to what's already stored, into the same tables (`team_season_results`, `league_seasons`, `coach_season_lines`, `player_seasons`, `season_stats`). |
 
 Defaults added by this plan (change any before its phase):
 
@@ -64,7 +64,7 @@ New tables (`db/migrations/<date>_season_archive.sql`, folded into `init_db.sql`
 Engine `engines/season_archive.py`:
 - `standings(games)`, `seeds(playoff_games, standings)` and `division_places(...)` are pure. Seeds come from the bracket (D5): Wild Card pairs 2v7, 3v6 and 4v5, and the #1 seed is the conference team in the Divisional round with no Wild Card game.
 - `archive(cur, season)` writes `league_seasons` and `team_season_results` once the season's Super Bowl is `COMPLETED`. It is idempotent: a second run replaces the season's rows with the same values. `python3 -m engines.season_archive [--season S] [--dry-run]`.
-- **Run:** a new optional step in `pipeline/weekly_capture.py` after the Super Bowl postgame load (`--mode postgame`), before the articles. A failure only warns, like the GM step. Backfill: run once for 2035 (complete). 2034 and earlier are not archived (D4).
+- **Run:** a new optional step in `pipeline/weekly_capture.py` after the Super Bowl postgame load (`--mode postgame`), before the articles. A failure only warns, like the GM step. Backfill: run once for 2035 (complete). 2034 and earlier are not archived from `games` (D4); the history backfill writes them as `SYNTH` rows.
 
 ### 3.2 Head-coach records from 2035 (phase 1, D2, D6)
 
@@ -116,7 +116,7 @@ Frontend (`src/components/napper/`): a **League History** panel in the LEAGUE ta
 
 ### 3.5 Career layer (phase 4)
 
-- A view **`player_career_mu`**: per player, Mu-era (2035+) totals over `season_stats` and the defense and kicking `season_stat_lines`, plus seasons played and teams. Labelled "since 2035" everywhere; pre-Mu careers are not recorded and never estimated.
+- A view **`player_career_mu`**: per player, Mu-era (2035+) totals over `season_stats` and the defense and kicking `season_stat_lines`, plus seasons played and teams. Labelled "since 2035" everywhere; pre-Mu careers are not recorded and never estimated. Once the history backfill is applied, the view covers 2026 onward ("since 2026"), with generated seasons marked (`docs/HISTORY_BACKFILL_PLAN.md` §5).
 - Career milestones (e.g. the first Mu-era 10,000-yard passer) feed the Record Book's Record Watch, which the `#records` work (`docs/RECORD_BOOK_AND_AWARDS_PLAN.md`) owns. This plan supplies the view, not the page.
 - Player page: a **Career** section (career path from the ledger, Mu-era totals by season). Team hub: a **History** view (season-by-season `team_season_results`, head coach, GM, playoff result, award winners).
 

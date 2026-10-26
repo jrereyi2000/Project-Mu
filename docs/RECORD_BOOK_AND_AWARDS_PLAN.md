@@ -46,7 +46,7 @@ Defaults are marked. Items marked **JR** need your call before the phase that us
 | D2 | Public or operator-only | **Public.** Records and awards are facts the newsroom already publishes; nothing here is hidden scouting or GM-queue data. |
 | D3 | Current-season marks | Shown with an "In progress · through Week N" tag while `league_state.current_season` has unplayed regular-season games. After Week 18 they read as final. |
 | D4 | Mu marks vs. NFL history | A "Set in this league" badge on any entry with `source IN ('BOOK','LEAGUE')`. A **Mu Era** filter (2026+) on every list, defaulting to *All-time*. |
-| D5 | All-Pro before 2035 (**JR**) | Show 2035 only, with a note. *Option:* backfill 2026–2034 from the game's All-Pro history. `AP All Pro.pdf` in the repo root may be that source; it hasn't been read or checked. It would be a separate, JR-approved data task (phase 5). |
+| D5 | All-Pro before 2035 (**JR**) | Show 2035 only, with a note. *Option:* backfill 2026–2034 from the game's All-Pro history. `AP All Pro.pdf` in the repo root turned out to be the 2035 team (already stored), so there is no source for 2026–2034. Generated First and Second Teams from the history backfill's season lines are an option there (`docs/HISTORY_BACKFILL_PLAN.md` §5), with JR's go-ahead (phase 5). |
 | D6 | Coach history | COTY winners and Super Bowl-winning coaches only (from `awards` and `coach_tenures`). No coach career leaderboard until `coach_seasons` covers more seasons. |
 | D7 | Records on the Team hub | A small **Records** panel inside the existing Main or Stats tab, not a sixth tab. It links to `#records?team=ABBR`. |
 | D8 | Writer tool | Leave `get_record_book` alone. The new API shares the engine helpers, not the tool. |
