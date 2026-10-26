@@ -5,6 +5,8 @@ Turn madden_capture.py screenshots into CSVs with Gemini vision.
   python3 extract.py captures/2026-10-13_1100
   python3 extract.py captures/2026-10-13_1100 --category defense [--category kicking]
       re-extracts only those Season Stats categories (stats/NN_<cat>_*.png -> stats_<cat>.csv), nothing else
+  python3 extract.py captures/2026-10-13_1100 --career [--category defense]
+      extracts only Career Stats (career/NN_<cat>_*.png -> career_<cat>.csv), all categories or the named ones
 
 Uses GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment, falling back to the
 project-root .env, the same way the newsroom does. Model: gemini-3.8-flash, the one
@@ -12,6 +14,8 @@ pipeline/ocr_extractor.py uses (override with MADDEN_EXTRACT_MODEL). Screenshots
 the table, halved in resolution and read in parallel (MADDEN_EXTRACT_WORKERS, default 8).
 
 Writes, inside that capture folder:
+  career_<category>.csv  --only career: Career Stats, the same columns as stats_<category>.csv
+  career_scope_<team>_<category>.csv  --only career-teams: one team's Career Stats list
   stats_<category>.csv   one per stats category (rows de-duplicated across pages;
                          Passing/Defense/Kicking: each left page paired with its right page, rows joined by position)
   team_<tab>.csv         team_conversions, team_redzoneefficiency, team_penalties (32 teams each)
@@ -1125,12 +1129,12 @@ def write_csv(path, columns, rows):
         w.writerows(rows)
 
 
-def stats_groups(root, categories=None):
+def stats_groups(root, categories=None, sub="stats"):
     """Season Stats screenshots by list: {"05_defense": [paths], "05_defense_right": [paths], ...}, limited to
-    `categories` (names like "defense", any case) when given."""
+    `categories` (names like "defense", any case) when given. sub="career": Career Stats (career/)."""
     want = {c.lower().replace(" ", "") for c in categories} if categories else None
     groups = {}
-    for p in glob.glob(os.path.join(root, "stats", "*.png")):
+    for p in glob.glob(os.path.join(root, sub, "*.png")):
         key = os.path.basename(p).rsplit("_", 1)[0]          # e.g. 01_passing, 05_defense_right
         cat = key.split("_", 1)[1].removesuffix("_right")
         if want is None or cat in want:
@@ -1138,8 +1142,9 @@ def stats_groups(root, categories=None):
     return groups
 
 
-def extract_stats(root, groups):
-    """Season Stats lists -> stats_<category>.csv (wide lists merge their left and right pages)."""
+def extract_stats(root, groups, prefix="stats"):
+    """Season Stats lists -> stats_<category>.csv (wide lists merge their left and right pages); prefix="career":
+    Career Stats lists -> career_<category>.csv."""
     for key, paths in sorted(groups.items()):
         if key.endswith("_right"):
             continue
@@ -1148,16 +1153,36 @@ def extract_stats(root, groups):
             cols, rows = vote_misreads(key, lambda: merge_wide(paths, groups[key + "_right"], key), both, ["NAME", "POS"])
         else:
             cols, rows = vote_misreads(key, lambda: merge(paths, key), paths, ["NAME", "POS"])
-        write_csv(os.path.join(root, f"stats_{key.split('_', 1)[1]}.csv"), cols, rows)
+        write_csv(os.path.join(root, f"{prefix}_{key.split('_', 1)[1]}.csv"), cols, rows)
 
 
-def extract_categories(root, categories):
-    """Re-extract only the named Season Stats categories (e.g. a Defense list re-captured with --resume)."""
-    groups = stats_groups(root, categories)
-    if not groups:
-        sys.exit(f"No Season Stats screenshots for {', '.join(categories)} in {os.path.join(root, 'stats')}")
-    prefetch(sorted(p for paths in groups.values() for p in paths))
-    extract_stats(root, groups)
+def extract_scoped(root, sub):
+    """Team-scoped lists in sub/ (<team>_<category>_NNN.png) -> <sub>_<team>_<category>.csv."""
+    scoped = {}
+    for p in glob.glob(os.path.join(root, sub, "*.png")):
+        scoped.setdefault(os.path.basename(p).rsplit("_", 1)[0], []).append(p)
+    for key, paths in sorted(scoped.items()):
+        if key.endswith("_right"):
+            continue
+        if key + "_right" in scoped:
+            both = paths + scoped[key + "_right"]
+            cols, rows = vote_misreads(key, lambda: merge_wide(paths, scoped[key + "_right"], key), both, ["NAME", "POS"])
+        else:
+            cols, rows = vote_misreads(key, lambda: merge(paths, key), paths, ["NAME", "POS"])
+        write_csv(os.path.join(root, f"{sub}_{key}.csv"), cols, rows)
+
+
+def extract_categories(root, categories, sub="stats"):
+    """Re-extract only the named Season Stats categories (e.g. a Defense list re-captured with --resume); sub="career":
+    Career Stats, every category when none is named."""
+    groups = stats_groups(root, categories, sub)
+    if not groups and not (sub == "career" and glob.glob(os.path.join(root, "career_scope", "*.png"))):
+        sys.exit(f"No {sub} screenshots for {', '.join(categories or ['any category'])} in {os.path.join(root, sub)}")
+    scoped = sorted(glob.glob(os.path.join(root, "career_scope", "*.png"))) if sub == "career" else []
+    prefetch(sorted(p for paths in groups.values() for p in paths) + scoped)
+    extract_stats(root, groups, sub)
+    if scoped:
+        extract_scoped(root, "career_scope")
     if METER is not None:
         t = METER.record("extract", model=MODEL, capture_folder=os.path.basename(os.path.normpath(root)), mode="weekly")
         print(f"Gemini: {t['calls']} calls, {t['input_tokens']:,} input ({t['cached_tokens']:,} cached), "
@@ -1171,8 +1196,11 @@ def main():
     ap.add_argument("root")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="re-extract only this Season Stats category (repeatable); everything else is left alone")
+    ap.add_argument("--career", action="store_true", help="extract only Career Stats (career/ -> career_<cat>.csv)")
     a = ap.parse_args()
     root = a.root
+    if a.career:
+        return extract_categories(root, a.category, "career")
     if a.category:
         return extract_categories(root, a.category)
     try:
@@ -1185,27 +1213,20 @@ def main():
         legacy_prosp = [p for p in glob.glob(os.path.join(root, "prospects", "*.png"))
                         if not os.path.basename(p).startswith("prospect_")]
     prefetch(sorted(glob.glob(os.path.join(root, "stats", "*.png")) +
+                    glob.glob(os.path.join(root, "career", "*.png")) +
                     glob.glob(os.path.join(root, "team_stats", "*.png")) +
                     glob.glob(os.path.join(root, "schedule", "*.png")) +
                     glob.glob(os.path.join(root, "schedule_next", "*.png")) +
                     glob.glob(os.path.join(root, "season_schedule", "*.png")) +
                     legacy_prosp +
-                    glob.glob(os.path.join(root, "stats_scope", "*.png"))))
+                    glob.glob(os.path.join(root, "stats_scope", "*.png")) +
+                    glob.glob(os.path.join(root, "career_scope", "*.png"))))
     extract_stats(root, stats_groups(root))
+    extract_stats(root, stats_groups(root, sub="career"), "career")
 
     # team-scoped Season Stats (--only stats --scope TEAM): stats_scope/<team>_<category>_NNN.png
-    scoped = {}
-    for p in glob.glob(os.path.join(root, "stats_scope", "*.png")):
-        scoped.setdefault(os.path.basename(p).rsplit("_", 1)[0], []).append(p)
-    for key, paths in sorted(scoped.items()):
-        if key.endswith("_right"):
-            continue
-        if key + "_right" in scoped:
-            both = paths + scoped[key + "_right"]
-            cols, rows = vote_misreads(key, lambda: merge_wide(paths, scoped[key + "_right"], key), both, ["NAME", "POS"])
-        else:
-            cols, rows = vote_misreads(key, lambda: merge(paths, key), paths, ["NAME", "POS"])
-        write_csv(os.path.join(root, f"stats_scope_{key}.csv"), cols, rows)
+    extract_scoped(root, "stats_scope")
+    extract_scoped(root, "career_scope")      # --only career-teams -> career_scope_<team>_<category>.csv
 
     team = {}
     for p in glob.glob(os.path.join(root, "team_stats", "*.png")):

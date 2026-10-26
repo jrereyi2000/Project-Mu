@@ -593,7 +593,7 @@ class RosterRecoveryTest(unittest.TestCase):
         captured = []
         failed = [False]
 
-        def capture(out, idx, cat, all_rows):
+        def capture(out, idx, cat, all_rows, **kw):
             folder = os.path.join(out, "stats")
             p = os.path.join(folder, f"{idx:02d}_{mc.norm(cat).lower()}_000.png")
             with open(p, "w") as f:

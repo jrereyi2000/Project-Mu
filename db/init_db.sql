@@ -1221,6 +1221,25 @@ CREATE INDEX IF NOT EXISTS coach_season_lines_team ON coach_season_lines (team_i
 -- seasons here; his earlier career isn't recorded and is never filled in.
 ALTER TABLE coach_seasons ADD COLUMN IF NOT EXISTS mu_era_only BOOLEAN NOT NULL DEFAULT false;
 
+-- Career totals from Madden's Career Stats lists (2026_12_26_player_career_totals.sql, pipeline/load_career_totals.py,
+-- docs/HISTORY_BACKFILL_PLAN.md phase 1): one row per list row and category, in season_stat_lines column names.
+CREATE TABLE IF NOT EXISTS player_career_totals (
+    id SERIAL PRIMARY KEY,
+    captured_season INT NOT NULL,
+    captured_week INT,
+    capture_folder TEXT NOT NULL,
+    category VARCHAR(16) NOT NULL,
+    player_id INT REFERENCES players(id) ON DELETE SET NULL,
+    list_name TEXT NOT NULL,
+    position VARCHAR(8),
+    stats JSONB NOT NULL,
+    flags TEXT[] NOT NULL DEFAULT '{}',
+    loaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS player_career_totals_player
+    ON player_career_totals (captured_season, category, player_id) WHERE player_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS player_career_totals_by_player ON player_career_totals (player_id);
+
 -- Coach of the Year race, rewritten per season by engines/coty_engine.py (2026_11_06_coty_scores.sql)
 CREATE TABLE IF NOT EXISTS coty_scores (
     id SERIAL PRIMARY KEY,

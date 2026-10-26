@@ -20,6 +20,10 @@ Usage
   python3 madden_capture.py --probe-l2    # record how the L2 dropdown behaves (from Player Stats)
   python3 madden_capture.py               # full run: stats + schedule
   python3 madden_capture.py --only stats  # or: --only team, --only schedule
+  python3 madden_capture.py --only career --out RUN  # Career Stats (Stats & Awards > Career Stats) into RUN/career/,
+                                            # right after RUN's Season Stats (docs/HISTORY_BACKFILL_PLAN.md §3.1)
+  python3 madden_capture.py --only career-teams --out RUN  # then team by team for the lists that hit 250 rows
+                                            # (rushing, receiving, defense, blocking; --category to change) -> career_scope/
   python3 madden_capture.py --only playoff  # postseason week: schedule (+ next round) and every game of last
                                             # round; Season Stats / Team Stats are regular season only, so skipped
   python3 madden_capture.py --week "SEASON WEEK 12"   # capture a specific schedule week
@@ -831,6 +835,40 @@ def open_team_stats():
     return cross_into("STATS_TILES", ["TEAM_STATS"])[0]
 
 
+# Stats & Awards' right-hand column, top to bottom (seen 2026-10-13): four short tiles beside the tall
+# Player Stats, Legacy Leaderboard and Team Stats tiles. All of them are read-only.
+STATS_TILE_COLUMN = ["IN-SEASON AWARDS", "NFL RECORD BOOK", "CAREER STATS", "COACH STATS"]
+
+
+def open_career_stats():
+    """Stats & Awards > Career Stats (docs/HISTORY_BACKFILL_PLAN.md §3.1): Right to the right-hand column, then
+    Up/Down to Career Stats. It opens a list laid out like Player Stats (same chips, columns and buttons)."""
+    f, s = look()
+    if s == "PLAYER_STATS":                     # maybe the Season Stats list: back to the tiles
+        press("circle", wait=1.5)
+        f, s = wait_for(["STATS_TILES"])
+    if s != "STATS_TILES":
+        f = to_league_tab()
+        f = move_to(f, LEAGUE_MENU, "STATS & AWARDS", "up", "down", "League menu item")
+        f, _ = cross_into("HUB_LEAGUE", ["STATS_TILES"])
+    for _ in range(10):
+        cur = f.highlighted(STATS_TILE_COLUMN)
+        if cur == "CAREER STATS":
+            break
+        if cur is None:
+            press("right")
+        else:
+            press("down" if STATS_TILE_COLUMN.index(cur) < 2 else "up")
+        f, _ = look()
+    else:
+        raise Abort("Could not highlight the Career Stats tile")
+    f = cross_into("STATS_TILES", ["PLAYER_STATS"])[0]
+    if "CAREER" not in f.text:
+        log("WARNING: the opened list shows no CAREER label; check it is Career Stats, not Season Stats")
+        save_debug(f, "career_list_unlabelled")
+    return f
+
+
 CURRENT_WEEK = None    # the week the League Schedule opens on (set by open_league_schedule)
 
 
@@ -1321,10 +1359,35 @@ LIST_VISIBLE_ROWS = 11
 LIST_ROW_SLACK = 5
 
 
-def prior_category_rows(out, cat):
+def _newest_rows(out, name, same_run):
+    """Data rows in the newest captures/<run>/<name> before this run (or in it too, same_run); None if none."""
+    out_dir = os.path.abspath(out)
+    root, cur_base = os.path.dirname(out_dir), os.path.basename(out_dir)
+    if not os.path.isdir(root):
+        return None
+    for d in sorted(os.listdir(root), reverse=True):
+        if d > cur_base or (d == cur_base and not same_run):
+            continue
+        try:
+            with open(os.path.join(root, d, name)) as fh:
+                rows = max(0, sum(1 for _ in fh) - 1)
+        except OSError:
+            continue
+        if rows > 0:
+            return rows
+    return None
+
+
+def prior_category_rows(out, cat, kind="stats"):
     """Rows in this category's list in the most recent earlier capture (its extracted stats_<cat>.csv), else the
     last loaded weekly capture's row count in the DB; None when neither exists. Page counts can't be compared week
-    to week: the same 250-row Defense list took 26 to 37 pages (2026-10-13 to 10-20) as Down presses drop."""
+    to week: the same 250-row Defense list took 26 to 37 pages (2026-10-13 to 10-20) as Down presses drop.
+    kind="career": an earlier career_<cat>.csv, else the season list's rows (this run's or an earlier one's): every
+    player with season stats has career stats, so a Career Stats list is at least that long."""
+    if kind == "career":
+        return max(_newest_rows(out, f"career_{norm(cat).lower()}.csv", same_run=False) or 0,
+                   _newest_rows(out, f"stats_{norm(cat).lower()}.csv", same_run=True)
+                   or prior_category_rows(out, cat) or 0) or None
     cat_norm = norm(cat).lower()
     out_dir = os.path.abspath(out)
     root, cur_base = os.path.dirname(out_dir), os.path.basename(out_dir)
@@ -1378,11 +1441,11 @@ def list_to_top(rows_per_page=10, max_pages=35):
     traverse("left")
 
 
-def capture_category(out, index, cat, all_rows, max_attempts=2):
-    folder = os.path.join(out, "stats")
+def capture_category(out, index, cat, all_rows, max_attempts=2, kind="stats"):
+    folder = os.path.join(out, kind)
     cat_norm = norm(cat).lower()
     base = f"{index:02d}_{cat_norm}"
-    prior_rows = prior_category_rows(out, cat)
+    prior_rows = prior_category_rows(out, cat, kind)
     min_pages = min_pages_for(prior_rows)
 
     for attempt in range(max_attempts):
@@ -1430,9 +1493,12 @@ def next_category(prev_cat, screen):
     raise Abort(f"Category stayed on {cat} after pressing R2 twice")
 
 
-def run_stats(out, all_rows, resume=True):
-    log("== Season stats ==")
-    sdir = os.path.join(out, "stats")
+def run_stats(out, all_rows, resume=True, kind="stats"):
+    """Season Stats (kind "stats", into stats/) or Career Stats (kind "career", into career/): the same lists, the
+    same navigation inside them and the same columns (JR, 2026-10-26); only the Stats & Awards tile differs."""
+    title = "Career Stats" if kind == "career" else "Season Stats"
+    log(f"== {title} ==")
+    sdir = os.path.join(out, kind)
     os.makedirs(sdir, exist_ok=True)
     done_path = os.path.join(sdir, "done.txt")
     done = {}                                       # norm(cat) -> index
@@ -1446,7 +1512,7 @@ def run_stats(out, all_rows, resume=True):
                         done[norm(parts[1])] = int(parts[0])
                     elif parts:
                         done[norm(parts[0])] = len(done) + 1
-        log(f"Resuming Season Stats in {out}: {len(done)} categories already done ({', '.join(sorted(done))})")
+        log(f"Resuming {title} in {out}: {len(done)} categories already done ({', '.join(sorted(done))})")
     else:
         open(done_path, "w").close()
 
@@ -1465,7 +1531,7 @@ def run_stats(out, all_rows, resume=True):
         log(f"All {len(done)} stats categories already captured in {sdir}")
         return len(done)
 
-    open_player_stats()
+    open_career_stats() if kind == "career" else open_player_stats()
     set_scope("NFL", debug_dir=os.path.join(out, "scope_debug"))
     f, _ = look()
     _, first = chip_labels(f)
@@ -1483,7 +1549,7 @@ def run_stats(out, all_rows, resume=True):
             for p in glob.glob(os.path.join(sdir, f"{idx:02d}_{cat_norm.lower()}_*")):
                 os.remove(p)
             try:
-                capture_category(out, idx, cat, all_rows)
+                capture_category(out, idx, cat, all_rows, kind=kind)
             except Abort as e:
                 for p in glob.glob(os.path.join(sdir, f"{idx:02d}_{cat_norm.lower()}_*")):
                     os.remove(p)
@@ -1504,20 +1570,21 @@ def run_stats(out, all_rows, resume=True):
 
 
 
-def run_scoped_stats(out, team, categories, all_rows):
+def run_scoped_stats(out, team, categories, all_rows, kind="stats"):
     """Season Stats for one team's scope, only the given categories, into stats_scope/
     (<team>_<category>_NNN.png). Used when Season Stats lists two players with the same name and
     position on different teams and their earlier totals can't tell them apart (JR, Oct 14): the
-    team's own list says which one is whose. Category names as on the R2 chip (KICKING, RUSHING...)."""
+    team's own list says which one is whose. Category names as on the R2 chip (KICKING, RUSHING...).
+    kind="career": Career Stats into career_scope/ (run_career_by_team)."""
     team, wanted = norm(team), {norm(c) for c in categories}
-    log(f"== Season stats, {team} only: {', '.join(sorted(wanted))} ==")
-    open_player_stats()
+    log(f"== {'Career' if kind == 'career' else 'Season'} stats, {team} only: {', '.join(sorted(wanted))} ==")
+    open_career_stats() if kind == "career" else open_player_stats()
     set_scope(team, debug_dir=os.path.join(out, "scope_debug"))
     f, _ = look()
     _, first = chip_labels(f)
     if not first:
         raise Abort("Can't read the stats category chip")
-    folder, cat, done = os.path.join(out, "stats_scope"), first, set()
+    folder, cat, done = os.path.join(out, f"{kind}_scope"), first, set()
     for _ in range(15):
         if norm(cat) in wanted and norm(cat) not in done:
             log(f"Category: {cat}")
@@ -1533,6 +1600,33 @@ def run_scoped_stats(out, team, categories, all_rows):
         if norm(cat) == norm(first) and done != wanted:
             raise Abort(f"Never found categories {sorted(wanted - done)}")
     log(f"Captured {team}: {', '.join(sorted(done))}")
+
+
+# League-wide lists stop at 250 rows (Receiving and Defense Season Stats hit exactly 250, 2036). A Career Stats
+# list holds every player with any career line, so these categories are captured team by team too: a team's
+# list is short and nobody falls off the bottom (docs/HISTORY_BACKFILL_PLAN.md §3.1, K3).
+CAREER_TEAM_CATEGORIES = ["RUSHING", "RECEIVING", "DEFENSE", "BLOCKING"]
+
+
+def run_career_by_team(out, categories, all_rows):
+    """Career Stats for each team's scope, into career_scope/<team>_<category>_NNN.png. career_scope/done.txt
+    lists finished teams, so --resume carries on with the next team; a stopped team is captured again."""
+    folder = os.path.join(out, "career_scope")
+    os.makedirs(folder, exist_ok=True)
+    done_path = os.path.join(folder, "done.txt")
+    done = set()
+    if os.path.exists(done_path):
+        with open(done_path) as fh:
+            done = {line.strip() for line in fh if line.strip()}
+    for team in sorted(TEAMS):
+        if team in done:
+            continue
+        for p in glob.glob(os.path.join(folder, f"{team.lower()}_*")):
+            os.remove(p)
+        run_scoped_stats(out, team, categories, all_rows, kind="career")
+        with open(done_path, "a") as fh:
+            fh.write(team + "\n")
+    log(f"Career Stats by team: {len(TEAMS)} teams done")
 
 
 # Team Stats tabs (R2 cycle, verified Oct 13): OFFENSE, DEFENSE, CONVERSIONS,
@@ -3997,8 +4091,8 @@ def main():
     ap.add_argument("--scope-only", action="store_true", help="from Player Stats: just switch scope to NFL")
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
-                    help="--only stats --scope: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings", "contracts", "transactions"],
+                    help="--only stats --scope, or --only career-teams: a category to capture (repeat for several, e.g. KICKING)")
+    ap.add_argument("--only", choices=["stats", "career", "career-teams", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings", "contracts", "transactions"],
                     help="roster, season-schedule, prospects, season, postgame, draft-results, team-overalls and contracts are never part of the default run")
     ap.add_argument("--since", metavar="HEADING", help='League Transactions: the newest heading already loaded, '
                     'e.g. "2036 SEASON - WEEK 4"; the scan stops after the first page wholly older than it '
@@ -4099,6 +4193,13 @@ def main():
             return
         if a.only in (None, "stats"):
             run_mode("Season Stats", lambda: run_stats(out, a.all_rows, resume=bool(a.resume) or os.path.exists(os.path.join(out, "stats", "done.txt"))), clear("scope_debug"))
+        if a.only == "career":
+            run_mode("Career Stats", lambda: run_stats(out, a.all_rows, kind="career",
+                                                       resume=bool(a.resume) or os.path.exists(os.path.join(out, "career", "done.txt"))),
+                     clear("scope_debug"))
+        if a.only == "career-teams":
+            run_mode("Career Stats by team", lambda: run_career_by_team(out, a.category or CAREER_TEAM_CATEGORIES,
+                                                                        a.all_rows), clear("scope_debug"))
         if a.only in (None, "team"):
             run_mode("Team Stats", lambda: run_team_stats(out), clear("team_stats"))
         if a.only in (None, "schedule"):

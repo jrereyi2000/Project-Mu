@@ -1,6 +1,6 @@
 # 2026–2034 History Backfill: Implementation Plan
 
-**Status (2026-10-26):** Phase 0 built: Saleh baseline fix applied, console facts K1–K5 answered (§2), and the three input files in `data/history/` (`engines/history_backfill/sources.py`, §3.1–§3.2). Phases 1–4 not built. JR's decisions are in §0.
+**Status (2026-10-26):** Phase 0 built: Saleh baseline fix applied, console facts K1–K5 answered (§2), and the three input files in `data/history/` (`engines/history_backfill/sources.py`, §3.1–§3.2). Phase 1's code built (2026-10-26): Career Stats capture, extract, load into `player_career_totals` (migration applied) and the remainder report; the console capture itself hasn't run yet and must before this offseason's retirements (§3.1). Phases 2–4 not built. JR's decisions are in §0.
 **Scope:** Give the league a complete 2026–2034 history at season level: standings, playoffs and coach lines for every team, and season stat lines for every player who played. Each player's lines add up to his captured Madden career totals. The history starts from the state of the real league at the end of the 2026–27 NFL season, ends at the captured 2035 season, and fits every fact already stored in between.
 **Reference specs:** `PROJECT_SPEC.md` §2.9 (Record Book), §3.1–§3.3a (players, seasons, stats, coaches), §3.3h (season archive), §7 (writer tools); `docs/SEASON_CONTINUITY_PLAN.md` (this plan replaces its D4); `docs/RECORD_BOOK_AND_AWARDS_PLAN.md` D5 (All-Pro before 2035).
 
@@ -61,7 +61,7 @@
 |---|---|---|---|
 | K1 | Where is the Career Stats page? | Under Stats & Awards, beside Player and Team stats, with the same navigation as Season Stats. | The capture reuses the Season Stats path (`LEAGUE_CROSS_OK` already allows STATS & AWARDS) and only switches the stats type. |
 | K2 | Categories and columns | Exactly the same as Season Stats. | `player_career_totals` uses the season columns, and the extractor reuses the season list parser. |
-| K3 | Is every active player listed? | Apparently yes, but the bottom of a list may be cut off. | The same row-coverage check as the season lists (`prior_category_rows`, `min_pages_for`). A player missing from a list has an unknown total, not zero (the `season_defense_values` rule). |
+| K3 | Is every active player listed? | Apparently yes, but the bottom of a list may be cut off. | League-wide lists stop at 250 rows (the 2036 Receiving and Defense Season Stats lists hold exactly 250, leaving 66 and 99 players with a season line off the list), so the long categories are also captured team by team (§3.1). The same row-coverage check as the season lists (`prior_category_rows`, `min_pages_for`) guards dropped presses. A player missing from every list has an unknown total, not zero (the `season_defense_values` rule). |
 | K4 | Does it include the current season so far? | Yes. | Capture right after a Season Stats capture with no games in between, so subtracting 2036 is exact. |
 | K5 | What do veteran totals include? | Real NFL stats through 2025; nothing from the real 2026 season. | Subtract real careers **through 2025** only (`data/history/nfl_careers_through_2025.csv`, from nflverse). |
 
@@ -71,13 +71,18 @@
 
 ### 3.1 Career totals capture (phase 1)
 
-- **Capture:** `madden_capture.py --only career`, which saves `career/{category}_NNN.png` pages through the existing list capture (`capture_list` / `capture_wide_list`). It runs right after a Season Stats capture (K4).
-- **Extract:** `extract.py` parses the pages the same way as season lists into `career_stats.csv`.
-- **Load:** `pipeline/load_career_totals.py` writes **`player_career_totals`**:
-  - Key: (`player_id`, `captured_season`, `category`). Other columns: `captured_week`, `capture_id`, `stats` JSONB (the category's columns), `flags`.
-  - Names are matched with `pipeline/capture_matching`. An unmatched or ambiguous name is stored with `player_id` NULL and a flag, never guessed.
-- **Remainder** (`engines/history_backfill/remainder.py`, pure): for each player and stat, the 2026–2034 share is:
-  - **remainder = career − Σ captured seasons (2035, 2036 to date) − Σ stored canon rows (2032–2034 Panthers) − pre-2026 NFL (B6)**
+- **When:** in the same session as a Season Stats capture with no games in between (K4), and before the offseason processes retirements, since retired players leave the list (B5). During the playoffs the regular-season lists are final, so any playoff week works. Run order, with RUN the capture folder:
+  1. `python3 madden_capture.py --only career --out RUN`: Stats & Awards > **Career Stats** (the right-hand tile column: In-Season Awards, NFL Record Book, Career Stats, Coach Stats; `open_career_stats`), every category into `career/NN_<cat>_NNN.png` through the Season Stats code (`run_stats(kind="career")`; `career/done.txt` for `--resume`). The cut-off check takes as its floor an earlier `career_<cat>.csv` or the season list's rows (a career list is at least as long). The first run should be watched: if the opened list shows no CAREER label, a frame is saved to `stop_debug/` to confirm it isn't the Season Stats list.
+  2. `python3 madden_capture.py --only career-teams --out RUN`: the same list team by team for the categories whose league-wide list stops at 250 rows (`CAREER_TEAM_CATEGORIES`: rushing, receiving, defense, blocking; `--category` to change) into `career_scope/<team>_<cat>_NNN.png` (`run_career_by_team`; `career_scope/done.txt` lists finished teams).
+  3. `python3 extract.py RUN --career`: `career_<cat>.csv` and `career_scope_<team>_<cat>.csv`, parsed like the season lists (a full `extract.py RUN` does them too).
+  4. `python3 -m pipeline.load_career_totals RUN [--dry-run] [--allow-missing]`.
+- **Load** (`pipeline/load_career_totals.py`, one transaction) writes **`player_career_totals`** for league_state's season, replacing that season's rows per category: `captured_season`, `captured_week`, `capture_folder`, `category`, `player_id` (NULL when unsettled), `list_name`, `position`, `stats` JSONB in `season_stat_lines` column names (defense `def_*`, kicking `kick_*`, punting `punt_*`, returns `kr_*`/`pr_*`, blocking `blk_*`) plus `games_played` from GP, `flags`. Unique per (`captured_season`, `category`, `player_id`).
+  - **Matching:** a team list's row by list name key + position + that team (flag `team_list`); then the league-wide rows by name key + position against the season's roster, skipping rows a team list already settled. Several players sharing a name and position are settled by their season lines: no counting stat of a career line may be below the same player's season total (`fits`; yards are left out since they can go down), and exactly one assignment must work (`settle`). Otherwise the row is stored with `player_id` NULL and `unmatched` / `ambiguous`; a single candidate whose season total is higher gets `below_season_total`. Two rows differing in at most two cells are one row read twice (`misread_copy`).
+  - **Report:** per category the rows, matches, flags and the players with a season line but no career row, with a warning naming the `--only career-teams --category` capture when a category without team lists is cut off. A missing category CSV stops the load unless `--allow-missing`. Tested on 2026-10-26 by loading the 2036 season lists as career lists in a dry run: 1,214 of 1,219 rows matched (the 5 others match no 2036 roster name), and the 250-row cut-off showed in receiving (66) and defense (99).
+- **Remainder** (`python3 -m engines.history_backfill.remainder [--season S]`; `compute()` is pure; writes `verify_output/history_remainders_<S>.csv` and `.md`, nothing to the database): for each player with career totals and each counting stat (averages, rates and longs aren't summable; `games_played` is):
+  - **mu = career − Σ captured seasons 2035..S (`season_stat_lines`) − pre-2026 NFL (B6)**; **generate = mu − Σ stored canon rows 2026–2034 (`season_stats`, the Panthers' 2032–2034 lines)**. `generate` is what phase 3 spreads over the player's open seasons, max(2026, first season)..2034 (first season = season − `years_of_experience`).
+  - **Flags:** `negative`, `no_open_seasons` (a remainder but a first season of 2035 or later), `missing_pre2026` (entered before 2026, no real-career row), `untracked_pre2026` (stats nflverse doesn't carry, e.g. broken tackles, YAC, run after catch, sacks allowed, so the remainder still holds his real pre-2026 share; listed per player). Players with a 2035..S line but no career row are listed separately.
+  - Checked on 2026-10-26 with careers built from each player's own 2035–2036 lines plus his real pre-2026 line: every remainder was zero except the four canon Panthers (Crawford, Davis, Franklin, Tucker), whose stored 2032–2034 lines show as negative, as they must until their real career totals are captured.
   - **Pre-2026 NFL:** `data/history/nfl_careers_through_2025.csv` (`sources.py nfl-careers`): nflverse regular-season player stats for 2016–2025 summed per player and renamed to the `season_stat_lines` columns (sums only; longs and rates aren't summable). It covers every real 2026 roster player and all 57 players in the 2036 pool who entered the league before 2026 (11+ years of experience). Players are matched by `espn_id` (nflverse `players.csv` maps it to the stats' gsis id), or, for a 2036 veteran with neither an `espn_id` nor a 2026 roster row, by a unique name among nflverse players whose rookie season is 2025 or earlier. A player with fewer than 10 years of experience in 2036 entered after 2026 and never gets a real career, even if his stored `espn_id` points at a real namesake.
   - **Bad remainders:** a negative remainder, or a positive one for a player who couldn't have played 2026–2034, is flagged and held out of generation until it's resolved.
 
@@ -179,7 +184,7 @@ python3 -m engines.history_backfill revert                   # deletes every SYN
 
 | Table | Change |
 |---|---|
-| `player_career_totals` | New (§3.1) |
+| `player_career_totals` | New (§3.1; `2026_12_26_player_career_totals.sql`, applied 2026-10-26) |
 | `players` | New column `origin` (NULL, or `HISTORY_FILLIN`) |
 | `player_seasons`, `season_stats`, `season_stat_lines`, `team_season_results`, `league_seasons`, `coach_season_lines` | New column `source` (DEFAULT `'CAPTURE'`; `'SYNTH'` for generated rows) |
 | `awards` | New column `source` (only used if generated All-Pro teams are approved, §5) |
@@ -204,7 +209,7 @@ python3 -m engines.history_backfill revert                   # deletes every SYN
 | Phase | Delivers | Done when |
 |---|---|---|
 | **0. Facts and fixes** (built 2026-10-26) | Saleh migration; K1–K5 answered on the console; `start_2026.csv`, `rosters_2026.csv` and `nfl_careers_through_2025.csv` from `engines/history_backfill/sources.py`; `tests/test_history_sources.py` | The Titans' snapshot difference is 83-70 (done); every 2036 veteran has a real career row (57 of 57) |
-| **1. Career totals** | Capture, extract and load; `player_career_totals`; remainders and their report | Every 2036 player has totals or a flag; no unflagged negative remainder |
+| **1. Career totals** (code built 2026-10-26; console capture pending) | Capture (`--only career`, `--only career-teams`), extract (`--career`) and load; `player_career_totals`; remainders and their report | Every 2036 player has totals or a flag; no unflagged negative remainder |
 | **2. Team arc** | `team_arc.py`, playoffs, points; staging; `apply` for team rows; coach lines | 31 coach totals match exactly, every Super Bowl and known record holds, JR has picked a candidate |
 | **3. Player lines and fill-ins** | `team_totals.py`, `player_lines.py`, `fillins.py`, `validate`; `apply` / `revert` for player rows | The §3.7 report is clean; JR approves the Panthers, award winners and leaders |
 | **4. Consumers** | "Since 2026" career labels, history views, writer tools, optional All-Pro | A 2028 MVP's page shows his season; the Titans' history lists 2026–2036 |
@@ -214,7 +219,7 @@ python3 -m engines.history_backfill revert                   # deletes every SYN
 ## 7. Tests
 
 - **`tests/test_history_sources.py`** (built): the 2026 projection, career sums and field-goal ranges, the namesake check.
-- **`tests/test_history_remainder.py`:** subtraction, flags and the pre-2026 split, on fixtures.
+- **`tests/test_history_career.py`** (built): `fits`, `settle`, name matching with and without team lists, `games_played`, and the remainder's subtraction and flags.
 - **`tests/test_history_team_arc.py`:** the integer program on a small synthetic league (exact totals, Super Bowl facts, winning-season counts, a reported infeasibility), and bracket validity.
 - **`tests/test_history_player_lines.py`:** exact integer sums, record ceilings and holders, award conditions, canon rows kept, fill-in thresholds.
 - **No live writes in tests.** `apply` and `revert` are checked on a restored copy through `DATABASE_URL`. The Napper tests are never run wholesale (memory).
