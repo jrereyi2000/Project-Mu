@@ -179,6 +179,10 @@ def _rank(value, entries, low):
     return 1 + sum(1 for v, _, _ in entries if _better(v, value, low))
 
 
+# Public names for other readers of the book (server/history_api.py): the same ranking rules as the engine.
+better, rank = _better, _rank
+
+
 def _num(v):
     return int(v) if float(v).is_integer() else v
 

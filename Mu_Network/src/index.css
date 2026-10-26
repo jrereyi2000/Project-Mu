@@ -92,6 +92,7 @@ img { display: block; max-width: 100%; }
 .stats-dropdown { position: relative; max-width: 700px; margin: 0 auto; padding: 28px 30px 30px; background: var(--white); box-shadow: 0 25px 50px #0005; animation: slideDown .2s ease-out; }
 .stats-dropdown-title { padding-bottom: 18px; border-bottom: 2px solid var(--ink); }
 .stats-dropdown-title h2 { margin: 6px 0 0; font-size: 25px; line-height: 1; letter-spacing: -.04em; text-transform: uppercase; }
+.stats-dropdown-group { margin-top: 18px; padding-bottom: 8px; border-bottom: 1px solid var(--gray-300); }
 .stats-dropdown-options { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .stats-dropdown-options > a { min-height: 118px; padding: 19px; display: grid; grid-template-columns: 27px 1fr 18px; gap: 10px; align-items: start; border: 1px solid var(--gray-100); transition: background .15s, border-color .15s, transform .15s; }
 .stats-dropdown-options > a:hover { background: var(--paper); border-color: var(--gray-300); transform: translateY(-2px); }

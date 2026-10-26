@@ -11,7 +11,7 @@ from typing import Optional
 import re
 
 from engines.gotw_engine import display_excitement
-from server import debug_api, social_api, napper_api, front_office_api, draft_api
+from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -122,6 +122,7 @@ app.include_router(debug_api.router)   # /api/debug/*: the #debug page (state, t
 app.include_router(napper_api.router)  # /api/napper/*: Napper interactive fantasy leagues platform
 app.include_router(front_office_api.router)  # /api/team/{abbr}/front-office: the Team hub's Front Office tab
 app.include_router(draft_api.router)   # /api/draft/*: Draft Central (big board, dossiers, honors, needs, mock, war room)
+app.include_router(history_api.router)  # /api/records/*: the #records Record Book
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 os.makedirs(_STATIC_DIR, exist_ok=True)
