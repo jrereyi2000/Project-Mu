@@ -227,6 +227,7 @@ Project Mu/
 ├── docs/
 │   ├── DRAFT_CENTRAL_PLAN.md  # Implementation plan & design for Draft Central (#draft via #debug): consensus big board, prospect dossier (college stats & game logs, combine radar), honors/awards, team needs & draft capital, media mock, broadcast war room
 │   ├── RECORD_BOOK_AND_AWARDS_PLAN.md # Plan for public #records (phase 1 built) (record book: NFL, game-book and Mu marks, ties, franchise view, Record Watch) and #awards (champions, award history, All-Pro), player Honors row and Team hub Records panel
+│   ├── SEASON_CONTINUITY_PLAN.md # Plan (written, not built; JR decisions 2026-10-26) for multi-season continuity: season-end archive (league_seasons, team_season_results), head-coach records from 2035, offseason retirement scan + player season ledger (a departure not recorded as retiring = free agent), Napper league history and restart, Mu-era career layer
 │   ├── USAGE_GUIDE.md         # Comprehensive end-to-end usage and operational guide
 │   ├── HEADSHOT_PIPELINE.md   # Deterministic appearance synthesis, Gemini batch generation, rembg cutout pipeline
 │   ├── EDITORIAL_MATRIX.md
