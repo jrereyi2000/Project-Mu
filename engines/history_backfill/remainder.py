@@ -16,8 +16,8 @@ years_of_experience) through 2034. Flags:
 - missing_pre2026:   he entered before 2026 but has no real-career row (nfl_careers_through_2025.csv)
 - untracked_pre2026: he entered before 2026 and some stats nflverse doesn't carry (broken tackles, YAC, run after
                      catch, sacks allowed, ...) still hold his real pre-2026 share; those columns are listed per player
-Players with a captured 2035..S line but no career row are listed separately: rostered in S (cut off a list, or
-never listed) or no longer rostered (gone before the capture; the lists carry active players only). Madden's career
+Players with a captured 2035..S line but no career row are listed separately: rostered in S (the lists carry players
+on a Madden roster only, so mostly free agents whose release we may not have; or an unmatched row) or no longer rostered (gone before the capture; the lists carry active players only). Madden's career
 GP isn't comparable to season games played, so games are left out; a column with no career row (a category the
 player isn't listed in) is unknown, not zero, and isn't subtracted.
 
@@ -194,8 +194,13 @@ def write_report(cur, season, result, no_row, gone):
     for pid, r in sorted(neg, key=lambda x: names.get(x[0]) or "")[:25]:
         bad = ", ".join(f"{c} {v:g}" for c, v in r["generate"].items() if v < -TOLERANCE)
         lines.append(f"- {names.get(pid)} ({pos.get(pid)}, id {pid}): {bad}")
-    lines += ["", f"## On a {season} roster, no career row (first 40)", ""]
-    lines += [f"- {names.get(pid)} ({pos.get(pid)}, id {pid})" for pid in no_row[:40]]
+    cur.execute("SELECT player_id, released_week FROM player_seasons WHERE season = %s", (season,))
+    released = dict(cur.fetchall())
+    lines += ["", f"## On a {season} roster, no career row (first 40)", "",
+              "The lists carry players on a Madden roster only, so these are free agents in Madden (released, "
+              "whether or not the release is in league_transactions) or a name/position the loader couldn't match.", ""]
+    lines += [f"- {names.get(pid)} ({pos.get(pid)}, id {pid})"
+              + (f": released week {released[pid]}" if released.get(pid) is not None else "") for pid in no_row[:40]]
     md_path = os.path.join(OUT_DIR, f"history_remainders_{season}.md")
     with open(md_path, "w") as f:
         f.write("\n".join(lines) + "\n")
