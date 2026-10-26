@@ -1,6 +1,6 @@
 # 2026–2034 History Backfill: Implementation Plan
 
-**Status (2026-10-26):** Written, not built. JR's decisions are in §0.
+**Status (2026-10-26):** Phase 0 built: Saleh baseline fix applied, console facts K1–K5 answered (§2), and the three input files in `data/history/` (`engines/history_backfill/sources.py`, §3.1–§3.2). Phases 1–4 not built. JR's decisions are in §0.
 **Scope:** Give the league a complete 2026–2034 history at season level: standings, playoffs and coach lines for every team, and season stat lines for every player who played. Each player's lines add up to his captured Madden career totals. The history starts from the state of the real league at the end of the 2026–27 NFL season, ends at the captured 2035 season, and fits every fact already stored in between.
 **Reference specs:** `PROJECT_SPEC.md` §2.9 (Record Book), §3.1–§3.3a (players, seasons, stats, coaches), §3.3h (season archive), §7 (writer tools); `docs/SEASON_CONTINUITY_PLAN.md` (this plan replaces its D4); `docs/RECORD_BOOK_AND_AWARDS_PLAN.md` D5 (All-Pro before 2035).
 
@@ -41,7 +41,7 @@
 
 | Fact | Coverage | Use |
 |---|---|---|
-| Coach snapshot differences, 2025 → 2034 | 31 teams: exact 9-season W-L (153 games, no ties), number of winning seasons, playoff W-L, Super Bowl W-L. Includes the Titans after B8, the Broncos (Gaffney) and the Chiefs (Leonard), who all started 0-0 in 2026. The Panthers have none (B9). | Hard limits on standings |
+| Coach snapshot differences, 2025 → 2034 | 31 teams: exact 9-season W-L (153 games, no ties), number of winning seasons, playoff W-L, Super Bowl W-L. Includes the Titans after B8, the Broncos (Gaffney) and the Chiefs (Leonard), who all started 0-0 in 2026. The Buccaneers' Todd Bowles is the one coach whose 2025 row is real history but not Madden's start: Madden began him with one more loss (PROJECT_SPEC §3.3a), so the Bucs' 2026–2034 record is 82-71, not the row difference of 82-72. The Panthers have none (B9). | Hard limits on standings |
 | Super Bowls | Both teams and the score for every season, 2026–2035 | Hard: champion and runner-up |
 | 2034 records | 18 teams in `team_seasons` | Hard |
 | Panthers | 2031: 0-17, 2032: 4-13, 2033: 4-13, 2034: 13-4; 2034's 17 regular-season games and 3 playoff games; a few `season_stats` rows for 2032–2034 (Crawford, Davis, Franklin, Tucker) | Hard |
@@ -55,15 +55,15 @@
 
 ---
 
-## 2. Console facts to confirm (before phase 1's capture)
+## 2. Console facts (answered by JR, 2026-10-26)
 
-| # | Question | Why it matters |
-|---|---|---|
-| K1 | Where is the Career Stats page, and can every step to it be read without pressing Cross on anything that changes state? | It must be a read-only screen added by name to the capture allow-list (the `LEAGUE_CROSS_OK` pattern). |
-| K2 | Which categories and columns does it show, and are they the same as Season Stats? Regular season only, or playoffs too? | Decides the `player_career_totals` columns and what gets subtracted. |
-| K3 | Does each list show every active player, or only leaders or players above a minimum? | Players missing from a list have an unknown total, not zero (the same rule as `season_defense_values`). |
-| K4 | Does the career total include the current season so far? | The capture must run in the same session as a Season Stats capture, with no games in between, so the subtraction is exact. |
-| K5 | For two or three veterans, does Madden's pre-2026 total match Pro-Football-Reference? | Checks the B6 subtraction. A consistent gap (e.g. Madden leaves out some stat) gets corrected for every veteran. |
+| # | Question | Answer | Consequence |
+|---|---|---|---|
+| K1 | Where is the Career Stats page? | Under Stats & Awards, beside Player and Team stats, with the same navigation as Season Stats. | The capture reuses the Season Stats path (`LEAGUE_CROSS_OK` already allows STATS & AWARDS) and only switches the stats type. |
+| K2 | Categories and columns | Exactly the same as Season Stats. | `player_career_totals` uses the season columns, and the extractor reuses the season list parser. |
+| K3 | Is every active player listed? | Apparently yes, but the bottom of a list may be cut off. | The same row-coverage check as the season lists (`prior_category_rows`, `min_pages_for`). A player missing from a list has an unknown total, not zero (the `season_defense_values` rule). |
+| K4 | Does it include the current season so far? | Yes. | Capture right after a Season Stats capture with no games in between, so subtracting 2036 is exact. |
+| K5 | What do veteran totals include? | Real NFL stats through 2025; nothing from the real 2026 season. | Subtract real careers **through 2025** only (`data/history/nfl_careers_through_2025.csv`, from nflverse). |
 
 ---
 
@@ -78,14 +78,14 @@
   - Names are matched with `pipeline/capture_matching`. An unmatched or ambiguous name is stored with `player_id` NULL and a flag, never guessed.
 - **Remainder** (`engines/history_backfill/remainder.py`, pure): for each player and stat, the 2026–2034 share is:
   - **remainder = career − Σ captured seasons (2035, 2036 to date) − Σ stored canon rows (2032–2034 Panthers) − pre-2026 NFL (B6)**
-  - **Pre-2026 NFL:** a one-time Pro-Football-Reference pull, `data/history/pfr_careers_through_2025.csv`, covering every player whose first season is 2025 or earlier.
+  - **Pre-2026 NFL:** `data/history/nfl_careers_through_2025.csv` (`sources.py nfl-careers`): nflverse regular-season player stats for 2016–2025 summed per player and renamed to the `season_stat_lines` columns (sums only; longs and rates aren't summable). It covers every real 2026 roster player and all 57 players in the 2036 pool who entered the league before 2026 (11+ years of experience). Players are matched by `espn_id` (nflverse `players.csv` maps it to the stats' gsis id), or, for a 2036 veteran with neither an `espn_id` nor a 2026 roster row, by a unique name among nflverse players whose rookie season is 2025 or earlier. A player with fewer than 10 years of experience in 2036 entered after 2026 and never gets a real career, even if his stored `espn_id` points at a real namesake.
   - **Bad remainders:** a negative remainder, or a positive one for a player who couldn't have played 2026–2034, is flagged and held out of generation until it's resolved.
 
 ### 3.2 The 2026 starting league
 
-- **Team strength in 2026:** each team's 2026 strength comes from the projected final 2026–27 NFL standings and point differentials. The projection is made at build time from current records plus the remaining schedule, and stored as `data/history/start_2026.csv`. If the real final standings arrive before JR approves the history, they replace the projection.
-- **2026 rosters:** real end-of-season rosters, keyed by `players.espn_id` where possible, stored as `data/history/rosters_2026.csv`. They identify two groups:
-  - **Retired real veterans:** on a 2026 roster but not in the 2035/2036 pool. They get `players` rows if missing, real careers through 2025 from Pro-Football-Reference, and Mu-era lines from §3.5 with a decline curve and a generated last season.
+- **Team strength in 2026:** `data/history/start_2026.csv` (`sources.py start-2026`): the real 2026–27 standings from ESPN projected to the season's end. A team's rating is its point differential per game shrunk toward zero (PD / (G + 4)); each unplayed game on its ESPN schedule is won with probability Φ((r − r_opp ± 1.5) / 13.5) (1.5 points of home edge); projected points add the remaining games at a scoring rate shrunk 4 games toward the league's. Built 2026-10-26 after 6–7 games. Rerun it later in the season (`--refresh`), and with the final standings if they arrive before JR approves the history.
+- **2026 rosters:** `data/history/rosters_2026.csv` (`sources.py rosters-2026`): ESPN's current rosters (2,557 players incl. practice squad and reserve lists, as of 2026-10-26; rerun near season's end). Each is matched to `players` by `espn_id`, else by a unique full name. A match is kept only if the player has at least 9 more years of experience in 2036 than in 2026 (`plausible_veteran`), so a fictional namesake isn't mistaken for him (`match = espn_id_conflict` when the stored `espn_id` fails this). `in_pool_2035` / `in_pool_2036` say whether he is still in the league. On 2026-10-26: 194 matched, 130 in the 2036 pool. They identify two groups:
+  - **Retired real veterans:** on a 2026 roster but not in the 2035/2036 pool. They get `players` rows if missing, real careers through 2025 from `nfl_careers_through_2025.csv`, and Mu-era lines from §3.5 with a decline curve and a generated last season.
   - **The 2026 rookie class:** real players, so their first season is fixed.
 
 ### 3.3 Team arc (phase 2): `engines/history_backfill/team_arc.py`
@@ -169,9 +169,9 @@ python3 -m engines.history_backfill revert                   # deletes every SYN
 - **Pins:** in `data/history/pins.json`, e.g. "Bears 11-6 in 2029", or "Crawford's 2033 line". `generate` treats them as hard facts.
 - **`apply` and `revert`:** both are idempotent.
 
-### 3.9 Saleh baseline fix (phase 0, B8)
+### 3.9 Saleh baseline fix (phase 0, B8; applied 2026-10-26)
 
-A migration (next free date, `_saleh_2025_baseline.sql`) sets coach 8's 2025 `coach_seasons` row to all zeros. Afterwards, the Titans' 2025 → 2034 difference reads 83-70, 6 winning seasons, 10-4 in the playoffs and 1-1 in Super Bowls (a loss in 2026, a win in 2031). His coach profile then shows a Mu-era career only.
+`db/migrations/2026_12_25_saleh_2025_baseline.sql` sets coach 8's 2025 `coach_seasons` row to all zeros. Afterwards, the Titans' 2025 → 2034 difference reads 83-70, 6 winning seasons, 10-4 in the playoffs and 1-1 in Super Bowls (a loss in 2026, a win in 2031). His coach profile then shows a Mu-era career only.
 
 ---
 
@@ -203,7 +203,7 @@ A migration (next free date, `_saleh_2025_baseline.sql`) sets coach 8's 2025 `co
 
 | Phase | Delivers | Done when |
 |---|---|---|
-| **0. Facts and fixes** | Saleh migration; K1–K5 answered on the console; `start_2026.csv`, `rosters_2026.csv` and the Pro-Football-Reference career file | The Titans' snapshot difference is 83-70; every 2026 roster player is matched or flagged |
+| **0. Facts and fixes** (built 2026-10-26) | Saleh migration; K1–K5 answered on the console; `start_2026.csv`, `rosters_2026.csv` and `nfl_careers_through_2025.csv` from `engines/history_backfill/sources.py`; `tests/test_history_sources.py` | The Titans' snapshot difference is 83-70 (done); every 2036 veteran has a real career row (57 of 57) |
 | **1. Career totals** | Capture, extract and load; `player_career_totals`; remainders and their report | Every 2036 player has totals or a flag; no unflagged negative remainder |
 | **2. Team arc** | `team_arc.py`, playoffs, points; staging; `apply` for team rows; coach lines | 31 coach totals match exactly, every Super Bowl and known record holds, JR has picked a candidate |
 | **3. Player lines and fill-ins** | `team_totals.py`, `player_lines.py`, `fillins.py`, `validate`; `apply` / `revert` for player rows | The §3.7 report is clean; JR approves the Panthers, award winners and leaders |
@@ -213,6 +213,7 @@ A migration (next free date, `_saleh_2025_baseline.sql`) sets coach 8's 2025 `co
 
 ## 7. Tests
 
+- **`tests/test_history_sources.py`** (built): the 2026 projection, career sums and field-goal ranges, the namesake check.
 - **`tests/test_history_remainder.py`:** subtraction, flags and the pre-2026 split, on fixtures.
 - **`tests/test_history_team_arc.py`:** the integer program on a small synthetic league (exact totals, Super Bowl facts, winning-season counts, a reported infeasibility), and bracket validity.
 - **`tests/test_history_player_lines.py`:** exact integer sums, record ceilings and holders, award conditions, canon rows kept, fill-in thresholds.
@@ -232,7 +233,7 @@ A migration (next free date, `_saleh_2025_baseline.sql`) sets coach 8's 2025 `co
 ## 9. Risks
 
 - **The Career Stats list is incomplete (K3):** missing players have unknown totals and get no generated lines, only flags.
-- **Madden's pre-2026 numbers don't match Pro-Football-Reference (K5):** checked on a few veterans before phase 1 relies on them.
+- **Madden's pre-2026 numbers don't match nflverse (K5):** JR confirmed they include real stats through 2025; phase 1's remainder report still flags any veteran whose remainder goes negative.
 - **Infeasible facts:** e.g. a stored 2034 record that conflicts with a coach total. Reported, never relaxed; JR decides.
 - **Canon lock-in (B15):** after `apply`, mistakes are fixed by pins and a rerun, not hand edits. `revert` keeps that cheap until writers have used the history.
 - **Shared checkout:** the season archive and coaching carousel sessions are editing `init_db.sql`, `PROJECT_SPEC.md` and `engines/coach_*`. Stage only this work's hunks, and agree on migration dates.

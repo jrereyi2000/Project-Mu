@@ -11,6 +11,8 @@ venv/
 # Large local data (videos, frames, headshot batch files) — see PROJECT_SPEC.md §1.1
 data/*
 !data/scouting/
+!data/history/
+data/history/.cache/
 
 # Database dumps
 db/backups/
