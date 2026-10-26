@@ -1,11 +1,12 @@
 // The Record Book (#records, PROJECT_SPEC §5.1/§5.2; docs/RECORD_BOOK_AND_AWARDS_PLAN.md phase 1): every category
 // card from GET /api/records (server/history_api.py), filtered by season type, scope, subject and era, or one
 // franchise's records with ?team=ABBR. The filters live in the hash (#records?type=post&scope=GAME&era=mu&team=car)
-// so a view can be linked.
+// so a view can be linked. The regular-season view opens with Record Watch while a season is being played.
 import { useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../../api";
 import FranchiseRecords from "./FranchiseRecords";
 import RecordCard, { type RecordCategory } from "./RecordCard";
+import RecordWatch from "./RecordWatch";
 import { GROUP_LABELS, SUBJECT_LABELS } from "./format";
 import "./history.css";
 
@@ -112,6 +113,7 @@ export default function RecordBookPage({ query, teams }: { query: string; teams:
       </section>
 
       <section className="rb-body">
+        {!params.team && params.type === "reg" && <RecordWatch />}
         {params.team ? (
           <FranchiseRecords abbr={params.team} />
         ) : error ? (

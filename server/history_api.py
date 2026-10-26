@@ -22,7 +22,8 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 
 from engines.coach_profile import fetch_team_coach
-from engines.records_engine import better, rank, tidy_name
+from engines.records_engine import (GAMES_PER_SEASON, better, load_book, rank, season_defense_values,
+                                    season_player_values, team_seasons, tidy_name)
 from newsroom.all_pro import DEFENSE_QUOTAS, OFFENSE_QUOTAS, SPECIAL_TEAMS_QUOTAS
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -34,6 +35,7 @@ AWARD_TYPES = ("MVP", "OPOY", "DPOY", "OROY", "DROY", "COTY", "SBMVP")   # the a
 ALL_PRO_TEAMS = {"First Team All-Pro": "first_team", "Second Team All-Pro": "second_team"}
 ALL_PRO_UNITS = (("OFFENSE", OFFENSE_QUOTAS), ("DEFENSE", DEFENSE_QUOTAS), ("SPECIAL_TEAMS", SPECIAL_TEAMS_QUOTAS))
 SLOT_ORDER = [slot for _, quotas in ALL_PRO_UNITS for slot in quotas]
+NO_PACE = {"season_fg_long"}   # a longest-kick mark doesn't add up over games, so Record Watch shows no 17-game pace
 
 router = APIRouter()
 
@@ -126,15 +128,20 @@ def _installed(cur) -> bool:
                                              "franchise_records_current", "league_records"))
 
 
+def season_in_progress(cur, season: int) -> bool:
+    """Some regular-season game of the season isn't COMPLETED yet (D3)."""
+    cur.execute("SELECT EXISTS (SELECT 1 FROM games WHERE season = %s AND game_type = 'REGULAR_SEASON' "
+                "AND status IS DISTINCT FROM 'COMPLETED');", (season,))
+    return bool(cur.fetchone()[0])
+
+
 def fetch_as_of(cur) -> dict:
     cur.execute("SELECT current_season, current_week FROM league_state LIMIT 1;")
     row = cur.fetchone()
     if not row:
         return {"season": None, "week": None, "in_progress": False}
     season, week = row
-    cur.execute("SELECT EXISTS (SELECT 1 FROM games WHERE season = %s AND game_type = 'REGULAR_SEASON' "
-                "AND status IS DISTINCT FROM 'COMPLETED');", (season,))
-    return {"season": season, "week": week, "in_progress": bool(cur.fetchone()[0])}
+    return {"season": season, "week": week, "in_progress": season_in_progress(cur, season)}
 
 
 def fetch_categories(cur) -> list:
@@ -343,6 +350,63 @@ def franchise_records(abbr: str):
                     league_record=bool(league) and mine[0]["value"] == league[0]["value"],
                     mu=any(m["mu"] for m in mine)))
             out["mu_count"] = sum(1 for r in out["records"] if r["mu"])
+            return out
+
+
+# ------------------------------------------------------------------------------------------------- watch ---
+def watch_category(cat: dict, entries: list, values: list, games: dict, abbrs: dict) -> Optional[dict]:
+    """Record Watch for one FULL single-season player category: the season's leader(s) so far against the record
+    from before this season (records_engine.load_book's entries). `entries` is [(value, holder, season)], `values`
+    is [(team_id, player_id, holder, value)] for this season and `games` is {team_id: games played}. None when
+    nobody has a value yet or the category has no record to chase."""
+    if not values or not entries:
+        return None
+    low = cat["better"] == "LOW"
+    best = (min if low else max)(v for v, _, _ in entries)
+    top = (min if low else max)(v for *_, v in values)
+    leaders = sorted(({"holder": h, "player_id": p, "team": abbrs.get(t), "games": games.get(t, 0)}
+                      for t, p, h, v in values if v == top), key=lambda l: l["holder"] or "")
+    played = max((l["games"] for l in leaders), default=0)
+    pace = None if cat["category"] in NO_PACE or not played else round(top / played * GAMES_PER_SEASON)
+    return {
+        "category": cat["category"], "label": cat["label"], "better": cat["better"],
+        "record": {"value": num(best), "holders": sorted(({"holder": tidy_name(h), "season": s}
+                                                         for v, h, s in entries if v == best),
+                                                        key=lambda h: (-(h["season"] or 0), h["holder"] or ""))},
+        "leaders": leaders,
+        "value": num(top),
+        "pct": round(top / best * 100, 1) if best and not low else None,
+        "pace_17": pace,
+        "on_pace": pace is not None and not better(best, pace, low),
+        "rank": rank(top, entries, low),
+    }
+
+
+@router.get("/api/records/watch")
+def record_watch(season: Optional[int] = None):
+    """This season's leaders in each FULL single-season player category against the record, while the regular
+    season is being played. `season` defaults to the current one; a finished regular season returns no rows."""
+    with psycopg.connect(CONN_INFO) as conn:
+        with conn.cursor() as cur:
+            as_of = fetch_as_of(cur)
+            season = season or as_of["season"]
+            out = {"season": season, "week": as_of["week"] if season == as_of["season"] else None,
+                   "in_progress": False, "categories": []}
+            if season is None or not _installed(cur) or not season_in_progress(cur, season):
+                return out
+            out["in_progress"] = True
+            book, abbrs = load_book(cur, season), fetch_abbrs(cur)
+            games = {t: r["games"] for t, r in team_seasons(cur, season).items()}
+            values = {}
+            for c, t, p, h, v in season_player_values(cur, season) + season_defense_values(cur, season):
+                values.setdefault(c, []).append((t, p, h, v))
+            for cat in fetch_categories(cur):
+                if (cat["coverage"], cat["scope"], cat["subject"], cat["season_type"]) != ("FULL", "SEASON", "PLAYER", "REGULAR"):
+                    continue
+                row = watch_category(cat, book["entries"].get(cat["category"], []), values.get(cat["category"], []),
+                                     games, abbrs)
+                if row:
+                    out["categories"].append(row)
             return out
 
 

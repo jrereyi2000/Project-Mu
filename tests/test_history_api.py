@@ -163,6 +163,38 @@ def db_up():
 
 
 @unittest.skipUnless(db_up(), "Postgres not reachable")
+class WatchTest(unittest.TestCase):
+    CAT = {"category": "season_pass_yards", "label": "Passing yards in a season", "better": "HIGH"}
+    BOOK = [(5477.0, "Peyton Manning", 2013), (5497.0, "George Crawford", 2035), (5497.0, "Matthew Stafford", 2021)]
+
+    def test_leader_against_the_record(self):
+        row = H.watch_category(self.CAT, self.BOOK, [(1, 10, "A", 3000.0), (2, 11, "B", 2500.0)], {1: 9, 2: 9}, {1: "CAR", 2: "DEN"})
+        self.assertEqual(row["value"], 3000)
+        self.assertEqual(row["leaders"], [{"holder": "A", "player_id": 10, "team": "CAR", "games": 9}])
+        self.assertEqual(row["record"]["value"], 5497)
+        self.assertEqual([h["holder"] for h in row["record"]["holders"]], ["George Crawford", "Matthew Stafford"])
+        self.assertEqual(row["pct"], 54.6)
+        self.assertEqual(row["pace_17"], 5667)
+        self.assertTrue(row["on_pace"])
+        self.assertEqual(row["rank"], 4)
+
+    def test_tied_leaders_and_off_pace(self):
+        row = H.watch_category(self.CAT, self.BOOK, [(2, 11, "B", 2000.0), (1, 10, "A", 2000.0)], {1: 9, 2: 10}, {1: "CAR", 2: "DEN"})
+        self.assertEqual([l["holder"] for l in row["leaders"]], ["A", "B"])
+        self.assertEqual(row["pace_17"], 3400)       # the leader with the most games sets the pace
+        self.assertFalse(row["on_pace"])
+
+    def test_longest_kick_has_no_pace(self):
+        cat = {"category": "season_fg_long", "label": "Longest field goal in a season", "better": "HIGH"}
+        row = H.watch_category(cat, [(68.0, "Cam Little", 2025)], [(1, 10, "K", 60.0)], {1: 5}, {1: "IND"})
+        self.assertIsNone(row["pace_17"])
+        self.assertFalse(row["on_pace"])
+
+    def test_nothing_to_watch(self):
+        self.assertIsNone(H.watch_category(self.CAT, self.BOOK, [], {}, {}))
+        self.assertIsNone(H.watch_category(self.CAT, [], [(1, 10, "A", 300.0)], {1: 1}, {1: "CAR"}))
+
+
 class EndpointTest(unittest.TestCase):
     TABLES = ("record_categories", "league_record_entries", "franchise_records", "awards")
 
@@ -263,6 +295,21 @@ class EndpointTest(unittest.TestCase):
         self.assertEqual(len(plain), n)
         self.assertEqual(plain, as_dicts)
         self.assertEqual([a["season"] for a in plain], sorted((a["season"] for a in plain), reverse=True))
+
+    def test_record_watch_only_in_season(self):
+        before = self.counts()
+        body = self.client.get("/api/records/watch").json()
+        season = body["season"]
+        live = bool(self.query("SELECT 1 FROM games WHERE season = %s AND game_type = 'REGULAR_SEASON' "
+                               "AND status IS DISTINCT FROM 'COMPLETED' LIMIT 1;", (season,)))
+        self.assertEqual(body["in_progress"], live)
+        if not live:
+            self.assertEqual(body["categories"], [])
+        for row in body["categories"]:
+            self.assertTrue(row["leaders"])
+            self.assertGreater(row["record"]["value"], 0)
+        self.assertEqual(self.client.get("/api/records/watch?season=2035").json()["categories"], [])
+        self.assertEqual(self.counts(), before)
 
 
 if __name__ == "__main__":

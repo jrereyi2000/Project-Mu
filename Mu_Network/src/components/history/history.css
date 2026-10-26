@@ -146,3 +146,29 @@
   .rb-compact-list li { grid-template-columns: minmax(0, 1fr) auto; }
   .rb-compact-holders { grid-column: 1 / -1; }
 }
+
+/* Record Watch (#records, in season only) */
+.rb-watch { margin-bottom: 30px; padding: 20px 20px 8px; background: var(--white); border-top: 3px solid var(--red); }
+.rb-watch header span { color: var(--red); font: 700 8px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.rb-watch h2 { margin: 6px 0 14px; font-size: 17px; letter-spacing: -.01em; }
+.rb-watch ul { margin: 0; padding: 0; list-style: none; }
+.rb-watch li { padding: 12px 0; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(80px, 1fr) minmax(0, 1.3fr) 150px; align-items: center; gap: 8px 18px; border-top: 1px solid var(--gray-100); }
+.rb-watch-label { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.rb-watch-label small, .rb-watch-pace small, .rb-watch-nums small { color: var(--gray-500); font: 600 9px var(--font-mono); text-transform: uppercase; letter-spacing: .03em; }
+.rb-watch-leader { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; font-weight: 650; }
+.rb-watch-leader span { display: inline-flex; align-items: center; gap: 5px; }
+.rb-watch-leader img { width: 18px; height: 18px; object-fit: contain; }
+.rb-watch-leader a { color: inherit; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 2px; }
+.rb-watch-bar { height: 6px; background: var(--gray-100); }
+.rb-watch-bar i { display: block; height: 100%; background: var(--ink); }
+.rb-watch li.on-pace .rb-watch-bar i, .rb-watch li.past .rb-watch-bar i { background: var(--red); }
+.rb-watch-nums { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rb-watch-nums strong, .rb-watch-pace strong { font: 700 16px var(--font-mono); letter-spacing: -.03em; }
+.rb-watch-pace { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+@media (max-width: 720px) {
+  .rb-watch li { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label pace" "nums nums" "bar bar"; }
+  .rb-watch-label { grid-area: label; }
+  .rb-watch-pace { grid-area: pace; align-items: flex-end; }
+  .rb-watch-nums { grid-area: nums; }
+  .rb-watch-bar { grid-area: bar; }
+}
