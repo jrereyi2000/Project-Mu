@@ -16,7 +16,10 @@ years_of_experience) through 2034. Flags:
 - missing_pre2026:   he entered before 2026 but has no real-career row (nfl_careers_through_2025.csv)
 - untracked_pre2026: he entered before 2026 and some stats nflverse doesn't carry (broken tackles, YAC, run after
                      catch, sacks allowed, ...) still hold his real pre-2026 share; those columns are listed per player
-Players with a captured 2035..S line but no career row (cut off a 250-row list) are listed separately.
+Players with a captured 2035..S line but no career row are listed separately: rostered in S (cut off a list, or
+never listed) or no longer rostered (gone before the capture; the lists carry active players only). Madden's career
+GP isn't comparable to season games played, so games are left out; a column with no career row (a category the
+player isn't listed in) is unknown, not zero, and isn't subtracted.
 
 Writes verify_output/history_remainders_<S>.csv (one row per player) and history_remainders_<S>.md (summary).
 compute() is pure; the rest reads the database and data/history/nfl_careers_through_2025.csv. Writes nothing to the
@@ -42,14 +45,14 @@ TOLERANCE = 0.05          # half-sacks and float reads
 
 def summable_columns():
     cols = {col for cat in CATEGORIES for col, _ in column_map(cat).values()}
-    return sorted(c for c in cols if not c.endswith(NOT_SUMMABLE)) + ["games_played"]
+    return sorted(c for c in cols if not c.endswith(NOT_SUMMABLE))
 
 
 COLUMNS = summable_columns()
 
 
-def _add(into, line, sign=1):
-    for c in COLUMNS:
+def _add(into, line, sign=1, only=None):
+    for c in only or COLUMNS:
         v = line.get(c)
         if v not in (None, ""):
             into[c] = into.get(c, 0) + sign * float(v)
@@ -61,17 +64,20 @@ def compute(career, captured, canon, pre2026, first_season, pre_columns):
     untracked}} (pure)."""
     out = {}
     for pid, tot in career.items():
+        # only the columns his career rows carry: no row in a category (an offensive player's 2 tackles below a
+        # team's defense list) means unknown, not zero
+        cols = [c for c in COLUMNS if tot.get(c) is not None]
         mu = {}
-        _add(mu, tot)
+        _add(mu, tot, only=cols)
         for line in captured.get(pid, []):
-            _add(mu, line, -1)
+            _add(mu, line, -1, cols)
         first = first_season.get(pid)
         entered_before = first is not None and first < FIRST_MU
         if pid in pre2026:
-            _add(mu, pre2026[pid], -1)
+            _add(mu, pre2026[pid], -1, cols)
         gen = dict(mu)
         for line in canon.get(pid, []):
-            _add(gen, line, -1)
+            _add(gen, line, -1, cols)
         gen = {c: round(v, 1) for c, v in gen.items()}
         start = max(FIRST_MU, first) if first is not None else FIRST_MU
         open_seasons = max(0, LAST_GENERATED - start + 1)
@@ -107,9 +113,7 @@ def read_career(cur, season):
     for pid, stats in cur.fetchall():
         t = career.setdefault(pid, {})
         for c, v in stats.items():
-            if c == "games_played":
-                t[c] = max(t.get(c) or 0, v or 0)      # every category repeats GP
-            else:
+            if c != "games_played":      # Madden's career GP isn't comparable to season GP (JR's 2036 capture)
                 t[c] = v
     return career
 
@@ -156,11 +160,13 @@ def build(cur, season):
     result = compute(career, captured, canon, pre, first, pre_cols)
     # captured 2035..S lines with no career row: the list was cut off, or the row wasn't matched
     no_row = sorted(pid for pid, lines in captured.items() if pid not in career
-                    and any(float(v) for line in lines for c, v in line.items() if c != "games_played" and v))
-    return result, no_row
+                    and any(float(v) for line in lines for c, v in line.items() if v))
+    cur.execute("SELECT player_id FROM player_seasons WHERE season = %s AND team_id IS NOT NULL", (season,))
+    rostered = {r[0] for r in cur.fetchall()}
+    return result, [p for p in no_row if p in rostered], [p for p in no_row if p not in rostered]
 
 
-def write_report(cur, season, result, no_row):
+def write_report(cur, season, result, no_row, gone):
     os.makedirs(OUT_DIR, exist_ok=True)
     cur.execute("SELECT id, full_name, player_name FROM players")
     names = {i: f or p for i, f, p in cur.fetchall()}
@@ -181,12 +187,14 @@ def write_report(cur, season, result, no_row):
              f"- With a 2026–2034 remainder to generate: "
              f"{sum(1 for r in result.values() if any(v > TOLERANCE for v in r['generate'].values()))}",
              f"- Flags: " + (", ".join(f"{k} {v}" for k, v in sorted(flags.items())) or "none"),
-             f"- Captured {FIRST_CAPTURED}–{season} lines with no career row: {len(no_row)}", "",
+             f"- On a {season} roster with a captured line but no career row: {len(no_row)}",
+             f"- Captured {FIRST_CAPTURED}–{season} lines of players no longer rostered (left before the capture, so "
+             f"not on the active-player lists): {len(gone)}", "",
              "## Negative remainders (first 25)", ""]
     for pid, r in sorted(neg, key=lambda x: names.get(x[0]) or "")[:25]:
         bad = ", ".join(f"{c} {v:g}" for c, v in r["generate"].items() if v < -TOLERANCE)
         lines.append(f"- {names.get(pid)} ({pos.get(pid)}, id {pid}): {bad}")
-    lines += ["", "## No career row (first 40)", ""]
+    lines += ["", f"## On a {season} roster, no career row (first 40)", ""]
     lines += [f"- {names.get(pid)} ({pos.get(pid)}, id {pid})" for pid in no_row[:40]]
     md_path = os.path.join(OUT_DIR, f"history_remainders_{season}.md")
     with open(md_path, "w") as f:
@@ -202,9 +210,10 @@ def main():
         season = a.season or latest_captured_season(cur)
         if season is None:
             raise SystemExit("player_career_totals is empty: capture, extract and load Career Stats first")
-        result, no_row = build(cur, season)
-        csv_path, md_path, flags = write_report(cur, season, result, no_row)
-    print(f"{len(result)} players; flags {dict(flags)}; {len(no_row)} captured players without a career row")
+        result, no_row, gone = build(cur, season)
+        csv_path, md_path, flags = write_report(cur, season, result, no_row, gone)
+    print(f"{len(result)} players; flags {dict(flags)}; {len(no_row)} rostered players without a career row; "
+          f"{len(gone)} no longer rostered")
     print(f"wrote {os.path.relpath(csv_path)} and {os.path.relpath(md_path)}")
 
 

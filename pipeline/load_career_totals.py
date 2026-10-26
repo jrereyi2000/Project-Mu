@@ -26,7 +26,7 @@ import sys
 
 import psycopg
 
-from pipeline.capture_matching import name_key, num
+from pipeline.capture_matching import name_key, num, one_slip
 from pipeline.load_capture import (CATEGORY, DSN, SEASON_OFFENSE, LoadError, counters_of, misread_copies, parse_row,
                                    read_csv, roster, team_index)
 
@@ -93,6 +93,7 @@ def match_rows(cat, rows, cmap, players, season_lines, scoped=None):
     out, taken, resolved = [], set(), set()
     for tid, trows in sorted((scoped or {}).items()):
         for r in trows:
+            r = dict(r, _team=tid)
             key, pos = name_key(r["NAME"]), r["POS"]
             vals = row_values(r, cmap, f"{cat} {r['NAME']} (team {tid})")
             sig = _sig(key, pos, vals)
@@ -130,7 +131,35 @@ def match_rows(cat, rows, cmap, players, season_lines, scoped=None):
             out += [(None, r, v, flags + ["ambiguous"]) for r, v in zip(rs, values)]
         else:
             out += [(got[i], r, v, flags) for i, (r, v) in enumerate(zip(rs, values))]
-    return out
+    return second_pass(out, players, season_lines, taken | {pid for pid, *_ in out if pid})
+
+
+def second_pass(out, players, season_lines, taken):
+    """Unmatched rows after every exact match, in order: a team-list row whose player is stored on another team
+    (moved_team: same name key + position anywhere), then one OCR slip in the name (name_slip: same position, and
+    the same team for a team-list row). Only a unique, not yet taken player whose season line fits; else the row
+    stays unmatched."""
+    def pick(cands, vals):
+        cands = [p for p in cands if p not in taken and fits(vals, season_lines.get(p))]
+        return cands[0] if len(cands) == 1 else None
+
+    done = []
+    for pid, r, vals, flags in out:
+        if pid is None and "unmatched" in flags:
+            key, pos = name_key(r["NAME"]), r["POS"]
+            team = flags[0] == "team_list" and r.get("_team")
+            got, how = None, None
+            if team:
+                got, how = pick([p for p, k, t, ps, _ in players if k == key and ps == pos and t != team], vals), \
+                    "moved_team"
+            if got is None:
+                got, how = pick([p for p, k, t, ps, _ in players if ps == pos and k != key and one_slip(k, key)
+                                 and (not team or t == team)], vals), "name_slip"
+            if got is not None:
+                taken.add(got)
+                pid, flags = got, [f for f in flags if f != "unmatched"] + [how]
+        done.append((pid, r, vals, flags))
+    return done
 
 
 def season_lines_of(cur, season):

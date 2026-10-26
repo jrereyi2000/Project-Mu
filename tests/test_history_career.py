@@ -53,6 +53,17 @@ class MatchRowsTest(unittest.TestCase):
         self.assertEqual(sorted((pid, v["rush_yards"], tuple(f)) for pid, _, v, f in got),
                          [(1, 600, ()), (2, 5000, ("team_list",))])
 
+    def test_team_list_player_stored_on_another_team(self):
+        got = match_rows("rushing", [], RUSH, PLAYERS, {}, {30: [_row("A.Jones", "HB", 3000, 700)]})
+        self.assertEqual([(pid, f) for pid, _, _, f in got], [(3, ["team_list", "moved_team"])])
+
+    def test_one_slip_in_the_name(self):
+        got = match_rows("rushing", [_row("A.Jomes", "HB", 3000, 700)], RUSH, PLAYERS, {})
+        self.assertEqual([(pid, f) for pid, _, _, f in got], [(3, ["name_slip"])])
+        # J.Smith has two players one slip from "J.Smitt": stays unmatched
+        got = match_rows("rushing", [_row("J.Smitt", "HB", 3000, 700)], RUSH, PLAYERS, {})
+        self.assertEqual([(pid, f) for pid, _, _, f in got], [(None, ["unmatched"])])
+
     def test_games_played_is_kept(self):
         got = match_rows("rushing", [_row("A.Jones", "HB", 3000, 700, gp=80)], RUSH, PLAYERS, {})
         self.assertEqual(got[0][2]["games_played"], 80)
@@ -67,7 +78,7 @@ class ComputeTest(unittest.TestCase):
         r = compute(career, captured, canon, pre, {7: 2024}, {"rush_yards", "games_played"})[7]
         self.assertEqual(r["mu"]["rush_yards"], 5800)
         self.assertEqual(r["generate"]["rush_yards"], 4900)
-        self.assertEqual(r["generate"]["games_played"], 82)
+        self.assertNotIn("games_played", r["generate"])         # career GP isn't comparable: left out
         self.assertEqual(r["open_seasons"], 9)
         self.assertEqual(r["flags"], ["untracked_pre2026"])      # broken tackles have no real-career source
         self.assertEqual(r["untracked"], ["rush_btk"])
@@ -80,6 +91,12 @@ class ComputeTest(unittest.TestCase):
         self.assertEqual(r[1]["open_seasons"], 5)
         self.assertEqual(r[2]["flags"], ["no_open_seasons"])     # 100 yards left but he arrived in 2035
         self.assertEqual(r[3]["flags"], ["missing_pre2026"])
+
+    def test_column_without_a_career_row_is_not_subtracted(self):
+        # a QB's 2 catches with no career receiving row: unknown, not -2
+        r = compute({1: {"pass_yards": 5000}}, {1: [{"pass_yards": 4000, "receptions": 2}]}, {}, {}, {1: 2030}, set())
+        self.assertEqual(r[1]["generate"], {"pass_yards": 1000})
+        self.assertEqual(r[1]["flags"], [])
 
 
 if __name__ == "__main__":
