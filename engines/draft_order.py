@@ -6,7 +6,9 @@
     picks 29–30  Conference Championship losers
     pick 31      Super Bowl loser,  pick 32  Super Bowl winner
 
-Within a bracket: regular-season win% (ties count half), then regular-season point differential, worst first.
+Within a bracket: regular-season win% (ties count half), then strength of schedule (opponents' combined win% over
+the games played, a repeat opponent counted each time; easier schedule first, as Madden orders it), then
+regular-season point differential, worst first.
 A pick is `locked` once its team's season is over and the bracket's round is complete, so nothing can move
 it. Teams still alive take the remaining (highest) picks by the same order, provisionally.
 
@@ -34,8 +36,9 @@ def game_round(game: dict):
 
 
 def regular_season_records(teams: dict, games: list) -> dict:
-    """{team_id: {w, l, t, pf, pa}} from completed regular-season games."""
+    """{team_id: {w, l, t, pf, pa, sos}} from completed regular-season games."""
     rec = {tid: dict(w=0, l=0, t=0, pf=0, pa=0) for tid in teams}
+    opponents = {tid: [] for tid in teams}
     for g in games:
         if g["status"] != "COMPLETED" or game_round(g) is not None or g["week"] > 18:
             continue
@@ -44,16 +47,22 @@ def regular_season_records(teams: dict, games: list) -> dict:
             if me not in rec:
                 continue
             r = rec[me]
+            opponents[me].append(them)
             r["pf"] += mine
             r["pa"] += theirs
             r["w" if mine > theirs else "l" if mine < theirs else "t"] += 1
+    for tid, ops in opponents.items():
+        # opponents' combined record: Madden counts only games already played, not the rest of the schedule
+        ops = [rec[o] for o in ops if o in rec]
+        played = sum(o["w"] + o["l"] + o["t"] for o in ops)
+        rec[tid]["sos"] = sum(o["w"] + 0.5 * o["t"] for o in ops) / played if played else 0.0
     return rec
 
 
 def _sort_key(r: dict):
     played = r["w"] + r["l"] + r["t"]
     win_pct = (r["w"] + 0.5 * r["t"]) / played if played else 0.0
-    return (win_pct, r["pf"] - r["pa"])
+    return (win_pct, r["sos"], r["pf"] - r["pa"])
 
 
 def compute_draft_order(teams: dict, games: list) -> dict:
@@ -93,6 +102,7 @@ def compute_draft_order(teams: dict, games: list) -> dict:
                 "record": f"{r['w']}-{r['l']}" + (f"-{r['t']}" if r["t"] else ""),
                 "win_pct": round((r["w"] + 0.5 * r["t"]) / played, 3) if played else 0.0,
                 "point_differential": f"+{diff}" if diff > 0 else str(diff),
+                "strength_of_schedule": round(r["sos"], 3),
                 "selection_status": status, "locked": locked}
 
     worst_first = lambda ids: sorted(ids, key=lambda tid: _sort_key(rec[tid]))

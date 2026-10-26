@@ -82,15 +82,27 @@ class DraftOrderTest(unittest.TestCase):
         self.assertEqual((p[31], p[32]), ((9, True), (5, True)))
         self.assertTrue(all(locked for _, locked in p.values()))
 
-    def test_ties_count_half_and_point_differential_breaks_ties(self):
+    def test_ties_count_half_and_point_differential_breaks_equal_schedules(self):
         teams = {1: dict(name="X", conference="AFC"), 2: dict(name="Y", conference="AFC"), 3: dict(name="Z", conference="AFC")}
         g = lambda h, a, hs, as_: dict(home_team_id=h, away_team_id=a, home_score=hs, away_score=as_,
                                        status="COMPLETED", week=1, game_type="REGULAR_SEASON")
-        # all three finish at .500: X 1-1 (-17), Y 0-0-2 (0), Z 1-1-2 (+17); the worst differential picks first
+        # all three finish at .500 against .500 schedules: X 1-1 (-17), Y 0-0-2 (0), Z 1-1-2 (+17); the worst
+        # differential picks first
         games = [g(1, 3, 20, 10), g(2, 3, 10, 10), g(2, 3, 14, 14), g(1, 3, 3, 30)]
         r = compute_draft_order(teams, games)
         self.assertEqual([(p["team"], p["win_pct"]) for p in r["round_1_order"]], [("X", 0.5), ("Y", 0.5), ("Z", 0.5)])
         self.assertEqual(r["round_1_order"][1]["record"], "0-0-2")
+
+    def test_easier_schedule_picks_first_before_point_differential(self):
+        teams = {t: dict(name=n, conference="AFC") for t, n in ((1, "A"), (2, "B"), (3, "Strong"), (4, "Weak"))}
+        g = lambda h, a, hs, as_: dict(home_team_id=h, away_team_id=a, home_score=hs, away_score=as_,
+                                       status="COMPLETED", week=1, game_type="REGULAR_SEASON")
+        # A and B both 1-1. A played Weak (1-4) twice: SOS .200, diff -2. B played Strong (3-0) and Weak: SOS .500,
+        # diff -30. The easier schedule picks first, though B's differential is worse.
+        games = [g(1, 4, 10, 13), g(1, 4, 21, 20), g(2, 3, 0, 40), g(2, 4, 20, 10), g(3, 4, 20, 10), g(3, 4, 20, 10)]
+        r = compute_draft_order(teams, games)
+        self.assertEqual([p["team"] for p in r["round_1_order"]], ["Weak", "A", "B", "Strong"])
+        self.assertEqual([p["strength_of_schedule"] for p in r["round_1_order"][1:3]], [0.2, 0.5])
 
 if __name__ == "__main__":
     unittest.main()
