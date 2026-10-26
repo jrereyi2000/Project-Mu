@@ -187,6 +187,7 @@ class EndpointTest(unittest.TestCase):
         roster = TestClient(app).get(f"/api/team/{row[0]}").json()["roster"]
         self.assertTrue(roster)
         self.assertFalse(set(row[1]) & {p["id"] for p in roster})
+        self.assertNotIn("DEF", {p["position"] for p in roster})       # no fantasy D/ST row
 
     def test_alias_and_unknown_team(self):
         self.assertEqual(self.client.get("/api/team/ARI/front-office").json()["team"]["abbreviation"], "AZ")

@@ -520,10 +520,10 @@ function TeamPage({ team }: { team: Team }) {
                   : player.years_of_experience === 0 ? "Rookie"
                   : `${player.years_of_experience} yr${player.years_of_experience === 1 ? "" : "s"}`}</span>
                 <span>
-                  {player.position !== "DEF" && <button className="roster-contract-link" aria-label={`${player.name}'s contract`}
+                  <button className="roster-contract-link" aria-label={`${player.name}'s contract`}
                     onClick={() => { setContractFocus({ playerId: player.id, name: player.name, nonce: Date.now() }); setTab("front office"); }}>
                     View →
-                  </button>}
+                  </button>
                 </span>
               </div>
             ))}

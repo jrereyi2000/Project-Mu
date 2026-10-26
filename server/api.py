@@ -228,12 +228,13 @@ def get_team(abbr: str, season: Optional[int] = None):
             team_info["abbreviation"] = display_team_abbr(team_info["abbreviation"])
             
             # Get Roster: a released player keeps team_id with released_week set (pipeline/load_transactions.py), so he
-            # leaves the roster from his release on; a signing elsewhere moves him and clears released_week.
+            # leaves the roster from his release on; a signing elsewhere moves him and clears released_week. The fantasy
+            # D/ST row (position DEF, e.g. "Bengals D/ST") isn't a player and stays off it too.
             cur.execute("""
                 SELECT p.id, p.full_name as name, p.player_number, p.espn_id, ps.position, ps.years_of_experience, ps.overall_rating
                 FROM players p
                 JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                WHERE ps.team_id = %s AND ps.released_week IS NULL
+                WHERE ps.team_id = %s AND ps.released_week IS NULL AND ps.position IS DISTINCT FROM 'DEF'
                 ORDER BY ps.overall_rating DESC
             """, (season, team_info['id']))
             roster = cur.fetchall()
