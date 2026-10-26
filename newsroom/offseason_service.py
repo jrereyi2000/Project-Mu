@@ -259,6 +259,30 @@ def match_signing_terms(signing: Dict[str, Any], rows: List[Dict[str, Any]]) -> 
     return "not recorded: state no contract terms"
 
 
+def coach_hot_seat_firings(conn, season: int) -> Optional[List[Dict[str, Any]]]:
+    """[{team, coach}] the coach hot seat (engines/coach_hot_seat.py) fired after `season`; None when it never
+    decided that season (before the hot seat existed)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*) AS n FROM coach_hot_seat WHERE season = %s", (season,))
+        if not cur.fetchone()["n"]:
+            return None
+        cur.execute("""SELECT t.abbreviation AS team, c.coach_name AS coach FROM coach_hot_seat h
+                       JOIN teams t ON t.id = h.team_id JOIN coaches c ON c.id = h.coach_id
+                       WHERE h.season = %s AND h.fired ORDER BY t.abbreviation""", (season,))
+        return [dict(r) for r in cur.fetchall()]
+
+
+def hot_seat_warnings(firings: List[Dict[str, Any]], moves: List[Dict[str, Any]]) -> List[str]:
+    """Pure. Fired teams with no coaching move, and head-coach hires at teams the hot seat didn't fire."""
+    fired = {f["team"]: f["coach"] for f in firings}
+    hired = {m["team"] for m in moves}             # every coaching move installs a new head coach
+    out = [f"{t}: the hot seat fired {c}; add the replacement you hired in Madden to coaching_moves"
+           for t, c in sorted(fired.items()) if t not in hired]
+    out += [f"{t}: a head-coach hire the hot seat didn't fire for; did Madden fire this coach on its own?"
+            for t in sorted(hired - set(fired))]
+    return out
+
+
 def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: Optional[str] = None) -> Dict[str, Any]:
     """Generates a structured dry-run validation preview of the manifest:
     - Resolves teams, coaches, slants
@@ -276,6 +300,7 @@ def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: 
         "event_dates": manifest["event_dates"],
         "resolved_teams": [],
         "coaching_moves": [],
+        "hot_seat_firings": [],
         "signings": [],
         "signing_candidates": [],
         "draft_summary": {},
@@ -312,6 +337,17 @@ def preview_manifest(path_or_dict: Union[str, Path, Dict[str, Any]], conn_info: 
                     "effective_season": m.get("effective_season", manifest["season"] + 1),
                     "notes": m.get("notes"),
                 })
+
+            # 1b. Reconcile with the coach hot seat: every team Mu fired a coach for needs its Madden replacement, and a
+            # head-coach change Mu didn't make means Madden fired someone on its own.
+            try:
+                with conn.transaction():
+                    firings = coach_hot_seat_firings(conn, manifest["season"])
+            except Exception:   # no coach_hot_seat table yet
+                firings = None
+            if firings is not None:
+                preview["hot_seat_firings"] = firings
+                preview["warnings"].extend(hot_seat_warnings(firings, preview["coaching_moves"]))
 
             # 2. Preview Signings with Qualitative Conversion & All-Pro Check
             for s in manifest.get("signings", []):

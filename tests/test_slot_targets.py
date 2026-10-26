@@ -198,6 +198,20 @@ class HotSeatTargetTests(unittest.TestCase):
         hot_seat, sotu, _ = resolve_slot_targets(WEEK_19_SLOTS, snap)
         self.assertEqual((hot_seat["team_id"], sotu["team_id"]), (32, 31))
 
+    def test_a_fired_coach_leads_and_the_note_reports_the_firings(self):
+        snap = wild_card_league({12: (4, 7.5), 10: (6, 7.0), 30: (5, 7.0)})
+        snap.coach_firings = {10: "Coach Ten", 30: "Coach Thirty"}
+        self.assertEqual(hot_seat_team_ids(snap), [30, 10, 12])  # firings first (steepest first), then 12 at -3.5
+        hot_seat = resolve_slot_targets(WEEK_19_SLOTS[:1], snap)[0]
+        self.assertEqual(hot_seat["team_id"], 30)
+        self.assertIn("fired head coach Coach Thirty today", hot_seat["note"])
+        self.assertIn("Team10 (ID: 10), 6 wins against 7.0 expected (-1.0) (fired Coach Ten today)", hot_seat["note"])
+        self.assertIn("Report the firings named here as news", hot_seat["note"])
+
+    def test_no_firings_says_so(self):
+        hot_seat = resolve_slot_targets(WEEK_19_SLOTS[:1], wild_card_league({12: (4, 7.5)}))[0]
+        self.assertIn("No head coach was fired today.", hot_seat["note"])
+
     def test_untargeted_outside_week_19(self):
         snap = wild_card_league({12: (4, 7.5)})
         snap.week = 20

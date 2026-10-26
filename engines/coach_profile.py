@@ -252,14 +252,23 @@ def fetch_team_staff(cur, team_id: int, season: int) -> dict | None:
 
 
 def league_staff_directory(cur, season: int) -> list[str]:
-    """One line per team naming its head coach and coordinators in `season`, for the writer prompts."""
+    """One line per team naming its head coach and coordinators in `season`, for the writer prompts. A head coach the
+    coach hot seat fired after `season` (engines/coach_hot_seat.py, Black Monday) is marked fired."""
+    fired = set()
+    cur.execute("SELECT to_regclass('coach_hot_seat') IS NOT NULL")
+    if cur.fetchone()[0]:
+        cur.execute("SELECT team_id, coach_id FROM coach_hot_seat WHERE season = %s AND fired", (season,))
+        fired = set(cur.fetchall())
     cur.execute("SELECT id, city, name, abbreviation FROM teams ORDER BY city, name")
     lines = []
     for team_id, city, name, abbr in cur.fetchall():
         staff = fetch_team_staff(cur, team_id, season)
         if not staff:
             continue
-        parts = [f"HC {staff['head_coach']['coach_name']}"]
+        hc = staff["head_coach"]
+        parts = [f"HC {hc['coach_name']}"
+                 + (f" (fired on Black Monday after the {season} season)" if (team_id, hc.get("id")) in fired
+                    else "")]
         for role, key in (("OC", "offensive_coordinator"), ("DC", "defensive_coordinator")):
             coord = staff.get(key)
             if coord:

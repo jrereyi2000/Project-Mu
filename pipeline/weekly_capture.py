@@ -438,6 +438,37 @@ def step_scouting(season):
         return []
 
 
+def step_coach_hot_seat(season):
+    """engines/coach_hot_seat.py: Black Monday. Once the regular season is complete and the Wild Card matchups are
+    loaded (the Week 18 run), Mu fires up to MAX_FIRES CPU-run teams' head coaches, before the Week 19 articles; JR
+    mirrors each firing in Madden. Every other run finds it not ready or already decided. Skipped without the
+    migration; a failure only logs a warning. Returns the report."""
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from engines import coach_hot_seat as chs
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            if not chs.installed(cur):
+                log("  Coach hot seat skipped: the coach hot seat migration isn't applied")
+                return None
+            rep = chs.run(cur, season, log=log)
+            conn.commit()
+        if rep["status"] != "decided":
+            log(f"  Coach hot seat {season}: {rep['status']}")
+            return rep
+        log(f"  Coach hot seat {season}: {len(rep['fired'])} head coach(es) fired")
+        if rep["fired"]:
+            who = "; ".join(f"{f['team']}: {f['coach']}" for f in rep["fired"])
+            notify(f"Black Monday: fire these head coaches in Madden: {who}. Record each replacement in the offseason "
+                   "manifest's coaching_moves.", title="Mu: coaches fired", tags=("door",))
+        return rep
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] Coach hot seat skipped: {e!r}")
+        return None
+
+
 def step_preseason_engines(season):
     """Preseason engines for start-of-season calibration (schedule, rosters, injuries loaded):
     1. Preseason Fantasy ADP (runs 100 simulated drafts, writes Week 1 ADP board).
@@ -884,6 +915,8 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             step_gm(season)
             log("Step 7c: scouting")
             step_scouting(season)
+            log("Step 7d: coach hot seat")
+            step_coach_hot_seat(season)
         published = None
         if articles:
             log("Step 8: articles")

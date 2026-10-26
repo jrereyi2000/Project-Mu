@@ -1181,6 +1181,18 @@ CREATE TABLE IF NOT EXISTS coty_scores (
     UNIQUE (coach_id, season)
 );
 
+-- Coach hot seat, decided once per season on Black Monday by engines/coach_hot_seat.py (2026_12_22_coach_hot_seat.sql)
+CREATE TABLE IF NOT EXISTS coach_hot_seat (
+    season INT NOT NULL,
+    team_id INT NOT NULL REFERENCES teams(id),
+    coach_id INT NOT NULL REFERENCES coaches(id),
+    score NUMERIC(6,3) NOT NULL,
+    fired BOOLEAN NOT NULL DEFAULT false,
+    inputs JSONB NOT NULL,
+    decided_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (season, team_id)
+);
+
 CREATE TABLE IF NOT EXISTS awards (
     id SERIAL PRIMARY KEY,
     season INT NOT NULL,
