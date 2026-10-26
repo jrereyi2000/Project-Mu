@@ -8,7 +8,8 @@ when Apple Vision is not available. Overlapping rows between pages are stitched 
 character-level OCR tolerance (_close) to form a contiguous 1-to-N draft order (224 picks
 in a standard 7-round NFL draft). Draft picks are enriched with:
 - overall_pick, round, round_pick
-- team and team_id (from draft order engine)
+- team and team_id: the pick's owner from draft_picks (the Draft Room's locked order, so traded picks go to
+  the team that held them; before a lock, the draft order engine mapped through today's owners)
 - full_name, college, age, archetype (matched from draft_prospects board)
 """
 
@@ -160,12 +161,23 @@ def stitch_pages(pages_rows: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]
     return combined
 
 
+def team_by_overall_pick(locked: List[Tuple[int, int]], slots: List[Dict[str, Any]],
+                         teams: Dict[int, Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
+    """{overall_pick: {team_id, abbreviation, team}} for the whole draft. locked: draft_picks (overall_pick,
+    owner_team_id) rows once the Draft Room has locked the order; used when every slot is locked, else slots:
+    draft_order_with_owners for every round (pure)."""
+    owner = dict(locked) if locked and len(locked) == len(slots) else {s["pick"]: s["owner_team_id"] for s in slots}
+    return {n: {"team_id": tid, "abbreviation": teams.get(tid, {}).get("abbreviation"),
+                "team": teams.get(tid, {}).get("name")} for n, tid in owner.items()}
+
+
 def load_db_context() -> Tuple[int, Dict[int, Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
-    """Load current draft season, round 1 draft order teams, and draft prospects from DB."""
+    """Load the league season, every pick's team (keyed by overall pick) and the class's prospects from DB.
+    The class drafts after the league season: draft_season = season + 1."""
     dsn = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
     try:
         import psycopg
-        from engines.draft_order import compute_draft_order, fetch_games, fetch_teams
+        from engines.draft_order import draft_order_with_owners, fetch_teams
 
         with psycopg.connect(dsn) as conn:
             with conn.cursor() as cur:
@@ -173,25 +185,23 @@ def load_db_context() -> Tuple[int, Dict[int, Dict[str, Any]], Dict[str, List[Di
                 row = cur.fetchone()
                 season = row[0] if row else 2035
 
-                teams = fetch_teams(cur)
-                games = fetch_games(cur, season)
-                order_res = compute_draft_order(teams, games)
-                team_by_pick = {item["pick"]: item for item in order_res.get("round_1_order", [])}
+                draft_season = season + 1
+                cur.execute("SELECT overall_pick, owner_team_id FROM draft_picks "
+                            "WHERE draft_season = %s AND overall_pick IS NOT NULL", (draft_season,))
+                locked = cur.fetchall()
+                slots = draft_order_with_owners(cur, draft_season, rounds=range(1, 8))
+                team_by_pick = team_by_overall_pick(locked, slots, fetch_teams(cur))
+                if not (locked and len(locked) == len(slots)):
+                    print(f"  Note: the {draft_season} order isn't locked in the Draft Room; "
+                          "teams come from the draft order and today's pick owners")
 
-                # Prospects could be under season or season + 1 (upcoming class)
+                # The class drafts after the league season (season + 1); the season's own class was drafted a year ago
                 cur.execute(
                     "SELECT id, full_name, position, college, age, ovr, archetype "
                     "FROM draft_prospects WHERE draft_season = %s",
-                    (season,),
+                    (draft_season,),
                 )
                 prospects = cur.fetchall()
-                if not prospects:
-                    cur.execute(
-                        "SELECT id, full_name, position, college, age, ovr, archetype "
-                        "FROM draft_prospects WHERE draft_season = %s",
-                        (season + 1,),
-                    )
-                    prospects = cur.fetchall()
 
         prospects_by_namekey: Dict[str, List[Dict[str, Any]]] = {}
         for p in prospects:
@@ -247,7 +257,7 @@ def extract_draft_results(root: str) -> Optional[str]:
             overall_pick = idx
             curr_round = ((overall_pick - 1) // 32) + 1
             curr_round_pick = ((overall_pick - 1) % 32) + 1
-            tinfo = team_by_pick.get(curr_round_pick, {})
+            tinfo = team_by_pick.get(overall_pick, {})
             team_str = tinfo.get("abbreviation") or tinfo.get("team") or ""
 
             raw_name = r["name"]
@@ -284,7 +294,7 @@ def extract_draft_results(root: str) -> Optional[str]:
             card_info = read_draft_recap_card(f_card)
             curr_round = ((idx - 1) // 32) + 1
             curr_round_pick = ((idx - 1) % 32) + 1
-            tinfo = team_by_pick.get(curr_round_pick, {})
+            tinfo = team_by_pick.get(idx, {})
             team_str = tinfo.get("abbreviation") or tinfo.get("team") or ""
             records.append({
                 "overall_pick": idx,

@@ -61,5 +61,21 @@ class TestExtractDraftResults(unittest.TestCase):
         res = E.extract_draft_results(self.tmp)
         self.assertEqual(res, csv_file)
 
+    def test_team_by_overall_pick_uses_owners(self):
+        teams = {1: {"name": "Bears", "abbreviation": "CHI"}, 2: {"name": "Lions", "abbreviation": "DET"}}
+        # pick 33 (round 2, Bears' slot) was traded to the Lions
+        slots = [{"pick": 1, "owner_team_id": 1}, {"pick": 2, "owner_team_id": 2},
+                 {"pick": 33, "owner_team_id": 2}, {"pick": 34, "owner_team_id": 2}]
+        got = E.team_by_overall_pick([], slots, teams)
+        self.assertEqual(got[33], {"team_id": 2, "abbreviation": "DET", "team": "Lions"})
+        self.assertEqual(got[1]["abbreviation"], "CHI")
+
+    def test_team_by_overall_pick_prefers_the_full_locked_order(self):
+        teams = {1: {"name": "Bears", "abbreviation": "CHI"}, 2: {"name": "Lions", "abbreviation": "DET"}}
+        slots = [{"pick": 1, "owner_team_id": 1}, {"pick": 2, "owner_team_id": 2}]
+        self.assertEqual(E.team_by_overall_pick([(1, 2), (2, 1)], slots, teams)[1]["team_id"], 2)
+        # a partial lock isn't trusted: the computed order stands
+        self.assertEqual(E.team_by_overall_pick([(1, 2)], slots, teams)[1]["team_id"], 1)
+
     def test_find_frames_empty(self):
         self.assertEqual(E.find_draft_recap_frames(self.tmp), [])
