@@ -1,10 +1,11 @@
-"""server/history_api.py: the #records Record Book and #awards endpoints. The ranking, badge and awards shaping tests
+"""server/history_api.py: the #records Record Book and #awards endpoints, and the player page's awards list. The ranking, badge and awards shaping tests
 need no database; the endpoint tests only read the live one (skipped when Postgres is down) and write nothing.
 
 Run this file only (the Napper tests write to the live database): python3 -m unittest tests.test_history_api"""
 import unittest
 
 import psycopg
+from psycopg.rows import dict_row
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -239,6 +240,29 @@ class EndpointTest(unittest.TestCase):
         self.assertEqual(slots, sorted(slots))
         empty = self.client.get("/api/awards/all-pro?season=1999").json()
         self.assertEqual((empty["first_team"], empty["second_team"]), ([], []))
+
+    def test_franchise_titles(self):
+        titles = self.client.get("/api/records/franchise/car").json()["titles"]
+        want = self.query("SELECT count(*) FROM games g JOIN teams t ON t.abbreviation = 'CAR' "
+                          "WHERE g.game_type = 'SUPER_BOWL' AND g.status = 'COMPLETED' AND ("
+                          "(g.home_team_id = t.id AND g.home_score > g.away_score) OR "
+                          "(g.away_team_id = t.id AND g.away_score > g.home_score));")[0][0]
+        self.assertEqual(len(titles), want)
+        self.assertTrue(all(t["score"] > t["opponent_score"] for t in titles))
+
+    def test_player_awards_on_both_cursor_kinds(self):
+        row = self.query("SELECT player_id, count(*) FROM awards WHERE player_id IS NOT NULL "
+                         "GROUP BY 1 ORDER BY 2 DESC LIMIT 1;")
+        if not row:
+            self.skipTest("no player awards stored")
+        pid, n = row[0]
+        with self.conn.cursor() as cur:
+            plain = H.fetch_player_awards(cur, pid)
+        with self.conn.cursor(row_factory=dict_row) as cur:
+            as_dicts = H.fetch_player_awards(cur, pid)
+        self.assertEqual(len(plain), n)
+        self.assertEqual(plain, as_dicts)
+        self.assertEqual([a["season"] for a in plain], sorted((a["season"] for a in plain), reverse=True))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Record Book & Awards Page: Implementation Plan
 
-**Status (2026-10-26):** Phases 1 (Record Book, `#records`) and 2 (Awards & Champions, `#awards`) built; phases 3–5 not started. Nothing here changes the database schema. Phase 1 adds a Rookie scope chip (the `rookie_*` categories) and ranks categories without an NFL list from their franchise records; phase 2 applies the `#awards` team and award filters on the page rather than as `/api/awards` parameters (PROJECT_SPEC §4.7).
+**Status (2026-10-26):** Phases 1 (Record Book, `#records`), 2 (Awards & Champions, `#awards`) and 3 (player Honors row, Team hub Records & Titles panel on the Stats tab) built; phases 4–5 not started. Nothing here changes the database schema. Phase 1 adds a Rookie scope chip (the `rookie_*` categories) and ranks categories without an NFL list from their franchise records; phase 2 applies the `#awards` team and award filters on the page rather than as `/api/awards` parameters (PROJECT_SPEC §4.7).
 **Scope:** A public **Record Book** (`#records`) and **Awards & Champions** (`#awards`) page, plus two small hooks: award badges on player pages and a Records panel on the Team hub.
 **Reference specs:** `PROJECT_SPEC.md` §2.9 (Record Book), §2.11 (Coach of the Year), §3.3a (coaches), §7.6b–§7.6d (stored All-Pro, award winners, Super Bowl MVP).
 

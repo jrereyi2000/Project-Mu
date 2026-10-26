@@ -1098,6 +1098,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                 "player": player,
                 "stat_group": stat_group,
                 "articles": articles,
+                "awards": history_api.fetch_player_awards(cur, id),
                 "game_log": games,
                 "career_stats": career,
                 "weekly_outlook": weekly_outlook

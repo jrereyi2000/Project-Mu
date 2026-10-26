@@ -6,6 +6,8 @@ import { DraftPage } from "./DraftPage";
 import { NapperPage } from "./NapperPage";
 import FrontOfficeTab, { type ContractFocus } from "./components/team/FrontOfficeTab";
 import AwardsPage from "./components/history/AwardsPage";
+import FranchiseRecords from "./components/history/FranchiseRecords";
+import PlayerHonors from "./components/history/PlayerHonors";
 import RecordBookPage from "./components/history/RecordBookPage";
 export const SystemContext = createContext<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
 
@@ -561,6 +563,10 @@ function TeamPage({ team }: { team: Team }) {
                 <article key={stat[0]}><span>{stat[0]}</span><strong>{stat[1]}</strong><small>TEAM RATING · {stat[2]}</small></article>
               ))}
             </div>
+
+          <div style={{ height: "4rem" }}></div>
+          <div className="team-section-title"><span>Set in this league</span><h2>Records &amp; Titles</h2></div>
+          <FranchiseRecords abbr={team.abbr} compact />
           </section>
       )}
 
@@ -1268,6 +1274,7 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
               <div><small>WEIGHT</small><strong>{player.weight} lbs</strong></div>
               <div><small>EXPERIENCE</small><strong>{player.years_of_experience} years</strong></div>
             </div>
+            <PlayerHonors awards={playerData.awards} />
           </div>
           <div className="player-season-card">
             <span>{gameLogSeason} SEASON</span>

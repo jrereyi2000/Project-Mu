@@ -113,6 +113,27 @@
 .aw-allpro-unit li img { width: 18px; height: 18px; object-fit: contain; }
 .aw-allpro-unit li small { color: var(--gray-500); font: 600 9px var(--font-mono); }
 
+/* Team hub Records panel (FranchiseRecords compact, Stats tab) */
+.rb-titles { margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 12px; }
+.rb-titles .rb-state { padding: 0 0 6px; }
+.rb-title { min-width: 180px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; color: var(--white); background: var(--charcoal); border-top: 3px solid var(--team-color, var(--red)); }
+.rb-title span { color: #aaaeb5; font: 700 8px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.rb-title strong { font: 700 28px var(--font-mono); letter-spacing: -.05em; }
+.rb-title small { color: #aaaeb5; font: 600 9px var(--font-mono); text-transform: uppercase; }
+.rb-compact-list { margin: 0; padding: 0; list-style: none; background: var(--white); }
+.rb-compact-list li { padding: 12px 16px; display: grid; grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 1.6fr); gap: 8px 16px; align-items: center; border-bottom: 1px solid var(--gray-100); font-size: 12px; }
+.rb-compact-list li > span:first-child small { display: block; margin-bottom: 3px; color: var(--gray-500); font: 700 7.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.rb-compact-list li > strong { font: 700 13px var(--font-mono); white-space: nowrap; }
+.rb-compact-holders { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.rb-full-link { margin-top: 14px; display: inline-block; color: var(--ink); font: 700 9px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--ink); }
+
+/* Player page Honors row (PlayerHonors.tsx), inside the dark player hero */
+.player-honors { margin-top: 22px; display: flex; flex-direction: column; gap: 8px; }
+.player-honors > small { color: #797c83; font: 700 6px var(--font-mono); letter-spacing: .08em; }
+.player-honors > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.player-honors a { padding: 5px 10px; border: 1px solid #ffffff2e; border-radius: 13px; color: var(--white); background: #ffffff0d; font: 700 9px var(--font-mono); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.player-honors a:hover { border-color: var(--team-color, var(--red)); background: #ffffff1a; }
+
 @media (max-width: 720px) {
   .rb-masthead { min-height: 170px; padding: 32px 16px; }
   .rb-controls { margin: -18px 16px 0; }
@@ -122,4 +143,6 @@
   .rb-grid { grid-template-columns: minmax(0, 1fr); }
   .aw-team { margin-left: 0; }
   .aw-split, .aw-allpro-grid { grid-template-columns: minmax(0, 1fr); }
+  .rb-compact-list li { grid-template-columns: minmax(0, 1fr) auto; }
+  .rb-compact-holders { grid-column: 1 / -1; }
 }

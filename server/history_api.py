@@ -168,9 +168,10 @@ def shape_mark(row: dict, abbrs: dict, as_of: dict) -> dict:
 
 
 def _rows(cur, sql: str, params=()) -> list:
+    """Rows as dicts from a tuple cursor or a dict_row cursor (server/api.py's pool)."""
     cur.execute(sql, params)
     cols = [d.name for d in cur.description]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
+    return [r if isinstance(r, dict) else dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def fetch_marks(cur, abbrs: dict, as_of: dict) -> tuple:
@@ -218,6 +219,20 @@ def build_category(cat: dict, entries: list, franchise: list, holders: list, era
     return dict(cat, basis=basis, record=record, top10=top,
                 result=None if era == "mu" else record_result(record, top, low),
                 previous_nfl_record=None if era == "mu" else previous_nfl_record(top, low))
+
+
+def fetch_titles(cur, team_id: int, abbrs: dict) -> list:
+    """The team's Super Bowl wins in this league, newest first: [{season, game_id, score, opponent, opponent_score}]."""
+    games = _rows(cur, "SELECT id, season, home_team_id, away_team_id, home_score, away_score FROM games "
+                       "WHERE game_type = 'SUPER_BOWL' AND status = 'COMPLETED' AND %s IN (home_team_id, away_team_id) "
+                       "ORDER BY season DESC;", (team_id,))
+    out = []
+    for g in games:
+        sb = super_bowl(g, abbrs)
+        if sb and sb["team_id"] == team_id:
+            out.append({"season": g["season"], "game_id": sb["game_id"], "score": sb["score"],
+                        "opponent": sb["opponent"], "opponent_score": sb["opponent_score"]})
+    return out
 
 
 def mu_mark_count(holders_by_cat: dict) -> int:
@@ -309,10 +324,11 @@ def franchise_records(abbr: str):
             team_id, team_abbr, city, name, color = resolve_team(cur, abbr)
             as_of = fetch_as_of(cur)
             out = {"team": {"id": team_id, "abbreviation": team_abbr, "name": f"{city} {name}", "color": color},
-                   "as_of": as_of, "mu_count": 0, "records": []}
+                   "as_of": as_of, "mu_count": 0, "records": [], "titles": []}
+            abbrs = fetch_abbrs(cur)
+            out["titles"] = fetch_titles(cur, team_id, abbrs)
             if not _installed(cur):
                 return out
-            abbrs = fetch_abbrs(cur)
             _, _, current, holders = fetch_marks(cur, abbrs, as_of)
             for cat in fetch_categories(cur):
                 if cat["season_type"] != "REGULAR":
@@ -405,6 +421,20 @@ def all_pro_team(rows: list) -> list:
         out.append({"slot": slot, "unit": unit, "name": r["player_name"], "player_id": r["player_id"],
                     "team": r["team"]})
     return out
+
+
+def fetch_player_awards(cur, player_id: int) -> list:
+    """Every stored award for one player (year-end awards, SB MVP, All-Pro), newest first, for the player page's
+    Honors row (server/api.py get_player). Works on a tuple or dict_row cursor; empty without the awards table."""
+    cur.execute("SELECT to_regclass('awards') IS NOT NULL AS present;")
+    row = cur.fetchone()
+    if not (row["present"] if isinstance(row, dict) else row[0]):
+        return []
+    rows = _rows(cur, "SELECT a.season, a.award_type, a.position, t.abbreviation AS team FROM awards a "
+                      "LEFT JOIN teams t ON t.id = a.team_id WHERE a.player_id = %s "
+                      "ORDER BY a.season DESC, a.id;", (player_id,))
+    return [{"season": r["season"], "award_type": r["award_type"], "position": r["position"], "team": r["team"]}
+            for r in rows]
 
 
 @router.get("/api/awards")
