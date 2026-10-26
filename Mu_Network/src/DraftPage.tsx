@@ -9,6 +9,18 @@ import ProspectModal from "./components/draft/ProspectModal";
 import "./components/draft/draft.css";
 
 type DraftTab = "board" | "honors" | "needs" | "mock" | "war-room";
+const DRAFT_TABS: DraftTab[] = ["board", "honors", "needs", "mock", "war-room"];
+
+// Deep links: #draft?tab=needs&team=CAR opens a tab (and, on Team Needs, one franchise).
+function readDraftHash(): { tab: DraftTab; team: string | null } {
+  const query = window.location.hash.split("?")[1] || "";
+  const params = new URLSearchParams(query);
+  const tab = params.get("tab") as DraftTab | null;
+  return {
+    tab: tab && DRAFT_TABS.includes(tab) ? tab : "board",
+    team: params.get("team")?.toUpperCase() || null,
+  };
+}
 
 interface DraftStateResponse {
   season: number;
@@ -46,7 +58,8 @@ interface DraftStateResponse {
 }
 
 export const DraftPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<DraftTab>("board");
+  const [activeTab, setActiveTab] = useState<DraftTab>(() => readDraftHash().tab);
+  const [teamFocus, setTeamFocus] = useState<string | null>(() => readDraftHash().team);
   const [state, setState] = useState<DraftStateResponse | null>(null);
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
   const [selectedProspectKey, setSelectedProspectKey] = useState<string | null>(null);
@@ -63,6 +76,16 @@ export const DraftPage: React.FC = () => {
   useEffect(() => {
     loadState();
   }, [loadState]);
+
+  useEffect(() => {
+    const onHash = () => {
+      const { tab, team } = readDraftHash();
+      setActiveTab(tab);
+      setTeamFocus(team);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   const draftSeason = state?.draft_season || 2037;
 
@@ -187,7 +210,7 @@ export const DraftPage: React.FC = () => {
           />
         )}
 
-        {activeTab === "needs" && <TeamNeedsMatrix />}
+        {activeTab === "needs" && <TeamNeedsMatrix team={teamFocus} onClearTeam={() => setTeamFocus(null)} />}
 
         {activeTab === "mock" && <MockDraftView onSelectProspect={setSelectedProspectKey} />}
 

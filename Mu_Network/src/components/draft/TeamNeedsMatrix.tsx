@@ -57,7 +57,7 @@ function directionStyle(dir: string): React.CSSProperties {
   return { background: "#e0f2fe", color: "#075985" };
 }
 
-export const TeamNeedsMatrix: React.FC = () => {
+export const TeamNeedsMatrix: React.FC<{ team?: string | null; onClearTeam?: () => void }> = ({ team, onClearTeam }) => {
   const [teams, setTeams] = useState<TeamNeedsRow[]>([]);
   const [draftSeason, setDraftSeason] = useState<number>(2037);
   const [loading, setLoading] = useState<boolean>(true);
@@ -80,6 +80,7 @@ export const TeamNeedsMatrix: React.FC = () => {
 
   const filtered = teams
     .filter((t) => {
+      if (team && t.abbreviation !== team) return false;
       if (confFilter !== "ALL" && t.conference !== confFilter) return false;
       if (dirFilter !== "ALL" && t.direction !== dirFilter) return false;
       if (search.trim()) {
@@ -123,6 +124,11 @@ export const TeamNeedsMatrix: React.FC = () => {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            {team && (
+              <button className="draft-filter-pill active" onClick={onClearTeam} title="Show all 32 teams">
+                {team} only ✕
+              </button>
+            )}
             <input
               type="search"
               className="draft-search-input"

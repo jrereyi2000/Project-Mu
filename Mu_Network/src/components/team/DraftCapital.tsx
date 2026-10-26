@@ -1,5 +1,6 @@
 // Front Office tab: the team's picks in the next three drafts (draft_picks), round by round. Its own pick is kept
 // or traded away ("to DET"); an acquired pick reads "via ATL". The overall number shows once the order is set.
+// Each draft header and pick links to Draft Central's Team Needs & Capital view, filtered to this team.
 import { teamLogo } from "./format";
 
 export type Pick = {
@@ -35,6 +36,7 @@ function PickChip({ pick }: { pick: Pick }) {
 }
 
 export default function DraftCapital({ data, abbr }: { data: DraftPicks; abbr: string }) {
+  const draftHref = `#draft?tab=needs&team=${abbr}`;
   const cell = (draft: number, round: number) =>
     data.picks.filter((p) => p.draft_season === draft && p.round === round)
       .sort((a, b) => ["OWN", "ACQUIRED", "TRADED_AWAY"].indexOf(a.status) - ["OWN", "ACQUIRED", "TRADED_AWAY"].indexOf(b.status));
@@ -49,7 +51,7 @@ export default function DraftCapital({ data, abbr }: { data: DraftPicks; abbr: s
 
   return (
     <section className="fo-block">
-      <div className="team-section-title"><span>{held} Picks Held · Next {data.drafts.length} Drafts</span><h2>Draft Capital</h2></div>
+      <div className="team-section-title"><span>{held} Picks Held · Next {data.drafts.length} Drafts</span><h2>Draft Capital</h2><a className="fo-draft-link" href={draftHref}>Draft Central →</a></div>
       <div className="fo-table-scroll">
         <table className="fo-draft" aria-label={`${abbr} draft picks by round`}>
           <thead>
@@ -59,7 +61,7 @@ export default function DraftCapital({ data, abbr }: { data: DraftPicks; abbr: s
                 const s = summary(d);
                 return (
                   <th key={d}>
-                    <strong>{d}</strong>
+                    <a href={draftHref}><strong>{d}</strong></a>
                     <small>{s.held} picks{s.extra ? ` · +${s.extra} acquired` : ""}{s.gone ? ` · ${s.gone} traded` : ""}</small>
                   </th>
                 );
@@ -73,7 +75,9 @@ export default function DraftCapital({ data, abbr }: { data: DraftPicks; abbr: s
                 {data.drafts.map((d) => (
                   <td key={d}>
                     <div className="fo-pick-cell">
-                      {cell(d, r).map((p) => <PickChip pick={p} key={`${p.original_team}-${p.status}`} />)}
+                      {cell(d, r).map((p) => (
+                        <a className="fo-pick-link" href={draftHref} key={`${p.original_team}-${p.status}`}><PickChip pick={p} /></a>
+                      ))}
                     </div>
                   </td>
                 ))}
