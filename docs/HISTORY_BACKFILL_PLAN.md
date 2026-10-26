@@ -1,6 +1,6 @@
 # 2026–2034 History Backfill: Implementation Plan
 
-**Status (2026-10-26):** Phase 0 built: Saleh baseline fix applied, console facts K1–K5 answered (§2), and the three input files in `data/history/` (`engines/history_backfill/sources.py`, §3.1–§3.2). Phase 1's code built (2026-10-26): Career Stats capture, extract, load into `player_career_totals` (migration applied) and the remainder report; the console capture itself hasn't run yet and must before this offseason's retirements (§3.1). Phases 2–4 not built. JR's decisions are in §0.
+**Status (2026-10-26):** Phase 0 built: Saleh baseline fix applied, console facts K1–K5 answered (§2), and the three input files in `data/history/` (`engines/history_backfill/sources.py`, §3.1–§3.2). Phase 1's code built (2026-10-26): Career Stats capture, extract, load into `player_career_totals` (migration applied) and the remainder report; the console capture itself hasn't run yet and must before this offseason's retirements (§3.1). The console capture ran and loaded 2026-10-26 (§3.1). Phase 2 built 2026-10-26: the team arc solver, staging, `apply` / `revert` (§3.3). Candidates 4–6 (`verify_output/history_team_arc.md`) all pass `verify`, all put the AFC's extra playoff loss on Houston (DeMeco Ryans), and await JR's pick. Phases 3–4 not built. JR's decisions are in §0.
 **Scope:** Give the league a complete 2026–2034 history at season level: standings, playoffs and coach lines for every team, and season stat lines for every player who played. Each player's lines add up to his captured Madden career totals. The history starts from the state of the real league at the end of the 2026–27 NFL season, ends at the captured 2035 season, and fits every fact already stored in between.
 **Reference specs:** `PROJECT_SPEC.md` §2.9 (Record Book), §3.1–§3.3a (players, seasons, stats, coaches), §3.3h (season archive), §7 (writer tools); `docs/SEASON_CONTINUITY_PLAN.md` (this plan replaces its D4); `docs/RECORD_BOOK_AND_AWARDS_PLAN.md` D5 (All-Pro before 2035).
 
@@ -29,7 +29,7 @@
 | B10 | **Every generated row is marked `source = 'SYNTH'`.** Captured career totals are `CAREER`. Rows already stored keep their current state and win over generated ones. |
 | B11 | **Season level only.** No 2026–2034 `games`, `player_stats` or box scores are generated. The Panthers' stored 2034 games stay the only per-game history. |
 | B12 | **Fill-in players are visible**, labelled "historical" on player pages and in leader lists. |
-| B13 | **Panthers 2026–2030:** middling years that kept Canales in the job (about .450–.550), with no Super Bowl trip. The 0-17 in 2031 starts the decline. |
+| B13 | **Panthers 2026–2030: 18-67, no playoffs** (replaces "middling years"). The coach totals force it: every other coach's 2025 → 2034 difference is exact, so Canales' 2026–2033 is the league's remainder, 26-110 with no playoff games, and 2031–2033 are 8-43. `Panthers Full History.pdf` agrees: no playoffs since 2025, whose 8-9 "was their high-water mark", so at most 8 wins a season. |
 | B14 | **Three candidate histories.** The generator writes three, each from a different random seed. JR picks one, can pin any season or line, and the run is refit around the pins (§3.8). |
 | B15 | **Approved history is canon.** Once applied, `SYNTH` rows are data under the hallucination policy, and writers must not contradict them. Regenerating the history needs JR's go-ahead. |
 | B16 | **Player teams:** each player spends his 2026–2034 seasons with his 2035 team unless something already stored says otherwise (a canon fact or a pin). Team moves can be added later as texture. |
@@ -41,9 +41,9 @@
 
 | Fact | Coverage | Use |
 |---|---|---|
-| Coach snapshot differences, 2025 → 2034 | 31 teams: exact 9-season W-L (153 games, no ties), number of winning seasons, playoff W-L, Super Bowl W-L. Includes the Titans after B8, the Broncos (Gaffney) and the Chiefs (Leonard), who all started 0-0 in 2026. The Buccaneers' Todd Bowles is the one coach whose 2025 row is real history but not Madden's start: Madden began him with one more loss (PROJECT_SPEC §3.3a), so the Bucs' 2026–2034 record is 82-71, not the row difference of 82-72. The Panthers have none (B9). | Hard limits on standings |
+| Coach snapshot differences, 2025 → 2034 | 31 teams: exact 9-season W-L (153 games, no ties), number of winning seasons, playoff W-L, Super Bowl W-L. Includes the Titans after B8, the Broncos (Gaffney) and the Chiefs (Leonard), who all started 0-0 in 2026. The Buccaneers' Todd Bowles is the one coach whose 2025 row is real history but not Madden's start: Madden began him with one more loss (PROJECT_SPEC §3.3a), so the Bucs' 2026–2034 record is 82-71, not the row difference of 82-72; 82 wins also need at least 2 winning seasons, not the difference's 1. The AFC differences add up to 64 playoff trips against the league's 63: one AFC coach with a real pre-2026 record started in Madden one playoff loss above his stored row (§3.3). The Panthers have none (B9). | Hard limits on standings |
 | Super Bowls | Both teams and the score for every season, 2026–2035 | Hard: champion and runner-up |
-| 2034 records | 18 teams in `team_seasons` | Hard |
+| 2034 records | Only Carolina's (13-4). The other 17 `team_seasons` 2034 rows hold just their games against Carolina (e.g. ATL 0-2), so they are lower bounds, not records. | Hard |
 | Panthers | 2031: 0-17, 2032: 4-13, 2033: 4-13, 2034: 13-4; 2034's 17 regular-season games and 3 playoff games; a few `season_stats` rows for 2032–2034 (Crawford, Davis, Franklin, Tucker) | Hard |
 | Awards | MVP, OPOY, DPOY, OROY, DROY, COTY and SB MVP for each season (7 per season). 12 non-COTY rows have no `player_id`, mostly players who have since retired. | Hard: an award season must justify the award |
 | Record book (`BOOK`) | Franchise and NFL single-season and rookie-season marks set 2026–2035, with player, season and value (`2026_10_28_league_record_book.sql`) | Hard: exact for the holder, a ceiling for everyone else |
@@ -95,17 +95,14 @@
 
 ### 3.3 Team arc (phase 2): `engines/history_backfill/team_arc.py`
 
-1. **Default path:** each team's strength runs from 2026 (§3.2) to 2035 (record, point differential and team overall, all captured), with a yearly pull back toward the league average (parity). That gives the default curve.
-2. **Standings:** an integer program in PuLP (installed) chooses wins for every team-season, 32 × 9 values:
-   - **Hard:** every season sums to 272 wins with no ties; the §1 totals; the known records (2034 and the Panthers); a winning season means 9 or more wins.
-   - **Objective:** stay close to the default curve, penalize large year-to-year swings, and add the story preferences (B13; MVP and COTY seasons; a long low stretch before a rise; a young, highly rated 2035 core implies earlier high draft picks).
-   - **Infeasible input:** if the facts can't all be met, the report names the constraints in conflict. Nothing is relaxed silently.
-3. **Playoffs:** each season gets 7 seeds per conference and a valid bracket.
-   - Seeds and division winners follow that season's records.
-   - Each team's playoff W-L sums to its coach total, and the stored Super Bowl matchup comes out of the bracket.
-   - Division places use `division_tiebreak = 'GENERATED'` when records tie, because without games the NFL tiebreakers can't be computed.
-4. **Points:** `points_for` and `points_against` are drawn from the team's strength and record, calibrated to the 2035–2036 scoring environment.
-5. **Strength path:** the final strength path is refit from the chosen records, so it always agrees with them. It drives §3.4–§3.6.
+Built 2026-10-26 (PROJECT_SPEC §3.3j has the full model).
+
+1. **Facts** (`derive`): the coach differences (§1) per tenure; Canales takes the league's remainder (B13); `BOWLES` adjusts Todd Bowles by −1 loss and +1 winning season. The AFC's 64 playoff trips need one AFC coach with a real pre-2026 record to carry a playoff loss his stored 2025 row lacks. The data can't say who, so the solver picks him and the report names him. JR can pin him in `data/history/pins.json` (`"playoff_loss_offset": ["HOU"]`). Stored games: the Super Bowls, Carolina's 2034 run (1 seed; beat NYG in the Divisional round and PHI for the NFC), Carolina 2034's 17 games (13-4, 535-347), and lower bounds for the teams it played. Canon from `Panthers Full History.pdf`: 0-17 in 2031 alone at the bottom; 4-13 in 2032 and 2033 tied for the worst record; Chicago the No. 1 offense 2029–2033 (Whitfield's Bears years).
+2. **Default path:** the 2026 projection (§3.2) and the 2035 record, each decaying toward .500 at 0.72 a season, shifted to each coach's total, plus a per-candidate AR(1) wiggle (B14).
+3. **Model:** OR-Tools CP-SAT, not PuLP. CBC found no feasible point in minutes; CP-SAT proves feasibility or infeasibility in seconds and finds a 1%-gap answer in about 3 minutes. Per team-season it chooses wins, a winning-season flag, a seed and a round flag. The bracket holds by seed: one Wild Card loser in each of 2v7, 3v6 and 4v5, then a reseeded Divisional round. Division winners have their division's most wins, seeds are ordered by wins, and wildcards have at least as many wins as any non-playoff team. The objective covers distance from the path and year-to-year swings (into 2035 too), plus soft story terms: COTY and MVP teams win 11+ and make the playoffs, COTY teams improve by 3+, Super Bowl teams win 11+ (weighted 2 per win short, after a first run gave a 7-10 champion), playoff teams win 9+, and Chicago wins 10+ in 2029–2033.
+   - **Infeasible input:** `generate` stops and names the constraint families whose removal makes it feasible. Nothing is relaxed silently.
+4. **Rows** (`finish`): division places use `division_tiebreak = 'GENERATED'` when records tie. Points come from wins (differential 31.5 × (W − 8.5) + noise; league mean rising from 383 in 2026 to 416 in 2035), balanced each season. Stored points are kept, and Chicago leads in scoring in 2029–2033. `verify` re-checks every fact on the rows.
+5. **Strength path for phases 3–4:** refit from the applied records (phase 3).
 
 **Written:**
 - `team_season_results` rows for 2026–2034 (`source = 'SYNTH'`). Head coach comes from `coach_tenures`; `gm_id` is NULL before a GM's `start_season`.
@@ -186,9 +183,10 @@ python3 -m engines.history_backfill revert                   # deletes every SYN
 |---|---|
 | `player_career_totals` | New (§3.1; `2026_12_26_player_career_totals.sql`, applied 2026-10-26) |
 | `players` | New column `origin` (NULL, or `HISTORY_FILLIN`) |
-| `player_seasons`, `season_stats`, `season_stat_lines`, `team_season_results`, `league_seasons`, `coach_season_lines` | New column `source` (DEFAULT `'CAPTURE'`; `'SYNTH'` for generated rows) |
+| `team_season_results`, `league_seasons`, `coach_season_lines` | New column `source` (DEFAULT `'CAPTURE'`; `'SYNTH'` for generated rows); `2026_12_28_history_team_arc.sql`, applied 2026-10-26 |
+| `player_seasons`, `season_stats`, `season_stat_lines` | Same `source` column (phase 3) |
 | `awards` | New column `source` (only used if generated All-Pro teams are approved, §5) |
-| `history_*` staging tables | New; dropped or emptied after `apply` |
+| `history_*` staging tables | `history_candidates` and `history_team_seasons` (phase 2, kept so a pick can be re-applied); player staging in phase 3 |
 | `coach_seasons` | Data only: Saleh's 2025 row (§3.9) |
 
 ---
@@ -210,7 +208,7 @@ python3 -m engines.history_backfill revert                   # deletes every SYN
 |---|---|---|
 | **0. Facts and fixes** (built 2026-10-26) | Saleh migration; K1–K5 answered on the console; `start_2026.csv`, `rosters_2026.csv` and `nfl_careers_through_2025.csv` from `engines/history_backfill/sources.py`; `tests/test_history_sources.py` | The Titans' snapshot difference is 83-70 (done); every 2036 veteran has a real career row (57 of 57) |
 | **1. Career totals** (code built 2026-10-26; console capture pending) | Capture (`--only career`, `--only career-teams`), extract (`--career`) and load; `player_career_totals`; remainders and their report | Every 2036 player has totals or a flag; no unflagged negative remainder |
-| **2. Team arc** | `team_arc.py`, playoffs, points; staging; `apply` for team rows; coach lines | 31 coach totals match exactly, every Super Bowl and known record holds, JR has picked a candidate |
+| **2. Team arc** (built 2026-10-26; awaiting JR's pick) | `team_arc.py`, playoffs, points; staging; `apply` for team rows; coach lines | 31 coach totals match exactly, every Super Bowl and known record holds, JR has picked a candidate |
 | **3. Player lines and fill-ins** | `team_totals.py`, `player_lines.py`, `fillins.py`, `validate`; `apply` / `revert` for player rows | The §3.7 report is clean; JR approves the Panthers, award winners and leaders |
 | **4. Consumers** | "Since 2026" career labels, history views, writer tools, optional All-Pro | A 2028 MVP's page shows his season; the Titans' history lists 2026–2036 |
 
@@ -220,7 +218,7 @@ python3 -m engines.history_backfill revert                   # deletes every SYN
 
 - **`tests/test_history_sources.py`** (built): the 2026 projection, career sums and field-goal ranges, the namesake check.
 - **`tests/test_history_career.py`** (built): `fits`, `settle`, name matching with and without team lists, the moved-team and name-slip pass, `games_played`, and the remainder's subtraction, columns without a career row and flags.
-- **`tests/test_history_team_arc.py`:** the integer program on a small synthetic league (exact totals, Super Bowl facts, winning-season counts, a reported infeasibility), and bracket validity.
+- **`tests/test_history_team_arc.py`** (built): the 64 bracket outcomes and reseeding, `bracket_ok`, `derive` on a synthetic league made from a known history (clean, bad totals, an extra playoff trip, an adjustment), a two-season solve that `verify` passes, and an impossible pin reported infeasible.
 - **`tests/test_history_player_lines.py`:** exact integer sums, record ceilings and holders, award conditions, canon rows kept, fill-in thresholds.
 - **No live writes in tests.** `apply` and `revert` are checked on a restored copy through `DATABASE_URL`. The Napper tests are never run wholesale (memory).
 

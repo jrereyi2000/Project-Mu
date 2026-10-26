@@ -1240,6 +1240,41 @@ CREATE UNIQUE INDEX IF NOT EXISTS player_career_totals_player
     ON player_career_totals (captured_season, category, player_id) WHERE player_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS player_career_totals_by_player ON player_career_totals (player_id);
 
+-- Generated 2026-2034 team arc (2026_12_28_history_team_arc.sql, engines/history_backfill/team_arc.py,
+-- docs/HISTORY_BACKFILL_PLAN.md phase 2): `apply` writes source = 'SYNTH'; the season archive's rows stay 'CAPTURE'.
+ALTER TABLE league_seasons ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE team_season_results ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE coach_season_lines ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+CREATE TABLE IF NOT EXISTS history_candidates (
+    id SERIAL PRIMARY KEY,
+    seed INT NOT NULL,
+    objective DOUBLE PRECISION,
+    solver_status TEXT,
+    pins JSONB,
+    report JSONB,                                  -- verify() problems and the AFC playoff-loss offset
+    applied_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS history_team_seasons (
+    candidate_id INT NOT NULL REFERENCES history_candidates(id) ON DELETE CASCADE,
+    season INT NOT NULL,
+    team_id INT NOT NULL REFERENCES teams(id),
+    wins INT NOT NULL,
+    losses INT NOT NULL,
+    ties INT NOT NULL DEFAULT 0,
+    points_for INT NOT NULL,
+    points_against INT NOT NULL,
+    division_place SMALLINT NOT NULL,
+    division_tiebreak TEXT,
+    conference_seed SMALLINT,
+    playoff_result VARCHAR(16) NOT NULL,
+    playoff_wins INT NOT NULL DEFAULT 0,
+    playoff_losses INT NOT NULL DEFAULT 0,
+    head_coach_id INT REFERENCES coaches(id) ON DELETE SET NULL,
+    gm_id INT,
+    PRIMARY KEY (candidate_id, season, team_id)
+);
+
 -- Coach of the Year race, rewritten per season by engines/coty_engine.py (2026_11_06_coty_scores.sql)
 CREATE TABLE IF NOT EXISTS coty_scores (
     id SERIAL PRIMARY KEY,
