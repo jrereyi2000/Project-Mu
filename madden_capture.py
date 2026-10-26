@@ -1591,16 +1591,21 @@ def run_stats(out, all_rows, resume=True, kind="stats"):
 
 
 
-def run_scoped_stats(out, team, categories, all_rows, kind="stats"):
+def run_scoped_stats(out, team, categories, all_rows, kind="stats", reopen=True):
     """Season Stats for one team's scope, only the given categories, into stats_scope/
     (<team>_<category>_NNN.png). Used when Season Stats lists two players with the same name and
     position on different teams and their earlier totals can't tell them apart (JR, Oct 14): the
     team's own list says which one is whose. Category names as on the R2 chip (KICKING, RUSHING...).
-    kind="career": Career Stats into career_scope/ (run_career_by_team)."""
+    kind="career": Career Stats into career_scope/ (run_career_by_team). reopen=False: already on the list, so only
+    the L2 scope changes (team after team without leaving the list)."""
     team, wanted = norm(team), {norm(c) for c in categories}
     log(f"== {'Career' if kind == 'career' else 'Season'} stats, {team} only: {', '.join(sorted(wanted))} ==")
-    open_career_stats() if kind == "career" else open_player_stats()
+    f, s = look()
+    if reopen or s != "PLAYER_STATS":
+        open_career_stats() if kind == "career" else open_player_stats()
     set_scope(team, debug_dir=os.path.join(out, "scope_debug"))
+    if not reopen:
+        list_to_top()                      # the last team's list may have been left scrolled down
     f, _ = look()
     _, first = chip_labels(f)
     if not first:
@@ -1631,7 +1636,9 @@ CAREER_TEAM_CATEGORIES = ["RUSHING", "RECEIVING", "DEFENSE", "BLOCKING"]
 
 def run_career_by_team(out, categories, all_rows):
     """Career Stats for each team's scope, into career_scope/<team>_<category>_NNN.png. career_scope/done.txt
-    lists finished teams, so --resume carries on with the next team; a stopped team is captured again."""
+    lists finished teams, so --resume carries on with the next team; a stopped team is captured again. The list is
+    opened once; each next team is only an L2 scope change (the categories are found with R2 from wherever the chip
+    is)."""
     folder = os.path.join(out, "career_scope")
     os.makedirs(folder, exist_ok=True)
     done_path = os.path.join(folder, "done.txt")
@@ -1639,12 +1646,14 @@ def run_career_by_team(out, categories, all_rows):
     if os.path.exists(done_path):
         with open(done_path) as fh:
             done = {line.strip() for line in fh if line.strip()}
+    opened = False
     for team in sorted(TEAMS):
         if team in done:
             continue
         for p in glob.glob(os.path.join(folder, f"{team.lower()}_*")):
             os.remove(p)
-        run_scoped_stats(out, team, categories, all_rows, kind="career")
+        run_scoped_stats(out, team, categories, all_rows, kind="career", reopen=not opened)
+        opened = True
         with open(done_path, "a") as fh:
             fh.write(team + "\n")
     log(f"Career Stats by team: {len(TEAMS)} teams done")
