@@ -5,6 +5,7 @@ import DebugPage from "./DebugPage";
 import { DraftPage } from "./DraftPage";
 import { NapperPage } from "./NapperPage";
 import FrontOfficeTab, { type ContractFocus } from "./components/team/FrontOfficeTab";
+import AwardsPage from "./components/history/AwardsPage";
 import RecordBookPage from "./components/history/RecordBookPage";
 export const SystemContext = createContext<{ season: number; week: number; availableSeasons: number[]; last_updated?: string | null }>({ season: 2035, week: 18, availableSeasons: [2035] });
 
@@ -4973,6 +4974,11 @@ function StatsDropdown({ close }: { close: () => void }) {
             <div><strong>Record Book</strong><small>NFL records, franchise marks and the records set in this league.</small></div>
             <i>→</i>
           </a>
+          <a href="#awards" onClick={close}>
+            <span>04</span>
+            <div><strong>Awards &amp; Champions</strong><small>Super Bowl champions, MVPs and year-end honors, and the All-Pro teams.</small></div>
+            <i>→</i>
+          </a>
         </div>
       </div>
     </div>
@@ -5495,6 +5501,8 @@ function App() {
         <StatsPage mode="player" />
       ) : route === "#records" || route.startsWith("#records?") ? (
         <RecordBookPage query={route.slice("#records".length)} teams={teams} />
+      ) : route === "#awards" || route.startsWith("#awards?") ? (
+        <AwardsPage query={route.slice("#awards".length)} teams={teams} />
       ) : route === "#standings" ? (
         <StandingsPage />
       ) : route === "#rankings" ? (

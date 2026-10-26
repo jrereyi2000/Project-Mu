@@ -50,3 +50,19 @@ export const GROUP_LABELS: Record<string, string> = {
 };
 
 export const SUBJECT_LABELS: Record<string, string> = { PLAYER: "Player", TEAM: "Team", COACH: "Coach" };
+
+// The database's abbreviations (AZ, WAS) as the site's team routes (ari, wsh), for matching the ?team= filter.
+export function siteAbbr(abbr: string | null | undefined): string {
+  const clean = (abbr || "").toLowerCase();
+  return clean === "az" ? "ari" : clean === "was" ? "wsh" : clean;
+}
+
+export const AWARD_LABELS: Record<string, { short: string; long: string }> = {
+  MVP: { short: "MVP", long: "MVP" },
+  OPOY: { short: "OPOY", long: "Offensive Player" },
+  DPOY: { short: "DPOY", long: "Defensive Player" },
+  OROY: { short: "OROY", long: "Offensive Rookie" },
+  DROY: { short: "DROY", long: "Defensive Rookie" },
+  COTY: { short: "COTY", long: "Coach of the Year" },
+  SBMVP: { short: "SB MVP", long: "Super Bowl MVP" },
+};

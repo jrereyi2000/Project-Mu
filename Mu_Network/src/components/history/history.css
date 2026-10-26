@@ -64,6 +64,55 @@
 .rb-table tr.mu td:first-child { box-shadow: inset 3px 0 var(--red); }
 .rb-table-value { font: 700 13px var(--font-mono); white-space: nowrap; }
 
+/* Awards & Champions (AwardsPage.tsx, AllProTeams.tsx) */
+.aw-section + .aw-section { margin-top: 56px; }
+.aw-team { margin-left: auto; }
+.aw-champions { display: grid; grid-auto-flow: column; grid-auto-columns: 220px; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+.aw-champ { padding: 18px; background: var(--white); border-top: 3px solid var(--ink); }
+.aw-champ:first-child { border-top-color: var(--red); }
+.aw-champ.dim { opacity: .35; }
+.aw-champ > span { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.aw-champ-team { margin: 12px 0 14px; display: flex; align-items: center; gap: 12px; }
+.aw-champ-team img { width: 44px; height: 44px; object-fit: contain; }
+.aw-champ-team a { display: flex; flex-direction: column; color: inherit; }
+.aw-champ-team strong { font: 700 24px var(--font-mono); letter-spacing: -.05em; }
+.aw-champ-team small { color: var(--gray-500); font: 600 9px var(--font-mono); text-transform: uppercase; }
+.aw-champ dl { margin: 0; display: grid; gap: 6px; }
+.aw-champ dl div { display: grid; grid-template-columns: 52px 1fr; gap: 6px; font-size: 11px; }
+.aw-champ dt { color: var(--gray-500); font: 700 8px/1.9 var(--font-mono); text-transform: uppercase; }
+.aw-champ dd { margin: 0; font-weight: 650; }
+.aw-champ a, .aw-winner a, .aw-leaders a, .aw-allpro a, .aw-counts a { color: inherit; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 2px; }
+.aw-table { min-width: 980px; }
+.aw-winner { display: flex; align-items: flex-start; gap: 8px; }
+.aw-winner img { width: 20px; height: 20px; object-fit: contain; }
+.aw-winner > span { display: flex; flex-direction: column; gap: 2px; font-weight: 650; }
+.aw-winner small { color: var(--gray-500); font: 600 9px var(--font-mono); }
+.aw-winner.hit { box-shadow: inset 3px 0 var(--red); padding-left: 6px; }
+.aw-winner.dim { opacity: .3; }
+.aw-none { color: var(--gray-300); }
+.aw-split { display: grid; grid-template-columns: 3fr 2fr; gap: 32px; align-items: start; }
+.aw-leaders { margin: 0; padding: 0; list-style: none; background: var(--white); }
+.aw-leaders li { padding: 12px 16px; display: grid; grid-template-columns: 44px 1fr 24px; gap: 12px; align-items: center; border-bottom: 1px solid var(--gray-100); }
+.aw-leaders b { color: var(--red); font: 700 20px var(--font-mono); letter-spacing: -.05em; }
+.aw-leaders span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; font-weight: 650; }
+.aw-leaders em { color: var(--gray-500); font: 700 8px var(--font-mono); font-style: normal; letter-spacing: .07em; text-transform: uppercase; }
+.aw-leaders small { color: var(--gray-500); font: 600 9px var(--font-mono); }
+.aw-leaders img { width: 24px; height: 24px; object-fit: contain; }
+.aw-counts { min-width: 0; }
+.aw-allpro-head { margin-bottom: 18px; }
+.aw-allpro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.aw-allpro-team { padding: 20px; background: var(--white); border-top: 3px solid var(--ink); }
+.aw-allpro-team:first-child { border-top-color: var(--red); }
+.aw-allpro-team h3 { margin: 0 0 6px; font-size: 18px; text-transform: uppercase; letter-spacing: -.02em; }
+.aw-allpro-team h3 small { margin-left: 8px; color: var(--gray-500); font: 600 9px var(--font-mono); letter-spacing: 0; text-transform: none; }
+.aw-allpro-unit h4 { margin: 16px 0 6px; color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.aw-allpro-unit ul { margin: 0; padding: 0; list-style: none; }
+.aw-allpro-unit li { padding: 6px 0; display: grid; grid-template-columns: 40px 18px 1fr auto; gap: 8px; align-items: center; border-bottom: 1px solid var(--gray-100); font-size: 12px; font-weight: 650; }
+.aw-allpro-unit li.hit { background: linear-gradient(90deg, #e318371a, transparent); }
+.aw-allpro-unit li b { color: var(--gray-500); font: 700 9px var(--font-mono); }
+.aw-allpro-unit li img { width: 18px; height: 18px; object-fit: contain; }
+.aw-allpro-unit li small { color: var(--gray-500); font: 600 9px var(--font-mono); }
+
 @media (max-width: 720px) {
   .rb-masthead { min-height: 170px; padding: 32px 16px; }
   .rb-controls { margin: -18px 16px 0; }
@@ -71,4 +120,6 @@
   .rb-era { margin-left: 0; }
   .rb-body { margin-top: 24px; padding: 0 16px; }
   .rb-grid { grid-template-columns: minmax(0, 1fr); }
+  .aw-team { margin-left: 0; }
+  .aw-split, .aw-allpro-grid { grid-template-columns: minmax(0, 1fr); }
 }

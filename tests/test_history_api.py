@@ -1,5 +1,5 @@
-"""server/history_api.py: the #records Record Book endpoints. The ranking and badge tests need no database; the
-endpoint tests only read the live one (skipped when Postgres is down) and write nothing.
+"""server/history_api.py: the #records Record Book and #awards endpoints. The ranking, badge and awards shaping tests
+need no database; the endpoint tests only read the live one (skipped when Postgres is down) and write nothing.
 
 Run this file only (the Napper tests write to the live database): python3 -m unittest tests.test_history_api"""
 import unittest
@@ -107,6 +107,52 @@ class CardTest(unittest.TestCase):
         self.assertIsInstance(H.num(7.0), int)
 
 
+def award(award_type, season, name, player_id=None, team="CAR", coach_id=None):
+    return {"award_type": award_type, "season": season, "name": name, "player_id": player_id, "coach_id": coach_id,
+            "position": None, "team": team}
+
+
+class AwardsTest(unittest.TestCase):
+    def test_super_bowl_from_the_winners_side(self):
+        g = {"id": 9, "home_team_id": 31, "away_team_id": 11, "home_score": 6, "away_score": 59}
+        sb = H.super_bowl(g, {31: "DEN", 11: "CAR"})
+        self.assertEqual((sb["team"], sb["score"], sb["opponent"], sb["opponent_score"]), ("CAR", 59, "DEN", 6))
+        self.assertIsNone(H.super_bowl(dict(g, home_score=None), {}))
+
+    def test_coty_row_is_a_coach(self):
+        a = H.shape_award({"award_type": "COTY", "season": 2035, "player_id": None, "player_name": None,
+                           "position": None, "team_id": 11, "coach_id": 2, "coach_name": "Marcus Whitfield"}, {11: "CAR"})
+        self.assertEqual((a["name"], a["coach_id"], a["player_id"], a["team"]), ("Marcus Whitfield", 2, None, "CAR"))
+
+    def test_leaders_count_repeat_winners(self):
+        rows = [award("MVP", 2034, "George Crawford", 325), award("MVP", 2035, "George Crawford", 325),
+                award("OPOY", 2026, "CeeDee Lamb", team="DAL"), award("OPOY", 2027, "CeeDee Lamb", team="DAL"),
+                award("DPOY", 2028, "Arvell Reese", 121, "NYG"), award("DPOY", 2029, "Arvell Reese", 121, "NYG"),
+                award("DPOY", 2030, "Arvell Reese", 121, "NYG"), award("MVP", 2033, "Drake Maye", 906)]
+        leaders = H.award_leaders(rows)
+        self.assertEqual([(l["name"], l["award_type"], l["count"]) for l in leaders],
+                         [("Arvell Reese", "DPOY", 3), ("George Crawford", "MVP", 2), ("CeeDee Lamb", "OPOY", 2)])
+        self.assertEqual(leaders[1]["seasons"], [2034, 2035])
+
+    def test_franchise_counts(self):
+        seasons = [{"champion": {"team": "CAR"}, "awards": {"MVP": award("MVP", 2035, "G"), "COTY": None}},
+                   {"champion": {"team": "BAL"}, "awards": {"MVP": award("MVP", 2033, "D", team="NE")}},
+                   {"champion": None, "awards": {"MVP": award("MVP", 2036, "G")}}]
+        self.assertEqual(H.franchise_counts(seasons), [{"team": "CAR", "titles": 1, "awards": 2},
+                                                       {"team": "BAL", "titles": 1, "awards": 0},
+                                                       {"team": "NE", "titles": 0, "awards": 1}])
+
+    def test_all_pro_slot_order(self):
+        rows = [{"id": 3, "position": "K", "player_name": "K", "player_id": 1, "team": "DAL"},
+                {"id": 2, "position": "WR", "player_name": "W2", "player_id": 2, "team": "CAR"},
+                {"id": 1, "position": "WR", "player_name": "W1", "player_id": 3, "team": "CAR"},
+                {"id": 4, "position": "EDGE", "player_name": "E", "player_id": 4, "team": "MIA"},
+                {"id": 5, "position": "QB", "player_name": "Q", "player_id": 5, "team": "CAR"}]
+        team = H.all_pro_team(rows)
+        self.assertEqual([(r["slot"], r["name"]) for r in team], [("QB", "Q"), ("WR", "W1"), ("WR", "W2"), ("EDGE", "E"), ("K", "K")])
+        self.assertEqual([r["unit"] for r in team], ["OFFENSE", "OFFENSE", "OFFENSE", "DEFENSE", "SPECIAL_TEAMS"])
+
+
 def db_up():
     try:
         psycopg.connect(H.CONN_INFO, connect_timeout=2).close()
@@ -117,7 +163,7 @@ def db_up():
 
 @unittest.skipUnless(db_up(), "Postgres not reachable")
 class EndpointTest(unittest.TestCase):
-    TABLES = ("record_categories", "league_record_entries", "franchise_records")
+    TABLES = ("record_categories", "league_record_entries", "franchise_records", "awards")
 
     def setUp(self):
         app = FastAPI()
@@ -171,6 +217,28 @@ class EndpointTest(unittest.TestCase):
         self.assertTrue(all(m["rank"] <= 10 for m in data["top10"]))
         self.assertTrue(all(m["mu"] and m["rank"] > 10 for m in data["mu_outside_top10"]))
         self.assertGreater(len(data["franchise_records"]), 0)
+
+    def test_awards(self):
+        before = self.counts()
+        data = self.client.get("/api/awards").json()
+        sbs = self.query("SELECT count(*) FROM games WHERE game_type = 'SUPER_BOWL' AND status = 'COMPLETED';")[0][0]
+        self.assertEqual(sum(1 for s in data["seasons"] if s["champion"]), sbs)
+        stored = self.query("SELECT count(*) FROM awards WHERE award_type = ANY(%s);", (list(H.AWARD_TYPES),))[0][0]
+        self.assertEqual(sum(1 for s in data["seasons"] for a in s["awards"].values() if a), stored)
+        self.assertEqual([s["season"] for s in data["seasons"]], sorted((s["season"] for s in data["seasons"]), reverse=True))
+        self.assertEqual(self.counts(), before)
+
+    def test_all_pro(self):
+        data = self.client.get("/api/awards/all-pro").json()
+        if not data["seasons_available"]:
+            self.skipTest("no All-Pro teams stored")
+        stored = self.query("SELECT count(*) FROM awards WHERE season = %s AND award_type LIKE '%%All-Pro';",
+                            (data["season"],))[0][0]
+        self.assertEqual(len(data["first_team"]) + len(data["second_team"]), stored)
+        slots = [H.SLOT_ORDER.index(r["slot"]) for r in data["first_team"] if r["slot"] in H.SLOT_ORDER]
+        self.assertEqual(slots, sorted(slots))
+        empty = self.client.get("/api/awards/all-pro?season=1999").json()
+        self.assertEqual((empty["first_team"], empty["second_team"]), ([], []))
 
 
 if __name__ == "__main__":

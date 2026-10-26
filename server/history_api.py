@@ -1,4 +1,5 @@
-"""Record Book backend (/api/records/*; docs/RECORD_BOOK_AND_AWARDS_PLAN.md, PROJECT_SPEC §2.9 and §4.7).
+"""Record Book and Awards backend (/api/records/*, /api/awards*; docs/RECORD_BOOK_AND_AWARDS_PLAN.md, PROJECT_SPEC §2.9,
+§4.7 and §7.6b–§7.6d).
 
 Read-only, public. It serves the record book the records engine keeps (record_categories, league_record_entries,
 franchise_records and the league_records view) as raw numbers for the #records page to format. Every mark carries its
@@ -9,6 +10,10 @@ Ranking uses the engine's own rules (records_engine.rank / better): ties share a
 smallest value first. A current-season LEAGUE mark is "in progress" while that season has unplayed regular-season
 games, because the engine rewrites those rows every week. When the tables don't exist (migrations not applied) every
 endpoint returns empty blocks rather than an error.
+
+The awards endpoints read the stored `awards` rows (year-end awards, Super Bowl MVP, All-Pro teams; newsroom/all_pro.py
+and newsroom/award_winners.py write them) with each season's Super Bowl from `games` and the champion's head coach
+from `coach_tenures`. A row without a player_id is served by name only.
 """
 import os
 from typing import Optional
@@ -16,13 +21,19 @@ from typing import Optional
 import psycopg
 from fastapi import APIRouter, HTTPException
 
+from engines.coach_profile import fetch_team_coach
 from engines.records_engine import better, rank, tidy_name
+from newsroom.all_pro import DEFENSE_QUOTAS, OFFENSE_QUOTAS, SPECIAL_TEAMS_QUOTAS
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 ABBR_ALIASES = {"ARI": "AZ", "CRD": "AZ", "WSH": "WAS", "WTC": "WAS"}
 MU_START = 2026          # the league's first season: BOOK and LEAGUE marks from here on were set in this league
 MU_SOURCES = ("BOOK", "LEAGUE")
 TOP = 10
+AWARD_TYPES = ("MVP", "OPOY", "DPOY", "OROY", "DROY", "COTY", "SBMVP")   # the award history table's columns
+ALL_PRO_TEAMS = {"First Team All-Pro": "first_team", "Second Team All-Pro": "second_team"}
+ALL_PRO_UNITS = (("OFFENSE", OFFENSE_QUOTAS), ("DEFENSE", DEFENSE_QUOTAS), ("SPECIAL_TEAMS", SPECIAL_TEAMS_QUOTAS))
+SLOT_ORDER = [slot for _, quotas in ALL_PRO_UNITS for slot in quotas]
 
 router = APIRouter()
 
@@ -316,4 +327,141 @@ def franchise_records(abbr: str):
                     league_record=bool(league) and mine[0]["value"] == league[0]["value"],
                     mu=any(m["mu"] for m in mine)))
             out["mu_count"] = sum(1 for r in out["records"] if r["mu"])
+            return out
+
+
+# ------------------------------------------------------------------------------------------------- awards ---
+def shape_award(row: dict, abbrs: dict) -> dict:
+    """One awards row: a player (linked when player_id is set) or, for Coach of the Year, a coach."""
+    coach = row["award_type"] == "COTY"
+    return {
+        "award_type": row["award_type"],
+        "season": row["season"],
+        "name": row["coach_name"] if coach else row["player_name"],
+        "player_id": None if coach else row["player_id"],
+        "coach_id": row["coach_id"] if coach else None,
+        "position": None if coach else row["position"],
+        "team": abbrs.get(row["team_id"]),
+    }
+
+
+def super_bowl(row: dict, abbrs: dict) -> Optional[dict]:
+    """A Super Bowl game as {team, score, opponent, opponent_score, game_id}, from the winner's side; None when it
+    isn't final or ended level."""
+    if row["home_score"] is None or row["away_score"] is None or row["home_score"] == row["away_score"]:
+        return None
+    home_won = row["home_score"] > row["away_score"]
+    win, lose = ("home", "away") if home_won else ("away", "home")
+    return {"game_id": row["id"], "team": abbrs.get(row[f"{win}_team_id"]), "team_id": row[f"{win}_team_id"],
+            "score": row[f"{win}_score"], "opponent": abbrs.get(row[f"{lose}_team_id"]),
+            "opponent_score": row[f"{lose}_score"]}
+
+
+def award_leaders(awards: list) -> list:
+    """Repeat winners of the same award (e.g. 2x MVP), most wins first. Players match on player_id, else on name."""
+    groups = {}
+    for a in awards:
+        if not a["name"]:
+            continue
+        who = ("coach", a["coach_id"]) if a["coach_id"] else ("player", a["player_id"]) if a["player_id"] \
+            else ("name", a["name"].lower())
+        groups.setdefault((a["award_type"], who), []).append(a)
+    out = []
+    for (award_type, _), rows in groups.items():
+        if len(rows) < 2:
+            continue
+        rows.sort(key=lambda a: a["season"])
+        last = rows[-1]
+        out.append({"award_type": award_type, "count": len(rows), "name": last["name"], "player_id": last["player_id"],
+                    "coach_id": last["coach_id"], "team": last["team"], "seasons": [a["season"] for a in rows]})
+    out.sort(key=lambda x: (-x["count"], AWARD_TYPES.index(x["award_type"]), -x["seasons"][-1]))
+    return out
+
+
+def franchise_counts(seasons: list) -> list:
+    """Titles and award wins per franchise since 2026 (award history columns only, not All-Pro), most titles first."""
+    counts = {}
+    for s in seasons:
+        if s["champion"]:
+            counts.setdefault(s["champion"]["team"], {"titles": 0, "awards": 0})["titles"] += 1
+        for a in s["awards"].values():
+            if a and a["team"]:
+                counts.setdefault(a["team"], {"titles": 0, "awards": 0})["awards"] += 1
+    out = [dict(team=t, **c) for t, c in counts.items() if t]
+    out.sort(key=lambda x: (-x["titles"], -x["awards"], x["team"]))
+    return out
+
+
+def all_pro_team(rows: list) -> list:
+    """One All-Pro team in slot order (offense, defense, special teams; newsroom/all_pro.py quotas), stored order
+    within a slot. A slot the quotas don't know goes last."""
+    def key(r):
+        slot = (r["position"] or "").upper()
+        return (SLOT_ORDER.index(slot) if slot in SLOT_ORDER else len(SLOT_ORDER), r["id"])
+    out = []
+    for r in sorted(rows, key=key):
+        slot = (r["position"] or "").upper()
+        unit = next((u for u, quotas in ALL_PRO_UNITS if slot in quotas), "OTHER")
+        out.append({"slot": slot, "unit": unit, "name": r["player_name"], "player_id": r["player_id"],
+                    "team": r["team"]})
+    return out
+
+
+@router.get("/api/awards")
+def awards():
+    """Champions and award history, newest season first: each season's Super Bowl result, the champion's head coach
+    and the award winners (award history columns), plus repeat winners and each franchise's titles and awards."""
+    with psycopg.connect(CONN_INFO) as conn:
+        with conn.cursor() as cur:
+            out = {"award_types": list(AWARD_TYPES), "seasons": [], "leaders": [], "franchise_counts": []}
+            if not _regclass(cur, "awards"):
+                return out
+            abbrs = fetch_abbrs(cur)
+            rows = [shape_award(r, abbrs) for r in _rows(
+                cur, "SELECT season, award_type, player_id, player_name, position, team_id, coach_id, coach_name "
+                     "FROM awards WHERE award_type = ANY(%s) ORDER BY season, id;", (list(AWARD_TYPES),))]
+            games = {r["season"]: super_bowl(r, abbrs) for r in _rows(
+                cur, "SELECT id, season, home_team_id, away_team_id, home_score, away_score FROM games "
+                     "WHERE game_type = 'SUPER_BOWL' AND status = 'COMPLETED';")}
+            has_tenures = _regclass(cur, "coach_tenures")
+            for season in sorted({r["season"] for r in rows} | set(games), reverse=True):
+                champ = games.get(season)
+                coach = None
+                if champ and has_tenures:
+                    hc = fetch_team_coach(cur, champ["team_id"], season)
+                    coach = {"coach_id": hc["id"], "name": hc["coach_name"]} if hc else None
+                won = {}
+                for r in rows:
+                    if r["season"] == season:
+                        won.setdefault(r["award_type"], r)
+                out["seasons"].append({"season": season, "champion": champ, "champion_coach": coach,
+                                       "sb_mvp": won.get("SBMVP"),
+                                       "awards": {t: won.get(t) for t in AWARD_TYPES}})
+            out["leaders"] = award_leaders(rows)
+            out["franchise_counts"] = franchise_counts(out["seasons"])
+            return out
+
+
+@router.get("/api/awards/all-pro")
+def all_pro(season: Optional[int] = None):
+    """One season's First and Second Team All-Pro in slot order. `season` defaults to the latest stored."""
+    with psycopg.connect(CONN_INFO) as conn:
+        with conn.cursor() as cur:
+            out = {"seasons_available": [], "season": season, "first_team": [], "second_team": []}
+            if not _regclass(cur, "awards"):
+                return out
+            cur.execute("SELECT DISTINCT season FROM awards WHERE award_type = ANY(%s) ORDER BY season DESC;",
+                        (list(ALL_PRO_TEAMS),))
+            out["seasons_available"] = [r[0] for r in cur.fetchall()]
+            if season is None:
+                season = out["season"] = out["seasons_available"][0] if out["seasons_available"] else None
+            if season is None:
+                return out
+            abbrs = fetch_abbrs(cur)
+            rows = _rows(cur, "SELECT id, award_type, player_id, player_name, position, team_id FROM awards "
+                              "WHERE season = %s AND award_type = ANY(%s);", (season, list(ALL_PRO_TEAMS)))
+            for r in rows:
+                r["team"] = abbrs.get(r["team_id"])
+            for award_type, key in ALL_PRO_TEAMS.items():
+                out[key] = all_pro_team([r for r in rows if r["award_type"] == award_type])
             return out
