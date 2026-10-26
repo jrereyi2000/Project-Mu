@@ -862,11 +862,8 @@ def open_career_stats():
         f, _ = look()
     else:
         raise Abort("Could not highlight the Career Stats tile")
-    f = cross_into("STATS_TILES", ["PLAYER_STATS"])[0]
-    if "CAREER" not in f.text:
-        log("WARNING: the opened list shows no CAREER label; check it is Career Stats, not Season Stats")
-        save_debug(f, "career_list_unlabelled")
-    return f
+    # the list has no title of its own (2026-10-26: it opens on the user's team, Crawford's career 16,411 yards)
+    return cross_into("STATS_TILES", ["PLAYER_STATS"])[0]
 
 
 CURRENT_WEEK = None    # the week the League Schedule opens on (set by open_league_schedule)
@@ -1237,20 +1234,43 @@ def at_edge(f, direction):
     return f.find("NAME") is not None
 
 
-def traverse(direction, burst=6, max_rounds=12):
+def gp_is_last_header(f):
+    """The GP column header is the right-most header on screen (nothing in the header row to its right)."""
+    gp = next((box for t, box in f.items if norm(t) == "GP"), None)
+    if gp is None:
+        return False
+    mid = (gp[1] + gp[3]) / 2
+    return not any(box[0] > gp[2] and box[1] <= mid <= box[3] for t, box in f.items if norm(t) != "GP")
+
+
+def at_career_edge(f, direction):
+    """Career Stats lists end on GP, not DP (2026-10-26: Passing's last column is GP, its label GAMES PLAYED). In a
+    Season Stats list GP sits just before DP, so GAMES PLAYED only counts when GP is the right-most header."""
+    if direction == "right" and "GAMES PLAYED" in f.text and gp_is_last_header(f):
+        return True
+    return at_edge(f, direction)
+
+
+def traverse(direction, burst=6, max_rounds=12, edge=None):
     """Press Left/Right in short bursts, reading the screen after each burst, until the edge
     is actually visible. Madden doesn't wrap at either edge, so overshooting is harmless.
-    (Oct 13: judging the edge from 'two presses changed nothing' stopped Kicking at FG LNG.)"""
+    (Oct 13: judging the edge from 'two presses changed nothing' stopped Kicking at FG LNG.)
+    edge(frame, direction): the edge test, at_edge by default."""
+    edge = edge or at_edge
     for _ in range(max_rounds):
         f = Frame()
-        if at_edge(f, direction):
+        if edge(f, direction):
             return f
         press(direction, hold=0.1, wait=0.5, times=burst)
     f = Frame()
-    if at_edge(f, direction):
+    if edge(f, direction):
         return f
     path = save_debug(f, f"never_reached_{direction}_edge")
     raise Abort(f"Never reached the {direction} edge of the table (frame: {path})")
+
+
+def traverse_career(direction, **kw):
+    return traverse(direction, edge=at_career_edge, **kw)
 
 
 def settle_list(timeout=6.0, gap=0.5):
@@ -1450,7 +1470,8 @@ def capture_category(out, index, cat, all_rows, max_attempts=2, kind="stats"):
 
     for attempt in range(max_attempts):
         if norm(cat) in WIDE_CATEGORIES:
-            pages = capture_wide_list(folder, base, confirm_end=True)
+            pages = capture_wide_list(folder, base, confirm_end=True,
+                                      traverse=traverse_career if kind == "career" else traverse)
         else:
             pages = capture_list(folder, base, stop_at_zeros=not all_rows, confirm_end=True)
 
@@ -1590,7 +1611,7 @@ def run_scoped_stats(out, team, categories, all_rows, kind="stats"):
             log(f"Category: {cat}")
             base = f"{team.lower()}_{norm(cat).lower()}"
             if norm(cat) in WIDE_CATEGORIES:
-                capture_wide_list(folder, base)
+                capture_wide_list(folder, base, traverse=traverse_career if kind == "career" else traverse)
             else:
                 capture_list(folder, base, stop_at_zeros=not all_rows)
             done.add(norm(cat))
