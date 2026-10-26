@@ -1275,6 +1275,40 @@ CREATE TABLE IF NOT EXISTS history_team_seasons (
     PRIMARY KEY (candidate_id, season, team_id)
 );
 
+-- Staged 2026-2034 player lines (2026_12_29_history_player_lines.sql, engines/history_backfill/players.py, phase 3):
+-- nothing reaches the live player tables before JR approves a run.
+CREATE TABLE IF NOT EXISTS history_player_runs (
+    id SERIAL PRIMARY KEY,
+    seed INT NOT NULL,
+    team_arc_candidate INT,
+    report JSONB,
+    applied_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS history_players (
+    run_id INT NOT NULL REFERENCES history_player_runs(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,                             -- p<player id> | e<espn id> | f<n>
+    kind VARCHAR(8) NOT NULL,                      -- pool | vet | fillin
+    player_id INT REFERENCES players(id) ON DELETE SET NULL,
+    espn_id TEXT,
+    full_name TEXT NOT NULL,
+    player_name TEXT NOT NULL,
+    position VARCHAR(8) NOT NULL,
+    first_season INT,
+    PRIMARY KEY (run_id, key)
+);
+CREATE TABLE IF NOT EXISTS history_player_lines (
+    run_id INT NOT NULL REFERENCES history_player_runs(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    season INT NOT NULL,
+    team_id INT NOT NULL REFERENCES teams(id),
+    position VARCHAR(8) NOT NULL,
+    age INT,
+    years_of_experience INT,
+    stats JSONB NOT NULL,
+    PRIMARY KEY (run_id, key, season)
+);
+
 -- Coach of the Year race, rewritten per season by engines/coty_engine.py (2026_11_06_coty_scores.sql)
 CREATE TABLE IF NOT EXISTS coty_scores (
     id SERIAL PRIMARY KEY,
