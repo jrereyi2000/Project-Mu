@@ -31,9 +31,10 @@ the Divisional round exactly one loser between the 1 seed and the lowest seed le
 reseeded as the NFL does; a team's playoff wins follow from its flag and bye.
 Seeds 1-4 are division winners (most wins in the division), ordered by wins; 5-7 the rest, ordered, at least as many
 wins as any conference team that missed. Ties are allowed and become division_tiebreak / seeding GENERATED (no games
-to break them). Objective: stay near the default path (targets: 2026 projection -> 2035 record, pulled toward .500 in
-between, shifted to each team's total, plus a seed-dependent AR(1) wiggle per candidate), penalize year-to-year
-swings (2034 -> the real 2035 too), and soft story terms: COTY and MVP teams win 11+ and make the playoffs (COTY teams
+to break them). Objective: stay near a random strength arc per team (default_targets: an AR(1) path with the NFL's spread from
+the 2026 projection to the real 2035 record, shifted to each coach's total; each candidate's seed draws different
+arcs), penalize zig-zags more than steady rises and falls (into the real 2035 too), keep about five 12-win and five
+5-win teams and no more than about 11 teams at 8-9 a season, and soft story terms: COTY and MVP teams win 11+ and make the playoffs (COTY teams
 also improve by 3+), Super Bowl teams win 11+, playoff teams win 9+, Chicago 2029-2033 wins 10+.
 
 finish() turns a solution into team_season_results rows (points from wins, calibrated to 2035; division places;
@@ -86,11 +87,12 @@ CANON = {
 }
 
 # objective weights
-W_TARGET, W_TARGET_2026, W_SWING = 1.0, 1.5, 0.3
+W_TARGET, W_TARGET_2026, W_SWING, W_ZIGZAG = 1.0, 1.5, 0.05, 0.25
 STORY = {"COTY": (1.0, 4.0), "MVP": (1.0, 3.0)}       # (per win short of 11, missing the playoffs)
 W_COTY_JUMP, W_SB_SHORT, W_TOP_OFFENSE, W_WEAK_PLAYOFF = 0.5, 2.0, 0.8, 1.0
-PULL = 0.72                                             # yearly decay of the 2026 and 2035 anchors toward .500
-WIGGLE_SD, WIGGLE_AR = 1.2, 0.6
+ARC_SD, ARC_RHO, ARC_STRETCH = 3.0, 0.65, 1.2              # team strength arcs (default_targets)
+SPREAD_TOP, SPREAD_BOTTOM, W_SPREAD = 5, 5, 3.0            # per season: about five 12+ and five 5- win teams (2035)
+MIDDLE_CAP, W_MIDDLE = 11, 2.0                              # and at most about 11 teams at 8-9 (2035: 12)
 
 # points (2035 team_season_results: PD = 31.5 x (W - 8.5), PF mean 416; real 2025 NFL about 383)
 PD_PER_WIN, PD_SD, PF_SD = 31.5, 35.0, 28.0
@@ -314,18 +316,26 @@ def derive(facts, canon_facts=CANON, adjust=BOWLES):
 # ---------------------------------------------------------------------------------------------- targets ----
 
 def default_targets(facts, d, seed):
-    """{(team, season): target wins}: the 2026 projection and the 2035 record pulled toward .500, shifted so each
-    coach group's free seasons add up to its total, plus an AR(1) wiggle drawn from `seed` (pure)."""
+    """{(team, season): target wins}: a random strength arc per team, drawn from `seed` (pure). Each arc is an AR(1)
+    path with the NFL's spread (stationary SD ARC_SD, year-to-year correlation ARC_RHO) from the 2026 projection,
+    stretched to outcome spread (ARC_STRETCH: projected wins are expected values, SD 2.4 against 2035's 2.85), bent
+    to land on the real 2035 record (the AR(1) bridge: each season moves by its covariance share of the miss at
+    2035), then shifted so each coach group's free seasons add up to its total. Unlike a path pulled toward .500, the
+    middle seasons keep good and bad teams."""
     rng = random.Random(seed)
     tgt = {}
+    T = LAST + 1
+    noise = ARC_SD * math.sqrt(1 - ARC_RHO ** 2)
     for tid in facts["teams"]:
-        a = facts["start"].get(tid, 8.5)
+        a = 8.5 + (facts["start"].get(tid, 8.5) - 8.5) * ARC_STRETCH
         b = facts["end"].get(tid, 8.5)
-        e = 0.0
+        path = {FIRST: a}
+        for y in range(FIRST + 1, T + 1):
+            path[y] = 8.5 + ARC_RHO * (path[y - 1] - 8.5) + rng.gauss(0, noise)
+        miss = b - path[T]
         for y in SEASONS:
-            e = WIGGLE_AR * e + rng.gauss(0, WIGGLE_SD)
-            base = 8.5 + (a - 8.5) * PULL ** (y - FIRST) + (b - 8.5) * PULL ** (LAST + 1 - y)
-            tgt[(tid, y)] = base + (e if seed else 0.0)
+            share = ARC_RHO ** (T - y) * (1 - ARC_RHO ** (2 * (y - FIRST))) / (1 - ARC_RHO ** (2 * (T - FIRST)))
+            tgt[(tid, y)] = path[y] + share * miss
     for g in d["groups"]:
         free = [y for y in g["seasons"] if (g["team"], y) not in d["fixed"]]
         if g["wins"] is None or not free:
@@ -532,6 +542,32 @@ def build(facts, d, targets, pins=(), drop=()):
             sw = m.NewIntVar(0, GAMES, f"sw_{t}_{y}")
             m.AddAbsEquality(sw, _diff(m, nxt - w[(t, y - 1)], GAMES, f"swd_{t}_{y}"))
             obj.append(wt(W_SWING) * SCALE * sw)
+        for y in SEASONS[1:]:                          # a zig-zag (up then down) costs more than a steady rise or fall
+            nxt = w[(t, y + 1)] if y < LAST else facts["end"].get(t)
+            if nxt is None:
+                continue
+            zz = m.NewIntVar(0, 2 * GAMES, f"zz_{t}_{y}")
+            m.AddAbsEquality(zz, _diff(m, nxt - 2 * w[(t, y)] + w[(t, y - 1)], 2 * GAMES, f"zzd_{t}_{y}"))
+            obj.append(wt(W_ZIGZAG) * SCALE * zz)
+    for y in SEASONS:                                  # keep real good and bad teams every season
+        hi, lo, mid = [], [], []
+        for t in T:
+            h, l, md = B(f"hi_{t}_{y}"), B(f"lo_{t}_{y}"), B(f"mid_{t}_{y}")
+            m.Add(w[(t, y)] >= 12).OnlyEnforceIf(h)
+            m.Add(w[(t, y)] <= 5).OnlyEnforceIf(l)
+            m.AddLinearConstraint(w[(t, y)], 8, 9).OnlyEnforceIf(md)
+            m.AddLinearExpressionInDomain(w[(t, y)], cp_model.Domain.FromIntervals([[0, 7], [10, GAMES]])) \
+                .OnlyEnforceIf(md.Not())
+            hi.append(h)
+            lo.append(l)
+            mid.append(md)
+        crowd = m.NewIntVar(0, TEAMS, f"crowd_{y}")
+        m.Add(crowd >= sum(mid) - MIDDLE_CAP)
+        obj.append(wt(W_MIDDLE) * SCALE * crowd)
+        for name, flags, want in (("top", hi, SPREAD_TOP), ("bottom", lo, SPREAD_BOTTOM)):
+            short = m.NewIntVar(0, want, f"spread_{name}_{y}")
+            m.Add(short >= want - sum(flags))
+            obj.append(wt(W_SPREAD) * SCALE * short)
     for n, (y, award, t) in enumerate(facts["awards"]):
         short_w, miss_w = STORY[award]
         sh = m.NewIntVar(0, 11, f"short_{n}")
@@ -815,7 +851,6 @@ def generate(seeds=3, pins_path=PINS_JSON, time_limit=180, conn_info=CONN_INFO):
         pins = read_pins(facts["by_abbr"], pins_path)
         if fact_problems:
             raise SystemExit("facts don't fit together; nothing generated:\n  " + "\n  ".join(fact_problems))
-        cur.execute("DELETE FROM history_candidates WHERE applied_at IS NULL")    # a new run replaces unpicked ones
         made = []
         for seed in range(1, seeds + 1):
             targets = default_targets(facts, d, seed)
@@ -938,6 +973,11 @@ def write_report(facts, d, made):
                 cells.append(f"{r['wins']}-{r['losses']}{mark}")
             tw = sum(rows[(t, y)]["wins"] for y in SEASONS)
             lines.append(f"| {ab(t)} | " + " | ".join(cells) + f" | {tw}-{GAMES * len(SEASONS) - tw} |")
+        lines += ["", "Spread by season (2035: 5 teams at 12+ wins, 5 at 5 or fewer, 12 at 8-9):", ""]
+        for y in SEASONS:
+            ws_ = [rows[(t, y)]["wins"] for t in teams]
+            lines.append(f"- {y}: {sum(w >= 12 for w in ws_)} at 12+, {sum(w <= 5 for w in ws_)} at 5 or fewer, "
+                         f"{sum(w in (8, 9) for w in ws_)} at 8-9")
         lines += ["", "Seeds by season (AFC / NFC, 1–7):", ""]
         for y in SEASONS:
             parts = []
