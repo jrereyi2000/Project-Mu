@@ -40,6 +40,9 @@ UNNAMED_NOTE = "not named in league records; refer to him only by title and neve
 
 REGULAR = "REGULAR_SEASON"
 FULL_SEASON_GAMES = 17
+# The first season with every game on record (JR 2026-10-26, docs/SEASON_CONTINUITY_PLAN.md D2): a tenure that began
+# earlier has its with-team record counted from here.
+RECORDS_FROM = 2035
 
 
 def effective_tendencies(coach: dict) -> dict:
@@ -340,6 +343,10 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
 
     start = coach["start_season"]
     with_team, playoffs_with_team = tenure_record(games, team_id, start, season)
+    since = start
+    if with_team is None and start < RECORDS_FROM <= season:
+        since = RECORDS_FROM
+        with_team, playoffs_with_team = tenure_record(games, team_id, since, season)
     sb = [g for g in games if start <= g["season"] <= season and g["game_type"] == "SUPER_BOWL"
           and team_id in (g["home_team_id"], g["away_team_id"])]
 
@@ -366,16 +373,33 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
         "this_season": season_record(games, team_id, season),
         "record_with_team": with_team,
         "playoff_record_with_team": playoffs_with_team,
+        "record_with_team_since": since if with_team is not None else None,
         "career": record_line(career),
+        "career_scope": "since joining this league" if snapshot and _mu_era_only(cur, coach["id"], snapshot["season"])
+                        else "full career",
         "super_bowls_with_team": [f"{g['season']} {'won' if _result(g, team_id) == 'W' else 'lost'}" for g in
                                   sorted(sb, key=lambda g: g["season"])],
         "coach_of_the_year": coty,
         "note": TENDENCY_NOTE + (" record_with_team is the regular season only; playoff_record_with_team is his "
-                                 "postseason wins and losses with this team over the same tenure (Super Bowls "
-                                 "included)." if with_team is not None else
+                                 "postseason wins and losses with this team over the same seasons (Super Bowls "
+                                 "included), both counted from record_with_team_since (when it is later than "
+                                 "with_team_since, earlier seasons of the tenure aren't on record: say 'since "
+                                 "<year>'). career_scope 'since joining this league' means his earlier career isn't "
+                                 "recorded; never fill it in." if with_team is not None else
                                  " record_with_team and playoff_record_with_team are null when an earlier season of "
                                  "this tenure isn't on record."),
     }
+
+
+def _mu_era_only(cur, coach_id: int, snapshot_season: int) -> bool:
+    """True when the coach's snapshot counts only his seasons in this league (coach_seasons.mu_era_only, the season
+    archive's carousel hires; False before that migration)."""
+    cur.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'coach_seasons' AND column_name = 'mu_era_only'")
+    if not cur.fetchone():
+        return False
+    cur.execute("SELECT mu_era_only FROM coach_seasons WHERE coach_id = %s AND season = %s", (coach_id, snapshot_season))
+    r = cur.fetchone()
+    return bool(r and r[0])
 
 
 def staff_matchup(off_coach: dict | None, def_coach: dict | None) -> dict | None:

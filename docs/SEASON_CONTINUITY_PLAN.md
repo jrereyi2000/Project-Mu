@@ -1,6 +1,6 @@
 # Multi-Season Continuity: Implementation Plan
 
-**Status (2026-10-26):** Written, not built. Phase 1 must land before the 2036 Super Bowl is loaded; phase 2's capture before this offseason's retirements are processed in Madden.
+**Status (2026-10-26):** Phase 1 built (season archive and head-coach records from 2035; `engines/season_archive.py`, migration `2026_12_24_season_archive.sql`, 2035 backfilled). Phases 2–4 not built; phase 2's retirement rows come from the League Transactions scan (C1).
 **Scope:** Keep each finished season on record and connect it to the next: a season-end archive, head-coach records from 2035, a retirement scan with a player season ledger, Napper league history with a restart for the new season, and a career layer that reads from all of it.
 **Reference specs:** `PROJECT_SPEC.md` §1.2 (running the system), §2.11 (Coach of the Year), §3.1–§3.3a (players, seasons, coaches), §3.3e (League Transactions), §3.3f (GM agents, rollover), §3.4b / §4.4b (Napper), §6.0 (weekly run).
 
@@ -45,7 +45,7 @@ Defaults added by this plan (change any before its phase):
 
 | # | Question | Why it matters |
 |---|---|---|
-| C1 | Where does Madden list the season's retirements? Candidates: offseason rows in League Transactions, a retirements list or news item at the start of the re-signing stage, or a player-card flag. | It decides whether phase 2 extends the League Transactions scan or adds a new read-only screen to `madden_capture.py`. |
+| C1 | **Answered (JR, 2026-10-26): retirements are listed in the League Transactions screen.** The first offseason scan will give example rows to fix the wording. | Phase 2 extends the existing League Transactions scan (`pipeline/transactions_parse.py` grammar, `load_transactions` effects) with a `RETIRED` type, not a new screen. |
 | C2 | At which offseason stage are retirements decided and shown, and does the list stay viewable after that stage? | It sets when the scan runs (§4). |
 | C3 | Does the list name the player's last team, position and age (or years)? | Name matching (`pipeline/capture_matching`) needs at least name + position, and team helps. |
 | C4 | Can the screen be read without pressing Cross on anything that changes state? | Same safety rule as master plan D7: read-only screens only, named one by one in `ROSTER_CROSS_OK`-style allow-lists. `RETIRE` in Options is never pressed. |

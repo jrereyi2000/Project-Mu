@@ -196,7 +196,9 @@ def shape_head_coach(profile: dict, coach: dict) -> dict:
         "this_season": profile["this_season"],
         "record_with_team": profile["record_with_team"],
         "playoff_record_with_team": profile["playoff_record_with_team"],
+        "record_with_team_since": profile.get("record_with_team_since"),
         "career": profile["career"],
+        "career_scope": profile.get("career_scope", "full career"),
         "super_bowls_with_team": profile["super_bowls_with_team"],
         "coach_of_the_year": profile["coach_of_the_year"],
     }

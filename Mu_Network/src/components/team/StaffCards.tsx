@@ -19,6 +19,8 @@ export type Staff = {
     this_season: { regular_season: string; playoffs: string | null };
     record_with_team: string | null;
     playoff_record_with_team: string | null;
+    record_with_team_since: number | null;
+    career_scope: "full career" | "since joining this league";
     career: { regular_season: string; win_pct: number | null; winning_seasons: number; playoffs: string; super_bowls: string } | null;
     super_bowls_with_team: string[];
     coach_of_the_year: number[];
@@ -94,9 +96,11 @@ export default function StaffCards({ staff, season }: { staff: Staff; season: nu
           </header>
           <div className="fo-stats">
             <Stat label="This season" value={hc.this_season.regular_season} note={hc.this_season.playoffs ? `${hc.this_season.playoffs} playoffs` : null} />
-            <Stat label="With team" value={hc.record_with_team}
+            <Stat label={hc.record_with_team && hc.record_with_team_since && hc.record_with_team_since > hc.since
+                ? `With team (since ${hc.record_with_team_since})` : "With team"} value={hc.record_with_team}
               note={hc.record_with_team ? `${hc.playoff_record_with_team} playoffs` : "early seasons not on record"} />
-            <Stat label="Career" value={hc.career?.regular_season ?? null}
+            <Stat label={hc.career_scope === "since joining this league" ? "Career (this league)" : "Career"}
+              value={hc.career?.regular_season ?? null}
               note={hc.career ? `${hc.career.playoffs} playoffs · ${hc.career.super_bowls} in Super Bowls` : null} />
           </div>
           <dl className="fo-schemes">

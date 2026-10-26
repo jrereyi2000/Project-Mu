@@ -75,7 +75,7 @@ class TransactionsRunTest(unittest.TestCase):
                 load_status=lambda f: None, step_load=lambda f, replace=False, mode="weekly": calls.append(("load", mode)) or {},
                 league_state=lambda: (2036, 4), since_heading=lambda s, weekly=True: "2036 SEASON - WEEK 1",
                 step_engines=lambda s: calls.append(("engines",)), step_gm=lambda s, next_stage=False: calls.append(("gm", next_stage)),
-                step_scouting=lambda s: calls.append(("scouting",)), step_coach_hot_seat=lambda s: None,
+                step_scouting=lambda s: calls.append(("scouting",)), step_coach_hot_seat=lambda s: None, step_season_archive=lambda s: None,
                 step_articles=lambda s, week=None: calls.append(("articles",))):
             os.makedirs(os.path.join(tmp, "tx1"))
             self.assertEqual(wc.run("tx1", mode="transactions"), 0)
@@ -111,7 +111,8 @@ class TransactionsRunTest(unittest.TestCase):
                     load_status=lambda f: None, step_load=load, league_state=lambda: (2036, 23),
                     since_heading=lambda s, weekly=True: "2036 SEASON - WEEK 1",
                     step_gm=lambda s, next_stage=False: calls.append(("gm", s, next_stage)),
-                    step_scouting=lambda s: calls.append(("scouting", s)), step_coach_hot_seat=lambda s: None):
+                    step_scouting=lambda s: calls.append(("scouting", s)), step_coach_hot_seat=lambda s: None,
+                    step_season_archive=lambda s: None):
                 os.makedirs(os.path.join(tmp, name))
                 code = wc.run(name, mode="transactions", gm_stage=True)
             if fail:                                       # a failed load stops before the GMs see stale books

@@ -438,6 +438,34 @@ def step_scouting(season):
         return []
 
 
+def step_season_archive(season):
+    """engines/season_archive.py (Step 7d, before the coaching carousel): once a season's Super Bowl is complete,
+    freeze it (league_seasons, team_season_results, coach_season_lines, the head coaches' career snapshots). Runs for
+    league_state's season and the one before it and skips a season already archived, so it acts once. Skipped without
+    the migration; a failure only logs a warning."""
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from engines import season_archive as sa
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            if not sa.installed(cur):
+                log("  Season archive skipped: the season archive migration isn't applied")
+                return None
+            reports = sa.run_ready(cur, season)
+            conn.commit()
+        for rep in reports:
+            if rep["status"] == "archived":
+                log(f"  Season {rep['season']} archived: champion {rep['champion']}, {rep['coaches']} coach lines"
+                    + (f"; problems: {'; '.join(rep['problems'])}" if rep["problems"] else "")
+                    + (f"; snapshots skipped: {'; '.join(rep['snapshots_skipped'])}" if rep["snapshots_skipped"] else ""))
+        return reports
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] Season archive skipped: {e!r}")
+        return None
+
+
 def step_coach_hot_seat(season):
     """engines/coaching_carousel.py (Step 7d): whatever of the coaching carousel is ready, once each: Black Monday
     head-coach firings (the Week 18 run, before the Week 19 articles), a playoff team's coach once it is out, the
@@ -932,6 +960,8 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             log("Step 7c: scouting")
             step_scouting(season)
         if mode in ("weekly", "playoff", "postgame"):
+            log("Step 7d: season archive")
+            step_season_archive(season)
             log("Step 7d: coaching carousel")
             step_coach_hot_seat(season)
         published = None
