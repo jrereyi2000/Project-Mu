@@ -610,6 +610,27 @@ def slip_candidate(cur, season, table, cat, row, values, key, pos, by_key, group
     return [(pid, team)]
 
 
+def game_slip(row, key, team_players, rows_here, positions=None):
+    """A game stats name no teammate has, read one letter off a real one (Texans M.Peralta for M. Feralta, Giants
+    D.Wilson for D. Wilbon, Chargers D.Millroe for D. Milroe; 2026-10-27). Two overlapping screenshots often read
+    one line twice, once under each spelling. team_players: [(name key, (player_id, pos, player_name))] of the
+    team; rows_here: {name key: row} of that team's lines in this game and category; positions narrows the
+    teammates when the category has them. Returns ("match", hit) when one teammate is one slip away and his own
+    name isn't on the list, ("twin", name) when it is with the same numbers (the line read twice: dropped), else None."""
+    near = [(k2, h) for k2, h in team_players if k2 != key and one_slip(k2, key)
+            and (positions is None or h[1] in positions)]
+    if len(near) != 1:
+        return None
+    k2, hit = near[0]
+    twin = rows_here.get(k2)
+    if twin is None:
+        return "match", hit
+    stats = [h for h in row if h not in ("GAME", "TEAM", "NAME")]
+    if all((row.get(h) or "").strip() == (twin.get(h) or "").strip() for h in stats):
+        return "twin", twin["NAME"]
+    return None
+
+
 # Season Stats names matched across one OCR slip (slip_candidate), reported as name_slips: worth a glance
 NAME_SLIPS = []
 
@@ -1133,9 +1154,10 @@ def load_games(cur, folder, season, report, replace=False):
         if cur.fetchone()[0] != len(games):
             problems.append(f"{len(games)} games captured for week {report['week']}, the games table has more")
 
-    by_team = {}
+    by_team, team_players = {}, {}
     for pid, key, team, pos, pn in players:
         by_team.setdefault((team, key), []).append((pid, pos, pn))
+        team_players.setdefault(team, []).append((key, (pid, pos, pn)))
 
     def who(cat, team, name):
         hits = by_team.get((team, name_key(name)), [])
@@ -1144,7 +1166,7 @@ def load_games(cur, folder, season, report, replace=False):
         return hits
 
     lines = {}            # (game id, player id) -> {"team", "pos", "name", table: {col: v}}
-    unmatched, later = [], []
+    unmatched, later, slips = [], [], []
     for path in sorted(os.listdir(folder)):
         if not (path.startswith("game_stats_") and path.endswith(".csv")):
             continue
@@ -1159,6 +1181,9 @@ def load_games(cur, folder, season, report, replace=False):
             dp_key = "DP" if any("DP" in r for r in csv_rows) else ("OVR" if any("OVR" in r for r in csv_rows) else "DP")
             cmap = {dp_key: ("downs_played", I)}
         table = "player_stats" if cat in GAME_OFFENSE else f"game_stat_{cat}"
+        listed = {}       # (game, team abbr) -> {name key: row}: a slip's twin is on the same list
+        for r in csv_rows:
+            listed.setdefault((r["GAME"], r["TEAM"].upper()), {})[name_key(r["NAME"])] = r
         for r in csv_rows:
             g = games.get(r["GAME"])
             if g is None:
@@ -1168,6 +1193,17 @@ def load_games(cur, folder, season, report, replace=False):
                 problems.append(f"{r['GAME']} {cat}: {r['NAME']} on {r['TEAM']}, not in this game")
                 continue
             hits = who(cat, team, r["NAME"])
+            if not hits:
+                key = name_key(r["NAME"])
+                slip = game_slip(r, key, team_players.get(team, []), listed[(r["GAME"], r["TEAM"].upper())],
+                                 CATEGORY_POSITIONS.get(cat))
+                if slip and slip[0] == "twin":
+                    slips.append(f"{r['GAME']} {cat}: {r['TEAM']} {r['NAME']} dropped, the same line as {slip[1]}")
+                    continue
+                if slip:
+                    hits = [slip[1]]
+                    slips.append(f"{r['GAME']} {cat}: {r['TEAM']} {r['NAME']} read as {slip[1][2]} "
+                                 f"(player {slip[1][0]}, name one letter off)")
             if len(hits) > 1 and cat == "general":
                 later.append((g, team, r, hits))   # settled below by who has other lines in that game
                 continue
@@ -1198,6 +1234,7 @@ def load_games(cur, folder, season, report, replace=False):
     if problems:
         raise LoadError("games checks failed:\n  " + "\n  ".join(problems))
     report["unmatched_lines"] = unmatched
+    report["game_name_slips"] = slips
 
     ids = [g["id"] for g in games.values()]
     if replace:

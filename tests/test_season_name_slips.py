@@ -61,3 +61,37 @@ class NameSlipTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+GIANTS = [("DWILBON", (749, "TE", "D. Wilbon")), ("DHOBBS", (1431, "WR", "D. Hobbs"))]
+
+
+def game_row(name, rec="2", yds="22"):
+    return {"GAME": "02_giants_at_cardinals", "TEAM": "NYG", "NAME": name, "REC": rec, "YARDS": yds}
+
+
+class GameNameSlipTests(unittest.TestCase):
+    """Game stats names one letter off (load_capture.game_slip, 2026-10-27): the Wild Card load stopped on
+    Texans M.Peralta, Giants D.Wilson and Chargers D.Millroe."""
+
+    def test_one_letter_off_matches_the_teammate(self):
+        r = game_row("D.Wilson")
+        self.assertEqual(L.game_slip(r, "DWILSON", GIANTS, {"DWILSON": r}), ("match", GIANTS[0][1]))
+
+    def test_same_line_read_twice_is_a_twin(self):
+        r, twin = game_row("D.Wilson"), game_row("D.Wilbon")
+        self.assertEqual(L.game_slip(r, "DWILSON", GIANTS, {"DWILSON": r, "DWILBON": twin}), ("twin", "D.Wilbon"))
+
+    def test_his_own_line_with_other_numbers_is_someone_else(self):
+        r, own = game_row("D.Wilson"), game_row("D.Wilbon", rec="4", yds="51")
+        self.assertIsNone(L.game_slip(r, "DWILSON", GIANTS, {"DWILSON": r, "DWILBON": own}))
+
+    def test_two_near_teammates_match_nobody(self):
+        team = GIANTS + [("DWILLON", (9001, "WR", "D. Willon"))]
+        self.assertIsNone(L.game_slip(game_row("D.Wilson"), "DWILSON", team, {}))
+
+    def test_category_positions_narrow_the_teammates(self):
+        self.assertIsNone(L.game_slip(game_row("D.Wilson"), "DWILSON", GIANTS, {}, {"QB", "HB"}))
+
+    def test_two_letters_off_is_nobody(self):
+        self.assertIsNone(L.game_slip(game_row("D.Watson"), "DWATSON", GIANTS, {}))
