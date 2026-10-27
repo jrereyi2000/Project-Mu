@@ -87,8 +87,9 @@ class RestartIntegrationTest(unittest.TestCase):
         link = self.cur.fetchone()
         self.assertEqual(link["previous_league_id"], self.league_id)
         # history walks the lineage; the old league can't be restarted twice
-        self.cur.execute("SELECT count(*) AS n FROM napper_leagues WHERE lineage_id = %s", (link["lineage_id"],))
-        self.assertGreaterEqual(self.cur.fetchone()["n"], 2)
+        self.cur.execute("SELECT count(*) AS n FROM napper_leagues WHERE COALESCE(lineage_id, id) = %s",
+                         (link["lineage_id"],))
+        self.assertGreaterEqual(self.cur.fetchone()["n"], 2)                  # also when the old league had no lineage
         with self.assertRaises(na.HTTPException) as e:
             na.restart_league(self.cur, self.league_id)
         self.assertEqual(e.exception.status_code, 409)
@@ -99,6 +100,77 @@ class RestartIntegrationTest(unittest.TestCase):
         with self.assertRaises(na.HTTPException) as e:
             na.restart_league(self.cur, self.league_id)
         self.assertEqual(e.exception.status_code, 400)
+
+
+@pytest.mark.integration
+class RestartedDraftCustomizationTest(unittest.TestCase):
+    """A restarted league's draft is customizable exactly like a first-year one: the reverse-standings order is only
+    the default the draft room opens with; Set Order, Randomize and Your Slot work on it. The draft engine commits
+    through its own connections, so this test commits to madden_test and puts everything back afterwards."""
+
+    def setUp(self):
+        from engines import napper_draft_engine as de
+        self.de = de
+        self.conn = psycopg.connect(na.DATABASE_URL, row_factory=dict_row)
+        self.cur = self.conn.cursor()
+        if not na._lineage_installed(self.cur):
+            self.skipTest("Napper lineage migration not in this database")
+        self.cur.execute("""SELECT l.id, l.season, l.status, l.champion_team_id FROM napper_leagues l
+                            WHERE EXISTS (SELECT 1 FROM napper_teams t WHERE t.league_id = l.id AND t.user_id IS NOT NULL)
+                              AND NOT EXISTS (SELECT 1 FROM napper_leagues n WHERE n.previous_league_id = l.id)
+                            ORDER BY l.is_seed, l.id LIMIT 1""")
+        self.old = self.cur.fetchone()
+        if not self.old:
+            self.skipTest("no Napper league with the user's team")
+        self.cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+        self.season = self.cur.fetchone()["current_season"]
+        self.cur.execute("SELECT id, final_rank, playoff_finish FROM napper_teams WHERE league_id = %s ORDER BY id",
+                         (self.old["id"],))
+        self.saved_teams = self.cur.fetchall()
+        for rank, t in enumerate(self.saved_teams, 1):
+            self.cur.execute("UPDATE napper_teams SET final_rank = %s WHERE id = %s", (rank, t["id"]))
+        self.cur.execute("UPDATE napper_leagues SET status = 'COMPLETE' WHERE id = %s", (self.old["id"],))
+        self.cur.execute("UPDATE league_state SET current_season = %s WHERE id = 1", (int(self.old["season"]) + 1,))
+        self.new_id = None
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.rollback()
+        if self.new_id:
+            self.cur.execute("DELETE FROM napper_leagues WHERE id = %s", (self.new_id,))
+        for t in self.saved_teams:
+            self.cur.execute("UPDATE napper_teams SET final_rank = %s, playoff_finish = %s WHERE id = %s",
+                             (t["final_rank"], t["playoff_finish"], t["id"]))
+        self.cur.execute("UPDATE napper_leagues SET status = %s, champion_team_id = %s WHERE id = %s",
+                         (self.old["status"], self.old["champion_team_id"], self.old["id"]))
+        self.cur.execute("UPDATE league_state SET current_season = %s WHERE id = 1", (self.season,))
+        self.conn.commit()
+        self.conn.close()
+
+    def test_default_order_then_set_order_and_randomize(self):
+        out = na.restart_league(self.cur, self.old["id"])
+        self.conn.commit()
+        self.new_id = out["league"]["id"]
+        expected = [s["team_id"] for s in out["draft_order"]]          # reverse of last season
+        user_slot = next(s["slot"] for s in out["draft_order"] if s["is_user"])
+
+        state = na.get_league_draft(self.new_id, rounds=15)            # the draft room's first load
+        self.assertEqual(state["status"], "PENDING")
+        self.assertEqual(state["user_slot"], user_slot)
+        slots = sorted(state["settings"]["teams_info"], key=lambda t: t["slot_num"])
+        self.assertEqual([t["team_id"] for t in slots], expected)
+
+        # Set Order: reverse it, exactly as the draft room's modal does
+        n = len(expected)
+        state = self.de.set_draft_order(state["id"], slot_order=list(range(n, 0, -1)))
+        slots = sorted(state["settings"]["teams_info"], key=lambda t: t["slot_num"])
+        self.assertEqual([t["team_id"] for t in slots], list(reversed(expected)))
+        self.assertEqual(state["user_slot"], n + 1 - user_slot)
+
+        # Randomize keeps every team, the draft still pending
+        state = self.de.randomize_draft_order(state["id"])
+        self.assertEqual(state["status"], "PENDING")
+        self.assertEqual(sorted(t["team_id"] for t in state["settings"]["teams_info"]), sorted(expected))
 
 
 if __name__ == "__main__":

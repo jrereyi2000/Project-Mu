@@ -1001,6 +1001,10 @@ def restart_league(cur, league_id: int) -> Dict[str, Any]:
     if successor:
         raise HTTPException(status_code=409, detail=f"Already restarted as league {successor['id']} "
                                                     f"({successor['season']})")
+    # Leagues created after the migration (create_league, the seeder) have no lineage yet: a league is its own.
+    lineage_id = old["lineage_id"] or league_id
+    if old["lineage_id"] is None:
+        cur.execute("UPDATE napper_leagues SET lineage_id = id WHERE id = %s", (league_id,))
     cur.execute(f"""SELECT id, final_rank, seed, {', '.join(RESTART_TEAM_COLS)} FROM napper_teams
                     WHERE league_id = %s""", (league_id,))
     order = restart_order(cur.fetchall())
@@ -1011,7 +1015,7 @@ def restart_league(cur, league_id: int) -> Dict[str, Any]:
         RETURNING id, name, season, teams_count, scoring_type, status, current_week, avatar_url
     """, (old["name"], season, old["teams_count"], old["scoring_type"],
           psycopg.types.json.Jsonb(old["roster_format"] or {}), old["avatar_url"], old["is_seed"], league_id,
-          old["lineage_id"] or league_id))
+          lineage_id))
     new_league = cur.fetchone()
     slots = []
     for slot, t in enumerate(order, 1):
@@ -1025,7 +1029,8 @@ def restart_league(cur, league_id: int) -> Dict[str, Any]:
                       "last_season_rank": t.get("final_rank"), "is_user": t["user_id"] is not None})
     card = {"type": "PRE_DRAFT_READY", "title": f"{old['name']}: the {season} season",
             "highlight": f"{old['teams_count']} Teams · Snake Draft · last season in reverse",
-            "commentary": "Same league, same managers, new rosters. Last season's last-place team picks first."}
+            "commentary": "Same league, same managers, new rosters. Last season's last-place team picks first by "
+                          "default; change it in the draft room (Your Slot, Randomize Order or Set Order)."}
     cur.execute("""
         INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text,
                                  card_payload)
@@ -1061,7 +1066,7 @@ def get_league_history(league_id: int):
             if lineage:
                 lineage_id = row["lineage_id"] or row["id"]
                 cur.execute("""SELECT id, name, season, status, scoring_type, champion_team_id FROM napper_leagues
-                               WHERE lineage_id = %s ORDER BY season, id""", (lineage_id,))
+                               WHERE COALESCE(lineage_id, id) = %s ORDER BY season, id""", (lineage_id,))
             else:
                 lineage_id = row["id"]
                 cur.execute("""SELECT id, name, season, status, scoring_type, champion_team_id FROM napper_leagues

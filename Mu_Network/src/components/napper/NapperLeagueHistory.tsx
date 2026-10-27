@@ -117,7 +117,8 @@ export function NapperLeagueHistory({ leagueId, onRestarted }: { leagueId: numbe
         <div style={{ background: "#16303a", border: "1px solid #00ceb8", borderRadius: "8px", padding: "12px 14px", marginBottom: "12px",
                       display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
           <span style={{ color: "#cbd5e1", fontSize: "12px" }}>
-            This season is over. Start a new one with the same managers; last season's last-place team picks first.
+            This season is over. Start a new one with the same managers. The draft opens with last season in reverse
+            (last place picks first), and you can change the order in the draft room before it starts.
           </span>
           <button type="button" onClick={restart} disabled={restarting}
                   style={{ background: "#00ceb8", color: "#0d1722", border: 0, borderRadius: "6px", padding: "7px 12px",
