@@ -479,7 +479,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     season INT NOT NULL,
     week INT,                                          -- games.week; NULL for preseason / offseason headings
     txn_date TEXT NOT NULL,                            -- the heading after OCR clean-up, as Madden shows it
-    type VARCHAR(12) NOT NULL CHECK (type IN ('SIGNED', 'RELEASED', 'TRADED', 'RE_SIGNED', 'EXTENDED', 'RESTRUCTURED', 'OTHER')),
+    type VARCHAR(12) NOT NULL CHECK (type IN ('SIGNED', 'RELEASED', 'TRADED', 'RE_SIGNED', 'EXTENDED', 'RESTRUCTURED', 'RETIRED', 'OTHER')),
     player_id INT REFERENCES players(id) ON DELETE SET NULL,
     player_name TEXT,                                  -- as the row spells it ("DEVONTA TAYLOR")
     position VARCHAR(6),
@@ -1230,6 +1230,47 @@ CREATE INDEX IF NOT EXISTS coach_season_lines_team ON coach_season_lines (team_i
 -- A coach with no record before he joined this league (a carousel hire, plan D6): his snapshot counts only his
 -- seasons here; his earlier career isn't recorded and is never filled in.
 ALTER TABLE coach_seasons ADD COLUMN IF NOT EXISTS mu_era_only BOOLEAN NOT NULL DEFAULT false;
+
+-- Player season ledger and retirements (2027_01_03_player_season_ledger.sql, engines/season_ledger.py,
+-- docs/SEASON_CONTINUITY_PLAN.md phase 2a).
+-- The season a player retired after (a captured retirement; the 2026-2034 history's players are retired by their
+-- players.origin instead, plan D11). A later signing or roster scan that finds him clears it (plan D8).
+ALTER TABLE players ADD COLUMN IF NOT EXISTS retired_season INT;
+
+-- One row per retirement read off League Transactions.
+CREATE TABLE IF NOT EXISTS player_retirements (
+    id SERIAL PRIMARY KEY,
+    season INT NOT NULL,                               -- the season he retired after
+    player_id INT REFERENCES players(id) ON DELETE CASCADE,   -- NULL: the name couldn't be settled (see flags)
+    player_name TEXT NOT NULL,
+    position VARCHAR(6),
+    team_id INT REFERENCES teams(id),                  -- his last team, when the row names one
+    transaction_id INT REFERENCES transactions(id) ON DELETE SET NULL,
+    capture_id INT REFERENCES captures(id) ON DELETE SET NULL,
+    flags TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS player_retirements_one ON player_retirements (season, player_id)
+    WHERE player_id IS NOT NULL;
+
+-- Each player's fate between two captured seasons (plan D10: captured seasons only, 2035 -> 2036 on).
+CREATE TABLE IF NOT EXISTS player_season_transitions (
+    player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    to_season INT NOT NULL,
+    from_season INT NOT NULL,
+    from_team_id INT REFERENCES teams(id),             -- his team at the end of from_season (NULL: not on a roster)
+    to_team_id INT REFERENCES teams(id),               -- his team at the start of to_season (NULL: none)
+    status VARCHAR(12) NOT NULL CHECK (status IN ('RETAINED', 'MOVED', 'RETIRED', 'FREE_AGENT', 'DRAFTED', 'NEW')),
+    source VARCHAR(12),                                -- how a move or arrival happened: TRADE, TRANSACTION, ROSTER_SCAN, DRAFT
+    ovr_before INT, ovr_after INT,
+    dev_before VARCHAR(32), dev_after VARCHAR(32),
+    age_before INT, age_after INT,
+    exp_before INT, exp_after INT,
+    flags TEXT,                                        -- e.g. retirement_scan_missing, released_in_season, returned
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (player_id, to_season)
+);
+CREATE INDEX IF NOT EXISTS player_season_transitions_status ON player_season_transitions (to_season, status);
 
 -- Career totals from Madden's Career Stats lists (2026_12_26_player_career_totals.sql, pipeline/load_career_totals.py,
 -- docs/HISTORY_BACKFILL_PLAN.md phase 1): one row per list row and category, in season_stat_lines column names.

@@ -547,10 +547,37 @@ def step_preseason_engines(season):
         run_napper_week(season, 1, trades=False, log=log)
     except Exception as e:
         log(f"  [WARN] Napper week 1 lineups skipped: {e!r}")
+    # Player season ledger (continuity plan phase 2a): each player's fate since last season. Optional.
+    step_season_ledger(season)
     # GM agents (team management step 3): the season rollover. Optional, never stops the run.
     step_gm_rollover(season)
     # Scouting (team management step 4): fo_quality from the drafts with real rookie ratings, the new class's rows.
     step_scouting_season(season)
+
+
+def step_season_ledger(season):
+    """engines/season_ledger.py for the season the Season scan just loaded: player_season_transitions from last
+    season's captured rosters to this one's (retained, moved, retired, free agent, drafted, new). Skipped without the
+    migration or when a season isn't captured; a failure only logs a warning."""
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from engines import season_ledger as sl
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            rep = sl.run_ready(cur, season)
+            conn.commit()
+        if rep["status"] == "built":
+            log(f"  Season ledger {season - 1} -> {season}: "
+                + ", ".join(f"{n} {k.lower()}" for k, n in rep["counts"].items())
+                + (f"; flags: {', '.join(f'{n} {k}' for k, n in rep['flags'].items())}" if rep["flags"] else ""))
+        else:
+            log(f"  Season ledger skipped: {rep['status']} {rep.get('reason', '')}".rstrip())
+        return rep
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] Season ledger skipped: {e!r}")
+        return None
 
 
 def step_scouting_season(season):
