@@ -348,8 +348,8 @@ def analyze_team_rosters(
                     WHEN r.slot IN ('QB', 'RB', 'WR', 'TE', 'K', 'DEF') THEN r.slot
                     WHEN r.slot = 'SUPERFLEX' THEN 'QB'
                     WHEN r.slot = 'FLEX' THEN 'RB'
-                    WHEN (SELECT position FROM player_seasons WHERE player_id = r.player_id AND position IN ('QB', 'HB', 'RB', 'WR', 'TE') LIMIT 1) IS NOT NULL 
-                        THEN (SELECT position FROM player_seasons WHERE player_id = r.player_id AND position IN ('QB', 'HB', 'RB', 'WR', 'TE') LIMIT 1)
+                    WHEN (SELECT position FROM player_seasons WHERE player_id = r.player_id AND position IN ('QB', 'HB', 'RB', 'WR', 'TE') AND source <> 'SYNTH' ORDER BY season DESC LIMIT 1) IS NOT NULL 
+                        THEN (SELECT position FROM player_seasons WHERE player_id = r.player_id AND position IN ('QB', 'HB', 'RB', 'WR', 'TE') AND source <> 'SYNTH' ORDER BY season DESC LIMIT 1)
                     ELSE 'WR'
                 END,
                 'WR'

@@ -1275,6 +1275,19 @@ CREATE TABLE IF NOT EXISTS history_team_seasons (
     PRIMARY KEY (candidate_id, season, team_id)
 );
 
+-- Generated 2026-2034 player rows (2026_12_30_history_player_rows.sql, phase 3 apply): source = 'SYNTH'; the
+-- players the backfill creates carry origin HISTORY (real 2026 players retired before 2035) or HISTORY_FILLIN.
+ALTER TABLE player_seasons ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE season_stat_defense ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE season_stat_kicking ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE season_stat_punting ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE season_stat_kickreturn ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE season_stat_puntreturn ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE season_stat_blocking ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE season_stat_general ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE players ADD COLUMN IF NOT EXISTS origin VARCHAR(16);
+
 -- Staged 2026-2034 player lines (2026_12_29_history_player_lines.sql, engines/history_backfill/players.py, phase 3):
 -- nothing reaches the live player tables before JR approves a run.
 CREATE TABLE IF NOT EXISTS history_player_runs (
@@ -1859,7 +1872,8 @@ SELECT ps.season, ps.player_id, pl.player_name, pl.full_name, ps.team_id, ps.pos
        p.net_average AS punt_net_average, p.blocked AS punt_blocked, p.inside_20 AS punt_inside_20,
        p.touchbacks AS punt_touchbacks, p.longest AS punt_longest,
        kr.returns AS kr_returns, kr.yards AS kr_yards, kr.average AS kr_average, kr.tds AS kr_tds, kr.longest AS kr_longest,
-       pr.returns AS pr_returns, pr.yards AS pr_yards, pr.average AS pr_average, pr.tds AS pr_tds, pr.longest AS pr_longest
+       pr.returns AS pr_returns, pr.yards AS pr_yards, pr.average AS pr_average, pr.tds AS pr_tds, pr.longest AS pr_longest,
+       ps.source
 FROM player_seasons ps
 JOIN players pl ON pl.id = ps.player_id
 LEFT JOIN season_stats ss            ON ss.season = ps.season AND ss.player_id = ps.player_id

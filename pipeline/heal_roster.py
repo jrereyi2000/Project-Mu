@@ -15,7 +15,7 @@ def get_missing_players(db_conn):
                 SELECT DISTINCT p.player_name
                 FROM players p
                 LEFT JOIN player_seasons ps ON p.id = ps.player_id
-                WHERE p.height IS NULL OR p.weight IS NULL OR ps.years_of_experience IS NULL
+                WHERE p.origin IS NULL AND (p.height IS NULL OR p.weight IS NULL OR ps.years_of_experience IS NULL)
             """)
             return [row[0] for row in cur.fetchall()]
 

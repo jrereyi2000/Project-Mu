@@ -369,8 +369,8 @@ def get_player_season_stats(player_identifier: str) -> str:
                     target_id = int(clean_ident)
                 else:
                     cur.execute("""
-                        SELECT id FROM players 
-                        WHERE player_name ILIKE %s OR full_name ILIKE %s
+                        SELECT id FROM players
+                        WHERE (player_name ILIKE %s OR full_name ILIKE %s) AND origin IS NULL
                         ORDER BY LENGTH(player_name) ASC
                         LIMIT 1;
                     """, (f"%{clean_ident}%", f"%{clean_ident}%"))
@@ -592,7 +592,7 @@ def get_player_scheme_splits(player_identifier: str, seasons: int = 2) -> str:
                     target_id = int(ident)
                 else:
                     cur.execute("""
-                        SELECT id FROM players WHERE player_name ILIKE %s OR full_name ILIKE %s
+                        SELECT id FROM players WHERE (player_name ILIKE %s OR full_name ILIKE %s) AND origin IS NULL
                         ORDER BY LENGTH(player_name) ASC LIMIT 1
                     """, (f"%{ident}%", f"%{ident}%"))
                     row = cur.fetchone()
@@ -2145,8 +2145,8 @@ def get_player_articles(player_identifier: str, limit: int = 5) -> str:
                     cur.execute("""
                         SELECT p.id, p.full_name 
                         FROM players p
-                        LEFT JOIN player_seasons ps ON p.id = ps.player_id
-                        WHERE p.full_name ILIKE %s OR p.player_name ILIKE %s 
+                        LEFT JOIN player_seasons ps ON p.id = ps.player_id AND ps.source <> 'SYNTH'
+                        WHERE (p.full_name ILIKE %s OR p.player_name ILIKE %s) AND p.origin IS NULL
                         ORDER BY LENGTH(p.full_name) ASC, ps.overall_rating DESC NULLS LAST, p.id ASC LIMIT 1;
                     """, (f"%{clean_id}%", f"%{clean_id}%"))
                     row = cur.fetchone()
@@ -2159,7 +2159,7 @@ def get_player_articles(player_identifier: str, limit: int = 5) -> str:
                 cur.execute("""
                     SELECT p.full_name, t.name, t.city, t.abbreviation
                     FROM players p
-                    LEFT JOIN player_seasons ps ON p.id = ps.player_id
+                    LEFT JOIN player_seasons ps ON p.id = ps.player_id AND ps.source <> 'SYNTH'
                     LEFT JOIN teams t ON ps.team_id = t.id
                     WHERE p.id = %s
                     ORDER BY ps.season DESC NULLS LAST LIMIT 1;
@@ -2549,7 +2549,7 @@ def _resolve_player_id(cur, identifier: str):
     if ident.isdigit():
         return int(ident)
     cur.execute("""
-        SELECT id FROM players WHERE player_name ILIKE %s OR full_name ILIKE %s
+        SELECT id FROM players WHERE (player_name ILIKE %s OR full_name ILIKE %s) AND origin IS NULL
         ORDER BY LENGTH(player_name) ASC LIMIT 1;
     """, (f"%{ident}%", f"%{ident}%"))
     row = cur.fetchone()

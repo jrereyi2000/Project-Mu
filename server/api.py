@@ -541,7 +541,7 @@ def get_seasons():
                     UNION
                     SELECT season FROM team_seasons
                     UNION
-                    SELECT season FROM player_seasons
+                    SELECT season FROM player_seasons WHERE source <> 'SYNTH'   -- 2026-2034 history waits for phase 4
                 ) AS all_seasons
                 ORDER BY season DESC
             """)
@@ -882,7 +882,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                 LEFT JOIN season_overall_ranks sor ON sor.season = ps.season AND sor.player_id = ps.player_id
                 LEFT JOIN games g ON g.season = ps.season AND (g.home_team_id = ps.team_id OR g.away_team_id = ps.team_id)
                 LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_id = ps.player_id AND st.team_id = ps.team_id
-                WHERE ps.player_id = %s
+                WHERE ps.player_id = %s AND ps.source <> 'SYNTH'    -- generated 2026-2034 seasons wait for phase 4
                 GROUP BY ps.season, t.name, t.abbreviation, sor.total_fpts, sor.overall_rank
                 ORDER BY ps.season DESC
             """, (id,))
@@ -899,7 +899,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                        ss.receptions, ss.rec_yards, ss.rec_tds
                 FROM season_stats ss
                 JOIN teams t ON t.id = ss.team_id
-                WHERE ss.player_id = %s
+                WHERE ss.player_id = %s AND ss.source <> 'SYNTH'
                 ORDER BY ss.season DESC
             """, (id,))
             ss_rows = [dict(r) for r in cur.fetchall()]
@@ -927,7 +927,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                        punt_punts, punt_yards, punt_average, punt_net_average, punt_inside_20, punt_longest,
                        kr_returns, kr_yards, kr_average, kr_tds, pr_returns, pr_yards, pr_average, pr_tds,
                        blk_sacks_allowed
-                FROM season_stat_lines WHERE player_id = %s
+                FROM season_stat_lines WHERE player_id = %s AND source <> 'SYNTH'
             """, (id,))
             lines = {r["season"]: r for r in cur.fetchall()}
             for c in career:
@@ -2549,7 +2549,7 @@ def search_global(q: str = "", season: Optional[int] = None, limit: int = 20):
                     LIMIT 1
                 ) ps_latest ON true
                 LEFT JOIN teams t_latest ON t_latest.id = ps_latest.team_id
-                WHERE p.full_name ILIKE %s
+                WHERE p.full_name ILIKE %s AND p.origin IS NULL      -- backfilled history players wait for phase 4
                 ORDER BY overall_rating DESC
                 LIMIT 15;
             """, (season, pattern))

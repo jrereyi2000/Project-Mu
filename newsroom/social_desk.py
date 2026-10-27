@@ -424,7 +424,7 @@ def load_moves(cur, season: int, week: int) -> tuple:
         caps = fetch_cap_rows(cur, season)
         pids = [r["player_id"] for r in rows if r["player_id"]]
         cur.execute("""SELECT player_id, team_id, COUNT(*) FROM player_seasons
-                       WHERE player_id = ANY(%s) AND season <= %s GROUP BY 1, 2;""", (pids, season))
+                       WHERE player_id = ANY(%s) AND season <= %s AND source <> 'SYNTH' GROUP BY 1, 2;""", (pids, season))
         tenure = {(p, t): n for p, t, n in cur.fetchall()}
     except Exception:
         cur.execute("ROLLBACK TO SAVEPOINT agent_wire_moves")

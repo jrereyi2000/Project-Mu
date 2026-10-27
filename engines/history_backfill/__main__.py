@@ -5,6 +5,8 @@ History backfill CLI (docs/HISTORY_BACKFILL_PLAN.md §3.8). Phase 2: the team ar
   python3 -m engines.history_backfill apply --candidate N
   python3 -m engines.history_backfill revert
   python3 -m engines.history_backfill players [--seed 1]      # phase 3: stage player lines and fill-ins
+  python3 -m engines.history_backfill apply-players --run N    # write a staged run (source SYNTH)
+  python3 -m engines.history_backfill revert-players           # delete every SYNTH player row
 """
 import argparse
 
@@ -23,6 +25,9 @@ def main():
     sub.add_parser("revert", help="delete every SYNTH row")
     pr = sub.add_parser("players", help="stage 2026-2034 player lines and fill-ins, and write their report")
     pr.add_argument("--seed", type=int, default=1)
+    ap_ = sub.add_parser("apply-players", help="write a staged player-lines run into the live tables (source SYNTH)")
+    ap_.add_argument("--run", type=int, required=True)
+    sub.add_parser("revert-players", help="delete every SYNTH player row and the players the backfill created")
     args = ap.parse_args()
     if args.cmd == "generate":
         for cid, status, problems in team_arc.generate(args.seeds, args.pins, args.time_limit):
@@ -34,6 +39,10 @@ def main():
         run_id, report = players.run(args.seed)
         print(f"run {run_id}: {report['players']} players, {report['lines']} lines, {report['fillins']} fill-ins, "
               f"{len(report['problems'])} problems; wrote {players.REPORT_MD}")
+    elif args.cmd == "apply-players":
+        print(f"applied run {args.run}: {players.apply_run(args.run)}")
+    elif args.cmd == "revert-players":
+        print(f"deleted {players.revert_players()} SYNTH player rows")
     else:
         print(f"deleted {team_arc.revert()} SYNTH rows")
 

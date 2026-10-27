@@ -614,8 +614,8 @@ class EntityTaggingService:
             cur.execute("""
                 SELECT p.id, p.full_name, ps.team_id, ps.overall_rating
                 FROM players p
-                LEFT JOIN player_seasons ps ON p.id = ps.player_id
-                WHERE p.full_name IS NOT NULL AND length(trim(p.full_name)) > 2
+                LEFT JOIN player_seasons ps ON p.id = ps.player_id AND ps.source <> 'SYNTH'
+                WHERE p.full_name IS NOT NULL AND length(trim(p.full_name)) > 2 AND p.origin IS NULL
                 ORDER BY ps.overall_rating DESC NULLS LAST, p.id ASC;
             """)
 

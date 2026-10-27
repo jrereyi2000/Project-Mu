@@ -124,5 +124,15 @@ class FillinTest(unittest.TestCase):
         self.assertNotIn(qbs[0]["full_name"], ("Abe Lincoln", "Bo Jackson", "Cal Ripken", "Abe Jackson"))
 
 
+class ApplyTest(unittest.TestCase):
+    def test_derived_rates(self):
+        from engines.history_backfill import players
+        r = players.derived("season_stats", {"completions": 300, "pass_attempts": 450, "pass_yards": 4500,
+                                             "games_played": 17, "rush_yards": 0, "rush_attempts": 0})
+        self.assertEqual((r["pass_comp_pct"], r["pass_ypa"], r["rush_avg"]), (66.7, 10.0, None))
+        self.assertEqual(players.derived("season_stat_kicking", {"fgm": 27, "fga": 30})["fg_pct"], 90.0)
+        self.assertEqual(players.SIDE["def_sacks"], ("season_stat_defense", "sacks"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -168,3 +168,158 @@ def write_report(run_id, everyone, lines, fills, unassigned, report, abbr):
     os.makedirs(os.path.dirname(REPORT_MD), exist_ok=True)
     with open(REPORT_MD, "w") as fh:
         fh.write("\n".join(out) + "\n")
+
+
+# ---------------------------------------------------------------------------------------------- apply ----
+
+SS_COLS = ("completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions", "pass_sacks", "rush_attempts",
+           "rush_yards", "rush_tds", "fumb", "rush_btk", "rush_yac", "receptions", "rec_yards", "rec_tds", "rec_rac")
+# season_stat_lines name -> (table, column)
+SIDE = {**{f"def_{c}": ("season_stat_defense", c) for c in (
+            "solo", "assists", "tackles", "tfl", "sacks", "ints", "int_yds", "deflections", "forced_fumbles",
+            "fumble_recoveries", "tds", "safeties")},
+        "kick_fgm": ("season_stat_kicking", "fgm"), "kick_fga": ("season_stat_kicking", "fga"),
+        "kick_xpm": ("season_stat_kicking", "xpm"), "kick_xpa": ("season_stat_kicking", "xpa"),
+        "punt_punts": ("season_stat_punting", "punts"), "punt_yards": ("season_stat_punting", "yards"),
+        "punt_net_yards": ("season_stat_punting", "net_yards"), "punt_inside_20": ("season_stat_punting", "inside_20"),
+        "kr_returns": ("season_stat_kickreturn", "returns"), "kr_yards": ("season_stat_kickreturn", "yards"),
+        "pr_returns": ("season_stat_puntreturn", "returns"), "pr_yards": ("season_stat_puntreturn", "yards"),
+        "blk_sacks_allowed": ("season_stat_blocking", "sacks_allowed"),
+        "games_played": ("season_stat_general", "games_played")}
+PLAYER_TABLES = ("season_stat_general", "season_stat_blocking", "season_stat_puntreturn", "season_stat_kickreturn",
+                 "season_stat_punting", "season_stat_kicking", "season_stat_defense", "season_stats", "player_seasons")
+ORIGIN = {"vet": "HISTORY", "fillin": "HISTORY_FILLIN"}
+
+
+def derived(table, row):
+    """Rates the side tables and season_stats carry, from the counting stats (pure)."""
+    def rate(a, b, nd=1):
+        return round(a / b, nd) if b else None
+    g = row.get("games_played") or 0
+    if table == "season_stats":
+        return {"pass_comp_pct": rate(100 * row.get("completions", 0), row.get("pass_attempts", 0)),
+                "pass_ypa": rate(row.get("pass_yards", 0), row.get("pass_attempts", 0)),
+                "pass_ypg": rate(row.get("pass_yards", 0), g), "rush_avg": rate(row.get("rush_yards", 0),
+                                                                                row.get("rush_attempts", 0)),
+                "rush_ypg": rate(row.get("rush_yards", 0), g), "rec_avg": rate(row.get("rec_yards", 0),
+                                                                              row.get("receptions", 0)),
+                "rec_ypg": rate(row.get("rec_yards", 0), g)}
+    if table == "season_stat_defense":
+        return {"int_avg": rate(row.get("int_yds", 0), row.get("ints", 0))}
+    if table == "season_stat_kicking":
+        return {"fg_pct": rate(100 * row.get("fgm", 0), row.get("fga", 0)),
+                "xp_pct": rate(100 * row.get("xpm", 0), row.get("xpa", 0))}
+    if table == "season_stat_punting":
+        return {"average": rate(row.get("yards", 0), row.get("punts", 0)),
+                "net_average": rate(row.get("net_yards", 0), row.get("punts", 0))}
+    if table in ("season_stat_kickreturn", "season_stat_puntreturn"):
+        return {"average": rate(row.get("yards", 0), row.get("returns", 0))}
+    return {}
+
+
+def apply_run(run_id, conn_info=CONN_INFO, dry_run=False):
+    """Write a staged run into players / player_seasons / season_stats / season_stat_* (source SYNTH) in one
+    transaction. Canon season_stats rows (the seeded Panthers lines) are updated in place: only their unstated
+    columns and the listed canon adjustments, with the old values kept in the run's report for revert. Refuses a run
+    with problems other than zero-counted negatives and canon adjustments, or when SYNTH player rows exist."""
+    with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
+        cur.execute("SELECT report FROM history_player_runs WHERE id = %s", (run_id,))
+        got = cur.fetchone()
+        if not got:
+            raise SystemExit(f"no run {run_id}")
+        report = got[0]
+        blocking = [p for p in report["problems"] if "counted as 0" not in p and not p.startswith("canon adjustment")]
+        if blocking:
+            raise SystemExit(f"run {run_id} has problems: {blocking[:5]}")
+        cur.execute("SELECT count(*) FROM player_seasons WHERE source = 'SYNTH'")
+        if cur.fetchone()[0]:
+            raise SystemExit("SYNTH player rows exist: revert-players first")
+        cur.execute("SELECT key, kind, player_id, espn_id, full_name, player_name FROM history_players WHERE run_id = %s",
+                    (run_id,))
+        pid = {}
+        for key, kind, player_id, espn, full, name in cur.fetchall():
+            if player_id:
+                pid[key] = player_id
+                continue
+            cur.execute("INSERT INTO players (player_name, full_name, espn_id, origin) VALUES (%s, %s, %s, %s) "
+                        "RETURNING id", (name, full, espn, ORIGIN[kind]))
+            pid[key] = cur.fetchone()[0]
+        cur.execute("""SELECT key, season, team_id, position, age, years_of_experience, stats FROM history_player_lines
+                       WHERE run_id = %s ORDER BY season, key""", (run_id,))
+        lines = cur.fetchall()
+        cols = ("completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions", "rush_attempts",
+                "rush_yards", "rush_tds", "receptions", "rec_yards", "rec_tds", "fumb", "pass_sacks")
+        cur.execute(f"SELECT id, player_id, season, {', '.join(cols)} FROM season_stats WHERE season BETWEEN 2026 AND 2034")
+        canon = {(r[1], r[2]): (r[0], dict(zip(cols, r[3:]))) for r in cur.fetchall()}
+        canon_changes, names_used, counts = [], set(), Counter()
+        cur.execute("SELECT season, player_name, team_id, position FROM season_stats WHERE season BETWEEN 2026 AND 2034")
+        names_used = {tuple(r) for r in cur.fetchall()}
+        cur.execute("SELECT key, player_name, full_name FROM history_players WHERE run_id = %s", (run_id,))
+        names = {k: (n, f) for k, n, f in cur.fetchall()}
+        for key, y, team, pos, age, exp, stats in lines:
+            p = pid[key]
+            cur.execute("""INSERT INTO player_seasons (player_id, team_id, season, position, age, years_of_experience,
+                               source) VALUES (%s, %s, %s, %s, %s, %s, 'SYNTH')""", (p, team, y, pos, age, exp))
+            counts["player_seasons"] += 1
+            off = {c: stats[c] for c in SS_COLS if stats.get(c)}
+            if (p, y) in canon:
+                row_id, old = canon[(p, y)]
+                upd = {c: v for c, v in off.items() if c in old and (not old[c] or v != old[c])}
+                upd.update({c: v for c, v in off.items() if c not in old})
+                if upd:
+                    canon_changes.append({"id": row_id, "old": {c: old.get(c) for c in upd}})
+                    cur.execute(f"UPDATE season_stats SET {', '.join(f'{c} = %s' for c in upd)} WHERE id = %s",
+                                (*upd.values(), row_id))
+                    counts["canon_updates"] += 1
+            elif off:
+                name = names[key][0]
+                if (y, name, team, pos) in names_used:
+                    name = names[key][1]                     # two teammates share a list name: the full name
+                names_used.add((y, name, team, pos))
+                row = {**off, **{k: v for k, v in derived("season_stats", {**off, **stats}).items() if v is not None}}
+                cur.execute(f"""INSERT INTO season_stats (season, player_id, player_name, team_id, position,
+                                    {', '.join(row)}, source)
+                                VALUES (%s, %s, %s, %s, %s, {', '.join(['%s'] * len(row))}, 'SYNTH')""",
+                            (y, p, name, team, pos, *row.values()))
+                counts["season_stats"] += 1
+            side = defaultdict(dict)
+            for stat, v in stats.items():
+                if stat in SIDE and v:
+                    t, c = SIDE[stat]
+                    side[t][c] = v
+            if "season_stat_defense" in side:
+                d = side["season_stat_defense"]
+                d["tackles"] = d.get("solo", 0) + d.get("assists", 0)
+            for t, row in side.items():
+                row = {**row, **{k: v for k, v in derived(t, row).items() if v is not None}}
+                cur.execute(f"""INSERT INTO {t} (season, player_id, team_id, position, {', '.join(row)}, source)
+                                VALUES (%s, %s, %s, %s, {', '.join(['%s'] * len(row))}, 'SYNTH')""",
+                            (y, p, team, pos, *row.values()))
+                counts[t] += 1
+        report["applied"] = {"counts": dict(counts), "canon_changes": canon_changes}
+        cur.execute("UPDATE history_player_runs SET applied_at = now(), report = %s WHERE id = %s",
+                    (json.dumps(report, default=str), run_id))
+        if dry_run:
+            conn.rollback()
+        else:
+            conn.commit()
+    return dict(counts)
+
+
+def revert_players(conn_info=CONN_INFO):
+    """Delete every SYNTH player row and the players the backfill created; restore the canon rows it touched."""
+    with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, report FROM history_player_runs WHERE applied_at IS NOT NULL")
+        n = 0
+        for run_id, report in cur.fetchall():
+            for ch in (report.get("applied") or {}).get("canon_changes", []):
+                cur.execute(f"UPDATE season_stats SET {', '.join(f'{c} = %s' for c in ch['old'])} WHERE id = %s",
+                            (*ch["old"].values(), ch["id"]))
+            cur.execute("UPDATE history_player_runs SET applied_at = NULL WHERE id = %s", (run_id,))
+        for t in PLAYER_TABLES:
+            cur.execute(f"DELETE FROM {t} WHERE source = 'SYNTH'")
+            n += cur.rowcount
+        cur.execute("DELETE FROM players WHERE origin IN ('HISTORY', 'HISTORY_FILLIN')")
+        n += cur.rowcount
+        conn.commit()
+    return n

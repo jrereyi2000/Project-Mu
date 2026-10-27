@@ -212,7 +212,8 @@ def store_takes(cur, agent_id: str, season: int, week: int, article_id: int, tak
         team_id = resolve_team(t["team"], team_index) if t.get("team") else None
         player_id = None
         if t.get("player"):
-            cur.execute("SELECT id FROM players WHERE full_name ILIKE %s ORDER BY id LIMIT 1;", (t["player"],))
+            cur.execute("SELECT id FROM players WHERE full_name ILIKE %s AND origin IS NULL ORDER BY id LIMIT 1;",
+                        (t["player"],))
             r = cur.fetchone()
             player_id = r[0] if r else None
         cur.execute("""INSERT INTO agent_memory_entries (agent_id, season, week, article_id, kind, text, team_id, player_id)
