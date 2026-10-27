@@ -192,7 +192,7 @@ The fit picks which ratings to edit and by how much; §4.3 Step 3 settles the la
 
 ### 4.5 PGID Mapping
 
-New column `players.madden_pgid` (Madden's player ID on the PC save), written by the teleporter for every player it places and by the weekly loader for rookies and new free agents. Project Mu's own `player_id` stays the primary key; the PGID is only the join to the save.
+New column `players.madden_pgid` (Madden's player ID on the PC save: `Player.PresentationId`, unique for all 3,086 players in `CAREER-GIANTS-AUTOSAVE`; stability across Advance Week and season rollover is a §5.4 check), written by the teleporter for every player it places and by the weekly loader for rookies and new free agents. Project Mu's own `player_id` stays the primary key; the PGID is only the join to the save.
 
 ---
 
@@ -206,7 +206,7 @@ Once the league runs on PC, screen capture (`madden_capture.py`, `extract.py`, t
 [Madden Saves Franchise to Disk] (C:\Users\<Name>\Documents\Madden NFL 27\settings\CAREER-*)
                    │
                    ▼
-     [pipeline/pc_save_reader.js] (Node.js + `madden-franchise`, Windows side)
+     [pipeline/save_reader/pc_save_reader.mjs] (Node.js + `madden-franchise`; built, v1)
      • Reads `Player`, `Contract`, `SeasonGame` and the tables that reference it
        (game stats, scoring plays), season/career stat tables, `Team`, `DraftPick`,
        transactions
@@ -227,6 +227,8 @@ Once the league runs on PC, screen capture (`madden_capture.py`, `extract.py`, t
      • Newsroom swarm and Agent Wire social desk
 ```
 
+**Reader status (2026-10-27):** `pipeline/save_reader/pc_save_reader.mjs` is built and tested against `CAREER-GIANTS-AUTOSAVE`: 2,990 players, 324 games and 35 teams in ~1.2 s, 6,019 per-game stat lines, all resolving to an exported game. Per-game lines are reached through `Player.GameStats` (an array of references into the `Game*Stats` tables, each row pointing at its `SeasonGame`), season lines through `Player.SeasonStats`, contracts through `Player.Contract` → `PlayerContract`. It writes JSON to a path given with `--out` (the loader will choose `captures/<run>/save.json`). Next: `pipeline/load_save.py`.
+
 **Why a new loader instead of CSVs for `pipeline/load_capture.py`:** `load_capture.py` is built around OCR output — the `36 CAP` year strip, row-count margins, fuzzy one-letter name matching, unmatched-row crop prompts. Faking CSVs means reproducing those quirks, and none of those checks mean anything with exact IDs. A thin loader that reuses the database-write helpers is less code. `load_capture.py` stays for reloading old captures.
 
 ### 5.2 Debounced File Watcher (`pipeline/watch_save.py`)
@@ -234,7 +236,7 @@ A small daemon on the PC:
 * Watches the `CAREER-*` save folder.
 * Debounces write bursts (waits a few seconds after the last write).
 * Compares the save's season year and current week with `league_state`.
-* On a new week, runs `pc_save_reader.js` $\rightarrow$ `load_save.py` $\rightarrow$ engines $\rightarrow$ newsroom.
+* On a new week, runs `pc_save_reader.mjs` $\rightarrow$ `load_save.py` $\rightarrow$ engines $\rightarrow$ newsroom.
 
 ### 5.3 Game-Level Data
 

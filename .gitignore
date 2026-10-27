@@ -48,3 +48,6 @@ captures/
 
 # Madden franchise save files
 CAREER-*
+
+# Save reader dependencies
+pipeline/save_reader/node_modules/

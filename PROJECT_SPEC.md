@@ -102,7 +102,12 @@ Project Mu/
 │   ├── ingest_prospects.py    #   Draft prospect CSV parsing and validation (strict, or lenient: bad cells → None with warnings)
 │   ├── draft_board.py         #   draft_prospects / mock_draft_picks reads and writes (board, rookie link, saved mock drafts)
 │   ├── draft_results.py       #   Round 1 actual draft results ingestion and 32-pick validation engine (§3.3c)
-│   └── roster_scanner.py, schedule_scanner.py, heal_roster.py
+│   ├── roster_scanner.py, schedule_scanner.py, heal_roster.py
+│   └── save_reader/           # Madden 27 PC franchise-save reader (Node, madden-franchise 4.4.1; docs/PC_MIGRATION_PLAN.md §5.1; not wired into the pipeline yet)
+│       ├── pc_save_reader.mjs #   `node pc_save_reader.mjs <CAREER-save> [--out snapshot.json]`: opens a temp copy (Madden's file is never touched) and writes one JSON snapshot: meta (schema expected vs used), season (calendar/franchise year, week index and type, stage), teams (TeamIndex, names), games (SeasonGame rows with both teams: status, simmed, scores, quarter scores, OT, weather, time of day, scoring plays from ScoringSummaries), players (pgid = Player.PresentationId, unique per save; row; name, position, archetype = PlayerType, status, team, age, years pro, height, weight_lbs = raw + 160, dev trait, OVR, current ratings, cap salary, contract by year, appearance ids incl. PLYR_COMMENT / PLYR_PORTRAIT / generic head, injury, season_stats and game_stats followed through Player.SeasonStats / Player.GameStats with game_row and opponent). Tables with several copies (Team) use the largest. Deleted players are skipped
+│       ├── lib.mjs            #   Pure helpers: 32-bit reference decode (15-bit table id + 17-bit row), ratings pick, numbered fields, stat table → kind
+│       ├── package.json       #   `npm install`, `npm test` (node --test); node_modules/ git-ignored
+│       └── test/              #   lib.test.mjs (unit); read_save.test.mjs (reads $MU_SAMPLE_SAVE or CAREER-GIANTS-AUTOSAVE at the root, skips if absent: file unchanged, pgids unique, quarters add up to finals, every game line resolves)
 ├── engines/                   # Deterministic analytics (Sections 2 & 6, steps 2–3)
 │   ├── game_stat_generator.py #   CPU-sim backfill (offense, defense, kicking, punting, blocking, returns) → culture engines (no swarm; see newsroom/weekly_run.py);
 │   │                          #   a released player (player_seasons.released_week) gets no line from his release week on (`_player_weights`); trades need nothing (lines deducted across teams)
@@ -310,6 +315,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | API server | `python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload` |
 | Frontend | `cd Mu_Network && npm run dev` (Vite on port 8443) |
 | Video pipeline | `python3 -m pipeline.main --file data/video/<clip>.mp4 --db` |
+| Read a Madden 27 PC save (not wired in yet) | `cd pipeline/save_reader && npm install && node pc_save_reader.mjs <CAREER-save> --out snapshot.json`; tests: `npm test` |
 | Stat backfill + culture engines | `python3 -m engines.game_stat_generator` (season from `league_state.current_season`; `--season N` overrides) |
 | Publish the weekly newsroom slate | `python3 -m newsroom.weekly_run` (next week; skips if already published). `--week N` for a specific week (Week 1 preseason and Week 23 Super Bowl are manual), `--force` to publish again, `--dry-run` to print prompts with no Gemini calls or writes. The Mu Fantasy slate runs in the same call after the national slate (W1–18, own already-published check); `--fantasy-only` / `--skip-fantasy` |
 | Commission a custom article | `python3 -m newsroom.custom_commission --prompt "..." [--season N] [--week N] [--desk NATIONAL\|FANTASY] [--dry-run]` (classifies prompt into article type and qualified writer via Gemini Flash, runs ReAct swarm, routes to National Newsroom or Mu Fantasy Desk; also interactive Two-Step Flow via `#debug` Control tab) |
