@@ -3610,6 +3610,29 @@ def get_front_office_rankings(season: int = 0) -> str:
     return json.dumps({"season": s_val, "front_offices": [standing_facts(r, s_val) for r in rows]}, indent=2)
 
 
+@tool
+def get_gm_record(team_identifier: str, season: int = 0) -> str:
+    """Fetch a team's GM's track record across every job he has held in this league (team, years, role, regular-season
+    record, winning seasons, division titles, playoff trips, Super Bowls, best finish, season by season, and how an
+    earlier job ended), plus the team's earlier GMs and how their tenures went. Finished seasons only; GMs are on
+    record from gms_on_record_since (null: none before the current GM), so say nothing about who ran a team before
+    that. Use the records as written."""
+    try:
+        from engines.gm_record import gm_record
+        s_val = resolve_season(season)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Team '{team_identifier}' not found."
+                rec = gm_record(cur, team_id, s_val)
+    except Exception as e:
+        return f"Error: {str(e)}"
+    if not rec:
+        return f"No GM on record for '{team_identifier}' in {s_val}."
+    return json.dumps(rec, indent=2, default=str)
+
+
 _PICK_TEXT = re.compile(r"^\s*(20\d\d)\s+(?:r(?:ound)?\s*([1-7])|([1-7])(?:st|nd|rd|th)(?:\s*-?\s*round)?)\b(?:\s*pick)?\s*\(?([^)]*)\)?\s*$",
                         re.I)
 
