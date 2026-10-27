@@ -45,3 +45,6 @@ WEEKLY_RUN
 
 # Remote Play capture screenshots / CSVs from madden_capture.py (see PROJECT_SPEC.md §1.1)
 captures/
+
+# Madden franchise save files
+CAREER-*
