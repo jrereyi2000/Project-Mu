@@ -389,7 +389,6 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
                     WHERE season < %s AND season >= %s
                     ORDER BY team_id, season ASC;
                 """, (season, season - 5))
-                from collections import defaultdict
                 by_team = defaultdict(list)
                 for tid, s_yr, w, post in cur.fetchall():
                     by_team[tid].append((s_yr, w, post))
@@ -1119,6 +1118,15 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 3. DEFENSIVE DATA: Defense and special teams now have real season numbers: tackles, sacks, tackles for loss, interceptions, pass deflections, forced fumbles and recoveries, defensive TDs, kicking, punting and returns, plus sacks allowed for linemen and sacks taken for quarterbacks. Use them to back defensive claims with named players. The limits: Madden lists only its leaders in each category, so a player with no line has unknown numbers (not zeros); listed defenders don't add up to a team total, so never sum them into team sacks or takeaways; and pressures, blitzes, coverage, snap counts and targets aren't recorded, so never give them as numbers or rates. Describing them in words is fine when it fits the box score and the game script: a pass rush that lived in the backfield, a corner who blanketed his man, a defense that brought more heat after halftime. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and three tendencies (pass lean, fourth-down aggressiveness, man coverage) as Low / Medium / High against the league. Pass lean and fourth-down aggressiveness are measured from this league's results (allowing for the score), so you can state them as what the team does ("one of the league's most aggressive fourth-down teams"). Man coverage is the staff's real-world philosophy, not measured here: present it as reputation ("a staff known for zone"), never as what the defense has done this season. There is no blitz data, so never put a number on how often a defense blitzes or call it a season-long habit. Never turn a tier into a percentage, and never put a count or rate on how often a team blitzed or played man in a specific game; describing in words what a defense did in one game is fine when it fits the game script. Team situational numbers work the same way: season third-down, red-zone and penalty rates come from `get_team_efficiency_profile`, and a single game's come only from its box score's `team_situational` line. If a game has no such line, don't invent its third-down or red-zone totals. Third-down defense has no season total, so never cite a season third-down rate allowed beyond what the tool shows, and down-and-distance splits (third-and-short, third-and-long) aren't recorded. Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
 
 4. HISTORICAL COMPARISONS (OPTIONAL): Ground your historical comparisons in this league's own reconstructed 10-season canon (2026–2035) and franchise history (queried via `get_team_history` and `get_player_career`). Draw parallels to real simulation milestones, dynasties, or collapses when they sharpen your argument: Marcus Whitfield's record-setting 2029–2033 Bears offense, Carolina's 0–17 collapse in 2031 and subsequent 2034 Super Bowl run, or past MVP/OPOY campaigns. When a real NFL comparison from 1990–2023 genuinely fits the numbers (similar record shape, scoring profile, or trajectory), you may use it, but prefer in-universe league lore. It is not required: most articles need none, and you should use at most one. Never invent a historical team or season.
+
+5. MARQUEE TEAMS & SUPERSTAR COVERAGE (ANGLE ROTATION & NARRATIVE MOMENTUM):
+National sports coverage naturally and rightfully centers around the league's marquee franchises, undefeated powerhouses, and superstar quarterbacks. Do not avoid them! However, you must NEVER write a generic overview that simply recites their record, praises their dominance, or repeats established narrative tropes. Whenever you evaluate a top-tier contender or MVP candidate, you must adopt one of these specific investigative angles:
+- The Vulnerability / The Nitpick: Even dominant teams have subtle cracks. Isolate a hidden flaw on film or in situational data (e.g. third-and-long defense, red-zone TD rate allowed, interior pass protection, field-goal reliability).
+- The Scheme / The Antidote: Focus on how opponents are scheming to counter them. Which coverage rotations or blitz timings have challenged their timing, and what does the tape reveal?
+- The Complacency & Focus Trap: Explore the psychological toll of being the hunted and getting every opponent's absolute best shot every Sunday.
+- The Future Bill & Roster Toll: Analyze the organizational cost of sustaining greatness: upcoming contract expirations, cap commitments, coordinator poaching, or aging depth.
+- The Foil / The Contender's Challenge: Frame chasing rivals or mid-tier contenders specifically around whether they possess the schematic ingredients or trench power to threaten the giant.
+NARRATIVE MOMENTUM RULE: Assume an informed reader who already knows the standings and records. Do NOT spend opening paragraphs re-introducing that an undefeated team is dominant or that an MVP candidate has great numbers; dive straight into the latest strategic wrinkle or key question.
 """
         if is_fantasy:
             national_writer_guidelines = FANTASY_DESK_GUIDELINES
@@ -1141,7 +1149,13 @@ CRITICAL BEAT WRITER RESEARCH & LOCAL REPORTING DIRECTIVE:
 - Query your team's executed trades and trade rumors with `get_league_transactions` and `get_trade_rumors` when they bear on the story: an executed trade is fact; a rumor is only ever reported as a rumor, never as done, and never with a player's name or a figure it doesn't give.
 - Query your team's roster moves with `get_league_transactions`, its cap sheet with `get_team_cap_sheet`, and a player's deal with `get_player_contract`, only when a move or contract bears on the story. CONTRACT FACTS RULE: moves, contract terms and cap figures come only from these three tools or the Assignment Brief, and only when they matter to your subject: most articles carry no cap numbers at all. Years and totals are fact. A figure marked `est.` is a projected year of a new deal: hedge it in prose ("roughly", "projected", "about"). An estimated cap row is approximate. Never fill in what a tool says is "not known" (no guaranteed money, incentive details or option years). Invent the colour freely (how talks went, an agent's stance, unnamed, unpriced interest from other teams, locker-room reaction) but never a term, a figure or a move.
 - Query your team's and the opponent's defensive and special-teams leaders (sacks, interceptions, tackles for loss, forced fumbles, kicking, returns) with `get_defense_special_teams_leaders` and the team name. Madden lists only its leaders, so a player with no line has unknown numbers, not zeros; don't add them up into team totals. Pressures, snap counts, targets and blitz or coverage rates aren't recorded, so never give them as numbers; in words, consistent with the game script, they're fine.
-3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the locker room. Quote coaching staff sentiment, cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
+3. AUTHENTIC BEAT REPORTING: Deliver your reporting with the immediacy, nuance, and accountability of an everyday beat writer inside the building. Quote coaching staff sentiment, cite specific situational downs (3rd down conversions, red zone execution, line protection), and speak directly to the local fan base without academic or algebraic math.
+BEAT WRITER OPENING VARIETY RULE:
+Never open your article with 'The mood inside the locker room...', 'The atmosphere inside the building...', or 'Walk through the facility...'. Instead, actively vary your opening across four distinct hooks:
+1. The Film Breakdown Hook: Start with a specific failed or successful play from last week that the coaches spent Tuesday correcting.
+2. The Press Conference / Quote Hook: Open with a candid quote from a coordinator or team captain addressing this week's challenge.
+3. The Personnel Angle: Highlight an unheralded starter, a backup thrust into action, or an offensive lineman adjusting to a new scheme.
+4. The Historical / Matchup Stakes Hook: Ground the opening in how this specific matchup or opponent has tested the franchise's identity.
 """
 
 
@@ -1199,9 +1213,26 @@ Readers must experience this as professional, authentic sports journalism. You m
 - Instead of "Upset Leverage (U)" -> write "narrative-shifting upset", "high-leverage shocker".
 - Instead of "Baseline Rating (R_rating)" -> write "baseline roster talent", "roster foundation".
 - Instead of "Legacy Floor (S_all-time)" -> write "historical franchise prestige", "championship pedigree".
-- Instead of "SpikeIndex" -> write "explosive ceiling", "boom-or-bust volatility", "single-game scoring explosion".
+- Instead of "SpikeIndex" -> write "explosive ceiling", "boom-or-bust volatility", "single-game scoring explosion", "big-play dependency", or "game-breaking ceiling".
 - Instead of "Awards Equity (A_awards)" or "A_awards" -> write "championship pedigree and proven hardware", "decorated résumé", or "perennial All-Pro pedigree".
 Strict Rule: No raw algebraic symbols, formula notation, or LaTeX math equations ($...$) may appear in your final text.
+
+BANNED JOURNALISTIC CLICHÉS & REPETITIVE BUZZWORDS:
+Never use the following overused idioms or stock sports-writing phrases in your copy:
+- "paper tiger" (find a fresh, specific way to describe inflated records)
+- "blueprint to victory" or "blueprint for victory" (use terms like "tactical mandates", "keys to control", "game plan priorities")
+- "existential" (reserve for true organizational overhauls, not single-game stakes)
+- "litmus test" or "bellwether"
+- "championship pedigree"
+- "look no further than"
+- "house of cards"
+- "smoke and mirrors" or "fool's gold"
+- "silver lining"
+- "flashing red"
+- "ticking time bomb" or "powder keg"
+- "in the crucible of..."
+- "the mood inside the [locker room / facility]..."
+- "That's the list." (as a closing line)
 
 HONORIFICS & EARNED HARDWARE DIRECTIVE:
 When evaluating, referencing, or introducing players in your article, check their `career_awards` in their player profile (`get_player_season_stats` or `get_player_context`).
@@ -1229,6 +1260,15 @@ You MUST begin your article text on the very first lines with an explicit Markdo
 > **EXCERPT:** [A sharp, 1-to-2 sentence summary (under 250 characters) capturing the core thesis, revelation, or hook of the piece for newsroom cards.]
 
 Immediately follow the excerpt with the rest of your article sections and analysis.
+
+HEADLINE & EXCERPT STYLISTIC VARIETY RULE:
+1. Anti-Colon Rule: No more than 1 in 4 articles should use a colon (':') in the headline. Actively alternate among these headline structures:
+   - The Bold Declarative Statement: '# Arch Manning Shrinks When the Spotlight Turns On'
+   - The Provocative Question: '# Are the Panthers the Greatest Team in Football History?'
+   - The Narrative Hook: '# The Tuesday Film Session That Fixed Roger Keaton'
+   - The Quote / Soundbite: '# 'The Car Is Out of Gas' — Inside the Baltimore Reckoning'
+   - The Analytical Thesis: '# Why Denver's One-Score Luck Finally Ran Out'
+2. Excerpt Variety: Do not start excerpts with formulaic clauses like 'Film charting reveals...', 'As the regular season concludes...', or 'With Week X in the books...'. Lead directly with a sharp, provocative thesis sentence.
 
 MARKDOWN & PARAGRAPH FORMATTING RULES:
 1. Always separate headings (##, ###), paragraphs, blockquotes, horizontal rules (---), tables, and lists with blank lines (double newlines). Never place a heading immediately above a paragraph or list without an empty line in between.
