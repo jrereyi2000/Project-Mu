@@ -2,7 +2,12 @@
 
 Written 2026-10-27 for JR. This plan extends step 4's Draft Room (`04_SCOUTING_AND_DRAFT_PLAN.md`, PROJECT_SPEC §2.18) and step 3's draft-day trades (`run_draft_day`, PROJECT_SPEC §2.17). Today, trade proposals stop at pick 32, and Madden simulates Rounds 2–7 with no trades at all. Real drafts have roughly 30 trades after Round 1, so this plan adds Mu-generated trades at the start of each later round.
 
-**Status:** plan only, nothing built yet.
+**Status (2026-10-27): built and on main** (PROJECT_SPEC §2.17, §2.18, §3.3g). The migration `2027_01_02_draft_round_starts.sql` still has to be applied to `madden`. JR's answers to §9: Round 1 stays at 3 proposals a draft (Q1), next year's Rounds 4–7 picks may pay (Q2), **trade-downs are supported** (Q3), and an approved trade JR can't make just expires with its round (Q4). As built, deviating from or settling this plan:
+- **Several calls per team.** A team moving up calls the owners of the 4 slots just ahead of its target's projected slot (`SELLER_WINDOW`), nearest first. A team moving back calls every later team that needs to move up, neediest first. The round still makes at most one deal per team. One seller per buyer drew almost nothing.
+- **Premium floor.** A round buyer's premium is at least the flat 1.35. The stored team boards hold each team's top 100 only and run dry after Round 2, so the board premium is mostly 1.0 there.
+- **θ_T scales with the pick.** For round trades it's 10% of the moved pick's league value × (1 − aggressiveness) (`ROUND_THETA_SHARE`), not the flat $1.5M, which is most of a Round 3–7 pick's whole value. Before this change, almost no deal cleared the bar.
+- **Volume falls short of the target.** A read-only run on the live 2037 board (Round 1 approximated by Madden's board) drew 18 proposals over Rounds 2–7 (11 up, 7 down). That's about 11 executed at the prior 0.6 approval rate, against the target of about 30. The GM value model is the limit: contenders discount picks, and teams already short on their own picks value the rest highly, so most sellers value their pick above the buyer. Widening the calls to 8 slots gave 20. A premium floor of 1.6 gave 22, and 2.0 gave 28, mostly trade-downs.
+- **No engine CLI.** There's no `gm_trade_engine --draft-round`: the candidates come from the Draft Room, so the CLI is `python3 -m engines.draft_room start-round --round N [--dry-run]`.
 
 **Delivers:**
 - A **Start Round N** step in the Draft Room for N = 2..7. It proposes the round's pick trades: teams moving up for a player they don't expect to last to their own pick.
@@ -148,6 +153,8 @@ The Draft Room tests write nothing to `madden`. Never run the napper tests whole
 ---
 
 ## 9. Open questions for JR
+
+Answered 2026-10-27 (see Status).
 
 - **Q1:** Should Round 1's cap of 3 proposals a draft go up so the whole draft feels like the real one? Roughly 5–8 Round 1 trades a year is common.
 - **Q2:** May round trades include next year's picks as payment, or only picks in this draft? This plan says both, with next year limited to Rounds 4–7.

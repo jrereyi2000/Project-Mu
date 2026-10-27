@@ -94,6 +94,11 @@ DRAFT_DAY_SHARE = 0.5                    # draft day gets half the draft stage's
 DRAFT_DAY_PREMIUM = 1.35                 # a team trading up covets the player on the board at that pick; when step 4's
                                          # team boards exist, run_draft_day gets a per-buyer premium from them instead
                                          # (engines/draft_room.draft_day_premiums)
+ROUND_TRADE_TARGET = 5                   # Rounds 2-7: executed trades a round, about 30 a draft (06 plan §4); its own
+ROUND_MAX_PROPOSALS = 8                  # budget, outside the offseason's 15-20 (counts_for_pacing false)
+NEXT_YEAR_MIN_ROUND = 4                  # round trades may pay with next year's picks from this round on (Q2)
+ROUND_THETA_SHARE = 0.1                  # a round trade's θ_T: 10% of the moved pick's league value x (1 - aggr.); the
+                                         # flat THETA ($1.5M) is most of a Round 3-7 pick's whole value
 
 
 # ------------------------------------------------------------------ window ----
@@ -171,10 +176,11 @@ def flag_value(p, key):
     return None
 
 
-def expire_stale(open_props, week, window="IN_SEASON", stage=None, pick=None):
+def expire_stale(open_props, week, window="IN_SEASON", stage=None, pick=None, round_no=None):
     """[(proposal_id, reason)] for PROPOSED/APPROVED proposals the league has moved past: their week is gone, the
-    deadline passed, a later offseason stage started, or a later pick is on the clock (draft day). JR may still
-    confirm an expired one he already made at the console."""
+    deadline passed, a later offseason stage started, a later pick is on the clock (draft day) or a later round
+    started (round_no: Round 1's proposals carry no round flag). JR may still confirm an expired one he already made
+    at the console."""
     out = []
     for p in open_props:
         if p["status"] not in ("PROPOSED", "APPROVED"):
@@ -182,6 +188,8 @@ def expire_stale(open_props, week, window="IN_SEASON", stage=None, pick=None):
         pw = p.get("trade_window", "IN_SEASON")
         if pw == "OFFSEASON" and stage is not None and (flag_value(p, "stage") or 0) < stage:
             out.append((p["id"], f"offseason stage {flag_value(p, 'stage')} is over"))
+        elif pw == "DRAFT_DAY" and round_no is not None and (flag_value(p, "round") or 1) < round_no:
+            out.append((p["id"], f"Round {flag_value(p, 'round') or 1} was simmed"))
         elif pw == "DRAFT_DAY" and (pick is not None and (flag_value(p, "pick") or 0) < pick or
                                     window == "OFFSEASON" and (stage or 0) > DRAFT_STAGE):
             out.append((p["id"], "the pick was made"))
@@ -1147,7 +1155,9 @@ def accepts(deal, valuer, b):
         urgent = ctx.get("urgent_need") and any(
             x["type"] == "PLAYER" and x["to"] == t and b["players"][x["player_id"]]["group"] == ctx["urgent_need"].get("group")
             for x in deal["assets"])
-        res.append(d >= threshold(ctx, bool(urgent), b.get("window", "IN_SEASON")))
+        theta = (b["theta_round"] * (1 - ctx["aggressiveness"]) if b.get("theta_round") is not None
+                 else threshold(ctx, bool(urgent), b.get("window", "IN_SEASON")))
+        res.append(d >= theta)
     return all(res), da, db
 
 
@@ -1658,6 +1668,121 @@ def run_draft_day(cur, season, pick, dry_run=False, llm=None, log=print, premium
     pid = None if dry_run else store(cur, b, best, valuer, rat, flags, trigger="DRAFT")
     rep["proposals"].append({"id": pid, "deal": best, "rationale": rat, "flags": flags, "steps": steps_text(b, best)})
     print_proposal(b, best, rat, cap_effects(best, b), flags, log)
+    return rep
+
+
+def round_pace(cur):
+    """(executed, decided) over every Rounds 2-7 draft-day proposal so far: JR's approval rate for p_exec."""
+    cur.execute("""SELECT count(*) FILTER (WHERE status = 'EXECUTED'),
+                          count(*) FILTER (WHERE status IN ('EXECUTED', 'REJECTED'))
+                   FROM gm_trade_proposals WHERE trade_window = 'DRAFT_DAY'
+                     AND EXISTS (SELECT 1 FROM unnest(flags) f WHERE f LIKE 'round:%%')""")
+    ex, dec = cur.fetchone()
+    return ex or 0, dec or 0
+
+
+def round_proposal_count(season, round_no, executed, decided):
+    """How many proposals a round draws: Poisson(ROUND_TRADE_TARGET / p_exec), at most ROUND_MAX_PROPOSALS,
+    seeded per (season, round) so a re-run proposes the same number."""
+    pe = p_exec(executed, decided) or 1
+    rng = random.Random(f"{season}:draft-round:{round_no}:n")
+    return min(ROUND_MAX_PROPOSALS, poisson(rng, ROUND_TRADE_TARGET / pe))
+
+
+def round_payment_ok(key, draft_season, round_no):
+    """A pick a round trade may pay with: this draft's Round round_no or later, or next year's from
+    NEXT_YEAR_MIN_ROUND."""
+    ds, rd, _ = key
+    return (ds == draft_season and rd >= round_no) or (ds == draft_season + 1 and rd >= NEXT_YEAR_MIN_ROUND)
+
+
+def round_deals(b, valuer, cand, draft_season, round_no):
+    """Pick-for-pick packages for one candidate {move, buyer, seller, seller_pick, buyer_pick}: the seller's pick
+    for 1-3 of the buyer's payable picks (a trade-down always takes the buyer's pick in this round back). The
+    initiator is team a: the buyer on a trade-up, the seller on a trade-down."""
+    buyer, seller = cand["buyer"], cand["seller"]
+    core = {"type": "PICK", "pick": cand["seller_pick"], "from": seller, "to": buyer}
+    give = [{"type": "PICK", "pick": k, "from": buyer, "to": seller} for k, o in b["picks"].items()
+            if o == buyer and k not in b["booked_picks"] and k != cand["seller_pick"]
+            and round_payment_ok(k, draft_season, round_no)]
+    must = [x for x in give if x["pick"] == cand.get("buyer_pick")] if cand["move"] == "DOWN" else []
+    if cand["move"] == "DOWN" and not must:
+        return []
+    rest = sorted((x for x in give if x not in must), key=lambda x: -valuer.value(x, seller))[:TOP_CANDIDATES]
+    a, bt = (buyer, seller) if cand["move"] == "UP" else (seller, buyer)
+    deals = []
+    for k in range(0 if must else 1, MAX_ASSETS + 1 - len(must)):
+        for g in itertools.combinations(rest, k):
+            deals.append({"a": a, "b": bt, "assets": [core] + must + list(g), "trigger": "DRAFT",
+                          "draft_move": cand["move"], "draft_round": round_no})
+    return deals
+
+
+def run_draft_round(cur, season, draft_season, round_no, candidates, slots, dry_run=False, llm=None, log=print,
+                    class_names=()):
+    """Draft-day trades at the start of Round round_no (2-7; 06 plan): open proposals from earlier rounds expire,
+    then up to round_proposal_count candidates (draft_room.round_candidates: {move UP | DOWN, buyer, seller,
+    seller_pick, buyer_pick, overall, premium}, best first) each draw at most one pick-for-pick proposal, every
+    team in at most one. slots: {original_team_id: slot in the round}, the real order. class_names: the class's
+    prospect names, which no rationale may use. Proposals are flagged round:<n>, pick:<overall>, move:<UP|DOWN> and
+    kept out of the offseason budget (counts_for_pacing false). Returns a report."""
+    rep = {"season": season, "round": round_no, "expired": [], "proposals": [], "n": 0}
+    for pid, why in expire_stale(read_proposals(cur, season, ("PROPOSED", "APPROVED")), OFFSEASON_WEEK, "DRAFT_DAY",
+                                 round_no=round_no):
+        rep["expired"].append((pid, why))
+        if not dry_run:
+            set_status(cur, pid, "EXPIRED", why)
+    b = read_books(cur, season, OFFSEASON_WEEK, "DRAFT_DAY")
+    expired = {pid for pid, _ in rep["expired"]}
+    b["open"] = [p for p in b["open"] if p["id"] not in expired]
+    b["picks"] = {k: o for k, o in b["picks"].items() if not (k[0] == draft_season and k[1] < round_no)}  # made
+    b = finish_books(b)
+    b["slots"].update(slots)
+    if llm is not None:
+        from engines.gm_rationale import league_names
+        b["league_names"] = league_names(b)
+        b["league_names"]["players"] |= {str(n).upper() for n in class_names if n}
+    rep["n"] = n = round_proposal_count(season, round_no, *round_pace(cur))
+    rng = random.Random(f"{season}:draft-round:{round_no}")
+    fits = tv.fits_from_db(cur, season)
+    busy = set()
+    for cand in candidates:
+        if len(rep["proposals"]) >= n:
+            break
+        buyer, seller = cand["buyer"], cand["seller"]
+        if buyer == seller or busy & {buyer, seller} or not (eligible_team(b, buyer) and eligible_team(b, seller)):
+            continue
+        if b["picks"].get(tuple(cand["seller_pick"])) != seller or tuple(cand["seller_pick"]) in b["booked_picks"]:
+            continue
+        b["on_clock"] = (tuple(cand["seller_pick"]), seller)
+        # a candidate's target won't last to its own pick, so it covets this one at least the flat draft-day premium
+        # (the boards hold each team's top 100 only, and run dry after Round 2)
+        b["draft_premiums"] = {buyer: max(cand.get("premium") or 0, DRAFT_DAY_PREMIUM)}
+        valuer = Valuer(b, fits)
+        core = {"type": "PICK", "pick": tuple(cand["seller_pick"]), "from": seller}
+        b["theta_round"] = ROUND_THETA_SHARE * valuer.league(core)
+        if valuer.value(dict(core, to=buyer), buyer) <= valuer.value(dict(core, to=seller), seller):
+            continue
+        best = choose(evaluate(round_deals(b, valuer, dict(cand, seller_pick=tuple(cand["seller_pick"])),
+                                           draft_season, round_no), b, valuer), rng)
+        if not best:
+            continue
+        flags = [f"round:{round_no}", f"pick:{cand['overall']}", f"move:{cand['move']}"] + [
+            f"advisory:{abbr(b, t)}" for t in (best["a"], best["b"]) if b["gm"].get(t, {}).get("user_controlled")]
+        rat = rationale_for(b, best, llm)
+        flags += llm_flags(rat)
+        pid = None
+        if not dry_run:
+            pid = store(cur, b, best, valuer, rat, flags, trigger="DRAFT")
+            if pid is not None:
+                cur.execute("UPDATE gm_trade_proposals SET counts_for_pacing = false WHERE id = %s", (pid,))
+        busy |= {buyer, seller}
+        b["booked_picks"] |= {tuple(x["pick"]) for x in best["assets"]}
+        b["hashes"].add(best["hash"])
+        rep["proposals"].append({"id": pid, "deal": best, "rationale": rat, "flags": flags,
+                                 "steps": steps_text(b, best)})
+        print_proposal(b, best, rat, cap_effects(best, b), flags, log)
+    b.pop("theta_round", None)
     return rep
 
 

@@ -488,6 +488,18 @@ def draft_room_undo(n: int, x_debug_token: Optional[str] = Header(None)):
     return _draft_room("undo_last", None, n)
 
 
+@router.post("/draft-room/rounds/{n}/start")
+def draft_room_start_round(n: int, x_debug_token: Optional[str] = Header(None)):
+    """JR is about to sim round n (2-7): propose the round's draft-day trades (once a round)."""
+    require_token(x_debug_token)
+    from engines.gm_llm import flush, make_llm
+    llm = make_llm("gm_rationale")
+    try:
+        return _draft_room("start_round", None, n, llm)
+    finally:
+        flush(llm)
+
+
 @router.post("/news/clear")
 def clear_news(body: ClearNewsIn, x_debug_token: Optional[str] = Header(None)):
     require_token(x_debug_token)

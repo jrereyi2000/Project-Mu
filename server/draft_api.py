@@ -671,3 +671,15 @@ def war_room_undo_pick(n: int, x_debug_token: Optional[str] = Header(None)):
     """Undo the last recorded pick n."""
     require_token(x_debug_token)
     return _run_war_room_action("undo_last", None, n)
+
+
+@router.post("/war-room/rounds/{n}/start")
+def war_room_start_round(n: int, x_debug_token: Optional[str] = Header(None)):
+    """Start round n (2-7) before JR sims it: the round's draft-day trade proposals."""
+    require_token(x_debug_token)
+    from engines.gm_llm import flush, make_llm
+    llm = make_llm("gm_rationale")
+    try:
+        return _run_war_room_action("start_round", None, n, llm)
+    finally:
+        flush(llm)

@@ -55,8 +55,11 @@ def build_fact_sheet(b, deal):
         else:
             assets.append({"kind": "pick", "name": pick_label(b, x["pick"]), "from": abbr(b, x["from"]),
                            "to": abbr(b, x["to"])})
-    return {"season": season, "week": b["week"], "window": b["window"], "trigger": deal.get("trigger"),
-            "teams": teams, "assets": assets}
+    out = {"season": season, "week": b["week"], "window": b["window"], "trigger": deal.get("trigger"),
+           "teams": teams, "assets": assets}
+    if deal.get("draft_move"):                  # a Rounds 2-7 draft-day trade (team a initiates: UP buys, DOWN sells)
+        out["draft_move"], out["draft_round"] = deal["draft_move"], deal.get("draft_round")
+    return out
 
 
 def _gets(sheet, side):
@@ -90,15 +93,17 @@ def template(sheet):
     ga, gb = _gets(sheet, "a"), _gets(sheet, "b")
     star_a = next((a for a in ga if a["kind"] == "player"), ga[0] if ga else None)
     star_b = next((a for a in gb if a["kind"] == "player"), gb[0] if gb else None)
+    down = sheet.get("trigger") == "DRAFT" and sheet.get("draft_move") == "DOWN"
     if sheet.get("trigger") == "DRAFT":
-        head = f"{A['nickname']} trade up with the {B['nickname']}"
+        head = f"{A['nickname']} trade {'down' if down else 'up'} with the {B['nickname']}"
     else:
         head = (f"{A['nickname']} acquire {star_a['name']} from the {B['nickname']}" if star_a and star_a["kind"] == "player"
                 else f"{A['nickname']} and {B['nickname']} swap {len(sheet['assets'])} assets")
     need = GROUP_NAMES.get(star_a.get("group")) if star_a and star_a["kind"] == "player" else (
         A["needs"][0] if A["needs"] else None)
     why_a = {"INJURY": f"With an injury at {GROUP_NAMES.get(A['urgent'], 'a key spot')}, we needed an answer now",
-             "DRAFT": "We had a player we didn't think would last, so we moved up to get him",
+             "DRAFT": ("Nobody left on our board was worth that pick to us, so we moved back and added picks" if down
+                       else "We had a player we didn't think would last, so we moved up to get him"),
              "SELL": f"We're in a {(A['direction'] or 'retool').lower()} year and this return fits our timeline",
              }.get(sheet["trigger"], f"We came into the week needing help at {need}" if need else "This makes us better")
     ra = (f"{A['gm']}: {why_a}. {_describe(star_a) if star_a else 'This return'} fits what the {A['nickname']} "
@@ -124,6 +129,9 @@ def prompt(sheet):
         "Rules: invent untracked colour freely (front-office chatter, how long he has liked a player, what the "
         "building feels like). Never state a number, dollar amount, player, team, record or contract fact that "
         "isn't on the fact sheet. Don't call the trade final or completed: it still has to go through.\n"
+        + ("This is a draft-day pick trade: never name a draft prospect (the fact sheet has none). draft_move UP "
+           "means team A moves up for a player it doesn't expect to last; DOWN means team A moves back.\n"
+           if sheet.get("trigger") == "DRAFT" else "") +
         'Answer with JSON only: {"headline": "...", "rationale_a": "...", "rationale_b": "..."}')
 
 

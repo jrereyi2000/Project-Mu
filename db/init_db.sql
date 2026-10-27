@@ -889,6 +889,16 @@ CREATE TABLE IF NOT EXISTS scout_draft_picks (
     UNIQUE (draft_season, prospect_key)
 );
 
+-- Rounds 2-7 JR started in the Draft Room (draft-day trades proposed at the start of each round;
+-- 2027_01_02_draft_round_starts.sql).
+CREATE TABLE IF NOT EXISTS draft_round_starts (
+    draft_season INT NOT NULL,
+    round SMALLINT NOT NULL CHECK (round BETWEEN 2 AND 7),
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    proposals SMALLINT NOT NULL DEFAULT 0,             -- trade proposals stored when the round started
+    PRIMARY KEY (draft_season, round)
+);
+
 -- The writer-safe board: consensus rows with the prospect's public fields and the step's top event headline.
 -- No true_value, err, impact, team boards or Madden OVR.
 CREATE OR REPLACE VIEW vw_scout_board_public AS

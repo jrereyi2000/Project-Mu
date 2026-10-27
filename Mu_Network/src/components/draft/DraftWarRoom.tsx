@@ -63,7 +63,9 @@ interface WarRoomState {
   projected?: Array<{ pick: number; team: string; prospect_key: string; full_name: string; position: string; college: string; consensus_rank: number; grade: number }>;
   consensus?: WarRoomProspect[];
   team_board?: { team: string; rows: WarRoomProspect[] };
-  trades?: Array<{ id: number; status: string; headline: string; pick?: number | null }>;
+  trades?: Array<{ id: number; status: string; headline: string; pick?: number | null; round?: number; move?: string }>;
+  rounds_installed?: boolean;
+  rounds?: { started: number[]; current: number | null; next: number | null; steps: string[] };
   all_teams?: Array<{ abbr: string; name: string }>;
 }
 
@@ -532,16 +534,51 @@ export const DraftWarRoom: React.FC<{
         </div>
       )}
 
-      {/* Post-Pick 32 Completion Banner */}
+      {/* Post-Pick 32: Rounds 2-7, one at a time (each round's draft-day trades, then JR sims it) */}
       {wr?.locked && !oc && (
         <div className="war-room-clock-banner" style={{ borderColor: "#10b981" }}>
           <div style={{ fontSize: "11px", fontWeight: 900, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Round 1 Complete · All 32 Selections Recorded
+            {wr.rounds?.current ? ` · Round ${wr.rounds.current} Trade Window Open` : ""}
           </div>
           <h3 style={{ margin: "4px 0 8px", fontSize: "20px", fontWeight: 900 }}>
-            Ready to Sim Rounds 2–7 in Madden
+            {wr.rounds?.current
+              ? wr.rounds.next ? `Round ${wr.rounds.current}: Trades, Then Sim` : "Round 7: Final Trades, Then Sim"
+              : "Rounds 2–7: Trades Before Each Round"}
           </h3>
-          <p style={{ margin: 0, fontSize: "13px", color: "#cbd5e1" }}>{wr.after}</p>
+          {!wr.rounds?.current && <p style={{ margin: "0 0 10px", fontSize: "13px", color: "#cbd5e1" }}>{wr.after}</p>}
+          {!wr.rounds_installed && (
+            <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#fca5a5" }}>
+              The draft round migration (2027_01_02_draft_round_starts.sql) isn't applied, so Rounds 2–7 trades are off.
+            </p>
+          )}
+          {(wr.rounds?.steps || []).length > 0 && (
+            <div style={{ background: "rgba(0,0,0,0.28)", borderRadius: "10px", padding: "12px 16px", marginBottom: "10px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 800, color: "#fbbf24", textTransform: "uppercase", marginBottom: "6px" }}>
+                🎮 Round {wr.rounds!.current} Madden Steps
+              </div>
+              <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "12.5px", color: "#e2e8f0", lineHeight: 1.6 }}>
+                {wr.rounds!.steps.map((s, idx) => (
+                  <li key={idx}>{s}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {wr.rounds?.next && (
+            <button
+              className="draft-filter-pill"
+              disabled={busy}
+              onClick={() =>
+                executeAction(
+                  `/rounds/${wr.rounds!.next}/start`,
+                  undefined,
+                  `Start Round ${wr.rounds!.next}? Do it once Round ${wr.rounds!.next! - 1} is simmed in Madden and before you sim Round ${wr.rounds!.next}: its draft-day trades are proposed now, and the previous round's unused ones expire.`
+                )
+              }
+            >
+              ▶ Start Round {wr.rounds.next}
+            </button>
+          )}
         </div>
       )}
 
@@ -554,7 +591,8 @@ export const DraftWarRoom: React.FC<{
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {wr!.trades!.map((t) => (
               <div key={t.id} style={{ fontSize: "13px", color: "#0f172a" }}>
-                <strong>Proposal #{t.id}</strong> (Pick #{t.pick ?? "?"}) ·{" "}
+                <strong>Proposal #{t.id}</strong> (Round {t.round ?? 1} · Pick #{t.pick ?? "?"}
+                {t.move === "DOWN" ? " · trade down" : ""}) ·{" "}
                 <span style={{ fontWeight: 800, color: "#b45309" }}>{t.status}</span> — {t.headline}
               </div>
             ))}

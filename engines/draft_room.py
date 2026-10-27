@@ -18,6 +18,11 @@ Each pick is decided only when it's on the clock, from the pool still available,
 later recommendation by construction. Recommendations are deterministic (stored boards), so a reload shows the same
 player. Draft-day trades: gm_trade_engine.run_draft_day once per pick with board-based premiums, at most
 MAX_DRAFT_DAY_PROPOSALS a draft (Q8); JR approves and confirms them through the Front Office.
+  start_round   Rounds 2-7 (docs/team_management/06_DRAFT_ROUND_TRADES_PLAN.md): before JR sims round n, the round's
+                draft-day trades (gm_trade_engine.run_draft_round): teams moving up for a player Mu doesn't expect
+                to last to their pick, and teams moving back when theirs will. Who's gone is estimated, never
+                captured: Round 1 as recorded, later rounds in Madden's board order (projected_pick), and no
+                proposal names a prospect. One row in draft_round_starts per round.
 """
 import json
 
@@ -25,7 +30,11 @@ from engines import scouting_boards as sb
 from engines import scouting_engine as se
 
 ROUND_1 = 32
+LAST_ROUND = 7
 MAX_DRAFT_DAY_PROPOSALS = 3
+FALL_GAP = 3                    # a team moves up when its target goes 3+ picks before its own pick
+DOWN_GAP = 6                    # and moves back when its target lasts 6+ picks past it
+SELLER_WINDOW = 4               # a team moving up calls the owners of the 4 slots just ahead of its target's
 PREMIUM_PER_GRADE = 0.05
 PREMIUM_RANGE = (1.0, 1.6)
 
@@ -92,6 +101,78 @@ def premiums(boards, cons, available, owner):
     return out
 
 
+def estimated_pool(available, projected, round_no):
+    """The prospects Mu assumes are left at the start of round_no (2-7), in Madden's board order: the available
+    ones (Round 1 as recorded) minus the 32 x (round_no - 2) Madden's CPU is assumed to have taken by its board
+    (projected_pick; in 2036 its picks tracked the board at r = 0.93). Unprojected prospects go last."""
+    order = sorted(available, key=lambda k: (projected.get(k) is None, projected.get(k) or 0, k))
+    return order[ROUND_1 * (round_no - 2):]
+
+
+def team_target(rows, cons, pool, need_groups, groups):
+    """The player a team wants this round: its board's best left in the pool; past its stored board, the
+    consensus's best at one of its top two needs; else the consensus's best."""
+    k = next((k for k, _, _ in rows if k in pool), None)
+    if k is not None:
+        return k
+    by_cons = sorted((k for k in pool if k in cons), key=lambda k: cons[k]["rank"])
+    return next((k for k in by_cons if groups.get(k) in (need_groups or [])[:2]), by_cons[0] if by_cons else None)
+
+
+def round_candidates(round_slots, pool, targets, fall_gap=FALL_GAP, down_gap=DOWN_GAP, window=SELLER_WINDOW):
+    """Trade candidates for a round, best first. round_slots: [{pick, round_pick, key, owner_team_id}] in order;
+    pool: the estimated pool in board order (a target's projected slot = its place in it); targets: {team: key}.
+    UP: the team's target goes fall_gap+ picks before its first pick in the round, so it calls the owners of the
+    `window` slots just ahead of that, nearest first. DOWN: its target lasts down_gap+ picks past its pick, so it
+    calls the later teams in the round whose own target won't last to their pick but will to this one, neediest
+    first. Each carries gap (how far the move is); a team's calls stay together, and the round makes at most one
+    deal per team (gm_trade_engine.run_draft_round)."""
+    go = {k: i + 1 for i, k in enumerate(pool)}
+    by_slot = {s["round_pick"]: s for s in round_slots}
+    first = {}
+    for s in round_slots:
+        first.setdefault(s["owner_team_id"], s)
+    need = {t: s["round_pick"] - go[targets[t]] for t, s in first.items() if go.get(targets.get(t))}
+    out = []
+    for t, s in first.items():
+        g = go.get(targets.get(t))
+        if g is None:
+            continue
+        if s["round_pick"] - g >= fall_gap:
+            for j, slot in enumerate(range(max(1, g - 1), max(0, g - 1 - window), -1)):
+                seller = by_slot.get(slot)
+                if seller and seller["owner_team_id"] != t:
+                    out.append({"move": "UP", "buyer": t, "seller": seller["owner_team_id"],
+                                "seller_pick": seller["key"], "buyer_pick": s["key"], "overall": seller["pick"],
+                                "gap": s["round_pick"] - g, "call": j})
+        elif g - s["round_pick"] >= down_gap:
+            later = [(need[b["owner_team_id"]], b) for b in first.values()
+                     if s["round_pick"] < b["round_pick"] < g and b["owner_team_id"] != t
+                     and 0 < need.get(b["owner_team_id"], 0) and go[targets[b["owner_team_id"]]] > s["round_pick"]]
+            for j, (_, b) in enumerate(sorted(later, key=lambda x: (-x[0], x[1]["round_pick"]))):
+                out.append({"move": "DOWN", "buyer": b["owner_team_id"], "seller": t, "seller_pick": s["key"],
+                            "buyer_pick": b["key"], "overall": s["pick"], "gap": g - s["round_pick"], "call": j})
+    lead = {}
+    for c in out:
+        me = c["buyer"] if c["move"] == "UP" else c["seller"]
+        lead[me] = max(lead.get(me, 0), c["gap"])
+    return sorted(out, key=lambda c: (-lead[c["buyer"] if c["move"] == "UP" else c["seller"]],
+                                      c["buyer"] if c["move"] == "UP" else c["seller"], c["call"]))
+
+
+def round_steps(n):
+    """What JR does in Madden for round n's trades (06 plan §1)."""
+    end = (f"Sim to the end of Round {n}, then click Start Round {n + 1} here." if n < LAST_ROUND else
+           f"Sim to the end of Round {n}: the draft is done. Run Draft results (--mode draft-results) and validate "
+           "here.")
+    return [f"Approve the Round {n} trades you want in Front Office (unused ones expire when the next round "
+            "starts).",
+            "For each approved trade: Options > User Teams, put both teams under user control, make the trade in "
+            "Madden, then click Made it in Front Office.",
+            "Options > User Teams: switch those teams back to CPU, except the teams you run.",
+            end]
+
+
 def validate_rows(recorded, recap):
     """recorded: [{overall_pick, team_id, prospect_id}]; recap: {actual_pick: (prospect_id, drafted_team_id)}.
     Returns [(overall_pick, MATCH | MISMATCH, recap prospect_id, why)]."""
@@ -122,8 +203,9 @@ def control_steps(team_name, prospect=None, user_controlled=False):
 
 BEFORE_DRAFT = ("Before pick 1: Options > User Teams, turn on user control for every Round 1 owner listed below, and "
                 "turn the pick clock off. Leave CPU trades off unless you're making an approved draft-day trade.")
-AFTER_DRAFT = ("After pick 32: Options > User Teams, switch every team back to CPU except the teams you run, then "
-               "sim the rest of the draft. Then run Draft results (--mode draft-results) and validate here.")
+AFTER_DRAFT = ("After pick 32: Options > User Teams, switch every team back to CPU except the teams you run. Then "
+               "click Start Round 2 here before you sim: each round's draft-day trades come first, then you sim "
+               "that round.")
 
 
 # -------------------------------------------------------------------- db ----
@@ -263,7 +345,12 @@ def state(cur, draft_season=None, team_view=None):
     out = {"installed": True, "draft_season": draft_season, "step": room["step"], "locked": room["locked"],
            "before": BEFORE_DRAFT, "after": AFTER_DRAFT, "slots": slots, "on_clock": None, "projected": [],
            "consensus": sorted((room["info"][k] for k in room["available"]), key=lambda i: i["consensus_rank"])[:64],
-           "trades": draft_day_proposals(cur, _season(cur))}
+           "trades": draft_day_proposals(cur, _season(cur)), "rounds_installed": rounds_installed(cur)}
+    started = rounds_started(cur, draft_season)
+    current = max(started, default=None)
+    out["rounds"] = {"started": sorted(started), "current": current,
+                     "next": next_round(started) if room["locked"] and n is None and out["rounds_installed"] else None,
+                     "steps": round_steps(current) if current else []}
     if n is not None and room["locked"]:
         out["on_clock"] = _pick_card(room, n)
         out["projected"] = [{"pick": p, "team": room["teams"][t]["abbr"], **room["info"][k]}
@@ -280,8 +367,81 @@ def state(cur, draft_season=None, team_view=None):
 def draft_day_proposals(cur, season):
     cur.execute("""SELECT id, status, headline, flags FROM gm_trade_proposals
                    WHERE season = %s AND trade_window = 'DRAFT_DAY' ORDER BY id""", (season,))
-    return [{"id": i, "status": st, "headline": h, "pick": next((int(f[5:]) for f in (fl or []) if f.startswith("pick:")),
-                                                                 None)} for i, st, h, fl in cur.fetchall()]
+    flag = lambda fl, key: next((int(f[len(key) + 1:]) for f in (fl or []) if f.startswith(key + ":")
+                                 and f[len(key) + 1:].isdigit()), None)
+    return [{"id": i, "status": st, "headline": h, "pick": flag(fl, "pick"), "round": flag(fl, "round") or 1,
+             "move": next((f[5:] for f in (fl or []) if f.startswith("move:")), "UP")}
+            for i, st, h, fl in cur.fetchall()]
+
+
+def rounds_installed(cur):
+    cur.execute("SELECT to_regclass('draft_round_starts') IS NOT NULL")
+    return bool(cur.fetchone()[0])
+
+
+def rounds_started(cur, draft_season):
+    """{round: proposals} for the rounds JR started (2-7)."""
+    if not rounds_installed(cur):
+        return {}
+    cur.execute("SELECT round, proposals FROM draft_round_starts WHERE draft_season = %s", (draft_season,))
+    return {r: n for r, n in cur.fetchall()}
+
+
+def next_round(started):
+    """The round Start Round would begin: 2, then each after the last one started; None after Round 7."""
+    n = max(started, default=1) + 1
+    return n if n <= LAST_ROUND else None
+
+
+def round_slots(cur, draft_season, n):
+    """Round n's slots from the locked order with today's owners: [{pick, round_pick, key, owner_team_id}]."""
+    cur.execute("""SELECT overall_pick, original_team_id, owner_team_id FROM draft_picks
+                   WHERE draft_season = %s AND round = %s AND overall_pick IS NOT NULL ORDER BY overall_pick""",
+                (draft_season, n))
+    return [{"pick": p, "round_pick": p - (n - 1) * ROUND_1, "key": (draft_season, n, o), "original_team_id": o,
+             "owner_team_id": w} for p, o, w in cur.fetchall()]
+
+
+def start_round(cur, draft_season, n, llm=None, log=print):
+    """JR is about to sim round n (2-7): propose its draft-day trades, once. Returns the new state."""
+    from engines import gm_trade_engine as ge
+    draft_season = draft_season or _season(cur) + 1
+    n = int(n)
+    if not rounds_installed(cur):
+        raise DraftRoomError(409, "the draft round migration (2027_01_02_draft_round_starts.sql) isn't applied")
+    room = load_room(cur, draft_season)
+    if not room["locked"]:
+        raise DraftRoomError(409, "lock the draft order first")
+    if next_pick(room["recorded"]) is not None:
+        raise DraftRoomError(409, "record all 32 Round 1 picks first")
+    want = next_round(rounds_started(cur, draft_season))
+    if want is None or n != want:
+        raise DraftRoomError(409, f"Round {want} is next, not {n}" if want else "every round has started")
+    slots = round_slots(cur, draft_season, n)
+    if len(slots) != ROUND_1:
+        raise DraftRoomError(409, f"Round {n} has {len(slots)} locked slots, not {ROUND_1}")
+    ids = {i["prospect_id"]: k for k, i in room["info"].items() if i.get("prospect_id")}
+    cur.execute("SELECT id, projected_pick FROM draft_prospects WHERE id = ANY(%s)", (list(ids),))
+    projected = {ids[i]: p for i, p in cur.fetchall() if p is not None}
+    pool = estimated_pool(room["available"], projected, n)
+    pool_set = set(pool)
+    groups = {k: sb.needs_group(room["info"][k]["position"]) for k in pool}
+    targets = {s["owner_team_id"]: team_target(room["boards"].get(s["owner_team_id"], []), room["cons"], pool_set,
+                                               (room["ctxs"].get(s["owner_team_id"]) or {}).get("need_groups"), groups)
+               for s in slots}
+    cands = round_candidates(slots, pool, targets)
+    prem = {}
+    for c in cands:
+        if c["seller"] not in prem:
+            prem[c["seller"]] = premiums(room["boards"], room["cons"], pool_set, c["seller"])
+        c["premium"] = prem[c["seller"]].get(c["buyer"])
+    rep = ge.run_draft_round(cur, _season(cur), draft_season, n, cands,
+                             {s["original_team_id"]: s["round_pick"] for s in slots}, llm=llm, log=log,
+                             class_names=[i["full_name"] for i in room["info"].values()])
+    stored = sum(1 for p in rep["proposals"] if p["id"] is not None)
+    cur.execute("""INSERT INTO draft_round_starts (draft_season, round, proposals) VALUES (%s, %s, %s)""",
+                (draft_season, n, stored))
+    return state(cur, draft_season)
 
 
 def clock_trades(cur, draft_season, n, room=None, log=print):
@@ -419,15 +579,17 @@ def main(argv=None):
     import psycopg
     from pipeline.load_capture import DSN
     ap = argparse.ArgumentParser(description="The Draft Room (team management step 4)")
-    ap.add_argument("action", choices=("state", "lock", "validate"))
+    ap.add_argument("action", choices=("state", "lock", "validate", "start-round"))
     ap.add_argument("--draft-season", type=int)
+    ap.add_argument("--round", type=int, help="start-round: the round JR is about to sim (2-7)")
     ap.add_argument("--dry-run", action="store_true", help="roll back at the end")
     a = ap.parse_args(argv)
     with psycopg.connect(DSN) as conn:
         cur = conn.cursor()
         ds = a.draft_season or _season(cur) + 1
         out = {"state": lambda: state(cur, ds), "lock": lambda: lock_order(cur, ds),
-               "validate": lambda: validate(cur, ds)}[a.action]()
+               "validate": lambda: validate(cur, ds),
+               "start-round": lambda: start_round(cur, ds, a.round)}[a.action]()
         print(json.dumps(out, indent=1, default=str)[:20000])
         conn.rollback() if a.dry_run or a.action == "state" else conn.commit()
     return 0
