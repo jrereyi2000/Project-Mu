@@ -41,6 +41,8 @@ Steps (each one's failure stops the week: nothing after it runs, and a notice go
   4. hand back notice: turn the controller back on and restart the broadcast (the script doesn't disconnect).
   5. extract   extract.py captures/<run>.
   6. load      pipeline.load_capture, one transaction; a failed check writes nothing.
+  6c. IR       weekly/playoff: banner + notice of healed players still on IR (Madden never activates them; JR
+               does it by hand, pipeline/ir_returns.py). The step 4 notice carries the projected list too.
   7. engines   the backfill and the analytics engines for league_state.current_season (strict: an
                engine error stops the week).
   8. articles  newsroom.weekly_run (skips a week already published).
@@ -336,6 +338,34 @@ def step_load(folder, replace=False, mode="weekly"):
     except Exception as e:
         raise WeekStopped(f"Load failed, nothing written: {e!r}")
     return report
+
+
+def step_ir_returns(projected=False):
+    """Madden's IR bug (pipeline/ir_returns.py): healed players never come off IR, so JR activates them by hand.
+    Prints a banner of who is due before league_state's week is played and returns the phone notice text ('' when
+    nobody is). projected=True (right after the capture, before the new report is loaded): the week after
+    league_state's, counted down from the last report. Optional: a failure only logs a warning."""
+    try:
+        import psycopg
+        from pipeline.load_capture import DSN
+        from pipeline.ir_returns import banner, ir_returns, notice_text
+        with psycopg.connect(DSN) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
+            season, week = cur.fetchone()
+            week += 1 if projected else 0
+            if week > FINAL_WEEK:
+                return ""
+            players = ir_returns(cur, season, week)
+        if players:
+            print("\n" + banner(players, week, projected) + "\n", flush=True)
+        else:
+            log(f"  IR returns: nobody to take off IR before Week {week}")
+        return notice_text(players, week, projected)
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] IR returns skipped: {e!r}")
+        return ""
 
 
 def step_engines(season):
@@ -921,9 +951,10 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             log("Step 3: capture" + (f" (League Transactions since {since})" if since else ""))
             step_capture(folder, log_path, mode, week_label, **({"since": since} if since else {}))
             mins = (time.time() - started) / 60
+            ir = step_ir_returns(projected=True) if mode in ("weekly", "playoff") and not week_label else ""
             notify(f"{what} done in {mins:.0f} min ({captured_week(folder) or 'last week'}). Turn your controller "
-                   "back on and restart the broadcast.", title="Mu: your turn", priority="high",
-                   tags=("joystick",))
+                   "back on and restart the broadcast." + (f"\n\n{ir}" if ir else ""), title="Mu: your turn",
+                   priority="high", tags=("joystick",))
         else:
             log("Capture already done; skipping connect and capture")
         if not extract_done(folder, mode):
@@ -934,6 +965,11 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
             log("Step 6: load")
             report = step_load(folder, replace=(mode == "games"), mode=mode)
             log(f"Loaded: {report.get('mode')} week {report.get('week')}")
+            if mode in ("weekly", "playoff") and not week_label:
+                log("Step 6c: IR returns")
+                ir = step_ir_returns()
+                if ir:
+                    notify(ir, title="Mu: take players off IR", priority="high", tags=("hospital",))
         else:
             log("Already loaded; skipping the load")
         if mode == "transactions":
