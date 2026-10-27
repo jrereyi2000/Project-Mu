@@ -60,12 +60,14 @@ FAMILY = {**{s: "pass" for s in PASS}, **{s: "rush" for s in RUSH}, **{s: "rec" 
           "def_int_yds": "ints", "def_deflections": "pd", "def_forced_fumbles": "ff", "def_fumble_recoveries": "ff",
           "def_tds": "ints", "def_safeties": "sacks", **{s: "kick" for s in KICK}, **{s: "punt" for s in PUNT},
           **{s: "ret" for s in RET}, "blk_sacks_allowed": "blk"}
-# share by rank inside a group (the rest of the group splits the last share evenly)
+# share by rank inside a group (the rest of the group splits the last share evenly). Calibrated to 2035-2036 team
+# concentration (JR 2026-10-26: the first shares spread production too thin): the starting QB ~96% of passing, the
+# top back ~56% of rushing, the top three receivers ~72% of receiving.
 RANK_SHARES = {
-    ("pass", "QB"): (0.92, 0.07, 0.01), ("rush", "QB"): (0.95, 0.05),
-    ("rush", "RB"): (0.6, 0.26, 0.09, 0.05), ("rec", "RB"): (0.55, 0.3, 0.15),
+    ("pass", "QB"): (0.97, 0.025, 0.005), ("rush", "QB"): (0.97, 0.03),
+    ("rush", "RB"): (0.66, 0.24, 0.07, 0.03), ("rec", "RB"): (0.62, 0.28, 0.1),
     ("rush", "WR"): (0.5, 0.3, 0.2), ("rush", "TE"): (1.0,),
-    ("rec", "WR"): (0.34, 0.27, 0.18, 0.11, 0.06, 0.04), ("rec", "TE"): (0.72, 0.22, 0.06),
+    ("rec", "WR"): (0.41, 0.3, 0.16, 0.08, 0.03, 0.02), ("rec", "TE"): (0.82, 0.15, 0.03),
     ("kick", "K"): (1.0,), ("punt", "P"): (1.0,),
     ("blk", "OL"): (0.19, 0.19, 0.19, 0.19, 0.19, 0.03, 0.02),
     ("ret", "WR"): (0.15, 0.45, 0.3, 0.1), ("ret", "RB"): (0.2, 0.5, 0.3), ("ret", "CB"): (0.1, 0.5, 0.4),
