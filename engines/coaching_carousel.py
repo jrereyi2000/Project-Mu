@@ -167,7 +167,8 @@ def review_coordinators(cur, season, log=print):
                          "talent_rank": tr, "unit_rank_before": unit_of(before, tid, role)[0],
                          "hc_slant": (hcs.get(tid) or {}).get("slant"), "hc_score": info["hc_score"],
                          "playoff_wins": res.get(tid, {}).get("wins", 0), "user_controlled": tid in mine})
-    cur.execute("SELECT count(*) FROM coordinator_hot_seat WHERE season = %s AND fired", (season,))
+    cur.execute("SELECT count(*) FROM coordinator_hot_seat WHERE season = %s AND fired AND NOT inputs ? 'fired_by'",
+                (season,))
     decisions = coordinator_seat(rows, season, MAX_COORD_FIRES - cur.fetchone()[0])
     by_key = {(r["team_id"], r["role"]): r for r in rows}
     out = []
@@ -294,8 +295,9 @@ def ready_to_hire(cur, season):
                 "(SELECT team_id FROM coach_hot_seat WHERE season = %s)", (season,))
     if cur.fetchone()[0]:
         return False
-    cur.execute("SELECT count(*) FROM staff_moves WHERE season = %s", (season,))
-    return cur.fetchone()[0] == 0
+    cur.execute("SELECT count(*) FROM staff_moves WHERE season = %s AND COALESCE(inputs->>'by', '') <> 'JR'",
+                (season,))
+    return cur.fetchone()[0] == 0                   # JR's own named replacements (engines/fire_coordinator) don't count
 
 
 def _insert_coordinator(cur, name, role, scheme, playbook, tendencies, notes):
@@ -320,7 +322,9 @@ def hiring_cycle(cur, season, log=print):
     opening first, opening_appeal),
     each poach's vacancy by an internal promotion, the new head coach's own coordinator on his side (OFFENSIVE: the
     OC, DEFENSIVE: the DC, CEO: none), then the coordinator openings left (most attractive team first).
-    Returns {head_coaches: [...], coordinators: [...], jr_losses: [...] (JR's coordinators poached)}."""
+    JR's teams fill only the coordinator jobs JR left open himself (engines/fire_coordinator.py).
+    Returns {head_coaches: [...], coordinators: [...], jr_losses: [...] (JR's coordinators poached),
+    jr_hires: [...] (the jobs JR left open)}."""
     nxt = season + 1
     tm, mine = teams(cur), jr_teams(cur)
     ranks, res = unit_ranks(cur, season), chs.playoff_results(cur, season)
@@ -331,7 +335,7 @@ def hiring_cycle(cur, season, log=print):
     fired_hc = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
     cur.execute("SELECT team_id, role, coordinator_id FROM coordinator_hot_seat WHERE season = %s AND fired", (season,))
     fired_coord = {(r[0], r[1]): r[2] for r in cur.fetchall()}
-    report = {"head_coaches": [], "coordinators": [], "jr_losses": []}
+    report = {"head_coaches": [], "coordinators": [], "jr_losses": [], "jr_hires": []}
 
     def promote(team_id, role, prev, why):
         """An internal promotion who keeps the system (prev: the coordinator he replaces)."""
@@ -480,7 +484,8 @@ def hiring_cycle(cur, season, log=print):
                   notes=f"{name}'s {bg}; runs his {mine_side['scheme'] or 'system'}")
             report["coordinators"].append({"team": abbr, "role": role, "coordinator": lname, "source": "HC_STAFF"})
 
-    # Coordinator openings left: fired coordinators' jobs and a poached team's own vacancy.
+    # Coordinator openings left: fired coordinators' jobs (JR's teams: only the ones he fired) and a poached team's
+    # own vacancy.
     nstaff = staff_in(cur, nxt)
     cur.execute("""SELECT c.id, c.coordinator_name, c.scheme, c.playbook, c.pass_lean, c.blitz_rate, c.man_coverage
                    FROM coordinators c WHERE c.id = ANY(%s)""", (list(set(fired_coord.values())),))
@@ -488,10 +493,11 @@ def hiring_cycle(cur, season, log=print):
                                    "man_coverage"), r)) for r in cur.fetchall()}
     where = {v: k for k, v in fired_coord.items()}
     cpu = [t for t in tm if t not in mine]
-    cparts = opening_parts(cur, season, cpu)
-    for tid in sorted(cpu, key=lambda t: (-opening_appeal(cparts[t]), t)):     # best job first
+    hiring = cpu + sorted({t for t, _ in fired_coord if t in mine})
+    cparts = opening_parts(cur, season, hiring)
+    for tid in sorted(hiring, key=lambda t: (-opening_appeal(cparts[t]), t)):     # best job first
         for role in ("OC", "DC"):
-            if (tid, role) in nstaff:
+            if (tid, role) in nstaff or (tid in mine and (tid, role) not in fired_coord):
                 continue
             abbr = tm[tid]["abbr"]
             prev = staff.get((tid, role), {})
@@ -526,6 +532,9 @@ def hiring_cycle(cur, season, log=print):
                 _move(cur, season, tid, role, "HIRED", name, coordinator_id=cid, source="OUTSIDE",
                       score=OUTSIDE_SCORE[role], notes=f"previously {bg}; keeps the system")
             report["coordinators"].append({"team": abbr, "role": role, "coordinator": name, "source": c["kind"]})
+            if tid in mine:
+                report["jr_hires"].append({"team": abbr, "role": role, "coordinator": name, "source": c["kind"],
+                                           "replaces": prev.get("name")})
             log(f"  hiring: {abbr} {role} {name} ({c['kind'].lower()})")
 
     cur.execute("SELECT DISTINCT team_id FROM staff_moves WHERE season = %s", (season,))

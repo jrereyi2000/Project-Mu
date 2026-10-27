@@ -506,6 +506,11 @@ def step_coach_hot_seat(season):
                                 for x in hires["jr_losses"])
                 notify(f"Your coordinators were poached: {who}. Rename or replace the promotion by migration if you "
                        "want someone else.", title="Mu: coordinator poached", tags=("warning",))
+            if hires and hires.get("jr_hires"):
+                who = "; ".join(f"{x['team']} {x['role']}: {x['coordinator']} ({x['source'].lower()}, replaces "
+                                f"{x['replaces']})" for x in hires["jr_hires"])
+                notify(f"Mu filled the coordinator jobs you left open: {who}. Nothing to do in Madden.",
+                       title="Mu: coordinator hired", tags=("handshake",))
         return reports
     except Exception as e:
         traceback.print_exc()
