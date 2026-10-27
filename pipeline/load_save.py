@@ -16,10 +16,16 @@ Writes, for that season:
   player_stats, game_stat_*  per-game lines: a game the save has lines for has its stored lines replaced
                              (Madden purges old weeks, so a game with no lines in this save keeps what it has)
   season_stats, season_stat_* season totals (a player traded mid-season is summed across teams)
-Not yet: contracts, injuries, scoring plays, league_state, captures rows.
+  player_contracts (+ years)  every rostered player's contract: the season's ACTIVE rows are superseded first
+  injuries                   the save's injured players for the league's current week (that week's rows replaced)
+  game_highlights            scoring plays from SeasonGame.ScoringSummaries (Madden keeps only recent weeks);
+                             a game whose highlights came from a capture keeps them
+  league_state               current week from the save (never moves back; only for the league's season or the
+                             next one) and, with --commit, a `captures` row (mode `save`) for the run
+Not yet: team_cap_seasons (the save's team cap fields aren't in a confirmed unit).
 
-Save lines are stored as line_source CAPTURED and season rows as source CAPTURE: both are real box-score data,
-which is what readers treat those values as.
+Save lines are stored as line_source CAPTURED, season rows as source CAPTURE and contracts as source SCAN: all are
+real data read from Madden, which is what readers treat those values as.
 """
 import argparse
 import json
@@ -29,6 +35,7 @@ import sys
 import psycopg
 
 from pipeline.capture_matching import db_player_name
+from pipeline.contracts import insert_contract, supersede_active
 from pipeline.load_capture import team_line_totals
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -247,6 +254,103 @@ def group_lines(rows):
     return out
 
 
+# --------------------------------------------------------------- contracts ----
+# Madden money is in $10,000 units. A contract year's cap hit is SalaryYear[i] + BonusYear[i] (the bonus is
+# already prorated per year), and CurrentYear is the index of this season: De'Von Achane's year 1 is 1050 + 327 =
+# 1377 = his PLYR_CAPSALARY, $13.77M.
+MONEY_UNIT = 10_000
+
+
+def contract_values(c, season):
+    """A snapshot contract -> insert_contract's keyword values (whole dollars). Cut penalty = the bonus still to be
+    charged (it all accelerates on release); cut savings = this year's cap hit minus that penalty. Both are
+    computed with that rule, not read from Madden."""
+    length, cur_year = c["length"], c["current_year"]
+    sal, bon = c["salary_by_year"], c["bonus_by_year"]
+    hit = lambda i: (sal[i] if i < len(sal) else 0) + (bon[i] if i < len(bon) else 0)
+    remaining = range(cur_year, length)
+    penalty = sum(bon[i] for i in remaining if i < len(bon))
+    return {
+        "length": length,
+        "years_remaining": max(length - cur_year, 0),
+        "total_value": sum(hit(i) for i in range(length)) * MONEY_UNIT,
+        "bonus": sum(bon[i] for i in range(length) if i < len(bon)) * MONEY_UNIT,
+        "cut_penalty": penalty * MONEY_UNIT,
+        "cut_savings": (hit(cur_year) - penalty) * MONEY_UNIT if cur_year < length else 0,
+        "no_trade_clause": c.get("no_trade_clause", False),
+        "incentive": None,
+        "years": {season + i - cur_year: hit(i) * MONEY_UNIT for i in remaining},
+    }
+
+
+# ----------------------------------------------------------------- injuries ----
+def words(enum_value):
+    """'KneeACLSprain' -> 'KNEE ACL SPRAIN' (the injury report's upper-case style)."""
+    out = ""
+    for i, ch in enumerate(enum_value or ""):
+        prev = enum_value[i - 1] if i else ""
+        nxt = enum_value[i + 1] if i + 1 < len(enum_value) else ""
+        if i and ch.isupper() and (prev.islower() or (nxt.islower() and prev.isupper())):
+            out += " "
+        out += ch
+    return out.upper()
+
+
+def injury_values(inj):
+    """(injury_type, duration, weeks_remaining, is_ir) in the injury report's style ('WEEK TO WEEK', '2 - 4 WEEKS')."""
+    lo, hi = max(inj.get("min_weeks") or 0, 0), max(inj.get("max_weeks") or 0, 0)
+    if hi <= 1:
+        duration, weeks = "WEEK TO WEEK", 1
+    elif lo == hi:
+        duration, weeks = f"{hi} WEEKS", hi
+    else:
+        duration, weeks = f"{lo} - {hi} WEEKS", hi
+    return words(inj.get("type")), duration, weeks, bool(inj.get("injured_reserve"))
+
+
+# --------------------------------------------------------------- highlights ----
+QUARTERS = {1: "Q1", 2: "Q2", 3: "Q3", 4: "Q4", 5: "OT"}
+SCORE_TYPES = {6: "TOUCHDOWN", 7: "TOUCHDOWN", 8: "TOUCHDOWN", 3: "FIELD GOAL", 2: "SAFETY"}
+CONVERSION_TYPES = {1: "EXTRA POINT", 2: "TWO-POINT CONVERSION"}
+
+
+def scoring_highlights(game, home_abbr, away_abbr):
+    """SeasonGame scoring summaries -> game_highlights plays (the shape engines/game_script_engine reads: quarter,
+    clock, play_type, play, points, team, scoring). Madden sometimes counts a touchdown's conversion in the
+    touchdown's row (0 -> 7) and sometimes only in the next row's score before, so the walk keeps a running score:
+    any gap between it and a row's score before (or the final) is that side's conversion, at the previous play's
+    time. The plays always add up to the final score."""
+    plays = sorted(game.get("scoring_plays") or [], key=lambda p: (p["quarter"], -p["seconds_left"]))
+    sides = (("home", home_abbr), ("away", away_abbr))
+    running = {"home": 0, "away": 0}
+    out, last = [], None
+
+    def add(points, kind, at, abbr, conversion=False):
+        quarter = QUARTERS.get(at["quarter"], "OT")
+        clock = f"{at['seconds_left'] // 60}:{at['seconds_left'] % 60:02d}"
+        out.append({"quarter": quarter, "clock": clock, "play_type": kind,
+                    "play": f"{abbr} {kind}{' GOOD' if conversion else ''}", "points": points, "team": abbr,
+                    "scoring": True, "source": "SAVE"})
+
+    def catch_up(target, at):
+        for side, abbr in sides:
+            gap = target[side] - running[side]
+            if gap > 0 and at is not None:
+                add(gap, CONVERSION_TYPES.get(gap, "SCORE"), at, abbr, conversion=gap in CONVERSION_TYPES)
+                running[side] = target[side]
+
+    for p in plays:
+        catch_up({"home": p["home_before"], "away": p["away_before"]}, last)
+        for side, abbr in sides:
+            pts = p[f"{side}_after"] - max(p[f"{side}_before"], running[side])
+            if pts > 0:
+                add(pts, SCORE_TYPES.get(pts, "SCORE"), p, abbr)
+                running[side] += pts
+        last = p
+    catch_up({"home": game["home_score"], "away": game["away_score"]}, last)
+    return out
+
+
 # -------------------------------------------------------------------- load ----
 def team_ids(cur, snapshot):
     cur.execute("SELECT abbreviation, id FROM teams")
@@ -443,7 +547,91 @@ def load_season_lines(cur, snapshot, season, players, report):
     report["season_line_rows"] = n
 
 
-def load_snapshot(cur, snapshot, season=None):
+def load_contracts(cur, snapshot, season, players, report, capture_id=None):
+    rows, differs = [], 0
+    for p in snapshot["players"]:
+        who = players.get(p["pgid"])
+        if who is None or who[1] is None or not p.get("contract") or not p["contract"].get("length"):
+            continue
+        vals = contract_values(p["contract"], season)
+        if vals["years"].get(season, 0) != (p.get("cap_salary") or 0) * MONEY_UNIT:
+            differs += 1
+        rows.append((who, vals))
+    # Contracts in their first year (new signings, rookies) often disagree with Player.PLYR_CAPSALARY (0 or a
+    # prorated amount); later years match it ~97% of the time. Which one Madden's Team Salary screen shows is a PC
+    # check, so the contract's own numbers are stored and the disagreements counted.
+    report["contracts_cap_hit_differs"] = differs
+    team_ids_ = {who[1] for who, _ in rows}
+    report["contracts_superseded"] = supersede_active(cur, season, team_ids_, [who[0] for who, _ in rows])
+    for (pid, team, _, _), vals in rows:
+        insert_contract(cur, player_id=pid, team_id=team, season=season, source="SCAN", capture_id=capture_id, **vals)
+    report["contracts"] = len(rows)
+
+
+def load_injuries(cur, snapshot, season, week, players, report):
+    if week is None:
+        report["injuries"] = "skipped: the save isn't in a regular-season or playoff week"
+        return
+    cur.execute("DELETE FROM injuries WHERE season = %s AND week = %s", (season, week))
+    n = 0
+    for p in snapshot["players"]:
+        who = players.get(p["pgid"])
+        inj = p.get("injury") or {}
+        if who is None or who[1] is None or (inj.get("status") == "Uninjured" and not inj.get("injured_reserve")):
+            continue
+        pid, team, pos, name = who
+        injury_type, duration, weeks, is_ir = injury_values(inj)
+        cur.execute("INSERT INTO injuries (season, week, team_id, player_id, player_name, position, ovr, injury_type, "
+                    "duration, weeks_remaining, is_ir) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (season, week, team_id, player_name) DO UPDATE SET player_id = EXCLUDED.player_id, "
+                    "position = EXCLUDED.position, ovr = EXCLUDED.ovr, injury_type = EXCLUDED.injury_type, "
+                    "duration = EXCLUDED.duration, weeks_remaining = EXCLUDED.weeks_remaining, is_ir = EXCLUDED.is_ir, "
+                    "captured_at = now()",
+                    (season, week, team, pid, name, pos, p["overall"], injury_type, duration, weeks, is_ir))
+        n += 1
+    report["injuries"] = n
+
+
+def load_highlights(cur, games, season, report):
+    cur.execute("SELECT id, abbreviation FROM teams")
+    abbr = dict(cur.fetchall())
+    n = 0
+    for gid, week, home, away, done, g in games.values():
+        if not done or not g.get("scoring_plays"):
+            continue
+        cur.execute("SELECT highlights FROM game_highlights WHERE game_id = %s", (gid,))
+        row = cur.fetchone()
+        if row and row[0] and any(h.get("source") != "SAVE" for h in row[0]):
+            continue              # captured highlights have real play text: keep them
+        plays = scoring_highlights(g, abbr[home], abbr[away])
+        cur.execute("INSERT INTO game_highlights (game_id, season, week, highlights) VALUES (%s, %s, %s, %s) "
+                    "ON CONFLICT (game_id) DO UPDATE SET highlights = EXCLUDED.highlights, season = EXCLUDED.season, "
+                    "week = EXCLUDED.week, created_at = now()", (gid, season, week, json.dumps(plays)))
+        n += 1
+    report["games_with_scoring_plays"] = n
+
+
+def current_week(snapshot):
+    """The save's current week in games.week numbering, or None outside the regular season and playoffs."""
+    wk = game_week(snapshot["season"]["week_type"], snapshot["season"]["week_index"])
+    return wk[0] if wk else None
+
+
+def update_league_state(cur, season, week, report):
+    """Moves league_state to the save's week: never back, and only for the league's season or the next one (a test
+    load as a far-off season leaves it alone)."""
+    cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
+    stored_season, stored_week = cur.fetchone()
+    if week is None:
+        report["league_state"] = f"kept {stored_season} week {stored_week}: no current week in the save"
+    elif season == stored_season + 1 or (season == stored_season and week > stored_week):
+        cur.execute("UPDATE league_state SET current_season = %s, current_week = %s WHERE id = 1", (season, week))
+        report["league_state"] = f"{stored_season} week {stored_week} -> {season} week {week}"
+    else:
+        report["league_state"] = f"kept {stored_season} week {stored_week} (save: {season} week {week})"
+
+
+def load_snapshot(cur, snapshot, season=None, capture_id=None):
     """The whole load on an open cursor (the caller commits or rolls back). Returns the report."""
     if snapshot.get("meta", {}).get("game_year") != 27:
         raise LoadError(f"not a Madden 27 snapshot: game_year {snapshot.get('meta', {}).get('game_year')}")
@@ -456,7 +644,34 @@ def load_snapshot(cur, snapshot, season=None):
     load_game_lines(cur, snapshot, games, players, report)
     load_team_scores(cur, games, report)
     load_season_lines(cur, snapshot, season, players, report)
+    load_contracts(cur, snapshot, season, players, report, capture_id)
+    week = current_week(snapshot)
+    report["current_week"] = week
+    load_injuries(cur, snapshot, season, week, players, report)
+    load_highlights(cur, games, season, report)
+    update_league_state(cur, season, week, report)
     return report
+
+
+REPORT_COUNTS = ("players", "players_created", "games", "games_completed", "game_line_rows", "team_stat_rows",
+                 "season_line_rows", "contracts", "injuries", "games_with_scoring_plays")
+
+
+def capture_row(cur, path, season, week):
+    """The run's `captures` row (mode `save`, folder = the snapshot's directory name); a run already loaded is
+    refused."""
+    folder = os.path.basename(os.path.dirname(os.path.abspath(path)))
+    cur.execute("SELECT id, status FROM captures WHERE folder = %s", (folder,))
+    row = cur.fetchone()
+    if row and row[1] == "loaded":
+        raise LoadError(f"{folder} is already loaded")
+    if row:
+        cur.execute("UPDATE captures SET mode = 'save', season = %s, week = %s, error = NULL WHERE id = %s",
+                    (season, week, row[0]))
+        return row[0]
+    cur.execute("INSERT INTO captures (folder, mode, season, week, status, extracted_at) "
+                "VALUES (%s, 'save', %s, %s, 'extracted', now()) RETURNING id", (folder, season, week))
+    return cur.fetchone()[0]
 
 
 def load(path, season=None, commit=False):
@@ -464,12 +679,18 @@ def load(path, season=None, commit=False):
         snapshot = json.load(fh)
     with psycopg.connect(DSN) as conn:
         cur = conn.cursor()
-        report = load_snapshot(cur, snapshot, season)
+        cid = None
         if commit:
+            cid = capture_row(cur, path, season or snapshot["season"]["calendar_year"], current_week(snapshot))
+        report = load_snapshot(cur, snapshot, season, capture_id=cid)
+        if commit:
+            cur.execute("UPDATE captures SET status = 'loaded', loaded_at = now(), row_counts = %s WHERE id = %s",
+                        (json.dumps({k: report[k] for k in REPORT_COUNTS if isinstance(report.get(k), int)}), cid))
             conn.commit()
         else:
             conn.rollback()
         report["committed"] = commit
+        report["capture_id"] = cid
     return report
 
 

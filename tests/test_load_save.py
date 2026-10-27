@@ -86,13 +86,58 @@ class MappingTest(unittest.TestCase):
             ls.load_snapshot(None, {"meta": {"game_year": 26}, "season": {}})
 
 
+# De'Von Achane's contract in CAREER-GIANTS-AUTOSAVE (cap salary 1377 in year 1).
+ACHANE_CONTRACT = {"length": 5, "current_year": 1, "salary_by_year": [114, 1050, 1422, 1422, 1571, 0, 0, 0, 0, 0],
+                   "bonus_by_year": [201, 327, 297, 297, 297, 0, 0], "no_trade_clause": False}
+
+
+class SaveValuesTest(unittest.TestCase):
+    def test_contract_values(self):
+        v = ls.contract_values(ACHANE_CONTRACT, 2027)
+        self.assertEqual(v["years"], {2027: 13_770_000, 2028: 17_190_000, 2029: 17_190_000, 2030: 18_680_000})
+        self.assertEqual((v["length"], v["years_remaining"]), (5, 4))
+        self.assertEqual(v["total_value"], 69_980_000)
+        self.assertEqual(v["bonus"], 14_190_000)
+        self.assertEqual(v["cut_penalty"], 12_180_000)          # 327 + 297 * 3 still to be charged
+        self.assertEqual(v["cut_savings"], 1_590_000)           # 1377 - 1218
+
+    def test_words(self):
+        self.assertEqual(ls.words("KneeACLSprain"), "KNEE ACL SPRAIN")
+        self.assertEqual(ls.words("BackStrain"), "BACK STRAIN")
+        self.assertEqual(ls.words("HandFingerBroken"), "HAND FINGER BROKEN")
+
+    def test_injury_values(self):
+        self.assertEqual(ls.injury_values({"type": "BackStrain", "min_weeks": 0, "max_weeks": 1}),
+                         ("BACK STRAIN", "WEEK TO WEEK", 1, False))
+        self.assertEqual(ls.injury_values({"type": "AnkleHighSprain", "min_weeks": 2, "max_weeks": 4, "injured_reserve": True}),
+                         ("ANKLE HIGH SPRAIN", "2 - 4 WEEKS", 4, True))
+        self.assertEqual(ls.injury_values({"type": "X", "min_weeks": -1, "max_weeks": 3})[1:3], ("0 - 3 WEEKS", 3))
+
+    def test_scoring_highlights_add_up_with_conversions(self):
+        game = tiny_snapshot()["games"][0]
+        plays = ls.scoring_highlights(game, "CHI", "AZ")
+        pts = lambda team: sum(p["points"] for p in plays if p["team"] == team)
+        self.assertEqual((pts("CHI"), pts("AZ")), (21, 10))
+        self.assertEqual([p["play_type"] for p in plays][:3], ["TOUCHDOWN", "EXTRA POINT", "FIELD GOAL"])
+        self.assertEqual((plays[0]["quarter"], plays[0]["clock"]), ("Q1", "10:00"))
+
+    def test_current_week(self):
+        snap = tiny_snapshot()
+        self.assertEqual(ls.current_week(snap), 2)
+        snap["season"].update(week_type="SuperBowl", week_index=22)
+        self.assertEqual(ls.current_week(snap), 23)
+        snap["season"].update(week_type="OffSeason", week_index=0)
+        self.assertIsNone(ls.current_week(snap))
+
+
 def tiny_snapshot():
     """Two teams, one finished game and one scheduled, a QB, a WR/returner, a free agent and a draft prospect."""
-    def player(pgid, first, last, pos, team, status, game_stats=(), season_stats=()):
+    def player(pgid, first, last, pos, team, status, game_stats=(), season_stats=(), contract=None, injury=None):
         return {"pgid": pgid, "row": pgid, "first_name": first, "last_name": last, "position": pos,
                 "archetype": "QB_FieldGeneral" if pos == "QB" else "WR_Slot", "status": status, "team_index": team,
                 "age": 25, "years_pro": 3, "jersey": 9, "height_in": 74, "weight_lbs": 210, "dev_trait": "College_Star",
-                "overall": 80, "game_stats": list(game_stats), "season_stats": list(season_stats)}
+                "overall": 80, "game_stats": list(game_stats), "season_stats": list(season_stats),
+                "contract": contract, "injury": injury or {"status": "Uninjured", "injured_reserve": False}}
     qb_line = {"kind": "offense", "game_row": 1, "opponent_team_index": 1,
                "stats": {"PASSCOMPLETED": 22, "PASSATTEMPTS": 27, "PASSYARDS": 264, "PASSTDS": 3, "DOWNSPLAYED": 65}}
     wr_line = {"kind": "off_return", "game_row": 1, "opponent_team_index": 1,
@@ -108,7 +153,13 @@ def tiny_snapshot():
         "games": [
             {"row": 1, "franchise_year": 1, "week_type": "RegularSeason", "week_index": 0, "status": "HomeWon",
              "home_team_index": 0, "away_team_index": 1, "home_score": 21, "away_score": 10,
-             "home_quarters": [7, 7, 0, 7], "away_quarters": [3, 0, 7, 0], "home_ot": 0, "away_ot": 0},
+             "home_quarters": [7, 7, 0, 7], "away_quarters": [3, 0, 7, 0], "home_ot": 0, "away_ot": 0,
+             "scoring_plays": [
+                 {"quarter": 1, "seconds_left": 600, "home_before": 0, "away_before": 0, "home_after": 6, "away_after": 0},
+                 {"quarter": 1, "seconds_left": 120, "home_before": 7, "away_before": 0, "home_after": 7, "away_after": 3},
+                 {"quarter": 2, "seconds_left": 30, "home_before": 7, "away_before": 3, "home_after": 13, "away_after": 3},
+                 {"quarter": 3, "seconds_left": 400, "home_before": 14, "away_before": 3, "home_after": 14, "away_after": 9},
+                 {"quarter": 4, "seconds_left": 65, "home_before": 14, "away_before": 10, "home_after": 20, "away_after": 10}]},
             {"row": 2, "franchise_year": 1, "week_type": "RegularSeason", "week_index": 1, "status": "Unplayed",
              "home_team_index": 1, "away_team_index": 0, "home_score": 0, "away_score": 0,
              "home_quarters": [0, 0, 0, 0], "away_quarters": [0, 0, 0, 0], "home_ot": 0, "away_ot": 0},
@@ -117,8 +168,10 @@ def tiny_snapshot():
              "home_quarters": [3, 0, 0, 0], "away_quarters": [0, 0, 0, 0], "home_ot": 0, "away_ot": 0},
         ],
         "players": [
-            player(900001, "Test", "Passer", "QB", 0, "Signed", [qb_line], [qb_season, old_season]),
-            player(900002, "Test", "Catcher", "WR", 0, "Signed", [wr_line]),
+            player(900001, "Test", "Passer", "QB", 0, "Signed", [qb_line], [qb_season, old_season], contract=ACHANE_CONTRACT),
+            player(900002, "Test", "Catcher", "WR", 0, "Signed", [wr_line],
+                   injury={"status": "Injured", "type": "KneeACLSprain", "min_weeks": 2, "max_weeks": 4,
+                           "injured_reserve": False}),
             player(900003, "Free", "Agent", "WR", 32, "FreeAgent"),
             player(900004, "Draft", "Prospect", "QB", 32, "Draft"),
         ],
@@ -179,6 +232,44 @@ class LoadTinySnapshotTest(unittest.TestCase):
                           TEST_SEASON, qb[0])
         self.assertEqual(season, (264, 3, "CAPTURE"))                           # the year-0 row isn't this season
 
+        contract = self.one("SELECT id, years_remaining, total_value, cut_penalty, status, source FROM player_contracts "
+                            "WHERE player_id = %s AND season = %s", qb[0], TEST_SEASON)
+        self.assertEqual(contract[1:], (4, 69_980_000, 12_180_000, "ACTIVE", "SCAN"))
+        self.cur.execute("SELECT year, cap_hit FROM player_contract_years WHERE contract_id = %s ORDER BY year", (contract[0],))
+        self.assertEqual(self.cur.fetchall()[0], (TEST_SEASON, 13_770_000))
+
+        inj = self.one("SELECT week, injury_type, duration, weeks_remaining, t.abbreviation FROM injuries i "
+                       "JOIN teams t ON t.id = i.team_id WHERE season = %s AND player_name = 'T. Catcher'", TEST_SEASON)
+        self.assertEqual(inj, (2, "KNEE ACL SPRAIN", "2 - 4 WEEKS", 4, "CHI"))
+        self.assertEqual(self.one("SELECT count(*) FROM injuries WHERE season = %s", TEST_SEASON), (1,))
+
+        hl = self.one("SELECT highlights FROM game_highlights WHERE game_id = %s", game[0])[0]
+        self.assertEqual(sum(p["points"] for p in hl if p["team"] == "CHI"), 21)
+        self.assertEqual(sum(p["points"] for p in hl if p["team"] == "AZ"), 10)
+        self.assertTrue(r["league_state"].startswith("kept"))                   # 2099 isn't the league's season
+
+    def test_league_state_moves_forward_only(self):
+        self.cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
+        season, week = self.cur.fetchone()
+        report = {}
+        ls.update_league_state(self.cur, season, week + 1, report)
+        self.assertEqual(self.one("SELECT current_week FROM league_state WHERE id = 1"), (week + 1,))
+        ls.update_league_state(self.cur, season, week, report)
+        self.assertEqual(self.one("SELECT current_week FROM league_state WHERE id = 1"), (week + 1,))
+        ls.update_league_state(self.cur, season + 1, 1, report)
+        self.assertEqual(self.one("SELECT current_season, current_week FROM league_state WHERE id = 1"), (season + 1, 1))
+        ls.update_league_state(self.cur, season + 5, 3, report)
+        self.assertEqual(self.one("SELECT current_season FROM league_state WHERE id = 1"), (season + 1,))
+
+    def test_captured_highlights_are_kept(self):
+        snap = tiny_snapshot()
+        ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
+        gid = self.one("SELECT id FROM games WHERE season = %s AND week = 1", TEST_SEASON)[0]
+        real = [{"quarter": "Q1", "clock": "9:12", "play_type": "PASS", "play": "A REAL CAPTURED PLAY"}]
+        self.cur.execute("UPDATE game_highlights SET highlights = %s WHERE game_id = %s", (json.dumps(real), gid))
+        ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
+        self.assertEqual(self.one("SELECT highlights FROM game_highlights WHERE game_id = %s", gid)[0], real)
+
     def test_reload_is_idempotent(self):
         snap = tiny_snapshot()
         ls.load_snapshot(self.cur, snap, season=TEST_SEASON)
@@ -226,6 +317,37 @@ class LoadSampleSaveTest(unittest.TestCase):
         self.assertGreater(len(rows), 300)
         off = [row for row in rows if row[1:4] != row[4:7]]
         self.assertEqual(off, [], f"{len(off)} players' season totals differ from their game lines")
+
+    def test_scoring_plays_add_up_to_the_final(self):
+        ls.load_snapshot(self.cur, self.snapshot, season=TEST_SEASON)
+        self.cur.execute("""
+            SELECT g.id, g.home_score, g.away_score, h.abbreviation, a.abbreviation, gh.highlights
+            FROM game_highlights gh JOIN games g ON g.id = gh.game_id
+            JOIN teams h ON h.id = g.home_team_id JOIN teams a ON a.id = g.away_team_id WHERE g.season = %s""",
+                         (TEST_SEASON,))
+        rows = self.cur.fetchall()
+        self.assertGreater(len(rows), 10)
+        bad = [r[0] for r in rows
+               if (sum(p["points"] for p in r[5] if p["team"] == r[3]), sum(p["points"] for p in r[5] if p["team"] == r[4]))
+               != (r[1], r[2])]
+        self.assertEqual(bad, [], f"{len(bad)} games' scoring plays don't add up to the final")
+
+    def test_contract_cap_hit_is_the_save_cap_salary(self):
+        """Contracts past their first year: this season's cap hit is PLYR_CAPSALARY for nearly all (a first-year
+        contract often isn't; see load_contracts)."""
+        r = ls.load_snapshot(self.cur, self.snapshot, season=TEST_SEASON)
+        self.assertIsInstance(r["contracts_cap_hit_differs"], int)
+        want = {p["pgid"]: p["cap_salary"] * ls.MONEY_UNIT for p in self.snapshot["players"]
+                if p["status"] in ("Signed", "PracticeSquad") and p.get("contract")
+                and p["contract"].get("length") and p["contract"]["current_year"] >= 1}
+        self.cur.execute("""
+            SELECT x.madden_pgid, y.cap_hit FROM player_contracts c JOIN players x ON x.id = c.player_id
+            JOIN player_contract_years y ON y.contract_id = c.id AND y.year = c.season
+            WHERE c.season = %s AND c.status = 'ACTIVE'""", (TEST_SEASON,))
+        got = {k: v for k, v in self.cur.fetchall() if k in want}
+        self.assertGreater(len(got), 500)
+        off = [k for k in got if got[k] != want[k]]
+        self.assertLess(len(off) / len(got), 0.05, f"{len(off)} of {len(got)} cap hits differ from the save's cap salary")
 
     def test_every_completed_game_scores_add_up(self):
         ls.load_snapshot(self.cur, self.snapshot, season=TEST_SEASON)
