@@ -534,6 +534,15 @@ def get_user_profile():
                     "trophies": 3,
                 }
 
+            # Trophies and seasons are counted from the leagues themselves (non-seed), not a stored tally
+            cur.execute("""
+                SELECT COUNT(*) FILTER (WHERE l.champion_team_id = t.id) AS titles, COUNT(*) AS seasons
+                FROM napper_leagues l JOIN napper_teams t ON t.league_id = l.id AND t.user_id = %s
+                WHERE l.is_seed IS NOT TRUE
+            """, (prof["id"],))
+            counts = cur.fetchone()
+            prof = {**prof, "trophies": counts["titles"], "seasons_played": counts["seasons"]}
+
             # Get pending incoming trade count
             cur.execute("""
                 SELECT COUNT(*) as cnt FROM napper_trades nt
@@ -623,7 +632,19 @@ def get_user_leagues():
                     "unplayed_count": max(0, int(user_total.get("starters") or 0) - int(user_total.get("played_players") or 0)),
                 })
 
-            return {"leagues": results}
+            restartable = []
+            if _lineage_installed(cur):
+                cur.execute("""
+                    SELECT l.id, l.name, l.season, l.champion_team_id, t.team_name, t.final_rank, t.playoff_finish
+                    FROM napper_leagues l
+                    JOIN napper_teams t ON t.league_id = l.id
+                        AND t.user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)
+                    WHERE l.is_seed IS NOT TRUE AND l.status = 'COMPLETE' AND l.season < %s
+                      AND NOT EXISTS (SELECT 1 FROM napper_leagues n WHERE n.previous_league_id = l.id)
+                    ORDER BY l.season DESC, l.id
+                """, (season,))
+                restartable = [dict(r) for r in cur.fetchall()]
+            return {"leagues": results, "restartable": restartable}
 
 
 @router.get("/league/{league_id}")
@@ -938,6 +959,148 @@ def create_league(req: LeagueCreateRequest):
         "league": new_league,
         "user_team_id": user_team_id,
     }
+
+
+# ─────────────────────── league history and restart (continuity plan phase 3) ───────────────────────
+
+RESTART_TEAM_COLS = ("user_id", "team_name", "manager_handle", "avatar_url", "is_ai", "persona")
+
+
+def _lineage_installed(cur) -> bool:
+    cur.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'napper_leagues' "
+                "AND column_name = 'lineage_id'")
+    return cur.fetchone() is not None
+
+
+def restart_order(teams: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Pure. The new season's draft order (plan D7): the reverse of last season's final standings, so the last-place
+    team picks first and the champion last. Teams without a final rank (never frozen) go by seed, then id."""
+    return sorted(teams, key=lambda t: (-(t.get("final_rank") or 0), -(t.get("seed") or 0), -t["id"]))
+
+
+def restart_league(cur, league_id: int) -> Dict[str, Any]:
+    """Start a finished league's next season in one transaction (the caller commits): a new PRE_DRAFT league for the
+    current NFL season with the old one's name, settings, avatar and every manager (user and AI, same names and
+    personas), 0-0, linked by previous_league_id / lineage_id. Each team's seed is its draft slot; the draft room
+    puts the user in that slot and the AI teams in creation order, which is the same order. Raises HTTPException
+    when the league isn't finished, already has a successor, or belongs to the current NFL season."""
+    if not _lineage_installed(cur):
+        raise HTTPException(status_code=409, detail="The Napper lineage migration isn't applied")
+    cur.execute("SELECT * FROM napper_leagues WHERE id = %s", (league_id,))
+    old = cur.fetchone()
+    if not old:
+        raise HTTPException(status_code=404, detail="League not found")
+    season = get_current_season(cur)
+    if old["status"] != "COMPLETE":
+        raise HTTPException(status_code=400, detail="Only a finished league (its final decided) can be restarted")
+    if int(old["season"]) >= season:
+        raise HTTPException(status_code=400, detail=f"The {season + 1} NFL season hasn't started yet; restart the "
+                                                    "league once the Season scan rolls the league over")
+    cur.execute("SELECT id, season FROM napper_leagues WHERE previous_league_id = %s", (league_id,))
+    successor = cur.fetchone()
+    if successor:
+        raise HTTPException(status_code=409, detail=f"Already restarted as league {successor['id']} "
+                                                    f"({successor['season']})")
+    cur.execute(f"""SELECT id, final_rank, seed, {', '.join(RESTART_TEAM_COLS)} FROM napper_teams
+                    WHERE league_id = %s""", (league_id,))
+    order = restart_order(cur.fetchall())
+    cur.execute("""
+        INSERT INTO napper_leagues (name, season, teams_count, scoring_type, roster_format, status, avatar_url,
+                                    current_week, is_seed, previous_league_id, lineage_id)
+        VALUES (%s, %s, %s, %s, %s, 'PRE_DRAFT', %s, 1, %s, %s, %s)
+        RETURNING id, name, season, teams_count, scoring_type, status, current_week, avatar_url
+    """, (old["name"], season, old["teams_count"], old["scoring_type"],
+          psycopg.types.json.Jsonb(old["roster_format"] or {}), old["avatar_url"], old["is_seed"], league_id,
+          old["lineage_id"] or league_id))
+    new_league = cur.fetchone()
+    slots = []
+    for slot, t in enumerate(order, 1):
+        cur.execute(f"""
+            INSERT INTO napper_teams (league_id, {', '.join(RESTART_TEAM_COLS)}, wins, losses, ties, points_for,
+                                      points_against, seed)
+            VALUES (%s, {', '.join(['%s'] * len(RESTART_TEAM_COLS))}, 0, 0, 0, 0, 0, %s)
+            RETURNING id
+        """, (new_league["id"], *[t[c] for c in RESTART_TEAM_COLS], slot))
+        slots.append({"slot": slot, "team_id": cur.fetchone()["id"], "team_name": t["team_name"],
+                      "last_season_rank": t.get("final_rank"), "is_user": t["user_id"] is not None})
+    card = {"type": "PRE_DRAFT_READY", "title": f"{old['name']}: the {season} season",
+            "highlight": f"{old['teams_count']} Teams · Snake Draft · last season in reverse",
+            "commentary": "Same league, same managers, new rosters. Last season's last-place team picks first."}
+    cur.execute("""
+        INSERT INTO napper_chat (league_id, sender_type, sender_name, sender_handle, avatar_url, message_text,
+                                 card_payload)
+        VALUES (%s, 'SYSTEM_BOT', 'Draft Commissioner', '@DraftBot', '/static/players/robot_avatar.webp', %s, %s)
+    """, (new_league["id"], f"⚡ {old['name']} is back for {season}. The draft room is open!",
+          psycopg.types.json.Jsonb(card)))
+    return {"league": new_league, "previous_league_id": league_id, "draft_order": slots}
+
+
+@router.post("/league/{league_id}/restart")
+def restart_league_endpoint(league_id: int):
+    """Restart a finished league for the current NFL season (one-season redraft; history is kept)."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            out = restart_league(cur, league_id)
+        conn.commit()
+    return {"status": "success", **out}
+
+
+@router.get("/league/{league_id}/history")
+def get_league_history(league_id: int):
+    """Every season of a league's lineage, oldest first: champion, the user's finish and every team's final record and
+    rank (frozen at completion; the current season, while it's still running, reads its live standings). Works for
+    old seasons too. `restartable`: this is the lineage's latest season, it's finished, and a newer NFL season has
+    begun."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            lineage = _lineage_installed(cur)
+            cur.execute(f"SELECT id{', lineage_id' if lineage else ''} FROM napper_leagues WHERE id = %s", (league_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="League not found")
+            if lineage:
+                lineage_id = row["lineage_id"] or row["id"]
+                cur.execute("""SELECT id, name, season, status, scoring_type, champion_team_id FROM napper_leagues
+                               WHERE lineage_id = %s ORDER BY season, id""", (lineage_id,))
+            else:
+                lineage_id = row["id"]
+                cur.execute("""SELECT id, name, season, status, scoring_type, champion_team_id FROM napper_leagues
+                               WHERE id = %s""", (league_id,))
+            leagues = cur.fetchall()
+            current_season = get_current_season(cur)
+            seasons = [_history_season(cur, lg, current_season) for lg in leagues]
+            latest = leagues[-1]
+            restartable = (lineage and latest["status"] == "COMPLETE" and int(latest["season"]) < current_season)
+            return {"lineage_id": lineage_id, "seasons": seasons, "restartable": bool(restartable),
+                    "restart_league_id": latest["id"] if restartable else None}
+
+
+def _history_season(cur, lg: Dict[str, Any], current_season: int) -> Dict[str, Any]:
+    cur.execute("""
+        SELECT id, team_name, manager_handle, is_ai, persona, wins, losses, ties, points_for, points_against, seed,
+               playoff_finish, final_rank,
+               (user_id = (SELECT id FROM napper_user_profiles ORDER BY id LIMIT 1)) AS is_user
+        FROM napper_teams WHERE league_id = %s ORDER BY final_rank NULLS LAST, seed, id
+    """, (lg["id"],))
+    teams = cur.fetchall()
+    if lg["status"] != "COMPLETE" and int(lg["season"]) == current_season:
+        live = {t["id"]: t for t in _get_league_standings(cur, lg["id"], int(lg["season"]), lg["scoring_type"])}
+        for t in teams:
+            for k in ("wins", "losses", "ties", "points_for", "points_against", "seed"):
+                t[k] = live.get(t["id"], {}).get(k, t[k])
+        teams.sort(key=lambda t: (t["seed"] or 99, t["id"]))
+    for t in teams:
+        t["points_for"] = round(float(t["points_for"] or 0), 2)
+        t["points_against"] = round(float(t["points_against"] or 0), 2)
+    user = next((t for t in teams if t["is_user"]), None)
+    champ = next((t for t in teams if t["id"] == lg["champion_team_id"]), None)
+    record = None
+    if user:
+        record = f"{user['wins']}-{user['losses']}" + (f"-{user['ties']}" if user["ties"] else "")
+    return {"league_id": lg["id"], "season": lg["season"], "name": lg["name"], "status": lg["status"],
+            "champion": champ and champ["team_name"], "user_team": user and user["team_name"],
+            "user_finish": user and user.get("playoff_finish"), "user_rank": user and user.get("final_rank"),
+            "user_record": record, "teams": teams}
 
 
 @router.post("/league/{league_id}/set_strategies")
@@ -2648,4 +2811,14 @@ def get_league_draft(league_id: int, rounds: int = Query(15, ge=1, le=25)):
 
     if row:
         return napper_draft_engine.get_draft_state(row["id"])
-    return napper_draft_engine.create_draft_session(league_id=league_id, rounds=rounds)
+    # A restarted league's teams were created in draft order with seed = slot (restart_league): put the user there.
+    user_slot = None
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            if _lineage_installed(cur):
+                cur.execute("""SELECT t.seed FROM napper_teams t JOIN napper_leagues l ON l.id = t.league_id
+                               WHERE t.league_id = %s AND l.previous_league_id IS NOT NULL AND t.user_id IS NOT NULL""",
+                            (league_id,))
+                r = cur.fetchone()
+                user_slot = r and r["seed"]
+    return napper_draft_engine.create_draft_session(league_id=league_id, rounds=rounds, user_slot=user_slot)

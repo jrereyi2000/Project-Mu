@@ -23,6 +23,7 @@ import type {
   NapperChatMessage,
   NapperStarterPlayer,
   NapperLeagueSummary,
+  NapperRestartableLeague,
   NapperUserProfile,
   NapperManagerArchetype,
   NapperWaiverPlayer,
@@ -51,6 +52,9 @@ export const NapperPage: React.FC<NapperPageProps> = ({
   const [pendingTradesCount, setPendingTradesCount] = useState<number>(0);
   const [deletingLeagueId, setDeletingLeagueId] = useState<number | null>(null);
   const [leagues, setLeagues] = useState<NapperLeagueSummary[]>([]);
+  // Finished leagues from an earlier NFL season, ready to restart (GET /leagues `restartable`, continuity phase 3)
+  const [restartable, setRestartable] = useState<NapperRestartableLeague[]>([]);
+  const [restartingId, setRestartingId] = useState<number | null>(null);
   const [leaguesLoaded, setLeaguesLoaded] = useState(false);
   const [chatMessages, setChatMessages] = useState<NapperChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState<boolean>(true);
@@ -158,6 +162,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
     fetch(`${API_BASE}/api/napper/leagues`)
       .then((res) => res.json())
       .then((data) => {
+        setRestartable(Array.isArray(data.restartable) ? data.restartable : []);
         if (Array.isArray(data.leagues)) {
           setLeagues(data.leagues);
           if (newSelectedId) {
@@ -169,6 +174,25 @@ export const NapperPage: React.FC<NapperPageProps> = ({
       })
       .catch(() => {})
       .finally(() => setLeaguesLoaded(true));
+  };
+
+  // Restart a finished league for the new NFL season, then open its draft room.
+  const handleRestartLeague = (oldLeagueId: number) => {
+    if (restartingId !== null) return;
+    setRestartingId(oldLeagueId);
+    fetch(`${API_BASE}/api/napper/league/${oldLeagueId}/restart`, { method: "POST" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Restart failed");
+        handleLeagueRestarted(data.league.id);
+      })
+      .catch((e) => window.alert(e.message))
+      .finally(() => setRestartingId(null));
+  };
+
+  const handleLeagueRestarted = (newLeagueId: number) => {
+    loadLeagues(newLeagueId);
+    window.location.hash = `#napper-draft-${newLeagueId}`;
   };
 
   const handleDeleteLeague = async (league: NapperLeagueSummary) => {
@@ -468,9 +492,26 @@ export const NapperPage: React.FC<NapperPageProps> = ({
 
         {/* Scrollable League List */}
         <div className="napper-left-rail-scroll px-3 py-1 space-y-1.5 flex-1 overflow-y-auto">
+          {restartable.map((lg) => (
+            <div key={`restart-${lg.id}`} className="p-2.5 rounded-xl border border-[#00ceb8]/50 bg-[#16303a]">
+              <div className="text-xs font-bold text-white truncate">{lg.name}</div>
+              <div className="text-[10px] text-[#8a99ad] truncate">
+                {lg.season} season complete{lg.final_rank ? ` · you finished #${lg.final_rank}` : ""}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRestartLeague(lg.id)}
+                disabled={restartingId !== null}
+                className="mt-1.5 w-full rounded-lg bg-[#00ceb8] text-[#0d1722] text-[10px] font-extrabold py-1 cursor-pointer disabled:opacity-60"
+              >
+                {restartingId === lg.id ? "Starting…" : "Start the new season"}
+              </button>
+            </div>
+          ))}
           {leagues.map((lg) => {
             const isSelected = selectedLeagueId === lg.id;
             const isPreDraft = lg.status === "PRE_DRAFT";
+            const isComplete = lg.status === "COMPLETE";
 
             return (
               <div
@@ -505,6 +546,10 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                         <span className="text-[#38bdf8] font-bold uppercase tracking-wider text-[9px]">
                           • PRE DRAFT ({lg.teams_count}T)
                         </span>
+                      ) : isComplete ? (
+                        <span className="text-[#ffc107] font-bold uppercase tracking-wider text-[9px]">
+                          • SEASON COMPLETE
+                        </span>
                       ) : (
                         <span>
                           {lg.user_team_name || "My Team"}{" "}
@@ -513,7 +558,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
                         </span>
                       )}
                     </div>
-                    {!isPreDraft && (
+                    {!isPreDraft && !isComplete && (
                       <div className="flex items-center justify-between text-[10px] font-mono mt-0.5">
                         <span className="text-white font-semibold">
                           {(lg.user_score ?? 0).toFixed(1)} pro: {(lg.user_proj ?? 0).toFixed(1)}
@@ -541,7 +586,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
               <div className="flex items-center gap-1.5 text-[10px] text-[#8a99ad]">
                 <span className="text-[#f59e0b]">🏆</span>
                 <span className="font-mono font-bold text-[#cbd5e1]">
-                  {profile?.trophies ?? 3}
+                  {profile?.trophies ?? 0}
                 </span>
                 <span className="text-[#5c6c80]">•</span>
                 <span className="text-[#00ceb8] text-[9px] font-semibold">Online</span>
@@ -745,7 +790,7 @@ export const NapperPage: React.FC<NapperPageProps> = ({
           )}
 
           {activeTab === "LEAGUE" && (
-            <NapperLeagueTab leagueId={selectedLeagueId} />
+            <NapperLeagueTab leagueId={selectedLeagueId} onRestarted={handleLeagueRestarted} />
           )}
 
           {activeTab === "PLAYERS" && (

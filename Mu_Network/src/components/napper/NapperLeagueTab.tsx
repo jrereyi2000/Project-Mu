@@ -4,12 +4,14 @@ import { BlueRobotAvatar, PinkRobotAvatar } from "./napperUtils";
 import { ARCHETYPE_METAS, NapperManagerArchetype, NapperPlayoffGame, NapperPlayoffs, NapperPlayoffSide } from "../../types/napper";
 import ArchetypeCompositionModal from "./draft/ArchetypeCompositionModal";
 import { NapperScoresTab } from "./NapperScoresTab";
+import { NapperLeagueHistory } from "./NapperLeagueHistory";
 
 interface NapperLeagueTabProps {
   leagueId: number;
+  onRestarted?: (newLeagueId: number) => void;
 }
 
-export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
+export function NapperLeagueTab({ leagueId, onRestarted }: NapperLeagueTabProps) {
   const [league, setLeague] = useState<any>(null);
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -142,6 +144,7 @@ export function NapperLeagueTab({ leagueId }: NapperLeagueTabProps) {
 
       {/* Playoff Bracket */}
       {playoffs && playoffs.status !== "NONE" && <PlayoffBracket playoffs={playoffs} />}
+      <NapperLeagueHistory leagueId={leagueId} onRestarted={onRestarted} />
 
     </div>
   );

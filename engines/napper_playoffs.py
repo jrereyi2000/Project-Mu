@@ -12,6 +12,10 @@ so the bracket fills in round by round. When the final is decided the league's c
 the user's profile gets a trophy if the user won, and both moments are posted to the league chat.
 Teams outside the bracket (and eliminated teams) have no matchup in playoff weeks.
 
+Once the champion is known the league is COMPLETE (complete_league, docs/SEASON_CONTINUITY_PLAN.md phase 3): every
+team's final record, playoff finish and final rank are frozen on napper_teams, so the season reads the same after the
+NFL season rolls over and the league is restarted.
+
 sync_playoffs() does all of this and is idempotent: the weekly step (engines/napper_weekly.py) and the API
 (`_ensure_matchup_and_rosters`, GET /api/napper/league/{id}/playoffs) both call it.
 """
@@ -28,7 +32,18 @@ ROUNDS = {15: "QUARTERFINAL", 16: "SEMIFINAL", 17: "FINAL"}
 ROUND_LABELS = {"QUARTERFINAL": "Quarterfinals", "SEMIFINAL": "Semifinals", "FINAL": "Championship"}
 
 
+FINISH_ORDER = ("CHAMPION", "RUNNER_UP", "SEMIFINAL", "QUARTERFINAL", "MISSED")
+
+
 # ─────────────────────────────── pure bracket (no database) ───────────────────────────────
+
+def final_ranks(seeds: Dict[int, int], finish: Dict[int, str], champion: int) -> Dict[int, int]:
+    """{team: final rank} for a finished league: champion 1, runner-up 2, then the semifinal and quarterfinal losers,
+    then the teams that missed the playoffs; ties within a finish go to the better seed (the regular-season order)."""
+    full = {t: ("CHAMPION" if t == champion else finish.get(t, "MISSED")) for t in seeds}
+    order = sorted(seeds, key=lambda t: (FINISH_ORDER.index(full[t]), seeds[t]))
+    return {t: i for i, t in enumerate(order, 1)}
+
 
 def build_bracket(seeds: Dict[int, int], scores: Dict[int, Dict[int, float]], final_weeks) -> dict:
     """The bracket as far as it is decided. seeds: {team: seed} for every team (1 = best); scores: {week:
@@ -101,6 +116,32 @@ def _post(dc, league_id: int, text: str, card: dict) -> None:
     """, (league_id, text, json.dumps(card)))
 
 
+def complete_league(dc, league_id: int, standings: List[dict], bracket: dict) -> bool:
+    """Freeze a finished league (idempotent): each team's regular-season record and points, playoff finish and final
+    rank, and the league's status COMPLETE. No-op before the lineage migration. Returns True when it wrote."""
+    dc.execute("SELECT count(*) AS n FROM information_schema.columns WHERE table_name = 'napper_teams' "
+               "AND column_name IN ('playoff_finish', 'final_rank')")
+    if dc.fetchone()["n"] < 2:
+        return False
+    dc.execute("SELECT status FROM napper_leagues WHERE id = %s", (league_id,))
+    if dc.fetchone()["status"] == "COMPLETE":
+        return False                                   # already frozen: GET /leagues calls this on every load
+    champion = bracket["champion"]
+    seeds = {t["id"]: t["seed"] for t in standings}
+    ranks = final_ranks(seeds, bracket["finish"], champion)
+    for t in standings:
+        finish = "CHAMPION" if t["id"] == champion else bracket["finish"].get(t["id"], "MISSED")
+        dc.execute("""UPDATE napper_teams SET wins = %s, losses = %s, ties = %s, points_for = %s, points_against = %s,
+                          seed = %s, playoff_finish = %s, final_rank = %s
+                      WHERE id = %s""",
+                   (t["wins"], t["losses"], t["ties"], t["points_for"], t["points_against"], t["seed"], finish,
+                    ranks[t["id"]], t["id"]))
+    dc.execute("""UPDATE napper_leagues SET status = 'COMPLETE', current_week = %s,
+                      completed_at = COALESCE(completed_at, now())
+                  WHERE id = %s""", (LAST_FANTASY_WEEK, league_id))
+    return True
+
+
 def sync_playoffs(cur, league_id: int, post_chat: bool = True) -> dict:
     """Brings the league's bracket up to date: writes playoff matchups for every round whose teams are known,
     and crowns the champion once the final is final. Returns {status, seeds, standings, bracket, champion}
@@ -167,4 +208,6 @@ def sync_playoffs(cur, league_id: int, post_chat: bool = True) -> dict:
                        "score": scores[LAST_FANTASY_WEEK].get(champion),
                        "runner_up_score": scores[LAST_FANTASY_WEEK].get(runner_up)})
             out["champion"] = champion
+        if champion is not None:
+            complete_league(dc, league_id, standings, bracket)
     return out

@@ -4,6 +4,7 @@ export interface NapperUserProfile {
   display_name: string;
   avatar_url: string;
   trophies: number;
+  seasons_played?: number;
 }
 
 export interface NapperLeagueSummary {
@@ -12,7 +13,7 @@ export interface NapperLeagueSummary {
   season: number;
   teams_count: number;
   scoring_type: string;
-  status: "PRE_DRAFT" | "IN_SEASON" | "COMPLETED";
+  status: "PRE_DRAFT" | "IN_SEASON" | "COMPLETE";
   avatar_url: string;
   user_team_id: number;
   user_team_name: string;
@@ -31,7 +32,7 @@ export interface NapperLeagueDetail {
   teams_count: number;
   scoring_type: string;
   roster_format: Record<string, number>;
-  status: "PRE_DRAFT" | "IN_SEASON" | "COMPLETED";
+  status: "PRE_DRAFT" | "IN_SEASON" | "COMPLETE";
   avatar_url: string;
   current_week: number;
 }
@@ -480,4 +481,47 @@ export interface NapperDraftState {
   teams: NapperDraftTeam[];
   picks: NapperDraftPick[];
   roster_slots: string[];
+}
+
+/** GET /leagues `restartable`: a finished league from an earlier NFL season with no successor yet. */
+export interface NapperRestartableLeague {
+  id: number;
+  name: string;
+  season: number;
+  team_name: string;
+  final_rank: number | null;
+  playoff_finish: string | null;
+}
+
+/** GET /league/{id}/history: one season of a league's lineage (frozen at completion). */
+export interface NapperHistorySeason {
+  league_id: number;
+  season: number;
+  name: string;
+  status: "PRE_DRAFT" | "IN_SEASON" | "COMPLETE";
+  champion: string | null;
+  user_team: string | null;
+  user_finish: string | null;
+  user_rank: number | null;
+  user_record: string | null;
+  teams: {
+    id: number;
+    team_name: string;
+    is_user: boolean;
+    wins: number;
+    losses: number;
+    ties: number;
+    points_for: number;
+    points_against: number;
+    seed: number | null;
+    playoff_finish: string | null;
+    final_rank: number | null;
+  }[];
+}
+
+export interface NapperLeagueHistory {
+  lineage_id: number;
+  seasons: NapperHistorySeason[];
+  restartable: boolean;
+  restart_league_id: number | null;
 }
