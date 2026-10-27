@@ -668,6 +668,8 @@ def inputs(cur, cast_out, season=2036):
             unresolved.append((cat, holder, y))
             continue
         key, v = (m["key"], y), int(round(float(value)))
+        if stat == "scrimmage_tds":
+            continue          # rush + rec TDs: no line column to pin; the ceilings and _scrimmage handle it
         if cat.startswith(("season_", "rookie_season_")):
             if stat == "def_tackles":
                 pins[key]["def_solo"] = int(round(v * 0.65))

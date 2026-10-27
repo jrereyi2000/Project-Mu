@@ -235,7 +235,7 @@ def load(cur, seed=1):
         cur.execute(f"SELECT season, holder, team_id, category, value FROM {table} WHERE season BETWEEN %s AND %s "
                     f"AND source = 'BOOK'", (FIRST, LAST))
         facts += [dict(season=s, name=n, team=t, kind=f"record:{c}", value=float(v))
-                  for s, n, t, c, v in cur.fetchall()]
+                  for s, n, t, c, v in cur.fetchall() if "_team_" not in c]      # a team record has no player
     out = build(pool, vets, facts, seed)
     out["real"] = real_by_espn
     out["facts"] = facts
