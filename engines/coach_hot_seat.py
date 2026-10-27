@@ -20,8 +20,12 @@ import random
 
 HOT_SEAT_LINE = 1.0
 MIN_TENURE = 2                     # a coach gets at least two seasons
-MAX_FIRES = 5                      # the NFL changes five or six head coaches a year
-BAD_RECORD_WINS = 5                # a record this bad costs a coach his job whatever the roster
+MIN_FIRES = 5                      # owners clear out five to eight head coaches a year (JR, 2026-10-27)
+MAX_FIRES = 7                      # Black Monday at most
+MAX_SEASON_FIRES = 8               # Black Monday plus playoff exits
+FLOOR_LINE = 0.4                   # a coach fired to reach MIN_FIRES still needs this score
+PAR_WINS = 8.5                     # the record term: 0.2 a win below this
+DEEP_RUN = ("CONFERENCE", "SUPER_BOWL_LOSS", "CHAMPION")
 SUPER_BOWL_YEARS = 3               # a Super Bowl win with the team protects him this many seasons
 MAX_EXIT_FIRES = 2                 # playoff coaches are fired far less often
 EXIT_MIN_TENURE = 3                # a playoff coach gets at least three seasons
@@ -29,43 +33,83 @@ CONTENDER_EXPECTED_WINS = 10.0     # a contender: this many expected wins or CON
 CONTENDER_WINS = 12
 
 
-def hot_seat(rows, season, max_fires=MAX_FIRES):
-    """Pure. rows: [{team_id, abbr, coach_id, coach_name, start_season, wins, losses, expected_wins, wins_before,
-    losses_before, made_playoffs, playoffs_before, super_bowl_win (season of his latest Super Bowl win with the team,
+def _history(r, season):
+    """{season: {wins, losses, playoffs, result}} of his earlier seasons with the team (from start_season on):
+    r["history"] (coach_season_lines), else last season from wins_before / losses_before / playoffs_before."""
+    start = r.get("start_season") or season
+    hist = {h["season"]: h for h in r.get("history") or [] if h["season"] >= start}
+    if season - 1 not in hist and season - 1 >= start and r.get("wins_before") is not None:
+        hist[season - 1] = {"season": season - 1, "wins": r["wins_before"], "losses": r.get("losses_before") or 0,
+                            "playoffs": bool(r.get("playoffs_before")), "result": None}
+    return hist
+
+
+def hot_seat(rows, season, max_fires=MAX_FIRES, min_fires=MIN_FIRES):
+    """Pure. rows: [{team_id, abbr, coach_id, coach_name, start_season, wins, losses, expected_wins, made_playoffs,
+    history ([{season, wins, losses, playoffs, result}] of his earlier seasons with the team; or wins_before,
+    losses_before, playoffs_before for last season), super_bowl_win (season of his latest Super Bowl win with the team,
     or None), user_controlled, coach_gm}] for `season`, whose regular season is complete.
-    score = (expected wins - wins)/2, +0.5 for BAD_RECORD_WINS wins or fewer, +0.5 for a second straight losing
-    season under him, -0.5 after a playoff trip last season, -1.0 within SUPER_BOWL_YEARS seasons of a Super Bowl win
-    with the team. A coach is fired when his team missed the playoffs, his tenure is at least 2 seasons, score >= 1.0,
-    JR doesn't run the team, he isn't also its GM, and a seeded draw (random.Random(f"coachseat:{season}:{abbr}"))
-    falls under min(0.9, 0.35 + 0.3 (score - 1)); the worst scores first, at most max_fires.
-    Returns {team_id: {coach_id, score, fire, inputs}}."""
+    score = record 0.2 (PAR_WINS - wins) + shortfall (expected - wins)/3 (between -0.5 and 1) + losing run (0.3 for a
+    second straight losing season under him, 0.6 for a third) + drought (0.1 a season past two without a playoff trip
+    under him, at most 0.5) - 0.4 after a playoff trip last season - 0.3 after a conference final in the last two
+    seasons - 0.3 in his second season - 1.0 within SUPER_BOWL_YEARS seasons of a Super Bowl win with the team.
+    A coach can be fired when his team missed the playoffs, his tenure is at least MIN_TENURE seasons, JR doesn't run
+    the team and he isn't also its GM. He is fired when score >= HOT_SEAT_LINE and a seeded draw
+    (random.Random(f"coachseat:{season}:{abbr}")) falls under min(0.95, 0.4 + 0.4 (score - 1)); then, while fewer
+    than min_fires are fired, the highest remaining scores at or above FLOOR_LINE (inputs.floor); the worst scores
+    first, at most max_fires. Returns {team_id: {coach_id, score, fire, inputs}}."""
     out = {}
     for r in rows:
         wins, losses = r.get("wins") or 0, r.get("losses") or 0
         exp = r.get("expected_wins")
-        tenure = season - (r.get("start_season") or season) + 1
-        terms = {"shortfall": round((exp - wins) / 2, 3) if exp is not None else 0.0,
-                 "bad_record": 0.5 if wins <= BAD_RECORD_WINS else 0.0,
-                 "two_losing": 0.5 if (tenure >= 2 and wins < losses and r.get("wins_before") is not None
-                                       and r["wins_before"] < (r.get("losses_before") or 0)) else 0.0,
-                 "playoffs_before": -0.5 if tenure >= 2 and r.get("playoffs_before") else 0.0,
+        start = r.get("start_season") or season
+        tenure = season - start + 1
+        hist = _history(r, season)
+        run = 1 if wins < losses else 0
+        while run and hist.get(season - run, {}).get("wins") is not None \
+                and hist[season - run]["wins"] < hist[season - run]["losses"]:
+            run += 1
+        dry = 0                                        # seasons under him since his last playoff trip, this one too
+        while season - dry >= start and not (dry and hist.get(season - dry, {}).get("playoffs")):
+            if dry and season - dry not in hist:
+                break
+            dry += 1
+        last = hist.get(season - 1, {})
+        terms = {"record": round(0.2 * (PAR_WINS - wins), 3),
+                 "shortfall": round(min(1.0, max(-0.5, (exp - wins) / 3)), 3) if exp is not None else 0.0,
+                 "losing_run": 0.6 if run >= 3 else 0.3 if run == 2 else 0.0,
+                 "drought": round(min(0.5, 0.1 * (dry - 2)), 3) if dry > 2 else 0.0,
+                 "playoffs_before": -0.4 if tenure >= 2 and last.get("playoffs") else 0.0,
+                 "deep_run": -0.3 if any(hist.get(s, {}).get("result") in DEEP_RUN
+                                         for s in (season - 1, season - 2)) else 0.0,
+                 "second_season": -0.3 if tenure == 2 else 0.0,
                  "super_bowl": -1.0 if (r.get("super_bowl_win") is not None
                                         and season - r["super_bowl_win"] < SUPER_BOWL_YEARS) else 0.0}
-        score = sum(terms.values())
-        p = min(0.9, max(0.0, 0.35 + 0.3 * (score - HOT_SEAT_LINE)))
+        score = round(sum(terms.values()), 3)
+        p = min(0.95, max(0.0, 0.4 + 0.4 * (score - HOT_SEAT_LINE)))
         draw = random.Random(f"coachseat:{season}:{r['abbr']}").random()
         why_not = ("made the playoffs" if r.get("made_playoffs") else
                    "first season" if tenure < MIN_TENURE else
                    "JR's team" if r.get("user_controlled") else
-                   "also the GM" if r.get("coach_gm") else
-                   "below the line" if score < HOT_SEAT_LINE else None)
-        out[r["team_id"]] = {"coach_id": r["coach_id"], "score": round(score, 3),
-                             "fire": why_not is None and draw < p,
+                   "also the GM" if r.get("coach_gm") else None)
+        out[r["team_id"]] = {"coach_id": r["coach_id"], "score": score,
+                             "fire": why_not is None and score >= HOT_SEAT_LINE and draw < p,
                              "inputs": {"coach": r.get("coach_name"), "wins": wins, "losses": losses,
                                         "expected_wins": exp, "tenure": tenure, "terms": terms,
+                                        "losing_run": run, "seasons_without_playoffs": dry,
                                         "made_playoffs": bool(r.get("made_playoffs")), "p": round(p, 3),
-                                        "draw": round(draw, 3), "safe": why_not}}
-    fired = sorted((t for t, v in out.items() if v["fire"]), key=lambda t: -out[t]["score"])
+                                        "draw": round(draw, 3),
+                                        "safe": why_not or ("below the line" if score < HOT_SEAT_LINE else None)}}
+    by_score = sorted(out, key=lambda t: (-out[t]["score"], t))
+    fired = [t for t in by_score if out[t]["fire"]]
+    for t in by_score:                                 # owners who want change anyway
+        if len(fired) >= min(min_fires, max_fires):
+            break
+        o = out[t]
+        if not o["fire"] and o["score"] >= FLOOR_LINE and o["inputs"]["safe"] in (None, "below the line"):
+            o["fire"], o["inputs"]["floor"] = True, True
+            fired.append(t)
+    fired.sort(key=lambda t: (-out[t]["score"], t))
     for t in fired[max_fires:]:
         out[t]["fire"] = False
         out[t]["inputs"]["capped"] = True
@@ -200,6 +244,17 @@ def read_rows(cur, season):
         r["expected_wins"] = float(r["expected_wins"]) if r["expected_wins"] is not None else None
         r["made_playoffs"] = r["team_id"] in made
         r["playoffs_before"] = r["team_id"] in before
+    cur.execute("SELECT to_regclass('coach_season_lines') IS NOT NULL")
+    if cur.fetchone()[0]:
+        cur.execute("""SELECT coach_id, team_id, season, wins, losses, playoff_result FROM coach_season_lines
+                       WHERE season < %s ORDER BY season""", (season,))
+        lines = {}
+        for cid, tid, s, w, l, res in cur.fetchall():
+            lines.setdefault((cid, tid), []).append({"season": s, "wins": w, "losses": l, "result": res,
+                                                     "playoffs": res is not None and res != "MISSED"})
+        for r in rows:
+            r["history"] = [h for h in lines.get((r["coach_id"], r["team_id"]), [])
+                            if h["season"] >= (r["start_season"] or season)]
     return rows
 
 
@@ -247,9 +302,10 @@ def run(cur, season, log=print):
         for r in rows:
             r.update(playoff_wins=res[r["team_id"]]["wins"], champion=res[r["team_id"]]["champion"],
                      flops_before=flops[r["team_id"]])
-        cur.execute("SELECT count(*) FROM coach_hot_seat WHERE season = %s AND phase = 'PLAYOFF_EXIT' AND fired",
-                    (season,))
-        left = MAX_EXIT_FIRES - cur.fetchone()[0]
+        cur.execute("""SELECT count(*) FILTER (WHERE phase = 'PLAYOFF_EXIT'), count(*) FROM coach_hot_seat
+                       WHERE season = %s AND fired""", (season,))
+        exits, total = cur.fetchone()
+        left = min(MAX_EXIT_FIRES - exits, MAX_SEASON_FIRES - total)
         _store(cur, season, "PLAYOFF_EXIT", rows, contender_seat(rows, season, left), rep, log)
     rep["status"] = "decided" if rep["decided"] else "up to date"
     return rep

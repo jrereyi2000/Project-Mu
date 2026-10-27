@@ -7,7 +7,7 @@ Run: python3 -m unittest tests.test_coach_hot_seat
 import random
 import unittest
 
-from engines.coach_hot_seat import MAX_EXIT_FIRES, MAX_FIRES, contender_seat, hot_seat
+from engines.coach_hot_seat import MAX_EXIT_FIRES, MAX_FIRES, MIN_FIRES, contender_seat, hot_seat
 from engines.coaching_carousel import (APPEAL_WEIGHTS, coordinator_candidacy, coordinator_seat, opening_appeal,
                                       percentiles, pick)
 from newsroom.offseason_service import hot_seat_warnings
@@ -26,21 +26,35 @@ def coach(team_id, wins, expected, **kw):
 
 class ScoreTests(unittest.TestCase):
     def test_terms(self):
-        h = hot_seat([coach(1, 4, 8.0, wins_before=5, losses_before=12)], SEASON)[1]
+        hist = [{"season": SEASON - 2, "wins": 6, "losses": 11, "playoffs": False, "result": "MISSED"},
+                {"season": SEASON - 1, "wins": 5, "losses": 12, "playoffs": False, "result": "MISSED"}]
+        h = hot_seat([coach(1, 4, 8.0, history=hist)], SEASON, min_fires=0)[1]
         t = h["inputs"]["terms"]
-        self.assertEqual((t["shortfall"], t["bad_record"], t["two_losing"]), (2.0, 0.5, 0.5))
-        self.assertEqual(h["score"], 3.0)
-        self.assertEqual(h["inputs"]["p"], 0.9)                     # capped at 0.9
+        self.assertEqual((t["record"], t["shortfall"], t["losing_run"], t["drought"]), (0.9, 1.0, 0.6, 0.1))
+        self.assertEqual(h["score"], 2.6)
+        self.assertEqual(h["inputs"]["p"], 0.95)                    # capped at 0.95
 
     def test_protections(self):
         base = hot_seat([coach(1, 6, 9.0)], SEASON)[1]["score"]
-        self.assertEqual(hot_seat([coach(1, 6, 9.0, playoffs_before=True)], SEASON)[1]["score"], base - 0.5)
+        self.assertEqual(hot_seat([coach(1, 6, 9.0, playoffs_before=True)], SEASON)[1]["score"], round(base - 0.4, 3))
         self.assertEqual(hot_seat([coach(1, 6, 9.0, super_bowl_win=SEASON - 2)], SEASON)[1]["score"], base - 1.0)
         self.assertEqual(hot_seat([coach(1, 6, 9.0, super_bowl_win=SEASON - 3)], SEASON)[1]["score"], base)
+        self.assertEqual(hot_seat([coach(1, 6, 9.0, start_season=SEASON - 1)], SEASON)[1]["inputs"]["terms"]
+                         ["second_season"], -0.3)
+        deep = [{"season": SEASON - 2, "wins": 12, "losses": 5, "playoffs": True, "result": "CONFERENCE"}]
+        self.assertEqual(hot_seat([coach(1, 6, 9.0, history=deep)], SEASON)[1]["inputs"]["terms"]["deep_run"], -0.3)
 
-    def test_second_losing_season_needs_him_there_last_season(self):
+    def test_losing_run_needs_him_there_last_season(self):
         rows = [coach(1, 6, 7.0, start_season=SEASON, wins_before=3, losses_before=14)]
-        self.assertEqual(hot_seat(rows, SEASON)[1]["inputs"]["terms"]["two_losing"], 0.0)
+        self.assertEqual(hot_seat(rows, SEASON)[1]["inputs"]["terms"]["losing_run"], 0.0)
+        rows = [coach(1, 6, 7.0, wins_before=3, losses_before=14)]
+        self.assertEqual(hot_seat(rows, SEASON)[1]["inputs"]["terms"]["losing_run"], 0.3)
+
+    def test_drought_counts_seasons_since_his_last_playoff_trip(self):
+        hist = [{"season": s, "wins": 8, "losses": 9, "playoffs": s == 2031, "result": None} for s in range(2030, SEASON)]
+        h = hot_seat([coach(1, 7, 7.0, history=hist)], SEASON)[1]["inputs"]
+        self.assertEqual(h["seasons_without_playoffs"], 5)          # 2032-2036
+        self.assertEqual(h["terms"]["drought"], 0.3)
 
     def test_no_expected_wins_counts_no_shortfall(self):
         self.assertEqual(hot_seat([coach(1, 3, None)], SEASON)[1]["inputs"]["terms"]["shortfall"], 0.0)
@@ -54,15 +68,28 @@ class FiringTests(unittest.TestCase):
             h = hot_seat([coach(1, 2, 10.0, **kw)], SEASON)[1]
             self.assertFalse(h["fire"])
             self.assertEqual(h["inputs"]["safe"], why)
-        self.assertEqual(hot_seat([coach(1, 8, 9.0)], SEASON)[1]["inputs"]["safe"], "below the line")
+        h = hot_seat([coach(1, 9, 9.0)], SEASON)[1]
+        self.assertEqual(h["inputs"]["safe"], "below the line")
+        self.assertFalse(h["fire"])                                 # under FLOOR_LINE: never fired to fill the floor
+
+    def test_floor_fills_with_the_next_worst(self):
+        rows = [coach(t, 5 + t % 2, 5.0 + t % 2) for t in range(1, 10)]   # 0.7 or 0.5: below the line
+        out = hot_seat(rows, SEASON)
+        fired = sorted(t for t in out if out[t]["fire"])
+        self.assertEqual(len(fired), MIN_FIRES)
+        self.assertTrue(all(out[t]["inputs"]["floor"] for t in fired))
+        worst = sorted(out, key=lambda t: (-out[t]["score"], t))[:MIN_FIRES]
+        self.assertEqual(fired, sorted(worst))
+        self.assertFalse(any(v["fire"] for v in hot_seat(rows, SEASON, min_fires=0).values()))
 
     def test_seeded_and_capped_worst_first(self):
         ids, i = [], 0
         while len(ids) < MAX_FIRES + 2:
-            if random.Random(f"coachseat:{SEASON}:T{i}").random() < 0.9:
+            if random.Random(f"coachseat:{SEASON}:T{i}").random() < 0.95:
                 ids.append(i)
             i += 1
-        rows = [coach(t, 2, 10.0 + n * 0.1) for n, t in enumerate(ids)]   # all score high, p = 0.9
+        rows = [coach(t, 0, 1.2 + n * 0.15, wins_before=3, losses_before=14)   # all score high, p = 0.95
+                for n, t in enumerate(ids)]
         out = hot_seat(rows, SEASON)
         self.assertEqual(out, hot_seat(rows, SEASON))                     # deterministic
         fired = [t for t in ids if out[t]["fire"]]
