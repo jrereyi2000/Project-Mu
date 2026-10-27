@@ -868,13 +868,31 @@ CAREER_STATS = ("games_played", "completions", "pass_attempts", "pass_yards", "p
 HISTORY_CAPTURED_FROM = 2035      # seasons before this are reconstructed league history (canon, docs/HISTORY_BACKFILL_PLAN.md)
 
 
+def rating_history(rows):
+    """A player's roster card by season for writers (pure): rows of (season, team, age, ovr, dev_trait), oldest
+    first. ovr_change is against the season just before, only when both cards are rated. A Hidden or never-scanned
+    dev trait is unknown, not Normal."""
+    out, prev = [], {}
+    for season, team, age, ovr, dev in rows:
+        line = {"season": season, "team": team, "age": age, "ovr": ovr,
+                "dev_trait": dev if dev and dev != "Hidden" else "unknown"}
+        before = prev.get(season - 1)
+        if ovr is not None and before is not None:
+            line["ovr_change"] = ovr - before
+        prev[season] = ovr
+        out.append(line)
+    return out
+
+
 @tool
 def get_player_career(player_identifier: str) -> str:
     """Fetch a player's whole career in this league, season by season since 2026 (the first season the league
     records): team, games and every stat group he has, with career totals. 2026-2034 seasons are the league's
     reconstructed history: canon, so write about them as fact, but there are no game logs or box scores for them.
-    Includes his awards, his moves between captured seasons (moved, drafted, joined, free agent, retired; from 2035 on)
-    and where his career stands now (active, a free agent, or retired). Accepts a player name or ID."""
+    Includes his awards, his moves between captured seasons (moved, drafted, joined, free agent, retired; from 2035 on),
+    where his career stands now (active, a free agent, or retired) and his ratings by season from 2035 on (age,
+    overall, change from the season before, dev trait; the reconstructed seasons have no ratings, so never cite one
+    for them). Accepts a player name or ID."""
     try:
         s_val = resolve_season(0)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -899,6 +917,11 @@ def get_player_career(player_identifier: str) -> str:
                 cur.execute("SELECT season, award_type FROM awards WHERE player_id = %s AND season <= %s "
                             "ORDER BY season", (pid, s_val))
                 awards = [f"{y} {a}" for y, a in cur.fetchall()]
+                cur.execute("""SELECT ps.season, t.abbreviation, ps.age, ps.overall_rating, ps.dev_trait
+                               FROM player_seasons ps LEFT JOIN teams t ON t.id = ps.team_id
+                               WHERE ps.player_id = %s AND ps.season BETWEEN %s AND %s ORDER BY ps.season""",
+                            (pid, HISTORY_CAPTURED_FROM, s_val))
+                ratings = rating_history(cur.fetchall())
                 from engines import season_ledger
                 path = season_ledger.career_path(cur, pid) if season_ledger.installed(cur) else None
                 return json.dumps({
@@ -910,7 +933,7 @@ def get_player_career(player_identifier: str) -> str:
                              "A fill-in from the league's reconstructed history (not a current player)."
                              if origin == "HISTORY_FILLIN" else None),
                     "seasons": seasons, "career_totals": {c: v for c, v in totals.items() if v},
-                    "awards": awards}, indent=2, default=str)
+                    "ratings_by_season": ratings, "awards": awards}, indent=2, default=str)
     except Exception as e:
         return f"Error: {str(e)}"
 
