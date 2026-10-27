@@ -357,9 +357,234 @@ def get_clutch_profile(team_identifier: str = "", quarterback: str = "", season:
     except Exception as e:
         return f"Error: {str(e)}"
 
+def _format_playoff_result(result: str | None) -> str:
+    mapping = {
+        "CHAMPION": "Won Super Bowl",
+        "SUPER_BOWL_LOSS": "Super Bowl Runner-Up",
+        "CONFERENCE": "Conf Championship",
+        "DIVISIONAL": "Divisional Round",
+        "WILD_CARD": "Wild Card",
+        "MISSED": "Missed Playoffs",
+    }
+    return mapping.get(result, result or "Missed Playoffs")
+
+
+def _ordinal_suffix(n: int | None) -> str:
+    if not n:
+        return "N/A"
+    return f"{n}th" if 11 <= (n % 100) <= 13 else f"{n}{['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]}"
+
+
+def _classify_franchise_state(rows: list) -> str:
+    if not rows:
+        return "Unknown"
+    total_w = sum(r[1] for r in rows)
+    total_l = sum(r[2] for r in rows)
+    win_pct = total_w / max(1, (total_w + total_l))
+    playoff_seasons = sum(1 for r in rows if r[5] and r[5] != "MISSED")
+    sb_wins = sum(1 for r in rows if r[5] == "CHAMPION")
+    conf_or_better = sum(1 for r in rows if r[5] in ("CHAMPION", "SUPER_BOWL_LOSS", "CONFERENCE"))
+    recent_2 = rows[-2:] if len(rows) >= 2 else rows
+    recent_sb = any(r[5] in ("CHAMPION", "SUPER_BOWL_LOSS") for r in recent_2)
+    recent_wins = [r[1] for r in rows]
+    ascending = len(recent_wins) >= 3 and (recent_wins[-1] > recent_wins[-2] >= recent_wins[-3] or (recent_wins[-1] >= 10 and recent_wins[-2] < 9))
+
+    if recent_sb or (sb_wins >= 1 and win_pct >= 0.50) or (conf_or_better >= 2 and win_pct >= 0.58):
+        return "Championship Window"
+    elif playoff_seasons >= 3 and win_pct >= 0.55:
+        return "Perennial Contender"
+    elif ascending or (win_pct >= 0.50 and recent_wins[-1] >= 10):
+        return "Ascending Core"
+    elif win_pct < 0.40 or (recent_wins[-1] <= 6 and win_pct < 0.45):
+        return "Rebuilding"
+    else:
+        return "Roster Purgatory"
+
+
+def _build_five_year_team_context(cur, team_id: int, season: int) -> dict:
+    cur.execute("""
+        SELECT season, wins, losses, ties, division_place, playoff_result
+        FROM team_season_results
+        WHERE team_id = %s AND season < %s AND season >= %s
+        ORDER BY season ASC;
+    """, (team_id, season, season - 5))
+    rows = cur.fetchall()
+    if not rows:
+        return {
+            "five_year_record": "None recorded",
+            "five_year_arc": [],
+            "franchise_state": "Unknown",
+        }
+    tot_w = sum(r[1] for r in rows)
+    tot_l = sum(r[2] for r in rows)
+    tot_t = sum(r[3] for r in rows)
+    rec_str = f"{tot_w}-{tot_l}" + (f"-{tot_t}" if tot_t > 0 else "")
+    arc = [
+        f"{r[0]}: {r[1]}-{r[2]}{f'-{r[3]}' if r[3] else ''} ({_ordinal_suffix(r[4])} in div, {_format_playoff_result(r[5])})"
+        for r in rows
+    ]
+    return {
+        "five_year_record": rec_str,
+        "five_year_arc": arc,
+        "franchise_state": _classify_franchise_state(rows),
+    }
+
+
+def _build_five_year_player_context(cur, player_id: int, player_name: str, position: str, experience: int,
+                                    season: int, current_stats: dict) -> dict:
+    cur.execute("""
+        SELECT ssl.season, t.abbreviation, ssl.games_played,
+               ssl.pass_yards, ssl.pass_tds, ssl.interceptions,
+               ssl.rush_attempts, ssl.rush_yards, ssl.rush_tds,
+               ssl.receptions, ssl.rec_yards, ssl.rec_tds,
+               ssl.def_tackles, ssl.def_sacks, ssl.def_ints,
+               ssl.def_tfl
+        FROM season_stat_lines ssl
+        LEFT JOIN teams t ON ssl.team_id = t.id
+        WHERE ssl.player_id = %s AND ssl.season < %s AND ssl.season >= %s
+        ORDER BY ssl.season ASC;
+    """, (player_id, season, season - 5))
+    rows = cur.fetchall()
+
+    cur.execute("""
+        SELECT season, award_type FROM awards
+        WHERE (player_id = %s OR player_name ILIKE %s) AND season < %s AND season >= %s
+        ORDER BY season ASC;
+    """, (player_id, f"%{player_name}%", season, season - 5))
+    awards_by_season = {}
+    for sy, aw in cur.fetchall():
+        awards_by_season.setdefault(sy, []).append(aw)
+
+    if not rows:
+        return {
+            "five_year_statline_summary": ["No prior recorded seasons (rookie or first year in database)"],
+            "five_year_per_season_averages": {},
+            "career_arc_assessment": "Rookie Baseline Season" if experience <= 1 else "No Prior Baseline Recorded",
+        }
+
+    summary = []
+    tot_games = 0
+    tot_pass_yds = 0
+    tot_pass_tds = 0
+    tot_rush_yds = 0
+    tot_rush_tds = 0
+    tot_rec = 0
+    tot_rec_yds = 0
+    tot_rec_tds = 0
+    tot_tackles = 0
+    tot_sacks = 0.0
+    tot_ints = 0
+
+    for r in rows:
+        sy, tabbr, gp = r[0], r[1] or "FA", r[2] or 0
+        tot_games += gp
+        pyds, ptds, pints = r[3] or 0, r[4] or 0, r[5] or 0
+        tot_pass_yds += pyds
+        tot_pass_tds += ptds
+        ryds, rtds = r[7] or 0, r[8] or 0
+        tot_rush_yds += ryds
+        tot_rush_tds += rtds
+        recs, recyds, rectds = r[9] or 0, r[10] or 0, r[11] or 0
+        tot_rec += recs
+        tot_rec_yds += recyds
+        tot_rec_tds += rectds
+        tkl, sck, ints = r[12] or 0, float(r[13] or 0.0), r[14] or 0
+        tot_tackles += tkl
+        tot_sacks += sck
+        tot_ints += ints
+        tfl = r[15] or 0
+
+        parts = [f"{sy} ({tabbr}): {gp} G"]
+        if position == "QB" or pyds > 500:
+            parts.append(f"{pyds:,} pass yds, {ptds} TD, {pints} INT")
+            if ryds > 50:
+                parts.append(f"{ryds} rush yds, {rtds} TD")
+        elif position in ("HB", "RB"):
+            parts.append(f"{ryds:,} rush yds, {rtds} TD")
+            if recs > 10:
+                parts.append(f"{recs} rec, {recyds} rec yds")
+        elif position in ("WR", "TE"):
+            parts.append(f"{recs} rec, {recyds:,} yds, {rectds} TD")
+        elif position in ("DT", "DE", "MLB", "OLB", "CB", "FS", "SS"):
+            def_str = f"{tkl} tkl"
+            if sck > 0:
+                def_str += f", {sck:g} sck"
+            if tfl > 0 and position in ("DT", "DE", "MLB", "OLB"):
+                def_str += f", {tfl} TFL"
+            if ints > 0:
+                def_str += f", {ints} INT"
+            parts.append(def_str)
+        elif position in ("K", "P"):
+            parts.append(f"{gp} games active")
+        else:
+            parts.append(f"{gp} games started/played")
+
+        line = ", ".join(parts)
+        if sy in awards_by_season:
+            line += f" | {', '.join(awards_by_season[sy])}"
+        summary.append(line)
+
+    n_seasons = len(rows)
+    avg_gp = round(tot_games / n_seasons, 1)
+    averages = {"seasons_counted": n_seasons, "avg_games": avg_gp}
+    primary_avg = 0.0
+    primary_curr = 0.0
+
+    if position == "QB" or tot_pass_yds > 1000:
+        averages["avg_pass_yds"] = round(tot_pass_yds / n_seasons)
+        averages["avg_pass_tds"] = round(tot_pass_tds / n_seasons, 1)
+        primary_avg = tot_pass_yds / n_seasons
+        primary_curr = current_stats.get("pass_yards", 0)
+    elif position in ("HB", "RB"):
+        averages["avg_rush_yds"] = round(tot_rush_yds / n_seasons)
+        averages["avg_rush_tds"] = round(tot_rush_tds / n_seasons, 1)
+        primary_avg = tot_rush_yds / n_seasons
+        primary_curr = current_stats.get("rush_yards", 0)
+    elif position in ("WR", "TE"):
+        averages["avg_receptions"] = round(tot_rec / n_seasons, 1)
+        averages["avg_rec_yds"] = round(tot_rec_yds / n_seasons)
+        averages["avg_rec_tds"] = round(tot_rec_tds / n_seasons, 1)
+        primary_avg = tot_rec_yds / n_seasons
+        primary_curr = current_stats.get("rec_yards", 0)
+    elif position in ("DT", "DE", "MLB", "OLB", "CB", "FS", "SS"):
+        averages["avg_tackles"] = round(tot_tackles / n_seasons, 1)
+        averages["avg_sacks"] = round(tot_sacks / n_seasons, 1)
+        averages["avg_ints"] = round(tot_ints / n_seasons, 1)
+        primary_avg = (tot_sacks * 25.0 + tot_tackles) / n_seasons
+        primary_curr = current_stats.get("sacks", 0.0) * 25.0 + current_stats.get("tackles", 0)
+
+    # Arc assessment
+    curr_gp = current_stats.get("games_played", 0)
+    if experience <= 1 or not primary_avg or primary_avg <= 0:
+        arc = "Rookie Baseline Season"
+    elif not curr_gp or curr_gp == 0:
+        arc = "Awaiting Regular-Season Snaps"
+    else:
+        pace = (primary_curr / curr_gp) * 17.0
+        ratio = pace / primary_avg
+        if ratio >= 1.25:
+            arc = "Career-Best Breakout Campaign" if experience <= 4 else "Late-Career Resurgence"
+        elif ratio >= 1.10:
+            arc = "Surging Above Career Baseline"
+        elif 0.85 <= ratio < 1.10:
+            arc = "In Prime / Consistent with Career Norms"
+        elif ratio < 0.75 and experience >= 7:
+            arc = "Age-Related Decline / Slower Pace"
+        elif ratio < 0.85:
+            arc = "Pacing Below Established Baseline"
+        else:
+            arc = "Consistent with Career Norms"
+
+    return {
+        "five_year_statline_summary": summary,
+        "five_year_per_season_averages": averages,
+        "career_arc_assessment": arc,
+    }
+
+
 @tool
 def get_player_season_stats(player_identifier: str) -> str:
-    """Fetch cumulative regular-season stats (passing, rushing, receiving, and where listed defense, kicking, punting, returns and sacks allowed), a separate postseason line from captured playoff box scores when he has one, Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), and Playoff Clout, and season touch/yard share for skill players. Accepts player name (e.g. 'Drake Maye') or player ID."""
+    """Fetch cumulative regular-season stats (passing, rushing, receiving, defense, kicking, punting), a 5-year historical statline summary and trailing per-season averages from league canon, career arc assessment (breakout, prime, decline), a separate postseason line from captured playoff box scores when he has one, Madden OVR, age, experience, awards, popularity, popularity components (SpikeIndex, Baseline Rating, Franchise Platform, Team Success, Awards Equity, Exposure), Playoff Clout, and season touch/yard share (including 3-game rolling usage trends for skill players). Accepts player name (e.g. 'Drake Maye') or player ID."""
     try:
         s_val = resolve_season()
         with psycopg.connect(db.db_conn_info) as conn:
@@ -418,8 +643,7 @@ def get_player_season_stats(player_identifier: str) -> str:
                     for a in cur.fetchall()
                 ]
 
-                # Season touch share / yard share of the team's carries + catches (season totals, which are real;
-                # per-game splits for CPU-simmed games are synthetic, so no game-to-game usage deltas)
+                # Season touch share / yard share of the team's carries + catches
                 usage = None
                 if row[1] in SKILL_POSITIONS:
                     cur.execute("""
@@ -430,7 +654,8 @@ def get_player_season_stats(player_identifier: str) -> str:
                                 SELECT team_id FROM player_seasons WHERE player_id = %s AND season = %s)
                         )
                         SELECT COALESCE(ss.rush_attempts, 0) + COALESCE(ss.receptions, 0),
-                               COALESCE(ss.rush_yards, 0) + COALESCE(ss.rec_yards, 0), team.touches, team.yards
+                               COALESCE(ss.rush_yards, 0) + COALESCE(ss.rec_yards, 0), team.touches, team.yards,
+                               ps.team_id
                         FROM players p
                         JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
                         JOIN season_stats ss ON ss.player_name = p.player_name AND ss.season = %s AND ss.team_id = ps.team_id
@@ -439,11 +664,60 @@ def get_player_season_stats(player_identifier: str) -> str:
                     """, (s_val, target_id, s_val, s_val, s_val, target_id))
                     u = cur.fetchone()
                     if u and u[2]:
+                        p_team_id = u[4]
+                        touch_share = round(100.0 * u[0] / u[2], 1)
                         usage = {
-                            "touch_share_pct": round(100.0 * u[0] / u[2], 1),
+                            "touch_share_pct": touch_share,
                             "scrimmage_yard_share_pct": round(100.0 * u[1] / u[3], 1) if u[3] else None,
                             "scale_note": "Share of the team's season carries + receptions and scrimmage yards. Receptions, not targets; snaps aren't recorded.",
                         }
+                        if p_team_id:
+                            cur.execute("""
+                                SELECT id FROM games
+                                WHERE season = %s AND (home_team_id = %s OR away_team_id = %s)
+                                  AND status = 'COMPLETED' AND game_type = 'REGULAR_SEASON'
+                                ORDER BY week DESC LIMIT 3;
+                            """, (s_val, p_team_id, p_team_id))
+                            recent_game_ids = [rg[0] for rg in cur.fetchall()]
+                            if len(recent_game_ids) >= 3:
+                                cur.execute("""
+                                    SELECT COALESCE(SUM(rush_attempts + receptions), 0)
+                                    FROM player_stats
+                                    WHERE game_id = ANY(%s) AND team_id = %s;
+                                """, (recent_game_ids, p_team_id))
+                                tm_recent = cur.fetchone()[0]
+                                if tm_recent > 0:
+                                    cur.execute("""
+                                        SELECT COALESCE(SUM(rush_attempts + receptions), 0)
+                                        FROM player_stats
+                                        WHERE game_id = ANY(%s) AND player_id = %s;
+                                    """, (recent_game_ids, target_id))
+                                    pl_recent = cur.fetchone()[0]
+                                    recent_share = round(100.0 * pl_recent / tm_recent, 1)
+                                    usage["recent_3_game_touch_share_pct"] = recent_share
+                                    usage["usage_delta_pct"] = round(recent_share - touch_share, 1)
+                                    usage["scale_note"] = ("Share of the team's season carries + receptions and scrimmage yards. "
+                                                           "recent_3_game_touch_share_pct is over the team's last 3 games, and "
+                                                           "usage_delta_pct is the difference from season touch share (+ is surging).")
+
+                # Five-year historical context and baseline
+                cur.execute("""
+                    SELECT games_played, pass_yards, rush_yards, rec_yards, def_tackles, def_sacks, def_ints
+                    FROM season_stat_lines
+                    WHERE player_id = %s AND season = %s;
+                """, (target_id, s_val))
+                s_row = cur.fetchone()
+                extra = defense_and_special_teams(cur, s_val, target_id)
+                curr_stats = {
+                    "games_played": s_row[0] if s_row else (extra.get("games_played") or 0),
+                    "pass_yards": (s_row[1] if s_row else (row[5] or 0)) or 0,
+                    "rush_yards": (s_row[2] if s_row else (row[8] or 0)) or 0,
+                    "rec_yards": (s_row[3] if s_row else (row[11] or 0)) or 0,
+                    "tackles": (s_row[4] if s_row else 0) or 0,
+                    "sacks": float((s_row[5] if s_row else 0.0) or 0.0),
+                    "ints": (s_row[6] if s_row else 0) or 0,
+                }
+                five_yr = _build_five_year_player_context(cur, target_id, row[0], row[1], row[15] or 0, s_val, curr_stats)
 
                 result = {
                     "player_id": target_id,
@@ -467,7 +741,7 @@ def get_player_season_stats(player_identifier: str) -> str:
                     },
                     "playoff_clout": {
                         "score": row[24],
-                        "scale_note": "0-100: 40 per Super Bowl MVP, 25 per Super Bowl win played in, 8 per other playoff win played in. Super Bowl rosters before 2035 aren't recorded, so earlier rings only count through SB MVPs.",
+                        "scale_note": "0-100: 40 per Super Bowl MVP, 25 per Super Bowl win played in, 8 per other playoff win played in. Credited across full 10-year league history.",
                     },
                     "career_awards": career_awards if career_awards else ["None recorded"],
                     "preseason_adp_rank": row[13] if row[13] else "Undrafted",
@@ -477,9 +751,11 @@ def get_player_season_stats(player_identifier: str) -> str:
                                    + (f", {row[25]} sacks taken" if row[25] is not None and row[5] else ""),
                         "rushing": f"{row[8] or 0} yds, {row[9] or 0} TD",
                         "receiving": f"{row[10] or 0} rec, {row[11] or 0} yds, {row[12] or 0} TD"
-                    }
+                    },
+                    "career_arc_assessment": five_yr["career_arc_assessment"],
+                    "five_year_statline_summary": five_yr["five_year_statline_summary"],
+                    "five_year_per_season_averages": five_yr["five_year_per_season_averages"],
                 }
-                extra = defense_and_special_teams(cur, s_val, target_id)
                 if row[1] in DEFENSIVE_POSITIONS + ("K", "P") and not any(row[5:13]):
                     result["season_stats"] = {}
                 result["season_stats"].update({k: v for k, v in extra.items() if k != "games_played"})
@@ -500,7 +776,7 @@ def get_player_season_stats(player_identifier: str) -> str:
 
 @tool
 def get_player_context(player_identifier: str) -> str:
-    """Fetch complete player profile including age, years of experience, career awards, Madden OVR, physical attributes, and season stats. Accepts player name or player ID."""
+    """Fetch complete player profile including 5-year historical statline summary and averages, career arc assessment, age, years of experience, career awards, Madden OVR, physical attributes, season stats, and rolling usage trends. Accepts player name or player ID."""
     try:
         fn = getattr(get_player_season_stats, "func", get_player_season_stats)
         return fn(player_identifier)
@@ -509,7 +785,7 @@ def get_player_context(player_identifier: str) -> str:
 
 @tool
 def get_team_context(team_identifier: str) -> str:
-    """Fetch a team's current record, watchability index, popularity, and top 3 players. Accepts team name, abbreviation, or team ID (e.g. 'Patriots', 'NE', or 17)."""
+    """Fetch a team's current record, 5-year historical record and arc (regular season records, division finishes, playoff exits), franchise state (Championship Window, Perennial Contender, Ascending Core, Rebuilding, Roster Purgatory), watchability index, popularity, Madden ratings, and top 3 players. Accepts team name, abbreviation, or team ID (e.g. 'Patriots', 'NE', or 17)."""
     try:
         s_val = resolve_season()
         with psycopg.connect(db.db_conn_info) as conn:
@@ -540,11 +816,15 @@ def get_team_context(team_identifier: str) -> str:
 
                 top_players = [f"{r[0]} ({r[1]} - {r[2]} OVR)" for r in cur.fetchall()]
                 coach = fetch_team_coach(cur, team_id, s_val)
+                five_yr = _build_five_year_team_context(cur, team_id, s_val)
 
                 result = {
                     "team": team_row[0],
                     "team_id": team_id,
                     "record": f"{team_row[1]}-{team_row[2]}",
+                    "franchise_state": five_yr["franchise_state"],
+                    "five_year_record": five_yr["five_year_record"],
+                    "five_year_arc": five_yr["five_year_arc"],
                     "culture_metrics": {
                         "watchability_index": float(team_row[3]) if team_row[3] else 50.0,
                         "popularity_index": float(team_row[4]) if team_row[4] else 50.0
@@ -1246,7 +1526,7 @@ def situational_profiles(cur, season: int) -> dict:
 
 @tool
 def get_team_efficiency_profile(team_identifier: str = "", season: int = 0) -> str:
-    """Fetch season efficiency from points and yards: Pythagorean wins (the record points for/against predict; pyth_luck = wins minus that, positive = record flatters them), team pace & production (0-100), yards per game passing and rushing, and giveaways per game; plus situational football: third- and fourth-down conversion rates, two-point tries, red-zone trips and TD rate on offense and allowed on defense, penalties and penalty yards per game, each with a league rank (1 = best). Without a team, returns all 32 teams sorted by pyth_luck; with a team name, abbreviation, or ID, returns that team only."""
+    """Fetch season efficiency from points, yards, and turnovers: Pythagorean wins (the record points for/against predict; pyth_luck = wins minus that, positive = record flatters them), team pace & production (0-100), yards per game passing and rushing, giveaways per game, takeaways per game, and turnover margin; plus situational football: third- and fourth-down conversion rates, two-point tries, red-zone trips and TD rate on offense and allowed on defense, penalties and penalty yards per game, each with a league rank (1 = best). Without a team, returns all 32 teams sorted by pyth_luck; with a team name, abbreviation, or ID, returns that team only."""
     try:
         s_val = resolve_season(season)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -1272,15 +1552,17 @@ def get_team_efficiency_profile(team_identifier: str = "", season: int = 0) -> s
                         "pass_yds_per_game": round(p["pass_yds_per_game"], 1),
                         "rush_yds_per_game": round(p["rush_yds_per_game"], 1),
                         "giveaways_per_game": round(p["giveaways_per_game"], 2),
+                        "takeaways_per_game": round(p.get("takeaways_per_game", 0.0), 2),
+                        "turnover_margin": int(p.get("turnover_margin", 0)),
                         "situational": situational.get(team_id, "Not captured for this season"),
                     }
 
-                note = ("Pace & production: 35 points and 425 yards per game = 100. Pythagorean wins use raw points; "
-                        "compare with expected_wins from get_opponent_adjusted_credit, which also adjusts for schedule. "
-                        "Situational numbers are season totals from the team stats through the week shown; ranks are 1-32, "
-                        "1 = best (fewest penalties, lowest red-zone TD rate allowed). Third-down defense isn't recorded as a "
-                        "season total: third downs allowed appear only for games where the opponent's line is recorded, so "
-                        "don't cite a season third-down defense rate beyond them.")
+                note = ("Pace & production: 35 points and 425 yards per game = 100. Turnover margin is takeaways minus "
+                        "giveaways over completed games. Pythagorean wins use raw points; compare with expected_wins from "
+                        "get_opponent_adjusted_credit, which also adjusts for schedule. Situational numbers are season totals "
+                        "from the team stats through the week shown; ranks are 1-32, 1 = best (fewest penalties, lowest red-zone TD rate allowed). "
+                        "Third-down defense isn't recorded as a season total: third downs allowed appear only for games where the opponent's "
+                        "line is recorded, so don't cite a season third-down defense rate beyond them.")
                 if not str(team_identifier).strip():
                     ranked = sorted(profiles.items(), key=lambda kv: kv[1]["pyth_luck"], reverse=True)
                     return json.dumps({"season": s_val, "scale_note": note, "teams": [fmt(t, p) for t, p in ranked]}, indent=2)

@@ -36,6 +36,16 @@ class SeasonLandscapeTests(unittest.TestCase):
     def test_week_1_everyone_is_winless(self):
         self.assertEqual(set(records_by_team(division_standings(TEAMS, [], before_week=1)).values()), {"0-0"})
 
+    def test_history_chips_appended_and_records_by_team_intact(self):
+        games = [g(1, 1, 2, 24, 17)]
+        chips = {1: "5-Yr: 10-11-10-8-6 (1 SB)", 2: "5-Yr: 4-4-5-8-10"}
+        st = division_standings(TEAMS, games, before_week=2, history_chips=chips)
+        self.assertIn("| 5-Yr: 10-11-10-8-6 (1 SB)", st["AFC East"][0])
+        self.assertIn("| 5-Yr: 4-4-5-8-10", st["AFC East"][1])
+        # records_by_team parses record correctly regardless of chip
+        self.assertEqual(records_by_team(st)[1], "1-0")
+        self.assertEqual(records_by_team(st)[2], "0-1")
+
 
 if __name__ == "__main__":
     unittest.main()

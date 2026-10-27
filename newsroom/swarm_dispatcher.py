@@ -380,7 +380,33 @@ def build_weekly_assignment_brief(db_conn_info: str, season: int, week: int) -> 
             """, (season, week))
             games = [dict(zip(("week", "home_team_id", "away_team_id", "home_score", "away_score"), r))
                      for r in cur.fetchall()]
-            standings = division_standings(teams, games, before_week=week)
+            # 5-year history chips (seasons season-5 .. season-1)
+            history_chips = {}
+            try:
+                cur.execute("""
+                    SELECT team_id, season, wins, playoff_result
+                    FROM team_season_results
+                    WHERE season < %s AND season >= %s
+                    ORDER BY team_id, season ASC;
+                """, (season, season - 5))
+                from collections import defaultdict
+                by_team = defaultdict(list)
+                for tid, s_yr, w, post in cur.fetchall():
+                    by_team[tid].append((s_yr, w, post))
+                for tid, s_list in by_team.items():
+                    wins_str = "-".join(str(w) for _, w, _ in s_list)
+                    sb_count = sum(1 for _, _, p in s_list if p in ("CHAMPION", "SUPER_BOWL_LOSS"))
+                    po_count = sum(1 for _, _, p in s_list if p != "MISSED")
+                    notes = []
+                    if sb_count > 0:
+                        notes.append(f"{sb_count} SB")
+                    if po_count > 0:
+                        notes.append(f"{po_count} PO")
+                    history_chips[tid] = f"5-Yr: {wins_str}" + (f" ({', '.join(notes)})" if notes else "")
+            except Exception:
+                history_chips = {}
+
+            standings = division_standings(teams, games, before_week=week, history_chips=history_chips)
             landscape = brief["season_landscape"]
             landscape["division_standings"] = standings
             records = records_by_team(standings)
@@ -1092,7 +1118,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 
 3. DEFENSIVE DATA: Defense and special teams now have real season numbers: tackles, sacks, tackles for loss, interceptions, pass deflections, forced fumbles and recoveries, defensive TDs, kicking, punting and returns, plus sacks allowed for linemen and sacks taken for quarterbacks. Use them to back defensive claims with named players. The limits: Madden lists only its leaders in each category, so a player with no line has unknown numbers (not zeros); listed defenders don't add up to a team total, so never sum them into team sacks or takeaways; and pressures, blitzes, coverage, snap counts and targets aren't recorded, so never give them as numbers or rates. Describing them in words is fine when it fits the box score and the game script: a pass rush that lived in the backfield, a corner who blanketed his man, a defense that brought more heat after halftime. COACHING TENDENCIES: `get_coach_profile` and the `coaching_matchup` block of `get_matchup_edges` give each head coach's schemes and three tendencies (pass lean, fourth-down aggressiveness, man coverage) as Low / Medium / High against the league. Pass lean and fourth-down aggressiveness are measured from this league's results (allowing for the score), so you can state them as what the team does ("one of the league's most aggressive fourth-down teams"). Man coverage is the staff's real-world philosophy, not measured here: present it as reputation ("a staff known for zone"), never as what the defense has done this season. There is no blitz data, so never put a number on how often a defense blitzes or call it a season-long habit. Never turn a tier into a percentage, and never put a count or rate on how often a team blitzed or played man in a specific game; describing in words what a defense did in one game is fine when it fits the game script. Team situational numbers work the same way: season third-down, red-zone and penalty rates come from `get_team_efficiency_profile`, and a single game's come only from its box score's `team_situational` line. If a game has no such line, don't invent its third-down or red-zone totals. Third-down defense has no season total, so never cite a season third-down rate allowed beyond what the tool shows, and down-and-distance splits (third-and-short, third-and-long) aren't recorded. Season numbers (player season stats, the defense and special-teams leaders, team situational rates and the standings) cover the regular season only; playoff numbers come only from playoff box scores (`get_game_box_score`) and the `postseason_stats` line of `get_player_season_stats`. Keep them separate: never add playoff stats into a season total or call a regular-season total a season-long figure that includes the playoffs.
 
-4. HISTORICAL COMPARISONS (OPTIONAL): You may compare a team or player to a real NFL team or season from 1990–2023 when the parallel genuinely sharpens your argument (similar record shape, scoring profile, roster age, or trajectory). It is not required: most articles need none, and you should use at most one. Never invent a historical team or season, and don't reach for the most famous examples by default; pick the comparison that actually fits the numbers.
+4. HISTORICAL COMPARISONS (OPTIONAL): Ground your historical comparisons in this league's own reconstructed 10-season canon (2026–2035) and franchise history (queried via `get_team_history` and `get_player_career`). Draw parallels to real simulation milestones, dynasties, or collapses when they sharpen your argument: Marcus Whitfield's record-setting 2029–2033 Bears offense, Carolina's 0–17 collapse in 2031 and subsequent 2034 Super Bowl run, or past MVP/OPOY campaigns. When a real NFL comparison from 1990–2023 genuinely fits the numbers (similar record shape, scoring profile, or trajectory), you may use it, but prefer in-universe league lore. It is not required: most articles need none, and you should use at most one. Never invent a historical team or season.
 """
         if is_fantasy:
             national_writer_guidelines = FANTASY_DESK_GUIDELINES

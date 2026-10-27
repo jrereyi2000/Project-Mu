@@ -3,10 +3,10 @@
 Team:   S = min(100, Σ_y e^{-0.15 (Y - y)} · [100·SB win + 50·SB loss + 20·playoff wins]) over seasons y ≤ Y.
 Player: S = min(100, 40·SB MVPs + 25·SB wins played in + 8·other playoff wins played in).
 
-Super Bowls come from games.game_type = 'SUPER_BOWL'; "other playoff wins" are completed wins in any other
-non-REGULAR_SEASON game (none exist before 2035). "Played in" means the player has a player_stats row for that game,
-which is only knowable from 2035 on: earlier Super Bowl rosters aren't stored, so before 2035 a player only gets
-credit for SB MVPs (matched on awards.player_id). Veterans' clout is understated accordingly.
+For 2026–2034 league history, team playoff runs and player rosters are recorded in team_season_results and
+player_seasons, crediting players on playoff rosters with their team's playoff wins and Super Bowl victories.
+For 2035 onward, Super Bowls and playoff games are verified from completed non-REGULAR_SEASON games where the
+player has a recorded player_stats row for the winning team.
 
 CLI:
     python3 -m engines.playoff_clout_engine --season 2035
@@ -40,14 +40,35 @@ def player_playoff_clout(counts: dict) -> float:
 
 
 def fetch_team_events(cur, season: int) -> list:
+    events = []
+    # 2026-2034: Reconstructed canon from team_season_results
+    cur.execute("""
+        SELECT season, team_id, playoff_result, playoff_wins
+        FROM team_season_results
+        WHERE season < 2035 AND season <= %s AND playoff_result <> 'MISSED'
+    """, (season,))
+    for y, team_id, p_result, p_wins in cur.fetchall():
+        p_wins = p_wins or 0
+        if p_result == "CHAMPION":
+            events.append((y, team_id, "sb_win"))
+            for _ in range(max(0, p_wins - 1)):
+                events.append((y, team_id, "playoff_win"))
+        elif p_result == "SUPER_BOWL_LOSS":
+            events.append((y, team_id, "sb_loss"))
+            for _ in range(p_wins):
+                events.append((y, team_id, "playoff_win"))
+        else:
+            for _ in range(p_wins):
+                events.append((y, team_id, "playoff_win"))
+
+    # 2035+: Completed games from games table
     cur.execute("""
         SELECT season, game_type,
                CASE WHEN home_score > away_score THEN home_team_id ELSE away_team_id END,
                CASE WHEN home_score > away_score THEN away_team_id ELSE home_team_id END
         FROM games
-        WHERE status = 'COMPLETED' AND game_type <> 'REGULAR_SEASON' AND season <= %s AND home_score <> away_score
+        WHERE status = 'COMPLETED' AND game_type <> 'REGULAR_SEASON' AND season >= 2035 AND season <= %s AND home_score <> away_score
     """, (season,))
-    events = []
     for y, game_type, winner, loser in cur.fetchall():
         if game_type == "SUPER_BOWL":
             events += [(y, winner, "sb_win"), (y, loser, "sb_loss")]
@@ -62,14 +83,32 @@ def fetch_player_counts(cur, season: int) -> dict:
     cur.execute("SELECT player_id FROM awards WHERE award_type = 'SBMVP' AND player_id IS NOT NULL AND season <= %s", (season,))
     for (pid,) in cur.fetchall():
         counts[pid]["sbmvp"] += 1
-    # Wins played in: the player's stat row is for the winning team
+
+    # 2026-2034: Player seasons mapped to team playoff runs
+    cur.execute("""
+        SELECT ps.player_id, tsr.playoff_result, tsr.playoff_wins
+        FROM team_season_results tsr
+        JOIN player_seasons ps ON ps.team_id = tsr.team_id AND ps.season = tsr.season
+        WHERE tsr.season < 2035 AND tsr.season <= %s AND tsr.playoff_result <> 'MISSED'
+    """, (season,))
+    for pid, p_result, p_wins in cur.fetchall():
+        p_wins = p_wins or 0
+        if p_result == "CHAMPION":
+            counts[pid]["sb_win"] += 1
+            counts[pid]["playoff_win"] += max(0, p_wins - 1)
+        elif p_result == "SUPER_BOWL_LOSS":
+            counts[pid]["playoff_win"] += p_wins
+        else:
+            counts[pid]["playoff_win"] += p_wins
+
+    # 2035+: Wins played in: the player's stat row is for the winning team
     cur.execute("""
         SELECT ps.player_id, g.game_type
         FROM games g
         JOIN player_stats st ON st.game_id = g.id
             AND st.team_id = CASE WHEN g.home_score > g.away_score THEN g.home_team_id ELSE g.away_team_id END
         JOIN player_seasons ps ON ps.player_id = st.player_id AND ps.season = g.season
-        WHERE g.status = 'COMPLETED' AND g.game_type <> 'REGULAR_SEASON' AND g.season <= %s AND g.home_score <> g.away_score
+        WHERE g.status = 'COMPLETED' AND g.game_type <> 'REGULAR_SEASON' AND g.season >= 2035 AND g.season <= %s AND g.home_score <> g.away_score
     """, (season,))
     for pid, game_type in cur.fetchall():
         counts[pid]["sb_win" if game_type == "SUPER_BOWL" else "playoff_win"] += 1

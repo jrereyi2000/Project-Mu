@@ -7,11 +7,12 @@ shows the league as it stood entering Week N (and a regenerated old week doesn't
 REGULAR_SEASON_FINAL_WEEK = 18
 
 
-def division_standings(teams, games, before_week: int) -> dict:
+def division_standings(teams, games, before_week: int, history_chips: dict | None = None) -> dict:
     """{division: [team line, ...]} sorted by win % then point differential.
 
     teams: [{"id", "name", "city", "conference", "division"}]
     games: completed games [{"week", "home_team_id", "away_team_id", "home_score", "away_score"}]
+    history_chips: optional {team_id: "5-Yr Wins: ..."} string chips to append to each line
     Only regular-season games (Weeks 1-18) before `before_week` count.
     """
     last_week = min(before_week - 1, REGULAR_SEASON_FINAL_WEEK)
@@ -43,7 +44,8 @@ def division_standings(teams, games, before_week: int) -> dict:
             r = rec[t["id"]]
             record = f"{r['w']}-{r['l']}" + (f"-{r['t']}" if r["t"] else "")
             diff = r["pf"] - r["pa"]
-            lines.append(f"{t['city']} {t['name']} (ID: {t['id']}) {record}, PF {r['pf']}, PA {r['pa']}, diff {diff:+d}")
+            chip = f" | {history_chips[t['id']]}" if history_chips and t["id"] in history_chips else ""
+            lines.append(f"{t['city']} {t['name']} (ID: {t['id']}) {record}, PF {r['pf']}, PA {r['pa']}, diff {diff:+d}{chip}")
         out[div] = lines
     return out
 

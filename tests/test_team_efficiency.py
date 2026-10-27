@@ -7,9 +7,9 @@ import unittest
 from engines.team_efficiency_engine import compute_team_efficiency, pythagorean_wins, team_pace
 
 
-def row(team_id, pf, pa, yds=350, pass_yds=250, rush_yds=100, giveaways=1):
+def row(team_id, pf, pa, yds=350, pass_yds=250, rush_yds=100, giveaways=1, takeaways=2):
     return {"team_id": team_id, "pf": pf, "pa": pa, "won": 1.0 if pf > pa else (0.5 if pf == pa else 0.0),
-            "yds": yds, "pass_yds": pass_yds, "rush_yds": rush_yds, "giveaways": giveaways}
+            "yds": yds, "pass_yds": pass_yds, "rush_yds": rush_yds, "giveaways": giveaways, "takeaways": takeaways}
 
 
 class TeamEfficiencyTests(unittest.TestCase):
@@ -28,6 +28,8 @@ class TeamEfficiencyTests(unittest.TestCase):
         self.assertEqual(p["wins"], 2.0)
         self.assertGreater(p["pyth_luck"], 1.0)
         self.assertAlmostEqual(p["giveaways_per_game"], 1.0)
+        self.assertAlmostEqual(p["takeaways_per_game"], 2.0)
+        self.assertEqual(p["turnover_margin"], 3)
 
 
 if __name__ == "__main__":

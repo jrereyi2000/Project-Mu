@@ -49,10 +49,12 @@ def compute_team_efficiency(rows: list) -> dict:
         g = len(rs)
 
         def total(key):
-            return sum(r[key] or 0 for r in rs)
+            return sum(r.get(key) or 0 for r in rs)
 
-        pf, pa, wins = total("pf"), total("pa"), sum(r["won"] for r in rs)
+        pf, pa, wins = total("pf"), total("pa"), sum(r.get("won", 0.0) for r in rs)
         pyth = pythagorean_wins(pf, pa, g)
+        giveaways = total("giveaways")
+        takeaways = total("takeaways")
         profiles[team_id] = {
             "games": g,
             "wins": wins,
@@ -60,7 +62,9 @@ def compute_team_efficiency(rows: list) -> dict:
             "points_against": pa,
             "pythagorean_wins": pyth,
             "pyth_luck": wins - pyth,
-            "giveaways_per_game": total("giveaways") / g,
+            "giveaways_per_game": giveaways / g,
+            "takeaways_per_game": takeaways / g,
+            "turnover_margin": int(takeaways - giveaways),
             "pace_production": team_pace(pf / g, total("yds") / g),
             "pass_yds_per_game": total("pass_yds") / g,
             "rush_yds_per_game": total("rush_yds") / g,
@@ -73,25 +77,28 @@ def fetch_team_game_rows(cur, season: int, before_week: int = None) -> list:
     playoff games stay out). before_week (optional) keeps only games from earlier weeks."""
     cur.execute("""
         WITH tg AS (
-            SELECT g.id AS game_id, g.home_team_id AS team_id, g.home_score AS pf, g.away_score AS pa
+            SELECT g.id AS game_id, g.home_team_id AS team_id, g.away_team_id AS opp_id, g.home_score AS pf, g.away_score AS pa
             FROM games g WHERE g.season = %(s)s AND g.status = 'COMPLETED' AND (%(w)s::int IS NULL OR g.week < %(w)s::int)
               AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
             UNION ALL
-            SELECT g.id, g.away_team_id, g.away_score, g.home_score
+            SELECT g.id, g.away_team_id, g.home_team_id, g.away_score, g.home_score
             FROM games g WHERE g.season = %(s)s AND g.status = 'COMPLETED' AND (%(w)s::int IS NULL OR g.week < %(w)s::int)
               AND COALESCE(g.game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
         )
-        SELECT tg.team_id, tg.pf, tg.pa, ts.total_offense, ts.passing_yards, ts.rushing_yards, ts.turnovers
+        SELECT tg.team_id, tg.pf, tg.pa, ts.total_offense, ts.passing_yards, ts.rushing_yards, ts.turnovers, ts_opp.turnovers
         FROM tg
         LEFT JOIN teams t ON t.id = tg.team_id
+        LEFT JOIN teams opp ON opp.id = tg.opp_id
         LEFT JOIN team_stats ts ON ts.game_id = tg.game_id AND ts.team_name = t.name
+        LEFT JOIN team_stats ts_opp ON ts_opp.game_id = tg.game_id AND ts_opp.team_name = opp.name
     """, {"s": season, "w": before_week})
     rows = []
-    for team_id, pf, pa, yds, pass_yds, rush_yds, giveaways in cur.fetchall():
+    for team_id, pf, pa, yds, pass_yds, rush_yds, giveaways, takeaways in cur.fetchall():
         rows.append({
             "team_id": team_id, "pf": pf or 0, "pa": pa or 0,
             "won": 1.0 if (pf or 0) > (pa or 0) else (0.5 if pf == pa else 0.0),
-            "yds": yds, "pass_yds": pass_yds, "rush_yds": rush_yds, "giveaways": giveaways,
+            "yds": yds, "pass_yds": pass_yds, "rush_yds": rush_yds,
+            "giveaways": giveaways or 0, "takeaways": takeaways or 0,
         })
     return rows
 
