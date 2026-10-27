@@ -38,8 +38,10 @@ CREATE TABLE IF NOT EXISTS players (
     height VARCHAR(10),
     weight INT,
     player_number INT DEFAULT 0,
-    espn_id INT
+    espn_id INT,
+    madden_pgid INT    -- Player.PresentationId on the PC save (2027_01_05_madden_pgid.sql)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS players_madden_pgid ON players (madden_pgid) WHERE madden_pgid IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- Temporal snapshot ledgers
