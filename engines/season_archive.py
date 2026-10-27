@@ -19,6 +19,8 @@ Everything is computed from `games`, never read off a Madden screen (plan D5):
   seed (2v7, 3v6, 4v5); the #1 seed is the conference's Divisional-round team with no Wild Card game. Only the order of
   the three home teams needs the conference tiebreakers.
 compute() is pure; archive() reads and writes. A second run of an archived season changes nothing unless --replace.
+A season the 2026-2034 history backfill generated (`source = 'SYNTH'`, docs/HISTORY_BACKFILL_PLAN.md) is never written
+over, --replace included: the history owns SYNTH seasons and this archive owns CAPTURE ones (continuity plan D9).
 """
 import argparse
 import json
@@ -269,6 +271,24 @@ def compute(games, teams):
 GAME_COLS = ("id", "season", "week", "game_type", "home_team_id", "away_team_id", "home_score", "away_score")
 
 
+def _has_source(cur):
+    """True once the history migration has added `source` to the archive tables."""
+    cur.execute("SELECT count(*) FROM information_schema.columns WHERE column_name = 'source' "
+                "AND table_name IN ('league_seasons', 'team_season_results', 'coach_season_lines')")
+    return cur.fetchone()[0] == 3
+
+
+def history_season(cur, season):
+    """True when any archive row for the season is a generated (SYNTH) history row."""
+    if not _has_source(cur):
+        return False
+    cur.execute("""SELECT EXISTS (SELECT 1 FROM league_seasons WHERE season = %s AND source = 'SYNTH')
+                       OR EXISTS (SELECT 1 FROM team_season_results WHERE season = %s AND source = 'SYNTH')
+                       OR EXISTS (SELECT 1 FROM coach_season_lines WHERE season = %s AND source = 'SYNTH')""",
+                (season, season, season))
+    return bool(cur.fetchone()[0])
+
+
 def installed(cur):
     cur.execute("SELECT to_regclass('league_seasons') IS NOT NULL AND to_regclass('coach_season_lines') IS NOT NULL")
     return bool(cur.fetchone()[0])
@@ -319,9 +339,12 @@ def coach_snapshot(cur, coach_id, season):
 
 def archive(cur, season, replace=False, dry_run=False):
     """Archive one season. Returns a report {season, status, champion, problems, coaches, snapshots_skipped}.
-    status: not_installed | not_ready | exists | archived | dry_run."""
+    status: not_installed | history (a SYNTH season: never written over) | not_ready | exists | archived | dry_run."""
     if not installed(cur):
         return {"season": season, "status": "not_installed"}
+    if history_season(cur, season):
+        return {"season": season, "status": "history",
+                "reason": "generated 2026-2034 history (source SYNTH); the history backfill owns it"}
     cur.execute("SELECT 1 FROM league_seasons WHERE season = %s", (season,))
     if cur.fetchone() and not replace:
         return {"season": season, "status": "exists"}
@@ -355,28 +378,31 @@ def archive(cur, season, replace=False, dry_run=False):
         return report
 
     lg = result["league"]
-    cur.execute("""INSERT INTO league_seasons (season, champion_team_id, runner_up_team_id, super_bowl_game_id,
-                                               regular_season_games, postseason_games, notes, finalized_at)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, now())
+    src = _has_source(cur)
+    cur.execute(f"""INSERT INTO league_seasons (season, champion_team_id, runner_up_team_id, super_bowl_game_id,
+                                               regular_season_games, postseason_games, notes, finalized_at
+                                               {', source' if src else ''})
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, now(){", 'CAPTURE'" if src else ''})
                    ON CONFLICT (season) DO UPDATE SET champion_team_id = EXCLUDED.champion_team_id,
                        runner_up_team_id = EXCLUDED.runner_up_team_id, super_bowl_game_id = EXCLUDED.super_bowl_game_id,
                        regular_season_games = EXCLUDED.regular_season_games,
-                       postseason_games = EXCLUDED.postseason_games, notes = EXCLUDED.notes, finalized_at = now()""",
+                       postseason_games = EXCLUDED.postseason_games, notes = EXCLUDED.notes, finalized_at = now()
+                       {", source = 'CAPTURE'" if src else ''}""",
                 (season, lg["champion_team_id"], lg["runner_up_team_id"], lg["super_bowl_game_id"],
                  lg["regular_season_games"], lg["postseason_games"], "; ".join(report["problems"]) or None))
     cur.execute("DELETE FROM team_season_results WHERE season = %s", (season,))
     for tid, r in result["teams"].items():
-        cur.execute("""INSERT INTO team_season_results (season, team_id, wins, losses, ties, points_for, points_against,
+        cur.execute(f"""INSERT INTO team_season_results (season, team_id, wins, losses, ties, points_for, points_against,
                            division_place, division_tiebreak, conference_seed, playoff_result, playoff_wins,
-                           playoff_losses, head_coach_id, gm_id)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                           playoff_losses, head_coach_id, gm_id{', source' if src else ''})
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s{", 'CAPTURE'" if src else ''})""",
                     (season, tid, r["wins"], r["losses"], r["ties"], r["points_for"], r["points_against"],
                      r["division_place"], r["division_tiebreak"], r["conference_seed"], r["playoff_result"],
                      r["playoff_wins"], r["playoff_losses"], r["head_coach_id"], r["gm_id"]))
     cur.execute("DELETE FROM coach_season_lines WHERE season = %s", (season,))
-    cur.executemany("""INSERT INTO coach_season_lines (coach_id, team_id, season, wins, losses, ties, games,
-                           playoff_wins, playoff_losses, playoff_result)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""", coach_rows)
+    cur.executemany(f"""INSERT INTO coach_season_lines (coach_id, team_id, season, wins, losses, ties, games,
+                           playoff_wins, playoff_losses, playoff_result{', source' if src else ''})
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s{", 'CAPTURE'" if src else ''})""", coach_rows)
     for coach_id, tid, s, snap, mu_only in snapshot_rows:
         cur.execute("""INSERT INTO coach_seasons (coach_id, team_id, season, career_wins, career_losses, career_ties,
                            winning_seasons, playoff_wins, playoff_losses, super_bowl_wins, super_bowl_losses,

@@ -128,6 +128,27 @@ class Live2035Test(unittest.TestCase):
                                  + r["teams"][g["away_team_id"]]["conference_seed"], 9)
         self.assertEqual(sum(row["division_place"] == 1 for row in r["teams"].values()), 8)
 
+    def test_history_seasons_are_never_written_over(self):
+        """Phase 1b (continuity plan D9): a SYNTH season is refused even with --replace and its rows stay."""
+        self.cur.execute("SELECT season FROM league_seasons WHERE source = 'SYNTH' ORDER BY season DESC LIMIT 1")
+        row = self.cur.fetchone()
+        if not row:
+            self.skipTest("no generated history in this database")
+        season = row[0]
+        self.cur.execute("SELECT count(*), sum(wins) FROM team_season_results WHERE season = %s AND source = 'SYNTH'",
+                         (season,))
+        before = self.cur.fetchone()
+        self.assertEqual(sa.archive(self.cur, season, replace=True)["status"], "history")
+        self.cur.execute("SELECT count(*), sum(wins) FROM team_season_results WHERE season = %s AND source = 'SYNTH'",
+                         (season,))
+        self.assertEqual(self.cur.fetchone(), before)
+
+    def test_archive_writes_capture_rows(self):
+        self.assertEqual(sa.archive(self.cur, 2035, replace=True)["status"], "archived")   # rolled back in tearDown
+        for table in ("league_seasons", "team_season_results", "coach_season_lines"):
+            self.cur.execute(f"SELECT DISTINCT source FROM {table} WHERE season = 2035")
+            self.assertEqual(self.cur.fetchall(), [("CAPTURE",)])
+
     def test_coach_snapshot_matches_the_view(self):
         """A 2035 snapshot (2034 snapshot + 2035 games) leaves coach_records unchanged."""
         self.cur.execute("SELECT DISTINCT ON (ct.team_id) ct.coach_id FROM coach_tenures ct "

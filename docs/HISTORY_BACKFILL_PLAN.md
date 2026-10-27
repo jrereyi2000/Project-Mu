@@ -33,7 +33,7 @@
 | B14 | **Three candidate histories.** The generator writes three, each from a different random seed. JR picks one, can pin any season or line, and the run is refit around the pins (§3.8). |
 | B15 | **Approved history is canon.** Once applied, `SYNTH` rows are data under the hallucination policy, and writers must not contradict them. Regenerating the history needs JR's go-ahead. |
 | B16 | **Player teams:** each player spends his 2026–2034 seasons with his 2035 team unless something already stored says otherwise (a canon fact or a pin). Team moves can be added later as texture. |
-| B17 | **Coach records stay "since 2035" on screen** (continuity plan D2). The generated 2026–2034 `coach_season_lines` exist for history views and writer tools. Their sums must equal the 2025 → 2034 snapshot differences exactly. |
+| B17 | **Coach with-team records count from 2026** (JR, revised 2026-10-27: the wins aren't synthetic, since each coach's 2026–2034 totals are his exact 2025 → 2034 snapshot difference). The generated 2026–2034 `coach_season_lines` feed `coach_profile`'s with-team record as well as the history views and writer tools, so their sums must equal those differences exactly. |
 
 ---
 

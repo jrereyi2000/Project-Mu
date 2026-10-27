@@ -5,7 +5,7 @@ Run: python3 -m unittest tests.test_coach_profile
 import unittest
 
 from engines.coach_profile import (accumulate, describe_tendencies, effective_tendencies, fetch_games, record_line,
-                                   season_record, staff_matchup, tenure_record)
+                                   season_record, staff_matchup, tenure_record, with_team_record)
 
 SNAP = {"season": 2034, "career_wins": 13, "career_losses": 4, "career_ties": 0, "winning_seasons": 1,
         "playoff_wins": 3, "playoff_losses": 0, "super_bowl_wins": 1, "super_bowl_losses": 0}
@@ -123,6 +123,35 @@ class CoachProfileTests(unittest.TestCase):
         self.assertEqual(line["defense"], "Y: 3-4 front, coverage Low (zone-first coverage; reputation)")
         self.assertIn("zone-first coverage; reputation", line["defense"])
         self.assertIsNone(staff_matchup(None, coach))
+
+
+class WithTeamRecordTests(unittest.TestCase):
+    """with_team_record: finished seasons from coach_season_lines (2026-2034 generated, 2035 on archived), the
+    current season from games (JR 2026-10-27: with-team records count from 2026)."""
+
+    LINE = {"wins": 10, "losses": 7, "ties": 0, "playoff_wins": 1, "playoff_losses": 1}
+
+    def test_lines_then_current_games(self):
+        lines = {2034: self.LINE, 2035: {"wins": 9, "losses": 8, "ties": 0, "playoff_wins": 0, "playoff_losses": 0}}
+        games = [game(2036, w, CAR, NYJ, 21, 10) for w in range(1, 4)] + [game(2036, 4, ATL, CAR, 30, 3)]
+        self.assertEqual(with_team_record(lines, games, CAR, 2034, 2036), ("22-16", "1-1"))
+
+    def test_ties_show(self):
+        lines = {2035: {"wins": 8, "losses": 8, "ties": 1, "playoff_wins": 0, "playoff_losses": 0}}
+        self.assertEqual(with_team_record(lines, [], CAR, 2035, 2036), ("8-8-1", "0-0"))
+
+    def test_missing_finished_season_is_unknown(self):
+        # 2034 has no line and no full season of games: unknown, never a partial total
+        lines = {2035: self.LINE}
+        self.assertEqual(with_team_record(lines, [], CAR, 2034, 2036), (None, None))
+
+    def test_finished_season_from_games_without_a_line(self):
+        games = [game(2035, w, CAR, NYJ, 20, 10) for w in range(1, 18)]
+        self.assertEqual(with_team_record({}, games, CAR, 2035, 2036), ("17-0", "0-0"))
+
+    def test_line_wins_over_games_for_a_finished_season(self):
+        games = [game(2035, 1, CAR, NYJ, 20, 10)]
+        self.assertEqual(with_team_record({2035: self.LINE}, games, CAR, 2035, 2036), ("10-7", "1-1"))
 
 
 if __name__ == "__main__":

@@ -40,9 +40,10 @@ UNNAMED_NOTE = "not named in league records; refer to him only by title and neve
 
 REGULAR = "REGULAR_SEASON"
 FULL_SEASON_GAMES = 17
-# The first season with every game on record (JR 2026-10-26, docs/SEASON_CONTINUITY_PLAN.md D2): a tenure that began
-# earlier has its with-team record counted from here.
-RECORDS_FROM = 2035
+# The first season of with-team records (JR 2026-10-27, docs/SEASON_CONTINUITY_PLAN.md D2/D12): every season from here
+# has a coach_season_lines row once it's finished (2026-2034 from the history backfill, whose per-coach totals are the
+# exact coach_seasons differences; 2035 on from the season archive). A tenure that began earlier counts from here.
+RECORDS_FROM = 2026
 
 
 def effective_tendencies(coach: dict) -> dict:
@@ -141,6 +142,44 @@ def tenure_record(games: list, team_id: int, start_season: int, season: int) -> 
         rec = tally if (g["game_type"] or REGULAR) == REGULAR else post
         rec["WLT".index(_result(g, team_id))] += 1
     return "-".join(map(str, tally if tally[2] else tally[:2])), f"{post[0]}-{post[1]}"
+
+
+def with_team_record(lines: dict, games: list, team_id: int, since: int, season: int) -> tuple:
+    """(regular-season record, playoff record) with a team over seasons since..season, as 'W-L' / 'W-L-T' and 'W-L'.
+    Each finished season (< season) comes from its coach_season_lines row (lines: {season: {wins, losses, ties,
+    playoff_wins, playoff_losses}}), else from its games when the full regular season is there; the current season
+    from `games` (already filtered to what the reader may see). (None, None) when a finished season has neither."""
+    reg, post = [0, 0, 0], [0, 0]
+    for s in range(since, season + 1):
+        if s < season and s in lines:
+            ln = lines[s]
+            reg = [reg[0] + ln["wins"], reg[1] + ln["losses"], reg[2] + ln["ties"]]
+            post = [post[0] + ln["playoff_wins"], post[1] + ln["playoff_losses"]]
+            continue
+        mine = [g for g in games if g["season"] == s and team_id in (g["home_team_id"], g["away_team_id"])]
+        regular = [g for g in mine if (g.get("game_type") or REGULAR) == REGULAR]
+        if s < season and len(regular) < FULL_SEASON_GAMES:
+            return None, None
+        for g in mine:
+            r = _result(g, team_id)
+            if (g.get("game_type") or REGULAR) == REGULAR:
+                reg["WLT".index(r)] += 1
+            elif r in ("W", "L"):
+                post["WL".index(r)] += 1
+    return "-".join(map(str, reg if reg[2] else reg[:2])), f"{post[0]}-{post[1]}"
+
+
+def fetch_lines(cur, coach_id: int, team_id: int, since: int, season: int) -> dict:
+    """{season: line} from coach_season_lines for the coach with the team, finished seasons since..season - 1
+    ({} before the season archive migration)."""
+    cur.execute("SELECT to_regclass('coach_season_lines') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return {}
+    cur.execute("""SELECT season, wins, losses, ties, playoff_wins, playoff_losses FROM coach_season_lines
+                   WHERE coach_id = %s AND team_id = %s AND season >= %s AND season < %s""",
+                (coach_id, team_id, since, season))
+    keys = ("wins", "losses", "ties", "playoff_wins", "playoff_losses")
+    return {r[0]: dict(zip(keys, r[1:])) for r in cur.fetchall()}
 
 
 def record_line(t: dict | None) -> dict | None:
@@ -342,11 +381,9 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
     career = accumulate(snapshot, tenures, games, season)
 
     start = coach["start_season"]
-    with_team, playoffs_with_team = tenure_record(games, team_id, start, season)
-    since = start
-    if with_team is None and start < RECORDS_FROM <= season:
-        since = RECORDS_FROM
-        with_team, playoffs_with_team = tenure_record(games, team_id, since, season)
+    since = max(start, RECORDS_FROM)
+    with_team, playoffs_with_team = with_team_record(fetch_lines(cur, coach["id"], team_id, since, season),
+                                                     games, team_id, since, season)
     sb = [g for g in games if start <= g["season"] <= season and g["game_type"] == "SUPER_BOWL"
           and team_id in (g["home_team_id"], g["away_team_id"])]
 
@@ -383,8 +420,8 @@ def coach_profile(cur, team_id: int, season: int, visible, awards_visible: bool)
         "note": TENDENCY_NOTE + (" record_with_team is the regular season only; playoff_record_with_team is his "
                                  "postseason wins and losses with this team over the same seasons (Super Bowls "
                                  "included), both counted from record_with_team_since (when it is later than "
-                                 "with_team_since, earlier seasons of the tenure aren't on record: say 'since "
-                                 "<year>'). career_scope 'since joining this league' means his earlier career isn't "
+                                 "with_team_since, the tenure began before 2026, the first season with records: "
+                                 "say 'since <year>'). career_scope 'since joining this league' means his earlier career isn't "
                                  "recorded; never fill it in." if with_team is not None else
                                  " record_with_team and playoff_record_with_team are null when an earlier season of "
                                  "this tenure isn't on record."),
