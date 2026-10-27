@@ -424,3 +424,83 @@ def records_check(conn_info=CONN_INFO, first=2026, last=2034):
     with open(RECORDS_MD, "w") as fh:
         fh.write("\n".join(md) + "\n")
     return dict(counts)
+
+
+# ------------------------------------------------------------------------------------------ leader ranges ----
+
+LEADERS_MD = os.path.join(ROOT, "verify_output", "history_leaders_report.md")
+# (label, season_stat_lines expression, a season's leader is the max; "per team" totals are the league sum / 32)
+LEADER_STATS = (("Passing yards", "pass_yards"), ("Passing TDs", "pass_tds"), ("Interceptions thrown", "interceptions"),
+                ("Rushing yards", "rush_yards"), ("Rushing TDs", "rush_tds"), ("Receptions", "receptions"),
+                ("Receiving yards", "rec_yards"), ("Receiving TDs", "rec_tds"), ("Sacks", "def_sacks"),
+                ("Tackles", "def_tackles"), ("Interceptions", "def_ints"), ("Field goals made", "kick_fgm"),
+                ("Punting average (40+ punts)", "punt_average"), ("Kick-return yards", "kr_yards"))
+MILESTONES = (("4,000-yard passers", "pass_yards", 4000), ("1,000-yard rushers", "rush_yards", 1000),
+              ("1,000-yard receivers", "rec_yards", 1000), ("10-sack seasons", "def_sacks", 10),
+              ("100-tackle seasons", "def_tackles", 100))
+CAPTURED = (2035, 2036)
+SLACK = 0.10              # within 10% of the captured range counts as inside it
+
+
+def range_flag(value, lo, hi, slack=SLACK):
+    """'' inside [lo, hi] widened by slack, else 'below' / 'above' (pure)."""
+    if value is None or lo is None:
+        return ""
+    if value < lo * (1 - slack):
+        return "below"
+    if value > hi * (1 + slack):
+        return "above"
+    return ""
+
+
+def leaders_report(conn_info=CONN_INFO, first=2026, last=2034):
+    """Each history season's leaders, top-10 averages, per-team totals and milestone counts against the captured
+    2035-2036 range (verify_output/history_leaders_report.md). Returns {season: [flagged measures]}."""
+    seasons = list(range(first, last + 1)) + list(CAPTURED)
+    data = defaultdict(dict)
+    with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
+        for label, col in LEADER_STATS:
+            cond = "punt_punts >= 40" if col == "punt_average" else f"{col} IS NOT NULL"
+            cur.execute(f"""SELECT season, array_agg({col} ORDER BY {col} DESC NULLS LAST), sum({col}) FROM season_stat_lines
+                            WHERE season = ANY(%s) AND {cond} GROUP BY season""", (seasons,))
+            for y, vals, total in cur.fetchall():
+                vals = [float(v) for v in vals if v is not None]
+                if not vals:
+                    continue
+                data[y][f"{label}: leader"] = vals[0]
+                data[y][f"{label}: top-10 average"] = round(sum(vals[:10]) / min(10, len(vals)), 1)
+                if col != "punt_average":
+                    data[y][f"{label}: per team"] = round(float(total) / 32, 1)
+        for label, col, th in MILESTONES:
+            cur.execute(f"SELECT season, count(*) FROM season_stat_lines WHERE season = ANY(%s) AND {col} >= %s "
+                        f"GROUP BY season", (seasons, th))
+            for y, n in cur.fetchall():
+                data[y][label] = n
+    measures = sorted({k for y in data for k in data[y]}, key=lambda k: [m for m in
+                      [f"{l}: {s}" for l, _ in LEADER_STATS for s in ("leader", "top-10 average", "per team")]
+                      + [l for l, _, _ in MILESTONES]].index(k))
+    flags, rows = defaultdict(list), []
+    for m in measures:
+        cap = [data[y][m] for y in CAPTURED if m in data[y]]
+        lo, hi = (min(cap), max(cap)) if cap else (None, None)
+        cells = []
+        for y in range(first, last + 1):
+            v = data[y].get(m)
+            f = range_flag(v, lo, hi)
+            if f:
+                flags[y].append(f"{m} {v:g} ({f} {lo:g}–{hi:g})")
+            cells.append("—" if v is None else f"{v:g}{' ↓' if f == 'below' else ' ↑' if f == 'above' else ''}")
+        rows.append(f"| {m} | " + " | ".join(cells) + f" | {lo:g}–{hi:g} |" if lo is not None else
+                    f"| {m} | " + " | ".join(cells) + " | — |")
+    md = ["# Leader ranges, 2026–2034 history", "",
+          f"Each history season against the captured {CAPTURED[0]}–{CAPTURED[1]} range (↓ / ↑: more than "
+          f"{int(SLACK * 100)}% outside it). Leaders sit below the Madden era by design where the record caps hold "
+          "them under today's NFL top 10, and 2026 starts from real-NFL levels.", "",
+          f"- Measures outside the range: {sum(len(v) for v in flags.values())} of "
+          f"{len(measures) * (last - first + 1)}", "",
+          "| Measure | " + " | ".join(str(y) for y in range(first, last + 1)) + f" | {CAPTURED[0]}–{CAPTURED[1]} |",
+          "|---|" + "---|" * (last - first + 2), *rows]
+    os.makedirs(os.path.dirname(LEADERS_MD), exist_ok=True)
+    with open(LEADERS_MD, "w") as fh:
+        fh.write("\n".join(md) + "\n")
+    return dict(flags)
