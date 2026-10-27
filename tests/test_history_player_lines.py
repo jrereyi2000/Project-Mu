@@ -146,6 +146,22 @@ class PinLineTest(unittest.TestCase):
         self.assertEqual((got["rec_yards"], got["receptions"]), (1615, 128))
 
 
+class AllProTest(unittest.TestCase):
+    def test_award_winner_first_and_no_repeats(self):
+        from engines.history_backfill import all_pro
+        rows = [{"player_id": i, "name": f"QB{i}", "team_id": i, "position": "QB", "pass_yards": 4000 + 100 * i,
+                 "pass_tds": 30} for i in range(1, 5)]
+        rows += [{"player_id": 10 + i, "name": f"CB{i}", "team_id": i, "position": "CB", "def_ints": 9 - i}
+                 for i in range(1, 8)]
+        out = all_pro.pick(rows, {}, [("MVP", 1)], [(None, "Long Snapper", 3), (None, "Other Snapper", 4)])
+        first, second = out["First Team All-Pro"], out["Second Team All-Pro"]
+        self.assertEqual([r["player_id"] for s, r in first if s == "QB"], [1])        # the MVP, though QB4 threw more
+        self.assertEqual([r["player_id"] for s, r in second if s == "QB"], [4])
+        corners = [(s, r["player_id"]) for s, r in first + second if s in ("CB", "SCB")]
+        self.assertEqual(corners, [("CB", 11), ("CB", 12), ("SCB", 13), ("CB", 14), ("CB", 15), ("SCB", 16)])
+        self.assertEqual([r["name"] for s, r in first if s == "LS"], ["Long Snapper"])
+
+
 class ApplyTest(unittest.TestCase):
     def test_derived_rates(self):
         from engines.history_backfill import players

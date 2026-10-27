@@ -1287,6 +1287,8 @@ ALTER TABLE season_stat_puntreturn ADD COLUMN IF NOT EXISTS source VARCHAR(8) NO
 ALTER TABLE season_stat_blocking ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
 ALTER TABLE season_stat_general ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
 ALTER TABLE players ADD COLUMN IF NOT EXISTS origin VARCHAR(16);
+-- generated 2026-2034 All-Pro teams (2026_12_31_awards_source.sql, engines/history_backfill/all_pro.py)
+ALTER TABLE awards ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
 
 -- Staged 2026-2034 player lines (2026_12_29_history_player_lines.sql, engines/history_backfill/players.py, phase 3):
 -- nothing reaches the live player tables before JR approves a run.

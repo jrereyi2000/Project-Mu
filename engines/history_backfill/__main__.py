@@ -10,6 +10,7 @@ History backfill CLI (docs/HISTORY_BACKFILL_PLAN.md §3.8). Phase 2: the team ar
   python3 -m engines.history_backfill link-facts               # link 2026-2034 awards / record rows to players
   python3 -m engines.history_backfill records-check            # the records engine over 2026-2034 (read-only)
   python3 -m engines.history_backfill leaders-report           # 2026-2034 leaders against 2035-2036 (read-only)
+  python3 -m engines.history_backfill all-pro [--dry-run]      # 2026-2034 All-Pro teams (awards, source SYNTH)
 """
 import argparse
 
@@ -34,6 +35,8 @@ def main():
     sub.add_parser("link-facts", help="link the applied run's 2026-2034 awards and record-book rows to players")
     sub.add_parser("records-check", help="run the records engine over 2026-2034 and write its report (read-only)")
     sub.add_parser("leaders-report", help="2026-2034 leaders and totals against the captured 2035-2036 range")
+    apro = sub.add_parser("all-pro", help="pick and store the 2026-2034 All-Pro teams from the history lines")
+    apro.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     if args.cmd == "generate":
         for cid, status, problems in team_arc.generate(args.seeds, args.pins, args.time_limit):
@@ -47,6 +50,9 @@ def main():
               f"{len(report['problems'])} problems; wrote {players.REPORT_MD}")
     elif args.cmd == "apply-players":
         print(f"applied run {args.run}: {players.apply_run(args.run)}")
+    elif args.cmd == "all-pro":
+        from engines.history_backfill import all_pro
+        print(f"{all_pro.run(args.dry_run)} picks{' (dry run)' if args.dry_run else ''}; wrote {all_pro.REPORT_MD}")
     elif args.cmd == "leaders-report":
         flags = players.leaders_report()
         print(f"{sum(len(v) for v in flags.values())} measures outside the 2035-2036 range; wrote {players.LEADERS_MD}")

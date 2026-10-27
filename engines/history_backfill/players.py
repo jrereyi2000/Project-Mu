@@ -310,6 +310,8 @@ def apply_run(run_id, conn_info=CONN_INFO, dry_run=False):
                             (y, p, team, pos, *row.values()))
                 counts[t] += 1
         report["applied"] = {"counts": dict(counts), "canon_changes": canon_changes, "linked_facts": link_facts(cur)}
+        from engines.history_backfill import all_pro              # the history players' ids are new: re-pick All-Pro
+        all_pro.store(cur, all_pro.picks_for(cur))
         cur.execute("UPDATE history_player_runs SET applied_at = now(), report = %s WHERE id = %s",
                     (json.dumps(report, default=str), run_id))
         if dry_run:
@@ -349,8 +351,10 @@ def link_facts(cur, first=2026, last=2034):
 def revert_players(conn_info=CONN_INFO):
     """Delete every SYNTH player row and the players the backfill created; restore the canon rows it touched."""
     with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, report FROM history_player_runs WHERE applied_at IS NOT NULL")
         n = 0
+        cur.execute("DELETE FROM awards WHERE source = 'SYNTH'")   # generated All-Pro (they point at these players)
+        n += cur.rowcount
+        cur.execute("SELECT id, report FROM history_player_runs WHERE applied_at IS NOT NULL")
         for run_id, report in cur.fetchall():
             for ch in (report.get("applied") or {}).get("canon_changes", []):
                 cur.execute(f"UPDATE season_stats SET {', '.join(f'{c} = %s' for c in ch['old'])} WHERE id = %s",
