@@ -96,6 +96,7 @@ DRAFT_DAY_PREMIUM = 1.35                 # a team trading up covets the player o
                                          # (engines/draft_room.draft_day_premiums)
 ROUND_TRADE_TARGET = 5                   # Rounds 2-7: executed trades a round, about 30 a draft (06 plan §4); its own
 ROUND_MAX_PROPOSALS = 8                  # budget, outside the offseason's 15-20 (counts_for_pacing false)
+ROUND_PREMIUM_FLOOR = 1.6                # a round buyer's least premium (JR, 2026-10-27; the top of the board range)
 NEXT_YEAR_MIN_ROUND = 4                  # round trades may pay with next year's picks from this round on (Q2)
 ROUND_THETA_SHARE = 0.1                  # a round trade's θ_T: 10% of the moved pick's league value x (1 - aggr.); the
                                          # flat THETA ($1.5M) is most of a Round 3-7 pick's whole value
@@ -1755,9 +1756,9 @@ def run_draft_round(cur, season, draft_season, round_no, candidates, slots, dry_
         if b["picks"].get(tuple(cand["seller_pick"])) != seller or tuple(cand["seller_pick"]) in b["booked_picks"]:
             continue
         b["on_clock"] = (tuple(cand["seller_pick"]), seller)
-        # a candidate's target won't last to its own pick, so it covets this one at least the flat draft-day premium
-        # (the boards hold each team's top 100 only, and run dry after Round 2)
-        b["draft_premiums"] = {buyer: max(cand.get("premium") or 0, DRAFT_DAY_PREMIUM)}
+        # a candidate's target won't last to its own pick, so it covets this one at least ROUND_PREMIUM_FLOOR (the
+        # boards hold each team's top 100 only, and run dry after Round 2)
+        b["draft_premiums"] = {buyer: max(cand.get("premium") or 0, ROUND_PREMIUM_FLOOR)}
         valuer = Valuer(b, fits)
         core = {"type": "PICK", "pick": tuple(cand["seller_pick"]), "from": seller}
         b["theta_round"] = ROUND_THETA_SHARE * valuer.league(core)
