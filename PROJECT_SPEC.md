@@ -214,7 +214,7 @@ Project Mu/
 │   │                          #   whose first initial + last name collided, breaking OCR/stat matching), 2026_11_22_rename_colliding_prospects.py
 │   │                          #   (renames 16 2036 draft prospects in draft_prospects and the prospects CSVs)
 │   └── backups/               #   madden_backup_*.sql dumps
-├── headshots/                 # AI player headshot generation
+├── headshots/                 # AI player headshot generation (§2.20)
 │   ├── headshot_appearance_generator.py, make_headshot.py
 │   ├── rookie_headshots.py    #   Automated rookie headshot generation for seasonal pipeline
 │   ├── gen.py                 #   Gemini batch job submit / download
@@ -485,27 +485,6 @@ JR, Oct 15: the real-world 2026 coach tiers (§3.3a) were checked against the 20
 - **Tiers** `observed_pass_lean` / `observed_fourth_down`: ranked across teams with at least 4 regular-season games, top 11/32 High, next 10/32 Medium, rest Low. Teams with fewer games get values but no tier. `tendency_games` is the number of games behind them.
 - **Stored** on `team_seasons` by `TendencyEngine().calculate(season)` after the team efficiency engine in the weekly run (§6, step 3); `python3 -m engines.tendency_engine [--season N]`. These are season totals, so they aren't cut off by an article's week, like the other `team_seasons` values (§7).
 - **Used by** the writer tools through `engines/coach_profile.py` (§3.3a): this season's tier, else last season's when the same coach ran the team, else the coach's real-world tier, each labelled with its source.
-
-### 2.13 Player Headshot Generation Architecture (`headshots/`, `docs/HEADSHOT_PIPELINE.md`)
-Fictional players in Madden lack official broadcast photography. The headshot subsystem creates photorealistic, broadcast-grade media-day player portraits across all 1,499 players in `players` and serves them as transparent WebP cutouts.
-- **Deterministic Appearance Synthesis (`headshots/headshot_appearance_generator.py`):** Uses independent SHA-256 seed streams (`name + team + version`) to deterministically sample physical traits: position-weighted skin tones (`TONE_W` across 5 tone brackets), authentic hair textures, facial hair distributions (skews clean-shaven for QBs/kickers/punters), BMI-derived physical build from database `height` and `weight`, age-dependent hairline recession, and micro-aging fine lines. Attractiveness and facial asymmetry (jawline, nose, eyes, natural skin blemishes) are jittered along a Gaussian stream to avoid synthetic airbrushed artifacts.
-- **Official Franchise Staging & Prompts (`headshots/make_headshot.py`):** Combines the synthesized appearance line with an authoritative 32-team home jersey color palette (`_color_cache`, primary/secondary hex values). Formulates a high-fashion sports media-day prompt: 85mm portrait lens at $f/5.6$, key/fill/rim lighting, natural fabric mesh folds, and a seamless pure white backdrop (`#FFFFFF`).
-- **Batch API Pipeline (`headshots/make_headshot.py`, `headshots/gen.py`):**
-  - Compiles all 1,499 active players into `data/headshots/batch_headshot_requests.jsonl` using `build_batch_request`, handling duplicate same-team name collisions by suffixing position or ID.
-  - Submits the batch payload to Gemini Batch API targeting `gemini-nano-banana-2.1` with `responseModalities: ["IMAGE"]` and 3:4 portrait aspect ratio.
-  - Downloads completed batch artifacts into `data/headshots/batch_results.jsonl`.
-- **Background Removal & WebP Processing (`headshots/process_headshots.py`):**
-  - Executes across 6 concurrent multiprocessing workers with an in-memory queue.
-  - Uses `rembg` with the edge-preserving ONNX `silueta` model ($\approx 0.35\text{s}$ inference) to cleanly segment players from the white background.
-  - Encodes the RGBA cutout into WebP (`quality=90`, `method=4`, $\approx 110\text{–}180\text{ KB}$).
-  - Re-maps request keys to each player's primary key `players.id`, saving directly to `static/players/{player_id}.webp`.
-- **Seasonal Rookie Headshot Pipeline (`headshots/rookie_headshots.py`, `pipeline/weekly_capture.py`):**
-  - Automatically runs after `step_load` in start-of-season cadence runs (`--mode season`) and roster scans (`--mode roster`) via `step_rookie_headshots(season)`.
-  - Queries all rookies entering the league on team rosters (`player_seasons.years_of_experience = 0` / linked `draft_prospects` rows) that do not yet have headshots in `static/players/{player_id}.webp`.
-  - Generates media-day headshots concurrently across 5–6 worker threads using `gemini-nano-banana-2.1`, strips backgrounds with thread-local `rembg` silueta sessions, archives raw cutouts to `data/headshots/players_backup/{player_id}.webp`, and standardizes transparent cutouts to 700×508 WebPs at `static/players/{player_id}.webp`.
-  - Fully idempotent: resumes seamlessly across stops and network drops. Standalone CLI: `python3 -m headshots.rookie_headshots [--season N] [--workers 5] [--drafted-only] [--dry-run]`.
-- **Frontend Serving:** Served statically at `/static/players/{player_id}.webp` by FastAPI (`server/api.py`). The React frontend (`Mu_Network/src/App.tsx`) loads headshots with cache-busting `?v=${HEADSHOT_VERSION}` across player modals, roster views, and social cards, falling back to team-colored initialed avatars if missing. Full architectural spec in [`docs/HEADSHOT_PIPELINE.md`](docs/HEADSHOT_PIPELINE.md).
-
 - **2035 (Week 17):** most pass-leaning New Orleans (+7.1 points of pass share), Chargers and Bengals; most run-leaning Buffalo (−8.6), Miami and Baltimore. Most aggressive on fourth down Baltimore (+0.59 attempts a game), Philadelphia and Miami; least Rams, Browns and Packers.
 - **Tests:** `tests/test_tendency_engine.py` (residuals, the 11/10/11 split, a lean that is only the score being none, per-game fourth downs, no tier before 4 games, missing inputs).
 
@@ -603,6 +582,26 @@ Mu runs the whole coaching carousel for CPU teams (JR, 2026-10-26): it fires hea
 - **Effects:** fired tenures close at the season (he coached it); hires start next season. Notices: `Mu: coaches fired` (fire them in Madden), `Mu: coaches hired` (hire any coach for each opening; Mu's hire stands for him) and `Mu: coordinator poached` (one of JR's coordinators left). The Week 19 Black Monday article reports the Black Monday firings (head coaches and coordinators) as news (`slot_targets.LeagueSnapshot.coach_firings` / `coordinator_firings`; fired teams lead the target); `league_staff_directory` marks fired staff for the season. The offseason package's Coaching Carousel takes its facts from `staff_moves` (`offseason_service.mu_coaching_packet`), and from that season on the manifest's `coaching_moves` apply to JR's teams only (§7.10).
 - **CLI:** `python3 -m engines.coaching_carousel [--season S] [--dry-run]` (everything ready, rolled back with `--dry-run`); `python3 -m engines.coach_hot_seat [--season S] [--dry-run]` prints every head coach's score, p, draw and verdict (both phases) and writes nothing.
 - **Tests:** `tests/test_coach_hot_seat.py` (pure: Black Monday terms, protections, who is safe, seeded and capped; playoff-exit terms, a playoff win or title protects, contender and tenure rules, the season cap; coordinator terms, the head coach's own side, the first-year line, JR's teams; seeded picks with noise; candidacy; opening appeal weights, the QB outweighing cap room, churn, percentiles; manifest warnings before and after the cycle), `tests/test_coaching_carousel_db.py` (rehearses the 2035 offseason on the live database in one transaction that is always rolled back: 32 decided, one hire per firing, every CPU team staffed, JR's teams never fire or hire (only poach departures and promotions), openings hired most attractive first, a second run changes nothing, a poach leaves a `LEFT` row; skipped without the database or once 2035 is decided), `tests/test_slot_targets.py` (a fired coach leads the Black Monday target, the note reports the firings, no firings says so); the weekly-run tests stub Step 7d.
+
+### 2.20 Player Headshot Generation Architecture (`headshots/`, `docs/HEADSHOT_PIPELINE.md`)
+Fictional players in Madden lack official broadcast photography. The headshot subsystem creates photorealistic, broadcast-grade media-day player portraits across all 1,499 players in `players` and serves them as transparent WebP cutouts.
+- **Deterministic Appearance Synthesis (`headshots/headshot_appearance_generator.py`):** Uses independent SHA-256 seed streams (`name + team + version`) to deterministically sample physical traits: position-weighted skin tones (`TONE_W` across 5 tone brackets), authentic hair textures, facial hair distributions (skews clean-shaven for QBs/kickers/punters), BMI-derived physical build from database `height` and `weight`, age-dependent hairline recession, and micro-aging fine lines. Attractiveness and facial asymmetry (jawline, nose, eyes, natural skin blemishes) are jittered along a Gaussian stream to avoid synthetic airbrushed artifacts.
+- **Official Franchise Staging & Prompts (`headshots/make_headshot.py`):** Combines the synthesized appearance line with an authoritative 32-team home jersey color palette (`_color_cache`, primary/secondary hex values). Formulates a high-fashion sports media-day prompt: 85mm portrait lens at $f/5.6$, key/fill/rim lighting, natural fabric mesh folds, and a seamless pure white backdrop (`#FFFFFF`).
+- **Batch API Pipeline (`headshots/make_headshot.py`, `headshots/gen.py`):**
+  - Compiles all 1,499 active players into `data/headshots/batch_headshot_requests.jsonl` using `build_batch_request`, handling duplicate same-team name collisions by suffixing position or ID.
+  - Submits the batch payload to Gemini Batch API targeting `gemini-nano-banana-2.1` with `responseModalities: ["IMAGE"]` and 3:4 portrait aspect ratio.
+  - Downloads completed batch artifacts into `data/headshots/batch_results.jsonl`.
+- **Background Removal & WebP Processing (`headshots/process_headshots.py`):**
+  - Executes across 6 concurrent multiprocessing workers with an in-memory queue.
+  - Uses `rembg` with the edge-preserving ONNX `silueta` model ($\approx 0.35\text{s}$ inference) to cleanly segment players from the white background.
+  - Encodes the RGBA cutout into WebP (`quality=90`, `method=4`, $\approx 110\text{–}180\text{ KB}$).
+  - Re-maps request keys to each player's primary key `players.id`, saving directly to `static/players/{player_id}.webp`.
+- **Seasonal Rookie Headshot Pipeline (`headshots/rookie_headshots.py`, `pipeline/weekly_capture.py`):**
+  - Automatically runs after `step_load` in start-of-season cadence runs (`--mode season`) and roster scans (`--mode roster`) via `step_rookie_headshots(season)`.
+  - Queries all rookies entering the league on team rosters (`player_seasons.years_of_experience = 0` / linked `draft_prospects` rows) that do not yet have headshots in `static/players/{player_id}.webp`.
+  - Generates media-day headshots concurrently across 5–6 worker threads using `gemini-nano-banana-2.1`, strips backgrounds with thread-local `rembg` silueta sessions, archives raw cutouts to `data/headshots/players_backup/{player_id}.webp`, and standardizes transparent cutouts to 700×508 WebPs at `static/players/{player_id}.webp`.
+  - Fully idempotent: resumes seamlessly across stops and network drops. Standalone CLI: `python3 -m headshots.rookie_headshots [--season N] [--workers 5] [--drafted-only] [--dry-run]`.
+- **Frontend Serving:** Served statically at `/static/players/{player_id}.webp` by FastAPI (`server/api.py`). The React frontend (`Mu_Network/src/App.tsx`) loads headshots with cache-busting `?v=${HEADSHOT_VERSION}` across player modals, roster views, and social cards, falling back to team-colored initialed avatars if missing. Full architectural spec in [`docs/HEADSHOT_PIPELINE.md`](docs/HEADSHOT_PIPELINE.md).
 
 ## 3. Database Schema & Architecture (PostgreSQL)
 
