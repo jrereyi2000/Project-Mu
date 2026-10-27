@@ -32,6 +32,7 @@ RATIOS = {"pass_attempts": "pass_yards", "completions": "pass_attempts", "interc
           "kr_yards": "kr_returns", "pr_yards": "pr_returns", "kick_fgm": "kick_fga", "kick_xpm": "kick_xpa",
           "def_int_yds": "def_ints"}
 CALIBRATION = (2035, 2036)
+RATE_CLAMP = 1.5          # a drawn rate stays within 1.5 SD of the 2035-2036 mean (a 2% interception rate was 27 INTs)
 
 
 def fit(samples):
@@ -77,7 +78,8 @@ def draw(model, arc, seed=1):
         for num, den in RATIOS.items():
             if ("rate", num) in model:
                 mean, sd = model[("rate", num)]
-                row[num] = max(0, int(round(row[den] * max(0.0, rng.gauss(mean, sd)))))
+                rate = min(mean + RATE_CLAMP * sd, max(mean - RATE_CLAMP * sd, rng.gauss(mean, sd)))
+                row[num] = max(0, int(round(row[den] * max(0.0, rate))))
         row["kick_fgm"] = min(row["kick_fgm"], row["kick_fga"])
         row["kick_xpm"] = min(row["kick_xpm"], row["kick_xpa"])
         for k, src in MIRROR.items():

@@ -25,6 +25,7 @@ generate() is pure apart from its inputs; problems are returned, never raised.
 """
 import math
 import random
+import zlib
 from collections import defaultdict
 
 PASS = ("pass_attempts", "completions", "pass_yards", "pass_tds", "interceptions", "pass_sacks")
@@ -45,14 +46,14 @@ STAT_GROUPS = {
     "pass": {"QB": 1.0},
     "rush": {"RB": 0.84, "QB": 0.12, "WR": 0.03, "TE": 0.01},
     "rec": {"WR": 0.6, "TE": 0.24, "RB": 0.16},
-    "tackles": {"LB": 0.34, "S": 0.22, "CB": 0.2, "DT": 0.12, "EDGE": 0.12},
+    "tackles": {"LB": 0.4, "S": 0.25, "CB": 0.17, "DT": 0.09, "EDGE": 0.09},
     "sacks": {"EDGE": 0.48, "DT": 0.26, "LB": 0.18, "S": 0.04, "CB": 0.04},
     "tfl": {"EDGE": 0.3, "DT": 0.3, "LB": 0.3, "S": 0.05, "CB": 0.05},
     "ints": {"CB": 0.48, "S": 0.36, "LB": 0.14, "EDGE": 0.01, "DT": 0.01},
     "pd": {"CB": 0.55, "S": 0.28, "LB": 0.13, "EDGE": 0.02, "DT": 0.02},
     "ff": {"EDGE": 0.3, "LB": 0.25, "S": 0.15, "CB": 0.15, "DT": 0.15},
     "kick": {"K": 1.0}, "punt": {"P": 1.0},
-    "ret": {"WR": 0.4, "RB": 0.3, "CB": 0.3},
+    "ret": {"WR": 0.7, "RB": 0.15, "CB": 0.15},            # Madden: one primary returner takes most returns
     "blk": {"OL": 1.0},
 }
 FAMILY = {**{s: "pass" for s in PASS}, **{s: "rush" for s in RUSH}, **{s: "rec" for s in REC},
@@ -70,13 +71,17 @@ RANK_SHARES = {
     ("rec", "WR"): (0.41, 0.3, 0.16, 0.08, 0.03, 0.02), ("rec", "TE"): (0.82, 0.15, 0.03),
     ("kick", "K"): (1.0,), ("punt", "P"): (1.0,),
     ("blk", "OL"): (0.19, 0.19, 0.19, 0.19, 0.19, 0.03, 0.02),
-    ("ret", "WR"): (0.15, 0.45, 0.3, 0.1), ("ret", "RB"): (0.2, 0.5, 0.3), ("ret", "CB"): (0.1, 0.5, 0.4),
+    ("ret", "WR"): (0.05, 0.85, 0.1), ("ret", "RB"): (0.1, 0.8, 0.1), ("ret", "CB"): (0.1, 0.8, 0.1),
+    # tackles and sacks concentrate on the starters (2035-2036: ~80 100-tackle and ~28 10-sack seasons a year)
+    ("tackles", "LB"): (0.42, 0.33, 0.15, 0.06, 0.04), ("tackles", "S"): (0.45, 0.4, 0.1, 0.05),
+    ("tackles", "CB"): (0.3, 0.28, 0.2, 0.12, 0.1), ("sacks", "EDGE"): (0.5, 0.3, 0.12, 0.08),
 }
 DEFAULT_RANKS = (0.3, 0.25, 0.18, 0.12, 0.08, 0.05, 0.02)
 PEAK = {"QB": (27, 34), "RB": (23, 27), "WR": (24, 29), "TE": (25, 30), "OL": (25, 31), "EDGE": (25, 30),
         "DT": (25, 30), "LB": (24, 29), "CB": (24, 29), "S": (24, 30), "K": (25, 37), "P": (25, 37)}
 DECLINE = 0.08            # per year past the peak
 VET_CAP = 1.4             # a vet takes at most this many times his provisional line
+SOFT_MARGIN = 1.05        # soft caps: 5% above the captured 2035-2036 season maximum
 
 # record-book categories -> line stat (season categories pin the holder; game categories are floors)
 RECORD_STAT = {"pass_yards": "pass_yards", "pass_tds": "pass_tds", "receptions": "receptions",
@@ -234,7 +239,7 @@ def provisional(members, sh, totals):
     return out
 
 
-def generate(cast, totals, remainders, canon, pins, floors, ceilings, awards, seed=1):
+def generate(cast, totals, remainders, canon, pins, floors, ceilings, awards, seed=1, soft=None):
     """cast: cast.build() members; totals: team_totals.draw(); remainders {player_id: {stat: value}};
     canon {(player_id, season): {stat: value}} (kept, not generated); pins {(key, season): {stat: value}};
     floors {(key, season): {stat: min}}; ceilings: f(member, season, stat) -> max or None; awards
@@ -309,11 +314,11 @@ def generate(cast, totals, remainders, canon, pins, floors, ceilings, awards, se
         for group, (key_stat, stats) in FREE_GROUPS.items():
             need = sum(prov[(m["key"], y)][key_stat] for m in vets)
             f = min(VET_CAP, room_of[key_stat] / need) if need > 0 else 0.0
-            for m in vets:
-                for stat in stats:
-                    v = int(round(prov[(m["key"], y)][stat] * f))
+            for stat in stats:                       # the group total split exactly: small counts don't round away
+                weights = {m["key"]: prov[(m["key"], y)][stat] for m in vets}
+                for k, v in split_exact(sum(weights.values()) * f, weights).items():
                     if v:
-                        lines[(m["key"], y)][stat] = v
+                        lines[(k, y)][stat] = v
                         given[stat] += v
         for m in vets:
             pinned = pins.get((m["key"], y), {})
@@ -331,6 +336,7 @@ def generate(cast, totals, remainders, canon, pins, floors, ceilings, awards, se
     problems += _ceilings(lines, members, ceilings, pins)
     problems += _awards(lines, members, by_key, awards, pins)
     problems += _ceilings(lines, members, ceilings, pins)        # records outrank awards: an award boost stays capped
+    problems += _soft_caps(lines, members, soft or {}, pins)
     for key in lines:
         row = lines[key]
         if "def_solo" in row or "def_assists" in row:
@@ -469,8 +475,8 @@ def _ceilings(lines, members, ceilings, pins):
                     cap = ceilings(m, y, stat)
                     v = lines.get(key, {}).get(stat, 0)
                     if cap is not None and v > cap:
-                        lines[key][stat] = cap
-                        over += v - cap
+                        lines[key][stat] = below_cap(cap, key, stat)
+                        over += v - lines[key][stat]
                 if not over or not m["constrained"]:
                     break
                 room = {}
@@ -487,6 +493,45 @@ def _ceilings(lines, members, ceilings, pins):
                     lines[(m["key"], y)][stat] = lines[(m["key"], y)].get(stat, 0) + v
         problems += _scrimmage(lines, m, ceilings, pins)
     return problems
+
+
+def below_cap(cap, key, stat):
+    """A capped season lands a little under its cap, not on it: up to 4% (at least 1) below, fixed per player-season
+    and stat (pure). Without it every capped leader read exactly the cap (127 catches every season)."""
+    spread = max(1, int(cap * 0.04))
+    return max(0, cap - (zlib.crc32(f"{key}|{stat}".encode()) % (spread + 1)))
+
+
+def _soft_caps(lines, members, soft, pins):
+    """Keep a season within the captured era's range (soft: {stat: max}): an excess moves to the player's other
+    seasons with room; what has nowhere to go goes back where it came from (a constrained player's career sum wins;
+    listed as a note) (pure apart from `lines`)."""
+    notes = []
+    for m in members:
+        for stat, cap in soft.items():
+            taken, room = {}, {}
+            for y in m["seasons"]:
+                key = (m["key"], y)
+                v = lines.get(key, {}).get(stat, 0)
+                if stat in pins.get(key, {}):
+                    continue
+                if v > cap:
+                    keep = below_cap(int(cap), key, stat)
+                    taken[y] = v - keep
+                    lines[key][stat] = keep
+                else:
+                    room[y] = int(cap - v)
+            over = sum(taken.values())
+            if not over or not m["constrained"]:
+                continue                                 # a free line just stays inside the range
+            place = min(over, sum(room.values()))
+            for y, v in split_exact(place, room).items():
+                lines[(m["key"], y)][stat] = lines[(m["key"], y)].get(stat, 0) + v
+            if place < over:
+                for y, v in split_exact(over - place, taken).items():
+                    lines[(m["key"], y)][stat] += v
+                notes.append(f"note: {m['full_name']}: {over - place} {stat} above the 2035-2036 range with nowhere to go")
+    return notes
 
 
 def _scrimmage(lines, m, ceilings, pins):
@@ -669,5 +714,11 @@ def inputs(cur, cast_out, season=2036):
             unresolved.append((a, name, y))
         else:
             awards.append((y, a, m["key"]))
+    # soft caps: a season stays within 5% of the captured 2035-2036 maximum (season_stat_lines; defense is the
+    # listed leaders, so its maxima are real)
+    view_cols = [c for c in LINE_STATS if c not in ("def_solo", "def_assists")] + ["def_solo", "def_assists"]
+    cur.execute(f"SELECT {', '.join(f'max({c})' for c in view_cols)} FROM season_stat_lines "
+                f"WHERE source = 'CAPTURE' AND season >= 2035")
+    soft = {c: float(v) * SOFT_MARGIN for c, v in zip(view_cols, cur.fetchone()) if v}
     return {"remainders": remainders, "canon": canon, "pins": dict(pins), "floors": dict(floors),
-            "ceilings": ceilings, "awards": awards, "unresolved": unresolved}
+            "ceilings": ceilings, "awards": awards, "unresolved": unresolved, "soft": soft}

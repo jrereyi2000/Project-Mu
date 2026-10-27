@@ -94,7 +94,7 @@ def run(seed=1, conn_info=CONN_INFO):
         arc_row = cur.fetchone()
         members = co["members"]
         lines, leftover, problems = pl.generate(members, totals, inp["remainders"], inp["canon"], inp["pins"],
-                                                inp["floors"], inp["ceilings"], inp["awards"], seed)
+                                                inp["floors"], inp["ceilings"], inp["awards"], seed, inp["soft"])
         known, seen = [], set()
         for f in co["unknown"]:                          # record holders nobody in the cast can be: named fill-ins
             if f["name"] not in seen:
@@ -122,8 +122,10 @@ def run(seed=1, conn_info=CONN_INFO):
                 row = lines.get((f["key"], y), {})
                 for stat in list(row):
                     cap = inp["ceilings"](f, y, stat) if stat in pl.LINE_STATS else None
+                    soft = inp["soft"].get(stat)
+                    cap = min(c for c in (cap, soft) if c is not None) if (cap is not None or soft) else None
                     if cap is not None and row[stat] > cap:
-                        row[stat] = cap
+                        row[stat] = pl.below_cap(int(cap), (f["key"], y), stat)
             pl._scrimmage(lines, f, inp["ceilings"], {})
         problems += validate(members, lines, inp)
         everyone = {m["key"]: m for m in members + fills}
@@ -239,7 +241,7 @@ def apply_run(run_id, conn_info=CONN_INFO, dry_run=False):
         if not got:
             raise SystemExit(f"no run {run_id}")
         report = got[0]
-        blocking = [p for p in report["problems"] if "counted as 0" not in p and not p.startswith("canon adjustment")]
+        blocking = [p for p in report["problems"] if "counted as 0" not in p and not p.startswith(("canon adjustment", "note:"))]
         if blocking:
             raise SystemExit(f"run {run_id} has problems: {blocking[:5]}")
         cur.execute("SELECT count(*) FROM player_seasons WHERE source = 'SYNTH'")
