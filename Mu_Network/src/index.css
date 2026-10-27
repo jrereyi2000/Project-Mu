@@ -497,6 +497,9 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 42px 80px; }
 .stat-category-tabs button { height: 48px; padding: 0; border: 0; border-bottom: 3px solid transparent; color: var(--gray-500); background: none; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .stat-category-tabs button.active, .stat-category-tabs button:hover { color: var(--ink); border-color: var(--team-color, var(--red)); }
 .player-log-note { margin: 10px 2px 0; color: var(--gray-500); font: 600 8px var(--font-mono); line-height: 1.6; }
+.career-history-tag { margin-left: 6px; padding: 1px 4px; border: 1px solid var(--gray-300, #ccc); border-radius: 3px; color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .04em; text-transform: uppercase; vertical-align: middle; }
+.career-total-row td { border-top: 2px solid var(--gray-300, #ccc); font-weight: 700; }
+.career-since { display: block; color: var(--gray-500); font: 600 8px var(--font-mono); text-transform: uppercase; }
 .stat-category-group { display: flex; align-items: flex-end; gap: 38px; }
 .stat-category-group + .stat-category-group { padding-left: 38px; border-left: 1px solid var(--gray-300); }
 .stat-category-group small { height: 48px; display: flex; align-items: center; color: var(--gray-500); font: 700 7px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
@@ -2540,4 +2543,17 @@ a.social-follow-row:hover { background: #171c22; }
 @media (max-width: 560px) {
   .roster-table.with-contract .data-row { grid-template-columns: 1.6fr .6fr .5fr .7fr .8fr; gap: 6px; }
   .roster-contract-link { padding: 5px 8px; }
+}
+
+/* Team hub History tab (components/team/TeamHistory.tsx) */
+.team-history { padding: 0 30px 40px; }
+.team-history-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.team-history-summary div { padding: 12px 14px; border: 1px solid var(--gray-300, #ccc); border-radius: 4px; }
+.team-history-summary b { display: block; font-size: 22px; letter-spacing: -.02em; }
+.team-history-summary span { color: var(--gray-500); font: 600 9px var(--font-mono); text-transform: uppercase; }
+.team-history-table td { vertical-align: top; }
+.team-history-champion td { background: rgba(212, 175, 55, .12); }
+@media (max-width: 640px) {
+  .team-history { padding: 0 16px 32px; }
+  .team-history-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

@@ -68,9 +68,22 @@ class AllocationTest(unittest.TestCase):
         self.assertIn("above the remainder", err)
 
     def test_consistent(self):
-        row = {"completions": 30, "pass_attempts": 20, "rush_yac": 90, "rush_yards": 50}
+        row = {"completions": 30, "pass_attempts": 20, "rush_attempts": 9, "rush_yac": 90, "rush_yards": 50}
         pl.consistent(row)
         self.assertEqual((row["pass_attempts"], row["rush_yac"]), (30, 50))
+        row = {"rush_yards": 12, "rush_tds": 1, "receptions": 2, "rec_tds": 3, "pass_tds": 2}   # no carries, no passes
+        pl.consistent(row)
+        self.assertEqual((row["rush_yards"], row["rush_tds"], row["rec_tds"], row["pass_tds"]), (0, 0, 2, 0))
+
+    def test_needs_an_attempt_when_allocating(self):
+        seasons = {2026: 1, 2027: 1}
+        rb = member("p3", "pool", "RB", "HB", dict(seasons), pid=3)
+        totals = {(1, 2026): {"rush_attempts": 400, "rush_yards": 1800, "rush_tds": 15},
+                  (1, 2027): {"rush_attempts": 0, "rush_yards": 1800, "rush_tds": 15}}
+        rem = {3: {"rush_attempts": 200, "rush_yards": 900, "rush_tds": 8}}
+        lines, _, _ = pl.generate([rb], totals, rem, {}, {}, {}, lambda m, y, s: None, [])
+        self.assertEqual(lines[("p3", 2026)]["rush_yards"], 900)       # 2027 has no carries, so no yards or TDs
+        self.assertEqual(lines[("p3", 2026)]["rush_tds"], 8)
 
 
 def member(key, kind, group, pos, seasons, pid=None, overall=75, production=0.5):

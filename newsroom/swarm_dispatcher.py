@@ -57,6 +57,8 @@ from newsroom.db_tools import (
     get_coach_of_the_year_race,
     get_clutch_profile,
     get_coach_profile,
+    get_player_career,
+    get_team_history,
     get_player_scheme_splits,
     get_team_efficiency_profile,
     get_matchup_edges,
@@ -615,8 +617,8 @@ class EntityTaggingService:
                 SELECT p.id, p.full_name, ps.team_id, ps.overall_rating
                 FROM players p
                 LEFT JOIN player_seasons ps ON p.id = ps.player_id AND ps.source <> 'SYNTH'
-                WHERE p.full_name IS NOT NULL AND length(trim(p.full_name)) > 2 AND p.origin IS NULL
-                ORDER BY ps.overall_rating DESC NULLS LAST, p.id ASC;
+                WHERE p.full_name IS NOT NULL AND length(trim(p.full_name)) > 2
+                ORDER BY (p.origin IS NOT NULL), ps.overall_rating DESC NULLS LAST, p.id ASC;
             """)
 
         raw_players = cur.fetchall()
@@ -820,6 +822,8 @@ class SwarmDispatcher:
             get_coach_of_the_year_race,
             get_clutch_profile,
             get_coach_profile,
+            get_player_career,
+            get_team_history,
             get_player_scheme_splits,
             get_team_efficiency_profile,
             get_matchup_edges,
@@ -1055,6 +1059,7 @@ CRITICAL WRITER RESEARCH TOOLS & OPTIONAL HISTORICAL COMPARISONS:
 2. RESEARCH TOOLS: First, analyze the provided JSON ASSIGNMENT BRIEF. You have autonomous database tools to dive into any game, team, box score, season schedule, standings, or player across the league.
 - If you need a team's complete season schedule and game log (scores, margins, one-score game outcomes, game IDs), call `get_team_season_schedule`.
 - If you need full division standings and point differentials, call `get_season_standings`.
+- If you need a player's whole career in this league (every season since 2026, team by team, with totals and awards), call `get_player_career`; for a franchise's season-by-season history since 2026 (records, playoff runs, coaches, GMs, award winners, titles), call `get_team_history`. Seasons 2026-2034 are the league's reconstructed history: canon, so state them as fact, but they have no game logs or box scores, so never invent single-game details for them.
 - If you need schedule-adjusted team strength (Opponent-Adjusted Game Credit, strength of schedule, expected wins, and which records are lucky or unlucky), call `get_opponent_adjusted_credit` (no team = all 32 ranked; with a team = game-by-game credit log). It also gives each team's Trajectory (Surging to Sliding over the last 4 games).
 - If you need the Coach of the Year race (head coaches ranked by COTY score with record, wins above expectation, roster outperformance and improvement over last season), call `get_coach_of_the_year_race`.
 - If you need who wins and loses late (fourth-quarter comebacks, game-winning drives, blown leads, records when trailing at halftime) for a team or a quarterback, or the league leaders in those, call `get_clutch_profile`.

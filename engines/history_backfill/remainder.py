@@ -145,7 +145,7 @@ def read_pre2026(path=CAREERS_CSV):
     return pre, cols
 
 
-def build(cur, season):
+def build(cur, season, include_synth=False):
     career = read_career(cur, season)
     line_cols = [c for c in COLUMNS]
     captured = read_lines(cur, "SELECT player_id, {cols} FROM season_stat_lines WHERE season BETWEEN %s AND %s",
@@ -153,8 +153,10 @@ def build(cur, season):
     cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'season_stats'")
     have = {r[0] for r in cur.fetchall()}
     ss_cols = [c for c in COLUMNS if c in have]
+    # canon = stored 2026-2034 rows; the backfill's own SYNTH lines only when asked (the post-apply check)
+    synth = "" if include_synth else " AND source <> 'SYNTH'"
     canon = read_lines(cur, "SELECT player_id, {cols} FROM season_stats WHERE season BETWEEN %s AND %s "
-                            "AND player_id IS NOT NULL", (FIRST_MU, LAST_GENERATED), ss_cols)
+                            "AND player_id IS NOT NULL" + synth, (FIRST_MU, LAST_GENERATED), ss_cols)
     pre, pre_cols = read_pre2026()
     first = read_first_seasons(cur)
     result = compute(career, captured, canon, pre, first, pre_cols)

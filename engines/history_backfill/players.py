@@ -296,7 +296,7 @@ def apply_run(run_id, conn_info=CONN_INFO, dry_run=False):
                                 VALUES (%s, %s, %s, %s, {', '.join(['%s'] * len(row))}, 'SYNTH')""",
                             (y, p, team, pos, *row.values()))
                 counts[t] += 1
-        report["applied"] = {"counts": dict(counts), "canon_changes": canon_changes}
+        report["applied"] = {"counts": dict(counts), "canon_changes": canon_changes, "linked_facts": link_facts(cur)}
         cur.execute("UPDATE history_player_runs SET applied_at = now(), report = %s WHERE id = %s",
                     (json.dumps(report, default=str), run_id))
         if dry_run:
@@ -304,6 +304,33 @@ def apply_run(run_id, conn_info=CONN_INFO, dry_run=False):
         else:
             conn.commit()
     return dict(counts)
+
+
+FACT_TABLES = (("awards", "player_name"), ("league_record_entries", "holder"), ("franchise_records", "holder"))
+
+
+def link_facts(cur, first=2026, last=2034):
+    """Point every unlinked 2026-2034 award and record-book row at its player: the one with that full name who has
+    a player_seasons row that season (on the row's team when it names one). Returns [(table, row id, player id)]."""
+    cur.execute("""SELECT ps.season, ps.team_id, p.id, COALESCE(p.full_name, p.player_name)
+                   FROM player_seasons ps JOIN players p ON p.id = ps.player_id
+                   WHERE ps.season BETWEEN %s AND %s""", (first, last))
+    by = defaultdict(set)
+    for y, team, pid, name in cur.fetchall():
+        k = cast_mod.name_key(name)
+        by[(k, y, None)].add(pid)
+        by[(k, y, team)].add(pid)
+    linked = []
+    for table, col in FACT_TABLES:
+        cur.execute(f"SELECT id, season, team_id, {col} FROM {table} WHERE player_id IS NULL AND {col} IS NOT NULL "
+                    f"AND season BETWEEN %s AND %s", (first, last))
+        for row_id, y, team, name in cur.fetchall():
+            cands = by.get((cast_mod.name_key(name), y, team)) or by.get((cast_mod.name_key(name), y, None)) or set()
+            if len(cands) == 1:
+                pid = next(iter(cands))
+                cur.execute(f"UPDATE {table} SET player_id = %s WHERE id = %s", (pid, row_id))
+                linked.append((table, row_id, pid))
+    return linked
 
 
 def revert_players(conn_info=CONN_INFO):
@@ -315,6 +342,8 @@ def revert_players(conn_info=CONN_INFO):
             for ch in (report.get("applied") or {}).get("canon_changes", []):
                 cur.execute(f"UPDATE season_stats SET {', '.join(f'{c} = %s' for c in ch['old'])} WHERE id = %s",
                             (*ch["old"].values(), ch["id"]))
+            for table, row_id, _pid in (report.get("applied") or {}).get("linked_facts", []):
+                cur.execute(f"UPDATE {table} SET player_id = NULL WHERE id = %s", (row_id,))
             cur.execute("UPDATE history_player_runs SET applied_at = NULL WHERE id = %s", (run_id,))
         for t in PLAYER_TABLES:
             cur.execute(f"DELETE FROM {t} WHERE source = 'SYNTH'")
@@ -323,3 +352,18 @@ def revert_players(conn_info=CONN_INFO):
         n += cur.rowcount
         conn.commit()
     return n
+
+
+def link_applied_facts(conn_info=CONN_INFO):
+    """link_facts for the applied run (it predates the linking step), kept in its report for revert."""
+    with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, report FROM history_player_runs WHERE applied_at IS NOT NULL")
+        got = cur.fetchone()
+        if not got:
+            raise SystemExit("no applied run")
+        run_id, report = got
+        linked = link_facts(cur)
+        report.setdefault("applied", {}).setdefault("linked_facts", []).extend(linked)
+        cur.execute("UPDATE history_player_runs SET report = %s WHERE id = %s", (json.dumps(report, default=str), run_id))
+        conn.commit()
+    return len(linked)

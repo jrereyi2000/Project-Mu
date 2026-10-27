@@ -128,9 +128,16 @@ def split_exact(total, weights):
     return out
 
 
-# allocation order for a constrained player: a stat capped by another comes after it
-CAPPED_BY = {"completions": "pass_attempts", "kick_fgm": "kick_fga", "kick_xpm": "kick_xpa"}
-ALLOC_ORDER = tuple(s for s in LINE_STATS if s not in CAPPED_BY) + tuple(CAPPED_BY)
+# allocation order for a constrained player: a stat capped by another comes after it. CAPPED_BY: a count that
+# can't exceed its base (completions <= attempts, TDs <= catches); NEEDS: yards that need at least one attempt.
+CAPPED_BY = {"completions": "pass_attempts", "kick_fgm": "kick_fga", "kick_xpm": "kick_xpa",
+             "pass_tds": "completions", "interceptions": "pass_attempts", "rush_tds": "rush_attempts",
+             "rec_tds": "receptions"}            # not rush_btk: Madden counts a receiver's broken tackles there too
+NEEDS = {"pass_yards": "pass_attempts", "rush_yards": "rush_attempts", "rush_yac": "rush_attempts",
+         "rec_yards": "receptions", "rec_rac": "receptions"}
+BASES = ("pass_attempts", "rush_attempts", "receptions", "kick_fga", "kick_xpa")
+ALLOC_ORDER = (tuple(s for s in LINE_STATS if s not in CAPPED_BY and s not in NEEDS)
+               + ("completions",) + tuple(s for s in CAPPED_BY if s != "completions") + tuple(NEEDS))
 
 
 def split_capped(total, weights, caps):
@@ -165,8 +172,10 @@ def allocate(total, weights, pins, floors, caps):
             rest = 0
         free = {y: w for y, w in weights.items() if y not in fixed}
         got, unplaced = split_capped(rest, free, {y: c for y, c in caps.items() if y in free})
-        if unplaced:
-            err = f"{unplaced} more than its seasons can hold"
+        if unplaced:                                     # the exact sum wins over the cap
+            err = f"{unplaced} more than its seasons can hold under their caps"
+            for y, v in split_exact(unplaced, free).items():
+                got[y] += v
         short = {y: floors[y] for y in free if y in floors and got[y] < floors[y]}
         if not short:
             return {**fixed, **got}, err
@@ -256,7 +265,11 @@ def generate(cast, totals, remainders, canon, pins, floors, ceilings, awards, se
                     adjustments.append((m["player_id"], y, stat, canon[(m["player_id"], y)][stat],
                                         lines[(m["key"], y)][stat]))
                 continue
-            caps = {y: lines[(m["key"], y)].get(CAPPED_BY[stat], 0) for y in seasons} if stat in CAPPED_BY else {}
+            caps = {}
+            if stat in CAPPED_BY:
+                caps = {y: lines[(m["key"], y)].get(CAPPED_BY[stat], 0) for y in seasons}
+            elif stat in NEEDS:
+                caps = {y: (0 if not lines[(m["key"], y)].get(NEEDS[stat], 0) else 10 ** 7) for y in seasons}
             got, err = allocate(r, {y: prov[(m["key"], y)][stat] for y in seasons},
                                 {y: pins[(m["key"], y)][stat] for y in seasons if stat in pins.get((m["key"], y), {})},
                                 {y: floors[(m["key"], y)][stat] for y in seasons if stat in floors.get((m["key"], y), {})},
@@ -303,6 +316,7 @@ def generate(cast, totals, remainders, canon, pins, floors, ceilings, awards, se
         if "def_solo" in row or "def_assists" in row:
             row["def_tackles"] = row.get("def_solo", 0) + row.get("def_assists", 0)
         if not by_key[key[0]]["constrained"]:
+            support_pins(row, pins.get(key, {}), lambda base, k=key: ceilings(by_key[k[0]], k[1], base))
             consistent(row)                              # a constrained line keeps Madden's own sums
     gp = games_played(lines, members, sh, seed)
     for key, g in gp.items():
@@ -322,6 +336,31 @@ def consistent(row):
     for part, whole in (("rush_yac", "rush_yards"), ("rec_rac", "rec_yards"), ("punt_net_yards", "punt_yards")):
         if row.get(part, 0) > max(0, row.get(whole, 0)):
             row[part] = max(0, row.get(whole, 0))
+    for stat, base in CAPPED_BY.items():                 # a count can't exceed its base...
+        if stat not in ("completions", "kick_fgm", "kick_xpm") and row.get(stat, 0) > row.get(base, 0):
+            row[stat] = row.get(base, 0)
+    for stat, base in NEEDS.items():                     # ...and yards need an attempt
+        if row.get(stat) and not row.get(base):
+            row[stat] = 0
+
+
+# a pinned record season needs its base: league ratios (2035-2036) for the attempts behind pinned yards and TDs
+SUPPORT = {"pass_yards": (("pass_attempts", 1 / 7.3), ("completions", 0.65 / 7.3)),
+           "pass_tds": (("completions", 1.0),), "rush_yards": (("rush_attempts", 1 / 4.6),),
+           "rush_tds": (("rush_attempts", 1.0),), "rec_yards": (("receptions", 1 / 12.5),),
+           "rec_tds": (("receptions", 1.0),)}
+
+
+def support_pins(row, pinned, cap=lambda base: None):
+    """Raise the attempts or catches behind a pinned stat toward what the record needs, never past the base's own
+    record ceiling (cap(base) -> max or None) and never below one (pure, in place)."""
+    for stat in pinned:
+        for base, ratio in SUPPORT.get(stat, ()):
+            need = max(1, int(math.ceil(row.get(stat, 0) * ratio)))
+            ceiling = cap(base)
+            if ceiling is not None and base not in pinned:
+                need = max(1, min(need, ceiling))
+            row[base] = max(row.get(base, 0), need)
 
 
 def games_played(lines, members, sh, seed=1):
@@ -461,7 +500,7 @@ def inputs(cur, cast_out, season=2036):
         remainders[pid] = gen
 
     cols = [c for c in PASS + RUSH + REC if c not in ("rush_btk", "rush_yac", "rec_rac")]
-    cur.execute(f"SELECT player_id, season, {', '.join(cols)} FROM season_stats WHERE season BETWEEN %s AND %s "
+    cur.execute(f"SELECT player_id, season, {', '.join(cols)} FROM season_stats WHERE source <> 'SYNTH' AND season BETWEEN %s AND %s "
                 f"AND player_id IS NOT NULL", (cast_mod.FIRST, cast_mod.LAST))
     # a seeded canon row's zeros are "not stated", not facts: only its non-zero columns are kept
     canon = {(r[0], r[1]): {c: v for c, v in zip(cols, r[2:]) if v} for r in cur.fetchall()}

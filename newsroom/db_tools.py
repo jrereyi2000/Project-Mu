@@ -13,6 +13,7 @@ from engines.game_script_engine import get_script, render_script
 from engines import clutch_engine as clutch
 from engines.player_splits import (BLEND_GAMES, DIMENSIONS, MIN_GAMES, compute_splits, defense_groups,
                                    player_lines, stat_group, STATS as SPLIT_STATS)
+import decimal
 import json
 import re
 
@@ -370,8 +371,8 @@ def get_player_season_stats(player_identifier: str) -> str:
                 else:
                     cur.execute("""
                         SELECT id FROM players
-                        WHERE (player_name ILIKE %s OR full_name ILIKE %s) AND origin IS NULL
-                        ORDER BY LENGTH(player_name) ASC
+                        WHERE player_name ILIKE %s OR full_name ILIKE %s
+                        ORDER BY (origin IS NOT NULL), LENGTH(player_name) ASC   -- today's player before a namesake
                         LIMIT 1;
                     """, (f"%{clean_ident}%", f"%{clean_ident}%"))
                     row = cur.fetchone()
@@ -580,6 +581,98 @@ def get_coach_profile(team_identifier: str, season: int = 0) -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
+CAREER_STATS = ("games_played", "completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions",
+                "rush_attempts", "rush_yards", "rush_tds", "receptions", "rec_yards", "rec_tds", "def_tackles",
+                "def_sacks", "def_tfl", "def_ints", "def_deflections", "def_forced_fumbles", "kick_fgm", "kick_fga",
+                "punt_punts", "blk_sacks_allowed")
+HISTORY_CAPTURED_FROM = 2035      # seasons before this are reconstructed league history (canon, docs/HISTORY_BACKFILL_PLAN.md)
+
+
+@tool
+def get_player_career(player_identifier: str) -> str:
+    """Fetch a player's whole career in this league, season by season since 2026 (the first season the league
+    records): team, games and every stat group he has, with career totals. 2026-2034 seasons are the league's
+    reconstructed history: canon, so write about them as fact, but there are no game logs or box scores for them.
+    Includes his awards. Accepts a player name or ID."""
+    try:
+        s_val = resolve_season(0)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                pid = _resolve_player_id(cur, player_identifier)
+                if not pid:
+                    return f"Player '{player_identifier}' not found."
+                cur.execute("SELECT COALESCE(full_name, player_name), origin FROM players WHERE id = %s", (pid,))
+                name, origin = cur.fetchone()
+                cols = ", ".join(f"l.{c}" for c in CAREER_STATS)
+                cur.execute(f"""SELECT l.season, t.abbreviation, l.position, {cols}
+                                FROM season_stat_lines l JOIN teams t ON t.id = l.team_id
+                                WHERE l.player_id = %s AND l.season <= %s ORDER BY l.season""", (pid, s_val))
+                seasons, totals = [], dict.fromkeys(CAREER_STATS, 0)
+                for r in cur.fetchall():
+                    stats = {c: (float(v) if isinstance(v, decimal.Decimal) else v)
+                             for c, v in zip(CAREER_STATS, r[3:]) if v}
+                    for c, v in stats.items():
+                        totals[c] += v
+                    seasons.append({"season": r[0], "team": r[1], "position": r[2],
+                                    "history": r[0] < HISTORY_CAPTURED_FROM, **stats})
+                cur.execute("SELECT season, award_type FROM awards WHERE player_id = %s AND season <= %s "
+                            "ORDER BY season", (pid, s_val))
+                awards = [f"{y} {a}" for y, a in cur.fetchall()]
+                return json.dumps({
+                    "player": name, "since": seasons[0]["season"] if seasons else None,
+                    "note": ("Retired before 2035: his whole career is reconstructed league history."
+                             if origin == "HISTORY" else
+                             "A fill-in from the league's reconstructed history (not a current player)."
+                             if origin == "HISTORY_FILLIN" else None),
+                    "seasons": seasons, "career_totals": {c: v for c, v in totals.items() if v},
+                    "awards": awards}, indent=2, default=str)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@tool
+def get_team_history(team_identifier: str) -> str:
+    """Fetch a franchise's season-by-season history in this league since 2026: record, points, division place,
+    playoff seed and result, head coach, GM and the team's award winners, plus totals (playoff trips, Super Bowl trips,
+    titles). 2026-2034 are reconstructed league history: canon, write about them as fact. Accepts team name,
+    abbreviation, or team ID."""
+    try:
+        s_val = resolve_season(0)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                team_id = _resolve_team_id(cur, team_identifier)
+                if not team_id:
+                    return f"Team '{team_identifier}' not found."
+                cur.execute("""SELECT r.season, r.wins, r.losses, r.ties, r.points_for, r.points_against,
+                                      r.division_place, r.conference_seed, r.playoff_result, c.coach_name, g.gm_name
+                               FROM team_season_results r
+                               LEFT JOIN coaches c ON c.id = r.head_coach_id
+                               LEFT JOIN gm_profiles g ON g.id = r.gm_id
+                               WHERE r.team_id = %s AND r.season < %s ORDER BY r.season""", (team_id, s_val))
+                keys = ("season", "wins", "losses", "ties", "points_for", "points_against", "division_place",
+                        "conference_seed", "playoff_result", "head_coach", "gm")
+                seasons = [dict(zip(keys, r)) for r in cur.fetchall()]
+                cur.execute("SELECT season, award_type, COALESCE(player_name, coach_name) FROM awards "
+                            "WHERE team_id = %s AND season < %s ORDER BY season", (team_id, s_val))
+                awards = {}
+                for y, a, n in cur.fetchall():
+                    awards.setdefault(y, []).append(f"{a}: {n}")
+                for s in seasons:
+                    s["history"] = s["season"] < HISTORY_CAPTURED_FROM
+                    s["awards"] = awards.get(s["season"], [])
+                cur.execute("SELECT name FROM teams WHERE id = %s", (team_id,))
+                return json.dumps({
+                    "team": cur.fetchone()[0], "seasons": seasons,
+                    "totals": {"wins": sum(s["wins"] for s in seasons), "losses": sum(s["losses"] for s in seasons),
+                               "playoff_trips": sum(1 for s in seasons if s["playoff_result"] != "MISSED"),
+                               "super_bowl_trips": [s["season"] for s in seasons
+                                                    if s["playoff_result"] in ("CHAMPION", "SUPER_BOWL_LOSS")],
+                               "titles": [s["season"] for s in seasons if s["playoff_result"] == "CHAMPION"]}},
+                    indent=2)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
 @tool
 def get_player_scheme_splits(player_identifier: str, seasons: int = 2) -> str:
     """Fetch how a QB, running back, receiver or tight end produces against different kinds of defenses over the last `seasons` seasons (default 2: this one and last): per-game averages and the change from his own average against Strong / Average / Weak scoring defenses (points allowed), pass rushes and coverages (Madden ranks). Only real game lines count. Accepts player name or player ID."""
@@ -592,8 +685,8 @@ def get_player_scheme_splits(player_identifier: str, seasons: int = 2) -> str:
                     target_id = int(ident)
                 else:
                     cur.execute("""
-                        SELECT id FROM players WHERE (player_name ILIKE %s OR full_name ILIKE %s) AND origin IS NULL
-                        ORDER BY LENGTH(player_name) ASC LIMIT 1
+                        SELECT id FROM players WHERE player_name ILIKE %s OR full_name ILIKE %s
+                        ORDER BY (origin IS NOT NULL), LENGTH(player_name) ASC LIMIT 1
                     """, (f"%{ident}%", f"%{ident}%"))
                     row = cur.fetchone()
                     target_id = row[0] if row else None
@@ -2146,8 +2239,8 @@ def get_player_articles(player_identifier: str, limit: int = 5) -> str:
                         SELECT p.id, p.full_name 
                         FROM players p
                         LEFT JOIN player_seasons ps ON p.id = ps.player_id AND ps.source <> 'SYNTH'
-                        WHERE (p.full_name ILIKE %s OR p.player_name ILIKE %s) AND p.origin IS NULL
-                        ORDER BY LENGTH(p.full_name) ASC, ps.overall_rating DESC NULLS LAST, p.id ASC LIMIT 1;
+                        WHERE p.full_name ILIKE %s OR p.player_name ILIKE %s
+                        ORDER BY (p.origin IS NOT NULL), LENGTH(p.full_name) ASC, ps.overall_rating DESC NULLS LAST, p.id ASC LIMIT 1;
                     """, (f"%{clean_id}%", f"%{clean_id}%"))
                     row = cur.fetchone()
                     if row:
@@ -2159,7 +2252,7 @@ def get_player_articles(player_identifier: str, limit: int = 5) -> str:
                 cur.execute("""
                     SELECT p.full_name, t.name, t.city, t.abbreviation
                     FROM players p
-                    LEFT JOIN player_seasons ps ON p.id = ps.player_id AND ps.source <> 'SYNTH'
+                    LEFT JOIN player_seasons ps ON p.id = ps.player_id
                     LEFT JOIN teams t ON ps.team_id = t.id
                     WHERE p.id = %s
                     ORDER BY ps.season DESC NULLS LAST LIMIT 1;
@@ -2549,8 +2642,8 @@ def _resolve_player_id(cur, identifier: str):
     if ident.isdigit():
         return int(ident)
     cur.execute("""
-        SELECT id FROM players WHERE (player_name ILIKE %s OR full_name ILIKE %s) AND origin IS NULL
-        ORDER BY LENGTH(player_name) ASC LIMIT 1;
+        SELECT id FROM players WHERE player_name ILIKE %s OR full_name ILIKE %s
+        ORDER BY (origin IS NOT NULL), LENGTH(player_name) ASC LIMIT 1;
     """, (f"%{ident}%", f"%{ident}%"))
     row = cur.fetchone()
     return row[0] if row else None

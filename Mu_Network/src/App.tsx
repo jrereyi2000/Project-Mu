@@ -5,6 +5,7 @@ import DebugPage from "./DebugPage";
 import { DraftPage } from "./DraftPage";
 import { NapperPage } from "./NapperPage";
 import FrontOfficeTab, { type ContractFocus } from "./components/team/FrontOfficeTab";
+import TeamHistory from "./components/team/TeamHistory";
 import AwardsPage from "./components/history/AwardsPage";
 import FranchiseRecords from "./components/history/FranchiseRecords";
 import PlayerHonors from "./components/history/PlayerHonors";
@@ -255,7 +256,7 @@ function getTeamPosition(abbr: string) {
 
 function TeamPage({ team }: { team: Team }) {
   const systemStatus = useContext(SystemContext);
-  const [tab, setTab] = useState<"main" | "roster" | "stats" | "front office">("main");
+  const [tab, setTab] = useState<"main" | "roster" | "stats" | "history" | "front office">("main");
   // A Roster row's "Contract" link opens the Front Office tab on that player's contract row.
   const [contractFocus, setContractFocus] = useState<ContractFocus | null>(null);
   const [teamData, setTeamData] = useState<any>(null);
@@ -360,7 +361,7 @@ function TeamPage({ team }: { team: Team }) {
       </section>
 
       <nav className="team-tabs" aria-label={`${team.name} sections`}>
-        {(["main", "roster", "stats", "front office"] as const).map((item) => (
+        {(["main", "roster", "stats", "history", "front office"] as const).map((item) => (
           <button className={tab === item ? "active" : ""} onClick={() => { setTab(item); setContractFocus(null); }} key={item}>
             {item}
           </button>
@@ -570,6 +571,7 @@ function TeamPage({ team }: { team: Team }) {
           </section>
       )}
 
+      {tab === "history" && <TeamHistory abbr={team.abbr} />}
       {tab === "front office" && <FrontOfficeTab abbr={team.abbr} season={systemStatus.season} focus={contractFocus} />}
     </main>
   );
@@ -1191,11 +1193,21 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
       .catch(err => console.error("Error loading player:", err));
   }, [playerId, gameLogSeason]);
 
+  // A player who only played in the 2026-2034 league history opens on his last season, not the current one.
+  const historyOnlySeasons: any[] = playerData?.career_stats || [];
+  const historyOnly = historyOnlySeasons.length > 0 && historyOnlySeasons.every((s: any) => s.history);
+  useEffect(() => {
+    if (historyOnly && gameLogSeason === systemStatus.season) setGameLogSeason(Number(historyOnlySeasons[0].season));
+  }, [historyOnly, gameLogSeason, systemStatus.season]);
+
   if (!playerData || playerData.error) {
     return <main className="player-page" style={{ padding: "4rem", textAlign: "center" }}>Loading player...</main>;
   }
 
   const { player, game_log, career_stats } = playerData;
+  const careerTotals: any = playerData.career_totals;
+  const hasHistory = (career_stats || []).some((s: any) => s.history);
+  const selectedIsHistory = (career_stats || []).some((s: any) => s.season === gameLogSeason && s.history);
   
   const visibleGames = showAllGames ? game_log : game_log.slice(-5);
   const isQuarterback = player.position === "QB";
@@ -1230,7 +1242,7 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
   const availablePlayerSeasons: number[] = Array.from(
     new Set([
       ...(career_stats || []).map((s: any) => Number(s.season)),
-      systemStatus.season,
+      ...(historyOnly ? [] : [systemStatus.season]),
     ])
   ).filter((s) => !Number.isNaN(s) && s > 2000).sort((a, b) => b - a);
 
@@ -1313,12 +1325,20 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
                   </div>
                 )}
               </div>
+              {!selectedIsHistory && (
               <button onClick={() => setShowAllGames(!showAllGames)}>
                 {showAllGames ? "Show last 5 games" : "Show all 17 games"}
                 <Chevron direction={showAllGames ? "up" : "down"} />
               </button>
+              )}
             </div>
           </div>
+          {selectedIsHistory ? (
+            <p className="player-log-note">
+              {gameLogSeason} is reconstructed league history: the season totals are in Career Stats below, and no
+              game logs were kept.
+            </p>
+          ) : (
           <div className="player-table-scroll">
             <table className="player-history-table">
               <thead>
@@ -1374,7 +1394,8 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
               </tbody>
             </table>
           </div>
-          {missingGameLines && (
+          )}
+          {missingGameLines && !selectedIsHistory && (
             <p className="player-log-note">— means no line was recorded for that game. Season totals are in Career Stats.</p>
           )}
         </section>
@@ -1406,6 +1427,7 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
                     >
                       <td>
                         <strong>{s.season}</strong>
+                        {s.history && <span className="career-history-tag" title="Reconstructed league history (2026–2034)">hist</span>}
                         {isSelected && <span style={{ marginLeft: "6px", color: "var(--team-color, #e31837)", fontSize: "11px" }}>●</span>}
                       </td>
                       <td><a href={`#team-${s.team_abbr.toLowerCase()}`} onClick={(e) => e.stopPropagation()}><img src={logo(s.team_abbr.toLowerCase())} alt="" /><span>{s.team_name}</span></a></td>
@@ -1433,9 +1455,42 @@ function PlayerPage({ category, playerId }: { category: string; playerId: number
                   </tr>
                 );
               })}
+              {careerTotals && career_stats.length > 1 && (
+                <tr className="career-total-row">
+                  <td><strong>Career</strong><span className="career-since">since {careerTotals.since}</span></td>
+                  <td>{careerTotals.seasons} seasons</td>
+                  <td>{careerTotals.gp || 0}</td>
+                  {unitGroup ? (
+                    careerCols.map((col) => <td key={col.label}>{col.value(careerTotals)}</td>)
+                  ) : isQuarterback ? (
+                    <>
+                      <td>{careerTotals.completions || 0}/{careerTotals.pass_attempts || 0}</td>
+                      <td>{careerTotals.pass_yards || 0}</td>
+                      <td>{careerTotals.pass_tds || 0}</td>
+                      <td>{careerTotals.rush_yards || 0}</td>
+                      <td>{careerTotals.rush_tds || 0}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td>{careerTotals.rush_attempts || 0}</td>
+                      <td>{careerTotals.rush_yards || 0}</td>
+                      <td>{careerTotals.rush_tds || 0}</td>
+                      <td>{careerTotals.receptions || 0}</td>
+                      <td>{careerTotals.rec_yards || 0}</td>
+                      <td>{careerTotals.rec_tds || 0}</td>
+                    </>
+                  )}
+                </tr>
+              )}
               </tbody>
             </table>
           </div>
+          {hasHistory && (
+            <p className="player-log-note">
+              <span className="career-history-tag">hist</span> seasons are reconstructed league history (2026–2034): season
+              totals only, no game logs. Career totals count every season in this league, since 2026.
+            </p>
+          )}
         </section>
 
         {playerStories.length > 0 && (
@@ -5008,12 +5063,14 @@ type SearchPlayerResult = {
   id: number;
   name: string;
   position: string;
-  overall: number;
+  overall: number | null;
   number: number | null;
   teamAbbr: string;
   teamDisplayAbbr: string;
   teamName: string;
   espn_id?: number | string | null;
+  history?: boolean;          // played only in 2026-2034 league history
+  lastSeason?: number | null;
 };
 
 function GlobalSearchModal({ close }: { close: () => void }) {
@@ -5217,7 +5274,9 @@ function GlobalSearchModal({ close }: { close: () => void }) {
                             {player.number ? `#${player.number} · ` : ""}{player.position} · {player.teamDisplayAbbr || player.teamName}
                           </small>
                         </div>
-                        <span className="global-search-item-ovr">{player.overall} OVR</span>
+                        <span className="global-search-item-ovr">
+                          {player.history ? `History · last ${player.lastSeason}` : `${player.overall} OVR`}
+                        </span>
                       </div>
                     );
                   })}

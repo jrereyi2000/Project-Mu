@@ -314,6 +314,66 @@ def get_team_schedule(abbr: str, season: Optional[int] = None):
                 g['away_abbr'] = display_team_abbr(g['away_abbr'])
             return schedule_games
 
+@app.get("/api/team/{abbr}/history")
+def get_team_history(abbr: str):
+    """Season-by-season franchise history (PROJECT_SPEC §3.3j; docs/HISTORY_BACKFILL_PLAN.md phase 4): every archived
+    season in team_season_results (2026-2034 reconstructed league history, 2035 on from the season archive), the
+    current season so far when it isn't archived yet, the head coach, GM, playoff result and the team's award
+    winners, plus totals since 2026."""
+    season, _ = season_week(None)
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM teams WHERE (abbreviation = %s OR abbreviation = %s)",
+                        (abbr.upper(), normalize_team_abbr(abbr)))
+            team_res = cur.fetchone()
+            if not team_res:
+                return {"error": "Team not found"}
+            team_id = team_res["id"]
+            cur.execute("""
+                SELECT r.season, r.wins, r.losses, r.ties, r.points_for, r.points_against, r.division_place,
+                       r.conference_seed, r.playoff_result, r.playoff_wins, r.playoff_losses, r.source,
+                       c.coach_name, g.gm_name
+                FROM team_season_results r
+                LEFT JOIN coaches c ON c.id = r.head_coach_id
+                LEFT JOIN gm_profiles g ON g.id = r.gm_id
+                WHERE r.team_id = %s
+                ORDER BY r.season DESC
+            """, (team_id,))
+            seasons = [dict(r) for r in cur.fetchall()]
+            if not any(r["season"] == season for r in seasons):
+                cur.execute("""
+                    SELECT ts.wins, ts.losses, c.coach_name
+                    FROM team_seasons ts
+                    LEFT JOIN coach_tenures ct ON ct.team_id = ts.team_id AND ct.start_season <= ts.season
+                         AND (ct.end_season IS NULL OR ct.end_season >= ts.season)
+                    LEFT JOIN coaches c ON c.id = ct.coach_id
+                    WHERE ts.team_id = %s AND ts.season = %s LIMIT 1
+                """, (team_id, season))
+                cur_row = cur.fetchone()
+                if cur_row:
+                    seasons.insert(0, {"season": season, "wins": cur_row["wins"], "losses": cur_row["losses"],
+                                       "ties": 0, "coach_name": cur_row["coach_name"], "in_progress": True})
+            cur.execute("""
+                SELECT season, award_type, COALESCE(player_name, coach_name) AS name
+                FROM awards WHERE team_id = %s ORDER BY season, award_type
+            """, (team_id,))
+            awards = {}
+            for a in cur.fetchall():
+                awards.setdefault(a["season"], []).append({"award": a["award_type"], "name": a["name"]})
+            for r in seasons:
+                r["history"] = r["season"] < HISTORY_CAPTURED_FROM
+                r["awards"] = awards.get(r["season"], [])
+            done = [r for r in seasons if not r.get("in_progress")]
+            summary = {
+                "since": min((r["season"] for r in seasons), default=None),
+                "wins": sum(r["wins"] or 0 for r in done), "losses": sum(r["losses"] or 0 for r in done),
+                "playoffs": sum(1 for r in done if r.get("playoff_result") not in (None, "MISSED")),
+                "titles": [r["season"] for r in done if r.get("playoff_result") == "CHAMPION"],
+                "super_bowls": [r["season"] for r in done if r.get("playoff_result") in ("CHAMPION", "SUPER_BOWL_LOSS")],
+            }
+            return {"seasons": seasons, "summary": summary}
+
+
 @app.get("/api/team/{abbr}/news")
 def get_team_news(abbr: str, season: Optional[int] = None, limit: Optional[int] = None):
     """
@@ -882,7 +942,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                 LEFT JOIN season_overall_ranks sor ON sor.season = ps.season AND sor.player_id = ps.player_id
                 LEFT JOIN games g ON g.season = ps.season AND (g.home_team_id = ps.team_id OR g.away_team_id = ps.team_id)
                 LEFT JOIN player_stats st ON st.game_id = g.id AND st.player_id = ps.player_id AND st.team_id = ps.team_id
-                WHERE ps.player_id = %s AND ps.source <> 'SYNTH'    -- generated 2026-2034 seasons wait for phase 4
+                WHERE ps.player_id = %s AND ps.source <> 'SYNTH'    -- generated seasons come from season_stat_lines below
                 GROUP BY ps.season, t.name, t.abbreviation, sor.total_fpts, sor.overall_rank
                 ORDER BY ps.season DESC
             """, (id,))
@@ -930,6 +990,37 @@ def get_player_api(id: int, season: Optional[int] = None):
                 FROM season_stat_lines WHERE player_id = %s AND source <> 'SYNTH'
             """, (id,))
             lines = {r["season"]: r for r in cur.fetchall()}
+            # 2026-2034 league history (docs/HISTORY_BACKFILL_PLAN.md phase 4): every stat group of a generated season
+            # comes from season_stat_lines; a seeded canon season (the Panthers' 2032-2034 lines) keeps its own
+            # offense and takes the rest from the generated row. Both read "history" on the page.
+            cur.execute("""
+                SELECT l.season, t.name AS team_name, t.abbreviation AS team_abbr, l.games_played AS gp,
+                       l.completions, l.pass_attempts, l.pass_yards, l.pass_tds, l.interceptions,
+                       l.rush_attempts, l.rush_yards, l.rush_tds, l.receptions, l.rec_yards, l.rec_tds,
+                       l.def_tackles, l.def_solo, l.def_assists, l.def_sacks, l.def_tfl, l.def_ints, l.def_int_yds,
+                       l.def_deflections, l.def_forced_fumbles, l.def_fumble_recoveries, l.def_tds, l.def_safeties,
+                       l.kick_fgm, l.kick_fga, l.kick_xpm, l.kick_xpa, l.punt_punts, l.punt_yards, l.punt_average,
+                       l.punt_net_average, l.punt_inside_20, l.kr_returns, l.kr_yards, l.pr_returns, l.pr_yards,
+                       l.blk_sacks_allowed
+                FROM season_stat_lines l JOIN teams t ON t.id = l.team_id
+                WHERE l.player_id = %s AND l.source = 'SYNTH'
+            """, (id,))
+            for h in cur.fetchall():
+                h = {k: (_n(v) if k not in ("season", "team_name", "team_abbr", "gp") else v) for k, v in h.items()}
+                row = career_by_season.get(h["season"])
+                if row is None:
+                    row = {"season": h["season"], "total_fpts": 0, "overall_rank": None}
+                    career.append(row)
+                    career_by_season[h["season"]] = row
+                for k, v in h.items():
+                    if v is not None and not row.get(k):
+                        row[k] = v
+                row["history"] = True
+                row["has_capture_line"] = True
+            for c in career:
+                if c["season"] < HISTORY_CAPTURED_FROM:
+                    c["history"] = True
+            career.sort(key=lambda x: x["season"], reverse=True)
             for c in career:
                 line = lines.get(c["season"])
                 c["has_capture_line"] = line is not None
@@ -1101,6 +1192,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                 "awards": history_api.fetch_player_awards(cur, id),
                 "game_log": games,
                 "career_stats": career,
+                "career_totals": career_totals(career),
                 "weekly_outlook": weekly_outlook
             }
 
@@ -1123,6 +1215,32 @@ def calculate_passer_rating(completions, attempts, yards, touchdowns, intercepti
 
 # ─── Defense & special teams (Season Stats capture: season_stat_lines / game_stat_lines) ───
 # Madden lists only its leaders in each category (defenders by tackles), so these tables rank listed players.
+HISTORY_CAPTURED_FROM = 2035     # seasons before this are reconstructed league history (B15: canon)
+CAREER_SUM = ("gp", "completions", "pass_attempts", "pass_yards", "pass_tds", "interceptions", "rush_attempts",
+              "rush_yards", "rush_tds", "receptions", "rec_yards", "rec_tds", "def_tackles", "def_solo", "def_sacks",
+              "def_tfl", "def_ints", "def_deflections", "def_forced_fumbles", "def_fumble_recoveries", "def_tds",
+              "kick_fgm", "kick_fga", "kick_xpm", "kick_xpa", "punt_punts", "punt_yards", "punt_inside_20",
+              "blk_sacks_allowed")
+
+
+def career_totals(career):
+    """The player's league career (since 2026, the first season this league records): counting stats summed over
+    every season row, plus the first season and how many are reconstructed history (pure)."""
+    if not career:
+        return None
+    out = {k: 0 for k in CAREER_SUM}
+    for c in career:
+        for k in CAREER_SUM:
+            v = c.get(k)
+            if isinstance(v, (int, float)):
+                out[k] += v
+    out = {k: (round(v, 1) if isinstance(v, float) else v) for k, v in out.items()}
+    out["seasons"] = len(career)
+    out["since"] = min(c["season"] for c in career)
+    out["history_seasons"] = sum(1 for c in career if c.get("history"))
+    return out
+
+
 def _n(v):
     """Display number: whole numbers without .0 (sacks come in halves)."""
     if v is None:
@@ -2537,34 +2655,37 @@ def search_global(q: str = "", season: Optional[int] = None, limit: int = 20):
                        COALESCE(ps_curr.position, ps_latest.position, 'ATH') as position,
                        COALESCE(ps_curr.overall_rating, ps_latest.overall_rating, 75) as overall_rating,
                        COALESCE(t_curr.abbreviation, t_latest.abbreviation, 'FA') as team_abbr,
-                       COALESCE(t_curr.name, t_latest.name, 'Free Agent') as team_name
+                       COALESCE(t_curr.name, t_latest.name, 'Free Agent') as team_name,
+                       ps_curr.player_id IS NULL AND ps_latest.season < %s AS history_only, ps_latest.season AS last_season
                 FROM players p
                 LEFT JOIN player_seasons ps_curr ON ps_curr.player_id = p.id AND ps_curr.season = %s
                 LEFT JOIN teams t_curr ON t_curr.id = ps_curr.team_id
                 LEFT JOIN LATERAL (
-                    SELECT ps.position, ps.overall_rating, ps.team_id
+                    SELECT ps.position, ps.overall_rating, ps.team_id, ps.season
                     FROM player_seasons ps
                     WHERE ps.player_id = p.id
                     ORDER BY ps.season DESC
                     LIMIT 1
                 ) ps_latest ON true
                 LEFT JOIN teams t_latest ON t_latest.id = ps_latest.team_id
-                WHERE p.full_name ILIKE %s AND p.origin IS NULL      -- backfilled history players wait for phase 4
-                ORDER BY overall_rating DESC
+                WHERE p.full_name ILIKE %s
+                ORDER BY (p.origin IS NOT NULL), overall_rating DESC NULLS LAST   -- today's players before history
                 LIMIT 15;
-            """, (season, pattern))
+            """, (HISTORY_CAPTURED_FROM, season, pattern))
             player_rows = cur.fetchall()
             players_res = [
                 {
                     "id": r["id"],
                     "name": r["full_name"],
                     "position": _ui_position(r["position"]) if r["position"] else "ATH",
-                    "overall": r["overall_rating"],
+                    "overall": None if r["history_only"] else r["overall_rating"],
                     "number": r["player_number"],
                     "teamAbbr": display_team_abbr(r["team_abbr"]).lower(),
                     "teamDisplayAbbr": display_team_abbr(r["team_abbr"]),
                     "teamName": r["team_name"],
                     "espn_id": r["espn_id"],
+                    "history": bool(r["history_only"]),            # played only in 2026-2034 league history
+                    "lastSeason": r["last_season"],
                 }
                 for r in player_rows
             ]
