@@ -268,23 +268,31 @@ Project Mu/
 │   ├── images/                #   Misc. screenshots and mockups
 │   └── headshots/             #   batch_headshot_requests.jsonl, batch_results.jsonl, players_backup/
 └── Mu_Network/                # React frontend (has its own PROJECT_SPEC.md for UI screens)
+    ├── src/App.tsx            #   Hash router and application shell (~340 lines; ScoreTicker, Primary Header, MegaMenu, Footer, view routing)
+    ├── src/context/           #   Shared React context providers (SystemContext.tsx: season, week, availableSeasons, last_updated)
+    ├── src/lib/               #   Domain constants & helpers (gridiron.tsx: teams, ESPN logos, headshots, divisions, player profiles)
+    ├── src/components/shell/  #   Shared shell chrome (ScoreTicker.tsx, MegaMenu.tsx, StatsDropdown.tsx, GlobalSearchModal.tsx)
+    ├── src/components/newsroom/ # Editorial front page & articles (NewsroomHomePage.tsx, PowerRankingsPage.tsx, ArticlePage.tsx, ArticleMarkdown.tsx, AuthorPage.tsx)
+    ├── src/components/league/ #   League & game views (SchedulePage.tsx, GamePage.tsx, PlayerPage.tsx, StatsPage.tsx, StandingsPage.tsx)
+    ├── src/components/team/   #   Team hub & front office (TeamPage.tsx, FrontOfficeTab.tsx, TeamHistory.tsx, StaffCards.tsx, TransactionsTimeline.tsx, DraftCapital.tsx)
+    ├── src/components/fantasy/ #  Mu Fantasy Analytics (FantasyPlayerContext.tsx with player modal overlay, FantasyHeader.tsx, FantasyDashboard.tsx, FantasyRankingsPage.tsx, FantasyArticles.tsx)
+    ├── src/components/social/ #   Agent Wire dark social experience (SocialLayout.tsx, SocialPages.tsx, socialShared.tsx)
+    ├── src/components/history/ #  Record book & honors (RecordBookPage.tsx, FranchiseRecords.tsx, AwardsPage.tsx, AllProTeams.tsx, PlayerHonors.tsx, RecordWatch.tsx)
     ├── src/DraftPage.tsx      #   Draft Central & Scouting Hub (#draft, accessed via #debug): Consensus Big Board, College Honors/Heisman Watch, 32-Team Needs & Capital Matrix, Media Mock Draft, Live Broadcast War Room, and Prospect Dossier modal (§5.2 item 11)
     ├── src/components/draft/  #   Draft Central UI components & broadcast styling (draft.css, ConsensusBigBoard.tsx, ProspectModal.tsx, CollegeGameLog.tsx, CombineCard.tsx, CollegeAwardsView.tsx, TeamNeedsMatrix.tsx, MockDraftView.tsx, DraftWarRoom.tsx)
     ├── src/NapperPage.tsx     #   Napper interactive 3-panel Sleeper fantasy platform (#napper, #napper-{leagueId})
     ├── src/napper.css         #   Napper Sleeper dark theme (#121926, #1a2332, #00ceb8 teal accents)
     ├── src/types/napper.ts    #   TypeScript types for Napper platform (leagues, matchups, rosters, trades, chat, drafts)
-    └── src/components/napper/draft/ # Sleeper-inspired Interactive Draft Room & Mock Draft Simulator (#napper-draft)
-        ├── NapperDraftRoom.tsx    # Master draft room container with header controls, sim engine, audio chimes, and split layout
-        ├── DraftBoardGrid.tsx     # 15-round snaking draft board matrix with slot claiming, direction arrows, and clock glow
-        ├── DraftPlayerPool.tsx    # Filterable player pool with search (⌘ U), positional count pills, and detailed projection lines
-        ├── DraftRosterQueue.tsx   # Right 3-tab panel (ROSTER slot tracker, starred QUEUE, live CHAT commentary feed)
-        ├── DraftRecapModal.tsx    # Post-draft recap modal with team letter grades (A+ to D), steals, reaches, and league save
-        ├── ArchetypeCompositionModal.tsx # Archetype composition selector (Balanced, Chaos, Nerds, Zero RB, Hero RB, or custom steppers)
-        ├── DraftOrderModal.tsx    # Manual draft order customizer (drag-and-drop slots, swap dropdowns, step arrows, reset/reverse, and prominent AI manager archetype badges & customizer)
-        └── napperDraft.css        # High-density Sleeper dark navy theme palette (#090e17, #0e1626, #141f33, #00ceb8)
-    ├── src/components/napper/ #   Napper tab components (Matchup, Team, Players/Waivers, Trades, League, Scores, utils)
-    ├── src/components/history/ #   #records Record Book and #awards: RecordBookPage.tsx (route, filters in the hash), RecordCard.tsx (category card, Top 10), FranchiseRecords.tsx (?team= view), RecordWatch.tsx (in-season chase panel), AwardsPage.tsx (champions, award history, leaders, franchise counts), AllProTeams.tsx (All-Pro season picker and teams), PlayerHonors.tsx (player page Honors row), format.ts (values, units, badges, award labels, site abbreviations), history.css
-    └── src/components/team/   #   Team hub tabs: FrontOfficeTab.tsx (#team-{abbr} Front Office: cap sheet + contracts), StaffCards.tsx, TransactionsTimeline.tsx, DraftCapital.tsx, format.ts (money, logos), frontOffice.css
+    ├── src/components/napper/draft/ # Sleeper-inspired Interactive Draft Room & Mock Draft Simulator (#napper-draft)
+    │   ├── NapperDraftRoom.tsx    # Master draft room container with header controls, sim engine, audio chimes, and split layout
+    │   ├── DraftBoardGrid.tsx     # 15-round snaking draft board matrix with slot claiming, direction arrows, and clock glow
+    │   ├── DraftPlayerPool.tsx    # Filterable player pool with search (⌘ U), positional count pills, and detailed projection lines
+    │   ├── DraftRosterQueue.tsx   # Right 3-tab panel (ROSTER slot tracker, starred QUEUE, live CHAT commentary feed)
+    │   ├── DraftRecapModal.tsx    # Post-draft recap modal with team letter grades (A+ to D), steals, reaches, and league save
+    │   ├── ArchetypeCompositionModal.tsx # Archetype composition selector (Balanced, Chaos, Nerds, Zero RB, Hero RB, or custom steppers)
+    │   ├── DraftOrderModal.tsx    # Manual draft order customizer (drag-and-drop slots, swap dropdowns, step arrows, reset/reverse, and prominent AI manager archetype badges & customizer)
+    │   └── napperDraft.css        # High-density Sleeper dark navy theme palette (#090e17, #0e1626, #141f33, #00ceb8)
+    └── src/components/napper/ #   Napper tab components (Matchup, Team, Players/Waivers, Trades, League, Scores, utils)
 ```
 
 ### 1.2 Running the System

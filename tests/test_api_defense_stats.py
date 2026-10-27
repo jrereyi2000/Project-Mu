@@ -15,7 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def frontend_columns(name: str = "unitStatColumns") -> dict:
-    with open(os.path.join(ROOT, "Mu_Network", "src", "App.tsx")) as f:
+    with open(os.path.join(ROOT, "Mu_Network", "src", "components", "league", "StatsPage.tsx")) as f:
         src = f.read()
     block = src[src.index(f"const {name}"):]
     block = block[:block.index("};")]

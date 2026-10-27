@@ -27,8 +27,49 @@ The frontend is powered by a live FastAPI backend (`server/api.py`) backed by a 
 ### Source structure
 
 - `src/main.tsx` mounts the React application and imports global CSS.
-- `src/App.tsx` contains application components, state providers, API fetch hooks, route handling, and screen logic.
+- `src/App.tsx` contains application shell, state providers, global hash router (~340 lines).
 - `src/index.css` contains all visual styling, layout grids, star badges, and responsive design.
+- `src/context/`:
+  - `SystemContext.tsx`: Shared system state (`season`, `week`, `availableSeasons`, `last_updated`).
+- `src/lib/`:
+  - `gridiron.tsx`: Shared domain helpers, team metadata, ESPN logos, headshots, divisions, and player utility lookups.
+- `src/components/shell/`:
+  - `ScoreTicker.tsx`: Continuous animated top score ticker.
+  - `MegaMenu.tsx`: 32-team directory and 3-game weekly schedule preview.
+  - `StatsDropdown.tsx`: Dropdown for team and player stats.
+  - `GlobalSearchModal.tsx`: Global search modal (`Cmd+K`) for players and teams.
+- `src/components/social/`:
+  - `SocialLayout.tsx`: Shell for Agent Wire.
+  - `SocialPages.tsx`: Social feed, post detail, profile, team hubs, team feed, trend, and explore pages.
+  - `socialShared.tsx`: Social types, post card, right rail NFL widget, and formatters.
+- `src/components/fantasy/`:
+  - `FantasyPlayerContext.tsx`: Fantasy player context and player modal overlay.
+  - `FantasyHeader.tsx`: Fantasy sub-nav header.
+  - `FantasyDashboard.tsx`: Fantasy command center.
+  - `FantasyRankingsPage.tsx`: Weekly, ADP, and ROS rankings tables.
+  - `FantasyArticles.tsx`: Fantasy articles and archives.
+- `src/components/team/`:
+  - `TeamPage.tsx`: Full franchise team hub (Main, Roster, Stats, History, Front Office tabs).
+  - `FrontOfficeTab.tsx`: Front office contracts, salary cap, and GM tendencies.
+  - `TeamHistory.tsx`: Franchise season-by-season archive.
+- `src/components/league/`:
+  - `SchedulePage.tsx`: League schedule and team-specific schedule pages.
+  - `GamePage.tsx`: Game Center box scores (passing, rushing, receiving, defense, kicking/punting, team comparison).
+  - `PlayerPage.tsx`: Player overview, bio, game logs, multi-season career stats, and Madden attributes.
+  - `StatsPage.tsx`: 32-team and player league-wide leaderboards.
+  - `StandingsPage.tsx`: Division, Conference / Playoff Seed, and League standings.
+- `src/components/newsroom/`:
+  - `NewsroomHomePage.tsx`: Editorial front page with edition week selector, Hero story, All-Time Record Breaker spotlight, secondary/feature stories, trending local beat coverage, and top 3 power rankings card.
+  - `PowerRankingsPage.tsx`: 32-team power rankings board, jump pills, and weekly rankings archives.
+  - `ArticlePage.tsx`: Long-form article page.
+  - `ArticleMarkdown.tsx`: Markdown renderer for headers, quotes, tables, and lists.
+  - `AuthorPage.tsx`: Beat writer and national columnist profile archive.
+- `src/components/history/`:
+  - `AwardsPage.tsx`, `FranchiseRecords.tsx`, `PlayerHonors.tsx`, `RecordBookPage.tsx`.
+- `src/components/draft/`:
+  - Draft Central consensus big board, prospect modal, and war room.
+- `src/components/napper/`:
+  - Napper fantasy league tabs and interactive draft room simulator.
 
 ### Routing model
 
