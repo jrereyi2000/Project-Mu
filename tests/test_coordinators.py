@@ -132,6 +132,10 @@ class TestSchemeInheritanceLogic(unittest.TestCase):
         self.assertIn("Robert Saleh: Cover 3 4-3 front", matchup["defense"])
 
 
+import pytest
+
+
+@pytest.mark.integration
 class TestDatabaseCoordinatorsAndSlants(unittest.TestCase):
     """Database-backed tests using PostgreSQL transaction rollback."""
 

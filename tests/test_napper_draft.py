@@ -1,5 +1,6 @@
 """Tests for Napper Draft Engine and API Endpoints (tests/test_napper_draft.py)."""
 
+from contextlib import contextmanager
 import pytest
 from fastapi.testclient import TestClient
 from server.api import app
@@ -13,274 +14,319 @@ from engines.napper_draft_engine import (
     simulate_until_user,
     simulate_entire_draft,
     finalize_draft,
+    get_db,
 )
+
+pytestmark = pytest.mark.integration
 
 client = TestClient(app)
 
 
-def test_create_mock_draft_endpoint():
-    """Tests POST /api/napper/drafts/create_mock with custom slots and snake ordering."""
+@pytest.fixture(scope="module", autouse=True)
+def _draft_test_env():
+    """Ensures madden_test has active-season week 6 state and Napper seed data for draft tests."""
+    from engines.napper_seeder import seed_napper_database
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+            orig_week = cur.fetchone()["current_week"]
+            cur.execute("UPDATE league_state SET current_week = 6 WHERE id = 1")
+        conn.commit()
+    seed_napper_database(wipe_all=True)
+    try:
+        yield
+    finally:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE league_state SET current_week = %s WHERE id = 1", (orig_week,))
+            conn.commit()
+
+
+@contextmanager
+def _league_draft_session(
+    teams_count: int = 8,
+    rounds: int = 15,
+    user_slot: int | None = 1,
+    scoring_type: str = "PPR",
+    is_superflex: bool = True,
+    archetype_composition: dict | None = None,
+):
+    """Creates a PRE_DRAFT league and initializes its draft session, deleting the league on exit."""
     payload = {
+        "name": "Draft Suite Test League",
+        "teams_count": teams_count,
+        "scoring_type": scoring_type,
+        "status": "PRE_DRAFT",
+        "is_superflex": is_superflex,
+    }
+    if archetype_composition:
+        payload["archetype_preset"] = "Custom"
+        payload["archetype_composition"] = archetype_composition
+
+    league_res = client.post("/api/napper/leagues/create", json=payload)
+    assert league_res.status_code == 200, league_res.text
+    league_id = league_res.json()["league"]["id"]
+    try:
+        draft_res = client.get(f"/api/napper/league/{league_id}/draft?rounds={rounds}")
+        assert draft_res.status_code == 200, draft_res.text
+        draft_data = draft_res.json()
+        draft_id = draft_data["id"]
+        if user_slot is not None and user_slot != 1:
+            claim_res = client.post(f"/api/napper/draft/{draft_id}/claim_slot", json={"slot": user_slot})
+            assert claim_res.status_code == 200, claim_res.text
+            draft_data = claim_res.json()
+        yield draft_data
+    finally:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM napper_leagues WHERE id = %s", (league_id,))
+            conn.commit()
+
+
+def test_create_mock_draft_endpoint():
+    """Tests that standalone create_mock returns 410 Gone and league draft initialization sets up custom slots and snake ordering."""
+    deprecated_res = client.post("/api/napper/drafts/create_mock", json={
         "teams_count": 10,
         "scoring_type": "PPR",
         "user_slot": 3,
         "rounds": 15,
         "is_superflex": True,
-    }
-    res = client.post("/api/napper/drafts/create_mock", json=payload)
-    assert res.status_code == 200
-    data = res.json()
+    })
+    assert deprecated_res.status_code == 410
 
-    assert data["status"] == "PENDING"
-    assert data["teams_count"] == 10
-    assert data["rounds"] == 15
-    assert data["total_picks"] == 150
-    assert data["user_slot"] == 3
-    assert data["is_mock"] is True
-    assert data["current_pick"] == 1
-    assert data["current_round"] == 1
-    assert data["is_user_turn"] is False
+    with _league_draft_session(
+        teams_count=10,
+        scoring_type="PPR",
+        user_slot=3,
+        rounds=15,
+        is_superflex=True,
+    ) as data:
+        assert data["status"] == "PENDING"
+        assert data["teams_count"] == 10
+        assert data["rounds"] == 15
+        assert data["total_picks"] == 150
+        assert data["user_slot"] == 3
+        assert data["is_mock"] is False
+        assert data["current_pick"] == 1
+        assert data["current_round"] == 1
+        assert data["is_user_turn"] is False
 
-    # Check teams
-    teams = data["teams"]
-    assert len(teams) == 10
-    user_team = next((t for t in teams if t["slot_num"] == 3), None)
-    assert user_team is not None
-    assert user_team["is_user"] is True
-    assert user_team["persona"] == "USER"
+        # Check teams
+        teams = data["teams"]
+        assert len(teams) == 10
+        user_team = next((t for t in teams if t["slot_num"] == 3), None)
+        assert user_team is not None
+        assert user_team["is_user"] is True
+        assert user_team["persona"] == "USER"
 
-    # Verify snake draft order
-    picks = data["picks"]
-    assert len(picks) == 150
+        # Verify snake draft order
+        picks = data["picks"]
+        assert len(picks) == 150
 
-    # Round 1: slots 1 to 10
-    assert picks[0]["overall_pick"] == 1
-    assert picks[0]["round_num"] == 1
-    assert picks[0]["pick_num"] == 1
-    assert picks[0]["slot_num"] == 1
+        # Round 1: slots 1 to 10
+        assert picks[0]["overall_pick"] == 1
+        assert picks[0]["round_num"] == 1
+        assert picks[0]["pick_num"] == 1
+        assert picks[0]["slot_num"] == 1
 
-    assert picks[9]["overall_pick"] == 10
-    assert picks[9]["round_num"] == 1
-    assert picks[9]["pick_num"] == 10
-    assert picks[9]["slot_num"] == 10
+        assert picks[9]["overall_pick"] == 10
+        assert picks[9]["round_num"] == 1
+        assert picks[9]["pick_num"] == 10
+        assert picks[9]["slot_num"] == 10
 
-    # Round 2: slots 10 down to 1 (snake reversal)
-    assert picks[10]["overall_pick"] == 11
-    assert picks[10]["round_num"] == 2
-    assert picks[10]["pick_num"] == 1
-    assert picks[10]["slot_num"] == 10
+        # Round 2: slots 10 down to 1 (snake reversal)
+        assert picks[10]["overall_pick"] == 11
+        assert picks[10]["round_num"] == 2
+        assert picks[10]["pick_num"] == 1
+        assert picks[10]["slot_num"] == 10
 
-    assert picks[19]["overall_pick"] == 20
-    assert picks[19]["round_num"] == 2
-    assert picks[19]["pick_num"] == 10
-    assert picks[19]["slot_num"] == 1
+        assert picks[19]["overall_pick"] == 20
+        assert picks[19]["round_num"] == 2
+        assert picks[19]["pick_num"] == 10
+        assert picks[19]["slot_num"] == 1
 
-    # Round 3: slots 1 to 10
-    assert picks[20]["overall_pick"] == 21
-    assert picks[20]["round_num"] == 3
-    assert picks[20]["slot_num"] == 1
+        # Round 3: slots 1 to 10
+        assert picks[20]["overall_pick"] == 21
+        assert picks[20]["round_num"] == 3
+        assert picks[20]["slot_num"] == 1
 
 
 def test_claim_slot_endpoint():
     """Tests claiming a new draft position before draft start."""
-    # Create draft at slot 2
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 8,
-        "rounds": 5,
-        "user_slot": 2,
-    })
-    assert create_res.status_code == 200
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(teams_count=8, rounds=5, user_slot=2) as draft_init:
+        draft_id = draft_init["id"]
 
-    # Claim slot 6
-    claim_res = client.post(f"/api/napper/draft/{draft_id}/claim_slot", json={"slot": 6})
-    assert claim_res.status_code == 200
-    data = claim_res.json()
+        # Claim slot 6
+        claim_res = client.post(f"/api/napper/draft/{draft_id}/claim_slot", json={"slot": 6})
+        assert claim_res.status_code == 200
+        data = claim_res.json()
 
-    assert data["user_slot"] == 6
-    team_6 = next(t for t in data["teams"] if t["slot_num"] == 6)
-    team_2 = next(t for t in data["teams"] if t["slot_num"] == 2)
-    assert team_6["is_user"] is True
-    assert team_2["is_user"] is False
+        assert data["user_slot"] == 6
+        team_6 = next(t for t in data["teams"] if t["slot_num"] == 6)
+        team_2 = next(t for t in data["teams"] if t["slot_num"] == 2)
+        assert team_6["is_user"] is True
+        assert team_2["is_user"] is False
 
-    # Check picks picked_by updated
-    slot_6_picks = [p for p in data["picks"] if p["slot_num"] == 6]
-    for p in slot_6_picks:
-        assert p["picked_by"] == "USER"
+        # Check picks picked_by updated
+        slot_6_picks = [p for p in data["picks"] if p["slot_num"] == 6]
+        for p in slot_6_picks:
+            assert p["picked_by"] == "USER"
 
-    # Test invalid slot
-    bad_res = client.post(f"/api/napper/draft/{draft_id}/claim_slot", json={"slot": 99})
-    assert bad_res.status_code == 400
+        # Test invalid slot
+        bad_res = client.post(f"/api/napper/draft/{draft_id}/claim_slot", json={"slot": 99})
+        assert bad_res.status_code == 400
 
 
 def test_start_draft_endpoint():
     """Tests starting a draft session and verifying on-the-clock state."""
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 6,
-        "rounds": 4,
-        "user_slot": 1,
-    })
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(teams_count=8, rounds=4, user_slot=1) as draft_init:
+        draft_id = draft_init["id"]
 
-    start_res = client.post(f"/api/napper/draft/{draft_id}/start")
-    assert start_res.status_code == 200
-    data = start_res.json()
+        start_res = client.post(f"/api/napper/draft/{draft_id}/start")
+        assert start_res.status_code == 200
+        data = start_res.json()
 
-    assert data["status"] == "IN_PROGRESS"
-    assert data["current_pick"] == 1
-    assert data["is_user_turn"] is True  # User is slot 1 and pick 1 is slot 1
-    assert data["on_the_clock"] is not None
-    assert data["on_the_clock"]["slot_num"] == 1
-    assert data["on_the_clock"]["is_user"] is True
+        assert data["status"] == "IN_PROGRESS"
+        assert data["current_pick"] == 1
+        assert data["is_user_turn"] is True  # User is slot 1 and pick 1 is slot 1
+        assert data["on_the_clock"] is not None
+        assert data["on_the_clock"]["slot_num"] == 1
+        assert data["on_the_clock"]["is_user"] is True
 
 
 def test_available_players_endpoint():
     """Tests fetching available player pool with ADP ordering, filtering, and stats."""
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 6,
-        "rounds": 4,
-        "user_slot": 1,
-    })
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(teams_count=8, rounds=4, user_slot=1) as draft_init:
+        draft_id = draft_init["id"]
 
-    # General pool
-    res = client.get(f"/api/napper/draft/{draft_id}/available_players?limit=20")
-    assert res.status_code == 200
-    data = res.json()
+        # General pool
+        res = client.get(f"/api/napper/draft/{draft_id}/available_players?limit=20")
+        assert res.status_code == 200
+        data = res.json()
 
-    assert "players" in data
-    assert "total" in data
-    assert len(data["players"]) == 20
-    assert data["total"] > 50
+        assert "players" in data
+        assert "total" in data
+        assert len(data["players"]) == 20
+        assert data["total"] > 50
 
-    p1 = data["players"][0]
-    assert "id" in p1
-    assert "name" in p1
-    assert "position" in p1
-    assert "team" in p1
-    assert "headshot_url" in p1
-    assert "adp" in p1
-    assert "bye" in p1
-    assert "age" in p1
-    assert "ros_pct" in p1
-    assert "projections" in p1
-    assert "pts" in p1["projections"]
-    assert "avg" in p1["projections"]
-    assert "rush" in p1
-    assert "rec" in p1
-    assert "draft_count" in p1
+        p1 = data["players"][0]
+        assert "id" in p1
+        assert "name" in p1
+        assert "position" in p1
+        assert "team" in p1
+        assert "headshot_url" in p1
+        assert "adp" in p1
+        assert "bye" in p1
+        assert "age" in p1
+        assert "projections" in p1
+        assert "pts" in p1["projections"]
+        assert "avg" in p1["projections"]
+        assert "rush" in p1
+        assert "rec" in p1
+        assert "draft_count" in p1
 
-    # Position filter QB
-    qb_res = client.get(f"/api/napper/draft/{draft_id}/available_players?position=QB&limit=10")
-    assert qb_res.status_code == 200
-    qb_data = qb_res.json()
-    assert all(p["position"] == "QB" for p in qb_data["players"])
+        # Position filter QB
+        qb_res = client.get(f"/api/napper/draft/{draft_id}/available_players?position=QB&limit=10")
+        assert qb_res.status_code == 200
+        qb_data = qb_res.json()
+        assert all(p["position"] == "QB" for p in qb_data["players"])
 
-    # Position filter RB
-    rb_res = client.get(f"/api/napper/draft/{draft_id}/available_players?position=RB&limit=10")
-    assert rb_res.status_code == 200
-    rb_data = rb_res.json()
-    assert all(p["position"] in ("RB", "HB", "FB") for p in rb_data["players"])
+        # Position filter RB
+        rb_res = client.get(f"/api/napper/draft/{draft_id}/available_players?position=RB&limit=10")
+        assert rb_res.status_code == 200
+        rb_data = rb_res.json()
+        assert all(p["position"] in ("RB", "HB", "FB") for p in rb_data["players"])
 
-    # Search filter
-    search_res = client.get(f"/api/napper/draft/{draft_id}/available_players?search=Davis")
-    assert search_res.status_code == 200
-    search_data = search_res.json()
-    assert len(search_data["players"]) > 0
-    assert any("Davis" in p["name"] for p in search_data["players"])
+        # Search filter
+        search_res = client.get(f"/api/napper/draft/{draft_id}/available_players?search=Davis")
+        assert search_res.status_code == 200
+        search_data = search_res.json()
+        assert len(search_data["players"]) > 0
+        assert any("Davis" in p["name"] for p in search_data["players"])
 
 
 def test_draft_pick_and_sim_flow():
     """Tests user selection, AI step simulation, and sim_to_user advancement."""
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 4,
-        "rounds": 3,
-        "user_slot": 2,  # User picks second
-    })
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(teams_count=8, rounds=3, user_slot=2) as draft_init:
+        draft_id = draft_init["id"]
 
-    client.post(f"/api/napper/draft/{draft_id}/start")
+        client.post(f"/api/napper/draft/{draft_id}/start")
 
-    # Step 1: Slot 1 is AI -> simulate_ai_pick via sim_step
-    step_res = client.post(f"/api/napper/draft/{draft_id}/sim_step")
-    assert step_res.status_code == 200
-    step_data = step_res.json()
+        # Step 1: Slot 1 is AI -> simulate_ai_pick via sim_step
+        step_res = client.post(f"/api/napper/draft/{draft_id}/sim_step")
+        assert step_res.status_code == 200
+        step_data = step_res.json()
 
-    assert step_data["current_pick"] == 2
-    assert step_data["is_user_turn"] is True
-    pick_1 = step_data["picks"][0]
-    assert pick_1["player"] is not None
-    assert pick_1["picked_by"] == "AI"
-    assert pick_1["pick_notes"] is not None
+        assert step_data["current_pick"] == 2
+        assert step_data["is_user_turn"] is True
+        pick_1 = step_data["picks"][0]
+        assert pick_1["player"] is not None
+        assert pick_1["picked_by"] == "AI"
+        assert pick_1["pick_notes"] is not None
 
-    # Step 2: Slot 2 is User -> user makes pick
-    avail_res = client.get(f"/api/napper/draft/{draft_id}/available_players?limit=5")
-    chosen_player = avail_res.json()["players"][0]
+        # Step 2: Slot 2 is User -> user makes pick
+        avail_res = client.get(f"/api/napper/draft/{draft_id}/available_players?limit=5")
+        chosen_player = avail_res.json()["players"][0]
 
-    pick_res = client.post(f"/api/napper/draft/{draft_id}/pick", json={"player_id": chosen_player["id"]})
-    assert pick_res.status_code == 200
-    pick_data = pick_res.json()
+        pick_res = client.post(f"/api/napper/draft/{draft_id}/pick", json={"player_id": chosen_player["id"]})
+        assert pick_res.status_code == 200
+        pick_data = pick_res.json()
 
-    assert pick_data["current_pick"] == 3
-    assert pick_data["is_user_turn"] is False
-    pick_2 = pick_data["picks"][1]
-    assert pick_2["player"]["id"] == chosen_player["id"]
-    assert pick_2["picked_by"] == "USER"
+        assert pick_data["current_pick"] == 3
+        assert pick_data["is_user_turn"] is False
+        pick_2 = pick_data["picks"][1]
+        assert pick_2["player"]["id"] == chosen_player["id"]
+        assert pick_2["picked_by"] == "USER"
 
-    # Step 3: Test duplicate pick rejection
-    dup_res = client.post(f"/api/napper/draft/{draft_id}/pick", json={"player_id": chosen_player["id"]})
-    assert dup_res.status_code == 400
+        # Step 3: Test duplicate pick rejection
+        dup_res = client.post(f"/api/napper/draft/{draft_id}/pick", json={"player_id": chosen_player["id"]})
+        assert dup_res.status_code == 400
 
-    # Step 4: sim_to_user:
-    # User is slot 2. In 4-team snake draft:
-    # Round 1: 1 (AI), 2 (User) -> done
-    # Picks 3 (AI), 4 (AI)
-    # Round 2: 5 (slot 4, AI), 6 (slot 3, AI), 7 (slot 2, User)
-    # So sim_to_user should simulate picks 3, 4, 5, 6 and stop at pick 7!
-    sim_res = client.post(f"/api/napper/draft/{draft_id}/sim_to_user")
-    assert sim_res.status_code == 200
-    sim_data = sim_res.json()
+        # Step 4: sim_to_user:
+        # User is slot 2. In 8-team snake draft:
+        # Round 1: 1 (AI), 2 (User) -> done; picks 3..8 are AI
+        # Round 2: picks 9..14 (slots 8..3, AI), pick 15 is slot 2 (User)
+        sim_res = client.post(f"/api/napper/draft/{draft_id}/sim_to_user")
+        assert sim_res.status_code == 200
+        sim_data = sim_res.json()
 
-    assert sim_data["current_pick"] == 7
-    assert sim_data["is_user_turn"] is True
-    assert sim_data["on_the_clock"]["slot_num"] == 2
+        assert sim_data["current_pick"] == 15
+        assert sim_data["is_user_turn"] is True
+        assert sim_data["on_the_clock"]["slot_num"] == 2
 
 
 def test_simulate_all_and_finalization():
     """Tests fast-forwarding an entire draft, report card grades, and recap."""
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 4,
-        "rounds": 4,
-        "user_slot": 1,
-    })
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(teams_count=8, rounds=4, user_slot=1) as draft_init:
+        draft_id = draft_init["id"]
 
-    all_res = client.post(f"/api/napper/draft/{draft_id}/sim_all")
-    assert all_res.status_code == 200
-    data = all_res.json()
+        all_res = client.post(f"/api/napper/draft/{draft_id}/sim_all")
+        assert all_res.status_code == 200
+        data = all_res.json()
 
-    assert data["status"] == "COMPLETED"
-    assert data["current_pick"] > data["total_picks"]
+        assert data["status"] == "COMPLETED"
+        assert data["current_pick"] > data["total_picks"]
 
-    # Verify all 16 picks filled
-    assert len(data["picks"]) == 16
-    for p in data["picks"]:
-        assert p["player"] is not None
-        assert p["player"]["id"] is not None
+        # Verify all 32 picks filled
+        assert len(data["picks"]) == 32
+        for p in data["picks"]:
+            assert p["player"] is not None
+            assert p["player"]["id"] is not None
 
-    # Verify recap details
-    recap = data["recap"]
-    assert recap is not None
-    assert "grades" in recap
-    assert len(recap["grades"]) == 4
+        # Verify recap details
+        recap = data["recap"]
+        assert recap is not None
+        assert "grades" in recap
+        assert len(recap["grades"]) == 8
 
-    # Each team has a grade
-    for slot_str, g_info in recap["grades"].items():
-        assert g_info["grade"] in ("A+", "A", "B+", "B", "C+", "C", "D")
-        assert g_info["projected_points"] > 0
+        # Each team has a grade
+        for slot_str, g_info in recap["grades"].items():
+            assert g_info["grade"] in ("A+", "A", "B+", "B", "C+", "C", "D")
+            assert g_info["projected_points"] > 0
 
-    assert "best_value" in recap
-    assert "biggest_reach" in recap
+        assert "best_value" in recap
+        assert "biggest_reach" in recap
 
 
 def test_league_draft_lifecycle():
@@ -354,101 +400,80 @@ def test_league_draft_lifecycle():
 def test_snake_draft_order_8_10_12_teams():
     """Verifies snake draft pick orders, turns, and mathematical formulas for 8, 10, and 12 teams."""
     # Test 8-team draft
-    res_8 = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 8,
-        "rounds": 15,
-        "user_slot": 1,
-        "scoring_type": "PPR",
-    })
-    assert res_8.status_code == 200
-    data_8 = res_8.json()
-    picks_8 = data_8["picks"]
-    assert len(picks_8) == 120
+    with _league_draft_session(teams_count=8, rounds=15, user_slot=1, scoring_type="PPR") as data_8:
+        picks_8 = data_8["picks"]
+        assert len(picks_8) == 120
 
-    # Round 1: slots 1 to 8
-    assert picks_8[0]["round_num"] == 1 and picks_8[0]["pick_num"] == 1 and picks_8[0]["slot_num"] == 1
-    assert picks_8[7]["round_num"] == 1 and picks_8[7]["pick_num"] == 8 and picks_8[7]["slot_num"] == 8
+        # Round 1: slots 1 to 8
+        assert picks_8[0]["round_num"] == 1 and picks_8[0]["pick_num"] == 1 and picks_8[0]["slot_num"] == 1
+        assert picks_8[7]["round_num"] == 1 and picks_8[7]["pick_num"] == 8 and picks_8[7]["slot_num"] == 8
 
-    # Round 2 turn: slot 8 picks at 2.1 (back-to-back at the turn!), slot 1 picks at 2.8
-    assert picks_8[8]["round_num"] == 2 and picks_8[8]["pick_num"] == 1 and picks_8[8]["slot_num"] == 8
-    assert picks_8[9]["round_num"] == 2 and picks_8[9]["pick_num"] == 2 and picks_8[8+1]["slot_num"] == 7
-    assert picks_8[15]["round_num"] == 2 and picks_8[15]["pick_num"] == 8 and picks_8[15]["slot_num"] == 1
+        # Round 2 turn: slot 8 picks at 2.1 (back-to-back at the turn!), slot 1 picks at 2.8
+        assert picks_8[8]["round_num"] == 2 and picks_8[8]["pick_num"] == 1 and picks_8[8]["slot_num"] == 8
+        assert picks_8[9]["round_num"] == 2 and picks_8[9]["pick_num"] == 2 and picks_8[8 + 1]["slot_num"] == 7
+        assert picks_8[15]["round_num"] == 2 and picks_8[15]["pick_num"] == 8 and picks_8[15]["slot_num"] == 1
 
-    # Round 3 turn: slot 1 picks at 3.1 (back-to-back at the turn!), slot 8 picks at 3.8
-    assert picks_8[16]["round_num"] == 3 and picks_8[16]["pick_num"] == 1 and picks_8[16]["slot_num"] == 1
-    assert picks_8[23]["round_num"] == 3 and picks_8[23]["pick_num"] == 8 and picks_8[23]["slot_num"] == 8
+        # Round 3 turn: slot 1 picks at 3.1 (back-to-back at the turn!), slot 8 picks at 3.8
+        assert picks_8[16]["round_num"] == 3 and picks_8[16]["pick_num"] == 1 and picks_8[16]["slot_num"] == 1
+        assert picks_8[23]["round_num"] == 3 and picks_8[23]["pick_num"] == 8 and picks_8[23]["slot_num"] == 8
 
-    # Round 4 turn: slot 8 picks at 4.1
-    assert picks_8[24]["round_num"] == 4 and picks_8[24]["pick_num"] == 1 and picks_8[24]["slot_num"] == 8
-    assert picks_8[31]["round_num"] == 4 and picks_8[31]["pick_num"] == 8 and picks_8[31]["slot_num"] == 1
+        # Round 4 turn: slot 8 picks at 4.1
+        assert picks_8[24]["round_num"] == 4 and picks_8[24]["pick_num"] == 1 and picks_8[24]["slot_num"] == 8
+        assert picks_8[31]["round_num"] == 4 and picks_8[31]["pick_num"] == 8 and picks_8[31]["slot_num"] == 1
 
-    # Comprehensive verification of all 120 picks for 8-team
-    for p in picks_8:
-        r = p["round_num"]
-        pk = p["pick_num"]
-        overall = (r - 1) * 8 + pk
-        expected_slot = pk if (r % 2 == 1) else (8 - pk + 1)
-        assert p["overall_pick"] == overall
-        assert p["slot_num"] == expected_slot
+        # Comprehensive verification of all 120 picks for 8-team
+        for p in picks_8:
+            r = p["round_num"]
+            pk = p["pick_num"]
+            overall = (r - 1) * 8 + pk
+            expected_slot = pk if (r % 2 == 1) else (8 - pk + 1)
+            assert p["overall_pick"] == overall
+            assert p["slot_num"] == expected_slot
 
     # Test 10-team draft
-    res_10 = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 10,
-        "rounds": 15,
-        "user_slot": 5,
-        "scoring_type": "PPR",
-    })
-    assert res_10.status_code == 200
-    data_10 = res_10.json()
-    picks_10 = data_10["picks"]
-    assert len(picks_10) == 150
+    with _league_draft_session(teams_count=10, rounds=15, user_slot=5, scoring_type="PPR") as data_10:
+        picks_10 = data_10["picks"]
+        assert len(picks_10) == 150
 
-    # Round 1 & Round 2 turns for 10-team
-    assert picks_10[0]["slot_num"] == 1
-    assert picks_10[9]["slot_num"] == 10
-    assert picks_10[10]["slot_num"] == 10  # 2.1 is slot 10
-    assert picks_10[19]["slot_num"] == 1   # 2.10 is slot 1
-    assert picks_10[20]["slot_num"] == 1   # 3.1 is slot 1
-    assert picks_10[29]["slot_num"] == 10  # 3.10 is slot 10
+        # Round 1 & Round 2 turns for 10-team
+        assert picks_10[0]["slot_num"] == 1
+        assert picks_10[9]["slot_num"] == 10
+        assert picks_10[10]["slot_num"] == 10  # 2.1 is slot 10
+        assert picks_10[19]["slot_num"] == 1   # 2.10 is slot 1
+        assert picks_10[20]["slot_num"] == 1   # 3.1 is slot 1
+        assert picks_10[29]["slot_num"] == 10  # 3.10 is slot 10
 
-    for p in picks_10:
-        r = p["round_num"]
-        pk = p["pick_num"]
-        overall = (r - 1) * 10 + pk
-        expected_slot = pk if (r % 2 == 1) else (10 - pk + 1)
-        assert p["overall_pick"] == overall
-        assert p["slot_num"] == expected_slot
+        for p in picks_10:
+            r = p["round_num"]
+            pk = p["pick_num"]
+            overall = (r - 1) * 10 + pk
+            expected_slot = pk if (r % 2 == 1) else (10 - pk + 1)
+            assert p["overall_pick"] == overall
+            assert p["slot_num"] == expected_slot
 
     # Test 12-team draft
-    res_12 = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 12,
-        "rounds": 15,
-        "user_slot": 12,
-        "scoring_type": "PPR",
-    })
-    assert res_12.status_code == 200
-    data_12 = res_12.json()
-    picks_12 = data_12["picks"]
-    assert len(picks_12) == 180
+    with _league_draft_session(teams_count=12, rounds=15, user_slot=12, scoring_type="PPR") as data_12:
+        picks_12 = data_12["picks"]
+        assert len(picks_12) == 180
 
-    # Round 1 & Round 2 turns for 12-team
-    assert picks_12[0]["slot_num"] == 1
-    assert picks_12[11]["slot_num"] == 12  # 1.12 is slot 12
-    assert picks_12[12]["slot_num"] == 12  # 2.1 is slot 12 (turn!)
-    assert picks_12[13]["slot_num"] == 11  # 2.2 is slot 11
-    assert picks_12[23]["slot_num"] == 1   # 2.12 is slot 1 (turn!)
-    assert picks_12[24]["slot_num"] == 1   # 3.1 is slot 1
-    assert picks_12[35]["slot_num"] == 12  # 3.12 is slot 12
-    assert picks_12[36]["slot_num"] == 12  # 4.1 is slot 12
-    assert picks_12[47]["slot_num"] == 1   # 4.12 is slot 1
+        # Round 1 & Round 2 turns for 12-team
+        assert picks_12[0]["slot_num"] == 1
+        assert picks_12[11]["slot_num"] == 12  # 1.12 is slot 12
+        assert picks_12[12]["slot_num"] == 12  # 2.1 is slot 12 (turn!)
+        assert picks_12[13]["slot_num"] == 11  # 2.2 is slot 11
+        assert picks_12[23]["slot_num"] == 1   # 2.12 is slot 1 (turn!)
+        assert picks_12[24]["slot_num"] == 1   # 3.1 is slot 1
+        assert picks_12[35]["slot_num"] == 12  # 3.12 is slot 12
+        assert picks_12[36]["slot_num"] == 12  # 4.1 is slot 12
+        assert picks_12[47]["slot_num"] == 1   # 4.12 is slot 1
 
-    for p in picks_12:
-        r = p["round_num"]
-        pk = p["pick_num"]
-        overall = (r - 1) * 12 + pk
-        expected_slot = pk if (r % 2 == 1) else (12 - pk + 1)
-        assert p["overall_pick"] == overall
-        assert p["slot_num"] == expected_slot
+        for p in picks_12:
+            r = p["round_num"]
+            pk = p["pick_num"]
+            overall = (r - 1) * 12 + pk
+            expected_slot = pk if (r % 2 == 1) else (12 - pk + 1)
+            assert p["overall_pick"] == overall
+            assert p["slot_num"] == expected_slot
 
 
 def test_player_pool_season_2035_and_projections():
@@ -478,209 +503,197 @@ def test_player_pool_season_2035_and_projections():
 
 
 def test_mock_draft_archetype_composition_and_randomized_order():
-    """Tests creating mock drafts with custom archetype compositions, randomized slots, and claiming slots."""
-    # 1. Create a draft with a specific archetype composition: 4 ANALYTICS_NERD, 3 ZERO_RB_ZEALOT, 2 HERO_RB
+    """Tests creating drafts with custom archetype compositions, randomized slots, and claiming slots."""
     custom_comp = {
         "ANALYTICS_NERD": 4,
         "ZERO_RB_ZEALOT": 3,
         "HERO_RB": 2,
     }
-    res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 10,
-        "rounds": 5,
-        "archetype_composition": custom_comp,
-    })
-    assert res.status_code == 200
-    data = res.json()
-    draft_id = data["id"]
+    with _league_draft_session(
+        teams_count=10,
+        rounds=5,
+        user_slot=None,
+        archetype_composition=custom_comp,
+    ) as data:
+        draft_id = data["id"]
 
-    # Slot should be randomized between 1 and 10
-    user_slot = data["user_slot"]
-    assert 1 <= user_slot <= 10
+        user_slot = data["user_slot"]
+        assert 1 <= user_slot <= 10
 
-    # Teams should have the requested archetype composition
-    ai_teams = [t for t in data["teams"] if not t["is_user"]]
-    assert len(ai_teams) == 9
+        # Teams should have the requested archetype composition
+        ai_teams = [t for t in data["teams"] if not t["is_user"]]
+        assert len(ai_teams) == 9
 
-    personas = [t["persona"] for t in ai_teams]
-    assert personas.count("ANALYTICS_NERD") == 4
-    assert personas.count("ZERO_RB_ZEALOT") == 3
-    assert personas.count("HERO_RB") == 2
+        personas = [t["persona"] for t in ai_teams]
+        assert personas.count("ANALYTICS_NERD") == 4
+        assert personas.count("ZERO_RB_ZEALOT") == 3
+        assert personas.count("HERO_RB") == 2
 
-    # 2. Test randomizing draft order
-    rand_res = client.post(f"/api/napper/draft/{draft_id}/randomize_order", json={"keep_user_slot": False})
-    assert rand_res.status_code == 200
-    rand_data = rand_res.json()
-    new_user_slot = rand_data["user_slot"]
-    assert 1 <= new_user_slot <= 10
+        # 2. Test randomizing draft order
+        rand_res = client.post(f"/api/napper/draft/{draft_id}/randomize_order", json={"keep_user_slot": False})
+        assert rand_res.status_code == 200
+        rand_data = rand_res.json()
+        new_user_slot = rand_data["user_slot"]
+        assert 1 <= new_user_slot <= 10
 
-    # Check picks reflect the updated user slot
-    user_picks = [p for p in rand_data["picks"] if p["slot_num"] == new_user_slot]
-    for up in user_picks:
-        assert up["picked_by"] == "USER"
-        assert up["team_name"] == "The Straw Hat Pirates"
+        # Check picks reflect the updated user slot
+        user_picks = [p for p in rand_data["picks"] if p["slot_num"] == new_user_slot]
+        for up in user_picks:
+            assert up["picked_by"] == "USER"
+            assert up["team_name"] == "The Straw Hat Pirates"
 
-    # 3. Test changing archetype composition via endpoint
-    new_comp = {
-        "TRASH_TALKER": 4,
-        "WAIVER_HAWK": 3,
-        "DIE_HARD": 2,
-    }
-    arch_res = client.post(f"/api/napper/draft/{draft_id}/set_archetypes", json={"archetype_composition": new_comp})
-    assert arch_res.status_code == 200
-    arch_data = arch_res.json()
-    new_ai_teams = [t for t in arch_data["teams"] if not t["is_user"]]
-    new_personas = [t["persona"] for t in new_ai_teams]
-    assert new_personas.count("TRASH_TALKER") == 4
-    assert new_personas.count("WAIVER_HAWK") == 3
-    assert new_personas.count("DIE_HARD") == 2
+        # 3. Test changing archetype composition via endpoint
+        new_comp = {
+            "TRASH_TALKER": 4,
+            "WAIVER_HAWK": 3,
+            "DIE_HARD": 2,
+        }
+        arch_res = client.post(f"/api/napper/draft/{draft_id}/set_archetypes", json={"archetype_composition": new_comp})
+        assert arch_res.status_code == 200
+        arch_data = arch_res.json()
+        new_ai_teams = [t for t in arch_data["teams"] if not t["is_user"]]
+        new_personas = [t["persona"] for t in new_ai_teams]
+        assert new_personas.count("TRASH_TALKER") == 4
+        assert new_personas.count("WAIVER_HAWK") == 3
+        assert new_personas.count("DIE_HARD") == 2
 
-    # 4. User can still claim any slot after randomization
-    target_slot = 1 if new_user_slot != 1 else 10
-    claim_res = client.post(f"/api/napper/draft/{draft_id}/claim_slot", json={"slot": target_slot})
-    assert claim_res.status_code == 200
-    claimed_data = claim_res.json()
-    assert claimed_data["user_slot"] == target_slot
-    claimed_user_team = next(t for t in claimed_data["teams"] if t["slot_num"] == target_slot)
-    assert claimed_user_team["is_user"] is True
+        # 4. User can still claim any slot after randomization
+        target_slot = 1 if new_user_slot != 1 else 10
+        claim_res = client.post(f"/api/napper/draft/{draft_id}/claim_slot", json={"slot": target_slot})
+        assert claim_res.status_code == 200
+        claimed_data = claim_res.json()
+        assert claimed_data["user_slot"] == target_slot
+        claimed_user_team = next(t for t in claimed_data["teams"] if t["slot_num"] == target_slot)
+        assert claimed_user_team["is_user"] is True
 
 
 def test_set_draft_order_endpoint_with_slot_order():
     """Tests POST /api/napper/draft/{id}/set_order using a slot_order permutation."""
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 8,
-        "scoring_type": "PPR",
-        "user_slot": 3,
-        "rounds": 14,
-        "is_superflex": True,
-    })
-    assert create_res.status_code == 200
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(
+        teams_count=8,
+        scoring_type="PPR",
+        user_slot=3,
+        rounds=14,
+        is_superflex=True,
+    ) as draft_init:
+        draft_id = draft_init["id"]
 
-    # Invert the draft order: previous slot 8 becomes 1, ..., previous slot 1 becomes 8
-    # Previous user slot was 3; in [8, 7, 6, 5, 4, 3, 2, 1], slot 3 is at index 5 -> slot 6!
-    slot_order = [8, 7, 6, 5, 4, 3, 2, 1]
-    order_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": slot_order})
-    assert order_res.status_code == 200
-    data = order_res.json()
+        # Invert the draft order: previous slot 8 becomes 1, ..., previous slot 1 becomes 8
+        # Previous user slot was 3; in [8, 7, 6, 5, 4, 3, 2, 1], slot 3 is at index 5 -> slot 6!
+        slot_order = [8, 7, 6, 5, 4, 3, 2, 1]
+        order_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": slot_order})
+        assert order_res.status_code == 200
+        data = order_res.json()
 
-    assert data["user_slot"] == 6
-    user_team = next(t for t in data["teams"] if t["slot_num"] == 6)
-    assert user_team["is_user"] is True
-    assert user_team["team_name"] == "The Straw Hat Pirates"
+        assert data["user_slot"] == 6
+        user_team = next(t for t in data["teams"] if t["slot_num"] == 6)
+        assert user_team["is_user"] is True
+        assert user_team["team_name"] == "The Straw Hat Pirates"
 
-    # Verify picks ownership updated
-    user_picks = [p for p in data["picks"] if p["slot_num"] == 6]
-    for p in user_picks:
-        assert p["picked_by"] == "USER"
-        assert p["team_name"] == "The Straw Hat Pirates"
+        # Verify picks ownership updated
+        user_picks = [p for p in data["picks"] if p["slot_num"] == 6]
+        for p in user_picks:
+            assert p["picked_by"] == "USER"
+            assert p["team_name"] == "The Straw Hat Pirates"
 
-    non_user_picks = [p for p in data["picks"] if p["slot_num"] != 6]
-    for p in non_user_picks:
-        assert p["picked_by"] == "AI"
+        non_user_picks = [p for p in data["picks"] if p["slot_num"] != 6]
+        for p in non_user_picks:
+            assert p["picked_by"] == "AI"
 
 
 def test_set_draft_order_endpoint_with_custom_teams_and_validation():
     """Tests POST /api/napper/draft/{id}/set_order with custom teams list and validation checks."""
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 8,
-        "scoring_type": "PPR",
-        "user_slot": 1,
-        "rounds": 12,
-        "is_superflex": True,
-    })
-    assert create_res.status_code == 200
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(
+        teams_count=8,
+        scoring_type="PPR",
+        user_slot=1,
+        rounds=12,
+        is_superflex=True,
+    ) as draft_init:
+        draft_id = draft_init["id"]
 
-    # 1. Invalid permutation (duplicate slots or wrong length)
-    bad_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [1, 2, 3, 4, 5, 6, 7]})
-    assert bad_res.status_code == 400
+        # 1. Invalid permutation (duplicate slots or wrong length)
+        bad_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [1, 2, 3, 4, 5, 6, 7]})
+        assert bad_res.status_code == 400
 
-    bad_res2 = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [1, 1, 2, 3, 4, 5, 6, 7]})
-    assert bad_res2.status_code == 400
+        bad_res2 = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [1, 1, 2, 3, 4, 5, 6, 7]})
+        assert bad_res2.status_code == 400
 
-    # 2. Reorder using custom teams payload
-    current_teams = create_res.json()["teams"]
-    # Move user (index 0) to slot 5 (index 4)
-    reordered_teams = current_teams[1:5] + [current_teams[0]] + current_teams[5:]
-    assert len(reordered_teams) == 8
+        # 2. Reorder using custom teams payload
+        current_teams = draft_init["teams"]
+        # Move user (index 0) to slot 5 (index 4)
+        reordered_teams = current_teams[1:5] + [current_teams[0]] + current_teams[5:]
+        assert len(reordered_teams) == 8
 
-    custom_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"teams": reordered_teams})
-    assert custom_res.status_code == 200
-    custom_data = custom_res.json()
-    assert custom_data["user_slot"] == 5
+        custom_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"teams": reordered_teams})
+        assert custom_res.status_code == 200
+        custom_data = custom_res.json()
+        assert custom_data["user_slot"] == 5
 
-    user_team = next(t for t in custom_data["teams"] if t["slot_num"] == 5)
-    assert user_team["is_user"] is True
+        user_team = next(t for t in custom_data["teams"] if t["slot_num"] == 5)
+        assert user_team["is_user"] is True
 
-    # 3. Cannot change order after draft has started
-    start_res = client.post(f"/api/napper/draft/{draft_id}/start")
-    assert start_res.status_code == 200
+        # 3. Cannot change order after draft has started
+        start_res = client.post(f"/api/napper/draft/{draft_id}/start")
+        assert start_res.status_code == 200
 
-    started_order_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [8, 7, 6, 5, 4, 3, 2, 1]})
-    assert started_order_res.status_code == 400
-    assert "Cannot set draft order after draft has started" in started_order_res.json()["detail"]
+        started_order_res = client.post(f"/api/napper/draft/{draft_id}/set_order", json={"slot_order": [8, 7, 6, 5, 4, 3, 2, 1]})
+        assert started_order_res.status_code == 400
+        assert "Cannot set draft order after draft has started" in started_order_res.json()["detail"]
 
 
 def test_available_players_includes_kickers():
     """Verifies that kickers are draftable players with proper ADP and projections."""
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 8,
-        "rounds": 15,
-        "user_slot": 1,
-    })
-    assert create_res.status_code == 200
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(teams_count=8, rounds=15, user_slot=1) as draft_init:
+        draft_id = draft_init["id"]
 
-    # 1. Query with position="K"
-    res_k = client.get(f"/api/napper/draft/{draft_id}/available_players?position=K&limit=50")
-    assert res_k.status_code == 200
-    k_data = res_k.json()
-    assert k_data["total"] > 0
-    kickers = k_data["players"]
-    assert len(kickers) > 0
-    for k in kickers:
-        assert k["position"] == "K"
-        assert k["adp"] < 999  # Valid ADP assigned
-        assert k["projections"]["pts"] > 0
+        # 1. Query with position="K"
+        res_k = client.get(f"/api/napper/draft/{draft_id}/available_players?position=K&limit=50")
+        assert res_k.status_code == 200
+        k_data = res_k.json()
+        assert k_data["total"] > 0
+        kickers = k_data["players"]
+        assert len(kickers) > 0
+        for k in kickers:
+            assert k["position"] == "K"
+        ranked_kickers = [k for k in kickers if k["adp"] is not None]
+        assert len(ranked_kickers) >= 32
+        for k in ranked_kickers:
+            assert k["adp"] < 999
+        assert sum(1 for k in ranked_kickers if (k["projections"]["pts"] or 0) > 0) >= 28
 
-    # 2. Query with position="ALL" with limit=600 includes kickers
-    res_all = client.get(f"/api/napper/draft/{draft_id}/available_players?position=ALL&limit=600")
-    assert res_all.status_code == 200
-    all_data = res_all.json()
-    all_positions = {p["position"] for p in all_data["players"]}
-    assert "K" in all_positions
+        # 2. Query with position="ALL" with limit=600 includes kickers
+        res_all = client.get(f"/api/napper/draft/{draft_id}/available_players?position=ALL&limit=600")
+        assert res_all.status_code == 200
+        all_data = res_all.json()
+        all_positions = {p["position"] for p in all_data["players"]}
+        assert "K" in all_positions
 
 
 def test_draft_kicker_selection():
     """Verifies drafting a kicker advances the draft and records the selection."""
-    create_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 4,
-        "rounds": 3,
-        "user_slot": 1,
-    })
-    assert create_res.status_code == 200
-    draft_id = create_res.json()["id"]
+    with _league_draft_session(teams_count=8, rounds=3, user_slot=1) as draft_init:
+        draft_id = draft_init["id"]
 
-    # Start draft
-    client.post(f"/api/napper/draft/{draft_id}/start")
+        # Start draft
+        client.post(f"/api/napper/draft/{draft_id}/start")
 
-    # Find a kicker
-    res_k = client.get(f"/api/napper/draft/{draft_id}/available_players?position=K&limit=10")
-    kicker = res_k.json()["players"][0]
-    kicker_id = kicker["id"]
+        # Find a kicker
+        res_k = client.get(f"/api/napper/draft/{draft_id}/available_players?position=K&limit=10")
+        kicker = res_k.json()["players"][0]
+        kicker_id = kicker["id"]
 
-    # Pick the kicker at pick #1
-    pick_res = client.post(f"/api/napper/draft/{draft_id}/pick", json={"player_id": kicker_id})
-    assert pick_res.status_code == 200
-    draft_state = pick_res.json()
+        # Pick the kicker at pick #1
+        pick_res = client.post(f"/api/napper/draft/{draft_id}/pick", json={"player_id": kicker_id})
+        assert pick_res.status_code == 200
+        draft_state = pick_res.json()
 
-    # Verify pick was recorded
-    first_pick = draft_state["picks"][0]
-    assert first_pick["player"] is not None
-    assert first_pick["player"]["id"] == kicker_id
-    assert first_pick["player"]["position"] == "K"
-    assert first_pick["player"]["name"] == kicker["name"]
+        # Verify pick was recorded
+        first_pick = draft_state["picks"][0]
+        assert first_pick["player"] is not None
+        assert first_pick["player"]["id"] == kicker_id
+        assert first_pick["player"]["position"] == "K"
+        assert first_pick["player"]["name"] == kicker["name"]
 
 
 def test_pick_league_custom_strategies():
@@ -701,135 +714,141 @@ def test_pick_league_custom_strategies():
     assert res.status_code == 200
     data = res.json()
     league_id = data["league"]["id"]
-
-    # Verify AI team personas
-    detail_res = client.get(f"/api/napper/league/{league_id}")
-    assert detail_res.status_code == 200
-    teams = detail_res.json()["teams"]
-    ai_teams = [t for t in teams if t["is_ai"]]
-    assert len(ai_teams) == 7
-
-    personas = [t["persona"] for t in ai_teams]
-    assert personas.count("HERO_RB") == 3
-    assert personas.count("ZERO_RB_ZEALOT") == 2
-    assert personas.count("EARLY_QB") == 2
-
-
-def test_set_league_strategies_endpoint():
-    """Verifies updating an existing league's strategies via POST /league/{id}/set_strategies."""
-    # Create test league
-    res = client.post("/api/napper/leagues/create", json={
-        "name": "Strategy Switch League",
-        "teams_count": 8,
-        "scoring_type": "PPR",
-        "status": "IN_SEASON",
-        "archetype_preset": "Balanced Mix",
-    })
-    assert res.status_code == 200
-    league_id = res.json()["league"]["id"]
-
-    # Update strategies to custom composition
-    update_res = client.post(f"/api/napper/league/{league_id}/set_strategies", json={
-        "archetype_preset": "Custom",
-        "archetype_composition": {
-            "ANALYTICS_NERD": 4,
-            "TRADE_FIEND": 3,
-        },
-    })
-    assert update_res.status_code == 200
-    assert update_res.json()["status"] == "success"
-
-    # Verify updated AI team personas
-    detail_res = client.get(f"/api/napper/league/{league_id}")
-    assert detail_res.status_code == 200
-    teams = detail_res.json()["teams"]
-    ai_teams = [t for t in teams if t["is_ai"]]
-    personas = [t["persona"] for t in ai_teams]
-
-    assert personas.count("ANALYTICS_NERD") == 4
-    assert personas.count("TRADE_FIEND") == 3
-
-
-def test_save_draft_as_league():
-    """Tests saving a draft session as a persistent active fantasy league."""
-    # 1. Create mock draft session
-    mock_res = client.post("/api/napper/drafts/create_mock", json={
-        "teams_count": 8,
-        "rounds": 15,
-        "user_slot": 1,
-        "scoring_type": "PPR",
-        "is_superflex": True,
-    })
-    assert mock_res.status_code == 200
-    mock_data = mock_res.json()
-    draft_id = mock_data["id"]
-
-    # 2. Simulate draft picks
-    sim_res = client.post(f"/api/napper/draft/{draft_id}/sim_all")
-    assert sim_res.status_code == 200
-    final_draft = sim_res.json()
-
-    # 3. Save as league
-    save_res = client.post("/api/napper/drafts/save_as_league", json={
-        "name": "Draft Champions League",
-        "teams_count": 8,
-        "scoring_type": "PPR",
-        "is_superflex": True,
-        "user_slot": 1,
-        "draft_id": draft_id,
-        "teams": [
-            {
-                "slot": t["slot_num"],
-                "name": t["team_name"],
-                "handle": t["manager_handle"],
-                "avatar": t["avatar_url"],
-                "is_user": t["is_user"],
-                "persona": t["persona"],
-                "roster": final_draft.get("rosters", {}).get(str(t["slot_num"]), []),
-            }
-            for t in final_draft.get("teams_info", [])
-        ],
-        "picks": final_draft.get("picks", []),
-    })
-    assert save_res.status_code == 200, save_res.json()
-    save_data = save_res.json()
-    assert save_data["status"] == "success"
-    league = save_data["league"]
-    league_id = league["id"]
-    assert league["name"] == "Draft Champions League"
-    assert league["status"] == "IN_SEASON"
-
     try:
-        # 4. Verify league appears in /api/napper/leagues
-        leagues_res = client.get("/api/napper/leagues")
-        assert leagues_res.status_code == 200
-        league_list = leagues_res.json()["leagues"]
-        matched = next((l for l in league_list if l["id"] == league_id), None)
-        assert matched is not None
-        assert matched["name"] == "Draft Champions League"
+        # Verify AI team personas
+        detail_res = client.get(f"/api/napper/league/{league_id}")
+        assert detail_res.status_code == 200
+        teams = detail_res.json()["teams"]
+        ai_teams = [t for t in teams if t["is_ai"]]
+        assert len(ai_teams) == 7
 
-        # 5. Verify rosters exist with starting slots and bench
-        rosters_res = client.get(f"/api/napper/league/{league_id}/teams_rosters?week=1")
-        assert rosters_res.status_code == 200
-        teams_rosters = rosters_res.json()["teams"]
-        assert len(teams_rosters) == 8
-        for tm in teams_rosters:
-            assert len(tm["players"]) > 0
-
-        # 6. Verify 14-week schedule generated
-        matchup_res = client.get(f"/api/napper/league/{league_id}/matchup?week=1")
-        assert matchup_res.status_code == 200
-
-        # 7. Verify chat announcement
-        chat_res = client.get(f"/api/napper/league/{league_id}/chat")
-        assert chat_res.status_code == 200
-        messages = chat_res.json()["messages"]
-        assert any("draft" in m["message_text"].lower() or (m.get("card_payload") and m["card_payload"].get("type") == "DRAFT_RECAP") for m in messages)
+        personas = [t["persona"] for t in ai_teams]
+        assert personas.count("HERO_RB") == 3
+        assert personas.count("ZERO_RB_ZEALOT") == 2
+        assert personas.count("EARLY_QB") == 2
     finally:
-        from engines.napper_draft_engine import get_db
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM napper_leagues WHERE id = %s", (league_id,))
             conn.commit()
+
+
+def test_set_league_strategies_endpoint():
+    """Verifies updating an existing league's strategies via POST /league/{id}/set_strategies."""
+    res = client.post("/api/napper/leagues/create", json={
+        "name": "Strategy Switch League",
+        "teams_count": 8,
+        "scoring_type": "PPR",
+        "status": "PRE_DRAFT",
+        "archetype_preset": "Balanced Mix",
+    })
+    assert res.status_code == 200
+    league_id = res.json()["league"]["id"]
+    try:
+        # Update strategies to custom composition
+        update_res = client.post(f"/api/napper/league/{league_id}/set_strategies", json={
+            "archetype_preset": "Custom",
+            "archetype_composition": {
+                "ANALYTICS_NERD": 4,
+                "TRADE_FIEND": 3,
+            },
+        })
+        assert update_res.status_code == 200
+        assert update_res.json()["status"] == "success"
+
+        # Verify updated AI team personas
+        detail_res = client.get(f"/api/napper/league/{league_id}")
+        assert detail_res.status_code == 200
+        teams = detail_res.json()["teams"]
+        ai_teams = [t for t in teams if t["is_ai"]]
+        personas = [t["persona"] for t in ai_teams]
+
+        assert personas.count("ANALYTICS_NERD") == 4
+        assert personas.count("TRADE_FIEND") == 3
+    finally:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM napper_leagues WHERE id = %s", (league_id,))
+            conn.commit()
+
+
+def test_save_draft_as_league():
+    """Tests saving a draft session as a persistent active fantasy league."""
+    with _league_draft_session(
+        teams_count=8,
+        rounds=15,
+        user_slot=1,
+        scoring_type="PPR",
+        is_superflex=True,
+    ) as draft_init:
+        draft_id = draft_init["id"]
+
+        # 2. Simulate draft picks
+        sim_res = client.post(f"/api/napper/draft/{draft_id}/sim_all")
+        assert sim_res.status_code == 200
+        final_draft = sim_res.json()
+
+        # 3. Save as league
+        save_res = client.post("/api/napper/drafts/save_as_league", json={
+            "name": "Draft Champions League",
+            "teams_count": 8,
+            "scoring_type": "PPR",
+            "is_superflex": True,
+            "user_slot": 1,
+            "draft_id": draft_id,
+            "teams": [
+                {
+                    "slot": t["slot_num"],
+                    "name": t["team_name"],
+                    "handle": t["manager_handle"],
+                    "avatar": t["avatar_url"],
+                    "is_user": t["is_user"],
+                    "persona": t["persona"],
+                    "roster": final_draft.get("rosters", {}).get(str(t["slot_num"]), []),
+                }
+                for t in final_draft.get("teams_info", [])
+            ],
+            "picks": final_draft.get("picks", []),
+        })
+        assert save_res.status_code == 200, save_res.json()
+        save_data = save_res.json()
+        assert save_data["status"] == "success"
+        league = save_data["league"]
+        league_id = league["id"]
+        assert league["name"] == "Draft Champions League"
+        assert league["status"] == "IN_SEASON"
+
+        try:
+            # 4. Verify league appears in /api/napper/leagues
+            leagues_res = client.get("/api/napper/leagues")
+            assert leagues_res.status_code == 200
+            league_list = leagues_res.json()["leagues"]
+            matched = next((l for l in league_list if l["id"] == league_id), None)
+            assert matched is not None
+            assert matched["name"] == "Draft Champions League"
+
+            # 5. Verify rosters exist with starting slots and bench
+            rosters_res = client.get(f"/api/napper/league/{league_id}/teams_rosters?week=1")
+            assert rosters_res.status_code == 200
+            teams_rosters = rosters_res.json()["teams"]
+            assert len(teams_rosters) == 8
+            for tm in teams_rosters:
+                assert len(tm["players"]) > 0
+
+            # 6. Verify 14-week schedule generated
+            matchup_res = client.get(f"/api/napper/league/{league_id}/matchup?week=1")
+            assert matchup_res.status_code == 200
+
+            # 7. Verify chat announcement
+            chat_res = client.get(f"/api/napper/league/{league_id}/chat")
+            assert chat_res.status_code == 200
+            messages = chat_res.json()["messages"]
+            assert any("draft" in m["message_text"].lower() or (m.get("card_payload") and m["card_payload"].get("type") == "DRAFT_RECAP") for m in messages)
+        finally:
+            with get_db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM napper_leagues WHERE id = %s", (league_id,))
+                conn.commit()
+
 
 

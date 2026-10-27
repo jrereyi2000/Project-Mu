@@ -8,7 +8,33 @@ from engines.napper_trade_engine import generate_trade_proposals
 
 from server.napper_api import get_db
 
+pytestmark = pytest.mark.integration
+
 client = TestClient(app)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _napper_api_env():
+    from engines.napper_seeder import seed_napper_database
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+            orig_week = cur.fetchone()["current_week"]
+            cur.execute("UPDATE league_state SET current_week = 6 WHERE id = 1")
+        conn.commit()
+    seed_napper_database(wipe_all=True)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE napper_leagues SET is_seed = FALSE WHERE id IN (1, 2, 3)")
+        conn.commit()
+    try:
+        yield
+    finally:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE league_state SET current_week = %s WHERE id = 1", (orig_week,))
+            conn.commit()
 
 
 def get_first_league_id() -> int:
@@ -33,7 +59,7 @@ def test_napper_leagues():
     assert "leagues" in data
     assert len(data["leagues"]) >= 3
     league_names = [lg["name"] for lg in data["leagues"]]
-    assert "Solo 2026 8-Team SF PPR" in league_names
+    assert "Solo 8-Team SF PPR" in league_names
 
 
 def test_napper_league_detail():
@@ -112,6 +138,11 @@ def test_napper_create_league_cleans_seed_leagues():
 
     created_id = None
     try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE napper_leagues SET is_seed = TRUE WHERE id IN (1, 2, 3)")
+            conn.commit()
+
         # Create a new league
         res = client.post("/api/napper/leagues/create", json={
             "name": "Grand Line Dynasty",
@@ -125,7 +156,7 @@ def test_napper_create_league_cleans_seed_leagues():
         assert data["league"]["name"] == "Grand Line Dynasty"
         created_id = data["league"]["id"]
 
-        # Check that seed leagues have been removed
+        # Check that seed leagues are excluded from active leagues list
         l_res = client.get("/api/napper/leagues")
         assert l_res.status_code == 200
         leagues = l_res.json()["leagues"]
@@ -139,7 +170,10 @@ def test_napper_create_league_cleans_seed_leagues():
             conn.commit()
         # Restore reference seed leagues without wiping user leagues
         seed_napper_database()
-
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE napper_leagues SET is_seed = FALSE WHERE id IN (1, 2, 3)")
+            conn.commit()
 
 
 def test_napper_delete_league_cascades():
@@ -155,7 +189,7 @@ def test_napper_delete_league_cascades():
     try:
         del_res = client.delete(f"/api/napper/league/{league_id}")
         assert del_res.status_code == 200
-        assert del_res.json()["status"] == "deleted"
+        assert del_res.json()["deleted"] is True
 
         assert client.get(f"/api/napper/league/{league_id}").status_code == 404
         assert all(l["id"] != league_id for l in client.get("/api/napper/leagues").json()["leagues"])
@@ -171,6 +205,10 @@ def test_napper_delete_league_cascades():
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM napper_leagues WHERE id = %s", (league_id,))
             conn.commit()
-        # create_league wipes seed leagues; restore them without touching user leagues
         from engines.napper_seeder import seed_napper_database
         seed_napper_database()
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE napper_leagues SET is_seed = FALSE WHERE id IN (1, 2, 3)")
+            conn.commit()
+

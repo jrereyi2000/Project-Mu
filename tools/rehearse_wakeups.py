@@ -1,5 +1,6 @@
 import argparse
 import json
+from pathlib import Path
 import psycopg
 import sys
 import signal
@@ -7,6 +8,7 @@ try:
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 except Exception:
     pass
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
 
 def get_default_season_and_week(db_conn_info: str):

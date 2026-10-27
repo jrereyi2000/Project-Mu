@@ -12,6 +12,10 @@ from newsroom.social_desk import load_week_context, plan_social_week, plan_team_
 from newsroom.social_writer import build_post_prompt, KIND_INSTRUCTIONS
 
 
+import pytest
+
+
+@pytest.mark.integration
 class NewsroomInjuriesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

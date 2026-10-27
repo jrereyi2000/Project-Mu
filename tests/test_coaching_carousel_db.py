@@ -11,11 +11,13 @@ try:
 except Exception:          # pragma: no cover
     psycopg = None
 
+import pytest
 from engines import coaching_carousel as cc
 
 SEASON = 2035
 
 
+@pytest.mark.integration
 class Rehearse2035(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

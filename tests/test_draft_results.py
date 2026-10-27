@@ -305,69 +305,66 @@ class TestCsvAndJsonLoading(unittest.TestCase):
         self.assertEqual(report["picks_loaded"], 32)
 
 
+import pytest
+
+
+@pytest.mark.integration
 class TestLiveDatabaseExecution(unittest.TestCase):
-    """Test against the local Postgres database (madden-db) if available."""
+    """Test against the isolated test Postgres database (madden_test) if available."""
 
     def test_live_db_round_trip(self):
-        try:
-            import psycopg
-            conn = psycopg.connect(R.DSN)
-        except Exception:
-            self.skipTest("Live database not reachable")
+        import psycopg
+        conn = psycopg.connect(R.DSN)
 
         try:
-            with conn:
-                # Use a high test season (e.g. 9999) to avoid colliding with active league data
-                test_season = 9999
+            test_season = 9999
 
-                # Create 2 test prospects in draft_prospects for season 9999
-                with conn.cursor() as cur:
-                    cur.execute("DELETE FROM draft_prospects WHERE draft_season = %s", (test_season,))
-                    cur.execute(
-                        """INSERT INTO draft_prospects 
-                           (draft_season, projected_pick, projected_round, round_pick, full_name, position, college)
-                           VALUES (%s, 1, '1', 1, 'Test Prospect Alpha', 'QB', 'Test State'),
-                                  (%s, 2, '1', 2, 'Test Prospect Beta', 'CB', 'Test Tech')""",
-                        (test_season, test_season),
-                    )
+            # Create 2 test prospects in draft_prospects for season 9999
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM draft_prospects WHERE draft_season = %s", (test_season,))
+                cur.execute(
+                    """INSERT INTO draft_prospects 
+                       (draft_season, projected_pick, projected_round, round_pick, full_name, position, college)
+                       VALUES (%s, 1, '1', 1, 'Test Prospect Alpha', 'QB', 'Test State'),
+                              (%s, 2, '1', 2, 'Test Prospect Beta', 'CB', 'Test Tech')""",
+                    (test_season, test_season),
+                )
 
-                picks = sample_32_picks()
-                picks[0]["player_name"] = "Test Prospect Alpha"
-                picks[0]["position"] = "QB"
-                picks[1]["player_name"] = "Test Prospect Beta"
-                picks[1]["position"] = "CB"
+            picks = sample_32_picks()
+            picks[0]["player_name"] = "Test Prospect Alpha"
+            picks[0]["position"] = "QB"
+            picks[1]["player_name"] = "Test Prospect Beta"
+            picks[1]["position"] = "CB"
 
-                # Run live load
-                report = R.resolve_and_load_picks(picks, test_season, dry_run=False, conn=conn)
-                self.assertEqual(report["status"], "success")
-                self.assertEqual(report["picks_loaded"], 32)
-                self.assertEqual(report["matched_prospects"], 2)
+            # Run load inside rolled-back transaction
+            report = R.resolve_and_load_picks(picks, test_season, dry_run=False, conn=conn)
+            self.assertEqual(report["status"], "success")
+            self.assertEqual(report["picks_loaded"], 32)
+            self.assertEqual(report["matched_prospects"], 2)
 
-                # Verify records in draft_prospects
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """SELECT actual_round, actual_round_pick, actual_pick, full_name, drafted_team_id 
-                           FROM draft_prospects WHERE draft_season = %s AND actual_pick IS NOT NULL 
-                           ORDER BY actual_pick""",
-                        (test_season,),
-                    )
-                    rows = cur.fetchall()
-                    self.assertEqual(len(rows), 32)
-                    self.assertEqual(rows[0][0], "1")
-                    self.assertEqual(rows[0][1], 1)
-                    self.assertEqual(rows[0][2], 1)
-                    self.assertEqual(rows[0][3], "Test Prospect Alpha")
+            # Verify records in draft_prospects
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT actual_round, actual_round_pick, actual_pick, full_name, drafted_team_id 
+                       FROM draft_prospects WHERE draft_season = %s AND actual_pick IS NOT NULL 
+                       ORDER BY actual_pick""",
+                    (test_season,),
+                )
+                rows = cur.fetchall()
+                self.assertEqual(len(rows), 32)
+                self.assertEqual(rows[0][0], "1")
+                self.assertEqual(rows[0][1], 1)
+                self.assertEqual(rows[0][2], 1)
+                self.assertEqual(rows[0][3], "Test Prospect Alpha")
 
-                    # Verify idempotency by loading again
-                    report2 = R.resolve_and_load_picks(picks, test_season, dry_run=False, conn=conn)
-                    self.assertEqual(report2["picks_loaded"], 32)
-                    cur.execute("SELECT count(*) FROM draft_prospects WHERE draft_season = %s AND actual_pick IS NOT NULL", (test_season,))
-                    count = cur.fetchone()[0]
-                    self.assertEqual(count, 32)
-
-                    # Cleanup test data
-                    cur.execute("DELETE FROM draft_prospects WHERE draft_season = %s", (test_season,))
+                # Verify idempotency by loading again
+                report2 = R.resolve_and_load_picks(picks, test_season, dry_run=False, conn=conn)
+                self.assertEqual(report2["picks_loaded"], 32)
+                cur.execute("SELECT count(*) FROM draft_prospects WHERE draft_season = %s AND actual_pick IS NOT NULL", (test_season,))
+                count = cur.fetchone()[0]
+                self.assertEqual(count, 32)
         finally:
+            conn.rollback()
             conn.close()
 
 

@@ -94,15 +94,10 @@ class BracketTest(unittest.TestCase):
             sa.compute([game(1, 2, 10, 0)], TEAMS)
 
 
-def db_up():
-    try:
-        psycopg.connect(sa.CONN_INFO, connect_timeout=2).close()
-        return True
-    except psycopg.OperationalError:
-        return False
+import pytest
 
 
-@unittest.skipUnless(db_up(), "Postgres not reachable")
+@pytest.mark.integration
 class Live2035Test(unittest.TestCase):
     """Reads 2035's games (complete: 272 regular season + 13 playoff) and checks the archive it would write."""
 

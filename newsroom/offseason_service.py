@@ -566,6 +566,10 @@ def apply_coaching_moves(
 
                 # 1. Close outgoing head coach tenure at hiring team
                 cur.execute("""
+                    DELETE FROM coach_tenures
+                    WHERE team_id = %s AND start_season >= %s
+                """, (team_id, effective_season))
+                cur.execute("""
                     UPDATE coach_tenures
                     SET end_season = %s
                     WHERE team_id = %s
@@ -654,6 +658,10 @@ def apply_coaching_moves(
                 if incoming_slant == "OFFENSIVE":
                     # Offensive scheme imported: close old OC tenure and insert new OC
                     cur.execute("""
+                        DELETE FROM coordinator_tenures
+                        WHERE team_id = %s AND role = 'OC' AND start_season >= %s
+                    """, (team_id, effective_season))
+                    cur.execute("""
                         UPDATE coordinator_tenures
                         SET end_season = %s
                         WHERE team_id = %s AND role = 'OC'
@@ -689,6 +697,10 @@ def apply_coaching_moves(
 
                 elif incoming_slant == "DEFENSIVE":
                     # Defensive scheme imported: close old DC tenure and insert new DC
+                    cur.execute("""
+                        DELETE FROM coordinator_tenures
+                        WHERE team_id = %s AND role = 'DC' AND start_season >= %s
+                    """, (team_id, effective_season))
                     cur.execute("""
                         UPDATE coordinator_tenures
                         SET end_season = %s

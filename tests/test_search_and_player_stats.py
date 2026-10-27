@@ -2,6 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from server.api import app
 
+pytestmark = pytest.mark.integration
+
 client = TestClient(app)
 
 def test_global_search_teams():

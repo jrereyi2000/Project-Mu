@@ -119,15 +119,10 @@ class StaffShapeTest(unittest.TestCase):
         self.assertIsNone(hc["record_with_team"])
 
 
-def db_up():
-    try:
-        psycopg.connect(fo.CONN_INFO, connect_timeout=2).close()
-        return True
-    except psycopg.OperationalError:
-        return False
+import pytest
 
 
-@unittest.skipUnless(db_up(), "Postgres not reachable")
+@pytest.mark.integration
 class EndpointTest(unittest.TestCase):
     def setUp(self):
         app = FastAPI()

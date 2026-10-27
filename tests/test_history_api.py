@@ -154,15 +154,9 @@ class AwardsTest(unittest.TestCase):
         self.assertEqual([r["unit"] for r in team], ["OFFENSE", "OFFENSE", "OFFENSE", "DEFENSE", "SPECIAL_TEAMS"])
 
 
-def db_up():
-    try:
-        psycopg.connect(H.CONN_INFO, connect_timeout=2).close()
-        return True
-    except psycopg.OperationalError:
-        return False
+import pytest
 
 
-@unittest.skipUnless(db_up(), "Postgres not reachable")
 class WatchTest(unittest.TestCase):
     CAT = {"category": "season_pass_yards", "label": "Passing yards in a season", "better": "HIGH"}
     BOOK = [(5477.0, "Peyton Manning", 2013), (5497.0, "George Crawford", 2035), (5497.0, "Matthew Stafford", 2021)]
@@ -195,6 +189,7 @@ class WatchTest(unittest.TestCase):
         self.assertIsNone(H.watch_category(self.CAT, [], [(1, 10, "A", 300.0)], {1: 1}, {1: "CAR"}))
 
 
+@pytest.mark.integration
 class EndpointTest(unittest.TestCase):
     TABLES = ("record_categories", "league_record_entries", "franchise_records", "awards")
 

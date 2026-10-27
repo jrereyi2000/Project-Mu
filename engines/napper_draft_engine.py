@@ -438,7 +438,7 @@ def get_draft_state(draft_id: int) -> Dict[str, Any]:
                 FROM napper_draft_picks dp
                 LEFT JOIN players p ON p.id = dp.player_id
                 LEFT JOIN player_seasons ps ON ps.player_id = p.id AND ps.season = %s
-                JOIN teams t ON t.id = ps.team_id
+                LEFT JOIN teams t ON t.id = ps.team_id
                 LEFT JOIN fantasy_projections fp ON fp.player_id = p.id AND fp.season = %s AND fp.week = 1
                 LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season = %s
                 WHERE dp.draft_id = %s

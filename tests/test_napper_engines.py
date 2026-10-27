@@ -33,8 +33,29 @@ DATABASE_URL = os.environ.get(
 )
 
 
+@pytest.fixture(scope="module")
+def _seeded_napper_env():
+    """Ensures madden_test has Napper reference leagues seeded at week 6 for engine tests."""
+    from engines.napper_seeder import seed_napper_database
+
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_week FROM league_state WHERE id = 1")
+            orig_week = cur.fetchone()[0]
+            cur.execute("UPDATE league_state SET current_week = 6 WHERE id = 1")
+        conn.commit()
+    seed_napper_database(wipe_all=True)
+    try:
+        yield
+    finally:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE league_state SET current_week = %s WHERE id = 1", (orig_week,))
+            conn.commit()
+
+
 @pytest.fixture
-def db_conn():
+def db_conn(_seeded_napper_env):
     """Provides a psycopg database connection rolled back after each test."""
     conn = psycopg.connect(DATABASE_URL)
     conn.autocommit = False
@@ -70,14 +91,18 @@ def test_positional_scarcity_weights():
     assert std_bench["RB"] >= 2
 
 
+@pytest.mark.integration
 def test_analyze_team_rosters_depth_penalties(db_conn):
     """Verify that teams with inadequate bench depth incur penalties in deficit evaluation."""
+    cur = db_conn.cursor()
+    cur.execute("SELECT season FROM napper_leagues WHERE id = 1")
+    season = cur.fetchone()[0]
     roster_req = {"QB": 2, "RB": 2, "WR": 2, "TE": 1}
     teams = analyze_team_rosters(
-        db_conn.cursor(),
+        cur,
         league_id=1,
         week=6,
-        season=2035,
+        season=season,
         roster_req=roster_req,
         is_superflex=True,
     )
@@ -99,6 +124,7 @@ def test_analyze_team_rosters_depth_penalties(db_conn):
 # 2. Trade Proposal Generation
 # -----------------------------------------------------------------------------
 
+@pytest.mark.integration
 def test_generate_trade_proposals(db_conn):
     """Verify AI managers generate fair, reciprocal proposals with natural language pitches."""
     # First resolve any pre-existing pending trades so AI teams can propose
@@ -158,6 +184,7 @@ def test_generate_trade_proposals(db_conn):
 # 3. AI-to-AI Trade Execution & Roster Mutations
 # -----------------------------------------------------------------------------
 
+@pytest.mark.integration
 def test_process_ai_to_ai_trades_execution(db_conn):
     """Verify stochastic acceptance mutates rosters and announces completion to chat."""
     cur = db_conn.cursor()
@@ -227,6 +254,7 @@ def test_process_ai_to_ai_trades_execution(db_conn):
         assert "🚨 TRADE COMPLETED!" in bot_announcement[2]
 
 
+@pytest.mark.integration
 def test_process_ai_trade_bench_depth_rejection(db_conn):
     """Verify that a trade which strips a team below required starters is rejected."""
     cur = db_conn.cursor()
@@ -267,9 +295,12 @@ def test_process_ai_trade_bench_depth_rejection(db_conn):
         assert trade_res["status"] == "REJECTED"
 
 
+@pytest.mark.integration
 def test_process_ai_trade_positional_replacement_not_orphaned(db_conn):
     """Verify that trading 1-for-1 at a position where target has the exact starter requirement does NOT trigger orphan starter rejection."""
     cur = db_conn.cursor()
+    cur.execute("SELECT season FROM napper_leagues WHERE id = 1")
+    season = cur.fetchone()[0]
     cur.execute("SELECT id FROM napper_teams WHERE league_id = 1 AND is_ai = TRUE ORDER BY id LIMIT 2")
     ai_team_1, ai_team_2 = [r[0] for r in cur.fetchall()]
 
@@ -277,11 +308,11 @@ def test_process_ai_trade_positional_replacement_not_orphaned(db_conn):
     cur.execute(
         """
         SELECT r.player_id FROM napper_rosters r
-        JOIN player_seasons ps ON ps.player_id = r.player_id AND ps.season = 2035
+        JOIN player_seasons ps ON ps.player_id = r.player_id AND ps.season = %s
         WHERE r.league_id = 1 AND r.team_id = %s AND r.week = 6 AND ps.position IN ('HB', 'RB')
         LIMIT 2
         """,
-        (ai_team_2,),
+        (season, ai_team_2),
     )
     rbs_team_2 = [r[0] for r in cur.fetchall()]
     if len(rbs_team_2) == 2:
@@ -292,21 +323,21 @@ def test_process_ai_trade_positional_replacement_not_orphaned(db_conn):
             WHERE league_id = 1 AND team_id = %s AND week = 6
               AND player_id NOT IN (%s, %s)
               AND player_id IN (
-                  SELECT player_id FROM player_seasons WHERE season = 2035 AND position IN ('HB', 'RB')
+                  SELECT player_id FROM player_seasons WHERE season = %s AND position IN ('HB', 'RB')
               )
             """,
-            (ai_team_2, rbs_team_2[0], rbs_team_2[1]),
+            (ai_team_2, rbs_team_2[0], rbs_team_2[1], season),
         )
 
         # Find 1 RB on ai_team_1 to offer
         cur.execute(
             """
             SELECT r.player_id FROM napper_rosters r
-            JOIN player_seasons ps ON ps.player_id = r.player_id AND ps.season = 2035
+            JOIN player_seasons ps ON ps.player_id = r.player_id AND ps.season = %s
             WHERE r.league_id = 1 AND r.team_id = %s AND r.week = 6 AND ps.position IN ('HB', 'RB')
             LIMIT 1
             """,
-            (ai_team_1,),
+            (season, ai_team_1),
         )
         rb_team_1_row = cur.fetchone()
         if rb_team_1_row:
@@ -342,6 +373,7 @@ def test_process_ai_trade_positional_replacement_not_orphaned(db_conn):
 # 4. Weekly Awards Generation
 # -----------------------------------------------------------------------------
 
+@pytest.mark.integration
 def test_generate_weekly_awards_formatting(db_conn):
     """Verify weekly awards (RB/WR/TE Benchwarmer, High Scorer, Heartbreaker) generate formatted cards."""
     awards = generate_weekly_awards(1, 5, conn=db_conn)
@@ -370,6 +402,7 @@ def test_generate_weekly_awards_formatting(db_conn):
 # 5. Persona-Specific Manager Banter Generation
 # -----------------------------------------------------------------------------
 
+@pytest.mark.integration
 def test_generate_manager_banter_all_personas(db_conn):
     """Verify contextual manager banter responds to blowouts, injuries, trades, and matchups."""
     contexts = ["INJURY", "BLOWOUT", "TRADE_CHATTER", "MATCHUP_PREVIEW"]

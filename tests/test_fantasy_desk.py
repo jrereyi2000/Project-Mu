@@ -89,28 +89,30 @@ class SlateTests(unittest.TestCase):
 
 class PromptTests(unittest.TestCase):
     def test_fantasy_prompt_uses_fantasy_voice_desk_rules_and_tools(self):
+        from unittest.mock import patch
         from newsroom.swarm_dispatcher import SwarmDispatcher
         d = SwarmDispatcher(api_key="test", debug_mode=False)
         brief = {"desk": "Mu Fantasy", "publication_week": 10}
-        p = d.compile_agent_prompt("Field_Yates", "YATES", "", "@FieldYates", "Field Yates", None, brief, 2035, 10,
-                                   "ARTICLE", article_type="FANTASY_WAIVER_WIRE", desk_note="Test note.")
-        self.assertIn("fantasy football column in the style of Field Yates", p["system_instruction"])
-        self.assertIn("get_fantasy_waiver_wire", p["system_instruction"])
-        self.assertIn("FANTASY DESK RULES", p["task_instruction"])
-        self.assertIn("YOUR SELECTION FILTER (YATES)", p["task_instruction"])
-        self.assertIn("EDITORIAL DESK ASSIGNMENT (MANDATORY):\n- Test note.", p["task_instruction"])
-        self.assertIn("FANTASY REGULAR SEASON, PUBLISHED BEFORE WEEK 10", p["task_instruction"])
-        self.assertNotIn("CRITICAL WRITER RESEARCH TOOLS", p["task_instruction"])
+        with patch("newsroom.swarm_dispatcher.psycopg.connect", side_effect=RuntimeError("offline")):
+            p = d.compile_agent_prompt("Field_Yates", "YATES", "", "@FieldYates", "Field Yates", None, brief, 2035, 10,
+                                       "ARTICLE", article_type="FANTASY_WAIVER_WIRE", desk_note="Test note.")
+            self.assertIn("fantasy football column in the style of Field Yates", p["system_instruction"])
+            self.assertIn("get_fantasy_waiver_wire", p["system_instruction"])
+            self.assertIn("FANTASY DESK RULES", p["task_instruction"])
+            self.assertIn("YOUR SELECTION FILTER (YATES)", p["task_instruction"])
+            self.assertIn("EDITORIAL DESK ASSIGNMENT (MANDATORY):\n- Test note.", p["task_instruction"])
+            self.assertIn("FANTASY REGULAR SEASON, PUBLISHED BEFORE WEEK 10", p["task_instruction"])
+            self.assertNotIn("CRITICAL WRITER RESEARCH TOOLS", p["task_instruction"])
 
-        national = d.compile_agent_prompt("Field_Yates", "YATES", "", "@FieldYates", "Field Yates", None, brief,
-                                          2035, 10, "ARTICLE", article_type="POSITIONAL_PLAYER_TIERS")
-        self.assertNotIn("get_fantasy_", national["system_instruction"])
-        self.assertNotIn("FANTASY DESK RULES", national["task_instruction"])
-        self.assertIn("You are writing a column in the style of Field Yates", national["system_instruction"])
+            national = d.compile_agent_prompt("Field_Yates", "YATES", "", "@FieldYates", "Field Yates", None, brief,
+                                              2035, 10, "ARTICLE", article_type="POSITIONAL_PLAYER_TIERS")
+            self.assertNotIn("get_fantasy_", national["system_instruction"])
+            self.assertNotIn("FANTASY DESK RULES", national["task_instruction"])
+            self.assertIn("You are writing a column in the style of Field Yates", national["system_instruction"])
 
-        tweet = d.compile_agent_prompt("Field_Yates", "YATES", "", "@FieldYates", "Field Yates", None, brief,
-                                       2035, 10, "TWEET")
-        self.assertIn("Your tweets are incredibly structured", tweet["system_instruction"])
+            tweet = d.compile_agent_prompt("Field_Yates", "YATES", "", "@FieldYates", "Field Yates", None, brief,
+                                           2035, 10, "TWEET")
+            self.assertIn("Your tweets are incredibly structured", tweet["system_instruction"])
 
     def test_fantasy_temporal_instruction_handles_postseason(self):
         self.assertIn("FANTASY DRAFT PREP", fd.fantasy_temporal_instruction(1))

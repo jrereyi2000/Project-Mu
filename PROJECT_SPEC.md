@@ -220,10 +220,14 @@ Project Mu/
 │   ├── gen.py                 #   Gemini batch job submit / download
 │   └── process_headshots.py   #   Background removal → static/players/{player_id}.webp
 ├── dashboards/                # Streamlit tools: admin_dashboard.py, espn_dashboard.py
-├── tests/                     # test_*.py scripts (unittest and pytest styles: run with python3 -m pytest -q tests)
+├── pytest.ini                 # Pytest configuration registering the @pytest.mark.integration tier
+├── tests/                     # test_*.py suite: offline unit tier (pytest -m "not integration") + isolated madden_test integration tier (pytest -m integration)
+│   ├── conftest.py            #   Live-DB firewall: blocks all connections to live 'madden', blocks unmocked DB access in unit tests, and routes @pytest.mark.integration tests to madden_test (--recreate-test-db)
 │   └── fixtures/prospects_board.csv # 40-row draft board with blank cells and a nameless row (draft tests never read data/ or captures/)
 ├── tools/
 │   ├── debug/                 #   One-off frame/OCR debugging scripts (including validate_draft_recap_flow.py for live Remote Play draft recap validation)
+│   ├── rehearse_editorial_flow.py # Standalone CLI rehearsal script for commissioning/writing a weekly editorial slate
+│   ├── rehearse_wakeups.py    #   Standalone CLI rehearsal script for verifying matrix slot targeting and agent wakeups
 │   ├── verify_session.sh      #   One-shot newsroom check: roundtable migration, unit tests, verify_newsroom.py, weekly dry run → verify_output/
 │   ├── verify_newsroom.py     #   Checks of the newsroom against the live DB (tool week cutoffs, brief, prompts, local portfolio, weekly news endpoint, agent memory, contract/transaction tools and the notable-move count); its one write test runs in a rolled-back transaction; --only TEXT runs just the matching checks
 │   ├── check_capture_load.py  #   Phase 3 exit check: backfill against a DB (analytics blocked) + per-player game lines vs season_stats
@@ -1643,7 +1647,7 @@ Rather than waking up a fixed list of writer agents who generate generic article
 
 1. **Weekly Default Distribution (Full 10-Slot Editorial Matrix):**
    - `docs/EDITORIAL_MATRIX.md` is the source of truth for the weekly slate. Every weekly run (`dispatch_weekly_national`) commissions all 10 matrix slots for the week: Hero, Slots 1–8, and Standalone.
-   - `article_count` / `target_articles` truncate the slate and are reserved for tests and debugging (`tests/test_wakeups.py --article-count`, `tests/test_editorial_flow.py --count`); production never passes them.
+   - `article_count` / `target_articles` truncate the slate and are reserved for tests and debugging (`tools/rehearse_wakeups.py --article-count`, `tools/rehearse_editorial_flow.py --count`); production never passes them.
    - The weekly national run does not wake up any extra beat reporters. Slots 6–8 come only from the matrix. Local beat portfolios (`LOCAL_POSTGAME_REPORT_CARD`, `LOCAL_PLAYER_SPOTLIGHT`, `LOCAL_SEASON_PROGRESS_REPORT`, plus team-specific `LOCAL_MATCHUP_PRIMER`) come from on-demand team wakeups (`dispatch_team_local`).
    - **Slot Targeting (`newsroom/slot_targets.py`):** Before writers are assigned, `commission_weekly_editorial_slate` resolves the subject of every targeted slot per the matrix's *Slot Targeting Rules*. Matchup primers go to the week's most interesting scheduled games, ranked by `rank_games_by_interest`: projected $E$ (§2.1) plus division-game and playoff-race stakes (byes excluded, 2-week team rotation in the regular season, covering the side with fewer primers this season), and in Super Bowl week to the AFC and NFC champions. In regular-season Weeks 2–18, Slot 6 is converted into a Crisis Beat / Hot Seat Accountability primer targeting teams with the worst win-differential vs. expectation ($\Delta W = \text{Wins} - \text{Expected Wins} \le -2.0$) or active losing streaks with sub-.350 win percentages, while Slots 7 and 8 remain marquee matchup primers. Phase 4 `FRANCHISE_STATE_OF_THE_UNION` goes to a mathematically eliminated team. Week 19 `COACHING_HOT_SEAT_AUDIT` (Slot 6) goes to the team that missed the playoffs with the steepest shortfall below −1.5 wins above expectation (`team_seasons.wins − expected_wins`, `hot_seat_team_ids`; the note lists the other eliminated teams below −1.5; untargeted if none qualifies or expected wins aren't computed), resolved before the Slot 7 Exit State of the Union, which goes to a team that missed the playoffs, and W20–22 `PLAYOFF_AUTOPSY` slots go to the prior round's losers. All of these are distinct teams, most popular first.
    - Each primer is written by a beat reporter for its subject team. Every targeted article gets an `EDITORIAL DESK SUBJECT ASSIGNMENT` block in its prompt, which overrides subject-selection instructions, and is saved under the subject's `team_id`. If league data can't be loaded, slots fall back to writer-chosen subjects.

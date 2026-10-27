@@ -216,6 +216,10 @@ class TestQualitativeOvrConversion(unittest.TestCase):
             convert_ovr_to_qualitative_tier(89)
 
 
+import pytest
+
+
+@pytest.mark.integration
 class TestAllProHonorsVerification(unittest.TestCase):
     """Tests AP All-Pro descriptor verification against the awards table."""
 
@@ -237,6 +241,7 @@ class TestAllProHonorsVerification(unittest.TestCase):
             self.assertIn("strictly forbidden", res["notes"])
 
 
+@pytest.mark.integration
 class TestManifestPreview(unittest.TestCase):
     """Tests dry-run preview generation."""
 
@@ -254,6 +259,7 @@ class TestManifestPreview(unittest.TestCase):
         self.assertIn("Season 2035 Offseason Manifest", preview["summary"])
 
 
+@pytest.mark.integration
 class TestCoachingMoveTransactionAndRollback(unittest.TestCase):
     """Tests transactional coaching moves, scheme inheritance, and rollback integrity."""
 
@@ -312,6 +318,7 @@ class TestCoachingMoveTransactionAndRollback(unittest.TestCase):
         self.assertIn(res["touched_teams"][0], res["touched_teams"])
 
 
+@pytest.mark.integration
 class TestAntiLeakageFactsPackaging(unittest.TestCase):
     """Tests information cutoff packaging for each offseason story type."""
 
@@ -424,6 +431,7 @@ class TestOffseasonRunnerExecution(unittest.TestCase):
         self.assertEqual(len(draft), 1)
         self.assertEqual(draft[0]["slot"], "Slot 5")
 
+    @pytest.mark.integration
     def test_runner_dry_run_execution(self):
         """Test full package dry-run without mutating database."""
         res = run_offseason_package(
@@ -439,6 +447,7 @@ class TestOffseasonRunnerExecution(unittest.TestCase):
         slots = [a["slot"] for a in res["articles"]]
         self.assertEqual(slots, ["Hero Slot", "Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5"])
 
+    @pytest.mark.integration
     def test_runner_only_coaching_dry_run(self):
         """Test partial package dry run for coaching carousel only."""
         res = run_offseason_package(
@@ -484,6 +493,7 @@ class TestOffseasonDebugApi(unittest.TestCase):
         r = self.client.post("/api/debug/offseason/preview", json={"season": 2035, "manifest_path": self.manifest_file})
         self.assertEqual(r.status_code, 401)
 
+    @pytest.mark.integration
     def test_preview_endpoint_success(self):
         r = self.client.post(
             "/api/debug/offseason/preview",

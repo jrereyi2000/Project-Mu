@@ -210,18 +210,13 @@ class DefenseKickingSeedTests(unittest.TestCase):
         self.assertIn("UPDATE record_categories SET coverage = 'FULL'", sql)
 
 
-try:
-    from db.db_handler import DatabaseHandler
-    import psycopg
-    with psycopg.connect(DatabaseHandler().db_conn_info) as _test_conn:
-        pass
-    HAS_LIVE_DB = True
-except Exception:
-    HAS_LIVE_DB = False
+import pytest
+import psycopg
+from db.db_handler import DatabaseHandler
 
 
+@pytest.mark.integration
 class FindRecordsBrokenInWeekTests(unittest.TestCase):
-    @unittest.skipUnless(HAS_LIVE_DB, "requires live database connection with 2035 season data")
     def test_find_records_broken_in_week(self):
         with psycopg.connect(DatabaseHandler().db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -256,9 +251,8 @@ class FindRecordsBrokenInWeekTests(unittest.TestCase):
                 self.assertTrue(any("Panthers" in e["holder"] and e["category"] == "season_team_wins" and e["result"] == "broke" for e in w18))
 
 
-
+@pytest.mark.integration
 class PostseasonRecordsTests(unittest.TestCase):
-    @unittest.skipUnless(HAS_LIVE_DB, "requires live database connection")
     def test_postseason_categories_and_top10(self):
         with psycopg.connect(DatabaseHandler().db_conn_info) as conn:
             with conn.cursor() as cur:

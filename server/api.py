@@ -15,12 +15,26 @@ from server import debug_api, social_api, napper_api, front_office_api, draft_ap
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
-db_pool = ConnectionPool(
+
+class LazyConnectionPool(ConnectionPool):
+    """ConnectionPool that defers opening worker threads until first .connection() or lifespan startup."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("open", False)
+        super().__init__(*args, **kwargs)
+
+    def connection(self, timeout=None):
+        if self.closed:
+            self.open()
+        return super().connection(timeout=timeout)
+
+
+db_pool = LazyConnectionPool(
     conninfo=CONN_INFO,
     min_size=4,
     max_size=20,
     kwargs={"row_factory": dict_row},
-    open=True
+    open=False,
 )
 
 
@@ -98,8 +112,11 @@ def maybe_start_team_wakeup(cur, team_id: int, season: int, label: str = "") -> 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if db_pool.closed:
+        db_pool.open()
     yield
-    db_pool.close()
+    if not db_pool.closed:
+        db_pool.close()
 
 app = FastAPI(lifespan=lifespan)
 

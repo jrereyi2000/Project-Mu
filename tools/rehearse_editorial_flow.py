@@ -4,28 +4,32 @@ Test Harness for NFL Editorial Workflow & Media Swarm
 ======================================================
 Usage Examples:
   # 1. Dry run prompt & commission inspection for Week 18 (no API calls, no DB writes)
-  python3 test_editorial_flow.py --season 2035 --week 18 --dry-run
+  python3 tools/rehearse_editorial_flow.py --season 2035 --week 18 --dry-run
 
   # 2. Mock generation with DB save & entity verification (instant, zero LLM cost)
-  python3 test_editorial_flow.py --season 2035 --week 18 --save-to-db --count 3
+  python3 tools/rehearse_editorial_flow.py --season 2035 --week 18 --save-to-db --count 3
 
   # 3. Live LLM execution for a single article type
-  python3 test_editorial_flow.py --season 2035 --week 18 --article-type MACRO_SLATE_RECAP --live
+  python3 tools/rehearse_editorial_flow.py --season 2035 --week 18 --article-type MACRO_SLATE_RECAP --live
 
   # 4. View existing database records for a given season and week
-  python3 test_editorial_flow.py --season 2035 --week 18 --view-db
+  python3 tools/rehearse_editorial_flow.py --season 2035 --week 18 --view-db
 """
 
 import argparse
+import os
+from pathlib import Path
 import sys
 import json
 import psycopg
 from psycopg.rows import dict_row
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from newsroom.swarm_dispatcher import SwarmDispatcher, build_weekly_assignment_brief
 from db.db_handler import DatabaseHandler
 
-DATABASE_URL = "host=localhost dbname=madden user=postgres password=postgres"
+DATABASE_URL = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
 def print_banner(text: str, char: str = "=", width: int = 80):
     print("\n" + char * width)

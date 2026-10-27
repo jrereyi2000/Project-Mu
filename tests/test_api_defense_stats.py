@@ -23,34 +23,14 @@ def frontend_columns(name: str = "unitStatColumns") -> dict:
             for m in re.finditer(r'(?:"([^"]+)"|(\w+)):\s*\[([^\]]*)\]', block)}
 
 
-try:
-    from fastapi.testclient import TestClient
-    from server.api import app
-    client = TestClient(app)
-    client.get("/api/status").raise_for_status()
-except Exception as e:   # no database or server dependencies here
-    client = None
-    SKIP = str(e)
+import pytest
+from fastapi.testclient import TestClient
+from server.api import app
+
+client = TestClient(app)
 
 
-@unittest.skipIf(client is None, "live database not reachable")
-class DefenseStatsApiTests(unittest.TestCase):
-    def test_player_categories_match_the_stats_page(self):
-        cols = frontend_columns()
-        for cat in ("Tackles", "Sacks", "Interceptions", "Kicking", "Punting", "Kick Returns", "Punt Returns"):
-            rows = client.get("/api/stats/player", params={"category": cat, "season": 2035}).json()
-            self.assertTrue(rows, cat)
-            self.assertEqual(list(rows[0]["stats"]), cols[cat], cat)
-        sacks = client.get("/api/stats/player", params={"category": "Sacks", "season": 2035}).json()
-        self.assertGreaterEqual(sacks[0]["stats"]["SCK"], sacks[-1]["stats"]["SCK"])
-
-    def test_team_categories_match_the_stats_page(self):
-        cols = frontend_columns()
-        for cat in ("Downs", "Red Zone Defense"):
-            rows = client.get("/api/stats/team", params={"category": cat, "season": 2035}).json()
-            self.assertEqual(len(rows), 32, cat)
-            self.assertEqual(list(rows[0]["stats"]), cols[cat], cat)
-
+class RealTeamStatsPureTests(unittest.TestCase):
     def test_real_team_stats_blanks_estimates(self):
         from server.api import real_team_stats
         row = real_team_stats({"third_down_conversions": 5, "third_down_attempts": 13, "red_zone_tds": 2,
@@ -69,6 +49,25 @@ class DefenseStatsApiTests(unittest.TestCase):
         self.assertTrue(captured["box_score_captured"])
         self.assertEqual((captured["first_downs"], captured["third_down_conversions"]), (14, 4))
         self.assertIsNone(captured["third_down_attempts"])
+
+
+@pytest.mark.integration
+class DefenseStatsApiTests(unittest.TestCase):
+    def test_player_categories_match_the_stats_page(self):
+        cols = frontend_columns()
+        for cat in ("Tackles", "Sacks", "Interceptions", "Kicking", "Punting", "Kick Returns", "Punt Returns"):
+            rows = client.get("/api/stats/player", params={"category": cat, "season": 2035}).json()
+            self.assertTrue(rows, cat)
+            self.assertEqual(list(rows[0]["stats"]), cols[cat], cat)
+        sacks = client.get("/api/stats/player", params={"category": "Sacks", "season": 2035}).json()
+        self.assertGreaterEqual(sacks[0]["stats"]["SCK"], sacks[-1]["stats"]["SCK"])
+
+    def test_team_categories_match_the_stats_page(self):
+        cols = frontend_columns()
+        for cat in ("Downs", "Red Zone Defense"):
+            rows = client.get("/api/stats/team", params={"category": cat, "season": 2035}).json()
+            self.assertEqual(len(rows), 32, cat)
+            self.assertEqual(list(rows[0]["stats"]), cols[cat], cat)
 
     def test_game_page_lines(self):
         import psycopg

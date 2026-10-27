@@ -110,6 +110,10 @@ class CollegeStatsPureTest(unittest.TestCase):
         self.assertTrue(forty_drill["percentile"] >= 90)
 
 
+import pytest
+
+
+@pytest.mark.integration
 class DraftApiRoutesTest(unittest.TestCase):
     def setUp(self):
         app = FastAPI()
