@@ -172,3 +172,27 @@
   .rb-watch-nums { grid-area: nums; }
   .rb-watch-bar { grid-area: bar; }
 }
+
+/* Career milestones (MilestoneWatch) */
+.rb-ms-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+.rb-ms h3 { margin: 4px 0 6px; font: 700 10px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--gray-500); }
+.rb-ms h3 small { margin-left: 6px; color: var(--gray-300); }
+.rb-ms li { padding: 9px 0; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) auto; gap: 4px 12px; align-items: center; }
+.rb-ms li.first { background: linear-gradient(90deg, #fff4f5, transparent 70%); }
+.rb-ms-who { min-width: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; }
+.rb-ms-who img { width: 18px; height: 18px; object-fit: contain; flex: 0 0 auto; }
+.rb-ms-who a { color: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--gray-300); text-underline-offset: 2px; }
+.rb-ms-who small, .rb-ms li > small { color: var(--gray-500); font: 600 9px var(--font-mono); text-transform: uppercase; }
+.rb-ms-mark { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; }
+.rb-ms-mark strong { font: 700 14px var(--font-mono); letter-spacing: -.03em; }
+.rb-ms-more { margin: 10px 0 4px; padding: 6px 12px; border: 1px solid var(--gray-100); border-radius: 14px; background: var(--white); font: 700 9px var(--font-mono); text-transform: uppercase; cursor: pointer; }
+.rb-ms-note { margin: 8px 0 12px; color: var(--gray-500); font: 500 9px/1.5 var(--font-mono); }
+@media (max-width: 800px) {
+  .rb-ms-cols { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .rb-ms li { grid-template-columns: 1fr auto; }
+  .rb-ms-mark { grid-column: 1 / -1; grid-row: 2; }
+}
+.player-career-path { margin-top: 12px; }
+.player-career-path span { padding: 5px 10px; border: 1px dashed #ffffff2e; border-radius: 13px; color: #d7d9de; font: 700 9px var(--font-mono); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }

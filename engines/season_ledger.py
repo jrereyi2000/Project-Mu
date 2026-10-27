@@ -256,9 +256,12 @@ def career_path(cur, player_id):
                     WHERE ps.player_id = %s ORDER BY ps.season""", (player_id,))
     seasons = [{"season": s, "team": t, "position": pos, "released_week": rw, "history": src == "SYNTH"}
                for s, t, pos, rw, src in cur.fetchall()]
-    cur.execute("""SELECT to_season, status, source, flags FROM player_season_transitions WHERE player_id = %s""",
-                (player_id,))
-    trans = {r[0]: {"status": r[1], "source": r[2], "flags": r[3]} for r in cur.fetchall()}
+    cur.execute("""SELECT x.to_season, x.status, x.source, x.flags, f.abbreviation, t.abbreviation
+                   FROM player_season_transitions x
+                   LEFT JOIN teams f ON f.id = x.from_team_id LEFT JOIN teams t ON t.id = x.to_team_id
+                   WHERE x.player_id = %s""", (player_id,))
+    trans = {r[0]: {"status": r[1], "source": r[2], "flags": r[3], "from_team": r[4], "to_team": r[5]}
+             for r in cur.fetchall()}
     for s in seasons:
         if s["season"] in trans:
             s["arrived"] = trans[s["season"]]
@@ -278,7 +281,8 @@ def career_path(cur, player_id):
         status = {"status": "ACTIVE", "team": seasons[-1]["team"]}
     else:
         status = {"status": "FREE_AGENT", "after_season": last, "basis": "no roster since"}
-    return {"player_id": player_id, "seasons": seasons, "now": status}
+    moves = [{"season": k, **v} for k, v in sorted(trans.items()) if v["status"] != "RETAINED"]
+    return {"player_id": player_id, "seasons": seasons, "moves": moves, "now": status}
 
 
 def main():

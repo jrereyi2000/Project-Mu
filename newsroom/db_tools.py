@@ -593,7 +593,8 @@ def get_player_career(player_identifier: str) -> str:
     """Fetch a player's whole career in this league, season by season since 2026 (the first season the league
     records): team, games and every stat group he has, with career totals. 2026-2034 seasons are the league's
     reconstructed history: canon, so write about them as fact, but there are no game logs or box scores for them.
-    Includes his awards. Accepts a player name or ID."""
+    Includes his awards, his moves between captured seasons (moved, drafted, joined, free agent, retired; from 2035 on)
+    and where his career stands now (active, a free agent, or retired). Accepts a player name or ID."""
     try:
         s_val = resolve_season(0)
         with psycopg.connect(db.db_conn_info) as conn:
@@ -618,14 +619,83 @@ def get_player_career(player_identifier: str) -> str:
                 cur.execute("SELECT season, award_type FROM awards WHERE player_id = %s AND season <= %s "
                             "ORDER BY season", (pid, s_val))
                 awards = [f"{y} {a}" for y, a in cur.fetchall()]
+                from engines import season_ledger
+                path = season_ledger.career_path(cur, pid) if season_ledger.installed(cur) else None
                 return json.dumps({
                     "player": name, "since": seasons[0]["season"] if seasons else None,
+                    "moves_between_seasons": [m for m in path["moves"] if m["season"] <= s_val] if path else [],
+                    "status_now": path["now"] if path else None,
                     "note": ("Retired before 2035: his whole career is reconstructed league history."
                              if origin == "HISTORY" else
                              "A fill-in from the league's reconstructed history (not a current player)."
                              if origin == "HISTORY_FILLIN" else None),
                     "seasons": seasons, "career_totals": {c: v for c, v in totals.items() if v},
                     "awards": awards}, indent=2, default=str)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@tool
+def get_offseason_movement(team_identifier: str = "", season: int = 0) -> str:
+    """Fetch the player movement into a season (the player season ledger: last season's rosters against this
+    season's opening rosters): retirements, the best players who left and are free agents, players who changed teams,
+    and the draft class and other arrivals, league-wide or for one team. A free agent is a player who left and isn't
+    recorded as retiring (if the retirement list for that offseason wasn't captured, say he's unsigned, never that he
+    retired). Ratings only rank players here: never print an overall. Accepts team name, abbreviation or ID."""
+    try:
+        s_val = int(season) if season else resolve_season(0)
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                from engines import season_ledger
+                if not season_ledger.installed(cur):
+                    return json.dumps({"season": s_val, "note": "No player ledger recorded yet. Don't describe offseason movement."})
+                team_id = None
+                if str(team_identifier or "").strip():
+                    team_id = _resolve_team_id(cur, team_identifier)
+                    if not team_id:
+                        return f"Team '{team_identifier}' not found."
+                cur.execute("""
+                    SELECT x.status, x.source, x.flags, COALESCE(p.full_name, p.player_name),
+                           COALESCE(x.exp_after, x.exp_before), f.abbreviation, t.abbreviation,
+                           (SELECT position FROM player_seasons ps WHERE ps.player_id = x.player_id
+                              AND ps.season IN (x.to_season, x.from_season) ORDER BY ps.season DESC LIMIT 1),
+                           (SELECT nt.abbreviation FROM player_seasons ps JOIN teams nt ON nt.id = ps.team_id
+                            WHERE ps.player_id = x.player_id AND ps.season = x.to_season AND ps.released_week IS NULL)
+                    FROM player_season_transitions x JOIN players p ON p.id = x.player_id
+                    LEFT JOIN teams f ON f.id = x.from_team_id LEFT JOIN teams t ON t.id = x.to_team_id
+                    WHERE x.to_season = %s AND x.status <> 'RETAINED'
+                      AND (%s::int IS NULL OR x.from_team_id = %s OR x.to_team_id = %s)
+                    ORDER BY GREATEST(COALESCE(x.ovr_before, 0), COALESCE(x.ovr_after, 0)) DESC, p.id
+                """, (s_val, team_id, team_id, team_id))
+                rows = cur.fetchall()
+                if not rows:
+                    return json.dumps({"season": s_val, "note": f"No offseason movement recorded into {s_val}."})
+                lists = {"retired": [], "free_agents": [], "changed_teams": [], "drafted": [], "other_arrivals": []}
+                scan_missing = False
+                for status, source, flags, name, exp, frm, to, pos, now_team in rows:
+                    flags = flags or ""
+                    who = f"{name} ({pos or '?'})"
+                    if status == "RETIRED":
+                        lists["retired"].append(f"{who}, last with {frm}")
+                    elif status == "FREE_AGENT":
+                        scan_missing = scan_missing or "retirement_scan_missing" in flags
+                        signed = re.search(r"signed_in_season:week (\d+)", flags)
+                        lists["free_agents"].append(f"{who}, left {frm}" + (
+                            f"; signed with {now_team or 'a team'} during the season (Week {signed.group(1)})" if signed else ""))
+                    elif status == "MOVED":
+                        lists["changed_teams"].append(f"{who}: {frm} -> {to}" + (" (trade)" if source == "TRADE" else ""))
+                    elif status == "DRAFTED":
+                        lists["drafted"].append(f"{who}, {to}")
+                    else:
+                        lists["other_arrivals"].append(f"{who}, {to}" + (" (undrafted rookie)" if "undrafted_rookie" in flags else ""))
+                out = {"season": s_val, "from_season": s_val - 1,
+                       "counts": {k: len(v) for k, v in lists.items()},
+                       **{k: v[:25] for k, v in lists.items()},
+                       "note": "Lists are best players first and capped at 25. "
+                               + ("No retirement list was captured for that offseason: call the free agents unsigned "
+                                  "or available, never retired. " if scan_missing else "")
+                               + "Teams named are where he ended last season and where he opened this one."}
+                return json.dumps(out, indent=2)
     except Exception as e:
         return f"Error: {str(e)}"
 

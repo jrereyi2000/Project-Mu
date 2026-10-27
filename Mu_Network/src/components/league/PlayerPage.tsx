@@ -3,6 +3,7 @@ import { API_BASE } from "../../api";
 import { SystemContext } from "../../context/SystemContext";
 import { Chevron, DEFAULT_AVATAR, getPlayerHeadshot, handleHeadshotError, logo } from "../../lib/gridiron";
 import PlayerHonors from "../history/PlayerHonors";
+import PlayerCareerPath from "./PlayerCareerPath";
 
 export const POSITION_LABELS: Record<string, string> = {
   QB: "Quarterback", HB: "Halfback", FB: "Fullback", WR: "Wide Receiver", TE: "Tight End",
@@ -164,6 +165,7 @@ export function PlayerPage({ playerId }: { category?: string; playerId: number }
               <div><small>EXPERIENCE</small><strong>{player.years_of_experience} years</strong></div>
             </div>
             <PlayerHonors awards={playerData.awards} />
+            <PlayerCareerPath path={playerData.career_path ?? null} />
           </div>
           <div className="player-season-card">
             <span>{gameLogSeason} SEASON</span>

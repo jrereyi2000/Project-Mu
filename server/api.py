@@ -1212,6 +1212,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                 "game_log": games,
                 "career_stats": career,
                 "career_totals": career_totals(career),
+                "career_path": _career_path(conn, id),
                 "weekly_outlook": weekly_outlook
             }
 
@@ -1363,6 +1364,18 @@ def history_team_stats(cur, season, cat):
     for x in out:
         del x["_key"]
     return out
+
+
+def _career_path(conn, player_id):
+    """The player season ledger's view of a career (engines/season_ledger.career_path): his moves between captured
+    seasons (moved, free agent, drafted, new, retired) and where it stands now. None before the ledger migration."""
+    from psycopg.rows import tuple_row
+    from engines import season_ledger
+    with conn.cursor(row_factory=tuple_row) as cur:
+        if not season_ledger.installed(cur):
+            return None
+        path = season_ledger.career_path(cur, player_id)
+    return {"moves": path["moves"], "now": path["now"]}
 
 
 def career_totals(career):

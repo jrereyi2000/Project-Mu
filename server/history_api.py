@@ -410,6 +410,20 @@ def record_watch(season: Optional[int] = None):
             return out
 
 
+# --------------------------------------------------------------------------------------------- milestones ---
+@router.get("/api/records/milestones")
+def career_milestones(season: Optional[int] = None):
+    """Career milestones since 2026 (engines/career_milestones.py, continuity plan phase 4): the round marks players'
+    league careers crossed this season (`first`: "alone" or "shared" when nobody had reached the mark before) and the
+    next marks within reach (this season's pace over the games left; next season once the regular season is over).
+    Careers count every season since 2026, the reconstructed 2026-2034 history included."""
+    from engines.career_milestones import season_milestones
+    with psycopg.connect(CONN_INFO) as conn:
+        with conn.cursor() as cur:
+            as_of = fetch_as_of(cur)
+            return season_milestones(cur, season or as_of["season"])
+
+
 # ------------------------------------------------------------------------------------------------- awards ---
 def shape_award(row: dict, abbrs: dict) -> dict:
     """One awards row: a player (linked when player_id is set) or, for Coach of the Year, a coach."""

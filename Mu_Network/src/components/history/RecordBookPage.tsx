@@ -7,6 +7,7 @@ import { API_BASE } from "../../api";
 import FranchiseRecords from "./FranchiseRecords";
 import RecordCard, { type RecordCategory } from "./RecordCard";
 import RecordWatch from "./RecordWatch";
+import MilestoneWatch from "./MilestoneWatch";
 import { GROUP_LABELS, SUBJECT_LABELS } from "./format";
 import "./history.css";
 
@@ -114,6 +115,7 @@ export default function RecordBookPage({ query, teams }: { query: string; teams:
 
       <section className="rb-body">
         {!params.team && params.type === "reg" && <RecordWatch />}
+        {!params.team && params.type === "reg" && <MilestoneWatch />}
         {params.team ? (
           <FranchiseRecords abbr={params.team} />
         ) : error ? (
