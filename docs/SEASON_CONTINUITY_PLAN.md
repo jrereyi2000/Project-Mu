@@ -1,6 +1,6 @@
 # Multi-Season Continuity: Implementation Plan
 
-**Status (2026-10-26):** Phase 1 built (season archive and head-coach records from 2035; `engines/season_archive.py`, migration `2026_12_24_season_archive.sql`, 2035 backfilled). Phases 2–4 not built; phase 2's retirement rows come from the League Transactions scan (C1).
+**Status (2026-10-27):** Phase 1 built (season archive and head-coach records from 2035; `engines/season_archive.py`, migration `2026_12_24_season_archive.sql`, 2035 backfilled). Phases 2–4 not built; phase 2's retirement rows come from the League Transactions scan (C1). **Revised 2026-10-27 for the 2026–2034 history backfill** (`docs/HISTORY_BACKFILL_PLAN.md`, applied 2026-10-26): it filled the archive tables and player history for 2026–2034 as `SYNTH` rows and built most of phase 4. See D9–D12, §1 and the phase table.
 **Scope:** Keep each finished season on record and connect it to the next: a season-end archive, head-coach records from 2035, a retirement scan with a player season ledger, Napper league history with a restart for the new season, and a career layer that reads from all of it.
 **Reference specs:** `PROJECT_SPEC.md` §1.2 (running the system), §2.11 (Coach of the Year), §3.1–§3.3a (players, seasons, coaches), §3.3e (League Transactions), §3.3f (GM agents, rollover), §3.4b / §4.4b (Napper), §6.0 (weekly run).
 
@@ -24,6 +24,15 @@ Defaults added by this plan (change any before its phase):
 | D7 | A restarted Napper league uses the reverse of last season's final standings as its draft order; JR can still change it in the existing Draft Order modal. |
 | D8 | Retired players stay in `players` (stats, awards and records point at them). A retired player who later signs (Madden lets players unretire) is moved back by the next transactions or roster load. |
 
+Added 2026-10-27 after the history backfill (defaults; change any before its phase):
+
+| # | Default |
+|---|---|
+| D9 | **Two owners, split by `source`.** The history backfill owns every `SYNTH` row (2026–2034) and only ever deletes `SYNTH` rows. The season archive owns `CAPTURE` rows (2035 on) and **never writes over a season whose rows are `SYNTH`**, `--replace` included. A season is one or the other, never both. |
+| D10 | **The ledger covers captured seasons only** (2035 → 2036 onward). 2026–2034 transitions aren't generated: the history keeps each pool player on his 2035 team (history B16), so they would say nothing. A player's whole path still reads from `player_seasons` across both sources. |
+| D11 | **History-era retirements are implied, not stored.** A player with `players.origin` `HISTORY` or `HISTORY_FILLIN` retired after his last generated season (all 1,811 end by 2034). Readers derive it from `origin`; `players.retired_season` is written only by the retirement scan. This keeps a regenerated or reverted history (history B15, `revert`) from leaving stale retirement rows behind. |
+| D12 | **Coach records on screen stay "since 2035"** (history B17). The generated 2026–2034 `coach_season_lines` serve the Team History tab and writer tools only; `coach_profile.RECORDS_FROM` stays 2035. |
+
 ---
 
 ## 1. Survey (live database and code, 2026-10-26)
@@ -31,12 +40,13 @@ Defaults added by this plan (change any before its phase):
 | Area | What exists | Gap |
 |---|---|---|
 | Season boundary | The **Season scan** (`pipeline/weekly_capture.py --mode season`) moves `league_state` to the new season, rescans rosters, contracts, team overalls, injuries and prospects, then runs the GM rollover (`engines/gm_rollover.py`: hot seat, directions, `fo_quality` carried forward, pick seeding) and scouting. Offseason stages (`gm_trade_engine.OFFSEASON_STAGES`): post-Super Bowl, re-signing, free agency, draft, preseason. | Nothing freezes the season that just ended. |
-| Players | `players` (identity only: no retired flag). `player_seasons` exists for 2035 (1,751) and 2036 (1,829). 1,490 players appear in both. **261 players on 2035 rosters have no 2036 row** and nothing says why. | No transitions, no retirements, no year-over-year OVR or development-trait change. |
+| Players | `players` (no retired flag; `origin` NULL, `HISTORY` (1,732 real players who retired during 2026–2034) or `HISTORY_FILLIN` (79)). `player_seasons`: captured 2035 (1,751) and 2036 (1,829); `SYNTH` 2026–2034 (1,522–1,716 a season). 1,490 players appear in both captured seasons. **261 players on 2035 rosters have no 2036 row** (all captured players, none from the history) and nothing says why. | No transitions or retirements between captured seasons; no year-over-year OVR or development-trait change (generated seasons carry stats, not ratings). |
 | Retirements | No code captures them. `madden_capture.OPTIONS_MENU` lists `RETIRE` (the user's own retirement option), which must never be pressed. League Transactions has only been loaded for the 2036 regular season, so it's unknown whether its offseason headings list retirements. | A capture source must be confirmed on the console (§2). |
-| Standings | `team_seasons` holds `wins`, `losses` and analytics. It has **no ties, points for/against, division place, seed or playoff result**. Full 32-team rows exist for 2035–2036 only. | A frozen final table per season. |
+| Standings | `team_seasons` holds `wins`, `losses` and analytics only. `team_season_results` / `league_seasons` now hold 2026–2034 (`SYNTH`, history §3.3j) and 2035 (`CAPTURE`, this plan's archive). | Built: phase 1 archives every season from 2036 on. A guard against overwriting `SYNTH` seasons is missing (D9, phase 1b). |
 | Head coaches | `coach_tenures` (start and end seasons). `coach_seasons` holds career snapshots for 2025 (30) and 2034 (32). All 32 head coaches of 2035 have a 2034 snapshot, and 2035 has every game on record (272 regular season, 6 Wild Card, 4 Divisional, 2 Conference, 1 Super Bowl). `coach_profile.tenure_record` returns null "with team" records when an earlier season of the tenure isn't fully on record (e.g. Zac Taylor, since 2019). | No per-season coach lines; nothing writes a snapshot at season end. |
 | Coaching carousel | Another session is building it (`engines/coaching_carousel.py`, `coach_hot_seat`, `coordinator_hot_seat`, `staff_moves`; uncommitted on 2026-10-26). It fires and hires and writes tenures for season + 1. | It writes no records, so it complements this plan. |
-| Career stats | `season_stats` and `season_stat_lines` per season, meaningful from 2035. | No career totals or Mu-era milestones. |
+| Career stats | `season_stats` / `season_stat_lines` for every season 2026–2036 (`SYNTH` before 2035); `player_career_totals` (Madden's Career Stats, history §3.3i). History phase 4 built the player page's history seasons and "Career since 2026" totals (`server/api.career_totals`), the Team History tab, `get_player_career` / `get_team_history`, and the Record Book's single-season Record Watch (`/api/records/watch`). | Career milestones (e.g. first to 10,000 yards since 2026); a ledger-driven career path. |
+| Tests | Since `c68c367` the suite can't reach live `madden` (`tests/conftest.py`): unit tests get no database, and `@pytest.mark.integration` tests run on `madden_test`, copied from `madden`. | Napper restart and ledger integration tests can use `madden_test`. |
 | Napper | `napper_leagues` has one row per league per season (`season`, `status` IN_SEASON / PRE_DRAFT, `champion_team_id`). `napper_teams`, `napper_matchups` and `napper_rosters` are per league, so a finished league keeps its results. `napper_user_profiles.trophies` exists, but the profile endpoint returns a hard-coded `3`. | No link from one season's league to the next, no restart, no history view, no real trophy count. |
 
 ---
@@ -65,6 +75,7 @@ Engine `engines/season_archive.py`:
 - `standings(games)`, `seeds(playoff_games, standings)` and `division_places(...)` are pure. Seeds come from the bracket (D5): Wild Card pairs 2v7, 3v6 and 4v5, and the #1 seed is the conference team in the Divisional round with no Wild Card game.
 - `archive(cur, season)` writes `league_seasons` and `team_season_results` once the season's Super Bowl is `COMPLETED`. It is idempotent: a second run replaces the season's rows with the same values. `python3 -m engines.season_archive [--season S] [--dry-run]`.
 - **Run:** a new optional step in `pipeline/weekly_capture.py` after the Super Bowl postgame load (`--mode postgame`), before the articles. A failure only warns, like the GM step. Backfill: run once for 2035 (complete). 2034 and earlier are not archived from `games` (D4); the history backfill writes them as `SYNTH` rows.
+- **Guard (phase 1b, D9):** `archive()` returns status `history` and writes nothing when the season's `league_seasons` row is `SYNTH`, even with `--replace`. Without it, `--season 2034 --replace` would rebuild 2034 from its 20 stored games and delete the generated standings and coach lines, which are canon (history B15). Rows it writes say `source = 'CAPTURE'` explicitly, not by column default.
 
 ### 3.2 Head-coach records from 2035 (phase 1, D2, D6)
 
@@ -78,12 +89,12 @@ Engine `engines/season_archive.py`:
 ### 3.3 Retirement scan and player season ledger (phase 2, D1, D8)
 
 **Retirement scan** (shape set by C1–C4):
-- Capture: a read-only step in the offseason stage run at the stage C2 names. It is either new rows in the League Transactions scan or a new screen in `madden_capture.py`. Both write `retirements/` frames.
-- Extract: `pipeline/extract_retirements.py` produces `retirements.csv` (`name, position, team, age, flags`) using the same on-device OCR plus Gemini re-read pattern as League Transactions.
-- Load: `pipeline/load_retirements.py`, inside `load_capture`'s transaction, writes **`player_retirements`** (`season` = the season just finished, `player_id`, `player_name`, `position`, `team_id`, `capture_id`; unique `(season, player_id)`; an unmatched or ambiguous name is stored with `player_id` NULL and a flag). It also sets **`players.retired_season`** (new nullable column). A later signing of that player (transactions load) or a roster scan that finds him clears it (D8).
+- Capture: the existing League Transactions scan (C1). Its offseason headings carry the retirement rows; no new screen.
+- Parse: a `RETIRED` type in `pipeline/transactions_parse.py`, its wording fixed from the first offseason scan's rows. The `transactions.type` CHECK needs `RETIRED` added (migration).
+- Load: the `RETIRED` effect in `pipeline/load_transactions.py` (inside `load_capture`'s transaction) writes **`player_retirements`** (`season` = the season just finished, `player_id`, `player_name`, `position`, `team_id`, `capture_id`; unique `(season, player_id)`; an unmatched or ambiguous name is stored with `player_id` NULL and a flag). It also sets **`players.retired_season`** (new nullable column). A later signing of that player (transactions load) or a roster scan that finds him clears it (D8).
 
 **Player season ledger**, `engines/season_ledger.py`, run by the Season scan right after the roster load:
-- **`player_season_transitions`**: (`player_id`, `to_season`) PK, `from_season`, `from_team_id`, `to_team_id`, `status`, `ovr_before` / `ovr_after`, `dev_before` / `dev_after`, `age_before` / `age_after`, `exp_before` / `exp_after`, `source`, `flags`.
+- **`player_season_transitions`** (captured seasons only, D10; `player_id` FK `ON DELETE CASCADE`, so a history revert that deletes `HISTORY` players is never blocked): (`player_id`, `to_season`) PK, `from_season`, `from_team_id`, `to_team_id`, `status`, `ovr_before` / `ovr_after`, `dev_before` / `dev_after`, `age_before` / `age_after`, `exp_before` / `exp_after`, `source`, `flags`.
 - `status` is decided by a pure `classify()`:
   - `RETAINED`: same team both seasons.
   - `MOVED`: a different team. `source` = `TRADE` (an executed GM trade), `TRANSACTION` (an offseason signing), else `ROSTER_SCAN`.
@@ -93,10 +104,10 @@ Engine `engines/season_archive.py`:
   - `NEW`: a first card that isn't a drafted rookie (undrafted rookie or a new free agent).
 - When the retirement scan didn't run for `from_season`, `FREE_AGENT` rows carry the flag `retirement_scan_missing`, so a later scan can turn them into `RETIRED` (a re-run is idempotent).
 - Backfill 2035 → 2036: the 261 missing players become `FREE_AGENT` with `retirement_scan_missing` (D1; no 2035 scan exists).
-- Read helpers: `free_agent_pool(cur, season)` (last seen, not retired, not on a roster) and `career_path(cur, player_id)` (every season's team and status).
+- Read helpers: `free_agent_pool(cur, season)` (last seen in a captured season, not retired, not on a roster; `HISTORY` / `HISTORY_FILLIN` players are retired by D11 and never in it) and `career_path(cur, player_id)` (every `player_seasons` season, `SYNTH` ones marked "hist", with the transition status between captured seasons and the implied retirement for history players).
 
 **Consumers** (later phases; each needs JR's go-ahead where it touches the editorial slate):
-- Writer tools `get_player_career` (path, transitions and Mu-era totals) and `get_offseason_movement` (retirements, notable free agents, offseason moves by team).
+- `get_player_career` already exists (history §3.3l): add the transitions and retirement to it rather than a new tool. New: `get_offseason_movement` (retirements, notable free agents, offseason moves by team).
 - Retirement and progression lines in the offseason package (`newsroom/offseason_service.py`), proposed to JR as rule changes, not switched on silently.
 - The Front Office tab's Transactions panel can show the offseason's retirements and departures for the team.
 
@@ -115,6 +126,9 @@ Endpoints (`server/napper_api.py`):
 Frontend (`src/components/napper/`): a **League History** panel in the LEAGUE tab (season list, champions, the user's finishes); on a `COMPLETE` league after the NFL season rolls over, a **"Start the {season} season"** banner that calls restart and opens the new league's draft room.
 
 ### 3.5 Career layer (phase 4)
+
+**Mostly built by the history backfill's phase 4 (2026-10-27 review):** history seasons and "Career since 2026" totals on the player page (`server/api.career_totals`, which replaces the `player_career_mu` view below), the Team History tab (`GET /api/team/{abbr}/history`, which reads this plan's archive from 2035), `get_player_career` / `get_team_history`, and the Record Book's single-season Record Watch. What's left for phase 4: career milestones (career totals since 2026 crossing round marks, fed to Record Watch and the slate), the ledger's path on the player page (moved / retired / free agent between seasons), and the offseason-package proposals. The original design follows for reference.
+
 
 - A view **`player_career_mu`**: per player, Mu-era (2035+) totals over `season_stats` and the defense and kicking `season_stat_lines`, plus seasons played and teams. Labelled "since 2035" everywhere; pre-Mu careers are not recorded and never estimated. Once the history backfill is applied, the view covers 2026 onward ("since 2026"), with generated seasons marked (`docs/HISTORY_BACKFILL_PLAN.md` §5).
 - Career milestones (e.g. the first Mu-era 10,000-yard passer) feed the Record Book's Record Watch, which the `#records` work (`docs/RECORD_BOOK_AND_AWARDS_PLAN.md`) owns. This plan supplies the view, not the page.
@@ -139,17 +153,18 @@ Every step is idempotent and optional in the run: a failure warns and the step c
 | Phase | Delivers | Done when |
 |---|---|---|
 | **1. Season archive + coach records from 2035** | Migration (`league_seasons`, `team_season_results`, `coach_season_lines`); `engines/season_archive.py`; postgame step; 2035 backfill; `coach_profile` with-team and career changes; Front Office staff card label. **Before the 2036 Super Bowl load.** | 2035: 32 team rows with ties, points, division places, seeds 1–7 per conference matching the bracket, Panthers `CHAMPION`, Broncos `SUPER_BOWL_LOSS`; 32 coach lines; 2035 snapshots equal 2034 + 2035. Zac Taylor shows a with-team record since 2035. A second run changes nothing. |
-| **2. Retirement scan + player ledger** | Console facts C1–C4 answered; capture, extract and load for retirements; `players.retired_season`; `player_retirements`; `engines/season_ledger.py` in the Season scan; 2035 → 2036 backfill; `free_agent_pool`, `career_path`. | The 2036 offseason's retirements load with every matched player marked; the 2036 → 2037 ledger has a status for every 2036 player; the 261 2035 departures read `FREE_AGENT` with `retirement_scan_missing`. |
+| **1b. Archive guard** | D9: `archive()` refuses `SYNTH` seasons (status `history`), writes `source = 'CAPTURE'` explicitly; a test that `--replace` on 2034 writes nothing. | `--season 2034 --replace` leaves every 2034 `SYNTH` row in place. |
+| **2. Retirement scan + player ledger** | C1 answered (League Transactions); `RETIRED` type and CHECK migration, parse and load for retirements; `players.retired_season`; `player_retirements`; `engines/season_ledger.py` in the Season scan; 2035 → 2036 backfill; `free_agent_pool`, `career_path` (D10, D11). | The 2036 offseason's retirements load with every matched player marked; the 2036 → 2037 ledger has a status for every 2036 player; the 261 2035 departures read `FREE_AGENT` with `retirement_scan_missing`; no `HISTORY` player is in the free-agent pool. |
 | **3. Napper history + restart** | Migration (lineage, `COMPLETE`, `final_rank`); restart, history and profile endpoints; League History panel and restart banner. | A completed 2036 league restarts as a 2037 league with the same managers and settings, reverse-standings draft order and a 0-0 start; history lists both seasons; trophies count real championships; the 2036 league can't be edited. |
-| **4. Career layer + consumers** | `player_career_mu` view; writer tools; player Career section; Team hub History view; proposals to JR for offseason-package lines. | A player's page shows his Mu-era path and totals; the Panthers' history lists 2035–2036 with coach, GM and result. |
+| **4. Career layer + consumers** (reduced) | History phase 4 built the totals, player history seasons, Team History tab and career writer tools. Left: career milestones since 2026 into Record Watch and the slate; the ledger path on the player page and in `get_player_career`; `get_offseason_movement`; proposals to JR for offseason-package lines. | A player's page shows moves, free-agent spells and retirement between captured seasons; a career mark since 2026 shows in Record Watch. |
 
 ---
 
 ## 6. Tests
 
-- `tests/test_season_archive.py`: pure standings, ties, seeds from a synthetic bracket, division tiebreakers (and `UNBROKEN`), playoff results, coach lines and snapshot arithmetic. A read-only live check of 2035 against `games` (skipped when Postgres is down).
+- `tests/test_season_archive.py`: pure standings, ties, seeds from a synthetic bracket, division tiebreakers (and `UNBROKEN`), playoff results, coach lines and snapshot arithmetic. Integration (`madden_test`): 2035 against `games`, and (phase 1b) a `SYNTH` season refused even with `--replace`.
 - `tests/test_season_ledger.py`: pure `classify()` for every status, the D1 rule, `retirement_scan_missing`, idempotence; retirement extraction and matching on fixtures.
-- `tests/test_napper_restart.py`: **pure only** (the restart plan built from a fixture league). The existing Napper API, engine, end-to-end and draft tests write to the live `madden` database (memory), so this work must not run them wholesale; any live restart check runs on a restored copy via `DATABASE_URL`.
+- `tests/test_napper_restart.py`: the restart plan as pure tests on a fixture league, plus `@pytest.mark.integration` tests of the endpoints on `madden_test` (`tests/conftest.py` blocks live `madden` for the whole suite since `c68c367`).
 - `tests/test_coach_profile.py` additions: with-team records since 2035; a D6 hire with no snapshot.
 
 ---
@@ -169,4 +184,6 @@ Every step is idempotent and optional in the run: a failure warns and the step c
 - **Name matching:** retirements and departures rely on the same matching as League Transactions; an ambiguous name is stored unmatched with a flag, never guessed.
 - **Shared checkout:** the coaching-carousel and Record Book sessions are editing `init_db.sql`, `server/api.py`, `App.tsx` and `engines/coach_*` at the same time. Stage only this work's hunks, and agree migration dates so files don't collide.
 - **Mid-season coach changes:** not modelled; `coach_season_lines` assumes one head coach per team per season until the carousel introduces in-season firings.
+- **History regeneration or revert** (history B15, `revert`): it deletes only `SYNTH` rows and `HISTORY` players, so the archive's `CAPTURE` rows survive; ledger rows cascade with their player (D10), and history-era retirements are derived (D11), so nothing goes stale.
+- **Readers mixing sources:** anything that sums across seasons (milestones, career paths) must label `SYNTH` seasons "hist" and never treat them as having games or box scores (history B11).
 - **Timing:** phase 1 after the 2036 Super Bowl can still backfill (the archive reads `games`), so missing the deadline costs nothing but a rerun. Phase 2's retirement capture can't be recovered once Madden stops showing the list (C2).
