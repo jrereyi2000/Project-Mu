@@ -8,6 +8,7 @@ History backfill CLI (docs/HISTORY_BACKFILL_PLAN.md §3.8). Phase 2: the team ar
   python3 -m engines.history_backfill apply-players --run N    # write a staged run (source SYNTH)
   python3 -m engines.history_backfill revert-players           # delete every SYNTH player row
   python3 -m engines.history_backfill link-facts               # link 2026-2034 awards / record rows to players
+  python3 -m engines.history_backfill records-check            # the records engine over 2026-2034 (read-only)
 """
 import argparse
 
@@ -30,6 +31,7 @@ def main():
     ap_.add_argument("--run", type=int, required=True)
     sub.add_parser("revert-players", help="delete every SYNTH player row and the players the backfill created")
     sub.add_parser("link-facts", help="link the applied run's 2026-2034 awards and record-book rows to players")
+    sub.add_parser("records-check", help="run the records engine over 2026-2034 and write its report (read-only)")
     args = ap.parse_args()
     if args.cmd == "generate":
         for cid, status, problems in team_arc.generate(args.seeds, args.pins, args.time_limit):
@@ -43,6 +45,8 @@ def main():
               f"{len(report['problems'])} problems; wrote {players.REPORT_MD}")
     elif args.cmd == "apply-players":
         print(f"applied run {args.run}: {players.apply_run(args.run)}")
+    elif args.cmd == "records-check":
+        print(f"{players.records_check()}; wrote {players.RECORDS_MD}")
     elif args.cmd == "link-facts":
         print(f"linked {players.link_applied_facts()} award and record rows")
     elif args.cmd == "revert-players":

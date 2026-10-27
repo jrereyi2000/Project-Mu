@@ -82,7 +82,7 @@ VET_CAP = 1.4             # a vet takes at most this many times his provisional 
 RECORD_STAT = {"pass_yards": "pass_yards", "pass_tds": "pass_tds", "receptions": "receptions",
                "rec_yards": "rec_yards", "rec_tds": "rec_tds", "rush_yards": "rush_yards", "rush_tds": "rush_tds",
                "sacks": "def_sacks", "def_interceptions": "def_ints", "def_tds": "def_tds", "fgm": "kick_fgm",
-               "tackles": "def_tackles"}
+               "tackles": "def_tackles", "scrimmage_tds": "scrimmage_tds"}   # scrimmage: rush + rec TDs (_scrimmage)
 AWARD_KEY = {"QB": "pass_yards", "RB": "rush_yards", "WR": "rec_yards", "TE": "rec_yards", "EDGE": "def_sacks",
              "DT": "def_sacks", "LB": "def_tackles", "CB": "def_ints", "S": "def_ints"}
 
@@ -485,6 +485,46 @@ def _ceilings(lines, members, ceilings, pins):
                     over = sum(max(0, r) for r in room.values())
                 for y, v in split_exact(over, {y: max(0, r) for y, r in room.items()}).items():
                     lines[(m["key"], y)][stat] = lines[(m["key"], y)].get(stat, 0) + v
+        problems += _scrimmage(lines, m, ceilings, pins)
+    return problems
+
+
+def _scrimmage(lines, m, ceilings, pins):
+    """Rushing + receiving TDs under the scrimmage-TD ceiling: the larger part gives up the excess; a constrained
+    player's excess moves to his seasons with scrimmage room (pure apart from `lines`)."""
+    problems = []
+    td = lambda row: row.get("rush_tds", 0) + row.get("rec_tds", 0)
+    moved = {"rush_tds": 0, "rec_tds": 0}
+    for y in m["seasons"]:
+        key = (m["key"], y)
+        row = lines.get(key, {})
+        cap = ceilings(m, y, "scrimmage_tds")
+        if cap is None or td(row) <= cap:
+            continue
+        over = td(row) - cap
+        free_parts = [p for p in ("rush_tds", "rec_tds") if p not in pins.get(key, {})]   # a record TD count stays
+        for part in sorted(free_parts, key=lambda s: -row.get(s, 0)):
+            take = min(over, row.get(part, 0))
+            row[part] = row.get(part, 0) - take
+            moved[part] += take
+            over -= take
+    if not m["constrained"]:
+        return problems
+    for part, n in moved.items():
+        if not n:
+            continue
+        room = {}
+        for y in m["seasons"]:
+            row = lines.get((m["key"], y), {})
+            cap = ceilings(m, y, "scrimmage_tds")
+            base = "rush_attempts" if part == "rush_tds" else "receptions"
+            if row.get(base) and part not in pins.get((m["key"], y), {}):
+                room[y] = max(0, (cap - td(row)) if cap is not None else 10 ** 6)
+        place = min(n, sum(room.values()))
+        for y, v in split_exact(place, room).items():
+            lines[(m["key"], y)][part] = lines[(m["key"], y)].get(part, 0) + v
+        if place < n:
+            problems.append(f"{m['full_name']}: {n - place} {part} above the scrimmage-TD ceilings with nowhere to go")
     return problems
 
 

@@ -114,6 +114,17 @@ def run(seed=1, conn_info=CONN_INFO):
                 row["games_played"] = rng.randint(12, 17)
                 pl.consistent(row)
                 lines[(f["key"], y)] = row
+        # fill-ins come after the record caps in generate(): cap them here (a fill-in holds no record)
+        for f in fills:
+            f.setdefault("group", cast_mod.GROUP.get(f["position"]))
+            f["constrained"] = False
+            for y in f["seasons"]:
+                row = lines.get((f["key"], y), {})
+                for stat in list(row):
+                    cap = inp["ceilings"](f, y, stat) if stat in pl.LINE_STATS else None
+                    if cap is not None and row[stat] > cap:
+                        row[stat] = cap
+            pl._scrimmage(lines, f, inp["ceilings"], {})
         problems += validate(members, lines, inp)
         everyone = {m["key"]: m for m in members + fills}
         keys = {k for k, _ in lines}
@@ -367,3 +378,49 @@ def link_applied_facts(conn_info=CONN_INFO):
         cur.execute("UPDATE history_player_runs SET report = %s WHERE id = %s", (json.dumps(report, default=str), run_id))
         conn.commit()
     return len(linked)
+
+
+# ------------------------------------------------------------------------------------------ records check ----
+
+RECORDS_MD = os.path.join(ROOT, "verify_output", "history_records_check.md")
+
+
+def records_check(conn_info=CONN_INFO, first=2026, last=2034):
+    """The records engine (engines/records_engine.evaluate, read-only) over every history season, measured against
+    the record book as it stood before each one. Lists franchise records broken or tied outside the book, NFL top-10
+    entries outside the book (today's lists, and as they stood then), and book records the stats don't reproduce.
+    Writes verify_output/history_records_check.md; returns the counts."""
+    from engines import records_engine
+    lines, counts = [], Counter()
+    with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
+        cur.execute("SELECT category, value FROM league_record_entries")
+        by_cat = defaultdict(list)
+        for cat, v in cur.fetchall():
+            by_cat[cat].append(float(v))
+        tenth = {c: sorted(v, reverse=True)[9] for c, v in by_cat.items() if len(v) >= 10}
+        for y in range(first, last + 1):
+            r = records_engine.evaluate(cur, y)
+            cur.execute("SELECT category, value FROM league_record_entries WHERE season = %s AND source = 'BOOK'", (y,))
+            book = [(c, float(v)) for c, v in cur.fetchall()]
+            in_book = lambda e: any(c == e["category"] and abs(v - float(e["value"])) < 0.01 for c, v in book)
+            franchise = [e for e in r["events"] if e["type"] == "franchise_record" and not e.get("in_book")]
+            top = [e for e in r["events"] if e["type"] == "top10" and not in_book(e)]
+            today = [e for e in top if float(e["value"]) >= tenth.get(e["category"], float("inf"))]
+            counts["franchise records outside the book"] += len(franchise)
+            counts["top-10 today outside the book"] += len(today)
+            counts["top-10 as they stood then (not today)"] += len(top) - len(today)
+            counts["book records the stats miss"] += len(r["book_only"])
+            for e in franchise:
+                lines.append(f"- {y} franchise record {e['result']}: {e['team']}, {e['label']}, {e['holder']} "
+                             f"{e['value']} (was {e['old_value']}, {', '.join(e['old_holders'][:2])})")
+            for e in today:
+                lines.append(f"- {y} NFL top 10 today: {e['label']}, {e['holder']} {e['value']} (rank {e['rank']})")
+            for b in r["book_only"]:
+                lines.append(f"- {y} book record the stats miss: {b['team']}, {b['label']}, {b['holder']} {b['value']}")
+    md = ["# Records check, 2026–2034 history", "",
+          "The records engine over each history season (read-only), against the record book as it stood before it.",
+          "", *[f"- {k}: {v}" for k, v in counts.items()], "", "## Details", "", *(lines or ["- none"])]
+    os.makedirs(os.path.dirname(RECORDS_MD), exist_ok=True)
+    with open(RECORDS_MD, "w") as fh:
+        fh.write("\n".join(md) + "\n")
+    return dict(counts)
