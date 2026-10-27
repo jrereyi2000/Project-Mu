@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  arrayRefs, calendarYear, decodeRef, isExportableGame, isRefValue, numberedFields, pickRatings, plainFields, weightLbs,
+  arrayRefs, calendarYear, decodeRef, fieldValueError, isExportableGame, isRefValue, numberedFields, pickRatings, plainFields, weightLbs,
 } from '../lib.mjs';
 
 test('decodeRef splits 15 table bits and 17 row bits', () => {
@@ -56,4 +56,26 @@ test('isExportableGame needs both teams and a real status', () => {
   assert.equal(isExportableGame({ home_team_index: 1, away_team_index: 2, status: 'Unplayed' }), true);
   assert.equal(isExportableGame({ home_team_index: null, away_team_index: 2, status: 'HomeWon' }), false);
   assert.equal(isExportableGame({ home_team_index: 1, away_team_index: 2, status: 'Invalid_' }), false);
+});
+
+test('fieldValueError enforces the ranges and lengths the library lets through', () => {
+  const speed = { type: 'int', minValue: 0, maxValue: 127 };
+  assert.equal(fieldValueError(speed, 99), null);
+  assert.match(fieldValueError(speed, 500), /above 127/);
+  assert.match(fieldValueError(speed, -1), /below 0/);
+  assert.match(fieldValueError(speed, 9.5), /integer/);
+  const name = { type: 'string', maxLength: 17 };
+  assert.equal(fieldValueError(name, 'Mu'), null);
+  assert.match(fieldValueError(name, 'X'.repeat(18)), /longer than 17/);
+  assert.match(fieldValueError(name, 5), /string/);
+  assert.equal(fieldValueError({ type: 'bool' }, true), null);
+  assert.match(fieldValueError({ type: 'bool' }, 'yes'), /true or false/);
+});
+
+test('fieldValueError checks enums, hides sentinel members and refuses references', () => {
+  const dev = { type: 'TraitDevelopment', enumMembers: ['First_', 'Normal', 'Star', 'XFactor', 'Invalid_'] };
+  assert.equal(fieldValueError(dev, 'Star'), null);
+  assert.match(fieldValueError(dev, 'Invalid_'), /not one of Normal, Star, XFactor/);
+  assert.match(fieldValueError({ type: 'PlayerContract', isReference: true }, '0'.repeat(32)), /reference/);
+  assert.match(fieldValueError({ type: 'float' }, 1.5), /not writable/);
 });

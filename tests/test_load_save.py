@@ -31,6 +31,10 @@ class MappingTest(unittest.TestCase):
         self.assertEqual(ls.dev_trait("College_Impact"), "Star")
         self.assertEqual(ls.dev_trait("College_Star"), "Superstar")
         self.assertEqual(ls.dev_trait("College_Elite"), "X-Factor")
+        self.assertEqual(ls.dev_trait("Star"), "Star")
+        self.assertEqual(ls.dev_trait("Superstar"), "Superstar")
+        self.assertEqual(ls.dev_trait("XFactor"), "X-Factor")
+        self.assertEqual(ls.dev_trait("Hidden"), "Hidden")
         self.assertIsNone(ls.dev_trait(None))
 
     def test_archetypes(self):

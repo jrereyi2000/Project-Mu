@@ -72,5 +72,28 @@ export const STAT_KINDS = {
   SeasonDefensiveKPReturnStats: 'def_return',
 };
 
+// Checks a value against a field's schema before save_writer.mjs sets it: the library rejects bad enum values but
+// silently stores out-of-range numbers (Speed 500) and over-long strings. Returns an error message, or null.
+// meta: { type, isReference, minValue, maxValue, maxLength, enumMembers }.
+export function fieldValueError(meta, value) {
+  if (meta.isReference) return 'reference fields are not writable here';
+  if (meta.enumMembers) {
+    const usable = meta.enumMembers.filter(m => !m.endsWith('_'));
+    return usable.includes(value) ? null : `not one of ${usable.slice(0, 8).join(', ')}${usable.length > 8 ? ', …' : ''}`;
+  }
+  if (meta.type === 'string') {
+    if (typeof value !== 'string') return 'must be a string';
+    return meta.maxLength && value.length > meta.maxLength ? `longer than ${meta.maxLength} characters` : null;
+  }
+  if (meta.type === 'bool') return typeof value === 'boolean' ? null : 'must be true or false';
+  if (meta.type === 'int' || meta.type === 'uint' || meta.type === 's_int') {
+    if (!Number.isInteger(value)) return 'must be an integer';
+    if (Number.isFinite(meta.minValue) && value < meta.minValue) return `below ${meta.minValue}`;
+    if (Number.isFinite(meta.maxValue) && value > meta.maxValue) return `above ${meta.maxValue}`;
+    return null;
+  }
+  return `field type ${meta.type} is not writable here`;
+}
+
 // Game rows worth exporting: a real matchup (both teams set) that has been scheduled.
 export const isExportableGame = game => game.home_team_index != null && game.away_team_index != null && game.status !== 'Invalid_';

@@ -54,10 +54,11 @@ TEAM_ABBR_ALIASES = {"ARI": "AZ"}          # Madden's short name -> teams.abbrev
 # screen on the PC.
 POSITIONS = {"LE": "LEDG", "RE": "REDG", "MLB": "MIKE", "LOLB": "WILL", "ROLB": "SAM"}
 
-# Madden 27 dev trait names (College_Impact / College_Star / College_Elite, also without the prefix) mapped by
-# rank onto Project Mu's Normal / Star / Superstar / X-Factor. Unconfirmed: check the in-game labels on the PC.
-DEV_TRAITS = {"Normal": "Normal", "Impact": "Star", "Star": "Superstar", "Elite": "X-Factor",
-              "Superstar": "Superstar", "XFactor": "X-Factor"}
+# Madden 27's TraitDevelopment enum gives two names to each stored value: College_Impact = Star (1), College_Star =
+# Superstar (2), College_Elite = XFactor (3) (schema M27_620_0; the library reads back the first name). So the
+# College_ names are the NFL tiers, not a separate scale.
+DEV_TRAITS = {"Normal": "Normal", "Star": "Star", "Superstar": "Superstar", "XFactor": "X-Factor", "Hidden": "Hidden",
+              "College_Impact": "Star", "College_Star": "Superstar", "College_Elite": "X-Factor"}
 
 ARCHETYPE_WORDS = {"MantoMan": "Man To Man", "SmallerSpeedRusher": "Speed Rusher"}
 
@@ -73,7 +74,7 @@ def position(madden_pos):
 def dev_trait(madden_dev):
     if not madden_dev:
         return None
-    return DEV_TRAITS.get(madden_dev.split("_")[-1], madden_dev)
+    return DEV_TRAITS.get(madden_dev, madden_dev)
 
 
 def archetype(player_type):
