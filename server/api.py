@@ -676,11 +676,13 @@ def get_standings(season: int):
         with conn.cursor() as cur:
             cur.execute("SELECT id, name, abbreviation, conference, division FROM teams")
             teams = cur.fetchall()
-            
+            if is_history_season(cur, season):
+                return history_standings(cur, season, teams)
+
             cur.execute("""
-                SELECT home_team_id, away_team_id, home_score, away_score 
-                FROM games 
-                WHERE season = %s AND status = 'COMPLETED' 
+                SELECT home_team_id, away_team_id, home_score, away_score
+                FROM games
+                WHERE season = %s AND status = 'COMPLETED' AND COALESCE(game_type, 'REGULAR_SEASON') = 'REGULAR_SEASON'
                 ORDER BY week ASC
             """, (season,))
             games = cur.fetchall()
@@ -1223,6 +1225,129 @@ CAREER_SUM = ("gp", "completions", "pass_attempts", "pass_yards", "pass_tds", "i
               "blk_sacks_allowed")
 
 
+def is_history_season(cur, season) -> bool:
+    """A 2026-2034 season: reconstructed league history (team_season_results SYNTH), no regular-season games kept."""
+    if season is None or season >= HISTORY_CAPTURED_FROM:
+        return False
+    cur.execute("SELECT 1 FROM team_season_results WHERE season = %s AND source = 'SYNTH' LIMIT 1", (season,))
+    return cur.fetchone() is not None
+
+
+def history_standings(cur, season, teams):
+    """Standings for a history season from team_season_results: record, points, division place, seed and playoff
+    result. Splits, streaks and last-five need games, so they're None."""
+    cur.execute("""SELECT team_id, wins, losses, ties, points_for, points_against, division_place, conference_seed,
+                          playoff_result FROM team_season_results WHERE season = %s""", (season,))
+    res = {r["team_id"]: r for r in cur.fetchall()}
+    out = []
+    for t in teams:
+        r = res.get(t["id"])
+        if not r:
+            continue
+        out.append({
+            "id": t["id"], "abbr": display_team_abbr(t["abbreviation"]), "name": t["name"],
+            "conference": t["conference"], "division": t["division"],
+            "wins": r["wins"], "losses": r["losses"], "ties": r["ties"],
+            "pointsFor": r["points_for"], "pointsAgainst": r["points_against"],
+            "confWins": None, "confLosses": None, "confTies": None, "divWins": None, "divLosses": None,
+            "divTies": None, "homeWins": None, "homeLosses": None, "awayWins": None, "awayLosses": None,
+            "streak": None, "lastFive": None, "isHistory": True,   # "history" is the W/L list in game standings
+            "divisionPlace": r["division_place"], "seed": r["conference_seed"], "playoffResult": r["playoff_result"],
+        })
+    return out
+
+
+HISTORY_OFFENSE_SQL = """
+    SELECT p.id, p.full_name AS name, p.player_number, l.position, t.name AS team_name, t.abbreviation AS team_abbr,
+           COALESCE(l.pass_attempts, 0) AS att, COALESCE(l.completions, 0) AS cmp, COALESCE(l.pass_yards, 0) AS pass_yds,
+           COALESCE(l.pass_tds, 0) AS pass_td, COALESCE(l.interceptions, 0) AS ints,
+           COALESCE(l.rush_attempts, 0) AS rush_att, COALESCE(l.rush_yards, 0) AS rush_yds,
+           COALESCE(l.rush_tds, 0) AS rush_td, COALESCE(l.fumb, 0) AS fum,
+           COALESCE(l.receptions, 0) AS rec, COALESCE(l.rec_yards, 0) AS rec_yds, COALESCE(l.rec_tds, 0) AS rec_td
+    FROM season_stat_lines l JOIN players p ON p.id = l.player_id JOIN teams t ON t.id = l.team_id
+    WHERE l.season = %s
+"""
+
+
+def history_offense_leaders(cur, season, cat):
+    """Passing, rushing, receiving and scoring leaders for a history season, from its season lines (no game lines
+    exist). Same shape as the game-line leaderboards."""
+    cur.execute(HISTORY_OFFENSE_SQL, (season,))
+    rows = cur.fetchall()
+    out = []
+    for r in rows:
+        if cat == "passing" and r["att"] > 0:
+            att, cmp, yds, td, ints = r["att"], r["cmp"], r["pass_yds"], r["pass_td"], r["ints"]
+            stats = {"ATT": att, "CMP": cmp, "CMP %": f"{100 * cmp / att:.1f}", "YDS/ATT": f"{yds / att:.1f}",
+                     "PASS YDS": yds, "TD": td, "INT": ints,
+                     "RATE": f"{calculate_passer_rating(cmp, att, yds, td, ints):.1f}"}
+            key = yds
+        elif cat == "rushing" and r["rush_att"] > 0:
+            stats = {"ATT": r["rush_att"], "YDS": r["rush_yds"], "AVG": f"{r['rush_yds'] / r['rush_att']:.1f}",
+                     "TD": r["rush_td"], "FUM": r["fum"]}
+            key = r["rush_yds"]
+        elif cat == "receiving" and r["rec"] > 0:
+            stats = {"REC": r["rec"], "YDS": r["rec_yds"], "AVG": f"{r['rec_yds'] / r['rec']:.1f}", "TD": r["rec_td"]}
+            key = r["rec_yds"]
+        elif cat == "scoring" and (r["pass_td"] + r["rush_td"] + r["rec_td"]) > 0:
+            total = r["pass_td"] + r["rush_td"] + r["rec_td"]
+            stats = {"PASSING TD": r["pass_td"], "RUSHING TD": r["rush_td"], "RECEIVING TD": r["rec_td"],
+                     "TOTAL TD": total}
+            key = total
+        else:
+            continue
+        out.append({"id": r["id"], "name": r["name"], "player_number": r["player_number"] or 0,
+                    "position": r["position"], "team_name": r["team_name"],
+                    "team_abbr": display_team_abbr(r["team_abbr"]), "stats": stats, "history": True, "_key": key})
+    out.sort(key=lambda x: x["_key"], reverse=True)
+    for x in out:
+        del x["_key"]
+    return out
+
+
+def history_team_stats(cur, season, cat):
+    """Team passing / rushing / receiving / scoring for a history season: its players' season lines summed by team
+    (untracked depth players aren't in them), points from team_season_results."""
+    cur.execute("""
+        SELECT t.id, t.name AS team_name, t.abbreviation AS team_abbr,
+               SUM(COALESCE(l.pass_attempts, 0)) AS pass_att, SUM(COALESCE(l.completions, 0)) AS pass_cmp,
+               SUM(COALESCE(l.pass_yards, 0)) AS pass_yds, SUM(COALESCE(l.pass_tds, 0)) AS pass_tds,
+               SUM(COALESCE(l.interceptions, 0)) AS ints, SUM(COALESCE(l.rush_attempts, 0)) AS rush_att,
+               SUM(COALESCE(l.rush_yards, 0)) AS rush_yds, SUM(COALESCE(l.rush_tds, 0)) AS rush_tds,
+               SUM(COALESCE(l.fumb, 0)) AS fums, MAX(r.points_for) AS pts
+        FROM season_stat_lines l JOIN teams t ON t.id = l.team_id
+        JOIN team_season_results r ON r.team_id = t.id AND r.season = l.season
+        WHERE l.season = %s GROUP BY t.id, t.name, t.abbreviation
+    """, (season,))
+    out = []
+    for r in cur.fetchall():
+        pa, pc, py, pt = r["pass_att"], r["pass_cmp"], r["pass_yds"], r["pass_tds"]
+        if cat == "passing":
+            stats = {"ATT": pa, "CMP": pc, "CMP %": f"{100 * pc / pa:.1f}" if pa else "0.0",
+                     "YDS/ATT": f"{py / pa:.1f}" if pa else "0.0", "PASS YDS": py, "TD": pt, "INT": r["ints"],
+                     "RATE": f"{calculate_passer_rating(pc, pa, py, pt, r['ints']):.1f}"}
+            key = py
+        elif cat == "rushing":
+            ra, ry = r["rush_att"], r["rush_yds"]
+            stats = {"ATT": ra, "YDS": ry, "AVG": f"{ry / ra:.1f}" if ra else "0.0", "TD": r["rush_tds"],
+                     "FUM": r["fums"]}
+            key = ry
+        elif cat == "receiving":
+            stats = {"REC": pc, "YDS": py, "AVG": f"{py / pc:.1f}" if pc else "0.0", "TD": pt}
+            key = py
+        elif cat == "scoring":
+            stats = {"PTS": r["pts"], "TOTAL TD": pt + r["rush_tds"], "PASS TD": pt, "RUSH TD": r["rush_tds"]}
+            key = r["pts"] or 0
+        else:
+            return []
+        out.append({"id": r["id"], "team_name": r["team_name"], "team_abbr": display_team_abbr(r["team_abbr"]),
+                    "stats": stats, "history": True, "_key": key})
+    out.sort(key=lambda x: x["_key"], reverse=True)
+    for x in out:
+        del x["_key"]
+    return out
+
+
 def career_totals(career):
     """The player's league career (since 2026, the first season this league records): counting stats summed over
     every season row, plus the first season and how many are reconstructed history (pure)."""
@@ -1436,6 +1561,9 @@ def get_player_stats_api(season: Optional[int] = None, category: str = "Passing"
     postseason = games_filter.endswith("<> 'REGULAR_SEASON'")
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
+            if is_history_season(cur, season) and cat in ("passing", "rushing", "receiving", "scoring"):
+                # 2026-2034 history: season lines only (no game lines); no postseason stats were kept
+                return [] if postseason else history_offense_leaders(cur, season, cat)
             if cat == "passing":
                 cur.execute("""
                     SELECT 
@@ -1627,6 +1755,11 @@ def get_team_stats_api(season: Optional[int] = None, category: str = "Passing", 
     games_filter = season_type_filter(season_type)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
+            if is_history_season(cur, season):
+                # 2026-2034 history: no games, so no situational or postseason team stats
+                if cat in ("downs", "red zone defense") or games_filter.endswith("<> 'REGULAR_SEASON'"):
+                    return []
+                return history_team_stats(cur, season, cat)
             if cat in ("downs", "red zone defense"):
                 # Regular season: the Team Stats capture; postseason: the playoff games' captured box scores
                 if games_filter.endswith("<> 'REGULAR_SEASON'"):

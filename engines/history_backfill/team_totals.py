@@ -24,6 +24,13 @@ STATS = OFFENSE + DEFENSE + SPECIAL
 MIRROR = {"receptions": "completions", "rec_yards": "pass_yards", "rec_tds": "pass_tds",
           "blk_sacks_allowed": "pass_sacks"}
 BALANCE = {"def_ints": "interceptions", "def_sacks": "pass_sacks"}   # league-wide each season: made = thrown/taken
+# drawn as a rate of their base (in this order), not on their own: independent draws gave 60-70 yards a punt, 40%
+# field goals and 3,200-yard passers with 10 TDs. Passing and rushing yards stay on the points regression.
+RATIOS = {"pass_attempts": "pass_yards", "completions": "pass_attempts", "interceptions": "pass_attempts",
+          "pass_tds": "pass_yards", "pass_sacks": "pass_attempts", "rush_attempts": "rush_yards",
+          "rush_tds": "rush_yards", "punt_yards": "punt_punts", "punt_net_yards": "punt_punts", "punt_inside_20": "punt_punts",
+          "kr_yards": "kr_returns", "pr_yards": "pr_returns", "kick_fgm": "kick_fga", "kick_xpm": "kick_xpa",
+          "def_int_yds": "def_ints"}
 CALIBRATION = (2035, 2036)
 
 
@@ -49,6 +56,10 @@ def fit(samples):
         resid = [z - (a + b1 * x + b2 * y) for x, y, z in zip(pf, pa, v)]
         sd = (sum(r * r for r in resid) / max(1, n - 3)) ** 0.5
         out[stat] = (a, b1, b2, sd)
+    for num, den in RATIOS.items():                      # rate = num / den per team-season: mean and spread
+        rates = [float(s[2].get(num) or 0) / float(s[2][den]) for s in samples if s[2].get(den)]
+        mean = sum(rates) / len(rates) if rates else 0.0
+        out[("rate", num)] = (mean, (sum((r - mean) ** 2 for r in rates) / max(1, len(rates) - 1)) ** 0.5)
     return out
 
 
@@ -63,9 +74,12 @@ def draw(model, arc, seed=1):
             a, b1, b2, sd = model[stat]
             row[stat] = max(0, int(round(a + b1 * pf + b2 * pa + rng.gauss(0, sd))))
         row["completions"] = min(row["completions"], row["pass_attempts"])
+        for num, den in RATIOS.items():
+            if ("rate", num) in model:
+                mean, sd = model[("rate", num)]
+                row[num] = max(0, int(round(row[den] * max(0.0, rng.gauss(mean, sd)))))
         row["kick_fgm"] = min(row["kick_fgm"], row["kick_fga"])
         row["kick_xpm"] = min(row["kick_xpm"], row["kick_xpa"])
-        row["punt_net_yards"] = min(row["punt_net_yards"], row["punt_yards"])
         for k, src in MIRROR.items():
             row[k] = row[src]
         out[key] = row

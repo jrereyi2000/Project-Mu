@@ -136,7 +136,9 @@ CAPPED_BY = {"completions": "pass_attempts", "kick_fgm": "kick_fga", "kick_xpm":
              "pass_tds": "completions", "interceptions": "pass_attempts", "rush_tds": "rush_attempts",
              "rec_tds": "receptions"}            # not rush_btk: Madden counts a receiver's broken tackles there too
 NEEDS = {"pass_yards": "pass_attempts", "rush_yards": "rush_attempts", "rush_yac": "rush_attempts",
-         "rec_yards": "receptions", "rec_rac": "receptions"}
+         "rec_yards": "receptions", "rec_rac": "receptions", "def_int_yds": "def_ints", "punt_yards": "punt_punts",
+         "punt_net_yards": "punt_punts", "punt_inside_20": "punt_punts", "kr_yards": "kr_returns",
+         "pr_yards": "pr_returns"}
 BASES = ("pass_attempts", "rush_attempts", "receptions", "kick_fga", "kick_xpa")
 ALLOC_ORDER = (tuple(s for s in LINE_STATS if s not in CAPPED_BY and s not in NEEDS)
                + ("completions",) + tuple(s for s in CAPPED_BY if s != "completions") + tuple(NEEDS))
@@ -185,14 +187,17 @@ def allocate(total, weights, pins, floors, caps):
     return {**fixed, **got}, err
 
 
-def shares(members, seed=1):
-    """{(key, season): {family: share of the team total}} from ranks within each team-season and group (pure)."""
+def shares(members, seed=1, pins=None):
+    """{(key, season): {family: share of the team total}} from ranks within each team-season and group (pure). A
+    record holder (a pinned season) ranks first in his group that season: he was the starter."""
     rng = random.Random(seed)
     roster = defaultdict(list)
     for m in members:
         t = talent(m)
         for y, team in m["seasons"].items():
             q = t * curve(m["ages"].get(y), m["exp"].get(y), m["group"]) * rng.uniform(0.9, 1.1)
+            if pins and (m["key"], y) in pins:
+                q += 100
             roster[(team, y)].append((q, m))
     out = defaultdict(dict)
     for (team, y), ms in roster.items():
@@ -242,7 +247,7 @@ def generate(cast, totals, remainders, canon, pins, floors, ceilings, awards, se
     fixed_keys = {m["key"] for m in members if m["kind"] == "pool" and m["player_id"] in remainders}
     for m in members:
         m["constrained"] = m["key"] in fixed_keys
-    sh = shares(members, seed)
+    sh = shares(members, seed, pins)
     prov = provisional(members, sh, totals)
     lines, problems, adjustments = {}, [], []
 
@@ -292,22 +297,35 @@ def generate(cast, totals, remainders, canon, pins, floors, ceilings, awards, se
         vets = [m for m in ms if not m["constrained"]]
         for m in vets:
             lines[(m["key"], y)] = {}
-        left = {}
+        # free players fill each stat group as a block: one factor from the group's key stat (what's left of the
+        # team total over what their shares ask for, at most VET_CAP) scales every stat of the group, so their
+        # ratios stay the team's (punting average, yards per catch, interceptions to return yards)
+        room_of = {}
         for stat in LINE_STATS:
             target = tot.get(stat) if stat not in DERIVED else tot.get(DERIVED[stat][0], 0) * DERIVED[stat][1]
             used = sum(lines.get((m["key"], y), {}).get(stat, 0) for m in ms if m["constrained"])
-            room = max(0, int(round((target or 0) - used)))
-            pinned = {m["key"]: pins[(m["key"], y)][stat] for m in vets if stat in pins.get((m["key"], y), {})}
-            for k, v in pinned.items():
-                lines[(k, y)][stat] = v
-            room = max(0, room - sum(pinned.values()))
-            want = {m["key"]: prov[(m["key"], y)][stat] for m in vets if m["key"] not in pinned}
-            need = sum(want.values())
-            give = min(room, int(round(VET_CAP * need)))
-            for k, v in split_exact(give, want).items():
-                lines[(k, y)][stat] = v
-            left[stat] = room - give
-        leftover[(team, y)] = left
+            room_of[stat] = max(0.0, (target or 0) - used)
+        given = defaultdict(float)
+        for group, (key_stat, stats) in FREE_GROUPS.items():
+            need = sum(prov[(m["key"], y)][key_stat] for m in vets)
+            f = min(VET_CAP, room_of[key_stat] / need) if need > 0 else 0.0
+            for m in vets:
+                for stat in stats:
+                    v = int(round(prov[(m["key"], y)][stat] * f))
+                    if v:
+                        lines[(m["key"], y)][stat] = v
+                        given[stat] += v
+        for m in vets:
+            pinned = pins.get((m["key"], y), {})
+            for stat, v in pinned.items():
+                given[stat] += v - lines[(m["key"], y)].get(stat, 0)
+                lines[(m["key"], y)][stat] = v
+            # a record season carries the rest of its line at league starter rates (attempts, TDs, INTs behind
+            # the yards), so a free record holder reads like the starter he was
+            for other, v in pin_line(pinned).items():
+                given[other] += v - lines[(m["key"], y)].get(other, 0)
+                lines[(m["key"], y)][other] = v
+        leftover[(team, y)] = {stat: max(0, int(round(room_of[stat] - given[stat]))) for stat in LINE_STATS}
 
     _floors(lines, {k: v for k, v in floors.items() if not by_key[k[0]]["constrained"]})
     problems += _ceilings(lines, members, ceilings, pins)
@@ -344,13 +362,56 @@ def consistent(row):
     for stat, base in NEEDS.items():                     # ...and yards need an attempt
         if row.get(stat) and not row.get(base):
             row[stat] = 0
+    sacks = int(math.floor(row.get("def_sacks", 0) or 0))   # a sack is a tackle, and a tackle for loss
+    if sacks:
+        row["def_tfl"] = max(row.get("def_tfl", 0), sacks)
+        if row.get("def_solo", 0) + row.get("def_assists", 0) < sacks:
+            row["def_solo"] = sacks - row.get("def_assists", 0)
 
+
+# free players' stat groups: (key stat that sets the group's factor, the stats it scales)
+FREE_GROUPS = {
+    "pass": ("pass_attempts", PASS), "rush": ("rush_attempts", RUSH), "rec": ("receptions", REC),
+    "tackles": ("def_solo", ("def_solo", "def_assists")), "sacks": ("def_sacks", ("def_sacks", "def_safeties")),
+    "tfl": ("def_tfl", ("def_tfl",)), "ints": ("def_ints", ("def_ints", "def_int_yds", "def_tds")),
+    "pd": ("def_deflections", ("def_deflections",)),
+    "ff": ("def_forced_fumbles", ("def_forced_fumbles", "def_fumble_recoveries")),
+    "kick": ("kick_fga", KICK), "punt": ("punt_punts", PUNT), "kr": ("kr_returns", ("kr_returns", "kr_yards")),
+    "pr": ("pr_returns", ("pr_returns", "pr_yards")), "blk": ("blk_sacks_allowed", BLK)}
 
 # a pinned record season needs its base: league ratios (2035-2036) for the attempts behind pinned yards and TDs
 SUPPORT = {"pass_yards": (("pass_attempts", 1 / 7.3), ("completions", 0.65 / 7.3)),
            "pass_tds": (("completions", 1.0),), "rush_yards": (("rush_attempts", 1 / 4.6),),
            "rush_tds": (("rush_attempts", 1.0),), "rec_yards": (("receptions", 1 / 12.5),),
            "rec_tds": (("receptions", 1.0),)}
+
+
+# 2035-2036 starters' rates (QBs with 300+ attempts, backs with 150+ carries, receivers with 50+ catches)
+PIN_RATES = {"pass_yards": {"pass_attempts": 1 / 6.95, "completions": 0.612 / 6.95, "pass_tds": 0.047 / 6.95,
+                            "interceptions": 0.010 / 6.95},
+             "rec_yards": {"receptions": 1 / 12.6, "rec_tds": 0.084 / 12.6},
+             "rush_yards": {"rush_attempts": 1 / 4.95, "rush_tds": 0.041 / 4.95}}
+# yards behind a pinned TD or catch count in a record-level season (a 45-TD passer ~5,000 yards, an 18-TD receiver
+# ~1,550, an 18-TD back ~1,800)
+PIN_YARDS = {"pass_tds": ("pass_yards", 112), "rec_tds": ("rec_yards", 85), "receptions": ("rec_yards", 12.6),
+             "rush_tds": ("rush_yards", 100)}
+
+
+def pin_line(pinned):
+    """The rest of a free player's record season from its pinned stats at league starter rates: yards from a pinned
+    TD or catch count when the yards aren't pinned, then attempts, completions, TDs, INTs and catches from the yards
+    (pinned values always win) (pure)."""
+    out = {}
+    for stat, (yards, per) in PIN_YARDS.items():
+        if stat in pinned and yards not in pinned:
+            out[yards] = int(round(pinned[stat] * per))
+    for yards, rates in PIN_RATES.items():
+        y = pinned.get(yards, out.get(yards))
+        if y:
+            for other, r in rates.items():
+                if other not in pinned:
+                    out[other] = int(round(y * r))
+    return {k: v for k, v in out.items() if k not in pinned}
 
 
 def support_pins(row, pinned, cap=lambda base: None):

@@ -2557,3 +2557,10 @@ a.social-follow-row:hover { background: #171c22; }
   .team-history { padding: 0 16px 32px; }
   .team-history-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* History seasons on Standings (2026-2034) */
+.standings-history-note { margin: 12px 30px 0; color: var(--gray-500); font: 600 9px var(--font-mono); line-height: 1.6; }
+.standings-seed { margin-left: 6px; padding: 0 4px; border: 1px solid var(--gray-300, #ccc); border-radius: 3px; color: var(--gray-500); font: 700 9px var(--font-mono); }
+@media (max-width: 640px) { .standings-history-note { margin: 12px 16px 0; } }
+.stats-history-note { margin: 0 30px 12px; }
+@media (max-width: 640px) { .stats-history-note { margin: 0 16px 12px; } }

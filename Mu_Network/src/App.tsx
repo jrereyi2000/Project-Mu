@@ -1568,6 +1568,9 @@ const statColumns: Record<string, string[]> = {
   "Punt Returns": ["RET", "YDS", "AVG", "LNG", "TD", "FC"],
 };
 
+// Seasons before this are reconstructed league history (server/api.py HISTORY_CAPTURED_FROM)
+const HISTORY_CAPTURED_FROM = 2035;
+
 function StatsPage({ mode }: { mode: "team" | "player" }) {
   const [category, setCategory] = useState("Passing");
   const systemStatus = useContext(SystemContext);
@@ -1673,6 +1676,13 @@ function StatsPage({ mode }: { mode: "team" | "player" }) {
           <span>{season} {mode.toUpperCase()} STATS · {unit.toUpperCase()}</span>
           <h2>{category}</h2>
         </div>
+        {season < HISTORY_CAPTURED_FROM && (
+          <p className="player-log-note stats-history-note">
+            <span className="career-history-tag">hist</span> {season} is reconstructed league history: season totals
+            only{mode === "team" ? " (team rows are their players' lines summed, so depth players who weren't tracked are missing)" : ""};
+            no postseason or situational stats were kept.
+          </p>
+        )}
 
         <div className="stat-category-tabs">
           {statCategoryGroups[mode].map((group) => (
@@ -1856,6 +1866,17 @@ function StandingsPage() {
     const losses = raw.losses;
     const ties = raw.ties;
     const pct = (wins + (ties * 0.5)) / Math.max(1, wins + losses + ties);
+    // A 2026-2034 history season has records but no games: splits, streak and last five read "—"
+    if (raw.isHistory) {
+      return {
+        team, wins, losses, ties, pct: pct.toFixed(3).replace(/^0\./, "."),
+        pointsFor: raw.pointsFor, pointsAgainst: raw.pointsAgainst,
+        differential: raw.pointsFor - raw.pointsAgainst,
+        home: "—", away: "—", division: "—", conference: "—", streak: "—", lastFive: "—",
+        divisionPlace: raw.divisionPlace as number | null, seed: raw.seed as number | null,
+        playoffResult: raw.playoffResult as string | null, history: true,
+      };
+    }
     
     // We mock division and conference records for now since the API doesn't compute them
     const index = teams.indexOf(team);
@@ -1870,8 +1891,11 @@ function StandingsPage() {
       conference: `${raw.confWins || 0}–${raw.confLosses || 0}${raw.confTies ? '–'+raw.confTies : ''}`,
       streak: raw.streak,
       lastFive: raw.lastFive,
+      divisionPlace: null as number | null, seed: null as number | null, playoffResult: null as string | null,
+      history: false,
     };
   };
+  const historySeason = standingsData.some((s) => s.isHistory);
 
   const [sortState, setSortState] = useState<Record<string, { key: string, dir: "desc" | "asc" }>>({});
 
@@ -1932,6 +1956,11 @@ function StandingsPage() {
       else if (sortKey === "LAST 5") { valA = parseRecordWins(sA.lastFive); valB = parseRecordWins(sB.lastFive); }
 
       const comparison = valA - valB;
+      // history seasons: a tied record keeps the generated division order (no games to break it)
+      if (comparison === 0 && sA.divisionPlace != null && sB.divisionPlace != null && sA.divisionPlace !== sB.divisionPlace
+          && view === "division") {
+        return sA.divisionPlace - sB.divisionPlace;
+      }
       if (comparison === 0) {
         if (sA.differential !== sB.differential) {
           return sortDir === "desc" ? sB.differential - sA.differential : sA.differential - sB.differential;
@@ -1959,7 +1988,7 @@ function StandingsPage() {
   return (
     <main className="standings-page">
       <section className="standings-masthead">
-        <div><span>LEAGUE TABLE</span><h1>Standings</h1><p>The complete {systemStatus.season} postseason picture, from every division to the full league.</p></div>
+        <div><span>LEAGUE TABLE</span><h1>Standings</h1><p>The complete {year} postseason picture, from every division to the full league.</p></div>
       </section>
 
       <section className="standings-controls">
@@ -2006,6 +2035,12 @@ function StandingsPage() {
         </div>
       </section>
 
+      {historySeason && (
+        <p className="standings-history-note">
+          <span className="career-history-tag">hist</span> {year} is reconstructed league history: final records, points,
+          division order and playoff seeds are canon; no games were kept, so splits and streaks read —.
+        </p>
+      )}
       <section className="standings-tables">
         {groups.map((group, groupIndex) => {
           const conference = group.label.startsWith("AFC") ? "American Football Conference" : group.label.startsWith("NFC") ? "National Football Conference" : null;
@@ -2033,7 +2068,8 @@ function StandingsPage() {
                       const standing = standingFor(team);
                       return (
                         <tr key={team.abbr}>
-                          <td><a href={`#team-${team.abbr}`}><span>{index + 1}</span><img src={logo(team.abbr)} alt="" /><strong>{team.name}</strong></a></td>
+                          <td><a href={`#team-${team.abbr}`}><span>{index + 1}</span><img src={logo(team.abbr)} alt="" /><strong>{team.name}</strong>
+                            {standing.seed ? <small className="standings-seed" title={standing.playoffResult === "CHAMPION" ? "Won the Super Bowl" : "Playoff seed"}>{standing.playoffResult === "CHAMPION" ? "🏆" : ""}{standing.seed}</small> : null}</a></td>
                           <td><b>{standing.wins}</b></td><td>{standing.losses}</td><td>{standing.ties}</td><td><b>{standing.pct}</b></td>
                           <td>{standing.pointsFor}</td><td>{standing.pointsAgainst}</td><td className={standing.differential >= 0 ? "positive" : "negative"}>{standing.differential > 0 ? "+" : ""}{standing.differential}</td>
                           <td>{standing.home}</td><td>{standing.away}</td><td>{standing.division}</td><td>{standing.conference}</td><td>{standing.streak}</td><td>{standing.lastFive}</td>

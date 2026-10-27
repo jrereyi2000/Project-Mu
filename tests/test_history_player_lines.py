@@ -137,6 +137,15 @@ class FillinTest(unittest.TestCase):
         self.assertNotIn(qbs[0]["full_name"], ("Abe Lincoln", "Bo Jackson", "Cal Ripken", "Abe Jackson"))
 
 
+class PinLineTest(unittest.TestCase):
+    def test_record_season_reads_like_a_starter(self):
+        got = pl.pin_line({"pass_yards": 5304, "pass_tds": 47})
+        self.assertEqual(got["pass_attempts"], 763)                 # 5,304 / 6.95
+        self.assertNotIn("pass_tds", got)                           # the pinned TDs stay
+        got = pl.pin_line({"rec_tds": 19})
+        self.assertEqual((got["rec_yards"], got["receptions"]), (1615, 128))
+
+
 class ApplyTest(unittest.TestCase):
     def test_derived_rates(self):
         from engines.history_backfill import players
