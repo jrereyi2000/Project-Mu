@@ -74,8 +74,8 @@ Articles are stored in `news_feed` with a `FANTASY_*` `article_type` and the slo
 | **W11–W14** ✅ | Season: Stretch | `FANTASY_START_SIT` | `FANTASY_WAIVER_WIRE` | `FANTASY_WEEKLY_REACTIONS` | Pool C | `FANTASY_RANKINGS_TIERS`, `FANTASY_BOX_SCORE_USAGE`, `FANTASY_TEN_THINGS`, `FANTASY_STREAMING_DST_K`*, `FANTASY_MATCHUP_EXPLOITS`† |
 | **W15** | Playoffs R1 | `FANTASY_START_SIT` (Playoff ed.) | `FANTASY_PLAYOFF_STREAMERS` | `FANTASY_WEEKLY_REACTIONS` | `FANTASY_PLAYOFF_SCHEDULE_PLANNER` (final look) | `FANTASY_RANKINGS_TIERS`, `FANTASY_BOX_SCORE_USAGE`, `FANTASY_CEILING_PLAYS`, `FANTASY_STREAMING_DST_K`*, `FANTASY_MATCHUP_EXPLOITS`† |
 | **W16** | Playoffs Semis | `FANTASY_START_SIT` (Playoff ed.) | `FANTASY_PLAYOFF_STREAMERS` | `FANTASY_WEEKLY_REACTIONS` | `FANTASY_CEILING_PLAYS` | `FANTASY_RANKINGS_TIERS`, `FANTASY_BOX_SCORE_USAGE`, `FANTASY_STREAMING_DST_K`*, `FANTASY_MATCHUP_EXPLOITS`† |
-| **W17** ✅ | Championship | `FANTASY_START_SIT` (Championship ed.) | `FANTASY_CEILING_PLAYS` | `FANTASY_PLAYOFF_STREAMERS` | `FANTASY_WEEKLY_REACTIONS` (semifinal recap) | `FANTASY_RANKINGS_TIERS`, `FANTASY_STREAMING_DST_K`*, `FANTASY_BOX_SCORE_USAGE`, `FANTASY_MATCHUP_EXPLOITS`† |
-| **W18** | Season in Review | `FANTASY_SEASON_IN_REVIEW` | **W19–W23** | Offseason (frozen) | *(W18 Hero)* | *(W18 Card 01)* | *(W18 Card 02)* | *(W18 Card 03)* | *(W18 list)* |
+| **W18** ✅ | Season in Review | `FANTASY_SEASON_IN_REVIEW` | `FANTASY_AWARDS` | `FANTASY_DRAFT_RETRO` | `FANTASY_PROJECTION_REPORT_CARD` | `FANTASY_DYNASTY_EARLY_LOOK` |
+| **W19–W23** ✅ | Offseason (frozen) | *(W18 Hero)* | *(W18 Card 01)* | *(W18 Card 02)* | *(W18 Card 03)* | *(W18 list)* |
 
 ✅ = decided. † = from W3 (W2 has one game of defensive data); subject to the 2036 matchup audit (§6). * = only after migration phase 3, and only from W3 on (the first W2 has one game of data; it can run from W2 if JR prefers). Rows W15 and W16 follow the decided W2–W17 pattern but haven't been reviewed slot by slot.
 
@@ -132,7 +132,7 @@ The Mu fantasy **trade deadline is before Week 12 kickoff** (decided). It's edit
 | `FANTASY_PLAYOFF_STREAMERS` | Short-term pickups for a single week | weekly projection, matchup stars, rostered % | YATES |
 | `FANTASY_CEILING_PLAYS` | High-variance options for underdogs, safe floors for favorites | per-player PPR range (min/max/SD) | BARNWELL |
 | `FANTASY_SEASON_IN_REVIEW` | The fantasy season as a story: storylines, breakouts, collapses. No awards or lists | season totals, weekly scores | BERRY |
-| `FANTASY_ALL_FANTASY_TEAM` | Best possible lineup of the season (QB/2RB/2WR/TE/FLEX), plus a playoff-weeks edition | season and wk 15–17 scores | YATES |
+| `FANTASY_ALL_FANTASY_TEAM` | *(Folded into `FANTASY_AWARDS`)* Best possible lineup of the season (QB/2RB/2WR/TE/FLEX), plus a playoff-weeks edition | season and wk 15–17 scores | BERRY |
 | `FANTASY_DRAFT_RETRO` | Draft hits and misses only (simulated ADP vs final rank); no individual awards, no strategy results | wk 1 `adp_rank` vs final PPR rank | BARNWELL |
 | `FANTASY_AWARDS` | Fantasy MVP, Bust of the Year, Waiver Gem, Playoff Hero, plus the All-Fantasy Team (best QB/2RB/2WR/TE/FLEX of the season and of wk 15–17) | season and wk 15–17 scores, ADP, rostered % | BERRY |
 | `FANTASY_PROJECTION_REPORT_CARD` | How the Mu model did: MAE, biggest misses | `get_fantasy_projection_accuracy` | BARNWELL |
