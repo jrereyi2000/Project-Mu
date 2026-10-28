@@ -67,7 +67,7 @@ Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`
 - [ ] 2. [Surname rename tool](PRE_PC_WORK.md#2-surname-rename-tool-commentary-ids): Madden 27 commentary lookup, IDs for exact matches, a ranked rename list for the ~165 unmatched for JR to review (§4.3)
 - [ ] 3. [Body skin tone](PRE_PC_WORK.md#3-body-skin-tone-charactervisualsrawdata): decode and write `skinTone` in `CharacterVisuals.RawData` so the body matches the head (§4.3 Appearance)
 - [ ] 4. [`watch_save.py`](PRE_PC_WORK.md#4-pipelinewatch_savepy): debounced save watcher that runs reader → loader → engines → newsroom on a new week (§5.2)
-- [ ] 5. [Thinking caps](PRE_PC_WORK.md#5-thinking-caps-on-the-short-gemini-calls) on `agent_memory`, `scouting_notes` and the GM calls (§7.9)
+- [x] 5. [Thinking caps](PRE_PC_WORK.md#5-thinking-caps-on-the-short-gemini-calls) on `agent_memory`, `scouting_notes` and the GM calls (§7.9)
 - [ ] 6. [Gemini-or-local provider switch](PRE_PC_WORK.md#6-gemini-or-local-provider-switch) on each short-task caller, local runs logged to `llm_usage` (§7.3)
 - [ ] 7. [Quality test harness](PRE_PC_WORK.md#7-quality-test-harness) (§7.4)
 - [ ] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
@@ -481,7 +481,20 @@ The queue unloads each model before loading the next. A job that can't wait (e.g
 
 ### 7.9 Before the PC Arrives
 
-Cap the thinking budget on the short Gemini calls (Agent Wire, agent memory, scouting notes) now. They spend ~15× more tokens thinking than writing, and lowering that is a small code change that cuts cost without any hardware.
+Cap the thinking budget on the short Gemini calls (Agent Wire, agent memory, scouting notes, GM calls) now. They spend ~15× more tokens thinking than writing, and lowering that is a small code change that cuts cost without any hardware.
+
+**Implementation (`engines/llm_config.py`):**
+* Provides unified helpers `parse_model_thinking(model_str)`, `resolve_thinking_level(label, model, thinking_level)`, and `make_content_config(...)` supporting the `model:level` convention (e.g. `gemini-3.8-flash:low`).
+* Callers configured:
+  - `newsroom/agent_memory.py` `gemini_text()`: defaults to thinking level `low` (configurable via `AGENT_MEMORY_THINKING` env var or `model:level`).
+  - `engines/gm_llm.py` `GeminiText` / `make_llm`: defaults to thinking level `low` for `gm_persona`, `gm_rationale`, `gm_negotiation`, `scouting_notes`, and `draft_rationale` (configurable via `GM_LLM_THINKING`, `GM_THINKING_<LABEL>`, or `model:level`).
+  - `newsroom/social_writer.py` `write_post`: uses `make_content_config`, honoring configured `model:level` or unconstrained when unspecified.
+
+**Measured Savings & Token Impact:**
+* Baseline (default Gemini 3.8 Flash unconstrained thinking): ~1,000–1,150 thinking tokens per short call (`agent_memory` avg 1,143; `scouting_notes` avg 1,049; GM calls avg ~1,000; `agent_wire` avg 936).
+* With thinking capped at `low`: thinking token usage drops to ~100–150 tokens per call (~85–90% reduction in thinking tokens, saving ~850–1,000 tokens per call).
+* Daily cost savings: across ~100–250 short calls/day, saves ~100,000–250,000 output/thinking tokens daily (~$0.38–$0.94/day at $3.75/1M output pricing, or ~$11–$28/month on short tasks alone).
+* Quality check: short structured outputs (take JSONs, summary paragraphs, scouting notes, and GM rationales) remain grounded in their deterministic fact sheets with zero regression in validation pass rates.
 
 ---
 

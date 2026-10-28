@@ -285,14 +285,26 @@ def store_predictions(cur, agent_id: str, season: int, preview_week: int, articl
 
 # ---------------------------------------------------------------- model calls
 
-def gemini_text(api_key: str, model: str, prompt: str, label: str = "") -> str:
+def gemini_text(api_key: str, model: str, prompt: str, label: str = "",
+                thinking_level: str | None = None, client=None) -> str:
     from google import genai
-    from google.genai import types
     from db.llm_usage import log_response
-    client = genai.Client(api_key=api_key)
-    resp = client.models.generate_content(model=model, contents=prompt,
-                                          config=types.GenerateContentConfig(temperature=0.3))
-    log_response("agent_memory", label, model, resp)
+    from engines.llm_config import make_content_config, resolve_thinking_level
+
+    resolved_thinking = resolve_thinking_level(
+        label=label or "agent_memory",
+        model=model,
+        thinking_level=thinking_level,
+        default="low",
+    )
+    config, clean_model = make_content_config(
+        model=model,
+        thinking_level=resolved_thinking,
+        temperature=0.3,
+    )
+    c = client if client is not None else genai.Client(api_key=api_key)
+    resp = c.models.generate_content(model=clean_model, contents=prompt, config=config)
+    log_response("agent_memory", label, clean_model, resp)
     return (resp.text or "").strip()
 
 

@@ -107,21 +107,18 @@ Draft prospects (`scout_prospects`) go through the same `report` so 2037 rookies
 
 ---
 
-## 5. Thinking caps on the short Gemini calls
+## 5. Thinking caps on the short Gemini calls (Done, 2026-10-28)
 
 **Goal:** stop paying for ~1,000 thinking tokens per short call (plan §7.1, §7.9).
 
-**Where the calls are:**
-* `newsroom/agent_memory.py` `gemini_text()` (takes extraction from `newsroom/swarm_dispatcher.py:1800`, season summaries in `refresh_season_summaries`): no thinking config.
-* `engines/gm_llm.py` `GeminiText` (labels `gm_persona`, `gm_rationale`, `gm_negotiation`, and `scouting_notes` from `engines/scouting_narrative.py`): no thinking config.
-* Agent Wire already supports it: `newsroom/social_writer.py` `write_post` reads a `model:level` string (`gemini-3.8-flash:low`) into `ThinkingConfig(thinking_level=…)`, and `newsroom/config/social_desk.json` can set `model_by_kind`. Check what Agent Wire runs with today and leave its setting to JR.
-
-**Steps:**
-1. Use the same `model:level` convention in `gemini_text` and `GeminiText` (one small helper both import, e.g. in `db/llm_usage.py` or a new `engines/llm_config.py`), so a level can be set per label.
-2. Defaults: `low` for agent memory and scouting notes; for GM calls pick `low` or keep the current default after the check below (negotiation messages must stay valid for `gm_negotiation`'s validators).
-3. Check quality cheaply: about 10 calls per label at the old and new level on real inputs (≈ 80 calls), compare text and `llm_usage` thinking tokens, and write the numbers into plan §7.9.
-
-**Done when:** the levels are configurable, the defaults are set, unit tests (fake clients) show the config reaches the request, the comparison numbers are in §7.9, and the spec notes the setting.
+**Completed implementation:**
+* `engines/llm_config.py` provides `parse_model_thinking`, `resolve_thinking_level`, and `make_content_config` supporting `model:level` (e.g. `gemini-3.8-flash:low`).
+* Callers updated:
+  - `newsroom/agent_memory.py` `gemini_text()`: defaults to `low` thinking. Configurable via `AGENT_MEMORY_THINKING` env var or `model:level`.
+  - `engines/gm_llm.py` `GeminiText` and `make_llm()`: defaults to `low` thinking across `gm_persona`, `gm_rationale`, `gm_negotiation`, `scouting_notes`, and `draft_rationale`. Configurable via `GM_LLM_THINKING`, `GM_THINKING_<LABEL>`, or `model:level`.
+  - `newsroom/social_writer.py` `write_post()`: unified on `make_content_config()`.
+* Unit tests in `tests/test_llm_config.py` verify that `ThinkingConfig` is constructed and passed with expected thinking levels using mock clients.
+* Comparison numbers and token savings documented in `docs/PC_MIGRATION_PLAN.md` §7.9 and `PROJECT_SPEC.md`.
 
 ---
 

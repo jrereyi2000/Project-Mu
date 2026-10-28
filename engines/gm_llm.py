@@ -20,39 +20,53 @@ class GeminiText:
     """prompt -> text through one genai client, every call counted by a UsageMeter. flush() writes the counted
     calls to llm_usage under `label` (never raises)."""
 
-    def __init__(self, key, label, model=DEFAULT_MODEL, temperature=0.7):
+    def __init__(self, key, label, model=DEFAULT_MODEL, temperature=0.7, thinking_level=None, client=None):
         from google import genai
         from db.llm_usage import UsageMeter
-        self.client = genai.Client(api_key=key)
+        from engines.llm_config import make_content_config, resolve_thinking_level
+
+        self.label = label
+        self.model = model
+        self.temperature = temperature
+        self.thinking_level = resolve_thinking_level(
+            label=label,
+            model=model,
+            thinking_level=thinking_level,
+            default="low",
+        )
+        self.config, self.model_name = make_content_config(
+            model=model,
+            thinking_level=self.thinking_level,
+            temperature=temperature,
+        )
+        self.client = client if client is not None else genai.Client(api_key=key)
         self.meter = UsageMeter(self.client)
-        self.label, self.model, self.temperature = label, model, temperature
 
     def __call__(self, prompt):
-        from google.genai import types
         with self.meter.labelled(self.label):
             resp = self.client.models.generate_content(
-                model=self.model, contents=prompt,
-                config=types.GenerateContentConfig(temperature=self.temperature))
+                model=self.model_name, contents=prompt,
+                config=self.config)
         return (resp.text or "").strip()
 
     def flush(self):
         try:
-            return self.meter.record(self.label, label=self.label, model=self.model)
+            return self.meter.record(self.label, label=self.label, model=self.model_name)
         except Exception as e:                                   # logging never breaks a run
             print(f"[gm_llm] usage not recorded: {e}", flush=True)
             return None
 
 
-def make_llm(label, model=DEFAULT_MODEL, enabled=True):
+def make_llm(label, model=DEFAULT_MODEL, enabled=True, thinking_level=None, client=None):
     """The live prompt -> text callable, or None (template fallback) when disabled, without a key, or when the
     SDK can't load."""
     if not enabled:
         return None
     key = api_key()
-    if not key:
+    if not key and client is None:
         return None
     try:
-        return GeminiText(key, label, model)
+        return GeminiText(key, label, model, thinking_level=thinking_level, client=client)
     except Exception as e:
         print(f"[gm_llm] Gemini unavailable, using templates: {e}", flush=True)
         return None
