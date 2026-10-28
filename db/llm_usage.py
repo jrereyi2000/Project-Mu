@@ -83,7 +83,7 @@ def log_usage(source, label, model, input_tokens=0, cached_tokens=0, output_toke
                          "thinking_tokens) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                          (source, (label or "")[:255], (norm_model or "")[:64], row["input_tokens"], row["cached_tokens"],
                           row["output_tokens"], row["thinking_tokens"]))
-    except Exception as e:
+    except (Exception, BaseException) as e:
         print(f"  (token usage not logged: {e})")
     return row
 
@@ -99,7 +99,7 @@ def log_response(source, label, model, resp):
                          "thinking_tokens) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                          (source, (label or "")[:255], (norm_model or "")[:64], row["input_tokens"], row["cached_tokens"],
                           row["output_tokens"], row["thinking_tokens"]))
-    except Exception as e:
+    except (Exception, BaseException) as e:
         print(f"  (token usage not logged: {e})")
     return row
 

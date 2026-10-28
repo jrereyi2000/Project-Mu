@@ -306,11 +306,13 @@ def generate_text(
     response_mime_type: Optional[str] = None,
     client: Any = None,
     api_key: Optional[str] = None,
-) -> str:
+    return_usage: bool = False,
+) -> Union[str, Tuple[str, dict]]:
     """Provider-switching text generator.
 
     Routes to Ollama or Gemini, with automatic fallback to Gemini on Ollama connection error
     or timeout. Logs token usage for both providers to llm_usage.
+    If return_usage=True, returns (text, usage_dict).
     """
     effective_label = label or source
     prov = resolve_provider(label=effective_label, source=source, model=model, provider=provider)
@@ -332,22 +334,15 @@ def generate_text(
                         messages.append({"role": role, "content": text_part})
                     else:
                         messages.append({"role": "user", "content": str(item)})
-                text, usage = call_ollama(
-                    model=ollama_model,
-                    messages=messages,
-                    temperature=temperature,
-                    response_schema=response_schema,
-                    response_mime_type=response_mime_type,
-                )
-            else:
-                text, usage = call_ollama(
-                    model=ollama_model,
-                    prompt=prompt,
-                    system=system,
-                    temperature=temperature,
-                    response_schema=response_schema,
-                    response_mime_type=response_mime_type,
-                )
+            text, usage = call_ollama(
+                model=ollama_model,
+                messages=messages if isinstance(prompt, list) else None,
+                prompt=prompt if not isinstance(prompt, list) else None,
+                system=system if not isinstance(prompt, list) else None,
+                temperature=temperature,
+                response_schema=response_schema,
+                response_mime_type=response_mime_type,
+            )
             # Log Ollama usage
             log_usage(
                 source=source,
@@ -358,6 +353,8 @@ def generate_text(
                 output_tokens=usage["output_tokens"],
                 thinking_tokens=usage["thinking_tokens"],
             )
+            if return_usage:
+                return text, usage
             return text
         except OLLAMA_FALLBACK_EXCEPTIONS as e:
             fb = resolve_fallback_model(label=effective_label, source=source, fallback_model=fallback_model)
@@ -386,7 +383,33 @@ def generate_text(
     )
     # Log Gemini usage
     log_response(source=source, label=effective_label, model=gemini_model, resp=resp)
+    if return_usage:
+        return text, usage
     return text
+
+
+def estimate_cost(model: str, usage: dict) -> float:
+    """Calculate estimated USD cost for a model call. Local models (ollama) are $0.00."""
+    if not model:
+        return 0.0
+    norm = normalize_model_name(model).lower()
+    if norm.startswith("ollama/") or norm.startswith("ollama:"):
+        return 0.0
+    prices = {
+        "gemini-3.8-flash": (0.15, 0.60),
+        "gemini-3.5-flash-lite": (0.075, 0.30),
+        "gemini-2.5-pro": (1.25, 5.00),
+        "gemini-2.5-flash": (0.15, 0.60),
+    }
+    pin, pout = (0.15, 0.60)
+    for k, v in prices.items():
+        if k in norm:
+            pin, pout = v
+            break
+    inp = usage.get("input_tokens") or usage.get("input") or 0
+    out = usage.get("output_tokens") or usage.get("output") or 0
+    think = usage.get("thinking_tokens") or usage.get("thinking") or 0
+    return (inp * pin + (out + think) * pout) / 1_000_000.0
 
 
 class ProviderText:

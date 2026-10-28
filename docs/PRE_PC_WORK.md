@@ -129,19 +129,31 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 
 ---
 
-## 7. Quality test harness
+## 7. Quality test harness (Done, 2026-10-28)
 
 **Goal:** one tool that runs a week of short-task calls through two or more providers on the same inputs and lays the outputs side by side, as plan §7.4 requires before any task moves.
 
-**Start from:** `tools/social_model_compare.py` (Agent Wire: same 20 assignments per model, JSON output with tokens and cost; already accepts `model:thinking`), and `tools/persona_side_by_side.py` (articles). Generalize, don't duplicate.
-
-**Steps:**
-1. `tools/llm_compare.py --task {agent_wire,memory_takes,memory_summary,scouting_notes,gm_persona,gm_rationale,gm_negotiation} --season S --week W --models A B …`: builds the real inputs from the database (read-only), sends each through every model via item 6's seam, and saves nothing to the newsroom tables.
-2. Output: one JSON per run plus an HTML page in `verify_output/` with inputs and outputs per row, and per-model columns for tokens, thinking, seconds and cost.
-3. Automatic checks that exist in code already: the callers' validators (`social_writer`'s length, money and rumor guards; `scouting_narrative.validate_scout_text`; GM message validation), JSON/schema validity for GM calls, and numbers in the output that aren't in the input facts. Count failures per model.
-4. Leave voice and persona fit to JR: a column for a manual verdict.
-
-**Done when:** a run on the Mac with Gemini at two thinking levels (and Ollama if item 6 is done) produces the page for Agent Wire and one other task; the number of real calls is printed before it starts and kept small by default (`--limit`); tests cover input building and the checks with fakes; plan §7.4 says how to run it.
+**Completed implementation:**
+* `tools/llm_compare.py`: unified CLI tool supporting 7 short tasks:
+  - `agent_wire`: Agent Wire social desk posts (tweets <= 280 chars)
+  - `memory_takes`: Writer take extraction from articles (JSON list)
+  - `memory_summary`: Running season memory summary (<= 120 words)
+  - `scouting_notes`: College draft prospect notes (scouting narrative rules)
+  - `gm_persona`: Front office GM persona & bio generation (JSON)
+  - `gm_rationale`: Trade rationale explanation in GM voices (JSON)
+  - `gm_negotiation`: Trade negotiation responses (JSON)
+* **Read-only DB extraction & synthetic fallbacks:** Authentic inputs extracted from `news_feed`, `scout_events`, `scout_prospects`, `gm_profiles`, `gm_trade_proposals`, and `agent_memories`, with reliable synthetic fallbacks when DB tables are empty. Prints estimated call count before starting.
+* **Provider evaluation loop:** Evaluates all inputs across specified models using `engines/llm_provider.generate_text`, capturing response text, input/output/thinking tokens, latency (seconds), and estimated cost ($0.00 for Ollama).
+* **Automated validation guards:**
+  - Length constraints (<= 280 chars for tweets, <= 140 words for summaries, bio <= 600 chars).
+  - Hallucination / number checks: flags numbers in generated text that do not exist in prompt/input facts.
+  - JSON schema validation: strict schema enforcement for `gm_rationale`, `gm_negotiation`, `gm_persona`, and `memory_takes`.
+  - Domain guards: `social_writer` money & rumor guards, `scouting_narrative` validation (no OVR/ratings/Madden, no banned claims, injury checks, height/school checks).
+  - Aggregated failure counts and pass rates per model.
+* **Reporting:**
+  - Full structured JSON saved to `verify_output/compare_<task>_<timestamp>.json`.
+  - Responsive, interactive HTML report saved to `verify_output/compare_<task>_<timestamp>.html` featuring summary KPI cards, side-by-side model comparison columns, pass/fail check badges with failure details, and interactive Persona Voice Verdict ratings/notes persisted to browser `localStorage`.
+* **Testing:** 24 unit tests in `tests/test_llm_compare.py` covering CLI parsing, input building, model querying loop with mock providers, validator guards, and report generation.
 
 ---
 

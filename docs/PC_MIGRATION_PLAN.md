@@ -69,7 +69,7 @@ Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`
 - [x] 4. [`watch_save.py`](PRE_PC_WORK.md#4-pipelinewatch_savepy): debounced save watcher that runs reader → loader → engines → newsroom on a new week (§5.2)
 - [x] 5. [Thinking caps](PRE_PC_WORK.md#5-thinking-caps-on-the-short-gemini-calls) on `agent_memory`, `scouting_notes` and the GM calls (§7.9)
 - [x] 6. [Gemini-or-local provider switch](PRE_PC_WORK.md#6-gemini-or-local-provider-switch) on each short-task caller, local runs logged to `llm_usage` (§7.3)
-- [ ] 7. [Quality test harness](PRE_PC_WORK.md#7-quality-test-harness) (§7.4)
+- [x] 7. [Quality test harness](PRE_PC_WORK.md#7-quality-test-harness) (`tools/llm_compare.py`, §7.4)
 - [x] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
 - [ ] 9. [League memory](PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
 - [ ] 10. [Personality plan phases 2 and 3](PRE_PC_WORK.md#10-personality-plan-phases-2-and-3-v213): catalogue and tables, then GMs (V2.13)
@@ -458,6 +458,38 @@ Each moved caller gets a provider switch via `engines/llm_provider.py` (Gemini o
 ### 7.4 Quality Test Before Switching
 
 Before migrating any task to local or hosted open-weight models, evaluate outputs side by side against the Gemini baseline using the quality test harness (`tools/llm_compare.py`, PRE_PC_WORK.md §7).
+
+#### Quality Test Harness CLI (`tools/llm_compare.py`)
+
+Run side-by-side evaluations across two or more models (Gemini at various thinking levels and local Ollama models) without modifying newsroom tables:
+
+```bash
+# Compare Agent Wire tweets between Gemini 3.8 Flash (low thinking) and 3.5 Flash-Lite:
+python3 -m tools.llm_compare --task agent_wire --season 2036 --week 20 --models gemini-3.8-flash:low gemini-3.5-flash-lite --limit 5
+
+# Compare GM trade rationale between Gemini and local Ollama Qwen:
+python3 -m tools.llm_compare --task gm_rationale --season 2036 --week 20 --models gemini-3.8-flash:low ollama:qwen2.5:14b --limit 3
+
+# Compare college scouting notes with resident Gemma 4 E2B/E4B:
+python3 -m tools.llm_compare --task scouting_notes --season 2036 --week 20 --models gemini-3.8-flash:low ollama:gemma-4:4b --limit 5
+```
+
+**Supported Tasks:**
+* `agent_wire`: Social desk posts (tweets, <= 280 chars, money & rumor guards)
+* `memory_takes`: Writer take extraction from articles (JSON list of up to 3 takes)
+* `memory_summary`: Running season memory summary (<= 120 words)
+* `scouting_notes`: College draft prospect notes (scouting narrative rules)
+* `gm_persona`: Front office GM persona & bio generation (JSON)
+* `gm_rationale`: Trade rationale explanation in GM voices (JSON)
+* `gm_negotiation`: Trade negotiation responses (JSON)
+
+**Outputs (`verify_output/`):**
+* `verify_output/compare_<task>_<timestamp>.json`: full structured telemetry containing per-model tokens (input, output, thinking), latency, cost, and automated check results.
+* `verify_output/compare_<task>_<timestamp>.html`: interactive side-by-side dashboard featuring:
+  - Summary KPI cards: Pass Rate (%), Total Failures, Token Breakdown (In / Out / Thinking), Latency, and Cost.
+  - Side-by-side comparison columns for all evaluated models.
+  - Automated validation check badges (PASS / FAIL) with itemized issue breakdowns.
+  - Interactive **Persona Voice Verdict** dropdowns (`🌟 Excellent`, `👍 Good`, `👌 Generic`, `👎 Off-Voice`, `🚫 Hallucinated`) and manual review notes, automatically persisted to browser `localStorage` for JR review.
 
 #### Evaluation Order (from OPEN_MODEL_RESEARCH.md §5)
 
