@@ -16,8 +16,8 @@ from newsroom.db_tools import db, fetch_moves, resolve_season
 from newsroom.run_context import context_season, cutoff_week
 from newsroom.roster_moves import move_line, on_roster, week_label
 
-GROUP = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE"}
-GROUPS = ("QB", "RB", "WR", "TE")
+GROUP = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE", "K": "K", "DEF": "DEF", "DST": "DEF"}
+GROUPS = ("QB", "RB", "WR", "TE", "K", "DEF")
 LAST_FANTASY_WEEK = 17
 SEASON_WEEKS = 18
 
@@ -25,13 +25,13 @@ SEASON_WEEKS = 18
 # ─────────────────────────────── helpers ───────────────────────────────
 
 def _group_filter(position: str) -> Optional[str]:
-    """'ALL' → None; QB/RB/WR/TE (HB/FB → RB) → group; anything else raises."""
+    """'ALL' → None; QB/RB/WR/TE/K/DEF (HB/FB → RB, DST → DEF) → group; anything else raises."""
     p = (position or "ALL").strip().upper()
     if p in ("", "ALL", "FLEX"):
         return None
     p = GROUP.get(p, p)
     if p not in GROUPS:
-        raise ValueError(f"position must be QB, RB, WR, TE or ALL (got {position!r})")
+        raise ValueError(f"position must be QB, RB, WR, TE, K, DEF or ALL (got {position!r})")
     return p
 
 
@@ -75,7 +75,7 @@ def _roster(cur, season: int) -> dict:
         FROM player_seasons ps
         JOIN players p ON p.id = ps.player_id
         JOIN teams t ON t.id = ps.team_id
-        WHERE ps.season = %s AND ps.position IN ('QB', 'HB', 'FB', 'WR', 'TE')
+        WHERE ps.season = %s AND ps.position IN ('QB', 'HB', 'FB', 'WR', 'TE', 'K', 'DEF')
     """, (season,))
     roster, by_slot = {}, defaultdict(list)
     cut = cutoff_week(season)
@@ -216,8 +216,8 @@ def get_fantasy_rankings(position: str = "ALL", week: int = 0, sort: str = "week
                          season: int = 0) -> str:
     """Fantasy rankings for a week (full PPR): each player's projected points, opponent, 1–5 matchup stars
     (5 = easiest), points per game so far, rest-of-season (ROS) rank and projected points, preseason ADP rank,
-    and simulated rostered % / started % (share of 100 simulated 12-team leagues). position = QB, RB, WR, TE or
-    ALL; week defaults to this article's week; sort = 'week' (this week's projection) or 'ros' (rest of season).
+    and simulated rostered % / started % (share of 100 simulated 12-team leagues). position = QB, RB, WR, TE,
+    K, DEF or ALL; week defaults to this article's week; sort = 'week' (this week's projection) or 'ros' (rest of season).
     Also lists the teams on bye. Use for Start/Sit, Rankings & Tiers and ROS tiers."""
     try:
         group = _group_filter(position)

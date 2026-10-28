@@ -11,8 +11,8 @@ from typing import Optional
 
 LAST_FANTASY_SLATE_WEEK = 18
 
-# K and D/ST content needs kicking/defense lines and K/DST scoring (pipeline migration phase 3).
-KDST_ENABLED = False
+# K and D/ST content enabled (pipeline migration phase 3 complete).
+KDST_ENABLED = True
 
 HERO, CARD1, CARD2, CARD3 = "Fantasy Hero", "Fantasy 1", "Fantasy 2", "Fantasy 3"
 

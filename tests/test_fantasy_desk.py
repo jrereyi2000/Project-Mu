@@ -54,8 +54,11 @@ class SlateTests(unittest.TestCase):
             self.assertEqual(fd.fantasy_slate(week), [])
             self.assertIsNone(fd.fantasy_phase(week))
 
-    def test_kdst_gated_until_phase_3(self):
-        self.assertFalse(any("DST" in t for w in range(1, 19) for t in types_of(w)))
+    def test_kdst_enabled_weeks_3_to_17(self):
+        for w in range(3, 18):
+            self.assertIn("FANTASY_STREAMING_DST_K", types_of(w), f"Week {w} missing DST_K")
+        for w in (1, 2, 18):
+            self.assertNotIn("FANTASY_STREAMING_DST_K", types_of(w), f"Week {w} has unexpected DST_K")
 
     def test_every_slotted_type_is_configured_with_fantasy_writers(self):
         for week in range(1, 19):
@@ -80,7 +83,7 @@ class SlateTests(unittest.TestCase):
                 "focus", "data_queried", "curatorial_autonomy", "structure_directive", "directive",
                 "example_prompt_hook", "structure_source"}
         fantasy = {k: v for k, v in self.article_types.items() if k.startswith("FANTASY_")}
-        self.assertEqual(len(fantasy), 26)
+        self.assertEqual(len(fantasy), 27)
         for k, v in fantasy.items():
             self.assertEqual(set(v), keys, k)
             self.assertEqual(len(v["allowed_writers"]), len(v["writer_display_names"]), k)

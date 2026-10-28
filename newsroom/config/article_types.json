@@ -1194,6 +1194,28 @@
       "example_prompt_hook": "Find this week's matchups to exploit and avoid at every position, and name the players they help or hurt.",
       "structure_source": "article"
     },
+    "FANTASY_STREAMING_DST_K": {
+      "name": "Streaming D/ST & Kickers",
+      "allowed_writers": [
+        "JOYNER"
+      ],
+      "writer_display_names": [
+        "KC Joyner (Matchups & Usage Charting)"
+      ],
+      "writing_archetype_category": "Fantasy Weekly Streaming",
+      "granularity": "Week-level / Streaming Options",
+      "focus": "Streaming defense/special teams units and kickers for this week: high-floor targets and volatile upside plays on waivers.",
+      "data_queried": [
+        "get_fantasy_rankings",
+        "get_fantasy_defense_vs_position",
+        "get_fantasy_waiver_wire"
+      ],
+      "curatorial_autonomy": "CURATORIAL AUTONOMY (STREAMING D/ST & KICKERS):\nUse get_fantasy_rankings for K and DEF with this week's matchups and projections, and get_fantasy_waiver_wire (or low rostered %) to isolate accessible options. Target defenses facing turnover-prone or high-sack offenses, and kickers on high-implied-total offenses in clean weather or domed stadiums. Recommend 3 top streaming defenses and 3 top streaming kickers, plus one deep-league stash for each.",
+      "structure_directive": "ARTICLE STRUCTURE & FORMATTING DIRECTIVE:\nStructure the article as a streaming column (at least 900 words; longer is fine when the content earns it).\n\n1. Open with a headline using # (include the week) and a paragraph on this week's streaming landscape.\n2. ## Streaming Defenses (D/ST): 3 recommendations with opponent, matchup stars, projected points, and breakdown, followed by ### Deep-League D/ST Stash.\n3. ## Streaming Kickers (K): 3 recommendations with opponent, offensive environment, projected points, and volume expectations, followed by ### Deep-League Kicker Option.\n4. ## Traps to Avoid: 1 defense and 1 kicker with high rostered % facing unfavorable game scripts.",
+      "directive": "ARTICLE TYPE SPECIFICATION: Streaming D/ST & Kickers\nGranularity: Week-level / Streaming Options.\nFocus: Streaming defenses and kickers for the week: high-floor targets and volatile upside plays on waivers.\nScope: Week-level D/ST and Kicker streaming options.",
+      "example_prompt_hook": "Identify this week's top streaming defenses and kickers: target favorable matchups and game scripts available on waivers.",
+      "structure_source": "article"
+    },
     "FANTASY_DVP_REPORT": {
       "name": "Defense vs. Position Report",
       "allowed_writers": [

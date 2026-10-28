@@ -23,8 +23,11 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(ft._group_filter("hb"), "RB")
         self.assertEqual(ft._group_filter("FB"), "RB")
         self.assertEqual(ft._group_filter("TE"), "TE")
+        self.assertEqual(ft._group_filter("K"), "K")
+        self.assertEqual(ft._group_filter("DEF"), "DEF")
+        self.assertEqual(ft._group_filter("DST"), "DEF")
         with self.assertRaises(ValueError):
-            ft._group_filter("K")
+            ft._group_filter("CB")
 
     def test_stat_line(self):
         self.assertEqual(ft._stat_line(line(rush_att=22, rush_yds=26, rec=1, rec_yds=6)), "22-26-0 rush, 1-6-0 rec")
