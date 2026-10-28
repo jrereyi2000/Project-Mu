@@ -63,3 +63,46 @@ test('a bad edit writes nothing', { skip, timeout: 300_000 }, async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a contract block edits the player\'s own contract record in place', { skip, timeout: 300_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mu-write-test-'));
+  try {
+    const out = join(dir, 'CAREER-CONTRACT');
+    const contract = { Length: 3, CurrentYear: 0, NoTradeClause: true, VoidYears: 0, SalaryDistribution: 'Custom' };
+    [900, 1000, 1100, 0, 0, 0, 0, 0, 0, 0].forEach((v, i) => { contract[`SalaryYear${i}`] = v; });
+    [200, 200, 200, 0, 0, 0, 0].forEach((v, i) => { contract[`BonusYear${i}`] = v; });
+    const report = await writeSave(savePath, { players: [{ pgid: ACHANE, set: { SpeedRating: 98 }, contract }] }, out);
+    assert.deepEqual([report.players, report.contracts, report.fields, report.verified], [1, 1, 23, true]);
+
+    const [a, b] = [await readSave(savePath), await readSave(out)];
+    const pa = new Map(a.players.map(p => [p.pgid, p]));
+    const changed = b.players.filter(p => JSON.stringify(p) !== JSON.stringify(pa.get(p.pgid))).map(p => p.pgid);
+    assert.deepEqual(changed, [ACHANE], 'no other player (or their contract) changed');
+    const c = b.players.find(p => p.pgid === ACHANE).contract;
+    assert.deepEqual([c.length, c.current_year, c.no_trade_clause, c.void_years], [3, 0, true, 0]);
+    assert.deepEqual(c.salary_by_year, [900, 1000, 1100, 0, 0, 0, 0, 0, 0, 0]);
+    assert.deepEqual(c.bonus_by_year, [200, 200, 200, 0, 0, 0, 0]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a bad contract edit writes nothing', { skip, timeout: 300_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mu-write-test-'));
+  try {
+    const out = join(dir, 'CAREER-BAD-CONTRACT');
+    const practiceSquad = (await readSave(savePath)).players.find(p => p.status === 'PracticeSquad' && !p.contract);
+    const bad = (contract, pgid = ACHANE, re = undefined) =>
+      assert.rejects(writeSave(savePath, { players: [{ pgid, set: { SpeedRating: 98 }, contract }] }, out), re);
+    await bad({ SalaryYear0: 20000 }, ACHANE, /above 16383/);
+    await bad({ SalaryYear0: -1 });
+    await bad({ BonusYear7: 10 }, ACHANE, /no such PlayerContract field/);
+    await bad({ Incentives: '0'.repeat(32) }, ACHANE, /reference/);
+    await bad({ Length: 2, CurrentYear: 2 }, ACHANE, /outside Length/);
+    await bad({ CurrentYear: 5 }, ACHANE, /outside Length/);             // Achane's Length is 5
+    await bad({ Length: 2 }, practiceSquad.pgid, /no PlayerContract record/);
+    assert.equal(existsSync(out), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

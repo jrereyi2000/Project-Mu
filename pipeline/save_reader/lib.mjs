@@ -72,6 +72,20 @@ export const STAT_KINDS = {
   SeasonDefensiveKPReturnStats: 'def_return',
 };
 
+// A field's schema as fieldValueError reads it, or null when the record has no such field.
+export function fieldMeta(record, key) {
+  const field = record.getFieldByKey(key);
+  if (!field) return null;
+  const o = field.offset;
+  return {
+    type: o.type, isReference: o.isReference, minValue: o.minValue, maxValue: o.maxValue, maxLength: o.maxLength,
+    enumMembers: o.enum ? o.enum.members.map(m => m.name) : null,
+    // Some enums give two names one stored value (TraitDevelopment: College_Elite = XFactor = 3), and the library
+    // reads back the first, so the read-back compares stored values.
+    enumValues: o.enum ? Object.fromEntries(o.enum.members.map(m => [m.name, m._value])) : null,
+  };
+}
+
 // Checks a value against a field's schema before save_writer.mjs sets it: the library rejects bad enum values but
 // silently stores out-of-range numbers (Speed 500) and over-long strings. Returns an error message, or null.
 // meta: { type, isReference, minValue, maxValue, maxLength, enumMembers }.
