@@ -4200,7 +4200,10 @@ def run_attributes(out, max_teams=32, resume=False, only_teams=None):
                 clear_partial()
                 if stream_frozen():
                     recover_stream(e)
-                    team = roster_team(open_roster())
+                    # the list reopens on the user's team, not where the run was: a new lap starts there
+                    # (Oct 28, a restart on the 49ers reopened on the Panthers and the run ended at the Browns)
+                    first = team = roster_team(open_roster())
+                    visited = 0
                     continue
                 raise
             done[norm(team)] = idx
@@ -4216,7 +4219,8 @@ def run_attributes(out, max_teams=32, resume=False, only_teams=None):
             team = next_roster_team(os.path.join(out, "team_debug"), team)
         except Abort as e:
             recover_stream(e)
-            team = roster_team(open_roster())
+            first = team = roster_team(open_roster())
+            visited = 0
             continue
         if norm(team) == norm(first) and visited > 1:
             break
