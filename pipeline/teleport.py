@@ -5,7 +5,7 @@ pipeline/save_reader/save_writer.mjs applies. Reads the database, never writes i
 
   python3 -m pipeline.teleport <snapshot.json> [--season 2036] [--edits edits.json] [--report report.json]
                                [--age-add N] [--write-ovr] [--contract-years-add N] [--draft draft.json]
-                               [--release] [--appearance]
+                               [--release] [--appearance] [--no-scan]
 
 <snapshot.json> is pipeline/save_reader/pc_save_reader.mjs's read of the PC save (version 2+). --season is the Project
 Mu season whose rosters move (default league_state.current_season). --age-add adds years to every age (1 if Madden
@@ -32,9 +32,11 @@ Donors left over (about 5-10 a team) are listed in the report (leftover_donors) 
 team's Roster and PracticeSquad end up holding exactly its Project Mu players.
 
 Per pair the edits set name, age, years pro, jersey, height, weight, dev trait, position / archetype when they change,
-the ratings engines/ovr_weights.adjust_ratings moves to reach the target OVR for the archetype, and PLYR_COMMENT: kept
-when the donor already has the same surname, else 0 (no recorded name; the full surname list and renames come later,
-§4.3). Contracts: pipeline/teleport_contracts adds the player's ACTIVE Project Mu contract to the edit, written into
+the ratings, and PLYR_COMMENT (pipeline/commentary_names, 0 when the surname has no recording). Ratings: a player with
+a PS5 attribute scan (player_attributes, §2.3; the latest of --season or before) gets the scanned ratings as read, so
+the scan's OVR is theirs (scanned_ratings; moved only by Project Mu's OVR change when --season is past the scan's
+season); --no-scan turns this off. Everyone else gets the donor's ratings moved by engines/ovr_weights.adjust_ratings
+to the Project Mu OVR for the archetype, then settled. Contracts: pipeline/teleport_contracts adds the player's ACTIVE Project Mu contract to the edit, written into
 the donor's own PlayerContract record (no Project Mu contract, or a practice-squad donor with no record: the donor's
 contract stays; counted in the report). With --appearance it adds GenericHeadAssetName,
 PLYR_GENERICHEAD, PLYR_ASSETNAME, CharacterBodyType and CharacterVisuals skinTone. Not yet: portraits.
@@ -104,8 +106,9 @@ def surname_key(last):
 
 # ----------------------------------------------------------------- matching ----
 def pair_cost(mu, donor, doc):
-    """Cost of turning `donor` into `mu` (see the module docstring)."""
-    target = mu["overall"]
+    """Cost of turning `donor` into `mu` (see the module docstring). A scanned player's ratings replace the donor's,
+    so only position and archetype count."""
+    target = None if mu.get("scan") else mu["overall"]
     arch = mu["madden_archetype"]
     same_pos = donor["position"] == mu["madden_position"]
     if same_pos and arch == donor["archetype"]:
@@ -207,41 +210,86 @@ def player_edit(mu, donor, doc, age_add=0, write_ovr=False):
     set_["PLYR_COMMENT"] = cid if cid is not None else 0
 
     ratings = dict(donor["ratings"])
-    if mu["overall"] is not None and arch in doc["archetypes"]:
+    if mu.get("scan"):
+        ratings, target, scan_notes = scanned_ratings(mu, donor, doc, arch)
+        notes += scan_notes
+    elif mu["overall"] is not None and arch in doc["archetypes"]:
+        target = mu["overall"]
         try:
-            ratings, _ = ow.adjust_ratings(doc, arch, ratings, mu["overall"])
+            ratings, _ = ow.adjust_ratings(doc, arch, ratings, target)
         except ValueError as e:
             notes.append(f"unreachable: {e}")
         if position in doc["slots"] and arch in doc["slots"][position]:
-            ratings, settled = settle_archetype(doc, position, arch, ratings, mu["overall"])
+            ratings, settled = settle_archetype(doc, position, arch, ratings, target)
             if not settled:
                 notes.append("rival archetype: another archetype stays above the target")
-        for k, v in ratings.items():
-            if v != donor["ratings"].get(k):
-                set_[f"{k}Rating"] = v
-        top, top_arch = ow.predict_ovr(doc, position, ratings, current=arch) if position in doc["slots"] else (None, None)
-        if write_ovr and position in doc["slots"]:
-            grades = [ow.predict_grade(doc, a, ratings) if a in doc["archetypes"] else 0 for a in doc["slots"][position]]
-            grades += [0] * (5 - len(grades))
-            for i, g in enumerate(grades[:5]):
-                set_[f"OverallGrade{i}"] = max(0, min(g, 99))
-            set_["OverallRating"] = max(0, min(top, 99))
-            set_["PlayerType"] = top_arch
     else:
         notes.append("no Project Mu OVR: ratings kept")
+        return {"pgid": donor["pgid"], "set": set_}, notes
+    for k, v in ratings.items():
+        if v != donor["ratings"].get(k):
+            set_[f"{k}Rating"] = v
+    if write_ovr and position in doc["slots"]:
+        grades = [ow.predict_grade(doc, a, ratings) if a in doc["archetypes"] else 0 for a in doc["slots"][position]]
+        if mu.get("scan") and target is not None and arch in doc["slots"][position]:
+            # Scanned ratings carry Madden's own OVR; the fit's error (K, LS, FB) mustn't change it or the archetype.
+            grades = [target if a == arch else min(g, target) for a, g in zip(doc["slots"][position], grades)]
+            top, top_arch = target, arch
+        else:
+            top, top_arch = ow.predict_ovr(doc, position, ratings, current=arch)
+        grades += [0] * (5 - len(grades))
+        for i, g in enumerate(grades[:5]):
+            set_[f"OverallGrade{i}"] = max(0, min(g, 99))
+        set_["OverallRating"] = max(0, min(top, 99))
+        set_["PlayerType"] = top_arch
     return {"pgid": donor["pgid"], "set": set_}, notes
+
+
+def scanned_ratings(mu, donor, doc, arch):
+    """(ratings, target OVR, notes) for a player with a PS5 scan (§2.3): the scanned ratings over the donor's (a rating
+    the list doesn't show keeps the donor's value). Madden computed the scan's OVR from those very ratings, so they are
+    written as read and the scan's OVR is the target, even where Project Mu's OVR for the same season differs (an
+    older roster read; noted as a scan gap). Only when Project Mu has moved a season past the scan (progression) are
+    they moved by Project Mu's OVR change, measured on the predicted grade so the formula's own error cancels out."""
+    scan = mu["scan"]
+    ratings = dict(donor["ratings"])
+    ratings.update({k: v for k, v in scan["ratings"].items() if k in ratings})
+    target, shown, notes = mu["overall"], scan["overall"], []
+    if shown is None or target is None or shown == target:
+        return ratings, shown if shown is not None else target, notes
+    if mu.get("season") is None or scan["season"] >= mu["season"]:
+        notes.append(f"scan gap: scan OVR {shown}, Project Mu {target}")
+        return ratings, shown, notes
+    notes.append(f"scan moved: {shown} -> {target} since {scan['season']}")
+    if arch in doc["archetypes"]:
+        try:
+            ratings, _ = ow.adjust_ratings(doc, arch, ratings, ow.predict_grade(doc, arch, ratings) + target - shown)
+        except ValueError as e:
+            notes.append(f"unreachable: {e}")
+    return ratings, target, notes
 
 
 # --------------------------------------------------------------------- load ----
 def project_mu_roster(cur, season):
     cur.execute("""
-        SELECT ps.player_id, p.player_name, p.full_name, p.height, p.weight, p.player_number, t.abbreviation,
-               ps.position, ps.archetype, ps.overall_rating, ps.age, ps.years_of_experience, ps.dev_trait
+        SELECT ps.player_id, ps.season, p.player_name, p.full_name, p.height, p.weight, p.player_number,
+               t.abbreviation, ps.position, ps.archetype, ps.overall_rating, ps.age, ps.years_of_experience, ps.dev_trait
         FROM player_seasons ps JOIN players p ON p.id = ps.player_id JOIN teams t ON t.id = ps.team_id
         WHERE ps.season = %s ORDER BY t.abbreviation, ps.overall_rating DESC NULLS LAST""", (season,))
-    cols = ("player_id", "player_name", "full_name", "height", "weight", "jersey", "team", "position", "archetype",
-            "overall", "age", "years_pro", "dev_trait")
+    cols = ("player_id", "season", "player_name", "full_name", "height", "weight", "jersey", "team", "position",
+            "archetype", "overall", "age", "years_pro", "dev_trait")
     return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def attribute_scans(cur, season):
+    """{player_id: {season, capture_folder, overall, ratings}}: each player's latest PS5 scan (player_attributes, §2.3)
+    from `season` or before."""
+    cur.execute("""
+        SELECT DISTINCT ON (player_id) player_id, season, capture_folder, overall_rating, ratings
+        FROM player_attributes WHERE season <= %s
+        ORDER BY player_id, season DESC, created_at DESC, id DESC""", (season,))
+    return {pid: {"season": s, "capture_folder": folder, "overall": ovr, "ratings": ratings}
+            for pid, s, folder, ovr, ratings in cur.fetchall()}
 
 
 def donors_by_team(snapshot):
@@ -257,14 +305,16 @@ def donors_by_team(snapshot):
     return by_team, lambda abbr: index.get(from_abbr.get(abbr, abbr))
 
 
-def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False, seeds=None):
+def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False, seeds=None, scans=None):
     """(edits for save_writer, report). With `release` the edits also release the leftover donors; `seeds`
-    (teleport_appearance.headshot_seeds) turns on appearance."""
+    (teleport_appearance.headshot_seeds) turns on appearance; `scans` (attribute_scans) gives scanned players their
+    PS5 ratings instead of the donor's moved to their OVR."""
     by_team, team_index = donors_by_team(snapshot)
     roster = [m for m in roster if m["position"] not in SKIP_POSITIONS]
     for m in roster:
         m["madden_position"] = TO_MADDEN_POSITION.get(m["position"], m["position"])
         m["madden_archetype"] = madden_archetype(doc, m["madden_position"], m["archetype"])
+        m["scan"] = (scans or {}).get(m["player_id"])
     teams = defaultdict(list)
     unknown_teams = Counter()
     for m in roster:
@@ -275,7 +325,7 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False, s
             teams[ti].append(m)
 
     edits, pairs, unmatched, leftover = [], [], [], []
-    kinds, notes_count, ovr_moves = Counter(), Counter(), []
+    kinds, notes_count, ovr_moves, scan_gaps = Counter(), Counter(), [], Counter()
     pool = ta.head_pool(snapshot) if seeds is not None else None
     looks, seed_sources = [], Counter()
     short_name = {t["team_index"]: t["short_name"] for t in snapshot["teams"]}
@@ -310,12 +360,16 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False, s
             for n in notes:
                 notes_count[n.split(":")[0] if ":" in n else " ".join(n.split(" ")[:1])] += 1
             rating_edits = {k: v for k, v in edit["set"].items() if k.endswith("Rating") and k != "OverallRating"}
-            if m["overall"] is not None:
+            if m["scan"]:
+                if m["overall"] is not None and m["scan"]["overall"] is not None:
+                    scan_gaps[m["scan"]["overall"] - m["overall"]] += 1
+            elif m["overall"] is not None:
                 ovr_moves.append(sum(abs(v - d["ratings"][k[:-6]]) for k, v in rating_edits.items()))
             pairs.append({"player_id": m["player_id"], "name": m["player_name"], "team": m["team"],
                           "position": m["position"], "target_ovr": m["overall"], "donor_pgid": d["pgid"],
                           "donor_position": d["position"], "donor_archetype": d["archetype"],
-                          "donor_ovr": d["overall"], "kind": kind, "notes": notes})
+                          "donor_ovr": d["overall"], "kind": kind, "ratings": "scan" if m["scan"] else "donor",
+                          "notes": notes})
     moves = np.array(ovr_moves) if ovr_moves else np.zeros(1)
     report = {
         "season_players": len(roster), "matched": len(pairs), "unmatched": unmatched,
@@ -324,6 +378,8 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False, s
         "rating_points_moved": {"median": float(np.median(moves)), "p90": float(np.percentile(moves, 90)),
                                 "max": float(moves.max())},
         "no_archetype_match": sum(1 for m in roster if m["madden_archetype"] is None),
+        "scanned": sum(1 for p in pairs if p["ratings"] == "scan"),
+        "scan_ovr_minus_project_mu": dict(sorted(scan_gaps.items())),
         "commentary_kept": sum(1 for e in edits if e["set"].get("PLYR_COMMENT")),
         "commentary_matched": sum(1 for e in edits if e["set"].get("PLYR_COMMENT", 0) > 0),
         "commentary_unmatched": sum(1 for e in edits if not e["set"].get("PLYR_COMMENT", 0)),
@@ -352,6 +408,7 @@ def main():
     ap.add_argument("--draft", help="draft_tables.mjs's read of the save: also teleport the draft class and picks")
     ap.add_argument("--release", action="store_true", help="release the leftover donors to free agency")
     ap.add_argument("--appearance", action="store_true", help="also write generic head and body type")
+    ap.add_argument("--no-scan", action="store_true", help="ignore player_attributes: every player gets donor ratings")
     a = ap.parse_args()
     with open(a.snapshot) as fh:
         snapshot = json.load(fh)
@@ -367,7 +424,8 @@ def main():
         roster = project_mu_roster(cur, season)
         contracts = teleport_contracts.load_contracts(cur, season)
         seeds = ta.headshot_seeds(cur, season) if a.appearance else None
-        edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr, a.release, seeds)
+        scans = None if a.no_scan else attribute_scans(cur, season)
+        edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr, a.release, seeds, scans)
         report["contracts"] = teleport_contracts.add_contracts(edits, report, contracts, snapshot, a.contract_years_add)
         if a.draft:
             from pipeline import teleport_draft

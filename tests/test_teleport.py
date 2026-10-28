@@ -130,6 +130,75 @@ class EditTest(unittest.TestCase):
         self.assertTrue(any("no Project Mu OVR" in n for n in notes))
 
 
+SCANNED = {**QB_RATINGS, "ThrowPower": 95, "ThrowAccuracyShort": 91, "Awareness": 88, "Speed": 81}
+
+
+def scan(ratings=None, overall=None, season=2036):
+    ratings = dict(SCANNED if ratings is None else ratings)
+    if overall is None:
+        overall = ow.predict_grade(DOC, "QB_StrongArm", ratings)
+    return {"season": season, "capture_folder": "2026-10-28_attributes", "overall": overall, "ratings": ratings}
+
+
+class ScanTest(unittest.TestCase):
+    def written(self, edit):
+        return {**QB_RATINGS, **{k[:-6]: v for k, v in edit["set"].items()
+                                 if k.endswith("Rating") and k != "OverallRating"}}
+
+    def test_scanned_ratings_are_written_as_read(self):
+        s = scan()
+        edit, notes = tp.player_edit(mu(overall=s["overall"], season=2036, scan=s), donor(), DOC)
+        self.assertEqual(self.written(edit), SCANNED)
+        self.assertEqual(notes, [])
+
+    def test_the_scan_ovr_wins_over_an_older_project_mu_read_of_the_same_season(self):
+        s = scan()
+        edit, notes = tp.player_edit(mu(overall=s["overall"] - 2, season=2036, scan=s), donor(), DOC, write_ovr=True)
+        self.assertEqual(self.written(edit), SCANNED)
+        self.assertEqual(edit["set"]["OverallRating"], s["overall"])
+        self.assertTrue(any(n.startswith("scan gap") for n in notes))
+
+    def test_a_later_project_mu_season_moves_the_scan_by_the_ovr_change(self):
+        s = scan(overall=90)                                    # shown OVR one off the fit: the change still applies
+        before = ow.predict_grade(DOC, "QB_StrongArm", SCANNED)
+        edit, notes = tp.player_edit(mu(overall=93, season=2037, scan=s), donor(), DOC)
+        self.assertEqual(ow.predict_grade(DOC, "QB_StrongArm", self.written(edit)), before + 3)
+        self.assertTrue(any(n.startswith("scan moved") for n in notes))
+
+    def test_write_ovr_keeps_the_scanned_archetype_on_top(self):
+        s = scan()
+        edit, _ = tp.player_edit(mu(overall=s["overall"], season=2036, scan=s), donor(), DOC, write_ovr=True)
+        st = edit["set"]
+        self.assertEqual((st["OverallRating"], st["PlayerType"], st["OverallGrade1"]),
+                         (s["overall"], "QB_StrongArm", s["overall"]))
+        self.assertTrue(all(st[f"OverallGrade{i}"] <= s["overall"] for i in range(5)))
+
+    def test_a_rating_the_list_does_not_show_keeps_the_donor_value(self):
+        d = donor(ratings={**QB_RATINGS, "Personality": 40})
+        s = scan(ratings={**SCANNED, "NotASaveField": 50})
+        edit, _ = tp.player_edit(mu(overall=s["overall"], season=2036, scan=s), d, DOC)
+        self.assertNotIn("NotASaveFieldRating", edit["set"])
+        self.assertNotIn("PersonalityRating", edit["set"])
+
+    def test_pairing_ignores_the_donor_ovr_for_a_scanned_player(self):
+        m = mu(overall=95, scan=scan())
+        self.assertEqual(tp.pair_cost(m, donor(), DOC), tp.SAME_ARCHETYPE)
+        self.assertEqual(tp.pair_cost(m, donor(archetype="QB_Scrambler"), DOC), tp.OTHER_ARCHETYPE)
+
+    def test_report_counts_scanned_players(self):
+        snapshot = {"teams": [{"short_name": "CAR", "team_index": 4}],
+                    "players": [{**donor(), "status": "Signed", "team_index": 4, "first_name": "Will",
+                                 "appearance": {"commentary_id": 4600}},
+                                {**donor(pgid=501), "status": "Signed", "team_index": 4, "first_name": "Sam",
+                                 "appearance": {"commentary_id": 4600}}]}
+        s = scan()
+        roster = [mu(overall=s["overall"] - 1, season=2036), mu(player_id=2, season=2036)]
+        _, report = tp.teleport(snapshot, [dict(r) for r in roster], DOC, scans={1: s})
+        self.assertEqual(report["scanned"], 1)
+        self.assertEqual(report["scan_ovr_minus_project_mu"], {1: 1})
+        self.assertEqual(sorted(p["ratings"] for p in report["pairs"]), ["donor", "scan"])
+
+
 class SettleTest(unittest.TestCase):
     def test_a_rival_archetype_is_brought_back_below_the_target(self):
         doc = {"slots": {"X": ["A", "B"]}, "archetypes": {
