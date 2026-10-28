@@ -4,6 +4,7 @@ import csv
 import os
 import tempfile
 import unittest
+from unittest import mock
 import psycopg
 import pytest
 
@@ -211,3 +212,125 @@ class TestDatabaseApplyIntegration(unittest.TestCase):
         finally:
             if os.path.exists(csv_path):
                 os.remove(csv_path)
+
+
+@pytest.mark.integration
+class TestPlayerNameAliasesGuard(unittest.TestCase):
+    def test_caching_and_check(self):
+        cn._ALIASES_TABLE_EXISTS = None
+        mock_cur = mock.MagicMock()
+        mock_cur.fetchone.return_value = (False,)
+        self.assertFalse(cn.player_name_aliases_exist(mock_cur))
+        self.assertIsNone(cn._ALIASES_TABLE_EXISTS)
+
+        mock_cur.fetchone.return_value = (True,)
+        self.assertTrue(cn.player_name_aliases_exist(mock_cur))
+        self.assertTrue(cn._ALIASES_TABLE_EXISTS)
+
+        # Cached - does not execute again
+        mock_cur.execute.reset_mock()
+        self.assertTrue(cn.player_name_aliases_exist(mock_cur))
+        mock_cur.execute.assert_not_called()
+
+        # Force check bypasses cache
+        self.assertTrue(cn.player_name_aliases_exist(mock_cur, force_check=True))
+        mock_cur.execute.assert_called_once()
+        cn._ALIASES_TABLE_EXISTS = None
+
+    def test_apply_requires_table_with_helpful_error(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False) as f:
+            f.write("player_id,name,team,pos,ovr,candidate_1,candidate_2,candidate_3,candidate_4,candidate_5,chosen\n")
+            f.write("1,Test Player,CAR,QB,90,Smith,Jones,Brown,Davis,Wilson,Smith\n")
+            csv_path = f.name
+        try:
+            with mock.patch("pipeline.commentary_names.player_name_aliases_exist", return_value=False):
+                with self.assertRaises(RuntimeError) as ctx:
+                    cn.run_apply(csv_path, dsn=TEST_DSN, commit=False)
+                self.assertIn("apply db/migrations/2027_01_07_player_name_aliases.sql first", str(ctx.exception))
+        finally:
+            if os.path.exists(csv_path):
+                os.remove(csv_path)
+
+    def test_search_endpoints_query_building_absent_and_present(self):
+        # 1. Test search_global query building when table is absent
+        mock_cur = mock.MagicMock()
+        mock_cur.fetchall.return_value = []
+        mock_cur.fetchone.return_value = {"total": 0, "current_season": 2036, "current_week": 1}
+
+        with mock.patch("server.api.player_name_aliases_exist", return_value=False):
+            with mock.patch("server.api.db_pool.connection") as mock_conn_ctx:
+                mock_conn = mock.MagicMock()
+                mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+                mock_conn_ctx.return_value.__enter__.return_value = mock_conn
+
+                from server.api import search_global
+                search_global("smith")
+                sql = mock_cur.execute.call_args[0][0]
+                self.assertNotIn("player_name_aliases", sql)
+
+        # 2. Test search_global query building when table is present
+        mock_cur.reset_mock()
+        with mock.patch("server.api.player_name_aliases_exist", return_value=True):
+            with mock.patch("server.api.db_pool.connection") as mock_conn_ctx:
+                mock_conn = mock.MagicMock()
+                mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+                mock_conn_ctx.return_value.__enter__.return_value = mock_conn
+
+                from server.api import search_global
+                search_global("smith")
+                sql = mock_cur.execute.call_args[0][0]
+                self.assertIn("player_name_aliases", sql)
+
+        # 3. Test napper available_players when absent
+        mock_cur.reset_mock()
+        with mock.patch("server.napper_api.player_name_aliases_exist", return_value=False):
+            with mock.patch("server.napper_api.get_db") as mock_get_db:
+                mock_conn = mock.MagicMock()
+                mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+                mock_get_db.return_value.__enter__.return_value = mock_conn
+
+                from server.napper_api import get_available_players
+                get_available_players(0, search="smith", position="ALL", limit=10, offset=0)
+                sqls = [c[0][0] for c in mock_cur.execute.call_args_list]
+                self.assertFalse(any("player_name_aliases" in s for s in sqls))
+
+        # 4. Test napper available_players when present
+        mock_cur.reset_mock()
+        with mock.patch("server.napper_api.player_name_aliases_exist", return_value=True):
+            with mock.patch("server.napper_api.get_db") as mock_get_db:
+                mock_conn = mock.MagicMock()
+                mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+                mock_get_db.return_value.__enter__.return_value = mock_conn
+
+                from server.napper_api import get_available_players
+                get_available_players(0, search="smith", position="ALL", limit=10, offset=0)
+                sqls = [c[0][0] for c in mock_cur.execute.call_args_list]
+                self.assertTrue(any("player_name_aliases" in s for s in sqls))
+
+    def test_find_player_by_alias_integration(self):
+        import psycopg
+        class _Rollback(Exception):
+            pass
+
+        with psycopg.connect(TEST_DSN) as conn:
+            with conn.cursor() as cur:
+                try:
+                    with cur.connection.transaction():
+                        cur.execute("SELECT p.id, p.full_name FROM players p JOIN player_seasons ps ON ps.player_id = p.id WHERE ps.season = 2036 AND ps.position IN ('QB', 'WR') LIMIT 1")
+                        row = cur.fetchone()
+                        pid, pname = row[0], row[1]
+                        test_alias = "UniqueTestZzzyxAlias"
+
+                        cur.execute("INSERT INTO player_name_aliases (player_id, alias, kind, created_at) VALUES (%s, %s, 'test', NOW())", (pid, test_alias))
+
+                        # Verify query using alias finds the player
+                        cur.execute("""
+                            SELECT p.id FROM players p
+                            WHERE p.full_name ILIKE %s OR p.player_name ILIKE %s
+                               OR EXISTS (SELECT 1 FROM player_name_aliases pna WHERE pna.player_id = p.id AND pna.alias ILIKE %s)
+                        """, (f"%{test_alias}%", f"%{test_alias}%", f"%{test_alias}%"))
+                        found_ids = [r[0] for r in cur.fetchall()]
+                        self.assertIn(pid, found_ids)
+                        raise _Rollback()
+                except _Rollback:
+                    pass

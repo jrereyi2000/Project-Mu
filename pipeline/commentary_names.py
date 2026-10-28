@@ -37,6 +37,31 @@ _COMMENTARY_RAW: dict[str, int] | None = None
 _NORMALIZED_LOOKUP: dict[str, int] | None = None
 _RECORDED_SURNAMES: list[str] | None = None
 _RECORDED_METADATA: list[tuple[str, str, str, str, str]] | None = None  # (cand, c_norm, c_pri, c_sec, c_first)
+_ALIASES_TABLE_EXISTS: bool | None = None
+
+
+def player_name_aliases_exist(cur, force_check: bool = False) -> bool:
+    """Decide whether player_name_aliases table exists.
+
+    Cached in process once True. Re-checked if False or None so it starts working
+    as soon as the migration is applied without requiring a restart.
+    """
+    global _ALIASES_TABLE_EXISTS
+    if _ALIASES_TABLE_EXISTS is True and not force_check:
+        return True
+    if cur is None:
+        return False
+    try:
+        cur.execute("SELECT (to_regclass('public.player_name_aliases') IS NOT NULL) AS flag")
+        row = cur.fetchone()
+        if not row:
+            return False
+        exists = bool(row[0] if isinstance(row, (tuple, list)) else next(iter(row.values())))
+        if exists:
+            _ALIASES_TABLE_EXISTS = True
+        return exists
+    except Exception:
+        return False
 
 
 # --------------------------------------------------------------------- loading ----
@@ -507,6 +532,11 @@ def run_apply(csv_path: str, dsn: str = DEFAULT_DSN, commit: bool = False) -> di
     changes = []
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            if not player_name_aliases_exist(cur, force_check=True):
+                raise RuntimeError(
+                    "Table 'player_name_aliases' does not exist. Please apply db/migrations/2027_01_07_player_name_aliases.sql first."
+                )
+
             for item in to_apply:
                 pid = item["player_id"]
                 chosen = item["chosen"]

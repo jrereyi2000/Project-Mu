@@ -23,6 +23,7 @@ from engines.napper_lineup_engine import (
     _roster_format, add_player, fill_empty_starter_slots, refresh_matchup_projections, release_player,
     roster_capacity,
 )
+from pipeline.commentary_names import player_name_aliases_exist
 from engines.napper_injuries import IR_MIN_WEEKS, get_injury_map, is_ir_eligible
 from engines.napper_trade_engine import TRADE_DEADLINE_WEEK, expire_pending_trades, trades_open
 from engines.napper_playoffs import PLAYOFF_TEAMS, ROUNDS as PLAYOFF_ROUNDS, ROUND_LABELS, sync_playoffs, team_week_note
@@ -2719,7 +2720,10 @@ def get_available_players(
             where_clauses.append("ps.team_id IS NOT NULL")
 
             if search:
-                where_clauses.append("(p.full_name ILIKE %(search)s OR p.player_name ILIKE %(search)s OR EXISTS (SELECT 1 FROM player_name_aliases pna WHERE pna.player_id = p.id AND pna.alias ILIKE %(search)s))")
+                if player_name_aliases_exist(cur):
+                    where_clauses.append("(p.full_name ILIKE %(search)s OR p.player_name ILIKE %(search)s OR EXISTS (SELECT 1 FROM player_name_aliases pna WHERE pna.player_id = p.id AND pna.alias ILIKE %(search)s))")
+                else:
+                    where_clauses.append("(p.full_name ILIKE %(search)s OR p.player_name ILIKE %(search)s)")
                 params["search"] = f"%{search.strip()}%"
 
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"

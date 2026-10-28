@@ -11,6 +11,7 @@ from typing import Optional
 import re
 
 from engines.gotw_engine import display_excitement
+from pipeline.commentary_names import player_name_aliases_exist
 from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -2813,7 +2814,13 @@ def search_global(q: str = "", season: Optional[int] = None, limit: int = 20):
             ]
 
             # Search players
-            cur.execute("""
+            has_aliases = player_name_aliases_exist(cur)
+            alias_clause = "\n                   OR EXISTS (SELECT 1 FROM player_name_aliases pna WHERE pna.player_id = p.id AND pna.alias ILIKE %s)" if has_aliases else ""
+            sql_params = [HISTORY_CAPTURED_FROM, season, pattern, pattern]
+            if has_aliases:
+                sql_params.append(pattern)
+
+            cur.execute(f"""
                 SELECT p.id, p.full_name, p.player_number, p.espn_id,
                        COALESCE(ps_curr.position, ps_latest.position, 'ATH') as position,
                        COALESCE(ps_curr.overall_rating, ps_latest.overall_rating, 75) as overall_rating,
@@ -2832,11 +2839,10 @@ def search_global(q: str = "", season: Optional[int] = None, limit: int = 20):
                 ) ps_latest ON true
                 LEFT JOIN teams t_latest ON t_latest.id = ps_latest.team_id
                 WHERE p.full_name ILIKE %s
-                   OR p.player_name ILIKE %s
-                   OR EXISTS (SELECT 1 FROM player_name_aliases pna WHERE pna.player_id = p.id AND pna.alias ILIKE %s)
+                   OR p.player_name ILIKE %s{alias_clause}
                 ORDER BY (p.origin IS NOT NULL), overall_rating DESC NULLS LAST   -- today's players before history
                 LIMIT 15;
-            """, (HISTORY_CAPTURED_FROM, season, pattern, pattern, pattern))
+            """, tuple(sql_params))
             player_rows = cur.fetchall()
             players_res = [
                 {

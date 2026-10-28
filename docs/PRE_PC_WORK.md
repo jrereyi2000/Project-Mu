@@ -283,7 +283,7 @@ conn.rollback(); conn.close()
 ```
 must print 32 (or the GM count) with no error.
 
-## R2. Player search breaks when `player_name_aliases` is missing (blocker)
+## R2. [x] Player search breaks when `player_name_aliases` is missing (blocker)
 
 **Bug:** 396eee1 added `OR EXISTS (SELECT 1 FROM player_name_aliases …)` to `server/api.py` `search_global` (~line 2832) and `server/napper_api.py` `get_available_players` (~line 2719). Live has no such table, so both queries fail with `relation "player_name_aliases" does not exist`.
 
