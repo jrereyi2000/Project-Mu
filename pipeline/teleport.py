@@ -4,13 +4,14 @@ the same team in a Madden 27 PC save, retargets the donor's ratings to the Proje
 pipeline/save_reader/save_writer.mjs applies. Reads the database, never writes it; never touches a save itself.
 
   python3 -m pipeline.teleport <snapshot.json> [--season 2036] [--edits edits.json] [--report report.json]
-                               [--age-add N] [--write-ovr]
+                               [--age-add N] [--write-ovr] [--appearance]
 
 <snapshot.json> is pipeline/save_reader/pc_save_reader.mjs's read of the PC save (version 2+). --season is the Project
 Mu season whose rosters move (default league_state.current_season). --age-add adds years to every age (1 if Madden
 has already aged its players into the new league year and Project Mu hasn't). --write-ovr also writes OverallRating,
 OverallGrade0-4 and PlayerType from engines/ovr_weights's predictions, for a Madden that doesn't recompute OVR on load
-(a PC check).
+(a PC check). --appearance also gives each player a generic head and body type matching their AI headshot
+(pipeline/teleport_appearance.py).
 
 Why same-team only: Madden ties players to teams through each team's Roster and DepthChart lists, not just
 Player.TeamIndex, so moving a player between teams isn't one field. Every Project Mu team has 54-62 players and every
@@ -25,7 +26,8 @@ Donors left over (about 5-10 a team) are reported; releasing them is a later ste
 Per pair the edits set name, age, years pro, jersey, height, weight, dev trait, position / archetype when they change,
 the ratings engines/ovr_weights.adjust_ratings moves to reach the target OVR for the archetype, and PLYR_COMMENT: kept
 when the donor already has the same surname, else 0 (no recorded name; the full surname list and renames come later,
-§4.3). Not yet: contracts (a reference field), portraits, appearance, the draft class and draft picks.
+§4.3). With --appearance it adds GenericHeadAssetName, PLYR_GENERICHEAD, PLYR_ASSETNAME and CharacterBodyType. Not yet:
+contracts (a reference field), portraits, CharacterVisuals (the body's skin tone), the draft class and draft picks.
 """
 import argparse
 import json
@@ -39,6 +41,7 @@ import psycopg
 from scipy.optimize import linear_sum_assignment
 
 from engines import ovr_weights as ow
+from pipeline import teleport_appearance as ta
 from pipeline.load_save import POSITIONS, TEAM_ABBR_ALIASES, archetype as mu_archetype_name
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -238,8 +241,8 @@ def donors_by_team(snapshot):
     return by_team, lambda abbr: index.get(from_abbr.get(abbr, abbr))
 
 
-def teleport(snapshot, roster, doc, age_add=0, write_ovr=False):
-    """(edits for save_writer, report)."""
+def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, seeds=None):
+    """(edits for save_writer, report). `seeds` (teleport_appearance.headshot_seeds) turns on appearance."""
     by_team, team_index = donors_by_team(snapshot)
     roster = [m for m in roster if m["position"] not in SKIP_POSITIONS]
     for m in roster:
@@ -256,6 +259,8 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False):
 
     edits, pairs, unmatched, leftover = [], [], [], 0
     kinds, notes_count, ovr_moves = Counter(), Counter(), []
+    pool = ta.head_pool(snapshot) if seeds is not None else None
+    looks, seed_sources = [], Counter()
     for ti, mu_players in sorted(teams.items()):
         donors = by_team.get(ti, [])
         matched = match_team(mu_players, donors, doc)
@@ -265,6 +270,16 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False):
         leftover += len(donors) - len(used)
         for m, d in matched:
             edit, notes = player_edit(m, d, doc, age_add, write_ovr)
+            seed = seeds.get(m["player_id"]) if seeds is not None else None
+            if seed:
+                first, last = split_name(m["full_name"], m["player_name"])
+                extra, look = ta.appearance_fields(pool, seed, first, last, d["pgid"], height_inches(m["height"]),
+                                                   m["weight"])
+                edit["set"].update(extra)
+                looks.append(look)
+                seed_sources[seed["source"]] += 1
+            elif seeds is not None:
+                seed_sources["no seed"] += 1
             edits.append(edit)
             cost = pair_cost(m, d, doc)
             kind = ("same archetype" if cost < OTHER_ARCHETYPE else "other archetype" if cost < NEIGHBOUR
@@ -290,6 +305,8 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False):
         "commentary_kept": sum(1 for e in edits if e["set"].get("PLYR_COMMENT")),
         "pairs": pairs,
     }
+    if seeds is not None:
+        report["appearance"] = ta.summarize(looks, seed_sources)
     return {"players": edits}, report
 
 
@@ -302,6 +319,7 @@ def main():
     ap.add_argument("--report", help="write the full report (every pair) here")
     ap.add_argument("--age-add", type=int, default=0)
     ap.add_argument("--write-ovr", action="store_true")
+    ap.add_argument("--appearance", action="store_true", help="also write generic head and body type")
     a = ap.parse_args()
     with open(a.snapshot) as fh:
         snapshot = json.load(fh)
@@ -315,7 +333,8 @@ def main():
             cur.execute("SELECT current_season FROM league_state WHERE id = 1")
             season = cur.fetchone()[0]
         roster = project_mu_roster(cur, season)
-    edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr)
+        seeds = ta.headshot_seeds(cur, season) if a.appearance else None
+    edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr, seeds)
     report["season"] = season
     if a.edits:
         with open(a.edits, "w") as fh:
