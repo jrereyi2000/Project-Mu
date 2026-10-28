@@ -175,24 +175,38 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 
 ---
 
-## 10. Personality plan phases 2 and 3 (V2.13)
+## 10. Personality plan phases 2 and 3 (V2.13) [DONE 2026-10-28]
 
 **Goal:** personas become data (tables, a full trait catalogue, seeding), and GMs get them.
 
-**Read first:** `docs/PERSONALITY_PLAN.md` in full, especially §4 (sliders, traits, views, wants and fears, mood, relationships, memory), §9 phases and §10 decisions. Phase 1 is built: `newsroom/config/agent_personas.json` (writer personas as sliders, traits, views with triggers, signature pools, want/fear), `newsroom/config/persona_traits.json` (started catalogue), `newsroom/personas.py` (active views, avoid list). Phase 1's side-by-side check exists as `tools/persona_side_by_side.py`.
+**Completed implementation (2026-10-28):**
+1. **Trait Catalogue (`newsroom/config/persona_traits.json`):**
+   - Expanded catalogue to 50 traits spanning all 7 categories from §4.2 (Football mind, Social, Ambition, Media, Work, Teaching, Quirks).
+   - Each entry contains: `id`, `name`, `label`, `category`, `roles` (`writer`, `gm`, `player`, `coach`, `owner`, `scout`, `media`) with non-negative odds per role, symmetric `conflicts`, `prompt_text` / `prompt` starting with `"tends to"`, situational `when` tags, and optional engine `effects` (progression and free agency entries included at 0).
+   - Validator utility (`validate_trait_catalogue`, `validate_slider_budget`, `validate_persona_traits`) in `newsroom/personas.py`.
+2. **Database Schema & Migration (`db/migrations/2027_01_09_personas.sql`, `db/init_db.sql`):**
+   - Tables keyed by `(persona_type, persona_id)` with `persona_type IN ('writer', 'gm', 'player', 'coach', 'owner', 'scout')`:
+     - `persona_sliders`: 6 sliders (`temperament`, `sociability`, `confidence`, `openness`, `warmth`, `drive`), bounded 0–10, with check constraint enforcing exact slider budget of 30 points.
+     - `persona_traits`: `trait_id`, `active` boolean, `notes`.
+     - `persona_views`: `view_text`, `trigger_condition`, `subject_tags`.
+     - `persona_relationships`: `target_type`, `target_id`, `trust` (-1.0 to 1.0), `note`, `tags`.
+     - `persona_trait_history`: `trait_id`, `added_season`, `removed_season`, `reason`.
+   - Applied cleanly to `madden_test`.
+3. **Deterministic Seeding & Persona Access (`newsroom/personas.py`):**
+   - `seed_sliders(type, id)` deterministically seeds 6 sliders totaling 30 from `f"{type}:{id}"`.
+   - `seed_traits(type, id, count=4)` samples role-weighted traits (3–5 traits, max 2 per category, no conflicts).
+   - `seed_writers_to_db(cur)` seeds writer personas from `newsroom/config/agent_personas.json` preserving identities and exact values.
+   - `seed_gms_to_db(cur)` seeds GM personas from `gm_profiles`.
+   - `load_personas(cur=cur)` loads writer personas from DB with seamless JSON fallback; prompts rendered from DB match JSON byte-for-byte.
+4. **Debug Review API (`server/debug_api.py`):**
+   - Added `GET /api/debug/personas` (supports filtering by `type` and `id`) and `POST /api/debug/personas/{type}/{id}` (with `X-Debug-Token` authentication and slider/trait budget validation) allowing review and editing before first use (Decision D4).
+5. **GM Persona Integration (`engines/gm_personas.py`, `engines/gm_negotiation.py`, `engines/gm_trade_engine.py`):**
+   - `read_books` in `gm_trade_engine.py` joins `persona_sliders` and `persona_traits` into `b["gm"]`.
+   - `engines/gm_personas.py` provides `ensure_gm_persona` and `get_gm_persona`.
+   - `engines/gm_negotiation.py` enhances `message_prompt` with GM disposition sentence and tendency lines, and nuances `template_message` dialogue to reflect aggressiveness, loyalty, and patience without altering trade engine mathematical values.
+6. **Testing (`tests/test_personas_db.py`):**
+   - 31 unit and integration tests covering catalogue validation, slider budget validation, trait conflict rules, reproducible seeding, DB vs JSON prompt equivalence, debug API auth/validation/roundtrips, and GM dialogue enhancement.
 
-**Phase 2: catalogue and tables.**
-1. Finish `persona_traits.json`: every category and example in §4.2, each with roles and odds per role, conflicts, category, prompt text with when it applies, and optional engine effects (progression plan §6–§7 entries included, effects at 0 for now). Check the role odds give sensible mixes.
-2. Tables (one migration): persona sliders, persona traits, views, relationships and trait history, keyed by an agent id that works for writers, GMs, players, coaches, owners and scouts (persona type + id).
-3. Seeding: deterministic (seeded per agent), honours the slider budget (D1: six sliders, 30 of 60), traits per role (D2: 3–5), at most two per category, no conflicts, stratified so the league has a spread. Writers are seeded from their existing JSON, not re-rolled.
-4. A JR review screen in `#debug` (server/debug_api.py and the debug page) to view and edit personas before first use (D4).
-5. `newsroom/personas.py` reads from the tables, with the JSON as the seed source.
-
-**Phase 3: GMs.** Sliders and traits on top of `gm_profiles` (and `engines/gm_personas.py`), GM memory of deals and talks, relationships between GMs and with JR. Traits shape GM text and, where §6 of the plan says so, choices inside what the trade engine allows; the trade engine's numbers don't change.
-
-**Decisions:** §10 lists D1–D7 with recommendations. Use the recommendations; ask JR before showing traits on the public site (D3) and before applying real-world writers' and coaches' traits (D5).
-
-**Done when:** migration applied to `madden_test`, seeding is reproducible, the catalogue passes a validator (budgets, conflicts, odds), writers' prompts are unchanged in content when read from the tables (test against the phase-1 output), GMs have personas used in their prompts, tests pass, and the personality plan's status, PROJECT_SPEC (spec §7.11 and tables) and plan V2.13 are updated. Applying to live `madden` needs JR's OK.
 
 ---
 

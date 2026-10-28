@@ -1090,3 +1090,129 @@ def offseason_run_endpoint(body: OffseasonRequestIn, x_debug_token: Optional[str
     return _load_job(job_id)
 
 
+class PersonaUpdateIn(BaseModel):
+    sliders: Optional[dict[str, int]] = None
+    traits: Optional[list[Any]] = None
+    views: Optional[list[dict[str, Any]]] = None
+    notes: Optional[str] = None
+
+
+@router.get("/personas")
+def get_personas_endpoint(type: Optional[str] = None, id: Optional[str] = None):
+    """View personas across writers, GMs, players, coaches, owners, and scouts (Decision D4)."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            query = "SELECT persona_type, persona_id, temperament, sociability, confidence, openness, warmth, drive FROM persona_sliders WHERE 1=1"
+            params = []
+            if type:
+                query += " AND persona_type = %s"
+                params.append(type.lower())
+            if id:
+                query += " AND persona_id = %s"
+                params.append(id)
+            query += " ORDER BY persona_type, persona_id"
+            cur.execute(query, params)
+            slider_rows = cur.fetchall()
+
+            t_query = "SELECT persona_type, persona_id, trait_id, active, notes FROM persona_traits WHERE 1=1"
+            t_params = []
+            if type:
+                t_query += " AND persona_type = %s"
+                t_params.append(type.lower())
+            if id:
+                t_query += " AND persona_id = %s"
+                t_params.append(id)
+            t_query += " ORDER BY id"
+            cur.execute(t_query, t_params)
+            traits_by_key = {}
+            for r in cur.fetchall():
+                key = (r["persona_type"], r["persona_id"])
+                traits_by_key.setdefault(key, []).append({
+                    "trait_id": r["trait_id"],
+                    "active": r["active"],
+                    "notes": r["notes"]
+                })
+
+            v_query = "SELECT persona_type, persona_id, view_text, trigger_condition, subject_tags FROM persona_views WHERE 1=1"
+            v_params = []
+            if type:
+                v_query += " AND persona_type = %s"
+                v_params.append(type.lower())
+            if id:
+                v_query += " AND persona_id = %s"
+                v_params.append(id)
+            v_query += " ORDER BY id"
+            cur.execute(v_query, v_params)
+            views_by_key = {}
+            for r in cur.fetchall():
+                key = (r["persona_type"], r["persona_id"])
+                views_by_key.setdefault(key, []).append({
+                    "view_text": r["view_text"],
+                    "trigger_condition": r["trigger_condition"],
+                    "subject_tags": r["subject_tags"] or []
+                })
+
+            gm_names = {}
+            try:
+                cur.execute("SELECT id, gm_name FROM gm_profiles WHERE end_season IS NULL")
+                gm_names = {str(r["id"]): r["gm_name"] for r in cur.fetchall()}
+            except Exception:
+                pass
+
+            results = []
+            for r in slider_rows:
+                pt, pid = r["persona_type"], r["persona_id"]
+                key = (pt, pid)
+                name = gm_names.get(pid, pid.replace("_", " ").title())
+                results.append({
+                    "persona_type": pt,
+                    "persona_id": pid,
+                    "name": name,
+                    "sliders": {
+                        "temperament": r["temperament"],
+                        "sociability": r["sociability"],
+                        "confidence": r["confidence"],
+                        "openness": r["openness"],
+                        "warmth": r["warmth"],
+                        "drive": r["drive"],
+                    },
+                    "traits": traits_by_key.get(key, []),
+                    "views": views_by_key.get(key, [])
+                })
+
+    return {"personas": results, "count": len(results)}
+
+
+@router.post("/personas/{persona_type}/{persona_id}")
+def update_persona_endpoint(persona_type: str, persona_id: str, body: PersonaUpdateIn,
+                            x_debug_token: Optional[str] = Header(None)):
+    """Edit sliders and traits for a persona before first use (Decision D4)."""
+    require_token(x_debug_token)
+    from newsroom.personas import save_persona, validate_slider_budget, validate_persona_traits
+    pt = persona_type.lower()
+    if pt not in ("writer", "gm", "player", "coach", "owner", "scout"):
+        raise HTTPException(400, f"invalid persona_type: {persona_type}")
+
+    if body.sliders is not None:
+        try:
+            validate_slider_budget(body.sliders)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+    if body.traits is not None:
+        try:
+            trait_ids = [t["trait_id"] if isinstance(t, dict) else t for t in body.traits]
+            validate_persona_traits(trait_ids)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+    with connect() as conn:
+        with conn.cursor() as cur:
+            res = save_persona(pt, persona_id, sliders=body.sliders,
+                               traits=body.traits, views=body.views, cur=cur)
+            conn.commit()
+
+    return {"ok": True, "persona_type": pt, "persona_id": persona_id, "persona": res}
+
+
+

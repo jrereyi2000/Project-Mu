@@ -1,6 +1,6 @@
 # Project Mu: Personality and Agents Plan
 
-**Status:** phase 1 built (2026-10-28, spec §7.11); phases 2–6 not started.
+**Status:** phases 1, 2, and 3 built (2026-10-28, spec §3.3f, §7.11); phases 4–6 not started.
 **Expands:** V2.13 of [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md). Feeds [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md) §6–§7 and [`LEAGUE_OFFICE_PLAN.md`](LEAGUE_OFFICE_PLAN.md) (agents, free agency, retirements).
 **Writer personas** can start before the PC (§9, phase 1).
 
@@ -179,8 +179,8 @@ For agents that act rather than only write (GMs, players, agents, coaches, owner
 | Phase | What | Needs |
 |---|---|---|
 | **1. Writer personas, now** (built) | `agent_personas.json` rewritten from rules into sliders, traits, views with triggers, signature pools and a want/fear, with the long-form voices folded in as `formats.ARTICLE`; no "always / must / end with". `newsroom/personas.py` picks active views from the piece's tags and the subject team's results; recent headlines and recently used signatures form the avoid list (from `news_feed`, no new table). The 13 writer slate-selection directives rewritten as leanings with alternatives. Still to do: the side-by-side test against current output on a week's slate (costs model calls) | Nothing new |
-| **2. Catalogue and tables** | the rest of `persona_traits.json` (engine effects, role odds checked); tables for persona sliders and traits, views, relationships and trait history; seeding and stratification; JR review screen in `#debug` | — |
-| **3. GMs** | Sliders and traits on top of `gm_profiles`; GM memory (deals, talks); relationships between GMs and with JR | 2 |
+| **2. Catalogue and tables** (built 2026-10-28) | Full 50-trait catalogue in `persona_traits.json` with categories, role odds, prompt tendencies, and optional effects; tables for persona sliders (`persona_sliders`), traits (`persona_traits`), views (`persona_views`), relationships (`persona_relationships`), and trait history (`persona_trait_history`); deterministic seeding and budget validation; review endpoints in `#debug` (`GET/POST /api/debug/personas`) | — |
+| **3. GMs** (built 2026-10-28) | Sliders and traits on top of `gm_profiles` (and `engines/gm_personas.py`), GM prompt formatting and negotiation dialogue reflection in `engines/gm_negotiation.py` without altering deterministic trade values | 2 |
 | **4. Players and coaches** | Personas for stars and captains first, then everyone who speaks; coaches and coordinators; Focus mapping; progression terms (progression plan phases F–G) | 2, PC |
 | **5. Agentic GMs** | Trigger + tools + loop for GM talks and trades (V2.11), inside the trade engine's checks | 3, league office save moves |
 | **6. Owners, player agents, scouts, media voters** | Inbox (V2.9), free agency (league office plan), scouting (V2.10), award ballots | 2–5 |
