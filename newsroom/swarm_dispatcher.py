@@ -15,7 +15,7 @@ from newsroom.roster_moves import (brief_block, cap_line, is_starter_rank, new_t
                                    trade_grades_due, trade_grades_target, trades_block)
 from newsroom.local_portfolio import PRIMER as LOCAL_PRIMER, plan_local_portfolio
 from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standings, records_by_team
-from newsroom import agent_memory
+from newsroom import agent_memory, personas as persona_lib
 from newsroom.playoff_overrides import find_active_override, normalize_temporal_mode, validate_playoff_overrides
 from newsroom.power_rankings import (
     FINAL_RANKINGS_WEEK,
@@ -785,14 +785,8 @@ class SwarmDispatcher:
                 if self.api_key:
                     break
 
-        # Load archetype prompts
-        personas_path = os.path.join(CONFIG_DIR, "agent_personas.json")
-        with open(personas_path, "r") as f:
-            personas_json = json.load(f)
-            self.personas_data = personas_json.get("archetypes", {})
-            # Long-form voices for writers whose archetype persona is written for tweets (articles only)
-            self.article_personas = {k: v for k, v in personas_json.get("article_personas", {}).items()
-                                     if not k.startswith("_")}
+        # Writer personas (newsroom/personas.py renders one per piece; ARTICLE habits live in each persona's formats)
+        self.personas_data = persona_lib.load_personas(os.path.join(CONFIG_DIR, "agent_personas.json"))
 
         # Load article structure directives
         directives_path = os.path.join(CONFIG_DIR, "article_structure_directives.json")
@@ -945,11 +939,21 @@ class SwarmDispatcher:
         archetype = canonical_writer_archetype(archetype)
         is_fantasy = bool(content_type == "ARTICLE" and article_type and str(article_type).upper().startswith("FANTASY_"))
         fantasy_voice = self.fantasy_writers.get(archetype, {}) if is_fantasy else {}
-        article_persona = self.article_personas.get(archetype) if content_type == "ARTICLE" else None
-        base_archetype_prompt = fantasy_voice.get("persona") or article_persona or self.personas_data.get(
-            archetype,
-            f"You are an NFL media agent with archetype {archetype}."
-        )
+        base_archetype_prompt = fantasy_voice.get("persona")
+        if not base_archetype_prompt:
+            persona = self.personas_data.get(archetype, f"You are an NFL media agent with archetype {archetype}.")
+            subject_team = slot_target["team_id"] if slot_target else assigned_team_id
+            try:
+                with psycopg.connect(self.db.db_conn_info) as pconn, pconn.cursor() as pcur:
+                    base_archetype_prompt = persona_lib.build_persona_block(
+                        pcur, persona, agent_id=agent_id, season=season, week=week,
+                        fmt="ARTICLE" if content_type == "ARTICLE" else "POST", article_type=article_type,
+                        team_id=subject_team, subject_key=str((slot_target or {}).get("game_id") or ""))
+            except Exception as e:
+                print(f"⚠️  [PERSONA CONTEXT UNAVAILABLE] {agent_id}: {e}")
+                base_archetype_prompt = persona_lib.render_persona(
+                    persona, "ARTICLE" if content_type == "ARTICLE" else "POST", persona_lib.article_tags(article_type),
+                    seed=f"{agent_id}:{season}:{week}")
 
         if not display_name and persistent_memory and persistent_memory.startswith("I am "):
             try:

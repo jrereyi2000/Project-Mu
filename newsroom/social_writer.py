@@ -76,8 +76,13 @@ def build_post_prompt(assignment: dict, account: dict, persona: str, team_name: 
     """(system_instruction, user_prompt) for one post.
 
     account: agent_memories row (agent_id, archetype, persistent_memory, handle, display_name).
-    persona: the archetype's tweet persona. parent: for replies, {"handle", "display_name", "text"}.
+    persona: the archetype's rendered persona block (newsroom/personas.build_persona_block); a raw persona dict is
+    rendered here without database context. parent: for replies, {"handle", "display_name", "text"}.
     """
+    if not isinstance(persona, str):
+        from newsroom.personas import post_tags, render_persona
+        persona = render_persona(persona, "POST", post_tags(kind_key(assignment), (assignment.get("facts") or {}).get("position")),
+                                 seed=f"{account.get('agent_id')}:{assignment.get('week')}:{kind_key(assignment)}")
     identity = (account.get("persistent_memory") or "").strip()
     who = f"You are {account.get('display_name') or account['agent_id']} ({account.get('handle')}) on Agent Wire, the league's social network."
     if team_name and account.get("archetype") in ("DIE_HARD_FAN", "LOCAL_BEAT_REPORTER"):

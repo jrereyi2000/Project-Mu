@@ -70,8 +70,7 @@ class TestOffseasonCatalog(unittest.TestCase):
         with open(AGENT_PERSONAS_PATH, "r", encoding="utf-8") as f:
             cls.personas_data = json.load(f)
         cls.archetypes = set(cls.personas_data.get("archetypes", {}).keys())
-        cls.article_personas = set(cls.personas_data.get("article_personas", {}).keys())
-        cls.valid_writers = cls.archetypes | cls.article_personas
+        cls.valid_writers = cls.archetypes
 
     def test_all_six_offseason_types_present(self):
         """Assert that all six offseason article types exist in the catalog."""

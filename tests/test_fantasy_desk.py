@@ -108,11 +108,12 @@ class PromptTests(unittest.TestCase):
                                               2035, 10, "ARTICLE", article_type="POSITIONAL_PLAYER_TIERS")
             self.assertNotIn("get_fantasy_", national["system_instruction"])
             self.assertNotIn("FANTASY DESK RULES", national["task_instruction"])
-            self.assertIn("You are writing a column in the style of Field Yates", national["system_instruction"])
+            self.assertIn("You write in the style of Field Yates", national["system_instruction"])
+            self.assertIn("HOW YOU WRITE A COLUMN", national["system_instruction"])
 
             tweet = d.compile_agent_prompt("Field_Yates", "YATES", "", "@FieldYates", "Field Yates", None, brief,
                                            2035, 10, "TWEET")
-            self.assertIn("Your tweets are incredibly structured", tweet["system_instruction"])
+            self.assertIn("HOW YOU WRITE A POST:\nStructured and factual.", tweet["system_instruction"])
 
     def test_fantasy_temporal_instruction_handles_postseason(self):
         self.assertIn("FANTASY DRAFT PREP", fd.fantasy_temporal_instruction(1))

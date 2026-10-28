@@ -62,9 +62,8 @@ def load_article_catalog() -> tuple[dict, dict, dict]:
     with open(os.path.join(CONFIG_DIR, "agent_personas.json")) as f:
         personas = json.load(f)
         archetypes = personas.get("archetypes", {})
-        article_personas = personas.get("article_personas", {})
 
-    return article_types, fantasy_writers, {**archetypes, **article_personas}
+    return article_types, fantasy_writers, archetypes
 
 
 def classify_prompt(

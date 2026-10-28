@@ -1,6 +1,6 @@
 # Project Mu: Personality and Agents Plan
 
-**Status:** plan, nothing built (2026-10-28).
+**Status:** phase 1 built (2026-10-28, spec §7.11); phases 2–6 not started.
 **Expands:** V2.13 of [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md). Feeds [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md) §6–§7 and [`LEAGUE_OFFICE_PLAN.md`](LEAGUE_OFFICE_PLAN.md) (agents, free agency, retirements).
 **Writer personas** can start before the PC (§9, phase 1).
 
@@ -79,7 +79,7 @@ Each catalogue entry defines:
 * **Prompt text**: a tendency phrased as "tends to …", plus **when it applies** (subjects, situations).
 * **Conflicts** and **category**.
 
-The catalogue lives in one data file (proposed `data/personality/traits.json`) so it can grow without code changes. Player work ethic, coachability and drive (progression plan §6) and coach teacher and specialty (§7) are entries in it, not separate systems.
+The catalogue lives in one data file (`newsroom/config/persona_traits.json`, started in phase 1 with the writer traits and the plan's examples; `data/` is git-ignored) so it can grow without code changes. Player work ethic, coachability and drive (progression plan §6) and coach teacher and specialty (§7) are entries in it, not separate systems.
 
 ### 4.3 Views (writers, GMs, coaches; many, each with when it applies)
 
@@ -178,8 +178,8 @@ For agents that act rather than only write (GMs, players, agents, coaches, owner
 
 | Phase | What | Needs |
 |---|---|---|
-| **1. Writer personas, now** | Rewrite `agent_personas.json` from rules into sliders, traits, views with triggers, signature pools and a want/fear; drop "always / must / end with". Prompt assembly picks active views; the takes log feeds an avoid list. Side-by-side test against current output on a week's slate | Nothing new |
-| **2. Catalogue and tables** | `traits.json`; tables for persona sliders and traits, views, relationships and trait history; seeding and stratification; JR review screen in `#debug` | — |
+| **1. Writer personas, now** (built) | `agent_personas.json` rewritten from rules into sliders, traits, views with triggers, signature pools and a want/fear, with the long-form voices folded in as `formats.ARTICLE`; no "always / must / end with". `newsroom/personas.py` picks active views from the piece's tags and the subject team's results; recent headlines and recently used signatures form the avoid list (from `news_feed`, no new table). The 13 writer slate-selection directives rewritten as leanings with alternatives. Still to do: the side-by-side test against current output on a week's slate (costs model calls) | Nothing new |
+| **2. Catalogue and tables** | the rest of `persona_traits.json` (engine effects, role odds checked); tables for persona sliders and traits, views, relationships and trait history; seeding and stratification; JR review screen in `#debug` | — |
 | **3. GMs** | Sliders and traits on top of `gm_profiles`; GM memory (deals, talks); relationships between GMs and with JR | 2 |
 | **4. Players and coaches** | Personas for stars and captains first, then everyone who speaks; coaches and coordinators; Focus mapping; progression terms (progression plan phases F–G) | 2, PC |
 | **5. Agentic GMs** | Trigger + tools + loop for GM talks and trades (V2.11), inside the trade engine's checks | 3, league office save moves |
@@ -203,4 +203,4 @@ For agents that act rather than only write (GMs, players, agents, coaches, owner
 
 ## 11. Spec changes when built
 
-Persona tables (sliders, traits, views, relationships, trait history) in spec §3; `traits.json` in the repository layout; prompt assembly in the newsroom section (§7) and `agent_personas.json` structure; engine trait effects in each engine's section; writer tools gaining relationships and traits.
+Persona tables (sliders, traits, views, relationships, trait history) in spec §3; prompt assembly in the newsroom section (§7) and `agent_personas.json` structure; engine trait effects in each engine's section; writer tools gaining relationships and traits.

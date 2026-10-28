@@ -27,6 +27,14 @@ def dispatcher_literal(name):
     raise KeyError(name)
 
 
+def persona_text(p: dict) -> str:
+    """A persona's prose (voice, views, signatures, want, fear, format habits), one line each."""
+    lines = [p.get("voice", ""), p.get("want", ""), p.get("fear", "")]
+    lines += [v["text"] for v in p.get("views", [])] + [s["text"] for s in p.get("signatures", [])]
+    lines += list(p.get("formats", {}).values())
+    return "\n".join(lines)
+
+
 class WriterConfigTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -45,15 +53,13 @@ class WriterConfigTests(unittest.TestCase):
             for writer in info.get("allowed_writers", []):
                 self.assertIn(writer, self.personas, f"{at_id} allows {writer}, which has no persona")
 
-    def test_tweet_personas_have_an_article_voice(self):
-        """A national writer whose persona is written for tweets needs an article_personas entry
+    def test_article_writers_have_article_habits(self):
+        """A national writer who writes articles has ARTICLE habits in its persona's formats
         (FANTASY_* articles use fantasy_writers.json instead)."""
-        article_personas = load("agent_personas.json", "article_personas")
         writers = {w for at_id, info in self.article_types.items() if not at_id.startswith("FANTASY_")
                    for w in info.get("allowed_writers", [])} | self.columnists()
-        for w in sorted(writers):
-            if "Your tweets" in self.personas.get(w, ""):
-                self.assertIn(w, article_personas, f"{w} writes articles but only has a tweet persona")
+        for w in sorted(writers - {"LOCAL_BEAT_REPORTER"}):
+            self.assertIn("ARTICLE", self.personas.get(w, {}).get("formats", {}), f"{w} writes articles but has no ARTICLE habits")
 
     def test_every_rotating_columnist_has_a_persona_and_curatorial_directive(self):
         for writer in self.columnists():
@@ -247,7 +253,8 @@ class WriterConfigTests(unittest.TestCase):
                 named = " ".join(map(str, info.get("data_queried", []))) + info.get("curatorial_autonomy", "")
                 self.assertTrue("get_team_cap_sheet" in named or "get_player_contract" in named,
                                 f"{at_id} asks about {hits} without naming the cap tools")
-        for name, text in self.personas.items():
+        for name, persona in self.personas.items():
+            text = persona_text(persona)
             for phrase in asks:
                 self.assertNotIn(phrase, text.lower(), f"persona {name} asks about '{phrase}'")
 
@@ -255,7 +262,7 @@ class WriterConfigTests(unittest.TestCase):
         """No directive lets a trade be reported unless it was executed; anything else is a rumor."""
         import re
         texts = {f"type {k}": " ".join(str(v) for v in info.values()) for k, info in self.article_types.items()}
-        texts.update({f"persona {k}": v for k, v in self.personas.items()})
+        texts.update({f"persona {k}": persona_text(v) for k, v in self.personas.items()})
         for rel in (("newsroom", "swarm_dispatcher.py"), ("newsroom", "social_writer.py"), ("docs", "EDITORIAL_MATRIX.md"),
                     ("docs", "SOCIAL_MATRIX.md")):
             with open(os.path.join(ROOT, *rel)) as f:
@@ -353,10 +360,9 @@ class WriterConfigTests(unittest.TestCase):
         self.assertIn("SKIP_BAYLESS", self.article_types["NATIONAL_OPINION_COLUMN"]["allowed_writers"])
 
     def test_mel_kiper_mock_draft_config(self):
-        """Mel Kiper Jr. is configured for OFFSEASON_MOCK_DRAFT with archetype and article persona."""
+        """Mel Kiper Jr. is configured for OFFSEASON_MOCK_DRAFT with a persona that has ARTICLE habits."""
         self.assertIn("MEL_KIPER", self.personas)
-        article_personas = load("agent_personas.json", "article_personas")
-        self.assertIn("MEL_KIPER", article_personas)
+        self.assertIn("ARTICLE", self.personas["MEL_KIPER"]["formats"])
         mock_config = self.article_types["OFFSEASON_MOCK_DRAFT"]
         self.assertIn("MEL_KIPER", mock_config["allowed_writers"])
         self.assertIn("Round 1", mock_config["directive"])

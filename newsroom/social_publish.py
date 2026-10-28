@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from newsroom.social_desk import (REGULAR_SEASON_FINAL_WEEK, Week, format_plan, load_week_context, plan_replies,
                                   plan_social_week, plan_team_wakeup)
-from newsroom.social_writer import MONEY_PROBLEM, RUMOR_PROBLEM, allowed_money, build_post_prompt, money_values, write_post
+from newsroom.social_writer import MONEY_PROBLEM, RUMOR_PROBLEM, allowed_money, build_post_prompt, kind_key, money_values, write_post
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEEKLY_SLOT = "Agent Wire"
@@ -450,8 +450,8 @@ class _Writer:
         self.cur, self.ctx, self.cfg, self.client, self.log = cur, ctx, cfg, client, log
         self.accounts = accounts_full
         self.model, self.max_workers = model, max_workers
-        with open(os.path.join(ROOT, "newsroom", "config", "agent_personas.json")) as f:
-            self.personas = json.load(f)["archetypes"]
+        from newsroom.personas import load_personas
+        self.personas = load_personas()
         self.usage = collections.Counter()
         self.cost = 0.0
         try:                                            # every post's calls -> llm_usage (source agent_wire)
@@ -470,7 +470,12 @@ class _Writer:
             memory = agent_memory.build_memory_block(self.cur, a["agent_id"], self.ctx["season"], self.ctx["week"], a.get("team_id"))
         except Exception:
             pass
-        return build_post_prompt(a, acct, self.personas.get(acct["archetype"], ""), team, memory, a.get("parent"))
+        from newsroom.personas import build_persona_block
+        persona = build_persona_block(
+            self.cur, self.personas.get(acct["archetype"], ""), agent_id=a["agent_id"], season=self.ctx["season"],
+            week=self.ctx["week"], fmt="POST", post_kind=kind_key(a), position=(a.get("facts") or {}).get("position"),
+            team_id=a.get("team_id"), subject_key=str(a.get("subject", {}).get("id") or ""))
+        return build_post_prompt(a, acct, persona, team, memory, a.get("parent"))
 
     def write(self, assignments):
         prompts = [self.prompt(a) for a in assignments]

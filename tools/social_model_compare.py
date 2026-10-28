@@ -93,7 +93,9 @@ def main():
     from newsroom import agent_memory
 
     conn_info = DatabaseHandler().db_conn_info
-    personas = json.load(open(os.path.join(ROOT, "newsroom", "config", "agent_personas.json")))["archetypes"]
+    from newsroom.personas import build_persona_block, load_personas
+    from newsroom.social_writer import kind_key
+    personas = load_personas()
     with psycopg.connect(conn_info) as conn, conn.cursor() as cur:
         ctx = load_week_context(cur, args.season, args.week)
         cur.execute("SELECT agent_id, archetype, assigned_team_id, persistent_memory, handle, display_name FROM agent_memories")
@@ -114,7 +116,10 @@ def main():
         def prompt_for(a, parent=None):
             acct = by_id[a["agent_id"]]
             team = ctx["teams"].get(acct.get("team_id") or -1, {}).get("name")
-            return build_post_prompt(a, acct, personas.get(acct["archetype"], ""), team,
+            persona = build_persona_block(cur, personas.get(acct["archetype"], ""), agent_id=acct["agent_id"],
+                                          season=args.season, week=args.week, fmt="POST", post_kind=kind_key(a),
+                                          position=(a.get("facts") or {}).get("position"), team_id=a.get("team_id"))
+            return build_post_prompt(a, acct, persona, team,
                                      memory(acct["agent_id"], a.get("team_id")), parent)
 
         prompts = [prompt_for(a) for a in picks]
