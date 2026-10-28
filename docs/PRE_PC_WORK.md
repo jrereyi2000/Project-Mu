@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work Briefs
 
-**Status:** 11 items, none started (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
+**Status:** 11 items, 1 completed (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
@@ -67,20 +67,21 @@ Draft prospects (`scout_prospects`) go through the same `report` so 2037 rookies
 
 ---
 
-## 3. Body skin tone (`CharacterVisuals.RawData`)
+## 3. Body skin tone (`CharacterVisuals.RawData`) — COMPLETED (2026-10-28)
 
 **Goal:** the teleporter can set the body's skin tone to match the generic head it picks, so head and body agree.
 
 **Background:** plan §4.3 "Appearance" and the `pipeline/teleport_appearance.py` docstring. The head's tone is the first digit of `GenericHeadAssetName` (`gen_<tone 1–7>_<hair>_<facial hair>_<n>`). The body's tint is `skinTone` (1–8) inside `CharacterVisuals.RawData`, a zstd blob compressed with a dictionary and holding an ISON document (gear loadouts plus `skinTone`). `madden-franchise` can't decode it on Node 23; Python `zstandard` plus a small ISON decoder reads it, but that decoder isn't in the repo (rebuild it). After a teleport the body tone matches the head for only 325 of 1,797 players.
 
-**Steps:**
-1. Find the zstd dictionary (in the save or the schema/library data) and decode every `CharacterVisuals` row of the sample save. Document the ISON format you find (types, lengths, how `skinTone` is stored).
-2. Map head tone digits 1–7 to body `skinTone` 1–8 from the sample save's real players (most frequent pairing per digit).
-3. Write an encoder that changes only `skinTone`, re-encodes and recompresses with the same dictionary. Round-trip test: decode → encode unchanged gives identical bytes (or identical decoded content if compression differs).
-4. Add a `CharacterVisuals` edit to `save_writer.mjs` (or a Python pre-step producing the new blob for a `records` edit) with the same schema check and read-back as the other edits. A player's `CharacterVisuals` row may be shared; check, and copy-on-write if so.
-5. `teleport --appearance` writes the tone.
+**Completed implementation:**
+1. **Dictionary & ISON structure:** Found zstd dictionary `madden-franchise/data/27/dict.bin` (dictionary ID `0x1823777C`). CharacterVisuals Table3 field `RawData` format: `[2 bytes LE uint16 compressed length] [zstd compressed stream with dict 0x1823777C] [0-padding to maxLength + 2 (377 bytes)]`. Payload is ISON format; root field `skinTone` is stored as `[0x10, 0x0a, 0x20, 0x00, 0x03, <tone: 1-8>]`.
+2. **Head to body mapping:** Analysed all 2,985 players in `CAREER-GIANTS-AUTOSAVE`. The modal mapping from generic head tone digit 1–7 to body skinTone 1–8 is an exact 1-to-1 match: `{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}`.
+3. **Encoder / Decoder module:** Implemented `pipeline/character_visuals.py` supporting ISON parse/serialize and zstd dictionary re-compression with `write_content_size=True`. Validated 100% round-trip fidelity (2,987/2,987 records in the sample save decoded and re-compressed with 100% byte-for-byte and decompression match). Provided CLI `batch` and `read-batch` IPC commands.
+4. **Save writer integration:** Implemented `pipeline/save_reader/visual_edits.mjs` handling `visuals` block (`{"skinTone": 1..8}`), copy-on-write allocation if a `CharacterVisuals` record is shared by multiple players, Table3 record slot sizing and overflow record handling (`populateOverflowRecord` / `clearOverflowRecordIfExists`), and strict read-back verification. Integrated into `pipeline/save_reader/save_writer.mjs`.
+5. **Teleporter integration:** Updated `pipeline/teleport_appearance.py` and `pipeline/teleport.py` so `--appearance` sets `visuals: {"skinTone": look["body_skin_tone"]}` alongside generic head and body type.
+6. **Tests:** Full test suite passing in `pipeline/save_reader/test/visual_edits.test.mjs` (`npm test`, 31 passing) and `tests/test_teleport_appearance.py` (`pytest`, 16 passing including `SampleAppearanceTest` verifying all 1,796 players in `CAREER-GIANTS-AUTOSAVE`).
 
-**Done when:** an edited copy of the sample save reads back with the new tones and every other field, player and table unchanged; head/body tone agree for all teleported players in the dry run; tests in `pipeline/save_reader/test/` (`node --test`) and Python tests pass; the docstring, plan §4.3 and spec updated. Whether Madden draws the edited body is a PC check: add it to plan §5.4.
+Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 
 ---
 

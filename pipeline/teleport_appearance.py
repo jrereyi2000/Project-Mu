@@ -19,8 +19,8 @@ What the save holds (Madden 27 PC, checked on CAREER-GIANTS-AUTOSAVE):
   PLYR_ASSETNAME        string 'LastFirst_<pgid>' for real players (whose scanned face is looked up by it, a PC
                                check), 'LastFirst_<pgid>_<n>' for Madden-generated ones
   CharacterVisuals      reference -> CharacterVisuals.RawData, a zstd (dictionary) compressed ISON blob: gear
-                               loadouts and a `skinTone` 1-8 that tints the body. Not editable yet (see
-                               docs/PC_MIGRATION_PLAN.md §4.3), so the body's skin tone keeps the donor's.
+                               loadouts and a `skinTone` 1-8 that tints the body. Updated via
+                               pipeline/character_visuals.py and save_writer.mjs visual edits to match the head tone.
 Head names read <skin tone 1-7>_<hair code>_<facial hair code>_<n>. The skin-tone digit is solid (it tracks
 CharacterVisuals.skinTone; K/P heads are 96% digits 1-2, CB heads 84% digits 6-7); the hair and facial hair letters
 are a reading of the names (N none, S stubble, G goatee, M moustache, B/BD beard; T twists/locs, H longer hair,
@@ -30,6 +30,7 @@ import re
 from collections import Counter
 
 from headshots import headshot_appearance_generator as hag
+from pipeline.character_visuals import HEAD_TO_BODY_SKIN_TONE
 
 BATCH_SEASON = 2035             # rosters the original 1,499-headshot batch was drawn from
 ROOKIE_HEADSHOTS_FROM = 2036    # first class drawn by headshots/rookie_headshots.py
@@ -110,25 +111,32 @@ def appearance_fields(pool, seed, first, last, pgid, height_in, weight_lb):
     t = traits(seed)
     head, level = pick_head(pool, t, seed)
     set_ = {}
+    body_skin_tone = None
     if head:
         set_["GenericHeadAssetName"] = head
         set_["PLYR_GENERICHEAD"] = head[len("gen_"):]
         set_["PLYR_ASSETNAME"] = asset_name(first, last, pgid)
+        m = HEAD_RX.match(head)
+        if m:
+            tone_digit = int(m.group(1))
+            body_skin_tone = HEAD_TO_BODY_SKIN_TONE.get(tone_digit)
     body = body_type(height_in, weight_lb)
     if body:
         set_["CharacterBodyType"] = body
     return set_, {"tone": t["tone"], "facial": t["facial"], "hair": hair_kind(t["hair"]), "head": head,
-                  "level": level, "body": body}
+                  "level": level, "body": body, "body_skin_tone": body_skin_tone}
 
 
 def summarize(infos, seeds_source):
     """Report block: trait and head distributions, so a run shows the heads follow the headshots."""
-    digit = Counter(HEAD_RX.match(i["head"]).group(1) for i in infos if i["head"])
+    digit = Counter(int(HEAD_RX.match(i["head"]).group(1)) for i in infos if i["head"])
+    body_tones = Counter(i["body_skin_tone"] for i in infos if i.get("body_skin_tone"))
     return {
         "players": len(infos),
         "seed_source": dict(seeds_source),
         "headshot_tone": dict(Counter(i["tone"] for i in infos)),
         "head_tone_digit": dict(sorted(digit.items())),
+        "body_skin_tone": dict(sorted(body_tones.items())),
         "headshot_facial": dict(Counter(i["facial"] for i in infos)),
         "headshot_hair": dict(Counter(i["hair"] for i in infos)),
         "filters_held": dict(Counter({3: "tone+facial+hair", 2: "tone+facial", 1: "tone", 0: "none"}[i["level"]]

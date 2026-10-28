@@ -12,6 +12,7 @@ import pytest
 
 from engines import ovr_weights as ow
 from headshots import headshot_appearance_generator as hag
+from pipeline import character_visuals as cv
 from pipeline import teleport as tp
 from pipeline import teleport_appearance as ta
 from tests.test_teleport import QB_RATINGS, READER, SAMPLE_SAVE, WRITER, _sample_ready
@@ -20,6 +21,57 @@ HEADS = ["gen_1_B_N_01", "gen_2_H_S_005", "gen_2_B_B_004", "gen_3_B_N_004", "gen
          "gen_6_BMH_N_003", "gen_7_T_N_009", "gen_7_B_G_004", "gen_7_M_S_011", "gen_1_MorphHead"]
 SNAPSHOT = {"players": [{"appearance": {"generic_head": h}} for h in HEADS] + [{"appearance": {"generic_head": ""}}]}
 SEED = {"name": "A. Manning", "team": "Dolphins", "position": "QB", "source": "batch"}
+
+
+class CharacterVisualsTest(unittest.TestCase):
+    def test_head_to_body_mapping(self):
+        self.assertEqual(cv.HEAD_TO_BODY_SKIN_TONE, {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7})
+
+    def test_ison_roundtrip(self):
+        doc = {
+            "loadouts": [
+                {
+                    "loadoutType": "PlayerOnField",
+                    "loadoutElements": [
+                        {"itemAssetName": "GearHelmet_SchuttF7Pro", "slotType": "HeadWear"},
+                        {"blends": [{"baseBlend": 0.5, "barycentricBlend": 0.5}], "itemAssetName": "Backplate_Standard"}
+                    ]
+                }
+            ],
+            "skinTone": 4
+        }
+        encoded = cv.write_ison(doc)
+        decoded = cv.parse_ison(encoded)
+        self.assertEqual(decoded["skinTone"], 4)
+        self.assertEqual(decoded["loadouts"][0]["loadoutType"], "PlayerOnField")
+        self.assertEqual(len(decoded["loadouts"][0]["loadoutElements"]), 2)
+        re_encoded = cv.write_ison(decoded)
+        self.assertEqual(encoded, re_encoded)
+
+    def test_zstd_compression_roundtrip(self):
+        doc = {"loadouts": [], "skinTone": 7}
+        ison_bytes = cv.write_ison(doc)
+        comp = cv.compress_slice(ison_bytes)
+        decomp = cv.decompress_slice(comp)
+        self.assertEqual(ison_bytes, decomp)
+
+    def test_extract_and_set_skin_tone(self):
+        doc = {"loadouts": [], "skinTone": 6}
+        ison_bytes = cv.write_ison(doc)
+        self.assertEqual(cv.extract_skin_tone(ison_bytes), 6)
+        modified = cv.set_skin_tone_in_ison(ison_bytes, 2)
+        self.assertEqual(cv.extract_skin_tone(modified), 2)
+
+    def test_update_raw_data_buffer_preserves_length(self):
+        doc = {"loadouts": [], "skinTone": 1}
+        ison_bytes = cv.write_ison(doc)
+        comp = cv.compress_slice(ison_bytes)
+        buf = len(comp).to_bytes(2, "little") + comp
+        buf = buf.ljust(377, b"\x00")
+
+        updated = cv.update_raw_data_buffer(buf, 5)
+        self.assertEqual(len(updated), 377)
+        self.assertEqual(cv.read_skin_tone_from_raw_data(updated), 5)
 
 
 class TraitsTest(unittest.TestCase):
@@ -105,6 +157,10 @@ class TeleportHookTest(unittest.TestCase):
         self.assertIn(s["GenericHeadAssetName"], HEADS)
         self.assertEqual(report["appearance"]["players"], 1)
         self.assertEqual(report["appearance"]["seed_source"], {"batch": 1})
+        self.assertIn("visuals", edits["players"][0])
+        tone_digit = int(s["GenericHeadAssetName"][4])
+        self.assertEqual(edits["players"][0]["visuals"]["skinTone"], cv.HEAD_TO_BODY_SKIN_TONE[tone_digit])
+        self.assertEqual(report["appearance"]["body_skin_tone"], {cv.HEAD_TO_BODY_SKIN_TONE[tone_digit]: 1})
 
 
 @pytest.mark.integration
@@ -123,12 +179,17 @@ class SampleAppearanceTest(unittest.TestCase):
         edits, report = tp.teleport(snapshot, roster, ow.load_weights(), seeds=seeds)
         look = report["appearance"]
         self.assertEqual(look["players"], report["matched"])
+        self.assertEqual(look["head_tone_digit"], look["body_skin_tone"])
+        for e in edits["players"]:
+            if "visuals" in e:
+                head_digit = int(e["set"]["GenericHeadAssetName"][4])
+                self.assertEqual(e["visuals"]["skinTone"], cv.HEAD_TO_BODY_SKIN_TONE[head_digit])
         tones = Counter()
         for tone, n in look["headshot_tone"].items():
             tones[ta.TONE_DIGITS[tone]] += n
         digits = Counter()
         for d, n in look["head_tone_digit"].items():
-            digits[next(k for k in ta.TONE_DIGITS.values() if d in k)] += n
+            digits[next(k for k in ta.TONE_DIGITS.values() if str(d) in k)] += n
         self.assertEqual(tones, digits)
         with tempfile.TemporaryDirectory() as d:
             path, out = os.path.join(d, "edits.json"), os.path.join(d, "CAREER-TELEPORTED")
