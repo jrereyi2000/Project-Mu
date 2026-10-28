@@ -121,7 +121,7 @@ The franchise's own history is thrown away (Project Mu is the record), so nothin
 * **Option 1 — set the year in the save (try first):** start the franchise, advance to the offseason, and write `CurrentSeasonYear` / `BaseCalendarYear` (and `BaseSuperBowlNumber`) in the season-info table, as the community `seasonYearSetup` script does for Madden 24/25 ([madden-franchise-utils](https://github.com/Sinthros/madden-franchise-utils)). Player ages and contracts are overwritten by the teleporter anyway. Test for side effects: draft class year, contract year labels, schedule, awards screens.
 * **Option 2 — unattended sim (fallback):** set all 32 teams to CPU control so no offseason stage waits on a decision, and sim to the 2037 offseason. Expect hours rather than minutes; it can run overnight.
 
-### 4.3 The Teleporter (`pipeline/teleport_universe.js`)
+### 4.3 The Teleporter (`pipeline/teleport.py`)
 
 ```
 [Project Mu DB (2037 offseason)]               [PC Save (2037 offseason)]
@@ -160,6 +160,14 @@ Players, contracts, picks, prospects           Generated players
 ```
 
 The donor's underlying ratings (and so its on-field style) are kept; only OVR, position, archetype and identity are guaranteed to match Project Mu. Player-behavior mods change play style anyway.
+
+**Built (2026-10-27): `pipeline/teleport.py`.** Two changes from the diagram above, both forced by the save:
+* **No team moves.** Madden ties players to teams through each team's `Roster` and `DepthChart` lists, not just `Player.TeamIndex`, so moving a player between teams isn't a single field. Every Project Mu team has 54–62 players and every Madden team about 63–65 (signed + practice squad), so each Project Mu player takes over a donor already on the same team: an identity swap. The pairing per team is an optimal assignment: same position and archetype first, then another archetype (PlayerType rewritten), then a neighbouring position (Position rewritten).
+* **OVR by archetype grade, then settled.** The donor's ratings move to the Project Mu OVR for that archetype (`engines/ovr_weights.adjust_ratings`). If another archetype then ends up higher, the settling step lowers ratings that feed the rival more than the player's own archetype and restores the target on ratings that favour it.
+
+Dry run on the sample save with the 2036 rosters: all 1,797 players matched (Project Mu's 32 team-defense `DEF` rows skipped), 852 same archetype, 772 another archetype, 78 a neighbouring position and 95 another position. The sample save's real-NFL rosters carry fewer tackles, outside linebackers, fullbacks, long snappers and QBs than Project Mu's; a generated 2037 PC save may balance differently. 236 donors are left over. Applying the 30,275 field edits to a copy with `save_writer.mjs` and reading it back: names and teams right for all 1,797, no other player, team or game changed, and the predicted OVR equals the Project Mu OVR with the right archetype on top for all 1,706 players that have one (91 have no OVR in Project Mu and keep the donor's ratings). Rating points moved per player: median 27, 90th percentile 76.
+
+Still to build: contracts (`Player.Contract` is a reference the writer refuses), portraits and appearance (§4.3 Appearance, §9.4), the draft class and draft picks (Step 5), releasing leftover donors, surname renames (below), and choosing `--age-add` and `--write-ovr` once the PC checks show how Madden ages players and whether it recomputes OVR.
 
 **Commentary IDs:** Madden says one pre-recorded surname clip per player, chosen by `Player.PLYR_COMMENT`. Checked on `CAREER-GIANTS-AUTOSAVE`: the ID belongs to the surname, not the player (every Smith is 4600, every Johnson 2506); suffixes share it (Smith, Smith II, Smith Jr → 4600); sound-alike spellings can share it (Andersen, Anderson → 103); IDs run roughly alphabetically up to ~9,500; 0 means no recording (200 of 3,086 players), and the commentators then avoid the name. A donor keeps the donor's ID, so without this step Madden calls Project Mu players by the donor's surname.
 

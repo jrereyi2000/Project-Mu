@@ -199,15 +199,17 @@ def _gain(terms, k, x, step):
     return w * step + q * ((x + step) ** 2 - x ** 2) / 100
 
 
-def adjust_ratings(doc, archetype, ratings, target, max_steps=600, floor=0, cap=RATING_MAX):
+def adjust_ratings(doc, archetype, ratings, target, max_steps=600, floor=0, cap=RATING_MAX, skills=None):
     """Ratings moved one point at a time until the archetype's grade is `target`, using only the archetype's skills
     (its formula's ratings with a median of at least SKILL_MEDIAN among its players): up on ratings that raise it most and
     aren't capped, down on those that lower it most and are above the floor. Each step picks the best gain per change
     already made to that rating, so the edit spreads over the ratings that matter instead of maxing one. Returns
     (new ratings, {rating: change}); raises ValueError if the target can't be reached. The player's OVR is the highest
-    archetype grade, so check predict_ovr afterwards: another archetype can end up above the target."""
+    archetype grade, so check predict_ovr afterwards: another archetype can end up above the target. `skills` overrides
+    the ratings it may move (the teleporter's settling step narrows them)."""
     terms = doc["archetypes"][archetype]["terms"]
-    skills = doc["archetypes"][archetype].get("skills", list(terms))
+    if skills is None:
+        skills = doc["archetypes"][archetype].get("skills", list(terms))
     out = dict(ratings)
     changes = defaultdict(int)
     for _ in range(max_steps):
