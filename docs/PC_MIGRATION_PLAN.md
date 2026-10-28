@@ -70,7 +70,7 @@ Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`
 - [x] 5. [Thinking caps](PRE_PC_WORK.md#5-thinking-caps-on-the-short-gemini-calls) on `agent_memory`, `scouting_notes` and the GM calls (§7.9)
 - [ ] 6. [Gemini-or-local provider switch](PRE_PC_WORK.md#6-gemini-or-local-provider-switch) on each short-task caller, local runs logged to `llm_usage` (§7.3)
 - [ ] 7. [Quality test harness](PRE_PC_WORK.md#7-quality-test-harness) (§7.4)
-- [ ] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
+- [x] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
 - [ ] 9. [League memory](PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
 - [ ] 10. [Personality plan phases 2 and 3](PRE_PC_WORK.md#10-personality-plan-phases-2-and-3-v213): catalogue and tables, then GMs (V2.13)
 - [ ] 11. [Progression plan phase C](PRE_PC_WORK.md#11-progression-plan-phase-c-v214): `engines/progression.py` offline, backtested (V2.14)
@@ -395,9 +395,9 @@ The community *Madden Franchise Exporter* (a plain-text dump of a franchise file
 
 ## 7. Phase 5: Local LLM for Short Tasks (RTX 5070 Ti)
 
-A local model takes over the short, high-volume calls. Newsroom articles stay on Gemini. Nothing moves until a side-by-side test shows its quality holds (§7.4).
+A local model takes over short, high-volume calls, with ultra-compact models running resident beside Madden for interactive gameplay tasks and mid-size models running on the nightly GPU queue. Newsroom articles remain cloud-hosted (Gemini or hosted open-weight models). Nothing moves until side-by-side quality testing passes (§7.4).
 
-Model candidates, costs and the 2027 Gemini price change: [`OPEN_MODEL_RESEARCH.md`](OPEN_MODEL_RESEARCH.md) (2026-10-28), which also corrects §7.2, §7.3 and §7.5.
+Detailed research, costs, benchmark comparisons, and sourcing: [`OPEN_MODEL_RESEARCH.md`](OPEN_MODEL_RESEARCH.md) (2026-10-28).
 
 ### 7.1 Measured Usage (`llm_usage`, 2026-10-22 – 2026-10-27, all `gemini-3.8-flash`)
 
@@ -416,46 +416,75 @@ Model candidates, costs and the 2027 Gemini price change: [`OPEN_MODEL_RESEARCH.
 
 ### 7.2 What Fits on 16GB
 
-Estimates until measured on the PC:
+Candidate models for the RTX 5070 Ti (16GB VRAM) evaluated at 4-bit quantization (Q4_K_M or similar) in Ollama or llama.cpp:
 
-| Model size (4-bit) | Weights | Room left for context | Output speed |
-| :--- | ---: | :--- | :--- |
-| 12–14B dense | ~9GB | ~35K tokens (~70K with quantized KV cache) | ~60–80 tok/s |
-| ~24B dense | ~14GB | a few thousand tokens | ~40 tok/s |
+| Candidate | Architecture / Params | Q4 Size | Fits 16GB VRAM? | Expected Speed & Role in Project Mu |
+| :--- | :--- | ---: | :--- | :--- |
+| **Gemma 4 26B-A4B** | ~26B total / 4B active MoE | ~14.5–16GB | Tight fit (may need 3-bit quant or partial offload) | ~130 tok/s on 5070 Ti; top MoE candidate for short tasks; same family as Gemini helps persona tone carry over (`gemma4:26b`) |
+| **Qwen3.8-27B** | 27B dense | ~16–17GB | Needs ~3.5-bit to fit VRAM | ~40 tok/s; strongest dense model at this size; 262K native context |
+| **LFM2.5-24B-A2B** (Liquid) | 24B total / 2.45B active MoE | ~14GB | Fits cleanly with context room | ~180+ tok/s; high reported IFEval (96.8) and tool use; fast short-task candidate |
+| **Qwen3.6-35B-A3B** | 35B total / 3B active MoE | ~20.6GB | VRAM + System RAM offload (`--n-cpu-moe`) | Tens of tok/s; viable via MoE CPU expert offload on 32GB DDR5 |
+| **Nemotron 3 Nano** (NVIDIA) | 30B total / ~3B active MoE | ~18GB | VRAM + System RAM offload (`--n-cpu-moe`) | Viable via MoE CPU expert offload; up to 1M context, strong tool use |
+| **gpt-oss-20b** (OpenAI) | 21B total / 3.6B active MoE | ~13GB | Fits cleanly | ~189 tok/s; fast baseline, known for flatter prose |
+| **Gemma 4 E4B / E2B** | ~4B / ~2B effective | 3–5GB | Fits easily; resident beside Madden | Fast response; low VRAM footprint enables concurrent execution during gameplay |
+| **LFM3-1.7B** (Liquid) | 1.73B hybrid | ~1GB | Fits easily; resident beside Madden | ~1GB footprint; dedicated to real-time structured JSON / classification during gameplay (§7.5) |
 
-System RAM (24–32GB) is not enough to make CPU offload of larger models useful. Pick the model at test time (§7.4), not in this plan; Ollama for Windows hosts it at `http://localhost:11434`, reachable from WSL2 (§3).
+**MoE expert offload changes the memory boundary:**
+While dense models cannot offload layers to system RAM without severe token-generation latency (saturating PCIe bus bandwidth reading all weights every token), mixture-of-experts (MoE) models behave fundamentally differently. With llama.cpp's `--n-cpu-moe` / `--cpu-moe`, attention layers and shared weights remain resident in GPU VRAM while only the sparse, per-token routed experts (~2–4B active parameters) are streamed from system RAM. With 32GB of DDR5 system RAM, 30–35B MoE models with ~3B active parameters (e.g. Qwen3.6-35B-A3B, Nemotron 3 Nano) achieve viable inference speeds (tens of tok/s; 40+ tok/s with an expert cache) on a 16GB card. With 24GB system RAM headroom is tighter alongside Windows and Docker.
+
+Pick the specific model at test time (§7.4); Ollama or llama.cpp for Windows hosts it at `http://localhost:11434`, reachable from WSL2 (§3).
 
 ### 7.3 Workload Split
 
 | Task | Target | Why |
 | :--- | :--- | :--- |
-| Agent Wire tweets | Local 12–14B | <2.5K-token prompts, ~60-token output; ~2s a call, ~10 min a day without thinking |
-| Agent memory takes & season summaries | Local 12–14B | <4.2K-token prompts, short output |
-| Scouting mover notes | Local 12–14B | Tiny prompts, a handful a week |
-| GM persona / rationale / negotiation | Local 12–14B | Short prompts; Ollama's JSON-schema `format` enforces structured output; no rate limits for live negotiations |
-| National articles | Gemini | 25–75K-token contexts in dozens-of-call tool loops; doesn't fit next to the weights, and quality in 192 persona voices would drop |
-| Local beat articles | Gemini | Same `newsroom` tool loop as national articles |
+| Agent Wire tweets | Local 24–27B (or MoE offload) | <2.5K-token prompts, ~60-token output; ~2s a call, ~10 min a day without thinking; runs on nightly queue (§7.8) or idle GPU |
+| Agent memory takes & season summaries | Local 24–27B (or MoE offload) | <4.2K-token prompts, short output; runs on nightly queue (§7.8) |
+| Scouting mover notes | Local 24–27B (or MoE offload) | Tiny prompts, a handful a week |
+| GM persona & trade rationale | Local 24–27B (or MoE offload) | Short prompts; structured output; runs when Madden is idle or during nightly queue |
+| Live GM negotiations & commission classification | Resident local ~1–2GB (LFM3-1.7B, Gemma 4 E2B/E4B) | ~1GB VRAM footprint stays resident beside Madden (§7.5); fast structured JSON with zero rate limits and no cloud fallback needed |
+| National articles | Gemini or Hosted Open Model API (DeepSeek V4.1 Flash, GLM-5.3-Flash) | 25–75K-token contexts (up to 150K+) in dozens-of-call tool loops; cannot fit next to local model weights on 16GB VRAM. Evaluated against hosted open-weight models due to 2027 price change (see below) |
+| Local beat articles | Gemini or Hosted Open Model API (DeepSeek V4.1 Flash, GLM-5.3-Flash) | Same `newsroom` tool loop and 192 persona voice requirements as national articles |
 
-Each moved caller gets a provider switch (Gemini or local) so it can fall back to Gemini when the local model is unavailable or busy (§7.5). The `llm_usage` logging gains the local model's rows so the comparison stays in one table.
+**Hosted open-weight models for the newsroom (2027 pricing alternative):**
+Gemini 3.8 Flash prices double on 2027-01-01 (input: $0.75 → $1.50 per 1M; output & thinking: $3.75 → $7.50 per 1M). Because the save loader (§5) eliminates screen OCR calls, articles become ~73% of the post-migration LLM bill, projected to rise from ~$125/month to ~$245/month (~$8.2/day).
+Hosted open-weight frontier models provide a cost-effective alternative for the newsroom's long tool loops:
+* **DeepSeek V4.1 Flash (1017):** 552B MoE (8–16B active), 1M context, MIT license. API pricing: $0.30 input / $1.20 output per 1M tokens at peak; 50% discount off-peak (which aligns with overnight newsroom runs). Estimated newsroom cost: ~$1.6/day (~$45/month).
+* **GLM-5.3-Flash:** 320B MoE (18B active), ~1M context, MIT license. API pricing: $0.15 input / $0.03 cached / $0.50 output per 1M tokens. Estimated newsroom cost: ~$1.0/day (~$30/month).
+* **Switching requirements:** The newsroom's automatic tool loop (`newsroom/swarm_dispatcher.py`) uses Google GenAI SDK's native function calling and `UsageMeter`. Using DeepSeek, GLM, or other OpenAI-compatible endpoints requires porting the tool-dispatch loop (~50 lines) to an OpenAI client and verifying tool-calling reliability and persona voice preservation over 50-turn loops (§7.4).
+
+Each moved caller gets a provider switch (Gemini, hosted open model, or local Ollama/llama.cpp; PRE_PC_WORK.md §6) with fallback when a provider is unavailable. The unified `llm_usage` table logs all providers for seamless side-by-side cost and token tracking.
 
 ### 7.4 Quality Test Before Switching
 
-For each task in §7.3, run one full week's calls through both Gemini and the local model on the same inputs and compare side by side:
+Before migrating any task to local or hosted open-weight models, evaluate outputs side by side against the Gemini baseline using the quality test harness (`tools/llm_compare.py`, PRE_PC_WORK.md §7).
 
-* **Voice:** do tweets and takes still sound like the persona, and follow the anti-cliché and headline-variety directives?
-* **Facts:** no contradictions of the data (the hallucination policy allows invented narrative, never wrong numbers).
-* **Structure:** JSON validity and schema adherence for the GM calls.
-* **Thinking:** Gemini spends ~900 thinking tokens per short call. Test the local model both with and without thinking; with thinking, the short tasks take roughly 1–1.5 hours a day instead of 10–20 minutes.
+#### Evaluation Order (from OPEN_MODEL_RESEARCH.md §5)
 
-A task moves only if its local output is acceptable; otherwise it stays on Gemini.
+1. **Now, no hardware:** Cap thinking on short Gemini calls (plan §7.9, `engines/llm_config.py`). Run `tools/social_model_compare.py` with `gemini-3.8-flash:low` and `gemini-3.5-flash-lite` to establish the baseline quality, token usage, and cost bar that open models must meet.
+2. **Hosted open models for newsroom (now):** Run one week of newsroom articles through DeepSeek V4.1 Flash and GLM-5.3-Flash (and Kimi K3 as an upper quality ceiling) side by side with Gemini 3.8 Flash. Evaluate via an OpenAI-compatible tool loop port (§7.3). Key gates: tool-calling reliability over 50-step loops, persona voice fidelity across 192 distinct writers, and zero factual contradictions with deterministic data tools.
+3. **Local short tasks (on Mac now via §2.5, PC on arrival):** Test Agent Wire, agent memory, and scouting prompts through candidate local models (Gemma 4 26B-A4B, Qwen3.8-27B, LFM2.5-24B-A2B, gpt-oss-20b, and Qwen3.6-35B-A3B with CPU expert offload), both with thinking enabled and disabled.
+4. **Beside-Madden resident tier (on PC):** Test live GM negotiations (`gm_negotiation`, rationale JSON) and custom commission classification through resident LFM3-1.7B and Gemma 4 E2B/E4B while Madden NFL 27 is active. Measure free GPU VRAM and verify that Madden's frame rate remains locked at 120 FPS.
+5. **Pre-switch re-verification:** Re-evaluate top open-weight releases before final migration cutover, monitoring incoming releases (e.g. Mistral Large 4, MiniMax M3.1 Flash, third-party LFM3 benchmarks).
+
+#### Quality Gates & Verification Criteria
+
+For each task in §7.3, side-by-side evaluation verifies:
+* **Voice:** Do tweets, takes, and articles preserve distinct persona signatures and follow anti-cliché, banned-phrase, and variety directives?
+* **Facts:** Strict adherence to data tools and input facts (the hallucination policy permits invented narrative color, but never incorrect statistics, scores, or names).
+* **Structure:** Strict JSON schema adherence and valid formatting for GM calls, trade proposals, and classification.
+* **Thinking & Latency:** With Gemini thinking capped at `low`, short tasks consume ~100–150 tokens. Test whether candidate local models require thinking for task adherence; unconstrained thinking can expand daily short-task execution time from 10–20 minutes to 1–1.5 hours.
+
+A task moves to a local or hosted open model only if its output passes all quality checks; otherwise it remains on Gemini.
 
 ### 7.5 Sharing the GPU with Madden
 
-Madden uses a large share of the 16GB while it runs, so local jobs and gameplay can't overlap:
+Madden NFL 27 consumes a substantial portion of the RTX 5070 Ti's 16GB VRAM during active gameplay. While mid-to-large models (14–27B) and image generation pipelines cannot safely share VRAM with Madden without risk of out-of-memory crashes or dropped frames, ultra-compact models alter this trade-off:
 
-* The save watcher (§5.2) loads stats and runs the engines right away, but puts local-model jobs on the nightly queue (§7.8), which only runs once Madden has exited (or a set idle time passes).
-* Queued jobs that can't wait (e.g. a live GM negotiation while playing) fall back to Gemini.
-* Gemini-side newsroom articles are unaffected and can run immediately.
+* **Beside-Madden resident execution (~1–2GB Tier):** Ultra-compact models (LFM3-1.7B at ~1GB weights, Gemma 4 E2B/E4B at ~3–5GB) remain resident in VRAM alongside Madden during active play. Interactive structured tasks triggered during gameplay—specifically live GM negotiations (`engines/gm_negotiation.py`, rationale JSON) and custom commission classification (`newsroom/custom_commission.py`)—execute against the resident model immediately. They do not have to wait for the nightly queue or fall back to cloud APIs.
+* **Nightly queue for heavy local batch jobs:** Creative text generation requiring 14–27B models (Agent Wire batches, agent memory takes, scouting notes) and image generation models (headshots, §7.7) are deferred by the save watcher (§5.2) to the nightly GPU queue (§7.8), executing once Madden has exited or after a designated idle timeout.
+* **Interactive overflow fallback:** If an interactive task during gameplay requires creative reasoning beyond the capabilities of the resident 1–2GB model, it falls back to Gemini (or a hosted open model) via the provider switch (PRE_PC_WORK.md §6).
+* **Cloud / hosted newsroom execution:** Gemini or hosted open-weight API calls (DeepSeek V4.1 Flash, GLM-5.3-Flash) do not utilize local GPU resources and run immediately after the weekly save load regardless of Madden's execution state.
 
 ### 7.6 Seasonal and One-Time Calls
 
@@ -485,7 +514,7 @@ The text model, the image model and Madden can't share the 16GB at once, so loca
 2. Headshots for new players and any re-renders (§7.7), then portrait conversion for the next mod build (§9.4).
 3. Audio segments for the broadcast layer (pregame and postgame TTS, Phase 7).
 
-The queue unloads each model before loading the next. A job that can't wait (e.g. a live GM negotiation) falls back to Gemini (§7.5). Gemini-side newsroom articles don't use the GPU and run immediately after the weekly load.
+The queue unloads each model before loading the next. An interactive job that can't wait executes against the resident ~1–2GB model or falls back to Gemini (§7.5). Gemini-side / hosted API newsroom articles don't use the GPU and run immediately after the weekly load.
 
 ### 7.9 Before the PC Arrives
 

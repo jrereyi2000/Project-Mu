@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work Briefs
 
-**Status:** 4 of 11 items complete (Item 1 QB OVR refit, Item 3 body skin tone, Item 4 watch_save.py, Item 5 thinking caps done 2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
+**Status:** 5 of 11 items complete (Item 1 QB OVR refit, Item 3 body skin tone, Item 4 watch_save.py, Item 5 thinking caps, Item 8 fold OPEN_MODEL_RESEARCH into §7 done 2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
@@ -147,13 +147,17 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 
 ---
 
-## 8. Fold `OPEN_MODEL_RESEARCH.md` into plan §7
+## 8. Fold `OPEN_MODEL_RESEARCH.md` into plan §7 [DONE 2026-10-28]
 
 **Goal:** plan §7 says what the research found, so nobody has to reconcile the two.
 
-**Do:** apply `docs/OPEN_MODEL_RESEARCH.md` §6 "Corrections" to `PC_MIGRATION_PLAN.md` §7.2 (MoE models with ~3B active make CPU offload useful for 30–35B models), §7.3 (hosted open-weight models as a tested alternative for articles, because of the 2027 Gemini price change), §7.5 (a 1–2GB model may stay loaded beside Madden for structured calls). Add the named candidates from research §3 to §7.2's table and the evaluation order from research §5 to §7.4. Edit the sections in place (no changelog); remove the "which also corrects §7.2, §7.3 and §7.5" note at the top of §7 once done. Check other docs for references (`grep -rn "OPEN_MODEL_RESEARCH\|§7\." docs`).
-
-**Done when:** §7 reads as one consistent plan with the research's numbers and candidates, the research doc's §6 says it has been applied, and the spec's line for both docs is current. Docs only, no code.
+**Folded into `PC_MIGRATION_PLAN.md` §7:**
+* **Top note removed:** removed out-of-line correction note; §7 is now self-contained and authoritative.
+* **§7.2 & Table:** added named candidates (Gemma 4 26B-A4B, Qwen3.8-27B, LFM2.5-24B-A2B, Qwen3.6-35B-A3B, Nemotron 3 Nano, gpt-oss-20b, Gemma 4 E2B/E4B, LFM3-1.7B). Detailed MoE expert offload (`--n-cpu-moe` in llama.cpp) where ~2–4B active params stream over PCIe while attention and shared weights stay in 16GB VRAM, achieving viable speeds on 32GB DDR5 system RAM.
+* **§7.3:** added hosted open-weight models (DeepSeek V4.1 Flash, GLM-5.3-Flash) as tested alternatives for newsroom articles due to the 2027-01-01 Gemini price doubling ($0.75 → $1.50 in, $3.75 → $7.50 out). Detailed OpenAI-compatible tool loop port requirements.
+* **§7.4:** added the 5-step evaluation order from `OPEN_MODEL_RESEARCH.md` §5 alongside quality gates (voice, facts, structure, thinking).
+* **§7.5:** updated beside-Madden execution to reflect that resident ~1–2GB models (LFM3-1.7B, Gemma 4 E2B/E4B) stay resident in VRAM alongside Madden for interactive structured calls (GM negotiations, custom commission classification) without waiting for nightly queue or cloud fallback.
+* **Doc alignment:** updated `OPEN_MODEL_RESEARCH.md` §6, `PC_MIGRATION_PLAN.md` §2.4 checklist, and `PROJECT_SPEC.md` doc descriptions.
 
 ---
 

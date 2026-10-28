@@ -1,6 +1,6 @@
 # Replacing Gemini 3.8 Flash with Open Models: Research (2026-10-28)
 
-Can Project Mu replace `gemini-3.8-flash` with an open-weight model? This covers running one locally on the PC's RTX 5070 Ti (16GB), and calling a hosted open model through an API. It extends `docs/PC_MIGRATION_PLAN.md` §7 and corrects it in a few places (§6 below). Research only; nothing is built.
+Can Project Mu replace `gemini-3.8-flash` with an open-weight model? This covers running one locally on the PC's RTX 5070 Ti (16GB), and calling a hosted open model through an API. It extends `docs/PC_MIGRATION_PLAN.md` §7 and provided corrections that have now been folded into `PC_MIGRATION_PLAN.md` §7 (making §7 authoritative and self-contained; see §6 below). Research only; nothing is built.
 
 **Sourcing:** model specs and benchmarks below are mostly vendor-reported or from aggregator sites, collected on 2026-10-28. Treat speeds and VRAM figures as estimates until measured on the PC. Project Mu's own numbers come from `llm_usage`.
 
@@ -146,9 +146,12 @@ Plan §7.4 already describes the quality bar (voice, facts, structure, thinking)
 
 ## 6. Corrections to `docs/PC_MIGRATION_PLAN.md` §7
 
-* §7.2 "System RAM … is not enough to make CPU offload of larger models useful": true for dense models, not for 30–35B MoE models with 3B active (§3.2).
-* §7.3 "National articles: Gemini": add hosted open-weight models as a tested alternative, because of the 2027 price change (§1, §4).
-* §7.5 "Queued jobs that can't wait … fall back to Gemini": a ~1–2GB model (LFM3, Gemma 4 E2B/E4B) may be able to stay loaded beside Madden for structured-output calls (§3.1).
+*(Note: All corrections below have been folded into [`docs/PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §7 as of 2026-10-28; plan §7 is now authoritative and self-contained.)*
+
+* **§7.2:** "System RAM … is not enough to make CPU offload of larger models useful": folded correction distinguishing dense models (cannot offload effectively) from 30–35B MoE models with ~2–4B active (e.g. Qwen3.6-35B-A3B, Nemotron 3 Nano) which run at viable speeds with `--n-cpu-moe` on 16GB VRAM + 32GB system RAM (§3.2). Named candidates table added.
+* **§7.3:** "National articles: Gemini": folded hosted open-weight models (DeepSeek V4.1 Flash, GLM-5.3-Flash) as a tested alternative for articles due to the 2027-01-01 Gemini price doubling ($0.75 → $1.50 in, $3.75 → $7.50 out; §1, §4).
+* **§7.4:** Folded the recommended 5-step evaluation order (§5) into plan §7.4.
+* **§7.5:** "Queued jobs that can't wait … fall back to Gemini": folded beside-Madden execution showing an ultra-compact ~1–2GB model (LFM3-1.7B, Gemma 4 E2B/E4B) can stay resident in VRAM alongside Madden for structured calls (GM JSON, custom commission classification) without waiting for the nightly queue or falling back to cloud (§3.1).
 
 ## Sources
 
