@@ -293,7 +293,7 @@ must print 32 (or the GM count) with no error.
 
 **Verify:** with the server code imported against live, `search_global(q="smith")` and Napper's available-players search with `search="smith"` return rows without error (read-only calls), and the same on `madden_test` finds a player by an alias inserted in a rolled-back transaction.
 
-## R3. `test_llm_config.py` writes fake usage rows to the real database
+## R3. [x] `test_llm_config.py` writes fake usage rows to the real database
 
 **Bug:** since 972a152 `newsroom/agent_memory.gemini_text` goes through `engines/llm_provider.py`, which does `from db.llm_usage import log_response, log_usage …` at import. `tests/test_llm_config.py` patches `db.llm_usage.log_response`, which no longer affects the bound name in `llm_provider`. Under pytest the live-DB firewall blocks the insert, but run any other way (`python -m unittest`, the agent's own runs) the fake calls insert rows: 6 rows in live `llm_usage` on 2026-10-28 14:42–14:46 UTC with `input_tokens=100, output_tokens=50, thinking_tokens=120`, labels `takes #1` / `summary agent`.
 

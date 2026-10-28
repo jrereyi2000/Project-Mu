@@ -265,7 +265,7 @@ Project Mu/
 ├── dashboards/                # Streamlit tools: admin_dashboard.py, espn_dashboard.py
 ├── pytest.ini                 # Pytest configuration registering the @pytest.mark.integration tier
 ├── tests/                     # test_*.py suite: offline unit tier (pytest -m "not integration") + isolated madden_test integration tier (pytest -m integration)
-│   ├── conftest.py            #   Live-DB firewall: blocks all connections to live 'madden', blocks unmocked DB access in unit tests, and routes @pytest.mark.integration tests to madden_test (--recreate-test-db)
+│   ├── conftest.py            #   Live-DB firewall: blocks all connections to live 'madden', blocks unmocked DB access in unit tests, routes @pytest.mark.integration tests to madden_test (--recreate-test-db), and autouse fixture guards unit tests from logging to llm_usage
 │   ├── fixtures/attributes/   #   Two labelled grayscale crops of the wide roster list (PUR..INJ, AGE..STR; labels.json: cell centres, values, which columns train the templates, highlighted row) for test_attribute_reader.py
 │   └── fixtures/prospects_board.csv # 40-row draft board with blank cells and a nameless row (draft tests never read data/ or captures/)
 ├── tools/

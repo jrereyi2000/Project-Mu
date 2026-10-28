@@ -224,3 +224,46 @@ def pytest_runtest_teardown(item, nextitem):
     finally:
         _IN_TEARDOWN = False
 
+
+@pytest.fixture(autouse=True)
+def guard_llm_usage_logging_in_unit_tests(request, monkeypatch):
+    """Prevent unit tests from attempting any real llm_usage database logging."""
+    is_integration = request.node.get_closest_marker("integration") is not None
+    if not is_integration:
+        # If the test specifically exercises log_usage / log_response mechanics with mocked DB, don't override
+        if "test_log_usage" in request.node.name or "test_log_response" in request.node.name:
+            return
+
+        def _noop_log_usage(source, label, model, input_tokens=0, cached_tokens=0, output_tokens=0, thinking_tokens=0):
+            return {
+                "input_tokens": int(input_tokens or 0),
+                "cached_tokens": int(cached_tokens or 0),
+                "output_tokens": int(output_tokens or 0),
+                "thinking_tokens": int(thinking_tokens or 0),
+            }
+
+        def _noop_log_response(source, label, model, resp):
+            from db.llm_usage import _usage
+            return _usage(resp)
+
+        def _noop_record(self, source, label=None, model=None, capture_folder=None, mode=None):
+            totals = self.totals()
+            self.take()
+            return totals
+
+        try:
+            import db.llm_usage
+            monkeypatch.setattr(db.llm_usage, "log_usage", _noop_log_usage)
+            monkeypatch.setattr(db.llm_usage, "log_response", _noop_log_response)
+            monkeypatch.setattr(db.llm_usage.UsageMeter, "record", _noop_record)
+        except (ImportError, AttributeError):
+            pass
+
+        try:
+            import engines.llm_provider
+            monkeypatch.setattr(engines.llm_provider, "log_usage", _noop_log_usage)
+            monkeypatch.setattr(engines.llm_provider, "log_response", _noop_log_response)
+        except (ImportError, AttributeError):
+            pass
+
+

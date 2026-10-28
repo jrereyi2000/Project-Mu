@@ -390,7 +390,7 @@ class CallerIntegrationTests(unittest.TestCase):
         mock_resp.raise_for_status.return_value = None
         mock_post.return_value = mock_resp
 
-        with mock.patch("db.llm_usage.log_usage") as mock_log:
+        with mock.patch("db.llm_usage.log_usage") as mock_log, mock.patch("engines.llm_provider.log_usage"):
             res = write_post(
                 client=None,
                 model="ollama:qwen2.5:14b",
@@ -430,7 +430,7 @@ class CallerIntegrationTests(unittest.TestCase):
 
         mock_post.side_effect = [resp1, resp2]
 
-        with mock.patch("db.llm_usage.log_usage"):
+        with mock.patch("db.llm_usage.log_usage"), mock.patch("engines.llm_provider.log_usage"):
             res = write_post(
                 client=None,
                 model="ollama:qwen2.5:14b",

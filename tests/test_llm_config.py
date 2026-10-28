@@ -103,9 +103,21 @@ class LLMConfigUnitTests(unittest.TestCase):
 
 
 class AgentMemoryThinkingTests(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self._patchers = [
+            mock.patch("engines.llm_provider.log_response"),
+            mock.patch("engines.llm_provider.log_usage"),
+            mock.patch("db.llm_usage.log_response"),
+            mock.patch("db.llm_usage.log_usage"),
+        ]
+        for p in self._patchers:
+            p.start()
+            self.addCleanup(p.stop)
+
     def test_gemini_text_defaults_to_low_thinking(self):
         mock_client = make_mock_client("take extraction response")
-        with mock.patch("db.llm_usage.log_response"):
+        with mock.patch("engines.llm_provider.log_response"), mock.patch("db.llm_usage.log_response"):
             text = gemini_text(
                 api_key="fake-key",
                 model="gemini-3.8-flash",
@@ -123,7 +135,7 @@ class AgentMemoryThinkingTests(unittest.TestCase):
 
     def test_gemini_text_model_override(self):
         mock_client = make_mock_client("summary text")
-        with mock.patch("db.llm_usage.log_response"):
+        with mock.patch("engines.llm_provider.log_response"), mock.patch("db.llm_usage.log_response"):
             gemini_text(
                 api_key="fake-key",
                 model="gemini-3.8-flash:high",
@@ -139,7 +151,7 @@ class AgentMemoryThinkingTests(unittest.TestCase):
 
     def test_gemini_text_unconstrained_thinking(self):
         mock_client = make_mock_client("summary text")
-        with mock.patch("db.llm_usage.log_response"):
+        with mock.patch("engines.llm_provider.log_response"), mock.patch("db.llm_usage.log_response"):
             gemini_text(
                 api_key="fake-key",
                 model="gemini-3.8-flash:default",
