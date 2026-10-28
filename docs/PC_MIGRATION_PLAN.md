@@ -68,7 +68,7 @@ Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`
 - [x] 3. [Body skin tone](PRE_PC_WORK.md#3-body-skin-tone-charactervisualsrawdata): decode and write `skinTone` in `CharacterVisuals.RawData` so the body matches the head (§4.3 Appearance)
 - [x] 4. [`watch_save.py`](PRE_PC_WORK.md#4-pipelinewatch_savepy): debounced save watcher that runs reader → loader → engines → newsroom on a new week (§5.2)
 - [x] 5. [Thinking caps](PRE_PC_WORK.md#5-thinking-caps-on-the-short-gemini-calls) on `agent_memory`, `scouting_notes` and the GM calls (§7.9)
-- [ ] 6. [Gemini-or-local provider switch](PRE_PC_WORK.md#6-gemini-or-local-provider-switch) on each short-task caller, local runs logged to `llm_usage` (§7.3)
+- [x] 6. [Gemini-or-local provider switch](PRE_PC_WORK.md#6-gemini-or-local-provider-switch) on each short-task caller, local runs logged to `llm_usage` (§7.3)
 - [ ] 7. [Quality test harness](PRE_PC_WORK.md#7-quality-test-harness) (§7.4)
 - [x] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
 - [ ] 9. [League memory](PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
@@ -453,7 +453,7 @@ Hosted open-weight frontier models provide a cost-effective alternative for the 
 * **GLM-5.3-Flash:** 320B MoE (18B active), ~1M context, MIT license. API pricing: $0.15 input / $0.03 cached / $0.50 output per 1M tokens. Estimated newsroom cost: ~$1.0/day (~$30/month).
 * **Switching requirements:** The newsroom's automatic tool loop (`newsroom/swarm_dispatcher.py`) uses Google GenAI SDK's native function calling and `UsageMeter`. Using DeepSeek, GLM, or other OpenAI-compatible endpoints requires porting the tool-dispatch loop (~50 lines) to an OpenAI client and verifying tool-calling reliability and persona voice preservation over 50-turn loops (§7.4).
 
-Each moved caller gets a provider switch (Gemini, hosted open model, or local Ollama/llama.cpp; PRE_PC_WORK.md §6) with fallback when a provider is unavailable. The unified `llm_usage` table logs all providers for seamless side-by-side cost and token tracking.
+Each moved caller gets a provider switch via `engines/llm_provider.py` (Gemini or local Ollama) so it can fall back to Gemini when the local model is down, unreachable, or times out (never on bad answers or validation failures). Provider choice is configured via model prefix (e.g. `ollama:qwen2.5:14b`), per-label/source environment variable (`LLM_PROVIDER_<LABEL>`, e.g. `LLM_PROVIDER_AGENT_WIRE`), global `LLM_PROVIDER`, or explicit parameter (default `gemini`). The `llm_usage` logging records local calls with `model = 'ollama/<model_name>'`, mapping `prompt_eval_count` to `input_tokens` and `eval_count` to `output_tokens`, keeping all model telemetry in one table.
 
 ### 7.4 Quality Test Before Switching
 

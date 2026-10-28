@@ -283,29 +283,36 @@ def store_predictions(cur, agent_id: str, season: int, preview_week: int, articl
     return n
 
 
-# ---------------------------------------------------------------- model calls
+def llm_text(prompt: str, label: str = "agent_memory", model: str | None = None,
+             thinking_level: str | None = None, api_key: str | None = None,
+             client=None, provider: str | None = None, fallback_model: str | None = None) -> str:
+    """Provider-neutral text helper for agent memory, supporting Ollama and Gemini with fallback."""
+    from engines.llm_provider import generate_text
+    return generate_text(
+        prompt=prompt,
+        source="agent_memory",
+        label=label,
+        model=model,
+        provider=provider,
+        fallback_model=fallback_model,
+        thinking_level=thinking_level,
+        temperature=0.3,
+        client=client,
+        api_key=api_key,
+    )
+
 
 def gemini_text(api_key: str, model: str, prompt: str, label: str = "",
                 thinking_level: str | None = None, client=None) -> str:
-    from google import genai
-    from db.llm_usage import log_response
-    from engines.llm_config import make_content_config, resolve_thinking_level
-
-    resolved_thinking = resolve_thinking_level(
+    """Provider-aware text helper for agent memory, maintaining backwards-compatible signature."""
+    return llm_text(
+        prompt=prompt,
         label=label or "agent_memory",
         model=model,
         thinking_level=thinking_level,
-        default="low",
+        api_key=api_key,
+        client=client,
     )
-    config, clean_model = make_content_config(
-        model=model,
-        thinking_level=resolved_thinking,
-        temperature=0.3,
-    )
-    c = client if client is not None else genai.Client(api_key=api_key)
-    resp = c.models.generate_content(model=clean_model, contents=prompt, config=config)
-    log_response("agent_memory", label, clean_model, resp)
-    return (resp.text or "").strip()
 
 
 def refresh_season_summaries(conn_info: str, api_key: str, model: str, season: int, week: int, max_workers: int = 5) -> int:
