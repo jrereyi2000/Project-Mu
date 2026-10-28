@@ -3757,3 +3757,51 @@ def check_trade_package(team_a: str, team_b: str, team_a_sends: str, team_b_send
                  "as talks anyone reported or a rumor, and cite only the terms shown here." if legal else
                  "Not legal: don't pitch this package. Change what failed and check again, or leave it out."),
     }, indent=2)
+
+
+@tool
+def search_league_memory(
+    query: str,
+    team: str = None,
+    player_id: int = None,
+    seasons: list[int] = None,
+    top_k: int = 5,
+) -> list[dict]:
+    """Search historical universe memory for authentic narrative callbacks (articles, writer takes, franchise records, league records).
+    Use this tool to find real callbacks from past seasons and weeks (e.g. 'the last time Carolina came back from 17 down',
+    'historical sack milestones', 'rivalry history between Falcons and Saints').
+    
+    Arguments:
+        query: semantic search query describing the narrative or event
+        team: optional team abbreviation or name filter (e.g. 'CAR', 'Panthers')
+        player_id: optional player ID filter
+        seasons: optional list of seasons to search (e.g. [2035, 2036])
+        top_k: number of citations to return (default 5)
+
+    Returns:
+        List of cited snippets:
+        - headline: headline or title of the cited event/take/record
+        - source: source table and ID (e.g. 'news_feed:123')
+        - date: formatted season and week label
+        - season, week: numerical season and week
+        - team_ids, player_ids: associated team abbreviations and player IDs
+        - text_excerpt: narrative excerpt
+        - similarity_score: cosine similarity score
+    """
+    from newsroom.league_memory import search_league_memory as _search_mem
+    with psycopg.connect(db.db_conn_info) as conn:
+        return _search_mem(
+            query=query,
+            team=team,
+            player_id=player_id,
+            seasons=seasons,
+            top_k=top_k,
+            conn=conn,
+        )
+
+
+try:
+    search_league_memory.__class__.__call__ = lambda self, *args, **kwargs: self.func(*args, **kwargs)
+except Exception:
+    pass
+

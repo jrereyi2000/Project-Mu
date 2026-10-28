@@ -1333,6 +1333,25 @@ CREATE TABLE IF NOT EXISTS player_ceilings (
 );
 CREATE INDEX IF NOT EXISTS idx_player_ceilings_season ON player_ceilings (updated_season);
 
+-- League Memory narrative search index (2027_01_10_league_memory.sql, newsroom/league_memory.py, docs/PRE_PC_WORK.md §9, docs/PC_MIGRATION_PLAN.md V2.8).
+CREATE TABLE IF NOT EXISTS league_memory (
+    id SERIAL PRIMARY KEY,
+    source_table VARCHAR(32) NOT NULL,
+    source_id INT NOT NULL,
+    season INT,
+    week INT,
+    team_ids VARCHAR(8)[],
+    player_ids INT[],
+    text_chunk TEXT NOT NULL,
+    embedding REAL[] NOT NULL,
+    model VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (source_table, source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_league_memory_source ON league_memory(source_table, source_id);
+CREATE INDEX IF NOT EXISTS idx_league_memory_season_week ON league_memory(season, week);
+
+
 -- Career totals from Madden's Career Stats lists (2026_12_26_player_career_totals.sql, pipeline/load_career_totals.py,
 -- docs/HISTORY_BACKFILL_PLAN.md phase 1): one row per list row and category, in season_stat_lines column names.
 CREATE TABLE IF NOT EXISTS player_career_totals (

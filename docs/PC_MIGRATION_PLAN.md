@@ -71,7 +71,7 @@ Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`
 - [x] 6. [Gemini-or-local provider switch](PRE_PC_WORK.md#6-gemini-or-local-provider-switch) on each short-task caller, local runs logged to `llm_usage` (§7.3)
 - [ ] 7. [Quality test harness](PRE_PC_WORK.md#7-quality-test-harness) (§7.4)
 - [x] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
-- [ ] 9. [League memory](PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
+- [x] 9. [League memory](PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
 - [ ] 10. [Personality plan phases 2 and 3](PRE_PC_WORK.md#10-personality-plan-phases-2-and-3-v213): catalogue and tables, then GMs (V2.13)
 - [x] 11. [Progression plan phase C](PRE_PC_WORK.md#11-progression-plan-phase-c-v214): `engines/progression.py` offline, backtested (V2.14)
 
@@ -667,7 +667,14 @@ A short write-up for all 16 games each week from the real box scores and scoring
 
 ## V2.8 League Memory
 
-A local search index (embeddings) over every stored article, take, stat line and record, so writers, players and broadcasters can pull real callbacks ("the last time Carolina came back from 17 down was 2031"). Feeds every feature here that writes text.
+A narrative search index over every stored article, take, and franchise/league record, so writers, players and broadcasters can pull authentic callbacks ("the last time Carolina came back from 17 down was 2031"). Feeds every feature here that writes text.
+
+**Architecture (Built 2026-10-28):**
+* **Storage:** PostgreSQL 14 table `league_memory` (`id`, `source_table`, `source_id`, `season`, `week`, `team_ids VARCHAR(8)[]`, `player_ids INT[]`, `text_chunk TEXT`, `embedding REAL[]`, `model VARCHAR(64)`, `created_at`, `UNIQUE(source_table, source_id)`). Uses standard Postgres arrays without requiring the `pgvector` extension; cosine similarity runs in Python/numpy.
+* **Corpus Ingestion:** Incremental indexing CLI (`python3 -m newsroom.league_memory index [--limit N] [--season S] [--commit] [--dry-run] [--batch-size 100]`) indexing `news_feed`, `agent_memory_entries`, `franchise_records`, and `league_record_entries`. Skips unchanged rows based on chunk content and model hash. Initial backfill verified on `madden_test` (7,158 chunks, ~437k tokens, ~$0.065 cost).
+* **Embedding Seam:** `embed_text(texts, model=...)` connects to Gemini embeddings (`gemini-embedding-001`), metered into `llm_usage` under source `memory_index`, with test mock seams (`set_mock_embedder`) and local embedding hooks (`set_local_embedder`) for PC migration.
+* **Writer Tool:** `@tool def search_league_memory(query, team=None, player_id=None, seasons=None, top_k=5)` in `newsroom/db_tools.py` and `newsroom/league_memory.py`, registered in `SwarmDispatcher.tools`. Automatically hides future-week memories via `is_visible_week(season, week)` when in an article context.
+
 
 ## V2.9 Front-Office Inbox and Conversations
 
