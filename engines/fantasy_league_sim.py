@@ -45,8 +45,8 @@ REGULAR_WEEKS = 14
 LAST_FANTASY_WEEK = 17
 SEASON_WEEKS = 18
 
-GROUP = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE"}
-LINEUP = {"QB": 1, "RB": 2, "WR": 2, "TE": 1}  # plus one FLEX (RB/WR/TE)
+GROUP = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE", "K": "K", "DEF": "DEF"}
+LINEUP = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "K": 1, "DEF": 1}  # plus one FLEX (RB/WR/TE)
 FLEX = ("RB", "WR", "TE")
 
 STRATEGIES = ("BPA", "HERO_RB", "ZERO_RB", "RB_HEAVY", "EARLY_QB", "EARLY_TE")
@@ -56,12 +56,12 @@ MIX_BLEND = 0.5       # weight kept on last season's mix
 MIX_FLOOR = 0.05      # no strategy drops below 5%
 
 # Draft valuation: value = POS_WEIGHT × (noisy draft_score − replacement level at the position).
-REPLACEMENT_RANK = {"QB": 12, "RB": 30, "WR": 30, "TE": 12}   # per 12 teams
-POS_WEIGHT = {"QB": 0.4, "RB": 1.0, "WR": 1.0, "TE": 0.8}
+REPLACEMENT_RANK = {"QB": 12, "RB": 30, "WR": 30, "TE": 12, "K": 12, "DEF": 12}   # per 12 teams
+POS_WEIGHT = {"QB": 0.4, "RB": 1.0, "WR": 1.0, "TE": 0.8, "K": 0.25, "DEF": 0.30}
 BOARD_NOISE = 0.012   # sd of each manager's personal read of a player's draft_score (relative)
-DRAFT_CAP = {"QB": 2, "RB": 7, "WR": 7, "TE": 2}
-SEASON_CAP = {"QB": 3, "RB": 8, "WR": 8, "TE": 3}
-BACKUP_PENALTY = {"QB": 6.0, "TE": 10.0}  # value points off per QB/TE already on the roster
+DRAFT_CAP = {"QB": 2, "RB": 7, "WR": 7, "TE": 2, "K": 1, "DEF": 1}
+SEASON_CAP = {"QB": 3, "RB": 8, "WR": 8, "TE": 3, "K": 2, "DEF": 2}
+BACKUP_PENALTY = {"QB": 6.0, "TE": 10.0, "K": 25.0, "DEF": 25.0}  # value points off per backup already on the roster
 SWAP_MARGIN = (1.15, 1.0)  # add a free agent when his value > drop value × 1.15 + 1.0
 
 
@@ -121,6 +121,8 @@ def replacement_levels(board: list, teams: int = TEAMS) -> dict:
 
 def strategy_adjustment(strategy: str, group: str, rnd: int, counts: Counter) -> float:
     """Value points a strategy adds or removes for a position in a round, given the roster so far."""
+    if group in ("K", "DEF") and rnd < 13:
+        return -35.0
     rb = counts["RB"]
     if strategy == "HERO_RB" and group == "RB":
         if rnd <= 2 and rb == 0:
@@ -176,12 +178,12 @@ def draft_league(rng: random.Random, board: list, strategies: list, levels: dict
         rnd += 1
         team = idx if rnd % 2 == 1 else n_teams - 1 - idx
         c = counts[team]
-        need = {g: max(0, LINEUP[g] - c[g]) for g in LINEUP}
+        need = {g: max(0, LINEUP[g] - c[g]) for g in LINEUP if g in boards[team]}
         picks_left = ROUNDS - sum(c.values())
         forced = sum(need.values()) >= picks_left
         best = None
         for g, lst in boards[team].items():
-            if c[g] >= DRAFT_CAP[g] or (forced and need[g] == 0):
+            if c[g] >= DRAFT_CAP[g] or (forced and need.get(g, 0) == 0):
                 continue
             k = cursor[team][g]
             while k < len(lst) and lst[k][1] in taken:
@@ -193,6 +195,21 @@ def draft_league(rng: random.Random, board: list, strategies: list, levels: dict
             value = base + strategy_adjustment(strategies[team], g, rnd, c) + roster_adjustment(g, c)
             if best is None or (value, -pid) > (best[0], -best[1]):
                 best = (value, pid, g)
+        if best is None:
+            # Fallback if forced positions ran out or board is partial
+            for g, lst in boards[team].items():
+                if c[g] >= DRAFT_CAP[g]:
+                    continue
+                k = cursor[team][g]
+                while k < len(lst) and lst[k][1] in taken:
+                    k += 1
+                cursor[team][g] = k
+                if k == len(lst):
+                    continue
+                base, pid = lst[k]
+                value = base + roster_adjustment(g, c)
+                if best is None or (value, -pid) > (best[0], -best[1]):
+                    best = (value, pid, g)
         _, pid, g = best
         taken.add(pid)
         c[g] += 1
@@ -248,7 +265,7 @@ def round_robin(n_teams: int, weeks: int, rng: random.Random) -> list:
 
 
 def set_lineup(roster: list, value: dict, group_of: dict) -> list:
-    """Best lineup by value: QB, 2 RB, 2 WR, TE, then FLEX from the remaining RB/WR/TE."""
+    """Best lineup by value: QB, 2 RB, 2 WR, TE, K, DEF, then FLEX from the remaining RB/WR/TE."""
     ranked = sorted(roster, key=lambda pid: (-value.get(pid, 0.0), pid))
     starters, used = [], set()
     for g, n in LINEUP.items():
@@ -539,7 +556,7 @@ def load_week_data(cur, season: int) -> WeekData:
     from engines.fantasy_projection_engine import load_season
 
     sd = load_season(cur, season)
-    # The simulated leagues roster skill players only (no K/DEF slots or caps).
+    # The simulated leagues roster all starting & bench positions in SEASON_CAP (QB, RB, WR, TE, K, DEF).
     skill = {pid: p for pid, p in sd.roster.items() if p["group"] in SEASON_CAP}
     group_of = {pid: p["group"] for pid, p in skill.items()}
     team_of = {pid: p["team_id"] for pid, p in skill.items()}

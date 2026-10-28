@@ -152,7 +152,7 @@ class KickerDefenseProjectionTest(unittest.TestCase):
                                round(FPE.DEFAULT_SLOT_PRIORS[("K", 1)] * 1.075, 2), places=2)
         self.assertEqual(by_pid[201]["pos_rank"], "K1")
 
-    def test_league_sim_ignores_kickers_and_defenses(self):
+    def test_league_sim_includes_kickers_and_defenses(self):
         from engines import fantasy_league_sim as sim
         data = self._two_team_data()
         data.roster[101] = {"name": "QB", "team_id": 1, "position": "QB", "group": "QB", "depth": 1, "ovr": 90}
@@ -162,8 +162,8 @@ class KickerDefenseProjectionTest(unittest.TestCase):
             wd = sim.load_week_data(_ScriptedCursor([]), 2036)
         finally:
             FPE.load_season = original
-        self.assertEqual(wd.group_of, {101: "QB"})
-        self.assertEqual(wd.team_of, {101: 1})
+        self.assertEqual(wd.group_of, {101: "QB", 201: "K", 202: "K", 301: "DEF", 302: "DEF"})
+        self.assertEqual(wd.team_of, {101: 1, 201: 1, 202: 2, 301: 1, 302: 2})
 
 
 if __name__ == "__main__":

@@ -90,13 +90,34 @@ class SeasonData:
 
 # Skill positions score from player_stats.fantasy_points; K and DEF score from their own stat tables below.
 SKILL_POSITIONS = ("QB", "HB", "FB", "WR", "TE")
-# Kicker points for one game_stat_kicking row `k`: 3 per FG, +1 for 40–49 yds, +2 for 50+, 1 per XP.
-KICKING_POINTS_SQL = "(COALESCE(k.fgm, 0) * 3 + COALESCE(k.fgm_49, 0) + 2 * COALESCE(k.fgm_50, 0) + COALESCE(k.xpm, 0))"
-# Team defense points for one game: `def` is game_stat_defense summed per (game, team), `dst` the DEF
-# player_seasons row, `g` the game. Plays (sack 1, INT/FR/safety/block 2, TD 6) plus a points-allowed tier.
+# Kicker points for one game_stat_kicking row `k`: yardage-based scoring (minimum 3 points under 30 yds,
+# fractional 0.1 per yard: 3.x for 30–39, 4.x for 40–49, 5.x for 50+, with fg_long exact yardage for the longest kick),
+# 1 per XP, -1 per missed FG or missed XP.
+KICKING_POINTS_SQL = """(
+    COALESCE(k.fgm_29, 0) * 3.0
+    + COALESCE(k.fgm_39, 0) * 3.5
+    + COALESCE(k.fgm_49, 0) * 4.5
+    + COALESCE(k.fgm_50, 0) * 5.5
+    + CASE 
+        WHEN COALESCE(k.fgm, 0) > 0 AND COALESCE(k.fg_long, 0) >= 30 THEN
+            (k.fg_long::numeric * 0.1) - (
+                CASE 
+                    WHEN k.fg_long >= 50 THEN 5.5
+                    WHEN k.fg_long >= 40 THEN 4.5
+                    ELSE 3.5
+                END
+            )
+        ELSE 0.0
+    END
+    + COALESCE(k.xpm, 0) * 1.0
+    - (COALESCE(k.fga, 0) - COALESCE(k.fgm, 0)) * 1.0
+    - (COALESCE(k.xpa, 0) - COALESCE(k.xpm, 0)) * 1.0
+)"""
+# Team defense points for one game: `def` is game_stat_defense summed per (game, team), `ret` return TDs,
+# `dst` the DEF player_seasons row, `g` the game. Plays (sack 1, INT/FR/safety/block 2, TD 6) plus points-allowed tier.
 _DEF_ALLOWED_SQL = "(CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END)"
 DEF_POINTS_SQL = f"""(COALESCE(def.sacks, 0) + 2 * COALESCE(def.ints, 0)
-    + 2 * COALESCE(def.fumble_recoveries, 0) + 6 * COALESCE(def.tds, 0)
+    + 2 * COALESCE(def.fumble_recoveries, 0) + 6 * (COALESCE(def.tds, 0) + COALESCE(ret.tds, 0))
     + 2 * COALESCE(def.safeties, 0) + 2 * COALESCE(def.blocks, 0)
     + CASE
         WHEN {_DEF_ALLOWED_SQL} = 0 THEN 10
@@ -107,13 +128,20 @@ DEF_POINTS_SQL = f"""(COALESCE(def.sacks, 0) + 2 * COALESCE(def.ints, 0)
         WHEN {_DEF_ALLOWED_SQL} <= 34 THEN -1
         ELSE -4
     END)"""
-# Joins that give DEF_POINTS_SQL its `def` alias (append after a `games g` / `player_seasons dst` join).
+# Joins that give DEF_POINTS_SQL its `def` and `ret` aliases (append after a `games g` / `player_seasons dst` join).
 DEF_STATS_JOIN_SQL = """LEFT JOIN (
     SELECT game_id, team_id, SUM(sacks) AS sacks, SUM(ints) AS ints,
            SUM(fumble_recoveries) AS fumble_recoveries, SUM(tds) AS tds,
            SUM(safeties) AS safeties, SUM(blocks) AS blocks
     FROM game_stat_defense GROUP BY game_id, team_id
-) def ON def.game_id = g.id AND def.team_id = dst.team_id"""
+) def ON def.game_id = g.id AND def.team_id = dst.team_id
+LEFT JOIN (
+    SELECT game_id, team_id, SUM(tds) AS tds FROM (
+        SELECT game_id, team_id, tds FROM game_stat_kickreturn
+        UNION ALL
+        SELECT game_id, team_id, tds FROM game_stat_puntreturn
+    ) r GROUP BY game_id, team_id
+) ret ON ret.game_id = g.id AND ret.team_id = dst.team_id"""
 
 
 def load_points_rows(cur, season: int) -> list:

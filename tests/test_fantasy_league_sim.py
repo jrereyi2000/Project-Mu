@@ -13,7 +13,7 @@ def synthetic_board(n_teams=32):
     """A board shaped like the real one: many WR/HB, fewer TE/QB, scores falling with depth."""
     board, pid = [], 1
     for pos, count, top, step in (("WR", 150, 136, 0.45), ("HB", 100, 134, 0.5), ("TE", 90, 113, 0.6),
-                                  ("QB", 80, 133, 0.8)):
+                                  ("QB", 80, 133, 0.8), ("K", 32, 60, 0.3), ("DEF", 32, 65, 0.3)):
         for i in range(count):
             board.append({"player_id": pid, "position": pos, "team_id": 1 + pid % n_teams,
                           "draft_score": round(top - step * i - (20 if pos == "QB" and i > 0 else 0), 2)})
@@ -188,7 +188,8 @@ class SeasonTests(unittest.TestCase):
             self.assertLessEqual(state.seeds[champ], 6)
         for week in range(1, 18):
             self.assertEqual(sum(r for (w, _), (r, _) in usage.items() if w == week), 2 * 12 * sim.ROUNDS)
-            self.assertEqual(sum(s for (w, _), (_, s) in usage.items() if w == week), 2 * 12 * 7)
+            starters = sum(sim.LINEUP.values()) + 1  # 9 starters: 1 QB, 2 RB, 2 WR, 1 TE, 1 K, 1 DEF + 1 FLEX
+            self.assertEqual(sum(s for (w, _), (_, s) in usage.items() if w == week), 2 * 12 * starters)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,10 @@ def score_player(row: dict, awards: list) -> float:
             base_value *= 1.00  # Franchise Tier
         else:
             base_value *= 0.90  # Streamer Tier
+    elif row['position'] == 'K':
+        base_value *= 0.65  # Late-round kicker tier
+    elif row['position'] == 'DEF':
+        base_value *= 0.70  # Late-round defense tier
 
     # --- 2. SITUATIONAL ECOSYSTEM BUMP ---
     if row['position'] in ['WR', 'TE', 'QB'] and row['pass_off_rank'] and row['pass_off_rank'] <= 10:
@@ -64,7 +68,7 @@ def score_player(row: dict, awards: list) -> float:
 
 
 def load_draft_board(cur, season: int) -> list:
-    """Every rostered QB/HB/WR/TE with its draft_score, best first."""
+    """Every rostered QB/HB/WR/TE/K/DEF with its draft_score, best first."""
     cur.execute("""
         SELECT p.id, p.player_name, COALESCE(p.full_name, p.player_name), ps.position, ps.overall_rating,
                ps.popularity_index, t.id, ts.pass_off_rank, ts.rush_off_rank
@@ -72,7 +76,7 @@ def load_draft_board(cur, season: int) -> list:
         JOIN players p ON ps.player_id = p.id
         JOIN teams t ON ps.team_id = t.id
         JOIN team_seasons ts ON t.id = ts.team_id AND ts.season = ps.season
-        WHERE ps.season = %s AND ps.position IN ('QB', 'HB', 'WR', 'TE')
+        WHERE ps.season = %s AND ps.position IN ('QB', 'HB', 'WR', 'TE', 'K', 'DEF')
     """, (season,))
     players = [dict(zip(("player_id", "player_name", "full_name", "position", "overall_rating",
                          "popularity_index", "team_id", "pass_off_rank", "rush_off_rank"), r))
