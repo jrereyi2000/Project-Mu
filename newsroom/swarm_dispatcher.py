@@ -90,6 +90,7 @@ from newsroom.db_tools import (
     get_front_office_standing,
     get_front_office_rankings,
     get_gm_record,
+    search_league_memory,
     fetch_cap_rows,
     fetch_moves,
     fetch_rumors,
@@ -876,6 +877,7 @@ class SwarmDispatcher:
             get_front_office_standing,
             get_front_office_rankings,
             get_gm_record,
+            search_league_memory,
         ]
 
         self.entity_tagger = EntityTaggingService(self.db.db_conn_info)

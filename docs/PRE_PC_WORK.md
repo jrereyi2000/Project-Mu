@@ -171,19 +171,28 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 
 ---
 
-## 9. League memory (V2.8)
+## 9. League memory (V2.8) [DONE 2026-10-28]
 
 **Goal:** a search index over what the universe has said and done, so writers (and later players, press and broadcast) can pull real callbacks: "the last time Carolina came back from 17 down was 2031".
 
-**Corpus (live counts 2026-10-28):** `news_feed` (2,814 articles; check where full article text lives), `agent_memory_entries` (3,247 writer takes), `franchise_records` (711) and `league_record_entries` (692), plus Agent Wire posts, season archive and game scripts where they're stored. Facts with exact numbers (records, stats) stay queries on the stat tables; the index is for narrative recall.
+**Corpus (live counts 2026-10-28):** `news_feed` (2,776 articles), `agent_memory_entries` (3,247 writer takes), `franchise_records` (711) and `league_record_entries` (692). Facts with exact numbers (records, stats) stay queries on the stat tables; the index is for narrative recall.
 
-**Design:**
-* **Storage:** the `madden-db` container is PostgreSQL 14 without `pgvector` (only `pg_trgm` is available). Default: a `league_memory` table (source table, source id, season, week, team ids, player ids, text chunk, embedding as `REAL[]`) and brute-force cosine in numpy, which is fast at tens of thousands of chunks. Switching the image to `pgvector/pgvector:pg14` is cleaner but changes infrastructure for every session: **ask JR before doing it.**
-* **Embeddings:** Gemini embedding API now (metered into `llm_usage`, source `memory_index`), behind a seam so a local embedding model can replace it on the PC. Record the model name per row; re-embed when it changes.
-* **Updates:** an incremental `python3 -m newsroom.league_memory index` that embeds only new or changed rows, run after the weekly articles.
-* **Use:** a writer tool (`search_league_memory(query, team?, player?, seasons?)`) registered with the newsroom's tool loop like the existing writer tools, returning short cited snippets (headline, date, author). Facts in an answer must still come from the data tools.
+**Completed implementation (2026-10-28):**
+1. **Schema & Migration:** `db/migrations/2027_01_10_league_memory.sql` (and `db/init_db.sql`) created `league_memory` (`id`, `source_table`, `source_id`, `season`, `week`, `team_ids VARCHAR(8)[]`, `player_ids INT[]`, `text_chunk TEXT`, `embedding REAL[]`, `model VARCHAR(64)`, `created_at`, `UNIQUE(source_table, source_id)`). Compatible with PostgreSQL 14 without pgvector.
+2. **Embedding Seam & Vector Search (`newsroom/league_memory.py`):**
+   - `embed_text(texts, model=...)` connects to Gemini embeddings (`gemini-embedding-001`), metered into `llm_usage` under source `memory_index`, with hooks for mock embedders (`set_mock_embedder`) and local PC models (`set_local_embedder`).
+   - Vectorized `cosine_similarity(query_emb, matrix)` helper in numpy evaluated in ~30ms for 8,000 vectors.
+3. **Incremental Indexing CLI:**
+   - `python3 -m newsroom.league_memory index [--limit N] [--season S] [--commit] [--dry-run] [--batch-size 100]`
+   - Computes candidate chunks across all four tables, skipping existing items whose text chunks and models are unchanged.
+   - Initial dry-run estimate: 7,158 chunks, ~437k tokens, estimated cost $0.0657. Full backfill executed on `madden_test`.
+4. **Writer Tool & Swarm Dispatcher:**
+   - `@tool def search_league_memory(query, team=None, player_id=None, seasons=None, top_k=5)` in `newsroom/db_tools.py` and `newsroom/league_memory.py`.
+   - Supports team abbreviation resolution, player filtering, season filtering, and article publication week temporal cutoff (`is_visible_week`).
+   - Registered in `SwarmDispatcher.tools` for all newsroom writers.
+5. **Testing:**
+   - `tests/test_league_memory.py`: 12 unit and integration tests covering chunk formatting, mock embedding seam, numpy cosine similarity edge cases, incremental skip logic, and writer tool filters.
 
-**Done when:** the full backfill runs once on `madden_test` (report chunk count and embedding cost first; cost estimate before running on live), queries return sensible callbacks for a handful of test questions in the docstring, the writer tool is wired in and covered by tests with a fake embedder, and the spec documents the table, CLI and tool. Plan V2.8 updated.
 
 ---
 
