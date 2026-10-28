@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v0)
+# @REPLACED-BY: server/api.py
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))  # `streamlit run` executes this file directly; make project packages importable
 import streamlit as st

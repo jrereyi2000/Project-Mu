@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v1)
+# @REPLACED-BY: NONE
 #!/usr/bin/env python3
 """
 Second OCR experiment: read every table cell on its own with Apple Vision.

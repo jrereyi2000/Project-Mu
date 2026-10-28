@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v0)
+# @REPLACED-BY: pipeline/load_save.py
 import psycopg
 import json
 import argparse

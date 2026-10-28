@@ -5,10 +5,12 @@ import redis
 from typing import List, Optional, Any
 from pydantic import BaseModel
 from pipeline.ocr_extractor import PlayerStat, TeamStat, GameMeta, RosterPlayer
+from pipeline.tombstone import tombstone, tombstone_branch
 
 class DatabaseHandler:
     def __init__(self, db_conn_info: str = None, redis_url: str = None):
         self.db_conn_info = db_conn_info or os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
+        # @AUDIT-STATUS: DEAD_BRANCH (v0) | Reason: Redis was only used for v0 emit_game_completed events, not consumed by v1 or v2
         self.redis_url = redis_url or os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         self.redis_client = redis.Redis.from_url(self.redis_url)
 
@@ -43,6 +45,8 @@ class DatabaseHandler:
                     raise RuntimeError("league_state has no row: set current_season and current_week first")
                 return res[0], res[1]
 
+    # @AUDIT-STATUS: PRUNE_SYMBOL (v0) | Replaced by: pipeline.load_save:load_snapshot
+    @tombstone(version="v0", replaced_by="pipeline.load_save:load_snapshot")
     def create_active_game(self) -> int:
         season, week = self.get_current_league_state()
         with psycopg.connect(self.db_conn_info) as conn:
@@ -50,6 +54,8 @@ class DatabaseHandler:
                 cur.execute("INSERT INTO games (season, week) VALUES (%s, %s) RETURNING id;", (season, week))
                 return cur.fetchone()[0]
 
+    # @AUDIT-STATUS: PRUNE_SYMBOL (v0) | Replaced by: pipeline.load_save:load_snapshot
+    @tombstone(version="v0", replaced_by="pipeline.load_save:load_snapshot")
     def update_game_meta(self, temp_game_id: int, game_meta: GameMeta) -> int:
         season, week = self.get_current_league_state()
         with psycopg.connect(self.db_conn_info) as conn:
@@ -96,6 +102,8 @@ class DatabaseHandler:
                     return temp_game_id
 
 
+    # @AUDIT-STATUS: PRUNE_SYMBOL (v0) | Replaced by: pipeline.load_save:load_snapshot
+    @tombstone(version="v0", replaced_by="pipeline.load_save:load_snapshot")
     def upsert_schedule(self, extraction: Any):
         with psycopg.connect(self.db_conn_info) as conn:
             with conn.cursor() as cur:
@@ -114,6 +122,8 @@ class DatabaseHandler:
                         """, (game.away_score, game.home_score, game.status, extraction.season, extraction.week, home_res[0], away_res[0]))
             conn.commit()
 
+    # @AUDIT-STATUS: PRUNE_SYMBOL (v0) | Replaced by: pipeline.load_save:load_snapshot
+    @tombstone(version="v0", replaced_by="pipeline.load_save:load_snapshot")
     def upsert_roster(self, roster_list, update_only: bool = False):
         if not roster_list: return
         season, _ = self.get_current_league_state()
@@ -172,6 +182,8 @@ class DatabaseHandler:
                             """, (player_id, team_id, season, p.position, p.age, p.overall_rating, p_exp))
             conn.commit()
 
+    # @AUDIT-STATUS: PRUNE_SYMBOL (v0) | Replaced by: pipeline.load_save:load_snapshot
+    @tombstone(version="v0", replaced_by="pipeline.load_save:load_snapshot")
     def upsert_team_stats(self, game_id: int, team_stats_list: List[TeamStat]):
         if not team_stats_list: return
         with psycopg.connect(self.db_conn_info) as conn:
@@ -216,6 +228,8 @@ class DatabaseHandler:
                     ts_to_insert
                 )
 
+    # @AUDIT-STATUS: PRUNE_SYMBOL (v0) | Replaced by: pipeline.load_save:load_snapshot
+    @tombstone(version="v0", replaced_by="pipeline.load_save:load_snapshot")
     def upsert_player_stats(self, game_id: int, player_stats_list: List[PlayerStat]):
         if not player_stats_list: return
         with psycopg.connect(self.db_conn_info) as conn:
@@ -420,6 +434,8 @@ class DatabaseHandler:
                     )
                 conn.commit()
 
+    # @AUDIT-STATUS: PRUNE_SYMBOL (v0) | Replaced by: pipeline.watch_save:process_save
+    @tombstone(version="v0", replaced_by="pipeline.watch_save:process_save")
     def emit_game_completed(self, game_id: int):
         event_payload = json.dumps({"event": "GAME_COMPLETED", "game_id": game_id})
         self.redis_client.publish("madden_events", event_payload)

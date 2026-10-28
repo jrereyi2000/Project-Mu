@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v0)
+# @REPLACED-BY: tests/test_load_save.py
 """Unit test for DatabaseHandler UPSERT and event emission logic (tests/test_db.py)."""
 
 from unittest.mock import MagicMock, patch

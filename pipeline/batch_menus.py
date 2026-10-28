@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v0)
+# @REPLACED-BY: pipeline/save_reader/pc_save_reader.mjs
 import argparse
 import cv2
 import numpy as np

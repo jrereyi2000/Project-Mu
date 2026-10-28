@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v0)
+# @REPLACED-BY: NONE
 import cv2
 from pipeline.template_classifier import TemplateClassifier
 import argparse

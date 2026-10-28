@@ -18,6 +18,7 @@ The project root is the Python import root. Every backend folder is a package, a
 ```
 Project Mu/
 ├── PROJECT_SPEC.md            # This document (system-level spec)
+├── AUDIT_LEDGER.md            # 4-Phase Deprecation & Lineage Audit Ledger (v0/v1/v2 reachability and supersession matrix)
 ├── CLAUDE.md                  # Claude Code session rules (read this spec first; keep it updated)
 ├── GEMINI.md                  # Same session rules for Gemini agents
 ├── NOTES.md                   # Feature documentation & engineering notes (draft prospects & OCR pipeline)
@@ -121,6 +122,7 @@ Project Mu/
 │   ├── ingest_prospects.py    #   Draft prospect CSV parsing and validation (strict, or lenient: bad cells → None with warnings)
 │   ├── draft_board.py         #   draft_prospects / mock_draft_picks reads and writes (board, rookie link, saved mock drafts)
 │   ├── draft_results.py       #   Round 1 actual draft results ingestion and 32-pick validation engine (§3.3c)
+│   ├── tombstone.py           #   Deprecation tripwire & runtime audit decorator (@tombstone, tombstone_branch)
 │   ├── roster_scanner.py, schedule_scanner.py, heal_roster.py
 │   └── save_reader/           # Madden 27 PC franchise-save reader (Node, madden-franchise 4.4.1; docs/in_progress/PC_MIGRATION_PLAN.md §5.1; not wired into the pipeline yet)
 │       ├── pc_save_reader.mjs #   `node pc_save_reader.mjs <CAREER-save> [--out snapshot.json]`: opens a temp copy (Madden's file is never touched) and writes one JSON snapshot: meta (schema expected vs used), season (calendar/franchise year, week index and type, stage), teams (TeamIndex, names), games (SeasonGame rows with both teams: status, simmed, scores, quarter scores, OT, weather, time of day, scoring plays from ScoringSummaries), players (pgid = Player.PresentationId, unique per save; row; name, position, archetype = PlayerType, status, team, age, years pro, height, weight_lbs = raw + 160, dev trait, OVR, archetype_grades = OverallGrade0-4 (OVR per archetype slot; reader_version 2), current ratings, cap salary, contract by year, appearance ids incl. PLYR_COMMENT / PLYR_PORTRAIT / generic head, injury, season_stats and game_stats followed through Player.SeasonStats / Player.GameStats with game_row and opponent). Tables with several copies (Team) use the largest. Deleted players are skipped

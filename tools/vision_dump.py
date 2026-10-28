@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v1)
+# @REPLACED-BY: NONE
 #!/usr/bin/env python3
 """
 Run Apple Vision OCR (the on-device OCR madden_capture.py already uses) over every
