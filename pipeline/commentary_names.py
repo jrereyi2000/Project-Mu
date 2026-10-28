@@ -11,6 +11,10 @@ Provides:
      skipping DEF/team defense) or draft prospects, and writes review CSV with top 5 candidates.
    - apply <reviewed.csv> [--commit]: writes chosen surname to players.full_name and player_name,
      recording old names in player_name_aliases. Dry-run by default.
+   - harvest <save | snapshot.json>: records the surname -> ID pairs a Madden save actually uses
+     (data/commentary_save_m27.json). They take precedence over the community lookup file, which
+     lacks the newest recordings (the 2026 rookie class, IDs ~9296-9340).
+   - validate <save | snapshot.json>: compares the community lookup file with the IDs in a save.
 """
 
 from collections import defaultdict
@@ -29,6 +33,8 @@ except ImportError:
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_COMMENTARY_PATH = os.path.join(ROOT, "data", "commentary_m27.json")
+DEFAULT_SAVE_COMMENTARY_PATH = os.path.join(ROOT, "data", "commentary_save_m27.json")
+SAVE_READER = os.path.join(ROOT, "pipeline", "save_reader", "pc_save_reader.mjs")
 DEFAULT_DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
 SUFFIX_PATTERN = re.compile(r",?\s+(Jr\.?|Sr\.?|II|III|IV|V)$", flags=re.IGNORECASE)
@@ -65,9 +71,34 @@ def player_name_aliases_exist(cur, force_check: bool = False) -> bool:
 
 
 # --------------------------------------------------------------------- loading ----
-def load_commentary_lookup(path: str | None = None) -> dict[str, int]:
+def _add_entries(lookup: dict[str, int], raw_data: dict, override: bool) -> None:
+    """Add surname -> ID entries under their lowercase, alphanumeric and suffix-free keys.
+
+    With override, the surname's own keys replace existing ones; the suffix-free key is only
+    ever filled when missing ('Samuel Jr' has its own recording, distinct from 'Samuel').
+    """
+    for surname, cid in raw_data.items():
+        cid_int = int(cid)
+        key = surname.lower()
+        if override or key not in lookup:
+            lookup[key] = cid_int
+
+        # Without hyphens / punctuation
+        clean_s = re.sub(r"[^a-z0-9]", "", key)
+        if clean_s and (override or clean_s not in lookup):
+            lookup[clean_s] = cid_int
+
+        # Without suffix if raw key contained one (e.g. 'Bolden Jr.')
+        no_suf = drop_suffixes(surname).lower()
+        if no_suf and no_suf not in lookup:
+            lookup[no_suf] = cid_int
+
+
+def load_commentary_lookup(path: str | None = None, save_path: str | None = None) -> dict[str, int]:
     """Load Madden 27 commentary lookup json mapping surname -> commentary ID.
 
+    The default load layers the IDs harvested from a save (DEFAULT_SAVE_COMMENTARY_PATH, when
+    present) over the community file; an explicit path loads that file alone unless save_path is given.
     Raises FileNotFoundError with instructions if the file is missing.
     """
     global _COMMENTARY_RAW, _NORMALIZED_LOOKUP, _RECORDED_SURNAMES, _RECORDED_METADATA
@@ -83,22 +114,18 @@ def load_commentary_lookup(path: str | None = None) -> dict[str, int]:
         with open(file_path, "r", encoding="utf-8") as f:
             raw_data = json.load(f)
 
+        if path is None and save_path is None and os.path.exists(DEFAULT_SAVE_COMMENTARY_PATH):
+            save_path = DEFAULT_SAVE_COMMENTARY_PATH
+        save_data: dict = {}
+        if save_path:
+            with open(save_path, "r", encoding="utf-8") as f:
+                save_data = json.load(f)
+
         lookup: dict[str, int] = {}
-        for surname, cid in raw_data.items():
-            cid_int = int(cid)
-            lookup[surname.lower()] = cid_int
+        _add_entries(lookup, save_data, override=True)
+        _add_entries(lookup, raw_data, override=False)
 
-            # Without hyphens / punctuation
-            clean_s = re.sub(r"[^a-z0-9]", "", surname.lower())
-            if clean_s and clean_s not in lookup:
-                lookup[clean_s] = cid_int
-
-            # Without suffix if raw key contained one (e.g. 'Bolden Jr.')
-            no_suf = drop_suffixes(surname).lower()
-            if no_suf and no_suf not in lookup:
-                lookup[no_suf] = cid_int
-
-        rec_surnames = sorted(list(raw_data.keys()))
+        rec_surnames = sorted(set(raw_data) | set(save_data))
         rec_meta = []
         for s in rec_surnames:
             p, sec = _get_double_metaphone(s)
@@ -200,10 +227,17 @@ def commentary_id(full_name: str | None, lookup: dict[str, int] | None = None) -
     if lookup is None:
         lookup = load_commentary_lookup()
 
+    suffix = SUFFIX_PATTERN.search(full_name.strip())
     for cand in extract_surname_candidates(full_name):
         norm = normalize(cand)
         if not norm:
             continue
+
+        # 0. A suffixed surname with its own recording ('Samuel Jr' 8440, not 'Samuel' 4317)
+        if suffix:
+            suffixed = re.sub(r"[^a-z0-9]", "", strip_accents(cand + suffix.group(0)).lower())
+            if suffixed in lookup:
+                return lookup[suffixed]
 
         # 1. Exact normalized match (e.g. 'smith', 'van buren', 'dennis-sutton')
         if norm in lookup:
@@ -604,6 +638,90 @@ def run_apply(csv_path: str, dsn: str = DEFAULT_DSN, commit: bool = False) -> di
     return {"applied": len(changes), "committed": commit, "changes": changes}
 
 
+# ------------------------------------------------------------ save harvest ----
+def read_save_players(source: str) -> list[dict]:
+    """Players of a Madden save: a pc_save_reader snapshot (.json) or the save itself (read with node)."""
+    import subprocess
+    import tempfile
+
+    if source.endswith(".json"):
+        with open(source, "r", encoding="utf-8") as f:
+            return json.load(f)["players"]
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "snapshot.json")
+        subprocess.run(["node", SAVE_READER, source, "--out", out], check=True, stdout=subprocess.DEVNULL)
+        with open(out, "r", encoding="utf-8") as f:
+            return json.load(f)["players"]
+
+
+def harvest_save_ids(players: list[dict]) -> dict[str, int]:
+    """Surname -> commentary ID as the save assigns them (0 = no recording, left out).
+
+    A surname the save gives two IDs keeps its most common one.
+    """
+    counts: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+    for p in players:
+        cid = (p.get("appearance") or {}).get("commentary_id") or 0
+        surname = (p.get("last_name") or "").strip()
+        if cid and surname:
+            counts[surname][int(cid)] += 1
+    return {s: max(ids, key=ids.get) for s, ids in sorted(counts.items())}
+
+
+def run_harvest(source: str, out_path: str = DEFAULT_SAVE_COMMENTARY_PATH) -> dict[str, int]:
+    """Write the save's surname -> ID pairs to out_path and report what the community file lacks."""
+    global _COMMENTARY_RAW
+    harvested = harvest_save_ids(read_save_players(source))
+    file_lookup = load_commentary_lookup(path=DEFAULT_COMMENTARY_PATH)
+    new = [s for s in harvested if commentary_id(f"X {s}", file_lookup) != harvested[s]]
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(harvested, f, indent=1, ensure_ascii=False)
+    _COMMENTARY_RAW = None  # the next default load picks up the new file
+    print(f"Harvested {len(harvested)} surnames from {source} -> {out_path}")
+    print(f"  Missing from or different in the community lookup: {len(new)}" + (f" ({', '.join(new)})" if new else ""))
+    return harvested
+
+
+def validate_lookup(players: list[dict], lookup: dict[str, int] | None = None) -> dict:
+    """Compare the community lookup file's IDs with the IDs a save assigns its players.
+
+    agree / disagree: the file's ID equals / differs from the save's; missing: the save has a recording
+    the file lacks; file_only: the save gives 0 but the file has an ID; both_none: neither has one.
+    """
+    if lookup is None:
+        lookup = load_commentary_lookup(path=DEFAULT_COMMENTARY_PATH)
+    result: dict = {k: [] for k in ("agree", "disagree", "missing", "file_only", "both_none")}
+    for p in players:
+        full = f"{p.get('first_name') or ''} {p.get('last_name') or ''}".strip()
+        save_id = int((p.get("appearance") or {}).get("commentary_id") or 0)
+        file_id = commentary_id(full, lookup)
+        if not save_id:
+            result["file_only" if file_id else "both_none"].append((full, file_id))
+        elif file_id is None:
+            result["missing"].append((full, save_id))
+        elif file_id == save_id:
+            result["agree"].append((full, save_id))
+        else:
+            result["disagree"].append((full, save_id, file_id))
+    return result
+
+
+def run_validate(source: str) -> dict:
+    result = validate_lookup(read_save_players(source))
+    checked = len(result["agree"]) + len(result["disagree"])
+    print(f"Commentary lookup vs {source}:")
+    print(f"  Agree: {len(result['agree'])} of {checked} players the file covers")
+    for label, key in (("Disagree (save, file)", "disagree"), ("Recorded in save, missing from file", "missing"),
+                       ("File has an ID, save gives 0", "file_only")):
+        rows = result[key]
+        print(f"  {label}: {len(rows)}")
+        for row in rows:
+            print(f"    {row}")
+    print(f"  Neither has a recording: {len(result['both_none'])}")
+    return result
+
+
 # --------------------------------------------------------------------- CLI ----
 def main():
     import argparse
@@ -625,12 +743,23 @@ def main():
     app_parser.add_argument("--commit", action="store_true", help="Commit changes to database (default: dry run)")
     app_parser.add_argument("--db", default=DEFAULT_DSN, help="Postgres connection string")
 
+    # harvest / validate commands
+    har_parser = subparsers.add_parser("harvest", help="Record the surname IDs a Madden save uses")
+    har_parser.add_argument("source", help="Madden save, or a pc_save_reader snapshot .json")
+    har_parser.add_argument("--out", "-o", default=DEFAULT_SAVE_COMMENTARY_PATH, help="Output JSON path")
+    val_parser = subparsers.add_parser("validate", help="Compare the community lookup file with a save's IDs")
+    val_parser.add_argument("source", help="Madden save, or a pc_save_reader snapshot .json")
+
     args = parser.parse_args()
 
     if args.command == "report":
         run_report(dsn=args.db, out_csv=args.out, season=args.season, include_prospects=args.prospects)
     elif args.command == "apply":
         run_apply(csv_path=args.csv_file, dsn=args.db, commit=args.commit)
+    elif args.command == "harvest":
+        run_harvest(args.source, args.out)
+    elif args.command == "validate":
+        run_validate(args.source)
 
 
 if __name__ == "__main__":

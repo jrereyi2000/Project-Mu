@@ -38,12 +38,12 @@ Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgi
 **Goal:** every Project Mu player has a surname Madden's commentators can say. Players with a recorded surname get its ID; the rest get a ranked list of recorded surnames that JR reviews, and the approved renames are written to the database.
 
 **Completed Implementation (2026-10-28):**
-* **Source Lookup:** Fetched `data/commentary_m27.json` (7,865 surnames → 7,666 IDs, git-ignored). Clear `FileNotFoundError` instructions if missing.
+* **Source Lookup:** Fetched `data/commentary_m27.json` (7,865 surnames → 7,666 IDs, git-ignored). Clear `FileNotFoundError` instructions if missing. Overlaid by the save's own IDs (`harvest` → `data/commentary_save_m27.json`, takes precedence); `validate` compares the two (PC_MIGRATION_PLAN §4.3).
 * **Module `pipeline/commentary_names.py`:**
   - `normalize(surname)`: drops suffixes (Jr, Sr, II, III, IV, V), strips accents and punctuation, casefolds, matches with and without hyphens.
   - `commentary_id(full_name)`: extracts candidate surnames, checks exact, normalized, unhyphenated, and punctuation-free matches; returns commentary ID int or `None`.
   - `suggest_surnames()`: ranks top 5 recorded surnames using Double Metaphone phonetic similarity tier + Levenshtein edit distance, preferring same first letter and strictly filtering out surnames already on the player's team roster.
-  - `report` CLI: computes coverage on active players (skipping `DEF` rows) and outputs `captures/commentary_unmatched.csv` with player info and top 5 ranked candidates, leaving `chosen` for JR review. Active players: 1,665 / 1,797 matched (92.7%), 132 unmatched.
+  - `report` CLI: computes coverage on active players (skipping `DEF` rows) and outputs `captures/commentary_unmatched.csv` with player info and top 5 ranked candidates, leaving `chosen` for JR review. Active players: 1,681 / 1,797 matched (93.5%) with the save's IDs, 116 unmatched (all generated players).
   - `apply` CLI: reads reviewed CSV, dry-run by default, validates chosen surnames against commentary lookup, updates `players.full_name` and `player_name`, and records historical aliases in `player_name_aliases`.
 * **Database Migration & Alias Search:**
   - Added migration `db/migrations/2027_01_07_player_name_aliases.sql` creating `player_name_aliases` table and index; added table to `db/init_db.sql`. Applied to `madden_test`.
@@ -51,7 +51,7 @@ Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgi
 * **Teleporter Integration:**
   - `pipeline/teleport.py` and `pipeline/teleport_draft.py` set `PLYR_COMMENT` from `commentary_id()` (0 when unrecorded).
   - Teleport reports include `commentary_matched` and `commentary_unmatched` counts.
-* **Testing:** 14 tests in `tests/test_commentary_names.py` covering normalization, lookup, ranking, dry-run rollback, committed renames, and alias search in `madden_test`. All teleport unit and integration tests passing (`tests/test_teleport.py`, `tests/test_teleport_draft.py`).
+* **Testing:** 22 tests in `tests/test_commentary_names.py` covering normalization, lookup (incl. suffixed recordings, save harvest precedence and validation), ranking, dry-run rollback, committed renames, and alias search in `madden_test`. All teleport unit and integration tests passing (`tests/test_teleport.py`, `tests/test_teleport_draft.py`).
 
 ---
 

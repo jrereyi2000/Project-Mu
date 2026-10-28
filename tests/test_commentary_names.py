@@ -1,6 +1,7 @@
 """Tests for pipeline/commentary_names.py (Madden commentary surname lookup & rename tool)."""
 
 import csv
+import json
 import os
 import tempfile
 import unittest
@@ -15,6 +16,26 @@ TEST_DSN = os.environ.get(
     "TEST_DATABASE_URL",
     "host=localhost dbname=madden_test user=postgres password=postgres",
 )
+
+
+_SAVE_PATH_PATCH = mock.patch.object(cn, "DEFAULT_SAVE_COMMENTARY_PATH", "/nonexistent/commentary_save.json")
+
+
+def setUpModule():
+    # Tests read the community file alone, not this machine's git-ignored save harvest.
+    _SAVE_PATH_PATCH.start()
+    cn._COMMENTARY_RAW = None
+
+
+def tearDownModule():
+    _SAVE_PATH_PATCH.stop()
+    cn._COMMENTARY_RAW = None
+
+
+def _lookup(raw: dict) -> dict:
+    lookup: dict = {}
+    cn._add_entries(lookup, raw, override=False)
+    return lookup
 
 
 class TestNormalization(unittest.TestCase):
@@ -79,6 +100,49 @@ class TestCommentaryLookup(unittest.TestCase):
         with self.assertRaises(FileNotFoundError) as ctx:
             cn.load_commentary_lookup("/nonexistent/path/to/commentary.json")
         self.assertIn("curl", str(ctx.exception))
+
+    def test_suffixed_surname_with_own_recording(self):
+        lookup = _lookup({"Samuel": 4317, "Samuel Jr": 8440, "Smith": 4600})
+        self.assertEqual(cn.commentary_id("Asante Samuel Jr", lookup), 8440)
+        self.assertEqual(cn.commentary_id("Deebo Samuel Sr", lookup), 4317)
+        self.assertEqual(cn.commentary_id("Will Smith Jr.", lookup), 4600)
+
+
+class TestSaveHarvest(unittest.TestCase):
+    PLAYERS = [
+        {"first_name": "Gabe", "last_name": "Jacas", "appearance": {"commentary_id": 9325}},
+        {"first_name": "Derion", "last_name": "Kendrick", "appearance": {"commentary_id": 499}},
+        {"first_name": "Kaleb", "last_name": "Elarms-Orr", "appearance": {"commentary_id": 9330}},
+        {"first_name": "Will", "last_name": "Smith", "appearance": {"commentary_id": 4600}},
+        {"first_name": "Jo", "last_name": "Nobody", "appearance": {"commentary_id": 0}},
+    ]
+
+    def test_harvest_skips_zero_and_keeps_save_ids(self):
+        self.assertEqual(cn.harvest_save_ids(self.PLAYERS),
+                         {"Elarms-Orr": 9330, "Jacas": 9325, "Kendrick": 499, "Smith": 4600})
+
+    def test_save_ids_take_precedence_over_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            file_path, save_path = os.path.join(tmp, "file.json"), os.path.join(tmp, "save.json")
+            with open(file_path, "w") as f:
+                json.dump({"Kendrick": 2592, "Orr": 3739, "Smith": 4600}, f)
+            with open(save_path, "w") as f:
+                json.dump(cn.harvest_save_ids(self.PLAYERS), f)
+            file_only = cn.load_commentary_lookup(path=file_path)
+            layered = cn.load_commentary_lookup(path=file_path, save_path=save_path)
+        self.assertIsNone(cn.commentary_id("Gabe Jacas", file_only))
+        self.assertEqual(cn.commentary_id("Gabe Jacas", layered), 9325)
+        self.assertEqual(cn.commentary_id("Derion Kendrick", layered), 499)
+        self.assertEqual(cn.commentary_id("Kaleb Elarms-Orr", file_only), 3739)
+        self.assertEqual(cn.commentary_id("Kaleb Elarms-Orr", layered), 9330)
+
+    def test_validate_lookup_buckets(self):
+        lookup = _lookup({"Kendrick": 2592, "Smith": 4600, "Nobody": 7})
+        result = cn.validate_lookup(self.PLAYERS, lookup)
+        self.assertEqual([r[0] for r in result["agree"]], ["Will Smith"])
+        self.assertEqual(result["disagree"], [("Derion Kendrick", 499, 2592)])
+        self.assertEqual(len(result["missing"]), 2)
+        self.assertEqual(result["file_only"], [("Jo Nobody", 7)])
 
 
 class TestCandidateRanking(unittest.TestCase):
