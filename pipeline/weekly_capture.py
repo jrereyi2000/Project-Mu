@@ -550,6 +550,22 @@ def step_coach_hot_seat(season):
         return None
 
 
+def run_weekly_engines(season, mode="weekly", log_fn=log):
+    """Runs the deterministic stats backfill & analytics engines (Step 7) plus weekly/playoff engines."""
+    log_fn(f"Step 7: backfill + engines (season {season})")
+    step_engines(season)
+    if mode in ("weekly", "playoff"):
+        log_fn("Step 7b: GM trade proposals")
+        step_gm(season)
+        log_fn("Step 7c: scouting")
+        step_scouting(season)
+    if mode in ("weekly", "playoff", "postgame"):
+        log_fn("Step 7d: season archive")
+        step_season_archive(season)
+        log_fn("Step 7d: coaching carousel")
+        step_coach_hot_seat(season)
+
+
 def step_preseason_engines(season):
     """Preseason engines for start-of-season calibration (schedule, rosters, injuries loaded):
     1. Preseason Fantasy ADP (runs 100 simulated drafts, writes Week 1 ADP board).
@@ -1022,18 +1038,7 @@ def run(resume=None, articles=True, connect=True, mode="weekly", season=None, te
                    title=f"Mu: {mode} scan done", tags=("white_check_mark",))
             return 0
         season, current_week = league_state()
-        log(f"Step 7: backfill + engines (season {season})")
-        step_engines(season)
-        if mode in ("weekly", "playoff"):
-            log("Step 7b: GM trade proposals")
-            step_gm(season)
-            log("Step 7c: scouting")
-            step_scouting(season)
-        if mode in ("weekly", "playoff", "postgame"):
-            log("Step 7d: season archive")
-            step_season_archive(season)
-            log("Step 7d: coaching carousel")
-            step_coach_hot_seat(season)
+        run_weekly_engines(season, mode=mode, log_fn=log)
         published = None
         if articles:
             log("Step 8: articles")
