@@ -1,5 +1,5 @@
 # Fantasy Editorial Matrix
-> **Status: complete. Built: §7 steps 1–7 (league sim, K & D/ST scoring + projections + streaming article, writer tools, article types and writers, publishing, API, fantasy page).** This is the source of truth for the fantasy slate, alongside `docs/EDITORIAL_MATRIX.md` for the main newsroom.
+> **Status: done (2026-10-28); all 7 steps built.** Built: §7 steps 1–7 (league sim, K & D/ST scoring + projections + streaming article, writer tools, article types and writers, publishing, API, fantasy page). This is the source of truth for the fantasy slate, alongside `docs/EDITORIAL_MATRIX.md` for the main newsroom.
 
 This matrix sets the weekly article slate for **Mu Fantasy** (`#fantasy`). It follows the **fantasy calendar**, not the NFL regular season and playoffs.
 

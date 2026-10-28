@@ -1,5 +1,5 @@
 {
-  "_comment": "Article voices and selection filters for the fantasy desk (FANTASY_* article types only). They replace the writer's normal persona and curatorial directive for fantasy articles; tweet personas and national-column directives are unchanged. See docs/in_progress/FANTASY_EDITORIAL_MATRIX.md.",
+  "_comment": "Article voices and selection filters for the fantasy desk (FANTASY_* article types only). They replace the writer's normal persona and curatorial directive for fantasy articles; tweet personas and national-column directives are unchanged. See docs/done/FANTASY_EDITORIAL_MATRIX.md.",
   "writers": {
     "BERRY": {
       "display_name": "Matthew Berry",

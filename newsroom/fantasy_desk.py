@@ -1,4 +1,4 @@
-"""Fantasy Editorial Matrix: which fantasy articles run each week (docs/in_progress/FANTASY_EDITORIAL_MATRIX.md).
+"""Fantasy Editorial Matrix: which fantasy articles run each week (docs/done/FANTASY_EDITORIAL_MATRIX.md).
 
 The fantasy page follows the fantasy calendar, not the NFL one:
     W1 draft prep · W2–W14 regular season · W15 playoffs round 1 · W16 semifinals · W17 championship ·
