@@ -4,13 +4,14 @@ the same team in a Madden 27 PC save, retargets the donor's ratings to the Proje
 pipeline/save_reader/save_writer.mjs applies. Reads the database, never writes it; never touches a save itself.
 
   python3 -m pipeline.teleport <snapshot.json> [--season 2036] [--edits edits.json] [--report report.json]
-                               [--age-add N] [--write-ovr]
+                               [--age-add N] [--write-ovr] [--draft draft.json]
 
 <snapshot.json> is pipeline/save_reader/pc_save_reader.mjs's read of the PC save (version 2+). --season is the Project
 Mu season whose rosters move (default league_state.current_season). --age-add adds years to every age (1 if Madden
 has already aged its players into the new league year and Project Mu hasn't). --write-ovr also writes OverallRating,
 OverallGrade0-4 and PlayerType from engines/ovr_weights's predictions, for a Madden that doesn't recompute OVR on load
-(a PC check).
+(a PC check). --draft also teleports the draft class and pick owners (pipeline/teleport_draft.py, from
+pipeline/save_reader/draft_tables.mjs's read of the same save) into the same edits file.
 
 Why same-team only: Madden ties players to teams through each team's Roster and DepthChart lists, not just
 Player.TeamIndex, so moving a player between teams isn't one field. Every Project Mu team has 54-62 players and every
@@ -25,7 +26,8 @@ Donors left over (about 5-10 a team) are reported; releasing them is a later ste
 Per pair the edits set name, age, years pro, jersey, height, weight, dev trait, position / archetype when they change,
 the ratings engines/ovr_weights.adjust_ratings moves to reach the target OVR for the archetype, and PLYR_COMMENT: kept
 when the donor already has the same surname, else 0 (no recorded name; the full surname list and renames come later,
-§4.3). Not yet: contracts (a reference field), portraits, appearance, the draft class and draft picks.
+§4.3). Not yet: contracts (a reference field), portraits, appearance. The draft class and pick owners are
+pipeline/teleport_draft.py (--draft).
 """
 import argparse
 import json
@@ -302,6 +304,7 @@ def main():
     ap.add_argument("--report", help="write the full report (every pair) here")
     ap.add_argument("--age-add", type=int, default=0)
     ap.add_argument("--write-ovr", action="store_true")
+    ap.add_argument("--draft", help="draft_tables.mjs's read of the save: also teleport the draft class and picks")
     a = ap.parse_args()
     with open(a.snapshot) as fh:
         snapshot = json.load(fh)
@@ -315,7 +318,14 @@ def main():
             cur.execute("SELECT current_season FROM league_state WHERE id = 1")
             season = cur.fetchone()[0]
         roster = project_mu_roster(cur, season)
-    edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr)
+        edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr)
+        if a.draft:
+            from pipeline import teleport_draft
+            with open(a.draft) as fh:
+                draft_edits, report["draft"] = teleport_draft.run(cur, snapshot, json.load(fh), doc, season + 1,
+                                                                  a.age_add, a.write_ovr)
+            edits["players"] += draft_edits["players"]
+            edits["records"] = draft_edits["records"]
     report["season"] = season
     if a.edits:
         with open(a.edits, "w") as fh:
@@ -323,8 +333,11 @@ def main():
     if a.report:
         with open(a.report, "w") as fh:
             json.dump(report, fh, indent=1)
-    summary = {k: v for k, v in report.items() if k != "pairs"}
+    summary = {k: v for k, v in report.items() if k not in ("pairs", "draft")}
     summary["unmatched"] = len(report["unmatched"])
+    if "draft" in report:
+        from pipeline import teleport_draft
+        summary["draft"] = teleport_draft.summary(report["draft"])
     print(json.dumps(summary, indent=1))
 
 

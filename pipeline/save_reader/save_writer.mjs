@@ -5,7 +5,8 @@
 //   node save_writer.mjs <CAREER-save> <edits.json> --out <new-save> [--overwrite-out]
 //
 // edits.json: {"players": [{"pgid": 22692, "set": {"FirstName": "Mu", "SpeedRating": 99, "PLYR_COMMENT": 4600}}]}
-// (pgid = Player.PresentationId, field names as in the save's Player table).
+// (pgid = Player.PresentationId, field names as in the save's Player table). An optional "records" list edits other
+// tables by table id and row (record_edits.mjs: draft picks, draft-class rows), with the same checks and read-back.
 //
 // Safety: the input save is never written (it is copied first, and --out may not be the input); --out must not
 // exist unless --overwrite-out. Every edit is checked against the field's schema before anything is set (the
@@ -18,6 +19,7 @@ import { basename, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
 import { fieldValueError } from './lib.mjs';
+import { applyRecordEdits, planRecordEdits, verifyRecordEdits } from './record_edits.mjs';
 
 async function playerTable(franchise) {
   const all = franchise.getAllTablesByName('Player');
@@ -78,8 +80,11 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     copyFileSync(input, work);
     const franchise = await Franchise.create(work, { autoParse: true, saveOnChange: false });
     const { targets, errors } = planEdits(await playerTable(franchise), edits);
+    const records = await planRecordEdits(franchise, edits.records);
+    errors.push(...records.errors);
     if (errors.length) throw new Error(`edits refused, nothing written:\n  ${errors.join('\n  ')}`);
     for (const t of targets) t.record[t.key] = t.value;
+    applyRecordEdits(records.targets);
     const staged = join(dir, 'out');
     await franchise.save(staged);
     renameSync(staged, out);
@@ -95,8 +100,10 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
         mismatches.push(`pgid ${t.pgid} ${t.key}: wrote ${t.value}, read ${r?.[t.key]}`);
       }
     }
+    mismatches.push(...await verifyRecordEdits(check, records.targets));
     if (mismatches.length) throw new Error(`read-back failed:\n  ${mismatches.join('\n  ')}`);
-    return { out, players: new Set(targets.map(t => t.pgid)).size, fields: targets.length, verified: true };
+    return { out, players: new Set(targets.map(t => t.pgid)).size, fields: targets.length,
+      records: new Set(records.targets.map(t => t.where)).size, recordFields: records.targets.length, verified: true };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -121,7 +128,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   }
   try {
     const report = await writeSave(a.save, JSON.parse(readFileSync(a.edits, 'utf8')), a.out, a);
-    console.error(`${report.fields} fields on ${report.players} players written and read back → ${report.out}`);
+    console.error(`${report.fields} fields on ${report.players} players and ${report.recordFields} on ${report.records} other`
+      + ` records written and read back → ${report.out}`);
   } catch (e) {
     console.error(e.message);
     process.exit(1);
