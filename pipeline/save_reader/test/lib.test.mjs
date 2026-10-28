@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  arrayRefs, calendarYear, decodeRef, fieldValueError, isExportableGame, isRefValue, numberedFields, pickRatings, plainFields, weightLbs,
+  arraySlots, arrayRefs, calendarYear, decodeRef, encodeRef, fieldValueError, isExportableGame, isRefValue, NO_REF,
+  numberedFields, packedRefs, packRefs, pickRatings, plainFields, weightLbs, withoutRefs,
 } from '../lib.mjs';
 
 test('decodeRef splits 15 table bits and 17 row bits', () => {
@@ -78,4 +79,28 @@ test('fieldValueError checks enums, hides sentinel members and refuses reference
   assert.match(fieldValueError(dev, 'Invalid_'), /not one of Normal, Star, XFactor/);
   assert.match(fieldValueError({ type: 'PlayerContract', isReference: true }, '0'.repeat(32)), /reference/);
   assert.match(fieldValueError({ type: 'float' }, 1.5), /not writable/);
+});
+
+test('encodeRef is the inverse of decodeRef', () => {
+  assert.equal(encodeRef(4164, 226), '00100000100010000000000011100010');
+  assert.deepEqual(decodeRef(encodeRef(4236, 3086)), { table: 4236, row: 3086 });
+  assert.throws(() => encodeRef(0, 1));
+  assert.throws(() => encodeRef(4236, 2 ** 17));
+});
+
+test('arraySlots orders Player0..N by number', () => {
+  assert.deepEqual(arraySlots(['Player10', 'Player2', 'Player0', 'Player1']), ['Player0', 'Player1', 'Player2', 'Player10']);
+});
+
+test('packedRefs, packRefs and withoutRefs keep slot order', () => {
+  const [a, b, c] = [encodeRef(4236, 1), encodeRef(4236, 2), encodeRef(4236, 3)];
+  assert.deepEqual(packedRefs([a, b, NO_REF]), { refs: [decodeRef(a), decodeRef(b)], packed: true });
+  assert.equal(packedRefs([a, NO_REF, c]).packed, false);
+  assert.deepEqual(packRefs([decodeRef(c), decodeRef(a)], 3), [c, a, NO_REF]);
+  assert.throws(() => packRefs([decodeRef(a), decodeRef(b)], 1));
+  const isB = r => r.row === 2;
+  assert.deepEqual(withoutRefs([a, b, c, NO_REF], isB), [a, c, NO_REF, NO_REF]);
+  // A hole keeps its place among the other entries (NYJ QB: starter, backup, empty, third).
+  assert.deepEqual(withoutRefs([b, a, NO_REF, c], isB), [a, NO_REF, c, NO_REF]);
+  assert.deepEqual(withoutRefs([a, c], isB), [a, c]);
 });

@@ -4,10 +4,13 @@
 //
 //   node save_writer.mjs <CAREER-save> <edits.json> --out <new-save> [--overwrite-out]
 //
-// edits.json: {"players": [{"pgid": 22692, "set": {"FirstName": "Mu", "SpeedRating": 99, "PLYR_COMMENT": 4600}}]}
-// (pgid = Player.PresentationId, field names as in the save's Player table). An edit's optional "contract" block,
-// {"Length": 4, "CurrentYear": 0, "SalaryYear0": 1050, ...}, sets fields of the player's own PlayerContract record in
-// place (contract_edits.mjs; money in $10,000 units), with the same checks and read-back.
+// edits.json: {"players": [{"pgid": 22692, "set": {"FirstName": "Mu", "SpeedRating": 99, "PLYR_COMMENT": 4600}}],
+//              "release": [12345, ...]}
+// (pgid = Player.PresentationId, field names as in the save's Player table). "release" sends rostered players to free
+// agency (release.mjs: status, team, contract, team lists and depth charts, the free-agent list, roster counts).
+// An edit's optional "contract" block, {"Length": 4, "CurrentYear": 0, "SalaryYear0": 1050, ...}, sets fields of the
+// player's own PlayerContract record in place (contract_edits.mjs; money in $10,000 units), with the same checks and
+// read-back.
 // An optional "records" list edits other tables by table id and row (record_edits.mjs: draft picks, draft-class
 // rows), with the same checks and read-back.
 //
@@ -24,6 +27,7 @@ import Franchise from 'madden-franchise';
 import { fieldMeta, fieldValueError } from './lib.mjs';
 import { contractRecordOf, planContractEdits } from './contract_edits.mjs';
 import { applyRecordEdits, planRecordEdits, verifyRecordEdits } from './record_edits.mjs';
+import { applyRelease, planRelease, releaseSummary, verifyRelease } from './release.mjs';
 
 async function playerTable(franchise) {
   const all = franchise.getAllTablesByName('Player');
@@ -77,9 +81,13 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     errors.push(...contract.errors);
     const records = await planRecordEdits(franchise, edits.records);
     errors.push(...records.errors);
+    const release = edits.release?.length
+      ? await planRelease(franchise, edits.release, { exclude: new Set(targets.map(t => t.pgid)) }) : null;
+    errors.push(...(release?.errors ?? []));
     if (errors.length) throw new Error(`edits refused, nothing written:\n  ${errors.join('\n  ')}`);
     for (const t of targets) t.record[t.key] = t.value;
     applyRecordEdits(records.targets);
+    if (release) applyRelease(release.plan);
     const staged = join(dir, 'out');
     await franchise.save(staged);
     renameSync(staged, out);
@@ -97,10 +105,12 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
       }
     }
     mismatches.push(...await verifyRecordEdits(check, records.targets));
+    if (release) mismatches.push(...await verifyRelease(check, release.plan));
     if (mismatches.length) throw new Error(`read-back failed:\n  ${mismatches.join('\n  ')}`);
     return { out, players: new Set(targets.map(t => t.pgid)).size, fields: targets.length,
       contracts: new Set(targets.filter(t => t.contract).map(t => t.pgid)).size,
-      records: new Set(records.targets.map(t => t.where)).size, recordFields: records.targets.length, verified: true };
+      records: new Set(records.targets.map(t => t.where)).size, recordFields: records.targets.length,
+      release: release ? releaseSummary(release.plan) : null, verified: true };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -127,6 +137,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     const report = await writeSave(a.save, JSON.parse(readFileSync(a.edits, 'utf8')), a.out, a);
     console.error(`${report.fields} fields on ${report.players} players (${report.contracts} contracts) and `
       + `${report.recordFields} on ${report.records} other records written and read back → ${report.out}`);
+    if (report.release) console.error(`released to free agency: ${JSON.stringify(report.release)}`);
   } catch (e) {
     console.error(e.message);
     process.exit(1);

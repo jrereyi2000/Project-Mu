@@ -5,6 +5,7 @@ pipeline/save_reader/save_writer.mjs applies. Reads the database, never writes i
 
   python3 -m pipeline.teleport <snapshot.json> [--season 2036] [--edits edits.json] [--report report.json]
                                [--age-add N] [--write-ovr] [--contract-years-add N] [--draft draft.json]
+                               [--release]
 
 <snapshot.json> is pipeline/save_reader/pc_save_reader.mjs's read of the PC save (version 2+). --season is the Project
 Mu season whose rosters move (default league_state.current_season). --age-add adds years to every age (1 if Madden
@@ -14,6 +15,8 @@ OverallGrade0-4 and PlayerType from engines/ovr_weights's predictions, for a Mad
 --season's).
 --draft also teleports the draft class and pick owners (pipeline/teleport_draft.py, from
 pipeline/save_reader/draft_tables.mjs's read of the same save) into the same edits file.
+--release also puts the leftover donors in the edits as "release": [pgid, ...], which save_writer.mjs
+sends to free agency (pipeline/save_reader/release.mjs); opt-in until the PC checks show Madden accepts the result.
 
 Why same-team only: Madden ties players to teams through each team's Roster and DepthChart lists, not just
 Player.TeamIndex, so moving a player between teams isn't one field. Every Project Mu team has 54-62 players and every
@@ -23,7 +26,8 @@ identity swap. Per team the pairing is an optimal assignment (scipy linear_sum_a
   same position, another archetype      + 15  (PlayerType rewritten)
   a neighbouring position (LT/RT, ...)  + 40  (Position rewritten)
   anything else                         + 120
-Donors left over (about 5-10 a team) are reported; releasing them is a later step.
+Donors left over (about 5-10 a team) are listed in the report (leftover_donors) and released with --release, so each
+team's Roster and PracticeSquad end up holding exactly its Project Mu players.
 
 Per pair the edits set name, age, years pro, jersey, height, weight, dev trait, position / archetype when they change,
 the ratings engines/ovr_weights.adjust_ratings moves to reach the target OVR for the archetype, and PLYR_COMMENT: kept
@@ -241,12 +245,13 @@ def donors_by_team(snapshot):
         if p["status"] in DONOR_STATUSES and p["team_index"] < 32:
             by_team[p["team_index"]].append({
                 "pgid": p["pgid"], "position": p["position"], "archetype": p["archetype"], "overall": p["overall"],
-                "ratings": p["ratings"], "last_name": p["last_name"], "commentary_id": p["appearance"]["commentary_id"]})
+                "ratings": p["ratings"], "first_name": p.get("first_name"), "last_name": p["last_name"],
+                "status": p["status"], "commentary_id": p["appearance"]["commentary_id"]})
     return by_team, lambda abbr: index.get(from_abbr.get(abbr, abbr))
 
 
-def teleport(snapshot, roster, doc, age_add=0, write_ovr=False):
-    """(edits for save_writer, report)."""
+def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False):
+    """(edits for save_writer, report). With `release` the edits also release the leftover donors."""
     by_team, team_index = donors_by_team(snapshot)
     roster = [m for m in roster if m["position"] not in SKIP_POSITIONS]
     for m in roster:
@@ -261,15 +266,18 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False):
         else:
             teams[ti].append(m)
 
-    edits, pairs, unmatched, leftover = [], [], [], 0
+    edits, pairs, unmatched, leftover = [], [], [], []
     kinds, notes_count, ovr_moves = Counter(), Counter(), []
-    for ti, mu_players in sorted(teams.items()):
-        donors = by_team.get(ti, [])
+    short_name = {t["team_index"]: t["short_name"] for t in snapshot["teams"]}
+    for ti in sorted(set(teams) | set(by_team)):        # a Madden team without Project Mu players loses every donor
+        mu_players, donors = teams.get(ti, []), by_team.get(ti, [])
         matched = match_team(mu_players, donors, doc)
         used = {d["pgid"] for _, d in matched}
         got = {id(m) for m, _ in matched}
         unmatched += [f"{m['team']} {m['player_name']} {m['position']}" for m in mu_players if id(m) not in got]
-        leftover += len(donors) - len(used)
+        leftover += [{"pgid": d["pgid"], "team": short_name.get(ti), "position": d["position"],
+                      "name": f"{d['first_name'] or ''} {d['last_name']}".strip(), "overall": d["overall"],
+                      "status": d["status"]} for d in donors if d["pgid"] not in used]
         for m, d in matched:
             edit, notes = player_edit(m, d, doc, age_add, write_ovr)
             edits.append(edit)
@@ -289,15 +297,20 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False):
     moves = np.array(ovr_moves) if ovr_moves else np.zeros(1)
     report = {
         "season_players": len(roster), "matched": len(pairs), "unmatched": unmatched,
-        "unknown_teams": dict(unknown_teams), "donors_left_over": leftover, "match_kinds": dict(kinds),
+        "unknown_teams": dict(unknown_teams), "donors_left_over": len(leftover), "match_kinds": dict(kinds),
         "notes": dict(notes_count),
         "rating_points_moved": {"median": float(np.median(moves)), "p90": float(np.percentile(moves, 90)),
                                 "max": float(moves.max())},
         "no_archetype_match": sum(1 for m in roster if m["madden_archetype"] is None),
         "commentary_kept": sum(1 for e in edits if e["set"].get("PLYR_COMMENT")),
+        "released": len(leftover) if release else 0,
         "pairs": pairs,
+        "leftover_donors": leftover,
     }
-    return {"players": edits}, report
+    out = {"players": edits}
+    if release:
+        out["release"] = [d["pgid"] for d in leftover]
+    return out, report
 
 
 def main():
@@ -311,6 +324,7 @@ def main():
     ap.add_argument("--write-ovr", action="store_true")
     ap.add_argument("--contract-years-add", type=int, default=0)
     ap.add_argument("--draft", help="draft_tables.mjs's read of the save: also teleport the draft class and picks")
+    ap.add_argument("--release", action="store_true", help="release the leftover donors to free agency")
     a = ap.parse_args()
     with open(a.snapshot) as fh:
         snapshot = json.load(fh)
@@ -325,7 +339,7 @@ def main():
             season = cur.fetchone()[0]
         roster = project_mu_roster(cur, season)
         contracts = teleport_contracts.load_contracts(cur, season)
-        edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr)
+        edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr, a.release)
         report["contracts"] = teleport_contracts.add_contracts(edits, report, contracts, snapshot, a.contract_years_add)
         if a.draft:
             from pipeline import teleport_draft
@@ -341,7 +355,7 @@ def main():
     if a.report:
         with open(a.report, "w") as fh:
             json.dump(report, fh, indent=1)
-    summary = {k: v for k, v in report.items() if k not in ("pairs", "draft")}
+    summary = {k: v for k, v in report.items() if k not in ("pairs", "draft", "leftover_donors")}
     summary["unmatched"] = len(report["unmatched"])
     if "draft" in report:
         from pipeline import teleport_draft

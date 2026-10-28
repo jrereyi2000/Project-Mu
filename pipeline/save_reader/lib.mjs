@@ -6,6 +6,48 @@ export function decodeRef(bits) {
   return { table: parseInt(bits.slice(0, 15), 2), row: parseInt(bits.slice(15), 2) };
 }
 
+export const NO_REF = '0'.repeat(32);
+
+// The inverse of decodeRef (release.mjs writes references into Player[] arrays).
+export function encodeRef(table, row) {
+  if (!Number.isInteger(table) || table < 1 || table >= 2 ** 15 || !Number.isInteger(row) || row < 0 || row >= 2 ** 17) {
+    throw new Error(`not a reference: table ${table}, row ${row}`);
+  }
+  return table.toString(2).padStart(15, '0') + row.toString(2).padStart(17, '0');
+}
+
+// An array record's slot fields (Player0, Player1, ..., Player99) in index order; Object.keys order isn't promised.
+export function arraySlots(fieldNames) {
+  return fieldNames
+    .map(k => [k, /(\d+)$/.exec(k)])
+    .filter(([, m]) => m)
+    .sort((a, b) => Number(a[1][1]) - Number(b[1][1]))
+    .map(([k]) => k);
+}
+
+// Madden packs arrays like Team.Roster from slot 0 with no gaps (checked on every team in the sample save). Given the
+// slot values in order, returns the refs and whether they are packed.
+export function packedRefs(values) {
+  const refs = values.map(decodeRef);
+  const n = refs.findIndex(r => !r);
+  const count = n === -1 ? refs.length : n;
+  return { refs: refs.slice(0, count), packed: refs.slice(count).every(r => !r) };
+}
+
+// Slot values with every reference `drop(ref)` picks taken out and the later slots moved up, empty slots at the end.
+// Holes elsewhere stay where they are relative to the other entries (5 of 1,120 depth-chart lists in the sample save
+// have one, e.g. NYJ QB: starter, backup, empty, third).
+export function withoutRefs(values, drop) {
+  const kept = values.filter(v => { const r = decodeRef(v); return !(r && drop(r)); });
+  return [...kept, ...Array(values.length - kept.length).fill(NO_REF)];
+}
+
+// Slot values for `refs` packed from slot 0 into `slots` slots, the rest empty.
+export function packRefs(refs, slots) {
+  if (refs.length > slots) throw new Error(`${refs.length} references don't fit ${slots} slots`);
+  return Array.from({ length: slots }, (_, i) => (i < refs.length ? encodeRef(refs[i].table, refs[i].row) : NO_REF));
+}
+
 export function isRefValue(value) {
   return typeof value === 'string' && /^[01]{32}$/.test(value);
 }
