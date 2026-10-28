@@ -57,18 +57,32 @@ class GeminiText:
             return None
 
 
-def make_llm(label, model=DEFAULT_MODEL, enabled=True, thinking_level=None, client=None):
+def make_llm(label, model=DEFAULT_MODEL, enabled=True, thinking_level=None, client=None,
+             provider=None, fallback_model=None):
     """The live prompt -> text callable, or None (template fallback) when disabled, without a key, or when the
-    SDK can't load."""
+    provider is unavailable."""
     if not enabled:
         return None
+    from engines.llm_provider import resolve_provider, ProviderText
+    prov = resolve_provider(label=label, model=model, provider=provider)
     key = api_key()
-    if not key and client is None:
+    if prov == "gemini" and not key and client is None:
         return None
     try:
+        if prov == "ollama":
+            return ProviderText(
+                label=label,
+                source=label,
+                model=model,
+                provider="ollama",
+                fallback_model=fallback_model,
+                thinking_level=thinking_level,
+                client=client,
+                api_key=key,
+            )
         return GeminiText(key, label, model, thinking_level=thinking_level, client=client)
     except Exception as e:
-        print(f"[gm_llm] Gemini unavailable, using templates: {e}", flush=True)
+        print(f"[gm_llm] LLM unavailable, using templates: {e}", flush=True)
         return None
 
 

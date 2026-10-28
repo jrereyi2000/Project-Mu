@@ -204,16 +204,102 @@ def usage_dict(response) -> dict:
 
 
 def cost_usd(model: str, usage: dict) -> float:
+    if model and (model.startswith("ollama/") or model.startswith("ollama:")):
+        return 0.0
     pin, pout = PRICES.get(model, (0.0, 0.0))
     return (usage["input"] * pin + (usage["output"] + usage["thinking"]) * pout) / 1_000_000
 
 
 def write_post(client, model: str, system: str, prompt: str, temperature: float = 0.9, fantasy_active: bool = True,
-               allowed=None, rumor: bool = False) -> dict:
-    """One Gemini call (no tools); `model` may carry a thinking level ("gemini-3.8-flash:low"). If the post runs over 280 characters, names a dollar figure that isn't in its
-    facts (`allowed`, the money guard) or words a rumor as a done deal (`rumor`), asks once for a rewrite.
+               allowed=None, rumor: bool = False, provider: str | None = None,
+               fallback_model: str | None = None, label: str | None = None) -> dict:
+    """One LLM call (no tools); supports Gemini or local Ollama with fallback to Gemini on network/timeout errors.
+    If the post runs over 280 characters, names an ungrounded dollar figure, or frames a rumor as a done deal,
+    asks once for a rewrite. Never falls back on bad answer / validation failure.
     Returns {"raw", "text", "hashtags", "problems", "usage", "cost_usd", "seconds", "calls"}."""
+    from engines.llm_provider import (
+        resolve_provider, resolve_model, resolve_fallback_model,
+        call_ollama, OLLAMA_FALLBACK_EXCEPTIONS,
+    )
+    from db.llm_usage import log_usage
+
+    prov = resolve_provider(label="agent_wire", model=model, provider=provider)
+
+    if prov == "ollama":
+        ollama_model = resolve_model("ollama", label="agent_wire", model=model)
+        fb_model = resolve_fallback_model(label="agent_wire", fallback_model=fallback_model)
+        start = time.time()
+        usage_total = {"input": 0, "cached": 0, "output": 0, "thinking": 0}
+
+        def _log_ollama_call(usage, call_label):
+            meter = getattr(client, "_usage_meter", None)
+            if meter is not None:
+                meter.add_call(usage, model=f"ollama/{ollama_model}", label=call_label or getattr(meter._local, "label", None), source="agent_wire")
+            else:
+                log_usage(source="agent_wire", label=call_label or label or "post", model=f"ollama/{ollama_model}",
+                          input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"])
+
+        def _call_ollama(msgs):
+            text, usage = call_ollama(model=ollama_model, messages=msgs, temperature=temperature)
+            usage_total["input"] += usage["input_tokens"]
+            usage_total["output"] += usage["output_tokens"]
+            return text, usage
+
+        try:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ]
+            raw, u1 = _call_ollama(messages)
+            _log_ollama_call(u1, label)
+        except OLLAMA_FALLBACK_EXCEPTIONS as e:
+            print(f"[social_writer] Ollama ({ollama_model}) unreachable or timed out ({type(e).__name__}: {e}). "
+                  f"Falling back to Gemini ({fb_model}).", flush=True)
+            return write_post(client, fb_model, system, prompt, temperature=temperature,
+                              fantasy_active=fantasy_active, allowed=allowed, rumor=rumor,
+                              provider="gemini", label=label)
+
+        post = clean_post(raw, fantasy_active=fantasy_active, allowed=allowed, rumor=rumor)
+        calls = 1
+        too_long = any("over 280" in p for p in post["problems"])
+        money = [p for p in post["problems"] if p.startswith(MONEY_PROBLEM)]
+        done = [p for p in post["problems"] if p.startswith(RUMOR_PROBLEM)]
+        if too_long or money or done:
+            asks = []
+            if too_long:
+                asks.append(f"That is {len(post['text'])} characters. Rewrite it in under 260 characters.")
+            if money:
+                asks.append(f"It names a dollar figure that isn't in FACTS ({money[0].split(': ', 1)[1]}). Use only the "
+                            "figures in FACTS, or none.")
+            if done:
+                asks.append("It says the trade happened, but this is a rumor: only talks. Word it as talks, not a deal.")
+            rewrite_prompt = " ".join(asks) + " Same voice. Output only the post."
+            rewrite_messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": rewrite_prompt},
+            ]
+            try:
+                raw2, u2 = _call_ollama(rewrite_messages)
+                _log_ollama_call(u2, f"{label or ''} rewrite".strip())
+                calls = 2
+                post2 = clean_post(raw2, fantasy_active=fantasy_active, allowed=allowed, rumor=rumor)
+                post2["problems"] = [f"rewritten once for {' and '.join(x for x, on in (('length', too_long), ('money', money), ('rumor wording', done)) if on)}"] + post2["problems"]
+                raw, post = raw2, post2
+            except OLLAMA_FALLBACK_EXCEPTIONS as e:
+                print(f"[social_writer] Ollama rewrite failed ({type(e).__name__}: {e}); keeping initial post.", flush=True)
+
+        return {"raw": raw, **post, "usage": usage_total, "cost_usd": 0.0,
+                "seconds": round(time.time() - start, 2), "calls": calls}
+
+    # Gemini provider flow
     from engines.llm_config import make_content_config
+
+    if client is None:
+        from google import genai
+        key = load_api_key()
+        client = genai.Client(api_key=key)
 
     config, model = make_content_config(model=model, system_instruction=system, temperature=temperature)
     start = time.time()

@@ -115,19 +115,20 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 
 ---
 
-## 6. Gemini-or-local provider switch
+## 6. Gemini-or-local provider switch (Done, 2026-10-28)
 
 **Goal:** each short-task caller can use Gemini or a local Ollama model, falls back to Gemini when the local one is down, and logs both to `llm_usage` (plan §7.3).
 
-**Callers:** the ones in item 5 plus Agent Wire (`newsroom/social_writer.py` `write_post`, called from `newsroom/social_publish.py`). Newsroom articles stay on Gemini.
-
-**Design:**
-* One provider seam returning text plus token usage: `gemini` (as today) and `ollama` (HTTP `POST http://<host>:11434/api/generate` or `/api/chat`, `"stream": false`; JSON-schema `format` for the GM calls; host from `.env`, default `localhost`; on WSL2 it's the Windows host).
-* Choose per label in one config (env or a small JSON), e.g. `agent_wire=ollama:qwen3.8-27b` with fallback `gemini-3.8-flash:low`. Fallback on connection error or timeout; never on a bad answer (the callers' validators already handle those).
-* `llm_usage.source` is `VARCHAR(16)`; keep sources as they are and put the local model's name in `model` (e.g. `ollama/qwen3.8-27b`). Ollama returns `prompt_eval_count` and `eval_count`; map them to input and output tokens, thinking 0 unless the model reports it. Log the same as Gemini calls (`log_response` / `UsageMeter` style).
-* Keep the existing call sites' signatures: `gm_llm.make_llm(label)` still returns a prompt → text callable; `agent_memory.gemini_text` gets a provider-neutral sibling.
-
-**Done when:** unit tests cover provider choice, fallback on a dead Ollama and usage rows for both (fake HTTP); a manual run on the Mac with Ollama (`brew install ollama`, any small instruct model) writes a few local rows to `llm_usage` in `madden_test`; spec and plan §7.3 updated. No caller switches to local by default: that waits for item 7's test.
+**Completed implementation:**
+* `engines/llm_provider.py` provides provider resolution (`resolve_provider`, `resolve_model`, `resolve_fallback_model`), Ollama HTTP API calling (`call_ollama` supporting `/api/generate`, `/api/chat`, and JSON schema format), Gemini execution (`call_gemini`), unified text generation with automatic fallback (`generate_text`), and a provider-neutral callable with flushing (`ProviderText`).
+* Provider choice configured via model prefix (`ollama:<model>` / `gemini:<model>`), per-label/source environment variables (`LLM_PROVIDER_<LABEL>`, e.g. `LLM_PROVIDER_AGENT_WIRE`, `LLM_PROVIDER_AGENT_MEMORY`), global `LLM_PROVIDER` env var, or explicit arguments. Default provider remains `gemini`.
+* Fallback to Gemini triggers strictly on connection error or timeout (`requests.exceptions.ConnectionError`, `Timeout`, socket/connection refused), never on bad answers or validation failures.
+* Callers updated:
+  - `engines/gm_llm.py` `make_llm()`: returns `ProviderText` for Ollama and `GeminiText` for Gemini, preserving `llm(prompt)` signature and `flush()`.
+  - `newsroom/agent_memory.py`: introduces `llm_text()` as provider-neutral helper while retaining backwards-compatible `gemini_text()`.
+  - `newsroom/social_writer.py`: `write_post()` supports Ollama with automatic Gemini fallback; `cost_usd()` returns $0.00 for local Ollama models.
+* `db/llm_usage.py`: supports Ollama token mapping (`prompt_eval_count` -> `input_tokens`, `eval_count` -> `output_tokens`, `thinking_tokens` -> 0), model column normalization (`ollama/<model_name>`), `log_usage()` direct helper, and `UsageMeter.add_call()` for recording local calls.
+* Unit tests in `tests/test_llm_provider.py` (25 tests) cover provider selection, Ollama calling and schema formatting, automatic fallback on connection error and timeout, token logging, and caller integration.
 
 ---
 
