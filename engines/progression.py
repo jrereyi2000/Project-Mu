@@ -1,5 +1,5 @@
 """
-Player Progression Engine (docs/in_progress/PROGRESSION_PLAN.md §5; PROJECT_SPEC §2.20; PRE_PC_WORK.md §11).
+Player Progression Engine (docs/in_progress/PROGRESSION_PLAN.md §5; PROJECT_SPEC §2.21; docs/done/PRE_PC_WORK.md §11).
 
 Decides each player's yearly OVR change and spreads it over individual ratings offline, backtested against
 what Madden 27 did on the 2035->2036 offseason.
@@ -12,13 +12,17 @@ Two Layers (§5.1):
           + play(starts / games played)   # performance and playing time proxy (snaps/starts)
           + injury(games missed, IR)      # missed time and physical setbacks
           + ε_i                           # deterministic seeded noise: Random(f"prog:{season}:{player_id}").gauss(0, 1.0)
+          + offset(age band)              # AGE_BAND_OFFSET, calibration to Madden's 2035->2036 offseason
+          + league                        # league-shape term holding the 2036 shape (calibrate_league_term)
+          + performance                   # last season's production rank + awards (performance_scores)
    Clamped per age band and OVR band. Each term stored in breakdown dict for newsroom citations.
 
 2. Ratings Layer (§5.4):
-   - Physical ratings (SPD, ACC, STR, AGI, COD, JMP, STA) follow age decline curves and injury setbacks.
-   - Skill and mental ratings (AWR, PRC, accuracy, coverage, blocking) develop later and improve with experience.
+   - Speed, Agility, Acceleration, Jumping and ChangeOfDirection decline with age; Speed and Strength grow a little
+     at 24 and under; injuries lower Speed and Acceleration.
    - Adjusts archetype 'skills' via engines.ovr_weights.adjust_ratings to reach target OVR, verifying
-     the archetype remains on top with settle_archetype / predict_ovr.
+     the archetype remains on top with settle_archetype / predict_ovr. The skills include Awareness and often
+     Speed, so the OVR change lands on them too; the plan's rating groups (phase C2) replace this.
 
 CLI & Modes:
   python3 -m engines.progression --season 2037 [--commit] [--dry-run]

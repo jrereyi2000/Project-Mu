@@ -247,12 +247,12 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
    - Skill ratings adjusted via `engines/ovr_weights.adjust_ratings` to reach target OVR, verified with `settle_archetype` and `predict_ovr` so the primary archetype remains on top.
 3. **CLI & Engine Interface:**
    - `python3 -m engines.progression --season S [--commit] [--dry-run]`
-   - `--backtest`: 2035→2036 backtest across 1,385 matched players: predicted mean ΔOVR is -0.095 vs actual -0.147 (difference 0.052, within the 0.15 limit); MAE 1.119; RMSE 1.491; within ±1 accuracy 73.0%.
-   - `--simulate 5`: 5-season forward simulation verifies league stability bounds (§5.5): 90+ player count stays in [45, 180] (Season 5: 54), starter average OVR stays in [80.5, 88.0] (Season 5: 81.46), average league OVR stays in [74.0, 80.5] (Season 5: 75.19), average age in [25.5, 28.5] (Season 5: 27.41).
+   - `--backtest`: 2035→2036 backtest across 1,385 matched players: predicted mean ΔOVR is -0.095 vs actual -0.147 (difference 0.052, within the 0.15 limit); MAE 1.119; RMSE 1.491; within ±1 accuracy 73.0%. *(First build. After the R6 age-band calibration: −0.159 vs −0.147, MAE 1.134, 71.7% within ±1; current figures in PROJECT_SPEC §2.21.)*
+   - `--simulate 5`: 5-season forward simulation verifies league stability bounds (§5.5): 90+ player count stays in [45, 180] (Season 5: 54), starter average OVR stays in [80.5, 88.0] (Season 5: 81.46), average league OVR stays in [74.0, 80.5] (Season 5: 75.19), average age in [25.5, 28.5] (Season 5: 27.41). *(First build, before the league term; R6 found these bounds too wide. With the league term and bounds relative to 2036: 90+ count 143–148, mean OVR 78.05–78.21.)*
 4. **Database Storage:**
    - Migration `db/migrations/2027_01_08_player_progression.sql` created `player_progression_history` and `player_ceilings`, tested and verified on `madden_test`.
 5. **Testing:**
-   - `tests/test_progression.py`: 8 tests covering terms, clamping, reproducible seeding, ratings adjustments, simulation stability, backtest accuracy, and database persistence.
+   - `tests/test_progression.py`: 8 tests covering terms, clamping, reproducible seeding, ratings adjustments, simulation stability, backtest accuracy, and database persistence (15 after R6 and the performance term).
 
 
 ---
@@ -346,7 +346,7 @@ Docs only, `docs/in_progress/PC_MIGRATION_PLAN.md`:
 
 **Bug fixed:** the §5.5 drift correction added 0.1–0.4 to a whole-point OVR before rounding, which never changed anything. It is now a seeded chance of one extra point, and it works, but at its ±0.4 cap it can't offset ~1.5 OVR a year of turnover; `--simulate 5` reports DRIFT.
 
-**JR decided (2026-10-28): keep the 2036 shape.** Built: per-age-band calibration to Madden (backtest within ~0.1 per band; the 30–33 decline now matches) and a two-part league term (development for young sub-star players, a star term for 86+ players 32 and under) fitted each offseason against the projected post-draft league; 90+ count 139–147 and mean 78.1 over five simulated seasons. Details in PROGRESSION_PLAN §5.5.
+**JR decided (2026-10-28): keep the 2036 shape.** Built: per-age-band calibration to Madden (backtest within ~0.1 per band; the 30–33 decline now matches) and a two-part league term (development for young sub-star players, a star term for 86+ players 32 and under) fitted each offseason against the projected post-draft league; 90+ count 139–147 and mean 78.1 over five simulated seasons (143–148 and 78.05–78.21 once the performance term was added). Details in PROGRESSION_PLAN §5.5.
 
 ## R7. [x] `save_writer.mjs` takes over 10 minutes once skin tones are written
 
