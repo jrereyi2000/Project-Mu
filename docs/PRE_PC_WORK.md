@@ -254,3 +254,83 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 5. **Testing:**
    - `tests/test_progression.py`: 8 tests covering terms, clamping, reproducible seeding, ratings adjustments, simulation stability, backtest accuracy, and database persistence.
 
+
+---
+
+# Review fixes (2026-10-28)
+
+Found in the review of items 1–11. Same rules as above (top of this file). **Do not write to the live `madden` database** in any of these, except the read-only checks named below; applying migrations to live and deleting rows there is JR's call and is not part of these fixes. Each fix has a **Verify** line: the exact check the reviewer will run.
+
+## R1. GM books break when the persona tables are missing (blocker)
+
+**Bug:** `engines/gm_trade_engine.py` `read_books()` (added in 4174ac5) runs `SELECT … FROM persona_sliders` / `persona_traits` inside `try/except Exception`. On a database without those tables (live `madden` today) psycopg raises `UndefinedTable`, the except swallows it, but the transaction is now aborted: every later query on that connection fails with `InFailedSqlTransaction`. `read_books` is used by `engines/front_office.py` (3 places, the front-office API), `engines/gm_negotiation.py` (live negotiations) and `gm_trade_engine.py` itself (weekly GM step, draft day, rechecks). The same pattern is in `newsroom/personas.py` `get_persona()` and `load_personas()` when given a `cur`, which `engines/gm_personas.py` `get_gm_persona()` passes.
+
+**Fix:**
+* Add one helper (e.g. `newsroom/personas.py` `persona_tables_exist(cur)`: `SELECT to_regclass('public.persona_sliders') IS NOT NULL AND to_regclass('public.persona_traits') IS NOT NULL`, plus `persona_views` / `persona_relationships` where those are read). `to_regclass` never raises, so it can't abort the transaction.
+* In `read_books`, `get_persona` and `load_personas`, skip the persona queries when the tables don't exist and use the existing fallbacks (seeded sliders/traits for GMs, JSON for writers).
+* Where a persona query can still fail for another reason, run it inside a savepoint (`with cur.connection.transaction():` in psycopg 3) so a failure rolls back only that block. Don't leave any bare `except Exception: pass` around SQL.
+* Check the rest of 4174ac5, efe1f64 and cf7e46e for the same pattern (`grep -n "except Exception" ` near `cur.execute`) and fix any that touch tables live doesn't have (`persona_*`, `league_memory`, `player_progression_history`, `player_ceilings`, `player_name_aliases`).
+
+**Tests:** a test whose cursor raises `psycopg.errors.UndefinedTable` on the persona query (or a scratch DB without the tables) and then asserts a following query still works and `read_books` returns GM entries with seeded personas.
+
+**Verify (read-only, on live, rolled back):**
+```python
+import psycopg; from engines import gm_trade_engine as g
+conn = psycopg.connect("host=localhost dbname=madden user=postgres password=postgres")
+with conn.cursor() as cur:
+    b = g.read_books(cur, 2036, 22); print(len(b["gm"])); cur.execute("select 1")
+conn.rollback(); conn.close()
+```
+must print 32 (or the GM count) with no error.
+
+## R2. Player search breaks when `player_name_aliases` is missing (blocker)
+
+**Bug:** 396eee1 added `OR EXISTS (SELECT 1 FROM player_name_aliases …)` to `server/api.py` `search_global` (~line 2832) and `server/napper_api.py` `get_available_players` (~line 2719). Live has no such table, so both queries fail with `relation "player_name_aliases" does not exist`.
+
+**Fix:** decide once per process whether the table exists (`to_regclass('public.player_name_aliases')`, cached, re-checked if `None` so it starts working after JR applies the migration without a restart being strictly required), and only add the alias clause (and its extra parameter) when it does. Keep the `player_name ILIKE` clause either way. Apply the same guard to any other reader of the table (`grep -rn player_name_aliases server newsroom engines pipeline`); `pipeline/commentary_names.py apply` may keep requiring it but must fail with a clear "apply db/migrations/2027_01_07_player_name_aliases.sql first" message.
+
+**Tests:** both endpoints with the table absent and present (integration tests on `madden_test` can drop and recreate the table inside a transaction, or unit tests with a fake cursor checking the SQL built).
+
+**Verify:** with the server code imported against live, `search_global(q="smith")` and Napper's available-players search with `search="smith"` return rows without error (read-only calls), and the same on `madden_test` finds a player by an alias inserted in a rolled-back transaction.
+
+## R3. `test_llm_config.py` writes fake usage rows to the real database
+
+**Bug:** since 972a152 `newsroom/agent_memory.gemini_text` goes through `engines/llm_provider.py`, which does `from db.llm_usage import log_response, log_usage …` at import. `tests/test_llm_config.py` patches `db.llm_usage.log_response`, which no longer affects the bound name in `llm_provider`. Under pytest the live-DB firewall blocks the insert, but run any other way (`python -m unittest`, the agent's own runs) the fake calls insert rows: 6 rows in live `llm_usage` on 2026-10-28 14:42–14:46 UTC with `input_tokens=100, output_tokens=50, thinking_tokens=120`, labels `takes #1` / `summary agent`.
+
+**Fix:** patch where the name is used (`engines.llm_provider.log_response` and `.log_usage`) in every test that drives a provider call (`tests/test_llm_config.py`, `tests/test_llm_provider.py`, `tests/test_llm_compare.py`, `tests/test_league_memory.py`; grep for `log_response`/`log_usage`/`UsageMeter`). Better still, add an autouse fixture in `tests/conftest.py` that replaces `db.llm_usage` logging (and the bound copies) with a no-op recorder for unit tests, so no future test can log.
+
+**Do not** delete the 6 rows; list them in the commit message for JR.
+
+**Verify:** `python3 -m unittest tests.test_llm_config tests.test_llm_provider` (outside pytest) adds no rows: `SELECT count(*) FROM llm_usage WHERE created_at > now() - interval '5 minutes'` on live is unchanged before/after.
+
+## R4. `test_madden_capture.py::test_live_stream_failure_stops` depends on chiaki-ng running
+
+**Bug:** `madden_capture.recover_stream` treats `not chiaki_running()` as a crashed stream and restarts. The test mocks `stream_frozen` but not `chiaki_running`, so it passes only while chiaki-ng is open; with it closed, `restart_stream` is called 8 times and the test fails. The code is right; the test is incomplete.
+
+**Fix:** mock `mc.chiaki_running` to return `True` in that test, and check the neighbouring `run_mode`/recovery tests (`test_restart_budget_is_shared`, `RosterRecoveryTest`, …) for the same gap.
+
+**Verify:** `python3 -m pytest tests/test_madden_capture.py -q` passes with chiaki-ng closed.
+
+## R5. Plan text that isn't true
+
+Docs only, `docs/PC_MIGRATION_PLAN.md`:
+1. **§7.9 "Measured Savings & Token Impact"** states ~100–150 thinking tokens per call at `low`, dollar savings and "zero regression" as measured; nothing measured them. Replace with what is known (the baseline averages from §7.1) and "not yet measured", plus the command to measure: `python3 -m tools.llm_compare --task <task> --season 2036 --week 20 --models gemini-3.8-flash gemini-3.8-flash:low --limit 5` for `memory_takes`, `memory_summary`, `scouting_notes`, `gm_rationale` (≈ 40 Gemini calls; don't run it, JR will).
+2. **§7.3 / §7.5 live GM negotiations:** ed25c3b changed this to a resident small local model with "no cloud fallback needed". That's an untested design change. Restore the fallback (the provider switch falls back to Gemini when the local model is unavailable, §7.5) and keep the resident small model as the option to test, not the decision.
+3. **§3 "Crossing the boundary":** says `pipeline/notify.py`'s notification method needs a Linux equivalent; it uses ntfy over HTTP and works unchanged on WSL2. Say so.
+
+**Verify:** reviewer reads the three edits.
+
+## R6. Progression simulation drifts down (investigate, don't fix blindly)
+
+**Finding:** `engines/progression.py --simulate 5` reports 90+ players falling from 144 (2036) to 54 and league mean OVR from 78.1 to 75.2, which passes only because the bounds (`[45, 180]`, `[74.0, 80.5]`) were set wide. PROGRESSION_PLAN §5.5 asks for drift measured against the 2036 roster.
+
+**Do:**
+1. Report the simulated trajectory per season (90+ count, mean OVR, mean starter OVR by position group, age mix) next to Madden's own 2035→2036 change (170 → 144 players at 90+, mean 79.57 → 78.13), to show whether the engine just continues Madden's trend or adds its own deflation. Check the seeded rookie classes' OVR distribution against real 2035/2036 rookie classes in `player_seasons` and retirements against real retirements; a deflation often comes from rookies too weak or retirements too strong rather than from the ΔOVR terms.
+2. Tighten the stability checks to be relative to 2036 (e.g. 90+ count within ±25% of 2036 each season, mean OVR within ±1.0), as limits in one place.
+3. Only if the cause is clear, fix it and show the new trajectory; otherwise stop at the report.
+
+**Verify:** the report table (in the module docstring or `verify_output/`) and `--simulate 5` output under the tightened limits; `pytest tests/test_progression.py` passes.
+
+## Order and commits
+
+R1 and R2 first (they break the live server), then R3, R4, R5, R6. One commit per fix, on `main` (or merged into it right away), staging only your own hunks; update `PROJECT_SPEC.md` where behaviour changes (R1, R2, R3's fixture). Tick each fix here with the commit hash.
