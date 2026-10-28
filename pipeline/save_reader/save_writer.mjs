@@ -8,6 +8,8 @@
 // (pgid = Player.PresentationId, field names as in the save's Player table). An edit's optional "contract" block,
 // {"Length": 4, "CurrentYear": 0, "SalaryYear0": 1050, ...}, sets fields of the player's own PlayerContract record in
 // place (contract_edits.mjs; money in $10,000 units), with the same checks and read-back.
+// An optional "records" list edits other tables by table id and row (record_edits.mjs: draft picks, draft-class
+// rows), with the same checks and read-back.
 //
 // Safety: the input save is never written (it is copied first, and --out may not be the input); --out must not
 // exist unless --overwrite-out. Every edit is checked against the field's schema before anything is set (the
@@ -21,6 +23,7 @@ import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
 import { fieldMeta, fieldValueError } from './lib.mjs';
 import { contractRecordOf, planContractEdits } from './contract_edits.mjs';
+import { applyRecordEdits, planRecordEdits, verifyRecordEdits } from './record_edits.mjs';
 
 async function playerTable(franchise) {
   const all = franchise.getAllTablesByName('Player');
@@ -72,8 +75,11 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     const contract = await planContractEdits(franchise, players, edits);
     targets.push(...contract.targets);
     errors.push(...contract.errors);
+    const records = await planRecordEdits(franchise, edits.records);
+    errors.push(...records.errors);
     if (errors.length) throw new Error(`edits refused, nothing written:\n  ${errors.join('\n  ')}`);
     for (const t of targets) t.record[t.key] = t.value;
+    applyRecordEdits(records.targets);
     const staged = join(dir, 'out');
     await franchise.save(staged);
     renameSync(staged, out);
@@ -90,9 +96,11 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
         mismatches.push(`pgid ${t.pgid} ${t.contract ? 'contract ' : ''}${t.key}: wrote ${t.value}, read ${r?.[t.key]}`);
       }
     }
+    mismatches.push(...await verifyRecordEdits(check, records.targets));
     if (mismatches.length) throw new Error(`read-back failed:\n  ${mismatches.join('\n  ')}`);
     return { out, players: new Set(targets.map(t => t.pgid)).size, fields: targets.length,
-      contracts: new Set(targets.filter(t => t.contract).map(t => t.pgid)).size, verified: true };
+      contracts: new Set(targets.filter(t => t.contract).map(t => t.pgid)).size,
+      records: new Set(records.targets.map(t => t.where)).size, recordFields: records.targets.length, verified: true };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -117,8 +125,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   }
   try {
     const report = await writeSave(a.save, JSON.parse(readFileSync(a.edits, 'utf8')), a.out, a);
-    console.error(`${report.fields} fields on ${report.players} players (${report.contracts} contracts) written and read `
-      + `back → ${report.out}`);
+    console.error(`${report.fields} fields on ${report.players} players (${report.contracts} contracts) and `
+      + `${report.recordFields} on ${report.records} other records written and read back → ${report.out}`);
   } catch (e) {
     console.error(e.message);
     process.exit(1);
