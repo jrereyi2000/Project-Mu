@@ -194,7 +194,8 @@ Project Mu/
 │   ├── dev_quality.py         #   Front-office player development D* (§2.18): current GM's tenure only, all 32 teams ranked (JR's too); each player's OVR change from last season's roster card to this one vs a league ridge fit on age/OVR band/dev/rookie, scaled by the OVR band's spread, 99 cap rule, dev-upgrade bonus, starters weigh 1.0, 3 windows recency-weighted, shrunk → gm_team_seasons.dev_quality*; team_development_record for writers; CLI --season S [--include-partial] [--dry-run]
 │   ├── fo_standing.py         #   Front-office standings (§2.18): score = (public draft H* + dev D*)/2, missing part = baseline 0, all 32 ranked with draft/dev part ranks and tier words; stored (gm_team_seasons) / live (hot seat); standing_facts for writers; CLI [--season S] [--live]
 │   ├── scouting_read.py       #   Read-only helpers for the newsroom and #debug: consensus_board, risers_fallers (visible at the article's cutoff), prospect_story, events_for (public fields only)
-│   └── college_stats.py       #   College stat aggregation, game logs, Combine RAS & drill percentile computation, and national awards/Heisman watch compilation from scout_events (strictly strips hidden fields)
+│   ├── college_stats.py       #   College stat aggregation, game logs, Combine RAS & drill percentile computation, and national awards/Heisman watch compilation from scout_events (strictly strips hidden fields)
+│   └── progression.py         #   Offline player progression & ratings engine (§2.21, Item 11 V2.14): deterministic yearly OVR change from age curves, dev traits, ceiling pull, playing time, and injury regression; spreads OVR change to ratings via ovr_weights and settle_archetype; backtested on 2035→2036 (MAE 1.119, 73% within ±1); multi-year simulation with rookie replenishment and drift feedback; CLI --season S [--commit] [--dry-run], --backtest, --simulate N
 
 ├── newsroom/                  # Agent swarm (Section 7)
 │   ├── swarm_dispatcher.py    #   Editorial desk, commissioning, parallel dispatch
@@ -670,6 +671,40 @@ Fictional players in Madden lack official broadcast photography. The headshot su
   - Fully idempotent: resumes seamlessly across stops and network drops. Standalone CLI: `python3 -m headshots.rookie_headshots [--season N] [--workers 5] [--drafted-only] [--dry-run]`.
 - **Frontend Serving:** Served statically at `/static/players/{player_id}.webp` by FastAPI (`server/api.py`). The React frontend (`Mu_Network/src/App.tsx`) loads headshots with cache-busting `?v=${HEADSHOT_VERSION}` across player modals, roster views, and social cards, falling back to team-colored initialed avatars if missing. Full architectural spec in [`docs/HEADSHOT_PIPELINE.md`](docs/HEADSHOT_PIPELINE.md).
 
+### 2.21 Player Progression Engine (`engines/progression.py`, `db/migrations/2027_01_08_player_progression.sql`)
+Offline, causal player progression model developed for the Madden 27 PC era (Item 11, `docs/PROGRESSION_PLAN.md`). Rather than delegating development to Madden's black-box simulation, the engine calculates deterministic yearly player overall and ratings changes offline and applies them to franchise save files or database tables, ensuring realistic aging curves, dev-trait impacts, ceiling convergence, and multi-year league rating stability.
+- **Two-Layer Architecture:**
+  - **Layer 1: Overall Progression ($\Delta\text{OVR}_i$):**
+    $$\Delta\text{OVR}_i = \text{age}(\text{group}, \text{age}) + \text{dev}(\text{dev\_trait}, \text{age}) + \text{pull}(\text{ceiling}_i - \text{OVR}_i) + \text{play}(\text{snaps/starts}) + \text{injury}(\text{games missed}) + \varepsilon_i$$
+    - $\text{age}$: Nonlinear cubic decline curves calibrated per position group (QBs peak at 27-28 and age gracefully into mid-30s; RBs peak early at 24-25 and fall off sharply past 28; OL/DL hold ground past 30).
+    - $\text{dev}$: Star ($+1.0$), Superstar ($+1.8$), and X-Factor ($+2.5$) provide upward growth bonuses for young players ($\le 26$) and veteran resistance ($+0.20$ to $+0.70$) for players $30+$ preventing premature talent collapse.
+    - $\text{pull}$: Pull toward latent ceiling $\alpha \cdot (\text{ceiling}_i - \text{OVR}_i)$, weighted by age ($0.18$ for young players, decaying to $0.03$ past 30).
+    - $\text{play}$: Starter snap-share bonuses ($+0.4$ to $+0.8$ for regular starters; $-0.6$ stagnation penalty for unplayed high-dev bench players).
+    - $\text{injury}$: Games missed degradation ($-0.3$ to $-0.8$ for $\ge 6$ games missed, up to $-1.2$ for full season).
+    - $\varepsilon_i$: Seeded Gaussian noise $\mathcal{N}(0, 1.0)$ using deterministic hash `f"prog:{season}:{player_id}"` with heavy-tail breakout/collapse chances ($2\%$).
+    - Capped at maximum $\pm 8$ OVR change and strictly clamped to $[40, 99]$.
+    - Causal attribution tags are recorded for each player: `BREAKOUT`, `AGE`, `INJURY`, `PLAYING_TIME`, `CEILING`, `DEVELOPED`, `REGRESSED`, `ON_TRACK`, `STALLED`.
+  - **Layer 2: Ratings Spread:**
+    - Physical ratings (`SpeedRating`, `AccelerationRating`, `AgilityRating`, `ChangeOfDirectionRating`) take age-curve and wear-and-tear degradation.
+    - Archetype skill ratings are distributed via `engines.ovr_weights.adjust_ratings` targeting the computed target OVR.
+    - Verified via `settle_archetype` to preserve primary archetype stability.
+- **Latent Ceilings (`engines/progression.py:seed_player_ceiling`):**
+  - Generated deterministically from player draft true value (`scout_prospects.true_value`), dev trait tier boosts, draft round pedigree, and current OVR. Persisted in `player_ceilings`.
+- **Empirical Backtest (2035→2036 Offseason):**
+  - Evaluated against actual Madden 27 progression across 1,385 returning players:
+  - Actual mean $\Delta\text{OVR} = -0.147$ vs Predicted mean $\Delta\text{OVR} = -0.095$ (difference $0.052 \le 0.15$).
+  - Mean Absolute Error (MAE): $1.119$ OVR points; within $\pm 1$ accuracy: $73.0\%$; within $\pm 2$ accuracy: $91.3\%$.
+- **Multi-Year Simulation Stability:**
+  - 5-year macro simulation verified with rookie class replenishment (224 draftees/yr drawn from rookie OVR distribution) and empirical NFL retirement hazard curves.
+  - Closed-loop drift correction (§5.5) modulates baseline offsets annually to preserve league average OVR ($72.0\text{–}74.0$) and prevents star inflation/deflation ($90+$ OVR players remain between $65\text{–}85$ league-wide).
+- **CLI Commands:**
+  - `python3 -m engines.progression --season 2036 [--commit] [--dry-run]`: Runs progression across rostered players for the given season.
+  - `python3 -m engines.progression --backtest`: Evaluates model predictions against actual 2035→2036 Madden deltas.
+  - `python3 -m engines.progression --simulate 5`: Runs multi-year roster stability simulation.
+- **Tests:** `tests/test_progression.py` (8 tests covering term calculations, deterministic seeds, clamping, ratings adjustment, backtest error limits, 5-year macro stability, and transactional DB writes).
+
+
+
 ## 3. Database Schema & Architecture (PostgreSQL)
 
 The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`). `db/init_db.sql` reproduces the full live schema (tables, constraints, generated columns, views, functions, triggers) on an empty database and is safe to re-run; it does not add columns to existing tables, so schema changes to the live DB ship as migrations under `db/migrations/` and must also be folded into `init_db.sql`.
@@ -858,6 +893,15 @@ Each player's fate between two **captured** seasons (2035 → 2036 on; 2026–20
 - **Run:** the Season scan's `step_season_ledger`, after the Napper week 1 lineups and before the GM rollover; `build` rewrites one boundary, so a rerun after phase 2b's retirements turns flagged free agents into `RETIRED`.
 - **2035 → 2036 (built 2026-10-27, after backup `madden_backup_20261027_035051.sql`):** 2,090 players: 1,277 retained, 133 moved (all `ROSTER_SCAN`: no 2035 offseason transactions were captured), 341 free agents (all `retirement_scan_missing`; 80 of them signed during 2036), 182 drafted, 157 new (13 undrafted rookies, 126 `no_prior_capture`). The 2036 free-agent pool holds 307 (the 261 who never returned plus 46 released in 2036); its top names (Abdul Carter 98, Will Anderson Jr 96, Jalon Walker 91) are more likely retirements or roster-capture gaps than unsigned players, which phase 2b's scan settles.
 - **Tests:** `tests/test_season_ledger.py` (pure: opening teams, every status, D1 and its flag, in-season signings, arrivals; integration on `madden_test`: the 2036 boundary accounts for every captured player, no `RETIRED` without a scan, idempotent, 2035 refused as a history boundary, no history players in the pool, a history player's path ends retired).
+
+### 3.3n Player Progression & Ceilings (`db/migrations/2027_01_08_player_progression.sql`, `engines/progression.py`, `docs/PROGRESSION_PLAN.md`)
+Offline progression history and latent development ceilings for all players across offseason boundaries (Item 11, V2.14).
+- **`player_progression_history`**:
+  - `season` (int), `player_id` (FK `players.id` ON DELETE CASCADE), `old_ovr` (int), `new_ovr` (int), `delta_ovr` (int), `age_term` (numeric), `dev_term` (numeric), `ceiling_term` (numeric), `play_term` (numeric), `injury_term` (numeric), `noise_term` (numeric), `ratings_diff` (JSONB: before/after mapping of changed individual ratings), `created_at` (timestamptz). PK `(season, player_id)`.
+  - Captures exact mathematical breakdowns for analytical audits and writer attribution lore (`BREAKOUT`, `AGE`, `INJURY`, `PLAYING_TIME`, `CEILING`).
+- **`player_ceilings`**:
+  - `player_id` (PK, FK `players.id` ON DELETE CASCADE), `ceiling` (int: latent ceiling rating clamped between current OVR and 99), `source` (varchar e.g. `'DRAFT_SCOUT'`, `'ROSTER_SEED'`), `updated_season` (int), `created_at` (timestamptz).
+  - Derived deterministically from draft prospect true value (`scout_prospects.true_value`), dev trait tier boosts, and draft round pedigree.
 
 ### 3.4 Fantasy Analytics & Projections
 - **`fantasy_projections`**:
