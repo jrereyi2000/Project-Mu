@@ -303,7 +303,7 @@ must print 32 (or the GM count) with no error.
 
 **Verify:** `python3 -m unittest tests.test_llm_config tests.test_llm_provider` (outside pytest) adds no rows: `SELECT count(*) FROM llm_usage WHERE created_at > now() - interval '5 minutes'` on live is unchanged before/after.
 
-## R4. `test_madden_capture.py::test_live_stream_failure_stops` depends on chiaki-ng running
+## R4. [x] `test_madden_capture.py::test_live_stream_failure_stops` depends on chiaki-ng running
 
 **Bug:** `madden_capture.recover_stream` treats `not chiaki_running()` as a crashed stream and restarts. The test mocks `stream_frozen` but not `chiaki_running`, so it passes only while chiaki-ng is open; with it closed, `restart_stream` is called 8 times and the test fails. The code is right; the test is incomplete.
 

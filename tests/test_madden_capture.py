@@ -523,13 +523,15 @@ class RunModeTest(unittest.TestCase):
                 raise mc.Abort("Category stayed on BLOCKING")
             return "ok"
 
-        with mock.patch.object(mc, "stream_frozen", return_value=True), \
+        with mock.patch.object(mc, "chiaki_running", return_value=True), \
+                mock.patch.object(mc, "stream_frozen", return_value=True), \
                 mock.patch.object(mc, "restart_stream") as restart, mock.patch.object(mc, "log"):
             self.assertEqual(mc.run_mode("test", mode, lambda: resets.append(1)), "ok")
         self.assertEqual((len(calls), len(resets), restart.call_count), (2, 1, 1))
 
     def test_live_stream_failure_stops(self):
-        with mock.patch.object(mc, "stream_frozen", return_value=False), \
+        with mock.patch.object(mc, "chiaki_running", return_value=True), \
+                mock.patch.object(mc, "stream_frozen", return_value=False), \
                 mock.patch.object(mc, "restart_stream") as restart, mock.patch.object(mc, "log"):
             with self.assertRaises(mc.Abort):
                 mc.run_mode("test", mock.Mock(side_effect=mc.Abort("real problem")))
@@ -537,11 +539,26 @@ class RunModeTest(unittest.TestCase):
 
     def test_restart_budget_is_shared(self):
         mc.RESTARTS[0] = mc.STREAM_RESTARTS
-        with mock.patch.object(mc, "stream_frozen", return_value=True), \
+        with mock.patch.object(mc, "chiaki_running", return_value=True), \
+                mock.patch.object(mc, "stream_frozen", return_value=True), \
                 mock.patch.object(mc, "restart_stream") as restart, mock.patch.object(mc, "log"):
             with self.assertRaises(mc.Abort):
                 mc.run_mode("test", mock.Mock(side_effect=mc.Abort("frozen again")))
         restart.assert_not_called()
+
+    def test_chiaki_crashed_restarts_and_reruns(self):
+        calls = []
+
+        def mode():
+            calls.append(1)
+            if len(calls) == 1:
+                raise mc.Abort("stream crashed")
+            return "ok"
+
+        with mock.patch.object(mc, "chiaki_running", side_effect=[False, True]), \
+                mock.patch.object(mc, "restart_stream") as restart, mock.patch.object(mc, "log"):
+            self.assertEqual(mc.run_mode("test", mode), "ok")
+        self.assertEqual((len(calls), restart.call_count), (2, 1))
 
 
 class RosterRecoveryTest(unittest.TestCase):
@@ -566,6 +583,7 @@ class RosterRecoveryTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as out, \
                 mock.patch.object(mc, "capture_team_roster", side_effect=capture), \
+                mock.patch.object(mc, "chiaki_running", return_value=True), \
                 mock.patch.object(mc, "stream_frozen", return_value=True), \
                 mock.patch.object(mc, "restart_stream", side_effect=restart), \
                 mock.patch.object(mc, "open_roster", return_value=None), \
@@ -581,6 +599,7 @@ class RosterRecoveryTest(unittest.TestCase):
     def test_not_frozen_means_stop(self):
         with tempfile.TemporaryDirectory() as out, \
                 mock.patch.object(mc, "capture_team_roster", side_effect=mc.Abort("real problem")), \
+                mock.patch.object(mc, "chiaki_running", return_value=True), \
                 mock.patch.object(mc, "stream_frozen", return_value=False), \
                 mock.patch.object(mc, "restart_stream") as restart, \
                 mock.patch.object(mc, "open_roster", return_value=None), \
@@ -588,6 +607,7 @@ class RosterRecoveryTest(unittest.TestCase):
                 mock.patch.object(mc, "log"):
             with self.assertRaises(mc.Abort):
                 mc.run_roster(out, max_teams=1)
+            restart.assert_not_called()
     def test_stats_resume_skips_done_and_discards_partial(self):
         cats = ["PASSING", "RUSHING", "RECEIVING"]
         captured = []
