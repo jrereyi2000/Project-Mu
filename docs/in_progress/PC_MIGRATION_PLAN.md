@@ -79,6 +79,8 @@ Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`
 
 On hold: applying `madden_pgid` to the live database (after the PC move); the CFB 27 bridge (§6, until a dynasty is planned); the pregame show (§9.1); the rest of Part 2. The full Project Mu draft order for `PickNumber` (§4.3) comes in once the Super Bowl is final.
 
+**Round 2 (audit 2026-10-28):** what's left that doesn't need the PC, sorted into standalone pieces (buildable off-repo on another device), repo + sample save work, database work and Mac/PS5-only steps: [`PRE_PC_WORK_2.md`](../not_started/PRE_PC_WORK_2.md).
+
 ### 2.5 Try Local LLM Inference on the Mac (optional)
 1. Install Ollama: `brew install ollama` (or download from [ollama.com](https://ollama.com)).
 2. Pull a mid-size instruct model and send it an Agent Wire prompt through `http://localhost:11434/api/generate` to get a feel for output quality before the PC arrives.
