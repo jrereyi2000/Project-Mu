@@ -7,7 +7,7 @@
 
 Timings and counts below are estimates until measured on the PC.
 
-**Part 1 (§1–§9)** is the migration. **Part 2 (V2.0–V2.14)** is the follow-on work the PC makes possible.
+**Part 1 (§1–§9)** is the migration. **Part 2 (V2.0–V2.15)** is the follow-on work the PC makes possible.
 
 ---
 
@@ -625,9 +625,13 @@ Extend the persona and memory model the newsroom already uses (identity line, ta
 * **Owners, agents and the commissioner:** for the inbox (V2.9) and league stories.
 * **Scouts:** for V2.10.
 
-Personas are generated once on the local model and stored; memory layers update as they act. Identity stays fixed, like `agent_memories.persistent_memory`.
+Personas are generated once on the local model and stored; memory layers update as they act. Identity stays fixed, like `agent_memories.persistent_memory`. Player and coach personas also get numeric traits (work ethic, coachability, teacher, specialty, …) that feed progression (V2.14).
 
-## V2.14 Suggested Order
+## V2.14 Project Mu Owns Progression
+
+Turn off Madden's player progression (XP sliders at 0, which live in the save's `ProgressionXPSlider` table; Madden's offseason regression overwritten from a snapshot) and decide every rating change in `engines/progression.py`: age, dev trait, a hidden ceiling seeded from scouting's `V`, playing time and game grade, injuries, and later coach and player personality traits. Changes are written through the save writer and stored with their causes for the newsroom. Plan: [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md).
+
+## V2.15 Suggested Order
 
 | Order | Feature | Builds on |
 | :--- | :--- | :--- |
@@ -640,3 +644,4 @@ Personas are generated once on the local model and stored; memory layers update 
 | 7 | V2.11 Negotiations, V2.9 Inbox | GM agents, V2.12, V2.13 |
 | 8 | V2.10 Scouting revamp | scouting engine, CFB bridge (§6) |
 | 9 | V2.5 Fans, V2.6 Radio, V2.7 Every-game recaps | V2.8, TTS (§9) |
+| alongside 3–7 | V2.14 Progression (engine first, then personality and coach terms) | save writer, OVR weights (§4.4), V2.13 |
