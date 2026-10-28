@@ -5,7 +5,7 @@ pipeline/save_reader/save_writer.mjs applies. Reads the database, never writes i
 
   python3 -m pipeline.teleport <snapshot.json> [--season 2036] [--edits edits.json] [--report report.json]
                                [--age-add N] [--write-ovr] [--contract-years-add N] [--draft draft.json]
-                               [--release]
+                               [--release] [--appearance]
 
 <snapshot.json> is pipeline/save_reader/pc_save_reader.mjs's read of the PC save (version 2+). --season is the Project
 Mu season whose rosters move (default league_state.current_season). --age-add adds years to every age (1 if Madden
@@ -17,6 +17,8 @@ OverallGrade0-4 and PlayerType from engines/ovr_weights's predictions, for a Mad
 pipeline/save_reader/draft_tables.mjs's read of the same save) into the same edits file.
 --release also puts the leftover donors in the edits as "release": [pgid, ...], which save_writer.mjs
 sends to free agency (pipeline/save_reader/release.mjs); opt-in until the PC checks show Madden accepts the result.
+--appearance also gives each player a generic head and body type matching their AI headshot
+(pipeline/teleport_appearance.py).
 
 Why same-team only: Madden ties players to teams through each team's Roster and DepthChart lists, not just
 Player.TeamIndex, so moving a player between teams isn't one field. Every Project Mu team has 54-62 players and every
@@ -34,8 +36,9 @@ the ratings engines/ovr_weights.adjust_ratings moves to reach the target OVR for
 when the donor already has the same surname, else 0 (no recorded name; the full surname list and renames come later,
 §4.3). Contracts: pipeline/teleport_contracts adds the player's ACTIVE Project Mu contract to the edit, written into
 the donor's own PlayerContract record (no Project Mu contract, or a practice-squad donor with no record: the donor's
-contract stays; counted in the report). Not yet: portraits, appearance. The draft class and
-pick owners are pipeline/teleport_draft.py (--draft).
+contract stays; counted in the report). With --appearance it adds GenericHeadAssetName,
+PLYR_GENERICHEAD, PLYR_ASSETNAME and CharacterBodyType. Not yet: portraits, CharacterVisuals (the body's skin tone).
+The draft class and pick owners are pipeline/teleport_draft.py (--draft).
 """
 import argparse
 import json
@@ -50,6 +53,7 @@ from scipy.optimize import linear_sum_assignment
 
 from engines import ovr_weights as ow
 from pipeline import teleport_contracts
+from pipeline import teleport_appearance as ta
 from pipeline.load_save import POSITIONS, TEAM_ABBR_ALIASES, archetype as mu_archetype_name
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -250,8 +254,9 @@ def donors_by_team(snapshot):
     return by_team, lambda abbr: index.get(from_abbr.get(abbr, abbr))
 
 
-def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False):
-    """(edits for save_writer, report). With `release` the edits also release the leftover donors."""
+def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False, seeds=None):
+    """(edits for save_writer, report). With `release` the edits also release the leftover donors; `seeds`
+    (teleport_appearance.headshot_seeds) turns on appearance."""
     by_team, team_index = donors_by_team(snapshot)
     roster = [m for m in roster if m["position"] not in SKIP_POSITIONS]
     for m in roster:
@@ -268,6 +273,8 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False):
 
     edits, pairs, unmatched, leftover = [], [], [], []
     kinds, notes_count, ovr_moves = Counter(), Counter(), []
+    pool = ta.head_pool(snapshot) if seeds is not None else None
+    looks, seed_sources = [], Counter()
     short_name = {t["team_index"]: t["short_name"] for t in snapshot["teams"]}
     for ti in sorted(set(teams) | set(by_team)):        # a Madden team without Project Mu players loses every donor
         mu_players, donors = teams.get(ti, []), by_team.get(ti, [])
@@ -280,6 +287,16 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False):
                       "status": d["status"]} for d in donors if d["pgid"] not in used]
         for m, d in matched:
             edit, notes = player_edit(m, d, doc, age_add, write_ovr)
+            seed = seeds.get(m["player_id"]) if seeds is not None else None
+            if seed:
+                first, last = split_name(m["full_name"], m["player_name"])
+                extra, look = ta.appearance_fields(pool, seed, first, last, d["pgid"], height_inches(m["height"]),
+                                                   m["weight"])
+                edit["set"].update(extra)
+                looks.append(look)
+                seed_sources[seed["source"]] += 1
+            elif seeds is not None:
+                seed_sources["no seed"] += 1
             edits.append(edit)
             cost = pair_cost(m, d, doc)
             kind = ("same archetype" if cost < OTHER_ARCHETYPE else "other archetype" if cost < NEIGHBOUR
@@ -307,6 +324,8 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False):
         "pairs": pairs,
         "leftover_donors": leftover,
     }
+    if seeds is not None:
+        report["appearance"] = ta.summarize(looks, seed_sources)
     out = {"players": edits}
     if release:
         out["release"] = [d["pgid"] for d in leftover]
@@ -325,6 +344,7 @@ def main():
     ap.add_argument("--contract-years-add", type=int, default=0)
     ap.add_argument("--draft", help="draft_tables.mjs's read of the save: also teleport the draft class and picks")
     ap.add_argument("--release", action="store_true", help="release the leftover donors to free agency")
+    ap.add_argument("--appearance", action="store_true", help="also write generic head and body type")
     a = ap.parse_args()
     with open(a.snapshot) as fh:
         snapshot = json.load(fh)
@@ -339,7 +359,8 @@ def main():
             season = cur.fetchone()[0]
         roster = project_mu_roster(cur, season)
         contracts = teleport_contracts.load_contracts(cur, season)
-        edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr, a.release)
+        seeds = ta.headshot_seeds(cur, season) if a.appearance else None
+        edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr, a.release, seeds)
         report["contracts"] = teleport_contracts.add_contracts(edits, report, contracts, snapshot, a.contract_years_add)
         if a.draft:
             from pipeline import teleport_draft
