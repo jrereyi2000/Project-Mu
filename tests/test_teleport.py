@@ -95,10 +95,14 @@ class EditTest(unittest.TestCase):
         self.assertEqual((s["FirstName"], s["LastName"], s["Age"], s["YearsPro"], s["JerseyNum"]),
                          ("George", "Crawford", 24, 2, 10))
         self.assertEqual((s["Height"], s["Weight"], s["TraitDevelopment"]), (75, 69, "XFactor"))
-        self.assertEqual(s["PLYR_COMMENT"], 0)                                  # Smith's clip would say the wrong name
+        self.assertEqual(s["PLYR_COMMENT"], 1087)                               # Crawford's commentary ID from lookup
         self.assertNotIn("Position", s)
 
-    def test_same_surname_keeps_the_commentary_id(self):
+    def test_unrecorded_surname_gets_zero_commentary_id(self):
+        edit, _ = tp.player_edit(mu(full_name="George UnrecordedName"), donor(), DOC)
+        self.assertEqual(edit["set"]["PLYR_COMMENT"], 0)
+
+    def test_recorded_surname_gets_the_commentary_id(self):
         edit, _ = tp.player_edit(mu(full_name="Will Smith"), donor(), DOC)
         self.assertEqual(edit["set"]["PLYR_COMMENT"], 4600)
 

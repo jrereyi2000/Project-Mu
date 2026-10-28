@@ -52,6 +52,7 @@ import psycopg
 from scipy.optimize import linear_sum_assignment
 
 from engines import ovr_weights as ow
+from pipeline import commentary_names as cn
 from pipeline import teleport_contracts
 from pipeline import teleport_appearance as ta
 from pipeline.load_save import POSITIONS, TEAM_ABBR_ALIASES, archetype as mu_archetype_name
@@ -201,7 +202,9 @@ def player_edit(mu, donor, doc, age_add=0, write_ovr=False):
     if arch != donor["archetype"]:
         set_["PlayerType"] = arch
         notes.append(f"archetype {donor['archetype']} -> {arch}")
-    set_["PLYR_COMMENT"] = donor["commentary_id"] if surname_key(last) == surname_key(donor["last_name"]) else 0
+    name = mu.get("full_name") or mu.get("player_name")
+    cid = cn.commentary_id(name)
+    set_["PLYR_COMMENT"] = cid if cid is not None else 0
 
     ratings = dict(donor["ratings"])
     if mu["overall"] is not None and arch in doc["archetypes"]:
@@ -322,6 +325,8 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False, s
                                 "max": float(moves.max())},
         "no_archetype_match": sum(1 for m in roster if m["madden_archetype"] is None),
         "commentary_kept": sum(1 for e in edits if e["set"].get("PLYR_COMMENT")),
+        "commentary_matched": sum(1 for e in edits if e["set"].get("PLYR_COMMENT", 0) > 0),
+        "commentary_unmatched": sum(1 for e in edits if not e["set"].get("PLYR_COMMENT", 0)),
         "released": len(leftover) if release else 0,
         "pairs": pairs,
         "leftover_donors": leftover,

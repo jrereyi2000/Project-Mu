@@ -2719,7 +2719,7 @@ def get_available_players(
             where_clauses.append("ps.team_id IS NOT NULL")
 
             if search:
-                where_clauses.append("(p.full_name ILIKE %(search)s OR p.player_name ILIKE %(search)s)")
+                where_clauses.append("(p.full_name ILIKE %(search)s OR p.player_name ILIKE %(search)s OR EXISTS (SELECT 1 FROM player_name_aliases pna WHERE pna.player_id = p.id AND pna.alias ILIKE %(search)s))")
                 params["search"] = f"%{search.strip()}%"
 
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"

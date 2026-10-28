@@ -187,6 +187,8 @@ def draft_class(snapshot, draft, prospects, doc, age_add=0, write_ovr=False):
         "positions": {"project_mu": dict(Counter(m["madden_position"] for m in mus)),
                       "madden": dict(Counter(d["position"] for d in donors))},
         "match_kinds": dict(kinds), "notes": dict(notes_count), "pairs": report_pairs,
+        "commentary_matched": sum(1 for p in players if p["set"].get("PLYR_COMMENT", 0) > 0),
+        "commentary_unmatched": sum(1 for p in players if not p["set"].get("PLYR_COMMENT", 0)),
     }
     return players, records, report
 

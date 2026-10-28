@@ -390,6 +390,16 @@ CREATE TABLE IF NOT EXISTS player_attributes (
     UNIQUE (player_id, capture_folder));
 CREATE INDEX IF NOT EXISTS player_attributes_season ON player_attributes (season, player_id);
 
+-- Player name aliases (2027_01_07_player_name_aliases.sql): tracks former names on commentary renames
+CREATE TABLE IF NOT EXISTS player_name_aliases (
+    player_id INT REFERENCES players(id) ON DELETE CASCADE,
+    alias VARCHAR(128) NOT NULL,
+    kind VARCHAR(32) NOT NULL DEFAULT 'commentary_rename',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (player_id, alias)
+);
+CREATE INDEX IF NOT EXISTS idx_player_name_aliases_alias ON player_name_aliases(alias);
+
 -- 7. One row per Gemini call (extract.py and the newsroom), replacing the cost estimates.
 CREATE TABLE IF NOT EXISTS llm_usage (
     id BIGSERIAL PRIMARY KEY,

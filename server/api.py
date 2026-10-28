@@ -2832,9 +2832,11 @@ def search_global(q: str = "", season: Optional[int] = None, limit: int = 20):
                 ) ps_latest ON true
                 LEFT JOIN teams t_latest ON t_latest.id = ps_latest.team_id
                 WHERE p.full_name ILIKE %s
+                   OR p.player_name ILIKE %s
+                   OR EXISTS (SELECT 1 FROM player_name_aliases pna WHERE pna.player_id = p.id AND pna.alias ILIKE %s)
                 ORDER BY (p.origin IS NOT NULL), overall_rating DESC NULLS LAST   -- today's players before history
                 LIMIT 15;
-            """, (HISTORY_CAPTURED_FROM, season, pattern))
+            """, (HISTORY_CAPTURED_FROM, season, pattern, pattern, pattern))
             player_rows = cur.fetchall()
             players_res = [
                 {
