@@ -4210,6 +4210,9 @@ def run_attributes(out, max_teams=32, resume=False, only_teams=None):
         if len([t for t in done if want is None or t in want]) >= target:
             break
         try:
+            # An odd number of sweeps ends scrolled right, where classify() reads the list as PLAYER_STATS and the
+            # team switch would stop (Ravens, Oct 28): back to the first column first.
+            attr_goto(0, team)
             team = next_roster_team(os.path.join(out, "team_debug"), team)
         except Abort as e:
             recover_stream(e)
