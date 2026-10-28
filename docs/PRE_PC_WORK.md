@@ -346,7 +346,7 @@ Docs only, `docs/PC_MIGRATION_PLAN.md`:
 
 **Bug fixed:** the §5.5 drift correction added 0.1–0.4 to a whole-point OVR before rounding, which never changed anything. It is now a seeded chance of one extra point, and it works, but at its ±0.4 cap it can't offset ~1.5 OVR a year of turnover; `--simulate 5` reports DRIFT.
 
-**For JR (PROGRESSION_PLAN §9):** whether Project Mu keeps the 2036 shape (stronger rookie classes, faster growth for young players, or a larger correction) or follows Madden's deflation; and whether to soften the 30–32 decline to Madden's rate (would need the backtest rerun).
+**JR decided (2026-10-28): keep the 2036 shape.** Built: per-age-band calibration to Madden (backtest within ~0.1 per band; the 30–33 decline now matches) and a two-part league term (development for young sub-star players, a star term for 86+ players 32 and under) fitted each offseason against the projected post-draft league; 90+ count 139–147 and mean 78.1 over five simulated seasons. Details in PROGRESSION_PLAN §5.5.
 
 ## R7. [x] `save_writer.mjs` takes over 10 minutes once skin tones are written
 

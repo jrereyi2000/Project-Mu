@@ -59,6 +59,26 @@ OVR_MAX = 99
 OVR_MIN = 40
 MAX_SEASON_CHANGE = 8
 
+# Calibration to Madden (backtest on 2035->2036, 1,385 players): a per-age-band offset in place of one -0.65 for
+# everyone, which grew young players ~0.1-0.2 a year too fast and aged 30-33s ~0.4 too fast. Band order as
+# trade_value.AGE_BANDS: <=23, 24-26, 27-29, 30-31, 32-33, 34+ (34+ had 5 players; it takes 32-33's value).
+AGE_BAND_OFFSET = (-0.86, -0.76, -0.65, -0.28, -0.19, -0.19)
+
+# League shape (JR, 2026-10-28): year over year the league keeps roughly its 2036 shape, the same number of 90+
+# players and the same mean OVR. Madden's own turnover doesn't (its rookie classes come in ~10 OVR below the veterans
+# they replace), so each offseason a league term adds development to young players, sized by projecting the league
+# with the coming rookie class (calibrate_league_term). Weight of the term by age; 0 from 30 on.
+LEAGUE_SHAPE_SEASON = 2036
+LEAGUE_TERM_WEIGHT = ((23, 1.0), (26, 0.75), (29, 0.35))
+# ... and by OVR: the term develops the young players below star level (who replace departing starters), not the
+# stars, so the 90+ count is left to ceilings and aging instead of being manufactured
+LEAGUE_TERM_OVR_WEIGHT = ((79, 1.0), (85, 0.5), (87, 0.2))
+# A second, star term holds the 90+ count: OVR a year for players at STAR_OVR+ and at most STAR_MAX_AGE (slower
+# decline or a push past 90). Both terms are fitted together each offseason.
+STAR_OVR, STAR_MAX_AGE = 86, 32
+LEAGUE_TERM_STEPS = [i / 2 for i in range(0, 13)]        # development: 0 .. 6 OVR a year
+STAR_TERM_STEPS = [i / 4 for i in range(-4, 9)]          # stars: -1 .. +2 OVR a year
+
 # Stability check bounds relative to 2036 baseline (PROGRESSION_PLAN §5.5; PRE_PC_WORK.md R6)
 # Evaluated for each season simulated, not just the final season.
 STABILITY_BOUNDS_2036 = {
@@ -114,7 +134,9 @@ def compute_player_delta(
     is_ir: bool,
     injury_weeks: Optional[int],
     season: int,
-    aging_curves: Dict[str, Any]
+    aging_curves: Dict[str, Any],
+    league_adj: float = 0.0,
+    star_adj: float = 0.0
 ) -> Tuple[int, int, Dict[str, float], str]:
     """Calculates yearly OVR delta and breakdown of individual causal terms (§5.2).
     Returns (delta_ovr, new_ovr, terms_breakdown, cause_tag)."""
@@ -167,9 +189,11 @@ def compute_player_delta(
     noise_rng = random.Random(f"prog:{season}:{player_id}")
     noise_t = noise_rng.gauss(0.0, 1.0)
 
-    # Offset to balance baseline against empirical Madden 2035->2036 mean (-0.15 OVR)
-    baseline_offset = -0.65
-    raw_delta = age_t + dev_t + ceil_t + play_t + inj_t + noise_t + baseline_offset
+    # Calibration to Madden's 2035->2036 offseason by age band (AGE_BAND_OFFSET)
+    baseline_offset = AGE_BAND_OFFSET[min(band, len(AGE_BAND_OFFSET) - 1)]
+    # League shape term (calibrate_league_term): extra development for young players, 0 from 30 on
+    league_t = league_adj * league_term_weight(age, ovr) + (star_adj if ovr >= STAR_OVR and age <= STAR_MAX_AGE else 0.0)
+    raw_delta = age_t + dev_t + ceil_t + play_t + inj_t + noise_t + baseline_offset + league_t
 
     # Clamping per age band and OVR band
     if ovr >= 99:
@@ -216,9 +240,16 @@ def compute_player_delta(
         "play": round(play_t, 2),
         "injury": round(inj_t, 2),
         "noise": round(noise_t, 2),
+        "league": round(league_t, 2),
     }
 
     return final_delta, new_ovr, breakdown, cause
+
+
+def league_term_weight(age: int, ovr: int = 0) -> float:
+    by_age = next((w for hi, w in LEAGUE_TERM_WEIGHT if (age or 0) <= hi), 0.0)
+    by_ovr = next((w for hi, w in LEAGUE_TERM_OVR_WEIGHT if (ovr or 0) <= hi), 0.0)
+    return by_age * by_ovr
 
 
 # ---------------------------------------------------------------- ratings layer ----
@@ -358,10 +389,13 @@ def run_progression(
     season: int,
     commit: bool = False,
     dry_run: bool = False,
+    hold_shape: bool = True,
     log=print
 ) -> Dict[str, Any]:
     """Runs progression for all players into target season, storing results in
-    player_progression_history and updating player_ceilings."""
+    player_progression_history and updating player_ceilings. With hold_shape (default) the development and star
+    terms are calibrated first so the league after the coming draft keeps the LEAGUE_SHAPE_SEASON shape: the draft
+    class is projected from that season's real class, sized to refill the league (calibrate_league_term)."""
     with conn.cursor() as cur:
         _, aging_pairs, _ = read_fit_rows(cur, season - 1 if season > 2036 else 2036)
         aging_curves = fit_aging(aging_pairs)
@@ -374,35 +408,41 @@ def run_progression(
         counts_by_cause = defaultdict(int)
         deltas = []
 
-        for p in roster:
-            p_id = p["player_id"]
-            ovr = p["overall_rating"]
+        def delta_inputs(p):
             age = p["age"] + 1  # Player advances 1 year in offseason
-
             # Seed or fetch ceiling
             if p["stored_ceiling"] is not None:
-                ceiling = float(p["stored_ceiling"])
-                c_source = "STORED"
+                ceiling, c_source = float(p["stored_ceiling"]), "STORED"
             else:
                 ceiling, c_source = seed_player_ceiling(
-                    p_id, ovr, age, p["dev_trait"], p["prospect_true_val"]
-                )
+                    p["player_id"], p["overall_rating"], age, p["dev_trait"], p["prospect_true_val"])
+            return ceiling, c_source, dict(
+                player_id=p["player_id"], position=p["position"], age=age, ovr=p["overall_rating"],
+                dev_trait=p["dev_trait"], ceiling=ceiling, games_played=p["games_played"],
+                downs_played=p["downs_played"], is_starter=p["is_starter"], is_ir=p["is_ir"],
+                injury_weeks=p["weeks_remaining"], season=season, aging_curves=aging_curves)
 
+        prepared = [(p, *delta_inputs(p)) for p in roster]
+        terms = (0.0, 0.0)
+        if hold_shape and prepared:
+            target = league_shape_target(cur)
+            class_size = max(0, target["players"] - len(prepared))
+            rookies = rookie_class(league_turnover(cur, LEAGUE_SHAPE_SEASON), class_size,
+                                   random.Random(f"draft:{season}"))
+            terms, projected = calibrate_league_term(
+                prepared, [r["ovr"] for r in rookies], target,
+                lambda item, dev, star: compute_player_delta(**item[3], league_adj=dev, star_adj=star)[1])
+            log(f"League shape: holding {target['season']} (90+={target['count_90_plus']}, "
+                f"mean {target['avg_ovr']:.2f}) with development term {terms[0]:+.1f} and star term "
+                f"{terms[1]:+.2f}; projected after a {class_size}-player draft: 90+={projected['count_90_plus']}, "
+                f"mean {projected['avg_ovr']:.2f}")
+
+        for p, ceiling, c_source, kwargs in prepared:
+            p_id = p["player_id"]
+            ovr = p["overall_rating"]
+            age = kwargs["age"]
             delta, new_ovr, breakdown, cause = compute_player_delta(
-                player_id=p_id,
-                position=p["position"],
-                age=age,
-                ovr=ovr,
-                dev_trait=p["dev_trait"],
-                ceiling=ceiling,
-                games_played=p["games_played"],
-                downs_played=p["downs_played"],
-                is_starter=p["is_starter"],
-                is_ir=p["is_ir"],
-                injury_weeks=p["weeks_remaining"],
-                season=season,
-                aging_curves=aging_curves,
-            )
+                **kwargs, league_adj=terms[0], star_adj=terms[1])
 
             ratings_diff = {}
             if p_id in attr_map:
@@ -431,6 +471,7 @@ def run_progression(
                 "play_term": breakdown["play"],
                 "injury_term": breakdown["injury"],
                 "noise_term": breakdown["noise"],
+                "league_term": breakdown["league"],
                 "ratings_diff": ratings_diff,
                 "ceiling": ceiling,
                 "ceiling_source": c_source,
@@ -449,9 +490,9 @@ def run_progression(
                 cur.execute("""
                     INSERT INTO player_progression_history (
                         season, player_id, old_ovr, new_ovr, delta_ovr,
-                        age_term, dev_term, ceiling_term, play_term, injury_term, noise_term,
+                        age_term, dev_term, ceiling_term, play_term, injury_term, noise_term, league_term,
                         ratings_diff, created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (season, player_id) DO UPDATE SET
                         old_ovr = EXCLUDED.old_ovr,
                         new_ovr = EXCLUDED.new_ovr,
@@ -462,12 +503,13 @@ def run_progression(
                         play_term = EXCLUDED.play_term,
                         injury_term = EXCLUDED.injury_term,
                         noise_term = EXCLUDED.noise_term,
+                        league_term = EXCLUDED.league_term,
                         ratings_diff = EXCLUDED.ratings_diff,
                         created_at = NOW();
                 """, (
                     r["season"], r["player_id"], r["old_ovr"], r["new_ovr"], r["delta_ovr"],
                     r["age_term"], r["dev_term"], r["ceiling_term"], r["play_term"], r["injury_term"], r["noise_term"],
-                    json.dumps(r["ratings_diff"])
+                    r["league_term"], json.dumps(r["ratings_diff"])
                 ))
                 cur.execute("""
                     INSERT INTO player_ceilings (player_id, ceiling, source, updated_season, created_at)
@@ -638,6 +680,36 @@ def run_backtest(conn, season: int = 2036, log=print) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------- simulation ----
+def league_shape_target(cur, season: int = LEAGUE_SHAPE_SEASON) -> Dict[str, Any]:
+    """The shape the league keeps (JR, 2026-10-28): size, 90+ count and mean OVR of `season`'s rosters."""
+    cur.execute("""
+        SELECT count(*), count(*) FILTER (WHERE overall_rating >= 90), avg(overall_rating)
+        FROM player_seasons WHERE season = %s AND overall_rating IS NOT NULL AND position != 'DEF'
+    """, (season,))
+    n, n90, mean = cur.fetchone()
+    return {"season": season, "players": n, "count_90_plus": n90, "avg_ovr": float(mean or 0)}
+
+
+def calibrate_league_term(players: List[Dict[str, Any]], rookie_ovrs: List[int], target: Dict[str, Any],
+                          progress) -> Tuple[Tuple[float, float], Dict[str, Any]]:
+    """The development and star terms (OVR a year) that bring the projected league (every player in `players`
+    progressed by progress(p, dev, star) -> new OVR, plus the coming rookie class) closest to `target`'s 90+ count
+    and mean OVR. Errors are scaled by what counts as close (5% of the 90+ count, a quarter point of mean); ties go
+    to the smaller terms. Returns ((dev, star), projected shape)."""
+    best = None
+    for dev in LEAGUE_TERM_STEPS:
+        for star in STAR_TERM_STEPS:
+            ovrs = [progress(p, dev, star) for p in players] + list(rookie_ovrs)
+            n90 = sum(1 for o in ovrs if o >= 90)
+            mean = sum(ovrs) / len(ovrs)
+            err = (abs(n90 - target["count_90_plus"]) / max(target["count_90_plus"] * 0.05, 1)
+                   + abs(mean - target["avg_ovr"]) / 0.25)
+            key = (round(err, 9), abs(dev) + abs(star))
+            if best is None or key < best[0]:
+                best = (key, (dev, star), {"count_90_plus": n90, "avg_ovr": round(mean, 2)})
+    return best[1], best[2]
+
+
 def league_turnover(cur, season: int) -> Dict[str, Any]:
     """What Madden itself did between season - 1 and season (PRE_PC_WORK.md R6): the rookie class (OVR, position,
     age), the dev traits of second-year players (rookies show 'Hidden'), and the share of last season's players
@@ -725,16 +797,16 @@ def run_simulation(
     conn,
     start_season: int = 2036,
     num_seasons: int = 5,
-    drift_correction: bool = True,
+    hold_shape: bool = True,
     log=print
 ) -> Dict[str, Any]:
     """Simulates N seasons ahead on a copy of the league to check its shape stays stable (§5.5).
 
-    Each season every player ages a year and gets compute_player_delta; players leave at the rates Madden's own
-    league showed between start_season - 1 and start_season (league_turnover); the league is refilled to its size
-    with a rookie class shaped like Madden's start_season class (rookie_class). With drift_correction (the §5.5
-    rule: the age term is adjusted for next season, never mid-run) a league whose 90+ count strays more than 10%
-    from the start season gets ±0.1 OVR a year added to every change, up to ±0.4.
+    Each season players leave at the rates Madden's own league showed between start_season - 1 and start_season
+    (league_turnover), everyone else ages a year and gets compute_player_delta, and the league is refilled to its
+    size with a rookie class shaped like Madden's start_season class (rookie_class). With hold_shape (the default,
+    JR 2026-10-28) the league term is calibrated each season so the league after the draft keeps start_season's
+    90+ count and mean OVR (calibrate_league_term); without it the league follows Madden's own turnover.
 
     is_stable: every simulated season within STABILITY_BOUNDS_2036 of the start season."""
     with conn.cursor() as cur:
@@ -750,53 +822,40 @@ def run_simulation(
                    "dev": r[5] or "Normal"} for r in cur.fetchall()]
 
     log(f"--- League Stability Simulation ({num_seasons} seasons from {start_season}, "
-        f"drift correction {'on' if drift_correction else 'off'}) ---")
+        f"{'holding the ' + str(start_season) + ' shape' if hold_shape else 'following Madden'}) ---")
     base = league_shape(roster)
     size = base["players_count"]
     log(f"Baseline {start_season}: Players={size}, 90+={base['count_90_plus']}, Avg OVR={base['avg_ovr']:.2f}, "
         f"Avg Age={base['avg_age']:.2f}, Avg Starter OVR={base['avg_starter_ovr']:.2f}")
     teams = sorted({p["team_id"] for p in roster if p["team_id"]})
 
-    history, adjustment = [], 0.0
+    target = {"count_90_plus": base["count_90_plus"], "avg_ovr": base["avg_ovr"]}
+    history = []
     for yr in range(1, num_seasons + 1):
         sim_s = start_season + yr
         leave_rng = random.Random(f"retire:{sim_s}")
-        survivors = []
-        for p in roster:
-            if leave_rng.random() < gone_rate(turnover, p["age"], p["ovr"]):
-                continue
-            new_age = p["age"] + 1
-            ceiling, _ = seed_player_ceiling(p["player_id"], p["ovr"], new_age, p["dev"])
-            delta, new_ovr, _, _ = compute_player_delta(
-                player_id=p["player_id"], position=p["position"], age=new_age, ovr=p["ovr"], dev_trait=p["dev"],
-                ceiling=ceiling, games_played=16, downs_played=None, is_starter=True, is_ir=False,
-                injury_weeks=0, season=sim_s, aging_curves=aging_curves)
-            if adjustment:
-                # OVR is whole points, so a fractional adjustment is a seeded chance of one more point
-                # (adding 0.3 before rounding would never change anything)
-                whole = int(adjustment)
-                if random.Random(f"adj:{sim_s}:{p['player_id']}").random() < abs(adjustment - whole):
-                    whole += 1 if adjustment > 0 else -1
-                new_ovr = max(OVR_MIN, min(OVR_MAX, new_ovr + whole))
-            survivors.append({**p, "age": new_age, "ovr": new_ovr})
-
+        staying = [p for p in roster if leave_rng.random() >= gone_rate(turnover, p["age"], p["ovr"])]
         rng = random.Random(f"draft:{sim_s}")
-        for i, r in enumerate(rookie_class(turnover, size - len(survivors), rng)):
-            survivors.append({"player_id": 100000 + sim_s * 1000 + i, "team_id": rng.choice(teams), **r})
-        roster = survivors
+        rookies = rookie_class(turnover, size - len(staying), rng)
 
-        shape = {"season": sim_s, **league_shape(roster), "adjustment": round(adjustment, 2)}
+        def progress(p, dev, star=0.0, sim_s=sim_s):
+            ceiling, _ = seed_player_ceiling(p["player_id"], p["ovr"], p["age"] + 1, p["dev"])
+            return compute_player_delta(
+                player_id=p["player_id"], position=p["position"], age=p["age"] + 1, ovr=p["ovr"], dev_trait=p["dev"],
+                ceiling=ceiling, games_played=16, downs_played=None, is_starter=True, is_ir=False,
+                injury_weeks=0, season=sim_s, aging_curves=aging_curves, league_adj=dev, star_adj=star)[1]
+
+        terms = (calibrate_league_term(staying, [r["ovr"] for r in rookies], target, progress)[0]
+                 if hold_shape else (0.0, 0.0))
+        roster = [{**p, "age": p["age"] + 1, "ovr": progress(p, *terms)} for p in staying]
+        roster += [{"player_id": 100000 + sim_s * 1000 + i, "team_id": rng.choice(teams), **r}
+                   for i, r in enumerate(rookies)]
+
+        shape = {"season": sim_s, **league_shape(roster), "league_term": terms[0], "star_term": terms[1]}
         history.append(shape)
         log(f"Season {sim_s}: 90+={shape['count_90_plus']:3} (Δ={shape['count_90_plus'] - base['count_90_plus']:+3}), "
             f"Avg OVR={shape['avg_ovr']:.2f}, Avg Age={shape['avg_age']:.2f}, "
-            f"Avg Starter={shape['avg_starter_ovr']:.2f}, adjustment {adjustment:+.1f}")
-
-        if drift_correction:
-            ratio = shape["count_90_plus"] / max(base["count_90_plus"], 1)
-            if ratio < 0.9:
-                adjustment = min(0.4, adjustment + 0.1)
-            elif ratio > 1.1:
-                adjustment = max(-0.4, adjustment - 0.1)
+            f"Avg Starter={shape['avg_starter_ovr']:.2f}, terms dev {terms[0]:+.1f} star {terms[1]:+.2f}")
 
     b = STABILITY_BOUNDS_2036
     lo90 = round(base["count_90_plus"] * (1 - b["count_90_plus_pct"]))
@@ -809,7 +868,7 @@ def run_simulation(
         for s in history)
     log(f"\nStability check (each season within {b} of {start_season}): "
         f"{'PASSED' if is_stable else 'DRIFT'}")
-    return {"start_season": start_season, "num_seasons": num_seasons, "drift_correction": drift_correction,
+    return {"start_season": start_season, "num_seasons": num_seasons, "hold_shape": hold_shape,
             "baseline": {"players": size, **{k: base[k] for k in ("count_90_plus", "avg_ovr", "avg_age",
                                                                    "avg_starter_ovr")}},
             "turnover": {"rookies": len(turnover["rookies"]),
@@ -826,7 +885,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Dry run without database commit")
     parser.add_argument("--backtest", action="store_true", help="Evaluate 2035->2036 actual vs predicted progression")
     parser.add_argument("--simulate", type=int, metavar="N", help="Simulate N seasons ahead to verify stability")
-    parser.add_argument("--no-drift-correction", action="store_true", help="With --simulate: no §5.5 adjustment")
+    parser.add_argument("--follow-madden", action="store_true",
+                        help="No league term: let the league follow Madden's turnover instead of holding its 2036 shape")
     parser.add_argument("--dsn", default=DSN, help="Database DSN")
 
     args = parser.parse_args()
@@ -836,9 +896,10 @@ def main():
             run_backtest(conn, season=args.season if args.season <= 2036 else 2036)
         elif args.simulate:
             run_simulation(conn, start_season=args.season if args.season <= 2036 else 2036, num_seasons=args.simulate,
-                           drift_correction=not args.no_drift_correction)
+                           hold_shape=not args.follow_madden)
         else:
-            run_progression(conn, season=args.season, commit=args.commit, dry_run=args.dry_run)
+            run_progression(conn, season=args.season, commit=args.commit, dry_run=args.dry_run,
+                            hold_shape=not args.follow_madden)
 
 
 if __name__ == "__main__":

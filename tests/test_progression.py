@@ -205,24 +205,31 @@ def test_ratings_adjustment(weights_doc):
 
 
 @pytest.mark.integration
-def test_simulation_reports_league_shape():
-    """The simulation runs on Madden's own turnover (rookie class, departures) and reports each season against the
-    2036 limits (§5.5, R6). It does not assert stability: with Madden-strength rookie classes the league shrinks,
-    which is a design decision for JR (PRE_PC_WORK.md R6), so the test checks the mechanics instead."""
+def test_simulation_holds_the_league_shape():
+    """With the league terms (JR, 2026-10-28) the league keeps its 2036 shape every season (§5.5, R6);
+    following Madden's own turnover it shrinks."""
     conn = psycopg.connect(TEST_DSN)
     with conn:
-        off = run_simulation(conn, start_season=2036, num_seasons=3, drift_correction=False, log=lambda *args: None)
-        on = run_simulation(conn, start_season=2036, num_seasons=3, drift_correction=True, log=lambda *args: None)
-    for res in (off, on):
-        assert len(res["history"]) == 3
-        assert isinstance(res["is_stable"], bool)
-        assert res["turnover"]["rookies"] > 0
-        for s in res["history"]:
-            assert s["players_count"] == res["baseline"]["players"]      # league refilled to its size
-    assert all(s["adjustment"] == 0 for s in off["history"])
-    # the correction is applied (whole points, seeded) once the 90+ count drifts, and only ever helps
-    if any(s["adjustment"] for s in on["history"]):
-        assert on["history"][-1]["avg_ovr"] > off["history"][-1]["avg_ovr"]
+        held = run_simulation(conn, start_season=2036, num_seasons=3, hold_shape=True, log=lambda *args: None)
+        madden = run_simulation(conn, start_season=2036, num_seasons=3, hold_shape=False, log=lambda *args: None)
+    base = held["baseline"]
+    assert held["is_stable"] is True
+    for s in held["history"]:
+        assert s["players_count"] == base["players"]
+        assert abs(s["count_90_plus"] - base["count_90_plus"]) <= max(10, base["count_90_plus"] * 0.10)
+        assert abs(s["avg_ovr"] - base["avg_ovr"]) <= 0.5
+    assert all(s["league_term"] == 0 and s["star_term"] == 0 for s in madden["history"])
+    assert madden["history"][-1]["avg_ovr"] < held["history"][-1]["avg_ovr"]
+
+
+def test_calibrate_league_term_hits_both_targets():
+    from engines.progression import calibrate_league_term
+    players = [{"ovr": o} for o in [70] * 80 + [88] * 20]
+    # dev moves the 70s, star moves the 88s; 90+ needs star >= 2 for the 88s
+    progress = lambda p, dev, star: p["ovr"] + (int(dev) if p["ovr"] < 85 else int(star))
+    (dev, star), shape = calibrate_league_term(players, [], {"count_90_plus": 20, "avg_ovr": 76.0}, progress)
+    assert star == 2.0 and shape["count_90_plus"] == 20
+    assert abs(shape["avg_ovr"] - 76.0) <= 0.5
 
 
 def test_rookie_class_follows_the_real_class():
