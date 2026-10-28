@@ -1,4 +1,4 @@
-"""Front-office quality from draft track records (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 3). Pure."""
+"""Front-office quality from draft track records (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 3). Pure."""
 from engines import fo_quality as fq
 
 

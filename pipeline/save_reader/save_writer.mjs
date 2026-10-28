@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Writes Player field edits into a copy of a Madden 27 franchise save, then reads the copy back to verify them
-// (docs/PC_MIGRATION_PLAN.md §4.3; the teleporter will build on this).
+// (docs/in_progress/PC_MIGRATION_PLAN.md §4.3; the teleporter will build on this).
 //
 //   node save_writer.mjs <CAREER-save> <edits.json> --out <new-save> [--overwrite-out]
 //

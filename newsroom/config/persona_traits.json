@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared trait catalogue (docs/PERSONALITY_PLAN.md \u00a74.2). Each trait: category, roles (role -> draw weight, used for seeding in phase 2), label, prompt (a tendency, phrased 'tends to ...'), optional when (tags from newsroom/personas.py; empty = a standing tendency), conflicts. At most two traits per category per agent. Engine effects (phase 4) will be added per trait as an 'effects' object.",
+  "_comment": "Shared trait catalogue (docs/in_progress/PERSONALITY_PLAN.md \u00a74.2). Each trait: category, roles (role -> draw weight, used for seeding in phase 2), label, prompt (a tendency, phrased 'tends to ...'), optional when (tags from newsroom/personas.py; empty = a standing tendency), conflicts. At most two traits per category per agent. Engine effects (phase 4) will be added per trait as an 'effects' object.",
   "traits": {
     "FILM_JUNKIE": {
       "id": "FILM_JUNKIE",

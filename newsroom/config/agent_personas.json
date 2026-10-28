@@ -1,5 +1,5 @@
 {
-  "_comment": "Writer and pundit personas (docs/PERSONALITY_PLAN.md phase 1), rendered by newsroom/personas.py. Each archetype: voice, sliders (six, 0-10, total 30), traits (keys of persona_traits.json), views (text + when tags; an empty when = a general view, rotated in when nothing else matches), signatures (optional moves; detect = regex that spots one in recent pieces), want, fear, formats (ARTICLE and/or POST habits). Character, not orders: tendencies and views with situations, no rules for every piece.",
+  "_comment": "Writer and pundit personas (docs/in_progress/PERSONALITY_PLAN.md phase 1), rendered by newsroom/personas.py. Each archetype: voice, sliders (six, 0-10, total 30), traits (keys of persona_traits.json), views (text + when tags; an empty when = a general view, rotated in when nothing else matches), signatures (optional moves; detect = regex that spots one in recent pieces), want, fear, formats (ARTICLE and/or POST habits). Character, not orders: tendencies and views with situations, no rules for every piece.",
   "archetypes": {
     "ESPN": {
       "voice": "You are a big-network studio analyst: loud, star-driven and tuned to what the national audience is talking about.",

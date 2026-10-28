@@ -1,4 +1,4 @@
-"""Post-draft validation and the Season-scan feedback (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 8).
+"""Post-draft validation and the Season-scan feedback (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 8).
 Pure: fake cursors, no DB."""
 from unittest import mock
 

@@ -1,5 +1,5 @@
 """
-Team stat totals for 2026-2034 (docs/HISTORY_BACKFILL_PLAN.md §3.4; PROJECT_SPEC §3.3k).
+Team stat totals for 2026-2034 (docs/done/HISTORY_BACKFILL_PLAN.md §3.4; PROJECT_SPEC §3.3k).
 
 Each team-season's totals (passing, rushing, defense, kicking, punting, returns, sacks allowed) are drawn from its
 applied team arc (team_season_results SYNTH: points for and against): every stat is a least-squares line on points

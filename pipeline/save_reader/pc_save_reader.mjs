@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Reads a Madden 27 PC franchise save into one JSON snapshot for Project Mu (docs/PC_MIGRATION_PLAN.md §5.1).
+// Reads a Madden 27 PC franchise save into one JSON snapshot for Project Mu (docs/in_progress/PC_MIGRATION_PLAN.md §5.1).
 //
 //   node pc_save_reader.mjs <CAREER-save> [--out snapshot.json]
 //

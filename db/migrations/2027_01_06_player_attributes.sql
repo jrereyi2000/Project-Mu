@@ -1,4 +1,4 @@
--- PS5 attribute scan (docs/PC_MIGRATION_PLAN.md §2.3; PROJECT_SPEC §3.1): every player's 54 ratings read off the
+-- PS5 attribute scan (docs/in_progress/PC_MIGRATION_PLAN.md §2.3; PROJECT_SPEC §3.1): every player's 54 ratings read off the
 -- wide Manage Roster > Roster list by madden_capture.py --only attributes and pipeline/attribute_reader.py, loaded
 -- by pipeline/load_attributes.py. One row per player per scan (capture folder), so scans can be repeated and
 -- compared; the teleporter takes a player's latest scan of the season.

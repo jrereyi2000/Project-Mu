@@ -1,5 +1,5 @@
 """
-The moves a trade makes (docs/team_management/03_GM_AGENTS_PLAN.md §2.7, Phase 5; PROJECT_SPEC §3.3f).
+The moves a trade makes (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.7, Phase 5; PROJECT_SPEC §3.3f).
 
 The League Transactions scan skips trade rows (JR, 2026-10-19), so every trade's moves are made here when JR
 confirms it on #debug: an approved proposal ("Made it"), a different trade on a proposal's card ("Made a

@@ -1,4 +1,4 @@
-"""Scouting consensus, events and read helpers (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 2).
+"""Scouting consensus, events and read helpers (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 2).
 Pure: no DB (the frozen 2037 class fixture stands in for draft_prospects)."""
 import csv
 import os

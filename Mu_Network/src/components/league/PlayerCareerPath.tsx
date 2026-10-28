@@ -1,4 +1,4 @@
-// The player page's Career Path row (docs/SEASON_CONTINUITY_PLAN.md phase 4): his moves between captured seasons from
+// The player page's Career Path row (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 4): his moves between captured seasons from
 // the player season ledger (`career_path` on GET /api/player/{id}): moved, drafted, joined, free agent, retired, and
 // how his career stands now when he isn't on a roster. Seasons he simply stayed are left out; nothing renders when
 // there's nothing to say.

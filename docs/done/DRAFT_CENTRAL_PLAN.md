@@ -2,14 +2,14 @@
 
 **Status (2026-10-28):** built 2026-10-24 (`81e1b29`, `Mu_Network/src/DraftPage.tsx`); linked from the Draft Capital grid (`b668894`).  
 **Access Model:** Accessible exclusively via the `#debug` control view (not a top-level navbar tab); navigating to `#draft` enters the Draft Central home page.  
-**Reference Specs:** `PROJECT_SPEC.md` §2.10, §2.18, §3.3c, §3.3g; `docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md`.
+**Reference Specs:** `PROJECT_SPEC.md` §2.10, §2.18, §3.3c, §3.3g; `docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md`.
 
 ---
 
 ## 1. Executive Summary & Objectives
 
 Project Mu simulates a living NFL and college football scouting ecosystem:
-- The backend currently generates weekly college `GAME` statlines for top prospects ([`engines/scouting_events.py`](file:///Users/jrereyi/Downloads/Project%20Mu/engines/scouting_events.py)), stochastic consensus movement across 27 steps ([`engines/scouting_engine.py`](file:///Users/jrereyi/Downloads/Project%20Mu/engines/scouting_engine.py)), private team GM boards ([`engines/scouting_boards.py`](file:///Users/jrereyi/Downloads/Project%20Mu/engines/scouting_boards.py)), and an analytical media mock draft ([`engines/mock_draft_engine.py`](file:///Users/jrereyi/Downloads/Project%20Mu/engines/mock_draft_engine.py)).
+- The backend currently generates weekly college `GAME` statlines for top prospects ([`engines/scouting_events.py`](file:/Users/jrereyi/Downloads/Project%20Mu/engines/scouting_events.py)), stochastic consensus movement across 27 steps ([`engines/scouting_engine.py`](file:/Users/jrereyi/Downloads/Project%20Mu/engines/scouting_engine.py)), private team GM boards ([`engines/scouting_boards.py`](file:/Users/jrereyi/Downloads/Project%20Mu/engines/scouting_boards.py)), and an analytical media mock draft ([`engines/mock_draft_engine.py`](file:/Users/jrereyi/Downloads/Project%20Mu/engines/mock_draft_engine.py)).
 - However, draft functionality has historically been isolated within backend test suites, newsroom tool queries, and an operational `#debug` card.
 
 This plan builds **Draft Central (`#draft`)**: a broadcast-grade, multi-tab scouting and draft simulation destination. It unifies college game-by-game logs, cumulative season statlines, NFL Combine athletic profiles, college awards races, team needs, media mock drafts, and a live broadcast-style Draft Day War Room into one immersive interface.

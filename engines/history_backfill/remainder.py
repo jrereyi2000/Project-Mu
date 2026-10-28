@@ -1,6 +1,6 @@
 """
 2026-2034 remainders: what each player's career totals leave for the seasons the backfill generates
-(docs/HISTORY_BACKFILL_PLAN.md §3.1; PROJECT_SPEC §3.3i).
+(docs/done/HISTORY_BACKFILL_PLAN.md §3.1; PROJECT_SPEC §3.3i).
 
   python3 -m engines.history_backfill.remainder [--season S]      # S = the captured season, default the latest
 

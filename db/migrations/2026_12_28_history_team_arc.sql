@@ -1,4 +1,4 @@
--- 2026-2034 team arc (docs/HISTORY_BACKFILL_PLAN.md phase 2; PROJECT_SPEC §3.3j).
+-- 2026-2034 team arc (docs/done/HISTORY_BACKFILL_PLAN.md phase 2; PROJECT_SPEC §3.3j).
 -- engines/history_backfill/team_arc.py generates candidate histories into the staging tables below; `apply` copies
 -- the one JR picks into league_seasons, team_season_results and coach_season_lines with source = 'SYNTH', and
 -- `revert` deletes every SYNTH row. Rows the season archive writes (2035 on) stay source = 'CAPTURE'.

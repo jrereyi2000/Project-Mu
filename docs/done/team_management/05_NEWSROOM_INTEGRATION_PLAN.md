@@ -270,7 +270,7 @@ Phases 1–2 need no approval. Phases 3–7 come after JR rules on §2.6, and Ph
 **Exit check:** a dry run (`dispatch_single_archetype(..., live=False)`) for 2036 W5 shows both blocks. JR reads one live FSOTU and one beat article from the next real run.
 
 ### Phase 5: Agent Wire moves (needs R12)
-**Files:** `social_desk.py` (`ctx["moves"]`, the four kinds, `plan_team_wakeup`), `social_writer.py` (`KIND_INSTRUCTIONS`, the money guard in `clean_post`), `social_desk.json` (kind factors), `docs/SOCIAL_MATRIX.md` (the approved text).
+**Files:** `social_desk.py` (`ctx["moves"]`, the four kinds, `plan_team_wakeup`), `social_writer.py` (`KIND_INSTRUCTIONS`, the money guard in `clean_post`), `social_desk.json` (kind factors), `docs/done/SOCIAL_MATRIX.md` (the approved text).
 
 **Tests**
 - `tests/test_social_desk.py` synthetic league: moves → at most 3 `MOVE_NEWS` from insiders only, `BEAT_MOVE` replacing `BEAT`, but not when the team has a starter injury, `CAP_TAKE` only when its trigger holds, still ~100 posts in total.
@@ -325,7 +325,7 @@ Phases 1–2 need no approval. Phases 3–7 come after JR rules on §2.6, and Ph
 - Tests: `tests/test_newsroom_trades.py` (pure and fake cursors). The exit check against a restored DB copy with a fake executed trade is JR's to run.
 
 ### Phase 9: Draft risers and fallers (**depends on step 4**)
-**Status (2026-10-20, built by step 4):** the data side and seam are on main. `engines/scouting_read.py` provides `risers_fallers` and `consensus_board` (with cutoff visibility), `engines/fo_quality.team_draft_record` provides the labels and streaks, and two registered writer tools exist: `get_draft_risers_fallers(season, limit)` and `get_team_draft_record(team, season)`. Both use pure formatters and are tested in `tests/test_mock_draft_tools.py`. Finished 2026-10-20 with JR's approved text: `@MockDraftMarty` `DRAFT_BOARD` posts (`social_desk.load_draft_movers` / `draft_board_subjects`, 1 a week, 2 from Week 19; `docs/SOCIAL_MATRIX.md` row 8b) and the directive lines in `OFFSEASON_MOCK_DRAFT` (step 4: risers/fallers, streaks, no OVR), `DRAFT_BLUEPRINT_ROSTER_AUDIT` and `FRANCHISE_STATE_OF_THE_UNION` (`get_team_draft_record`, verdicts as written, hidden dev never a bust). Tests: `tests/test_draft_board_posts.py`.
+**Status (2026-10-20, built by step 4):** the data side and seam are on main. `engines/scouting_read.py` provides `risers_fallers` and `consensus_board` (with cutoff visibility), `engines/fo_quality.team_draft_record` provides the labels and streaks, and two registered writer tools exist: `get_draft_risers_fallers(season, limit)` and `get_team_draft_record(team, season)`. Both use pure formatters and are tested in `tests/test_mock_draft_tools.py`. Finished 2026-10-20 with JR's approved text: `@MockDraftMarty` `DRAFT_BOARD` posts (`social_desk.load_draft_movers` / `draft_board_subjects`, 1 a week, 2 from Week 19; `docs/done/SOCIAL_MATRIX.md` row 8b) and the directive lines in `OFFSEASON_MOCK_DRAFT` (step 4: risers/fallers, streaks, no OVR), `DRAFT_BLUEPRINT_ROSTER_AUDIT` and `FRANCHISE_STATE_OF_THE_UNION` (`get_team_draft_record`, verdicts as written, hidden dev never a bust). Tests: `tests/test_draft_board_posts.py`.
 **Interface request to step 4:** a weekly consensus board (season, week, prospect, grade, rank) and the per-team hit-rate inputs (`q_team`).
 
 **Files**
@@ -351,7 +351,7 @@ Phases 1–2 need no approval. Phases 3–7 come after JR rules on §2.6, and Ph
 | 8 | §7 tools (`get_trade_rumors`, `TRADED` lines); §7.8 (`TRADE_NEWS` / `TRADE_RUMOR`); §7.3 if `TRADE_GRADES` is approved |
 | 9 | §7 tools; §7.8 draft posts |
 
-Phases 3–5 also edit `docs/EDITORIAL_MATRIX.md` / `docs/SOCIAL_MATRIX.md`, and only with JR's approved text.
+Phases 3–5 also edit `docs/EDITORIAL_MATRIX.md` / `docs/done/SOCIAL_MATRIX.md`, and only with JR's approved text.
 
 ## 5. Out of scope
 - Any schema change: §2.1 and §2.2 are used as they are. `vw_team_cap_sheet` stays.

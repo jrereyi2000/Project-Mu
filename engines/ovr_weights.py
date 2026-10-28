@@ -1,5 +1,5 @@
 """
-Madden 27 OVR formulas (docs/PC_MIGRATION_PLAN.md §4.4): fits how Madden turns a player's ratings into each archetype's
+Madden 27 OVR formulas (docs/in_progress/PC_MIGRATION_PLAN.md §4.4): fits how Madden turns a player's ratings into each archetype's
 OVR, from a save-reader snapshot (pipeline/save_reader), and moves a player's ratings to a target OVR for the
 teleporter (§4.3 step 2).
 

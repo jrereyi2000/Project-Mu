@@ -1,5 +1,5 @@
 """
-Contract and cap writes (docs/TEAM_MANAGEMENT_PLAN.md §2.1; PROJECT_SPEC §3.3d). The Team Salary load
+Contract and cap writes (docs/done/TEAM_MANAGEMENT_PLAN.md §2.1; PROJECT_SPEC §3.3d). The Team Salary load
 (pipeline/load_capture.load_contracts) and the transactions load (team management step 2) share them.
 Money is whole dollars (pipeline/money.parse_money). Nothing here commits.
 """

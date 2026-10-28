@@ -1,5 +1,5 @@
 """
-The teleporter's draft step (docs/PC_MIGRATION_PLAN.md §4.3 Step 5): turns a Madden 27 PC save's draft class into
+The teleporter's draft step (docs/in_progress/PC_MIGRATION_PLAN.md §4.3 Step 5): turns a Madden 27 PC save's draft class into
 Project Mu's and gives its future picks Project Mu's owners. Writes the edits file
 pipeline/save_reader/save_writer.mjs applies; reads the database, never writes it; never touches a save itself.
 

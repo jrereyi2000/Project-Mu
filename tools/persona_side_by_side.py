@@ -1,4 +1,4 @@
-"""Writer persona side-by-side (docs/PERSONALITY_PLAN.md phase 1).
+"""Writer persona side-by-side (docs/in_progress/PERSONALITY_PLAN.md phase 1).
 
 Writes the same national articles twice, once with the personas and writer slate filters from before phase 1
 (read from git at OLD_REV) and once with the current ones, and saves both versions with their persona blocks to

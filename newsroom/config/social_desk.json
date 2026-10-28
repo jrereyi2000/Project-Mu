@@ -1,5 +1,5 @@
 {
-  "_comment": "Agent Wire social desk settings (docs/SOCIAL_MATRIX.md §5, PROJECT_SPEC §7.8). model_by_kind overrides model for a post kind (REACTION, PERFORMANCE, BAD_GAME, COMPARISON, TEAM_STORY, PLAYER, BEAT, STANDINGS, SHARE, PREVIEW, MEME, REPLY). JR chose Gemini 3.8 Flash for every kind (Oct 14, 2026).",
+  "_comment": "Agent Wire social desk settings (docs/done/SOCIAL_MATRIX.md §5, PROJECT_SPEC §7.8). model_by_kind overrides model for a post kind (REACTION, PERFORMANCE, BAD_GAME, COMPARISON, TEAM_STORY, PLAYER, BEAT, STANDINGS, SHARE, PREVIEW, MEME, REPLY). JR chose Gemini 3.8 Flash for every kind (Oct 14, 2026).",
   "model": "gemini-3.8-flash",
   "model_by_kind": {},
   "max_workers": 5,

@@ -1,4 +1,4 @@
-"""Tests for engines/college_stats.py and server/draft_api.py (Draft Central; docs/DRAFT_CENTRAL_PLAN.md)."""
+"""Tests for engines/college_stats.py and server/draft_api.py (Draft Central; docs/done/DRAFT_CENTRAL_PLAN.md)."""
 import unittest
 from unittest import mock
 

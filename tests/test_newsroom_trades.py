@@ -1,4 +1,4 @@
-"""Trades and rumors in the newsroom (docs/team_management/05_NEWSROOM_INTEGRATION_PLAN.md Phase 8). Pure helpers and
+"""Trades and rumors in the newsroom (docs/done/team_management/05_NEWSROOM_INTEGRATION_PLAN.md Phase 8). Pure helpers and
 fake cursors: no database, no model calls."""
 import re
 import unittest

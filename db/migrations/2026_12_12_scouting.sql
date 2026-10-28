@@ -1,4 +1,4 @@
--- Scouting and draft (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.10; PROJECT_SPEC §3.3g).
+-- Scouting and draft (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.10; PROJECT_SPEC §3.3g).
 -- Each prospect's hidden true value, the weekly noisy consensus board and the invented college events that explain
 -- its moves, 32 private team boards, and the Round 1 picks JR records live in the Draft Room. Rows key on a stable
 -- prospect_key (draft season + name + position group) because a Draft Board re-scan replaces draft_prospects ids.

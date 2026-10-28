@@ -1,5 +1,5 @@
 """
-2026-2034 team arc: standings, playoffs, points and coach lines (docs/HISTORY_BACKFILL_PLAN.md phase 2, §3.3;
+2026-2034 team arc: standings, playoffs, points and coach lines (docs/done/HISTORY_BACKFILL_PLAN.md phase 2, §3.3;
 PROJECT_SPEC §3.3j).
 
   python3 -m engines.history_backfill generate [--seeds 3] [--pins data/history/pins.json] [--time-limit S]

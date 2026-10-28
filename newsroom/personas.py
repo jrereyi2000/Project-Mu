@@ -1,4 +1,4 @@
-"""Writer and pundit personas (docs/PERSONALITY_PLAN.md phase 1).
+"""Writer and pundit personas (docs/in_progress/PERSONALITY_PLAN.md phase 1).
 
 Each persona in newsroom/config/agent_personas.json ("archetypes") is character, not orders: a voice, six sliders
 with a fixed budget, traits from newsroom/config/persona_traits.json, views that each apply only in some

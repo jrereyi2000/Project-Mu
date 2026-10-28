@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Phase 3 exit check (docs/PIPELINE_MIGRATION.md): after a weekly load, run the backfill and check
+Phase 3 exit check (docs/done/PIPELINE_MIGRATION.md): after a weekly load, run the backfill and check
 that every player's per-game player_stats add up to season_stats.
 
   python3 tools/check_capture_load.py --db <test copy> --season 2035 [--backfill]

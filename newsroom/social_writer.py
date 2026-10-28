@@ -1,4 +1,4 @@
-"""Agent Wire post writer (docs/SOCIAL_MATRIX.md §3, build step 4).
+"""Agent Wire post writer (docs/done/SOCIAL_MATRIX.md §3, build step 4).
 
 Turns one social-desk assignment (newsroom/social_desk.py) into a prompt, calls Gemini once with no tools,
 and cleans the reply into a post. The facts packet is the only source of numbers; the account's tweet persona
@@ -9,7 +9,7 @@ import os
 import re
 import time
 
-# USD per 1M tokens (input, output incl. thinking). docs/SOCIAL_MATRIX.md §9; Gemini 3.8 Flash doubles Jan 1, 2027.
+# USD per 1M tokens (input, output incl. thinking). docs/done/SOCIAL_MATRIX.md §9; Gemini 3.8 Flash doubles Jan 1, 2027.
 PRICES = {
     "gemini-3.8-flash": (0.75, 3.75),
     "gemini-3.5-flash-lite": (0.30, 2.50),

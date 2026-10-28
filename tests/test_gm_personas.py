@@ -1,4 +1,4 @@
-"""GM personas (docs/team_management/03_GM_AGENTS_PLAN.md Phase 1). Pure: no database, no Gemini."""
+"""GM personas (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 1). Pure: no database, no Gemini."""
 import json
 
 from engines import gm_llm

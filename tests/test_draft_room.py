@@ -1,4 +1,4 @@
-"""The Draft Room (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 7). Pure: no DB."""
+"""The Draft Room (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 7). Pure: no DB."""
 from unittest import mock
 
 import pytest

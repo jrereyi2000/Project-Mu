@@ -1,4 +1,4 @@
--- Writer identity lines as character, not rules (docs/PERSONALITY_PLAN.md phase 1; PROJECT_SPEC §7.7, §7.11).
+-- Writer identity lines as character, not rules (docs/in_progress/PERSONALITY_PLAN.md phase 1; PROJECT_SPEC §7.7, §7.11).
 -- agent_memories.persistent_memory goes into every prompt as PERSISTENT WORLDVIEW. A few lines were written as
 -- rules ("regression always comes", "I only care about ...", "That's it. That's the list.", "Emojis only."), and
 -- the 2036 persona side-by-side (tools/persona_side_by_side.py) showed Barnwell still ending every column with a

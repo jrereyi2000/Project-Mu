@@ -1,5 +1,5 @@
 """
-Scouting engine (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.1-§2.5; PROJECT_SPEC §2.18, §3.3g).
+Scouting engine (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.1-§2.5; PROJECT_SPEC §2.18, §3.3g).
 
 A draft class's scouting rows (scout_prospects) carry each prospect's hidden true value V (engines/scouting_value.py).
 Everything keys on prospect_key, because a Draft Board re-scan replaces draft_prospects ids (relink re-points them).

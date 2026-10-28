@@ -1,4 +1,4 @@
--- Career totals from Madden's Career Stats lists (docs/HISTORY_BACKFILL_PLAN.md phase 1; PROJECT_SPEC §3.3i).
+-- Career totals from Madden's Career Stats lists (docs/done/HISTORY_BACKFILL_PLAN.md phase 1; PROJECT_SPEC §3.3i).
 -- pipeline/load_career_totals.py writes one row per list row and category: the player's career line as Madden shows
 -- it (real NFL stats through 2025 for veterans, every season since, the current season so far), in the
 -- season_stat_lines column names. A row whose name can't be settled to one player keeps player_id NULL and a flag.

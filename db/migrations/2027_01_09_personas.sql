@@ -1,4 +1,4 @@
--- Personality plan phases 2 and 3 (docs/PERSONALITY_PLAN.md §4, §9; PROJECT_SPEC §3, §7.11; PRE_PC_WORK.md §10).
+-- Personality plan phases 2 and 3 (docs/in_progress/PERSONALITY_PLAN.md §4, §9; PROJECT_SPEC §3, §7.11; PRE_PC_WORK.md §10).
 -- Persona tables keyed by (persona_type, persona_id) across writers, GMs, players, coaches, owners, and scouts.
 --
 -- Apply with:

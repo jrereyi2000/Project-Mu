@@ -21,7 +21,7 @@ Usage
   python3 madden_capture.py               # full run: stats + schedule
   python3 madden_capture.py --only stats  # or: --only team, --only schedule
   python3 madden_capture.py --only career --out RUN  # Career Stats (Stats & Awards > Career Stats) into RUN/career/,
-                                            # right after RUN's Season Stats (docs/HISTORY_BACKFILL_PLAN.md §3.1)
+                                            # right after RUN's Season Stats (docs/done/HISTORY_BACKFILL_PLAN.md §3.1)
   python3 madden_capture.py --only career-teams --out RUN  # then team by team for the lists that hit 250 rows
                                             # (rushing, receiving, defense, blocking; --category to change) -> career_scope/
   python3 madden_capture.py --only playoff  # postseason week: schedule (+ next round) and every game of last
@@ -519,7 +519,7 @@ def classify(f):
     # Postgame highlights screen: VIEW PLAY / CHANGE QUARTER at bottom, TIME / PLAY in table
     if f.find("VIEW PLAY") and (f.find("CHANGE QUARTER") or (f.find("TIME") and f.find("RATING"))):
         return "HIGHLIGHTS"
-    # Manage Roster > Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md C3): its right edge shows
+    # Manage Roster > Team Salary (docs/done/team_management/01_CONTRACT_SCAN_PLAN.md C3): its right edge shows
     # SAVINGS and PENALTY too, so it is told apart by the cap strip over the table (36 CAP, 35 ROLLOVER,
     # ADJUSTED CAP, CAP SPACE, SALARIES, CAP PENALTY, TOTAL SPEND, 37 ROOKIE RES), which every team shows.
     # The hub (tabs showing) never counts, whatever tile it shows.
@@ -841,7 +841,7 @@ STATS_TILE_COLUMN = ["IN-SEASON AWARDS", "NFL RECORD BOOK", "CAREER STATS", "COA
 
 
 def open_career_stats():
-    """Stats & Awards > Career Stats (docs/HISTORY_BACKFILL_PLAN.md §3.1): Right to the right-hand column, then
+    """Stats & Awards > Career Stats (docs/done/HISTORY_BACKFILL_PLAN.md §3.1): Right to the right-hand column, then
     Up/Down to Career Stats. It opens a list laid out like Player Stats (same chips, columns and buttons)."""
     f, s = look()
     if s == "PLAYER_STATS":                     # maybe the Season Stats list: back to the tiles
@@ -1630,7 +1630,7 @@ def run_scoped_stats(out, team, categories, all_rows, kind="stats", reopen=True)
 
 # League-wide lists stop at 250 rows (Receiving and Defense Season Stats hit exactly 250, 2036). A Career Stats
 # list holds every player with any career line, so these categories are captured team by team too: a team's
-# list is short and nobody falls off the bottom (docs/HISTORY_BACKFILL_PLAN.md §3.1, K3).
+# list is short and nobody falls off the bottom (docs/done/HISTORY_BACKFILL_PLAN.md §3.1, K3).
 CAREER_TEAM_CATEGORIES = ["RUSHING", "RECEIVING", "DEFENSE", "BLOCKING"]
 
 
@@ -3026,7 +3026,7 @@ def run_injuries(out, target_teams=None):
 
 
 # ------------------------------------------------------- team salary ----
-# Manage Roster > Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md; master plan §3.1):
+# Manage Roster > Team Salary (docs/done/team_management/01_CONTRACT_SCAN_PLAN.md; master plan §3.1):
 #  * 12 rows show (frames of 2026-10-19); pages step 11 rows, so consecutive pages overlap by one (merged
 #    away). NAME/POS scroll away when the table moves right, so every page is captured at both edges at
 #    the same row position (capture_wide_list): left edge = NAME header showing, right edge = the
@@ -3285,7 +3285,7 @@ def run_contracts(out, target_teams=None, resume=False):
 
 
 # --------------------------------------------------------- transactions ----
-# League > League Transactions (docs/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, master plan §3.3): a
+# League > League Transactions (docs/done/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, master plan §3.3): a
 # newest-first list, L2 chip NFL, R2 type filter ALL, no week filter, no title. Confirmed by JR (2026-10-19): it
 # opens on NFL / ALL; 4 rows show, each a heading ("2036 SEASON - WEEK 4") over one unwrapped line of text; Down
 # moves a highlight like the other lists (so a batch of presses may only move it: capture_list's text check
@@ -4038,7 +4038,7 @@ def run_roster(out, max_teams=32, resume=False):
 
 
 # ---------------------------------------------------------- attributes ----
-# The wide roster list (docs/PC_MIGRATION_PLAN.md §2.3, mapped Oct 28): d-pad left/right moves a column cursor whose
+# The wide roster list (docs/in_progress/PC_MIGRATION_PLAN.md §2.3, mapped Oct 28): d-pad left/right moves a column cursor whose
 # full name shows in the chip at the top right; 11 columns and 14 rows show at once; the highlight scrolls down to
 # the 8th row and stays there. pipeline/attribute_reader.py has the column list and reads the views.
 ATTR_STEP = 7                                   # rows between sweeps, so every player is seen once not highlighted
@@ -4466,7 +4466,7 @@ def main():
                 log("Returning to the hub before contracts")
                 go_hub()
         if a.only == "attributes":
-            # PS5 attribute scan (docs/PC_MIGRATION_PLAN.md §2.3); read with python3 -m pipeline.attribute_reader RUN
+            # PS5 attribute scan (docs/in_progress/PC_MIGRATION_PLAN.md §2.3); read with python3 -m pipeline.attribute_reader RUN
             atries = [0]
 
             def attributes():

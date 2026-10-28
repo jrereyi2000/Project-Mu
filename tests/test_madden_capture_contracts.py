@@ -1,5 +1,5 @@
 """Console-free checks of madden_capture.py's Team Salary (contracts) capture
-(docs/team_management/01_CONTRACT_SCAN_PLAN.md Phase 2). Frames come from tests/fixtures/team_salary/*.json,
+(docs/done/team_management/01_CONTRACT_SCAN_PLAN.md Phase 2). Frames come from tests/fixtures/team_salary/*.json,
 OCR item lists in the shape --step writes; until Phase 0 they are synthetic placeholders."""
 import json
 import os

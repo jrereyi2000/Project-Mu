@@ -1,6 +1,6 @@
 # Project Mu: Offseason Editorial Package Implementation Plan
 
-**Status (2026-10-28):** built 2026-10-16 (`4e02c72`): the six offseason article types and the Week 24 package in [EDITORIAL_MATRIX.md](EDITORIAL_MATRIX.md), which is now the source of truth.
+**Status (2026-10-28):** built 2026-10-16 (`4e02c72`): the six offseason article types and the Week 24 package in [EDITORIAL_MATRIX.md](../EDITORIAL_MATRIX.md), which is now the source of truth.
 
 ## 1. Objective
 
@@ -8,7 +8,7 @@ Build an offseason editorial package that follows the season from the Super Bowl
 
 Although published as one unified package, each story is researched and narrated as if written in the week after its own event (`event_date + 1 week`), enforcing an event-relative information cutoff. The publication week (Week 24) and the story's narrative anchor date are separate concepts: Super Bowl stories never preview future coaching hires, the coaching carousel never leaks free-agency signings, and signings never reference draft picks.
 
-The package covers three Super Bowl follow-ups, a coaching-carousel audit powered by a new coordinator/slant data model and user-submitted moves (detailed in [docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md](file:///Users/jrereyi/Downloads/Project%20Mu/docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md)), marquee free-agency signing evaluations (editorial facts only), and a first-round-only draft recap based on captured or ingested actual draft results. This document is an implementation specification. The article types described here will be added to `article_types.json` once implementation begins.
+The package covers three Super Bowl follow-ups, a coaching-carousel audit powered by a new coordinator/slant data model and user-submitted moves (detailed in [docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md](file:/Users/jrereyi/Downloads/Project%20Mu/docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md)), marquee free-agency signing evaluations (editorial facts only), and a first-round-only draft recap based on captured or ingested actual draft results. This document is an implementation specification. The article types described here will be added to `article_types.json` once implementation begins.
 
 ---
 
@@ -104,7 +104,7 @@ Writer personas in `newsroom/config/agent_personas.json` provide voice. Type dir
 - **Name:** The Coaching Carousel: Hires, Firings, and Grades
 - **Writers:** `SANDO` (executive decisions/team windows), `BARNWELL` (performance context/sustainability)
 - **Granularity / focus:** Offseason coaching cycle; grade each entered team decision in context.
-- **Evidence:** Submitted move facts (outgoing coach, incoming coach, coaching slant, former team/coordinator origin); team record and wins relative to expectation; team efficiency and roster context; coach career profile; inherited vs. imported offensive/defensive schemes (governed by [docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md](file:///Users/jrereyi/Downloads/Project%20Mu/docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md)).
+- **Evidence:** Submitted move facts (outgoing coach, incoming coach, coaching slant, former team/coordinator origin); team record and wins relative to expectation; team efficiency and roster context; coach career profile; inherited vs. imported offensive/defensive schemes (governed by [docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md](file:/Users/jrereyi/Downloads/Project%20Mu/docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md)).
 - **Autonomy:** Cover only submitted moves. Explain the team's need, what the hire addresses, and the tactical/philosophical risks. Assign letter grades supported by concrete rationale. Apply validated tenure/coordinator updates before dispatch so upcoming-season context reflects the correct staff.
 - **Structure:** Main carousel pattern; consequential entered moves; strongest decision; highest-risk decision; brief note on material unknowns.
 - **Hook:** “Grade the coaching changes entered for this offseason, explaining which teams addressed their needs and which accepted the greatest risk.”
@@ -135,7 +135,7 @@ Writer personas in `newsroom/config/agent_personas.json` provide voice. Type dir
 
 ## 3. Subplan: Coordinator Data Model and Coaching Slants
 
-Before implementing the coaching carousel article, the database and engine architecture must be upgraded to support coordinators and head coaching backgrounds. For the complete, standalone technical specification covering database schemas, baseline seeding, tenure constraints, and scheme inheritance rules, see **[docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md](file:///Users/jrereyi/Downloads/Project%20Mu/docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md)**. A summary of core tenets is provided below:
+Before implementing the coaching carousel article, the database and engine architecture must be upgraded to support coordinators and head coaching backgrounds. For the complete, standalone technical specification covering database schemas, baseline seeding, tenure constraints, and scheme inheritance rules, see **[docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md](file:/Users/jrereyi/Downloads/Project%20Mu/docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md)**. A summary of core tenets is provided below:
 
 ### 3.1 Head Coach Slant Classification
 Every head coach in the `coaches` table receives a primary orientation:
@@ -324,7 +324,7 @@ Rather than creating a separate table, actual draft results enrich the existing 
 3. Establish shared file ownership to prevent merge collisions.
 
 ### Phase 0.5: Coordinator Model & Coach Slant System (Subplan)
-*Executed per [docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md](file:///Users/jrereyi/Downloads/Project%20Mu/docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md):*
+*Executed per [docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md](file:/Users/jrereyi/Downloads/Project%20Mu/docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md):*
 1. Add migration for `coaches.slant` (`OFFENSIVE`, `DEFENSIVE`, `CEO`).
 2. Add `coordinators` and `coordinator_tenures` tables.
 3. Seed Madden coordinator baseline list and procedurally fill gaps.

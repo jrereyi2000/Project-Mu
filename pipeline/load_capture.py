@@ -1,5 +1,5 @@
 """
-Load an extracted capture folder into the database (docs/PIPELINE_MIGRATION.md, phase 3).
+Load an extracted capture folder into the database (docs/done/PIPELINE_MIGRATION.md, phase 3).
 
   python3 -m pipeline.load_capture captures/<run> [--dry-run] [--apply-from "2036 SEASON - WEEK 3"]
 
@@ -246,7 +246,7 @@ def load_roster(cur, folder, season, report):
 
 # ----------------------------------------------------------- column maps ----
 # captured header -> (table, column, parser). Offense goes on season_stats / player_stats; every
-# other category on its own table (docs/PIPELINE_MIGRATION.md, hybrid layout). GP/DP repeat in
+# other category on its own table (docs/done/PIPELINE_MIGRATION.md, hybrid layout). GP/DP repeat in
 # every Season Stats category and go to the general table once.
 I, D = num, dec
 SEASON_OFFENSE = {
@@ -1391,7 +1391,7 @@ def load_prospects(cur, folder, season, report):
 
 
 # --------------------------------------------------------------- contracts ----
-# Team Salary (docs/team_management/01_CONTRACT_SCAN_PLAN.md Phase 4; PROJECT_SPEC §3.3d)
+# Team Salary (docs/done/team_management/01_CONTRACT_SCAN_PLAN.md Phase 4; PROJECT_SPEC §3.3d)
 CAP_LABEL_RE = re.compile(r"^\s*(\d{2})\s*CAP\s*$", re.I)
 ROOKIE_LABEL_RE = re.compile(r"^\s*(\d{2})\s*ROOKIE", re.I)
 CONTRACT_MONEY = {"TOTAL": "total_value", "BONUS": "bonus", "SAVINGS": "cut_savings", "PENALTY": "cut_penalty"}

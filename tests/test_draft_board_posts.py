@@ -1,4 +1,4 @@
-"""Draft board coverage (docs/team_management/05_NEWSROOM_INTEGRATION_PLAN.md Phase 9, JR-approved text 2026-10-20):
+"""Draft board coverage (docs/done/team_management/05_NEWSROOM_INTEGRATION_PLAN.md Phase 9, JR-approved text 2026-10-20):
 @MockDraftMarty DRAFT_BOARD posts and the three draft directive additions. Pure: no database, no model calls."""
 import json
 import unittest

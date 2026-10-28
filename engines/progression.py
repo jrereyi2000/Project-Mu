@@ -1,5 +1,5 @@
 """
-Player Progression Engine (docs/PROGRESSION_PLAN.md §5; PROJECT_SPEC §2.20; PRE_PC_WORK.md §11).
+Player Progression Engine (docs/in_progress/PROGRESSION_PLAN.md §5; PROJECT_SPEC §2.20; PRE_PC_WORK.md §11).
 
 Decides each player's yearly OVR change and spreads it over individual ratings offline, backtested against
 what Madden 27 did on the 2035->2036 offseason.

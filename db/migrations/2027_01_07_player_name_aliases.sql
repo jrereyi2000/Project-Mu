@@ -1,4 +1,4 @@
--- Commentary rename player name aliases (docs/PRE_PC_WORK.md §2; docs/PC_MIGRATION_PLAN.md §4.3)
+-- Commentary rename player name aliases (docs/done/PRE_PC_WORK.md §2; docs/in_progress/PC_MIGRATION_PLAN.md §4.3)
 -- Records historical/original names when a player's surname is renamed to match Madden commentary.
 -- Dry-run by default; apply on madden_test first.
 

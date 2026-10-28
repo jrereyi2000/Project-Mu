@@ -1,5 +1,7 @@
 # Pipeline migration: handoff for Claude Code
 
+**Status (2026-10-28): superseded by [PC_MIGRATION_PLAN.md](../in_progress/PC_MIGRATION_PLAN.md).** Phases 1–4 are done and phase 5's capture flow ran every week of 2036. Phase 5's formal exit runs and phase 6 (retire the stream extraction) won't be done: on the PC the save loader (PC plan §5) retires screen capture and OCR as a whole, `pipeline/ocr_extractor.py` included. Everything below is the plan as of Oct 15, kept for history; PROJECT_SPEC describes the current pipeline.
+
 Plan agreed with JR on Oct 13, 2026 in a claude.ai planning session. The full plan also lives in the claude.ai doc "Project Mu Pipeline Migration Plan"; this file is the copy Claude Code works from. If this file and the code disagree, trust the code and say so. If this file seems wrong or underspecified, ask JR before improvising.
 
 ## Current state (Oct 14, 2026)

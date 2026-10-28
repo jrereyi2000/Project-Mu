@@ -1,5 +1,5 @@
 """
-Scouting: each prospect's hidden true value V and the public grade scale (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md
+Scouting: each prospect's hidden true value V and the public grade scale (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md
 §2.1; PROJECT_SPEC §2.18). Pure: no DB.
 
     V = OVR + PV[position] + AGE[age]          (OVR points; a blank OVR counts as UNRATED_OVR)

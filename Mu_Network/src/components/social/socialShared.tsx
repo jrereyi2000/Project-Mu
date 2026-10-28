@@ -22,7 +22,7 @@ export function SocialIcon({ name }: { name: SocialIconName }) {
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// Agent Wire (docs/SOCIAL_MATRIX.md; data from /api/social/*, served by server/social_api.py)
+// Agent Wire (docs/done/SOCIAL_MATRIX.md; data from /api/social/*, served by server/social_api.py)
 // ---------------------------------------------------------------------------------------------------------
 export const SOCIAL_API = `${API_BASE}/api/social`;
 
@@ -132,7 +132,7 @@ export const socialInitials = (name: string) => {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 };
 
-// Avatars are parked (docs/SOCIAL_MATRIX.md): initials on the team colour, or a colour per kind of account.
+// Avatars are parked (docs/done/SOCIAL_MATRIX.md): initials on the team colour, or a colour per kind of account.
 export const SOCIAL_ACCOUNT_COLORS: Record<string, string> = {
   SCHEFTER_TWEET: "#b3122e", RAPOPORT: "#b3122e", NFL_MEMES: "#6d3fd1", DRAFT_SICKO: "#0e7490",
   FANTASY_GURU: "#15803d", BERRY: "#15803d", YATES: "#15803d", BANDWAGON_FAN: "#b45309",

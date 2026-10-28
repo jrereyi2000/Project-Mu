@@ -1,4 +1,4 @@
-// Releases rostered players to free agency inside an open franchise (docs/PC_MIGRATION_PLAN.md §4.3: donors the
+// Releases rostered players to free agency inside an open franchise (docs/in_progress/PC_MIGRATION_PLAN.md §4.3: donors the
 // teleporter leaves over). save_writer.mjs drives it from the edits file's "release": [pgid, ...]; it plans against
 // the save before anything changes, applies, and verifies the written file.
 //

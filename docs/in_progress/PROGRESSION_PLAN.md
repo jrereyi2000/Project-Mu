@@ -2,7 +2,7 @@
 
 **Status:** Phase C (engines/progression.py offline, backtested) complete (2026-10-28). Revised 2026-10-28 with the contextual design (three rating groups, durability and mileage, ceiling bands and breakthroughs, peak upkeep, form, Madden's behaviour traits, scheme continuity and mentors, and how player and coach traits drive each): not built; phase C2 builds it offline, phases D–H on the PC. JR decided D8–D12 (2026-10-28); D13 (how form reaches the game, through Madden's morale or a ratings overlay) waits on a PC test.
 **Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md)). It needs the save reader, the save writer and the OVR weights from §4–§5 there.
-**Companions:** [`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) (the community progression tools), V2.13 (personalities) and V2.14 (this plan's summary) of the migration plan. [`LEAGUE_OFFICE_PLAN.md`](LEAGUE_OFFICE_PLAN.md) uses the same personality traits for free agency, contracts and depth charts, and its coach-set depth charts feed the playing-time term here.
+**Companions:** [`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) (the community progression tools), V2.13 (personalities) and V2.14 (this plan's summary) of the migration plan. [`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md) uses the same personality traits for free agency, contracts and depth charts, and its coach-set depth charts feed the playing-time term here.
 
 Turn off Madden's own player progression on the PC. Project Mu then decides how every player's ratings change and writes the result into the save. Progression becomes something the universe can explain: every rating change has causes the newsroom can report. Later, player and coach personalities become some of those causes.
 

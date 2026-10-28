@@ -12,7 +12,7 @@ so the bracket fills in round by round. When the final is decided the league's c
 the user's profile gets a trophy if the user won, and both moments are posted to the league chat.
 Teams outside the bracket (and eliminated teams) have no matchup in playoff weeks.
 
-Once the champion is known the league is COMPLETE (complete_league, docs/SEASON_CONTINUITY_PLAN.md phase 3): every
+Once the champion is known the league is COMPLETE (complete_league, docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 3): every
 team's final record, playoff finish and final rank are frozen on napper_teams, so the season reads the same after the
 NFL season rolls over and the league is restarted.
 

@@ -1,5 +1,5 @@
 """
-Invented college events that explain each scouting step (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.2, §2.6;
+Invented college events that explain each scouting step (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.2, §2.6;
 PROJECT_SPEC §2.18). Pure: no DB, every draw seeded.
 
 The engine draws each prospect's consensus move first; generate() then picks an event whose sign and size fit it from

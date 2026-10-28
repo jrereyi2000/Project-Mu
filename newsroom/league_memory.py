@@ -1,5 +1,5 @@
 """
-League Memory (V2.8) narrative search index (docs/PRE_PC_WORK.md §9, docs/PC_MIGRATION_PLAN.md V2.8).
+League Memory (V2.8) narrative search index (docs/done/PRE_PC_WORK.md §9, docs/in_progress/PC_MIGRATION_PLAN.md V2.8).
 
 Builds and searches a narrative embedding index over historical universe events:
 - news_feed (published articles)
@@ -658,7 +658,7 @@ def search_league_memory(
 # ------------------------------------------------------------------ CLI Interface ----
 
 def main():
-    parser = argparse.ArgumentParser(description="League Memory Narrative Index CLI (docs/PRE_PC_WORK.md §9)")
+    parser = argparse.ArgumentParser(description="League Memory Narrative Index CLI (docs/done/PRE_PC_WORK.md §9)")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # index subcommand

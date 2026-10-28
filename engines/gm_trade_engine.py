@@ -1,5 +1,5 @@
 """
-GM trade proposal engine (docs/team_management/03_GM_AGENTS_PLAN.md §2.4-2.5, Phases 4 and 7; PROJECT_SPEC §2.17).
+GM trade proposal engine (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.4-2.5, Phases 4 and 7; PROJECT_SPEC §2.17).
 
 Each week the trade window is open (1 <= week <= TRADE_DEADLINE_WEEK in season; the offseason window in
 Phase 7) the engine: expires stale proposals, recomputes direction (at checkpoints) and needs, raises injury

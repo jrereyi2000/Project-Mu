@@ -1,5 +1,5 @@
 """
-Trade rationale writer (docs/team_management/03_GM_AGENTS_PLAN.md §2.8; PROJECT_SPEC §2.17).
+Trade rationale writer (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.8; PROJECT_SPEC §2.17).
 
 build_fact_sheet() is everything a rationale may state: the assets (position, name, OVR, age, dev, cap hit,
 years left), both teams' record, direction, needs, cap before and after, the GM and the head coach. template()

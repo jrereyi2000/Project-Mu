@@ -1,4 +1,4 @@
--- League transactions (docs/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, master plan §2.2).
+-- League transactions (docs/done/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, master plan §2.2).
 -- The weekly League > LEAGUE TRANSACTIONS scan (madden_capture.py --only transactions -> transactions.csv ->
 -- pipeline/load_transactions.py). Madden's CPU signs and releases (D1); Mu's trades are made by hand (D2/D3).
 

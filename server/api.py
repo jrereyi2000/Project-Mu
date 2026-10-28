@@ -334,7 +334,7 @@ def get_team_schedule(abbr: str, season: Optional[int] = None):
 
 @app.get("/api/team/{abbr}/history")
 def get_team_history(abbr: str):
-    """Season-by-season franchise history (PROJECT_SPEC §3.3j; docs/HISTORY_BACKFILL_PLAN.md phase 4): every archived
+    """Season-by-season franchise history (PROJECT_SPEC §3.3j; docs/done/HISTORY_BACKFILL_PLAN.md phase 4): every archived
     season in team_season_results (2026-2034 reconstructed league history, 2035 on from the season archive), the
     current season so far when it isn't archived yet, the head coach, GM, playoff result and the team's award
     winners, plus totals since 2026."""
@@ -1010,7 +1010,7 @@ def get_player_api(id: int, season: Optional[int] = None):
                 FROM season_stat_lines WHERE player_id = %s AND source <> 'SYNTH'
             """, (id,))
             lines = {r["season"]: r for r in cur.fetchall()}
-            # 2026-2034 league history (docs/HISTORY_BACKFILL_PLAN.md phase 4): every stat group of a generated season
+            # 2026-2034 league history (docs/done/HISTORY_BACKFILL_PLAN.md phase 4): every stat group of a generated season
             # comes from season_stat_lines; a seeded canon season (the Panthers' 2032-2034 lines) keeps its own
             # offense and takes the rest from the generated row. Both read "history" on the page.
             cur.execute("""
@@ -1904,7 +1904,7 @@ def get_team_stats_api(season: Optional[int] = None, category: str = "Passing", 
             return results
 
 
-# ─── Mu Fantasy articles (newsroom/fantasy_desk.py writes them; docs/FANTASY_EDITORIAL_MATRIX.md) ───
+# ─── Mu Fantasy articles (newsroom/fantasy_desk.py writes them; docs/in_progress/FANTASY_EDITORIAL_MATRIX.md) ───
 _NEWSROOM_CONFIG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "newsroom", "config")
 
 
@@ -3382,7 +3382,7 @@ def trigger_team_wakeup(team_id: int, season: Optional[int] = None, week: Option
         ),
     }
 
-# --- Agent Wire (docs/SOCIAL_MATRIX.md §7; queries in server/social_api.py) ---
+# --- Agent Wire (docs/done/SOCIAL_MATRIX.md §7; queries in server/social_api.py) ---
 @app.get("/api/social/feed")
 def social_feed(season: Optional[int] = None, week: Optional[int] = None, tab: str = "foryou",
                 team: Optional[str] = None, trend: Optional[str] = None, limit: int = 30, offset: int = 0):

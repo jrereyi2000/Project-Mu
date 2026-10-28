@@ -629,7 +629,7 @@ def extract_roster(root):
 
 
 # --------------------------------------------------------- team salary ----
-# Team management step 1 (docs/team_management/01_CONTRACT_SCAN_PLAN.md Phase 3). Read with Gemini through
+# Team management step 1 (docs/done/team_management/01_CONTRACT_SCAN_PLAN.md Phase 3). Read with Gemini through
 # merge_wide like every capture_wide_list table: Apple Vision drops the digit 1 in Madden's font, and money
 # cells are full of 1s.
 SALARY_PAGE_ROWS = 12           # rows visible on a page (frames of 2026-10-19)

@@ -1,6 +1,6 @@
 # Project Mu: PC Migration & Universe Teleportation Master Plan
 
-**Status (2026-10-28):** Phase 0 (Mac prep, §2) done: all 11 pre-PC items complete (§2.4, [PRE_PC_WORK.md](PRE_PC_WORK.md)). Phases 1–7 wait on the PC; the teleporter (§4.3) has dry runs only. Part 2 (V2) status is at its end.
+**Status (2026-10-28):** Phase 0 (Mac prep, §2) done: all 11 pre-PC items complete (§2.4, [PRE_PC_WORK.md](../done/PRE_PC_WORK.md)). Phases 1–7 wait on the PC; the teleporter (§4.3) has dry runs only. Part 2 (V2) status is at its end.
 
 **Target Execution Window:** Late October 2026 – Early 2027  
 **Architecture Transition:** PS5 Remote Play screen capture (`madden_capture.py` + `extract.py` at the repo root, driven by `pipeline/weekly_capture.py`) $\longrightarrow$ native PC franchise-file I/O ([`madden-franchise`](https://github.com/bep713/madden-franchise), which lists full support for Madden 19–27 and CFB 27 PC Dynasty saves)  
@@ -63,19 +63,19 @@ Read every player's full set of ratings off the PS5 so the PC players carry thei
 
 ### 2.4 Pre-PC Work List (JR, 2026-10-28)
 
-Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`PRE_PC_WORK.md`](PRE_PC_WORK.md) (goal, what exists, steps, when it's done) that an agent can be pointed at.
+Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`PRE_PC_WORK.md`](../done/PRE_PC_WORK.md) (goal, what exists, steps, when it's done) that an agent can be pointed at.
 
-- [x] 1. [QB OVR refit](PRE_PC_WORK.md#1-qb-ovr-refit): tame Long Snap in the QB formulas, checked against the 78 scanned QBs (§2.3, §4.4)
-- [x] 2. [Surname rename tool](PRE_PC_WORK.md#2-surname-rename-tool-commentary-ids): Madden 27 commentary lookup, IDs for exact matches, a ranked rename list for the ~165 unmatched for JR to review (§4.3)
-- [x] 3. [Body skin tone](PRE_PC_WORK.md#3-body-skin-tone-charactervisualsrawdata): decode and write `skinTone` in `CharacterVisuals.RawData` so the body matches the head (§4.3 Appearance)
-- [x] 4. [`watch_save.py`](PRE_PC_WORK.md#4-pipelinewatch_savepy): debounced save watcher that runs reader → loader → engines → newsroom on a new week (§5.2)
-- [x] 5. [Thinking caps](PRE_PC_WORK.md#5-thinking-caps-on-the-short-gemini-calls) on `agent_memory`, `scouting_notes` and the GM calls (§7.9)
-- [x] 6. [Gemini-or-local provider switch](PRE_PC_WORK.md#6-gemini-or-local-provider-switch) on each short-task caller, local runs logged to `llm_usage` (§7.3)
-- [x] 7. [Quality test harness](PRE_PC_WORK.md#7-quality-test-harness) (`tools/llm_compare.py`, §7.4)
-- [x] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
-- [x] 9. [League memory](PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
-- [x] 10. [Personality plan phases 2 and 3](PRE_PC_WORK.md#10-personality-plan-phases-2-and-3-v213): catalogue and tables, then GMs (V2.13) [DONE 2026-10-28]
-- [x] 11. [Progression plan phase C](PRE_PC_WORK.md#11-progression-plan-phase-c-v214): `engines/progression.py` offline, backtested (V2.14)
+- [x] 1. [QB OVR refit](../done/PRE_PC_WORK.md#1-qb-ovr-refit): tame Long Snap in the QB formulas, checked against the 78 scanned QBs (§2.3, §4.4)
+- [x] 2. [Surname rename tool](../done/PRE_PC_WORK.md#2-surname-rename-tool-commentary-ids): Madden 27 commentary lookup, IDs for exact matches, a ranked rename list for the ~165 unmatched for JR to review (§4.3)
+- [x] 3. [Body skin tone](../done/PRE_PC_WORK.md#3-body-skin-tone-charactervisualsrawdata): decode and write `skinTone` in `CharacterVisuals.RawData` so the body matches the head (§4.3 Appearance)
+- [x] 4. [`watch_save.py`](../done/PRE_PC_WORK.md#4-pipelinewatch_savepy): debounced save watcher that runs reader → loader → engines → newsroom on a new week (§5.2)
+- [x] 5. [Thinking caps](../done/PRE_PC_WORK.md#5-thinking-caps-on-the-short-gemini-calls) on `agent_memory`, `scouting_notes` and the GM calls (§7.9)
+- [x] 6. [Gemini-or-local provider switch](../done/PRE_PC_WORK.md#6-gemini-or-local-provider-switch) on each short-task caller, local runs logged to `llm_usage` (§7.3)
+- [x] 7. [Quality test harness](../done/PRE_PC_WORK.md#7-quality-test-harness) (`tools/llm_compare.py`, §7.4)
+- [x] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](../done/PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
+- [x] 9. [League memory](../done/PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
+- [x] 10. [Personality plan phases 2 and 3](../done/PRE_PC_WORK.md#10-personality-plan-phases-2-and-3-v213): catalogue and tables, then GMs (V2.13) [DONE 2026-10-28]
+- [x] 11. [Progression plan phase C](../done/PRE_PC_WORK.md#11-progression-plan-phase-c-v214): `engines/progression.py` offline, backtested (V2.14)
 
 On hold: applying `madden_pgid` to the live database (after the PC move); the CFB 27 bridge (§6, until a dynasty is planned); the pregame show (§9.1); the rest of Part 2. The full Project Mu draft order for `PickNumber` (§4.3) comes in once the Super Bowl is final.
 
@@ -159,7 +159,7 @@ Starting in the offseason avoids rebuilding a mid-playoff bracket and matches th
 
 The franchise's own history is thrown away (Project Mu is the record), so nothing about how the save gets to 2037 matters except the result.
 
-* **Option 1 — set the year in the save (try first):** start the franchise, advance to the offseason, and write `CurrentSeasonYear` / `BaseCalendarYear` (and `BaseSuperBowlNumber`) in the season-info table, as the community `seasonYearSetup` script does ([madden-franchise-utils](https://github.com/Sinthros/madden-franchise-utils) for Madden 24/25; an M27 build, `seasonYearSetup.exe`, is in *Prime's Retro Franchise Tools (M27)* on the MMC Discord, see [`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) §2, so it can be run as is or read for the exact fields). Player ages and contracts are overwritten by the teleporter anyway. Test for side effects: draft class year, contract year labels, schedule, awards screens.
+* **Option 1 — set the year in the save (try first):** start the franchise, advance to the offseason, and write `CurrentSeasonYear` / `BaseCalendarYear` (and `BaseSuperBowlNumber`) in the season-info table, as the community `seasonYearSetup` script does ([madden-franchise-utils](https://github.com/Sinthros/madden-franchise-utils) for Madden 24/25; an M27 build, `seasonYearSetup.exe`, is in *Prime's Retro Franchise Tools (M27)* on the MMC Discord, see [`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) §2, so it can be run as is or read for the exact fields). Player ages and contracts are overwritten by the teleporter anyway. Test for side effects: draft class year, contract year labels, schedule, awards screens.
 * **Option 2 — unattended sim (fallback):** set all 32 teams to CPU control so no offseason stage waits on a decision, and sim to the 2037 offseason. Expect hours rather than minutes; it can run overnight.
 * **Decide before creating the franchise:** the community *M27 Roster size increase* mod (80 preseason / 65 cut day, practice-squad eligibility 3 years, starting cap +$40M) only takes effect in a new franchise. Practice-squad size itself is hard-coded. If Project Mu rosters need more than 53 + 16, apply it before step 1.
 
@@ -389,7 +389,7 @@ The community *Madden Franchise Exporter* (a plain-text dump of a franchise file
                `draftPlayerImportNcaa` / `playersToDraftClass` utilities are prior art)
 ```
 
-**Prior art to compare before building:** *Pipeline — CFB 27 → Madden 26/27 Draft Class Tool* (MMC Discord, 2026-08) already does most of this chain as a Windows app: it reads the dynasty's leaving players (or predicts them from earlier saves), projects round and pick, converts ratings to Madden's scale with a deterministic, tunable curve, assigns dev traits by target shares and writes an importable draft class with faces. Project Mu still needs its own reader for `scout_events` and the name check, but the rating translation and injection could start from that tool or check against it. Community M27 classes (Eli2Manningham 2027–2033, matched to M27's higher rookie scale) are the fallback for a year without a CFB class. If a class import runs out of player rows, WiiMaster's `trimFreeAgents` utility deletes the lowest free agents to make room ([`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) §2).
+**Prior art to compare before building:** *Pipeline — CFB 27 → Madden 26/27 Draft Class Tool* (MMC Discord, 2026-08) already does most of this chain as a Windows app: it reads the dynasty's leaving players (or predicts them from earlier saves), projects round and pick, converts ratings to Madden's scale with a deterministic, tunable curve, assigns dev traits by target shares and writes an importable draft class with faces. Project Mu still needs its own reader for `scout_events` and the name check, but the rating translation and injection could start from that tool or check against it. Community M27 classes (Eli2Manningham 2027–2033, matched to M27's higher rookie scale) are the fallback for a year without a CFB class. If a class import runs out of player rows, WiiMaster's `trimFreeAgents` utility deletes the lowest free agents to make room ([`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) §2).
 
 **Rookie names:** Madden-generated draft classes already carry commentary IDs. Anything Project Mu names itself (CFB 27 imports that get renamed, fictional prospects or created players) picks surnames from Madden's recorded list, so every new player can be called by name. Existing players keep their names.
 
@@ -399,17 +399,17 @@ The community *Madden Franchise Exporter* (a plain-text dump of a franchise file
 
 A local model takes over short, high-volume calls, with ultra-compact models running resident beside Madden for interactive gameplay tasks and mid-size models running on the nightly GPU queue. Newsroom articles remain cloud-hosted (Gemini or hosted open-weight models). Nothing moves until side-by-side quality testing passes (§7.4).
 
-Detailed research, costs, benchmark comparisons, and sourcing: [`OPEN_MODEL_RESEARCH.md`](OPEN_MODEL_RESEARCH.md) (2026-10-28).
+Detailed research, costs, benchmark comparisons, and sourcing: [`OPEN_MODEL_RESEARCH.md`](../OPEN_MODEL_RESEARCH.md) (2026-10-28).
 
 ### 7.1 Measured Usage (`llm_usage`, 2026-10-22 – 2026-10-27, all `gemini-3.8-flash`)
 
 | Source | Calls / day | Avg in | Max in | Avg out | Avg thinking |
 | :--- | ---: | ---: | ---: | ---: | ---: |
 | `newsroom` (national articles and local beat articles) | ~250–550 | 44K | 184K | 304 | 513 |
-| `agent_wire` ([`newsroom/social_writer.py`](../newsroom/social_writer.py)) | ~120–320 | 1.7K | 2.4K | 63 | 936 |
-| `agent_memory` ([`newsroom/agent_memory.py`](../newsroom/agent_memory.py)) | ~65–180 | 1.1K | 4.2K | 161 | 1,143 |
-| `scouting_notes` ([`engines/scouting_narrative.py`](../engines/scouting_narrative.py)) | ~8–32 | 0.3K | 0.4K | 75 | 1,049 |
-| `gm_persona` / `gm_rationale` / `gm_negotiation` ([`engines/gm_negotiation.py`](../engines/gm_negotiation.py) and the GM agents) | a few | 0.3–1K | 1.3K | 130–180 | ~1,000 |
+| `agent_wire` ([`newsroom/social_writer.py`](../../newsroom/social_writer.py)) | ~120–320 | 1.7K | 2.4K | 63 | 936 |
+| `agent_memory` ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)) | ~65–180 | 1.1K | 4.2K | 161 | 1,143 |
+| `scouting_notes` ([`engines/scouting_narrative.py`](../../engines/scouting_narrative.py)) | ~8–32 | 0.3K | 0.4K | 75 | 1,049 |
+| `gm_persona` / `gm_rationale` / `gm_negotiation` ([`engines/gm_negotiation.py`](../../engines/gm_negotiation.py) and the GM agents) | a few | 0.3–1K | 1.3K | 130–180 | ~1,000 |
 | `extract` (screen OCR) | ~500 | 1.2K | 1.4K | 668 | 801 |
 
 * Each newsroom article is a tool loop of dozens of calls whose context grows with each step. The newsroom sends ~18M input tokens a day, ~85% of it cache hits.
@@ -563,10 +563,10 @@ Cap the thinking budget on the short Gemini calls (Agent Wire, agent memory, sco
 
 **Measured Savings & Token Impact:**
 * **Baseline averages from §7.1** (default Gemini 3.8 Flash unconstrained thinking):
-  - `agent_wire` ([`newsroom/social_writer.py`](../newsroom/social_writer.py)): avg 936 thinking tokens (1.7K in, 63 out)
-  - `agent_memory` ([`newsroom/agent_memory.py`](../newsroom/agent_memory.py)): avg 1,143 thinking tokens (1.1K in, 161 out)
-  - `scouting_notes` ([`engines/scouting_narrative.py`](../engines/scouting_narrative.py)): avg 1,049 thinking tokens (0.3K in, 75 out)
-  - GM calls (`gm_persona`, `gm_rationale`, `gm_negotiation`, [`engines/gm_negotiation.py`](../engines/gm_negotiation.py)): avg ~1,000 thinking tokens (0.3–1K in, 130–180 out)
+  - `agent_wire` ([`newsroom/social_writer.py`](../../newsroom/social_writer.py)): avg 936 thinking tokens (1.7K in, 63 out)
+  - `agent_memory` ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)): avg 1,143 thinking tokens (1.1K in, 161 out)
+  - `scouting_notes` ([`engines/scouting_narrative.py`](../../engines/scouting_narrative.py)): avg 1,049 thinking tokens (0.3K in, 75 out)
+  - GM calls (`gm_persona`, `gm_rationale`, `gm_negotiation`, [`engines/gm_negotiation.py`](../../engines/gm_negotiation.py)): avg ~1,000 thinking tokens (0.3–1K in, 130–180 out)
 * **Not yet measured:** Thinking token reduction, dollar savings, and task validation pass rates at `low` thinking caps have not yet been empirically measured against real data.
 * **To measure:** Run the quality test harness (`tools/llm_compare.py`, §7.4):
   ```bash
@@ -653,7 +653,7 @@ Player models are barely visible in play, so they only need to be close: the tra
 * `Player.PLYR_PORTRAIT` picks the portrait image; all players use the `library_icons_brt` portrait library.
 * Real NFL players have their own portrait IDs: 2,865 of 3,086 players have a unique ID (range up to 30,000).
 * Madden-generated players share a small set of generic portraits (IDs around 3,300–3,950), and 92 players have 0 (no portrait).
-* The community calls this field "Portrait ID"; with `PLYR_ASSETNAME` (the face scan) it is what portrait and cyberface mods key on, so mods ship ID lists and patchers that rewrite both fields per player (e.g. RFM's 300+ cyberfaces and portraits, Kevin's *Bulk Draft Class Portrait and Cyberface Assignment* from a CSV). MyFranchise Tool can also import a custom portrait image per player, keyed by Portrait ID ([`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) §4).
+* The community calls this field "Portrait ID"; with `PLYR_ASSETNAME` (the face scan) it is what portrait and cyberface mods key on, so mods ship ID lists and patchers that rewrite both fields per player (e.g. RFM's 300+ cyberfaces and portraits, Kevin's *Bulk Draft Class Portrait and Cyberface Assignment* from a CSV). MyFranchise Tool can also import a custom portrait image per player, keyed by Portrait ID ([`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) §4).
 
 **Plan:**
 1. By 2036 the real players behind those 2,865 unique slots are long retired, so their portrait images can be overwritten with Project Mu headshots. 2,865 slots cover the 1,829 active players plus several years of rookie classes; slots of players who retire are reused after that.
@@ -769,7 +769,7 @@ Turn off Madden's player progression (XP sliders at 0, which live in the save's 
 
 ## V2.15 Project Mu Runs the League
 
-Madden plays the games; Project Mu makes every front-office decision for all 32 teams and the save writer carries them out: trades without JR's manual Madden steps, the whole draft, the coaching carousel, re-signings and extensions with player agents, free agency, cuts, waivers and the practice squad, coach-set depth charts, retirements, injury durations, media award ballots, the cap and rookie scale. Needs sign and trade moves in the writer, a read-back check after every write, and either all 32 teams user-controlled or the CPU's automation off. JR runs his team from `Mu_Network`. Plan: [`LEAGUE_OFFICE_PLAN.md`](LEAGUE_OFFICE_PLAN.md).
+Madden plays the games; Project Mu makes every front-office decision for all 32 teams and the save writer carries them out: trades without JR's manual Madden steps, the whole draft, the coaching carousel, re-signings and extensions with player agents, free agency, cuts, waivers and the practice squad, coach-set depth charts, retirements, injury durations, media award ballots, the cap and rookie scale. Needs sign and trade moves in the writer, a read-back check after every write, and either all 32 teams user-controlled or the CPU's automation off. JR runs his team from `Mu_Network`. Plan: [`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md).
 
 ## V2.16 Suggested Order
 

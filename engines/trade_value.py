@@ -1,5 +1,5 @@
 """
-Trade value model (docs/team_management/03_GM_AGENTS_PLAN.md §2.3, Phase 3; PROJECT_SPEC §2.17).
+Trade value model (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.3, Phase 3; PROJECT_SPEC §2.17).
 
 Everything is in dollars of surplus, so players and picks compare directly. Pure: the fits take rows, the values
 take dicts; read_* gather the rows from the DB (read-only) and the fits are recomputed every run.

@@ -194,7 +194,7 @@ Cost: about 32 teams × ~6 pages × 2 halves ≈ 400 half-size crops, about the 
 
 | Phase | Section | Edit |
 |---|---|---|
-| 1 | §1.1 Repository Layout | `pipeline/money.py`; `db/migrations/` list += `2026_12_07_contracts.sql`; `docs/team_management/` folder (this plan) and `docs/TEAM_MANAGEMENT_PLAN.md` under docs |
+| 1 | §1.1 Repository Layout | `pipeline/money.py`; `db/migrations/` list += `2026_12_07_contracts.sql`; `docs/done/team_management/` folder (this plan) and `docs/done/TEAM_MANAGEMENT_PLAN.md` under docs |
 | 1 | §3 Schema | New §3.3d **Contracts & Cap** (`2026_12_07_contracts.sql`): the three tables, the partial unique index, status/source values, money-as-bigint rule, `vw_team_cap_sheet` columns, SUPERSEDED semantics |
 | 2 | §1.1 (`madden_capture.py` and `captures/` lines) | `--only contracts`, `--team-names`, the `contracts/<NN>_<team>/salary[_right]_NNN.png` layout, `done.txt`/`targets.txt`; the Cross guard now includes TEAM SALARY |
 | 2 | §1.2 Running the System | Capture-row command: `madden_capture.py --only contracts [--team-names …]` |

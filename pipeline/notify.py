@@ -1,5 +1,5 @@
 """
-Phone notices for the weekly run (docs/PIPELINE_MIGRATION.md, phase 5) through ntfy.
+Phone notices for the weekly run (docs/done/PIPELINE_MIGRATION.md, phase 5) through ntfy.
 
   python3 -m pipeline.notify "test message"          # send one by hand
 

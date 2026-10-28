@@ -1,4 +1,4 @@
-"""Trade rationale writer (docs/team_management/03_GM_AGENTS_PLAN.md Phase 6). Fake LLMs only: no Gemini, no DB."""
+"""Trade rationale writer (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 6). Fake LLMs only: no Gemini, no DB."""
 import json
 
 from engines.gm_rationale import league_names, parse_answer, template, validate_rationale, write_rationale

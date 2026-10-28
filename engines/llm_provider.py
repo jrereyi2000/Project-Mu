@@ -1,6 +1,6 @@
 """
 LLM Provider Seam for Gemini and Local Ollama Models.
-(docs/PRE_PC_WORK.md §6, docs/PC_MIGRATION_PLAN.md §7.3)
+(docs/done/PRE_PC_WORK.md §6, docs/in_progress/PC_MIGRATION_PLAN.md §7.3)
 
 Provides a unified interface for short LLM tasks, allowing execution via either
 Google Gemini (via the google-genai SDK) or local Ollama (via HTTP API), with

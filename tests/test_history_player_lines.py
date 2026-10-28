@@ -1,4 +1,4 @@
-"""Pure tests for 2026-2034 player lines (docs/HISTORY_BACKFILL_PLAN.md phase 3): the cast, team totals, the
+"""Pure tests for 2026-2034 player lines (docs/done/HISTORY_BACKFILL_PLAN.md phase 3): the cast, team totals, the
 allocation helpers, a small generate() and fill-ins. No DB."""
 import unittest
 

@@ -1,5 +1,5 @@
 """
-Team boards and the draft simulation behind --calibrate (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.3, §2.5;
+Team boards and the draft simulation behind --calibrate (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.3, §2.5;
 PROJECT_SPEC §2.18). Pure: no DB.
 
 Each front office sees T = V + e_team, plus fit and bias:

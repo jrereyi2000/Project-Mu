@@ -1,4 +1,4 @@
--- Simulated fantasy leagues (engines/fantasy_league_sim.py, docs/FANTASY_EDITORIAL_MATRIX.md §5, PROJECT_SPEC §3.4).
+-- Simulated fantasy leagues (engines/fantasy_league_sim.py, docs/in_progress/FANTASY_EDITORIAL_MATRIX.md §5, PROJECT_SPEC §3.4).
 -- 100 simulated 12-team PPR leagues per season: drafts → ADP, weekly rostered % / start %, standings, and the
 -- draft strategy mix (which adapts each season from the previous season's title results).
 --

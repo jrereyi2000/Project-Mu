@@ -212,7 +212,7 @@ Each of the 100 leagues also plays its season:
 
 **Available today:** `fantasy_projections` (wk 1 ADP; wk 2–18 projections, matchup stars, pos/ROS ranks), `vw_fantasy_scores`, `vw_fantasy_defense_vs_position`, Playoff SOS, `player_stats` box-score lines (pass/rush/rec counting stats, fumbles), roster (OVR, depth chart, age, experience).
 
-**After pipeline migration phase 3** (`docs/PIPELINE_MIGRATION.md`): every game's box score and both teams' player stats are captured weekly. Season Stats is a cross-check only (Madden lists the top ~270 per category). New nullable columns come from the captured headers:
+**After pipeline migration phase 3** (`docs/done/PIPELINE_MIGRATION.md`): every game's box score and both teams' player stats are captured weekly. Season Stats is a cross-check only (Madden lists the top ~270 per category). New nullable columns come from the captured headers:
 - Rushing: broken tackles (BTK), yards after contact (YAC), long. Receiving: run after catch (RAC), RAC average, long. Passing: sacks taken.
 - Kicking: FG made/attempted by distance (29/39/49/50+), XP. **Kicker scoring becomes possible.**
 - Defense per player: solo/assisted tackles, TFL, sacks, INT, deflections, forced/recovered fumbles, TDs, safeties. Added up by team with points allowed (from the score) and return TDs, this gives **D/ST scoring**. (Individual defensive players could support IDP, but IDP is out of scope.)

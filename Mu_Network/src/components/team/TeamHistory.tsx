@@ -1,4 +1,4 @@
-// The Team hub's History tab (docs/HISTORY_BACKFILL_PLAN.md phase 4; PROJECT_SPEC §3.3j): every season this league
+// The Team hub's History tab (docs/done/HISTORY_BACKFILL_PLAN.md phase 4; PROJECT_SPEC §3.3j): every season this league
 // records, from GET /api/team/{abbr}/history. 2026–2034 are reconstructed league history (marked "hist"); 2035 on
 // come from the season archive; the current season shows its record so far.
 import { useEffect, useState } from "react";

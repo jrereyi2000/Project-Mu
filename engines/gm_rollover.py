@@ -1,5 +1,5 @@
 """
-GM season rollover (docs/team_management/03_GM_AGENTS_PLAN.md Phase 7, §7 Q4; PROJECT_SPEC §3.3f).
+GM season rollover (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 7, §7 Q4; PROJECT_SPEC §3.3f).
 
 Run by the Season scan's preseason engines (pipeline/weekly_capture.step_preseason_engines, optional: a failure
 only warns) for the new season, or by hand:

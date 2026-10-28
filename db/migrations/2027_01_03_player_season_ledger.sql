@@ -1,4 +1,4 @@
--- Player season ledger and retirements (docs/SEASON_CONTINUITY_PLAN.md phase 2a; PROJECT_SPEC §3.3m).
+-- Player season ledger and retirements (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 2a; PROJECT_SPEC §3.3m).
 -- engines/season_ledger.py writes player_season_transitions at each Season scan (and by hand for a backfill): one row
 -- per player per captured season boundary, with his fate (RETAINED, MOVED, RETIRED, FREE_AGENT, DRAFTED, NEW) and his
 -- rating, development trait, age and experience on both sides. Retirements come from League Transactions rows

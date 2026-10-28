@@ -1,4 +1,4 @@
--- 2026-2034 All-Pro teams (docs/HISTORY_BACKFILL_PLAN.md §5; PROJECT_SPEC §3.3l).
+-- 2026-2034 All-Pro teams (docs/done/HISTORY_BACKFILL_PLAN.md §5; PROJECT_SPEC §3.3l).
 -- engines/history_backfill/all_pro.py stores generated First and Second Teams with source = 'SYNTH'; every other
 -- award row stays 'CAPTURE'. `revert-players` deletes the SYNTH rows first (awards.player_id blocks deleting a player).
 --

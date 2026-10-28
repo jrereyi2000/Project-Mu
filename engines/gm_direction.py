@@ -1,5 +1,5 @@
 """
-Team direction and positional needs (docs/team_management/03_GM_AGENTS_PLAN.md §2.2, Phase 2; PROJECT_SPEC §2.16).
+Team direction and positional needs (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.2, Phase 2; PROJECT_SPEC §2.16).
 
 Pure parts: direction_scores (the league's D values), assign_directions (bands, overrides, hysteresis),
 starter_slots and positional_needs. The loader reads team_seasons, rosters, injuries and contracts and writes

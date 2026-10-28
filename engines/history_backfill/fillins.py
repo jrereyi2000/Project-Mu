@@ -1,5 +1,5 @@
 """
-Fill-in players for 2026-2034 (docs/HISTORY_BACKFILL_PLAN.md phase 3, §3.6; PROJECT_SPEC §3.3k).
+Fill-in players for 2026-2034 (docs/done/HISTORY_BACKFILL_PLAN.md phase 3, §3.6; PROJECT_SPEC §3.3k).
 
 After player_lines, each team-season's leftover (its team total minus the cast's lines) is what players we have no
 record of produced: post-2026 draftees who washed out or retired before 2035 (B7). A leftover the size of a starter

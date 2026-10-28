@@ -1,4 +1,4 @@
--- Capture loader, part 1 (docs/PIPELINE_MIGRATION.md, phase 3): storage for every stat the
+-- Capture loader, part 1 (docs/done/PIPELINE_MIGRATION.md, phase 3): storage for every stat the
 -- madden_capture.py / extract.py capture produces, the captures run log and Gemini token usage.
 -- Hybrid layout (JR, Oct 14): offense extras as columns on season_stats / player_stats, every other
 -- category in its own season- and game-level table, views joining them. Nothing reads the new

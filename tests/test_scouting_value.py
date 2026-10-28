@@ -1,4 +1,4 @@
-"""Scouting true value, keys, grade scale and class build (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 1).
+"""Scouting true value, keys, grade scale and class build (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 1).
 Pure: no DB."""
 from engines import scouting_value as sv
 from engines.scouting_engine import build_class, relink_actions, step_for, step_when

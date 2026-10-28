@@ -1,4 +1,4 @@
-"""Fantasy research tools for writer agents (docs/FANTASY_EDITORIAL_MATRIX.md §7 step 4, PROJECT_SPEC §7).
+"""Fantasy research tools for writer agents (docs/in_progress/FANTASY_EDITORIAL_MATRIX.md §7 step 4, PROJECT_SPEC §7).
 
 Same week rule as newsroom/db_tools.py (newsroom/run_context.py): a Week N article sees box scores from weeks
 before N only. Projections and simulated-league rosters for week N are visible, because they are built only

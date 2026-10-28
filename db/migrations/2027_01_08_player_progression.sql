@@ -1,4 +1,4 @@
--- Player progression engine (docs/PROGRESSION_PLAN.md §5.6; PROJECT_SPEC §2, §3; PRE_PC_WORK.md §11).
+-- Player progression engine (docs/in_progress/PROGRESSION_PLAN.md §5.6; PROJECT_SPEC §2, §3; PRE_PC_WORK.md §11).
 -- Stores per-player yearly progression breakdown (OVR delta terms and ratings diffs).
 --
 -- Apply with:

@@ -1,5 +1,5 @@
 """
-Appearance for the teleporter (docs/PC_MIGRATION_PLAN.md §4.3 "Appearance"): gives each teleported donor a generic head
+Appearance for the teleporter (docs/in_progress/PC_MIGRATION_PLAN.md §4.3 "Appearance"): gives each teleported donor a generic head
 and body type close to the Project Mu player's AI headshot. Pure apart from headshot_seeds (one read-only query).
 
 Where the headshot traits come from: headshots/headshot_appearance_generator.appearance() is seeded from the name and

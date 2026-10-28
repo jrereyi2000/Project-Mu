@@ -1,5 +1,5 @@
 """
-The Gemini seam for the GM agents (docs/team_management/03_GM_AGENTS_PLAN.md §2.8; PROJECT_SPEC §3.3f).
+The Gemini seam for the GM agents (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.8; PROJECT_SPEC §3.3f).
 
 Everything GM-related that may use an LLM (persona bios at seeding, trade rationale) takes an `llm` argument:
 a callable prompt -> text, or None for the template fallback. make_llm() builds the live one only when a key

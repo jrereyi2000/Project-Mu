@@ -1,4 +1,4 @@
-"""Front Office helpers (docs/team_management/03_GM_AGENTS_PLAN.md Phase 5). Pure + fake cursors: no DB."""
+"""Front Office helpers (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 5). Pure + fake cursors: no DB."""
 from engines import front_office as fo
 
 NICK = {"PANTHERS": "CAR", "SAINTS": "NO", "FALCONS": "ATL"}

@@ -1,6 +1,6 @@
 """
 The Draft Room: GM agents choose picks 1-32 live and JR makes each one in Madden (master D4;
-docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.8; PROJECT_SPEC §2.18, §3.3g, §4.5).
+docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.8; PROJECT_SPEC §2.18, §3.3g, §4.5).
 
   lock_order    after the Super Bowl load, at offseason stage 4: compute_draft_order mapped through draft_picks
                 owners, overall_pick filled for every round of the class; JR can fix a Round 1 owner first; runs the
@@ -18,7 +18,7 @@ Each pick is decided only when it's on the clock, from the pool still available,
 later recommendation by construction. Recommendations are deterministic (stored boards), so a reload shows the same
 player. Draft-day trades: gm_trade_engine.run_draft_day once per pick with board-based premiums, at most
 MAX_DRAFT_DAY_PROPOSALS a draft (Q8); JR approves and confirms them through the Front Office.
-  start_round   Rounds 2-7 (docs/team_management/06_DRAFT_ROUND_TRADES_PLAN.md): before JR sims round n, the round's
+  start_round   Rounds 2-7 (docs/done/team_management/06_DRAFT_ROUND_TRADES_PLAN.md): before JR sims round n, the round's
                 draft-day trades (gm_trade_engine.run_draft_round): teams moving up for a player Mu doesn't expect
                 to last to their pick, and teams moving back when theirs will. Who's gone is estimated, never
                 captured: Round 1 as recorded, later rounds in Madden's board order (projected_pick), and no

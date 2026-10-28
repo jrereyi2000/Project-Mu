@@ -1,5 +1,5 @@
 """
-Who played where, 2026-2034 (docs/HISTORY_BACKFILL_PLAN.md phase 3, §3.5; PROJECT_SPEC §3.3k).
+Who played where, 2026-2034 (docs/done/HISTORY_BACKFILL_PLAN.md phase 3, §3.5; PROJECT_SPEC §3.3k).
 
 The cast is every player who gets 2026-2034 season lines, with a team for each season he played:
 - pool: everyone on a 2035 or 2036 roster. His seasons run from his first season (season - years_of_experience) to

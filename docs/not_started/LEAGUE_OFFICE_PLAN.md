@@ -1,8 +1,8 @@
 # Project Mu: League Office Plan
 
 **Status:** plan, nothing built (2026-10-28).
-**Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md)): the save reader, writer and loader (§4–§5 there). Runs alongside [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md), which this plan leans on for player and coach personalities.
-**Replaces on the PC:** decision D3 of [`TEAM_MANAGEMENT_PLAN.md`](TEAM_MANAGEMENT_PLAN.md) (JR switches one team to user control per trade so the CPU keeps doing signings, re-signings and depth charts). Here losing the CPU's front office is the point.
+**Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md)): the save reader, writer and loader (§4–§5 there). Runs alongside [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md), which this plan leans on for player and coach personalities.
+**Replaces on the PC:** decision D3 of [`TEAM_MANAGEMENT_PLAN.md`](../done/TEAM_MANAGEMENT_PLAN.md) (JR switches one team to user control per trade so the CPU keeps doing signings, re-signings and depth charts). Here losing the CPU's front office is the point.
 
 **Goal:** Madden plays the games. Project Mu runs the league: every front-office decision for all 32 teams is made by Project Mu's engines and agents and written into the save. JR runs his own team from `Mu_Network` and goes into Madden to play.
 

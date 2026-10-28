@@ -1,4 +1,4 @@
-"""GM offseason, draft day and season rollover (docs/team_management/03_GM_AGENTS_PLAN.md Phase 7). Pure: no DB."""
+"""GM offseason, draft day and season rollover (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 7). Pure: no DB."""
 from engines import gm_trade_engine as ge
 from engines.gm_personas import pick_seed_rows, picks_to_seed
 from engines.gm_rollover import MAX_FIRES, hot_seat, rollover_actions

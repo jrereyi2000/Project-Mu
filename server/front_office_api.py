@@ -1,4 +1,4 @@
-"""Team hub Front Office tab backend (/api/team/{abbr}/front-office; docs/team_management, PROJECT_SPEC §4.2).
+"""Team hub Front Office tab backend (/api/team/{abbr}/front-office; docs/done/team_management, PROJECT_SPEC §4.2).
 
 Read-only, public. It serves the cap sheet and the active contracts (phase 1), the season's moves and draft capital
 (phase 2), and the staff: head coach, coordinators, GM, the team's direction and its top needs (phase 3). The rows come from the same fetch helpers the writer tools use (newsroom/db_tools.py),

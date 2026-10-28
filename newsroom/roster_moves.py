@@ -1,4 +1,4 @@
-"""Roster moves, contracts and cap facts for the newsroom (docs/team_management/05_NEWSROOM_INTEGRATION_PLAN.md).
+"""Roster moves, contracts and cap facts for the newsroom (docs/done/team_management/05_NEWSROOM_INTEGRATION_PLAN.md).
 
 Pure helpers, no database: the writer tools in newsroom/db_tools.py, the briefs in swarm_dispatcher.py, the Agent
 Wire (social_desk.py) and the fantasy tools fetch rows and pass them through here, so the tests need no DB.

@@ -1,5 +1,5 @@
 """
-Scouting read helpers for the newsroom (team management step 5 Phase 9) and #debug (docs/team_management/
+Scouting read helpers for the newsroom (team management step 5 Phase 9) and #debug (docs/done/team_management/
 04_SCOUTING_AND_DRAFT_PLAN.md §2.11; PROJECT_SPEC §2.18). Read-only, plain tuple cursors.
 
 Only public fields leave this module: consensus grade, rank, round label and their changes, the prospect's board

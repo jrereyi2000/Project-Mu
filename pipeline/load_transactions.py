@@ -1,5 +1,5 @@
 """
-Load transactions.csv (docs/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, phase 4; PROJECT_SPEC §3.3e).
+Load transactions.csv (docs/done/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, phase 4; PROJECT_SPEC §3.3e).
 
 Called by pipeline/load_capture.py inside its one DB transaction: from load_weekly before Season Stats (so a
 moved player's week lands on his new team), or alone for a transactions-only folder. plan_effects() is pure

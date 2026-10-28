@@ -1,5 +1,5 @@
 """
-All-Pro teams for 2026-2034 (docs/HISTORY_BACKFILL_PLAN.md §5, records plan D5; PROJECT_SPEC §3.3l).
+All-Pro teams for 2026-2034 (docs/done/HISTORY_BACKFILL_PLAN.md §5, records plan D5; PROJECT_SPEC §3.3l).
 
   python3 -m engines.history_backfill all-pro [--dry-run]
 

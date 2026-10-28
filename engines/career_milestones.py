@@ -1,5 +1,5 @@
 """
-Career milestones since 2026 (docs/SEASON_CONTINUITY_PLAN.md phase 4; PROJECT_SPEC §3.3m).
+Career milestones since 2026 (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 4; PROJECT_SPEC §3.3m).
 
 A player's career in this league is every season_stat_lines row he has since 2026: the reconstructed 2026-2034 history
 (source SYNTH, canon) and the captured seasons from 2035, the same basis as the player page's "Career since 2026"

@@ -1,4 +1,4 @@
-"""Napper league history and restart (docs/SEASON_CONTINUITY_PLAN.md phase 3): final ranks at completion, the
+"""Napper league history and restart (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 3): final ranks at completion, the
 restarted season's draft order, and the restart itself. The pure tests need no database; the integration test runs
 on madden_test (tests/conftest.py) inside one transaction that is rolled back."""
 import unittest

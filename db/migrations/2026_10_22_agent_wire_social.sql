@@ -1,4 +1,4 @@
--- Agent Wire (docs/SOCIAL_MATRIX.md, build steps 1 and 2): social schema, account handles/names/bios,
+-- Agent Wire (docs/done/SOCIAL_MATRIX.md, build steps 1 and 2): social schema, account handles/names/bios,
 -- the three new social accounts, and removal of the junk tweets saved before the "only real output is saved" fix.
 --
 -- Run ./db/backup_db.sh first. Idempotent. Apply with:

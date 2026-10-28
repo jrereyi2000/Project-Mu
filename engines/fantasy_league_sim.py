@@ -1,4 +1,4 @@
-"""Simulated fantasy leagues → ADP, rostered % and start % (docs/FANTASY_EDITORIAL_MATRIX.md §5, PROJECT_SPEC §3.4).
+"""Simulated fantasy leagues → ADP, rostered % and start % (docs/in_progress/FANTASY_EDITORIAL_MATRIX.md §5, PROJECT_SPEC §3.4).
 
 There are no real fantasy leagues, so LEAGUES (100) 12-team PPR leagues are simulated each season:
 

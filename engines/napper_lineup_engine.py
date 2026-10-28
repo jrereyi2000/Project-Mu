@@ -1,4 +1,4 @@
-"""Weekly lineups for AI Napper managers (docs/NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md, Phase 4).
+"""Weekly lineups for AI Napper managers (docs/done/NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md, Phase 4).
 
 For each AI team and week, before that week's games:
 

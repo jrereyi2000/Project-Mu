@@ -1,5 +1,5 @@
 """Unit tests for tools.llm_compare.
-(docs/PRE_PC_WORK.md §7, docs/PC_MIGRATION_PLAN.md §7.4)
+(docs/done/PRE_PC_WORK.md §7, docs/in_progress/PC_MIGRATION_PLAN.md §7.4)
 
 Uses mock providers to ensure ZERO real paid API calls.
 Tests:

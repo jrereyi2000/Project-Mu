@@ -29,7 +29,7 @@ from pipeline.notify import env
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JOBS_DIR = os.path.join(ROOT, "captures", "jobs")
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
-DOCS = {"spec": "PROJECT_SPEC.md", "migration": "docs/PIPELINE_MIGRATION.md", "frontend": "Mu_Network/PROJECT_SPEC.md"}
+DOCS = {"spec": "PROJECT_SPEC.md", "migration": "docs/done/PIPELINE_MIGRATION.md", "frontend": "Mu_Network/PROJECT_SPEC.md"}
 MAX_PAGE_SIZE = 200
 JOB_KINDS = {
     "scan_week": ("Scan week", []),
@@ -218,7 +218,7 @@ def get_transactions(season: Optional[int] = None, week: Optional[int] = None, l
 
 
 # ------------------------------------------------------- front office ----
-# Team management step 3 (docs/team_management/03_GM_AGENTS_PLAN.md §2.7; PROJECT_SPEC §3.3f): the GM agents'
+# Team management step 3 (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.7; PROJECT_SPEC §3.3f): the GM agents'
 # proposals, JR's approve / reject / confirm, recorded trades and the trade rows the transactions scan saw.
 class ReasonIn(BaseModel):
     reason: Optional[str] = None

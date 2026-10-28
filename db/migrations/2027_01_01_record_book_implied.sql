@@ -1,4 +1,4 @@
--- Record-book rows the 2026-2034 history implies (docs/HISTORY_BACKFILL_PLAN.md §3.7; PROJECT_SPEC §3.3l).
+-- Record-book rows the 2026-2034 history implies (docs/done/HISTORY_BACKFILL_PLAN.md §3.7; PROJECT_SPEC §3.3l).
 -- `python3 -m engines.history_backfill records-check` found four franchise records the book's own facts create but
 -- don't list (JR 2026-10-26: add them; Jeanty and Gore tie rather than break):
 --   - Evan Smith's book rookie record of 18 receiving TDs (WAS 2029) also beats Washington's season record of 12.

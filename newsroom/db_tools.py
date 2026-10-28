@@ -865,7 +865,7 @@ CAREER_STATS = ("games_played", "completions", "pass_attempts", "pass_yards", "p
                 "rush_attempts", "rush_yards", "rush_tds", "receptions", "rec_yards", "rec_tds", "def_tackles",
                 "def_sacks", "def_tfl", "def_ints", "def_deflections", "def_forced_fumbles", "kick_fgm", "kick_fga",
                 "punt_punts", "blk_sacks_allowed")
-HISTORY_CAPTURED_FROM = 2035      # seasons before this are reconstructed league history (canon, docs/HISTORY_BACKFILL_PLAN.md)
+HISTORY_CAPTURED_FROM = 2035      # seasons before this are reconstructed league history (canon, docs/done/HISTORY_BACKFILL_PLAN.md)
 
 
 def rating_history(rows):
@@ -3004,7 +3004,7 @@ def get_record_book(category: str = None, team_identifier: str = None, season: i
 
 
 # ================================================================================================================
-# Roster moves, contracts and the cap (docs/team_management/05_NEWSROOM_INTEGRATION_PLAN.md §2.4). Each tool is a
+# Roster moves, contracts and the cap (docs/done/team_management/05_NEWSROOM_INTEGRATION_PLAN.md §2.4). Each tool is a
 # fetch_*(cur, ...) plus the pure formatters in newsroom/roster_moves.py. The contract and cap tables have no
 # per-week history, so like rosters they show the current books; transactions follow the week cutoff (§2.2).
 # ================================================================================================================

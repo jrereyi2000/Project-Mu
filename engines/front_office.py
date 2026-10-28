@@ -1,5 +1,5 @@
 """
-Front Office: the GM agents' read helpers and JR's trade actions (docs/team_management/03_GM_AGENTS_PLAN.md
+Front Office: the GM agents' read helpers and JR's trade actions (docs/done/team_management/03_GM_AGENTS_PLAN.md
 §2.7, §2.9, Phase 5; PROJECT_SPEC §3.3f).
 
 Read helpers (the hand-off surface for steps 4 and 5; all read-only, plain tuple cursors):

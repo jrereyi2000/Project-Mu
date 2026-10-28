@@ -1,5 +1,5 @@
 """
-Load Career Stats lists into player_career_totals (docs/HISTORY_BACKFILL_PLAN.md phase 1; PROJECT_SPEC §3.3i).
+Load Career Stats lists into player_career_totals (docs/done/HISTORY_BACKFILL_PLAN.md phase 1; PROJECT_SPEC §3.3i).
 
   python3 -m pipeline.load_career_totals captures/<run> [--dry-run] [--allow-missing]
 

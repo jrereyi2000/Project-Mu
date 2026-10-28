@@ -1,4 +1,4 @@
-"""Team direction and needs (docs/team_management/03_GM_AGENTS_PLAN.md Phase 2). Pure: no database."""
+"""Team direction and needs (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 2). Pure: no database."""
 from engines.gm_direction import (CONTEND_N, REBUILD_N, SLOTS, assign_directions, band_edges, compute,
                                   direction_scores, league_lines, positional_needs, slot_ovrs, starter_slots)
 

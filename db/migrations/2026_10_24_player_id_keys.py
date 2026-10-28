@@ -1,5 +1,5 @@
 """
-Capture loader, part 2 (docs/PIPELINE_MIGRATION.md, phase 3): player_id keys on season_stats and
+Capture loader, part 2 (docs/done/PIPELINE_MIGRATION.md, phase 3): player_id keys on season_stats and
 player_stats. Run after the roster load (pipeline/load_capture.py on a roster capture), because
 the existing links were wrong in places (two M. Santos on one id, season_stats rows linked to
 another player, player_stats rows whose name matched nobody on the team).

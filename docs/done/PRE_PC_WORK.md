@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work Briefs
 
-**Status:** All 11 of 11 items complete (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
+**Status:** All 11 of 11 items complete (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
@@ -108,7 +108,7 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
   - `engines/gm_llm.py` `GeminiText` and `make_llm()`: defaults to `low` thinking across `gm_persona`, `gm_rationale`, `gm_negotiation`, `scouting_notes`, and `draft_rationale`. Configurable via `GM_LLM_THINKING`, `GM_THINKING_<LABEL>`, or `model:level`.
   - `newsroom/social_writer.py` `write_post()`: unified on `make_content_config()`.
 * Unit tests in `tests/test_llm_config.py` verify that `ThinkingConfig` is constructed and passed with expected thinking levels using mock clients.
-* Comparison numbers and token savings documented in `docs/PC_MIGRATION_PLAN.md` §7.9 and `PROJECT_SPEC.md`.
+* Comparison numbers and token savings documented in `docs/in_progress/PC_MIGRATION_PLAN.md` §7.9 and `PROJECT_SPEC.md`.
 
 ---
 
@@ -313,7 +313,7 @@ must print 32 (or the GM count) with no error.
 
 ## R5. [x] Plan text that isn't true
 
-Docs only, `docs/PC_MIGRATION_PLAN.md`:
+Docs only, `docs/in_progress/PC_MIGRATION_PLAN.md`:
 1. **§7.9 "Measured Savings & Token Impact"** states ~100–150 thinking tokens per call at `low`, dollar savings and "zero regression" as measured; nothing measured them. Replace with what is known (the baseline averages from §7.1) and "not yet measured", plus the command to measure: `python3 -m tools.llm_compare --task <task> --season 2036 --week 20 --models gemini-3.8-flash gemini-3.8-flash:low --limit 5` for `memory_takes`, `memory_summary`, `scouting_notes`, `gm_rationale` (≈ 40 Gemini calls; don't run it, JR will).
 2. **§7.3 / §7.5 live GM negotiations:** ed25c3b changed this to a resident small local model with "no cloud fallback needed". That's an untested design change. Restore the fallback (the provider switch falls back to Gemini when the local model is unavailable, §7.5) and keep the resident small model as the option to test, not the decision.
 3. **§3 "Crossing the boundary":** says `pipeline/notify.py`'s notification method needs a Linux equivalent; it uses ntfy over HTTP and works unchanged on WSL2. Say so.

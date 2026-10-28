@@ -1,5 +1,5 @@
 """
-GM personas (docs/team_management/03_GM_AGENTS_PLAN.md §2.1, Phase 1; PROJECT_SPEC §3.3f).
+GM personas (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.1, Phase 1; PROJECT_SPEC §3.3f).
 
 One invented GM per team, stable across seasons: traits are deterministic (random.Random(sha256("gm:" + abbr)))
 and stratified across the league, so there are always 6-10 aggressive GMs (>= 0.65) and 6-10 passive ones

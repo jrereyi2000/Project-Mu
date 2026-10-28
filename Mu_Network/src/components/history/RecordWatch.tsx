@@ -1,4 +1,4 @@
-// Record Watch (#records, regular-season view; docs/RECORD_BOOK_AND_AWARDS_PLAN.md phase 4): while a regular season is
+// Record Watch (#records, regular-season view; docs/done/RECORD_BOOK_AND_AWARDS_PLAN.md phase 4): while a regular season is
 // being played, this season's leader in each fully tracked single-season player category against the record, from
 // GET /api/records/watch. Renders nothing once the regular season is complete (the endpoint returns no rows then).
 import { useEffect, useState } from "react";

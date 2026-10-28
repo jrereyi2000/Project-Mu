@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 One-time rebuild of a season's backfilled game lines from corrected season totals
-(docs/PIPELINE_MIGRATION.md, phase 3; JR, Oct 14).
+(docs/done/PIPELINE_MIGRATION.md, phase 3; JR, Oct 14).
 
   python3 tools/rebuild_backfill.py --db <test copy> --season 2035 [--keep-team Panthers]
   python3 tools/rebuild_backfill.py --db madden --season 2035 --yes      # live: after ./db/backup_db.sh

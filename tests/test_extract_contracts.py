@@ -1,4 +1,4 @@
-"""Network-free checks of extract.py's Team Salary reading (docs/team_management/01_CONTRACT_SCAN_PLAN.md
+"""Network-free checks of extract.py's Team Salary reading (docs/done/team_management/01_CONTRACT_SCAN_PLAN.md
 Phase 3). Gemini readings are seeded into extract._cache; the cap strip reader is mocked. The tables are
 synthetic until Phase 0 drops real console frames in."""
 import csv

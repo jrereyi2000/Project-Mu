@@ -1,4 +1,4 @@
--- Draft-day trades in Rounds 2-7 (docs/team_management/06_DRAFT_ROUND_TRADES_PLAN.md §5; PROJECT_SPEC §2.18, §3.3g).
+-- Draft-day trades in Rounds 2-7 (docs/done/team_management/06_DRAFT_ROUND_TRADES_PLAN.md §5; PROJECT_SPEC §2.18, §3.3g).
 -- One row per round JR started in the Draft Room (engines/draft_room.start_round), so a round that drew no trade
 -- proposals still counts as started and a second click doesn't propose again.
 --

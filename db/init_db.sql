@@ -412,7 +412,7 @@ CREATE TABLE IF NOT EXISTS llm_usage (
 CREATE INDEX IF NOT EXISTS llm_usage_source_created ON llm_usage (source, created_at);
 
 -- 8. Contracts and cap from Manage Roster > TEAM SALARY (db/migrations/2026_12_07_contracts.sql,
--- docs/TEAM_MANAGEMENT_PLAN.md §2.1). Money is whole dollars (pipeline/money.parse_money).
+-- docs/done/TEAM_MANAGEMENT_PLAN.md §2.1). Money is whole dollars (pipeline/money.parse_money).
 -- The TEAM SALARY header strip, one row per team and season. The latest scan wins.
 CREATE TABLE IF NOT EXISTS team_cap_seasons (
     team_id INT NOT NULL REFERENCES teams(id),
@@ -501,7 +501,7 @@ LEFT JOIN player_seasons ps ON ps.player_id = c.player_id AND ps.season = c.seas
 LEFT JOIN team_cap_seasons tc ON tc.team_id = c.team_id AND tc.season = c.season
 WHERE c.status = 'ACTIVE';
 
--- 9. League transactions (2026_12_08_transactions.sql, docs/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md).
+-- 9. League transactions (2026_12_08_transactions.sql, docs/done/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md).
 -- One row per list row. The list gives no date finer than its heading ("2036 SEASON - WEEK 4") and identical
 -- rows are legitimate, so the key is (season, heading, normalized row, seq): seq counts equal rows within a
 -- heading group from the oldest up, so it stays stable when newer rows appear at the top of the list.
@@ -549,7 +549,7 @@ ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_at TIMESTAMPTZ;
 ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_transaction_id INT
     REFERENCES transactions(id) ON DELETE SET NULL;
 
--- 10. GM agents (2026_12_10_gm_agents.sql, docs/team_management/03_GM_AGENTS_PLAN.md; PROJECT_SPEC §3.3f).
+-- 10. GM agents (2026_12_10_gm_agents.sql, docs/done/team_management/03_GM_AGENTS_PLAN.md; PROJECT_SPEC §3.3f).
 -- Personas, team direction and needs, draft-pick ownership, trade proposals, assets and sightings.
 -- One row per GM tenure (the coach_tenures shape). Traits are 0-1 except pick_affinity (0.6-1.4) and youth_bias
 -- (-1 veterans .. +1 youth); position_bias = {group: multiplier}, at most 3 groups, each within +-15%.
@@ -806,7 +806,7 @@ LEFT JOIN gm_team_seasons s ON s.team_id = g.team_id AND s.season = ls.current_s
 LEFT JOIN gm_team_settings st ON st.team_id = g.team_id
 WHERE g.end_season IS NULL AND ls.id = 1;
 
--- 11. Scouting and draft (2026_12_12_scouting.sql, docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md;
+-- 11. Scouting and draft (2026_12_12_scouting.sql, docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md;
 -- PROJECT_SPEC §3.3g). Hidden columns: true_value, true_rank, value_inputs, err, impact, scout_team_boards.
 -- One row per prospect per class. true_value (V) and true_rank are hidden; prospect_id is re-linked after every
 -- board load (engines/scouting_engine.relink). status: ACTIVE -> DRAFTED | UDFA, or WITHDRAWN when a re-scan drops him.
@@ -1113,7 +1113,7 @@ CREATE TABLE IF NOT EXISTS coach_tenures (
     CHECK (end_season IS NULL OR end_season >= start_season)
 );
 
--- Coordinators and staff tenures (2026_11_25_coordinators_and_slants.sql, docs/COACH_SLANTS_AND_COORDINATORS_PLAN.md)
+-- Coordinators and staff tenures (2026_11_25_coordinators_and_slants.sql, docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md)
 CREATE TABLE IF NOT EXISTS coordinators (
     id SERIAL PRIMARY KEY,
     coordinator_name VARCHAR(255) NOT NULL,
@@ -1207,7 +1207,7 @@ JOIN snap s ON s.coach_id = c.id
 LEFT JOIN add a ON a.coach_id = c.id;
 
 -- Season-end archive and head-coach records from 2035 (2026_12_24_season_archive.sql, engines/season_archive.py,
--- docs/SEASON_CONTINUITY_PLAN.md phase 1).
+-- docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 1).
 -- One row per finished season.
 CREATE TABLE IF NOT EXISTS league_seasons (
     season INT PRIMARY KEY,
@@ -1263,7 +1263,7 @@ CREATE INDEX IF NOT EXISTS coach_season_lines_team ON coach_season_lines (team_i
 ALTER TABLE coach_seasons ADD COLUMN IF NOT EXISTS mu_era_only BOOLEAN NOT NULL DEFAULT false;
 
 -- Player season ledger and retirements (2027_01_03_player_season_ledger.sql, engines/season_ledger.py,
--- docs/SEASON_CONTINUITY_PLAN.md phase 2a).
+-- docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 2a).
 -- The season a player retired after (a captured retirement; the 2026-2034 history's players are retired by their
 -- players.origin instead, plan D11). A later signing or roster scan that finds him clears it (plan D8).
 ALTER TABLE players ADD COLUMN IF NOT EXISTS retired_season INT;
@@ -1303,7 +1303,7 @@ CREATE TABLE IF NOT EXISTS player_season_transitions (
 );
 CREATE INDEX IF NOT EXISTS player_season_transitions_status ON player_season_transitions (to_season, status);
 
--- Player progression engine (2027_01_08_player_progression.sql, engines/progression.py, docs/PROGRESSION_PLAN.md).
+-- Player progression engine (2027_01_08_player_progression.sql, engines/progression.py, docs/in_progress/PROGRESSION_PLAN.md).
 CREATE TABLE IF NOT EXISTS player_progression_history (
     id SERIAL PRIMARY KEY,
     season INT NOT NULL,
@@ -1335,7 +1335,7 @@ CREATE TABLE IF NOT EXISTS player_ceilings (
 );
 CREATE INDEX IF NOT EXISTS idx_player_ceilings_season ON player_ceilings (updated_season);
 
--- League Memory narrative search index (2027_01_10_league_memory.sql, newsroom/league_memory.py, docs/PRE_PC_WORK.md §9, docs/PC_MIGRATION_PLAN.md V2.8).
+-- League Memory narrative search index (2027_01_10_league_memory.sql, newsroom/league_memory.py, docs/done/PRE_PC_WORK.md §9, docs/in_progress/PC_MIGRATION_PLAN.md V2.8).
 CREATE TABLE IF NOT EXISTS league_memory (
     id SERIAL PRIMARY KEY,
     source_table VARCHAR(32) NOT NULL,
@@ -1353,7 +1353,7 @@ CREATE TABLE IF NOT EXISTS league_memory (
 CREATE INDEX IF NOT EXISTS idx_league_memory_source ON league_memory(source_table, source_id);
 CREATE INDEX IF NOT EXISTS idx_league_memory_season_week ON league_memory(season, week);
 
--- Personality plan tables (2027_01_09_personas.sql, docs/PERSONALITY_PLAN.md §4, §9).
+-- Personality plan tables (2027_01_09_personas.sql, docs/in_progress/PERSONALITY_PLAN.md §4, §9).
 CREATE TABLE IF NOT EXISTS persona_sliders (
     persona_type VARCHAR(32) NOT NULL CHECK (persona_type IN ('writer', 'gm', 'player', 'coach', 'owner', 'scout')),
     persona_id VARCHAR(64) NOT NULL,
@@ -1424,7 +1424,7 @@ CREATE INDEX IF NOT EXISTS idx_persona_trait_history_lookup ON persona_trait_his
 
 
 -- Career totals from Madden's Career Stats lists (2026_12_26_player_career_totals.sql, pipeline/load_career_totals.py,
--- docs/HISTORY_BACKFILL_PLAN.md phase 1): one row per list row and category, in season_stat_lines column names.
+-- docs/done/HISTORY_BACKFILL_PLAN.md phase 1): one row per list row and category, in season_stat_lines column names.
 CREATE TABLE IF NOT EXISTS player_career_totals (
     id SERIAL PRIMARY KEY,
     captured_season INT NOT NULL,
@@ -1443,7 +1443,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS player_career_totals_player
 CREATE INDEX IF NOT EXISTS player_career_totals_by_player ON player_career_totals (player_id);
 
 -- Generated 2026-2034 team arc (2026_12_28_history_team_arc.sql, engines/history_backfill/team_arc.py,
--- docs/HISTORY_BACKFILL_PLAN.md phase 2): `apply` writes source = 'SYNTH'; the season archive's rows stay 'CAPTURE'.
+-- docs/done/HISTORY_BACKFILL_PLAN.md phase 2): `apply` writes source = 'SYNTH'; the season archive's rows stay 'CAPTURE'.
 ALTER TABLE league_seasons ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
 ALTER TABLE team_season_results ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
 ALTER TABLE coach_season_lines ADD COLUMN IF NOT EXISTS source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE';
@@ -1707,7 +1707,7 @@ CREATE TABLE IF NOT EXISTS news_feed (
     excerpt TEXT,
     article_type VARCHAR(64),
     slot VARCHAR(32),
-    -- Agent Wire posts (db/migrations/2026_10_22_agent_wire_social.sql; docs/SOCIAL_MATRIX.md)
+    -- Agent Wire posts (db/migrations/2026_10_22_agent_wire_social.sql; docs/done/SOCIAL_MATRIX.md)
     agent_id VARCHAR(100),      -- agent_memories.agent_id of the author
     post_kind VARCHAR(32),      -- REACTION | PERFORMANCE | BEAT | STANDINGS | SHARE | REPLY | PREVIEW | MEME
     posted_at TIMESTAMP,        -- simulated in-world posting time (created_at = real generation time)
@@ -1725,7 +1725,7 @@ CREATE INDEX IF NOT EXISTS idx_news_feed_social_week ON news_feed (season, week,
 CREATE INDEX IF NOT EXISTS idx_news_feed_agent ON news_feed (agent_id);
 CREATE INDEX IF NOT EXISTS idx_news_feed_reply_to ON news_feed (reply_to_id);
 
--- Agent Wire weekly trends, computed from post tags and hashtags (docs/SOCIAL_MATRIX.md §4)
+-- Agent Wire weekly trends, computed from post tags and hashtags (docs/done/SOCIAL_MATRIX.md §4)
 CREATE TABLE IF NOT EXISTS social_trends (
     id SERIAL PRIMARY KEY,
     season INT NOT NULL,

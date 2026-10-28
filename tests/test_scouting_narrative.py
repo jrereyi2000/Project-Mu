@@ -1,4 +1,4 @@
-"""Scouting prose behind the Gemini seam (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 5). Pure: fake LLMs."""
+"""Scouting prose behind the Gemini seam (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 5). Pure: fake LLMs."""
 from unittest import mock
 
 from engines import scouting_engine as se

@@ -40,7 +40,7 @@ UNNAMED_NOTE = "not named in league records; refer to him only by title and neve
 
 REGULAR = "REGULAR_SEASON"
 FULL_SEASON_GAMES = 17
-# The first season of with-team records (JR 2026-10-27, docs/SEASON_CONTINUITY_PLAN.md D2/D12): every season from here
+# The first season of with-team records (JR 2026-10-27, docs/in_progress/SEASON_CONTINUITY_PLAN.md D2/D12): every season from here
 # has a coach_season_lines row once it's finished (2026-2034 from the history backfill, whose per-coach totals are the
 # exact coach_seasons differences; 2035 on from the season archive). A tenure that began earlier counts from here.
 RECORDS_FROM = 2026

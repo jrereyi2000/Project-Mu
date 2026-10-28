@@ -1,5 +1,5 @@
 """
-Season-end archive and head-coach records (docs/SEASON_CONTINUITY_PLAN.md phase 1; PROJECT_SPEC §3.3h).
+Season-end archive and head-coach records (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 1; PROJECT_SPEC §3.3h).
 
 Once a season's Super Bowl is COMPLETED this freezes the season: league_seasons (champion, runner-up), one
 team_season_results row per team, one coach_season_lines row per head coach, and the coach's career snapshot in
@@ -19,7 +19,7 @@ Everything is computed from `games`, never read off a Madden screen (plan D5):
   seed (2v7, 3v6, 4v5); the #1 seed is the conference's Divisional-round team with no Wild Card game. Only the order of
   the three home teams needs the conference tiebreakers.
 compute() is pure; archive() reads and writes. A second run of an archived season changes nothing unless --replace.
-A season the 2026-2034 history backfill generated (`source = 'SYNTH'`, docs/HISTORY_BACKFILL_PLAN.md) is never written
+A season the 2026-2034 history backfill generated (`source = 'SYNTH'`, docs/done/HISTORY_BACKFILL_PLAN.md) is never written
 over, --replace included: the history owns SYNTH seasons and this archive owns CAPTURE ones (continuity plan D9).
 """
 import argparse

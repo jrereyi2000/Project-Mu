@@ -1,4 +1,4 @@
-// Awards & Champions (#awards, PROJECT_SPEC §5.1/§5.2; docs/RECORD_BOOK_AND_AWARDS_PLAN.md phase 2), from
+// Awards & Champions (#awards, PROJECT_SPEC §5.1/§5.2; docs/done/RECORD_BOOK_AND_AWARDS_PLAN.md phase 2), from
 // GET /api/awards and /api/awards/all-pro (server/history_api.py): one champion card per season, the award history
 // table, repeat winners, each franchise's titles and awards, and the All-Pro teams. The team and award filters live in
 // the hash (#awards?team=car&award=MVP).

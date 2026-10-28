@@ -1,6 +1,6 @@
 """
 pipeline/watch_save.py: Debounced save watcher daemon for Madden NFL PC franchise saves
-(docs/PC_MIGRATION_PLAN.md §5.2, docs/PRE_PC_WORK.md §4).
+(docs/in_progress/PC_MIGRATION_PLAN.md §5.2, docs/done/PRE_PC_WORK.md §4).
 
 Watches a directory for CAREER-* save files, debounces write bursts from Madden,
 snapshots the save via pc_save_reader.mjs, and runs the weekly ingestion pipeline:

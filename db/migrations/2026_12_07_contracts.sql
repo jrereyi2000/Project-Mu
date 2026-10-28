@@ -1,4 +1,4 @@
--- Contracts and cap (docs/TEAM_MANAGEMENT_PLAN.md §2.1, docs/team_management/01_CONTRACT_SCAN_PLAN.md Phase 1;
+-- Contracts and cap (docs/done/TEAM_MANAGEMENT_PLAN.md §2.1, docs/done/team_management/01_CONTRACT_SCAN_PLAN.md Phase 1;
 -- PROJECT_SPEC §3.3d): every team's cap strip and every player's contract from Manage Roster > TEAM SALARY,
 -- scanned once a season (the Season scan, after rosters) and re-scanned per team when League Transactions
 -- show a move (step 2). Money is whole dollars (bigint, pipeline/money.parse_money).

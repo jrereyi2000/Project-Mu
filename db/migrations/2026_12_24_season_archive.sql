@@ -1,4 +1,4 @@
--- Season-end archive and head-coach records from 2035 (docs/SEASON_CONTINUITY_PLAN.md phase 1; PROJECT_SPEC §3.3h).
+-- Season-end archive and head-coach records from 2035 (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 1; PROJECT_SPEC §3.3h).
 -- engines/season_archive.py writes these once a season's Super Bowl is COMPLETED (the weekly run's postgame step, or
 -- `python3 -m engines.season_archive --season S`): the season's champion, every team's final line (computed from
 -- games: ties, points, division place with the tiebreaker that decided it, conference seed read off the bracket,

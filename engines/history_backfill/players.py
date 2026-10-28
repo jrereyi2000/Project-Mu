@@ -1,5 +1,5 @@
 """
-Phase 3 run: cast -> team totals -> player lines -> fill-ins -> validate -> stage (docs/HISTORY_BACKFILL_PLAN.md
+Phase 3 run: cast -> team totals -> player lines -> fill-ins -> validate -> stage (docs/done/HISTORY_BACKFILL_PLAN.md
 phase 3; PROJECT_SPEC §3.3k).
 
   python3 -m engines.history_backfill players [--seed 1]

@@ -1,6 +1,6 @@
 """
 Unit tests for LLM thinking config helpers and short Gemini call thinking caps.
-(docs/PRE_PC_WORK.md §5, docs/PC_MIGRATION_PLAN.md §7.1, §7.9)
+(docs/done/PRE_PC_WORK.md §5, docs/in_progress/PC_MIGRATION_PLAN.md §7.1, §7.9)
 
 Verifies with fake/mock clients (no real API calls) that ThinkingConfig is passed
 with the expected levels across llm_config, agent_memory, gm_llm, and social_writer.

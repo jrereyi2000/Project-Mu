@@ -1,7 +1,7 @@
 {
   "name": "project-mu-save-reader",
   "private": true,
-  "description": "Reads a Madden 27 PC franchise save into a JSON snapshot for Project Mu (docs/PC_MIGRATION_PLAN.md §5)",
+  "description": "Reads a Madden 27 PC franchise save into a JSON snapshot for Project Mu (docs/in_progress/PC_MIGRATION_PLAN.md §5)",
   "type": "module",
   "scripts": {
     "read": "node pc_save_reader.mjs",

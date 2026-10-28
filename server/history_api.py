@@ -1,4 +1,4 @@
-"""Record Book and Awards backend (/api/records/*, /api/awards*; docs/RECORD_BOOK_AND_AWARDS_PLAN.md, PROJECT_SPEC §2.9,
+"""Record Book and Awards backend (/api/records/*, /api/awards*; docs/done/RECORD_BOOK_AND_AWARDS_PLAN.md, PROJECT_SPEC §2.9,
 §4.7 and §7.6b–§7.6d).
 
 Read-only, public. It serves the record book the records engine keeps (record_categories, league_record_entries,

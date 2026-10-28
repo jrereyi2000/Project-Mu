@@ -1,5 +1,5 @@
 """
-Money as Madden shows it on TEAM SALARY and LEAGUE TRANSACTIONS (docs/TEAM_MANAGEMENT_PLAN.md §2.1).
+Money as Madden shows it on TEAM SALARY and LEAGUE TRANSACTIONS (docs/done/TEAM_MANAGEMENT_PLAN.md §2.1).
 Pure, no database access. Every team-management step parses money through parse_money().
 
     parse_money("$16.8M")  -> 16800000

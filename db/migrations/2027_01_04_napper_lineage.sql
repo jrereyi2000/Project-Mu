@@ -1,4 +1,4 @@
--- Napper league history and restart (docs/SEASON_CONTINUITY_PLAN.md phase 3; PROJECT_SPEC §3.4b, §4.4b).
+-- Napper league history and restart (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 3; PROJECT_SPEC §3.4b, §4.4b).
 -- Napper stays one-season redraft (JR 2026-10-26). A league becomes COMPLETE when its fantasy final is decided
 -- (engines/napper_playoffs.sync_playoffs), which freezes every team's final record, playoff finish and rank, so an
 -- old season reads the same after the NFL season rolls over. A COMPLETE league can be restarted for the new NFL

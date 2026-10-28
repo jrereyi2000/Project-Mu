@@ -1,5 +1,5 @@
 """
-Matching captured rows to players (docs/PIPELINE_MIGRATION.md, phase 3). Pure functions, no
+Matching captured rows to players (docs/done/PIPELINE_MIGRATION.md, phase 3). Pure functions, no
 database access, so they can be unit-tested; pipeline/load_capture.py does the queries.
 
 Names come in three spellings: the roster list and stats tables show "G.Crawford", the database

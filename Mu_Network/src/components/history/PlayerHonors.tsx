@@ -1,4 +1,4 @@
-// The player page's Honors row (PROJECT_SPEC §5.2 item 13; docs/RECORD_BOOK_AND_AWARDS_PLAN.md phase 3): one chip per
+// The player page's Honors row (PROJECT_SPEC §5.2 item 13; docs/done/RECORD_BOOK_AND_AWARDS_PLAN.md phase 3): one chip per
 // award the player has won, from the `awards` list on GET /api/player/{id}. Repeat wins fold into one chip ("2× MVP");
 // a single All-Pro selection names its season and slot ("2035 First Team All-Pro (QB)"). Nothing renders without awards.
 import { AWARD_LABELS } from "./format";

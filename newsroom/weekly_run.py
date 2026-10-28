@@ -11,9 +11,9 @@ It is called by the video pipeline after the stats sync (pipeline/main.py) and c
     python3 -m newsroom.weekly_run --week 23          # Super Bowl week (no games complete Week 22)
     python3 -m newsroom.weekly_run --week 7 --force   # publish again even though Week 7 exists
     python3 -m newsroom.weekly_run --dry-run          # print the plan and prompts; no Gemini calls, no writes
-    python3 -m newsroom.weekly_run --fantasy-only     # only the Mu Fantasy slate (docs/FANTASY_EDITORIAL_MATRIX.md)
+    python3 -m newsroom.weekly_run --fantasy-only     # only the Mu Fantasy slate (docs/in_progress/FANTASY_EDITORIAL_MATRIX.md)
     python3 -m newsroom.weekly_run --skip-fantasy     # national slate and Agent Wire posts, no fantasy slate
-    python3 -m newsroom.weekly_run --social-only      # only the Agent Wire posts (docs/SOCIAL_MATRIX.md)
+    python3 -m newsroom.weekly_run --social-only      # only the Agent Wire posts (docs/done/SOCIAL_MATRIX.md)
     python3 -m newsroom.weekly_run --skip-social      # national and fantasy slates, no Agent Wire posts
 
 The Mu Fantasy slate (newsroom/fantasy_desk.py) runs after the national slate in the same run, Weeks 1–18,

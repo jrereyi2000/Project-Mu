@@ -1,4 +1,4 @@
-// The Record Book (#records, PROJECT_SPEC §5.1/§5.2; docs/RECORD_BOOK_AND_AWARDS_PLAN.md phase 1): every category
+// The Record Book (#records, PROJECT_SPEC §5.1/§5.2; docs/done/RECORD_BOOK_AND_AWARDS_PLAN.md phase 1): every category
 // card from GET /api/records (server/history_api.py), filtered by season type, scope, subject and era, or one
 // franchise's records with ?team=ABBR. The filters live in the hash (#records?type=post&scope=GAME&era=mu&team=car)
 // so a view can be linked. The regular-season view opens with Record Watch while a season is being played.

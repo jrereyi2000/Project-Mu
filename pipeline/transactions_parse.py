@@ -1,5 +1,5 @@
 """
-League > LEAGUE TRANSACTIONS rows (docs/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md): pure parsing, no
+League > LEAGUE TRANSACTIONS rows (docs/done/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md): pure parsing, no
 database and no Quartz/Vision, so the capture, the extractor, the loader and the tests can all share it.
 
 A row is a heading and a line of text (newest first on screen):

@@ -1,5 +1,5 @@
 -- Migration: 2026_12_29_franklin_2032_record.sql
--- Ka'Von Franklin's 2032 line back to the record book (docs/HISTORY_BACKFILL_PLAN.md phase 3).
+-- Ka'Von Franklin's 2032 line back to the record book (docs/done/HISTORY_BACKFILL_PLAN.md phase 3).
 --
 -- 2026_12_27_career_fit_fixes.sql trimmed his seeded 2032 line to 800 rushing yards to fit his Madden career, but
 -- franchise_records holds his 2032 Carolina rookie record at 1,016 yards and Panthers Full History.pdf says "rushing

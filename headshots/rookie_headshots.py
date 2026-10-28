@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automated rookie player headshot generation for seasonal pipeline (docs/HEADSHOT_PIPELINE.md).
+"""Automated rookie player headshot generation for seasonal pipeline (docs/done/HEADSHOT_PIPELINE.md).
 
 Produces photorealistic broadcast-grade media-day portraits for incoming draft class rookies,
 removes backgrounds via rembg (silueta model), and saves transparent WebPs to static/players/{player_id}.webp.

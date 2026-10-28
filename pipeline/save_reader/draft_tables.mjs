@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Reads a Madden 27 franchise save's draft tables into JSON for the teleporter's draft step (pipeline/teleport_draft.py,
-// docs/PC_MIGRATION_PLAN.md §4.3 Step 5): the future draft picks with their owners, and the draft-class rows.
+// docs/in_progress/PC_MIGRATION_PLAN.md §4.3 Step 5): the future draft picks with their owners, and the draft-class rows.
 //
 //   node draft_tables.mjs <CAREER-save> [--out draft.json]
 //

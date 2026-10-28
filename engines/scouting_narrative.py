@@ -1,5 +1,5 @@
 """
-Scouting prose behind the Gemini seam (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.7; PROJECT_SPEC §2.18).
+Scouting prose behind the Gemini seam (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.7; PROJECT_SPEC §2.18).
 
 Numbers are always deterministic (stat lines, measurables, grades, picks); the LLM only rewrites prose:
   1. up to MAX_NOTES weekly scouting notes for the biggest movers (llm_usage label `scouting_notes`);

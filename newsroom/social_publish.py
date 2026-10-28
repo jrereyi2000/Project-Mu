@@ -1,4 +1,4 @@
-"""Agent Wire publishing (docs/SOCIAL_MATRIX.md §2–§5, build step 5).
+"""Agent Wire publishing (docs/done/SOCIAL_MATRIX.md §2–§5, build step 5).
 
 Runs a planned week (newsroom/social_desk.py) end to end: writes each post with Gemini (newsroom/social_writer.py),
 gives it a simulated posting time and computed engagement, saves it to news_feed with its tags and agent memory,
@@ -100,7 +100,7 @@ def post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.datetim
 
 
 def _post_time(ctx: dict, a: dict, parent_time: dt.datetime = None) -> dt.datetime:
-    """Simulated posting time (docs/SOCIAL_MATRIX.md §3). Publication week N looks back at Week N-1's games
+    """Simulated posting time (docs/done/SOCIAL_MATRIX.md §3). Publication week N looks back at Week N-1's games
     (Thu–Mon) and is published Tue–Wed; previews run Thu–Sat of Week N before kickoff."""
     season, week = ctx["season"], ctx["week"]
     rng = _rng(season, week, a.get("agent_id"), a["kind"], a["subject"].get("type"), a["subject"].get("id"))
@@ -209,7 +209,7 @@ def engagement(followers: int, role: str, kind: str, heat: float, seed, cfg: dic
 
 # ----------------------------------------------------------------------------------------------- trends ---
 def compute_trends(posts: list, lookups: dict, cfg: dict) -> list:
-    """Weekly trends from saved posts (docs/SOCIAL_MATRIX.md §4): teams, players, games and hashtags, scored by
+    """Weekly trends from saved posts (docs/done/SOCIAL_MATRIX.md §4): teams, players, games and hashtags, scored by
     engagement with a recency weight. posts: [{"id", "likes", "reposts", "reply_count", "posted_at", "text",
     "team_ids", "player_ids", "game_id", "hashtags"}]; lookups: {"teams": {id: {...}}, "players": {id: name},
     "games": {id: {...}}}."""

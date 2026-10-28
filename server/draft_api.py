@@ -1,5 +1,5 @@
 """
-Draft Central backend (/api/draft/*; docs/DRAFT_CENTRAL_PLAN.md, PROJECT_SPEC §2.10, §2.18, §4.6).
+Draft Central backend (/api/draft/*; docs/done/DRAFT_CENTRAL_PLAN.md, PROJECT_SPEC §2.10, §2.18, §4.6).
 
 Serves the Consensus Big Board, Prospect Scouting Dossiers (cumulative college season stats, weekly game logs, combine
 athletic percentiles, storyline timelines), College Honors & Awards, 32-Team Draft Needs & Capital Matrix, Media Mock

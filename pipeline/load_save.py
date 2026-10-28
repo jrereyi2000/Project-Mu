@@ -1,6 +1,6 @@
 """
 Loads a save-reader snapshot (pipeline/save_reader/pc_save_reader.mjs) into the database in one transaction
-(docs/PC_MIGRATION_PLAN.md §5.1). The PC replacement for load_capture.py: players are matched on
+(docs/in_progress/PC_MIGRATION_PLAN.md §5.1). The PC replacement for load_capture.py: players are matched on
 players.madden_pgid (Madden's Player.PresentationId), so there is no name matching and no OCR check.
 
   python3 -m pipeline.load_save captures/<run>/save.json [--season N] [--commit]

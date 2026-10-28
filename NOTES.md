@@ -1,13 +1,13 @@
 # Project Mu: Draft Prospects & Mock Draft Integration Notes
 
 **Date:** October 15, 2026  
-**Status:** Agent 0 of `docs/PARALLEL_ARTICLE_UPGRADE_HANDOFF.md` done: board and mock draft in the database, one board tool, playoff-exit draft order, 24-pick `OFFSEASON_MOCK_DRAFT`; merged into `main`  
+**Status:** Agent 0 of `docs/done/PARALLEL_ARTICLE_UPGRADE_HANDOFF.md` done: board and mock draft in the database, one board tool, playoff-exit draft order, 24-pick `OFFSEASON_MOCK_DRAFT`; merged into `main`  
 **Active Branch:** `feat/draft-kiper-mock`  
 **Active Worktree:** `/Users/jrereyi/Downloads/Project Mu/.claude/worktrees/draft-kiper-mock`  
 **Test Suite Status:** 534/534 tests passing (`python3 -m pytest -q tests`; the real-capture OCR test takes ~4 min)  
 
 > [!NOTE]
-> Merged into `main` on Oct 15 at the end of Agent 0 (`docs/PARALLEL_ARTICLE_UPGRADE_HANDOFF.md`). Agents 1, 2 and 4–9 branch from that `main`.
+> Merged into `main` on Oct 15 at the end of Agent 0 (`docs/done/PARALLEL_ARTICLE_UPGRADE_HANDOFF.md`). Agents 1, 2 and 4–9 branch from that `main`.
 
 ---
 

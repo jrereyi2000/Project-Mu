@@ -1,4 +1,4 @@
-"""Agent Wire model comparison (docs/SOCIAL_MATRIX.md build step 4).
+"""Agent Wire model comparison (docs/done/SOCIAL_MATRIX.md build step 4).
 
 Writes the same 20 social-desk assignments with each model and saves the posts, token usage and cost to a
 JSON file for side-by-side review. Reads the database; writes nothing to it. Needs GEMINI_API_KEY (or .env).

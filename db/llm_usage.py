@@ -1,5 +1,5 @@
 """
-Gemini token logging (docs/PIPELINE_MIGRATION.md, phase 3) into the llm_usage table.
+Gemini token logging (docs/done/PIPELINE_MIGRATION.md, phase 3) into the llm_usage table.
 
   meter = UsageMeter(client)          # counts every model call this client makes
   with meter.labelled("01_passing_000.png"):

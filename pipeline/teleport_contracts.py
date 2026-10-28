@@ -1,5 +1,5 @@
 """
-Project Mu contracts onto teleported players (docs/PC_MIGRATION_PLAN.md §4.3 Step 4). pipeline/teleport.py pairs each
+Project Mu contracts onto teleported players (docs/in_progress/PC_MIGRATION_PLAN.md §4.3 Step 4). pipeline/teleport.py pairs each
 Project Mu player with a donor; this turns the player's ACTIVE player_contracts row (+ player_contract_years) into the
 fields of the donor's own PlayerContract record, which pipeline/save_reader/save_writer.mjs edits in place (an edit's
 "contract" block). Reads the database, never writes it.

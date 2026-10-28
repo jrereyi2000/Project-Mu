@@ -1,5 +1,5 @@
 """
-Front-office quality q_team from draft track records (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.4;
+Front-office quality q_team from draft track records (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md §2.4;
 PROJECT_SPEC §2.18, §3.3f). q scales each team's scouting error (team boards): lower = a sharper front office.
 
 Hit score per Round 1-2 pick: h = (OVR_now - E[OVR | slot, years since draft]) / sd + DEV_BONUS.

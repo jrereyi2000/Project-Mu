@@ -1,5 +1,5 @@
 """
-Phase 0 inputs for the 2026-2034 history backfill (docs/HISTORY_BACKFILL_PLAN.md §3.1-§3.2; PROJECT_SPEC §1.2).
+Phase 0 inputs for the 2026-2034 history backfill (docs/done/HISTORY_BACKFILL_PLAN.md §3.1-§3.2; PROJECT_SPEC §1.2).
 
 Three files under data/history/, each rebuilt by one command and read by later phases (never by the live site):
 

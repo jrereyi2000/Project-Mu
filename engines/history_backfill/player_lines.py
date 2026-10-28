@@ -1,5 +1,5 @@
 """
-2026-2034 player season lines (docs/HISTORY_BACKFILL_PLAN.md phase 3, §3.5; PROJECT_SPEC §3.3k).
+2026-2034 player season lines (docs/done/HISTORY_BACKFILL_PLAN.md phase 3, §3.5; PROJECT_SPEC §3.3k).
 
 Inputs: the cast (cast.py), team totals (team_totals.py), each pool player's remainder (remainder.py: career totals
 minus 2035-2036 minus real pre-2026 minus canon rows), the record book and awards.

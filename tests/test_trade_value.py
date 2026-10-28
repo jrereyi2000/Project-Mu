@@ -1,4 +1,4 @@
-"""Trade value model (docs/team_management/03_GM_AGENTS_PLAN.md Phase 3). Fixture rows only: no database."""
+"""Trade value model (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 3). Fixture rows only: no database."""
 import math
 import random
 

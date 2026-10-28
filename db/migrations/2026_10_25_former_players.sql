@@ -1,4 +1,4 @@
--- Agent Wire former players (docs/SOCIAL_MATRIX.md, agreed with JR on Oct 14, 2026): 20 big-name ex-players who
+-- Agent Wire former players (docs/done/SOCIAL_MATRIX.md, agreed with JR on Oct 14, 2026): 20 big-name ex-players who
 -- post about players around the league with a soft spot for their old team. Real retired players plus 2026
 -- NFL Top 100 stars who aren't on a 2035 roster (treated as retired before 2035). Written "in the style of",
 -- like the pundit accounts. assigned_team_id is the old team (used for the slant; their posts are not filed

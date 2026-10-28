@@ -1,4 +1,4 @@
-"""Team boards and the poor-pick calibration band (docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 4, master
+"""Team boards and the poor-pick calibration band (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md Phase 4, master
 §2.5: 20-30% poor Round 1 picks, clustered among noisy front offices). Pure: the frozen 2037 class and a frozen
 export of the 2037 Round 1 owners and the 32 GMs (tests/fixtures/scouting_teams_2036.json)."""
 import json

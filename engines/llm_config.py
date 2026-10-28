@@ -1,6 +1,6 @@
 """
 LLM Configuration Helper for Thinking Budgets and Generation Configs.
-(docs/PRE_PC_WORK.md §5, docs/PC_MIGRATION_PLAN.md §7.1, §7.9)
+(docs/done/PRE_PC_WORK.md §5, docs/in_progress/PC_MIGRATION_PLAN.md §7.1, §7.9)
 
 Parses 'model:level' strings (e.g. 'gemini-3.8-flash:low') and constructs
 google.genai.types.GenerateContentConfig with ThinkingConfig.

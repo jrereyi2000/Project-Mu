@@ -1,5 +1,5 @@
 """
-The 2037-offseason teleporter (docs/PC_MIGRATION_PLAN.md §4.3): matches every Project Mu player to a donor already on
+The 2037-offseason teleporter (docs/in_progress/PC_MIGRATION_PLAN.md §4.3): matches every Project Mu player to a donor already on
 the same team in a Madden 27 PC save, retargets the donor's ratings to the Project Mu OVR, and writes the edits file
 pipeline/save_reader/save_writer.mjs applies. Reads the database, never writes it; never touches a save itself.
 

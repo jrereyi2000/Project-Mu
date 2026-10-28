@@ -1,4 +1,4 @@
--- League Memory narrative search index (docs/PRE_PC_WORK.md §9, docs/PC_MIGRATION_PLAN.md V2.8).
+-- League Memory narrative search index (docs/done/PRE_PC_WORK.md §9, docs/in_progress/PC_MIGRATION_PLAN.md V2.8).
 -- Stores historical universe events (articles, writer takes, franchise records, league records)
 -- with text chunks and vector embeddings (REAL[]) for fast cosine similarity in Python/numpy.
 

@@ -1,6 +1,6 @@
 """
 College season stats aggregation, game logs, combine percentile cards, and awards compilation for Draft Central
-(docs/DRAFT_CENTRAL_PLAN.md; PROJECT_SPEC §2.18, §4.6).
+(docs/done/DRAFT_CENTRAL_PLAN.md; PROJECT_SPEC §2.18, §4.6).
 
 Pure helpers (`aggregate_games`, `combine_profile`, `format_summary_line`) operate on public event dicts without DB
 access. Database readers (`prospect_dossier`, `board_stat_summaries`, `compile_awards_and_honors`) take an open tuple

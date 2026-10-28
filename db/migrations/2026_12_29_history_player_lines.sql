@@ -1,4 +1,4 @@
--- 2026-2034 player lines, staged (docs/HISTORY_BACKFILL_PLAN.md phase 3; PROJECT_SPEC §3.3k).
+-- 2026-2034 player lines, staged (docs/done/HISTORY_BACKFILL_PLAN.md phase 3; PROJECT_SPEC §3.3k).
 -- `python3 -m engines.history_backfill players` writes one run: the players who get lines (current players, real
 -- 2026 veterans who retired before 2035, fill-ins) and their season lines in season_stat_lines column names. Nothing
 -- reaches players / player_seasons / season_stats before JR approves a run (a later apply step).

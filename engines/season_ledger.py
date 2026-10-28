@@ -1,5 +1,5 @@
 """
-Player season ledger (docs/SEASON_CONTINUITY_PLAN.md phase 2a; PROJECT_SPEC §3.3m).
+Player season ledger (docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 2a; PROJECT_SPEC §3.3m).
 
 Each player's fate between two captured seasons, written to player_season_transitions: RETAINED (same team), MOVED
 (another team), RETIRED (a retirement on record for the season he left after), FREE_AGENT (on last season's rosters,

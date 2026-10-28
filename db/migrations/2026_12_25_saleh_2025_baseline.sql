@@ -1,6 +1,6 @@
 -- Robert Saleh's 2025 baseline row held his real Jets record (20-36), but Madden started his career at 0-0 in 2026
 -- (JR, 2026-10-26: the row is stale). His end-of-2034 row (83-70) is exactly 153 games = 9 x 17 since 2026, so with a
--- zero baseline the Titans' 2026-2034 record is 83-70, as docs/HISTORY_BACKFILL_PLAN.md §3.9 needs.
+-- zero baseline the Titans' 2026-2034 record is 83-70, as docs/done/HISTORY_BACKFILL_PLAN.md §3.9 needs.
 -- Run once after 2026_10_31_coach_baseline.sql: psql -f db/migrations/2026_12_25_saleh_2025_baseline.sql
 BEGIN;
 

@@ -1,5 +1,5 @@
 """
-History backfill CLI (docs/HISTORY_BACKFILL_PLAN.md §3.8). Phase 2: the team arc.
+History backfill CLI (docs/done/HISTORY_BACKFILL_PLAN.md §3.8). Phase 2: the team arc.
 
   python3 -m engines.history_backfill generate [--seeds 3] [--pins data/history/pins.json] [--time-limit S]
   python3 -m engines.history_backfill apply --candidate N

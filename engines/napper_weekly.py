@@ -1,4 +1,4 @@
-"""Weekly Napper step (docs/NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md, Phase 5).
+"""Weekly Napper step (docs/done/NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md, Phase 5).
 
 Run after the week's fantasy projections are written (engines/game_stat_generator.py calls it right after
 the simulated leagues). For every IN_SEASON Napper league of the current season, for the upcoming week:

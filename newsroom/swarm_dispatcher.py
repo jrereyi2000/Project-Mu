@@ -2212,7 +2212,7 @@ If you need specific stats, use your database tools before producing your final 
         save_to_db: bool = False,
         max_workers: int = 5,
     ) -> list:
-        """Writes the week's Mu Fantasy slate (docs/FANTASY_EDITORIAL_MATRIX.md). No slate in Weeks 19–23."""
+        """Writes the week's Mu Fantasy slate (docs/in_progress/FANTASY_EDITORIAL_MATRIX.md). No slate in Weeks 19–23."""
         phase = fantasy_phase(week)
         if phase is None:
             print(f"[Fantasy] Week {week}: offseason, no fantasy slate (the page keeps the Week 18 slate).")

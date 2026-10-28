@@ -1,4 +1,4 @@
-"""Draft-day trades at the start of Rounds 2-7 (docs/team_management/06_DRAFT_ROUND_TRADES_PLAN.md): the pure parts of
+"""Draft-day trades at the start of Rounds 2-7 (docs/done/team_management/06_DRAFT_ROUND_TRADES_PLAN.md): the pure parts of
 engines/draft_room.start_round and engines/gm_trade_engine.run_draft_round, on synthetic data (no database)."""
 import unittest
 

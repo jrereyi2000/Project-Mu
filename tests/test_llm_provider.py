@@ -1,6 +1,6 @@
 """
 Unit tests for the Gemini-or-local LLM provider switch and llm_usage logging.
-(docs/PRE_PC_WORK.md §6, docs/PC_MIGRATION_PLAN.md §7.3)
+(docs/done/PRE_PC_WORK.md §6, docs/in_progress/PC_MIGRATION_PLAN.md §7.3)
 
 Verifies using unittest.mock (no real paid API calls or running Ollama required):
 1. Provider and model resolution (prefixes, per-label env, global env, defaults).

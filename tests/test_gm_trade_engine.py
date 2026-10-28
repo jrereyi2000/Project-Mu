@@ -1,4 +1,4 @@
-"""GM trade proposal engine (docs/team_management/03_GM_AGENTS_PLAN.md Phase 4). Synthetic books: no database."""
+"""GM trade proposal engine (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 4). Synthetic books: no database."""
 import math
 
 from engines import gm_trade_engine as ge

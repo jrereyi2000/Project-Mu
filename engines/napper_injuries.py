@@ -1,4 +1,4 @@
-"""Injury status for Napper rosters (docs/NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md, Phases 2–4).
+"""Injury status for Napper rosters (docs/done/NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md, Phases 2–4).
 
 A player's status in week w comes from his latest `injuries` row in weeks <= w (the weekly Madden injury
 report), with weeks_remaining counted down by the weeks since that report. This matches

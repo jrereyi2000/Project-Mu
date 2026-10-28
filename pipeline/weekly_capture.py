@@ -1,5 +1,5 @@
 """
-The weekly run (docs/PIPELINE_MIGRATION.md, phase 5: target weekly flow, steps 2-9), started on demand
+The weekly run (docs/done/PIPELINE_MIGRATION.md, phase 5: target weekly flow, steps 2-9), started on demand
 from the debug page (#debug, server/debug_api.py: Scan week / Backfill previous week / Game scan) or by hand:
 
   python3 -m pipeline.weekly_capture                  # connect, capture, extract, load, backfill + engines, articles, shrink

@@ -1,4 +1,4 @@
--- Madden's player ID on the PC franchise save (docs/PC_MIGRATION_PLAN.md §4.5; PROJECT_SPEC §3.1).
+-- Madden's player ID on the PC franchise save (docs/in_progress/PC_MIGRATION_PLAN.md §4.5; PROJECT_SPEC §3.1).
 -- players.madden_pgid = Player.PresentationId from pipeline/save_reader, unique per save. Written by
 -- pipeline/load_save.py for every player it loads (and later by the teleporter); NULL for players never seen
 -- in a PC save. Project Mu's own players.id stays the primary key.

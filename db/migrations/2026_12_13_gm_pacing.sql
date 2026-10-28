@@ -1,4 +1,4 @@
--- GM trade pacing reset (docs/team_management/03_GM_AGENTS_PLAN.md §2.4; PROJECT_SPEC §3.3f).
+-- GM trade pacing reset (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.4; PROJECT_SPEC §3.3f).
 -- counts_for_pacing = false keeps a proposal out of the budget's executed / decided totals (p_exec) and out of
 -- "already made this week", without deleting it. JR, 2026-10-20: the week 4 and 5 proposals were made under the
 -- old open-combination search and don't count; the in-season engine now uses the 2025 trade shapes.

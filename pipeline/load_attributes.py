@@ -1,5 +1,5 @@
 """
-Loads a PS5 attribute scan (docs/PC_MIGRATION_PLAN.md §2.3) into player_attributes, in one transaction.
+Loads a PS5 attribute scan (docs/in_progress/PC_MIGRATION_PLAN.md §2.3) into player_attributes, in one transaction.
 
   python3 -m pipeline.attribute_reader RUN                  # captures/RUN/attributes/ -> attributes.csv
   python3 -m pipeline.load_attributes RUN [--season N] [--commit]

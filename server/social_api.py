@@ -1,4 +1,4 @@
-"""Agent Wire read API (docs/SOCIAL_MATRIX.md §7, build step 6).
+"""Agent Wire read API (docs/done/SOCIAL_MATRIX.md §7, build step 6).
 
 Query functions take a dict-row cursor and return JSON-ready dicts; server/api.py exposes them under
 /api/social/*. Only posts written by the social desk (news_feed rows with content_type 'TWEET' and an agent_id)

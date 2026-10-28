@@ -1,4 +1,4 @@
-// Career milestones (#records, regular-season view; docs/SEASON_CONTINUITY_PLAN.md phase 4): the round marks players'
+// Career milestones (#records, regular-season view; docs/in_progress/SEASON_CONTINUITY_PLAN.md phase 4): the round marks players'
 // careers in this league (since 2026, history included) crossed this season, and the next ones within reach, from
 // GET /api/records/milestones. A "first" is a mark nobody in the league had reached before.
 import { useEffect, useState } from "react";

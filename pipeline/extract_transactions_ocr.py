@@ -1,5 +1,5 @@
 """
-League Transactions pages -> transactions.csv (docs/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, phase 3).
+League Transactions pages -> transactions.csv (docs/done/team_management/02_LEAGUE_TRANSACTIONS_PLAN.md, phase 3).
 
 transactions/page_NNN.png (newest first, ~4 rows a page, 3-row steps) are read with on-device Apple Vision.
 Each row is a heading ("2036 SEASON - WEEK 4") over one line of text; the rows of consecutive pages are lined

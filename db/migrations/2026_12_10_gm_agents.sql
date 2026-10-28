@@ -1,4 +1,4 @@
--- GM agents (docs/TEAM_MANAGEMENT_PLAN.md §2.4, docs/team_management/03_GM_AGENTS_PLAN.md §2.6; PROJECT_SPEC §3.3f).
+-- GM agents (docs/done/TEAM_MANAGEMENT_PLAN.md §2.4, docs/done/team_management/03_GM_AGENTS_PLAN.md §2.6; PROJECT_SPEC §3.3f).
 -- One invented GM per team (persona traits, stable across seasons), the team's direction and needs per season,
 -- draft-pick ownership, trade proposals and their assets (Mu's GM agents decide trades, JR makes them by hand in
 -- Madden, D2/D3), and the trade rows the League Transactions scan sees (sightings; they never execute anything).

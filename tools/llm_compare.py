@@ -1,5 +1,5 @@
 """Quality Test Harness for Short LLM Tasks.
-(docs/PRE_PC_WORK.md §7, docs/PC_MIGRATION_PLAN.md §7.4)
+(docs/done/PRE_PC_WORK.md §7, docs/in_progress/PC_MIGRATION_PLAN.md §7.4)
 
 Runs authentic short-task inputs through two or more models/providers side by side
 using engines/llm_provider.py, outputting structured JSON and an interactive HTML report

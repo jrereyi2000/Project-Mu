@@ -1,4 +1,4 @@
-"""Trade moves (docs/team_management/03_GM_AGENTS_PLAN.md Phase 5). Pure plan + a recording fake cursor: no DB."""
+"""Trade moves (docs/done/team_management/03_GM_AGENTS_PLAN.md Phase 5). Pure plan + a recording fake cursor: no DB."""
 import pytest
 
 from pipeline import trade_moves as tm

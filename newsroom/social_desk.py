@@ -1,4 +1,4 @@
-"""Agent Wire social desk: plans each week's posts (docs/SOCIAL_MATRIX.md §2–§3).
+"""Agent Wire social desk: plans each week's posts (docs/done/SOCIAL_MATRIX.md §2–§3).
 
 Build step 3 = planning only. `plan_social_week(ctx)` turns one week's data into ~100 post assignments
 (account + kind + subject + facts packet); nothing is written and no model is called. Generation,
@@ -26,7 +26,7 @@ from newsroom.season_landscape import REGULAR_SEASON_FINAL_WEEK, division_standi
 
 TARGET_POSTS = 100
 
-# Bucket sizes (docs/SOCIAL_MATRIX.md §2, player-first mix agreed with JR on Oct 14). Die-hard reactions are one
+# Bucket sizes (docs/done/SOCIAL_MATRIX.md §2, player-first mix agreed with JR on Oct 14). Die-hard reactions are one
 # per team that played; shares are one per published article; replies flex between REPLY_RANGE to keep the week
 # near TARGET_POSTS.
 BUCKET_SIZES = {
@@ -154,7 +154,7 @@ BUZZ_ANGLES = {
 # Bucket floors when a busy week has to trim to stay near TARGET_POSTS (last-added posts go first).
 TRIM_ORDER = (("PERFORMANCE", 10), ("COMPARISON", 7), ("BAD_GAME", 5), ("TEAM_STORY", 4), ("MOVES", 1))
 
-# Roster moves (team management step 5, docs/team_management/05_NEWSROOM_INTEGRATION_PLAN.md §2.8): insiders break
+# Roster moves (team management step 5, docs/done/team_management/05_NEWSROOM_INTEGRATION_PLAN.md §2.8): insiders break
 # the most notable moves of the week, the team's beat reporter files on them in place of a plain note, die-hards react
 # to the biggest, and one pundit takes a cap squeeze.
 INSIDER_ARCHETYPES = ("SCHEFTER_TWEET", "RAPOPORT")
@@ -1495,7 +1495,7 @@ class Accounts:
 
 
 # --------------------------------------------------------------------------------------------- planner ---
-# Fan posts each get one angle so a team's fans don't all write the same post (docs/SOCIAL_MATRIX.md §3).
+# Fan posts each get one angle so a team's fans don't all write the same post (docs/done/SOCIAL_MATRIX.md §3).
 FAN_ANGLES = (
     "one specific player who dominated or struggled",
     "the turning point of the game as you remember it (no invented stats)",
