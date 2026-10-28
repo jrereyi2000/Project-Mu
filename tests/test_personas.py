@@ -164,6 +164,19 @@ class RenderTests(unittest.TestCase):
         self.assertIn("Bill Barnwell", out)
         self.assertIn("surplus value", out)       # the TRADE view, from the article type alone
 
+    def test_recent_work_falls_back_to_archetype_for_old_articles(self):
+        class Cur:
+            def execute(self, sql, params):
+                self.params = params
+            def fetchall(self):
+                return [("H1", "## Regression Warning"), ("H2", "text")]
+        cur = Cur()
+        texts, heads = P.recent_work(cur, "Bill_Barnwell", 2036, 12, "ARTICLE", "BARNWELL")
+        self.assertEqual(cur.params[4:7], ("Bill_Barnwell", "BARNWELL", "BARNWELL"))
+        self.assertEqual(heads, ["H1", "H2"])
+        P.recent_work(cur, "Beat_1", 2036, 12, "ARTICLE", "LOCAL_BEAT_REPORTER")
+        self.assertEqual(cur.params[5:7], (None, None))       # shared archetype: own pieces only
+
     def test_post_prompt_renders_a_persona_dict(self):
         from newsroom.social_writer import build_post_prompt
         a = {"kind": "BAD_GAME", "subject": {"type": "player"}, "facts": {"position": "QB"}, "week": 5}

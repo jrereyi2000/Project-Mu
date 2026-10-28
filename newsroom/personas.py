@@ -94,6 +94,7 @@ MIN_VIEWS = 2          # topped up from the general views (empty `when`)
 RECENT_ARTICLES = 3    # signature detection window, articles
 RECENT_POSTS = 15      # signature detection window, posts
 RECENT_HEADLINES = 5   # avoid list
+SHARED_ARCHETYPES = {"LOCAL_BEAT_REPORTER", "DIE_HARD_FAN", "BANDWAGON_FAN", "FORMER_PLAYER"}
 
 
 def load_personas(path: str = PERSONAS_PATH) -> dict:
@@ -217,17 +218,22 @@ def team_signals(cur, season: int, week: int, team_id: int = None) -> set:
     return signals_from_games(cur.fetchall(), team_id)
 
 
-def recent_work(cur, agent_id: str, season: int, week: int, fmt: str) -> tuple:
-    """(recent texts for signature detection, recent headlines) from the writer's own pieces before this week."""
+def recent_work(cur, agent_id: str, season: int, week: int, fmt: str, archetype: str = None) -> tuple:
+    """(recent texts for signature detection, recent headlines) from the writer's own pieces before this week.
+
+    Articles saved before agent_id was stored on news_feed (2026-10-28) are matched by archetype, except for
+    archetypes that many agents share (beat reporters, fans)."""
     if not agent_id:
         return [], []
     content_type = "ARTICLE" if fmt == "ARTICLE" else "TWEET"
     limit = RECENT_ARTICLES if fmt == "ARTICLE" else RECENT_POSTS
+    by_archetype = archetype if archetype and archetype not in SHARED_ARCHETYPES else None
     cur.execute("""
         SELECT headline, content FROM news_feed
-        WHERE agent_id = %s AND content_type = %s AND (season < %s OR (season = %s AND week < %s))
+        WHERE content_type = %s AND (season < %s OR (season = %s AND week < %s))
+          AND (agent_id = %s OR (agent_id IS NULL AND %s::text IS NOT NULL AND persona = %s))
         ORDER BY season DESC, week DESC, id DESC LIMIT %s
-    """, (agent_id, content_type, season, season, week, max(limit, RECENT_HEADLINES)))
+    """, (content_type, season, season, week, agent_id, by_archetype, by_archetype, max(limit, RECENT_HEADLINES)))
     rows = cur.fetchall()
     texts = [c for _, c in rows[:limit] if c]
     headlines = [h for h, _ in rows[:RECENT_HEADLINES] if h] if fmt == "ARTICLE" else []
@@ -330,7 +336,7 @@ def render_persona(persona, fmt: str = "ARTICLE", tags: set = frozenset(), seed:
     return "\n\n".join(out)
 
 
-def build_persona_block(cur, persona, *, agent_id: str = None, season: int = None, week: int = None,
+def build_persona_block(cur, persona, *, agent_id: str = None, archetype: str = None, season: int = None, week: int = None,
                         fmt: str = "ARTICLE", article_type: str = None, post_kind: str = None,
                         position: str = None, team_id: int = None, subject_key: str = "") -> str:
     """render_persona with tags and recent work from the database. Database trouble only drops the
@@ -345,7 +351,7 @@ def build_persona_block(cur, persona, *, agent_id: str = None, season: int = Non
         except Exception as e:
             print(f"⚠️  [PERSONA SIGNALS UNAVAILABLE] {agent_id}: {e}")
         try:
-            texts, headlines = _guarded(cur, lambda: recent_work(cur, agent_id, season, week, fmt))
+            texts, headlines = _guarded(cur, lambda: recent_work(cur, agent_id, season, week, fmt, archetype))
         except Exception as e:
             print(f"⚠️  [PERSONA RECENT WORK UNAVAILABLE] {agent_id}: {e}")
     seed = f"{agent_id}:{season}:{week}:{fmt}:{article_type or post_kind}:{team_id}:{subject_key}"

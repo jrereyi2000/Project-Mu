@@ -946,7 +946,7 @@ class SwarmDispatcher:
             try:
                 with psycopg.connect(self.db.db_conn_info) as pconn, pconn.cursor() as pcur:
                     base_archetype_prompt = persona_lib.build_persona_block(
-                        pcur, persona, agent_id=agent_id, season=season, week=week,
+                        pcur, persona, agent_id=agent_id, archetype=archetype, season=season, week=week,
                         fmt="ARTICLE" if content_type == "ARTICLE" else "POST", article_type=article_type,
                         team_id=subject_team, subject_key=str((slot_target or {}).get("game_id") or ""))
             except Exception as e:
@@ -1693,8 +1693,8 @@ If you need specific stats, use your database tools before producing your final 
                 with psycopg.connect(self.db.db_conn_info) as conn:
                     with conn.cursor() as cur:
                         cur.execute("""
-                            INSERT INTO news_feed (season, week, team_id, content_type, persona, article_type, slot, headline, excerpt, content, created_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                            INSERT INTO news_feed (season, week, team_id, content_type, persona, article_type, slot, headline, excerpt, content, agent_id, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                             RETURNING id;
                         """, (
                             season,
@@ -1706,7 +1706,8 @@ If you need specific stats, use your database tools before producing your final 
                             assigned_slot,
                             headline,
                             excerpt,
-                            generated_text
+                            generated_text,
+                            compiled_prompt.get("agent_id")
                         ))
                         row = cur.fetchone()
                         article_id = row[0] if row else None
