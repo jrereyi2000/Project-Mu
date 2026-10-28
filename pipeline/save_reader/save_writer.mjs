@@ -5,37 +5,27 @@
 //   node save_writer.mjs <CAREER-save> <edits.json> --out <new-save> [--overwrite-out]
 //
 // edits.json: {"players": [{"pgid": 22692, "set": {"FirstName": "Mu", "SpeedRating": 99, "PLYR_COMMENT": 4600}}]}
-// (pgid = Player.PresentationId, field names as in the save's Player table).
+// (pgid = Player.PresentationId, field names as in the save's Player table). An edit's optional "contract" block,
+// {"Length": 4, "CurrentYear": 0, "SalaryYear0": 1050, ...}, sets fields of the player's own PlayerContract record in
+// place (contract_edits.mjs; money in $10,000 units), with the same checks and read-back.
 //
 // Safety: the input save is never written (it is copied first, and --out may not be the input); --out must not
 // exist unless --overwrite-out. Every edit is checked against the field's schema before anything is set (the
 // library itself stores out-of-range numbers and over-long strings), so a bad edit writes nothing. Reference fields
-// (Contract, team links) and OverallRating's recalculation are out of scope: Madden, not the library, recomputes
+// (Contract, team links: a contract is edited through its record, never re-pointed) and OverallRating's recalculation are out of scope: Madden, not the library, recomputes
 // OVR, which is a PC check.
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
-import { fieldValueError } from './lib.mjs';
+import { fieldMeta, fieldValueError } from './lib.mjs';
+import { contractRecordOf, planContractEdits } from './contract_edits.mjs';
 
 async function playerTable(franchise) {
   const all = franchise.getAllTablesByName('Player');
   for (const t of all) await t.readRecords();
   return all.reduce((best, t) => (!best || t.records.length > best.records.length ? t : best), null);
-}
-
-function fieldMeta(record, key) {
-  const field = record.getFieldByKey(key);
-  if (!field) return null;
-  const o = field.offset;
-  return {
-    type: o.type, isReference: o.isReference, minValue: o.minValue, maxValue: o.maxValue, maxLength: o.maxLength,
-    enumMembers: o.enum ? o.enum.members.map(m => m.name) : null,
-    // Some enums give two names one stored value (TraitDevelopment: College_Elite = XFactor = 3), and the library
-    // reads back the first, so the read-back compares stored values.
-    enumValues: o.enum ? Object.fromEntries(o.enum.members.map(m => [m.name, m._value])) : null,
-  };
 }
 
 // Finds each edit's record and checks every value; returns { targets, errors } without changing anything.
@@ -77,7 +67,11 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     const work = join(dir, basename(input));
     copyFileSync(input, work);
     const franchise = await Franchise.create(work, { autoParse: true, saveOnChange: false });
-    const { targets, errors } = planEdits(await playerTable(franchise), edits);
+    const players = await playerTable(franchise);
+    const { targets, errors } = planEdits(players, edits);
+    const contract = await planContractEdits(franchise, players, edits);
+    targets.push(...contract.targets);
+    errors.push(...contract.errors);
     if (errors.length) throw new Error(`edits refused, nothing written:\n  ${errors.join('\n  ')}`);
     for (const t of targets) t.record[t.key] = t.value;
     const staged = join(dir, 'out');
@@ -89,14 +83,16 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     const table = await playerTable(check);
     const mismatches = [];
     for (const t of targets) {
-      const r = table.records.find(x => !x.isEmpty && x.PresentationId === t.pgid);
+      const player = table.records.find(x => !x.isEmpty && x.PresentationId === t.pgid);
+      const r = t.contract && player ? await contractRecordOf(check, player) : player;
       const stored = v => (t.meta.enumValues ? t.meta.enumValues[v] : v);
       if (!r || stored(r[t.key]) !== stored(t.value)) {
-        mismatches.push(`pgid ${t.pgid} ${t.key}: wrote ${t.value}, read ${r?.[t.key]}`);
+        mismatches.push(`pgid ${t.pgid} ${t.contract ? 'contract ' : ''}${t.key}: wrote ${t.value}, read ${r?.[t.key]}`);
       }
     }
     if (mismatches.length) throw new Error(`read-back failed:\n  ${mismatches.join('\n  ')}`);
-    return { out, players: new Set(targets.map(t => t.pgid)).size, fields: targets.length, verified: true };
+    return { out, players: new Set(targets.map(t => t.pgid)).size, fields: targets.length,
+      contracts: new Set(targets.filter(t => t.contract).map(t => t.pgid)).size, verified: true };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -121,7 +117,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   }
   try {
     const report = await writeSave(a.save, JSON.parse(readFileSync(a.edits, 'utf8')), a.out, a);
-    console.error(`${report.fields} fields on ${report.players} players written and read back → ${report.out}`);
+    console.error(`${report.fields} fields on ${report.players} players (${report.contracts} contracts) written and read `
+      + `back → ${report.out}`);
   } catch (e) {
     console.error(e.message);
     process.exit(1);

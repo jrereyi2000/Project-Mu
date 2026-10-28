@@ -12,6 +12,8 @@ import pytest
 
 from engines import ovr_weights as ow
 from pipeline import teleport as tp
+from pipeline import teleport_contracts as tc
+from pipeline.load_save import contract_values
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAMPLE_SAVE = os.environ.get("MU_SAMPLE_SAVE", os.path.join(ROOT, "CAREER-GIANTS-AUTOSAVE"))
@@ -154,8 +156,11 @@ class SampleTeleportTest(unittest.TestCase):
         with psycopg.connect(tp.DSN) as conn:
             cur = conn.cursor()
             cur.execute("SELECT current_season FROM league_state WHERE id = 1")
-            cls.roster = tp.project_mu_roster(cur, cur.fetchone()[0])
+            cls.season = cur.fetchone()[0]
+            cls.roster = tp.project_mu_roster(cur, cls.season)
+            cls.contracts = tc.load_contracts(cur, cls.season)
         cls.edits, cls.report = tp.teleport(cls.snapshot, cls.roster, DOC)
+        cls.contract_counts = tc.add_contracts(cls.edits, cls.report, cls.contracts, cls.snapshot)
 
     def test_everyone_is_matched_on_their_own_team(self):
         r = self.report
@@ -185,3 +190,17 @@ class SampleTeleportTest(unittest.TestCase):
         self.assertGreater(hit / total, 0.95)
         untouched = set(before) - {pr["donor_pgid"] for pr in self.report["pairs"]}
         self.assertTrue(all(before[k] == now[k] for k in untouched))
+
+        # Contracts: every written one reads back as Project Mu's cap hits; the rest keep the donor's.
+        self.assertGreater(self.contract_counts.get("written", 0), 1000)
+        player_of = {pr["donor_pgid"]: pr["player_id"] for pr in self.report["pairs"]}
+        for e in self.edits["players"]:
+            if "contract" not in e:
+                self.assertEqual(now[e["pgid"]]["contract"], before[e["pgid"]]["contract"])
+                continue
+            c, years = self.contracts[player_of[e["pgid"]]]
+            got = contract_values(now[e["pgid"]]["contract"], self.season)
+            self.assertEqual((got["length"], got["years_remaining"]), (c["length"], c["years_remaining"]))
+            for y, want in years.items():
+                if self.season <= y < self.season + c["years_remaining"]:
+                    self.assertLessEqual(abs(got["years"][y] - want), tc.MONEY_UNIT // 2)

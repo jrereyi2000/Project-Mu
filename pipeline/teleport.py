@@ -4,13 +4,14 @@ the same team in a Madden 27 PC save, retargets the donor's ratings to the Proje
 pipeline/save_reader/save_writer.mjs applies. Reads the database, never writes it; never touches a save itself.
 
   python3 -m pipeline.teleport <snapshot.json> [--season 2036] [--edits edits.json] [--report report.json]
-                               [--age-add N] [--write-ovr]
+                               [--age-add N] [--write-ovr] [--contract-years-add N]
 
 <snapshot.json> is pipeline/save_reader/pc_save_reader.mjs's read of the PC save (version 2+). --season is the Project
 Mu season whose rosters move (default league_state.current_season). --age-add adds years to every age (1 if Madden
 has already aged its players into the new league year and Project Mu hasn't). --write-ovr also writes OverallRating,
 OverallGrade0-4 and PlayerType from engines/ovr_weights's predictions, for a Madden that doesn't recompute OVR on load
-(a PC check).
+(a PC check). --contract-years-add moves every contract's current year on by N (Madden's league year ahead of
+--season's).
 
 Why same-team only: Madden ties players to teams through each team's Roster and DepthChart lists, not just
 Player.TeamIndex, so moving a player between teams isn't one field. Every Project Mu team has 54-62 players and every
@@ -25,7 +26,9 @@ Donors left over (about 5-10 a team) are reported; releasing them is a later ste
 Per pair the edits set name, age, years pro, jersey, height, weight, dev trait, position / archetype when they change,
 the ratings engines/ovr_weights.adjust_ratings moves to reach the target OVR for the archetype, and PLYR_COMMENT: kept
 when the donor already has the same surname, else 0 (no recorded name; the full surname list and renames come later,
-§4.3). Not yet: contracts (a reference field), portraits, appearance, the draft class and draft picks.
+§4.3). Contracts: pipeline/teleport_contracts adds the player's ACTIVE Project Mu contract to the edit, written into
+the donor's own PlayerContract record (no Project Mu contract, or a practice-squad donor with no record: the donor's
+contract stays; counted in the report). Not yet: portraits, appearance, the draft class and draft picks.
 """
 import argparse
 import json
@@ -39,6 +42,7 @@ import psycopg
 from scipy.optimize import linear_sum_assignment
 
 from engines import ovr_weights as ow
+from pipeline import teleport_contracts
 from pipeline.load_save import POSITIONS, TEAM_ABBR_ALIASES, archetype as mu_archetype_name
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -302,6 +306,7 @@ def main():
     ap.add_argument("--report", help="write the full report (every pair) here")
     ap.add_argument("--age-add", type=int, default=0)
     ap.add_argument("--write-ovr", action="store_true")
+    ap.add_argument("--contract-years-add", type=int, default=0)
     a = ap.parse_args()
     with open(a.snapshot) as fh:
         snapshot = json.load(fh)
@@ -315,7 +320,9 @@ def main():
             cur.execute("SELECT current_season FROM league_state WHERE id = 1")
             season = cur.fetchone()[0]
         roster = project_mu_roster(cur, season)
+        contracts = teleport_contracts.load_contracts(cur, season)
     edits, report = teleport(snapshot, roster, doc, a.age_add, a.write_ovr)
+    report["contracts"] = teleport_contracts.add_contracts(edits, report, contracts, snapshot, a.contract_years_add)
     report["season"] = season
     if a.edits:
         with open(a.edits, "w") as fh:
