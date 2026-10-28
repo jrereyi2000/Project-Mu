@@ -331,6 +331,17 @@ Docs only, `docs/PC_MIGRATION_PLAN.md`:
 
 **Verify:** the report table (in the module docstring or `verify_output/`) and `--simulate 5` output under the tightened limits; `pytest tests/test_progression.py` passes.
 
+## R7. `save_writer.mjs` takes over 10 minutes once skin tones are written
+
+**Bug:** with 5328902 (item 3) every teleported player's edit carries a `visuals` block, written by `pipeline/save_reader/visual_edits.mjs`. Writing the full teleport (1,796 players) to a copy of `CAREER-GIANTS-AUTOSAVE` now exceeds 600 s, so `tests/test_teleport_appearance.py::SampleAppearanceTest::test_heads_land_and_follow_the_headshots` fails with `TimeoutExpired` (full suite, 2026-10-28). Before item 3 the same write (`teleport --draft --release --appearance`, 80,508 fields) took about 18 s.
+
+**Do:**
+1. Time it: `python3 -m pipeline.teleport <snapshot> --season 2036 --edits <scratch>/edits.json --release --appearance`, then `node pipeline/save_reader/save_writer.mjs CAREER-GIANTS-AUTOSAVE <scratch>/edits.json --out <scratch>/OUT` with and without the `visuals` blocks (strip them from a copy of the edits). Profile with `node --cpu-prof` if the cause isn't obvious.
+2. Likely causes to check: the zstd dictionary or decoder rebuilt per player; each blob decoded/encoded more than once (plan, apply, verify); a table re-read or record list scanned per player (O(n²)); `CharacterVisuals` rows shared between players and rewritten repeatedly.
+3. Fix so the full write with visuals is within ~2× the time without them. Keep the read-back verification.
+
+**Verify:** both timings before/after in the commit message; `python3 -m pytest tests/test_teleport_appearance.py -q -m integration` passes; `npm test` in `pipeline/save_reader` passes.
+
 ## Order and commits
 
-R1 and R2 first (they break the live server), then R3, R4, R5, R6. One commit per fix, on `main` (or merged into it right away), staging only your own hunks; update `PROJECT_SPEC.md` where behaviour changes (R1, R2, R3's fixture). Tick each fix here with the commit hash.
+R1 and R2 first (they break the live server), then R7, R3, R4, R5, R6. One commit per fix, on `main` (or merged into it right away), staging only your own hunks; update `PROJECT_SPEC.md` where behaviour changes (R1, R2, R3's fixture). Tick each fix here with the commit hash.
