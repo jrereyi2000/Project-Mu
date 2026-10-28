@@ -97,7 +97,13 @@ RECENT_HEADLINES = 5   # avoid list
 SHARED_ARCHETYPES = {"LOCAL_BEAT_REPORTER", "DIE_HARD_FAN", "BANDWAGON_FAN", "FORMER_PLAYER"}
 
 
-def load_personas(path: str = PERSONAS_PATH) -> dict:
+VALID_CATEGORIES = {
+    "football_mind", "social", "ambition", "media", "work", "teaching", "quirks"
+}
+VALID_ROLES = {"writer", "gm", "player", "coach", "owner", "scout", "media", "fan", "agent"}
+
+
+def load_personas_json(path: str = PERSONAS_PATH) -> dict:
     with open(path) as f:
         return json.load(f).get("archetypes", {})
 
@@ -105,6 +111,417 @@ def load_personas(path: str = PERSONAS_PATH) -> dict:
 def load_traits(path: str = TRAITS_PATH) -> dict:
     with open(path) as f:
         return {k: v for k, v in json.load(f).get("traits", {}).items() if not k.startswith("_")}
+
+
+def validate_trait_catalogue(traits: dict = None) -> bool:
+    """Validates the trait catalogue for category, role odds, prompt phrasing, and conflict symmetry."""
+    if traits is None:
+        traits = load_traits()
+    for tid, t in traits.items():
+        if tid.startswith("_"):
+            continue
+        if t.get("id") and t["id"] != tid:
+            raise ValueError(f"Trait key '{tid}' does not match entry id '{t['id']}'")
+        cat = t.get("category")
+        if cat not in VALID_CATEGORIES:
+            raise ValueError(f"Trait '{tid}' has invalid category '{cat}'")
+        roles = t.get("roles")
+        if not isinstance(roles, dict):
+            raise ValueError(f"Trait '{tid}' missing roles dict")
+        for r, w in roles.items():
+            if r not in VALID_ROLES:
+                raise ValueError(f"Trait '{tid}' has unknown role '{r}'")
+            if not isinstance(w, (int, float)) or w < 0:
+                raise ValueError(f"Trait '{tid}' role '{r}' weight must be non-negative number")
+        prompt = t.get("prompt_text") or t.get("prompt")
+        if not prompt or not prompt.startswith("tends to"):
+            raise ValueError(f"Trait '{tid}' prompt must start with 'tends to'")
+        conflicts = t.get("conflicts", [])
+        if not isinstance(conflicts, list):
+            raise ValueError(f"Trait '{tid}' conflicts must be a list")
+        for c in conflicts:
+            if c == tid:
+                raise ValueError(f"Trait '{tid}' cannot conflict with itself")
+            if c not in traits:
+                raise ValueError(f"Trait '{tid}' conflicts with unknown trait '{c}'")
+            if tid not in traits[c].get("conflicts", []):
+                raise ValueError(f"Conflict asymmetry: '{tid}' lists '{c}', but '{c}' does not list '{tid}'")
+        when = t.get("when")
+        if when is not None:
+            if not isinstance(when, (list, set, tuple)):
+                raise ValueError(f"Trait '{tid}' when must be a list/set/tuple")
+            diff = set(when) - ALL_TAGS
+            if diff:
+                raise ValueError(f"Trait '{tid}' has invalid when tags: {diff}")
+    return True
+
+
+def validate_slider_budget(sliders: dict) -> bool:
+    """Validates that a persona's 6 sliders are in [0, 10] and sum to exactly SLIDER_BUDGET (30)."""
+    if not isinstance(sliders, dict):
+        raise ValueError("Sliders must be a dictionary")
+    diff = set(SLIDERS) - set(sliders.keys())
+    if diff:
+        raise ValueError(f"Missing sliders: {diff}")
+    extra = set(sliders.keys()) - set(SLIDERS)
+    if extra:
+        raise ValueError(f"Unknown sliders: {extra}")
+    for s in SLIDERS:
+        v = sliders[s]
+        if not isinstance(v, int) or isinstance(v, bool):
+            raise ValueError(f"Slider '{s}' must be an integer, got {type(v).__name__}")
+        if not (0 <= v <= 10):
+            raise ValueError(f"Slider '{s}' value {v} out of bounds [0, 10]")
+    total = sum(sliders[s] for s in SLIDERS)
+    if total != SLIDER_BUDGET:
+        raise ValueError(f"Slider total {total} does not match budget {SLIDER_BUDGET}")
+    return True
+
+
+def validate_persona_traits(traits_list: list, traits: dict = None) -> bool:
+    """Validates that persona traits are 3-5, have no duplicates, max 2 per category, and no conflicts."""
+    if traits is None:
+        traits = load_traits()
+    if not isinstance(traits_list, (list, tuple, set)):
+        raise ValueError("Traits must be a list")
+    if not (3 <= len(traits_list) <= 5):
+        raise ValueError(f"Persona must have between 3 and 5 traits, got {len(traits_list)}")
+    if len(set(traits_list)) != len(traits_list):
+        raise ValueError("Duplicate traits in persona")
+    cats = {}
+    for t in traits_list:
+        if t not in traits:
+            raise ValueError(f"Unknown trait '{t}'")
+        cat = traits[t].get("category")
+        cats[cat] = cats.get(cat, 0) + 1
+        if cats[cat] > 2:
+            raise ValueError(f"Too many traits from category '{cat}' (max 2 allowed)")
+        conflicts = set(traits[t].get("conflicts", []))
+        clashes = conflicts & set(traits_list)
+        if clashes:
+            raise ValueError(f"Trait '{t}' conflicts with {clashes}")
+    return True
+
+
+def seed_sliders(persona_type: str, persona_id: str) -> dict:
+    """Deterministically generates 6 sliders that sum to 30 points within [0, 10]."""
+    seed = f"{persona_type}:{persona_id}"
+    rng = random.Random(seed)
+    sliders = {s: 5 for s in SLIDERS}
+    keys = list(SLIDERS)
+    steps = rng.randint(15, 30)
+    for _ in range(steps):
+        a, b = rng.sample(keys, 2)
+        if sliders[a] < 10 and sliders[b] > 0:
+            sliders[a] += 1
+            sliders[b] -= 1
+    return sliders
+
+
+def seed_traits(persona_type: str, persona_id: str, count: int = 4, traits: dict = None) -> list:
+    """Deterministically selects 3-5 traits for an agent role, max 2 per category, without conflicts."""
+    if traits is None:
+        traits = load_traits()
+    seed = f"{persona_type}:{persona_id}"
+    rng = random.Random(seed)
+
+    role = persona_type.lower()
+    candidates = []
+    for tid, t in traits.items():
+        w = t.get("roles", {}).get(role, 0)
+        if w > 0:
+            candidates.append((tid, t, w))
+
+    if not candidates:
+        candidates = [(tid, t, 1) for tid, t in traits.items()]
+
+    shuffled = list(candidates)
+    rng.shuffle(shuffled)
+    shuffled.sort(key=lambda item: -(rng.random() ** (1.0 / max(0.1, item[2]))))
+
+    chosen = []
+    category_counts = {}
+    for tid, t, _ in shuffled:
+        cat = t.get("category")
+        if category_counts.get(cat, 0) >= 2:
+            continue
+        conflicts = set(t.get("conflicts", []))
+        if any(c in chosen for c in conflicts):
+            continue
+        if any(tid in traits[c].get("conflicts", []) for c in chosen):
+            continue
+        chosen.append(tid)
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+        if len(chosen) >= count:
+            break
+
+    return chosen
+
+
+def seed_persona(persona_type: str, persona_id: str, count: int = 4, traits: dict = None) -> dict:
+    """Seeds a full persona dict deterministically."""
+    sliders = seed_sliders(persona_type, persona_id)
+    t_list = seed_traits(persona_type, persona_id, count=count, traits=traits)
+    return {
+        "persona_type": persona_type,
+        "persona_id": persona_id,
+        "sliders": sliders,
+        "traits": t_list,
+        "views": [],
+        "relationships": []
+    }
+
+
+def get_persona(persona_type: str, persona_id: str, cur=None) -> dict:
+    """Reads a persona from the database tables, falling back to JSON or deterministic seeding."""
+    if cur is not None:
+        try:
+            cur.execute("""
+                SELECT temperament, sociability, confidence, openness, warmth, drive
+                FROM persona_sliders WHERE persona_type = %s AND persona_id = %s
+            """, (persona_type, persona_id))
+            row = cur.fetchone()
+            if row:
+                sliders = {
+                    "temperament": row[0], "sociability": row[1], "confidence": row[2],
+                    "openness": row[3], "warmth": row[4], "drive": row[5]
+                }
+                cur.execute("""
+                    SELECT trait_id FROM persona_traits
+                    WHERE persona_type = %s AND persona_id = %s AND active = TRUE ORDER BY id
+                """, (persona_type, persona_id))
+                t_list = [r[0] for r in cur.fetchall()]
+
+                cur.execute("""
+                    SELECT view_text, trigger_condition, subject_tags FROM persona_views
+                    WHERE persona_type = %s AND persona_id = %s ORDER BY id
+                """, (persona_type, persona_id))
+                v_list = [{"text": r[0], "trigger": r[1], "when": r[2] or []} for r in cur.fetchall()]
+
+                cur.execute("""
+                    SELECT target_type, target_id, trust, note, tags FROM persona_relationships
+                    WHERE persona_type = %s AND persona_id = %s ORDER BY id
+                """, (persona_type, persona_id))
+                r_list = [{"target_type": r[0], "target_id": r[1], "trust": float(r[2]), "note": r[3], "tags": r[4] or []}
+                          for r in cur.fetchall()]
+
+                base = {}
+                if persona_type == "writer":
+                    json_data = load_personas_json()
+                    if persona_id in json_data:
+                        base = dict(json_data[persona_id])
+
+                base.update({
+                    "persona_type": persona_type,
+                    "persona_id": persona_id,
+                    "sliders": sliders,
+                    "traits": t_list,
+                    "views": v_list,
+                    "relationships": r_list
+                })
+                return base
+        except Exception:
+            pass
+
+    # Fallback
+    if persona_type == "writer":
+        json_data = load_personas_json()
+        if persona_id in json_data:
+            return dict(json_data[persona_id])
+    return seed_persona(persona_type, persona_id)
+
+
+def save_persona(persona_type: str, persona_id: str, sliders: dict = None,
+                 traits: list = None, views: list = None, cur=None) -> dict:
+    """Saves persona sliders, traits, and views to the database."""
+    if cur is None:
+        raise ValueError("Database cursor required to save persona")
+
+    if sliders is not None:
+        validate_slider_budget(sliders)
+        cur.execute("""
+            INSERT INTO persona_sliders (persona_type, persona_id, temperament, sociability,
+                                         confidence, openness, warmth, drive, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (persona_type, persona_id) DO UPDATE SET
+                temperament = EXCLUDED.temperament,
+                sociability = EXCLUDED.sociability,
+                confidence = EXCLUDED.confidence,
+                openness = EXCLUDED.openness,
+                warmth = EXCLUDED.warmth,
+                drive = EXCLUDED.drive,
+                updated_at = now()
+        """, (persona_type, persona_id, sliders["temperament"], sliders["sociability"],
+              sliders["confidence"], sliders["openness"], sliders["warmth"], sliders["drive"]))
+
+    if traits is not None:
+        trait_ids = [t["trait_id"] if isinstance(t, dict) else t for t in traits]
+        validate_persona_traits(trait_ids)
+        cur.execute("DELETE FROM persona_traits WHERE persona_type = %s AND persona_id = %s",
+                    (persona_type, persona_id))
+        for item in traits:
+            if isinstance(item, dict):
+                tid = item["trait_id"]
+                active = item.get("active", True)
+                notes = item.get("notes")
+            else:
+                tid = item
+                active = True
+                notes = None
+            cur.execute("""
+                INSERT INTO persona_traits (persona_type, persona_id, trait_id, active, notes)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (persona_type, persona_id, tid, active, notes))
+
+    if views is not None:
+        cur.execute("DELETE FROM persona_views WHERE persona_type = %s AND persona_id = %s",
+                    (persona_type, persona_id))
+        for v in views:
+            cur.execute("""
+                INSERT INTO persona_views (persona_type, persona_id, view_text, trigger_condition, subject_tags)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (persona_type, persona_id, v.get("text") or v.get("view_text"),
+                  v.get("trigger") or v.get("trigger_condition", ""),
+                  v.get("when") or v.get("subject_tags", [])))
+
+    return get_persona(persona_type, persona_id, cur=cur)
+
+
+def seed_writers_to_db(cur, personas_data: dict = None) -> int:
+    """Seeds writer personas from agent_personas.json into the DB tables, preserving identities."""
+    if personas_data is None:
+        personas_data = load_personas_json()
+    count = 0
+    for k, p in personas_data.items():
+        s = p.get("sliders", {})
+        if set(s.keys()) == set(SLIDERS) and sum(s.values()) == SLIDER_BUDGET:
+            cur.execute("""
+                INSERT INTO persona_sliders (persona_type, persona_id, temperament, sociability,
+                                             confidence, openness, warmth, drive, updated_at)
+                VALUES ('writer', %s, %s, %s, %s, %s, %s, %s, now())
+                ON CONFLICT (persona_type, persona_id) DO UPDATE SET
+                    temperament = EXCLUDED.temperament,
+                    sociability = EXCLUDED.sociability,
+                    confidence = EXCLUDED.confidence,
+                    openness = EXCLUDED.openness,
+                    warmth = EXCLUDED.warmth,
+                    drive = EXCLUDED.drive,
+                    updated_at = now()
+            """, (k, s["temperament"], s["sociability"], s["confidence"],
+                  s["openness"], s["warmth"], s["drive"]))
+            count += 1
+
+        cur.execute("DELETE FROM persona_traits WHERE persona_type = 'writer' AND persona_id = %s", (k,))
+        for t in p.get("traits", []):
+            cur.execute("""
+                INSERT INTO persona_traits (persona_type, persona_id, trait_id, active)
+                VALUES ('writer', %s, %s, TRUE)
+                ON CONFLICT (persona_type, persona_id, trait_id) DO UPDATE SET active = TRUE
+            """, (k, t))
+
+        cur.execute("DELETE FROM persona_views WHERE persona_type = 'writer' AND persona_id = %s", (k,))
+        for v in p.get("views", []):
+            cur.execute("""
+                INSERT INTO persona_views (persona_type, persona_id, view_text, trigger_condition, subject_tags)
+                VALUES ('writer', %s, %s, '', %s)
+            """, (k, v["text"], v.get("when", [])))
+    return count
+
+
+def seed_gms_to_db(cur, traits_catalogue: dict = None) -> int:
+    """Seeds GM personas into persona_sliders and persona_traits from gm_profiles."""
+    if traits_catalogue is None:
+        traits_catalogue = load_traits()
+    cur.execute("""
+        SELECT id, team_id, gm_name, aggressiveness, risk_appetite, pick_affinity, youth_bias
+        FROM gm_profiles WHERE end_season IS NULL
+    """)
+    rows = cur.fetchall()
+    count = 0
+    for r in rows:
+        gm_id = str(r[0])
+        sliders = seed_sliders("gm", gm_id)
+        traits = seed_traits("gm", gm_id, count=4, traits=traits_catalogue)
+
+        cur.execute("""
+            INSERT INTO persona_sliders (persona_type, persona_id, temperament, sociability,
+                                         confidence, openness, warmth, drive, updated_at)
+            VALUES ('gm', %s, %s, %s, %s, %s, %s, %s, now())
+            ON CONFLICT (persona_type, persona_id) DO UPDATE SET
+                temperament = EXCLUDED.temperament,
+                sociability = EXCLUDED.sociability,
+                confidence = EXCLUDED.confidence,
+                openness = EXCLUDED.openness,
+                warmth = EXCLUDED.warmth,
+                drive = EXCLUDED.drive,
+                updated_at = now()
+        """, (gm_id, sliders["temperament"], sliders["sociability"], sliders["confidence"],
+              sliders["openness"], sliders["warmth"], sliders["drive"]))
+
+        cur.execute("DELETE FROM persona_traits WHERE persona_type = 'gm' AND persona_id = %s", (gm_id,))
+        for t in traits:
+            cur.execute("""
+                INSERT INTO persona_traits (persona_type, persona_id, trait_id, active)
+                VALUES ('gm', %s, %s, TRUE)
+                ON CONFLICT (persona_type, persona_id, trait_id) DO UPDATE SET active = TRUE
+            """, (gm_id, t))
+        count += 1
+    return count
+
+
+def load_personas(path: str = PERSONAS_PATH, cur=None) -> dict:
+    """Loads personas from database tables with JSON fallback."""
+    json_personas = load_personas_json(path)
+    if cur is None:
+        return json_personas
+    try:
+        cur.execute("""
+            SELECT persona_id, temperament, sociability, confidence, openness, warmth, drive
+            FROM persona_sliders WHERE persona_type = 'writer'
+        """)
+        slider_rows = cur.fetchall()
+        if not slider_rows:
+            return json_personas
+
+        cur.execute("""
+            SELECT persona_id, trait_id FROM persona_traits
+            WHERE persona_type = 'writer' AND active = TRUE ORDER BY id
+        """)
+        trait_rows = cur.fetchall()
+        traits_by_id = {}
+        for pid, tid in trait_rows:
+            traits_by_id.setdefault(pid, []).append(tid)
+
+        cur.execute("""
+            SELECT persona_id, view_text, subject_tags FROM persona_views
+            WHERE persona_type = 'writer' ORDER BY id
+        """)
+        view_rows = cur.fetchall()
+        views_by_id = {}
+        for pid, vt, tags in view_rows:
+            views_by_id.setdefault(pid, []).append({"text": vt, "when": tags or []})
+
+        out = {}
+        for r in slider_rows:
+            pid = r[0]
+            base = dict(json_personas.get(pid, {}))
+            base["sliders"] = {
+                "temperament": r[1], "sociability": r[2], "confidence": r[3],
+                "openness": r[4], "warmth": r[5], "drive": r[6]
+            }
+            if pid in traits_by_id:
+                base["traits"] = traits_by_id[pid]
+            if pid in views_by_id:
+                base["views"] = views_by_id[pid]
+            out[pid] = base
+
+        for k, v in json_personas.items():
+            if k not in out:
+                out[k] = v
+        return out
+    except Exception:
+        return json_personas
+
 
 
 # --------------------------------------------------------------------------------------------- context tags ---

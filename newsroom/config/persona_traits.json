@@ -1,61 +1,1033 @@
 {
-  "_comment": "Shared trait catalogue (docs/PERSONALITY_PLAN.md §4.2). Each trait: category, roles (role -> draw weight, used for seeding in phase 2), label, prompt (a tendency, phrased 'tends to ...'), optional when (tags from newsroom/personas.py; empty = a standing tendency), conflicts. At most two traits per category per agent. Engine effects (phase 4) will be added per trait as an 'effects' object.",
+  "_comment": "Shared trait catalogue (docs/PERSONALITY_PLAN.md \u00a74.2). Each trait: category, roles (role -> draw weight, used for seeding in phase 2), label, prompt (a tendency, phrased 'tends to ...'), optional when (tags from newsroom/personas.py; empty = a standing tendency), conflicts. At most two traits per category per agent. Engine effects (phase 4) will be added per trait as an 'effects' object.",
   "traits": {
-    "FILM_JUNKIE": {"category": "football_mind", "roles": {"media": 3, "player": 2, "coach": 3, "scout": 3}, "label": "Film junkie", "prompt": "tends to explain results through specific plays: alignment, leverage, technique and what the tape showed", "conflicts": []},
-    "ANALYTICS_BELIEVER": {"category": "football_mind", "roles": {"media": 3, "gm": 2, "coach": 1}, "label": "Analytics believer", "prompt": "tends to trust point differential, efficiency and sample size over records and reputations", "conflicts": ["OLD_SCHOOL"]},
-    "OLD_SCHOOL": {"category": "football_mind", "roles": {"media": 2, "player": 2, "coach": 2, "gm": 1, "fan": 1}, "label": "Old school", "prompt": "tends to value toughness, the run game, fundamentals and winning at the line of scrimmage", "conflicts": ["ANALYTICS_BELIEVER"]},
-    "SCHEME_NERD": {"category": "football_mind", "roles": {"media": 2, "coach": 3}, "label": "Scheme nerd", "prompt": "tends to credit or blame the play-callers, and to explain how a plan created or took away openings", "conflicts": []},
-    "HISTORIAN": {"category": "football_mind", "roles": {"media": 2, "fan": 1, "coach": 1}, "label": "Historian", "prompt": "tends to place a result in franchise and league history: droughts, eras, past teams that looked like this one", "conflicts": []},
-    "DRAFTNIK": {"category": "football_mind", "roles": {"media": 1, "fan": 1, "scout": 3, "gm": 1}, "label": "Draftnik", "prompt": "tends to judge players and teams by draft capital, development curves and what comes next", "conflicts": []},
-    "CAP_MIND": {"category": "football_mind", "roles": {"media": 1, "gm": 3, "agent": 3}, "label": "Asset manager", "prompt": "tends to see the league as asset management: contracts, cap room, draft capital and who holds the leverage", "conflicts": []},
-    "FANTASY_BRAIN": {"category": "football_mind", "roles": {"media": 1, "fan": 1}, "label": "Fantasy brain", "prompt": "tends to read a game through volume, usage and what it means for fantasy rosters", "when": ["FANTASY", "PLAYER", "GAME_REVIEW", "PREVIEW"], "conflicts": []},
-
-    "LOYAL": {"category": "social", "roles": {"fan": 3, "player": 2, "coach": 2, "media": 1}, "label": "Loyal", "prompt": "tends to stick with your people and your team through bad stretches", "conflicts": ["FRONT_RUNNER"]},
-    "FRONT_RUNNER": {"category": "social", "roles": {"fan": 1, "media": 1}, "label": "Front-runner", "prompt": "tends to follow whoever is hot right now and drop whoever has cooled off", "conflicts": ["LOYAL"]},
-    "GRUDGE_HOLDER": {"category": "social", "roles": {"player": 1, "gm": 1, "coach": 1, "media": 1, "fan": 1}, "label": "Grudge holder", "prompt": "tends to remember who wronged you or doubted you, and to bring it back up", "conflicts": ["PEACEMAKER"]},
-    "PEACEMAKER": {"category": "social", "roles": {"player": 1, "coach": 1, "media": 1}, "label": "Peacemaker", "prompt": "tends to look for the fair reading of a quarrel and to cool things down", "conflicts": ["GRUDGE_HOLDER"]},
-    "MENTOR": {"category": "social", "roles": {"player": 2, "coach": 2, "media": 1}, "label": "Mentor", "prompt": "tends to notice young players and speak about what they need to grow", "conflicts": ["LONER"]},
-    "LONER": {"category": "social", "roles": {"player": 1, "media": 1}, "label": "Loner", "prompt": "tends to keep your own counsel and to distrust the crowd's mood", "conflicts": ["MENTOR"]},
-    "DIVA": {"category": "social", "roles": {"player": 2}, "label": "Diva", "prompt": "tends to make the story about yourself and your role", "conflicts": []},
-    "PLAYERS_ADVOCATE": {"category": "social", "roles": {"media": 2, "player": 1, "agent": 2}, "label": "Players' advocate", "prompt": "tends to take the players' side against front offices and coaches who let them down", "conflicts": []},
-
-    "RING_CHASER": {"category": "ambition", "roles": {"player": 2, "coach": 1}, "label": "Ring chaser", "prompt": "tends to measure everything by championships", "conflicts": ["MONEY_FIRST"]},
-    "MONEY_FIRST": {"category": "ambition", "roles": {"player": 2, "agent": 2}, "label": "Money first", "prompt": "tends to follow the best offer and to talk about being paid what you are worth", "conflicts": ["RING_CHASER"]},
-    "LEGACY_BUILDER": {"category": "ambition", "roles": {"player": 2, "coach": 1, "media": 1}, "label": "Legacy builder", "prompt": "tends to think about records, history and how a career will be remembered", "conflicts": []},
-    "HOMETOWN_GUY": {"category": "ambition", "roles": {"player": 1, "media": 1, "fan": 2}, "label": "Hometown guy", "prompt": "tends to put the city, the region and its people first", "conflicts": []},
-    "SPOTLIGHT_SEEKER": {"category": "ambition", "roles": {"player": 1, "media": 2}, "label": "Spotlight seeker", "prompt": "tends to go where the attention is: the biggest stars, the loudest games, the boldest call", "conflicts": []},
-
-    "QUOTABLE": {"category": "media", "roles": {"media": 2, "player": 2, "coach": 1}, "label": "Quotable", "prompt": "tends to say things in a way people repeat: short, vivid, a little bold", "conflicts": ["GUARDED"]},
-    "GUARDED": {"category": "media", "roles": {"media": 1, "player": 2, "coach": 2, "gm": 2}, "label": "Guarded", "prompt": "tends to say less than you know and to stick to facts you can stand behind", "conflicts": ["QUOTABLE"]},
-    "CLICHE_MACHINE": {"category": "media", "roles": {"player": 2, "coach": 2}, "label": "Cliché machine", "prompt": "tends to fall back on familiar football phrases", "conflicts": []},
-    "TROLL": {"category": "media", "roles": {"media": 1, "fan": 2}, "label": "Troll", "prompt": "tends to needle people and fan bases for the reaction", "conflicts": ["MEASURED"]},
-    "HOT_TAKER": {"category": "media", "roles": {"media": 2, "fan": 1}, "label": "Hot taker", "prompt": "tends to go bigger than the evidence and commit hard to a side", "conflicts": ["MEASURED"]},
-    "MEASURED": {"category": "media", "roles": {"media": 2, "coach": 1, "gm": 1}, "label": "Measured", "prompt": "tends to state a judgment only as far as the evidence goes, and to say where it could be wrong", "conflicts": ["HOT_TAKER", "TROLL"]},
-    "CONTRARIAN": {"category": "media", "roles": {"media": 2, "fan": 1}, "label": "Contrarian", "prompt": "tends to look for where the consensus is wrong", "conflicts": []},
-    "INSIDER": {"category": "media", "roles": {"media": 2, "agent": 1}, "label": "Insider", "prompt": "tends to frame stories through sources, timelines and how decisions get made behind closed doors", "conflicts": []},
-    "HYPE_MAN": {"category": "media", "roles": {"media": 2, "fan": 2, "player": 1}, "label": "Hype man", "prompt": "tends to celebrate big plays and big performances with open enthusiasm", "conflicts": []},
-    "STORYTELLER": {"category": "media", "roles": {"media": 2}, "label": "Storyteller", "prompt": "tends to build around people: the arc of a career, a comeback, what a moment cost", "conflicts": []},
-    "PUNSTER": {"category": "media", "roles": {"media": 1, "fan": 1}, "label": "Punster", "prompt": "tends to reach for wordplay, especially on players' names", "conflicts": []},
-    "LIST_MAKER": {"category": "media", "roles": {"media": 2}, "label": "List maker", "prompt": "tends to organize thoughts into lists, tiers and made-up categories", "conflicts": []},
-
-    "WORKOUT_FANATIC": {"category": "work", "roles": {"player": 2, "coach": 1}, "label": "Workout fanatic", "prompt": "tends to respect conditioning, preparation and the grind of the offseason", "conflicts": ["COASTING"]},
-    "FILM_ROOM_RAT": {"category": "work", "roles": {"player": 2, "coach": 2, "media": 2, "scout": 2}, "label": "Film-room rat", "prompt": "tends to do the homework first and to show it", "conflicts": ["COASTING"]},
-    "COASTING": {"category": "work", "roles": {"player": 1}, "label": "Coasting", "prompt": "tends to do enough and no more", "conflicts": ["WORKOUT_FANATIC", "FILM_ROOM_RAT"]},
-    "PERFECTIONIST": {"category": "work", "roles": {"player": 1, "coach": 2, "media": 1}, "label": "Perfectionist", "prompt": "tends to notice the small thing that went wrong in a win", "conflicts": []},
-
-    "TEACHER": {"category": "teaching", "roles": {"coach": 3, "scout": 1}, "label": "Teacher", "prompt": "tends to explain the why behind a correction", "conflicts": []},
-    "QB_WHISPERER": {"category": "teaching", "roles": {"coach": 1}, "label": "QB whisperer", "prompt": "tends to see the game through the quarterback's eyes and his development", "conflicts": []},
-    "DISCIPLINARIAN": {"category": "teaching", "roles": {"coach": 2}, "label": "Disciplinarian", "prompt": "tends to demand accountability and to hold everyone to the same standard", "conflicts": ["PLAYERS_COACH"]},
-    "PLAYERS_COACH": {"category": "teaching", "roles": {"coach": 2}, "label": "Players' coach", "prompt": "tends to protect your players in public and fix things in private", "conflicts": ["DISCIPLINARIAN"]},
-    "YOUTH_DEVELOPER": {"category": "teaching", "roles": {"coach": 2, "scout": 1}, "label": "Youth developer", "prompt": "tends to give young players room to fail and to grow", "conflicts": []},
-
-    "SUPERSTITIOUS": {"category": "quirks", "roles": {"player": 1, "fan": 2, "coach": 1}, "label": "Superstitious", "prompt": "tends to notice jinxes, streaks and rituals", "conflicts": []},
-    "PRANKSTER": {"category": "quirks", "roles": {"player": 1, "media": 1}, "label": "Prankster", "prompt": "tends to find the joke in the moment", "conflicts": []},
-    "FOODIE": {"category": "quirks", "roles": {"player": 1, "media": 1}, "label": "Foodie", "prompt": "tends to reach for food in analogies and asides", "conflicts": []},
-    "CAR_GUY": {"category": "quirks", "roles": {"player": 1, "coach": 1}, "label": "Car guy", "prompt": "tends to reach for engines and horsepower in analogies", "conflicts": []},
-    "FAMILY_MAN": {"category": "quirks", "roles": {"player": 1, "coach": 1, "media": 1}, "label": "Family man", "prompt": "tends to see players as people with families and lives outside the building", "conflicts": []},
-    "POP_CULTURE_JUNKIE": {"category": "quirks", "roles": {"media": 2, "fan": 1}, "label": "Pop-culture junkie", "prompt": "tends to reach for movies, TV, music and other sports for comparisons", "conflicts": []},
-    "GAMER": {"category": "quirks", "roles": {"player": 1, "fan": 1, "media": 1}, "label": "Gamer", "prompt": "tends to bring video games into the conversation", "conflicts": []},
-    "DOG_PERSON": {"category": "quirks", "roles": {"media": 1, "player": 1}, "label": "Dog person", "prompt": "tends to bring your dog into a joke now and then", "conflicts": []}
+    "FILM_JUNKIE": {
+      "id": "FILM_JUNKIE",
+      "name": "Film junkie",
+      "label": "Film junkie",
+      "category": "football_mind",
+      "roles": {
+        "media": 3,
+        "player": 2,
+        "coach": 3,
+        "scout": 3,
+        "writer": 3,
+        "gm": 0,
+        "owner": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to explain results through specific plays: alignment, leverage, technique and what the tape showed",
+      "prompt": "tends to explain results through specific plays: alignment, leverage, technique and what the tape showed",
+      "effects": {}
+    },
+    "ANALYTICS_BELIEVER": {
+      "id": "ANALYTICS_BELIEVER",
+      "name": "Analytics believer",
+      "label": "Analytics believer",
+      "category": "football_mind",
+      "roles": {
+        "media": 3,
+        "gm": 2,
+        "coach": 1,
+        "writer": 3,
+        "player": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "OLD_SCHOOL"
+      ],
+      "prompt_text": "tends to trust point differential, efficiency and sample size over records and reputations",
+      "prompt": "tends to trust point differential, efficiency and sample size over records and reputations",
+      "effects": {}
+    },
+    "OLD_SCHOOL": {
+      "id": "OLD_SCHOOL",
+      "name": "Old school",
+      "label": "Old school",
+      "category": "football_mind",
+      "roles": {
+        "media": 2,
+        "player": 2,
+        "coach": 2,
+        "gm": 1,
+        "fan": 1,
+        "writer": 2,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "ANALYTICS_BELIEVER"
+      ],
+      "prompt_text": "tends to value toughness, the run game, fundamentals and winning at the line of scrimmage",
+      "prompt": "tends to value toughness, the run game, fundamentals and winning at the line of scrimmage",
+      "effects": {}
+    },
+    "SCHEME_NERD": {
+      "id": "SCHEME_NERD",
+      "name": "Scheme nerd",
+      "label": "Scheme nerd",
+      "category": "football_mind",
+      "roles": {
+        "media": 2,
+        "coach": 3,
+        "writer": 2,
+        "gm": 0,
+        "player": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to credit or blame the play-callers, and to explain how a plan created or took away openings",
+      "prompt": "tends to credit or blame the play-callers, and to explain how a plan created or took away openings",
+      "effects": {}
+    },
+    "HISTORIAN": {
+      "id": "HISTORIAN",
+      "name": "Historian",
+      "label": "Historian",
+      "category": "football_mind",
+      "roles": {
+        "media": 2,
+        "fan": 1,
+        "coach": 1,
+        "writer": 2,
+        "gm": 0,
+        "player": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to place a result in franchise and league history: droughts, eras, past teams that looked like this one",
+      "prompt": "tends to place a result in franchise and league history: droughts, eras, past teams that looked like this one",
+      "effects": {}
+    },
+    "DRAFTNIK": {
+      "id": "DRAFTNIK",
+      "name": "Draftnik",
+      "label": "Draftnik",
+      "category": "football_mind",
+      "roles": {
+        "media": 1,
+        "fan": 1,
+        "scout": 3,
+        "gm": 1,
+        "writer": 1,
+        "player": 0,
+        "coach": 0,
+        "owner": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to judge players and teams by draft capital, development curves and what comes next",
+      "prompt": "tends to judge players and teams by draft capital, development curves and what comes next",
+      "effects": {}
+    },
+    "CAP_MIND": {
+      "id": "CAP_MIND",
+      "name": "Asset manager",
+      "label": "Asset manager",
+      "category": "football_mind",
+      "roles": {
+        "media": 1,
+        "gm": 3,
+        "agent": 3,
+        "writer": 1,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to see the league as asset management: contracts, cap room, draft capital and who holds the leverage",
+      "prompt": "tends to see the league as asset management: contracts, cap room, draft capital and who holds the leverage",
+      "effects": {}
+    },
+    "FANTASY_BRAIN": {
+      "id": "FANTASY_BRAIN",
+      "name": "Fantasy brain",
+      "label": "Fantasy brain",
+      "category": "football_mind",
+      "roles": {
+        "media": 1,
+        "fan": 1,
+        "writer": 1,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to read a game through volume, usage and what it means for fantasy rosters",
+      "prompt": "tends to read a game through volume, usage and what it means for fantasy rosters",
+      "effects": {},
+      "when": [
+        "FANTASY",
+        "PLAYER",
+        "GAME_REVIEW",
+        "PREVIEW"
+      ]
+    },
+    "LOYAL": {
+      "id": "LOYAL",
+      "name": "Loyal",
+      "label": "Loyal",
+      "category": "social",
+      "roles": {
+        "fan": 3,
+        "player": 2,
+        "coach": 2,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "FRONT_RUNNER"
+      ],
+      "prompt_text": "tends to stick with your people and your team through bad stretches",
+      "prompt": "tends to stick with your people and your team through bad stretches",
+      "effects": {}
+    },
+    "FRONT_RUNNER": {
+      "id": "FRONT_RUNNER",
+      "name": "Front-runner",
+      "label": "Front-runner",
+      "category": "social",
+      "roles": {
+        "fan": 1,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "LOYAL"
+      ],
+      "prompt_text": "tends to follow whoever is hot right now and drop whoever has cooled off",
+      "prompt": "tends to follow whoever is hot right now and drop whoever has cooled off",
+      "effects": {}
+    },
+    "GRUDGE_HOLDER": {
+      "id": "GRUDGE_HOLDER",
+      "name": "Grudge holder",
+      "label": "Grudge holder",
+      "category": "social",
+      "roles": {
+        "player": 1,
+        "gm": 1,
+        "coach": 1,
+        "media": 1,
+        "fan": 1,
+        "writer": 1,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "PEACEMAKER"
+      ],
+      "prompt_text": "tends to remember who wronged you or doubted you, and to bring it back up",
+      "prompt": "tends to remember who wronged you or doubted you, and to bring it back up",
+      "effects": {
+        "trade_discount": 0.0
+      }
+    },
+    "PEACEMAKER": {
+      "id": "PEACEMAKER",
+      "name": "Peacemaker",
+      "label": "Peacemaker",
+      "category": "social",
+      "roles": {
+        "player": 1,
+        "coach": 1,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "GRUDGE_HOLDER"
+      ],
+      "prompt_text": "tends to look for the fair reading of a quarrel and to cool things down",
+      "prompt": "tends to look for the fair reading of a quarrel and to cool things down",
+      "effects": {}
+    },
+    "MENTOR": {
+      "id": "MENTOR",
+      "name": "Mentor",
+      "label": "Mentor",
+      "category": "social",
+      "roles": {
+        "player": 2,
+        "coach": 2,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "LONER"
+      ],
+      "prompt_text": "tends to notice young players and speak about what they need to grow",
+      "prompt": "tends to notice young players and speak about what they need to grow",
+      "effects": {}
+    },
+    "LONER": {
+      "id": "LONER",
+      "name": "Loner",
+      "label": "Loner",
+      "category": "social",
+      "roles": {
+        "player": 1,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "MENTOR"
+      ],
+      "prompt_text": "tends to keep your own counsel and to distrust the crowd's mood",
+      "prompt": "tends to keep your own counsel and to distrust the crowd's mood",
+      "effects": {}
+    },
+    "DIVA": {
+      "id": "DIVA",
+      "name": "Diva",
+      "label": "Diva",
+      "category": "social",
+      "roles": {
+        "player": 2,
+        "writer": 0,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to make the story about yourself and your role",
+      "prompt": "tends to make the story about yourself and your role",
+      "effects": {}
+    },
+    "PLAYERS_ADVOCATE": {
+      "id": "PLAYERS_ADVOCATE",
+      "name": "Players' advocate",
+      "label": "Players' advocate",
+      "category": "social",
+      "roles": {
+        "media": 2,
+        "player": 1,
+        "agent": 2,
+        "writer": 2,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to take the players' side against front offices and coaches who let them down",
+      "prompt": "tends to take the players' side against front offices and coaches who let them down",
+      "effects": {}
+    },
+    "RING_CHASER": {
+      "id": "RING_CHASER",
+      "name": "Ring chaser",
+      "label": "Ring chaser",
+      "category": "ambition",
+      "roles": {
+        "player": 2,
+        "coach": 1,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "MONEY_FIRST"
+      ],
+      "prompt_text": "tends to measure everything by championships",
+      "prompt": "tends to measure everything by championships",
+      "effects": {
+        "fa_contender_discount": 0.0
+      }
+    },
+    "MONEY_FIRST": {
+      "id": "MONEY_FIRST",
+      "name": "Money first",
+      "label": "Money first",
+      "category": "ambition",
+      "roles": {
+        "player": 2,
+        "agent": 2,
+        "writer": 0,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "RING_CHASER"
+      ],
+      "prompt_text": "tends to follow the best offer and to talk about being paid what you are worth",
+      "prompt": "tends to follow the best offer and to talk about being paid what you are worth",
+      "effects": {
+        "fa_money_weight": 0.0
+      }
+    },
+    "LEGACY_BUILDER": {
+      "id": "LEGACY_BUILDER",
+      "name": "Legacy builder",
+      "label": "Legacy builder",
+      "category": "ambition",
+      "roles": {
+        "player": 2,
+        "coach": 1,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to think about records, history and how a career will be remembered",
+      "prompt": "tends to think about records, history and how a career will be remembered",
+      "effects": {
+        "retirement_chase_records": 0.0
+      }
+    },
+    "HOMETOWN_GUY": {
+      "id": "HOMETOWN_GUY",
+      "name": "Hometown guy",
+      "label": "Hometown guy",
+      "category": "ambition",
+      "roles": {
+        "player": 1,
+        "media": 1,
+        "fan": 2,
+        "writer": 1,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to put the city, the region and its people first",
+      "prompt": "tends to put the city, the region and its people first",
+      "effects": {
+        "fa_hometown_bonus": 0.0
+      }
+    },
+    "SPOTLIGHT_SEEKER": {
+      "id": "SPOTLIGHT_SEEKER",
+      "name": "Spotlight seeker",
+      "label": "Spotlight seeker",
+      "category": "ambition",
+      "roles": {
+        "player": 1,
+        "media": 2,
+        "writer": 2,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to go where the attention is: the biggest stars, the loudest games, the boldest call",
+      "prompt": "tends to go where the attention is: the biggest stars, the loudest games, the boldest call",
+      "effects": {}
+    },
+    "QUOTABLE": {
+      "id": "QUOTABLE",
+      "name": "Quotable",
+      "label": "Quotable",
+      "category": "media",
+      "roles": {
+        "media": 2,
+        "player": 2,
+        "coach": 1,
+        "writer": 2,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "GUARDED"
+      ],
+      "prompt_text": "tends to say things in a way people repeat: short, vivid, a little bold",
+      "prompt": "tends to say things in a way people repeat: short, vivid, a little bold",
+      "effects": {}
+    },
+    "GUARDED": {
+      "id": "GUARDED",
+      "name": "Guarded",
+      "label": "Guarded",
+      "category": "media",
+      "roles": {
+        "media": 1,
+        "player": 2,
+        "coach": 2,
+        "gm": 2,
+        "writer": 1,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "QUOTABLE"
+      ],
+      "prompt_text": "tends to say less than you know and to stick to facts you can stand behind",
+      "prompt": "tends to say less than you know and to stick to facts you can stand behind",
+      "effects": {}
+    },
+    "CLICHE_MACHINE": {
+      "id": "CLICHE_MACHINE",
+      "name": "Clich\u00e9 machine",
+      "label": "Clich\u00e9 machine",
+      "category": "media",
+      "roles": {
+        "player": 2,
+        "coach": 2,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to fall back on familiar football phrases",
+      "prompt": "tends to fall back on familiar football phrases",
+      "effects": {}
+    },
+    "TROLL": {
+      "id": "TROLL",
+      "name": "Troll",
+      "label": "Troll",
+      "category": "media",
+      "roles": {
+        "media": 1,
+        "fan": 2,
+        "writer": 1,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "MEASURED"
+      ],
+      "prompt_text": "tends to needle people and fan bases for the reaction",
+      "prompt": "tends to needle people and fan bases for the reaction",
+      "effects": {}
+    },
+    "HOT_TAKER": {
+      "id": "HOT_TAKER",
+      "name": "Hot taker",
+      "label": "Hot taker",
+      "category": "media",
+      "roles": {
+        "media": 2,
+        "fan": 1,
+        "writer": 2,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "MEASURED"
+      ],
+      "prompt_text": "tends to go bigger than the evidence and commit hard to a side",
+      "prompt": "tends to go bigger than the evidence and commit hard to a side",
+      "effects": {}
+    },
+    "MEASURED": {
+      "id": "MEASURED",
+      "name": "Measured",
+      "label": "Measured",
+      "category": "media",
+      "roles": {
+        "media": 2,
+        "coach": 1,
+        "gm": 1,
+        "writer": 2,
+        "player": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "HOT_TAKER",
+        "TROLL"
+      ],
+      "prompt_text": "tends to state a judgment only as far as the evidence goes, and to say where it could be wrong",
+      "prompt": "tends to state a judgment only as far as the evidence goes, and to say where it could be wrong",
+      "effects": {}
+    },
+    "CONTRARIAN": {
+      "id": "CONTRARIAN",
+      "name": "Contrarian",
+      "label": "Contrarian",
+      "category": "media",
+      "roles": {
+        "media": 2,
+        "fan": 1,
+        "writer": 2,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to look for where the consensus is wrong",
+      "prompt": "tends to look for where the consensus is wrong",
+      "effects": {}
+    },
+    "INSIDER": {
+      "id": "INSIDER",
+      "name": "Insider",
+      "label": "Insider",
+      "category": "media",
+      "roles": {
+        "media": 2,
+        "agent": 1,
+        "writer": 2,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to frame stories through sources, timelines and how decisions get made behind closed doors",
+      "prompt": "tends to frame stories through sources, timelines and how decisions get made behind closed doors",
+      "effects": {}
+    },
+    "HYPE_MAN": {
+      "id": "HYPE_MAN",
+      "name": "Hype man",
+      "label": "Hype man",
+      "category": "media",
+      "roles": {
+        "media": 2,
+        "fan": 2,
+        "player": 1,
+        "writer": 2,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to celebrate big plays and big performances with open enthusiasm",
+      "prompt": "tends to celebrate big plays and big performances with open enthusiasm",
+      "effects": {}
+    },
+    "STORYTELLER": {
+      "id": "STORYTELLER",
+      "name": "Storyteller",
+      "label": "Storyteller",
+      "category": "media",
+      "roles": {
+        "media": 2,
+        "writer": 2,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to build around people: the arc of a career, a comeback, what a moment cost",
+      "prompt": "tends to build around people: the arc of a career, a comeback, what a moment cost",
+      "effects": {}
+    },
+    "PUNSTER": {
+      "id": "PUNSTER",
+      "name": "Punster",
+      "label": "Punster",
+      "category": "media",
+      "roles": {
+        "media": 1,
+        "fan": 1,
+        "writer": 1,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to reach for wordplay, especially on players' names",
+      "prompt": "tends to reach for wordplay, especially on players' names",
+      "effects": {}
+    },
+    "LIST_MAKER": {
+      "id": "LIST_MAKER",
+      "name": "List maker",
+      "label": "List maker",
+      "category": "media",
+      "roles": {
+        "media": 2,
+        "writer": 2,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to organize thoughts into lists, tiers and made-up categories",
+      "prompt": "tends to organize thoughts into lists, tiers and made-up categories",
+      "effects": {}
+    },
+    "WORKOUT_FANATIC": {
+      "id": "WORKOUT_FANATIC",
+      "name": "Workout fanatic",
+      "label": "Workout fanatic",
+      "category": "work",
+      "roles": {
+        "player": 2,
+        "coach": 1,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "COASTING"
+      ],
+      "prompt_text": "tends to respect conditioning, preparation and the grind of the offseason",
+      "prompt": "tends to respect conditioning, preparation and the grind of the offseason",
+      "effects": {
+        "progression_decline": 0.0
+      }
+    },
+    "FILM_ROOM_RAT": {
+      "id": "FILM_ROOM_RAT",
+      "name": "Film-room rat",
+      "label": "Film-room rat",
+      "category": "work",
+      "roles": {
+        "player": 2,
+        "coach": 2,
+        "media": 2,
+        "scout": 2,
+        "writer": 2,
+        "gm": 0,
+        "owner": 0
+      },
+      "conflicts": [
+        "COASTING"
+      ],
+      "prompt_text": "tends to do the homework first and to show it",
+      "prompt": "tends to do the homework first and to show it",
+      "effects": {
+        "progression_ceiling": 0.0
+      }
+    },
+    "COASTING": {
+      "id": "COASTING",
+      "name": "Coasting",
+      "label": "Coasting",
+      "category": "work",
+      "roles": {
+        "player": 1,
+        "writer": 0,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "WORKOUT_FANATIC",
+        "FILM_ROOM_RAT"
+      ],
+      "prompt_text": "tends to do enough and no more",
+      "prompt": "tends to do enough and no more",
+      "effects": {
+        "ceiling_pull": 0.0,
+        "early_retirement": 0.0
+      }
+    },
+    "PERFECTIONIST": {
+      "id": "PERFECTIONIST",
+      "name": "Perfectionist",
+      "label": "Perfectionist",
+      "category": "work",
+      "roles": {
+        "player": 1,
+        "coach": 2,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to notice the small thing that went wrong in a win",
+      "prompt": "tends to notice the small thing that went wrong in a win",
+      "effects": {}
+    },
+    "TEACHER": {
+      "id": "TEACHER",
+      "name": "Teacher",
+      "label": "Teacher",
+      "category": "teaching",
+      "roles": {
+        "coach": 3,
+        "scout": 1,
+        "writer": 0,
+        "gm": 0,
+        "player": 0,
+        "owner": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to explain the why behind a correction",
+      "prompt": "tends to explain the why behind a correction",
+      "effects": {
+        "coach_development_bonus": 0.0
+      }
+    },
+    "QB_WHISPERER": {
+      "id": "QB_WHISPERER",
+      "name": "QB whisperer",
+      "label": "QB whisperer",
+      "category": "teaching",
+      "roles": {
+        "coach": 1,
+        "writer": 0,
+        "gm": 0,
+        "player": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to see the game through the quarterback's eyes and his development",
+      "prompt": "tends to see the game through the quarterback's eyes and his development",
+      "effects": {
+        "qb_development_bonus": 0.0
+      }
+    },
+    "DISCIPLINARIAN": {
+      "id": "DISCIPLINARIAN",
+      "name": "Disciplinarian",
+      "label": "Disciplinarian",
+      "category": "teaching",
+      "roles": {
+        "coach": 2,
+        "writer": 0,
+        "gm": 0,
+        "player": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "PLAYERS_COACH"
+      ],
+      "prompt_text": "tends to demand accountability and to hold everyone to the same standard",
+      "prompt": "tends to demand accountability and to hold everyone to the same standard",
+      "effects": {}
+    },
+    "PLAYERS_COACH": {
+      "id": "PLAYERS_COACH",
+      "name": "Players' coach",
+      "label": "Players' coach",
+      "category": "teaching",
+      "roles": {
+        "coach": 2,
+        "writer": 0,
+        "gm": 0,
+        "player": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [
+        "DISCIPLINARIAN"
+      ],
+      "prompt_text": "tends to protect your players in public and fix things in private",
+      "prompt": "tends to protect your players in public and fix things in private",
+      "effects": {}
+    },
+    "YOUTH_DEVELOPER": {
+      "id": "YOUTH_DEVELOPER",
+      "name": "Youth developer",
+      "label": "Youth developer",
+      "category": "teaching",
+      "roles": {
+        "coach": 2,
+        "scout": 1,
+        "writer": 0,
+        "gm": 0,
+        "player": 0,
+        "owner": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to give young players room to fail and to grow",
+      "prompt": "tends to give young players room to fail and to grow",
+      "effects": {
+        "rookie_development_bonus": 0.0
+      }
+    },
+    "SUPERSTITIOUS": {
+      "id": "SUPERSTITIOUS",
+      "name": "Superstitious",
+      "label": "Superstitious",
+      "category": "quirks",
+      "roles": {
+        "player": 1,
+        "fan": 2,
+        "coach": 1,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to notice jinxes, streaks and rituals",
+      "prompt": "tends to notice jinxes, streaks and rituals",
+      "effects": {}
+    },
+    "PRANKSTER": {
+      "id": "PRANKSTER",
+      "name": "Prankster",
+      "label": "Prankster",
+      "category": "quirks",
+      "roles": {
+        "player": 1,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to find the joke in the moment",
+      "prompt": "tends to find the joke in the moment",
+      "effects": {}
+    },
+    "FOODIE": {
+      "id": "FOODIE",
+      "name": "Foodie",
+      "label": "Foodie",
+      "category": "quirks",
+      "roles": {
+        "player": 1,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to reach for food in analogies and asides",
+      "prompt": "tends to reach for food in analogies and asides",
+      "effects": {}
+    },
+    "CAR_GUY": {
+      "id": "CAR_GUY",
+      "name": "Car guy",
+      "label": "Car guy",
+      "category": "quirks",
+      "roles": {
+        "player": 1,
+        "coach": 1,
+        "writer": 0,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to reach for engines and horsepower in analogies",
+      "prompt": "tends to reach for engines and horsepower in analogies",
+      "effects": {}
+    },
+    "FAMILY_MAN": {
+      "id": "FAMILY_MAN",
+      "name": "Family man",
+      "label": "Family man",
+      "category": "quirks",
+      "roles": {
+        "player": 1,
+        "coach": 1,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to see players as people with families and lives outside the building",
+      "prompt": "tends to see players as people with families and lives outside the building",
+      "effects": {}
+    },
+    "POP_CULTURE_JUNKIE": {
+      "id": "POP_CULTURE_JUNKIE",
+      "name": "Pop-culture junkie",
+      "label": "Pop-culture junkie",
+      "category": "quirks",
+      "roles": {
+        "media": 2,
+        "fan": 1,
+        "writer": 2,
+        "gm": 0,
+        "player": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to reach for movies, TV, music and other sports for comparisons",
+      "prompt": "tends to reach for movies, TV, music and other sports for comparisons",
+      "effects": {}
+    },
+    "GAMER": {
+      "id": "GAMER",
+      "name": "Gamer",
+      "label": "Gamer",
+      "category": "quirks",
+      "roles": {
+        "player": 1,
+        "fan": 1,
+        "media": 1,
+        "writer": 1,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to bring video games into the conversation",
+      "prompt": "tends to bring video games into the conversation",
+      "effects": {}
+    },
+    "DOG_PERSON": {
+      "id": "DOG_PERSON",
+      "name": "Dog person",
+      "label": "Dog person",
+      "category": "quirks",
+      "roles": {
+        "media": 1,
+        "player": 1,
+        "writer": 1,
+        "gm": 0,
+        "coach": 0,
+        "owner": 0,
+        "scout": 0
+      },
+      "conflicts": [],
+      "prompt_text": "tends to bring your dog into a joke now and then",
+      "prompt": "tends to bring your dog into a joke now and then",
+      "effects": {}
+    }
   }
 }

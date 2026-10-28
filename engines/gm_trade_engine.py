@@ -326,9 +326,35 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
                           g.position_bias, g.voice, COALESCE(st.user_controlled, false), COALESCE(st.suggestions_on, true)
                    FROM gm_profiles g LEFT JOIN gm_team_settings st ON st.team_id = g.team_id
                    WHERE g.end_season IS NULL""")
-    b["gm"] = {r[0]: {"gm_id": r[1], "gm_name": r[2], "aggressiveness": float(r[3]), "risk_appetite": float(r[4]),
-                      "pick_affinity": float(r[5]), "youth_bias": float(r[6]), "position_bias": r[7] or {},
-                      "voice": r[8], "user_controlled": r[9], "suggestions_on": r[10]} for r in cur.fetchall()}
+    gm_rows = cur.fetchall()
+    try:
+        cur.execute("""
+            SELECT persona_id, temperament, sociability, confidence, openness, warmth, drive
+            FROM persona_sliders WHERE persona_type = 'gm'
+        """)
+        sl_map = {r[0]: {"temperament": r[1], "sociability": r[2], "confidence": r[3],
+                         "openness": r[4], "warmth": r[5], "drive": r[6]} for r in cur.fetchall()}
+        cur.execute("""
+            SELECT persona_id, trait_id FROM persona_traits
+            WHERE persona_type = 'gm' AND active = TRUE ORDER BY id
+        """)
+        tr_map = {}
+        for pid, tid in cur.fetchall():
+            tr_map.setdefault(pid, []).append(tid)
+    except Exception:
+        sl_map, tr_map = {}, {}
+    from newsroom.personas import seed_sliders, seed_traits
+    b["gm"] = {}
+    for r in gm_rows:
+        gid = str(r[1])
+        sliders = sl_map.get(gid) or seed_sliders("gm", gid)
+        traits = tr_map.get(gid) or seed_traits("gm", gid)
+        b["gm"][r[0]] = {
+            "gm_id": r[1], "gm_name": r[2], "aggressiveness": float(r[3]), "risk_appetite": float(r[4]),
+            "pick_affinity": float(r[5]), "youth_bias": float(r[6]), "position_bias": r[7] or {},
+            "voice": r[8], "user_controlled": r[9], "suggestions_on": r[10],
+            "sliders": sliders, "traits": traits
+        }
     cur.execute("""SELECT team_id, direction, needs, surplus, urgent_need, direction_inputs, direction_score
                    FROM gm_team_seasons WHERE season = %s""", (season,))
     b["ts"] = {r[0]: {"direction": r[1], "needs": r[2] or [], "surplus": r[3] or [], "urgent_need": r[4],

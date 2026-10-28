@@ -72,7 +72,7 @@ Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`
 - [x] 7. [Quality test harness](PRE_PC_WORK.md#7-quality-test-harness) (`tools/llm_compare.py`, §7.4)
 - [x] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
 - [x] 9. [League memory](PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
-- [ ] 10. [Personality plan phases 2 and 3](PRE_PC_WORK.md#10-personality-plan-phases-2-and-3-v213): catalogue and tables, then GMs (V2.13)
+- [x] 10. [Personality plan phases 2 and 3](PRE_PC_WORK.md#10-personality-plan-phases-2-and-3-v213): catalogue and tables, then GMs (V2.13) [DONE 2026-10-28]
 - [x] 11. [Progression plan phase C](PRE_PC_WORK.md#11-progression-plan-phase-c-v214): `engines/progression.py` offline, backtested (V2.14)
 
 On hold: applying `madden_pgid` to the live database (after the PC move); the CFB 27 bridge (§6, until a dynasty is planned); the pregame show (§9.1); the rest of Part 2. The full Project Mu draft order for `PickNumber` (§4.3) comes in once the Super Bowl is final.
@@ -740,6 +740,8 @@ A storyline layer that tracks arcs as state across weeks and seasons, each with 
 * **Inputs:** game scripts (spec §2.14), the season archive and team arc history, records, contracts, scouting, and Madden's own storyline tables (`Story`, `BranchingStory`, `FootballStory` in the Madden 27 schema; check on the PC what they hold).
 
 ## V2.13 Personalities Across the NFL Universe
+
+**Status (2026-10-28):** Phases 1, 2, and 3 built. Writers and GMs use structured database tables (`persona_sliders`, `persona_traits`, `persona_views`, `persona_relationships`, `persona_trait_history`), a 50-trait validated catalogue (`newsroom/config/persona_traits.json`), deterministic seeding (`f"{type}:{id}"`), `#debug` review endpoints (`GET /api/debug/personas`, `POST /api/debug/personas/{type}/{id}`), and GM prompt/dialogue personality reflection.
 
 Extend the persona and memory model the newsroom already uses (identity line, takes log, season summaries) beyond writers and GMs to:
 

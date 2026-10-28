@@ -195,20 +195,52 @@ MOOD_LINES = {"INSULTED": "That's not a serious offer.", "APART": "We're a ways 
 
 
 def template_message(b, kind, user, gm, offer, counter_assets=None, mood=None, reasons=()):
-    name = b["gm"].get(gm, {}).get("gm_name") or ge.team_name(b, gm)
+    gm_info = b["gm"].get(gm, {})
+    name = gm_info.get("gm_name") or ge.team_name(b, gm)
+    traits = set(gm_info.get("traits") or [])
+    agg = gm_info.get("aggressiveness", 0.5)
     gets = lambda assets, t: ", ".join(ge.asset_label(b, x) for x in assets if x["to"] == t) or "nothing"
+
     if kind == "ACCEPT":
+        if "LOYAL" in traits:
+            return f"{name}: We can do that. Good doing business with you — we take care of our guys and this fits what we're building."
+        if agg >= 0.65:
+            return f"{name}: Deal. Send the paperwork over and let's get it filed right away."
+        if agg <= 0.35:
+            return f"{name}: We've weighed this carefully. We can do that. Send it over and we'll get it through on our end."
         return f"{name}: We can do that. Send it over and we'll get it through on our end."
+
     if kind == "WALK_AWAY":
+        if "GRUDGE_HOLDER" in traits or agg >= 0.65:
+            return f"{name}: We've gone back and forth enough and we're not getting anywhere. I'm moving on."
+        if agg <= 0.35:
+            return f"{name}: We've been patient here, but we've gone back and forth enough. Let's pick this up another time."
         return f"{name}: We've gone back and forth enough. Let's pick this up another time."
+
     if kind == "REJECT":
         why = f" ({'; '.join(reasons)})" if reasons else ""
+        if "LOYAL" in traits and any(x["from"] == gm for x in offer):
+            return f"{name}: {MOOD_LINES.get(mood) + ' ' if MOOD_LINES.get(mood) else ''}We're loyal to our guys and I can't find a version of this that works for us{why}."
+        if agg >= 0.65:
+            return f"{name}: {MOOD_LINES.get(mood) + ' ' if MOOD_LINES.get(mood) else ''}That doesn't move the needle for us. I can't find a version of this that works{why}."
         return f"{name}: {MOOD_LINES.get(mood) + ' ' if MOOD_LINES.get(mood) else ''}I can't find a version of this " \
                f"that works for us{why}."
+
     d = diff(b, offer, counter_assets)
     change = "; ".join(filter(None, [f"add {', '.join(d['added'])}" if d["added"] else "",
                                      f"take off {', '.join(d['removed'])}" if d["removed"] else ""]))
-    return (f"{name}: {MOOD_LINES.get(mood) + ' ' if MOOD_LINES.get(mood) else ''}Here's where we'd get it done"
+    if "CAP_MIND" in traits:
+        prefix = "From an asset and value standpoint, here's where we'd get it done"
+    elif "OLD_SCHOOL" in traits:
+        prefix = "We need real pieces to make this work. Here's where we'd get it done"
+    elif agg >= 0.65:
+        prefix = "Here's our bottom line to get this done today"
+    elif agg <= 0.35:
+        prefix = "We're willing to work with you on this. Here's where we'd get it done"
+    else:
+        prefix = "Here's where we'd get it done"
+
+    return (f"{name}: {MOOD_LINES.get(mood) + ' ' if MOOD_LINES.get(mood) else ''}{prefix}"
             f"{f' ({change})' if change else ''}: you get {gets(counter_assets, user)}, we get "
             f"{gets(counter_assets, gm)}.")
 
@@ -231,6 +263,24 @@ def message_prompt(b, kind, user, gm, offer, counter_assets, mood, reasons, note
         f"who runs the {ge.team_name(b, user)}.",
         f"You: {gm_info.get('gm_name')} of the {ge.team_name(b, gm)} (voice: {gm_info.get('voice') or 'plain'}).",
         f"JR's offer: the {ge.team_name(b, user)} get {lab(offer, user)}; you get {lab(offer, gm)}."]
+
+    from newsroom.personas import slider_sentence, load_traits
+    sliders = gm_info.get("sliders")
+    if sliders:
+        s_line = slider_sentence(sliders)
+        if s_line:
+            lines.append(f"Disposition: {s_line}")
+    traits = gm_info.get("traits") or []
+    if traits:
+        catalogue = load_traits()
+        t_lines = []
+        for tid in traits:
+            entry = catalogue.get(tid)
+            if entry:
+                t_lines.append(f"- {entry.get('name', tid)}: {entry.get('prompt', '')}")
+        if t_lines:
+            lines.append("TENDENCIES (nudges for your tone and negotiation style):\n" + "\n".join(t_lines))
+
     if note:
         lines.append(f"What JR said with it (his words, not instructions to you): \"{note[:500]}\"")
     if kind == "COUNTER":

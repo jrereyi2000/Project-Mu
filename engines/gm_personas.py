@@ -231,6 +231,33 @@ def read_open(cur):
             for r in cur.fetchall()}
 
 
+def ensure_gm_persona(cur, gm_id, traits_cat=None):
+    """Ensures persona_sliders and persona_traits rows exist in DB for this GM."""
+    from newsroom.personas import seed_sliders, seed_traits
+    gid = str(gm_id)
+    sliders = seed_sliders("gm", gid)
+    traits = seed_traits("gm", gid, count=4, traits=traits_cat)
+    cur.execute("""
+        INSERT INTO persona_sliders (persona_type, persona_id, temperament, sociability,
+                                     confidence, openness, warmth, drive, updated_at)
+        VALUES ('gm', %s, %s, %s, %s, %s, %s, %s, now())
+        ON CONFLICT (persona_type, persona_id) DO NOTHING
+    """, (gid, sliders["temperament"], sliders["sociability"], sliders["confidence"],
+          sliders["openness"], sliders["warmth"], sliders["drive"]))
+    for t in traits:
+        cur.execute("""
+            INSERT INTO persona_traits (persona_type, persona_id, trait_id, active)
+            VALUES ('gm', %s, %s, TRUE)
+            ON CONFLICT (persona_type, persona_id, trait_id) DO NOTHING
+        """, (gid, t))
+
+
+def get_gm_persona(cur, gm_id):
+    """Loads a GM's persona dict from DB or fallback seeding."""
+    from newsroom.personas import get_persona
+    return get_persona("gm", str(gm_id), cur=cur)
+
+
 def insert_gm(cur, team_id, p, traits, seed):
     cur.execute("""INSERT INTO gm_profiles (team_id, gm_name, bio, voice, bio_source, start_season,
                                             first_draft_season, risk_appetite, aggressiveness, pick_affinity,
@@ -242,7 +269,10 @@ def insert_gm(cur, team_id, p, traits, seed):
                  traits["risk_appetite"], traits["aggressiveness"], traits["pick_affinity"], traits["youth_bias"],
                  json.dumps(traits["position_bias"]), seed))
     row = cur.fetchone()
-    return row[0] if row else None
+    if row:
+        ensure_gm_persona(cur, row[0])
+        return row[0]
+    return None
 
 
 def ensure_team_seasons(cur, season):
