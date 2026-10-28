@@ -11,7 +11,12 @@ Matching: each scan row is matched to a player_seasons row of the same team and 
   1. list-name key ('T.DAVIS' -> TDAVIS, capture_matching.name_key) and position; a key shared by two players is
      decided by position, then age;
   2. one OCR slip in the name (capture_matching.one_slip) with the same position;
-  3. otherwise the row is reported unmatched and not loaded.
+  3. after every team: a row still unmatched goes to a player listed on another team that season (a trade or
+     signing the database hasn't caught up with) with the same name key and position and an age within one year,
+     when exactly one such player is left unmatched by the whole scan;
+  4. otherwise the row is reported unmatched and not loaded.
+Before keying, OCR slips the reader leaves in list names are undone (scan_name): a trailing token of I/l/L/1/| is a
+suffix ('W.NOLEN IIL' -> W.NOLEN), and a 0 in a name is the letter O ('0.0LADEJO' -> O.OLADEJO).
 A team's rows already loaded from the same capture folder are replaced; other scans are kept (one row per player
 per scan, so the teleporter takes the latest of the season). With --commit the run gets a `captures` row (mode
 `attributes`, status loaded).
@@ -20,6 +25,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 
 import psycopg
@@ -51,6 +57,12 @@ def read_csv(path):
     return rows
 
 
+def scan_name(name):
+    """A list name with the reader's OCR slips undone: 'W.NOLEN IIL' -> 'W.NOLEN', '0.0LADEJO' -> 'O.OLADEJO'."""
+    name = re.sub(r"\s+[IlL1|]{2,3}$", "", (name or "").strip())
+    return name.replace("0", "O")
+
+
 def match_rows(rows, candidates):
     """rows: one team's scan rows; candidates: [{player_id, name, position, age}] for that team and season.
     Returns ([(row, player_id, how)], [unmatched row]). One to one: a player is matched at most once."""
@@ -68,7 +80,7 @@ def match_rows(rows, candidates):
         return pool[0] if len(pool) == 1 else None
 
     for row in rows:
-        key = name_key(row["name"] or "")
+        key = name_key(scan_name(row["name"]))
         c = pick([c for c, k in keyed if k == key], row)
         how = "name"
         if c is None:
@@ -80,6 +92,24 @@ def match_rows(rows, candidates):
             continue
         taken.add(c["player_id"])
         matched.append((row, c["player_id"], how))
+    return matched, left
+
+
+def match_moved(rows, candidates, taken):
+    """Rows no team matched -> players listed on another team (candidates: the season's players with a `team`).
+    Same name key and position, age within a year, not `taken` by the scan, and only one such player."""
+    keyed = [(c, name_key(c["name"])) for c in candidates if c["player_id"] not in taken]
+    matched, left = [], []
+    for row in rows:
+        key = name_key(scan_name(row["name"]))
+        pool = [c for c, k in keyed if k == key and c["player_id"] not in taken
+                and (c["position"] or "") == (row["pos"] or "")
+                and (row["age"] is None or c["age"] is None or abs(c["age"] - row["age"]) <= 1)]
+        if len(pool) != 1:
+            left.append(row)
+            continue
+        taken.add(pool[0]["player_id"])
+        matched.append((row, pool[0]["player_id"], f"moved from {pool[0]['team']}"))
     return matched, left
 
 
@@ -95,13 +125,21 @@ def candidates(cur, season, team_id):
     return [dict(zip(("player_id", "name", "position", "age"), r)) for r in cur.fetchall()]
 
 
+def season_players(cur, season):
+    cur.execute("""SELECT ps.player_id, p.player_name, ps.position, ps.age, t.name
+                   FROM player_seasons ps JOIN players p ON p.id = ps.player_id JOIN teams t ON t.id = ps.team_id
+                   WHERE ps.season = %s""", (season,))
+    return [dict(zip(("player_id", "name", "position", "age", "team"), r)) for r in cur.fetchall()]
+
+
 def load(cur, folder, rows, season, log=print):
-    """Write matched rows; returns {"loaded", "unmatched", "by_one_slip", "ovr_ok", "teams"}."""
+    """Write matched rows; returns {"loaded", "unmatched", "by_one_slip", "moved", "ovr_ok", "teams"}."""
     teams = team_ids(cur)
     by_team = {}
     for r in rows:
         by_team.setdefault((r["team"] or "").upper(), []).append(r)
-    totals = {"loaded": 0, "unmatched": 0, "by_one_slip": 0, "ovr_ok": 0, "teams": 0}
+    totals = {"loaded": 0, "unmatched": 0, "by_one_slip": 0, "moved": 0, "ovr_ok": 0, "teams": 0}
+    results, taken = {}, set()
     for team, trows in sorted(by_team.items()):
         tid = teams.get(team)
         if tid is None:
@@ -109,6 +147,16 @@ def load(cur, folder, rows, season, log=print):
             totals["unmatched"] += len(trows)
             continue
         matched, left = match_rows(trows, candidates(cur, season, tid))
+        taken.update(pid for _, pid, _ in matched)
+        results[team] = (tid, matched, left)
+    leftovers = [r for _, _, left in results.values() for r in left]
+    if leftovers:
+        moved, _ = match_moved(leftovers, season_players(cur, season), taken)
+        for row, pid, how in moved:
+            _, matched, left = results[(row["team"] or "").upper()]
+            matched.append((row, pid, how))
+            left.remove(row)
+    for team, (tid, matched, left) in sorted(results.items()):
         cur.execute("DELETE FROM player_attributes WHERE capture_folder = %s AND team_id = %s", (folder, tid))
         for row, pid, how in matched:
             cur.execute("""INSERT INTO player_attributes (player_id, season, team_id, capture_folder, position, age,
@@ -123,7 +171,10 @@ def load(cur, folder, rows, season, log=print):
                         (pid, season, tid, folder, row["pos"], row["age"], row["ovr"], row["predicted_ovr"],
                          row["ovr_check"], row["confirmed"], json.dumps(row["ratings"]), row["flags"] or None))
             totals["by_one_slip"] += how == "one slip"
+            totals["moved"] += how.startswith("moved")
             totals["ovr_ok"] += row["ovr_check"] == "ok"
+            if how.startswith("moved"):
+                log(f"  {team}: row {row['row']} {row['name']} {row['pos']}: {how}")
         for row in left:
             log(f"  {team}: unmatched row {row['row']} {row['name']} {row['pos']} age {row['age']} OVR {row['ovr']}")
         totals["loaded"] += len(matched)
@@ -154,7 +205,7 @@ def main():
             season = cur.fetchone()[0]
         t = load(cur, folder, rows, season)
         print(f"{folder} season {season}: {t['loaded']} players loaded for {t['teams']} teams "
-              f"({t['by_one_slip']} by a one-letter name slip), {t['unmatched']} unmatched, OVR check ok {t['ovr_ok']}")
+              f"({t['by_one_slip']} by a one-letter name slip, {t['moved']} listed on another team), {t['unmatched']} unmatched, OVR check ok {t['ovr_ok']}")
         if a.commit:
             cur.execute("""INSERT INTO captures (folder, mode, season, status, row_counts, loaded_at)
                            VALUES (%s, 'attributes', %s, 'loaded', %s, now())

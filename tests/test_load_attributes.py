@@ -44,6 +44,29 @@ def test_one_to_one():
     assert len(matched) == 1 and len(left) == 1
 
 
+def test_ocr_slips_in_list_names():
+    assert la.scan_name("W.NOLEN IIL") == "W.NOLEN"
+    assert la.scan_name("0.0LADEJO") == "O.OLADEJO"
+    matched, left = la.match_rows([row("W.NOLEN IIL", "DT"), row("0.0LADEJO", "REDG")],
+                                  [cand(1, "W. Nolen III", "DT"), cand(2, "O. Oladejo", "REDG")])
+    assert [(pid, how) for _, pid, how in matched] == [(1, "name"), (2, "name")] and left == []
+
+
+def test_moved_player_found_on_another_team():
+    league = [dict(cand(1, "B. Miller", "RT", 32), team="Lions"), dict(cand(2, "D. Miller", "QB", 23), team="Browns")]
+    matched, left = la.match_moved([row("B.MILLER", "RT", age=33)], league, set())
+    assert [(pid, how) for _, pid, how in matched] == [(1, "moved from Lions")] and left == []
+
+
+def test_moved_needs_position_age_and_one_untaken_player():
+    league = [dict(cand(1, "B. Miller", "RT", 32), team="Lions")]
+    assert la.match_moved([row("B.MILLER", "LT", age=32)], league, set())[0] == []      # another position
+    assert la.match_moved([row("B.MILLER", "RT", age=35)], league, set())[0] == []      # age too far off
+    assert la.match_moved([row("B.MILLER", "RT", age=32)], league, {1})[0] == []        # the scan has him already
+    two = league + [dict(cand(2, "B. Miller", "RT", 32), team="Jets")]
+    assert la.match_moved([row("B.MILLER", "RT", age=32)], two, set())[0] == []         # two could be him
+
+
 def test_read_csv(tmp_path):
     p = tmp_path / "attributes.csv"
     with open(p, "w", newline="") as fh:
