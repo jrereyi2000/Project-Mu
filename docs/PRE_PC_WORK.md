@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work Briefs
 
-**Status:** 5 of 11 items complete (Item 1 QB OVR refit, Item 3 body skin tone, Item 4 watch_save.py, Item 5 thinking caps, Item 8 fold OPEN_MODEL_RESEARCH into §7 done 2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
+**Status:** 6 of 11 items complete (Item 1 QB OVR refit, Item 2 surname renames/commentary IDs, Item 3 body skin tone, Item 4 watch_save.py, Item 5 thinking caps, Item 8 fold OPEN_MODEL_RESEARCH into §7 done 2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
@@ -33,28 +33,25 @@ Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgi
 
 ---
 
-## 2. Surname rename tool (commentary IDs)
+## 2. Surname rename tool (commentary IDs) [DONE 2026-10-28]
 
 **Goal:** every Project Mu player has a surname Madden's commentators can say. Players with a recorded surname get its ID; the rest get a ranked list of recorded surnames that JR reviews, and the approved renames are written to the database.
 
-**Background:** plan §4.3 "Commentary IDs" and its 5-step surname rule. `Player.PLYR_COMMENT` holds one ID per surname (Smith 4600, Johnson 2506, Anderson and Andersen 103); 0 means no recording and the commentators avoid the name. Today `pipeline/teleport.py:204` keeps the donor's ID only when the donor has the same surname, else 0.
-
-**Source list:** [madden-franchise-utils](https://github.com/Sinthros/madden-franchise-utils) `Utils/JsonLookups/27/playerLookups/commentary.json` (7,865 surnames → 7,666 IDs, `{"Abdullah": 4, …}`). The repo has no license, so don't commit the file: fetch it into the git-ignored `data/` (e.g. `data/commentary_m27.json`) with a documented `curl` from `raw.githubusercontent.com`, and fail clearly when it's missing. Their `commentaryIdFix/commentaryIdFix.js` shows the matching they use: lowercase, strip suffixes, else 0.
-
-**Coverage today:** active players = latest `player_seasons` season, `players.retired_season IS NULL`, name `COALESCE(full_name, player_name)` (`player_name` is the short 'A. Manning' form). After dropping Jr/Sr/II/III/IV/V and folding case and accents, 1,663 of 1,829 match (91%); ~165 don't. Skip the 32 team-defense rows (position `DEF`, name like 'D/ST').
-
-**Build** `pipeline/commentary_names.py`:
-1. `normalize(surname)`: drop suffixes, casefold, strip accents; try the lookup with the punctuation as written (it has 'Abdul-Quddus') and without.
-2. `commentary_id(full_name) -> int | None`.
-3. `report` subcommand: coverage numbers, and a CSV for the unmatched with player_id, name, team, position, OVR and the top 5 recorded surnames, ranked by sound first (Double Metaphone; add `metaphone` or `jellyfish` to requirements) then spelling (edit distance). Prefer same first letter and similar length, and avoid surnames already on the same team. Leave a `chosen` column for JR.
-4. `apply <reviewed.csv> [--commit]`: writes the new surname to `players.full_name` and the matching `player_name`, and keeps the old name as an alias. There's no alias table yet: add one (`player_name_aliases`: player_id, alias, kind, created_at) via a migration, and make player search use it if `server/` has a name search. Dry run by default; **`--commit` on live needs JR's OK.**
-5. `pipeline/teleport.py` and `pipeline/teleport_draft.py` set `PLYR_COMMENT` from `commentary_id()` (0 when unmatched), and the teleport report counts matched / unmatched.
-
-Draft prospects (`scout_prospects`) go through the same `report` so 2037 rookies can be renamed before they arrive.
-
-**Not in scope:** rewriting names in past articles (plan §4.3 leaves that for migration time).
-
-**Done when:** `report` reproduces ~1,663 / 1,829 and writes the review CSV; unit tests cover normalization, suffixes, accents, punctuation and ranking; `apply` dry run on `madden_test` changes only the listed players and records aliases; the teleporter writes looked-up IDs; spec and plan §4.3 updated.
+**Completed Implementation (2026-10-28):**
+* **Source Lookup:** Fetched `data/commentary_m27.json` (7,865 surnames → 7,666 IDs, git-ignored). Clear `FileNotFoundError` instructions if missing.
+* **Module `pipeline/commentary_names.py`:**
+  - `normalize(surname)`: drops suffixes (Jr, Sr, II, III, IV, V), strips accents and punctuation, casefolds, matches with and without hyphens.
+  - `commentary_id(full_name)`: extracts candidate surnames, checks exact, normalized, unhyphenated, and punctuation-free matches; returns commentary ID int or `None`.
+  - `suggest_surnames()`: ranks top 5 recorded surnames using Double Metaphone phonetic similarity tier + Levenshtein edit distance, preferring same first letter and strictly filtering out surnames already on the player's team roster.
+  - `report` CLI: computes coverage on active players (skipping `DEF` rows) and outputs `captures/commentary_unmatched.csv` with player info and top 5 ranked candidates, leaving `chosen` for JR review. Active players: 1,665 / 1,797 matched (92.7%), 132 unmatched.
+  - `apply` CLI: reads reviewed CSV, dry-run by default, validates chosen surnames against commentary lookup, updates `players.full_name` and `player_name`, and records historical aliases in `player_name_aliases`.
+* **Database Migration & Alias Search:**
+  - Added migration `db/migrations/2027_01_07_player_name_aliases.sql` creating `player_name_aliases` table and index; added table to `db/init_db.sql`. Applied to `madden_test`.
+  - Integrated `player_name_aliases` into player search in `server/api.py` (`/api/search`) and `server/napper_api.py`.
+* **Teleporter Integration:**
+  - `pipeline/teleport.py` and `pipeline/teleport_draft.py` set `PLYR_COMMENT` from `commentary_id()` (0 when unrecorded).
+  - Teleport reports include `commentary_matched` and `commentary_unmatched` counts.
+* **Testing:** 14 tests in `tests/test_commentary_names.py` covering normalization, lookup, ranking, dry-run rollback, committed renames, and alias search in `madden_test`. All teleport unit and integration tests passing (`tests/test_teleport.py`, `tests/test_teleport_draft.py`).
 
 ---
 
