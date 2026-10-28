@@ -500,7 +500,8 @@ def step_coach_hot_seat(season):
     """engines/coaching_carousel.py (Step 7d): whatever of the coaching carousel is ready, once each: Black Monday
     head-coach firings (the Week 18 run, before the Week 19 articles), a playoff team's coach once it is out, the
     coordinator review of every team whose coach kept his job, and the hiring cycle once the Super Bowl is complete.
-    Runs for league_state's season and the one before it (the league may already have rolled over). JR mirrors
+    Runs for league_state's season and the one before it (the league may already have rolled over), never a season
+    before coaching_carousel.FIRST_SEASON (2035: the offseason manifest staffed it). JR mirrors
     head-coach changes in Madden: one notice lists the coaches to fire, another the openings to fill (hire any coach;
     Mu's hire stands for him). Skipped without the migrations; a failure only logs a warning."""
     try:
@@ -514,7 +515,8 @@ def step_coach_hot_seat(season):
                 log("  Coaching carousel skipped: the coach hot seat / coaching carousel migrations aren't applied")
                 return None
             for s in (season - 1, season):
-                reports.append(cc.run(cur, s, log=log))
+                if cc.owns(s):                  # never a season the offseason manifest staffed (2035)
+                    reports.append(cc.run(cur, s, log=log))
             conn.commit()
         for rep in reports:
             s, hs = rep["season"], rep["hot_seat"]

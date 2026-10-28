@@ -35,6 +35,7 @@ PROMOTION_SCORE = 0.4
 RETREAD_PENALTY = 0.3              # owners prefer a fresh face
 OUTSIDE_SLANTS = (("OFFENSIVE", 0.45), ("DEFENSIVE", 0.35), ("CEO", 0.2))
 SIDE = {"OC": "OFFENSIVE", "DC": "DEFENSIVE"}
+FIRST_SEASON = 2036               # the first season Mu ran the carousel (2035 and before: the offseason manifest)
 
 
 # ----------------------------------------------------------------------------------------------- data helpers ----
@@ -336,6 +337,7 @@ def hiring_cycle(cur, season, log=print):
     cur.execute("SELECT team_id, role, coordinator_id FROM coordinator_hot_seat WHERE season = %s AND fired", (season,))
     fired_coord = {(r[0], r[1]): r[2] for r in cur.fetchall()}
     report = {"head_coaches": [], "coordinators": [], "jr_losses": [], "jr_hires": []}
+    created = set()                                 # coordinators this cycle created: only these may be undone
 
     def promote(team_id, role, prev, why):
         """An internal promotion who keeps the system (prev: the coordinator he replaces)."""
@@ -344,6 +346,7 @@ def hiring_cycle(cur, season, log=print):
         bg = background(seed, "PROMOTED", role)
         notes = f"{tm[team_id]['name']} {role} from {nxt}; promoted from {tm[team_id]['name']} {bg} {why}"
         cid = _insert_coordinator(cur, name, role, prev.get("scheme"), prev.get("playbook"), prev, notes)
+        created.add(cid)
         cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) VALUES (%s, %s, %s, %s)",
                     (cid, team_id, role, nxt))
         _move(cur, season, team_id, role, "HIRED", name, coordinator_id=cid, source="PROMOTED",
@@ -455,7 +458,7 @@ def hiring_cycle(cur, season, log=print):
         if slant in ("OFFENSIVE", "DEFENSIVE"):
             role = "OC" if slant == "OFFENSIVE" else "DC"
             cur_c = staff_in(cur, nxt).get((tid, role))           # still in the job for next season, if anyone
-            if cur_c and cur_c["start_season"] == nxt:
+            if cur_c and cur_c["coordinator_id"] in created:
                 # Named earlier in this cycle (a promotion after a poach): the new head coach's pick takes the job
                 # instead, so the stand-in is undone rather than fired.
                 cur.execute("DELETE FROM staff_moves WHERE season = %s AND coordinator_id = %s",
@@ -464,6 +467,11 @@ def hiring_cycle(cur, season, log=print):
                 cur.execute("DELETE FROM coordinators WHERE id = %s", (cur_c["coordinator_id"],))
                 report["coordinators"] = [x for x in report["coordinators"] if x["coordinator"] != cur_c["name"]]
             elif cur_c:
+                # Anyone else keeps his record (hot-seat rows, history): he is replaced. One already named for next
+                # season by someone else (a migration, the manifest) never starts there, so that tenure goes.
+                if cur_c["start_season"] == nxt:
+                    cur.execute("DELETE FROM coordinator_tenures WHERE coordinator_id = %s AND team_id = %s "
+                                "AND role = %s AND start_season = %s", (cur_c["coordinator_id"], tid, role, nxt))
                 cur.execute("""UPDATE coordinator_tenures SET end_season = %s
                                WHERE coordinator_id = %s AND team_id = %s AND role = %s
                                  AND (end_season IS NULL OR end_season > %s)""",
@@ -478,6 +486,7 @@ def hiring_cycle(cur, season, log=print):
             notes = f"{tm[tid]['name']} {role} under {name} from {nxt}; {name}'s {bg} before following him"
             cid = _insert_coordinator(cur, lname, role, mine_side["scheme"], f"{tm[tid]['name']} "
                                       f"{'Offense' if role == 'OC' else 'Defense'}", tend, notes)
+            created.add(cid)
             cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) "
                         "VALUES (%s, %s, %s, %s)", (cid, tid, role, nxt))
             _move(cur, season, tid, role, "HIRED", lname, coordinator_id=cid, source="HC_STAFF",
@@ -564,6 +573,12 @@ def check_staffs(cur, season, team_ids):
 def installed(cur):
     cur.execute("SELECT to_regclass('staff_moves') IS NOT NULL AND to_regclass('coordinator_hot_seat') IS NOT NULL")
     return cur.fetchone()[0]
+
+
+def owns(season):
+    """True for the seasons the carousel decides; earlier ones (2035) were set by the offseason manifest, and their
+    next season's staff is already named, so the weekly run must never decide them."""
+    return season >= FIRST_SEASON
 
 
 def run(cur, season, log=print):

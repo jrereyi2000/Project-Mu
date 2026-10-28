@@ -285,6 +285,26 @@ class RunTest(unittest.TestCase):
         self.assertTrue(wc.extract_done(f, "season"))
 
 
+class CoachingCarouselSeasonsTest(unittest.TestCase):
+    """Step 7d decides league_state's season and the one before, but never a season the offseason manifest staffed
+    (2035): the 2036 Wild Card run decided 2035 and its hiring cycle broke on 2036's coordinators."""
+
+    def test_skips_seasons_before_the_carousel(self):
+        from engines import coaching_carousel as cc
+        seasons = []
+        conn = mock.MagicMock()
+        conn.__enter__.return_value = conn
+        rep = lambda cur, s, log=None: (seasons.append(s), {"season": s, "hires": None, "coordinators_fired": [],
+                                                             "hot_seat": {"status": "up to date", "fired": []}})[1]
+        with mock.patch("psycopg.connect", return_value=conn), \
+                mock.patch.object(cc, "installed", return_value=True), mock.patch.object(cc, "run", side_effect=rep), \
+                mock.patch.object(wc, "log", lambda m: None):
+            wc.step_coach_hot_seat(2036)
+            self.assertEqual(seasons, [2036])
+            wc.step_coach_hot_seat(2037)
+            self.assertEqual(seasons, [2036, 2036, 2037])
+
+
 if __name__ == "__main__":
     unittest.main()
 

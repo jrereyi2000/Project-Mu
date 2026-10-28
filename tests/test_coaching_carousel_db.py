@@ -175,5 +175,54 @@ class JRFiresCoordinators2035(unittest.TestCase):
             fc.undo(self.cur, SEASON, "CAR", "OC", log=lambda m: None)         # the cycle already ran
 
 
+@pytest.mark.integration
+class StaffAlreadyNamedForNextSeason(unittest.TestCase):
+    """The 2036 Wild Card run (2026-10-27): Step 7d ran the carousel for 2035, whose 2036 staff the offseason
+    manifest had already named and whose coordinators the 2036 review had already put on the hot seat. A new head
+    coach bringing his own coordinator deleted that coordinator as if the cycle had just promoted him, and the
+    coordinator_hot_seat row referencing him raised ForeignKeyViolation. Rehearsed on that state and rolled back."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            cls.conn = psycopg.connect(DSN, connect_timeout=3)
+        except Exception as e:
+            raise unittest.SkipTest(f"no database: {e!r}")
+        cur = cls.conn.cursor()
+        if not cc.installed(cur):
+            cls.conn.close()
+            raise unittest.SkipTest("coaching carousel migrations not applied")
+        cur.execute("SELECT count(*) FROM coach_hot_seat WHERE season = %s", (SEASON,))
+        if cur.fetchone()[0]:
+            cls.conn.close()
+            raise unittest.SkipTest(f"{SEASON} already decided in this database")
+        # Every 2036 coordinator reviewed (on the hot seat, kept), as on the live database after 2036's Black Monday.
+        cls.named = cc.staff_in(cur, SEASON + 1)
+        for (tid, role), c in cls.named.items():
+            cur.execute("""INSERT INTO coordinator_hot_seat (season, team_id, role, coordinator_id, score, fired, phase,
+                                                             inputs) VALUES (%s, %s, %s, %s, 0, false, 'BLACK_MONDAY', '{}')
+                           ON CONFLICT DO NOTHING""", (SEASON + 1, tid, role, c["coordinator_id"]))
+        cls.cur = cur
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.conn.rollback()
+        cls.conn.close()
+
+    def test_hiring_cycle_keeps_coordinators_it_did_not_create(self):
+        # Raised ForeignKeyViolation before. The cycle now gets to its own staff check, which refuses (2036's head
+        # coaches are already named), so the weekly run never decides 2035 (coaching_carousel.owns).
+        self.assertFalse(cc.owns(SEASON))
+        with self.assertRaisesRegex(ValueError, "staff check"):
+            cc.run(self.cur, SEASON, log=lambda m: None)
+        ids = [c["coordinator_id"] for c in self.named.values()]
+        self.cur.execute("SELECT count(*) FROM coordinators WHERE id = ANY(%s)", (ids,))
+        self.assertEqual(self.cur.fetchone()[0], len(ids))
+        # A head coach who brought his own coordinator replaced the one already named, on the record.
+        self.cur.execute("SELECT count(*) FROM staff_moves WHERE season = %s AND action = 'REPLACED' "
+                         "AND coordinator_id = ANY(%s)", (SEASON, ids))
+        self.assertGreater(self.cur.fetchone()[0], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
