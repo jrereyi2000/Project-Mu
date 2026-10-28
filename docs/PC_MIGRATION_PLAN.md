@@ -7,7 +7,7 @@
 
 Timings and counts below are estimates until measured on the PC.
 
-**Part 1 (§1–§9)** is the migration. **Part 2 (V2.0–V2.15)** is the follow-on work the PC makes possible.
+**Part 1 (§1–§9)** is the migration. **Part 2 (V2.0–V2.16)** is the follow-on work the PC makes possible.
 
 ---
 
@@ -631,7 +631,11 @@ Personas are generated once on the local model and stored; memory layers update 
 
 Turn off Madden's player progression (XP sliders at 0, which live in the save's `ProgressionXPSlider` table; Madden's offseason regression overwritten from a snapshot) and decide every rating change in `engines/progression.py`: age, dev trait, a hidden ceiling seeded from scouting's `V`, playing time and game grade, injuries, and later coach and player personality traits. Changes are written through the save writer and stored with their causes for the newsroom. Plan: [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md).
 
-## V2.15 Suggested Order
+## V2.15 Project Mu Runs the League
+
+Madden plays the games; Project Mu makes every front-office decision for all 32 teams and the save writer carries them out: trades without JR's manual Madden steps, the whole draft, the coaching carousel, re-signings and extensions with player agents, free agency, cuts, waivers and the practice squad, coach-set depth charts, retirements, injury durations, media award ballots, the cap and rookie scale. Needs sign and trade moves in the writer, a read-back check after every write, and either all 32 teams user-controlled or the CPU's automation off. JR runs his team from `Mu_Network`. Plan: [`LEAGUE_OFFICE_PLAN.md`](LEAGUE_OFFICE_PLAN.md).
+
+## V2.16 Suggested Order
 
 | Order | Feature | Builds on |
 | :--- | :--- | :--- |
@@ -645,3 +649,4 @@ Turn off Madden's player progression (XP sliders at 0, which live in the save's 
 | 8 | V2.10 Scouting revamp | scouting engine, CFB bridge (§6) |
 | 9 | V2.5 Fans, V2.6 Radio, V2.7 Every-game recaps | V2.8, TTS (§9) |
 | alongside 3–7 | V2.14 Progression (engine first, then personality and coach terms) | save writer, OVR weights (§4.4), V2.13 |
+| from the first PC season | V2.15 League office (trades, draft and coaching changes first; then the transactions engine, depth charts, retirements, awards) | save writer moves, V2.14 personalities, V2.9, V2.11 |

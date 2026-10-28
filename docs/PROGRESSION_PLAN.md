@@ -2,7 +2,7 @@
 
 **Status:** plan, nothing built (2026-10-28).
 **Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md)). It needs the save reader, the save writer and the OVR weights from §4–§5 there.
-**Companions:** [`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) (the community progression tools), V2.13 (personalities) and V2.14 (this plan's summary) of the migration plan.
+**Companions:** [`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) (the community progression tools), V2.13 (personalities) and V2.14 (this plan's summary) of the migration plan. [`LEAGUE_OFFICE_PLAN.md`](LEAGUE_OFFICE_PLAN.md) uses the same personality traits for free agency, contracts and depth charts, and its coach-set depth charts feed the playing-time term here.
 
 Turn off Madden's own player progression on the PC. Project Mu then decides how every player's ratings change and writes the result into the save. Progression becomes something the universe can explain: every rating change has causes the newsroom can report. Later, player and coach personalities become some of those causes.
 
