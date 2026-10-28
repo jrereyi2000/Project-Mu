@@ -41,9 +41,25 @@ Dump the canonical database (all 11 seasons, players, contracts, historical stat
 ```
 *Verify that `db/backups/madden_backup_<timestamp>.sql` exists and has a plausible size.*
 
-No attribute scan is taken from the PS5. Underlying ratings on the PC come from donor players (§4.3); only OVR, position, archetype and the identity fields carry over from Project Mu.
+### 2.3 PS5 Attribute Scan (JR decision 2026-10-28)
+Read every player's full set of ratings off the PS5 so the PC players carry their real attributes, not a donor's ratings scaled to the right OVR (§4.3). They then play as they did on the PS5, and their OVR follows from the same Madden 27 formula. This can be built and tested now; it doesn't wait for the PC.
 
-### 2.3 Try Local LLM Inference on the Mac (optional)
+* **Screen (mapped 2026-10-28, reference views in `captures/2026-10-28_widelist/`):** Manage Roster → Roster, the list `--only roster` already navigates (team through the held-L2 dropdown). The player card isn't needed.
+  * **Columns:** NAME, CONV, POS, AGE, OVR, DEV, MOR, SAVINGS, PENALTY, then 54 ratings, left to right: SPD ACC AGI COD STR AWR CAR BCV BTK TRK SFA SPM JKM CTH CIT SPC SRR MRR DRR RLS JMP THP SAC MAC DAC RUN TUP BSK PAC PBK PBP PBF RBK RBP RBF LBK IBL PRC TAK POW BSH FMV PMV PUR MCV ZCV PRS RET KPW KAC LS STA TGH INJ. INJ is last (right does nothing past it). The chip at the top right of the list names the cursor's column in full (SPEED RATING, CHANGE OF DIRECTION, HIT POWER, …), which gives the header → save-field mapping.
+  * **Moving across:** d-pad right moves a column cursor one column. The view starts scrolling once the cursor reaches the right edge (the 8th press, at SPD), then shifts one column (~190 px at 3024 px wide) per press. One view shows 11 columns, so a page of rows needs ~6 views.
+  * **NAME is not pinned.** It scrolls off with the rest, so rows are joined across views by their position on the page. All of a page's views must be taken before moving down (sweep right on one page, down, sweep left on the next).
+  * **Moving down:** keeps the horizontal position. The list shows 14 rows and scrolls one row per press once the highlight nears the bottom.
+  * **Screen check:** once SAVINGS/PENALTY/MOR scroll off, `classify()` calls the view PLAYER_STATS. The capture mode needs its own check (the L2 team chip plus the column chip).
+  * Not yet checked: whether the team dropdown includes free agents.
+* **Capture:** a new `madden_capture.py` mode that sweeps each page of rows across all views per team. About 50–60 players × 54 ratings is ~3,000 values a team, ~90K for the league. Roughly 300–350 presses a team; a few minutes each at the current press timing, a few hours for the league.
+* **Reading: digit templates, not OCR.** All cells use one fixed font on a fixed grid. Apple Vision misread or skipped ~20% of cells whole-frame and did worse per cell, but templates (threshold the cell, split digits by blank columns, nearest of 10 averaged digit images, ignoring the green progression arrow) read 77/77 held-out cells and 28/28 AGE and OVR cells on another view, the highlighted row included. The highlighted row's bold text caused 2 misses on the training view; train it on its own examples, or take each row from a view where it isn't highlighted. No LLM tokens. Fallback: `extract.py` with Gemini, roughly 1,000 screenshots for the league (~$6–7 at 2026 prices).
+* **Check:** every value is 0–99, and each team's row count matches its roster. The scanned ratings run through `engines/ovr_weights.predict_grade` for the player's archetype must give the OVR on the same row (exact for 93% of players on the PC sample save, ±1 for nearly all). A player off by more than 1 is read again. A misread digit in a heavily weighted rating moves the OVR, so this check catches most OCR errors.
+* **Mapping:** each column header (SPD, STR, AGI, …) maps to a Madden 27 `Player.<Name>Rating` field. A rating in the save that the list doesn't show keeps the donor's value.
+* **Storage:** a new table (e.g. `player_ratings`: player_id, season, capture id, ratings keyed by save field name), so the scan is kept with the database and can be repeated.
+* **Timing:** run it now to prove the capture and the OVR check. Run the final scan as late as possible on the PS5. Madden applies progression in the offseason, so if the PS5 franchise is advanced past progression into the 2037 offseason, the scan matches the teleport's starting point (§4.1). Otherwise, scan after the Super Bowl and expect PC ratings to be end-of-2036.
+* **Not covered:** draft prospects (their ratings sit behind scouting) and anyone added after the final scan. They keep the donor-plus-OVR route.
+
+### 2.4 Try Local LLM Inference on the Mac (optional)
 1. Install Ollama: `brew install ollama` (or download from [ollama.com](https://ollama.com)).
 2. Pull a mid-size instruct model and send it an Agent Wire prompt through `http://localhost:11434/api/generate` to get a feel for output quality before the PC arrives.
 
@@ -165,7 +181,7 @@ Players, contracts, picks, prospects           Generated players
                    [Save the franchise to disk]
 ```
 
-The donor's underlying ratings (and so its on-field style) are kept; only OVR, position, archetype and identity are guaranteed to match Project Mu. Player-behavior mods change play style anyway.
+**Scanned players (§2.3):** for every player with a PS5 attribute scan, Step 2 writes the scanned ratings onto the donor instead of adjusting the donor's own. Their OVR then matches by construction, and Step 3 is only a check. For the rest (draft prospects, players added after the scan), the donor's underlying ratings (and so its on-field style) are kept; only OVR, position, archetype and identity are guaranteed to match Project Mu. Player-behavior mods change play style anyway.
 
 **Built (2026-10-27): `pipeline/teleport.py`.** Two changes from the diagram above, both forced by the save:
 * **No team moves.** Madden ties players to teams through each team's `Roster` and `DepthChart` lists, not just `Player.TeamIndex`, so moving a player between teams isn't a single field. Every Project Mu team has 54–62 players and every Madden team about 63–65 (signed + practice squad), so each Project Mu player takes over a donor already on the same team: an identity swap. The pairing per team is an optimal assignment: same position and archetype first, then another archetype (PlayerType rewritten), then a neighbouring position (Position rewritten).
