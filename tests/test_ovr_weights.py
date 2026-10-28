@@ -121,8 +121,10 @@ class StoredWeightsTest(unittest.TestCase):
         for arch in ("QB_FieldGeneral", "QB_StrongArm", "QB_Improviser", "QB_Scrambler"):
             a = self.doc["archetypes"][arch]
             self.assertEqual(a["model"], "quadratic", arch)
-            self.assertGreater(a["cv_within_1"], a["linear_cv_within_1"] + 0.1, arch)
+            self.assertGreaterEqual(a["cv_within_1"], a["linear_cv_within_1"], arch)
+            self.assertGreaterEqual(a["cv_within_1"], 0.95, arch)
             self.assertNotIn("LongSnap", a["skills"], arch)
+            self.assertNotIn("LongSnap", a["terms"], arch)
         self.assertIn("LongSnap", self.doc["archetypes"]["LS_Accurate"]["skills"])
 
     def test_a_qb_moves_to_its_target(self):

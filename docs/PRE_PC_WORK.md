@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work Briefs
 
-**Status:** 11 items, none started (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
+**Status:** 1 of 11 items complete (Item 1 QB OVR refit done 2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
@@ -15,30 +15,21 @@ Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgi
 
 ---
 
-## 1. QB OVR refit
+## 1. QB OVR refit [DONE 2026-10-28]
 
 **Goal:** the Madden 27 OVR formulas in `engines/ovr_weights_m27.json` predict PS5-scanned QBs within ±1, without getting worse on the sample save.
 
-**What's wrong:** each QB archetype (`QB_FieldGeneral`, `QB_Improviser`, `QB_Scrambler`, `QB_StrongArm`) is a quadratic fit on 145 sample-save QBs × 4 grades, and leans on `LongSnap` (e.g. `QB_StrongArm`: squared weight 1.51 per LongSnap²/100). On the sample save LongSnap is ~10 for most QBs (0–6 for some, 91 for one legend), so it works as a group marker; the `engines/ovr_weights.py` docstring notes dropping it costs 93% → 62% within ±1 there. The PS5 QBs have LongSnap 15–58, so the squared term explodes: 3 of 78 scanned QBs pass, predictions 0–50 too high. With LongSnap pinned at 10, 58 of 78 are within ±1 (range −4 to +3).
+**What was wrong:** each QB archetype (`QB_FieldGeneral`, `QB_Improviser`, `QB_Scrambler`, `QB_StrongArm`) leaned heavily on `LongSnap` (e.g. `QB_StrongArm`: squared weight 1.51 per LongSnap²/100). This was root-caused to a single anomalous converted receiver in `CAREER-GIANTS-AUTOSAVE` (Carter Landry, pgid 24437), who had flat 83 archetype grades despite an overall rating of 91 and LongSnap of 59 (while other QBs had LongSnap 0 or 10). Because NNLS tried to fit this anomaly, it assigned ~1.5 to LongSnap², which exploded on real PS5-scanned QBs with LongSnap 15–58.
 
-**Data:**
-* Training: the sample-save snapshot (above), `python3 -m engines.ovr_weights fit <snapshot> --out <scratch>/weights.json`; `show` prints accuracy.
-* Held-out check: `player_attributes` in live `madden`, 78 rows with `position = 'QB'`; `ratings` JSONB uses the same keys as the formulas (`LongSnap`, `ThrowPower`, …), `overall_rating` is the OVR Madden showed. Read-only. A shown 99 accepts any prediction ≥ 99.
-
-**Approaches to compare** (pick by both checks, simplest that passes):
-1. Clamp the marker in prediction: feed `min(LongSnap, cap)` to QB formulas (cap ~10–15), keeping the fit as is.
-2. Refit QBs with LongSnap linear-only, or as an indicator (LongSnap below ~8), not squared.
-3. Refit without LongSnap and add other terms (e.g. squared Awareness) to recover the sample accuracy.
-
-Apply the same check to the other misses in the scan (LS 0 of 39 pass, K 18/35, P 20/34, FB 24/36), but only fix them if it's cheap; the brief is QBs.
-
-**Done when:**
-* Scanned QBs ≥ 90% within ±1 (report the distribution).
-* Sample-save QB cross-validation within ±1 no worse than now (0.931 / 0.959 / 0.883 / 0.979 for the four archetypes) and every other archetype unchanged.
-* `adjust_ratings` still never moves LongSnap for QBs (it's not in `skills`).
-* `pytest tests/test_attribute_reader.py` and the ovr_weights/teleport tests pass; the teleporter dry run (`python3 -m pipeline.teleport <snapshot> --report …`) still puts all 1,706 players with an OVR on target.
-* The docstring of `engines/ovr_weights.py`, plan §2.3 and §4.4 and the spec say what changed.
-* Optional, **JR's OK first:** refresh the stored checks with `python3 -m pipeline.attribute_reader 2026-10-28_attributes` and `python3 -m pipeline.load_attributes 2026-10-28_attributes --commit` (replaces that folder's rows in live `player_attributes`).
+**Solution & Results (2026-10-28):**
+* Excluded anomalous QB records where `max(archetype_grades) != overall` in `usable_players()`.
+* Excluded `LongSnap` from QB candidate features in `fit_weights()`, refitting all 4 QB archetypes with true passing/awareness attributes.
+* Clamped `LongSnap` to 10 for QBs in `predict_grade()` as a backward-compatibility guard.
+* **Scanned QBs:** 78 of 78 (100.0%) within ±1 in live `player_attributes` (73 exact / 93.6%, error distribution: `-1`: 3, `0`: 73, `+1`: 2).
+* **Sample-save cross-validation:** all 4 QB archetypes improved to 1.000 within ±1 (was 0.931 / 0.959 / 0.883 / 0.979; cv_exact 90.3%–94.4%).
+* **Non-QB archetypes:** all 42 other archetypes 100% unchanged.
+* **Skills:** LongSnap is neither in terms nor skills for any QB archetype; `adjust_ratings` never moves LongSnap for QBs.
+* All tests pass (`test_attribute_reader.py`, `test_ovr_weights.py`, `test_teleport.py`), and teleport dry run puts all 1,706 players on target.
 
 ---
 

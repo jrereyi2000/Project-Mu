@@ -1,11 +1,11 @@
 {
  "game_year": 27,
  "source": "CAREER-GIANTS-AUTOSAVE",
- "players": 2987,
- "samples": 9110,
- "fitted_at": "2026-10-28T00:17:46+00:00",
- "cv_exact": 0.886,
- "cv_within_1": 0.994,
+ "players": 2986,
+ "samples": 9106,
+ "fitted_at": "2026-10-28T13:55:00+00:00",
+ "cv_exact": 0.912,
+ "cv_within_1": 0.998,
  "slots": {
   "HB": [
    "HB_PowerBack",
@@ -2752,189 +2752,139 @@
    "positions": [
     "QB"
    ],
-   "n": 145,
+   "n": 144,
    "model": "quadratic",
-   "intercept": -30.311204,
+   "intercept": -89.776855,
    "skills": [
     "Acceleration",
     "Awareness",
-    "Injury",
+    "PlayAction",
     "ThrowAccuracyDeep",
     "ThrowAccuracyMid",
     "ThrowAccuracyShort",
-    "ThrowPower"
+    "ThrowOnTheRun",
+    "ThrowPower",
+    "ThrowUnderPressure"
    ],
    "terms": {
-    "LongSnap": [
-     0.0,
-     1.32288
-    ],
-    "Awareness": [
-     0.333564,
+    "ThrowPower": [
+     0.478889,
      0.0
     ],
     "ThrowAccuracyShort": [
-     0.0,
-     0.284719
-    ],
-    "ThrowAccuracyDeep": [
-     0.156101,
-     0.087842
-    ],
-    "ThrowPower": [
-     0.0,
-     0.25727
-    ],
-    "ThrowAccuracyMid": [
-     0.0,
-     0.186145
-    ],
-    "Acceleration": [
-     0.048901,
+     0.344959,
      0.0
     ],
-    "Tackle": [
-     0.0,
-     0.025346
+    "ThrowAccuracyMid": [
+     0.342091,
+     0.001212
     ],
-    "Injury": [
-     0.0,
-     0.010724
+    "Awareness": [
+     0.317544,
+     0.0
     ],
-    "PlayRecognition": [
-     0.0,
-     0.007956
+    "ThrowAccuracyDeep": [
+     0.245704,
+     0.0
     ],
-    "MediumRouteRunning": [
-     0.0,
-     0.00775
+    "ThrowUnderPressure": [
+     0.080689,
+     0.015301
     ],
-    "Pursuit": [
-     0.0,
-     0.00555
+    "ThrowOnTheRun": [
+     0.074687,
+     0.0
     ],
-    "PowerMoves": [
-     0.0,
-     0.003277
+    "PlayAction": [
+     0.058342,
+     0.0
+    ],
+    "Acceleration": [
+     0.0092,
+     0.0
     ]
    },
-   "cv_exact": 0.448,
-   "cv_within_1": 0.931,
-   "linear_cv_within_1": 0.628
+   "cv_exact": 0.917,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
   },
   "QB_Improviser": {
    "positions": [
     "QB"
    ],
-   "n": 145,
+   "n": 144,
    "model": "quadratic",
-   "intercept": -47.35323,
+   "intercept": -92.135107,
    "skills": [
     "Acceleration",
-    "Agility",
     "Awareness",
     "BreakSack",
-    "Carrying",
     "ChangeOfDirection",
-    "JukeMove",
     "Speed",
-    "SpinMove",
     "ThrowAccuracyDeep",
+    "ThrowAccuracyMid",
     "ThrowAccuracyShort",
     "ThrowOnTheRun",
     "ThrowPower",
-    "ThrowUnderPressure",
-    "Trucking"
+    "ThrowUnderPressure"
    ],
    "terms": {
-    "LongSnap": [
-     0.0,
-     1.491298
-    ],
-    "ThrowAccuracyDeep": [
-     0.338983,
+    "ThrowPower": [
+     0.360682,
      0.0
     ],
     "Awareness": [
-     0.318271,
+     0.302653,
      0.0
-    ],
-    "ThrowPower": [
-     0.0,
-     0.195872
     ],
     "ThrowUnderPressure": [
-     0.0,
-     0.176512
-    ],
-    "BreakSack": [
-     0.115469,
-     0.015899
-    ],
-    "ThrowOnTheRun": [
-     0.0,
-     0.138111
-    ],
-    "ThrowAccuracyShort": [
-     0.0,
-     0.105035
-    ],
-    "Acceleration": [
-     0.059455,
+     0.295887,
      0.0
     ],
-    "Agility": [
-     0.033316,
+    "ThrowAccuracyDeep": [
+     0.270933,
+     0.014043
+    ],
+    "ThrowOnTheRun": [
+     0.224716,
+     0.007695
+    ],
+    "ThrowAccuracyShort": [
+     0.167008,
+     0.0
+    ],
+    "BreakSack": [
+     0.163313,
+     0.0
+    ],
+    "ThrowAccuracyMid": [
+     0.081333,
      0.0
     ],
     "ChangeOfDirection": [
-     0.032236,
-     0.0
-    ],
-    "PowerMoves": [
-     0.0,
-     0.035849
-    ],
-    "MediumRouteRunning": [
-     0.0,
-     0.023818
-    ],
-    "JukeMove": [
-     0.013419,
+     0.05328,
      0.0
     ],
     "Speed": [
-     0.011098,
+     0.037992,
      0.0
     ],
-    "Carrying": [
-     0.0,
-     0.007601
-    ],
-    "SpinMove": [
-     0.004819,
+    "Acceleration": [
+     0.032861,
      0.0
-    ],
-    "Trucking": [
-     0.0,
-     0.001946
-    ],
-    "Tackle": [
-     0.0,
-     0.000157
     ]
    },
-   "cv_exact": 0.607,
-   "cv_within_1": 0.959,
-   "linear_cv_within_1": 0.579
+   "cv_exact": 0.91,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
   },
   "QB_Scrambler": {
    "positions": [
     "QB"
    ],
-   "n": 145,
+   "n": 144,
    "model": "quadratic",
-   "intercept": -41.672966,
+   "intercept": -81.420923,
    "skills": [
     "Acceleration",
     "Agility",
@@ -2942,186 +2892,126 @@
     "BCVision",
     "BreakSack",
     "Carrying",
-    "Injury",
-    "JukeMove",
+    "ChangeOfDirection",
     "Speed",
-    "ThrowAccuracyDeep",
+    "ThrowAccuracyMid",
     "ThrowAccuracyShort",
     "ThrowOnTheRun",
-    "ThrowPower"
+    "ThrowPower",
+    "ThrowUnderPressure"
    ],
    "terms": {
-    "LongSnap": [
-     0.0,
-     1.357537
-    ],
     "ThrowPower": [
-     0.403002,
-     0.0
+     0.359539,
+     0.046543
     ],
     "ThrowAccuracyShort": [
-     0.0,
-     0.259942
+     0.270828,
+     0.0
     ],
-    "BreakSack": [
-     0.151897,
-     0.010041
+    "ThrowAccuracyMid": [
+     0.255778,
+     0.0
     ],
     "ThrowOnTheRun": [
-     0.062752,
-     0.086719
+     0.202966,
+     0.0
+    ],
+    "BreakSack": [
+     0.18842,
+     0.0
     ],
     "Awareness": [
-     0.051792,
-     0.092579
+     0.139893,
+     0.0
+    ],
+    "ThrowUnderPressure": [
+     0.133618,
+     0.0
     ],
     "Acceleration": [
-     0.082908,
+     0.064282,
+     0.0
+    ],
+    "BCVision": [
+     0.06118,
      0.0
     ],
     "Speed": [
      0.0,
-     0.081462
-    ],
-    "ThrowAccuracyDeep": [
-     0.0,
-     0.067325
-    ],
-    "Agility": [
-     0.040896,
-     0.0
-    ],
-    "JukeMove": [
-     0.026247,
-     0.0
-    ],
-    "BCVision": [
-     0.0,
-     0.03019
+     0.072095
     ],
     "Carrying": [
-     0.020143,
+     0.032984,
      0.0
     ],
-    "PowerMoves": [
-     0.0,
-     0.013253
+    "Agility": [
+     0.032687,
+     0.0
     ],
-    "PlayRecognition": [
-     0.0,
-     0.009862
-    ],
-    "MediumRouteRunning": [
-     0.0,
-     0.004032
-    ],
-    "Injury": [
-     0.001558,
+    "ChangeOfDirection": [
+     0.018923,
      0.0
     ]
    },
-   "cv_exact": 0.331,
-   "cv_within_1": 0.883,
-   "linear_cv_within_1": 0.662
+   "cv_exact": 0.903,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
   },
   "QB_StrongArm": {
    "positions": [
     "QB"
    ],
-   "n": 145,
+   "n": 144,
    "model": "quadratic",
-   "intercept": -62.320375,
+   "intercept": -93.141348,
    "skills": [
-    "Acceleration",
     "Agility",
     "Awareness",
-    "Carrying",
-    "Injury",
-    "JukeMove",
-    "SpinMove",
+    "BreakSack",
+    "PlayAction",
     "ThrowAccuracyDeep",
     "ThrowAccuracyMid",
     "ThrowPower",
-    "ThrowUnderPressure",
-    "Trucking"
+    "ThrowUnderPressure"
    ],
    "terms": {
-    "LongSnap": [
-     0.0,
-     1.506572
-    ],
     "ThrowPower": [
-     0.541767,
-     0.077395
-    ],
-    "ThrowAccuracyDeep": [
-     0.38949,
-     0.0
-    ],
-    "Awareness": [
-     0.254884,
+     0.672101,
      0.0
     ],
     "ThrowAccuracyMid": [
-     0.0,
-     0.223624
+     0.437732,
+     0.0
+    ],
+    "ThrowAccuracyDeep": [
+     0.354451,
+     0.0
+    ],
+    "Awareness": [
+     0.236403,
+     0.0
     ],
     "ThrowUnderPressure": [
-     0.0,
-     0.137957
-    ],
-    "PowerMoves": [
-     0.0,
-     0.039093
-    ],
-    "JukeMove": [
-     0.020257,
-     0.003317
-    ],
-    "Acceleration": [
-     0.014133,
+     0.204732,
      0.0
     ],
-    "SpinMove": [
-     0.01266,
+    "BreakSack": [
+     0.055365,
      0.0
     ],
-    "MediumRouteRunning": [
-     0.0,
-     0.010427
+    "PlayAction": [
+     0.035281,
+     0.0
     ],
     "Agility": [
      0.0,
-     0.00996
-    ],
-    "Injury": [
-     0.006139,
-     0.0
-    ],
-    "Trucking": [
-     0.0,
-     0.00587
-    ],
-    "Tackle": [
-     0.0,
-     0.003929
-    ],
-    "PlayRecognition": [
-     0.0,
-     0.002918
-    ],
-    "Carrying": [
-     0.001876,
-     0.0
-    ],
-    "Pursuit": [
-     0.0,
-     0.000322
+     0.00802
     ]
    },
-   "cv_exact": 0.634,
-   "cv_within_1": 0.979,
-   "linear_cv_within_1": 0.6
+   "cv_exact": 0.931,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
   },
   "S_Hybrid": {
    "positions": [
@@ -4186,6 +4076,6 @@
    "linear_cv_within_1": 1.0
   }
  },
- "ovr_exact": 0.928,
- "ovr_within_1": 0.997
+ "ovr_exact": 0.948,
+ "ovr_within_1": 0.998
 }
