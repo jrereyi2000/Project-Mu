@@ -37,7 +37,7 @@ when the donor already has the same surname, else 0 (no recorded name; the full 
 §4.3). Contracts: pipeline/teleport_contracts adds the player's ACTIVE Project Mu contract to the edit, written into
 the donor's own PlayerContract record (no Project Mu contract, or a practice-squad donor with no record: the donor's
 contract stays; counted in the report). With --appearance it adds GenericHeadAssetName,
-PLYR_GENERICHEAD, PLYR_ASSETNAME and CharacterBodyType. Not yet: portraits, CharacterVisuals (the body's skin tone).
+PLYR_GENERICHEAD, PLYR_ASSETNAME, CharacterBodyType and CharacterVisuals skinTone. Not yet: portraits.
 The draft class and pick owners are pipeline/teleport_draft.py (--draft).
 """
 import argparse
@@ -293,6 +293,8 @@ def teleport(snapshot, roster, doc, age_add=0, write_ovr=False, release=False, s
                 extra, look = ta.appearance_fields(pool, seed, first, last, d["pgid"], height_inches(m["height"]),
                                                    m["weight"])
                 edit["set"].update(extra)
+                if look.get("body_skin_tone") is not None:
+                    edit["visuals"] = {"skinTone": look["body_skin_tone"]}
                 looks.append(look)
                 seed_sources[seed["source"]] += 1
             elif seeds is not None:
