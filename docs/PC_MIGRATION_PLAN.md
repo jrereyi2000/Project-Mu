@@ -129,7 +129,7 @@ On hold: applying `madden_pgid` to the live database (after the PC move); the CF
 
 **Why not native Linux:** Madden uses EA Javelin anticheat, which runs at the Windows kernel level and does not work under Linux/Proton ([GamingOnLinux tracker](https://www.gamingonlinux.com/anticheat/vendor/11)); MMC Modding Tools and the community franchise tools are Windows-only too. WSL2 gives a real Ubuntu terminal (same `ls`, `cd`, `grep`, `git`, bash as the macOS terminal) next to Windows, so Project Mu's `.sh` scripts and Python code run unchanged.
 
-**Crossing the boundary:** WSL2 reads the Windows save folder at `/mnt/c/Users/<Name>/Documents/Madden NFL 27/saves/` (offline franchise files, per the MMC tool instructions; confirm on the PC). Ollama on Windows is reachable from WSL2 at the Windows host address (or `localhost` with WSL mirrored networking). Mac-specific pieces (`chiaki-ng`, the capture macros, `pipeline/notify.py`'s notification method) are not needed on the PC or need a Linux equivalent.
+**Crossing the boundary:** WSL2 reads the Windows save folder at `/mnt/c/Users/<Name>/Documents/Madden NFL 27/saves/` (offline franchise files, per the MMC tool instructions; confirm on the PC). Ollama on Windows is reachable from WSL2 at the Windows host address (or `localhost` with WSL mirrored networking). `pipeline/notify.py` uses `ntfy` over HTTP and works unchanged on WSL2. Mac-specific capture pieces (`chiaki-ng`, the screen capture macros) are not needed on the PC because saves are read directly from disk.
 
 ---
 
@@ -442,7 +442,7 @@ Pick the specific model at test time (§7.4); Ollama or llama.cpp for Windows ho
 | Agent memory takes & season summaries | Local 24–27B (or MoE offload) | <4.2K-token prompts, short output; runs on nightly queue (§7.8) |
 | Scouting mover notes | Local 24–27B (or MoE offload) | Tiny prompts, a handful a week |
 | GM persona & trade rationale | Local 24–27B (or MoE offload) | Short prompts; structured output; runs when Madden is idle or during nightly queue |
-| Live GM negotiations & commission classification | Resident local ~1–2GB (LFM3-1.7B, Gemma 4 E2B/E4B) | ~1GB VRAM footprint stays resident beside Madden (§7.5); fast structured JSON with zero rate limits and no cloud fallback needed |
+| Live GM negotiations & commission classification | Resident local ~1–2GB option (LFM3-1.7B, Gemma 4 E2B/E4B) with Gemini fallback | Option to test resident alongside Madden (§7.5); provider switch falls back to Gemini when local model is unavailable or unfeasible |
 | National articles | Gemini or Hosted Open Model API (DeepSeek V4.1 Flash, GLM-5.3-Flash) | 25–75K-token contexts (up to 150K+) in dozens-of-call tool loops; cannot fit next to local model weights on 16GB VRAM. Evaluated against hosted open-weight models due to 2027 price change (see below) |
 | Local beat articles | Gemini or Hosted Open Model API (DeepSeek V4.1 Flash, GLM-5.3-Flash) | Same `newsroom` tool loop and 192 persona voice requirements as national articles |
 
@@ -513,9 +513,9 @@ A task moves to a local or hosted open model only if its output passes all quali
 
 Madden NFL 27 consumes a substantial portion of the RTX 5070 Ti's 16GB VRAM during active gameplay. While mid-to-large models (14–27B) and image generation pipelines cannot safely share VRAM with Madden without risk of out-of-memory crashes or dropped frames, ultra-compact models alter this trade-off:
 
-* **Beside-Madden resident execution (~1–2GB Tier):** Ultra-compact models (LFM3-1.7B at ~1GB weights, Gemma 4 E2B/E4B at ~3–5GB) remain resident in VRAM alongside Madden during active play. Interactive structured tasks triggered during gameplay—specifically live GM negotiations (`engines/gm_negotiation.py`, rationale JSON) and custom commission classification (`newsroom/custom_commission.py`)—execute against the resident model immediately. They do not have to wait for the nightly queue or fall back to cloud APIs.
+* **Beside-Madden resident option to test (~1–2GB Tier):** Test running ultra-compact models (LFM3-1.7B at ~1GB weights, Gemma 4 E2B/E4B at ~3–5GB) resident in VRAM alongside Madden during active play as an option to evaluate, not a final decision. Interactive structured tasks triggered during gameplay—specifically live GM negotiations (`engines/gm_negotiation.py`, rationale JSON) and custom commission classification (`newsroom/custom_commission.py`)—can test executing against this resident model without waiting for the nightly queue.
 * **Nightly queue for heavy local batch jobs:** Creative text generation requiring 14–27B models (Agent Wire batches, agent memory takes, scouting notes) and image generation models (headshots, §7.7) are deferred by the save watcher (§5.2) to the nightly GPU queue (§7.8), executing once Madden has exited or after a designated idle timeout.
-* **Interactive overflow fallback:** If an interactive task during gameplay requires creative reasoning beyond the capabilities of the resident 1–2GB model, it falls back to Gemini (or a hosted open model) via the provider switch (PRE_PC_WORK.md §6).
+* **Cloud fallback:** When the local model is unavailable, offline, times out, or if resident execution alongside Madden degrades gameplay frame rate, the provider switch (`engines/llm_provider.py`, PRE_PC_WORK.md §6) automatically falls back to Gemini (or a hosted open model). Live GM negotiations always retain cloud fallback.
 * **Cloud / hosted newsroom execution:** Gemini or hosted open-weight API calls (DeepSeek V4.1 Flash, GLM-5.3-Flash) do not utilize local GPU resources and run immediately after the weekly save load regardless of Madden's execution state.
 
 ### 7.6 Seasonal and One-Time Calls
@@ -560,10 +560,17 @@ Cap the thinking budget on the short Gemini calls (Agent Wire, agent memory, sco
   - `newsroom/social_writer.py` `write_post`: uses `make_content_config`, honoring configured `model:level` or unconstrained when unspecified.
 
 **Measured Savings & Token Impact:**
-* Baseline (default Gemini 3.8 Flash unconstrained thinking): ~1,000–1,150 thinking tokens per short call (`agent_memory` avg 1,143; `scouting_notes` avg 1,049; GM calls avg ~1,000; `agent_wire` avg 936).
-* With thinking capped at `low`: thinking token usage drops to ~100–150 tokens per call (~85–90% reduction in thinking tokens, saving ~850–1,000 tokens per call).
-* Daily cost savings: across ~100–250 short calls/day, saves ~100,000–250,000 output/thinking tokens daily (~$0.38–$0.94/day at $3.75/1M output pricing, or ~$11–$28/month on short tasks alone).
-* Quality check: short structured outputs (take JSONs, summary paragraphs, scouting notes, and GM rationales) remain grounded in their deterministic fact sheets with zero regression in validation pass rates.
+* **Baseline averages from §7.1** (default Gemini 3.8 Flash unconstrained thinking):
+  - `agent_wire` ([`newsroom/social_writer.py`](../newsroom/social_writer.py)): avg 936 thinking tokens (1.7K in, 63 out)
+  - `agent_memory` ([`newsroom/agent_memory.py`](../newsroom/agent_memory.py)): avg 1,143 thinking tokens (1.1K in, 161 out)
+  - `scouting_notes` ([`engines/scouting_narrative.py`](../engines/scouting_narrative.py)): avg 1,049 thinking tokens (0.3K in, 75 out)
+  - GM calls (`gm_persona`, `gm_rationale`, `gm_negotiation`, [`engines/gm_negotiation.py`](../engines/gm_negotiation.py)): avg ~1,000 thinking tokens (0.3–1K in, 130–180 out)
+* **Not yet measured:** Thinking token reduction, dollar savings, and task validation pass rates at `low` thinking caps have not yet been empirically measured against real data.
+* **To measure:** Run the quality test harness (`tools/llm_compare.py`, §7.4):
+  ```bash
+  python3 -m tools.llm_compare --task <task> --season 2036 --week 20 --models gemini-3.8-flash gemini-3.8-flash:low --limit 5
+  ```
+  for `memory_takes`, `memory_summary`, `scouting_notes`, and `gm_rationale` (≈ 40 Gemini calls across the 4 tasks; JR will run this).
 
 ---
 

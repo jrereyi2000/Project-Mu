@@ -311,7 +311,7 @@ must print 32 (or the GM count) with no error.
 
 **Verify:** `python3 -m pytest tests/test_madden_capture.py -q` passes with chiaki-ng closed.
 
-## R5. Plan text that isn't true
+## R5. [x] Plan text that isn't true
 
 Docs only, `docs/PC_MIGRATION_PLAN.md`:
 1. **§7.9 "Measured Savings & Token Impact"** states ~100–150 thinking tokens per call at `low`, dollar savings and "zero regression" as measured; nothing measured them. Replace with what is known (the baseline averages from §7.1) and "not yet measured", plus the command to measure: `python3 -m tools.llm_compare --task <task> --season 2036 --week 20 --models gemini-3.8-flash gemini-3.8-flash:low --limit 5` for `memory_takes`, `memory_summary`, `scouting_notes`, `gm_rationale` (≈ 40 Gemini calls; don't run it, JR will).
