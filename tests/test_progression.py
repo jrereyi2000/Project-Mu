@@ -314,6 +314,94 @@ def test_performance_moves_the_delta(mock_aging_curves):
     assert up[2]["performance"] == 2.0 and up[3] == "STANDOUT_SEASON"
 
 
+def test_rating_groups():
+    from engines.progression import rating_group
+    assert rating_group("Speed") == rating_group("ThrowPower") == "physical"
+    assert rating_group("Awareness") == rating_group("PlayRecognition") == "mental"
+    assert rating_group("ManCoverage") == "technical"
+    assert rating_group("Injury") == "fixed"
+
+
+def test_mental_decline_follows_the_peak():
+    """D10: nothing before 30; then a share of the draft-day-to-peak gain, never below draft day."""
+    from engines.progression import mental_decline
+    cur, peak, entry = {"Awareness": 90}, {"Awareness": 95}, {"Awareness": 55}
+    assert mental_decline(cur, peak, entry, 28) == {"Awareness": 90}
+    a31 = mental_decline(cur, peak, entry, 31)["Awareness"]
+    a34 = mental_decline(cur, peak, entry, 34)["Awareness"]
+    assert a34 < a31 < 90
+    assert a31 == 90 - round(0.04 * 40)
+    # a smaller peak gain loses less
+    assert mental_decline(cur, {"Awareness": 90}, {"Awareness": 80}, 34)["Awareness"] == 89
+    assert mental_decline({"Awareness": 56}, peak, entry, 34)["Awareness"] == 55       # floor: draft day
+
+
+def test_estimate_entry_mental_uses_years_pro():
+    from engines.progression import estimate_entry_mental
+    r = {"Awareness": 80, "PlayRecognition": 30}
+    assert estimate_entry_mental(r, 0) == {"Awareness": 80, "PlayRecognition": 30}
+    assert estimate_entry_mental(r, 5) == {"Awareness": 47, "PlayRecognition": 20}    # floor 20
+
+
+def test_ratings_layer_keeps_groups_apart(weights_doc):
+    """Growth goes to technical and mental skills (mental first), never physical outside the strength program;
+    a young player's decline leaves mental ratings alone; delta_ovr aims at the ratings' own grade."""
+    ratings = {
+        "Speed": 88, "Acceleration": 90, "Agility": 85, "Awareness": 70, "Strength": 70, "Stamina": 80,
+        "Tackle": 78, "Pursuit": 80, "PlayRecognition": 70, "BlockShedding": 74,
+        "HitPower": 75, "ZoneCoverage": 70, "ManCoverage": 65
+    }
+    arch = "MLB_FieldGeneral"
+    grade = ow.predict_grade(weights_doc, arch, ratings)
+    grown, diff, _, _ = apply_ratings_progression(weights_doc, "MIKE", arch, ratings, age=24, target_ovr=0,
+                                                  delta_ovr=3, years_pro=3)
+    assert ow.predict_grade(weights_doc, arch, grown) == grade + 3
+    assert all(grown[k] <= ratings[k] for k in ("Speed", "Acceleration", "Agility", "Strength", "Stamina"))
+    assert grown["Awareness"] + grown["PlayRecognition"] > ratings["Awareness"] + ratings["PlayRecognition"]
+
+    rookie, _, _, _ = apply_ratings_progression(weights_doc, "MIKE", arch, ratings, age=22, target_ovr=0,
+                                                delta_ovr=0, years_pro=0)
+    assert rookie["Strength"] == 71 and rookie["Stamina"] == 81                      # strength program
+
+    slump, _, _, _ = apply_ratings_progression(weights_doc, "MIKE", arch, ratings, age=25, target_ovr=0,
+                                               delta_ovr=-2, years_pro=3)
+    assert slump["Awareness"] == ratings["Awareness"] and slump["PlayRecognition"] == ratings["PlayRecognition"]
+    assert ow.predict_grade(weights_doc, arch, slump) == grade - 2
+
+
+def test_db_tackles_do_not_count_and_downs_set_the_rate():
+    from engines.progression import production
+    quiet = {"games_played": 16, "def_tackles": 30, "def_ints": 4, "def_deflections": 12}
+    busy = {"games_played": 16, "def_tackles": 110, "def_ints": 1, "def_deflections": 6}
+    assert production("DB", quiet) > production("DB", busy)
+    # per down, scaled to the group's downs per game: the same counts over fewer downs rank higher
+    a = {"games_played": 16, "downs_played": 600, "def_ints": 4}
+    b = {"games_played": 16, "downs_played": 1100, "def_ints": 4}
+    assert production("DB", a, 60.0) > production("DB", b, 60.0)
+    assert production("DB", {"games_played": 16, "def_ints": 4}, 60.0) == 32 / 16     # no downs: per game
+
+
+@pytest.mark.integration
+def test_performance_reliability_weights():
+    """Each group's weight is its year-to-year correlation scaled so the most repeatable group is 1 (§5.15)."""
+    from engines.progression import performance_reliability, performance_scores
+    conn = psycopg.connect(TEST_DSN)
+    with conn, conn.cursor() as cur:
+        rel = performance_reliability(cur, 2036)
+        perf = performance_scores(cur, 2036)
+    assert max(rel["weights"].values()) == 1.0
+    assert all(0.0 <= w <= 1.0 for w in rel["weights"].values())
+    assert all(abs(v["score"]) <= rel["weights"].get(v["group"], 1.0) + 1e-9 for v in perf.values() if v["group"])
+
+
+def test_simulated_performance_scales_by_reliability():
+    from engines.progression import simulated_performance
+    roster = [{"player_id": i, "position": "WR" if i % 2 else "CB", "ovr": 60 + i % 40} for i in range(400)]
+    perf = simulated_performance(roster, 2037, {"DB": 0.5, "REC": 1.0})
+    assert max(abs(perf[i]["score"]) for i in range(0, 400, 2)) <= 0.5
+    assert max(abs(perf[i]["score"]) for i in range(1, 400, 2)) == 1.0
+
+
 def test_simulated_performance_gives_scores_and_all_pros():
     from engines.progression import simulated_performance
     roster = [{"player_id": i, "position": "WR" if i % 2 else "CB", "ovr": 60 + i % 40} for i in range(400)]

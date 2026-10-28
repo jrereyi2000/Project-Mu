@@ -52,8 +52,31 @@ from pipeline.teleport import TO_MADDEN_POSITION, madden_archetype, settle_arche
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
-# Physical ratings tracked for age and injury adjustments
-PHYSICAL_RATINGS = ("Speed", "Acceleration", "Agility", "Strength", "Jumping", "Stamina", "ChangeOfDirection")
+# Rating groups (PROGRESSION_PLAN §5.1, §5.4): physical ratings are set on draft day and worn down by age, mental
+# ratings decline last and slowest, everything else is technical. Injury is left alone (durability, §5.8).
+PHYSICAL_RATINGS = ("Speed", "Acceleration", "Agility", "ChangeOfDirection", "Strength", "Jumping", "Stamina",
+                    "ThrowPower", "KickPower", "Toughness")
+MENTAL_RATINGS = ("Awareness", "PlayRecognition")
+FIXED_RATINGS = ("Injury",)
+
+# Madden's mean mental gain since draft day by years pro (Awareness and PlayRecognition, current minus
+# Original*Rating in CAREER-GIANTS-AUTOSAVE): ((max years pro, gain), ...). Stands in for draft-day ratings until
+# the PC save's Original*Rating is loaded; 10+ years (+19.6 in the sample) mixes in pre-franchise entry ratings, so
+# 7+ uses the 7-9 value.
+MADDEN_MENTAL_GAIN_BY_YEARS = ((1, 0.2), (3, 15.3), (6, 32.6), (99, 37.0))
+MENTAL_RATING_FLOOR = 20
+# Mental decline (JR 2026-10-28, D10): last and slowest, at a rate set by the peak. From MENTAL_DECLINE_AGE on (once
+# physical decline is under way) a player loses a share each season of what he gained between draft day and his
+# career peak, never falling below his draft-day rating: ((max age, share), ...).
+MENTAL_DECLINE_SHARE = ((29, 0.0), (31, 0.04), (33, 0.07), (99, 0.10))
+# Share of an OVR gain put into mental skills first (§5.4). Madden's young players gain mostly mental ratings:
+# +15.3 Awareness/PlayRecognition against +4.6 on technical ratings (draft-day 55+) at 2-3 years pro in
+# CAREER-GIANTS-AUTOSAVE (3.3 to 1 in points per rating). At 0.3 the engine's 1-3-year players gaining 3 OVR grow
+# 3.7 to 1 (0 gives 1.4; 0.4 gives 15). Refit on the PC from the save's own Original*Rating.
+MENTAL_GROWTH_SHARE = 0.3
+# Strength program (§5.4): +1 Strength and Stamina after each of a player's first two seasons, below this rating
+STRENGTH_PROGRAM_YEARS = 1          # years_of_experience 0 and 1 (rookie = 0)
+STRENGTH_PROGRAM_CAP = 90
 
 # Position groups that decline physically earlier (CB, RB, WR peak and fade earlier in Madden)
 EARLY_DECLINE_GROUPS = {"CB", "RB", "WR"}
@@ -265,6 +288,35 @@ def league_term_weight(age: int, ovr: int = 0) -> float:
 
 
 # ---------------------------------------------------------------- ratings layer ----
+def rating_group(name: str) -> str:
+    """'physical', 'mental', 'fixed' or 'technical' (§5.1)."""
+    if name in PHYSICAL_RATINGS:
+        return "physical"
+    if name in MENTAL_RATINGS:
+        return "mental"
+    return "fixed" if name in FIXED_RATINGS else "technical"
+
+
+def estimate_entry_mental(ratings: Dict[str, int], years_pro: Optional[int]) -> Dict[str, int]:
+    """Draft-day mental ratings when the save's Original*Rating isn't loaded: current minus Madden's mean gain for
+    his years pro (MADDEN_MENTAL_GAIN_BY_YEARS), never above current."""
+    years = years_pro if years_pro is not None else 99
+    gain = next(g for hi, g in MADDEN_MENTAL_GAIN_BY_YEARS if years <= hi)
+    return {k: min(ratings[k], max(MENTAL_RATING_FLOOR, round(ratings[k] - gain)))
+            for k in MENTAL_RATINGS if k in ratings}
+
+
+def mental_decline(current: Dict[str, int], peak: Dict[str, int], entry: Dict[str, int], age: int) -> Dict[str, int]:
+    """New mental ratings after this season's decline (D10): a share by age of the gain from draft day to the peak,
+    never below draft day."""
+    share = next(s for hi, s in MENTAL_DECLINE_SHARE if age <= hi)
+    out = {}
+    for k, x in current.items():
+        p, e = max(peak.get(k, x), x), min(entry.get(k, x), x)
+        out[k] = max(e, x - round(share * max(0, p - e)))
+    return out
+
+
 def apply_ratings_progression(
     doc: Dict[str, Any],
     position: str,
@@ -272,22 +324,33 @@ def apply_ratings_progression(
     ratings: Dict[str, int],
     age: int,
     target_ovr: int,
-    injury_severity: int = 0
+    injury_severity: int = 0,
+    years_pro: Optional[int] = None,
+    peak_mental: Optional[Dict[str, int]] = None,
+    entry_mental: Optional[Dict[str, int]] = None,
+    delta_ovr: Optional[int] = None,
 ) -> Tuple[Dict[str, int], Dict[str, int], str, bool]:
-    """Applies age and injury adjustments to physical ratings, then uses ovr_weights.adjust_ratings
-    to move archetype skill ratings to hit target_ovr, verifying archetype stays on top (§5.4).
+    """Spreads the OVR change over the rating groups (§5.1, §5.4), then checks the archetype stays on top:
+    1. physical: age decline (earlier for CB, RB, WR), the strength program in the first two seasons, injuries;
+    2. mental: from 30, the peak-based decline (mental_decline);
+    3. the rest of the way to target_ovr with ovr_weights.adjust_ratings on the archetype's technical skills, plus
+       mental skills when he is growing; all skills only if that can't reach the target.
+    With delta_ovr, the target is the ratings' own grade plus delta_ovr: the ratings (the PS5 scan) carry their own
+    OVR, which wins over an older player_seasons read (PC_MIGRATION_PLAN §4.3).
     Returns (new_ratings, ratings_diff, archetype_name, is_settled)."""
     madden_pos = TO_MADDEN_POSITION.get(position, position)
     arch = madden_archetype(doc, madden_pos, archetype) if archetype else None
     if not arch or arch not in doc["archetypes"]:
         # Fall back to current top archetype from ratings
         _, arch = ow.predict_ovr(doc, madden_pos, ratings)
+    if delta_ovr is not None:
+        target_ovr = max(OVR_MIN, min(OVR_MAX, ow.predict_grade(doc, arch, ratings) + delta_ovr))
 
     updated = dict(ratings)
     original = dict(ratings)
     group = position_group(position)
 
-    # 1. Physical ratings aging & injury adjustments
+    # 1. Physical: age decline, strength program, injuries
     if age >= 29:
         drop = 1 if age in (29, 30) else 2
         for pr in ("Speed", "Agility"):
@@ -297,25 +360,47 @@ def apply_ratings_progression(
             for pr in ("Acceleration", "Jumping", "ChangeOfDirection"):
                 if pr in updated:
                     updated[pr] = max(25, updated[pr] - 1)
-    elif age <= 24:
-        # Modest physical growth for young players
-        for pr in ("Speed", "Strength"):
-            if pr in updated and updated[pr] < 88:
-                updated[pr] = min(99, updated[pr] + 1)
+        if age >= 33:
+            for pr in ("ThrowPower", "KickPower"):
+                if pr in updated:
+                    updated[pr] = max(25, updated[pr] - 1)
+    if years_pro is not None and years_pro <= STRENGTH_PROGRAM_YEARS:
+        for pr in ("Strength", "Stamina"):
+            if pr in updated and updated[pr] < STRENGTH_PROGRAM_CAP:
+                updated[pr] += 1
 
     if injury_severity > 0:
         for pr in ("Speed", "Acceleration"):
             if pr in updated:
                 updated[pr] = max(25, updated[pr] - injury_severity)
 
-    # 2. Adjust archetype skills to reach target_ovr
-    try:
-        updated, _ = ow.adjust_ratings(doc, arch, updated, target_ovr)
-    except ValueError:
-        # If target cannot be fully reached, keep best effort
-        pass
+    # 2. Mental: declines last, by the peak
+    mental = {k: updated[k] for k in MENTAL_RATINGS if k in updated}
+    entry = entry_mental or estimate_entry_mental(mental, years_pro)
+    updated.update(mental_decline(mental, peak_mental or mental, entry, age))
 
-    # 3. Settle archetype so player's primary archetype remains on top
+    # 3. The rest of the way to target_ovr: growth goes first to mental skills (MENTAL_GROWTH_SHARE of it), then
+    # technical and mental; decline beyond the physical and mental steps comes out of technical skills
+    skills = doc["archetypes"][arch].get("skills", list(doc["archetypes"][arch]["terms"]))
+    grade = ow.predict_grade(doc, arch, updated)
+    growing = grade < target_ovr
+    if growing:
+        mental_skills = [k for k in skills if rating_group(k) == "mental"]
+        step = grade + math.ceil(MENTAL_GROWTH_SHARE * (target_ovr - grade))
+        if mental_skills and step > grade:
+            try:
+                updated, _ = ow.adjust_ratings(doc, arch, updated, step, skills=mental_skills)
+            except ValueError:
+                pass
+    allowed = [k for k in skills if rating_group(k) == "technical" or (growing and rating_group(k) == "mental")]
+    for choice in (allowed, skills):
+        try:
+            updated, _ = ow.adjust_ratings(doc, arch, updated, target_ovr, skills=choice)
+            break
+        except ValueError:
+            continue
+
+    # 4. Settle archetype so player's primary archetype remains on top
     settled_ratings, settled_ok = settle_archetype(doc, madden_pos, arch, updated, target_ovr)
 
     ratings_diff = {
@@ -333,7 +418,10 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
     along with stats, injury, and ceiling inputs."""
     cur.execute("SELECT to_regclass('public.player_ceilings') IS NOT NULL")
     has_ceilings = bool((cur.fetchone() or [False])[0])
+    cur.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'player_ceilings' AND column_name = 'peak_mental'")
+    has_mental = has_ceilings and cur.fetchone() is not None
     ceiling_col = "pc.ceiling as stored_ceiling" if has_ceilings else "NULL as stored_ceiling"
+    mental_cols = "pc.peak_mental, pc.entry_mental" if has_mental else "NULL, NULL"
     ceiling_join = "LEFT JOIN player_ceilings pc ON pc.player_id = ps.player_id" if has_ceilings else ""
 
     cur.execute(f"""
@@ -351,7 +439,9 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
             COALESCE(inj.is_ir, false) as is_ir,
             COALESCE(inj.weeks_remaining, 0) as weeks_remaining,
             sp.true_value as prospect_true_val,
-            {ceiling_col}
+            {ceiling_col},
+            ps.years_of_experience,
+            {mental_cols}
         FROM player_seasons ps
         JOIN players p ON p.id = ps.player_id
         LEFT JOIN season_stat_general sg ON sg.player_id = ps.player_id AND sg.season = ps.season
@@ -371,7 +461,7 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
     cols = (
         "player_id", "name", "position", "team_id", "age", "overall_rating",
         "dev_trait", "archetype", "games_played", "downs_played",
-        "is_ir", "weeks_remaining", "prospect_true_val", "stored_ceiling"
+        "is_ir", "weeks_remaining", "prospect_true_val", "stored_ceiling", "years_pro", "peak_mental", "entry_mental"
     )
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
@@ -410,8 +500,19 @@ def performance_term(perf: Optional[Dict[str, Any]]) -> float:
     return max(lo, min(hi, PERF_WEIGHT * perf.get("score", 0.0) + perf.get("awards", 0.0)))
 
 
-def production(group: str, r: Dict[str, Any]) -> Optional[float]:
-    """One season's production for a position group, per game (None: nothing to rank on)."""
+# Positions whose box scores say little (PROGRESSION_PLAN §5.15, JR 2026-10-28): linemen and defensive backs are
+# ranked on per-down rates where downs are known, with part of the score from their unit (UNIT_SHARE), and every
+# group's score is scaled by how well it repeats year to year (performance_reliability).
+DOWN_RATE_GROUPS = ("OL", "FRONT", "DB")
+UNIT_SHARE = {"OL": 0.5, "DB": 0.4, "FRONT": 0.2}
+PERF_SHRINK_GAMES = 4            # a player's score is scaled by games / (games + this)
+RELIABILITY_DOWNS_SHARE = 0.3    # a season counts for reliability when this share of its stat lines has downs
+
+
+def production(group: str, r: Dict[str, Any], downs_per_game: Optional[float] = None) -> Optional[float]:
+    """One season's production for a position group, per game (None: nothing to rank on). For linemen and
+    defenders with downs played, counts are per down scaled to `downs_per_game` (the group's median), so players
+    with and without downs rank on the same scale. Tackles by defensive backs don't count (§5.15)."""
     g = lambda k: float(r.get(k) or 0)
     games = g("games_played")
     if group == "K":
@@ -432,34 +533,162 @@ def production(group: str, r: Dict[str, Any]) -> Optional[float]:
         v = (g("def_tackles") + 2 * g("def_tfl") + 5 * g("def_sacks") + 6 * g("def_ints") + 2 * g("def_deflections")
              + 4 * g("def_forced_fumbles") + 15 * g("def_tds"))
     else:  # DB
-        v = (g("def_tackles") + 8 * g("def_ints") + 3 * g("def_deflections") + 4 * g("def_forced_fumbles")
-             + 15 * g("def_tds"))
+        v = 8 * g("def_ints") + 3 * g("def_deflections") + 4 * g("def_forced_fumbles") + 15 * g("def_tds")
+    if group in DOWN_RATE_GROUPS and downs_per_game and g("downs_played") > 0:
+        return v / g("downs_played") * downs_per_game
     return v / games
 
 
-def performance_scores(cur, season: int) -> Dict[int, Dict[str, Any]]:
-    """{player_id: {"score": -1..+1 (position-group rank of production), "awards": bonus, "notes": [...]}} for
-    `season`. Players without enough games or attempts get no score (their playing-time term still applies)."""
+def _z(values: Dict[Any, float]) -> Dict[Any, float]:
+    if len(values) < 2:
+        return {k: 0.0 for k in values}
+    m = sum(values.values()) / len(values)
+    sd = math.sqrt(sum((v - m) ** 2 for v in values.values()) / (len(values) - 1)) or 1.0
+    return {k: (v - m) / sd for k, v in values.items()}
+
+
+def unit_scores(cur, season: int) -> Dict[int, Dict[str, float]]:
+    """{team_id: {"OL": z, "FRONT": z, "DB": z}} for `season`, each a z-score across teams (higher is better).
+    OL: sack rate allowed and yards per carry, from the team's own season stat lines (every season). FRONT:
+    opponents' yards per carry; DB: opponents' completion rate, yards per attempt and passing TDs per attempt, from
+    the regular-season team box scores (team_stats, 2035 on); teams without them get no defensive unit score."""
+    cur.execute("""
+        SELECT team_id, sum(pass_sacks), sum(pass_attempts), sum(rush_yards), sum(rush_attempts)
+        FROM season_stat_lines WHERE season = %s AND team_id IS NOT NULL GROUP BY team_id
+    """, (season,))
+    sack, ypc = {}, {}
+    for team, sacks, att, ry, ra in cur.fetchall():
+        if att and ra:
+            sack[team] = -float(sacks or 0) / (float(att) + float(sacks or 0))
+            ypc[team] = float(ry or 0) / float(ra)
+    out = defaultdict(dict)
+    zs, zy = _z(sack), _z(ypc)
+    for team in zs:
+        out[team]["OL"] = (zs[team] + zy[team]) / 2
+    cur.execute("""
+        SELECT opp.id, sum(t.passing_completions), sum(t.passing_attempts), sum(t.passing_yards),
+               sum(t.passing_tds), sum(t.rushing_yards), sum(t.rushing_attempts)
+        FROM team_stats t
+        JOIN games g ON g.id = t.game_id AND g.season = %s AND g.game_type = 'REGULAR_SEASON'
+        JOIN teams tm ON tm.name = t.team_name
+        JOIN teams opp ON opp.id = CASE WHEN g.home_team_id = tm.id THEN g.away_team_id ELSE g.home_team_id END
+        GROUP BY opp.id
+    """, (season,))
+    comp, ypa, tdr, rypc = {}, {}, {}, {}
+    for team, c, a, y, td, ry, ra in cur.fetchall():
+        if a and ra:
+            comp[team], ypa[team], tdr[team] = -float(c) / a, -float(y) / a, -float(td) / a
+            rypc[team] = -float(ry) / ra
+    zc, za, zt, zr = _z(comp), _z(ypa), _z(tdr), _z(rypc)
+    for team in zc:
+        out[team]["DB"] = (zc[team] + za[team] + zt[team]) / 3
+        out[team]["FRONT"] = zr[team]
+    return dict(out)
+
+
+def _group_of(position: Optional[str]) -> Optional[str]:
+    return next((k for k, v in PERF_GROUPS.items() if position in v), None)
+
+
+def raw_performance(cur, season: int) -> Dict[int, Dict[str, Any]]:
+    """{player_id: {"group", "raw" (-1..+1 rank of own production blended with the unit's score), "games"}} for
+    `season`, before the reliability weight and awards."""
     cur.execute("SELECT * FROM season_stat_lines WHERE season = %s", (season,))
     cols = [d[0] for d in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    by_group = defaultdict(list)
+    dpg = defaultdict(list)
     for r in rows:
-        group = next((k for k, v in PERF_GROUPS.items() if r.get("position") in v), None)
+        group = _group_of(r.get("position"))
+        if group in DOWN_RATE_GROUPS and (r.get("downs_played") or 0) > 0 and (r.get("games_played") or 0) >= PERF_MIN_GAMES:
+            dpg[group].append(r["downs_played"] / r["games_played"])
+    median = {g: sorted(v)[len(v) // 2] for g, v in dpg.items()}
+    units = unit_scores(cur, season)
+    by_group = defaultdict(dict)
+    meta = {}
+    for r in rows:
+        group = _group_of(r.get("position"))
         if group:
-            v = production(group, r)
+            v = production(group, r, median.get(group))
             if v is not None:
-                by_group[group].append((v, r["player_id"]))
+                by_group[group][r["player_id"]] = v
+                meta[r["player_id"]] = (group, r.get("team_id"), r.get("games_played") or 0)
     out = {}
     for group, vals in by_group.items():
-        vals.sort()
-        n = len(vals)
-        for i, (_, pid) in enumerate(vals):
+        z = _z(vals)
+        share = UNIT_SHARE.get(group, 0.0)
+        blended = {}
+        for pid, zv in z.items():
+            unit = units.get(meta[pid][1], {}).get(group)
+            blended[pid] = zv if unit is None or not share else (1 - share) * zv + share * unit
+        ranked = sorted(blended.items(), key=lambda kv: kv[1])
+        n = len(ranked)
+        for i, (pid, b) in enumerate(ranked):
             # average rank of ties, as a percentile, to -1..+1
-            lo = next(j for j in range(n) if vals[j][0] == vals[i][0])
-            hi = max(j for j in range(n) if vals[j][0] == vals[i][0])
+            lo = next(j for j in range(n) if ranked[j][1] == b)
+            hi = max(j for j in range(n) if ranked[j][1] == b)
             pct = ((lo + hi) / 2) / (n - 1) if n > 1 else 0.5
-            out[pid] = {"score": round(2 * pct - 1, 3), "awards": 0.0, "notes": [], "group": group}
+            out[pid] = {"group": group, "raw": 2 * pct - 1, "games": meta[pid][2]}
+    return out
+
+
+_RELIABILITY_CACHE: Dict[Tuple[str, int], Dict[str, Any]] = {}
+
+
+def performance_reliability(cur, upto_season: int) -> Dict[str, Any]:
+    """{"weights": {group: 0..1}, "r": {group: correlation}, "n": {group: pairs}, "seasons": [...]}: how well each
+    group's score predicts itself the next season, pooled over pairs of consecutive stat seasons up to
+    `upto_season`, scaled so the most repeatable group gets 1 (§5.15). Only pairs where both seasons have downs
+    played (RELIABILITY_DOWNS_SHARE of stat lines; 2035 on) count, since earlier seasons rank per game and without
+    unit scores, which makes volume look repeatable; with no such pair, every pair counts. A group that doesn't
+    repeat (r <= 0) gets 0."""
+    key = (cur.connection.info.dbname, upto_season)
+    if key in _RELIABILITY_CACHE:
+        return _RELIABILITY_CACHE[key]
+    cur.execute("""
+        SELECT season, avg(CASE WHEN downs_played > 0 THEN 1.0 ELSE 0.0 END)
+        FROM season_stat_lines WHERE season <= %s GROUP BY 1 ORDER BY 1
+    """, (upto_season,))
+    coverage = dict(cur.fetchall())
+    seasons = list(coverage)
+    with_downs = [s for s in seasons if coverage[s] >= RELIABILITY_DOWNS_SHARE]
+    if not any(s + 1 in with_downs for s in with_downs):
+        with_downs = seasons
+    raw = {s: raw_performance(cur, s) for s in with_downs}
+    pairs = defaultdict(list)
+    for s in with_downs:
+        if s + 1 in raw:
+            for pid, a in raw[s].items():
+                b = raw[s + 1].get(pid)
+                if b and b["group"] == a["group"]:
+                    pairs[a["group"]].append((a["raw"], b["raw"]))
+    r = {}
+    for group, xy in pairs.items():
+        if len(xy) < 20:
+            continue
+        mx, my = sum(x for x, _ in xy) / len(xy), sum(y for _, y in xy) / len(xy)
+        sxy = sum((x - mx) * (y - my) for x, y in xy)
+        sx = math.sqrt(sum((x - mx) ** 2 for x, _ in xy))
+        sy = math.sqrt(sum((y - my) ** 2 for _, y in xy))
+        r[group] = sxy / (sx * sy) if sx and sy else 0.0
+    top = max([v for v in r.values() if v > 0], default=1.0)
+    out = {"weights": {g: round(max(0.0, v) / top, 3) for g, v in r.items()},
+           "r": {g: round(v, 3) for g, v in r.items()}, "n": {g: len(v) for g, v in pairs.items()},
+           "seasons": sorted(raw)}
+    _RELIABILITY_CACHE[key] = out
+    return out
+
+
+def performance_scores(cur, season: int) -> Dict[int, Dict[str, Any]]:
+    """{player_id: {"score": -1..+1, "awards": bonus, "notes": [...], "group"}} for `season`: the position-group
+    rank of production (raw_performance), times the group's reliability weight and the player's games / (games +
+    PERF_SHRINK_GAMES). Players without enough games or attempts get no score (their playing-time term still
+    applies)."""
+    weights = performance_reliability(cur, season)["weights"]
+    out = {}
+    for pid, p in raw_performance(cur, season).items():
+        shrink = p["games"] / (p["games"] + PERF_SHRINK_GAMES) if p["games"] else 1.0
+        out[pid] = {"score": round(p["raw"] * weights.get(p["group"], 1.0) * shrink, 3), "awards": 0.0,
+                    "notes": [], "group": p["group"]}
     cur.execute("SELECT player_id, award_type FROM awards WHERE season = %s AND player_id IS NOT NULL", (season,))
     for pid, award in cur.fetchall():
         bonus = AWARD_BONUS.get(award)
@@ -544,18 +773,30 @@ def run_progression(
             delta, new_ovr, breakdown, cause = compute_player_delta(
                 **kwargs, league_adj=terms[0], star_adj=terms[1])
 
-            ratings_diff = {}
+            ratings_diff, peak, entry, entry_source = {}, None, None, None
             if p_id in attr_map:
+                current = attr_map[p_id]
+                mental = {k: current[k] for k in MENTAL_RATINGS if k in current}
+                if p["entry_mental"]:
+                    entry, entry_source = p["entry_mental"], "STORED"
+                else:
+                    entry, entry_source = estimate_entry_mental(mental, p["years_pro"]), "ESTIMATED"
+                peak = {k: max(v, (p["peak_mental"] or {}).get(k, v)) for k, v in mental.items()}
                 try:
-                    _, ratings_diff, _, _ = apply_ratings_progression(
+                    new_ratings, ratings_diff, _, _ = apply_ratings_progression(
                         doc=weights_doc,
                         position=p["position"],
                         archetype=p["archetype"],
-                        ratings=attr_map[p_id],
+                        ratings=current,
                         age=age,
                         target_ovr=new_ovr,
-                        injury_severity=1 if p["is_ir"] else 0
+                        delta_ovr=delta,
+                        injury_severity=1 if p["is_ir"] else 0,
+                        years_pro=p["years_pro"],
+                        peak_mental=peak,
+                        entry_mental=entry,
                     )
+                    peak = {k: max(v, new_ratings.get(k, v)) for k, v in peak.items()}
                 except Exception:
                     ratings_diff = {}
 
@@ -578,6 +819,9 @@ def run_progression(
                 "ceiling": ceiling,
                 "ceiling_source": c_source,
                 "cause": cause,
+                "peak_mental": peak,
+                "entry_mental": entry,
+                "entry_source": entry_source,
             })
             counts_by_cause[cause] += 1
             deltas.append(delta)
@@ -593,8 +837,8 @@ def run_progression(
                     INSERT INTO player_progression_history (
                         season, player_id, old_ovr, new_ovr, delta_ovr,
                         age_term, dev_term, ceiling_term, play_term, injury_term, noise_term, league_term,
-                        performance_term, ratings_diff, created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        performance_term, ratings_diff, cause, created_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (season, player_id) DO UPDATE SET
                         old_ovr = EXCLUDED.old_ovr,
                         new_ovr = EXCLUDED.new_ovr,
@@ -608,21 +852,28 @@ def run_progression(
                         league_term = EXCLUDED.league_term,
                         performance_term = EXCLUDED.performance_term,
                         ratings_diff = EXCLUDED.ratings_diff,
+                        cause = EXCLUDED.cause,
                         created_at = NOW();
                 """, (
                     r["season"], r["player_id"], r["old_ovr"], r["new_ovr"], r["delta_ovr"],
                     r["age_term"], r["dev_term"], r["ceiling_term"], r["play_term"], r["injury_term"], r["noise_term"],
-                    r["league_term"], r["performance_term"], json.dumps(r["ratings_diff"])
+                    r["league_term"], r["performance_term"], json.dumps(r["ratings_diff"]), r["cause"]
                 ))
                 cur.execute("""
-                    INSERT INTO player_ceilings (player_id, ceiling, source, updated_season, created_at)
-                    VALUES (%s, %s, %s, %s, NOW())
+                    INSERT INTO player_ceilings (player_id, ceiling, source, updated_season, peak_mental, entry_mental,
+                                                 entry_source, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (player_id) DO UPDATE SET
                         ceiling = EXCLUDED.ceiling,
                         source = EXCLUDED.source,
                         updated_season = EXCLUDED.updated_season,
+                        peak_mental = COALESCE(EXCLUDED.peak_mental, player_ceilings.peak_mental),
+                        entry_mental = COALESCE(player_ceilings.entry_mental, EXCLUDED.entry_mental),
+                        entry_source = COALESCE(player_ceilings.entry_source, EXCLUDED.entry_source),
                         created_at = NOW();
-                """, (r["player_id"], r["ceiling"], r["ceiling_source"], season))
+                """, (r["player_id"], r["ceiling"], r["ceiling_source"], season,
+                      json.dumps(r["peak_mental"]) if r["peak_mental"] else None,
+                      json.dumps(r["entry_mental"]) if r["entry_mental"] else None, r["entry_source"]))
             conn.commit()
             log("Commit successful.")
         else:
@@ -887,10 +1138,13 @@ def rookie_class(turnover: Dict[str, Any], size: int, rng: random.Random) -> Lis
 SIM_ALL_PRO_PER_SEASON = 62      # First + Second Team, as in the real awards table
 
 
-def simulated_performance(roster: List[Dict[str, Any]], season: int) -> Dict[int, Dict[str, Any]]:
+def simulated_performance(roster: List[Dict[str, Any]], season: int,
+                          weights: Optional[Dict[str, float]] = None) -> Dict[int, Dict[str, Any]]:
     """A season's performance for the simulation, which has no stats: production ranked within the position group
-    on OVR plus seeded noise (better players usually, not always, produce more), and the 62 best scores, spread over
-    the groups by size, get All-Pro bonuses (the first half First Team)."""
+    on OVR plus seeded noise (better players usually, not always, produce more), scaled by the group's reliability
+    weight as real scores are (performance_reliability), and the 62 best scores, spread over the groups by size,
+    get All-Pro bonuses (the first half First Team)."""
+    weights = weights or {}
     rng = random.Random(f"perf:{season}")
     by_group = defaultdict(list)
     for p in roster:
@@ -902,7 +1156,8 @@ def simulated_performance(roster: List[Dict[str, Any]], season: int) -> Dict[int
         vals.sort()
         n = len(vals)
         for i, (_, pid) in enumerate(vals):
-            out[pid] = {"score": round(2 * (i / (n - 1) if n > 1 else 0.5) - 1, 3), "awards": 0.0, "notes": []}
+            out[pid] = {"score": round((2 * (i / (n - 1) if n > 1 else 0.5) - 1) * weights.get(group, 1.0), 3),
+                        "awards": 0.0, "notes": []}
         k = round(SIM_ALL_PRO_PER_SEASON * n / max(len(roster), 1))
         for j, (_, pid) in enumerate(reversed(vals[-k:] if k else [])):
             out[pid]["awards"] = AWARD_BONUS["First Team All-Pro"] if j < (k + 1) // 2 else AWARD_BONUS["Second Team All-Pro"]
@@ -952,6 +1207,7 @@ def run_simulation(
         """, (start_season,))
         roster = [{"player_id": r[0], "team_id": r[1], "position": r[2], "age": r[3], "ovr": r[4],
                    "dev": r[5] or "Normal"} for r in cur.fetchall()]
+        weights = performance_reliability(cur, start_season)["weights"]
 
     log(f"--- League Stability Simulation ({num_seasons} seasons from {start_season}, "
         f"{'holding the ' + str(start_season) + ' shape' if hold_shape else 'following Madden'}) ---")
@@ -969,7 +1225,7 @@ def run_simulation(
         staying = [p for p in roster if leave_rng.random() >= gone_rate(turnover, p["age"], p["ovr"])]
         rng = random.Random(f"draft:{sim_s}")
         rookies = rookie_class(turnover, size - len(staying), rng)
-        perf = simulated_performance(roster, sim_s - 1)       # last season, played by this roster
+        perf = simulated_performance(roster, sim_s - 1, weights)   # last season, played by this roster
 
         def progress(p, dev, star=0.0, sim_s=sim_s):
             ceiling, _ = seed_player_ceiling(p["player_id"], p["ovr"], p["age"] + 1, p["dev"])

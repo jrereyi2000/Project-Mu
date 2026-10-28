@@ -1321,6 +1321,7 @@ CREATE TABLE IF NOT EXISTS player_progression_history (
     performance_term NUMERIC(4, 2) NOT NULL DEFAULT 0,  -- last season's production rank + awards
     ratings_diff JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    cause VARCHAR(32),                                  -- main cause tag (2027_01_11_progression_rating_groups.sql)
     UNIQUE (season, player_id)
 );
 CREATE INDEX IF NOT EXISTS idx_player_progression_season ON player_progression_history (season);
@@ -1331,7 +1332,10 @@ CREATE TABLE IF NOT EXISTS player_ceilings (
     ceiling NUMERIC(5, 2) NOT NULL,
     source VARCHAR(32) NOT NULL,
     updated_season INT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    peak_mental JSONB,                                  -- career-high Awareness, PlayRecognition
+    entry_mental JSONB,                                 -- draft-day Awareness, PlayRecognition
+    entry_source VARCHAR(16)                            -- ESTIMATED (Madden's mean gain) | SAVE
 );
 CREATE INDEX IF NOT EXISTS idx_player_ceilings_season ON player_ceilings (updated_season);
 
