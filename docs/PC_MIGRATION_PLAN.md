@@ -69,7 +69,12 @@ No attribute scan is taken from the PS5. Underlying ratings on the PC come from 
              • EA app / Steam: Madden NFL 27, College Football 27
              • Node.js 20+ LTS (runs `madden-franchise`)
              • Ollama for Windows (uses the RTX 5070 Ti directly)
-             • Frosty Mod Manager / other mods as wanted
+             • MMC Modding Tools (Frosty-based M27 mod editor/manager; re-download
+               after each title update for the new SDK/cache)
+             • MyFranchise Tool (M27 v2.0.1+) and Madden Franchise Editor with the
+               M27 schema, to inspect and hand-fix teleporter writes
+             • Mods: M27 Unlocked, Sabos Franchise Mod (sim stats, injuries, XP off),
+               others as wanted (docs/MMC_MOD_SURVEY.md)
                      │
                      ▼
              [WSL2 side: Project Mu]
@@ -88,9 +93,9 @@ No attribute scan is taken from the PS5. Underlying ratings on the PC come from 
              • Enable Windows Remote Desktop (Mac control from the couch)
 ```
 
-**Why not native Linux:** Madden uses EA Javelin anticheat, which runs at the Windows kernel level and does not work under Linux/Proton ([GamingOnLinux tracker](https://www.gamingonlinux.com/anticheat/vendor/11)); Frosty Mod Manager is Windows-only too. WSL2 gives a real Ubuntu terminal (same `ls`, `cd`, `grep`, `git`, bash as the macOS terminal) next to Windows, so Project Mu's `.sh` scripts and Python code run unchanged.
+**Why not native Linux:** Madden uses EA Javelin anticheat, which runs at the Windows kernel level and does not work under Linux/Proton ([GamingOnLinux tracker](https://www.gamingonlinux.com/anticheat/vendor/11)); MMC Modding Tools and the community franchise tools are Windows-only too. WSL2 gives a real Ubuntu terminal (same `ls`, `cd`, `grep`, `git`, bash as the macOS terminal) next to Windows, so Project Mu's `.sh` scripts and Python code run unchanged.
 
-**Crossing the boundary:** WSL2 reads the Windows save folder at `/mnt/c/Users/<Name>/Documents/Madden NFL 27/settings/`. Ollama on Windows is reachable from WSL2 at the Windows host address (or `localhost` with WSL mirrored networking). Mac-specific pieces (`chiaki-ng`, the capture macros, `pipeline/notify.py`'s notification method) are not needed on the PC or need a Linux equivalent.
+**Crossing the boundary:** WSL2 reads the Windows save folder at `/mnt/c/Users/<Name>/Documents/Madden NFL 27/saves/` (offline franchise files, per the MMC tool instructions; confirm on the PC). Ollama on Windows is reachable from WSL2 at the Windows host address (or `localhost` with WSL mirrored networking). Mac-specific pieces (`chiaki-ng`, the capture macros, `pipeline/notify.py`'s notification method) are not needed on the PC or need a Linux equivalent.
 
 ---
 
@@ -118,8 +123,9 @@ Starting in the offseason avoids rebuilding a mid-playoff bracket and matches th
 
 The franchise's own history is thrown away (Project Mu is the record), so nothing about how the save gets to 2037 matters except the result.
 
-* **Option 1 — set the year in the save (try first):** start the franchise, advance to the offseason, and write `CurrentSeasonYear` / `BaseCalendarYear` (and `BaseSuperBowlNumber`) in the season-info table, as the community `seasonYearSetup` script does for Madden 24/25 ([madden-franchise-utils](https://github.com/Sinthros/madden-franchise-utils)). Player ages and contracts are overwritten by the teleporter anyway. Test for side effects: draft class year, contract year labels, schedule, awards screens.
+* **Option 1 — set the year in the save (try first):** start the franchise, advance to the offseason, and write `CurrentSeasonYear` / `BaseCalendarYear` (and `BaseSuperBowlNumber`) in the season-info table, as the community `seasonYearSetup` script does ([madden-franchise-utils](https://github.com/Sinthros/madden-franchise-utils) for Madden 24/25; an M27 build, `seasonYearSetup.exe`, is in *Prime's Retro Franchise Tools (M27)* on the MMC Discord, see [`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) §2, so it can be run as is or read for the exact fields). Player ages and contracts are overwritten by the teleporter anyway. Test for side effects: draft class year, contract year labels, schedule, awards screens.
 * **Option 2 — unattended sim (fallback):** set all 32 teams to CPU control so no offseason stage waits on a decision, and sim to the 2037 offseason. Expect hours rather than minutes; it can run overnight.
+* **Decide before creating the franchise:** the community *M27 Roster size increase* mod (80 preseason / 65 cut day, practice-squad eligibility 3 years, starting cap +$40M) only takes effect in a new franchise. Practice-squad size itself is hard-coded. If Project Mu rosters need more than 53 + 16, apply it before step 1.
 
 ### 4.3 The Teleporter (`pipeline/teleport.py`)
 
@@ -178,7 +184,7 @@ Dry run on the sample save with the 2036 rosters: all 1,797 players matched (Pro
 **Commentary IDs:** Madden says one pre-recorded surname clip per player, chosen by `Player.PLYR_COMMENT`. Checked on `CAREER-GIANTS-AUTOSAVE`: the ID belongs to the surname, not the player (every Smith is 4600, every Johnson 2506); suffixes share it (Smith, Smith II, Smith Jr → 4600); sound-alike spellings can share it (Andersen, Anderson → 103); IDs run roughly alphabetically up to ~9,500; 0 means no recording (200 of 3,086 players), and the commentators then avoid the name. A donor keeps the donor's ID, so without this step Madden calls Project Mu players by the donor's surname.
 
 Surname rule for the teleporter:
-1. Build the full surname → ID list from Madden's commentary data (not the save; community tools such as `commentaryIdFix` in [madden-franchise-utils](https://github.com/Sinthros/madden-franchise-utils) carry a lookup), checked against the IDs used in real saves.
+1. Build the full surname → ID list from Madden's commentary data (not the save; community tools such as `commentaryIdFix` in [madden-franchise-utils](https://github.com/Sinthros/madden-franchise-utils) carry a lookup), checked against the IDs used in real saves. WiiMaster's *Presentation ID (Commentary) Fix Tool v3.1* on the MMC Discord sets every player's ID from his name; check whether it supports Madden 27. If it does, its lookup is the list, and running it after the renames in step 4 is a cross-check ([`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) §2).
 2. Normalize each Project Mu surname: drop Jr./Sr./II/III/IV/V, fold case, punctuation and accents.
 3. Exact match → that ID. Spelling variants count only when Madden's own list maps them to the same ID.
 4. No match → rename the player to the closest recorded surname (JR decision 2026-10-27: every 2036 name is fictional anyway). Rank candidates by sound first (phonetic key such as Double Metaphone) and spelling second (edit distance); JR reviews the list before it is applied. The new surname is written to both Madden and Project Mu (`players.player_name` / `full_name`), so the game, the site and the writers agree; the old name is kept as an alias for search and history.
@@ -219,7 +225,7 @@ Once the league runs on PC, screen capture (`madden_capture.py`, `extract.py`, t
 ### 5.1 Architecture
 
 ```
-[Madden Saves Franchise to Disk] (C:\Users\<Name>\Documents\Madden NFL 27\settings\CAREER-*)
+[Madden Saves Franchise to Disk] (C:\Users\<Name>\Documents\Madden NFL 27\saves\CAREER-*)
                    │
                    ▼
      [pipeline/save_reader/pc_save_reader.mjs] (Node.js + `madden-franchise`; built, v1)
@@ -299,6 +305,8 @@ Before building §4–§5, read a fresh Madden 27 save and confirm:
 6. Season stat rows update after each simmed week, and the diff matches the per-game rows.
 7. Whether Madden recomputes OVR on load (§4.4).
 
+The community *Madden Franchise Exporter* (a plain-text dump of a franchise file's career and season stats, team stats, game logs and rosters) is an independent check for items 3, 5 and 6 and for `pipeline/load_save.py` output.
+
 ---
 
 ## 6. Phase 4: The CFB 27 $\rightarrow$ Madden Dynasty Bridge
@@ -336,6 +344,8 @@ Before building §4–§5, read a fresh Madden 27 save and confirm:
           └──> Writes the prospects into Madden's draft class (community
                `draftPlayerImportNcaa` / `playersToDraftClass` utilities are prior art)
 ```
+
+**Prior art to compare before building:** *Pipeline — CFB 27 → Madden 26/27 Draft Class Tool* (MMC Discord, 2026-08) already does most of this chain as a Windows app: it reads the dynasty's leaving players (or predicts them from earlier saves), projects round and pick, converts ratings to Madden's scale with a deterministic, tunable curve, assigns dev traits by target shares and writes an importable draft class with faces. Project Mu still needs its own reader for `scout_events` and the name check, but the rating translation and injection could start from that tool or check against it. Community M27 classes (Eli2Manningham 2027–2033, matched to M27's higher rookie scale) are the fallback for a year without a CFB class. If a class import runs out of player rows, WiiMaster's `trimFreeAgents` utility deletes the lowest free agents to make room ([`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) §2).
 
 **Rookie names:** Madden-generated draft classes already carry commentary IDs. Anything Project Mu names itself (CFB 27 imports that get renamed, fictional prospects or created players) picks surnames from Madden's recorded list, so every new player can be called by name. Existing players keep their names.
 
@@ -518,14 +528,15 @@ Player models are barely visible in play, so they only need to be close: the tra
 * `Player.PLYR_PORTRAIT` picks the portrait image; all players use the `library_icons_brt` portrait library.
 * Real NFL players have their own portrait IDs: 2,865 of 3,086 players have a unique ID (range up to 30,000).
 * Madden-generated players share a small set of generic portraits (IDs around 3,300–3,950), and 92 players have 0 (no portrait).
+* The community calls this field "Portrait ID"; with `PLYR_ASSETNAME` (the face scan) it is what portrait and cyberface mods key on, so mods ship ID lists and patchers that rewrite both fields per player (e.g. RFM's 300+ cyberfaces and portraits, Kevin's *Bulk Draft Class Portrait and Cyberface Assignment* from a CSV). MyFranchise Tool can also import a custom portrait image per player, keyed by Portrait ID ([`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) §4).
 
 **Plan:**
 1. By 2036 the real players behind those 2,865 unique slots are long retired, so their portrait images can be overwritten with Project Mu headshots. 2,865 slots cover the 1,829 active players plus several years of rookie classes; slots of players who retire are reused after that.
 2. The teleporter gives each Project Mu player a slot and writes it to `PLYR_PORTRAIT`; the rookie import does the same each season after `headshots/rookie_headshots.py` runs.
 3. A converter takes each headshot (already a transparent cutout, `static/players/{player_id}.webp`), resizes it to Madden's portrait size and encodes it in the game's texture format.
-4. The portrait textures are replaced through FMT ([FMT.Madden26Plugin](https://github.com/FMTDev/FMT.Madden26Plugin)) and loaded as a mod with the anti-tamper module, offline only.
+4. The portrait textures are replaced through MMC Modding Tools (the community's Frosty-based Madden 27 editor, updated for each title update; [FMT.Madden26Plugin](https://github.com/FMTDev/FMT.Madden26Plugin) is the alternative) and loaded as a mod with the anti-tamper module, offline only.
 
-**One-portrait spike first,** on the PC: export one portrait with FMT to learn its size, format and how the ID maps to the image; replace it with a headshot; check it in-game on the player card. Texture replacement is the most common kind of FMT mod, so this is much lower risk than custom head meshes, but it is not yet confirmed for Madden 27.
+**One-portrait spike first,** on the PC: export one portrait with MMC Modding Tools to learn its size, format and how the ID maps to the image; replace it with a headshot; check it in-game on the player card. Also try the MyFranchise Tool custom-portrait import on one player and check whether Madden's own screens show it or only MFT does; if Madden shows it, it may replace steps 3–4. Portrait texture mods already exist for Madden 27 (WiiMaster's *Old Style Portraits*, Keanu Steez's roster/portrait pack), so the texture route is proven in principle.
 
 ---
 
