@@ -4037,6 +4037,189 @@ def run_roster(out, max_teams=32, resume=False):
         raise Abort(f"Expected 32 teams, captured {len(done)}: {sorted(done)}")
 
 
+# ---------------------------------------------------------- attributes ----
+# The wide roster list (docs/PC_MIGRATION_PLAN.md §2.3, mapped Oct 28): d-pad left/right moves a column cursor whose
+# full name shows in the chip at the top right; 11 columns and 14 rows show at once; the highlight scrolls down to
+# the 8th row and stays there. pipeline/attribute_reader.py has the column list and reads the views.
+ATTR_STEP = 7                                   # rows between sweeps, so every player is seen once not highlighted
+ATTR_RIGHT = [0, 19, 30, 41, 52, 62]            # cursor columns a left-to-right sweep stops at (11 columns a view)
+ATTR_LEFT = [62, 41, 30, 19, 9, 0]
+ATTR_CROP = (0.0, 0.10, 0.735, 0.85)            # list area kept from each window grab (fractions)
+ATTR_MAX_SWEEPS = 16                            # 14 + 15*7 rows, past any roster
+
+
+def attr_column(f):
+    """The cursor's column (attribute_reader.COLUMNS index) from the chip at the top right, or None."""
+    from pipeline import attribute_reader as ar
+    W, H = f.size
+    words = [t for t, b in sorted(f.items, key=lambda it: it[1][0])
+             if H * ar.CHIP_Y[0] < b[1] < H * ar.CHIP_Y[1] and W * ar.CHIP_X[0] < b[0] and b[2] < W * ar.CHIP_X[1]]
+    return ar.column_of_chip(" ".join(words))
+
+
+def attr_goto(target, team, tries=4):
+    """Move the column cursor to `target` and return the settled frame there. Counts presses, then checks the
+    chip and corrects (a dropped press is common), so every saved view is at a known column."""
+    f = Frame()
+    cur = attr_column(f)
+    for attempt in range(tries + 2):
+        if cur is None:
+            time.sleep(0.5)
+            f = Frame()
+            cur = attr_column(f)
+            if cur is None:
+                continue
+        if cur == target:
+            if norm(roster_team(f) or "") != norm(team):
+                raise Abort(f"The roster list now shows {roster_team(f)}, not {team}")
+            return f
+        press("right" if target > cur else "left", hold=0.08, wait=0.6, times=abs(target - cur))
+        f = Frame()
+        cur = attr_column(f)
+    save_debug(f, f"attr_cursor_{target}")
+    raise Abort(f"Couldn't put the column cursor on column {target} (chip reads column {cur})")
+
+
+def attr_save(f, folder, sweep, view, col):
+    """Keep the list area as grayscale PNG (the reader needs nothing else) and the OCR items in window pixels."""
+    from PIL import Image as _Image
+    im = _Image.open(f.path).convert("L")
+    W, H = im.size
+    box = (int(W * ATTR_CROP[0]), int(H * ATTR_CROP[1]), int(W * ATTR_CROP[2]), int(H * ATTR_CROP[3]))
+    base = os.path.join(folder, f"s{sweep:02d}_v{view:02d}")
+    im.crop(box).save(base + ".png", optimize=True)
+    with open(base + ".txt", "w") as fh:
+        fh.write(f"screen: ROSTER_LIST\nwindow: {W} {H}\ncrop: {box[0]} {box[1]} {box[2]} {box[3]}\ncursor: {col}\n")
+        for t, (x0, y0, x1, y1) in f.items:
+            fh.write(f"{t}\t{x0:.0f},{y0:.0f},{x1:.0f},{y1:.0f}\n")
+
+
+def attr_page(f):
+    """The current view read as a one-view page (for telling how far the list moved), or None."""
+    from pipeline import attribute_reader as ar
+    templates, shape = ar.load_templates()
+    v = ar.read_view(f.path, f.items, templates, shape)
+    return ar.sweep_table([v]) if v else None
+
+
+def attr_sweep(folder, sweep, cols, team):
+    for view, col in enumerate(cols):
+        f = attr_goto(col, team)
+        attr_save(f, folder, sweep, view, col)
+    log(f"  sweep {sweep}: {len(cols)} views")
+    return f
+
+
+def capture_team_attributes(out, index, team):
+    """One team's 54 ratings for every player: sweeps of the whole width, 7 rows apart, alternating direction.
+    The end of the list is where a 7-row move shifts the list by less; one more press confirms it (a dropped press
+    looks the same), then a last sweep one row up so the final highlighted player is also seen plain."""
+    from pipeline import attribute_reader as ar
+    folder = os.path.join(out, "attributes", f"{index:02d}_{norm(team).lower()}")
+    os.makedirs(folder, exist_ok=True)
+    attr_goto(0, team)
+    roster_to_top()
+    press("down", hold=0.08, wait=0.8, times=ATTR_STEP)
+    sweep = 1
+    f = attr_sweep(folder, sweep, ATTR_RIGHT, team)
+    while sweep < ATTR_MAX_SWEEPS:
+        before = attr_page(f)
+        press("down", hold=0.08, wait=0.8, times=ATTR_STEP)
+        f = Frame()
+        now = attr_page(f)
+        if before is None or now is None:
+            save_debug(f, "attr_unreadable")
+            raise Abort("Couldn't read the roster list to tell how far it moved")
+        j = ar.align_shift(before, now)[0]
+        cols = ATTR_LEFT if sweep % 2 else ATTR_RIGHT
+        if j == ATTR_STEP:
+            sweep += 1
+            f = attr_sweep(folder, sweep, cols, team)
+            continue
+        press("down", hold=0.08, wait=0.8)               # less than a full move: the end, or a dropped press?
+        f = Frame()
+        again = attr_page(f)
+        if again is not None and ar.align_shift(now, again)[0] > 0:
+            log(f"  list moved {j} of {ATTR_STEP} rows, then again: a dropped press, not the end")
+            sweep += 1
+            f = attr_sweep(folder, sweep, cols, team)
+            continue
+        sweep += 1
+        f = attr_sweep(folder, sweep, cols, team)
+        press("up", hold=0.08, wait=0.8)
+        sweep += 1
+        attr_sweep(folder, sweep, ATTR_LEFT if cols is ATTR_RIGHT else ATTR_RIGHT, team)
+        break
+    else:
+        raise Abort(f"{team}: no end of the list after {ATTR_MAX_SWEEPS} sweeps")
+    log(f"{team}: {sweep} sweeps")
+    return sweep
+
+
+def run_attributes(out, max_teams=32, resume=False, only_teams=None):
+    """Every team's wide roster list into attributes/NN_<team>/sNN_vNN.png (+ .txt), following the team dropdown
+    from the team the list opens on, like run_roster. attributes/done.txt lists finished teams; resume=True
+    skips them. Read the views afterwards with `python3 -m pipeline.attribute_reader RUN`."""
+    import shutil
+    log("== Attributes (wide roster list) ==")
+    adir = os.path.join(out, "attributes")
+    os.makedirs(adir, exist_ok=True)
+    done_path = os.path.join(adir, "done.txt")
+    done = {}
+    if (resume or os.path.exists(done_path)) and os.path.exists(done_path):
+        for line in open(done_path):
+            parts = line.split()
+            if len(parts) >= 2 and parts[0].isdigit():
+                done[parts[1]] = int(parts[0])
+        log(f"Resuming {out}: {len(done)} teams already done")
+    want = {norm(t) for t in only_teams} if only_teams else None
+    target = len(want) if want else max_teams
+
+    def clear_partial():
+        for d in glob.glob(os.path.join(adir, "[0-9]*_*")):
+            if norm(os.path.basename(d).split("_", 1)[1]) not in done:
+                shutil.rmtree(d)
+
+    clear_partial()
+    first = roster_team(open_roster())
+    if not first:
+        raise Abort("Can't read the roster team chip")
+    team, visited = first, 0
+    while True:
+        finished = len([t for t in done if want is None or t in want])
+        if finished >= target:
+            break
+        if norm(team) in done or (want is not None and norm(team) not in want):
+            log(f"Team: {team} (skipped)")
+        else:
+            log(f"Team: {team}")
+            idx = max(list(done.values()) + [0]) + 1
+            try:
+                capture_team_attributes(out, idx, team)
+            except Abort as e:
+                clear_partial()
+                if stream_frozen():
+                    recover_stream(e)
+                    team = roster_team(open_roster())
+                    continue
+                raise
+            done[norm(team)] = idx
+            with open(done_path, "a") as dh:
+                dh.write(f"{idx} {norm(team)}\n")
+        visited += 1
+        if len([t for t in done if want is None or t in want]) >= target:
+            break
+        try:
+            team = next_roster_team(os.path.join(out, "team_debug"), team)
+        except Abort as e:
+            recover_stream(e)
+            team = roster_team(open_roster())
+            continue
+        if norm(team) == norm(first) and visited > 1:
+            break
+    log(f"Attributes captured for {len(done)} teams")
+
+
 def probe_l2(out):
     """Record how the L2 dropdown behaves on Player Stats (scope) or the roster list (team).
     Holds L2 the whole time, presses Up 3x then Down 3x (net zero movement),
@@ -4122,14 +4305,14 @@ def main():
     ap.add_argument("--scope", metavar="TEAM", help="--only stats: one team's Season Stats (team nickname, e.g. SAINTS)")
     ap.add_argument("--category", action="append", metavar="CAT",
                     help="--only stats --scope, or --only career-teams: a category to capture (repeat for several, e.g. KICKING)")
-    ap.add_argument("--only", choices=["stats", "career", "career-teams", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings", "contracts", "transactions"],
-                    help="roster, season-schedule, prospects, season, postgame, draft-results, team-overalls and contracts are never part of the default run")
+    ap.add_argument("--only", choices=["stats", "career", "career-teams", "team", "schedule", "roster", "season-schedule", "games", "playoff", "prospects", "injuries", "season", "postgame", "superbowl", "draft-results", "draft-recap", "team-overalls", "team-ratings", "contracts", "transactions", "attributes"],
+                    help="roster, season-schedule, prospects, season, postgame, draft-results, team-overalls, contracts and attributes are never part of the default run")
     ap.add_argument("--since", metavar="HEADING", help='League Transactions: the newest heading already loaded, '
                     'e.g. "2036 SEASON - WEEK 4"; the scan stops after the first page wholly older than it '
                     '(default: the whole list, a first-run backfill). Used by --only transactions and the weekly/playoff runs')
     ap.add_argument("--games", type=int, help="--only games: stop after this many games (testing)")
-    ap.add_argument("--teams", type=int, default=32, help="--only roster: stop after this many teams (testing)")
-    ap.add_argument("--team-names", metavar="NAMES", help="--only contracts: only these teams, comma-separated "
+    ap.add_argument("--teams", type=int, default=32, help="--only roster / attributes: stop after this many teams (testing)")
+    ap.add_argument("--team-names", metavar="NAMES", help="--only contracts / attributes: only these teams, comma-separated "
                     "nicknames (e.g. PANTHERS,SAINTS); a resume without it keeps the run's contracts/targets.txt")
     ap.add_argument("--prospects", type=int, default=32, help="--only prospects: stop after this many prospects (0 for all, default 32)")
     ap.add_argument("--all-prospects", action="store_true", help="--only prospects: capture the entire draft board until the end")
@@ -4149,8 +4332,8 @@ def main():
     a = ap.parse_args()
     team_names = None
     if a.team_names:
-        if a.only != "contracts":
-            sys.exit("--team-names needs --only contracts")
+        if a.only not in ("contracts", "attributes"):
+            sys.exit("--team-names needs --only contracts or --only attributes")
         team_names = [norm(t) for t in a.team_names.split(",") if t.strip()]
         bad = sorted(set(team_names) - TEAMS)
         if bad:
@@ -4275,6 +4458,14 @@ def main():
             if a.only == "season":
                 log("Returning to the hub before contracts")
                 go_hub()
+        if a.only == "attributes":
+            # PS5 attribute scan (docs/PC_MIGRATION_PLAN.md §2.3); read with python3 -m pipeline.attribute_reader RUN
+            atries = [0]
+
+            def attributes():
+                atries[0] += 1                  # after a stream restart, continue the same run
+                return run_attributes(out, a.teams, resume=bool(a.resume) or atries[0] > 1, only_teams=team_names)
+            run_mode("the attribute scan", attributes)
         if a.only in ("season", "contracts"):
             # Team Salary right after rosters (team management step 1), so every contract row matches a player
             contracts_done = read_done(os.path.join(out, "contracts", "done.txt"))
