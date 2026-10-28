@@ -1,0 +1,4191 @@
+{
+ "game_year": 27,
+ "source": "CAREER-GIANTS-AUTOSAVE",
+ "players": 2987,
+ "samples": 9110,
+ "fitted_at": "2026-10-28T00:17:46+00:00",
+ "cv_exact": 0.886,
+ "cv_within_1": 0.994,
+ "slots": {
+  "HB": [
+   "HB_PowerBack",
+   "HB_ElusiveBack",
+   "HB_ReceivingBack",
+   null,
+   null
+  ],
+  "LE": [
+   "DE_SmallerSpeedRusher",
+   "DE_PowerRusher",
+   "DE_RunStopper",
+   null,
+   null
+  ],
+  "LOLB": [
+   "OLB_PassCoverage",
+   "OLB_RunStopper",
+   null,
+   null,
+   null
+  ],
+  "WR": [
+   "WR_DeepThreat",
+   "WR_Playmaker",
+   "WR_Physical",
+   "WR_Slot",
+   null
+  ],
+  "SS": [
+   "S_Zone",
+   "S_Hybrid",
+   "S_RunSupport",
+   null,
+   null
+  ],
+  "FS": [
+   "S_Zone",
+   "S_Hybrid",
+   "S_RunSupport",
+   null,
+   null
+  ],
+  "LS": [
+   "LS_Power",
+   "LS_Accurate",
+   null,
+   null,
+   null
+  ],
+  "QB": [
+   "QB_FieldGeneral",
+   "QB_StrongArm",
+   "QB_Improviser",
+   "QB_Scrambler",
+   null
+  ],
+  "MLB": [
+   "MLB_FieldGeneral",
+   "MLB_PassCoverage",
+   "MLB_RunStopper",
+   null,
+   null
+  ],
+  "DT": [
+   "DT_NoseTackle",
+   "DT_SpeedRusher",
+   "DT_PowerRusher",
+   null,
+   null
+  ],
+  "CB": [
+   "CB_MantoMan",
+   "CB_Slot",
+   "CB_Zone",
+   null,
+   null
+  ],
+  "TE": [
+   "TE_Blocking",
+   "TE_VerticalThreat",
+   "TE_Possession",
+   null,
+   null
+  ],
+  "RE": [
+   "DE_SmallerSpeedRusher",
+   "DE_PowerRusher",
+   "DE_RunStopper",
+   null,
+   null
+  ],
+  "RT": [
+   "OT_PassProtector",
+   "OT_Power",
+   "OT_Agile",
+   null,
+   null
+  ],
+  "LG": [
+   "G_PassProtector",
+   "G_Power",
+   "G_Agile",
+   null,
+   null
+  ],
+  "LT": [
+   "OT_PassProtector",
+   "OT_Power",
+   "OT_Agile",
+   null,
+   null
+  ],
+  "RG": [
+   "G_PassProtector",
+   "G_Power",
+   "G_Agile",
+   null,
+   null
+  ],
+  "C": [
+   "C_PassProtector",
+   "C_Power",
+   "C_Agile",
+   null,
+   null
+  ],
+  "P": [
+   "KP_Accurate",
+   "KP_Power",
+   null,
+   null,
+   null
+  ],
+  "ROLB": [
+   "OLB_PassCoverage",
+   "OLB_RunStopper",
+   null,
+   null,
+   null
+  ],
+  "K": [
+   "KP_Accurate",
+   "KP_Power",
+   null,
+   null,
+   null
+  ],
+  "FB": [
+   "FB_Blocking",
+   "FB_Utility",
+   null,
+   null,
+   null
+  ]
+ },
+ "archetypes": {
+  "CB_MantoMan": {
+   "positions": [
+    "CB"
+   ],
+   "n": 291,
+   "model": "quadratic",
+   "intercept": -68.848677,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "Catching",
+    "ChangeOfDirection",
+    "Jumping",
+    "ManCoverage",
+    "PlayRecognition",
+    "Press",
+    "Speed",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "ManCoverage": [
+     0.346674,
+     0.027422
+    ],
+    "Speed": [
+     0.342172,
+     0.0
+    ],
+    "Acceleration": [
+     0.333596,
+     0.0
+    ],
+    "Awareness": [
+     0.200631,
+     0.0
+    ],
+    "Press": [
+     0.126,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.097989,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.094161,
+     0.0
+    ],
+    "Tackle": [
+     0.041891,
+     0.014062
+    ],
+    "Agility": [
+     0.048182,
+     0.0
+    ],
+    "Catching": [
+     0.03557,
+     0.0
+    ],
+    "ZoneCoverage": [
+     0.033446,
+     0.0
+    ],
+    "Jumping": [
+     0.029518,
+     0.0
+    ]
+   },
+   "cv_exact": 0.935,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "CB_Slot": {
+   "positions": [
+    "CB"
+   ],
+   "n": 291,
+   "model": "linear",
+   "intercept": -75.505293,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "Catching",
+    "ChangeOfDirection",
+    "ImpactBlocking",
+    "Injury",
+    "JukeMove",
+    "Jumping",
+    "ManCoverage",
+    "PlayRecognition",
+    "Press",
+    "Pursuit",
+    "Speed",
+    "Tackle",
+    "Toughness",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "Acceleration": [
+     0.264515,
+     0.0
+    ],
+    "ManCoverage": [
+     0.258027,
+     0.0
+    ],
+    "Speed": [
+     0.247593,
+     0.0
+    ],
+    "Tackle": [
+     0.224047,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.184691,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.162646,
+     0.0
+    ],
+    "Awareness": [
+     0.136469,
+     0.0
+    ],
+    "ZoneCoverage": [
+     0.092924,
+     0.0
+    ],
+    "Agility": [
+     0.083531,
+     0.0
+    ],
+    "Pursuit": [
+     0.071987,
+     0.0
+    ],
+    "Press": [
+     0.050017,
+     0.0
+    ],
+    "BlockShedding": [
+     0.042975,
+     0.0
+    ],
+    "Catching": [
+     0.036217,
+     0.0
+    ],
+    "Jumping": [
+     0.025986,
+     0.0
+    ],
+    "LongSnap": [
+     0.010229,
+     0.0
+    ],
+    "Injury": [
+     0.00776,
+     0.0
+    ],
+    "FinesseMoves": [
+     0.006253,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.004094,
+     0.0
+    ],
+    "PlayAction": [
+     0.002085,
+     0.0
+    ],
+    "JukeMove": [
+     0.001666,
+     0.0
+    ],
+    "ThrowAccuracy": [
+     0.000879,
+     0.0
+    ],
+    "Toughness": [
+     0.000538,
+     0.0
+    ]
+   },
+   "cv_exact": 0.931,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "CB_Zone": {
+   "positions": [
+    "CB"
+   ],
+   "n": 291,
+   "model": "quadratic",
+   "intercept": -68.951967,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "Catching",
+    "ChangeOfDirection",
+    "Jumping",
+    "ManCoverage",
+    "PlayRecognition",
+    "Press",
+    "Speed",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "ZoneCoverage": [
+     0.356808,
+     0.0
+    ],
+    "Acceleration": [
+     0.347451,
+     0.0
+    ],
+    "Speed": [
+     0.337228,
+     0.0
+    ],
+    "Awareness": [
+     0.155944,
+     0.031251
+    ],
+    "PlayRecognition": [
+     0.124726,
+     0.0
+    ],
+    "Tackle": [
+     0.088881,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.072205,
+     0.0
+    ],
+    "ManCoverage": [
+     0.070311,
+     0.0
+    ],
+    "Agility": [
+     0.058354,
+     0.0
+    ],
+    "Press": [
+     0.04181,
+     0.017868
+    ],
+    "Catching": [
+     0.042251,
+     0.0
+    ],
+    "Jumping": [
+     0.02245,
+     0.005237
+    ]
+   },
+   "cv_exact": 0.931,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "C_Agile": {
+   "positions": [
+    "C"
+   ],
+   "n": 115,
+   "model": "quadratic",
+   "intercept": -51.141446,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ImpactBlocking",
+    "Injury",
+    "LeadBlock",
+    "PassBlock",
+    "PassBlockFinesse",
+    "RunBlock",
+    "RunBlockFinesse",
+    "Speed",
+    "Strength"
+   ],
+   "terms": {
+    "RunBlockFinesse": [
+     0.340862,
+     0.0
+    ],
+    "PassBlockFinesse": [
+     0.314347,
+     0.0
+    ],
+    "Awareness": [
+     0.243137,
+     0.0
+    ],
+    "Strength": [
+     0.20331,
+     0.0
+    ],
+    "RunBlock": [
+     0.116661,
+     0.0
+    ],
+    "LeadBlock": [
+     0.089332,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.079554,
+     0.0
+    ],
+    "PassBlock": [
+     0.071188,
+     0.0
+    ],
+    "Agility": [
+     0.044857,
+     0.0
+    ],
+    "Speed": [
+     0.013519,
+     0.02821
+    ],
+    "Acceleration": [
+     0.029508,
+     0.0
+    ],
+    "Injury": [
+     0.0,
+     0.008267
+    ]
+   },
+   "cv_exact": 0.878,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "C_PassProtector": {
+   "positions": [
+    "C"
+   ],
+   "n": 115,
+   "model": "quadratic",
+   "intercept": -52.554571,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ImpactBlocking",
+    "PassBlock",
+    "PassBlockFinesse",
+    "PassBlockPower",
+    "Strength"
+   ],
+   "terms": {
+    "PassBlockFinesse": [
+     0.455267,
+     0.0
+    ],
+    "PassBlockPower": [
+     0.44707,
+     0.0
+    ],
+    "Awareness": [
+     0.339697,
+     0.0
+    ],
+    "PassBlock": [
+     0.1672,
+     0.0
+    ],
+    "Strength": [
+     0.097635,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.034602,
+     0.0
+    ],
+    "Acceleration": [
+     0.011188,
+     0.015232
+    ],
+    "Agility": [
+     0.023158,
+     0.0
+    ]
+   },
+   "cv_exact": 0.826,
+   "cv_within_1": 0.991,
+   "linear_cv_within_1": 0.991
+  },
+  "C_Power": {
+   "positions": [
+    "C"
+   ],
+   "n": 115,
+   "model": "linear",
+   "intercept": -52.452029,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ChangeOfDirection",
+    "ImpactBlocking",
+    "LeadBlock",
+    "PassBlock",
+    "PassBlockPower",
+    "RunBlock",
+    "RunBlockFinesse",
+    "RunBlockPower",
+    "Speed",
+    "Strength"
+   ],
+   "terms": {
+    "RunBlockPower": [
+     0.324221,
+     0.0
+    ],
+    "PassBlockPower": [
+     0.316244,
+     0.0
+    ],
+    "Awareness": [
+     0.230519,
+     0.0
+    ],
+    "Strength": [
+     0.217554,
+     0.0
+    ],
+    "RunBlock": [
+     0.159532,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.097847,
+     0.0
+    ],
+    "LeadBlock": [
+     0.093027,
+     0.0
+    ],
+    "PassBlock": [
+     0.044928,
+     0.0
+    ],
+    "Speed": [
+     0.037354,
+     0.0
+    ],
+    "Agility": [
+     0.031951,
+     0.0
+    ],
+    "Acceleration": [
+     0.022771,
+     0.0
+    ],
+    "RunBlockFinesse": [
+     0.011253,
+     0.0
+    ],
+    "ThrowUnderPressure": [
+     0.009863,
+     0.0
+    ],
+    "CatchInTraffic": [
+     0.004884,
+     0.0
+    ],
+    "LongSnap": [
+     0.00449,
+     0.0
+    ],
+    "Carrying": [
+     0.003437,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.00304,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.000655,
+     0.0
+    ],
+    "KickAccuracy": [
+     0.000395,
+     0.0
+    ],
+    "PowerMoves": [
+     0.000169,
+     0.0
+    ]
+   },
+   "cv_exact": 0.896,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "DE_PowerRusher": {
+   "positions": [
+    "LE",
+    "RE"
+   ],
+   "n": 278,
+   "model": "quadratic",
+   "intercept": -51.877693,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "FinesseMoves",
+    "HitPower",
+    "PlayRecognition",
+    "PowerMoves",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle"
+   ],
+   "terms": {
+    "PowerMoves": [
+     0.38652,
+     0.0
+    ],
+    "Tackle": [
+     0.247685,
+     0.0
+    ],
+    "Strength": [
+     0.242515,
+     0.0
+    ],
+    "Awareness": [
+     0.194461,
+     0.0
+    ],
+    "Acceleration": [
+     0.161284,
+     0.0
+    ],
+    "Pursuit": [
+     0.119167,
+     0.0
+    ],
+    "Speed": [
+     0.114404,
+     0.0
+    ],
+    "Agility": [
+     0.0,
+     0.064248
+    ],
+    "PlayRecognition": [
+     0.039596,
+     0.0
+    ],
+    "FinesseMoves": [
+     0.018374,
+     0.0
+    ],
+    "HitPower": [
+     0.0,
+     0.021443
+    ]
+   },
+   "cv_exact": 0.96,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "DE_RunStopper": {
+   "positions": [
+    "LE",
+    "RE"
+   ],
+   "n": 278,
+   "model": "linear",
+   "intercept": -58.894178,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "FinesseMoves",
+    "HitPower",
+    "ImpactBlocking",
+    "Injury",
+    "Jumping",
+    "PassBlock",
+    "PassBlockPower",
+    "PlayRecognition",
+    "PowerMoves",
+    "Pursuit",
+    "Speed",
+    "Stamina",
+    "Strength",
+    "Tackle",
+    "Toughness"
+   ],
+   "terms": {
+    "Tackle": [
+     0.29634,
+     0.0
+    ],
+    "BlockShedding": [
+     0.295696,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.206845,
+     0.0
+    ],
+    "Strength": [
+     0.194662,
+     0.0
+    ],
+    "Pursuit": [
+     0.155103,
+     0.0
+    ],
+    "Acceleration": [
+     0.122627,
+     0.0
+    ],
+    "Speed": [
+     0.093979,
+     0.0
+    ],
+    "Awareness": [
+     0.089232,
+     0.0
+    ],
+    "Agility": [
+     0.078544,
+     0.0
+    ],
+    "HitPower": [
+     0.05398,
+     0.0
+    ],
+    "FinesseMoves": [
+     0.041666,
+     0.0
+    ],
+    "PowerMoves": [
+     0.040538,
+     0.0
+    ],
+    "PassBlockPower": [
+     0.005355,
+     0.0
+    ],
+    "Stamina": [
+     0.003096,
+     0.0
+    ],
+    "Jumping": [
+     0.001774,
+     0.0
+    ],
+    "Toughness": [
+     0.001277,
+     0.0
+    ],
+    "LongSnap": [
+     0.001145,
+     0.0
+    ],
+    "PassBlock": [
+     0.000935,
+     0.0
+    ],
+    "BreakTackle": [
+     0.000882,
+     0.0
+    ],
+    "Injury": [
+     0.000792,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.000288,
+     0.0
+    ],
+    "KickReturn": [
+     0.000104,
+     0.0
+    ]
+   },
+   "cv_exact": 0.939,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "DE_SmallerSpeedRusher": {
+   "positions": [
+    "LE",
+    "RE"
+   ],
+   "n": 278,
+   "model": "quadratic",
+   "intercept": -54.631405,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "FinesseMoves",
+    "HitPower",
+    "PlayRecognition",
+    "PowerMoves",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle"
+   ],
+   "terms": {
+    "FinesseMoves": [
+     0.38297,
+     0.0
+    ],
+    "Tackle": [
+     0.242737,
+     0.0
+    ],
+    "Acceleration": [
+     0.234745,
+     0.0
+    ],
+    "Awareness": [
+     0.203175,
+     0.0
+    ],
+    "Speed": [
+     0.166854,
+     0.0
+    ],
+    "Agility": [
+     0.146204,
+     0.0
+    ],
+    "Pursuit": [
+     0.112765,
+     0.0
+    ],
+    "Strength": [
+     0.075997,
+     0.0
+    ],
+    "PowerMoves": [
+     0.023813,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.0,
+     0.025291
+    ],
+    "HitPower": [
+     0.0,
+     0.021492
+    ]
+   },
+   "cv_exact": 0.939,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "DT_NoseTackle": {
+   "positions": [
+    "DT"
+   ],
+   "n": 233,
+   "model": "quadratic",
+   "intercept": -39.186436,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "HitPower",
+    "PlayRecognition",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle"
+   ],
+   "terms": {
+    "BlockShedding": [
+     0.383804,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.195043,
+     0.0
+    ],
+    "Tackle": [
+     0.118216,
+     0.0935
+    ],
+    "Strength": [
+     0.038197,
+     0.180441
+    ],
+    "Pursuit": [
+     0.116643,
+     0.010633
+    ],
+    "Acceleration": [
+     0.106994,
+     0.0
+    ],
+    "Awareness": [
+     0.077599,
+     0.0
+    ],
+    "HitPower": [
+     0.060039,
+     0.0
+    ],
+    "Agility": [
+     0.055654,
+     0.0
+    ],
+    "Speed": [
+     0.033479,
+     0.020786
+    ]
+   },
+   "cv_exact": 0.931,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "DT_PowerRusher": {
+   "positions": [
+    "DT"
+   ],
+   "n": 233,
+   "model": "linear",
+   "intercept": -61.271738,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "FinesseMoves",
+    "HitPower",
+    "ImpactBlocking",
+    "Injury",
+    "Jumping",
+    "PlayRecognition",
+    "PowerMoves",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle"
+   ],
+   "terms": {
+    "PowerMoves": [
+     0.373203,
+     0.0
+    ],
+    "Strength": [
+     0.315521,
+     0.0
+    ],
+    "Tackle": [
+     0.22187,
+     0.0
+    ],
+    "Awareness": [
+     0.212489,
+     0.0
+    ],
+    "BlockShedding": [
+     0.099455,
+     0.0
+    ],
+    "Acceleration": [
+     0.098855,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.097643,
+     0.0
+    ],
+    "Pursuit": [
+     0.085829,
+     0.0
+    ],
+    "Speed": [
+     0.081017,
+     0.0
+    ],
+    "HitPower": [
+     0.05037,
+     0.0
+    ],
+    "Agility": [
+     0.036333,
+     0.0
+    ],
+    "FinesseMoves": [
+     0.011877,
+     0.0
+    ],
+    "Injury": [
+     0.010525,
+     0.0
+    ],
+    "KickReturn": [
+     0.003993,
+     0.0
+    ],
+    "BreakTackle": [
+     0.003264,
+     0.0
+    ],
+    "JukeMove": [
+     0.003155,
+     0.0
+    ],
+    "ThrowAccuracy": [
+     0.003062,
+     0.0
+    ],
+    "DeepRouteRunning": [
+     0.002863,
+     0.0
+    ],
+    "Jumping": [
+     0.002635,
+     0.0
+    ],
+    "ZoneCoverage": [
+     0.001677,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.001244,
+     0.0
+    ],
+    "Press": [
+     0.000664,
+     0.0
+    ],
+    "StiffArm": [
+     0.000368,
+     0.0
+    ]
+   },
+   "cv_exact": 0.923,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "DT_SpeedRusher": {
+   "positions": [
+    "DT"
+   ],
+   "n": 233,
+   "model": "quadratic",
+   "intercept": -55.950944,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "FinesseMoves",
+    "HitPower",
+    "PlayRecognition",
+    "PowerMoves",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle"
+   ],
+   "terms": {
+    "FinesseMoves": [
+     0.374103,
+     0.0
+    ],
+    "Strength": [
+     0.287925,
+     0.0
+    ],
+    "Tackle": [
+     0.218576,
+     0.0
+    ],
+    "Awareness": [
+     0.200245,
+     0.006205
+    ],
+    "Pursuit": [
+     0.137732,
+     0.0
+    ],
+    "Acceleration": [
+     0.133977,
+     0.0
+    ],
+    "Speed": [
+     0.048173,
+     0.037579
+    ],
+    "Agility": [
+     0.061826,
+     0.002491
+    ],
+    "PlayRecognition": [
+     0.050719,
+     0.001558
+    ],
+    "BlockShedding": [
+     0.004508,
+     0.045522
+    ],
+    "HitPower": [
+     0.036378,
+     0.0
+    ],
+    "PowerMoves": [
+     0.0,
+     0.010263
+    ]
+   },
+   "cv_exact": 0.948,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "FB_Blocking": {
+   "positions": [
+    "FB"
+   ],
+   "n": 25,
+   "model": "quadratic",
+   "intercept": -74.30915,
+   "skills": [
+    "Agility",
+    "Awareness",
+    "BreakTackle",
+    "Carrying",
+    "ChangeOfDirection",
+    "ImpactBlocking",
+    "JukeMove",
+    "LeadBlock",
+    "MediumRouteRunning",
+    "PassBlock",
+    "PassBlockPower",
+    "Release",
+    "RunBlock",
+    "RunBlockPower",
+    "SpectacularCatch",
+    "Strength",
+    "Trucking"
+   ],
+   "terms": {
+    "LeadBlock": [
+     0.409323,
+     0.0
+    ],
+    "RunBlock": [
+     0.272807,
+     0.0
+    ],
+    "PassBlockPower": [
+     0.1983,
+     0.0
+    ],
+    "Awareness": [
+     0.135318,
+     0.036673
+    ],
+    "Trucking": [
+     0.136382,
+     0.0
+    ],
+    "RunBlockPower": [
+     0.136368,
+     0.0
+    ],
+    "Carrying": [
+     0.129246,
+     0.0
+    ],
+    "Strength": [
+     0.0,
+     0.153952
+    ],
+    "JukeMove": [
+     0.094312,
+     0.0
+    ],
+    "BreakTackle": [
+     0.076805,
+     0.015067
+    ],
+    "Agility": [
+     0.085097,
+     0.0
+    ],
+    "Release": [
+     0.078474,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.077393,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.052516,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.047146,
+     0.0
+    ],
+    "SpectacularCatch": [
+     0.046582,
+     0.0
+    ],
+    "BreakSack": [
+     0.020823,
+     0.0
+    ],
+    "MediumRouteRunning": [
+     0.019471,
+     0.0
+    ],
+    "KickReturn": [
+     0.011638,
+     0.0
+    ],
+    "PassBlock": [
+     0.0,
+     0.00283
+    ]
+   },
+   "cv_exact": 0.32,
+   "cv_within_1": 0.8,
+   "linear_cv_within_1": 0.64
+  },
+  "FB_Utility": {
+   "positions": [
+    "FB"
+   ],
+   "n": 25,
+   "model": "quadratic",
+   "intercept": -54.782515,
+   "skills": [
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "BreakTackle",
+    "Carrying",
+    "DeepRouteRunning",
+    "ImpactBlocking",
+    "JukeMove",
+    "LeadBlock",
+    "PassBlockFinesse",
+    "Release",
+    "ShortRouteRunning",
+    "SpectacularCatch",
+    "Speed",
+    "Stamina",
+    "StiffArm",
+    "Strength",
+    "Trucking"
+   ],
+   "terms": {
+    "ImpactBlocking": [
+     0.232212,
+     0.0
+    ],
+    "Awareness": [
+     0.173684,
+     0.0
+    ],
+    "Carrying": [
+     0.161978,
+     0.0
+    ],
+    "ShortRouteRunning": [
+     0.155465,
+     0.0
+    ],
+    "StiffArm": [
+     0.153061,
+     0.0
+    ],
+    "LeadBlock": [
+     0.141155,
+     0.0
+    ],
+    "BCVision": [
+     0.088174,
+     0.019432
+    ],
+    "Trucking": [
+     0.087675,
+     0.0
+    ],
+    "Speed": [
+     0.0,
+     0.107715
+    ],
+    "Release": [
+     0.082274,
+     0.0
+    ],
+    "Strength": [
+     0.0,
+     0.088587
+    ],
+    "SpectacularCatch": [
+     0.070276,
+     0.0
+    ],
+    "PassBlockFinesse": [
+     0.068604,
+     0.0
+    ],
+    "Agility": [
+     0.0,
+     0.085214
+    ],
+    "JukeMove": [
+     0.006289,
+     0.065917
+    ],
+    "Stamina": [
+     0.058949,
+     0.0
+    ],
+    "BreakTackle": [
+     0.052682,
+     0.0
+    ],
+    "ManCoverage": [
+     0.028826,
+     0.0
+    ],
+    "DeepRouteRunning": [
+     0.023588,
+     0.0
+    ],
+    "ZoneCoverage": [
+     0.005937,
+     0.0
+    ]
+   },
+   "cv_exact": 0.28,
+   "cv_within_1": 0.76,
+   "linear_cv_within_1": 0.44
+  },
+  "G_Agile": {
+   "positions": [
+    "LG",
+    "RG"
+   ],
+   "n": 243,
+   "model": "linear",
+   "intercept": -48.209562,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ChangeOfDirection",
+    "ImpactBlocking",
+    "Injury",
+    "Jumping",
+    "LeadBlock",
+    "PassBlock",
+    "PassBlockFinesse",
+    "RunBlock",
+    "RunBlockFinesse",
+    "Speed",
+    "Strength"
+   ],
+   "terms": {
+    "PassBlockFinesse": [
+     0.357746,
+     0.0
+    ],
+    "RunBlockFinesse": [
+     0.304288,
+     0.0
+    ],
+    "Strength": [
+     0.216423,
+     0.0
+    ],
+    "Awareness": [
+     0.154466,
+     0.0
+    ],
+    "RunBlock": [
+     0.12992,
+     0.0
+    ],
+    "LeadBlock": [
+     0.125187,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.090796,
+     0.0
+    ],
+    "PassBlock": [
+     0.058137,
+     0.0
+    ],
+    "Agility": [
+     0.042859,
+     0.0
+    ],
+    "Speed": [
+     0.027378,
+     0.0
+    ],
+    "Acceleration": [
+     0.027331,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.010203,
+     0.0
+    ],
+    "KickReturn": [
+     0.008014,
+     0.0
+    ],
+    "ThrowAccuracy": [
+     0.002646,
+     0.0
+    ],
+    "Injury": [
+     0.002297,
+     0.0
+    ],
+    "KickPower": [
+     0.001931,
+     0.0
+    ],
+    "Jumping": [
+     0.001772,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.001131,
+     0.0
+    ],
+    "Catching": [
+     0.000454,
+     0.0
+    ],
+    "HitPower": [
+     0.000104,
+     0.0
+    ]
+   },
+   "cv_exact": 0.926,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "G_PassProtector": {
+   "positions": [
+    "LG",
+    "RG"
+   ],
+   "n": 243,
+   "model": "quadratic",
+   "intercept": -44.5196,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ImpactBlocking",
+    "PassBlock",
+    "PassBlockFinesse",
+    "PassBlockPower",
+    "Speed",
+    "Strength"
+   ],
+   "terms": {
+    "PassBlockPower": [
+     0.46015,
+     0.0
+    ],
+    "PassBlockFinesse": [
+     0.435771,
+     0.020769
+    ],
+    "Awareness": [
+     0.231417,
+     0.0
+    ],
+    "PassBlock": [
+     0.162115,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.051669,
+     0.014276
+    ],
+    "Strength": [
+     0.053233,
+     0.006582
+    ],
+    "Agility": [
+     0.02916,
+     0.0
+    ],
+    "Acceleration": [
+     0.028624,
+     0.0
+    ],
+    "Speed": [
+     0.002987,
+     0.017866
+    ]
+   },
+   "cv_exact": 0.926,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "G_Power": {
+   "positions": [
+    "LG",
+    "RG"
+   ],
+   "n": 243,
+   "model": "quadratic",
+   "intercept": -41.882197,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ImpactBlocking",
+    "LeadBlock",
+    "PassBlock",
+    "PassBlockPower",
+    "RunBlock",
+    "RunBlockPower",
+    "Speed",
+    "Strength"
+   ],
+   "terms": {
+    "PassBlockPower": [
+     0.278717,
+     0.048934
+    ],
+    "RunBlockPower": [
+     0.275297,
+     0.003282
+    ],
+    "Strength": [
+     0.228588,
+     0.0
+    ],
+    "RunBlock": [
+     0.164285,
+     0.0
+    ],
+    "Awareness": [
+     0.158717,
+     0.005573
+    ],
+    "LeadBlock": [
+     0.093816,
+     0.026184
+    ],
+    "ImpactBlocking": [
+     0.105014,
+     0.0
+    ],
+    "Agility": [
+     0.026276,
+     0.003031
+    ],
+    "PassBlock": [
+     0.028006,
+     0.0
+    ],
+    "Speed": [
+     0.017366,
+     0.004781
+    ],
+    "Acceleration": [
+     0.001099,
+     0.024924
+    ]
+   },
+   "cv_exact": 0.934,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "HB_ElusiveBack": {
+   "positions": [
+    "HB"
+   ],
+   "n": 194,
+   "model": "quadratic",
+   "intercept": -130.223892,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "BreakTackle",
+    "Carrying",
+    "ChangeOfDirection",
+    "JukeMove",
+    "Speed",
+    "SpinMove"
+   ],
+   "terms": {
+    "Acceleration": [
+     0.332081,
+     0.0
+    ],
+    "Speed": [
+     0.305365,
+     0.0
+    ],
+    "Agility": [
+     0.287226,
+     0.0
+    ],
+    "Awareness": [
+     0.274887,
+     0.0
+    ],
+    "Carrying": [
+     0.267201,
+     0.0
+    ],
+    "BCVision": [
+     0.237096,
+     0.0
+    ],
+    "JukeMove": [
+     0.221748,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.201053,
+     0.0
+    ],
+    "SpinMove": [
+     0.177556,
+     0.0
+    ],
+    "BreakTackle": [
+     0.128227,
+     0.0
+    ]
+   },
+   "cv_exact": 0.851,
+   "cv_within_1": 0.99,
+   "linear_cv_within_1": 0.99
+  },
+  "HB_PowerBack": {
+   "positions": [
+    "HB"
+   ],
+   "n": 194,
+   "model": "quadratic",
+   "intercept": -110.678481,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "BreakTackle",
+    "Carrying",
+    "Speed",
+    "StiffArm",
+    "Strength",
+    "Trucking"
+   ],
+   "terms": {
+    "Trucking": [
+     0.308711,
+     0.0
+    ],
+    "Carrying": [
+     0.303829,
+     0.0
+    ],
+    "BreakTackle": [
+     0.239654,
+     0.025975
+    ],
+    "Awareness": [
+     0.226462,
+     0.025128
+    ],
+    "Strength": [
+     0.235791,
+     0.0
+    ],
+    "Acceleration": [
+     0.23367,
+     0.0
+    ],
+    "StiffArm": [
+     0.22802,
+     0.0
+    ],
+    "BCVision": [
+     0.215521,
+     0.0
+    ],
+    "Agility": [
+     0.088243,
+     0.0
+    ],
+    "Speed": [
+     0.0,
+     0.109831
+    ]
+   },
+   "cv_exact": 0.897,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "HB_ReceivingBack": {
+   "positions": [
+    "HB"
+   ],
+   "n": 194,
+   "model": "quadratic",
+   "intercept": -128.087762,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "Carrying",
+    "CatchInTraffic",
+    "Catching",
+    "ChangeOfDirection",
+    "JukeMove",
+    "Release",
+    "ShortRouteRunning",
+    "Speed",
+    "SpinMove"
+   ],
+   "terms": {
+    "Catching": [
+     0.34311,
+     0.0
+    ],
+    "Speed": [
+     0.302513,
+     0.0
+    ],
+    "Awareness": [
+     0.295232,
+     0.0
+    ],
+    "ShortRouteRunning": [
+     0.260681,
+     0.011212
+    ],
+    "CatchInTraffic": [
+     0.211157,
+     0.0
+    ],
+    "Agility": [
+     0.201715,
+     0.0
+    ],
+    "Acceleration": [
+     0.086996,
+     0.109788
+    ],
+    "Carrying": [
+     0.158535,
+     0.0
+    ],
+    "BCVision": [
+     0.137949,
+     0.0
+    ],
+    "JukeMove": [
+     0.132815,
+     0.0
+    ],
+    "SpinMove": [
+     0.127767,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.084016,
+     0.049728
+    ],
+    "Release": [
+     0.027353,
+     0.0
+    ]
+   },
+   "cv_exact": 0.938,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "KP_Accurate": {
+   "positions": [
+    "K",
+    "P"
+   ],
+   "n": 100,
+   "model": "quadratic",
+   "intercept": -5.189762,
+   "skills": [
+    "Awareness",
+    "KickAccuracy",
+    "KickPower"
+   ],
+   "terms": {
+    "KickAccuracy": [
+     0.561358,
+     0.0
+    ],
+    "Awareness": [
+     0.396347,
+     0.0
+    ],
+    "KickPower": [
+     0.0,
+     0.095696
+    ]
+   },
+   "cv_exact": 0.98,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "KP_Power": {
+   "positions": [
+    "K",
+    "P"
+   ],
+   "n": 100,
+   "model": "quadratic",
+   "intercept": -4.678607,
+   "skills": [
+    "Awareness",
+    "KickAccuracy",
+    "KickPower"
+   ],
+   "terms": {
+    "Awareness": [
+     0.316667,
+     0.113236
+    ],
+    "KickPower": [
+     0.346629,
+     0.040361
+    ],
+    "KickAccuracy": [
+     0.24258,
+     0.0
+    ],
+    "LongSnap": [
+     0.0,
+     0.096555
+    ]
+   },
+   "cv_exact": 0.93,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "LS_Accurate": {
+   "positions": [
+    "LS"
+   ],
+   "n": 29,
+   "model": "quadratic",
+   "intercept": -20.631243,
+   "skills": [
+    "Acceleration",
+    "Awareness",
+    "BlockShedding",
+    "Carrying",
+    "ChangeOfDirection",
+    "ImpactBlocking",
+    "LongSnap",
+    "Strength",
+    "Tackle"
+   ],
+   "terms": {
+    "LongSnap": [
+     0.587207,
+     0.0
+    ],
+    "Awareness": [
+     0.21627,
+     0.0
+    ],
+    "Tackle": [
+     0.16621,
+     0.0
+    ],
+    "ThrowUnderPressure": [
+     0.158122,
+     0.0
+    ],
+    "ThrowAccuracyMid": [
+     0.0,
+     0.128733
+    ],
+    "Acceleration": [
+     0.100346,
+     0.0
+    ],
+    "Strength": [
+     0.06179,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.02889,
+     0.0
+    ],
+    "Carrying": [
+     0.023017,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.022268,
+     0.0
+    ],
+    "ThrowAccuracyShort": [
+     0.0,
+     0.024938
+    ],
+    "BlockShedding": [
+     0.011885,
+     0.0
+    ]
+   },
+   "cv_exact": 0.621,
+   "cv_within_1": 0.931,
+   "linear_cv_within_1": 0.862
+  },
+  "LS_Power": {
+   "positions": [
+    "LS"
+   ],
+   "n": 29,
+   "model": "quadratic",
+   "intercept": -5.661564,
+   "skills": [
+    "Awareness",
+    "ChangeOfDirection",
+    "ImpactBlocking",
+    "Injury",
+    "JukeMove",
+    "LeadBlock",
+    "LongSnap",
+    "PassBlock",
+    "Pursuit",
+    "Strength",
+    "Tackle"
+   ],
+   "terms": {
+    "LongSnap": [
+     0.542707,
+     0.0
+    ],
+    "Tackle": [
+     0.20396,
+     0.0
+    ],
+    "Awareness": [
+     0.001418,
+     0.161677
+    ],
+    "ThrowAccuracyMid": [
+     0.0,
+     0.161588
+    ],
+    "KickAccuracy": [
+     0.04948,
+     0.0
+    ],
+    "PassBlock": [
+     0.0,
+     0.042205
+    ],
+    "Strength": [
+     0.0,
+     0.038491
+    ],
+    "Injury": [
+     0.0,
+     0.031336
+    ],
+    "LeadBlock": [
+     0.024345,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.019466,
+     0.0
+    ],
+    "JukeMove": [
+     0.017678,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.0,
+     0.021885
+    ],
+    "ThrowPower": [
+     0.0,
+     0.019574
+    ],
+    "Pursuit": [
+     0.014062,
+     0.0
+    ]
+   },
+   "cv_exact": 0.414,
+   "cv_within_1": 0.931,
+   "linear_cv_within_1": 0.793
+  },
+  "MLB_FieldGeneral": {
+   "positions": [
+    "MLB"
+   ],
+   "n": 173,
+   "model": "quadratic",
+   "intercept": -71.721273,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "ChangeOfDirection",
+    "ManCoverage",
+    "PlayRecognition",
+    "Pursuit",
+    "Speed",
+    "Stamina",
+    "Strength",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "Tackle": [
+     0.343448,
+     0.0
+    ],
+    "Pursuit": [
+     0.27417,
+     0.0
+    ],
+    "Acceleration": [
+     0.1932,
+     0.0
+    ],
+    "ZoneCoverage": [
+     0.182751,
+     0.0
+    ],
+    "Awareness": [
+     0.181042,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.169123,
+     0.0
+    ],
+    "Strength": [
+     0.165769,
+     0.0
+    ],
+    "BlockShedding": [
+     0.130289,
+     0.0
+    ],
+    "ManCoverage": [
+     0.076915,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.033721,
+     0.01574
+    ],
+    "Speed": [
+     0.0,
+     0.052203
+    ],
+    "Agility": [
+     0.0,
+     0.051007
+    ],
+    "Stamina": [
+     0.016394,
+     0.0
+    ]
+   },
+   "cv_exact": 0.913,
+   "cv_within_1": 0.994,
+   "linear_cv_within_1": 0.994
+  },
+  "MLB_PassCoverage": {
+   "positions": [
+    "MLB"
+   ],
+   "n": 173,
+   "model": "quadratic",
+   "intercept": -70.825518,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ChangeOfDirection",
+    "ManCoverage",
+    "PlayRecognition",
+    "Pursuit",
+    "Speed",
+    "Stamina",
+    "Strength",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "ZoneCoverage": [
+     0.369308,
+     0.0
+    ],
+    "Tackle": [
+     0.268659,
+     0.0
+    ],
+    "Pursuit": [
+     0.235068,
+     0.0
+    ],
+    "Awareness": [
+     0.203229,
+     0.0
+    ],
+    "Acceleration": [
+     0.196566,
+     0.0
+    ],
+    "ManCoverage": [
+     0.15782,
+     0.0
+    ],
+    "Speed": [
+     0.139949,
+     0.019166
+    ],
+    "ChangeOfDirection": [
+     0.077531,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.071371,
+     0.0
+    ],
+    "Agility": [
+     0.0,
+     0.077034
+    ],
+    "Strength": [
+     0.0,
+     0.060643
+    ],
+    "Stamina": [
+     0.0,
+     0.007077
+    ]
+   },
+   "cv_exact": 0.96,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "MLB_RunStopper": {
+   "positions": [
+    "MLB"
+   ],
+   "n": 173,
+   "model": "linear",
+   "intercept": -74.999016,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "Catching",
+    "ChangeOfDirection",
+    "HitPower",
+    "Injury",
+    "Jumping",
+    "ManCoverage",
+    "PassBlock",
+    "PlayRecognition",
+    "PowerMoves",
+    "Pursuit",
+    "RunBlockPower",
+    "Speed",
+    "Strength",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "Tackle": [
+     0.380507,
+     0.0
+    ],
+    "Pursuit": [
+     0.274719,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.232151,
+     0.0
+    ],
+    "Strength": [
+     0.195378,
+     0.0
+    ],
+    "BlockShedding": [
+     0.18859,
+     0.0
+    ],
+    "Acceleration": [
+     0.175657,
+     0.0
+    ],
+    "ZoneCoverage": [
+     0.103251,
+     0.0
+    ],
+    "Awareness": [
+     0.093551,
+     0.0
+    ],
+    "Agility": [
+     0.069619,
+     0.0
+    ],
+    "Speed": [
+     0.049555,
+     0.0
+    ],
+    "ManCoverage": [
+     0.040205,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.039669,
+     0.0
+    ],
+    "HitPower": [
+     0.034196,
+     0.0
+    ],
+    "PowerMoves": [
+     0.004471,
+     0.0
+    ],
+    "DeepRouteRunning": [
+     0.004125,
+     0.0
+    ],
+    "RunBlockPower": [
+     0.003773,
+     0.0
+    ],
+    "BreakTackle": [
+     0.003049,
+     0.0
+    ],
+    "Catching": [
+     0.002466,
+     0.0
+    ],
+    "Jumping": [
+     0.00193,
+     0.0
+    ],
+    "Injury": [
+     0.001546,
+     0.0
+    ],
+    "PassBlock": [
+     0.000314,
+     0.0
+    ]
+   },
+   "cv_exact": 0.884,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "OLB_PassCoverage": {
+   "positions": [
+    "LOLB",
+    "ROLB"
+   ],
+   "n": 171,
+   "model": "quadratic",
+   "intercept": -64.561981,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ChangeOfDirection",
+    "ManCoverage",
+    "PlayRecognition",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "ZoneCoverage": [
+     0.312842,
+     0.0
+    ],
+    "Awareness": [
+     0.251715,
+     0.012162
+    ],
+    "Tackle": [
+     0.26122,
+     0.0
+    ],
+    "Pursuit": [
+     0.196259,
+     0.0
+    ],
+    "Speed": [
+     0.173913,
+     0.0
+    ],
+    "Acceleration": [
+     0.126819,
+     0.053975
+    ],
+    "PlayRecognition": [
+     0.131282,
+     0.0
+    ],
+    "ManCoverage": [
+     0.106333,
+     0.016503
+    ],
+    "ChangeOfDirection": [
+     0.079766,
+     0.0
+    ],
+    "Strength": [
+     0.033693,
+     0.0
+    ],
+    "Agility": [
+     0.0,
+     0.033738
+    ]
+   },
+   "cv_exact": 0.906,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "OLB_RunStopper": {
+   "positions": [
+    "LOLB",
+    "ROLB"
+   ],
+   "n": 171,
+   "model": "quadratic",
+   "intercept": -55.617601,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "ChangeOfDirection",
+    "HitPower",
+    "ImpactBlocking",
+    "Injury",
+    "ManCoverage",
+    "PlayRecognition",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "BlockShedding": [
+     0.292061,
+     0.0
+    ],
+    "Tackle": [
+     0.29082,
+     0.0
+    ],
+    "Pursuit": [
+     0.287597,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.165276,
+     0.0
+    ],
+    "Strength": [
+     0.127612,
+     0.028762
+    ],
+    "ZoneCoverage": [
+     0.075385,
+     0.0122
+    ],
+    "Acceleration": [
+     0.006542,
+     0.097475
+    ],
+    "Awareness": [
+     0.069392,
+     0.0
+    ],
+    "Speed": [
+     0.0,
+     0.068753
+    ],
+    "HitPower": [
+     0.054135,
+     0.0
+    ],
+    "ManCoverage": [
+     0.045511,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.019968,
+     0.013927
+    ],
+    "Agility": [
+     0.028205,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.010288,
+     0.0
+    ],
+    "Injury": [
+     0.0,
+     0.009469
+    ]
+   },
+   "cv_exact": 0.836,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "OT_Agile": {
+   "positions": [
+    "LT",
+    "RT"
+   ],
+   "n": 240,
+   "model": "quadratic",
+   "intercept": -41.27355,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ImpactBlocking",
+    "LeadBlock",
+    "PassBlock",
+    "PassBlockFinesse",
+    "RunBlock",
+    "RunBlockFinesse",
+    "RunBlockPower",
+    "Speed",
+    "Strength"
+   ],
+   "terms": {
+    "PassBlockFinesse": [
+     0.371048,
+     0.0
+    ],
+    "RunBlockFinesse": [
+     0.348835,
+     0.0
+    ],
+    "Strength": [
+     0.213745,
+     0.0
+    ],
+    "Awareness": [
+     0.148806,
+     0.0
+    ],
+    "RunBlock": [
+     0.105893,
+     0.0
+    ],
+    "PassBlock": [
+     0.093698,
+     0.0
+    ],
+    "Speed": [
+     0.0464,
+     0.0
+    ],
+    "Agility": [
+     0.039537,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.035509,
+     0.0
+    ],
+    "LeadBlock": [
+     0.007173,
+     0.017149
+    ],
+    "Acceleration": [
+     0.0,
+     0.0249
+    ],
+    "RunBlockPower": [
+     0.013474,
+     0.0
+    ]
+   },
+   "cv_exact": 0.954,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "OT_PassProtector": {
+   "positions": [
+    "LT",
+    "RT"
+   ],
+   "n": 240,
+   "model": "quadratic",
+   "intercept": -42.129957,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ChangeOfDirection",
+    "ImpactBlocking",
+    "PassBlock",
+    "PassBlockFinesse",
+    "PassBlockPower",
+    "Speed",
+    "Strength"
+   ],
+   "terms": {
+    "PassBlockFinesse": [
+     0.480609,
+     0.000548
+    ],
+    "PassBlockPower": [
+     0.469972,
+     0.006455
+    ],
+    "Awareness": [
+     0.212725,
+     0.0
+    ],
+    "PassBlock": [
+     0.159581,
+     0.0
+    ],
+    "Strength": [
+     0.0,
+     0.039615
+    ],
+    "ImpactBlocking": [
+     0.029344,
+     0.0
+    ],
+    "Speed": [
+     0.0,
+     0.029163
+    ],
+    "Agility": [
+     0.023033,
+     0.0
+    ],
+    "Acceleration": [
+     0.0,
+     0.022202
+    ],
+    "ManCoverage": [
+     0.01042,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.0,
+     0.011219
+    ]
+   },
+   "cv_exact": 0.912,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "OT_Power": {
+   "positions": [
+    "LT",
+    "RT"
+   ],
+   "n": 240,
+   "model": "quadratic",
+   "intercept": -32.951926,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ImpactBlocking",
+    "LeadBlock",
+    "PassBlock",
+    "PassBlockPower",
+    "RunBlock",
+    "RunBlockPower",
+    "Speed",
+    "Strength"
+   ],
+   "terms": {
+    "RunBlockPower": [
+     0.371198,
+     0.0
+    ],
+    "PassBlockPower": [
+     0.348962,
+     0.0
+    ],
+    "RunBlock": [
+     0.149282,
+     0.0
+    ],
+    "Awareness": [
+     0.146231,
+     0.0
+    ],
+    "Strength": [
+     0.0,
+     0.127455
+    ],
+    "ImpactBlocking": [
+     0.062643,
+     0.0
+    ],
+    "PassBlock": [
+     0.059047,
+     0.0
+    ],
+    "Acceleration": [
+     0.032747,
+     0.0
+    ],
+    "Agility": [
+     0.030941,
+     0.0
+    ],
+    "LeadBlock": [
+     0.029439,
+     0.0
+    ],
+    "Speed": [
+     0.020952,
+     0.0
+    ]
+   },
+   "cv_exact": 0.921,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "QB_FieldGeneral": {
+   "positions": [
+    "QB"
+   ],
+   "n": 145,
+   "model": "quadratic",
+   "intercept": -30.311204,
+   "skills": [
+    "Acceleration",
+    "Awareness",
+    "Injury",
+    "ThrowAccuracyDeep",
+    "ThrowAccuracyMid",
+    "ThrowAccuracyShort",
+    "ThrowPower"
+   ],
+   "terms": {
+    "LongSnap": [
+     0.0,
+     1.32288
+    ],
+    "Awareness": [
+     0.333564,
+     0.0
+    ],
+    "ThrowAccuracyShort": [
+     0.0,
+     0.284719
+    ],
+    "ThrowAccuracyDeep": [
+     0.156101,
+     0.087842
+    ],
+    "ThrowPower": [
+     0.0,
+     0.25727
+    ],
+    "ThrowAccuracyMid": [
+     0.0,
+     0.186145
+    ],
+    "Acceleration": [
+     0.048901,
+     0.0
+    ],
+    "Tackle": [
+     0.0,
+     0.025346
+    ],
+    "Injury": [
+     0.0,
+     0.010724
+    ],
+    "PlayRecognition": [
+     0.0,
+     0.007956
+    ],
+    "MediumRouteRunning": [
+     0.0,
+     0.00775
+    ],
+    "Pursuit": [
+     0.0,
+     0.00555
+    ],
+    "PowerMoves": [
+     0.0,
+     0.003277
+    ]
+   },
+   "cv_exact": 0.448,
+   "cv_within_1": 0.931,
+   "linear_cv_within_1": 0.628
+  },
+  "QB_Improviser": {
+   "positions": [
+    "QB"
+   ],
+   "n": 145,
+   "model": "quadratic",
+   "intercept": -47.35323,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BreakSack",
+    "Carrying",
+    "ChangeOfDirection",
+    "JukeMove",
+    "Speed",
+    "SpinMove",
+    "ThrowAccuracyDeep",
+    "ThrowAccuracyShort",
+    "ThrowOnTheRun",
+    "ThrowPower",
+    "ThrowUnderPressure",
+    "Trucking"
+   ],
+   "terms": {
+    "LongSnap": [
+     0.0,
+     1.491298
+    ],
+    "ThrowAccuracyDeep": [
+     0.338983,
+     0.0
+    ],
+    "Awareness": [
+     0.318271,
+     0.0
+    ],
+    "ThrowPower": [
+     0.0,
+     0.195872
+    ],
+    "ThrowUnderPressure": [
+     0.0,
+     0.176512
+    ],
+    "BreakSack": [
+     0.115469,
+     0.015899
+    ],
+    "ThrowOnTheRun": [
+     0.0,
+     0.138111
+    ],
+    "ThrowAccuracyShort": [
+     0.0,
+     0.105035
+    ],
+    "Acceleration": [
+     0.059455,
+     0.0
+    ],
+    "Agility": [
+     0.033316,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.032236,
+     0.0
+    ],
+    "PowerMoves": [
+     0.0,
+     0.035849
+    ],
+    "MediumRouteRunning": [
+     0.0,
+     0.023818
+    ],
+    "JukeMove": [
+     0.013419,
+     0.0
+    ],
+    "Speed": [
+     0.011098,
+     0.0
+    ],
+    "Carrying": [
+     0.0,
+     0.007601
+    ],
+    "SpinMove": [
+     0.004819,
+     0.0
+    ],
+    "Trucking": [
+     0.0,
+     0.001946
+    ],
+    "Tackle": [
+     0.0,
+     0.000157
+    ]
+   },
+   "cv_exact": 0.607,
+   "cv_within_1": 0.959,
+   "linear_cv_within_1": 0.579
+  },
+  "QB_Scrambler": {
+   "positions": [
+    "QB"
+   ],
+   "n": 145,
+   "model": "quadratic",
+   "intercept": -41.672966,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "BreakSack",
+    "Carrying",
+    "Injury",
+    "JukeMove",
+    "Speed",
+    "ThrowAccuracyDeep",
+    "ThrowAccuracyShort",
+    "ThrowOnTheRun",
+    "ThrowPower"
+   ],
+   "terms": {
+    "LongSnap": [
+     0.0,
+     1.357537
+    ],
+    "ThrowPower": [
+     0.403002,
+     0.0
+    ],
+    "ThrowAccuracyShort": [
+     0.0,
+     0.259942
+    ],
+    "BreakSack": [
+     0.151897,
+     0.010041
+    ],
+    "ThrowOnTheRun": [
+     0.062752,
+     0.086719
+    ],
+    "Awareness": [
+     0.051792,
+     0.092579
+    ],
+    "Acceleration": [
+     0.082908,
+     0.0
+    ],
+    "Speed": [
+     0.0,
+     0.081462
+    ],
+    "ThrowAccuracyDeep": [
+     0.0,
+     0.067325
+    ],
+    "Agility": [
+     0.040896,
+     0.0
+    ],
+    "JukeMove": [
+     0.026247,
+     0.0
+    ],
+    "BCVision": [
+     0.0,
+     0.03019
+    ],
+    "Carrying": [
+     0.020143,
+     0.0
+    ],
+    "PowerMoves": [
+     0.0,
+     0.013253
+    ],
+    "PlayRecognition": [
+     0.0,
+     0.009862
+    ],
+    "MediumRouteRunning": [
+     0.0,
+     0.004032
+    ],
+    "Injury": [
+     0.001558,
+     0.0
+    ]
+   },
+   "cv_exact": 0.331,
+   "cv_within_1": 0.883,
+   "linear_cv_within_1": 0.662
+  },
+  "QB_StrongArm": {
+   "positions": [
+    "QB"
+   ],
+   "n": 145,
+   "model": "quadratic",
+   "intercept": -62.320375,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "Carrying",
+    "Injury",
+    "JukeMove",
+    "SpinMove",
+    "ThrowAccuracyDeep",
+    "ThrowAccuracyMid",
+    "ThrowPower",
+    "ThrowUnderPressure",
+    "Trucking"
+   ],
+   "terms": {
+    "LongSnap": [
+     0.0,
+     1.506572
+    ],
+    "ThrowPower": [
+     0.541767,
+     0.077395
+    ],
+    "ThrowAccuracyDeep": [
+     0.38949,
+     0.0
+    ],
+    "Awareness": [
+     0.254884,
+     0.0
+    ],
+    "ThrowAccuracyMid": [
+     0.0,
+     0.223624
+    ],
+    "ThrowUnderPressure": [
+     0.0,
+     0.137957
+    ],
+    "PowerMoves": [
+     0.0,
+     0.039093
+    ],
+    "JukeMove": [
+     0.020257,
+     0.003317
+    ],
+    "Acceleration": [
+     0.014133,
+     0.0
+    ],
+    "SpinMove": [
+     0.01266,
+     0.0
+    ],
+    "MediumRouteRunning": [
+     0.0,
+     0.010427
+    ],
+    "Agility": [
+     0.0,
+     0.00996
+    ],
+    "Injury": [
+     0.006139,
+     0.0
+    ],
+    "Trucking": [
+     0.0,
+     0.00587
+    ],
+    "Tackle": [
+     0.0,
+     0.003929
+    ],
+    "PlayRecognition": [
+     0.0,
+     0.002918
+    ],
+    "Carrying": [
+     0.001876,
+     0.0
+    ],
+    "Pursuit": [
+     0.0,
+     0.000322
+    ]
+   },
+   "cv_exact": 0.634,
+   "cv_within_1": 0.979,
+   "linear_cv_within_1": 0.6
+  },
+  "S_Hybrid": {
+   "positions": [
+    "FS",
+    "SS"
+   ],
+   "n": 259,
+   "model": "quadratic",
+   "intercept": -53.659731,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ChangeOfDirection",
+    "Jumping",
+    "ManCoverage",
+    "PlayRecognition",
+    "Press",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "Awareness": [
+     0.237708,
+     0.010718
+    ],
+    "Speed": [
+     0.238333,
+     0.0
+    ],
+    "ManCoverage": [
+     0.213519,
+     0.030727
+    ],
+    "Tackle": [
+     0.165062,
+     0.021894
+    ],
+    "ZoneCoverage": [
+     0.137538,
+     0.0
+    ],
+    "Agility": [
+     0.129987,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.108217,
+     0.0
+    ],
+    "Acceleration": [
+     0.0,
+     0.116352
+    ],
+    "Pursuit": [
+     0.074792,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.05219,
+     0.011347
+    ],
+    "Jumping": [
+     0.061106,
+     0.0
+    ],
+    "Press": [
+     0.014313,
+     0.027649
+    ],
+    "Strength": [
+     0.008164,
+     0.025664
+    ]
+   },
+   "cv_exact": 0.919,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "S_RunSupport": {
+   "positions": [
+    "FS",
+    "SS"
+   ],
+   "n": 259,
+   "model": "quadratic",
+   "intercept": -57.470948,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BlockShedding",
+    "ChangeOfDirection",
+    "HitPower",
+    "Jumping",
+    "ManCoverage",
+    "PlayRecognition",
+    "Press",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "PlayRecognition": [
+     0.291818,
+     0.0
+    ],
+    "Tackle": [
+     0.281785,
+     0.0
+    ],
+    "Pursuit": [
+     0.166527,
+     0.0
+    ],
+    "Acceleration": [
+     0.15092,
+     0.0
+    ],
+    "ZoneCoverage": [
+     0.144812,
+     0.0
+    ],
+    "Awareness": [
+     0.134743,
+     0.009071
+    ],
+    "Agility": [
+     0.108671,
+     0.0
+    ],
+    "HitPower": [
+     0.088607,
+     0.0
+    ],
+    "ManCoverage": [
+     0.05621,
+     0.025512
+    ],
+    "Speed": [
+     0.0,
+     0.093359
+    ],
+    "ChangeOfDirection": [
+     0.051655,
+     0.0
+    ],
+    "Jumping": [
+     0.05035,
+     0.0
+    ],
+    "Strength": [
+     0.031242,
+     0.0
+    ],
+    "BlockShedding": [
+     0.009324,
+     0.024019
+    ],
+    "Press": [
+     0.016756,
+     0.0
+    ]
+   },
+   "cv_exact": 0.927,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "S_Zone": {
+   "positions": [
+    "FS",
+    "SS"
+   ],
+   "n": 259,
+   "model": "quadratic",
+   "intercept": -64.675916,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "ChangeOfDirection",
+    "Jumping",
+    "PlayRecognition",
+    "Pursuit",
+    "Speed",
+    "Strength",
+    "Tackle",
+    "ZoneCoverage"
+   ],
+   "terms": {
+    "ZoneCoverage": [
+     0.373604,
+     0.016824
+    ],
+    "Awareness": [
+     0.341242,
+     0.005906
+    ],
+    "Speed": [
+     0.262611,
+     0.0
+    ],
+    "Acceleration": [
+     0.183946,
+     0.0
+    ],
+    "Tackle": [
+     0.159162,
+     0.0
+    ],
+    "Pursuit": [
+     0.09889,
+     0.016525
+    ],
+    "Agility": [
+     0.095427,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.073222,
+     0.0
+    ],
+    "PlayRecognition": [
+     0.054532,
+     0.0
+    ],
+    "Jumping": [
+     0.048252,
+     0.0
+    ],
+    "Strength": [
+     0.032627,
+     0.003406
+    ]
+   },
+   "cv_exact": 0.923,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "TE_Blocking": {
+   "positions": [
+    "TE"
+   ],
+   "n": 162,
+   "model": "quadratic",
+   "intercept": -74.43372,
+   "skills": [
+    "Awareness",
+    "BreakTackle",
+    "CatchInTraffic",
+    "Catching",
+    "DeepRouteRunning",
+    "ImpactBlocking",
+    "LeadBlock",
+    "MediumRouteRunning",
+    "PassBlock",
+    "PassBlockFinesse",
+    "PassBlockPower",
+    "RunBlock",
+    "RunBlockFinesse",
+    "RunBlockPower",
+    "ShortRouteRunning",
+    "StiffArm",
+    "Strength",
+    "Trucking"
+   ],
+   "terms": {
+    "RunBlock": [
+     0.232201,
+     0.0
+    ],
+    "RunBlockFinesse": [
+     0.205585,
+     0.0
+    ],
+    "Awareness": [
+     0.188504,
+     0.014789
+    ],
+    "ImpactBlocking": [
+     0.200159,
+     0.0
+    ],
+    "RunBlockPower": [
+     0.198803,
+     0.0
+    ],
+    "LeadBlock": [
+     0.160109,
+     0.025315
+    ],
+    "Strength": [
+     0.136708,
+     0.0
+    ],
+    "PassBlockPower": [
+     0.083336,
+     0.060815
+    ],
+    "PassBlock": [
+     0.022905,
+     0.129723
+    ],
+    "PassBlockFinesse": [
+     0.059393,
+     0.069444
+    ],
+    "ShortRouteRunning": [
+     0.095052,
+     0.0
+    ],
+    "MediumRouteRunning": [
+     0.084307,
+     0.0
+    ],
+    "CatchInTraffic": [
+     0.069449,
+     0.003159
+    ],
+    "Catching": [
+     0.068422,
+     0.0
+    ],
+    "StiffArm": [
+     0.06092,
+     0.0
+    ],
+    "BreakTackle": [
+     0.038708,
+     0.0
+    ],
+    "Trucking": [
+     0.024091,
+     0.0
+    ],
+    "DeepRouteRunning": [
+     0.0145,
+     0.0
+    ]
+   },
+   "cv_exact": 0.914,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "TE_Possession": {
+   "positions": [
+    "TE"
+   ],
+   "n": 162,
+   "model": "linear",
+   "intercept": -81.98289,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "BreakTackle",
+    "CatchInTraffic",
+    "Catching",
+    "DeepRouteRunning",
+    "ImpactBlocking",
+    "JukeMove",
+    "Jumping",
+    "LeadBlock",
+    "MediumRouteRunning",
+    "PassBlock",
+    "PassBlockFinesse",
+    "PassBlockPower",
+    "Release",
+    "RunBlock",
+    "RunBlockFinesse",
+    "RunBlockPower",
+    "ShortRouteRunning",
+    "SpectacularCatch",
+    "Speed",
+    "Stamina",
+    "StiffArm",
+    "Strength",
+    "Toughness",
+    "Trucking"
+   ],
+   "terms": {
+    "CatchInTraffic": [
+     0.290806,
+     0.0
+    ],
+    "ShortRouteRunning": [
+     0.285303,
+     0.0
+    ],
+    "Catching": [
+     0.216341,
+     0.0
+    ],
+    "Awareness": [
+     0.194222,
+     0.0
+    ],
+    "RunBlock": [
+     0.102774,
+     0.0
+    ],
+    "PassBlockFinesse": [
+     0.099641,
+     0.0
+    ],
+    "Strength": [
+     0.095995,
+     0.0
+    ],
+    "RunBlockPower": [
+     0.088426,
+     0.0
+    ],
+    "Agility": [
+     0.087921,
+     0.0
+    ],
+    "Acceleration": [
+     0.08558,
+     0.0
+    ],
+    "MediumRouteRunning": [
+     0.079655,
+     0.0
+    ],
+    "Speed": [
+     0.076958,
+     0.0
+    ],
+    "ImpactBlocking": [
+     0.054964,
+     0.0
+    ],
+    "RunBlockFinesse": [
+     0.053678,
+     0.0
+    ],
+    "PassBlockPower": [
+     0.051704,
+     0.0
+    ],
+    "LeadBlock": [
+     0.045587,
+     0.0
+    ],
+    "StiffArm": [
+     0.043051,
+     0.0
+    ],
+    "BCVision": [
+     0.031344,
+     0.0
+    ],
+    "Trucking": [
+     0.030754,
+     0.0
+    ],
+    "Release": [
+     0.03019,
+     0.0
+    ],
+    "BreakTackle": [
+     0.018553,
+     0.0
+    ],
+    "Jumping": [
+     0.017162,
+     0.0
+    ],
+    "PassBlock": [
+     0.016742,
+     0.0
+    ],
+    "Stamina": [
+     0.01545,
+     0.0
+    ],
+    "SpectacularCatch": [
+     0.014981,
+     0.0
+    ],
+    "JukeMove": [
+     0.006529,
+     0.0
+    ],
+    "Toughness": [
+     0.00569,
+     0.0
+    ],
+    "DeepRouteRunning": [
+     0.002529,
+     0.0
+    ],
+    "Pursuit": [
+     0.001992,
+     0.0
+    ],
+    "ThrowAccuracy": [
+     0.000846,
+     0.0
+    ]
+   },
+   "cv_exact": 0.765,
+   "cv_within_1": 0.994,
+   "linear_cv_within_1": 0.994
+  },
+  "TE_VerticalThreat": {
+   "positions": [
+    "TE"
+   ],
+   "n": 162,
+   "model": "linear",
+   "intercept": -78.975475,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "BreakTackle",
+    "Carrying",
+    "CatchInTraffic",
+    "Catching",
+    "ChangeOfDirection",
+    "DeepRouteRunning",
+    "Jumping",
+    "LeadBlock",
+    "MediumRouteRunning",
+    "PassBlock",
+    "PassBlockFinesse",
+    "PassBlockPower",
+    "Release",
+    "RunBlock",
+    "RunBlockFinesse",
+    "RunBlockPower",
+    "ShortRouteRunning",
+    "SpectacularCatch",
+    "Speed",
+    "StiffArm",
+    "Strength",
+    "Toughness",
+    "Trucking"
+   ],
+   "terms": {
+    "Catching": [
+     0.231349,
+     0.0
+    ],
+    "Awareness": [
+     0.195123,
+     0.0
+    ],
+    "CatchInTraffic": [
+     0.165504,
+     0.0
+    ],
+    "MediumRouteRunning": [
+     0.163073,
+     0.0
+    ],
+    "Speed": [
+     0.155228,
+     0.0
+    ],
+    "ShortRouteRunning": [
+     0.152224,
+     0.0
+    ],
+    "Acceleration": [
+     0.148939,
+     0.0
+    ],
+    "Agility": [
+     0.102938,
+     0.0
+    ],
+    "DeepRouteRunning": [
+     0.098988,
+     0.0
+    ],
+    "SpectacularCatch": [
+     0.087453,
+     0.0
+    ],
+    "RunBlockFinesse": [
+     0.066091,
+     0.0
+    ],
+    "RunBlockPower": [
+     0.065994,
+     0.0
+    ],
+    "Jumping": [
+     0.061861,
+     0.0
+    ],
+    "RunBlock": [
+     0.056061,
+     0.0
+    ],
+    "Release": [
+     0.051688,
+     0.0
+    ],
+    "BreakTackle": [
+     0.049156,
+     0.0
+    ],
+    "BCVision": [
+     0.048157,
+     0.0
+    ],
+    "StiffArm": [
+     0.039267,
+     0.0
+    ],
+    "PassBlockFinesse": [
+     0.033579,
+     0.0
+    ],
+    "PassBlockPower": [
+     0.025852,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.019479,
+     0.0
+    ],
+    "Trucking": [
+     0.016895,
+     0.0
+    ],
+    "Strength": [
+     0.009047,
+     0.0
+    ],
+    "PassBlock": [
+     0.00607,
+     0.0
+    ],
+    "ThrowAccuracyShort": [
+     0.004237,
+     0.0
+    ],
+    "LeadBlock": [
+     0.004117,
+     0.0
+    ],
+    "Toughness": [
+     0.001763,
+     0.0
+    ],
+    "Carrying": [
+     0.001523,
+     0.0
+    ],
+    "ThrowAccuracy": [
+     0.000311,
+     0.0
+    ]
+   },
+   "cv_exact": 0.852,
+   "cv_within_1": 0.994,
+   "linear_cv_within_1": 0.994
+  },
+  "WR_DeepThreat": {
+   "positions": [
+    "WR"
+   ],
+   "n": 329,
+   "model": "quadratic",
+   "intercept": -66.283407,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "Carrying",
+    "CatchInTraffic",
+    "Catching",
+    "ChangeOfDirection",
+    "DeepRouteRunning",
+    "JukeMove",
+    "Jumping",
+    "MediumRouteRunning",
+    "Release",
+    "SpectacularCatch",
+    "Speed",
+    "SpinMove"
+   ],
+   "terms": {
+    "DeepRouteRunning": [
+     0.27306,
+     0.0
+    ],
+    "Acceleration": [
+     0.220124,
+     0.0
+    ],
+    "Catching": [
+     0.214667,
+     0.0
+    ],
+    "Speed": [
+     0.201976,
+     0.0
+    ],
+    "Awareness": [
+     0.164999,
+     0.0
+    ],
+    "Release": [
+     0.161161,
+     0.0
+    ],
+    "CatchInTraffic": [
+     0.132899,
+     0.0
+    ],
+    "MediumRouteRunning": [
+     0.101812,
+     0.0
+    ],
+    "SpectacularCatch": [
+     0.077859,
+     0.0
+    ],
+    "Agility": [
+     0.0,
+     0.083464
+    ],
+    "ChangeOfDirection": [
+     0.035557,
+     0.0
+    ],
+    "Jumping": [
+     0.020578,
+     0.0
+    ],
+    "SpinMove": [
+     0.019748,
+     0.0
+    ],
+    "JukeMove": [
+     0.0,
+     0.012143
+    ],
+    "Carrying": [
+     0.0,
+     0.009357
+    ]
+   },
+   "cv_exact": 0.927,
+   "cv_within_1": 0.997,
+   "linear_cv_within_1": 0.997
+  },
+  "WR_Physical": {
+   "positions": [
+    "WR"
+   ],
+   "n": 329,
+   "model": "linear",
+   "intercept": -74.263307,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "BreakTackle",
+    "Carrying",
+    "CatchInTraffic",
+    "Catching",
+    "ChangeOfDirection",
+    "Injury",
+    "Jumping",
+    "MediumRouteRunning",
+    "Release",
+    "ShortRouteRunning",
+    "SpectacularCatch",
+    "Speed",
+    "StiffArm",
+    "Strength",
+    "Toughness",
+    "Trucking"
+   ],
+   "terms": {
+    "CatchInTraffic": [
+     0.279092,
+     0.0
+    ],
+    "SpectacularCatch": [
+     0.275793,
+     0.0
+    ],
+    "Release": [
+     0.222154,
+     0.0
+    ],
+    "Catching": [
+     0.186881,
+     0.0
+    ],
+    "Jumping": [
+     0.16016,
+     0.0
+    ],
+    "ShortRouteRunning": [
+     0.130234,
+     0.0
+    ],
+    "Acceleration": [
+     0.111792,
+     0.0
+    ],
+    "Awareness": [
+     0.089245,
+     0.0
+    ],
+    "Speed": [
+     0.077074,
+     0.0
+    ],
+    "Strength": [
+     0.073582,
+     0.0
+    ],
+    "Agility": [
+     0.049063,
+     0.0
+    ],
+    "BreakTackle": [
+     0.04698,
+     0.0
+    ],
+    "MediumRouteRunning": [
+     0.043553,
+     0.0
+    ],
+    "StiffArm": [
+     0.033258,
+     0.0
+    ],
+    "Trucking": [
+     0.019096,
+     0.0
+    ],
+    "PassBlockFinesse": [
+     0.003555,
+     0.0
+    ],
+    "ChangeOfDirection": [
+     0.002736,
+     0.0
+    ],
+    "PassBlock": [
+     0.000952,
+     0.0
+    ],
+    "Toughness": [
+     0.000633,
+     0.0
+    ],
+    "Injury": [
+     0.000516,
+     0.0
+    ],
+    "BCVision": [
+     0.000422,
+     0.0
+    ],
+    "Carrying": [
+     0.000168,
+     0.0
+    ]
+   },
+   "cv_exact": 0.942,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "WR_Playmaker": {
+   "positions": [
+    "WR"
+   ],
+   "n": 329,
+   "model": "quadratic",
+   "intercept": -59.716481,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BCVision",
+    "BreakTackle",
+    "CatchInTraffic",
+    "Catching",
+    "ChangeOfDirection",
+    "DeepRouteRunning",
+    "JukeMove",
+    "Jumping",
+    "MediumRouteRunning",
+    "ShortRouteRunning",
+    "SpectacularCatch",
+    "Speed",
+    "SpinMove"
+   ],
+   "terms": {
+    "MediumRouteRunning": [
+     0.212926,
+     0.0
+    ],
+    "Acceleration": [
+     0.184816,
+     0.0
+    ],
+    "Agility": [
+     0.172135,
+     0.0
+    ],
+    "JukeMove": [
+     0.171601,
+     0.0
+    ],
+    "BCVision": [
+     0.123542,
+     0.0
+    ],
+    "Awareness": [
+     0.112956,
+     0.0
+    ],
+    "DeepRouteRunning": [
+     0.085304,
+     0.017134
+    ],
+    "Catching": [
+     0.088637,
+     0.0
+    ],
+    "ShortRouteRunning": [
+     0.087979,
+     0.0
+    ],
+    "Speed": [
+     0.0,
+     0.102366
+    ],
+    "ChangeOfDirection": [
+     0.079,
+     0.0
+    ],
+    "CatchInTraffic": [
+     0.054206,
+     0.0
+    ],
+    "SpinMove": [
+     0.054114,
+     0.0
+    ],
+    "SpectacularCatch": [
+     0.040415,
+     0.005931
+    ],
+    "BreakTackle": [
+     0.005083,
+     0.046652
+    ],
+    "Jumping": [
+     0.009064,
+     0.007813
+    ]
+   },
+   "cv_exact": 0.903,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  },
+  "WR_Slot": {
+   "positions": [
+    "WR"
+   ],
+   "n": 329,
+   "model": "quadratic",
+   "intercept": -62.140098,
+   "skills": [
+    "Acceleration",
+    "Agility",
+    "Awareness",
+    "BreakTackle",
+    "Carrying",
+    "CatchInTraffic",
+    "Catching",
+    "ChangeOfDirection",
+    "DeepRouteRunning",
+    "JukeMove",
+    "MediumRouteRunning",
+    "ShortRouteRunning",
+    "Speed",
+    "SpinMove"
+   ],
+   "terms": {
+    "ShortRouteRunning": [
+     0.330403,
+     0.0
+    ],
+    "CatchInTraffic": [
+     0.242299,
+     0.0
+    ],
+    "Catching": [
+     0.230276,
+     0.0
+    ],
+    "Awareness": [
+     0.212988,
+     0.000222
+    ],
+    "Agility": [
+     0.152143,
+     0.040394
+    ],
+    "Acceleration": [
+     0.177962,
+     0.0
+    ],
+    "MediumRouteRunning": [
+     0.131121,
+     0.0
+    ],
+    "Speed": [
+     0.0,
+     0.060006
+    ],
+    "ChangeOfDirection": [
+     0.024767,
+     0.0
+    ],
+    "SpinMove": [
+     0.018975,
+     0.004568
+    ],
+    "BreakTackle": [
+     0.018588,
+     0.0
+    ],
+    "Carrying": [
+     0.016315,
+     0.0
+    ],
+    "DeepRouteRunning": [
+     0.014261,
+     0.0
+    ],
+    "JukeMove": [
+     0.0,
+     0.009419
+    ]
+   },
+   "cv_exact": 0.927,
+   "cv_within_1": 1.0,
+   "linear_cv_within_1": 1.0
+  }
+ },
+ "ovr_exact": 0.928,
+ "ovr_within_1": 0.997
+}

@@ -18,7 +18,7 @@ import {
   arrayRefs, calendarYear, decodeRef, isExportableGame, numberedFields, pickRatings, plainFields, STAT_KINDS, weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 1;
+export const READER_VERSION = 2;
 
 const STAT_REF_FIELDS = ['SeasonGame', 'OpposingTeam'];
 
@@ -207,6 +207,9 @@ async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIn
       weight_lbs: weightLbs(p.Weight),
       dev_trait: p.TraitDevelopment,
       overall: p.OverallRating,
+      // OverallGrade0-4: the player's OVR under each archetype of their position, in Madden's slot order (engines/
+      // ovr_weights maps slots to archetypes). OverallRating is the highest; PlayerType names it.
+      archetype_grades: numberedFields(p, names, 'OverallGrade'),
       ratings: pickRatings(p, names),
       cap_salary: p.PLYR_CAPSALARY,
       contract: await readContract(tables, p.Contract),

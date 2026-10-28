@@ -38,6 +38,10 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
     }
   }
 
+  const graded = s.players.filter(p => p.archetype_grades.some(g => g > 0));
+  const atMax = graded.filter(p => p.overall === Math.max(...p.archetype_grades));
+  assert.ok(atMax.length / graded.length > 0.99, 'OVR is the highest archetype grade');
+
   const gameRows = new Set(s.games.map(g => g.row));
   const lines = s.players.flatMap(p => p.game_stats);
   assert.ok(lines.length > 0, 'per-game stat lines present');
