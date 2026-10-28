@@ -557,6 +557,11 @@ def search_league_memory(
 
     try:
         with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('public.league_memory') IS NOT NULL")
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return []
+
             # 1. Resolve team abbreviation if provided
             team_abbr = resolve_team_abbr(team, cur) if team else None
 

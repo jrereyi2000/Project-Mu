@@ -272,54 +272,81 @@ def seed_persona(persona_type: str, persona_id: str, count: int = 4, traits: dic
     }
 
 
+def persona_tables_exist(cur, *, views: bool = False, relationships: bool = False) -> bool:
+    """Checks whether persona tables exist in the current database without aborting transactions.
+
+    Uses to_regclass which performs a system catalog lookup and returns NULL rather than
+    raising an error if a relation does not exist.
+    """
+    if cur is None:
+        return False
+    clauses = [
+        "to_regclass('public.persona_sliders') IS NOT NULL",
+        "to_regclass('public.persona_traits') IS NOT NULL",
+    ]
+    if views:
+        clauses.append("to_regclass('public.persona_views') IS NOT NULL")
+    if relationships:
+        clauses.append("to_regclass('public.persona_relationships') IS NOT NULL")
+    try:
+        cur.execute("SELECT (" + " AND ".join(clauses) + ") AS exists_flag")
+        row = cur.fetchone()
+        if not row:
+            return False
+        return bool(row[0] if isinstance(row, (tuple, list)) else next(iter(row.values())))
+    except Exception:
+        return False
+
+
 def get_persona(persona_type: str, persona_id: str, cur=None) -> dict:
     """Reads a persona from the database tables, falling back to JSON or deterministic seeding."""
-    if cur is not None:
+    if cur is not None and persona_tables_exist(cur, views=True, relationships=True):
         try:
-            cur.execute("""
-                SELECT temperament, sociability, confidence, openness, warmth, drive
-                FROM persona_sliders WHERE persona_type = %s AND persona_id = %s
-            """, (persona_type, persona_id))
-            row = cur.fetchone()
-            if row:
-                sliders = {
-                    "temperament": row[0], "sociability": row[1], "confidence": row[2],
-                    "openness": row[3], "warmth": row[4], "drive": row[5]
-                }
+            with cur.connection.transaction():
                 cur.execute("""
-                    SELECT trait_id FROM persona_traits
-                    WHERE persona_type = %s AND persona_id = %s AND active = TRUE ORDER BY id
+                    SELECT temperament, sociability, confidence, openness, warmth, drive
+                    FROM persona_sliders WHERE persona_type = %s AND persona_id = %s
                 """, (persona_type, persona_id))
-                t_list = [r[0] for r in cur.fetchall()]
+                row = cur.fetchone()
+                if row:
+                    sliders = {
+                        "temperament": row[0], "sociability": row[1], "confidence": row[2],
+                        "openness": row[3], "warmth": row[4], "drive": row[5]
+                    }
+                    cur.execute("""
+                        SELECT trait_id FROM persona_traits
+                        WHERE persona_type = %s AND persona_id = %s AND active = TRUE ORDER BY id
+                    """, (persona_type, persona_id))
+                    t_list = [r[0] for r in cur.fetchall()]
 
-                cur.execute("""
-                    SELECT view_text, trigger_condition, subject_tags FROM persona_views
-                    WHERE persona_type = %s AND persona_id = %s ORDER BY id
-                """, (persona_type, persona_id))
-                v_list = [{"text": r[0], "trigger": r[1], "when": r[2] or []} for r in cur.fetchall()]
+                    cur.execute("""
+                        SELECT view_text, trigger_condition, subject_tags FROM persona_views
+                        WHERE persona_type = %s AND persona_id = %s ORDER BY id
+                    """, (persona_type, persona_id))
+                    v_list = [{"text": r[0], "trigger": r[1], "when": r[2] or []} for r in cur.fetchall()]
 
-                cur.execute("""
-                    SELECT target_type, target_id, trust, note, tags FROM persona_relationships
-                    WHERE persona_type = %s AND persona_id = %s ORDER BY id
-                """, (persona_type, persona_id))
-                r_list = [{"target_type": r[0], "target_id": r[1], "trust": float(r[2]), "note": r[3], "tags": r[4] or []}
-                          for r in cur.fetchall()]
+                    cur.execute("""
+                        SELECT target_type, target_id, trust, note, tags FROM persona_relationships
+                        WHERE persona_type = %s AND persona_id = %s ORDER BY id
+                    """, (persona_type, persona_id))
+                    r_list = [{"target_type": r[0], "target_id": r[1], "trust": float(r[2]), "note": r[3], "tags": r[4] or []}
+                              for r in cur.fetchall()]
 
-                base = {}
-                if persona_type == "writer":
-                    json_data = load_personas_json()
-                    if persona_id in json_data:
-                        base = dict(json_data[persona_id])
+                    base = {}
+                    if persona_type == "writer":
+                        json_data = load_personas_json()
+                        if persona_id in json_data:
+                            base = dict(json_data[persona_id])
 
-                base.update({
-                    "persona_type": persona_type,
-                    "persona_id": persona_id,
-                    "sliders": sliders,
-                    "traits": t_list,
-                    "views": v_list,
-                    "relationships": r_list
-                })
-                return base
+                    base.update({
+                        "persona_type": persona_type,
+                        "persona_id": persona_id,
+                        "sliders": sliders,
+                        "traits": t_list,
+                        "views": v_list,
+                        "relationships": r_list
+                    })
+                    return base
         except Exception:
             pass
 
@@ -336,6 +363,8 @@ def save_persona(persona_type: str, persona_id: str, sliders: dict = None,
     """Saves persona sliders, traits, and views to the database."""
     if cur is None:
         raise ValueError("Database cursor required to save persona")
+    if not persona_tables_exist(cur, views=True if views is not None else False):
+        raise RuntimeError("Persona tables do not exist in database")
 
     if sliders is not None:
         validate_slider_budget(sliders)
@@ -389,6 +418,8 @@ def save_persona(persona_type: str, persona_id: str, sliders: dict = None,
 
 def seed_writers_to_db(cur, personas_data: dict = None) -> int:
     """Seeds writer personas from agent_personas.json into the DB tables, preserving identities."""
+    if cur is None or not persona_tables_exist(cur, views=True):
+        return 0
     if personas_data is None:
         personas_data = load_personas_json()
     count = 0
@@ -430,6 +461,8 @@ def seed_writers_to_db(cur, personas_data: dict = None) -> int:
 
 def seed_gms_to_db(cur, traits_catalogue: dict = None) -> int:
     """Seeds GM personas into persona_sliders and persona_traits from gm_profiles."""
+    if cur is None or not persona_tables_exist(cur):
+        return 0
     if traits_catalogue is None:
         traits_catalogue = load_traits()
     cur.execute("""
@@ -472,53 +505,54 @@ def seed_gms_to_db(cur, traits_catalogue: dict = None) -> int:
 def load_personas(path: str = PERSONAS_PATH, cur=None) -> dict:
     """Loads personas from database tables with JSON fallback."""
     json_personas = load_personas_json(path)
-    if cur is None:
+    if cur is None or not persona_tables_exist(cur, views=True):
         return json_personas
     try:
-        cur.execute("""
-            SELECT persona_id, temperament, sociability, confidence, openness, warmth, drive
-            FROM persona_sliders WHERE persona_type = 'writer'
-        """)
-        slider_rows = cur.fetchall()
-        if not slider_rows:
-            return json_personas
+        with cur.connection.transaction():
+            cur.execute("""
+                SELECT persona_id, temperament, sociability, confidence, openness, warmth, drive
+                FROM persona_sliders WHERE persona_type = 'writer'
+            """)
+            slider_rows = cur.fetchall()
+            if not slider_rows:
+                return json_personas
 
-        cur.execute("""
-            SELECT persona_id, trait_id FROM persona_traits
-            WHERE persona_type = 'writer' AND active = TRUE ORDER BY id
-        """)
-        trait_rows = cur.fetchall()
-        traits_by_id = {}
-        for pid, tid in trait_rows:
-            traits_by_id.setdefault(pid, []).append(tid)
+            cur.execute("""
+                SELECT persona_id, trait_id FROM persona_traits
+                WHERE persona_type = 'writer' AND active = TRUE ORDER BY id
+            """)
+            trait_rows = cur.fetchall()
+            traits_by_id = {}
+            for pid, tid in trait_rows:
+                traits_by_id.setdefault(pid, []).append(tid)
 
-        cur.execute("""
-            SELECT persona_id, view_text, subject_tags FROM persona_views
-            WHERE persona_type = 'writer' ORDER BY id
-        """)
-        view_rows = cur.fetchall()
-        views_by_id = {}
-        for pid, vt, tags in view_rows:
-            views_by_id.setdefault(pid, []).append({"text": vt, "when": tags or []})
+            cur.execute("""
+                SELECT persona_id, view_text, subject_tags FROM persona_views
+                WHERE persona_type = 'writer' ORDER BY id
+            """)
+            view_rows = cur.fetchall()
+            views_by_id = {}
+            for pid, vt, tags in view_rows:
+                views_by_id.setdefault(pid, []).append({"text": vt, "when": tags or []})
 
-        out = {}
-        for r in slider_rows:
-            pid = r[0]
-            base = dict(json_personas.get(pid, {}))
-            base["sliders"] = {
-                "temperament": r[1], "sociability": r[2], "confidence": r[3],
-                "openness": r[4], "warmth": r[5], "drive": r[6]
-            }
-            if pid in traits_by_id:
-                base["traits"] = traits_by_id[pid]
-            if pid in views_by_id:
-                base["views"] = views_by_id[pid]
-            out[pid] = base
+            out = {}
+            for r in slider_rows:
+                pid = r[0]
+                base = dict(json_personas.get(pid, {}))
+                base["sliders"] = {
+                    "temperament": r[1], "sociability": r[2], "confidence": r[3],
+                    "openness": r[4], "warmth": r[5], "drive": r[6]
+                }
+                if pid in traits_by_id:
+                    base["traits"] = traits_by_id[pid]
+                if pid in views_by_id:
+                    base["views"] = views_by_id[pid]
+                out[pid] = base
 
-        for k, v in json_personas.items():
-            if k not in out:
-                out[k] = v
-        return out
+            for k, v in json_personas.items():
+                if k not in out:
+                    out[k] = v
+            return out
     except Exception:
         return json_personas
 

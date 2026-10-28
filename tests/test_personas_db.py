@@ -344,5 +344,110 @@ class GmPersonaPromptEnhancementTests(unittest.TestCase):
         self.assertIn("We've been patient here, but we've gone back and forth enough", msg_walk)
 
 
+class _RollbackTest(Exception):
+    pass
+
+
+@pytest.mark.integration
+class PersonaTablesMissingTests(unittest.TestCase):
+    """Verifies that missing persona tables do not abort transactions (R1 review fix)."""
+
+    def test_missing_tables_fallback_and_no_transaction_abort(self):
+        from engines import gm_trade_engine as g
+        try:
+            conn = psycopg.connect(CONN_INFO)
+        except Exception:
+            self.skipTest("madden_test DB unavailable")
+
+        with conn.cursor() as cur:
+            try:
+                with cur.connection.transaction():
+                    # Drop tables in a savepoint/transaction to simulate pre-migration database
+                    cur.execute("""
+                        DROP TABLE IF EXISTS persona_trait_history CASCADE;
+                        DROP TABLE IF EXISTS persona_relationships CASCADE;
+                        DROP TABLE IF EXISTS persona_views CASCADE;
+                        DROP TABLE IF EXISTS persona_traits CASCADE;
+                        DROP TABLE IF EXISTS persona_sliders CASCADE;
+                    """)
+                    self.assertFalse(P.persona_tables_exist(cur))
+                    self.assertFalse(P.persona_tables_exist(cur, views=True))
+                    self.assertFalse(P.persona_tables_exist(cur, views=True, relationships=True))
+
+                    # read_books must succeed and return seeded personas without aborting transaction
+                    b = g.read_books(cur, 2036, 22)
+                    self.assertGreater(len(b["gm"]), 0)
+                    first_gm = next(iter(b["gm"].values()))
+                    self.assertIn("sliders", first_gm)
+                    self.assertIn("traits", first_gm)
+                    self.assertEqual(sum(first_gm["sliders"].values()), 30)
+
+                    # Subsequent query in same transaction must succeed
+                    cur.execute("SELECT 1")
+                    val = cur.fetchone()
+                    self.assertEqual(val[0] if isinstance(val, (tuple, list)) else next(iter(val.values())), 1)
+
+                    # get_persona must fall back to seeded persona without error
+                    gm_p = P.get_persona("gm", "1", cur=cur)
+                    self.assertEqual(sum(gm_p["sliders"].values()), 30)
+                    cur.execute("SELECT 1")
+                    val = cur.fetchone()
+                    self.assertEqual(val[0] if isinstance(val, (tuple, list)) else next(iter(val.values())), 1)
+
+                    # load_personas must return JSON personas without error
+                    all_writers = P.load_personas(cur=cur)
+                    self.assertIn("LOCAL_BEAT_REPORTER", all_writers)
+                    cur.execute("SELECT 1")
+                    val = cur.fetchone()
+                    self.assertEqual(val[0] if isinstance(val, (tuple, list)) else next(iter(val.values())), 1)
+
+                    raise _RollbackTest()
+            except _RollbackTest:
+                pass
+
+            # Verify tables exist again after rollback
+            self.assertTrue(P.persona_tables_exist(cur))
+        conn.close()
+
+    def test_undefined_table_mock_cursor_recovers_without_abort(self):
+        from engines import gm_trade_engine as g
+
+        mock_conn = mock.MagicMock()
+        mock_cur = mock.MagicMock()
+        mock_cur.connection = mock_conn
+
+        # Set up savepoint context manager
+        savepoint_cm = mock.MagicMock()
+        mock_conn.transaction.return_value = savepoint_cm
+
+        def fake_execute(query, params=None):
+            if "persona_sliders" in query or "persona_traits" in query:
+                raise psycopg.errors.UndefinedTable("relation does not exist")
+            return None
+
+        mock_cur.execute.side_effect = fake_execute
+
+        # With persona_tables_exist returning True, query attempts inside savepoint and fails gracefully
+        with mock.patch("newsroom.personas.persona_tables_exist", return_value=True):
+            with mock.patch.object(g, "value_season", return_value=2036):
+                with mock.patch.object(g, "read_cap", return_value={}):
+                    with mock.patch.object(g, "read_proposals", return_value=[]):
+                        with mock.patch("engines.gm_direction.read_injuries", return_value={}):
+                            with mock.patch("engines.trade_value.read_players", return_value={}):
+                                fetch_queue = [
+                                    [(1, "CAR", "Carolina", "Panthers", "NFC", "South")],  # teams
+                                    [(1, 10, "Scott Fitterer", 0.5, 0.5, 0.5, 0.5, {}, "standard", False, True)],  # gm_profiles
+                                ]
+                                mock_cur.fetchall.side_effect = lambda: fetch_queue.pop(0) if fetch_queue else []
+                                mock_cur.fetchone.return_value = (0, 0, 20)
+                                books = g.read_books(mock_cur, 2036, 22)
+                                self.assertIn(1, books["gm"])
+                                gm_entry = books["gm"][1]
+                                self.assertIn("sliders", gm_entry)
+                                self.assertEqual(sum(gm_entry["sliders"].values()), 30)
+                                # Savepoint transaction context manager was entered
+                                savepoint_cm.__enter__.assert_called()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -261,7 +261,7 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 
 Found in the review of items 1–11. Same rules as above (top of this file). **Do not write to the live `madden` database** in any of these, except the read-only checks named below; applying migrations to live and deleting rows there is JR's call and is not part of these fixes. Each fix has a **Verify** line: the exact check the reviewer will run.
 
-## R1. GM books break when the persona tables are missing (blocker)
+## R1. [x] GM books break when the persona tables are missing (blocker)
 
 **Bug:** `engines/gm_trade_engine.py` `read_books()` (added in 4174ac5) runs `SELECT … FROM persona_sliders` / `persona_traits` inside `try/except Exception`. On a database without those tables (live `madden` today) psycopg raises `UndefinedTable`, the except swallows it, but the transaction is now aborted: every later query on that connection fails with `InFailedSqlTransaction`. `read_books` is used by `engines/front_office.py` (3 places, the front-office API), `engines/gm_negotiation.py` (live negotiations) and `gm_trade_engine.py` itself (weekly GM step, draft day, rechecks). The same pattern is in `newsroom/personas.py` `get_persona()` and `load_personas()` when given a `cur`, which `engines/gm_personas.py` `get_gm_persona()` passes.
 

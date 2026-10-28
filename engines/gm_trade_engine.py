@@ -327,23 +327,25 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
                    FROM gm_profiles g LEFT JOIN gm_team_settings st ON st.team_id = g.team_id
                    WHERE g.end_season IS NULL""")
     gm_rows = cur.fetchall()
-    try:
-        cur.execute("""
-            SELECT persona_id, temperament, sociability, confidence, openness, warmth, drive
-            FROM persona_sliders WHERE persona_type = 'gm'
-        """)
-        sl_map = {r[0]: {"temperament": r[1], "sociability": r[2], "confidence": r[3],
-                         "openness": r[4], "warmth": r[5], "drive": r[6]} for r in cur.fetchall()}
-        cur.execute("""
-            SELECT persona_id, trait_id FROM persona_traits
-            WHERE persona_type = 'gm' AND active = TRUE ORDER BY id
-        """)
-        tr_map = {}
-        for pid, tid in cur.fetchall():
-            tr_map.setdefault(pid, []).append(tid)
-    except Exception:
-        sl_map, tr_map = {}, {}
-    from newsroom.personas import seed_sliders, seed_traits
+    from newsroom.personas import persona_tables_exist, seed_sliders, seed_traits
+    sl_map, tr_map = {}, {}
+    if persona_tables_exist(cur):
+        try:
+            with cur.connection.transaction():
+                cur.execute("""
+                    SELECT persona_id, temperament, sociability, confidence, openness, warmth, drive
+                    FROM persona_sliders WHERE persona_type = 'gm'
+                """)
+                sl_map = {r[0]: {"temperament": r[1], "sociability": r[2], "confidence": r[3],
+                                 "openness": r[4], "warmth": r[5], "drive": r[6]} for r in cur.fetchall()}
+                cur.execute("""
+                    SELECT persona_id, trait_id FROM persona_traits
+                    WHERE persona_type = 'gm' AND active = TRUE ORDER BY id
+                """)
+                for pid, tid in cur.fetchall():
+                    tr_map.setdefault(pid, []).append(tid)
+        except Exception:
+            sl_map, tr_map = {}, {}
     b["gm"] = {}
     for r in gm_rows:
         gid = str(r[1])

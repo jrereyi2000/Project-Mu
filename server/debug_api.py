@@ -1102,6 +1102,10 @@ def get_personas_endpoint(type: Optional[str] = None, id: Optional[str] = None):
     """View personas across writers, GMs, players, coaches, owners, and scouts (Decision D4)."""
     with connect() as conn:
         with conn.cursor() as cur:
+            from newsroom.personas import persona_tables_exist
+            if not persona_tables_exist(cur, views=True):
+                return {"personas": [], "count": 0}
+
             query = "SELECT persona_type, persona_id, temperament, sociability, confidence, openness, warmth, drive FROM persona_sliders WHERE 1=1"
             params = []
             if type:

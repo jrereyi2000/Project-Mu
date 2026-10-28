@@ -278,7 +278,12 @@ def apply_ratings_progression(
 def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
     """Loads player roster state from season-1 (or current season if preseason scan)
     along with stats, injury, and ceiling inputs."""
-    cur.execute("""
+    cur.execute("SELECT to_regclass('public.player_ceilings') IS NOT NULL")
+    has_ceilings = bool((cur.fetchone() or [False])[0])
+    ceiling_col = "pc.ceiling as stored_ceiling" if has_ceilings else "NULL as stored_ceiling"
+    ceiling_join = "LEFT JOIN player_ceilings pc ON pc.player_id = ps.player_id" if has_ceilings else ""
+
+    cur.execute(f"""
         SELECT
             ps.player_id,
             COALESCE(p.full_name, p.player_name) as name,
@@ -293,7 +298,7 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
             COALESCE(inj.is_ir, false) as is_ir,
             COALESCE(inj.weeks_remaining, 0) as weeks_remaining,
             sp.true_value as prospect_true_val,
-            pc.ceiling as stored_ceiling
+            {ceiling_col}
         FROM player_seasons ps
         JOIN players p ON p.id = ps.player_id
         LEFT JOIN season_stat_general sg ON sg.player_id = ps.player_id AND sg.season = ps.season
@@ -304,7 +309,7 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
         LEFT JOIN scout_prospects sp ON sp.prospect_id = (
             SELECT id FROM draft_prospects dp WHERE dp.player_id = ps.player_id LIMIT 1
         )
-        LEFT JOIN player_ceilings pc ON pc.player_id = ps.player_id
+        {ceiling_join}
         WHERE ps.season = %s
           AND ps.overall_rating IS NOT NULL
           AND ps.position != 'DEF'

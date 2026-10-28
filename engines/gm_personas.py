@@ -233,7 +233,9 @@ def read_open(cur):
 
 def ensure_gm_persona(cur, gm_id, traits_cat=None):
     """Ensures persona_sliders and persona_traits rows exist in DB for this GM."""
-    from newsroom.personas import seed_sliders, seed_traits
+    from newsroom.personas import persona_tables_exist, seed_sliders, seed_traits
+    if not persona_tables_exist(cur):
+        return
     gid = str(gm_id)
     sliders = seed_sliders("gm", gid)
     traits = seed_traits("gm", gid, count=4, traits=traits_cat)
