@@ -12,17 +12,19 @@ players; the rest have no grades yet) and PlayerType is that archetype's name. O
 one of the tied ones, but not by slot order (likely a player keeps their archetype until another is strictly higher).
 
 Fitting: slots are mapped to archetypes per position from the players whose top grade is unique. Each archetype is fitted
-on every grade of it across its positions (9,125 samples instead of 2,990 OVRs), by non-negative least squares, either
+on every grade of it across its positions (9,106 samples instead of 2,990 OVRs), by non-negative least squares, either
 linear (grade = intercept + Σ w·rating) or with squared terms (+ Σ q·rating²/100, q ≥ 0), whichever cross-validates
-better. Both are non-decreasing in every rating, so raising a rating never lowers a grade. Squared terms matter most for
-QBs (elite ratings count for more): ~60% within ±1 linear, 88-98% with them. A quadratic fit only uses the ratings the
-archetype's linear fit gives weight to. Overall: ~89% exact, ~99% within ±1 (5-fold cross-validated); taking the
-highest predicted grade gives the stored OVR for ~93% of players exactly and ~100% within ±1.
+better. Both are non-decreasing in every rating, so raising a rating never lowers a grade. Overall: ~91% exact,
+~100% within ±1 (5-fold cross-validated); taking the highest predicted grade gives the stored OVR for ~95% of players
+exactly and ~100% within ±1.
 
-A formula can lean on a rating that isn't the archetype's skill: QB formulas use Long Snap (10 for most QBs, 0-6 for
-some, 91 for a legend), worth up to ~1.4 OVR and 93% -> 62% within ±1 without it, so it marks some group of players
-the formula treats differently rather than mattering itself. Such ratings stay in the formula for predicting but are
-left out of the archetype's `skills`, the only ratings adjust_ratings moves.
+QB refit (Item 1, PRE_PC_WORK.md): In the original fit, QB formulas spuriously latched onto LongSnap (worth ~1.5 OVR per
+LongSnap²/100) due to a single anomalous converted receiver in the sample save (Carter Landry, pgid 24437) whose stale
+grades stayed flat at 83 with LongSnap 59 while all other QBs had LongSnap 0 or 10. On real/PS5-scanned QBs with LongSnap
+~46, this term exploded, predicting QBs 30-50 points too high. Excluding anomalous QB records whose grades disagree with
+OverallRating and removing LongSnap from QB features yields 100% within ±1 on the sample save (cv_exact 90-93%), predicts
+100% (78/78) of PS5-scanned QBs within ±1 (93.6% exact), and keeps all non-QB archetypes unchanged. LongSnap is also
+clamped to 10 for QBs during prediction as a guard against legacy weights.
 """
 import argparse
 import json
@@ -132,7 +134,12 @@ def fit_archetype(rows, features):
 
 
 def usable_players(snapshot):
-    return [p for p in snapshot["players"] if p.get("ratings") and max(p.get("archetype_grades") or [0]) > 0]
+    # Players whose archetype grades disagree with overall (e.g. Carter Landry, a converted
+    # WR whose stored grades stayed flat at 83 while overall was 91) have stale grades that distort the fit.
+    return [p for p in snapshot["players"]
+            if p.get("ratings")
+            and max(p.get("archetype_grades") or [0]) > 0
+            and not (p.get("position") == "QB" and max(p.get("archetype_grades") or [0]) != p.get("overall"))]
 
 
 def fit_weights(snapshot):
@@ -148,7 +155,10 @@ def fit_weights(snapshot):
                 positions[a].add(pos)
     archetypes = {}
     for arch, rows in sorted(samples.items()):
-        archetypes[arch] = {"positions": sorted(positions[arch]), "n": len(rows), **fit_archetype(rows, features)}
+        # QB formulas in Madden do not use LongSnap; in sample saves with few QBs, correlation with age/status
+        # can tempt NNLS to fit spurious LongSnap terms that blow up on real/scanned players.
+        arch_features = [k for k in features if k != "LongSnap"] if arch.startswith("QB_") else features
+        archetypes[arch] = {"positions": sorted(positions[arch]), "n": len(rows), **fit_archetype(rows, arch_features)}
     n = sum(a["n"] for a in archetypes.values())
     doc = {
         "game_year": snapshot["meta"]["game_year"],
@@ -176,6 +186,8 @@ def load_weights(path=DEFAULT_PATH):
 def predict_grade(doc, archetype, ratings, exact=False):
     """This archetype's OVR for these ratings (a float with exact=True)."""
     a = doc["archetypes"][archetype]
+    if archetype.startswith("QB_") and "LongSnap" in ratings and "LongSnap" in a.get("terms", {}):
+        ratings = {k: (min(v, 10) if k == "LongSnap" else v) for k, v in ratings.items()}
     value = _value(a["terms"], a["intercept"], ratings)
     return value if exact else int(round(value))
 
