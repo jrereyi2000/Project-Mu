@@ -46,7 +46,7 @@ Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgi
   - `report` CLI: computes coverage on active players (skipping `DEF` rows) and outputs `captures/commentary_unmatched.csv` with player info and top 5 ranked candidates, leaving `chosen` for JR review. Active players: 1,681 / 1,797 matched (93.5%) with the save's IDs, 116 unmatched (all generated players).
   - `apply` CLI: reads reviewed CSV, dry-run by default, validates chosen surnames against commentary lookup, updates `players.full_name` and `player_name`, and records historical aliases in `player_name_aliases`.
 * **Database Migration & Alias Search:**
-  - Added migration `db/migrations/2027_01_07_player_name_aliases.sql` creating `player_name_aliases` table and index; added table to `db/init_db.sql`. Applied to `madden_test`.
+  - Added migration `db/migrations/2027_01_07_player_name_aliases.sql` creating `player_name_aliases` table and index; added table to `db/init_db.sql`. Applied to `madden_test` and to live `madden` (2026-10-28).
   - Integrated `player_name_aliases` into player search in `server/api.py` (`/api/search`) and `server/napper_api.py`.
 * **Teleporter Integration:**
   - `pipeline/teleport.py` and `pipeline/teleport_draft.py` set `PLYR_COMMENT` from `commentary_id()` (0 when unrecorded).
