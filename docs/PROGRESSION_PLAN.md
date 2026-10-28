@@ -147,6 +147,8 @@ Dev trait changes become part of the offseason pass instead of Madden's XP thres
 
 ## 6. Player personalities (V2.13) and progression
 
+The traits below are entries in the shared trait catalogue of [`PERSONALITY_PLAN.md`](PERSONALITY_PLAN.md) §4.2, not a separate system.
+
 V2.13 plans personas for players (identity line, takes log, season summaries). This plan adds a small set of **numeric traits** to each persona, decided by the engine and stored, so personality can affect the numbers without a language model deciding anything:
 
 | Trait (0–1) | Effect on progression | Other uses |
