@@ -1,5 +1,7 @@
 # Player Headshot Generation Architecture & Pipeline
 
+**Status (2026-10-28):** built. `headshots/` generates and processes the headshots (1,694 player images in `static/players/`); `rookie_headshots.py` covers new rookies. PROJECT_SPEC §2.20 describes the current system.
+
 This document details the end-to-end design, deterministic synthesis, batch generation, and post-processing pipeline used to produce photorealistic AI player headshots for all players in the league database.
 
 ---

@@ -1,5 +1,7 @@
 # Step 1: Contract scan (sub-plan)
 
+**Status (2026-10-28):** built and live. Migration applied 2026-10-19; first full scan loaded 2026-10-20 (master §5).
+
 Written 2026-10-19 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md), step 1. This plan builds within the master's fixed interfaces: §2.1 schema, §2.3 capture conventions, D5/D7, and the §3 console facts. Where it extends them, it says so.
 
 **Delivers:** `madden_capture.py --only contracts`, `contracts.csv` + `team_cap.csv` from `extract.py`, `pipeline/money.py`, migration `2026_12_07_contracts.sql` (folded into `init_db.sql`), a `contracts` load mode, `weekly_capture.py --mode contracts [--teams CAR,NO]`, a contracts phase in the Season scan, and a `#debug` button.

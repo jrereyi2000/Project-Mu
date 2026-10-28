@@ -1,5 +1,7 @@
 # Project Mu: Newsroom & Social Desk Injury Integration Plan
 
+**Status (2026-10-28):** built and merged 2026-10-15 (`372a042`): tiered injury coverage in the newsroom, fantasy desk and Agent Wire (`get_team_injury_report` and friends). PROJECT_SPEC describes the current system.
+
 > **System Objective**: Incorporate the weekly ground-truth `injuries` ledger into the Project Mu Newsroom (National writers, local beat reporters, fantasy analysts) and Agent Wire (social desk) with authentic, tiered coverage thresholds.
 > **Git Rule**: Working on isolated worktree `.claude/worktrees/newsroom-injuries` on branch `feat/newsroom-injuries`. When commits are made, check out `main` and merge `feat/newsroom-injuries` in right away without asking.
 

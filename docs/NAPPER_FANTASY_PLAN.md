@@ -1,6 +1,8 @@
 # Project Mu: "Napper" — Interactive Fantasy League Platform
 ## Architectural Specification & Implementation Plan
 
+**Status (2026-10-28):** built. Napper is live (`server/napper_api.py`, `Mu_Network/src/components/napper/`); the weekly follow-ups are in [NAPPER_UPDATES.md](NAPPER_UPDATES.md) and [NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md](NAPPER_WEEKLY_IMPLEMENTATION_PLAN.md). PROJECT_SPEC describes the current system.
+
 ![Napper Desktop Interface Reference](../data/images/sleeper_desktop_reference.png)
 
 ---

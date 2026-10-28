@@ -1,5 +1,7 @@
 # Project Mu: Coach Slants and Coordinators Implementation Plan
 
+**Status (2026-10-28):** built. Coordinators, slants and staff profiles landed 2026-10-16 (`engines/coordinator_seeder.py`, `5311ed3`); the full coaching carousel with coordinator poaching 2026-10-26 (`engines/coaching_carousel.py`, `3e4d3d9`). PROJECT_SPEC describes the current system.
+
 ## 1. Executive Summary
 
 This plan defines the architecture for tracking **coaching slants** (`OFFENSIVE`, `DEFENSIVE`, `CEO`) and a full **coordinator infrastructure** (Offensive Coordinators and Defensive Coordinators) across the 32 NFL franchises.

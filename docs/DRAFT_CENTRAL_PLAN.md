@@ -1,6 +1,6 @@
 # Draft Central & Immersive College Scouting Plan
 
-**Status:** Plan Approved / Scoped  
+**Status (2026-10-28):** built 2026-10-24 (`81e1b29`, `Mu_Network/src/DraftPage.tsx`); linked from the Draft Capital grid (`b668894`).  
 **Access Model:** Accessible exclusively via the `#debug` control view (not a top-level navbar tab); navigating to `#draft` enters the Draft Central home page.  
 **Reference Specs:** `PROJECT_SPEC.md` §2.10, §2.18, §3.3c, §3.3g; `docs/team_management/04_SCOUTING_AND_DRAFT_PLAN.md`.
 

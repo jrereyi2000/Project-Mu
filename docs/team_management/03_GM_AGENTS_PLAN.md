@@ -1,5 +1,7 @@
 # Step 3: GM agents (sub-plan)
 
+**Status (2026-10-28):** built and live. Phases 1–7 on `main`; migration `2026_12_10_gm_agents.sql` applied 2026-10-20 (master §5).
+
 Written 2026-10-20 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) step 3. This plan owns master §2.4 (`gm_profiles`, `gm_trade_proposals`, the Front Office surface). It reads step 1's contract tables (§2.1) and step 2's `transactions` (§2.2) only through the interfaces the master plan fixes.
 
 **Delivers:** 32 stable GM personas, a per-season team direction and positional needs, a data-fitted trade value model, a weekly proposal engine that paces toward ~17 in-season and 15–20 offseason executed trades a season, draft-pick ownership, a Front Office section on `#debug` where JR approves, rejects and confirms trades, the moves a confirmed trade makes (players, contracts, cap rows, picks, `transactions` rows), and read helpers that steps 4 and 5 consume.

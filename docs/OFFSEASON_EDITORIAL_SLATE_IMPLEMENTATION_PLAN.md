@@ -1,5 +1,7 @@
 # Project Mu: Offseason Editorial Package Implementation Plan
 
+**Status (2026-10-28):** built 2026-10-16 (`4e02c72`): the six offseason article types and the Week 24 package in [EDITORIAL_MATRIX.md](EDITORIAL_MATRIX.md), which is now the source of truth.
+
 ## 1. Objective
 
 Build an offseason editorial package that follows the season from the Super Bowl through the first round of the next NFL Draft. All six articles are published together in the single interseason publication week after Week 23 and before the next season's Week 1 (internal marker: **Week 24**, labeled **“Offseason”** in the UI).

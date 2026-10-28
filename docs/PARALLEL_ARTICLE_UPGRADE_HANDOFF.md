@@ -1,5 +1,7 @@
 # Project Mu: Parallel Article Generation Upgrade Handoff Specification
 
+**Status (2026-10-28):** done. Agents 0–9 all landed on `main` on 2026-10-15 (Agent 3's task was folded into Agent 0).
+
 ## Overview & Context
 We recently completed the integration of two major data pipelines into Project Mu:
 1. **Coaching System**: Head-coach profiles (`coaches`, `coach_tenures`, `coach_seasons`, `coty_scores`), measured pass lean and fourth-down aggressiveness (`team_seasons.observed_pass_lean`, `team_seasons.observed_fourth_down`), coverage philosophies, career playoff/Super Bowl records, and Coach of the Year outperformance metrics.

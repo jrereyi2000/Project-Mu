@@ -1,5 +1,7 @@
 # Project Mu: Weekly Injury Extraction Pipeline Plan
 
+**Status (2026-10-28):** built 2026-10-15 (`a5f668e`): `madden_capture.py`'s `run_injuries` and the `injuries` load. PROJECT_SPEC describes the current system.
+
 ## 1. System Overview & Objectives
 This plan outlines the integration of weekly injury extraction into Project Mu's capture, OCR, and ingestion pipeline. Madden exposes an **Injury Report** screen under Franchise mode (`Manage Roster > Injury Report`). Unlike Player Stats or Team Stats, the Injury Report is scoped strictly by individual team without an all-NFL summary view.
 

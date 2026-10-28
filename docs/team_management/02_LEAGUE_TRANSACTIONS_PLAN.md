@@ -1,5 +1,7 @@
 # Step 2: League Transactions weekly scan (sub-plan)
 
+**Status (2026-10-28):** built and live. Migration applied 2026-10-19; first backfill loaded 2026-10-20; weekly scans continue (master §5).
+
 Written 2026-10-19 for [`TEAM_MANAGEMENT_PLAN.md`](../TEAM_MANAGEMENT_PLAN.md) step 2. This plan owns master §2.2 (the `transactions` schema). It uses step 1's §2.1 contract tables, `pipeline/money.py` and `--mode contracts --teams` only through the interfaces the master plan fixes, and it never designs them.
 
 **Delivers:** `madden_capture.py --only transactions`, `transactions.csv`, migration `2026_12_08_transactions.sql`, a loader that moves players between teams and keeps their contracts and the team cap rows current from the transactions (no automatic Team Salary re-scans, §6 answer 1), a transactions phase in the weekly run, and the changes the engines and Napper need once a player's team can change mid-season.

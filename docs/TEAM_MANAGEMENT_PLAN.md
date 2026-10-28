@@ -1,5 +1,7 @@
 # Team Management: Implementation Plan (master)
 
+**Status (2026-10-28):** steps 1–4 built and live; step 5 built through phase 9; the follow-on [06_DRAFT_ROUND_TRADES_PLAN.md](team_management/06_DRAFT_ROUND_TRADES_PLAN.md) is built but its migration isn't applied to `madden` yet. Details in §5.
+
 Written 2026-10-19 from a design talk with JR. This plan ties the work together. Each step gets its own sub-plan under [`docs/team_management/`](team_management/), and a sub-agent writes that sub-plan before building the step. This document holds the decisions, the order of the steps, and the **interfaces between them**: tables, functions, file layouts. With those fixed, each sub-agent can plan and build its step without reading the others.
 
 **Goal:** Mu knows every contract and every roster move in the league, and Mu (not Madden's CPU) decides the trades and the Round 1 picks. The CPU still handles routine signings and releases.

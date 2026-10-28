@@ -1,5 +1,7 @@
 # Project Mu: PC Migration & Universe Teleportation Master Plan
 
+**Status (2026-10-28):** Phase 0 (Mac prep, §2) done: all 11 pre-PC items complete (§2.4, [PRE_PC_WORK.md](PRE_PC_WORK.md)). Phases 1–7 wait on the PC; the teleporter (§4.3) has dry runs only. Part 2 (V2) status is at its end.
+
 **Target Execution Window:** Late October 2026 – Early 2027  
 **Architecture Transition:** PS5 Remote Play screen capture (`madden_capture.py` + `extract.py` at the repo root, driven by `pipeline/weekly_capture.py`) $\longrightarrow$ native PC franchise-file I/O ([`madden-franchise`](https://github.com/bep713/madden-franchise), which lists full support for Madden 19–27 and CFB 27 PC Dynasty saves)  
 **Primary Hardware:** AMD Ryzen 7 9700X, NVIDIA GeForce RTX 5070 Ti 16GB, 24GB–32GB DDR5, 1TB+ NVMe SSD  
