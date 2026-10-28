@@ -138,7 +138,7 @@ Plan §7.4 already describes the quality bar (voice, facts, structure, thinking)
 
 1. **Now, no hardware:** cap thinking on the short Gemini calls (plan §7.9). Then run `tools/social_model_compare.py` with `gemini-3.8-flash:low` and `gemini-3.5-flash-lite` to set the bar the open models have to meet.
 2. **Hosted open models, now:** run one week of newsroom articles through DeepSeek V4.1 Flash and GLM-5.3-Flash (and Kimi K3 as a quality ceiling) and compare them side by side with Gemini. That needs the OpenAI-compatible port of the tool loop from §4; the comparison decides whether the port is worth keeping. Check especially: tool-call reliability over dozens of steps, persona voice, and fact accuracy against the data tools.
-3. **Local short tasks, on the Mac now (plan §2.4) and again on the PC:** Agent Wire, memory and scouting prompts through Gemma 4 26B-A4B, Qwen3.8-27B, LFM2.5-24B-A2B and gpt-oss-20b, each with thinking off and on.
+3. **Local short tasks, on the Mac now (plan §2.5) and again on the PC:** Agent Wire, memory and scouting prompts through Gemma 4 26B-A4B, Qwen3.8-27B, LFM2.5-24B-A2B and gpt-oss-20b, each with thinking off and on.
 4. **Beside-Madden tier, on the PC:** GM JSON and commission classification through LFM3-1.7B and Gemma 4 E4B while Madden is running. Measure the GPU memory that's actually free and Madden's frame rate.
 5. **Re-check before the switch:** this field changes monthly. Mistral Large 4, MiniMax M3.1 Flash weights and third-party LFM3 scores are all due within weeks.
 
