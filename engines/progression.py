@@ -136,7 +136,8 @@ def compute_player_delta(
     season: int,
     aging_curves: Dict[str, Any],
     league_adj: float = 0.0,
-    star_adj: float = 0.0
+    star_adj: float = 0.0,
+    performance: float = 0.0
 ) -> Tuple[int, int, Dict[str, float], str]:
     """Calculates yearly OVR delta and breakdown of individual causal terms (§5.2).
     Returns (delta_ovr, new_ovr, terms_breakdown, cause_tag)."""
@@ -193,7 +194,9 @@ def compute_player_delta(
     baseline_offset = AGE_BAND_OFFSET[min(band, len(AGE_BAND_OFFSET) - 1)]
     # League shape term (calibrate_league_term): extra development for young players, 0 from 30 on
     league_t = league_adj * league_term_weight(age, ovr) + (star_adj if ovr >= STAR_OVR and age <= STAR_MAX_AGE else 0.0)
-    raw_delta = age_t + dev_t + ceil_t + play_t + inj_t + noise_t + baseline_offset + league_t
+    # Performance term (performance_term): how well he played last season, ranked within his position group
+    perf_t = performance
+    raw_delta = age_t + dev_t + ceil_t + play_t + inj_t + noise_t + baseline_offset + league_t + perf_t
 
     # Clamping per age band and OVR band
     if ovr >= 99:
@@ -218,6 +221,10 @@ def compute_player_delta(
     # Assign narrative cause tag (§5.6)
     if is_ir or (inj_t <= -0.4 and final_delta < 0):
         cause = "INJURY"
+    elif perf_t >= 1.0 and final_delta > 0:
+        cause = "STANDOUT_SEASON"
+    elif perf_t <= -0.75 and final_delta < 0:
+        cause = "POOR_SEASON"
     elif final_delta >= 3 and (dev_t + ceil_t >= 1.5):
         cause = "BREAKOUT"
     elif ceil_t >= 0.75 and final_delta > 0:
@@ -241,6 +248,7 @@ def compute_player_delta(
         "injury": round(inj_t, 2),
         "noise": round(noise_t, 2),
         "league": round(league_t, 2),
+        "performance": round(perf_t, 2),
     }
 
     return final_delta, new_ovr, breakdown, cause
@@ -372,6 +380,92 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
     return rows
 
 
+# ---------------------------------------------------------------- performance ----
+# How well a player played (JR, 2026-10-28), from Project Mu's season stats until the PC save's per-game
+# GAMERATING exists. Production per game is ranked against the same position group (players with at least
+# PERF_MIN_GAMES games), mapped to a score from -1 (worst) to +1 (best), plus award bonuses.
+PERF_MIN_GAMES = 6
+PERF_GROUPS = {
+    "QB": ("QB",), "RB": ("HB", "FB"), "REC": ("WR", "TE"), "OL": ("LT", "LG", "C", "RG", "RT"),
+    "FRONT": ("DT", "LEDG", "REDG", "LE", "RE", "MIKE", "WILL", "SAM", "MLB", "LOLB", "ROLB"),
+    "DB": ("CB", "FS", "SS"), "K": ("K",), "P": ("P",),
+}
+AWARD_BONUS = {"First Team All-Pro": 1.0, "Second Team All-Pro": 0.5, "MVP": 0.5, "OPOY": 0.5, "DPOY": 0.5,
+               "OROY": 0.5, "DROY": 0.5}
+AWARD_BONUS_CAP = 1.5
+PERF_WEIGHT = 1.0                # OVR a year for the best (+1) or worst (-1) production in the group
+PERF_TERM_RANGE = (-1.0, 2.0)    # rank plus awards, clamped
+# Not fitted to Madden: its 2035->2036 changes barely follow production (correlation 0.03 with the score), so
+# this term is Project Mu's choice; the backtest against Madden gets slightly worse with it.
+
+
+def performance_term(perf: Optional[Dict[str, Any]]) -> float:
+    if not perf:
+        return 0.0
+    lo, hi = PERF_TERM_RANGE
+    return max(lo, min(hi, PERF_WEIGHT * perf.get("score", 0.0) + perf.get("awards", 0.0)))
+
+
+def production(group: str, r: Dict[str, Any]) -> Optional[float]:
+    """One season's production for a position group, per game (None: nothing to rank on)."""
+    g = lambda k: float(r.get(k) or 0)
+    games = g("games_played")
+    if group == "K":
+        return g("kick_fg_pct") + g("kick_fgm_50") * 2 if g("kick_fga") >= 10 else None
+    if group == "P":
+        return g("punt_net_average") if g("punt_punts") >= 20 else None
+    if games < PERF_MIN_GAMES:
+        return None
+    if group == "QB":
+        v = g("pass_yards") + 20 * g("pass_tds") - 45 * g("interceptions") + g("rush_yards") + 20 * g("rush_tds")
+    elif group == "RB":
+        v = g("rush_yards") + g("rec_yards") + 20 * (g("rush_tds") + g("rec_tds")) - 25 * g("fumb")
+    elif group == "REC":
+        v = g("rec_yards") + 20 * g("rec_tds") + 2 * g("receptions")
+    elif group == "OL":
+        v = -g("blk_sacks_allowed")
+    elif group == "FRONT":
+        v = (g("def_tackles") + 2 * g("def_tfl") + 5 * g("def_sacks") + 6 * g("def_ints") + 2 * g("def_deflections")
+             + 4 * g("def_forced_fumbles") + 15 * g("def_tds"))
+    else:  # DB
+        v = (g("def_tackles") + 8 * g("def_ints") + 3 * g("def_deflections") + 4 * g("def_forced_fumbles")
+             + 15 * g("def_tds"))
+    return v / games
+
+
+def performance_scores(cur, season: int) -> Dict[int, Dict[str, Any]]:
+    """{player_id: {"score": -1..+1 (position-group rank of production), "awards": bonus, "notes": [...]}} for
+    `season`. Players without enough games or attempts get no score (their playing-time term still applies)."""
+    cur.execute("SELECT * FROM season_stat_lines WHERE season = %s", (season,))
+    cols = [d[0] for d in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    by_group = defaultdict(list)
+    for r in rows:
+        group = next((k for k, v in PERF_GROUPS.items() if r.get("position") in v), None)
+        if group:
+            v = production(group, r)
+            if v is not None:
+                by_group[group].append((v, r["player_id"]))
+    out = {}
+    for group, vals in by_group.items():
+        vals.sort()
+        n = len(vals)
+        for i, (_, pid) in enumerate(vals):
+            # average rank of ties, as a percentile, to -1..+1
+            lo = next(j for j in range(n) if vals[j][0] == vals[i][0])
+            hi = max(j for j in range(n) if vals[j][0] == vals[i][0])
+            pct = ((lo + hi) / 2) / (n - 1) if n > 1 else 0.5
+            out[pid] = {"score": round(2 * pct - 1, 3), "awards": 0.0, "notes": [], "group": group}
+    cur.execute("SELECT player_id, award_type FROM awards WHERE season = %s AND player_id IS NOT NULL", (season,))
+    for pid, award in cur.fetchall():
+        bonus = AWARD_BONUS.get(award)
+        if bonus:
+            e = out.setdefault(pid, {"score": 0.0, "awards": 0.0, "notes": [], "group": None})
+            e["awards"] = min(AWARD_BONUS_CAP, e["awards"] + bonus)
+            e["notes"].append(award)
+    return out
+
+
 def fetch_player_attributes_map(cur, season: int) -> Dict[int, Dict[str, int]]:
     """Loads player ratings from player_attributes for the season."""
     cur.execute("""
@@ -420,8 +514,10 @@ def run_progression(
                 player_id=p["player_id"], position=p["position"], age=age, ovr=p["overall_rating"],
                 dev_trait=p["dev_trait"], ceiling=ceiling, games_played=p["games_played"],
                 downs_played=p["downs_played"], is_starter=p["is_starter"], is_ir=p["is_ir"],
-                injury_weeks=p["weeks_remaining"], season=season, aging_curves=aging_curves)
+                injury_weeks=p["weeks_remaining"], season=season, aging_curves=aging_curves,
+                performance=performance_term(perf.get(p["player_id"])))
 
+        perf = performance_scores(cur, season - 1)
         prepared = [(p, *delta_inputs(p)) for p in roster]
         terms = (0.0, 0.0)
         if hold_shape and prepared:
@@ -472,6 +568,8 @@ def run_progression(
                 "injury_term": breakdown["injury"],
                 "noise_term": breakdown["noise"],
                 "league_term": breakdown["league"],
+                "performance_term": breakdown["performance"],
+                "performance_notes": (perf.get(p_id) or {}).get("notes", []),
                 "ratings_diff": ratings_diff,
                 "ceiling": ceiling,
                 "ceiling_source": c_source,
@@ -491,8 +589,8 @@ def run_progression(
                     INSERT INTO player_progression_history (
                         season, player_id, old_ovr, new_ovr, delta_ovr,
                         age_term, dev_term, ceiling_term, play_term, injury_term, noise_term, league_term,
-                        ratings_diff, created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        performance_term, ratings_diff, created_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (season, player_id) DO UPDATE SET
                         old_ovr = EXCLUDED.old_ovr,
                         new_ovr = EXCLUDED.new_ovr,
@@ -504,12 +602,13 @@ def run_progression(
                         injury_term = EXCLUDED.injury_term,
                         noise_term = EXCLUDED.noise_term,
                         league_term = EXCLUDED.league_term,
+                        performance_term = EXCLUDED.performance_term,
                         ratings_diff = EXCLUDED.ratings_diff,
                         created_at = NOW();
                 """, (
                     r["season"], r["player_id"], r["old_ovr"], r["new_ovr"], r["delta_ovr"],
                     r["age_term"], r["dev_term"], r["ceiling_term"], r["play_term"], r["injury_term"], r["noise_term"],
-                    r["league_term"], json.dumps(r["ratings_diff"])
+                    r["league_term"], r["performance_term"], json.dumps(r["ratings_diff"])
                 ))
                 cur.execute("""
                     INSERT INTO player_ceilings (player_id, ceiling, source, updated_season, created_at)
@@ -535,9 +634,11 @@ def run_progression(
 
 
 # ---------------------------------------------------------------- backtest ----
-def run_backtest(conn, season: int = 2036, log=print) -> Dict[str, Any]:
+def run_backtest(conn, season: int = 2036, with_performance: bool = False, log=print) -> Dict[str, Any]:
     """Evaluates predicted vs actual ΔOVR on the 2035->2036 offseason.
-    Reports error by age band, OVR band, and position group, and compares against dev_quality."""
+    Reports error by age band, OVR band, and position group, and compares against dev_quality.
+    The Madden calibration (AGE_BAND_OFFSET) is fitted without the performance term, which Madden doesn't follow;
+    with_performance shows what that term costs against Madden."""
     with conn.cursor() as cur:
         _, aging_pairs, _ = read_fit_rows(cur, season)
         aging_curves = fit_aging(aging_pairs)
@@ -569,6 +670,7 @@ def run_backtest(conn, season: int = 2036, log=print) -> Dict[str, Any]:
         """, (season, season - 1, season - 1, season - 1))
 
         rows = cur.fetchall()
+        perf = performance_scores(cur, season - 1) if with_performance else {}
         # dev_quality comparison fit
         dev_windows = fetch_window(cur, season)
 
@@ -598,7 +700,8 @@ def run_backtest(conn, season: int = 2036, log=print) -> Dict[str, Any]:
             is_ir=is_ir,
             injury_weeks=inj_w,
             season=season,
-            aging_curves=aging_curves
+            aging_curves=aging_curves,
+            performance=performance_term(perf.get(p_id))
         )
         d_act = o36 - o35
         preds.append(d_pred)
@@ -777,6 +880,31 @@ def rookie_class(turnover: Dict[str, Any], size: int, rng: random.Random) -> Lis
     return out
 
 
+SIM_ALL_PRO_PER_SEASON = 62      # First + Second Team, as in the real awards table
+
+
+def simulated_performance(roster: List[Dict[str, Any]], season: int) -> Dict[int, Dict[str, Any]]:
+    """A season's performance for the simulation, which has no stats: production ranked within the position group
+    on OVR plus seeded noise (better players usually, not always, produce more), and the 62 best scores, spread over
+    the groups by size, get All-Pro bonuses (the first half First Team)."""
+    rng = random.Random(f"perf:{season}")
+    by_group = defaultdict(list)
+    for p in roster:
+        group = next((k for k, v in PERF_GROUPS.items() if p["position"] in v), None)
+        if group:
+            by_group[group].append((p["ovr"] + rng.gauss(0.0, 4.0), p["player_id"]))
+    out = {}
+    for group, vals in by_group.items():
+        vals.sort()
+        n = len(vals)
+        for i, (_, pid) in enumerate(vals):
+            out[pid] = {"score": round(2 * (i / (n - 1) if n > 1 else 0.5) - 1, 3), "awards": 0.0, "notes": []}
+        k = round(SIM_ALL_PRO_PER_SEASON * n / max(len(roster), 1))
+        for j, (_, pid) in enumerate(reversed(vals[-k:] if k else [])):
+            out[pid]["awards"] = AWARD_BONUS["First Team All-Pro"] if j < (k + 1) // 2 else AWARD_BONUS["Second Team All-Pro"]
+    return out
+
+
 def league_shape(roster: List[Dict[str, Any]]) -> Dict[str, Any]:
     n = len(roster)
     rows = [{"player_id": p["player_id"], "team_id": p["team_id"], "ovr_start": p["ovr"]} for p in roster]
@@ -837,13 +965,15 @@ def run_simulation(
         staying = [p for p in roster if leave_rng.random() >= gone_rate(turnover, p["age"], p["ovr"])]
         rng = random.Random(f"draft:{sim_s}")
         rookies = rookie_class(turnover, size - len(staying), rng)
+        perf = simulated_performance(roster, sim_s - 1)       # last season, played by this roster
 
         def progress(p, dev, star=0.0, sim_s=sim_s):
             ceiling, _ = seed_player_ceiling(p["player_id"], p["ovr"], p["age"] + 1, p["dev"])
             return compute_player_delta(
                 player_id=p["player_id"], position=p["position"], age=p["age"] + 1, ovr=p["ovr"], dev_trait=p["dev"],
                 ceiling=ceiling, games_played=16, downs_played=None, is_starter=True, is_ir=False,
-                injury_weeks=0, season=sim_s, aging_curves=aging_curves, league_adj=dev, star_adj=star)[1]
+                injury_weeks=0, season=sim_s, aging_curves=aging_curves, league_adj=dev, star_adj=star,
+                performance=performance_term(perf.get(p["player_id"])))[1]
 
         terms = (calibrate_league_term(staying, [r["ovr"] for r in rookies], target, progress)[0]
                  if hold_shape else (0.0, 0.0))
@@ -885,6 +1015,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Dry run without database commit")
     parser.add_argument("--backtest", action="store_true", help="Evaluate 2035->2036 actual vs predicted progression")
     parser.add_argument("--simulate", type=int, metavar="N", help="Simulate N seasons ahead to verify stability")
+    parser.add_argument("--with-performance", action="store_true",
+                        help="With --backtest: include the performance term (Madden doesn't follow it)")
     parser.add_argument("--follow-madden", action="store_true",
                         help="No league term: let the league follow Madden's turnover instead of holding its 2036 shape")
     parser.add_argument("--dsn", default=DSN, help="Database DSN")
@@ -893,7 +1025,8 @@ def main():
 
     with psycopg.connect(args.dsn) as conn:
         if args.backtest:
-            run_backtest(conn, season=args.season if args.season <= 2036 else 2036)
+            run_backtest(conn, season=args.season if args.season <= 2036 else 2036,
+                         with_performance=args.with_performance)
         elif args.simulate:
             run_simulation(conn, start_season=args.season if args.season <= 2036 else 2036, num_seasons=args.simulate,
                            hold_shape=not args.follow_madden)

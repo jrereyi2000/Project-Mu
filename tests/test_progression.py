@@ -281,3 +281,43 @@ def test_progression_db_execution():
             cur.execute("SELECT count(*) FROM player_ceilings")
             c_count = cur.fetchone()[0]
             assert c_count >= count
+
+
+def test_production_ranks_within_the_position_group():
+    from engines.progression import production
+    good = {"games_played": 16, "pass_yards": 4800, "pass_tds": 40, "interceptions": 8}
+    bad = {"games_played": 16, "pass_yards": 2900, "pass_tds": 12, "interceptions": 18}
+    assert production("QB", good) > production("QB", bad)
+    assert production("QB", {"games_played": 3, "pass_yards": 900}) is None          # too few games
+    assert production("K", {"kick_fga": 5, "kick_fg_pct": 100}) is None              # too few attempts
+    assert production("OL", {"games_played": 17, "blk_sacks_allowed": 1}) > production(
+        "OL", {"games_played": 17, "blk_sacks_allowed": 9})
+
+
+def test_performance_term_is_rank_plus_awards_clamped():
+    from engines.progression import performance_term
+    assert performance_term(None) == 0.0
+    assert performance_term({"score": 1.0, "awards": 0.0}) == 1.0
+    assert performance_term({"score": -1.0, "awards": 0.0}) == -1.0
+    assert performance_term({"score": 1.0, "awards": 1.5}) == 2.0                  # clamped
+    assert performance_term({"score": -1.0, "awards": 0.5}) == -0.5
+
+
+def test_performance_moves_the_delta(mock_aging_curves):
+    from engines.progression import compute_player_delta
+    kw = dict(player_id=7, position="WR", age=25, ovr=80, dev_trait="Normal", ceiling=88.0, games_played=16,
+              downs_played=None, is_starter=True, is_ir=False, injury_weeks=0, season=2037,
+              aging_curves=mock_aging_curves)
+    up = compute_player_delta(**kw, performance=2.0)
+    down = compute_player_delta(**kw, performance=-1.0)
+    assert up[1] - down[1] == 3
+    assert up[2]["performance"] == 2.0 and up[3] == "STANDOUT_SEASON"
+
+
+def test_simulated_performance_gives_scores_and_all_pros():
+    from engines.progression import simulated_performance
+    roster = [{"player_id": i, "position": "WR" if i % 2 else "CB", "ovr": 60 + i % 40} for i in range(400)]
+    perf = simulated_performance(roster, 2037)
+    assert len(perf) == 400
+    assert -1.0 <= min(v["score"] for v in perf.values()) and max(v["score"] for v in perf.values()) <= 1.0
+    assert sum(1 for v in perf.values() if v["awards"]) == 62

@@ -1318,6 +1318,7 @@ CREATE TABLE IF NOT EXISTS player_progression_history (
     injury_term NUMERIC(4, 2) NOT NULL DEFAULT 0,
     noise_term NUMERIC(4, 2) NOT NULL DEFAULT 0,
     league_term NUMERIC(4, 2) NOT NULL DEFAULT 0,       -- league-shape term (development + star)
+    performance_term NUMERIC(4, 2) NOT NULL DEFAULT 0,  -- last season's production rank + awards
     ratings_diff JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (season, player_id)

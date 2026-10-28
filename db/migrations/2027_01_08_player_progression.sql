@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS player_progression_history (
     injury_term NUMERIC(4, 2) NOT NULL DEFAULT 0,
     noise_term NUMERIC(4, 2) NOT NULL DEFAULT 0,
     league_term NUMERIC(4, 2) NOT NULL DEFAULT 0,       -- league-shape term (development + star)
+    performance_term NUMERIC(4, 2) NOT NULL DEFAULT 0,  -- last season's production rank + awards
     ratings_diff JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (season, player_id)
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS player_progression_history (
 
 -- Databases created before the league-shape term (2026-10-28)
 ALTER TABLE player_progression_history ADD COLUMN IF NOT EXISTS league_term NUMERIC(4, 2) NOT NULL DEFAULT 0;
+ALTER TABLE player_progression_history ADD COLUMN IF NOT EXISTS performance_term NUMERIC(4, 2) NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_player_progression_season ON player_progression_history (season);
 CREATE INDEX IF NOT EXISTS idx_player_progression_player ON player_progression_history (player_id);
