@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work Briefs
 
-**Status:** 11 items, none started (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
+**Status:** 11 items, 1 done (item 4), 10 remaining (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
@@ -84,7 +84,8 @@ Draft prospects (`scout_prospects`) go through the same `report` so 2037 rookies
 
 ---
 
-## 4. `pipeline/watch_save.py`
+## 4. `pipeline/watch_save.py` (Done)
+*Completed 2026-10-28.* Built `pipeline/watch_save.py`, extracted `weekly_capture.run_weekly_engines` for deterministic engine reuse, and covered with 21 unit and integration tests in `tests/test_watch_save.py`. Verified end-to-end dry-run against `CAREER-GIANTS-AUTOSAVE` and `madden_test`.
 
 **Goal:** a daemon that notices when Madden saves a new week and runs the weekly pipeline on the save (plan §5.2).
 
