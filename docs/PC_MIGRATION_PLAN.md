@@ -661,6 +661,8 @@ Extend the persona and memory model the newsroom already uses (identity line, ta
 
 Personas are generated once on the local model and stored; memory layers update as they act. Identity stays fixed, like `agent_memories.persistent_memory`. Player and coach personas also get numeric traits (work ethic, coachability, teacher, specialty, …) that feed progression (V2.14).
 
+The personality model (Sims-style sliders with a budget, traits from a catalogue, views that apply only when relevant, mood from the week's data, relationships) and the agent loops are in [`PERSONALITY_PLAN.md`](PERSONALITY_PLAN.md).
+
 ## V2.14 Project Mu Owns Progression
 
 Turn off Madden's player progression (XP sliders at 0, which live in the save's `ProgressionXPSlider` table; Madden's offseason regression overwritten from a snapshot) and decide every rating change in `engines/progression.py`: age, dev trait, a hidden ceiling seeded from scouting's `V`, playing time and game grade, injuries, and later coach and player personality traits. Changes are written through the save writer and stored with their causes for the newsroom. Plan: [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md).
@@ -677,8 +679,6 @@ Madden plays the games; Project Mu makes every front-office decision for all 32 
 | 2 | V2.8 League memory | stored articles and stats |
 | 3 | V2.13 Personalities (players, coaches) | agent memory |
 | 4 | V2.2 Press conferences, V2.3 Player voices | V2.8, V2.13 |
-The personality model (Sims-style sliders with a budget, traits from a catalogue, views that apply only when relevant, mood from the week's data, relationships) and the agent loops are in [`PERSONALITY_PLAN.md`](PERSONALITY_PLAN.md).
-
 | 5 | V2.4 Photography | local headshots (§7.7) |
 | 6 | V2.12 Narratives | game scripts, records, hot seat |
 | 7 | V2.11 Negotiations, V2.9 Inbox | GM agents, V2.12, V2.13 |
