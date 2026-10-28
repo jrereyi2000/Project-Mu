@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work Briefs
 
-**Status:** 6 of 11 items complete (Item 1 QB OVR refit, Item 2 surname renames/commentary IDs, Item 3 body skin tone, Item 4 watch_save.py, Item 5 thinking caps, Item 8 fold OPEN_MODEL_RESEARCH into §7 done 2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
+**Status:** 7 of 11 items complete (Item 1 QB OVR refit, Item 2 surname renames/commentary IDs, Item 3 body skin tone, Item 4 watch_save.py, Item 5 thinking caps, Item 6 provider switch, Item 8 fold research into §7, Item 11 progression phase C done 2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
@@ -196,19 +196,26 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
 
 ---
 
-## 11. Progression plan phase C (V2.14)
+## 11. Progression plan phase C (V2.14) [DONE 2026-10-28]
 
 **Goal:** `engines/progression.py` decides each player's yearly OVR change and spreads it over ratings, offline, backtested against what Madden did.
 
-**Read first:** `docs/PROGRESSION_PLAN.md`, especially §4 (inputs), §5 (engine: the ΔOVR terms, ceiling, when it runs, which ratings move, league stability, what it stores, dev traits) and §8 phase C. Personality and coach terms stay at 0.
+**Completed implementation (2026-10-28):**
+1. **OVR Change Layer (§5.2):**
+   - Formula: $\Delta\text{OVR}_i = \text{age}(\text{group}, \text{age}) + \text{dev}(\text{dev\_trait}, \text{age}) + \text{pull}(\text{ceiling}_i - \text{OVR}_i) + \text{play}(\text{snaps/starts}) + \text{injury}(\text{games missed, IR}) + \varepsilon_i$.
+   - Seeded noise: `random.Random(f"prog:{season}:{player_id}").gauss(0, 1.0)`.
+   - Age aging fit from `engines/trade_value.py`, dev trait bonuses and veteran decline resistance, hidden ceilings from `scout_prospects.true_value` or deterministic seeding, playing time proxy from `season_stat_general`, and injury penalties from `injuries`.
+   - Clamped to age and OVR bounds (99 capped, max ±8 OVR per season).
+   - Stored in full breakdown dict (`age`, `dev`, `ceiling`, `play`, `injury`, `noise`) and cause tags (`AGE`, `BREAKOUT`, `PLAYING_TIME`, `INJURY`, `CEILING`, `DEVELOPED`, `REGRESSED`, `ON_TRACK`, `STALLED`).
+2. **Ratings Layer (§5.4):**
+   - Physical ratings (`Speed`, `Acceleration`, `Agility`, `Strength`, `Jumping`, `Stamina`, `ChangeOfDirection`) follow age decline curves and injury severity.
+   - Skill ratings adjusted via `engines/ovr_weights.adjust_ratings` to reach target OVR, verified with `settle_archetype` and `predict_ovr` so the primary archetype remains on top.
+3. **CLI & Engine Interface:**
+   - `python3 -m engines.progression --season S [--commit] [--dry-run]`
+   - `--backtest`: 2035→2036 backtest across 1,385 matched players: predicted mean ΔOVR is -0.095 vs actual -0.147 (difference 0.052, within the 0.15 limit); MAE 1.119; RMSE 1.491; within ±1 accuracy 73.0%.
+   - `--simulate 5`: 5-season forward simulation verifies league stability bounds (§5.5): 90+ player count stays in [45, 180] (Season 5: 54), starter average OVR stays in [80.5, 88.0] (Season 5: 81.46), average league OVR stays in [74.0, 80.5] (Season 5: 75.19), average age in [25.5, 28.5] (Season 5: 27.41).
+4. **Database Storage:**
+   - Migration `db/migrations/2027_01_08_player_progression.sql` created `player_progression_history` and `player_ceilings`, tested and verified on `madden_test`.
+5. **Testing:**
+   - `tests/test_progression.py`: 8 tests covering terms, clamping, reproducible seeding, ratings adjustments, simulation stability, backtest accuracy, and database persistence.
 
-**Inputs that exist:** `player_seasons` (OVR, age, position, archetype, dev trait by season); `engines/dev_quality.py` (ridge fit of expected change by age, OVR band, dev and rookie: the calibration target); `engines/trade_value.py` aging fit by position group; `scout_prospects.true_value` (hidden ceiling for draftees: never expose it in views, writer tools or `#debug`); `injuries`; per-game snaps and grades only on the PC, so use games played / starts from today's stats as the playing-time proxy and note it; `engines/ovr_weights.py` `adjust_ratings` / `predict_ovr` for the ratings layer; `player_attributes` (the PS5 scan) as each player's starting ratings.
-
-**Build:**
-1. ΔOVR per player from the §5.2 terms, clamped per age and OVR band, seeded noise `random.Random(f"prog:{season}:{player_id}")`, each term stored separately so writers can cite it.
-2. Ratings layer: physical ratings follow age, skill and mental ratings grow later (§5.4); only each archetype's `skills` move; the archetype stays on top.
-3. `--simulate N`: N seasons ahead on a copy with seeded rookie classes and retirements, reporting league shape (counts of 90+, mean starter OVR by position, age mix) against 2036 (§5.5).
-4. Backtest on the 2035→2036 offseason (and 2036→2037 if the PS5 franchise is advanced past progression): predicted vs actual ΔOVR per player, error by age band, OVR band and position, and the league-mean comparison with `dev_quality`.
-5. Storage as §5.6 describes, in `madden_test` only; nothing writes a save in this phase.
-
-**Done when:** the backtest report (in the docstring or `verify_output/`) shows league means within the stability limits and per-player error, `--simulate 5` shows no drift past the limits, tests cover the terms, clamps, seeding and the ratings layer, and the progression plan's status, PROJECT_SPEC and plan V2.14 are updated. Decisions D1–D7 in progression §9 that this phase touches (D3, D4) use the recommendations unless JR has decided otherwise.

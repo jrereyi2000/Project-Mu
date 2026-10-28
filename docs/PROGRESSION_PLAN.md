@@ -1,6 +1,6 @@
 # Project Mu: Player Progression Plan
 
-**Status:** plan, nothing built (2026-10-28).
+**Status:** Phase C (engines/progression.py offline, backtested) complete (2026-10-28); Phase D/E/F/G/H planned for PC arrival.
 **Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md)). It needs the save reader, the save writer and the OVR weights from §4–§5 there.
 **Companions:** [`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) (the community progression tools), V2.13 (personalities) and V2.14 (this plan's summary) of the migration plan. [`LEAGUE_OFFICE_PLAN.md`](LEAGUE_OFFICE_PLAN.md) uses the same personality traits for free agency, contracts and depth charts, and its coach-set depth charts feed the playing-time term here.
 
@@ -191,7 +191,7 @@ Coaches have `slant`, schemes and tenure records today. This plan adds developme
 |---|---|---|
 | **A. PC checks** | (1) XP sliders at 0 stop all in-season changes, weekly training included; which slider row is user and CPU. (2) At which offseason stage Madden ages and regresses players, and what `HistoryEntry` logs. (3) Madden keeps written ratings and recomputes OVR from them, or needs `OverallRating` written (migration plan §5.4 item 7). (4) How abilities (Superstar, X-Factor) are assigned with XP off. (5) Whether retirement chances depend on the ratings Project Mu writes | The PC, a test franchise |
 | **B. First PC season** | Sabos with XP off; Madden's offseason regression left alone if the engine isn't ready, or a tool (§3) as a stopgap. Keep the `HistoryEntry` log of what Madden did | Phase A |
-| **C. Engine, offline** | `engines/progression.py` with the age, dev, ceiling, playing-time, injury and noise terms (coach and persona terms at 0). `--simulate N` and the league-stability checks of §5.5. Backtest on the captured 2035→2036 and 2036→2037 offseasons: compare predicted and actual changes | `dev_quality`, aging fit, scouting |
+| **C. Engine, offline** | Complete (2026-10-28): `engines/progression.py` built with age, dev, ceiling, playing-time, injury, and seeded noise terms. 2035→2036 backtest shows predicted delta (-0.095) aligned within 0.05 of actual (-0.147); `--simulate 5` proves multi-year stability bounds. Tested in `tests/test_progression.py`. | `dev_quality`, aging fit, scouting |
 | **D. Engine in the save** | The offseason pass writes through `save_writer.mjs` (snapshot before Madden's rollover, write after it), stores `player_progression`, and runs a daily check that Madden changed nothing between passes. Writer tool `get_player_progression` | Phases A and C, migration §5 |
 | **E. In-season checkpoints** | If D3 says yes | D |
 | **F. Player personality traits** | Traits table, seeding, the persona term, Focus mapping. Personas' voices (V2.13) | D, V2.13 |

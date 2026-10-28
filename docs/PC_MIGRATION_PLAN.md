@@ -73,7 +73,7 @@ Work that needs neither the PC nor a real 2037 save. Each item has a brief in [`
 - [x] 8. [Fold `OPEN_MODEL_RESEARCH.md` into §7](PRE_PC_WORK.md#8-fold-open_model_researchmd-into-plan-7) (§7.2, §7.3, §7.5)
 - [ ] 9. [League memory](PRE_PC_WORK.md#9-league-memory-v28) (V2.8)
 - [ ] 10. [Personality plan phases 2 and 3](PRE_PC_WORK.md#10-personality-plan-phases-2-and-3-v213): catalogue and tables, then GMs (V2.13)
-- [ ] 11. [Progression plan phase C](PRE_PC_WORK.md#11-progression-plan-phase-c-v214): `engines/progression.py` offline, backtested (V2.14)
+- [x] 11. [Progression plan phase C](PRE_PC_WORK.md#11-progression-plan-phase-c-v214): `engines/progression.py` offline, backtested (V2.14)
 
 On hold: applying `madden_pgid` to the live database (after the PC move); the CFB 27 bridge (§6, until a dynasty is planned); the pregame show (§9.1); the rest of Part 2. The full Project Mu draft order for `PickNumber` (§4.3) comes in once the Super Bowl is final.
 
