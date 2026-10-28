@@ -345,6 +345,8 @@ Before building §4–§5, read a fresh Madden 27 save and confirm:
 
 A local model takes over the short, high-volume calls. Newsroom articles stay on Gemini. Nothing moves until a side-by-side test shows its quality holds (§7.4).
 
+Model candidates, costs and the 2027 Gemini price change: [`OPEN_MODEL_RESEARCH.md`](OPEN_MODEL_RESEARCH.md) (2026-10-28), which also corrects §7.2, §7.3 and §7.5.
+
 ### 7.1 Measured Usage (`llm_usage`, 2026-10-22 – 2026-10-27, all `gemini-3.8-flash`)
 
 | Source | Calls / day | Avg in | Max in | Avg out | Avg thinking |
