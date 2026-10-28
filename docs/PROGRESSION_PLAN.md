@@ -129,7 +129,7 @@ Madden's league has a shape (count of 90+ players, mean starter OVR by position,
 
 * Compares the league's mean ΔOVR by age band and OVR band with the `dev_quality` fit from Madden's own seasons (2035→2036 and, once the PS5 finishes, 2036→2037). These are the only seasons where Madden decided progression, so keep them as the reference.
 * Checks the counts by OVR band and position against the 2036 roster. A season where they drift past a set limit is reported, and the age term is adjusted for next season, never mid-run.
-* `--simulate N` runs the engine N seasons ahead on a copy (with seeded rookie classes and retirements) to show the drift before the first real offseason.
+* `--simulate N [--no-drift-correction]` runs the engine N seasons ahead on a copy, with departures at Madden's own 2035→2036 rates and rookie classes shaped like the real 2036 class, and checks every season against limits relative to 2036 (`STABILITY_BOUNDS_2036`). First result (2026-10-28, PRE_PC_WORK.md R6): the league shrinks as Madden's does (90+ players 144 → 46 in five seasons), mostly from weak rookie classes replacing better veterans; the correction (±0.4 OVR a year at most) can't hold it. Keeping the 2036 shape is a decision for §9.
 
 ### 5.6 What it stores
 

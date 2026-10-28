@@ -59,6 +59,16 @@ OVR_MAX = 99
 OVR_MIN = 40
 MAX_SEASON_CHANGE = 8
 
+# Stability check bounds relative to 2036 baseline (PROGRESSION_PLAN §5.5; PRE_PC_WORK.md R6)
+# Evaluated for each season simulated, not just the final season.
+STABILITY_BOUNDS_2036 = {
+    "count_90_plus_pct": 0.25,        # 90+ count within ±25% of baseline (108 to 180 for 144 baseline)
+    "avg_ovr_delta": 1.0,             # Mean OVR within ±1.0 of baseline (77.13 to 79.13 for 78.13 baseline)
+    "avg_starter_ovr_delta": 2.0,     # Mean starter OVR within ±2.0 of baseline (83.51 to 87.51 for 85.51 baseline)
+    "avg_age_min": 25.5,
+    "avg_age_max": 28.8,
+}
+
 
 # ------------------------------------------------------------------ ceilings ----
 def seed_player_ceiling(
@@ -628,189 +638,184 @@ def run_backtest(conn, season: int = 2036, log=print) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------- simulation ----
+def league_turnover(cur, season: int) -> Dict[str, Any]:
+    """What Madden itself did between season - 1 and season (PRE_PC_WORK.md R6): the rookie class (OVR, position,
+    age), the dev traits of second-year players (rookies show 'Hidden'), and the share of last season's players
+    gone by age band and OVR band. 'Gone' is everyone not on a roster this season (retired, cut, unsigned), which is
+    what the simulation replaces with rookies."""
+    cur.execute("""
+        SELECT overall_rating, position, age FROM player_seasons
+        WHERE season = %s AND years_of_experience = 0 AND overall_rating IS NOT NULL AND position != 'DEF'
+        ORDER BY overall_rating DESC
+    """, (season,))
+    rookies = [{"ovr": r[0], "position": r[1], "age": r[2] or 22} for r in cur.fetchall()]
+    cur.execute("""
+        SELECT COALESCE(dev_trait, 'Normal'), count(*) FROM player_seasons
+        WHERE season = %s AND years_of_experience = 1 AND position != 'DEF' AND dev_trait IS DISTINCT FROM 'Hidden'
+        GROUP BY 1
+    """, (season,))
+    devs = dict(cur.fetchall()) or {"Normal": 1}
+    cur.execute("""
+        SELECT a.age, a.overall_rating,
+               NOT EXISTS (SELECT 1 FROM player_seasons b WHERE b.season = %s AND b.player_id = a.player_id)
+        FROM player_seasons a
+        WHERE a.season = %s AND a.position != 'DEF' AND a.overall_rating IS NOT NULL
+    """, (season, season - 1))
+    counts = defaultdict(lambda: [0, 0])
+    for age, ovr, gone in cur.fetchall():
+        k = (turnover_band(age), ovr >= 85)
+        counts[k][0] += int(gone)
+        counts[k][1] += 1
+    return {"season": season, "rookies": rookies, "devs": devs,
+            "gone": {k: (g, n) for k, (g, n) in counts.items()}}
+
+
+TURNOVER_BANDS = ((36, "36+"), (33, "33-35"), (30, "30-32"), (27, "27-29"), (0, "<27"))
+MIN_TURNOVER_SAMPLE = 20      # a band with fewer players borrows the rate of the whole age band
+OLDEST_GONE = 0.9             # 36+ has almost no players left in the data; assume most leave
+
+
+def turnover_band(age: int) -> str:
+    return next(name for lo, name in TURNOVER_BANDS if (age or 0) >= lo)
+
+
+def gone_rate(turnover: Dict[str, Any], age: int, ovr: int) -> float:
+    band, top = turnover_band(age), ovr >= 85
+    g, n = turnover["gone"].get((band, top), (0, 0))
+    if n >= MIN_TURNOVER_SAMPLE:
+        return g / n
+    g2 = sum(v[0] for (b, _), v in turnover["gone"].items() if b == band)
+    n2 = sum(v[1] for (b, _), v in turnover["gone"].items() if b == band)
+    if n2 >= MIN_TURNOVER_SAMPLE:
+        return g2 / n2
+    return OLDEST_GONE if band == "36+" else 0.5
+
+
+def rookie_class(turnover: Dict[str, Any], size: int, rng: random.Random) -> List[Dict[str, Any]]:
+    """`size` rookies shaped like the real class: pick i takes the real class's OVR at the same quantile (±1),
+    with the real class's positions and ages and second-year dev traits."""
+    real = turnover["rookies"]
+    devs, weights = zip(*sorted(turnover["devs"].items()))
+    out = []
+    for i in range(size):
+        src = real[min(len(real) - 1, int(i * len(real) / max(size, 1)))]
+        out.append({"ovr": max(OVR_MIN, min(OVR_MAX, src["ovr"] + rng.choice((-1, 0, 0, 1)))),
+                    "position": rng.choice(real)["position"], "age": rng.choice(real)["age"],
+                    "dev": rng.choices(devs, weights=weights)[0]})
+    return out
+
+
+def league_shape(roster: List[Dict[str, Any]]) -> Dict[str, Any]:
+    n = len(roster)
+    rows = [{"player_id": p["player_id"], "team_id": p["team_id"], "ovr_start": p["ovr"]} for p in roster]
+    st = starter_flags(rows)
+    starters = [p for p in roster if st.get(p["player_id"])]
+    by_pos = defaultdict(list)
+    for p in starters:
+        by_pos[p["position"]].append(p["ovr"])
+    return {"players_count": n,
+            "count_90_plus": sum(1 for p in roster if p["ovr"] >= 90),
+            "avg_ovr": round(sum(p["ovr"] for p in roster) / n, 2),
+            "avg_age": round(sum(p["age"] for p in roster) / n, 2),
+            "avg_starter_ovr": round(sum(p["ovr"] for p in starters) / len(starters), 2) if starters else 0.0,
+            "starter_ovr_by_pos": {k: round(sum(v) / len(v), 1) for k, v in sorted(by_pos.items())}}
+
+
 def run_simulation(
     conn,
     start_season: int = 2036,
     num_seasons: int = 5,
+    drift_correction: bool = True,
     log=print
 ) -> Dict[str, Any]:
-    """Simulates N seasons ahead on a copy of league rosters to verify league stability bounds (§5.5).
-    Tracks count of 90+ players, average starter OVR by position, average OVR, and age mix."""
+    """Simulates N seasons ahead on a copy of the league to check its shape stays stable (§5.5).
+
+    Each season every player ages a year and gets compute_player_delta; players leave at the rates Madden's own
+    league showed between start_season - 1 and start_season (league_turnover); the league is refilled to its size
+    with a rookie class shaped like Madden's start_season class (rookie_class). With drift_correction (the §5.5
+    rule: the age term is adjusted for next season, never mid-run) a league whose 90+ count strays more than 10%
+    from the start season gets ±0.1 OVR a year added to every change, up to ±0.4.
+
+    is_stable: every simulated season within STABILITY_BOUNDS_2036 of the start season."""
     with conn.cursor() as cur:
         _, aging_pairs, _ = read_fit_rows(cur, start_season)
         aging_curves = fit_aging(aging_pairs)
-
+        turnover = league_turnover(cur, start_season)
         cur.execute("""
             SELECT player_id, team_id, position, age, overall_rating, dev_trait
             FROM player_seasons
-            WHERE season = %s
-              AND overall_rating IS NOT NULL
-              AND position != 'DEF'
+            WHERE season = %s AND overall_rating IS NOT NULL AND position != 'DEF'
         """, (start_season,))
-        current_roster = [
-            {
-                "player_id": r[0], "team_id": r[1], "position": r[2], "age": r[3],
-                "ovr": r[4], "dev": r[5] or "Normal", "gp": 16
-            }
-            for r in cur.fetchall()
-        ]
+        roster = [{"player_id": r[0], "team_id": r[1], "position": r[2], "age": r[3], "ovr": r[4],
+                   "dev": r[5] or "Normal"} for r in cur.fetchall()]
 
-    log(f"--- League Stability Simulation ({num_seasons} seasons from {start_season}) ---")
-    baseline_n = len(current_roster)
-    baseline_90 = sum(1 for p in current_roster if p["ovr"] >= 90)
-    baseline_ovr = sum(p["ovr"] for p in current_roster) / baseline_n
-    baseline_age = sum(p["age"] for p in current_roster) / baseline_n
+    log(f"--- League Stability Simulation ({num_seasons} seasons from {start_season}, "
+        f"drift correction {'on' if drift_correction else 'off'}) ---")
+    base = league_shape(roster)
+    size = base["players_count"]
+    log(f"Baseline {start_season}: Players={size}, 90+={base['count_90_plus']}, Avg OVR={base['avg_ovr']:.2f}, "
+        f"Avg Age={base['avg_age']:.2f}, Avg Starter OVR={base['avg_starter_ovr']:.2f}")
+    teams = sorted({p["team_id"] for p in roster if p["team_id"]})
 
-    s_rows = [{"player_id": p["player_id"], "team_id": p["team_id"], "ovr_start": p["ovr"]} for p in current_roster]
-    st = starter_flags(s_rows)
-    starters = [p for p in current_roster if st.get(p["player_id"])]
-    baseline_starter = sum(p["ovr"] for p in starters) / len(starters) if starters else 0.0
-
-    log(f"Baseline {start_season}: Players={baseline_n}, 90+={baseline_90}, Avg OVR={baseline_ovr:.2f}, Avg Age={baseline_age:.2f}, Avg Starter OVR={baseline_starter:.2f}")
-
-    seasons_history = []
-    positions_pool = [p["position"] for p in current_roster]
-    teams_pool = list(set(p["team_id"] for p in current_roster if p["team_id"]))
-
-    annual_adjustment = 0.0
+    history, adjustment = [], 0.0
     for yr in range(1, num_seasons + 1):
         sim_s = start_season + yr
+        leave_rng = random.Random(f"retire:{sim_s}")
         survivors = []
-        retire_rng = random.Random(f"retire:{sim_s}")
-
-        for p in current_roster:
-            age = p["age"]
-            ovr = p["ovr"]
-
-            # NFL retirement odds
-            if age >= 36:
-                ret_prob = 0.90
-            elif age >= 34:
-                ret_prob = 0.35 if ovr >= 85 else 0.70
-            elif age >= 32:
-                ret_prob = 0.12 if ovr >= 85 else 0.40
-            elif age >= 30:
-                ret_prob = 0.04 if ovr >= 80 else 0.20
-            elif age >= 27:
-                ret_prob = 0.01 if ovr >= 72 else 0.10
-            else:
-                ret_prob = 0.005 if ovr >= 68 else 0.05
-
-            if retire_rng.random() < ret_prob:
+        for p in roster:
+            if leave_rng.random() < gone_rate(turnover, p["age"], p["ovr"]):
                 continue
-
-            new_age = age + 1
-            p_id = p["player_id"]
-            pos = p["position"]
-            dev = p["dev"]
-
-            ceiling, _ = seed_player_ceiling(p_id, ovr, new_age, dev)
+            new_age = p["age"] + 1
+            ceiling, _ = seed_player_ceiling(p["player_id"], p["ovr"], new_age, p["dev"])
             delta, new_ovr, _, _ = compute_player_delta(
-                player_id=p_id,
-                position=pos,
-                age=new_age,
-                ovr=ovr,
-                dev_trait=dev,
-                ceiling=ceiling,
-                games_played=p.get("gp", 16),
-                downs_played=None,
-                is_starter=True,
-                is_ir=False,
-                injury_weeks=0,
-                season=sim_s,
-                aging_curves=aging_curves
-            )
-            # Apply dynamic drift adjustment (§5.5)
-            if annual_adjustment != 0.0:
-                new_ovr = max(OVR_MIN, min(OVR_MAX, int(round(new_ovr + annual_adjustment))))
+                player_id=p["player_id"], position=p["position"], age=new_age, ovr=p["ovr"], dev_trait=p["dev"],
+                ceiling=ceiling, games_played=16, downs_played=None, is_starter=True, is_ir=False,
+                injury_weeks=0, season=sim_s, aging_curves=aging_curves)
+            if adjustment:
+                # OVR is whole points, so a fractional adjustment is a seeded chance of one more point
+                # (adding 0.3 before rounding would never change anything)
+                whole = int(adjustment)
+                if random.Random(f"adj:{sim_s}:{p['player_id']}").random() < abs(adjustment - whole):
+                    whole += 1 if adjustment > 0 else -1
+                new_ovr = max(OVR_MIN, min(OVR_MAX, new_ovr + whole))
+            survivors.append({**p, "age": new_age, "ovr": new_ovr})
 
-            survivors.append({
-                "player_id": p_id, "team_id": p["team_id"], "position": pos,
-                "age": new_age, "ovr": new_ovr, "dev": dev, "gp": 16
-            })
+        rng = random.Random(f"draft:{sim_s}")
+        for i, r in enumerate(rookie_class(turnover, size - len(survivors), rng)):
+            survivors.append({"player_id": 100000 + sim_s * 1000 + i, "team_id": rng.choice(teams), **r})
+        roster = survivors
 
-        # Replenish league with rookie class
-        needed = baseline_n - len(survivors)
-        rookie_rng = random.Random(f"draft:{sim_s}")
-        for i in range(needed):
-            pos = rookie_rng.choice(positions_pool)
-            team = rookie_rng.choice(teams_pool)
-            pick = i + 1
-            if pick <= 10:
-                r_ovr = rookie_rng.randint(79, 84)
-                r_dev = rookie_rng.choices(["Star", "Superstar", "X-Factor", "Normal"], weights=[0.35, 0.40, 0.20, 0.05])[0]
-            elif pick <= 32:
-                r_ovr = rookie_rng.randint(76, 80)
-                r_dev = rookie_rng.choices(["Star", "Superstar", "Normal"], weights=[0.45, 0.30, 0.25])[0]
-            elif pick <= 100:
-                r_ovr = rookie_rng.randint(72, 77)
-                r_dev = rookie_rng.choices(["Star", "Superstar", "Normal"], weights=[0.40, 0.10, 0.50])[0]
-            else:
-                r_ovr = rookie_rng.randint(66, 73)
-                r_dev = rookie_rng.choices(["Star", "Normal"], weights=[0.20, 0.80])[0]
+        shape = {"season": sim_s, **league_shape(roster), "adjustment": round(adjustment, 2)}
+        history.append(shape)
+        log(f"Season {sim_s}: 90+={shape['count_90_plus']:3} (Δ={shape['count_90_plus'] - base['count_90_plus']:+3}), "
+            f"Avg OVR={shape['avg_ovr']:.2f}, Avg Age={shape['avg_age']:.2f}, "
+            f"Avg Starter={shape['avg_starter_ovr']:.2f}, adjustment {adjustment:+.1f}")
 
-            r_age = rookie_rng.choice([21, 22, 23])
-            survivors.append({
-                "player_id": 100000 + sim_s * 1000 + i,
-                "team_id": team, "position": pos, "age": r_age,
-                "ovr": r_ovr, "dev": r_dev, "gp": 15
-            })
+        if drift_correction:
+            ratio = shape["count_90_plus"] / max(base["count_90_plus"], 1)
+            if ratio < 0.9:
+                adjustment = min(0.4, adjustment + 0.1)
+            elif ratio > 1.1:
+                adjustment = max(-0.4, adjustment - 0.1)
 
-        current_roster = survivors
-        n_90 = sum(1 for p in current_roster if p["ovr"] >= 90)
-        avg_o = sum(p["ovr"] for p in current_roster) / len(current_roster)
-        avg_a = sum(p["age"] for p in current_roster) / len(current_roster)
-
-        s_rows = [{"player_id": p["player_id"], "team_id": p["team_id"], "ovr_start": p["ovr"]} for p in current_roster]
-        st = starter_flags(s_rows)
-        starters = [p for p in current_roster if st.get(p["player_id"])]
-        avg_starter = sum(p["ovr"] for p in starters) / len(starters) if starters else 0.0
-
-        # Starter avg by position
-        pos_starter_ovr = defaultdict(list)
-        for p in starters:
-            pos_starter_ovr[p["position"]].append(p["ovr"])
-        pos_starter_means = {pos: round(sum(vals) / len(vals), 1) for pos, vals in sorted(pos_starter_ovr.items())}
-
-        log(f"Season {sim_s}: 90+={n_90:3} (Δ={n_90 - baseline_90:+3}), Avg OVR={avg_o:.2f}, Avg Age={avg_a:.2f}, Avg Starter={avg_starter:.2f}")
-
-        seasons_history.append({
-            "season": sim_s,
-            "players_count": len(current_roster),
-            "count_90_plus": n_90,
-            "avg_ovr": round(avg_o, 2),
-            "avg_age": round(avg_a, 2),
-            "avg_starter_ovr": round(avg_starter, 2),
-            "starter_ovr_by_pos": pos_starter_means
-        })
-
-        # §5.5 feedback: adjust age/baseline term for next season if drifting
-        if n_90 < 130:
-            annual_adjustment = min(0.40, annual_adjustment + 0.10)
-        elif n_90 > 155:
-            annual_adjustment = max(-0.40, annual_adjustment - 0.10)
-
-    # Stability checks (§5.5): verify no drift past bounds
-    final_state = seasons_history[-1]
-    is_stable = (
-        (45 <= final_state["count_90_plus"] <= 180) and
-        (80.5 <= final_state["avg_starter_ovr"] <= 88.0) and
-        (74.0 <= final_state["avg_ovr"] <= 80.5) and
-        (25.5 <= final_state["avg_age"] <= 28.5)
-    )
-
-    log(f"\nStability Check Result: {'PASSED (No drift detected)' if is_stable else 'WARNING (Drift detected)'}")
-    return {
-        "start_season": start_season,
-        "num_seasons": num_seasons,
-        "baseline": {
-            "players": baseline_n, "count_90_plus": baseline_90,
-            "avg_ovr": round(baseline_ovr, 2), "avg_age": round(baseline_age, 2),
-            "avg_starter_ovr": round(baseline_starter, 2)
-        },
-        "history": seasons_history,
-        "is_stable": is_stable
-    }
+    b = STABILITY_BOUNDS_2036
+    lo90 = round(base["count_90_plus"] * (1 - b["count_90_plus_pct"]))
+    hi90 = round(base["count_90_plus"] * (1 + b["count_90_plus_pct"]))
+    is_stable = all(
+        lo90 <= s["count_90_plus"] <= hi90
+        and abs(s["avg_ovr"] - base["avg_ovr"]) <= b["avg_ovr_delta"]
+        and abs(s["avg_starter_ovr"] - base["avg_starter_ovr"]) <= b["avg_starter_ovr_delta"]
+        and b["avg_age_min"] <= s["avg_age"] <= b["avg_age_max"]
+        for s in history)
+    log(f"\nStability check (each season within {b} of {start_season}): "
+        f"{'PASSED' if is_stable else 'DRIFT'}")
+    return {"start_season": start_season, "num_seasons": num_seasons, "drift_correction": drift_correction,
+            "baseline": {"players": size, **{k: base[k] for k in ("count_90_plus", "avg_ovr", "avg_age",
+                                                                   "avg_starter_ovr")}},
+            "turnover": {"rookies": len(turnover["rookies"]),
+                         "gone": {f"{k[0]}{' 85+' if k[1] else ''}": round(g / n, 3)
+                                  for k, (g, n) in sorted(turnover["gone"].items()) if n}},
+            "history": history, "is_stable": is_stable}
 
 
 # ---------------------------------------------------------------- CLI ----
@@ -821,6 +826,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Dry run without database commit")
     parser.add_argument("--backtest", action="store_true", help="Evaluate 2035->2036 actual vs predicted progression")
     parser.add_argument("--simulate", type=int, metavar="N", help="Simulate N seasons ahead to verify stability")
+    parser.add_argument("--no-drift-correction", action="store_true", help="With --simulate: no §5.5 adjustment")
     parser.add_argument("--dsn", default=DSN, help="Database DSN")
 
     args = parser.parse_args()
@@ -829,7 +835,8 @@ def main():
         if args.backtest:
             run_backtest(conn, season=args.season if args.season <= 2036 else 2036)
         elif args.simulate:
-            run_simulation(conn, start_season=args.season if args.season <= 2036 else 2036, num_seasons=args.simulate)
+            run_simulation(conn, start_season=args.season if args.season <= 2036 else 2036, num_seasons=args.simulate,
+                           drift_correction=not args.no_drift_correction)
         else:
             run_progression(conn, season=args.season, commit=args.commit, dry_run=args.dry_run)
 

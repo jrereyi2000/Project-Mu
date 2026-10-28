@@ -10,6 +10,8 @@
 //   - If a CharacterVisuals record is shared by multiple players, copy-on-write allocates an empty
 //     record in CharacterVisuals, copies the existing data, and re-points the player's reference.
 import { spawnSync } from 'child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { decodeRef, encodeRef } from './lib.mjs';
@@ -18,20 +20,35 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const CV_TABLE = 'CharacterVisuals';
 
 /**
- * Runs Python pipeline.character_visuals batch command to process raw buffers.
+ * Runs Python pipeline.character_visuals batch command to process raw buffers. Requests and results go through
+ * temp files, not stdin/stdout: a spawnSync stdin pipe sometimes never reached EOF when the writer itself ran
+ * under pytest, and both processes waited forever (PRE_PC_WORK.md R7). The timeout turns any other hang into an
+ * error.
  */
+export const PYTHON_BATCH_TIMEOUT_MS = 5 * 60 * 1000;
+
 export function runPythonBatch(subcommand, payload) {
-  const proc = spawnSync('python3', ['-m', 'pipeline.character_visuals', subcommand], {
-    input: JSON.stringify(payload),
-    encoding: 'utf8',
-    cwd: REPO_ROOT,
-    maxBuffer: 100 * 1024 * 1024,
-  });
-  if (proc.error) throw proc.error;
-  if (proc.status !== 0) {
-    throw new Error(`python character_visuals ${subcommand} failed (status ${proc.status}): ${proc.stderr}`);
+  const dir = mkdtempSync(join(tmpdir(), 'mu-visuals-'));
+  const inPath = join(dir, 'requests.json');
+  const outPath = join(dir, 'results.json');
+  try {
+    writeFileSync(inPath, JSON.stringify(payload));
+    const proc = spawnSync('python3',
+      ['-m', 'pipeline.character_visuals', subcommand, '--in', inPath, '--out', outPath], {
+        encoding: 'utf8',
+        cwd: REPO_ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: PYTHON_BATCH_TIMEOUT_MS,
+        maxBuffer: 100 * 1024 * 1024,
+      });
+    if (proc.error) throw proc.error;
+    if (proc.status !== 0) {
+      throw new Error(`python character_visuals ${subcommand} failed (status ${proc.status}): ${proc.stderr}`);
+    }
+    return JSON.parse(readFileSync(outPath, 'utf8'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  return JSON.parse(proc.stdout);
 }
 
 /**

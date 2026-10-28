@@ -365,15 +365,33 @@ def main():
     parser = argparse.ArgumentParser(description="CharacterVisuals RawData processor")
     sub = parser.add_subparsers(dest="command")
 
-    # batch subcommand (JSON stdin -> JSON stdout)
-    sub.add_parser("batch", help="Batch process CharacterVisuals edits from JSON stdin")
-    sub.add_parser("read-batch", help="Batch read skin tones from JSON stdin")
+    # batch subcommands: JSON requests in, JSON results out. visual_edits.mjs passes files (--in/--out): a
+    # stdin pipe from Node's spawnSync could hang without EOF when the writer itself ran under pytest
+    # (PRE_PC_WORK.md R7). Without them, stdin -> stdout.
+    for name, help_text in (("batch", "Batch process CharacterVisuals edits"),
+                            ("read-batch", "Batch read skin tones")):
+        sp = sub.add_parser(name, help=help_text)
+        sp.add_argument("--in", dest="in_path", help="request JSON file (default stdin)")
+        sp.add_argument("--out", dest="out_path", help="result JSON file (default stdout)")
 
     args = parser.parse_args()
 
+    def load_requests():
+        if args.in_path:
+            with open(args.in_path) as fh:
+                return json.load(fh)
+        return json.load(sys.stdin)
+
+    def dump_results(results):
+        if args.out_path:
+            with open(args.out_path, "w") as fh:
+                json.dump(results, fh)
+        else:
+            json.dump(results, sys.stdout)
+
     if args.command == "batch":
-        # Stdin: [{"id": 0, "raw_hex": "...", "skinTone": 3}, ...]
-        reqs = json.load(sys.stdin)
+        # [{"id": 0, "raw_hex": "...", "skinTone": 3}, ...]
+        reqs = load_requests()
         zd = get_zstd_dict()
         results = []
         for req in reqs:
@@ -387,9 +405,9 @@ def main():
                 "new_tone": tone,
                 "new_raw_hex": new_buf.hex(),
             })
-        json.dump(results, sys.stdout)
+        dump_results(results)
     elif args.command == "read-batch":
-        reqs = json.load(sys.stdin)
+        reqs = load_requests()
         zd = get_zstd_dict()
         results = []
         for req in reqs:
@@ -403,7 +421,7 @@ def main():
                 "id": req.get("id"),
                 "skinTone": tone,
             })
-        json.dump(results, sys.stdout)
+        dump_results(results)
     else:
         parser.print_help()
 

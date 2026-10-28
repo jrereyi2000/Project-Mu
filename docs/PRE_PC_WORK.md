@@ -320,7 +320,7 @@ Docs only, `docs/PC_MIGRATION_PLAN.md`:
 
 **Verify:** reviewer reads the three edits.
 
-## R6. Progression simulation drifts down (investigate, don't fix blindly)
+## R6. [x] Progression simulation drifts down (investigate, don't fix blindly)
 
 **Finding:** `engines/progression.py --simulate 5` reports 90+ players falling from 144 (2036) to 54 and league mean OVR from 78.1 to 75.2, which passes only because the bounds (`[45, 180]`, `[74.0, 80.5]`) were set wide. PROGRESSION_PLAN §5.5 asks for drift measured against the 2036 roster.
 
@@ -331,7 +331,24 @@ Docs only, `docs/PC_MIGRATION_PLAN.md`:
 
 **Verify:** the report table (in the module docstring or `verify_output/`) and `--simulate 5` output under the tightened limits; `pytest tests/test_progression.py` passes.
 
-## R7. `save_writer.mjs` takes over 10 minutes once skin tones are written
+**Done (2026-10-28).** The simulation now runs on Madden's own turnover instead of hand-set rates: departures by age band and OVR band from 2035→2036 (everyone not on a 2036 roster: 11% under 27–29, 29% at 30–32, 54% at 33–35), and a rookie class shaped like the real 2036 class (195 players, median 67, 90th percentile 76, best 83, second-year dev traits). Limits are relative to 2036, checked every season (`STABILITY_BOUNDS_2036`). The earlier uncommitted tuning (rookies at 83–88, lower retirement odds, +0.15–0.6 OVR a year) was dropped: it passed the limits by inventing a stronger league.
+
+| | 90+ | Mean OVR | Mean starter |
+|---|---:|---:|---:|
+| Madden 2035 → 2036 (real) | 170 → 144 | 79.57 → 78.13 | — |
+| Simulated 2037 | 118 | 76.30 | 84.23 |
+| Simulated 2038 | 88 | 74.74 | 82.66 |
+| Simulated 2039 | 82 | 73.67 | 81.42 |
+| Simulated 2040 | 66 | 72.73 | 80.12 |
+| Simulated 2041 | 46 | 72.02 | 78.95 |
+
+(from 2036: 144 / 78.13 / 85.51; drift correction on.) **The engine mostly copies Madden's own offseason:** year 1 loses 26 players at 90+, as Madden did, and the mean change of players who stay is −0.27 against Madden's −0.15. By age it matches Madden within ~0.15 except 30–32, where it declines −1.93 a year against Madden's −1.09. Most of the loss is turnover: the players who leave average ~76–78 and the rookies who replace them ~68, and young players grow only ~+1 a year, as under Madden. So the league shrinks because Madden's league does.
+
+**Bug fixed:** the §5.5 drift correction added 0.1–0.4 to a whole-point OVR before rounding, which never changed anything. It is now a seeded chance of one extra point, and it works, but at its ±0.4 cap it can't offset ~1.5 OVR a year of turnover; `--simulate 5` reports DRIFT.
+
+**For JR (PROGRESSION_PLAN §9):** whether Project Mu keeps the 2036 shape (stronger rookie classes, faster growth for young players, or a larger correction) or follows Madden's deflation; and whether to soften the 30–32 decline to Madden's rate (would need the backtest rerun).
+
+## R7. [x] `save_writer.mjs` takes over 10 minutes once skin tones are written
 
 **Bug:** with 5328902 (item 3) every teleported player's edit carries a `visuals` block, written by `pipeline/save_reader/visual_edits.mjs`. Writing the full teleport (1,796 players) to a copy of `CAREER-GIANTS-AUTOSAVE` now exceeds 600 s, so `tests/test_teleport_appearance.py::SampleAppearanceTest::test_heads_land_and_follow_the_headshots` fails with `TimeoutExpired` (full suite, 2026-10-28). Before item 3 the same write (`teleport --draft --release --appearance`, 80,508 fields) took about 18 s.
 
@@ -341,6 +358,8 @@ Docs only, `docs/PC_MIGRATION_PLAN.md`:
 3. Fix so the full write with visuals is within ~2× the time without them. Keep the read-back verification.
 
 **Verify:** both timings before/after in the commit message; `python3 -m pytest tests/test_teleport_appearance.py -q -m integration` passes; `npm test` in `pipeline/save_reader` passes.
+
+**Done (2026-10-28). Not slow: a hang.** Every stage of the full write (75,949 fields, 1,538 contracts, 1,796 skin tones, 237 releases) finishes in ~20 s, from the command line as before item 3 (17 s without skin tones). Under pytest the writer sometimes never finished: `sample` showed `python3 -m pipeline.character_visuals read-batch` blocked reading stdin at 0% CPU while Node's `spawnSync` waited for it, so the stdin pipe never reached EOF. `runPythonBatch` now passes requests and results through temp files (`--in` / `--out`, stdin closed) with a 5-minute timeout. The sample-save test passes in ~17 s (three runs), the CLI write takes 19 s, `npm test` 31/31.
 
 ## Order and commits
 
