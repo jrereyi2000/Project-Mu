@@ -20,7 +20,7 @@
 | :--- | :--- |
 | `CAREER-GIANTS-AUTOSAVE` (repo root) | B |
 | `.env` (Gemini key, DB URL) | C, and A7/A9 if they run real calls |
-| `db/backups/madden_backup_*.sql` → `./db/restore_db.sh`, then `pytest --reclone` for `madden_test` | C |
+| `db/backups/madden_backup_*.sql` → `./db/restore_db.sh`, then `pytest --recreate-test-db` for `madden_test` | C |
 | `static/players/*.webp` (headshots) | A1, A2, A5 test inputs (a handful is enough) |
 | `data/commentary_m27.json`, `data/commentary_save_m27.json` | only for teleport dry runs |
 

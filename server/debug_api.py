@@ -869,8 +869,10 @@ def start_job(body: JobIn, x_debug_token: Optional[str] = Header(None)):
     os.makedirs(JOBS_DIR, exist_ok=True)
     job_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     args = job_command(body.kind, body.resume, week=body.week) if body.week is not None else job_command(body.kind, body.resume)
-    # sh writes the exit code next to the log, so the status survives an API restart
-    cmd = ["sh", "-c", '"$@"; echo $? > "$EXIT"', "sh", *args]
+    # sh writes the exit code next to the log, so the status survives an API restart.
+    # `trap : INT` keeps sh alive through a Stop's Ctrl-C until the job exits: dash (Ubuntu's sh)
+    # otherwise dies with the job and never writes the exit code; bash (macOS) waits either way
+    cmd = ["sh", "-c", 'trap : INT; "$@"; echo $? > "$EXIT"', "sh", *args]
     log = open(_job_path(job_id, "log"), "w")
     p = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                          env={**os.environ, "EXIT": _job_path(job_id, "exit"), "PYTHONUNBUFFERED": "1"})
@@ -997,7 +999,7 @@ def commission_article_endpoint(body: CommissionIn, x_debug_token: Optional[str]
     if body.slot:
         args += ["--slot", body.slot]
 
-    cmd = ["sh", "-c", '"$@"; echo $? > "$EXIT"', "sh", *args]
+    cmd = ["sh", "-c", 'trap : INT; "$@"; echo $? > "$EXIT"', "sh", *args]
     log = open(_job_path(job_id, "log"), "w")
     p = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                          env={**os.environ, "EXIT": _job_path(job_id, "exit"), "PYTHONUNBUFFERED": "1"})
@@ -1067,7 +1069,7 @@ def offseason_run_endpoint(body: OffseasonRequestIn, x_debug_token: Optional[str
     if body.only:
         args += ["--only", body.only]
 
-    cmd = ["sh", "-c", '"$@"; echo $? > "$EXIT"', "sh", *args]
+    cmd = ["sh", "-c", 'trap : INT; "$@"; echo $? > "$EXIT"', "sh", *args]
     log = open(_job_path(job_id, "log"), "w")
     p = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                          env={**os.environ, "EXIT": _job_path(job_id, "exit"), "PYTHONUNBUFFERED": "1"})

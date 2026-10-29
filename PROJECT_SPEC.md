@@ -365,10 +365,12 @@ All Python commands run **from the project root** (relative data paths such as `
 
 | Task | Command |
 |---|---|
-| Initial Python setup | `pip3 install -r requirements.txt` (installs backend, DB, ML/solvers, vision, and macOS capture deps) |
+| Initial Python setup | `pip3 install -r requirements.txt` (installs backend, DB, ML/solvers, vision, and macOS capture deps). On the PC (WSL2 Ubuntu, repo at `~/Project-Mu`): `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`, then `source .venv/bin/activate` in every shell, since `save_writer.mjs` / `visual_edits.mjs` call `python3` from `PATH` and need the venv's `zstandard` |
 | Environment config | `cp .env.example .env` (fill in `GEMINI_API_KEY`, `DEBUG_TOKEN`, `DATABASE_URL`) |
 | Frontend setup | `cd Mu_Network && npm install` (Vite + React 19) |
-| Database initialization | `createdb madden && psql -d madden -f db/init_db.sql` |
+| Database container (PC, once) | `docker run -d --name madden-db --restart unless-stopped -e POSTGRES_PASSWORD=postgres -p 5432:5432 -v madden-pgdata:/var/lib/postgresql/data postgres:14` (Docker Desktop with WSL integration; data lives in the `madden-pgdata` volume). Every DB script (`db/backup_db.sh`, `restore_db.sh`, `clear_news_feed.sh`, tests' `madden_test` clone) goes through `docker exec madden-db`, so no host `psql` is needed |
+| Restore the live database | `./db/restore_db.sh backup_latest.sql` (or a `db/backups/madden_backup_<timestamp>.sql`), then `pytest --recreate-test-db` to clone it into `madden_test`. Without `madden_test`, `conftest.py` creates it empty and the DB-backed tests fail on missing tables instead of skipping. On Linux, `tests/test_pipeline_upgrades.py` and `tests/test_team_overalls.py` can't be collected (they import the macOS-only `madden_capture`); pass `--ignore` for both |
+| Database initialization (empty) | `docker exec madden-db createdb -U postgres madden && docker exec -i madden-db psql -U postgres -d madden -v ON_ERROR_STOP=1 < db/init_db.sql` |
 | Seed a fresh database (new save / PC restart) | `python3 -m db.seed_clean_db [--season 2024] [--week 1] [--user-team IND] [--dry-run]` |
 | API server | `python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload` |
 | Frontend dev | `cd Mu_Network && npm run dev` (Vite on port 8443) |
