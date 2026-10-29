@@ -25,7 +25,7 @@ These replace an EA anti-cheat file and run unsigned downloads as Administrator,
 
 ## 3. Load order and what can't be on together
 
-In the Mod Manager's applied list, a mod higher up wins any asset it shares with a mod below it. Everything below is in that order (top first). Groups marked **one at a time** replace the same assets wholesale; JR toggles between them per game.
+In the Mod Manager's applied list, a mod with higher priority wins any asset it shares with a lower one. The table below runs from highest priority to lowest. Groups marked **one at a time** replace the same assets wholesale; JR toggles between them per game.
 
 | # | Group | Mods | Notes |
 |---|---|---|---|
@@ -51,9 +51,9 @@ In the Mod Manager's applied list, a mod higher up wins any asset it shares with
 JR wants the scorebug/network, crowd tier and ball (BCA Pink in October, maybe on chosen players only) picked automatically per game from team popularity and the matchup. What the tools allow:
 
 - `MMCModManager.exe -launch <pack name>` launches the game with a saved pack (strings in the binary; error text "Unable to find pack with name {0}").
-- Packs are kept in `C:\Users\jrere\AppData\Local\MMC\manager_config.json` under `Games.Madden27.Packs`, one string per pack: `"<file>.fbmod:True|<file>.fbmod:False|..."` (`True` = enabled), with `Games.Madden27.Options.SelectedPack` naming the active one. Edit it only while the Mod Manager is closed.
+- Packs are kept in `C:\Users\jrere\AppData\Local\MMC\manager_config.json` under `Games.Madden27.Packs`, one string per pack: `"<file>.fbmod:True|<file>.fbmod:False|..."` (`True` = enabled), listed from **lowest priority to highest**, so the last mod in the string wins a shared asset (checked 2026-10-29: a pack with MUT Remover lowest and More Gameday Cutscenes highest was saved as `MUTRemover1.6.fbmod:True|No VRAM Warning.fbmod:True|More Gameday Cutscenes.fbmod:True`). `Games.Madden27.Options.SelectedPack` naming the active one. Edit it only while the Mod Manager is closed.
 - So one approach: save a pack per combination (e.g. `FOX-Tier1-Mudded`), or rewrite one pack's enabled list in `manager_config.json`, then launch with `-launch`. Project Mu would choose the pack from the week's schedule (network by kickoff window, crowd tier by team popularity/record, October → BCA).
 - Mods are applied at launch, so a change needs a game restart; it fits between games, not mid-game.
 - Pink gear on only some players would mean editing the BCA mod in MMC Editor (it replaces shared textures, so it is all-or-nothing as shipped).
 
-First check: confirm the list order in the pack string is the applied-list order (top first) by building a two-mod pack in the UI.
+To write a pack from the table in §3, reverse it: the table's last row goes first in the string.
