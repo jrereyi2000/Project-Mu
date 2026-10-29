@@ -12,7 +12,10 @@ Writes, for that season:
   players / player_seasons   every Signed, PracticeSquad or FreeAgent player (a pgid not yet stored gets a new
                              players row); team, position, age, OVR, experience, dev trait, archetype
   games                      regular-season and playoff games, scheduled and completed (preseason skipped)
-  team_stats                 quarter and OT scores plus line totals for completed games
+  team_stats                 quarter and OT scores plus Madden's team box score (SeasonGame team stat cache:
+                             yards, first downs, 3rd/4th downs, turnovers, red zone, penalties, possession) for
+                             completed games; completions from the player lines once Madden links them (a save
+                             without a box score falls back to line totals)
   player_stats, game_stat_*  per-game lines: a game the save has lines for has its stored lines replaced
                              (Madden purges old weeks, so a game with no lines in this save keeps what it has)
   season_stats, season_stat_* season totals (a player traded mid-season is summed across teams)
@@ -298,7 +301,8 @@ def words(enum_value):
 
 
 def injury_values(inj):
-    """(injury_type, duration, weeks_remaining, is_ir) in the injury report's style ('WEEK TO WEEK', '2 - 4 WEEKS')."""
+    """(injury_type, duration, weeks_remaining, is_ir) in the injury report's style ('WEEK TO WEEK', '2 - 4 WEEKS').
+    A healed player Madden still has on IR has type Invalid_: no injury type."""
     lo, hi = max(inj.get("min_weeks") or 0, 0), max(inj.get("max_weeks") or 0, 0)
     if hi <= 1:
         duration, weeks = "WEEK TO WEEK", 1
@@ -306,7 +310,8 @@ def injury_values(inj):
         duration, weeks = f"{hi} WEEKS", hi
     else:
         duration, weeks = f"{lo} - {hi} WEEKS", hi
-    return words(inj.get("type")), duration, weeks, bool(inj.get("injured_reserve"))
+    kind = inj.get("type")
+    return (words(kind) if kind and kind != "Invalid_" else None), duration, weeks, bool(inj.get("injured_reserve"))
 
 
 # --------------------------------------------------------------- highlights ----
@@ -493,6 +498,30 @@ def load_game_lines(cur, snapshot, games, players, report):
     return game_ids
 
 
+def team_box(ts):
+    """A SeasonGame team stat cache (Madden's TeamStats row) -> team_stats columns. Passing yards are the passers'
+    gross yards (OFFPASSYARDS equals the summed lines, sacks not taken off) and total_offense = passing + rushing;
+    total_yards_gained adds return yards; red_zone_pct is trips ending in a TD or FG, as the captured box score had it."""
+    rz_att, rz_td, rz_fg = ts.get("OFFREDZONES", 0), ts.get("OFFREDZONETDS", 0), ts.get("OFFREDZONEFGS", 0)
+    return {
+        "first_downs": ts.get("FIRSTDOWNS", 0), "total_offense": ts.get("OFFYARDS", 0),
+        "total_yards_gained": ts.get("TOTALYARDS", 0),
+        "total_plays": ts.get("RUSHATTEMPTS", 0) + ts.get("PASSATTEMPTS", 0) + ts.get("SACKSALLOWED", 0),
+        "rushing_attempts": ts.get("RUSHATTEMPTS", 0), "rushing_yards": ts.get("OFFRUSHYARDS", 0),
+        "rushing_tds": ts.get("RUSHTDS", 0), "passing_attempts": ts.get("PASSATTEMPTS", 0),
+        "passing_yards": ts.get("OFFPASSYARDS", 0), "passing_tds": ts.get("PASSTDS", 0),
+        "third_down_attempts": ts.get("THIRDDOWNS", 0), "third_down_conversions": ts.get("THIRDDOWNCONV", 0),
+        "fourth_down_attempts": ts.get("FOURTHDOWNS", 0), "fourth_down_conversions": ts.get("FOURTHDOWNCONV", 0),
+        "turnovers": ts.get("GIVEAWAYS", 0), "punt_return_yards": ts.get("PUNTRETURNYARDS", 0),
+        "kick_return_yards": ts.get("KICKRETURNYARDS", 0),
+        "two_point_conversions": ts.get("TWOPOINTCONVMADE", 0), "two_point_attempts": ts.get("TWOPOINTCONVATTEMPTS", 0),
+        "red_zone_attempts": rz_att, "red_zone_tds": rz_td, "red_zone_fgs": rz_fg,
+        "red_zone_pct": round(100 * (rz_td + rz_fg) / rz_att, 1) if rz_att else None,
+        "penalties": ts.get("PENALTIES", 0), "penalty_yards": ts.get("PENALTYYARDS", 0),
+        "time_of_possession_s": ts.get("POSSESSIONTIME", 0),
+    }
+
+
 def load_team_scores(cur, games, report):
     cur.execute("SELECT id, name FROM teams")
     names = dict(cur.fetchall())
@@ -503,7 +532,14 @@ def load_team_scores(cur, games, report):
         for tid, side in ((home, "home"), (away, "away")):
             q = g[f"{side}_quarters"]
             vals = {"score": g[f"{side}_score"], "q1": q[0], "q2": q[1], "q3": q[2], "q4": q[3], "ot": g[f"{side}_ot"]}
-            vals.update(team_line_totals(cur, gid, tid))
+            lines = team_line_totals(cur, gid, tid)
+            box = g.get(f"{side}_team_stats")
+            if box:      # Madden's team box score; completions only come from the player lines, once Madden links them
+                vals.update(team_box(box))
+                if lines["passing_attempts"]:
+                    vals["passing_completions"] = lines["passing_completions"]
+            else:
+                vals.update(lines)
             cols = list(vals)
             cur.execute(f"INSERT INTO team_stats (game_id, team_name, {', '.join(cols)}) VALUES (%s, %s, "
                         f"{', '.join(['%s'] * len(cols))}) ON CONFLICT (game_id, team_name) DO UPDATE SET "

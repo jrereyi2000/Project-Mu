@@ -329,8 +329,9 @@ Once the league runs on PC, screen capture (`madden_capture.py`, `extract.py`, t
 
 **Checked on a real save (2026-10-27).** `CAREER-GIANTS-AUTOSAVE`, a Madden 27 franchise in 2027 (franchise year 1), current week index 4. The save reports schema 987; `madden-franchise` 4.4.1 falls back to its bundled 620, and the tables below decode cleanly with it.
 * **Per-game stats exist for CPU-simmed games:** `GameOffensiveStats`, `GameDefensiveStats`, `GameKickingStats`, `GameOLineStats` and both return tables have a row per player per game for all 16 games of each of the first four regular-season weeks, simmed and user-played alike, linked to `SeasonGame`. Example: a QB line of 22/27, 264 yards, 3 TD, 65 downs played, game rating 79.
-* **The latest played week had scores and scoring summaries but no per-game stat rows yet.** Check on the PC whether they appear after the next Advance Week.
-* **Retention:** the stat tables' capacities (7,700 offense rows, 13,500 defense rows) are below a full season at the observed ~460 and ~915 rows a week, so older weeks are probably purged. Scoring summaries were kept only for the last two weeks, plus a few user-played games from the previous season. The loader must read every week.
+* **The latest played week had scores and scoring summaries but no per-game stat rows yet.** Confirmed on the PC (§5.4): they appear in the next week's save.
+* **Retention:** the stat tables' capacities (7,700 offense rows, 13,500 defense rows) are below a full season at the observed ~460 and ~915 rows a week, so older weeks are probably purged. Scoring summaries were kept only for the last two weeks, plus a few user-played games from the previous season. The loader must read every week. On the PC's unmodded 2026 franchise a week was ~350 offense, ~700 defense, ~260 O-line and 64 kicking rows, about 19–23 weeks of capacity per table (§5.4).
+* **Team box scores:** `SeasonGame.HomeTeamStatCache` / `AwayTeamStatCache` → a `TeamStats` row per side (first downs, offensive/total yards, rushing and passing yards and attempts, third/fourth downs, red zone, penalties, possession time, giveaways/takeaways, sacks). Found on the PC (§5.4); filled for every played game, the latest week included. The reader exports it and `load_save.py` writes it to `team_stats`.
 * **Scoring summaries:** `SeasonGame.ScoringSummaries` → `ScoringSummary[]` → `ScoringSummary` rows with `Quarter`, `TimeStampInSec` (time left in the quarter), score before and after, and `Conversion`.
 * **Quarter scores, weather and time of day are filled in** on played games.
 * **Empty in this save:** `Highlight` (0 rows; likely only for games played by hand, none recent), `Injury` (0), `MorphHead` (0 rows; player heads use `GenericHeadAssetName` / `PLYR_GENERICHEAD`, not face sliders).
@@ -365,7 +366,59 @@ Before building §4–§5, read a fresh Madden 27 save and confirm:
 5. How many weeks of per-game rows survive: sim several weeks, then past a season rollover.
 6. Season stat rows update after each simmed week, and the diff matches the per-game rows.
 7. Whether Madden recomputes OVR on load (§4.4).
-8. Whether Madden draws the edited body skin tone in-game (§4.3, `CharacterVisuals.RawData`).
+8. ~~Whether Madden draws the edited body skin tone in-game (§4.3, `CharacterVisuals.RawData`).~~ Obsolete: only the teleport needed it, and the fresh-save plan drops the teleport.
+
+**Results (2026-10-29), on `CAREER-WEEK1/2/3`.** These are a throwaway, unmodded 2026 franchise (franchise year 0, user team CAR) with Regular Season weeks 1–3, every game simmed. Each save was made with the week's 15 CPU games already simmed and CAR's game still `Unplayed`; that game is simmed by the next save. Played-game counts of 63/79/95 are the 48 preseason games plus 15, 31 and 47 regular-season games. **Re-run every check on the real modded 2034 franchise:** sim-stat and roster mods change the numbers, and items 5 and 7 need more than three weeks.
+1. **Opens: yes.** All three report schema 988 and decode with `madden-franchise`'s bundled 620. Every §5.3 table is present: `SeasonGame` 335 rows, `Game*Stats`, `ScoringSummary`, `Highlight`, `NewsCenterArticle` (17/39/45 rows), `Injury` (8–10 rows), `PlayerStatRecord`, `HistoryEntry` (24k→51k rows) and `MorphHead` (0). `Highlight` has no schema entry and falls back to a generic one.
+2. **PGIDs: stable.** 3,244 players in each save, with the same PGIDs, names and Player rows from week to week, and no duplicates. Between saves 66 and then 52 players changed team or status (free-agent signings and cuts), and 108 and then 101 changed OVR (in-season progression).
+3. **Simmed games: filled.**
+   - Quarter scores add up to the final for every played game.
+   - Scoring summaries exist for the latest two regular-season weeks, never for preseason.
+   - Per-game `Game*Stats` rows lag one save, for every regular-season week. The rows for the latest week already exist in the tables (338 offense rows in WEEK2), but with a null `SeasonGame` and no `Player.GameStats` link, so they can't be credited until the next save links them.
+   - Preseason games get no per-game rows.
+   - The team box score (§5.3) is present for every played game, including the latest week and preseason. Its rushing yards and attempts and its passing attempts and TDs equal the summed player lines for all 64 team-games checked. Its passing yards are the passers' gross yards.
+   - Still needs JR: compare one game with the in-game box score (see below).
+4. **Highlight: none.** 0 of 3,200 rows in all three saves, so the table isn't filled for simmed games. Whether it fills for a game JR plays is still open.
+5. **Retention: at least two weeks** (WEEK3 still has week 1 and week 2 rows). Capacity works out to roughly 19 weeks for defense and 21–23 for the other tables, so a full regular season may only just fit, and playoffs may not. Season rollover can't be tested yet.
+6. **Season rows: match.** Season rows lag exactly like the game rows: a save's season totals cover the weeks whose game rows it links. The change in season totals between saves equals the newly linked week's game rows:
+   - 1,420 of 1,420 player rows for week 1.
+   - 1,426 of 1,443 for week 2. The other 17 are half sacks: a season row folds two `DLINEHALFSACK` into one `DLINESACKS`, and the loader's sack formula already handles that.
+   - `*LONGEST` fields are the running maximum (2,143 of 2,143).
+   - `GAMERATING` is 0 in season rows.
+   - A player's season row can move from `SeasonOffensiveStats` to `SeasonOffensiveKPReturnStats` once he returns a kick. The loader reads fields, not tables, so this doesn't affect it.
+   - The 248 season rows already filled in WEEK1 have `SEAS_YEAR` = −1 (prior-year history) and are skipped.
+7. **OVR recompute on load: not tested.** It needs an edited save loaded in-game. Each save's stored OVR is the highest archetype grade (the reader test checks this). Low priority now that the teleport is dropped; it matters only for V2.14.
+
+**Loader run.** All three snapshots were committed in order into a scratch database (`init_db.sql` plus `seed_clean_db --season 2026 --week 1`), which was dropped afterwards.
+- `league_state` moved 1 → 2 → 3.
+- 47 games were completed.
+- Game lines: 0, then 2,362, then 4,743 rows.
+- Season totals match the summed game lines for every player.
+- 2,853 players were loaded (draft prospects are skipped).
+- Injuries: 252 / 227 / 216 rows, of which 217 / 194 / 170 are on IR.
+
+Fixed in the loader:
+- `team_stats` yards, first downs, conversions, turnovers, red zone, penalties and possession were left at 0 or NULL. They now come from the team box score (reader_version 3).
+- A healed player Madden still has on IR was stored with injury type `INVALID_`. It is now NULL.
+
+**JR to check in-game** (CAREER-WEEK3, or a fresh run of the same weeks):
+- **Week 1, CHI 27 @ CAR 24, defensive box score.** Does Madden's tackles column show the total or solo, and do the sacks agree?
+
+  | Player | Solo | Assists | Tackles | Sacks |
+  | :--- | ---: | ---: | ---: | ---: |
+  | Bobby Okereke (CAR) | 7 | 4 | 11 | 0 |
+  | Jaelan Phillips (CAR) | 9 | 1 | 10 | 1 |
+  | Kyler Gordon (CHI) | 7 | 2 | 9 | 0 |
+  | Grady Jarrett (CHI) | | | | 0.5 |
+  | Montez Sweat (CHI) | | | | 0.5 |
+
+- **Same game, team stats.** Bears: 360 total, 289 passing, 71 rushing, 21 first downs, 5/12 on third down, 29/38 passing. Panthers: 383, 221, 162, 18 first downs, 4/9 on third down, 23/30 passing.
+- **LOLB/ROLB.** The league has 30 LOLB and 91 ROLB, all off-ball (Run Stopper / Pass Coverage); edge rushers are LE/RE. CAR has no LOLB: Devin Lloyd, Tyrel Dodson and Bam Martin-Scott are all ROLB, and the loader stores them as SAM. Check what Madden's Panthers depth chart calls their slots before trusting LOLB → WILL / ROLB → SAM.
+- **Team Salary screen.** About 98 contracts per save have this year's contract hit (SalaryYear + BonusYear) different from `PLYR_CAPSALARY`, almost all `CurrentYear` 0, and every new mismatch is a player who signed or moved that week. Check which number the screen shows for:
+  - Jerome Baker (LAC): contract $2.51M, cap salary $0.22M
+  - Deonte Banks (NYJ): $2.60M vs $4.31M
+  - Joey Bosa (CIN): $11.33M vs $0.22M
+  - Channing Tindall (CHI): $1.70M vs $1.21M
 
 The community *Madden Franchise Exporter* (a plain-text dump of a franchise file's career and season stats, team stats, game logs and rosters) is an independent check for items 3, 5 and 6 and for `pipeline/load_save.py` output.
 
