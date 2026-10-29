@@ -24,6 +24,7 @@ Project Mu/
 ├── NOTES.md                   # Feature documentation & engineering notes (draft prospects & OCR pipeline)
 ├── requirements.txt           # Python dependencies for API, database, engines, pipeline, and newsroom
 ├── .env.example               # Environment variables template (Gemini API, PostgreSQL DSN, ntfy, debug token)
+├── backup_latest.sql          # Latest canonical PostgreSQL database backup committed to the repo
 ├── madden_capture.py          # Remote Play capture (macOS + chiaki-ng): drives Madden franchise menus with held keypresses,
 │                              #   checks every screen via Apple Vision OCR, screenshots Season Stats (NFL scope, all categories;
 │                              #   Madden lists the top ~270 per category; Passing/Defense/Kicking: each page also captured scrolled right at the same row position, *_right_NNN.png;
@@ -416,7 +417,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Rookie headshot generation | `python3 -m headshots.rookie_headshots [--season N] [--workers 5] [--drafted-only] [--dry-run]` (generates media-day headshots for incoming draft class rookies, removes backgrounds via `rembg`, saves to `static/players/{player_id}.webp`) |
 | Headshot post-processing (legacy batch) | `python3 -m headshots.process_headshots` |
 | Dashboards | `streamlit run dashboards/admin_dashboard.py` |
-| DB backup / restore | `db/backup_db.sh` / `db/restore_db.sh db/backups/<file>.sql` |
+| DB backup / restore | `db/backup_db.sh` / `db/restore_db.sh db/backups/<file>.sql` (committed repo copy maintained at root `backup_latest.sql`) |
 
 ---
 
