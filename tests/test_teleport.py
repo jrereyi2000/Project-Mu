@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """pipeline/teleport.py: mapping, pairing, edits and archetype settling (unit, on the stored Madden 27 formulas where a
 real formula is needed), and a full dry run against the sample save with the edits applied to a copy (integration)."""
 import json

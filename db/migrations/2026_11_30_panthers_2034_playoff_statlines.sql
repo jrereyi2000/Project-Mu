@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: 2026_11_30_panthers_2034_playoff_statlines.sql
 -- Description:
 --   Seeds exact canonical player_stats and team_stats for Carolina's 2034 playoff run:

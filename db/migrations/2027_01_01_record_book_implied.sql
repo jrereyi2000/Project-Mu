@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Record-book rows the 2026-2034 history implies (docs/done/HISTORY_BACKFILL_PLAN.md §3.7; PROJECT_SPEC §3.3l).
 -- `python3 -m engines.history_backfill records-check` found four franchise records the book's own facts create but
 -- don't list (JR 2026-10-26: add them; Jeanty and Gore tie rather than break):

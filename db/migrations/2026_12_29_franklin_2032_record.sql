@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: 2026_12_29_franklin_2032_record.sql
 -- Ka'Von Franklin's 2032 line back to the record book (docs/done/HISTORY_BACKFILL_PLAN.md phase 3).
 --

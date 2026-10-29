@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- 2026 head coaches (all 32 teams; Carolina's is Dave Canales, who coached through 2033) and their real NFL
 -- head-coaching careers through 2025, stored as coach_seasons season 2025 with team_id NULL: the baseline the
 -- franchise started from (PROJECT_SPEC §3.3a). Sources: Wikipedia "List of current NFL head coaches" (revision of

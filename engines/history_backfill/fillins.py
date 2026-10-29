@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history)
+# @REPLACED-BY: NONE (Mu 2026-2036 history discarded; AUDIT_LEDGER.md §3b)
 """
 Fill-in players for 2026-2034 (docs/done/HISTORY_BACKFILL_PLAN.md phase 3, §3.6; PROJECT_SPEC §3.3k).
 

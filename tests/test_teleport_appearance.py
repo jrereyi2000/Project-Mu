@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """pipeline/teleport_appearance.py: headshot traits -> generic head / body type (unit, no database), the teleporter
 hook, and the sample save teleported with appearance and applied to a copy (integration)."""
 import json

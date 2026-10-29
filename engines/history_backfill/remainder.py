@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history)
+# @REPLACED-BY: NONE (Mu 2026-2036 history discarded; AUDIT_LEDGER.md §3b)
 """
 2026-2034 remainders: what each player's career totals leave for the seasons the backfill generates
 (docs/done/HISTORY_BACKFILL_PLAN.md §3.1; PROJECT_SPEC §3.3i).

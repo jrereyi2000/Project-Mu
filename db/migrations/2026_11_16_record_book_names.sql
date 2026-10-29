@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Record book: full names for two short-form holders (JR, Oct 15, 2026; PROJECT_SPEC §2.9).
 -- 2026_10_28_league_record_book.sql kept the record book's short form where the roster didn't match a single player.
 -- The 2035 roster (after the name-casing fix) has exactly one of each: A. Lowery is Antoine Lowery (Bills QB, a 2035

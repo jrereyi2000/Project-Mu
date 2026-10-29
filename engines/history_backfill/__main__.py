@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history)
+# @REPLACED-BY: NONE (Mu 2026-2036 history discarded; AUDIT_LEDGER.md §3b)
 """
 History backfill CLI (docs/done/HISTORY_BACKFILL_PLAN.md §3.8). Phase 2: the team arc.
 

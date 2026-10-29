@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport, PS5 attribute scan)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """pipeline/load_attributes.py: scan-row matching (unit) and a load into madden_test that is always rolled back
 (integration)."""
 import csv

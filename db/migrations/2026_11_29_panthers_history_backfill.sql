@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: 2026_11_29_panthers_history_backfill.sql
 -- Description:
 --   1) Corrects 2034 Coach of the Year (COTY) in awards to Marcus Whitfield (Carolina Panthers).

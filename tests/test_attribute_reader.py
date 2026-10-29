@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport, PS5 attribute scan)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """pipeline/attribute_reader.py: digit templates on labelled crops of the wide roster list (tests/fixtures/attributes),
 chip and header placement, sweep alignment and the OVR check. No screen, no database."""
 import numpy as np

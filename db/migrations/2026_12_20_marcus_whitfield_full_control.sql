@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: Marcus Whitfield runs Carolina as head coach and GM (full control), since 2034
 -- Per JR: Whitfield (Panthers head coach, coach_tenures 2034-present) has also been Carolina's GM since 2034.
 -- The seeded persona Bennett Thorne (GM since 2036) never held the job, so his row becomes Whitfield's in place

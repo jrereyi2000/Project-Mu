@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: Backfill coordinator lore for Marcus Whitfield and Chicago Bears
 -- Marcus Whitfield was the Bears offensive coordinator from 2028-2033 under Ben Johnson
 -- until getting hired as the Panthers head coach in 2034.

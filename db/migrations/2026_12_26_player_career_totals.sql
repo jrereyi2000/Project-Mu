@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history schema)
+-- @REPLACED-BY: NONE (feature dropped with the 2026-2036 history; drop the tables from db/init_db.sql at prune time; AUDIT_LEDGER.md §3b)
 -- Career totals from Madden's Career Stats lists (docs/done/HISTORY_BACKFILL_PLAN.md phase 1; PROJECT_SPEC §3.3i).
 -- pipeline/load_career_totals.py writes one row per list row and category: the player's career line as Madden shows
 -- it (real NFL stats through 2025 for veterans, every season since, the current season so far), in the

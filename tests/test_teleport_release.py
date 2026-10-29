@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """pipeline/teleport.py --release: leftover donors in the report and the edits (unit, on a made-up snapshot), and the
 full run on the sample save: teleport, apply players + releases to a copy, read back (integration)."""
 import json

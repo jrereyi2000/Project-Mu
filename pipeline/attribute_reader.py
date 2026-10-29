@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport, PS5 attribute scan)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """
 Reads the PS5 attribute scan (docs/in_progress/PC_MIGRATION_PLAN.md §2.3): `madden_capture.py --only attributes` screenshots of the
 wide Manage Roster > Roster list, turned into every player's 54 ratings without OCR or an LLM.

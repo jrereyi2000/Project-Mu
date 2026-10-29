@@ -2,6 +2,8 @@
 
 **Status:** All 11 of 11 items complete (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
+**2026-10-29: the teleport is dropped for a fresh 2034 PC franchise, and Mu's 2026–2036 history is discarded** ([`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md), decision at the top; obsolete code in [`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b). Items 2 (surname rename, the 2036 `apply` run) and 3 (body skin tone) only served the teleport; their code is marked for deletion except `commentary_names.py`'s lookup. Items 1 and 4–11 still serve the fresh save.
+
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
 ## Rules for every item

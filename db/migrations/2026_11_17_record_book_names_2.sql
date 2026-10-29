@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Record book: full names for the last three short-form holders (JR, Oct 15, 2026; PROJECT_SPEC §2.9).
 -- None of them is in the league in 2035; JR named them:
 --   B. Ojulari -> Bayo Ojulari (Cardinals rookie single-game sacks, 2 in 2028; retired before 2035)

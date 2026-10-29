@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """pipeline/teleport_contracts.py: Project Mu contracts -> PlayerContract fields, checked by converting back with
 pipeline/load_save.contract_values (unit; the end-to-end write is in tests/test_teleport.py's integration test)."""
 import unittest

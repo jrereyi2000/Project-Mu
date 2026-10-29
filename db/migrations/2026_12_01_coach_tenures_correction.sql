@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Correct head coach tenures: update active team tenures to actual hiring years,
 -- update 2025 baseline-season coaches, backfill prior historical stints for veteran coaches,
 -- and link coach_seasons 2025 baseline rows to team_id (PROJECT_SPEC §3.3a).
