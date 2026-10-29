@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history)
+# @REPLACED-BY: NONE (Mu 2026-2036 history discarded; AUDIT_LEDGER.md §3b)
 """Pure tests for the history backfill's phase 0 inputs (engines/history_backfill/sources.py). No network, no DB."""
 import unittest
 

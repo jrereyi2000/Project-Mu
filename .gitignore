@@ -49,3 +49,7 @@ CAREER-*
 
 # Save reader dependencies
 pipeline/save_reader/node_modules/
+
+# Windows download markers and the local mod downloads (PC setup, 2026-10-29)
+*:Zone.Identifier
+PC_MODS/

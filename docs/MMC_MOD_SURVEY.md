@@ -1,6 +1,6 @@
 # Madden Modding Community (MMC) Survey for the PC Migration
 
-Scraped 2026-10-28 from the MMC Discord (server 483324610968944651) through JR's signed-in Chrome. Companion to [`PC_MIGRATION_PLAN.md`](in_progress/PC_MIGRATION_PLAN.md). Nothing here is installed or tested; versions and dates are as posted. Thread links are `https://discord.com/channels/483324610968944651/<id>`.
+Scraped 2026-10-28 from the MMC Discord (server 483324610968944651) through JR's signed-in Chrome. Companion to [`PC_MIGRATION_PLAN.md`](in_progress/PC_MIGRATION_PLAN.md). **2026-10-29: the teleport is dropped for a fresh 2034 PC franchise, and Mu's 2026–2036 history is discarded** ([`PC_MIGRATION_PLAN.md`](in_progress/PC_MIGRATION_PLAN.md), decision at the top; obsolete code in [`AUDIT_LEDGER.md`](../AUDIT_LEDGER.md) §3b). Rows tied to the teleport (§4.3 donors, appearance, release) no longer apply; the franchise-start tools (`seasonYearSetup`, the roster-size mod) do. Nothing here is installed or tested; versions and dates are as posted. Thread links are `https://discord.com/channels/483324610968944651/<id>`.
 
 Starting point was the thread JR linked, *TBRs MyFranchise Tool* (`1221157058447933530`). It lives in `mmc-mod-details`, an archived forum with three Madden 24-era posts, so the survey widened to the live Madden 27 channels: `tools` (~90 posts), `m27-community-mods` (149 posts), `mod-tools-release`, `sabos-mods`, `sinthros-mods` and the MyFranchise channels.
 

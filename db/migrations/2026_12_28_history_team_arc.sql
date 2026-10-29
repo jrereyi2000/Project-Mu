@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history schema)
+-- @REPLACED-BY: NONE (feature dropped with the 2026-2036 history; drop the tables from db/init_db.sql at prune time; AUDIT_LEDGER.md §3b)
 -- 2026-2034 team arc (docs/done/HISTORY_BACKFILL_PLAN.md phase 2; PROJECT_SPEC §3.3j).
 -- engines/history_backfill/team_arc.py generates candidate histories into the staging tables below; `apply` copies
 -- the one JR picks into league_seasons, team_season_results and coach_season_lines with source = 'SYNTH', and

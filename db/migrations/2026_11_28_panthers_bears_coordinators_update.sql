@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: Update Carolina and Chicago OC tenures
 -- Carolina Panthers:
 --   Brad Idzik OC under Dave Canales (2026-2033; tenure ended when Whitfield was hired)

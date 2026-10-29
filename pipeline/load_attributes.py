@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport, PS5 attribute scan)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """
 Loads a PS5 attribute scan (docs/in_progress/PC_MIGRATION_PLAN.md §2.3) into player_attributes, in one transaction.
 

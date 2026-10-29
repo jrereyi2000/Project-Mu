@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: End Ejiro Evero's tenure as Panthers DC in 2033; add Shavon Bell as Panthers DC (2034-present)
 BEGIN;
 

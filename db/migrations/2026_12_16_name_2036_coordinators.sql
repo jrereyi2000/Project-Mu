@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: Name the remaining 2036 stand-in coordinators
 -- The 2035 offseason package (newsroom/offseason_service.py) filled nine coordinator jobs with stand-ins
 -- ("<Team> Interim OC/DC", "<Coach> Offensive/Defensive Lieutenant"). JR asked Claude to name them all.

@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Real-life 2026 schemes for the 32 head coaches of 2026 (PROJECT_SPEC §3.3a). The offense is the family the
 -- staff runs (head coach and 2026 offensive coordinator); the defense is the base front (head coach and 2026
 -- defensive coordinator). These are classifications from coaching trees, not official team labels. Coordinators:

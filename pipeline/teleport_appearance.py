@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """
 Appearance for the teleporter (docs/in_progress/PC_MIGRATION_PLAN.md §4.3 "Appearance"): gives each teleported donor a generic head
 and body type close to the Project Mu player's AI headshot. Pure apart from headshot_seeds (one read-only query).

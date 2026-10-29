@@ -1,6 +1,6 @@
 # Project Mu: Pre-PC Work, Round 2 (sorted by what each item needs)
 
-**Status:** audit only, nothing built (2026-10-28). Round 1 (the 11 items in [`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md) §2.4, briefs in [`PRE_PC_WORK.md`](../done/PRE_PC_WORK.md)) is done. This is what's still left that doesn't need the PC, sorted so some of it can be built on another device.
+**Status:** audit only, nothing built (2026-10-28). **2026-10-29: the teleport is dropped for a fresh 2034 save (PC_MIGRATION_PLAN.md, decision at the top).** §D, C12 and C13 are obsolete; items that ran on the 2036 data (C3's "run on 2036", C1's backtest) now use the `madden_2036` archive or wait for the new league. The rest still stands. Round 1 (the 11 items in [`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md) §2.4, briefs in [`PRE_PC_WORK.md`](../done/PRE_PC_WORK.md)) is done. This is what's still left that doesn't need the PC, sorted so some of it can be built on another device.
 
 **The sort:**
 * **A. Standalone:** needs neither the repo, the database nor Madden. Build it anywhere as a small package with the interface given here, then bring it in.
@@ -22,7 +22,7 @@
 | `.env` (Gemini key, DB URL) | C, and A7/A9 if they run real calls |
 | `db/backups/madden_backup_*.sql` → `./db/restore_db.sh`, then `pytest --recreate-test-db` for `madden_test` | C |
 | `static/players/*.webp` (headshots) | A1, A2, A5 test inputs (a handful is enough) |
-| `data/commentary_m27.json`, `data/commentary_save_m27.json` | only for teleport dry runs |
+| `data/commentary_m27.json`, `data/commentary_save_m27.json` | only for teleport dry runs (obsolete 2026-10-29; `commentary_names.py` keeps using them for Mu-named prospects) |
 
 4. **Branch, don't commit to `main`, on the other device.** Push the branch; merging it into `main` happens here (CLAUDE.md commit rule). A and B items touch new files almost entirely, so they merge cleanly. C items edit `PROJECT_SPEC.md`, `db/init_db.sql` and plan docs, which other sessions edit here too, so expect text conflicts.
 5. **Standalone packages land as their own folder** (`headshots/local/`, `broadcast/`, …) with a README stating the interface. Wiring one into the pipeline and the spec is a small B/C job afterwards.
@@ -85,7 +85,7 @@ Do these here, or on the other device after restoring a dump into `madden_test`.
 | C10 | V2.9 inbox, V2.11 free-form negotiation talk | The talk can be built now inside the trade engine's checks; carrying out the trades waits on B1 and the PC |
 | C11 | V2.10 scouting revamp, V2.5 fans | Lower in the V2.16 order |
 
-**Small teleport fixes (do before the renames are committed, D3):**
+**Small teleport fixes (do before the renames are committed, D3):** *OBSOLETE (2026-10-29): the teleport is dropped; delete with `pipeline/teleport*.py`.*
 
 | # | Item |
 | :--- | :--- |
@@ -95,6 +95,8 @@ Do these here, or on the other device after restoring a dump into `madden_test`.
 ---
 
 ## D. Mac/PS5 only
+
+> **OBSOLETE (2026-10-29).** The PS5 franchise is not finished or carried over; nothing here needs doing. The last 2036 state is `madden_2036` on the PC (week 21). Delete this section with the teleport code.
 
 | # | Item |
 | :--- | :--- |
@@ -107,4 +109,4 @@ Do these here, or on the other device after restoring a dump into `madden_test`.
 
 ## Still waiting on the PC
 
-All of §5.4, progression phase A, League Office phase A, the one-portrait spike (§9.4), applying `madden_pgid` to live `madden`, `team_cap_seasons` units, the first-year contract check, 2036 → 2037 retirements (continuity C5), and the decisions that need a PC test (progression D13, League Office L1).
+All of §5.4, progression phase A, League Office phase A, the one-portrait spike (§9.4), ~~applying `madden_pgid` to live `madden`~~ (done on `madden_2036` 2026-10-29; new franchise databases get it from `db/init_db.sql`), `team_cap_seasons` units, the first-year contract check, ~~2036 → 2037 retirements (continuity C5)~~ (obsolete with the fresh save), and the decisions that need a PC test (progression D13, League Office L1).

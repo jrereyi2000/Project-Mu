@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Marcus Whitfield takes Carolina's schemes and pass/blitz/man tendencies from Dave Canales: the playbooks haven't
 -- changed since 2026, so the team keeps them. Fourth-down aggressiveness is the head coach's own call and Whitfield
 -- has no earlier head-coaching record, so it is Medium (PROJECT_SPEC §3.3a).

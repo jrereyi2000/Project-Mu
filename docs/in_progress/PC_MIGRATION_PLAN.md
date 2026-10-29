@@ -1,6 +1,11 @@
 # Project Mu: PC Migration & Universe Teleportation Master Plan
 
-**Status (2026-10-28):** Phase 0 (Mac prep, §2) done: all 11 pre-PC items complete (§2.4, [PRE_PC_WORK.md](../done/PRE_PC_WORK.md)). Phases 1–7 wait on the PC; the teleporter (§4.3) has dry runs only. Part 2 (V2) status is at its end.
+**Status (2026-10-29):** The PC is set up (§3). **Plan changed 2026-10-29: fresh 2034 franchise, no teleport** (see the decision below). §2 (Mac/PS5 prep) and §4 (teleporter) are obsolete and kept only until the code they describe is pruned ([AUDIT_LEDGER.md](../../AUDIT_LEDGER.md) §3b). Next: §5.4 save checks, the watcher's auto-init and multi-franchise support (§5.2), mods, then the real franchise. Part 2 (V2) status is at its end.
+
+**Decision 2026-10-29: fresh 2034 save, Mu history discarded (JR).** The universe does not move to PC. A new Madden 27 PC franchise starts in **2034** (start year set with `seasonYearSetup.exe`, roster-size mod installed first), with modded gameplay and sim stats. All of Project Mu's 2026–2036 history is dropped because its stats are inflated; the new league starts from real NFL history through 2025 (`db/seed_clean_db.py`), so the record book jumps from 2025 to 2034. The 2036 database is kept read-only as `madden_2036` (archive, and the inputs for the §7.4 quality tests). Reasons and the PC setup plan: [Fresh Save Strategy PDF](./Project%20Mu_%20Fresh%20Save%20Strategy%20%26%20Remote%20PC-WSL%20Migration%20Plan.pdf), with its outdated parts listed in [FRESH_SAVE_STRATEGY_NOTES.md](./FRESH_SAVE_STRATEGY_NOTES.md). What this makes obsolete:
+* §2 (finish 2036 on the PS5, final backup, PS5 attribute scan) and [PRE_PC_WORK_2.md](../not_started/PRE_PC_WORK_2.md) §D.
+* §4 (the 2037 offseason teleporter). Its draft step (`pipeline/teleport_draft.py`, writing Mu's scouted class and pick owners into the save) and the OVR formulas (`engines/ovr_weights.py`, used by `engines/progression.py`) stay; both import helpers from `pipeline/teleport.py` that must move out first.
+* Code that only served the teleport or the 2026–2036 history is marked `OBSOLETE_FRESH_SAVE` in [AUDIT_LEDGER.md](../../AUDIT_LEDGER.md) for later deletion.
 
 **Target Execution Window:** Late October 2026 – Early 2027  
 **Architecture Transition:** PS5 Remote Play screen capture (`madden_capture.py` + `extract.py` at the repo root, driven by `pipeline/weekly_capture.py`) $\longrightarrow$ native PC franchise-file I/O ([`madden-franchise`](https://github.com/bep713/madden-franchise), which lists full support for Madden 19–27 and CFB 27 PC Dynasty saves)  
@@ -29,9 +34,13 @@ Project Mu has simulated and chronicled 11 seasons (2026–2036) of NFL universe
 
 This document defines the plan to move the universe to PC at the **2037 offseason**, replace screen capture with a direct save loader, wire up CFB 27, and move the short LLM calls to a local model.
 
+*2026-10-29: the universe no longer moves (decision above). The PC starts a fresh 2034 franchise; the save loader, CFB 27 bridge and local-model goals stand.*
+
 ---
 
 ## 2. Phase 0: Pre-Arrival Preparation (Mac)
+
+> **OBSOLETE (2026-10-29), delete with the teleport code.** The fresh 2034 save drops the 2036 finish (§2.1), the final Mac backup (§2.2; the last 2036 state is `madden_2036` on the PC, from `backup_latest.sql`, week 21) and the PS5 attribute scan (§2.3). §2.4 stays as the record of the finished pre-PC work; items 1 (QB OVR refit), 4–11 still serve the fresh save, items 2–3 (surname rename, skin tone) only served the teleport.
 
 ### 2.1 Finish 2036 on the PS5
 Play the Conference Championships and the Super Bowl on the PS5 and run the normal capture + newsroom pipeline through the Week 23 slate, so 2036 concludes in Project Mu exactly as every earlier season did (season archive, awards, records).
@@ -44,6 +53,8 @@ Dump the canonical database (all 11 seasons, players, contracts, historical stat
 *Verify that `db/backups/madden_backup_<timestamp>.sql` exists and has a plausible size.*
 
 ### 2.3 PS5 Attribute Scan (JR decision 2026-10-28)
+
+> **OBSOLETE (2026-10-29):** the scan fed the teleport. `pipeline/attribute_reader.py`, `pipeline/load_attributes.py`, `pipeline/attribute_digits.json`, `madden_capture.py --only attributes` and the `player_attributes` table are marked for deletion.
 Read every player's full set of ratings off the PS5 so the PC players carry their real attributes, not a donor's ratings scaled to the right OVR (§4.3). They then play as they did on the PS5, and their OVR follows from the same Madden 27 formula. This can be built and tested now; it doesn't wait for the PC.
 
 * **Screen (mapped 2026-10-28, reference views in `captures/2026-10-28_widelist/`):** Manage Roster → Roster, the list `--only roster` already navigates (team through the held-L2 dropdown). The player card isn't needed.
@@ -129,10 +140,10 @@ On hold: applying `madden_pgid` to the live database (after the PC move); the CF
                      ▼
              [Controller & Remote Access]
              • Pair PS5 DualSense via Bluetooth (PS + Share buttons)
-             • Enable Windows Remote Desktop (Mac control from the couch)
+             • Parsec (Mac control from the couch)
 ```
 
-**As set up (2026-10-29):** WSL2 distro `Ubuntu` (Ubuntu 26.04, Python 3.14, Node 22 from apt), Docker Desktop 29.9 with Ubuntu integration, repo at `~/Project-Mu` with a `.venv`, Postgres 14.24 in `madden-db` (command in `PROJECT_SPEC.md` §1.2). Git in Ubuntu pushes through the Windows Git Credential Manager (`/mnt/c/Program Files/Git/ucrt64/bin/git-credential-manager.exe`). Ollama for Windows is installed with no models yet. `.env`, `CAREER-GIANTS-AUTOSAVE`, `data/commentary_m27.json`, `data/commentary_save_m27.json` and the headshots are in place. `backup_latest.sql` (2036 week 21, 3,903 players, 154 MB) restored without errors; it predates three migrations, which are not yet applied to the PC's `madden`: `2027_01_05_madden_pgid` (held until the teleport, §4.5), `2027_01_08_player_progression` and `2027_01_09_personas`. Tests on the PC: save reader 31/31; pytest 1,769 passed and 14 failed. Of the 14, 8 are macOS-only code (Apple Vision, `Quartz`), 3 need the unapplied migrations, 1 needed `rembg[cpu]` (now in `requirements.txt`), and the `#debug` job-stop test failed because Ubuntu's `sh` (dash) exits on Ctrl-C before writing the job's exit code, fixed with `trap : INT` in `server/debug_api.py`. Windows Documents is redirected to OneDrive, so Madden's saves are in `C:\Users\jrere\OneDrive\Documents\Madden NFL 27\saves\` (confirmed after the first launch: `PROFILE-MADDEN`, `ROSTER-Official`, no `CAREER-*` until a franchise is started); `.env` sets `MADDEN_SAVES_DIR` to its `/mnt/c/...` path and `watch_save.py --once` scans it. Consider excluding that folder from OneDrive sync so uploads don't touch the files `watch_save.py` debounces. `C:\Users\jrere\.wslconfig`: `memory=12GB`, `networkingMode=mirrored`. Mods (2026-10-29): MMC Modding Tools v1.1.0.7 and all 71 `.fbmod`s from `PC_MODS/` are staged in `C:\Madden27Modding` and pre-imported into the Mod Manager; load order and the groups that must be toggled one at a time (CBS vs FOX broadcast sets, crowd tiers, ball, FPS menus, autoplaycall vs Sabos Gameplay) are in [`MOD_INSTALL.md`](../MOD_INSTALL.md). JR still swaps the anti-cheat launcher and applies the first pack by hand. Still to do: start a franchise for the §5.4 checks, the Mac's final post-Super Bowl backup and its restore, the launcher swap and a first modded launch.
+**As set up (2026-10-29):** WSL2 distro `Ubuntu` (Ubuntu 26.04, Python 3.14, Node 22 from apt), Docker Desktop 29.9 with Ubuntu integration, repo at `~/Project-Mu` with a `.venv`, Postgres 14.24 in `madden-db` (command in `PROJECT_SPEC.md` §1.2). Git in Ubuntu pushes through the Windows Git Credential Manager (`/mnt/c/Program Files/Git/ucrt64/bin/git-credential-manager.exe`). Ollama for Windows is installed with `gemma4:12b` pulled (Q4_K_M, 8 GB); WSL2 reaches it at `localhost:11434` through mirrored networking. `.env`, `CAREER-GIANTS-AUTOSAVE`, `data/commentary_m27.json`, `data/commentary_save_m27.json` and the headshots are in place. `backup_latest.sql` (2036 week 21, 3,903 players, 154 MB) restored without errors. On 2026-10-29 that database was backed up (`db/backups/madden_backup_20261029_pre_rename.sql`) and renamed `madden` → **`madden_2036`**, the read-only archive of the old universe and the quality-test inputs (§7.4); there is no `madden` database until the watcher creates the new franchise's. Every migration through `2027_01_12` is applied to `madden_2036` and `madden_test` (`2027_01_05_madden_pgid` is no longer held: `pipeline/load_save.py` needs it), and `db/init_db.sql` builds the same schema. Tests on the PC: save reader 31/31; pytest 1,775 passed, the only failures the macOS-only Apple Vision / `Quartz` code. Earlier PC-only fixes: `rembg[cpu]` added to `requirements.txt`, and the `#debug` job-stop fix (Ubuntu's `sh` is dash and exits on Ctrl-C before writing the job's exit code; `trap : INT` in `server/debug_api.py`). The OneDrive backup of Documents is turned off (2026-10-29), so Madden's saves are back in `C:\Users\jrere\Documents\Madden NFL 27\saves\` and `.env` sets `MADDEN_SAVES_DIR=/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/`. A first, unmodded test franchise (2026, franchise year 0) left `CAREER-WEEK1`–`CAREER-WEEK3` there (regular-season weeks 1–3, all games simmed) for the §5.4 checks. `C:\Users\jrere\.wslconfig`: `memory=12GB`, `networkingMode=mirrored`. DualSense paired; Parsec replaces Remote Desktop for couch control. Mods (2026-10-29): MMC Modding Tools v1.1.0.7 and all 71 `.fbmod`s from `PC_MODS/` (gitignored) are staged in `C:\Madden27Modding` and pre-imported into the Mod Manager; load order and the groups that must be toggled one at a time (CBS vs FOX broadcast sets, crowd tiers, ball, FPS menus, autoplaycall vs Sabos Gameplay) are in [`MOD_INSTALL.md`](../MOD_INSTALL.md). JR still swaps the anti-cheat launcher and applies the first pack by hand. The roster-size mod (`M27-Pre80Cut65SalaryCapADD40Pr3yVer1-1.fbmod`) is chosen and has to be in before the real franchise is created. Still to do: §5.4 checks, watcher auto-init and multi-franchise support (§5.2), the launcher swap and a first modded launch, then create the 2034 franchise.
 
 **Why not native Linux:** Madden uses EA Javelin anticheat, which runs at the Windows kernel level and does not work under Linux/Proton ([GamingOnLinux tracker](https://www.gamingonlinux.com/anticheat/vendor/11)); MMC Modding Tools and the community franchise tools are Windows-only too. WSL2 gives a real Ubuntu terminal (same `ls`, `cd`, `grep`, `git`, bash as the macOS terminal) next to Windows, so Project Mu's `.sh` scripts and Python code run unchanged.
 
@@ -141,6 +152,8 @@ On hold: applying `madden_pgid` to the live database (after the PC move); the CF
 ---
 
 ## 4. Phase 2: The 2037 Offseason Teleporter
+
+> **OBSOLETE (2026-10-29), delete with the teleport code.** No universe moves to PC (decision at the top). What survives: `seasonYearSetup.exe` and the roster-size mod from §4.2 (now used to start the fresh franchise in 2034); the OVR formulas of §4.4 (`engines/ovr_weights.py`, used by `engines/progression.py`); the draft step of §4.3 (`pipeline/teleport_draft.py`, Mu's scouted class into the save); and `players.madden_pgid` from §4.5, which `pipeline/load_save.py` writes for every player it loads. The rest (`pipeline/teleport.py`, `teleport_appearance.py`, `teleport_contracts.py`, `character_visuals.py`, `save_reader/visual_edits.mjs`) is marked `OBSOLETE_FRESH_SAVE` in [AUDIT_LEDGER.md](../../AUDIT_LEDGER.md) §3b.
 
 The PS5 league already runs Madden 27, the same game as the PC, but the franchise file can't be moved: PS5 saves are encrypted on the console and Madden has no cross-platform transfer for offline franchises. The teleporter builds a PC Madden 27 franchise that matches Project Mu's 2037 offseason.
 
@@ -383,7 +396,7 @@ The community *Madden Franchise Exporter* (a plain-text dump of a franchise file
           ▼
 [Name Check]
           │
-          ├──> Each prospect's surname goes through the teleporter's surname rule (§4.3).
+          ├──> Each prospect's surname goes through the surname rule (§4.3, `pipeline/commentary_names.py`).
           │    Prospects with a recorded surname get its commentary ID; the rest get 0
           │    and are listed so JR can decide whether to keep the name
           │
@@ -588,7 +601,7 @@ To transition from the temporary Costco prebuilt to your permanent, whisper-quie
 1. **Days 1–75 (Active Operation):**
    * Keep the Costco PC intact in its designated spot on the hardwood floor.
    * Keep the original shipping box and all styrofoam inserts safe in a closet.
-   * Run your 2036–2037 franchise seasons and refine the save reader scripts.
+   * Run the fresh 2034 franchise's first seasons and refine the save reader scripts.
 2. **Days 60–75 (Black Friday / Holiday Sales Monitoring):**
    * Watch for holiday discounts on the four SFF components:
      * **Case:** Fractal Design Terra (Jade or Silver, 10.4L) or Lian Li / DAN A4-H2O (11L)
@@ -648,7 +661,7 @@ Madden's commentary is pre-recorded clips triggered inside the game engine. A mo
 
 * **GPU:** Madden is using the 5070 Ti during play (§7.5). Use cloud LLM and TTS for the live layer; pregame, postgame and recaps can run locally when Madden isn't running.
 * **Voices:** several newsroom personas are modeled on real journalists. Broadcast voices are original synthetic voices, never clones of a real person's voice.
-* **Player names:** Madden's own calls depend on the commentary IDs set by the teleporter (§4.3).
+* **Player names:** Madden's own calls depend on each player's commentary ID. In the fresh 2034 save Madden's own players already have theirs; Mu-named draft prospects (`pipeline/teleport_draft.py`, the CFB 27 bridge) get them through `pipeline/commentary_names.py`.
 
 ### 9.4 Headshots as In-Game Portraits
 
@@ -662,7 +675,7 @@ Player models are barely visible in play, so they only need to be close: the tra
 
 **Plan:**
 1. By 2036 the real players behind those 2,865 unique slots are long retired, so their portrait images can be overwritten with Project Mu headshots. 2,865 slots cover the 1,829 active players plus several years of rookie classes; slots of players who retire are reused after that.
-2. The teleporter gives each Project Mu player a slot and writes it to `PLYR_PORTRAIT`; the rookie import does the same each season after `headshots/rookie_headshots.py` runs.
+2. *(Teleport obsolete 2026-10-29: in the fresh 2034 save, a one-off portrait pass replaces this.)* The teleporter gives each Project Mu player a slot and writes it to `PLYR_PORTRAIT`; the rookie import does the same each season after `headshots/rookie_headshots.py` runs.
 3. A converter takes each headshot (already a transparent cutout, `static/players/{player_id}.webp`), resizes it to Madden's portrait size and encodes it in the game's texture format.
 4. The portrait textures are replaced through MMC Modding Tools (the community's Frosty-based Madden 27 editor, updated for each title update; [FMT.Madden26Plugin](https://github.com/FMTDev/FMT.Madden26Plugin) is the alternative) and loaded as a mod with the anti-tamper module, offline only.
 

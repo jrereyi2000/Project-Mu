@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport)
+# @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """
 CharacterVisuals.RawData ISON decoder, encoder, and skinTone updater for Madden 27 PC franchise saves
 (docs/done/PRE_PC_WORK.md §3, docs/in_progress/PC_MIGRATION_PLAN.md §4.3 "Appearance").

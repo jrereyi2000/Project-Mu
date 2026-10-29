@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history schema)
+-- @REPLACED-BY: NONE (feature dropped with the 2026-2036 history; drop the tables from db/init_db.sql at prune time; AUDIT_LEDGER.md §3b)
 -- 2026-2034 player rows (docs/done/HISTORY_BACKFILL_PLAN.md phase 3; PROJECT_SPEC §3.3k).
 -- `python3 -m engines.history_backfill apply-players --run N` writes a staged run into the live player tables with
 -- source = 'SYNTH'; the players it creates carry players.origin ('HISTORY': a real 2026 player who retired before

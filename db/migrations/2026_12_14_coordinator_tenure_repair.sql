@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: Repair coordinator tenures and head coach slants after the 2036 coaching carousel
 --
 -- tests/test_coordinators.py::test_seeder_idempotency re-ran engines/coordinator_seeder.py against the live

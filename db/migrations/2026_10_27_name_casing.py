@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+# @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 """
 Data fix (Oct 14): players.full_name spellings left in all caps ("JERRY RAYFORD") by the old video
 scanner. The roster load kept them because it keeps a stored spelling whose letters match the

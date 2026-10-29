@@ -1,3 +1,5 @@
+// @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport)
+// @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 // Visual edits for save_writer.mjs: an edit's `visuals` block sets CharacterVisuals.RawData fields
 // (specifically body skinTone 1-8 inside the zstd-compressed ISON document).
 //

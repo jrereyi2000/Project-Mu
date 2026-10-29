@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+# @REPLACED-BY: db/init_db.sql (its trigger and indexes are there) + db/seed_clean_db.py (the id repair was old-universe data; AUDIT_LEDGER.md §3b)
 """
 Capture loader, part 2 (docs/done/PIPELINE_MIGRATION.md, phase 3): player_id keys on season_stats and
 player_stats. Run after the roster load (pipeline/load_capture.py on a roster capture), because

@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Migration: Name the Colts' 2036 offensive coordinator
 -- When Indianapolis hired Charles Grant (2035 offseason package), the package filled the OC job with the stand-in
 -- "Charles Grant Offensive Lieutenant". Per JR he is Grant's former Panthers quarterbacks coach; JR asked Claude to

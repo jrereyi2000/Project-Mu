@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v0)
+# @REPLACED-BY: db/init_db.sql (one-off schema script for the original database)
 import psycopg
 
 with psycopg.connect("host=localhost dbname=madden user=postgres password=postgres") as conn:

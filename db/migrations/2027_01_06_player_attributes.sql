@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport schema, PS5 attribute scan)
+-- @REPLACED-BY: NONE (feature dropped with the 2026-2036 history; drop the tables from db/init_db.sql at prune time; AUDIT_LEDGER.md §3b)
 -- PS5 attribute scan (docs/in_progress/PC_MIGRATION_PLAN.md §2.3; PROJECT_SPEC §3.1): every player's 54 ratings read off the
 -- wide Manage Roster > Roster list by madden_capture.py --only attributes and pipeline/attribute_reader.py, loaded
 -- by pipeline/load_attributes.py. One row per player per scan (capture folder), so scans can be repeated and

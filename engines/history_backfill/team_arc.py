@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history)
+# @REPLACED-BY: NONE (Mu 2026-2036 history discarded; AUDIT_LEDGER.md §3b)
 """
 2026-2034 team arc: standings, playoffs, points and coach lines (docs/done/HISTORY_BACKFILL_PLAN.md phase 2, §3.3;
 PROJECT_SPEC §3.3j).

@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: PRUNE_FILE (v1)
+# @REPLACED-BY: NONE (one-off data fix on the old database)
 """Moves Super Bowl games from week 22 to week 23 (Super Bowl Week per docs/EDITORIAL_MATRIX.md).
 
 Historical imports (pipeline/batch_menus.py) previously stored the Super Bowl at week 22. Idempotent.

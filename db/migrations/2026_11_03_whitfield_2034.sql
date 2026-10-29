@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Marcus Whitfield's career counters after his first season (2034, Carolina): 13-4, #1 seed with a bye,
 -- 3-0 in the playoffs and the Super Bowl win over the Jets (48-27). No head-coaching career before 2034.
 -- Per JR (Oct 14); the 2034 regular-season and earlier playoff games aren't in `games`. PROJECT_SPEC §3.3a.

@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history)
+# @REPLACED-BY: NONE (Mu 2026-2036 history discarded; AUDIT_LEDGER.md §3b)
 """Pure tests for the 2026-2034 team arc (docs/done/HISTORY_BACKFILL_PLAN.md phase 2): the bracket, the facts check and
 a solve on a small synthetic league whose coach totals come from a known history. No DB."""
 import random

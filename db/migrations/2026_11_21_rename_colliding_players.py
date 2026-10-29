@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+# @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 """
 Data fix & collision avoidance (2026-10-15):
 Renames 33 Madden-generated fake players who shared their first initial and last name

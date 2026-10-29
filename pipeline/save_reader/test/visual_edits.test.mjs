@@ -1,3 +1,5 @@
+// @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (v2-teleport)
+// @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 // Tests for visual_edits.mjs: CharacterVisuals.RawData skinTone edits and copy-on-write
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

@@ -1,3 +1,5 @@
+# @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history)
+# @REPLACED-BY: NONE (Mu 2026-2036 history discarded; AUDIT_LEDGER.md §3b)
 """
 Team stat totals for 2026-2034 (docs/done/HISTORY_BACKFILL_PLAN.md §3.4; PROJECT_SPEC §3.3k).
 

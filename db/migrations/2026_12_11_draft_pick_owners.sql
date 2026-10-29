@@ -1,3 +1,5 @@
+-- @AUDIT-STATUS: OBSOLETE_FRESH_SAVE (mu-history data)
+-- @REPLACED-BY: db/seed_clean_db.py + db/init_db.sql (old-universe data only; AUDIT_LEDGER.md §3b)
 -- Traded draft picks as of 2036 week 4, from JR's list (2026-10-20). Every pick not listed is still owned
 -- by its original team (the SEED rows from engines.gm_personas seed). Data fix: run after 2026_12_10_gm_agents.sql
 -- and the GM seed. Idempotent; stops if any listed pick is missing.
