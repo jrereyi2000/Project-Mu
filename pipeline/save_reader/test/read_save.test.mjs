@@ -20,6 +20,7 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
   assert.equal(statSync(savePath).mtimeMs, before.mtime);
 
   assert.equal(s.meta.game_year, 27);
+  assert.ok(Number.isInteger(s.franchise.league_id) && s.franchise.league_id !== 0, 'franchise league id');
   assert.ok(s.teams.length >= 32);
   assert.ok(s.games.length > 0);
   assert.ok(s.players.length > 1000);

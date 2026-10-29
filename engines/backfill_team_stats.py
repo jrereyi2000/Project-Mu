@@ -1,7 +1,9 @@
+import os
+
 import psycopg
 
 def backfill_missing_team_stats():
-    with psycopg.connect('host=localhost dbname=madden user=postgres password=postgres') as conn:
+    with psycopg.connect(os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT DISTINCT ps.game_id, ps.team_id, t.name

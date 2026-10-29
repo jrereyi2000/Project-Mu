@@ -314,16 +314,18 @@ Once the league runs on PC, screen capture (`madden_capture.py`, `extract.py`, t
 **Why a new loader instead of CSVs for `pipeline/load_capture.py`:** `load_capture.py` is built around OCR output — the `36 CAP` year strip, row-count margins, fuzzy one-letter name matching, unmatched-row crop prompts. Faking CSVs means reproducing those quirks, and none of those checks mean anything with exact IDs. A thin loader that reuses the database-write helpers is less code. `load_capture.py` stays for reloading old captures.
 
 ### 5.2 Debounced File Watcher (`pipeline/watch_save.py`)
-**Built and tested (2026-10-28).** A Python daemon running on the PC/WSL2:
-* **Watches** the `CAREER-*` save folder (`--saves-dir`, path argument, or `MADDEN_SAVES_DIR` in `.env`, e.g. `/mnt/c/Users/<Name>/Documents/Madden NFL 27/saves/`).
-* **Debounces** write bursts: acts only when `mtime` and `size` have been stable for `--debounce` seconds (default 10s) and `size > 0`. Tracks processed modification times so each state is executed once.
-* **Snapshots & Compares:** Snapshots via `pc_save_reader.mjs` into `captures/<run>/save.json` and compares save season and week against `league_state`:
+**Built and tested (2026-10-28); one database per franchise since 2026-10-29.** A Python daemon running on the PC/WSL2 (full description: `PROJECT_SPEC.md` §6.0b):
+* **Watches** the `CAREER-*` save folder (`--saves-dir`, path argument, or `MADDEN_SAVES_DIR` in `.env`, `/mnt/c/Users/jrere/Documents/Madden NFL 27/saves/` on JR's PC). Saves from several franchises can share the folder; a backlog is processed oldest first.
+* **Debounces** write bursts: acts only when `mtime` and `size` have been stable for `--debounce` seconds (default 10s) and `size > 0`. Tracks processed modification times per file so each state is executed once.
+* **Routes by franchise:** `pc_save_reader.mjs` (reader v3) reports the save's `Franchise.LeagueID`, which Madden picks at random for each franchise and keeps in every save slot and week (CAREER-WEEK1–3: -1851690351 throughout; CAREER-GIANTS-AUTOSAVE: 2027975635). `db/franchises.py` maps it to that franchise's own database, `madden_<name>`, in the registry `data/franchises.json`, which also names the active franchise the site serves.
+* **Sets up a new franchise only with `--auto-init`:** creates `madden_<--franchise-name>`, seeds it with `db/seed_clean_db.py` from the save's season and week and `--user-team`, and stamps `league_state.madden_league_id`. A database that has data is never seeded; a mismatched stamp stops the load; `--reseed` (with `--once`) drops and recreates one franchise's database and needs `--confirm-reseed <db>`. The old rule that treated a jump of more than a season as a "different franchise" and reseeded the same database is gone.
+* **Compares** the save's season and week with that franchise's `league_state`:
   * *Same week:* no-op, temporary snapshot folder removed.
-  * *Older week / different franchise:* sends an ntfy notification and no-ops.
-  * *New week:* runs `load_save.py` (`--commit`), then deterministic analytics engines (`weekly_capture.run_weekly_engines`), queues nightly jobs (§7.5), and publishes newsroom articles (`newsroom.weekly_run.run_weekly_swarm`).
+  * *Older week / season gap:* sends an ntfy notification and no-ops.
+  * *New week:* runs `load_save.py` (`--commit`), then deterministic analytics engines (`weekly_capture.run_weekly_engines`), queues nightly jobs (§7.5), and publishes newsroom articles (`newsroom.weekly_run.run_weekly_swarm`), all in a child process with `DATABASE_URL` set to the franchise's database.
 * **Locking & Error Handling:** Prevents concurrent runs via `captures/.weekly_run.lock` (shared with `weekly_capture.py`). Failed runs trigger high-priority phone notifications via `pipeline.notify`.
-* **Flags:** `--once` (checks once and exits), `--dry-run` (load without commit, skips engines/articles), `--no-articles` (loads and runs engines, skips newsroom articles), `--season N` (season override), `--force` (bypasses week check for testing).
-* **Testing:** 21 unit and integration tests in `tests/test_watch_save.py` covering debounce settle/bursts, week classification, run lock, flag semantics, and end-to-end dry run against `CAREER-GIANTS-AUTOSAVE` and `madden_test`.
+* **Flags:** `--once`, `--dry-run` (load without commit, skips engines/articles, never creates or seeds a database), `--no-articles`, `--no-engines` (load only), `--season N`, `--force`, `--auto-init`, `--franchise-name`, `--user-team`, `--reseed` + `--confirm-reseed`, `--dsn` (load into one database, no routing).
+* **Testing:** `tests/test_watch_save.py` (debounce, week classification, run lock, franchise routing with a fake Postgres, the auto-init/reseed guards, the ingest child, the registry and its CLI, and an end-to-end dry run against `CAREER-GIANTS-AUTOSAVE` into `madden_test`). Real `--once` runs on 2026-10-29: CAREER-WEEK1 created and seeded a throwaway franchise database and loaded week 1 (2,853 players), WEEK2 and WEEK3 loaded weeks 2 and 3 into the same database, a second WEEK2 read was an older-week no-op, CAREER-GIANTS-AUTOSAVE got its own database, and the daemon over a folder holding both franchises' saves routed each to its own database. The throwaway databases were dropped afterwards.
 
 ### 5.3 Game-Level Data
 

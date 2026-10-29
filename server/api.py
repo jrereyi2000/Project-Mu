@@ -10,6 +10,11 @@ import datetime
 from typing import Optional
 import re
 
+# The site shows the active franchise's database when DATABASE_URL isn't set (db/franchises.py); this has to run
+# before the imports below, which read DATABASE_URL at import time.
+from db.franchises import export_active_dsn
+export_active_dsn()
+
 from engines.gotw_engine import display_excitement
 from pipeline.commentary_names import player_name_aliases_exist
 from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api

@@ -17,7 +17,8 @@
 CREATE TABLE IF NOT EXISTS league_state (
     id INT NOT NULL DEFAULT 1 PRIMARY KEY,
     current_season INT NOT NULL DEFAULT 2024,
-    current_week INT NOT NULL DEFAULT 1
+    current_week INT NOT NULL DEFAULT 1,
+    madden_league_id BIGINT                -- the save's Franchise.LeagueID (db/franchises.py)
 );
 
 CREATE TABLE IF NOT EXISTS teams (
