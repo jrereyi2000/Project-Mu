@@ -46,6 +46,22 @@ In the Mod Manager's applied list, a mod with higher priority wins any asset it 
 | 15 | Gameplay alt | autoplaycall (EJ) | Shares one chunk with Sabos Gameplay, and Sabos says not to combine gameplay mods: **one at a time** with Sabos Gameplay |
 | 16 | Menus / UI | Madden120FPSMenus / 60FPSMenu 1.1, MUT Remover 1.6, No Offline Warning 1.0.2, No VRAM Warning, Halftime Off 1.4 | The two FPS menu mods are **one at a time**; 120 matches the NVIDIA 120 FPS cap (plan §3). MUT Remover's one shared chunk is merged |
 
+## 3a. The `Default` pack (matches Shady Mike's list)
+
+Written 2026-10-29 into `manager_config.json` to match the applied list in Shady Mike Gaming's *My COMPLETE Madden 27 Mod List!* (YouTube `pG2SaNC1r30`, the scroll at ~0:56–1:08; MMC Edition 1.1.0.6). His list numbers mods 64 (lowest priority, top) to 1 (highest, bottom) in folders: Miscellaneous, Presentation / Broadcast, Field, Player Likeness, Accessories & Equipment, Jerseys, High Priority. The pack keeps his order and his on/off state for every mod we have; the frame shows his setup for a Prime TNF game. 21 of the 71 mods are on:
+
+- **On:** MUT Remover, Mudded ball, No VRAM Warning, yellow first down marker, lighting overhual, Noblurry, Shifted Kick Meter, Immersive Audio Overhaul, Prime TNF presentation, NFLScorebugs FOX v3 and CBS v3, More Gameday Cutscenes, DOF Enabler, BetterGrass, Stadium Experience, Jumbotron, Hair Fix and Faces, M27 Unlocked, smallpads27_2, Special Teams Formations, autoplaycall.
+- **Off, as in his list:** Halftime Off, SNF/MNF/FOX/CBS presentations, both Real Broadcast Music mods, Sabos Franchise Mod and Sabos Gameplay Mod. He uses autoplaycall instead of Sabos Gameplay and keeps it above any gameplay mod.
+- **Off, not in his list** (placed in the matching folder's spot so turning one on needs no reordering): BCA Pink Oct, both FPS menu mods, No Offline Warning, No Film Grain+ (above Noblurry), Realistic Stadium Sounds, Realistic Entrance Music, Normalized Holding Audio, CBS/FOX team logos (next to their scorebug), the 22 stadium attachments (above Stadium Experience), the 4 crowd tiers, both cyberfaces, both Justin Jefferson cleats, Roster Size Limit increase.
+- **His mods we don't have:** Old Style Portraits, Brandon Gaudin/Charles Davis Only, Modern UI, No Music in Practice, NO Bootflow Video, CM Clean Screen Base and its three CMCS add-ons (player indicator, passing meter, ball landing), CalebWilliamsMustache, RFM Tattoos, NoWeatherVisorRemoval, Modern Practice Attire, Speedflexchinstrap, Turtlenecks and Turtleneck_Replacement, 16 jersey/rebrand mods (all but Updated Mascots Jerseys off), 2017-18 Companion (off), HurtsSplashScreen.
+- **Version gaps:** he runs Stadium Experience 2.0, Jumbotron 2.5, Halftime Off 1.3, Sabos Gameplay 1.1 and **autoplaycall v4**; ours are 2.3, 2.7, 1.4, 1.2.1 and an autoplaycall whose header says version 1, so ours is probably older.
+
+How he switches networks (transcript ~15:30–16:45): for a FOX game turn on FOX presentation, FOX Real Broadcast Music and the FOX scorebug and turn off everything CBS; the reverse for CBS. The two scorebugs only replace the main bug, so one can stay on for SNF/MNF/TNF games, but the network music and presentation go off and the primetime presentation goes on. The pack has **both** scorebugs on because that's what the frame shows; CBS (higher) wins where they differ, so untick one.
+
+Where his order differs from §3: the scorebugs sit above Shifted Kick Meter, so the scorebugs' copies of the two kick meter widgets win. Move Shifted Kick Meter above the scorebugs if the shifted meter doesn't show.
+
+His UI folders aren't part of the pack string; they would have to be recreated in the UI.
+
 ## 4. Switching mods per game (idea, not built)
 
 JR wants the scorebug/network, crowd tier and ball (BCA Pink in October, maybe on chosen players only) picked automatically per game from team popularity and the matchup. What the tools allow:
