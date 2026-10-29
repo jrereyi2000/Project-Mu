@@ -53,9 +53,9 @@ FREE_AGENT_TEAM_INDEX = 32
 LOADED_STATUSES = ("Signed", "PracticeSquad", "FreeAgent")
 TEAM_ABBR_ALIASES = {"ARI": "AZ"}          # Madden's short name -> teams.abbreviation where they differ
 
-# Madden 27 positions -> Project Mu's. LOLB/ROLB -> WILL/SAM is unconfirmed: check against Madden's roster
-# screen on the PC.
-POSITIONS = {"LE": "LEDG", "RE": "REDG", "MLB": "MIKE", "LOLB": "WILL", "ROLB": "SAM"}
+# Madden 27 positions -> Project Mu's. Madden's depth chart shows ROLB as WILL (checked on the PC, 2026-10-29), so
+# LOLB is SAM.
+POSITIONS = {"LE": "LEDG", "RE": "REDG", "MLB": "MIKE", "LOLB": "SAM", "ROLB": "WILL"}
 
 # Madden 27's TraitDevelopment enum gives two names to each stored value: College_Impact = Star (1), College_Star =
 # Superstar (2), College_Elite = XFactor (3) (schema M27_620_0; the library reads back the first name). So the
@@ -146,8 +146,8 @@ def offense_rates(v):
     return v
 
 
-# Madden's DEFTACKLES is taken as solo tackles (assists are separate) and a sack as DLINESACKS plus half a sack per
-# DLINEHALFSACK. Both unconfirmed: check one game against the in-game box score on the PC.
+# Madden's DEFTACKLES is solo tackles and ASSDEFTACKLES assists; the in-game box score's tackle column is their sum
+# (checked on the PC, 2026-10-29). A sack is DLINESACKS plus half a sack per DLINEHALFSACK.
 def defense_cols(s):
     solo, ast = s.get("DEFTACKLES", 0), s.get("ASSDEFTACKLES", 0)
     v = {
@@ -595,8 +595,8 @@ def load_contracts(cur, snapshot, season, players, report, capture_id=None):
             differs += 1
         rows.append((who, vals))
     # Contracts in their first year (new signings, rookies) often disagree with Player.PLYR_CAPSALARY (0 or a
-    # prorated amount); later years match it ~97% of the time. Which one Madden's Team Salary screen shows is a PC
-    # check, so the contract's own numbers are stored and the disagreements counted.
+    # prorated amount); later years match it ~97% of the time. Madden's Team Salary screen shows the contract's own
+    # number (checked on the PC, 2026-10-29), so that is what is stored; the disagreements are only counted.
     report["contracts_cap_hit_differs"] = differs
     team_ids_ = {who[1] for who, _ in rows}
     report["contracts_superseded"] = supersede_active(cur, season, team_ids_, [who[0] for who, _ in rows])

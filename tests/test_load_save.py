@@ -24,6 +24,8 @@ class MappingTest(unittest.TestCase):
     def test_positions(self):
         self.assertEqual(ls.position("LE"), "LEDG")
         self.assertEqual(ls.position("MLB"), "MIKE")
+        self.assertEqual(ls.position("ROLB"), "WILL")
+        self.assertEqual(ls.position("LOLB"), "SAM")
         self.assertEqual(ls.position("WR"), "WR")
 
     def test_dev_traits_by_rank(self):

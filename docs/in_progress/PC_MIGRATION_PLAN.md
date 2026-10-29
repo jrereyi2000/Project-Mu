@@ -403,24 +403,11 @@ Fixed in the loader:
 - `team_stats` yards, first downs, conversions, turnovers, red zone, penalties and possession were left at 0 or NULL. They now come from the team box score (reader_version 3).
 - A healed player Madden still has on IR was stored with injury type `INVALID_`. It is now NULL.
 
-**JR to check in-game** (CAREER-WEEK3, or a fresh run of the same weeks):
-- **Week 1, CHI 27 @ CAR 24, defensive box score.** Does Madden's tackles column show the total or solo, and do the sacks agree?
-
-  | Player | Solo | Assists | Tackles | Sacks |
-  | :--- | ---: | ---: | ---: | ---: |
-  | Bobby Okereke (CAR) | 7 | 4 | 11 | 0 |
-  | Jaelan Phillips (CAR) | 9 | 1 | 10 | 1 |
-  | Kyler Gordon (CHI) | 7 | 2 | 9 | 0 |
-  | Grady Jarrett (CHI) | | | | 0.5 |
-  | Montez Sweat (CHI) | | | | 0.5 |
-
-- **Same game, team stats.** Bears: 360 total, 289 passing, 71 rushing, 21 first downs, 5/12 on third down, 29/38 passing. Panthers: 383, 221, 162, 18 first downs, 4/9 on third down, 23/30 passing.
-- **LOLB/ROLB.** The league has 30 LOLB and 91 ROLB, all off-ball (Run Stopper / Pass Coverage); edge rushers are LE/RE. CAR has no LOLB: Devin Lloyd, Tyrel Dodson and Bam Martin-Scott are all ROLB, and the loader stores them as SAM. Check what Madden's Panthers depth chart calls their slots before trusting LOLB → WILL / ROLB → SAM.
-- **Team Salary screen.** About 98 contracts per save have this year's contract hit (SalaryYear + BonusYear) different from `PLYR_CAPSALARY`, almost all `CurrentYear` 0, and every new mismatch is a player who signed or moved that week. Check which number the screen shows for:
-  - Jerome Baker (LAC): contract $2.51M, cap salary $0.22M
-  - Deonte Banks (NYJ): $2.60M vs $4.31M
-  - Joey Bosa (CIN): $11.33M vs $0.22M
-  - Channing Tindall (CHI): $1.70M vs $1.21M
+**Checked in-game by JR (2026-10-29, CAREER-WEEK1–3):**
+- **Tackles.** Madden's box-score tackle column is the total: `DEFTACKLES` is solo tackles and `ASSDEFTACKLES` assists (Week 1, CHI 27 @ CAR 24: Bobby Okereke 7 solo + 4 assists = 11), which is what the loader already stored. Half sacks were not checked separately.
+- **Team stats.** Every team-box-score number in that game matched (Bears 360 total, 289 passing, 71 rushing, 21 first downs, 5/12 on third down, 29/38 passing; Panthers 383, 221, 162, 18, 4/9, 23/30), confirming the reader_version 3 team box score.
+- **LOLB/ROLB.** Madden's Panthers depth chart lists Devin Lloyd, Tyrel Dodson and Bam Martin-Scott (all ROLB in the save) as WILL. The loader now maps ROLB → WILL and so LOLB → SAM (MLB is MIKE).
+- **Team Salary screen.** It shows the contract's own hit (SalaryYear + BonusYear) for the first-year mismatches (Jerome Baker $2.51M, Deonte Banks $2.60M, Joey Bosa $11.33M, Channing Tindall $1.70M), not `PLYR_CAPSALARY`. The loader already stores that number; `contracts_cap_hit_differs` is only a count.
 
 The community *Madden Franchise Exporter* (a plain-text dump of a franchise file's career and season stats, team stats, game logs and rosters) is an independent check for items 3, 5 and 6 and for `pipeline/load_save.py` output.
 
