@@ -269,6 +269,72 @@ class ProcessSaveTest(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         mock_load.assert_called_once()
 
+    @mock.patch("pipeline.watch_save.get_league_state")
+    def test_unseeded_without_auto_init_raises(self, mock_state):
+        mock_state.return_value = (None, None)
+
+        with mock.patch("pipeline.watch_save.snapshot_save", side_effect=self.fake_snapshot_save):
+            with self.assertRaises(ws.WatcherError) as ctx:
+                ws.process_save(self.save_file, run_folder=self.tmp, auto_init=False)
+            self.assertIn("--auto-init", str(ctx.exception))
+
+    @mock.patch("pipeline.watch_save.send_notify")
+    @mock.patch("pipeline.watch_save.step_articles")
+    @mock.patch("pipeline.watch_save.run_weekly_engines")
+    @mock.patch("pipeline.load_save.load")
+    @mock.patch("db.seed_clean_db.run_clean_seed")
+    @mock.patch("pipeline.watch_save.get_league_state")
+    def test_auto_init_provisions_and_loads(self, mock_state, mock_seed, mock_load, mock_engines, mock_articles, mock_notify):
+        mock_state.return_value = (None, None)
+        mock_load.return_value = {"league_state": "2036 week 6", "players": 1500, "games_completed": 0}
+        mock_articles.return_value = {"status": "published", "week": 6}
+
+        with mock.patch("pipeline.watch_save.snapshot_save", side_effect=self.fake_snapshot_save):
+            res = ws.process_save(
+                self.save_file, run_folder=self.tmp, auto_init=True, user_teams=["IND"]
+            )
+
+        self.assertEqual(res["status"], "success")
+        mock_seed.assert_called_once_with(
+            dsn=mock.ANY,
+            season=2036,
+            week=6,
+            user_teams=["IND"],
+            dry_run=False,
+            log=mock.ANY,
+        )
+        mock_load.assert_called_once()
+        mock_engines.assert_called_once()
+
+    @mock.patch("pipeline.watch_save.send_notify")
+    @mock.patch("pipeline.watch_save.step_articles")
+    @mock.patch("pipeline.watch_save.run_weekly_engines")
+    @mock.patch("pipeline.load_save.load")
+    @mock.patch("db.seed_clean_db.run_clean_seed")
+    @mock.patch("pipeline.watch_save.get_league_state")
+    def test_auto_init_reseeds_on_different_franchise(self, mock_state, mock_seed, mock_load, mock_engines, mock_articles, mock_notify):
+        # Stored is 2036, but save is season 2026 (older_week / different franchise)
+        mock_state.return_value = (2036, 1)
+        self.fake_snapshot["season"]["calendar_year"] = 2026
+        mock_load.return_value = {"league_state": "2026 week 6", "players": 1500, "games_completed": 0}
+        mock_articles.return_value = {"status": "published", "week": 6}
+
+        with mock.patch("pipeline.watch_save.snapshot_save", side_effect=self.fake_snapshot_save):
+            res = ws.process_save(
+                self.save_file, run_folder=self.tmp, auto_init=True, user_teams=["IND"]
+            )
+
+        self.assertEqual(res["status"], "success")
+        mock_seed.assert_called_once_with(
+            dsn=mock.ANY,
+            season=2026,
+            week=6,
+            user_teams=["IND"],
+            dry_run=False,
+            log=mock.ANY,
+        )
+        mock_load.assert_called_once()
+
 
 class FindFilesTest(unittest.TestCase):
     def setUp(self):

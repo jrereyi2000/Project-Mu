@@ -20,6 +20,9 @@ Options:
   --no-articles            Run loader and engines, skip newsroom articles
   --season N               Override season year (default: save's calendar year)
   --force                  Proceed even if week is same as or older than league_state
+  --auto-init              Auto-seed clean database if unseeded or new franchise detected
+  --user-team TEAMS        Comma-separated user-controlled team abbreviations (e.g. IND)
+  --reseed                 Force clean re-seeding of database on save detection
   --lock-file PATH         Custom lock file path (default: captures/.weekly_run.lock)
 """
 import argparse
@@ -38,7 +41,7 @@ from contextlib import contextmanager
 
 from pipeline.load_save import current_week, DSN
 from pipeline.notify import env, notify as send_notify
-from pipeline.weekly_capture import run_weekly_engines, step_articles, WeekStopped
+from pipeline.weekly_capture import run_weekly_engines, step_articles, step_preseason_engines, WeekStopped
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CAPTURES = os.path.join(ROOT, "captures")
@@ -183,16 +186,23 @@ def wait_for_settle(path, debounce_seconds=DEFAULT_DEBOUNCE, timeout=60, poll_in
 
 
 def get_league_state(dsn=None):
-    """Returns (current_season, current_week) from league_state table."""
+    """Returns (current_season, current_week) from league_state table, or (None, None) if unseeded/empty."""
     import psycopg
     conn_dsn = dsn or DSN
-    with psycopg.connect(conn_dsn) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
-            row = cur.fetchone()
-            if not row:
-                raise WatcherError("league_state row id=1 not found")
-            return int(row[0]), int(row[1])
+    try:
+        with psycopg.connect(conn_dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT to_regclass('public.league_state')")
+                reg = cur.fetchone()
+                if not reg or not reg[0]:
+                    return None, None
+                cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
+                row = cur.fetchone()
+                if not row:
+                    return None, None
+                return int(row[0]), int(row[1])
+    except Exception:
+        return None, None
 
 
 def classify_week(save_season, save_week, stored_season, stored_week):
@@ -242,12 +252,14 @@ def queue_nightly_jobs(season, week, log_fn=log):
 
 
 def process_save(save_path, season=None, dry_run=False, no_articles=False, force=False,
+                 auto_init=False, reseed=False, user_teams=None,
                  run_folder=None, dsn=None, reader_script=READER_SCRIPT, log_fn=log):
     """
     Core processing for a settled save file:
     1. Snapshots into captures/<run>/save.json
-    2. Compares save season & week against league_state
-    3. If new week (or force): runs load_save -> engines -> articles
+    2. Auto-initializes clean DB if unseeded or --auto-init / --reseed is set
+    3. Compares save season & week against league_state
+    4. If new week (or force or just_seeded): runs load_save -> engines -> articles
     """
     from pipeline import load_save
 
@@ -263,10 +275,39 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, force
     save_week = current_week(snapshot)
     stored_season, stored_week = get_league_state(dsn)
 
-    log_fn(f"Save: season {save_season}, week {save_week} | League state: season {stored_season}, week {stored_week}")
-    classification = classify_week(save_season, save_week, stored_season, stored_week)
+    just_seeded = False
+    needs_seed = (stored_season is None) or (reseed and stored_season is not None)
 
-    if not force:
+    if auto_init and not needs_seed and stored_season is not None:
+        cls_check = classify_week(save_season, save_week, stored_season, stored_week)
+        if cls_check in ("different_franchise", "older_week"):
+            log_fn(f"Auto-init: detected {cls_check} (save: {save_season} vs stored: {stored_season}). Reseeding DB...")
+            needs_seed = True
+
+    if needs_seed:
+        if not auto_init and stored_season is None:
+            raise WatcherError(
+                "Database is not initialized (no league_state found). "
+                "Run with --auto-init to automatically seed the clean DB from the save."
+            )
+        initial_week = save_week if save_week is not None else 1
+        log_fn(f"Auto-seeding clean database for Season {save_season}, Week {initial_week}...")
+        from db.seed_clean_db import run_clean_seed
+        run_clean_seed(
+            dsn=dsn or DSN,
+            season=save_season,
+            week=initial_week,
+            user_teams=user_teams or [],
+            dry_run=dry_run,
+            log=log_fn,
+        )
+        stored_season, stored_week = save_season, initial_week
+        just_seeded = True
+
+    log_fn(f"Save: season {save_season}, week {save_week} | League state: season {stored_season}, week {stored_week}")
+
+    if not force and not just_seeded:
+        classification = classify_week(save_season, save_week, stored_season, stored_week)
         if classification == "same_week":
             log_fn(f"Save {os.path.basename(save_path)} is at season {save_season} week {save_week}, same as league_state. No-op.")
             shutil.rmtree(run_folder, ignore_errors=True)
@@ -297,12 +338,16 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, force
         return {"status": "success", "dry_run": True, "season": save_season, "week": save_week, "load_report": load_report}
 
     # Step: engines
-    run_weekly_engines(save_season, mode="weekly", log_fn=log_fn)
-    queue_nightly_jobs(save_season, save_week, log_fn=log_fn)
+    if save_week is None:
+        log_fn(f"Step 7: start-of-season calibration engines (season {save_season})")
+        step_preseason_engines(save_season)
+    else:
+        run_weekly_engines(save_season, mode="weekly", log_fn=log_fn)
+        queue_nightly_jobs(save_season, save_week, log_fn=log_fn)
 
     # Step: articles
     published = None
-    if not no_articles:
+    if not no_articles and save_week is not None:
         log_fn("Step 8: newsroom articles")
         res = step_articles(save_season, week=save_week)
         published = f"slate for Week {res.get('week')}: {res.get('status')}"
@@ -310,7 +355,7 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, force
             raise WeekStopped(f"Articles did not publish ({res})")
 
     send_notify(
-        f"Ingested season {save_season} week {save_week} from {os.path.basename(save_path)}. "
+        f"Ingested season {save_season} week {save_week or 'preseason'} from {os.path.basename(save_path)}. "
         f"{published or 'Articles skipped.'}",
         title="Mu: week done",
         tags=("white_check_mark",)
@@ -321,7 +366,8 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, force
 
 def watch_loop(watch_path, pattern="CAREER-*", debounce_seconds=DEFAULT_DEBOUNCE,
                poll_interval=DEFAULT_POLL_INTERVAL, dry_run=False, no_articles=False,
-               season=None, force=False, lock_path=DEFAULT_LOCK_PATH, log_fn=log):
+               season=None, force=False, auto_init=False, reseed=False, user_teams=None,
+               lock_path=DEFAULT_LOCK_PATH, log_fn=log):
     """Continuous polling daemon loop."""
     debouncer = FileDebouncer(debounce_seconds=debounce_seconds)
     running = True
@@ -348,7 +394,8 @@ def watch_loop(watch_path, pattern="CAREER-*", debounce_seconds=DEFAULT_DEBOUNCE
                     with run_lock(lock_path):
                         res = process_save(
                             save_file, season=season, dry_run=dry_run, no_articles=no_articles,
-                            force=force, log_fn=log_fn
+                            force=force, auto_init=auto_init, reseed=reseed, user_teams=user_teams,
+                            log_fn=log_fn
                         )
                         debouncer.mark_processed(save_file)
                         log_fn(f"Result for {os.path.basename(save_file)}: {res.get('status')}")
@@ -377,11 +424,15 @@ def main():
     ap.add_argument("--no-articles", action="store_true", help="Run loader and engines, skip newsroom articles")
     ap.add_argument("--season", type=int, help="Override season year (default: save's calendar year)")
     ap.add_argument("--force", action="store_true", help="Run even if week is same as or older than league_state")
+    ap.add_argument("--auto-init", action="store_true", help="Auto-seed clean database if unseeded or new franchise detected")
+    ap.add_argument("--user-team", default="", help="Comma-separated abbreviations of user-controlled teams (e.g. IND or IND,CAR)")
+    ap.add_argument("--reseed", action="store_true", help="Force clean re-seeding of database on save detection")
     ap.add_argument("--lock-file", default=DEFAULT_LOCK_PATH, help=f"Lock file path (default: {DEFAULT_LOCK_PATH})")
     args = ap.parse_args()
 
     watch_path = args.path or args.saves_dir or env("MADDEN_SAVES_DIR", ".")
     watch_path = os.path.abspath(watch_path)
+    user_teams = [t.strip().upper() for t in args.user_team.split(",") if t.strip()]
 
     if not os.path.exists(watch_path):
         log(f"Error: watch path '{watch_path}' does not exist.")
@@ -403,7 +454,9 @@ def main():
             with run_lock(args.lock_file):
                 res = process_save(
                     target_save, season=args.season, dry_run=args.dry_run,
-                    no_articles=args.no_articles, force=args.force, log_fn=log
+                    no_articles=args.no_articles, force=args.force,
+                    auto_init=args.auto_init, reseed=args.reseed, user_teams=user_teams,
+                    log_fn=log
                 )
                 log(f"Execution completed: {res.get('status')}")
                 sys.exit(0)
@@ -421,6 +474,7 @@ def main():
             watch_path, pattern=args.pattern, debounce_seconds=args.debounce,
             poll_interval=args.poll_interval, dry_run=args.dry_run,
             no_articles=args.no_articles, season=args.season, force=args.force,
+            auto_init=args.auto_init, reseed=args.reseed, user_teams=user_teams,
             lock_path=args.lock_file, log_fn=log
         )
 
