@@ -548,6 +548,74 @@ ALTER TABLE player_contract_years ADD COLUMN IF NOT EXISTS projected BOOLEAN NOT
 ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_at TIMESTAMPTZ;
 ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_transaction_id INT
     REFERENCES transactions(id) ON DELETE SET NULL;
+-- Head coaches & coordinators (coaches, coach_tenures, coordinators, coordinator_tenures, coach_seasons)
+CREATE TABLE IF NOT EXISTS coaches (
+    id SERIAL PRIMARY KEY,
+    coach_name VARCHAR(255) UNIQUE NOT NULL,
+    slant VARCHAR(16) NOT NULL DEFAULT 'OFFENSIVE' CHECK (slant IN ('OFFENSIVE', 'DEFENSIVE', 'CEO')),
+    offensive_scheme VARCHAR(64),
+    defensive_scheme VARCHAR(64),
+    -- 2026 tendencies, Low / Medium / High (2026_11_05_coach_tendencies.sql)
+    pass_lean VARCHAR(6) CHECK (pass_lean IN ('Low', 'Medium', 'High')),
+    fourth_down_aggressiveness VARCHAR(6) CHECK (fourth_down_aggressiveness IN ('Low', 'Medium', 'High')),
+    blitz_rate VARCHAR(6) CHECK (blitz_rate IN ('Low', 'Medium', 'High')),
+    man_coverage VARCHAR(6) CHECK (man_coverage IN ('Low', 'Medium', 'High'))
+);
+
+-- Who coached which team, and when. end_season NULL = still there.
+CREATE TABLE IF NOT EXISTS coach_tenures (
+    id SERIAL PRIMARY KEY,
+    coach_id INT NOT NULL REFERENCES coaches(id) ON DELETE CASCADE,
+    team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    start_season INT NOT NULL,
+    end_season INT,
+    UNIQUE (coach_id, team_id, start_season),
+    CHECK (end_season IS NULL OR end_season >= start_season)
+);
+
+-- Coordinators and staff tenures (2026_11_25_coordinators_and_slants.sql, docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md)
+CREATE TABLE IF NOT EXISTS coordinators (
+    id SERIAL PRIMARY KEY,
+    coordinator_name VARCHAR(255) NOT NULL,
+    side VARCHAR(16) NOT NULL CHECK (side IN ('OFFENSIVE', 'DEFENSIVE')),
+    scheme VARCHAR(64) NOT NULL,
+    playbook VARCHAR(64),
+    pass_lean VARCHAR(6) CHECK (pass_lean IN ('Low', 'Medium', 'High')),
+    blitz_rate VARCHAR(6) CHECK (blitz_rate IN ('Low', 'Medium', 'High')),
+    man_coverage VARCHAR(6) CHECK (man_coverage IN ('Low', 'Medium', 'High')),
+    origin_notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS coordinator_tenures (
+    id SERIAL PRIMARY KEY,
+    coordinator_id INT NOT NULL REFERENCES coordinators(id) ON DELETE CASCADE,
+    team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    role VARCHAR(8) NOT NULL CHECK (role IN ('OC', 'DC')),
+    start_season INT NOT NULL,
+    end_season INT,
+    UNIQUE (coordinator_id, team_id, role, start_season),
+    CHECK (end_season IS NULL OR end_season >= start_season)
+);
+CREATE INDEX IF NOT EXISTS idx_coord_tenures_team_season ON coordinator_tenures(team_id, start_season, coalesce(end_season, 9999));
+
+-- Career counters as the coach screen shows them at the end of each season (they include
+-- pre-franchise NFL careers, so they are stored, not rebuilt from games).
+CREATE TABLE IF NOT EXISTS coach_seasons (
+    id SERIAL PRIMARY KEY,
+    coach_id INT NOT NULL REFERENCES coaches(id) ON DELETE CASCADE,
+    team_id INT REFERENCES teams(id) ON DELETE CASCADE,
+    season INT NOT NULL,
+    career_wins INT,
+    career_losses INT,
+    career_ties INT,
+    winning_seasons INT,
+    playoff_wins INT,
+    playoff_losses INT,
+    super_bowl_wins INT,
+    super_bowl_losses INT,
+    UNIQUE (coach_id, season)
+);
 
 -- 10. GM agents (2026_12_10_gm_agents.sql, docs/done/team_management/03_GM_AGENTS_PLAN.md; PROJECT_SPEC §3.3f).
 -- Personas, team direction and needs, draft-pick ownership, trade proposals, assets and sightings.
@@ -561,7 +629,7 @@ CREATE TABLE IF NOT EXISTS gm_profiles (
     bio TEXT,                                         -- short, invented (untracked narrative)
     voice TEXT,                                       -- style notes for the rationale writer
     bio_source VARCHAR(8) NOT NULL DEFAULT 'TEMPLATE' CHECK (bio_source IN ('LLM', 'TEMPLATE')),
-    start_season INT NOT NULL CHECK (start_season >= 2030),   -- invented tenure start
+    start_season INT NOT NULL CHECK (start_season >= 1970),   -- tenure start
     first_draft_season INT,                           -- first class he picks (a hot-seat hire: start + 1)
     coach_id INT REFERENCES coaches(id),              -- a head coach who also serves as GM (full control)
     end_season INT,
@@ -805,6 +873,60 @@ CROSS JOIN league_state ls
 LEFT JOIN gm_team_seasons s ON s.team_id = g.team_id AND s.season = ls.current_season
 LEFT JOIN gm_team_settings st ON st.team_id = g.team_id
 WHERE g.end_season IS NULL AND ls.id = 1;
+
+-- ---------------------------------------------------------------------------
+-- Draft (2026_11_19_draft_board.sql)
+-- ---------------------------------------------------------------------------
+
+-- Scouted draft board (pipeline/draft_board.py, loaded from the Draft Board scan by pipeline/load_capture.py).
+-- One row per prospect per draft class; a re-scan replaces the class. Only the pick and name are required:
+-- the scan can leave a cell blank (JR, Oct 15), and the rookie's real values arrive with next season's
+-- roster scan, which also sets player_id.
+CREATE TABLE IF NOT EXISTS draft_prospects (
+    id SERIAL PRIMARY KEY,
+    draft_season INT NOT NULL,              -- the class: league season + 1
+    projected_pick INT,                     -- overall: 1-224 drafted, then the undrafted in board order (nullable for unprojected picks)
+    projected_round VARCHAR(4),             -- '1'..'7' or 'UDFA'
+    round_pick SMALLINT,
+    full_name VARCHAR(255) NOT NULL,
+    position VARCHAR(10),
+    college VARCHAR(100),
+    height_in SMALLINT,
+    weight SMALLINT,
+    age SMALLINT,
+    ovr SMALLINT,                           -- scouted OVR on the board
+    archetype VARCHAR(64),
+    notes TEXT,
+    source_capture VARCHAR(255),            -- captures/<run> the board came from
+    player_id INT REFERENCES players(id) ON DELETE SET NULL,
+    loaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Actual draft selection columns (2026_11_26_draft_selections.sql)
+    actual_round VARCHAR(8),
+    actual_round_pick SMALLINT,
+    actual_pick SMALLINT CHECK (actual_pick BETWEEN 1 AND 32),
+    drafted_team_id INT REFERENCES teams(id) ON DELETE SET NULL,
+    selection_notes TEXT,
+    UNIQUE (draft_season, projected_pick)
+);
+CREATE INDEX IF NOT EXISTS idx_draft_prospects_player ON draft_prospects(player_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_draft_prospects_actual_pick ON draft_prospects(draft_season, actual_pick) WHERE actual_pick IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_draft_prospects_drafted_team ON draft_prospects(draft_season, drafted_team_id) WHERE drafted_team_id IS NOT NULL;
+
+-- Round 1 mock draft per (season, week), saved by engines/mock_draft_engine.py so every article that week
+-- cites the same picks. Rows go with the board they were drawn from (a re-scan replaces both).
+CREATE TABLE IF NOT EXISTS mock_draft_picks (
+    season INT NOT NULL,                    -- league season whose draft order and needs were used
+    week INT NOT NULL,
+    pick SMALLINT NOT NULL,
+    team_id INT REFERENCES teams(id),
+    prospect_id INT NOT NULL REFERENCES draft_prospects(id) ON DELETE CASCADE,
+    locked BOOLEAN NOT NULL DEFAULT false,  -- the team's season is over, so its pick is final
+    selection_status VARCHAR(40),
+    fit_score NUMERIC(7, 1),
+    rationale TEXT,
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (season, week, pick)
+);
 
 -- 11. Scouting and draft (2026_12_12_scouting.sql, docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md;
 -- PROJECT_SPEC §3.3g). Hidden columns: true_value, true_rank, value_inputs, err, impact, scout_team_boards.
@@ -1085,77 +1207,34 @@ JOIN teams t ON tpt.def_team_id = t.id
 JOIN league_pos_benchmarks lpb ON tpt.season = lpb.season AND tpt.position = lpb.position;
 
 -- ---------------------------------------------------------------------------
--- Awards
+-- Awards & Coaching Records
 -- ---------------------------------------------------------------------------
 
--- Head coaches (2026_10_30_coaches.sql)
-CREATE TABLE IF NOT EXISTS coaches (
+CREATE TABLE IF NOT EXISTS awards (
     id SERIAL PRIMARY KEY,
-    coach_name VARCHAR(255) UNIQUE NOT NULL,
-    slant VARCHAR(16) NOT NULL DEFAULT 'OFFENSIVE' CHECK (slant IN ('OFFENSIVE', 'DEFENSIVE', 'CEO')),
-    offensive_scheme VARCHAR(64),
-    defensive_scheme VARCHAR(64),
-    -- 2026 tendencies, Low / Medium / High (2026_11_05_coach_tendencies.sql)
-    pass_lean VARCHAR(6) CHECK (pass_lean IN ('Low', 'Medium', 'High')),
-    fourth_down_aggressiveness VARCHAR(6) CHECK (fourth_down_aggressiveness IN ('Low', 'Medium', 'High')),
-    blitz_rate VARCHAR(6) CHECK (blitz_rate IN ('Low', 'Medium', 'High')),
-    man_coverage VARCHAR(6) CHECK (man_coverage IN ('Low', 'Medium', 'High'))
-);
-
--- Who coached which team, and when. end_season NULL = still there.
-CREATE TABLE IF NOT EXISTS coach_tenures (
-    id SERIAL PRIMARY KEY,
-    coach_id INT NOT NULL REFERENCES coaches(id) ON DELETE CASCADE,
-    team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-    start_season INT NOT NULL,
-    end_season INT,
-    UNIQUE (coach_id, team_id, start_season),
-    CHECK (end_season IS NULL OR end_season >= start_season)
-);
-
--- Coordinators and staff tenures (2026_11_25_coordinators_and_slants.sql, docs/done/COACH_SLANTS_AND_COORDINATORS_PLAN.md)
-CREATE TABLE IF NOT EXISTS coordinators (
-    id SERIAL PRIMARY KEY,
-    coordinator_name VARCHAR(255) NOT NULL,
-    side VARCHAR(16) NOT NULL CHECK (side IN ('OFFENSIVE', 'DEFENSIVE')),
-    scheme VARCHAR(64) NOT NULL,
-    playbook VARCHAR(64),
-    pass_lean VARCHAR(6) CHECK (pass_lean IN ('Low', 'Medium', 'High')),
-    blitz_rate VARCHAR(6) CHECK (blitz_rate IN ('Low', 'Medium', 'High')),
-    man_coverage VARCHAR(6) CHECK (man_coverage IN ('Low', 'Medium', 'High')),
-    origin_notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS coordinator_tenures (
-    id SERIAL PRIMARY KEY,
-    coordinator_id INT NOT NULL REFERENCES coordinators(id) ON DELETE CASCADE,
-    team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-    role VARCHAR(8) NOT NULL CHECK (role IN ('OC', 'DC')),
-    start_season INT NOT NULL,
-    end_season INT,
-    UNIQUE (coordinator_id, team_id, role, start_season),
-    CHECK (end_season IS NULL OR end_season >= start_season)
-);
-CREATE INDEX IF NOT EXISTS idx_coord_tenures_team_season ON coordinator_tenures(team_id, start_season, coalesce(end_season, 9999));
-
--- Career counters as the coach screen shows them at the end of each season (they include
--- pre-franchise NFL careers, so they are stored, not rebuilt from games).
-CREATE TABLE IF NOT EXISTS coach_seasons (
-    id SERIAL PRIMARY KEY,
-    coach_id INT NOT NULL REFERENCES coaches(id) ON DELETE CASCADE,
-    team_id INT REFERENCES teams(id) ON DELETE CASCADE,
     season INT NOT NULL,
-    career_wins INT,
-    career_losses INT,
-    career_ties INT,
-    winning_seasons INT,
-    playoff_wins INT,
-    playoff_losses INT,
-    super_bowl_wins INT,
-    super_bowl_losses INT,
-    UNIQUE (coach_id, season)
+    award_type VARCHAR(50) NOT NULL,
+    player_id INT REFERENCES players(id),
+    team_id INT REFERENCES teams(id),
+    coach_name VARCHAR(255),
+    coach_id INT REFERENCES coaches(id),
+    player_name VARCHAR(255),
+    position VARCHAR(10),
+    source VARCHAR(8) NOT NULL DEFAULT 'CAPTURE'
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS awards_season_player_type_idx 
+    ON awards (season, award_type, position, player_id) 
+    WHERE player_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS awards_single_winner_player_idx 
+    ON awards (season, award_type) 
+    WHERE award_type IN ('MVP', 'OPOY', 'DPOY', 'OROY', 'DROY', 'SBMVP');
+
+CREATE UNIQUE INDEX IF NOT EXISTS awards_coach_season_type_idx 
+    ON awards (season, award_type) 
+    WHERE award_type = 'COTY';
+
 
 -- Each coach's current career totals: the latest stored snapshot (coach_seasons, totals at the end of that season)
 -- plus every completed game his team played in later seasons while he held the job (coach_tenures; one head coach
@@ -1424,8 +1503,6 @@ CREATE TABLE IF NOT EXISTS persona_trait_history (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_persona_trait_history_lookup ON persona_trait_history (persona_type, persona_id);
->>>>>>> subagent-Personality-Systems-Engineer-self-2e9ae970
-
 
 -- Career totals from Madden's Career Stats lists (2026_12_26_player_career_totals.sql, pipeline/load_career_totals.py,
 -- docs/done/HISTORY_BACKFILL_PLAN.md phase 1): one row per list row and category, in season_stat_lines column names.
@@ -1594,84 +1671,6 @@ CREATE TABLE IF NOT EXISTS staff_moves (
 );
 CREATE INDEX IF NOT EXISTS staff_moves_season ON staff_moves (season);
 
-CREATE TABLE IF NOT EXISTS awards (
-    id SERIAL PRIMARY KEY,
-    season INT NOT NULL,
-    award_type VARCHAR(50) NOT NULL,
-    player_id INT REFERENCES players(id),
-    team_id INT REFERENCES teams(id),
-    coach_name VARCHAR(255),
-    coach_id INT REFERENCES coaches(id),
-    player_name VARCHAR(255),
-    position VARCHAR(10)
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS awards_season_player_type_idx 
-    ON awards (season, award_type, position, player_id) 
-    WHERE player_id IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS awards_single_winner_player_idx 
-    ON awards (season, award_type) 
-    WHERE award_type IN ('MVP', 'OPOY', 'DPOY', 'OROY', 'DROY', 'SBMVP');
-
-CREATE UNIQUE INDEX IF NOT EXISTS awards_coach_season_type_idx 
-    ON awards (season, award_type) 
-    WHERE award_type = 'COTY';
-
--- ---------------------------------------------------------------------------
--- Draft (2026_11_19_draft_board.sql)
--- ---------------------------------------------------------------------------
-
--- Scouted draft board (pipeline/draft_board.py, loaded from the Draft Board scan by pipeline/load_capture.py).
--- One row per prospect per draft class; a re-scan replaces the class. Only the pick and name are required:
--- the scan can leave a cell blank (JR, Oct 15), and the rookie's real values arrive with next season's
--- roster scan, which also sets player_id.
-CREATE TABLE IF NOT EXISTS draft_prospects (
-    id SERIAL PRIMARY KEY,
-    draft_season INT NOT NULL,              -- the class: league season + 1
-    projected_pick INT,                     -- overall: 1-224 drafted, then the undrafted in board order (nullable for unprojected picks)
-    projected_round VARCHAR(4),             -- '1'..'7' or 'UDFA'
-    round_pick SMALLINT,
-    full_name VARCHAR(255) NOT NULL,
-    position VARCHAR(10),
-    college VARCHAR(100),
-    height_in SMALLINT,
-    weight SMALLINT,
-    age SMALLINT,
-    ovr SMALLINT,                           -- scouted OVR on the board
-    archetype VARCHAR(64),
-    notes TEXT,
-    source_capture VARCHAR(255),            -- captures/<run> the board came from
-    player_id INT REFERENCES players(id) ON DELETE SET NULL,
-    loaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- Actual draft selection columns (2026_11_26_draft_selections.sql)
-    actual_round VARCHAR(8),
-    actual_round_pick SMALLINT,
-    actual_pick SMALLINT CHECK (actual_pick BETWEEN 1 AND 32),
-    drafted_team_id INT REFERENCES teams(id) ON DELETE SET NULL,
-    selection_notes TEXT,
-    UNIQUE (draft_season, projected_pick)
-);
-CREATE INDEX IF NOT EXISTS idx_draft_prospects_player ON draft_prospects(player_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_draft_prospects_actual_pick ON draft_prospects(draft_season, actual_pick) WHERE actual_pick IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_draft_prospects_drafted_team ON draft_prospects(draft_season, drafted_team_id) WHERE drafted_team_id IS NOT NULL;
-
--- Round 1 mock draft per (season, week), saved by engines/mock_draft_engine.py so every article that week
--- cites the same picks. Rows go with the board they were drawn from (a re-scan replaces both).
-CREATE TABLE IF NOT EXISTS mock_draft_picks (
-    season INT NOT NULL,                    -- league season whose draft order and needs were used
-    week INT NOT NULL,
-    pick SMALLINT NOT NULL,
-    team_id INT REFERENCES teams(id),
-    prospect_id INT NOT NULL REFERENCES draft_prospects(id) ON DELETE CASCADE,
-    locked BOOLEAN NOT NULL DEFAULT false,  -- the team's season is over, so its pick is final
-    selection_status VARCHAR(40),
-    fit_score NUMERIC(7, 1),
-    rationale TEXT,
-    generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (season, week, pick)
-);
-
 -- ---------------------------------------------------------------------------
 -- Media & content
 -- ---------------------------------------------------------------------------
@@ -1751,12 +1750,13 @@ CREATE TABLE IF NOT EXISTS record_categories (
     category VARCHAR(40) PRIMARY KEY,
     label TEXT NOT NULL,
     scope VARCHAR(6) NOT NULL CHECK (scope IN ('SEASON', 'GAME')),
-    subject VARCHAR(6) NOT NULL CHECK (subject IN ('PLAYER', 'TEAM')),
+    subject VARCHAR(6) NOT NULL CHECK (subject IN ('PLAYER', 'TEAM', 'COACH')),
     better VARCHAR(4) NOT NULL DEFAULT 'HIGH' CHECK (better IN ('HIGH', 'LOW')),
     sort_order INT NOT NULL,
     -- FULL: every franchise's season record and the NFL top 10 through 2025 are seeded; BOOK: only what the league's
     -- record book lists (2026 on). 2026_10_28_league_record_book.sql.
-    coverage VARCHAR(4) NOT NULL DEFAULT 'FULL' CHECK (coverage IN ('FULL', 'BOOK'))
+    coverage VARCHAR(4) NOT NULL DEFAULT 'FULL' CHECK (coverage IN ('FULL', 'BOOK')),
+    season_type VARCHAR(16) NOT NULL DEFAULT 'REGULAR' CHECK (season_type IN ('REGULAR', 'POSTSEASON'))
 );
 
 -- Every franchise record holder there has been, real (source 'NFL', through 2025) or set in this league ('LEAGUE').
@@ -1793,7 +1793,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_league_record_entries
 
 -- The current holder(s) of each franchise record (ties included).
 CREATE OR REPLACE VIEW franchise_records_current AS
-SELECT fr.*, c.label, c.scope, c.subject, c.better
+SELECT fr.*, c.label, c.scope, c.subject, c.better, c.season_type
 FROM franchise_records fr
 JOIN record_categories c ON c.category = fr.category
 WHERE fr.value = (SELECT CASE WHEN c.better = 'LOW' THEN MIN(x.value) ELSE MAX(x.value) END
@@ -1802,7 +1802,7 @@ WHERE fr.value = (SELECT CASE WHEN c.better = 'LOW' THEN MIN(x.value) ELSE MAX(x
 -- The NFL's all-time top 10 per category (ties included).
 CREATE OR REPLACE VIEW league_top10 AS
 SELECT * FROM (
-    SELECT e.*, c.label, c.scope, c.better,
+    SELECT e.*, c.label, c.scope, c.subject, c.better, c.season_type,
            RANK() OVER (PARTITION BY e.category
                         ORDER BY CASE WHEN c.better = 'LOW' THEN e.value ELSE -e.value END) AS rank
     FROM league_record_entries e JOIN record_categories c ON c.category = e.category
@@ -1812,7 +1812,7 @@ CREATE OR REPLACE VIEW league_records AS
 WITH cands AS (
     SELECT fr.category, fr.value, fr.holder, fr.team_id, fr.player_id, fr.season, NULL::date AS game_date, NULL::int AS game_id, fr.source
     FROM franchise_records_current fr JOIN record_categories c ON c.category = fr.category
-    WHERE c.scope = 'SEASON' AND c.coverage = 'FULL'
+    WHERE c.scope = 'SEASON' AND c.coverage = 'FULL' AND c.season_type = 'REGULAR'
     UNION
     SELECT t.category, t.value, t.holder, t.team_id, t.player_id, t.season, t.game_date, t.game_id, t.source
     FROM league_top10 t WHERE t.rank = 1
@@ -1821,7 +1821,7 @@ WITH cands AS (
     FROM cands c JOIN record_categories rc ON rc.category = c.category GROUP BY c.category, rc.better
 )
 SELECT DISTINCT ON (c.category, c.holder, c.season)
-       c.category, rc.label, rc.scope, rc.subject, c.value, c.holder, c.team_id, c.player_id, c.season,
+       c.category, rc.label, rc.scope, rc.subject, rc.season_type, c.value, c.holder, c.team_id, c.player_id, c.season,
        c.game_date, c.game_id, c.source
 FROM cands c
 JOIN best b ON b.category = c.category AND b.value = c.value
@@ -2136,4 +2136,178 @@ LEFT JOIN game_stat_kicking k      ON k.game_id = ids.game_id AND k.player_id = 
 LEFT JOIN game_stat_punting p      ON p.game_id = ids.game_id AND p.player_id = ids.player_id
 LEFT JOIN game_stat_kickreturn kr  ON kr.game_id = ids.game_id AND kr.player_id = ids.player_id
 LEFT JOIN game_stat_puntreturn pr  ON pr.game_id = ids.game_id AND pr.player_id = ids.player_id;
+
+-- ---------------------------------------------------------------------------
+-- Napper Fantasy Platform (2026_12_02_napper_fantasy.sql, NAPPER_FANTASY_PLAN.md)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS napper_user_profiles (
+    id SERIAL PRIMARY KEY,
+    handle VARCHAR(32) UNIQUE NOT NULL,
+    display_name VARCHAR(64) NOT NULL,
+    avatar_url TEXT,
+    trophies INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS napper_leagues (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    season INT NOT NULL,
+    teams_count INT NOT NULL,
+    scoring_type VARCHAR(16) DEFAULT 'PPR',
+    roster_format JSONB NOT NULL DEFAULT '{"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "SUPERFLEX": 0, "K": 1, "DEF": 1, "BN": 6, "IR": 1}'::jsonb,
+    status VARCHAR(16) DEFAULT 'IN_SEASON',
+    avatar_url TEXT,
+    current_week INT DEFAULT 1,
+    is_seed BOOLEAN DEFAULT FALSE,
+    previous_league_id INT REFERENCES napper_leagues(id) ON DELETE SET NULL,
+    lineage_id INT,
+    completed_at TIMESTAMPTZ,
+    champion_team_id INT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS napper_leagues_lineage ON napper_leagues (lineage_id, season);
+CREATE UNIQUE INDEX IF NOT EXISTS napper_leagues_one_successor ON napper_leagues (previous_league_id)
+    WHERE previous_league_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS napper_teams (
+    id SERIAL PRIMARY KEY,
+    league_id INT REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    user_id INT REFERENCES napper_user_profiles(id) ON DELETE SET NULL,
+    team_name VARCHAR(64) NOT NULL,
+    manager_handle VARCHAR(32) NOT NULL,
+    avatar_url TEXT,
+    is_ai BOOLEAN DEFAULT FALSE,
+    persona VARCHAR(32),
+    wins INT DEFAULT 0,
+    losses INT DEFAULT 0,
+    ties INT DEFAULT 0,
+    points_for NUMERIC(8,2) DEFAULT 0.00,
+    points_against NUMERIC(8,2) DEFAULT 0.00,
+    seed SMALLINT,
+    playoff_finish VARCHAR(12),
+    final_rank SMALLINT
+);
+CREATE INDEX IF NOT EXISTS idx_napper_teams_league ON napper_teams(league_id);
+
+ALTER TABLE napper_leagues DROP CONSTRAINT IF EXISTS fk_napper_leagues_champion;
+ALTER TABLE napper_leagues ADD CONSTRAINT fk_napper_leagues_champion FOREIGN KEY (champion_team_id) REFERENCES napper_teams(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS napper_rosters (
+    id SERIAL PRIMARY KEY,
+    league_id INT REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    team_id INT REFERENCES napper_teams(id) ON DELETE CASCADE,
+    week INT NOT NULL,
+    player_id INT REFERENCES players(id) ON DELETE CASCADE,
+    slot VARCHAR(16) NOT NULL,
+    UNIQUE(team_id, week, player_id)
+);
+CREATE INDEX IF NOT EXISTS idx_napper_rosters_team_week ON napper_rosters(team_id, week);
+CREATE INDEX IF NOT EXISTS idx_napper_rosters_league_week ON napper_rosters(league_id, week);
+
+CREATE TABLE IF NOT EXISTS napper_matchups (
+    id SERIAL PRIMARY KEY,
+    league_id INT REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    week INT NOT NULL,
+    home_team_id INT REFERENCES napper_teams(id) ON DELETE CASCADE,
+    away_team_id INT REFERENCES napper_teams(id) ON DELETE CASCADE,
+    home_score NUMERIC(6,2) DEFAULT 0.00,
+    away_score NUMERIC(6,2) DEFAULT 0.00,
+    home_proj NUMERIC(6,2) DEFAULT 0.00,
+    away_proj NUMERIC(6,2) DEFAULT 0.00,
+    win_prob_home NUMERIC(4,3) DEFAULT 0.500,
+    is_final BOOLEAN DEFAULT FALSE,
+    playoff_round VARCHAR(16)
+);
+CREATE INDEX IF NOT EXISTS idx_napper_matchups_league_week ON napper_matchups(league_id, week);
+
+CREATE TABLE IF NOT EXISTS napper_trades (
+    id SERIAL PRIMARY KEY,
+    league_id INT REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    week INT NOT NULL,
+    proposer_team_id INT REFERENCES napper_teams(id) ON DELETE CASCADE,
+    target_team_id INT REFERENCES napper_teams(id) ON DELETE CASCADE,
+    offered_player_ids INT[] NOT NULL DEFAULT '{}',
+    requested_player_ids INT[] NOT NULL DEFAULT '{}',
+    status VARCHAR(16) DEFAULT 'PENDING',
+    initiated_by_ai BOOLEAN DEFAULT FALSE,
+    ai_rationale TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_napper_trades_league ON napper_trades(league_id);
+
+CREATE TABLE IF NOT EXISTS napper_chat (
+    id SERIAL PRIMARY KEY,
+    league_id INT REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    sender_type VARCHAR(16) DEFAULT 'USER',
+    sender_name VARCHAR(64) NOT NULL,
+    sender_handle VARCHAR(32) NOT NULL,
+    avatar_url TEXT,
+    message_text TEXT,
+    card_payload JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_napper_chat_league ON napper_chat(league_id, created_at);
+
+CREATE TABLE IF NOT EXISTS napper_drafts (
+    id SERIAL PRIMARY KEY,
+    league_id INT REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    season INT NOT NULL,
+    rounds INT DEFAULT 15,
+    teams_count INT DEFAULT 10,
+    scoring_type VARCHAR(16) DEFAULT 'PPR',
+    status VARCHAR(16) DEFAULT 'PENDING',
+    current_round INT DEFAULT 1,
+    current_pick INT DEFAULT 1,
+    is_mock BOOLEAN DEFAULT FALSE,
+    user_slot INT DEFAULT 1,
+    settings JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_napper_drafts_league ON napper_drafts(league_id);
+
+CREATE TABLE IF NOT EXISTS napper_draft_picks (
+    id SERIAL PRIMARY KEY,
+    draft_id INT REFERENCES napper_drafts(id) ON DELETE CASCADE,
+    round_num INT NOT NULL,
+    pick_num INT NOT NULL,
+    overall_pick INT NOT NULL,
+    team_id INT REFERENCES napper_teams(id) ON DELETE CASCADE,
+    team_name VARCHAR(64),
+    slot_num INT NOT NULL,
+    player_id INT REFERENCES players(id) ON DELETE CASCADE,
+    picked_by VARCHAR(16) DEFAULT 'AI',
+    pick_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(draft_id, overall_pick)
+);
+CREATE INDEX IF NOT EXISTS idx_napper_draft_picks_draft ON napper_draft_picks(draft_id);
+CREATE INDEX IF NOT EXISTS idx_napper_draft_picks_draft_overall ON napper_draft_picks(draft_id, overall_pick);
+CREATE INDEX IF NOT EXISTS idx_napper_draft_picks_player ON napper_draft_picks(player_id);
+
+CREATE TABLE IF NOT EXISTS napper_waiver_claims (
+    id SERIAL PRIMARY KEY,
+    league_id INT NOT NULL REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    team_id INT NOT NULL REFERENCES napper_teams(id) ON DELETE CASCADE,
+    add_player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    drop_player_id INT REFERENCES players(id) ON DELETE SET NULL,
+    rank SMALLINT NOT NULL DEFAULT 1,
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    reason VARCHAR(16),
+    note TEXT,
+    week INT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_napper_waiver_claims_pending ON napper_waiver_claims (league_id, status);
+
+CREATE TABLE IF NOT EXISTS napper_waiver_wire (
+    league_id INT NOT NULL REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    dropped_by_team_id INT REFERENCES napper_teams(id) ON DELETE SET NULL,
+    clears_week INT NOT NULL,
+    dropped_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (league_id, player_id)
+);
 

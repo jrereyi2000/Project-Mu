@@ -240,6 +240,7 @@ Project Mu/
 │   ├── db_handler.py          #   Shared connection / UPSERT layer (DATABASE_URL)
 │   ├── llm_usage.py           #   UsageMeter: counts every Gemini call on a client (tool loops included) → llm_usage (+ the capture's totals); log_response for one-off calls
 │   ├── init_db.sql, run_sql.py
+│   ├── seed_clean_db.py       #   Clean database seed script for new saves / PC restarts (teams, league_state, NFL records, coaches/coords, GMs, draft picks, writers, Napper)
 │   ├── backup_db.sh, restore_db.sh   # pg_dump / restore via the madden-db Docker container
 │   ├── clear_news_feed.sh     #   Back up then delete generated news_feed content (--week N, --season S, --articles-only keeps tweets, -y/--yes)
 │   ├── migrations/            #   migrate_*.py, 2026_10_12_fantasy_points_generated.sql, 2026_10_13_projected_excitement.sql, 2026_10_14_opp_adj_credit.sql,
@@ -367,6 +368,7 @@ All Python commands run **from the project root** (relative data paths such as `
 | Environment config | `cp .env.example .env` (fill in `GEMINI_API_KEY`, `DEBUG_TOKEN`, `DATABASE_URL`) |
 | Frontend setup | `cd Mu_Network && npm install` (Vite + React 19) |
 | Database initialization | `createdb madden && psql -d madden -f db/init_db.sql` |
+| Seed a fresh database (new save / PC restart) | `python3 -m db.seed_clean_db [--season 2024] [--week 1] [--user-team IND] [--dry-run]` |
 | API server | `python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload` |
 | Frontend dev | `cd Mu_Network && npm run dev` (Vite on port 8443) |
 | Video pipeline | `python3 -m pipeline.main --file data/video/<clip>.mp4 --db` |
@@ -723,6 +725,8 @@ Offline progression engine for the PC era (phase C of `docs/in_progress/PROGRESS
 ## 3. Database Schema & Architecture (PostgreSQL)
 
 The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`). `db/init_db.sql` reproduces the full live schema (tables, constraints, generated columns, views, functions, triggers) on an empty database and is safe to re-run; it does not add columns to existing tables, so schema changes to the live DB ship as migrations under `db/migrations/` and must also be folded into `init_db.sql`.
+
+For starting a brand new franchise save (e.g. PC migration or fresh modded sim restart), `db/seed_clean_db.py` bootstraps a completely fresh database from scratch (`python3 -m db.seed_clean_db [--season 2024] [--week 1] [--user-team IND] [--dry-run]`): applies `init_db.sql` if tables are missing, populates the 32 NFL franchises (`teams`), sets `league_state`, configures `gm_team_settings` with user-control flags, loads historical NFL records through 2025, seeds real NFL head coaches and coordinators with schemes and slants, seeds 32 GM personas with 3 upcoming draft classes (`draft_picks`), seeds newsroom writer personas, and sets the default Napper fantasy manager profile.
 
 ### 3.1 Core Entity & State Tables
 - **`teams`**:
