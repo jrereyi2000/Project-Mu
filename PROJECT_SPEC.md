@@ -361,7 +361,7 @@ Project Mu/
 ```
 
 ### 1.2 Running the System
-All Python commands run **from the project root** (relative data paths such as `data/...` and `static/...` resolve against it). Configuration comes from the environment: `DATABASE_URL` (defaults to the local `madden` database; the backfill, every engine, the newsroom, the capture loader and the API all read it, so pointing it at a restored test copy runs everything there) and `GEMINI_API_KEY` (the swarm also reads a root-level `.env`, configured from `.env.example`). Python dependencies are installed via `pip install -r requirements.txt`.
+All Python commands run **from the project root** (relative data paths such as `data/...` and `static/...` resolve against it). Configuration comes from the environment: `DATABASE_URL` (defaults to the local `madden` database; the backfill, every engine, the newsroom, the capture loader and the API all read it from the process environment, not `.env`, so pointing it at a restored test copy runs everything there). On the PC there is no `madden` database since 2026-10-29: the PS5 universe (2026–2036, through 2036 week 21, all migrations through `2027_01_12` applied) was renamed to `madden_2036`, a frozen archive and the input set for `tools/llm_compare.py`; run against it with `DATABASE_URL="host=localhost dbname=madden_2036 user=postgres password=postgres"`. The fresh 2034 franchise gets its own database and `GEMINI_API_KEY` (the swarm also reads a root-level `.env`, configured from `.env.example`). Python dependencies are installed via `pip install -r requirements.txt`.
 
 | Task | Command |
 |---|---|
@@ -727,7 +727,7 @@ Offline progression engine for the PC era (phase C of `docs/in_progress/PROGRESS
 
 ## 3. Database Schema & Architecture (PostgreSQL)
 
-The database utilizes a relational temporal model in PostgreSQL (`dbname=madden`). `db/init_db.sql` reproduces the full live schema (tables, constraints, generated columns, views, functions, triggers) on an empty database and is safe to re-run; it does not add columns to existing tables, so schema changes to the live DB ship as migrations under `db/migrations/` and must also be folded into `init_db.sql`.
+The database utilizes a relational temporal model in PostgreSQL (`dbname=madden` by default; on the PC the 2036 universe is the archive `madden_2036`, §1.2). `db/init_db.sql` reproduces the full live schema (tables, constraints, generated columns, views, functions, triggers) on an empty database and is safe to re-run; it does not add columns to existing tables, so schema changes to the live DB ship as migrations under `db/migrations/` and must also be folded into `init_db.sql`. Last checked 2026-10-29 against `madden_2036` with every migration through `2027_01_12` applied: same tables, columns and types, views, indexes, constraints and functions. The only intended differences are `napper_leagues.season` / `napper_drafts.season` NOT NULL and `gm_profiles.start_season >= 1970` (the migration's `>= 2030` would reject real-NFL GM tenures that `seed_clean_db.py` writes).
 
 For starting a brand new franchise save (e.g. PC migration or fresh modded sim restart), `db/seed_clean_db.py` bootstraps a completely fresh database from scratch (`python3 -m db.seed_clean_db [--season 2024] [--week 1] [--user-team IND] [--dry-run]`): applies `init_db.sql` if tables are missing, populates the 32 NFL franchises (`teams`), sets `league_state`, configures `gm_team_settings` with user-control flags, loads historical NFL records through 2025, seeds real NFL head coaches and coordinators with schemes and slants, seeds 32 GM personas with 3 upcoming draft classes (`draft_picks`), seeds newsroom writer personas, and sets the default Napper fantasy manager profile.
 
@@ -927,7 +927,7 @@ Offline progression history and latent development ceilings for all players acro
 - **`player_ceilings`**:
   - `player_id` (PK, FK `players.id` ON DELETE CASCADE), `ceiling` (numeric(5,2), at most 99), `source` (varchar: `SCOUT_PROSPECT`, `SEEDED`, or `STORED` once reused), `updated_season` (int), `created_at` (timestamptz); from `2027_01_11`: `peak_mental` (JSONB: career-high Awareness and PlayRecognition, raised each run), `entry_mental` (JSONB: draft-day values, written once), `entry_source` (varchar(16): `ESTIMATED` from Madden's mean gain by years pro; the PC loader will write the save's `Original*Rating`).
   - From the prospect's `scout_prospects.true_value`, or seeded from OVR, age and dev trait (§2.21). Hidden.
-- Applied to `madden_test` only (both migrations).
+- Applied to `madden_2036` and `madden_test` (both migrations; 2026-10-29).
 
 ### 3.3o League Memory Index (`db/migrations/2027_01_10_league_memory.sql`, `newsroom/league_memory.py`, docs/done/PRE_PC_WORK.md §9, docs/in_progress/PC_MIGRATION_PLAN.md V2.8)
 Narrative search index over historical universe events (articles, writer takes, franchise records, league records) for authentic callbacks in newsroom writing. Works with PostgreSQL 14 without `pgvector` by storing embeddings as `REAL[]` and executing vectorized cosine similarity in Python/numpy (~30ms for 8,000 vectors).

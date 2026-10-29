@@ -903,7 +903,7 @@ CREATE TABLE IF NOT EXISTS draft_prospects (
     -- Actual draft selection columns (2026_11_26_draft_selections.sql)
     actual_round VARCHAR(8),
     actual_round_pick SMALLINT,
-    actual_pick SMALLINT CHECK (actual_pick BETWEEN 1 AND 32),
+    actual_pick SMALLINT CHECK (actual_pick BETWEEN 1 AND 300),
     drafted_team_id INT REFERENCES teams(id) ON DELETE SET NULL,
     selection_notes TEXT,
     UNIQUE (draft_season, projected_pick)
@@ -1148,16 +1148,105 @@ CREATE TABLE IF NOT EXISTS fantasy_sim_player_weeks (
     PRIMARY KEY (season, week, player_id)
 );
 
+-- Fantasy points per game for skill players, kickers and team defenses (2027_01_12_kdst_fantasy_scores.sql)
 CREATE OR REPLACE VIEW vw_fantasy_scores AS
-SELECT
+-- 1. Offensive Skill Players
+SELECT 
     ps.game_id,
     ps.player_name,
     ps.team_id,
     g.season,
     g.week,
-    ps.fantasy_points AS ppr_score  -- generated column on player_stats
+    ps.fantasy_points AS ppr_score,
+    ps.player_id
 FROM player_stats ps
-JOIN games g ON ps.game_id = g.id;
+JOIN games g ON ps.game_id = g.id
+
+UNION ALL
+
+-- 2. Kickers (game_stat_kicking)
+-- Yardage-based: <30 yds = 3.0 pts, 30-39 = 3.5, 40-49 = 4.5, 50+ = 5.5,
+-- with fg_long exact decimal yardage adjustment (fg_long * 0.1) for the longest kick;
+-- +1.0 per extra point made, -1.0 per missed FG, -1.0 per missed XP.
+SELECT 
+    k.game_id,
+    p.player_name,
+    k.team_id,
+    g.season,
+    g.week,
+    ROUND((
+        COALESCE(k.fgm_29, 0) * 3.0
+        + COALESCE(k.fgm_39, 0) * 3.5
+        + COALESCE(k.fgm_49, 0) * 4.5
+        + COALESCE(k.fgm_50, 0) * 5.5
+        + CASE 
+            WHEN COALESCE(k.fgm, 0) > 0 AND COALESCE(k.fg_long, 0) >= 30 THEN
+                (k.fg_long::numeric * 0.1) - (
+                    CASE 
+                        WHEN k.fg_long >= 50 THEN 5.5
+                        WHEN k.fg_long >= 40 THEN 4.5
+                        ELSE 3.5
+                    END
+                )
+            ELSE 0.0
+        END
+        + COALESCE(k.xpm, 0) * 1.0
+        - (COALESCE(k.fga, 0) - COALESCE(k.fgm, 0)) * 1.0
+        - (COALESCE(k.xpa, 0) - COALESCE(k.xpm, 0)) * 1.0
+    )::numeric, 2) AS ppr_score,
+    k.player_id
+FROM game_stat_kicking k
+JOIN games g ON k.game_id = g.id
+JOIN players p ON p.id = k.player_id
+
+UNION ALL
+
+-- 3. Team Defenses / Special Teams (D/ST)
+-- Sacks (1), INTs (2), Fumble recoveries (2), Safeties (2), Blocked kicks (2),
+-- Defensive TDs (6), Return TDs (6), and Points Allowed tiers:
+-- 0 pts = 10, 1-6 = 7, 7-13 = 4, 14-20 = 1, 21-27 = 0, 28-34 = -1, 35+ = -4.
+SELECT 
+    g.id AS game_id,
+    p.player_name,
+    dst.team_id,
+    g.season,
+    g.week,
+    ROUND((
+        COALESCE(def.sacks, 0)
+        + 2 * COALESCE(def.ints, 0)
+        + 2 * COALESCE(def.fumble_recoveries, 0)
+        + 6 * (COALESCE(def.tds, 0) + COALESCE(ret.tds, 0))
+        + 2 * COALESCE(def.safeties, 0)
+        + 2 * COALESCE(def.blocks, 0)
+        + CASE 
+            WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) = 0 THEN 10
+            WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 6 THEN 7
+            WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 13 THEN 4
+            WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 20 THEN 1
+            WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 27 THEN 0
+            WHEN (CASE WHEN g.home_team_id = dst.team_id THEN g.away_score ELSE g.home_score END) <= 34 THEN -1
+            ELSE -4
+        END
+    )::numeric, 2) AS ppr_score,
+    dst.player_id
+FROM player_seasons dst
+JOIN players p ON p.id = dst.player_id
+JOIN games g ON g.season = dst.season AND g.status = 'COMPLETED'
+    AND (g.home_team_id = dst.team_id OR g.away_team_id = dst.team_id)
+LEFT JOIN (
+    SELECT game_id, team_id, SUM(sacks) AS sacks, SUM(ints) AS ints,
+           SUM(fumble_recoveries) AS fumble_recoveries, SUM(tds) AS tds,
+           SUM(safeties) AS safeties, SUM(blocks) AS blocks
+    FROM game_stat_defense GROUP BY game_id, team_id
+) def ON def.game_id = g.id AND def.team_id = dst.team_id
+LEFT JOIN (
+    SELECT game_id, team_id, SUM(tds) AS tds FROM (
+        SELECT game_id, team_id, tds FROM game_stat_kickreturn
+        UNION ALL
+        SELECT game_id, team_id, tds FROM game_stat_puntreturn
+    ) r GROUP BY game_id, team_id
+) ret ON ret.game_id = g.id AND ret.team_id = dst.team_id
+WHERE dst.position = 'DEF';
 
 -- PPR points conceded by each defense per position over completed games,
 -- with league benchmarks and a 1-5 matchup star rating (5 = most generous).
@@ -1620,6 +1709,8 @@ CREATE TABLE IF NOT EXISTS coty_scores (
     roster_outperformance DOUBLE PRECISION,
     win_pct_change DOUBLE PRECISION,
     first_year_with_team BOOLEAN NOT NULL DEFAULT FALSE,
+    historical_bonus DOUBLE PRECISION DEFAULT 0.0,
+    historical_notes TEXT[],
     UNIQUE (coach_id, season)
 );
 
@@ -1749,7 +1840,7 @@ CREATE INDEX IF NOT EXISTS idx_social_trends_week ON social_trends (season, week
 CREATE TABLE IF NOT EXISTS record_categories (
     category VARCHAR(40) PRIMARY KEY,
     label TEXT NOT NULL,
-    scope VARCHAR(6) NOT NULL CHECK (scope IN ('SEASON', 'GAME')),
+    scope VARCHAR(10) NOT NULL CHECK (scope IN ('SEASON', 'GAME', 'CAREER')),
     subject VARCHAR(6) NOT NULL CHECK (subject IN ('PLAYER', 'TEAM', 'COACH')),
     better VARCHAR(4) NOT NULL DEFAULT 'HIGH' CHECK (better IN ('HIGH', 'LOW')),
     sort_order INT NOT NULL,
@@ -2192,7 +2283,8 @@ CREATE TABLE IF NOT EXISTS napper_teams (
 CREATE INDEX IF NOT EXISTS idx_napper_teams_league ON napper_teams(league_id);
 
 ALTER TABLE napper_leagues DROP CONSTRAINT IF EXISTS fk_napper_leagues_champion;
-ALTER TABLE napper_leagues ADD CONSTRAINT fk_napper_leagues_champion FOREIGN KEY (champion_team_id) REFERENCES napper_teams(id) ON DELETE SET NULL;
+ALTER TABLE napper_leagues DROP CONSTRAINT IF EXISTS napper_leagues_champion_team_id_fkey;
+ALTER TABLE napper_leagues ADD CONSTRAINT napper_leagues_champion_team_id_fkey FOREIGN KEY (champion_team_id) REFERENCES napper_teams(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS napper_rosters (
     id SERIAL PRIMARY KEY,
@@ -2301,6 +2393,14 @@ CREATE TABLE IF NOT EXISTS napper_waiver_claims (
     processed_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_napper_waiver_claims_pending ON napper_waiver_claims (league_id, status);
+
+CREATE TABLE IF NOT EXISTS napper_waiver_runs (
+    league_id INT NOT NULL REFERENCES napper_leagues(id) ON DELETE CASCADE,
+    week INT NOT NULL,
+    priority INT[] NOT NULL,
+    processed_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (league_id, week)
+);
 
 CREATE TABLE IF NOT EXISTS napper_waiver_wire (
     league_id INT NOT NULL REFERENCES napper_leagues(id) ON DELETE CASCADE,
