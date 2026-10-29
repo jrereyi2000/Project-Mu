@@ -13,7 +13,7 @@ prerequisites needed to start a brand new franchise save with native PC save loa
   6. Real NFL Head Coaches & Coordinators with schemes, slants, and starting tenures
   7. 32 GM Personas & 3 Draft Classes of Draft Capital (`draft_picks` via engines.gm_personas)
   8. Newsroom writers: the 38 archetype personas (agent_personas.json) into `persona_sliders`, `persona_traits`,
-     `persona_views`, and the 218 writer/social accounts (newsroom/config/agent_accounts.json) into `agent_memories`
+     `persona_views`, and the 199 writer/social accounts (newsroom/config/agent_accounts.json) into `agent_memories`
   9. Default Napper Fantasy user profile
 
 Usage:

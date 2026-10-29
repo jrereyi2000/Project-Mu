@@ -39,6 +39,20 @@ class AgentAccountsFileTest(unittest.TestCase):
             archetypes = set(json.load(f)["archetypes"])
         self.assertTrue({a["archetype"] for a in self.accounts} <= archetypes)
 
+    def test_no_former_players_and_kiper_present(self):
+        archetypes = {a["archetype"] for a in self.accounts}
+        self.assertNotIn("FORMER_PLAYER", archetypes)
+        self.assertIn("MEL_KIPER", archetypes)
+
+    def test_article_writers_have_accounts(self):
+        import re
+        with open(seed.REPO_ROOT / "newsroom" / "config" / "article_types.json") as f:
+            text = f.read()
+        with open(seed.REPO_ROOT / "newsroom" / "config" / "agent_personas.json") as f:
+            archetypes = set(json.load(f)["archetypes"])
+        named = {w for w in re.findall(r'"([A-Z][A-Z_0-9]+)"', text) if w in archetypes}
+        self.assertTrue(named <= {a["archetype"] for a in self.accounts}, named)
+
     def test_identity_only(self):
         for a in self.accounts:
             self.assertEqual(set(a), {"agent_id", "archetype", "team", "handle", "display_name", "bio",
