@@ -534,18 +534,55 @@ Before migrating any task to local or hosted open-weight models, evaluate output
 
 #### Quality Test Harness CLI (`tools/llm_compare.py`)
 
-Run side-by-side evaluations across two or more models (Gemini at various thinking levels and local Ollama models) without modifying newsroom tables:
+Run side-by-side evaluations across two or more models (Gemini at various thinking levels and local Ollama models) without modifying any table. Inputs come from the frozen 2036 archive `madden_2036` by default (`--db` takes another database name or DSN, or set `LLM_COMPARE_DB`); every connection the process opens is read-only (`PGOPTIONS=-c default_transaction_read_only=on`) and model calls skip the `llm_usage` write. If the database is unreachable the harness warns and falls back to its built-in sample inputs.
 
 ```bash
+# The whole matrix in one command: all 7 tasks, one combined report (verify_output/compare_suite_<ts>.html):
+python3 -m tools.llm_compare --suite --models gemini-3.8-flash:low ollama:gemma4:12b ollama:gemma4:12b@nothink --limit 5
+
 # Compare Agent Wire tweets between Gemini 3.8 Flash (low thinking) and 3.5 Flash-Lite:
 python3 -m tools.llm_compare --task agent_wire --season 2036 --week 20 --models gemini-3.8-flash:low gemini-3.5-flash-lite --limit 5
 
-# Compare GM trade rationale between Gemini and local Ollama Qwen:
-python3 -m tools.llm_compare --task gm_rationale --season 2036 --week 20 --models gemini-3.8-flash:low ollama:qwen2.5:14b --limit 3
-
-# Compare college scouting notes with resident Gemma 4 E2B/E4B:
-python3 -m tools.llm_compare --task scouting_notes --season 2036 --week 20 --models gemini-3.8-flash:low ollama:gemma-4:4b --limit 5
+# GM calls on the beside-Madden tier, reasoning off, JSON output requested:
+python3 -m tools.llm_compare --suite --tasks gm_persona gm_rationale gm_negotiation --models ollama:gemma4:e4b@nothink ollama:lfm3:1.7b@nothink --json-mode --limit 3
 ```
+
+**Ollama models on the PC.** Ollama for Windows serves WSL at `localhost:11434` (mirrored networking). Model specs are `ollama:<tag>`, with the tag's own colon (`ollama:gemma4:12b`). The harness never falls back to Gemini: an Ollama timeout or connection error is scored as a failed call (before 2026-10-29 a 60s timeout on a cold model load quietly answered with Gemini and scored it as the local model at $0). Options:
+* `@think` / `@nothink` on an Ollama spec forces the model's reasoning on or off (Ollama `think`). gemma4 and lfm3 reason by default. Ollama counts reasoning inside `eval_count`, so `thinking_tokens` is an estimate from the reasoning's share of the generated text.
+* `--ollama-timeout` (default 300s: a cold 8GB load plus a reasoning pass runs past `llm_provider`'s 60s default) and `--num-ctx` (default 16,384; Ollama's own 4,096 default silently truncates the longer prompts).
+* `--json-mode` asks for JSON output (Ollama `format: json`, Gemini `response_mime_type`) on `gm_persona`, `gm_rationale` and `gm_negotiation`. The production GM calls don't request JSON yet, so leave it off to measure them as they run today.
+
+**Smoke test (2026-10-29, season 2036 week 20, `--limit 1`, database inputs):**
+
+| Model | Pass | Total time, 7 calls | Cost | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `gemini-3.8-flash:low` | 7/7 | 18s (1.8–3.5s a call) | $0.0015 | reported 0 thinking tokens on every call |
+| `ollama:gemma4:12b` (reasoning on) | 7/7 | 108s (4.7–23s a call) | $0 | ~650–3,600 reasoning tokens a call |
+| `ollama:gemma4:12b@nothink` | 6/7 | 10s (0.6–3s a call) | $0 | `gm_rationale` failed: a trailing comma in its JSON. With `--json-mode`, 6/6 on the three GM tasks at `--limit 2` |
+| `ollama:gemma4:e4b@nothink` | 7/7 | 36s (31s was the cold load; 0.4–1s a call after) | $0 | |
+| `ollama:lfm3:1.7b` (reasoning on) | 6/7 | 101s (7–20s a call) | $0 | `memory_summary` failed; 2,400–6,200 reasoning tokens a call |
+
+A smoke test is one input per task: it shows the pipeline works, not which model is good enough. The voice and facts verdicts still need a `--limit 5` run and JR's review in the HTML report.
+
+**Candidate local models (Ollama registry tags and download sizes, checked 2026-10-29).** Pulled: `gemma4:12b`, `gemma4:e4b`, `lfm3:1.7b`.
+
+| Tag | Size | Fits the 16GB GPU |
+| :--- | :--- | :--- |
+| `lfm3:1.7b` | 1.1 GB | yes; beside-Madden tier |
+| `gemma4:e2b` | 4.6 GB | yes; beside-Madden tier |
+| `gemma4:e4b` | 6.6 GB | yes; beside-Madden tier |
+| `gemma4:12b` | 8.0 GB | yes |
+| `qwen2.5:14b` | 9.0 GB | yes (the provider's default Ollama model) |
+| `qwen3:14b` | 9.3 GB | yes |
+| `gpt-oss:20b` | 13.8 GB | yes, with little room for context |
+| `lfm2.5:24b` | 14.5 GB | barely; expect some CPU offload |
+| `mistral-small3.2:24b` | 15.2 GB | partial CPU offload |
+| `qwen3.8:27b` | 17.7 GB | partial CPU offload (dense, slow) |
+| `qwen3:30b-a3b` | 18.6 GB | MoE, CPU expert offload |
+| `gemma4:26b` (= `gemma4:26b-a4b`) | 18.7 GB | MoE, CPU expert offload |
+| `qwen3.6:35b-a3b` | 22.6 GB | MoE, CPU expert offload |
+
+Not on the registry: `gemma4:4b`, `gemma4:27b`, `lfm2.5:24b-a2b`. To pull the next tier: `ollama pull gpt-oss:20b`, `ollama pull qwen3:14b`, `ollama pull gemma4:26b`.
 
 **Supported Tasks:**
 * `agent_wire`: Social desk posts (tweets, <= 280 chars, money & rumor guards)
@@ -557,6 +594,7 @@ python3 -m tools.llm_compare --task scouting_notes --season 2036 --week 20 --mod
 * `gm_negotiation`: Trade negotiation responses (JSON)
 
 **Outputs (`verify_output/`):**
+* `verify_output/compare_suite_<timestamp>.json` / `.html` (`--suite` only): pass rate, average latency and cost per task per model plus totals, linking each task's report.
 * `verify_output/compare_<task>_<timestamp>.json`: full structured telemetry containing per-model tokens (input, output, thinking), latency, cost, and automated check results.
 * `verify_output/compare_<task>_<timestamp>.html`: interactive side-by-side dashboard featuring:
   - Summary KPI cards: Pass Rate (%), Total Failures, Token Breakdown (In / Out / Thinking), Latency, and Cost.
@@ -638,12 +676,12 @@ Cap the thinking budget on the short Gemini calls (Agent Wire, agent memory, sco
   - `agent_memory` ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)): avg 1,143 thinking tokens (1.1K in, 161 out)
   - `scouting_notes` ([`engines/scouting_narrative.py`](../../engines/scouting_narrative.py)): avg 1,049 thinking tokens (0.3K in, 75 out)
   - GM calls (`gm_persona`, `gm_rationale`, `gm_negotiation`, [`engines/gm_negotiation.py`](../../engines/gm_negotiation.py)): avg ~1,000 thinking tokens (0.3–1K in, 130–180 out)
-* **Not yet measured:** Thinking token reduction, dollar savings, and task validation pass rates at `low` thinking caps have not yet been empirically measured against real data.
-* **To measure:** Run the quality test harness (`tools/llm_compare.py`, §7.4):
+* **First reading (2026-10-29 smoke test, §7.4):** at `low`, `gemini-3.8-flash` reported 0 thinking tokens on one call of each of the 7 tasks, all passing, $0.0015 in total. One call per task is not a measurement of savings or pass rates.
+* **To measure:** Run the quality test harness (`tools/llm_compare.py`, §7.4) against the `madden_2036` archive:
   ```bash
-  python3 -m tools.llm_compare --task <task> --season 2036 --week 20 --models gemini-3.8-flash gemini-3.8-flash:low --limit 5
+  python3 -m tools.llm_compare --suite --tasks memory_takes memory_summary scouting_notes gm_rationale --season 2036 --week 20 --models gemini-3.8-flash gemini-3.8-flash:low --limit 5
   ```
-  for `memory_takes`, `memory_summary`, `scouting_notes`, and `gm_rationale` (≈ 40 Gemini calls across the 4 tasks; JR will run this).
+  (≈ 40 Gemini calls across the 4 tasks; JR will run this).
 
 ---
 
