@@ -14,9 +14,18 @@ Supported tasks:
   - gm_rationale: Trade rationale explanation in GM voices (JSON)
   - gm_negotiation: Trade negotiation responses (JSON)
 
+Inputs are read from the frozen 2036 archive (`madden_2036`) by default; pass --db for another
+database (a DSN or a bare database name). Every connection the process opens is read-only
+(PGOPTIONS default_transaction_read_only), and model calls skip the llm_usage write.
+
+Ollama models never fall back to Gemini here: a timeout is scored as a failure, not as the
+local model's answer. Append @think / @nothink to an Ollama model to force its reasoning on or off
+(gemma4 reasons by default).
+
 Usage:
   python3 -m tools.llm_compare --task agent_wire --models gemini-3.8-flash:low gemini-3.5-flash-lite
-  python3 -m tools.llm_compare --task gm_rationale --season 2036 --week 20 --models gemini-3.8-flash:low ollama:qwen2.5:14b --limit 3
+  python3 -m tools.llm_compare --task gm_rationale --models gemini-3.8-flash:low ollama:gemma4:12b@nothink --limit 3
+  python3 -m tools.llm_compare --suite --models gemini-3.8-flash:low ollama:gemma4:12b --limit 1
 """
 import argparse
 import collections
@@ -46,6 +55,14 @@ TASKS = [
     "gm_rationale",
     "gm_negotiation",
 ]
+
+# Tasks whose answer is one JSON object; --json-mode asks the model for JSON output on these
+# (Ollama format=json, Gemini response_mime_type). The production GM calls don't use it yet.
+JSON_TASKS = {"gm_persona", "gm_rationale", "gm_negotiation"}
+
+DEFAULT_DB = "madden_2036"
+DEFAULT_OLLAMA_TIMEOUT = 300.0  # a cold 8GB load plus a thinking pass runs past llm_provider's 60s default
+DEFAULT_NUM_CTX = 16384         # Ollama's 4,096 default truncates the longer GM and memory prompts
 
 NUM_RE = re.compile(r"(?<![\w.$])(\d+(?:\.\d+)?)(?![\w.]*\d)")
 MONEY_RE = re.compile(r"\$\s?(\d+(?:\.\d+)?)\s?([MKmkBb])?", re.I)
@@ -330,18 +347,38 @@ def validate_output(task: str, text: str, inp: TaskInput) -> Tuple[bool, List[st
 # Input Extraction (Database Read-Only with Authentic Fallbacks)
 # ---------------------------------------------------------------------------
 
+def resolve_dsn(db: Optional[str] = None) -> str:
+    """--db value (a DSN, or a bare database name on the local madden-db container) to a DSN.
+    Falls back to LLM_COMPARE_DB, then the madden_2036 archive. DATABASE_URL is not used: on the PC
+    it names the live franchise, and the compare inputs come from the archive."""
+    db = (db or os.environ.get("LLM_COMPARE_DB") or DEFAULT_DB).strip()
+    if "=" in db or "://" in db:
+        return db
+    return f"host=localhost dbname={db} user=postgres password=postgres"
+
+
+def use_database_read_only(dsn: str) -> None:
+    """Point this process at dsn, read-only. Builders call newsroom/engine helpers that open their own
+    connections from DATABASE_URL, so the variable is set too, and PGOPTIONS makes every libpq
+    connection in the process refuse writes."""
+    os.environ["DATABASE_URL"] = dsn
+    opts = os.environ.get("PGOPTIONS", "")
+    if "default_transaction_read_only" not in opts:
+        os.environ["PGOPTIONS"] = (opts + " -c default_transaction_read_only=on").strip()
+
+
 def get_db_cursor():
     """Attempt to connect to PostgreSQL in read-only mode."""
     if os.environ.get("MOCK_DB") or (os.environ.get("PYTEST_CURRENT_TEST") and not os.environ.get("MADDEN_INTEGRATION_TEST")):
         return None, None
     try:
         import psycopg
-        from db.db_handler import DatabaseHandler
-        conn_info = DatabaseHandler().db_conn_info
+        conn_info = os.environ.get("DATABASE_URL") or resolve_dsn()
         conn = psycopg.connect(conn_info, connect_timeout=4)
         conn.read_only = True
         return conn, conn.cursor()
-    except (Exception, BaseException):
+    except (Exception, BaseException) as e:
+        print(f"[llm_compare] WARNING: database unavailable ({e}); using the built-in sample inputs", file=sys.stderr)
         return None, None
 
 
@@ -815,12 +852,30 @@ def extract_task_inputs(task: str, season: int, week: int, limit: int = 5) -> Li
 # Evaluation Execution Loop
 # ---------------------------------------------------------------------------
 
+def parse_model_spec(spec: str, ollama_timeout: float = DEFAULT_OLLAMA_TIMEOUT,
+                     num_ctx: int = DEFAULT_NUM_CTX) -> Tuple[str, Optional[dict]]:
+    """'ollama:gemma4:12b@nothink' -> ('ollama:gemma4:12b', {think: False, num_ctx, timeout}).
+    Gemini specs pass through unchanged ('gemini-3.8-flash:low' keeps its thinking level)."""
+    model, _, flag = spec.partition("@")
+    if not model.startswith(("ollama:", "ollama/")):
+        return spec, None
+    opts: Dict[str, Any] = {"timeout": ollama_timeout, "num_ctx": num_ctx}
+    if flag in ("think", "nothink"):
+        opts["think"] = flag == "think"
+    elif flag:
+        raise ValueError(f"Unknown model flag @{flag} in {spec} (use @think or @nothink)")
+    return model, opts
+
+
 def run_evaluation(
     task: str,
     inputs: List[TaskInput],
     models: List[str],
     client: Any = None,
     api_key: Optional[str] = None,
+    ollama_timeout: float = DEFAULT_OLLAMA_TIMEOUT,
+    num_ctx: int = DEFAULT_NUM_CTX,
+    json_mode: bool = False,
 ) -> Dict[str, Any]:
     """Execute all inputs across all models and gather metrics and validation checks."""
     total_calls = len(inputs) * len(models)
@@ -865,23 +920,29 @@ def run_evaluation(
 
         for model in models:
             t0 = time.perf_counter()
+            call_model = model
             try:
+                call_model, ollama_options = parse_model_spec(model, ollama_timeout, num_ctx)
                 out = generate_text(
                     prompt=inp.prompt,
                     system=inp.system_prompt,
-                    model=model,
+                    model=call_model,
                     source="llm_compare",
                     label=f"compare_{task}",
                     client=client,
                     api_key=api_key,
                     return_usage=True,
+                    allow_fallback=False,
+                    log_tokens=False,
+                    ollama_options=ollama_options,
+                    response_mime_type="application/json" if json_mode and task in JSON_TASKS else None,
                 )
                 if isinstance(out, tuple):
                     text, usage = out
                 else:
                     text, usage = out, {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0, "cached_tokens": 0}
                 elapsed = time.perf_counter() - t0
-                cost = estimate_cost(model, usage)
+                cost = estimate_cost(call_model, usage)
                 passed, failures, metrics = validate_output(task, text, inp)
             except Exception as e:
                 elapsed = time.perf_counter() - t0
@@ -1314,6 +1375,88 @@ def save_reports(data: Dict[str, Any], out_dir: str = "verify_output") -> Tuple[
     return json_path, html_path
 
 
+def render_suite_html(suite: Dict[str, Any]) -> str:
+    """One page for a --suite run: pass rate, latency and cost per task per model, linking each task's report."""
+    models = suite["models"]
+    head = "".join(f"<th>{html.escape(m)}</th>" for m in models)
+    rows = ""
+    for t in suite["tasks"]:
+        cells = ""
+        for m in models:
+            s = t["summary"].get(m)
+            if not s:
+                cells += "<td>-</td>"
+                continue
+            cls = "pass" if s["pass_rate"] >= 90 else "warn" if s["pass_rate"] >= 60 else "fail"
+            cells += (f"<td><span class='{cls}'>{s['pass_rate']}% ({s['passed_calls']}/{s['total_calls']})</span>"
+                      f"<br><small>{s['avg_seconds']:.1f}s avg · ${s['total_cost_usd']:.4f}</small></td>")
+        link = html.escape(os.path.basename(t.get("html_path") or ""))
+        rows += f"<tr><td><a href='{link}'>{html.escape(t['task'])}</a></td>{cells}</tr>"
+    totals = ""
+    for m in models:
+        tot = suite["totals"][m]
+        totals += (f"<td><strong>{tot['pass_rate']}%</strong> ({tot['passed_calls']}/{tot['total_calls']})"
+                   f"<br><small>{tot['total_seconds']:.1f}s · ${tot['total_cost_usd']:.4f}</small></td>")
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Compare Suite</title>
+<style>
+:root {{ --bg:#fff; --fg:#1d1d1f; --line:#d9d9de; --pass:#1a7f37; --warn:#9a6700; --fail:#cf222e; }}
+@media (prefers-color-scheme: dark) {{ :root {{ --bg:#16161a; --fg:#ececf1; --line:#34343c; --pass:#4ac26b; --warn:#d4a72c; --fail:#ff7b72; }} }}
+body {{ background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; margin:0; padding:24px 16px; }}
+table {{ border-collapse:collapse; width:100%; max-width:1100px; }}
+th, td {{ border-bottom:1px solid var(--line); padding:8px; text-align:left; vertical-align:top; }}
+a {{ color:inherit; }} .pass {{ color:var(--pass); }} .warn {{ color:var(--warn); }} .fail {{ color:var(--fail); }}
+.wrap {{ overflow-x:auto; }}
+</style></head><body>
+<h1>LLM Compare Suite</h1>
+<p>{html.escape(suite['timestamp'])} · season {suite['season']} week {suite['week']} · limit {suite['limit']} · db {html.escape(suite['db'])}</p>
+<div class="wrap"><table><thead><tr><th>Task</th>{head}</tr></thead>
+<tbody>{rows}<tr><td><strong>All tasks</strong></td>{totals}</tr></tbody></table></div>
+</body></html>
+"""
+
+
+def run_suite(tasks: List[str], models: List[str], season: int, week: int, limit: int,
+              out_dir: str = "verify_output", db_label: str = "", **eval_kwargs) -> Tuple[Dict[str, Any], str, str]:
+    """Run every task across models, save each task's report, then one combined suite JSON + HTML."""
+    suite: Dict[str, Any] = {
+        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "season": season, "week": week, "limit": limit, "db": db_label, "models": models, "tasks": [],
+    }
+    for task in tasks:
+        inputs = extract_task_inputs(task, season, week, limit=limit)
+        if not inputs:
+            print(f"[llm_compare] No inputs for {task}; skipped")
+            continue
+        data = run_evaluation(task, inputs, models, **eval_kwargs)
+        json_path, html_path = save_reports(data, out_dir=out_dir)
+        suite["tasks"].append({"task": task, "summary": data["summary"], "json_path": json_path, "html_path": html_path})
+
+    totals = {}
+    for m in models:
+        rows = [t["summary"][m] for t in suite["tasks"] if m in t["summary"]]
+        calls = sum(r["total_calls"] for r in rows)
+        passed = sum(r["passed_calls"] for r in rows)
+        totals[m] = {
+            "total_calls": calls, "passed_calls": passed,
+            "pass_rate": round(passed / max(1, calls) * 100.0, 1),
+            "total_seconds": round(sum(r["total_seconds"] for r in rows), 3),
+            "total_cost_usd": round(sum(r["total_cost_usd"] for r in rows), 6),
+        }
+    suite["totals"] = totals
+
+    os.makedirs(out_dir, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    json_path = os.path.join(out_dir, f"compare_suite_{ts}.json")
+    html_path = os.path.join(out_dir, f"compare_suite_{ts}.html")
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(suite, f, indent=2, ensure_ascii=False, default=str)
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(render_suite_html(suite))
+    return suite, json_path, html_path
+
+
 # ---------------------------------------------------------------------------
 # CLI Entrypoint
 # ---------------------------------------------------------------------------
@@ -1322,30 +1465,62 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Side-by-side LLM quality test harness across models & providers."
     )
-    parser.add_argument(
-        "--task",
-        required=True,
-        choices=TASKS,
-        help="Task to compare",
-    )
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--task", choices=TASKS, help="Task to compare")
+    mode.add_argument("--suite", action="store_true",
+                      help="Run every task (or --tasks) and write one combined suite report")
+    parser.add_argument("--tasks", nargs="+", choices=TASKS, help="With --suite: the tasks to run (default: all)")
     parser.add_argument("--season", type=int, default=2036, help="Season year (default: 2036)")
     parser.add_argument("--week", type=int, default=20, help="Season week (default: 20)")
     parser.add_argument(
         "--models",
         nargs="+",
         required=True,
-        help="List of models to evaluate (e.g. gemini-3.8-flash:low gemini-3.5-flash-lite ollama:qwen2.5:14b)",
+        help="Models to evaluate (e.g. gemini-3.8-flash:low gemini-3.5-flash-lite ollama:gemma4:12b@nothink)",
     )
+    parser.add_argument("--db", type=str, default=None,
+                        help=f"Input database: DSN or database name (default: LLM_COMPARE_DB or {DEFAULT_DB}); opened read-only")
+    parser.add_argument("--ollama-timeout", type=float, default=DEFAULT_OLLAMA_TIMEOUT,
+                        help=f"Seconds before an Ollama call is scored as failed (default: {DEFAULT_OLLAMA_TIMEOUT:.0f})")
+    parser.add_argument("--num-ctx", type=int, default=DEFAULT_NUM_CTX,
+                        help=f"Ollama context window in tokens (default: {DEFAULT_NUM_CTX})")
+    parser.add_argument("--json-mode", action="store_true",
+                        help=f"Request JSON output on {', '.join(sorted(JSON_TASKS))}")
     parser.add_argument("--limit", type=int, default=5, help="Number of inputs to test (default: 5)")
     parser.add_argument("--out", type=str, default="verify_output", help="Output directory for reports")
 
     args = parser.parse_args(argv)
+    for spec in args.models:
+        try:
+            parse_model_spec(spec)
+        except ValueError as e:
+            parser.error(str(e))
+
+    dsn = resolve_dsn(args.db)
+    use_database_read_only(dsn)
+    eval_kwargs = {"ollama_timeout": args.ollama_timeout, "num_ctx": args.num_ctx, "json_mode": args.json_mode}
+
+    if args.suite:
+        db_label = re.sub(r"password=\S+", "password=***", dsn)
+        suite, json_path, html_path = run_suite(
+            args.tasks or TASKS, args.models, args.season, args.week, args.limit,
+            out_dir=args.out, db_label=db_label, **eval_kwargs,
+        )
+        print(f"\n=======================================================")
+        print(f" Suite complete: {len(suite['tasks'])} tasks")
+        for m, tot in suite["totals"].items():
+            print(f"   {m:32}: {tot['pass_rate']}% ({tot['passed_calls']}/{tot['total_calls']}) "
+                  f"{tot['total_seconds']:.1f}s ${tot['total_cost_usd']:.4f}")
+        print(f" JSON report: {json_path}")
+        print(f" HTML report: {html_path}")
+        print(f"=======================================================\n")
+        return
 
     inputs = extract_task_inputs(args.task, args.season, args.week, limit=args.limit)
     if not inputs:
         sys.exit(f"No inputs available for task {args.task}.")
 
-    data = run_evaluation(args.task, inputs, args.models)
+    data = run_evaluation(args.task, inputs, args.models, **eval_kwargs)
     json_path, html_path = save_reports(data, out_dir=args.out)
 
     print(f"\n=======================================================")

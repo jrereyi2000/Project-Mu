@@ -30,9 +30,13 @@ from tools.llm_compare import (
     extract_numbers_from_facts,
     extract_task_inputs,
     main,
+    parse_model_spec,
     render_html_report,
+    resolve_dsn,
     run_evaluation,
+    run_suite,
     save_reports,
+    use_database_read_only,
     validate_agent_wire,
     validate_gm_negotiation,
     validate_gm_persona,
@@ -48,7 +52,8 @@ class TestCLIArgumentParsing:
     def test_cli_parsing_valid(self):
         with patch("tools.llm_compare.extract_task_inputs") as mock_extract, \
              patch("tools.llm_compare.run_evaluation") as mock_eval, \
-             patch("tools.llm_compare.save_reports") as mock_save:
+             patch("tools.llm_compare.save_reports") as mock_save, \
+             patch("tools.llm_compare.use_database_read_only") as mock_ro:
 
             mock_extract.return_value = [
                 TaskInput(id="t1", title="T1", task="agent_wire", prompt="prompt")
@@ -72,10 +77,63 @@ class TestCLIArgumentParsing:
             assert len(args[1]) == 1
             assert args[2] == ["gemini-3.8-flash:low", "gemini-3.5-flash-lite"]
             mock_save.assert_called_once_with(mock_eval.return_value, out_dir="test_output")
+            mock_ro.assert_called_once_with("host=localhost dbname=madden_2036 user=postgres password=postgres")
 
     def test_cli_invalid_task_exits(self):
         with pytest.raises(SystemExit):
             main(["--task", "invalid_task", "--models", "m1"])
+
+    def test_cli_needs_task_or_suite(self):
+        with pytest.raises(SystemExit):
+            main(["--models", "m1"])
+        with pytest.raises(SystemExit):
+            main(["--task", "agent_wire", "--suite", "--models", "m1"])
+
+    def test_cli_rejects_unknown_model_flag(self):
+        with pytest.raises(SystemExit):
+            main(["--task", "agent_wire", "--models", "ollama:gemma4:12b@fast"])
+
+    def test_cli_suite(self):
+        with patch("tools.llm_compare.run_suite") as mock_suite, \
+             patch("tools.llm_compare.use_database_read_only") as mock_ro:
+            mock_suite.return_value = ({"tasks": [], "totals": {}}, "s.json", "s.html")
+            main(["--suite", "--tasks", "gm_rationale", "gm_persona", "--models", "ollama:gemma4:12b@nothink",
+                  "--db", "madden_test", "--json-mode", "--limit", "2"])
+
+            mock_ro.assert_called_once_with("host=localhost dbname=madden_test user=postgres password=postgres")
+            args, kwargs = mock_suite.call_args
+            assert args == (["gm_rationale", "gm_persona"], ["ollama:gemma4:12b@nothink"], 2036, 20, 2)
+            assert kwargs["json_mode"] is True
+            assert kwargs["db_label"] == "host=localhost dbname=madden_test user=postgres password=***"
+
+
+class TestDatabaseAndModelSpecs:
+    def test_resolve_dsn(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LLM_COMPARE_DB", None)
+            assert resolve_dsn() == "host=localhost dbname=madden_2036 user=postgres password=postgres"
+            assert resolve_dsn("madden_test") == "host=localhost dbname=madden_test user=postgres password=postgres"
+            assert resolve_dsn("host=db dbname=x user=u") == "host=db dbname=x user=u"
+            assert resolve_dsn("postgresql://u@db/x") == "postgresql://u@db/x"
+        with patch.dict(os.environ, {"LLM_COMPARE_DB": "madden_archive"}):
+            assert "dbname=madden_archive" in resolve_dsn()
+
+    def test_use_database_read_only(self):
+        with patch.dict(os.environ, {"PGOPTIONS": "-c statement_timeout=0"}):
+            use_database_read_only("host=localhost dbname=madden_2036")
+            use_database_read_only("host=localhost dbname=madden_2036")
+            assert os.environ["DATABASE_URL"] == "host=localhost dbname=madden_2036"
+            assert os.environ["PGOPTIONS"] == "-c statement_timeout=0 -c default_transaction_read_only=on"
+
+    def test_parse_model_spec(self):
+        assert parse_model_spec("gemini-3.8-flash:low") == ("gemini-3.8-flash:low", None)
+        model, opts = parse_model_spec("ollama:gemma4:12b", ollama_timeout=120, num_ctx=8192)
+        assert model == "ollama:gemma4:12b"
+        assert opts == {"timeout": 120, "num_ctx": 8192}
+        assert parse_model_spec("ollama:gemma4:12b@nothink")[1]["think"] is False
+        assert parse_model_spec("ollama:lfm3:1.7b@think")[1]["think"] is True
+        with pytest.raises(ValueError):
+            parse_model_spec("ollama:gemma4:12b@fast")
 
 
 class TestInputBuilding:
@@ -440,6 +498,58 @@ class TestModelEvaluationLoop:
         assert res["passed"] is False
         assert any("Connection refused" in f for f in res["failures"])
         assert data["summary"]["ollama:broken"]["failed_calls"] == 1
+
+
+    def test_run_evaluation_call_options(self):
+        # No Gemini fallback, no llm_usage writes, Ollama options from the spec, JSON mode only on JSON tasks
+        inp = TaskInput(id="i", title="I", task="gm_rationale", prompt="p")
+        calls = []
+
+        def fake_generate_text(**kwargs):
+            calls.append(kwargs)
+            return '{"headline": "h", "rationale_a": "a", "rationale_b": "b"}', {"input_tokens": 1, "output_tokens": 1}
+
+        with patch("tools.llm_compare.generate_text", side_effect=fake_generate_text):
+            run_evaluation("gm_rationale", [inp], ["gemini-3.8-flash:low", "ollama:gemma4:12b@nothink"],
+                           ollama_timeout=90, num_ctx=4096, json_mode=True)
+            run_evaluation("agent_wire", [TaskInput(id="w", title="W", task="agent_wire", prompt="p")],
+                           ["ollama:gemma4:12b"], json_mode=True)
+
+        gem, oll, wire = calls
+        assert all(c["allow_fallback"] is False and c["log_tokens"] is False for c in calls)
+        assert gem["model"] == "gemini-3.8-flash:low" and gem["ollama_options"] is None
+        assert oll["model"] == "ollama:gemma4:12b"
+        assert oll["ollama_options"] == {"timeout": 90, "num_ctx": 4096, "think": False}
+        assert gem["response_mime_type"] == "application/json"
+        assert wire["response_mime_type"] is None
+
+
+class TestSuiteRunner:
+    def test_run_suite_writes_combined_report(self, tmp_path):
+        def fake_eval(task, inputs, models, **kwargs):
+            summary = {m: {"total_calls": 1, "passed_calls": 1 if m == "a" else 0, "pass_rate": 100.0 if m == "a" else 0.0,
+                           "avg_seconds": 1.0, "total_seconds": 1.0, "total_cost_usd": 0.001 if m == "a" else 0.0}
+                       for m in models}
+            return {"task": task, "models": models, "summary": summary, "items": []}
+
+        with patch("tools.llm_compare.extract_task_inputs",
+                   side_effect=lambda t, s, w, limit: [] if t == "memory_summary" else [TaskInput(id="i", title="I", task=t, prompt="p")]), \
+             patch("tools.llm_compare.run_evaluation", side_effect=fake_eval) as mock_eval, \
+             patch("tools.llm_compare.save_reports", side_effect=lambda d, out_dir: (f"{d['task']}.json", f"{d['task']}.html")):
+            suite, json_path, html_path = run_suite(["agent_wire", "memory_summary", "gm_rationale"], ["a", "b"],
+                                                    2036, 20, 1, out_dir=str(tmp_path), db_label="dbname=madden_2036",
+                                                    json_mode=True)
+
+        assert [t["task"] for t in suite["tasks"]] == ["agent_wire", "gm_rationale"]  # no inputs -> skipped
+        assert mock_eval.call_args.kwargs == {"json_mode": True}
+        assert suite["totals"]["a"] == {"total_calls": 2, "passed_calls": 2, "pass_rate": 100.0,
+                                        "total_seconds": 2.0, "total_cost_usd": 0.002}
+        assert suite["totals"]["b"]["pass_rate"] == 0.0
+        with open(json_path, encoding="utf-8") as f:
+            assert json.load(f)["db"] == "dbname=madden_2036"
+        with open(html_path, encoding="utf-8") as f:
+            page = f.read()
+        assert "LLM Compare Suite" in page and "gm_rationale.html" in page and "prefers-color-scheme" in page
 
 
 class TestReportGeneration:

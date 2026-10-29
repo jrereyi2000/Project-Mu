@@ -174,7 +174,83 @@ class OllamaAPICallTests(unittest.TestCase):
         self.assertEqual(kwargs["json"]["format"], schema)
 
 
+    @mock.patch("requests.post")
+    def test_call_ollama_think_and_num_ctx(self, mock_post):
+        # gemma4 returns its reasoning in `thinking` and counts it inside eval_count
+        mock_resp = mock.MagicMock()
+        mock_resp.json.return_value = {
+            "response": "x" * 100,
+            "thinking": "y" * 300,
+            "prompt_eval_count": 40,
+            "eval_count": 120,
+        }
+        mock_resp.raise_for_status.return_value = None
+        mock_post.return_value = mock_resp
+
+        text, usage = call_ollama(model="gemma4:12b", prompt="p", think=True, num_ctx=16384, timeout=300)
+
+        self.assertEqual(text, "x" * 100)
+        self.assertEqual(usage["thinking_tokens"], 90)
+        self.assertEqual(usage["output_tokens"], 30)
+        _, kwargs = mock_post.call_args
+        self.assertIs(kwargs["json"]["think"], True)
+        self.assertEqual(kwargs["json"]["options"]["num_ctx"], 16384)
+        self.assertEqual(kwargs["timeout"], 300)
+
+    @mock.patch("requests.post")
+    def test_call_ollama_leaves_think_unset_by_default(self, mock_post):
+        mock_resp = mock.MagicMock()
+        mock_resp.json.return_value = {"response": "ok", "prompt_eval_count": 5, "eval_count": 2}
+        mock_resp.raise_for_status.return_value = None
+        mock_post.return_value = mock_resp
+
+        _, usage = call_ollama(model="gemma4:12b", prompt="p")
+
+        _, kwargs = mock_post.call_args
+        self.assertNotIn("think", kwargs["json"])
+        self.assertNotIn("options", kwargs["json"])
+        self.assertEqual(usage["output_tokens"], 2)
+        self.assertEqual(usage["thinking_tokens"], 0)
+
+
 class ProviderFallbackTests(unittest.TestCase):
+    @mock.patch("requests.post")
+    def test_no_fallback_when_disabled(self, mock_post):
+        # tools/llm_compare.py must never score Gemini's answer as the local model's
+        mock_post.side_effect = requests.exceptions.ReadTimeout("Read timed out")
+        mock_client = make_mock_gemini_client("Should not be called")
+
+        with self.assertRaises(requests.exceptions.ReadTimeout):
+            generate_text(prompt="p", source="llm_compare", model="ollama:gemma4:12b",
+                          client=mock_client, allow_fallback=False)
+        mock_client.models.generate_content.assert_not_called()
+
+    @mock.patch("requests.post")
+    def test_ollama_options_and_no_logging(self, mock_post):
+        mock_resp = mock.MagicMock()
+        mock_resp.json.return_value = {"response": "ok", "prompt_eval_count": 5, "eval_count": 2}
+        mock_resp.raise_for_status.return_value = None
+        mock_post.return_value = mock_resp
+
+        with mock.patch("engines.llm_provider.log_usage") as mock_log:
+            text = generate_text(prompt="p", source="llm_compare", model="ollama:gemma4:12b", log_tokens=False,
+                                 ollama_options={"think": False, "num_ctx": 8192, "timeout": 120})
+
+        self.assertEqual(text, "ok")
+        mock_log.assert_not_called()
+        _, kwargs = mock_post.call_args
+        self.assertIs(kwargs["json"]["think"], False)
+        self.assertEqual(kwargs["json"]["options"]["num_ctx"], 8192)
+        self.assertEqual(kwargs["timeout"], 120)
+
+    def test_gemini_no_logging(self):
+        mock_client = make_mock_gemini_client("Gemini text")
+        with mock.patch("engines.llm_provider.log_response") as mock_log:
+            text = generate_text(prompt="p", source="llm_compare", model="gemini-3.8-flash:low",
+                                 client=mock_client, log_tokens=False)
+        self.assertEqual(text, "Gemini text")
+        mock_log.assert_not_called()
+
     @mock.patch("requests.post")
     def test_fallback_to_gemini_on_connection_error(self, mock_post):
         mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused to http://localhost:11434")

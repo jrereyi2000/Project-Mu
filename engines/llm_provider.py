@@ -173,12 +173,19 @@ def call_ollama(
     response_mime_type: Optional[str] = None,
     timeout: Optional[float] = None,
     base_url: Optional[str] = None,
+    think: Optional[bool] = None,
+    num_ctx: Optional[int] = None,
 ) -> Tuple[str, dict]:
     """Call Ollama API (/api/generate or /api/chat) without streaming.
 
+    think: True/False turns a thinking model's reasoning on or off (Ollama's `think` field);
+    None leaves the model's default (gemma4 thinks by default). num_ctx overrides Ollama's
+    4,096-token default context, which silently truncates longer prompts.
+
     Returns (text, usage_dict) where usage_dict contains:
-      input_tokens (prompt_eval_count), output_tokens (eval_count),
-      cached_tokens (0), thinking_tokens (0).
+      input_tokens (prompt_eval_count), output_tokens (eval_count minus thinking),
+      cached_tokens (0), thinking_tokens (estimated: Ollama counts reasoning inside
+      eval_count and returns it as text only, so eval_count is split by character share).
     Raises requests connection/timeout exceptions on network failure.
     """
     url_base = base_url or get_ollama_base_url()
@@ -187,6 +194,8 @@ def call_ollama(
     options: dict[str, Any] = {}
     if temperature is not None:
         options["temperature"] = temperature
+    if num_ctx:
+        options["num_ctx"] = int(num_ctx)
 
     fmt = None
     if response_schema is not None:
@@ -210,10 +219,13 @@ def call_ollama(
             payload["options"] = options
         if fmt is not None:
             payload["format"] = fmt
+        if think is not None:
+            payload["think"] = bool(think)
         resp = requests.post(endpoint, json=payload, timeout=t_out)
         resp.raise_for_status()
         data = resp.json()
         text = data.get("message", {}).get("content", "")
+        thinking_text = data.get("message", {}).get("thinking") or ""
     else:
         endpoint = f"{url_base}/api/generate"
         payload = {
@@ -227,14 +239,21 @@ def call_ollama(
             payload["options"] = options
         if fmt is not None:
             payload["format"] = fmt
+        if think is not None:
+            payload["think"] = bool(think)
         resp = requests.post(endpoint, json=payload, timeout=t_out)
         resp.raise_for_status()
         data = resp.json()
         text = data.get("response", "")
+        thinking_text = data.get("thinking") or ""
 
     input_tokens = int(data.get("prompt_eval_count") or 0)
-    output_tokens = int(data.get("eval_count") or 0)
+    eval_count = int(data.get("eval_count") or 0)
     thinking_tokens = int(data.get("thinking_tokens") or 0)
+    if not thinking_tokens and thinking_text:
+        # Split eval_count between reasoning and answer by their share of the generated characters
+        thinking_tokens = round(eval_count * len(thinking_text) / (len(thinking_text) + len(text or "")))
+    output_tokens = max(0, eval_count - thinking_tokens)
 
     usage = {
         "input_tokens": input_tokens,
@@ -307,12 +326,19 @@ def generate_text(
     client: Any = None,
     api_key: Optional[str] = None,
     return_usage: bool = False,
+    allow_fallback: bool = True,
+    log_tokens: bool = True,
+    ollama_options: Optional[dict] = None,
 ) -> Union[str, Tuple[str, dict]]:
     """Provider-switching text generator.
 
     Routes to Ollama or Gemini, with automatic fallback to Gemini on Ollama connection error
     or timeout. Logs token usage for both providers to llm_usage.
     If return_usage=True, returns (text, usage_dict).
+    allow_fallback=False re-raises Ollama errors instead of answering with Gemini, and
+    log_tokens=False skips the llm_usage write (tools/llm_compare.py needs both: a quiet
+    fallback would score Gemini's answer as the local model's, and the archive DB is read-only).
+    ollama_options passes think / num_ctx / timeout through to call_ollama.
     """
     effective_label = label or source
     prov = resolve_provider(label=effective_label, source=source, model=model, provider=provider)
@@ -342,21 +368,25 @@ def generate_text(
                 temperature=temperature,
                 response_schema=response_schema,
                 response_mime_type=response_mime_type,
+                **(ollama_options or {}),
             )
             # Log Ollama usage
-            log_usage(
-                source=source,
-                label=effective_label,
-                model=f"ollama/{ollama_model}",
-                input_tokens=usage["input_tokens"],
-                cached_tokens=0,
-                output_tokens=usage["output_tokens"],
-                thinking_tokens=usage["thinking_tokens"],
-            )
+            if log_tokens:
+                log_usage(
+                    source=source,
+                    label=effective_label,
+                    model=f"ollama/{ollama_model}",
+                    input_tokens=usage["input_tokens"],
+                    cached_tokens=0,
+                    output_tokens=usage["output_tokens"],
+                    thinking_tokens=usage["thinking_tokens"],
+                )
             if return_usage:
                 return text, usage
             return text
         except OLLAMA_FALLBACK_EXCEPTIONS as e:
+            if not allow_fallback:
+                raise
             fb = resolve_fallback_model(label=effective_label, source=source, fallback_model=fallback_model)
             print(
                 f"[llm_provider] Ollama ({ollama_model}) unreachable or timed out ({type(e).__name__}: {e}). "
@@ -382,7 +412,8 @@ def generate_text(
         api_key=api_key,
     )
     # Log Gemini usage
-    log_response(source=source, label=effective_label, model=gemini_model, resp=resp)
+    if log_tokens:
+        log_response(source=source, label=effective_label, model=gemini_model, resp=resp)
     if return_usage:
         return text, usage
     return text
