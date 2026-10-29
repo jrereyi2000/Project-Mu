@@ -263,8 +263,9 @@ class WriterConfigTests(unittest.TestCase):
         import re
         texts = {f"type {k}": " ".join(str(v) for v in info.values()) for k, info in self.article_types.items()}
         texts.update({f"persona {k}": persona_text(v) for k, v in self.personas.items()})
+        social_matrix = ("docs", "done", "SOCIAL_MATRIX.md") if os.path.exists(os.path.join(ROOT, "docs", "done", "SOCIAL_MATRIX.md")) else ("docs", "SOCIAL_MATRIX.md")
         for rel in (("newsroom", "swarm_dispatcher.py"), ("newsroom", "social_writer.py"), ("docs", "EDITORIAL_MATRIX.md"),
-                    ("docs", "SOCIAL_MATRIX.md")):
+                    social_matrix):
             with open(os.path.join(ROOT, *rel)) as f:
                 texts[rel[-1]] = f.read()
         for name, text in texts.items():
