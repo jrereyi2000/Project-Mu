@@ -19,9 +19,6 @@ data/history/.cache/
 db/backups/
 *.sql.gz
 
-# Generated headshots (regenerate via headshots/process_headshots.py)
-static/players/
-
 # OS / editor
 .DS_Store
 .idea/
