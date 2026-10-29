@@ -1,33 +1,101 @@
-# Madden capture (chiaki-ng → CSV)
+# Project Mu: Automated Media Engine & Simulation Network
 
-## One-time setup (Mac)
+An automated, event-driven platform and media ecosystem for a simulated NFL universe.
+
+## Quick Start & Setup
+
+### 1. Python Environment & Dependencies
+Python 3.11+ is recommended. Install required packages using the requirements file:
+
 ```bash
-pip3 install pyobjc-framework-Quartz pyobjc-framework-Vision pillow google-genai pydantic
-defaults write org.streetpea.chiaking NSAppSleepDisabled -bool YES   # stop App Nap throttling
+# In the project root
+pip3 install -r requirements.txt
 ```
-System Settings → Privacy & Security: give **Terminal** both **Screen Recording** and **Accessibility**.
 
-## Each week
-1. Open chiaki-ng and stream Madden. Be anywhere in your franchise menus (not in a game). **Keep part of chiaki-ng's window visible**, and don't minimize it or put it in full screen. When macOS thinks nobody can see it, chiaki-ng stops drawing the stream and the window goes blank gray. If that happens mid-run, the script brings chiaki-ng to the front to wake it up, then carries on.
-2. `python3 madden_capture.py --test` checks that the script can see and read the screen. It presses nothing.
-3. `python3 madden_capture.py` does the full run: season stats (NFL, every category) plus last week's schedule.
-4. `python3 extract.py captures/<folder>` turns the screenshots into CSVs with Gemini. It uses `GEMINI_API_KEY` from your environment or the project-root `.env`.
+*(Note: On macOS, `requirements.txt` automatically includes Apple Vision and Quartz PyObjC frameworks for screen capture and OCR.)*
 
-## Weekly run from the debug page (phase 5)
-1. Subscribe to the ntfy topic in `.env` (`NTFY_TOPIC`) in the ntfy phone app. `python3 -m pipeline.notify "hello"` sends a test.
-2. Keep the API (`python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload`) and the site (`cd Mu_Network && npm run dev`) running. Open the site's **LIVE** badge, or on your phone `http://<Mac's IP>:8000/#debug` (the API serves the built site; run `cd Mu_Network && npm run build` after frontend changes). Enter `DEBUG_TOKEN` from `.env` once.
-3. After **Advance Week**, tap **Scan week** (or **Backfill previous week** for no articles, **Game scan** for last week's box scores). Remote Play takes the console and your controller disconnects. The page shows the log.
-4. When your phone says **"your turn"** (~20 min), turn the controller back on. Extract, load, engines and articles carry on without you, and a last notice says the week is done.
-5. If a notice says **"week stopped"**, nothing after the failed step ran (a failed load publishes nothing). Fix it, then pick the run's folder under **Resume a stopped run** and tap the same button (or `python3 -m pipeline.weekly_capture --resume <folder>`).
+### 2. Node.js Dependencies
+Install packages for the frontend and PC save reader:
 
-## Safety rules built in
-- The script checks the screen before every press and stops if it is anywhere unexpected.
-- It never presses Cross on the Gameday tab (Advance Week) or on the schedule list (Actions / Force Win).
-- If the quit prompt appears, it presses Cross only when **NO** is highlighted.
-- Press Ctrl-C at any time to stop. It releases all keys.
+```bash
+# Frontend (Mu_Network - Vite + React 19)
+cd Mu_Network && npm install && cd ..
 
-## If something goes wrong
-- **The stream freezes** (picture stuck, keys do nothing): in any mode the script notices (a harmless press that doesn't change the screen), force-quits chiaki-ng and relaunches the stream (`CHIAKI_HOST` / `CHIAKI_HOST_IP` in `.env`), up to 8 times a run, then redoes the step it was on (a stats mode from scratch, the game or roster team it was on). Otherwise force quit chiaki-ng and reopen it yourself, then `python3 madden_capture.py --only roster --resume <folder>`.
-- **"STOPPED: ..."**: read the message; it names the screen it expected and what it saw.
-- **Keys don't register:** add `--foreground`. This brings chiaki-ng to the front and sends normal keystrokes.
-- **The NFL scope dropdown fails:** open Player Stats, run `python3 madden_capture.py --probe-l2`, and send me the screenshots in `captures/<folder>/probe/`.
+# PC Franchise Save Reader/Writer
+cd pipeline/save_reader && npm install && cd ../..
+```
+
+### 3. Environment Variables
+Copy the template configuration and supply your keys:
+
+```bash
+cp .env.example .env
+```
+Key variables to verify:
+- `GEMINI_API_KEY`: Required for OCR extraction, media swarms, and editorial dispatch.
+- `DATABASE_URL`: PostgreSQL connection string (defaults to `host=localhost dbname=madden user=postgres password=postgres`).
+- `DEBUG_TOKEN`: Authentication token for `#debug` management routes.
+
+### 4. Database Setup (PostgreSQL)
+Ensure PostgreSQL is running, create the database, and run the initial schema and migrations:
+
+```bash
+createdb madden
+psql -d madden -f db/init_db.sql
+# Apply migrations in db/migrations/ as needed
+```
+
+---
+
+## Console Capture Setup (macOS + chiaki-ng)
+
+If running weekly game/stats capture directly from PS5 Remote Play:
+1. Prevent App Nap throttling on chiaki-ng:
+   ```bash
+   defaults write org.streetpea.chiaking NSAppSleepDisabled -bool YES
+   ```
+2. In **System Settings → Privacy & Security**: give **Terminal** (or your IDE) both **Screen Recording** and **Accessibility** permissions.
+
+---
+
+## Running the Application
+
+### Start Backend API & Frontend UI
+```bash
+# Start FastAPI backend (port 8000)
+python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload
+
+# Start Vite React frontend (port 5173)
+cd Mu_Network && npm run dev
+```
+To serve the frontend directly through FastAPI at `http://localhost:8000/`, build the site:
+```bash
+cd Mu_Network && npm run build
+```
+
+---
+
+## Weekly Pipeline Workflow
+
+### From the Debug Page (`#debug`)
+1. Subscribe to the ntfy topic in `.env` (`NTFY_TOPIC`) in the ntfy phone app. Test with `python3 -m pipeline.notify "hello"`.
+2. Keep the API running and open `http://<Host IP>:8000/#debug`. Enter your `DEBUG_TOKEN`.
+3. After **Advance Week** in Madden, tap **Scan week** (or **Backfill previous week** for no articles, **Game scan** for last week's box scores). Remote Play takes the console and your controller disconnects. The page displays the real-time log.
+4. When your phone notifies **"your turn"** (~20 min), turn the controller back on. Extract, load, quantitative engines, and newsroom articles continue autonomously.
+5. If a step fails, the notification alerts you to fix it and resume via `#debug` or CLI (`python3 -m pipeline.weekly_capture --resume <folder>`).
+
+### Manual CLI Run
+1. Open chiaki-ng and stream Madden. Be in franchise menus (keep part of the window visible).
+2. Test capture: `python3 madden_capture.py --test`
+3. Run capture: `python3 madden_capture.py`
+4. Run Gemini extraction: `python3 extract.py captures/<folder>`
+
+---
+
+## Safety Rules & Troubleshooting
+- **Screen Verification:** The capture script checks the screen before every keypress and stops if anywhere unexpected.
+- **Safety Locks:** Never presses Cross on the Gameday tab (Advance Week) or on the schedule list (Actions / Force Win).
+- **Quit Prompts:** If the quit prompt appears, it only presses Cross when **NO** is highlighted.
+- **Ctrl-C Safety:** Pressing Ctrl-C at any time releases all virtual keys.
+- **Frozen Streams:** If chiaki-ng stops updating, the script detects it and restarts chiaki-ng (`CHIAKI_HOST` / `CHIAKI_HOST_IP` in `.env`).
+- **Keys Don't Register:** Pass `--foreground` to bring chiaki-ng to the foreground during keystrokes.

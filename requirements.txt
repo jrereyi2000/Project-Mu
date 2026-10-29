@@ -1,0 +1,43 @@
+# Project Mu: Automated Media Engine & Simulation Network
+# Python Dependencies
+
+# Core API & Server
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.8.0
+requests>=2.31.0
+
+# Database (PostgreSQL & Redis)
+psycopg[binary]>=3.2.0
+psycopg-pool>=3.2.0
+redis>=5.0.0
+
+# LLM Swarms, Vision & Newsroom
+google-genai>=1.0.0
+langchain-core>=0.3.0
+
+# Quantitative Analytics, Solvers & Data
+numpy>=1.26.0
+scipy>=1.13.0
+ortools>=9.12.0,<10.0.0  # Pinned <10 to keep protobuf <6 for google-genai compatibility
+pandas>=2.2.0
+
+# Image Processing, Phonetics & Codecs
+pillow>=10.4.0
+opencv-python>=4.10.0
+zstandard>=0.23.0
+metaphone>=0.6
+
+# Testing
+pytest>=8.0.0
+
+# macOS Screen Capture & Local OCR (Apple Vision / Quartz)
+pyobjc-core>=10.0; sys_platform == 'darwin'
+pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'
+pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'
+pyobjc-framework-Vision>=10.0; sys_platform == 'darwin'
+
+# Optional / Specific Workflows
+rembg>=2.0.0             # Background removal for headshots/rookie_headshots.py
+streamlit>=1.35.0        # Internal debug dashboards (dashboards/)
+streamlink>=6.7.0        # Video stream ingestion (pipeline/ingest_stream.py)

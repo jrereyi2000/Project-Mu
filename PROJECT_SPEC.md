@@ -22,6 +22,8 @@ Project Mu/
 ├── CLAUDE.md                  # Claude Code session rules (read this spec first; keep it updated)
 ├── GEMINI.md                  # Same session rules for Gemini agents
 ├── NOTES.md                   # Feature documentation & engineering notes (draft prospects & OCR pipeline)
+├── requirements.txt           # Python dependencies for API, database, engines, pipeline, and newsroom
+├── .env.example               # Environment variables template (Gemini API, PostgreSQL DSN, ntfy, debug token)
 ├── madden_capture.py          # Remote Play capture (macOS + chiaki-ng): drives Madden franchise menus with held keypresses,
 │                              #   checks every screen via Apple Vision OCR, screenshots Season Stats (NFL scope, all categories;
 │                              #   Madden lists the top ~270 per category; Passing/Defense/Kicking: each page also captured scrolled right at the same row position, *_right_NNN.png;
@@ -357,12 +359,16 @@ Project Mu/
 ```
 
 ### 1.2 Running the System
-All Python commands run **from the project root** (relative data paths such as `data/...` and `static/...` resolve against it). Configuration comes from the environment: `DATABASE_URL` (defaults to the local `madden` database; the backfill, every engine, the newsroom, the capture loader and the API all read it, so pointing it at a restored test copy runs everything there) and `GEMINI_API_KEY` (the swarm also reads a root-level `.env`).
+All Python commands run **from the project root** (relative data paths such as `data/...` and `static/...` resolve against it). Configuration comes from the environment: `DATABASE_URL` (defaults to the local `madden` database; the backfill, every engine, the newsroom, the capture loader and the API all read it, so pointing it at a restored test copy runs everything there) and `GEMINI_API_KEY` (the swarm also reads a root-level `.env`, configured from `.env.example`). Python dependencies are installed via `pip install -r requirements.txt`.
 
 | Task | Command |
 |---|---|
+| Initial Python setup | `pip3 install -r requirements.txt` (installs backend, DB, ML/solvers, vision, and macOS capture deps) |
+| Environment config | `cp .env.example .env` (fill in `GEMINI_API_KEY`, `DEBUG_TOKEN`, `DATABASE_URL`) |
+| Frontend setup | `cd Mu_Network && npm install` (Vite + React 19) |
+| Database initialization | `createdb madden && psql -d madden -f db/init_db.sql` |
 | API server | `python3 -m uvicorn server.api:app --host 0.0.0.0 --port 8000 --reload` |
-| Frontend | `cd Mu_Network && npm run dev` (Vite on port 8443) |
+| Frontend dev | `cd Mu_Network && npm run dev` (Vite on port 8443) |
 | Video pipeline | `python3 -m pipeline.main --file data/video/<clip>.mp4 --db` |
 | Read a Madden 27 PC save (not wired in yet) | `cd pipeline/save_reader && npm install && node pc_save_reader.mjs <CAREER-save> --out snapshot.json`; tests: `npm test` |
 | Write Player edits into a copy of a save | `cd pipeline/save_reader && node save_writer.mjs <CAREER-save> edits.json --out <new-save>` |
