@@ -10,12 +10,13 @@ Set up 2026-10-29 from `PC_MODS/` (untracked downloads; see [`MMC_MOD_SURVEY.md`
 | All 71 mods, pre-imported | `C:\Madden27Modding\MMC_Modding_Tools_v1.1.0.7\MMC_ModManager_v1.1.0.7\Mods\Madden27\` |
 | Franchise tools and installers (not run) | `C:\Madden27Modding\Tools\` |
 | Madden 27 | `C:\Program Files\EA Games\Madden NFL 27\` |
+| Mod Manager config (packs) | `C:\Users\jrere\AppData\Local\MMC\manager_config.json` |
 
 The tools have to be on the same drive as the game. Sabos Gameplay Mod 1.0–1.2 (`Old/`) were left out; 1.2.1 replaces them. Fox Scorebug 3.0 was deleted by JR in favour of SimLeagueTV's NFLScorebugs FOX v3.
 
 ## 2. Steps JR does by hand
 
-These replace an EA anti-cheat file and run unsigned downloads as Administrator, so they are not automated.
+These replace an EA anti-cheat file and run unsigned downloads as Administrator, so they are not automated. Steps 1–2 done 2026-10-29: the MMC launcher is in place (EA's original kept as `_EAAntiCheat.GameServiceLauncher.exe`), and the first modded launch ran with a `Default` pack holding only No VRAM Warning; the Mod Manager then wrote `CryptBase.dll` and `ModData\` into the game folder.
 
 1. **Swap the anti-cheat launcher** (ReadMe step 2–3). In `C:\Program Files\EA Games\Madden NFL 27\`, rename `EAAntiCheat.GameServiceLauncher.exe` to `_EAAntiCheat.GameServiceLauncher.exe`, then copy in the one from `C:\Madden27Modding\MMC_Modding_Tools_v1.1.0.7\AC_(PUT IN CFB27 or M27 FOLDER)\`. The game folder's existing `*_b` files are EA's own backups; leave them.
 2. **Mod Manager as Administrator:** right-click `MMCModManager.exe` → Properties → Compatibility → *Run this program as administrator*. On first launch pick Madden 27; the 71 mods should already be listed (if not, *Add Mod* and select them from the `Mods\Madden27` folder).
@@ -49,9 +50,10 @@ In the Mod Manager's applied list, a mod higher up wins any asset it shares with
 
 JR wants the scorebug/network, crowd tier and ball (BCA Pink in October, maybe on chosen players only) picked automatically per game from team popularity and the matchup. What the tools allow:
 
-- `MMCModManager.exe -launch <pack name>` launches the game with a saved pack (strings in the binary; error text "Unable to find pack with name {0}"). Packs are kept in `manager_config.json` in the Mod Manager folder.
+- `MMCModManager.exe -launch <pack name>` launches the game with a saved pack (strings in the binary; error text "Unable to find pack with name {0}").
+- Packs are kept in `C:\Users\jrere\AppData\Local\MMC\manager_config.json` under `Games.Madden27.Packs`, one string per pack: `"<file>.fbmod:True|<file>.fbmod:False|..."` (`True` = enabled), with `Games.Madden27.Options.SelectedPack` naming the active one. Edit it only while the Mod Manager is closed.
 - So one approach: save a pack per combination (e.g. `FOX-Tier1-Mudded`), or rewrite one pack's enabled list in `manager_config.json`, then launch with `-launch`. Project Mu would choose the pack from the week's schedule (network by kickoff window, crowd tier by team popularity/record, October → BCA).
 - Mods are applied at launch, so a change needs a game restart; it fits between games, not mid-game.
 - Pink gear on only some players would mean editing the BCA mod in MMC Editor (it replaces shared textures, so it is all-or-nothing as shipped).
 
-First step once the Mod Manager has run: read the `manager_config.json` it writes to learn the pack format.
+First check: confirm the list order in the pack string is the applied-list order (top first) by building a two-mod pack in the UI.
