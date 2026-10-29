@@ -79,6 +79,17 @@ class MappingTest(unittest.TestCase):
         d = ls.group_lines([{"stats": {"DEFTACKLES": 5, "ASSDEFTACKLES": 2, "DLINESACKS": 1, "DLINEHALFSACK": 1}}])["defense"]
         self.assertEqual((d["solo"], d["assists"], d["tackles"], d["sacks"]), (5, 2, 7, 1.5))
 
+    def test_team_box(self):
+        box = ls.team_box({"FIRSTDOWNS": 17, "OFFYARDS": 405, "TOTALYARDS": 483, "RUSHATTEMPTS": 30, "PASSATTEMPTS": 38,
+                           "SACKSALLOWED": 2, "OFFRUSHYARDS": 118, "OFFPASSYARDS": 287, "THIRDDOWNS": 18,
+                           "THIRDDOWNCONV": 8, "GIVEAWAYS": 1, "OFFREDZONES": 4, "OFFREDZONETDS": 2, "OFFREDZONEFGS": 1,
+                           "PENALTIES": 11, "PENALTYYARDS": 119, "POSSESSIONTIME": 2166})
+        self.assertEqual((box["total_offense"], box["total_yards_gained"], box["rushing_yards"], box["passing_yards"]),
+                         (405, 483, 118, 287))
+        self.assertEqual((box["total_plays"], box["third_down_conversions"], box["turnovers"]), (70, 8, 1))
+        self.assertEqual((box["red_zone_attempts"], box["red_zone_pct"], box["time_of_possession_s"]), (4, 75.0, 2166))
+        self.assertIsNone(ls.team_box({})["red_zone_pct"])
+
     def test_line_team_is_opposite_the_opponent(self):
         game = {"home_team_index": 3, "away_team_index": 7}
         self.assertEqual(ls.line_team([{"opponent_team_index": 3}], game, 30, 70, 99), 70)
@@ -116,6 +127,8 @@ class SaveValuesTest(unittest.TestCase):
         self.assertEqual(ls.injury_values({"type": "AnkleHighSprain", "min_weeks": 2, "max_weeks": 4, "injured_reserve": True}),
                          ("ANKLE HIGH SPRAIN", "2 - 4 WEEKS", 4, True))
         self.assertEqual(ls.injury_values({"type": "X", "min_weeks": -1, "max_weeks": 3})[1:3], ("0 - 3 WEEKS", 3))
+        healed_on_ir = {"status": "Uninjured", "type": "Invalid_", "min_weeks": -1, "max_weeks": 0, "injured_reserve": True}
+        self.assertEqual(ls.injury_values(healed_on_ir), (None, "WEEK TO WEEK", 1, True))
 
     def test_scoring_highlights_add_up_with_conversions(self):
         game = tiny_snapshot()["games"][0]
@@ -158,6 +171,8 @@ def tiny_snapshot():
             {"row": 1, "franchise_year": 1, "week_type": "RegularSeason", "week_index": 0, "status": "HomeWon",
              "home_team_index": 0, "away_team_index": 1, "home_score": 21, "away_score": 10,
              "home_quarters": [7, 7, 0, 7], "away_quarters": [3, 0, 7, 0], "home_ot": 0, "away_ot": 0,
+             "home_team_stats": {"FIRSTDOWNS": 19, "OFFYARDS": 351, "OFFPASSYARDS": 251, "OFFRUSHYARDS": 100,
+                                 "PASSATTEMPTS": 27, "PASSTDS": 3, "RUSHATTEMPTS": 24, "GIVEAWAYS": 0},
              "scoring_plays": [
                  {"quarter": 1, "seconds_left": 600, "home_before": 0, "away_before": 0, "home_after": 6, "away_after": 0},
                  {"quarter": 1, "seconds_left": 120, "home_before": 7, "away_before": 0, "home_after": 7, "away_after": 3},
@@ -231,6 +246,12 @@ class LoadTinySnapshotTest(unittest.TestCase):
         home = self.one("SELECT score, q1, q2, q3, q4, ot, passing_completions, passing_tds FROM team_stats "
                         "WHERE game_id = %s AND team_name = (SELECT name FROM teams WHERE abbreviation = 'CHI')", game[0])
         self.assertEqual(home, (21, 7, 7, 0, 7, 0, 22, 3))
+        box = self.one("SELECT total_offense, passing_yards, rushing_yards, first_downs FROM team_stats "
+                       "WHERE game_id = %s AND team_name = (SELECT name FROM teams WHERE abbreviation = 'CHI')", game[0])
+        self.assertEqual(box, (351, 251, 100, 19))                               # from Madden's team box score
+        away = self.one("SELECT passing_attempts, total_offense FROM team_stats WHERE game_id = %s "
+                        "AND team_name = (SELECT name FROM teams WHERE abbreviation = 'AZ')", game[0])
+        self.assertEqual(away, (0, 0))                                           # no box score: line totals only
 
         season = self.one("SELECT pass_yards, pass_tds, source FROM season_stats WHERE season = %s AND player_id = %s",
                           TEST_SEASON, qb[0])
@@ -352,6 +373,21 @@ class LoadSampleSaveTest(unittest.TestCase):
         self.assertGreater(len(got), 500)
         off = [k for k in got if got[k] != want[k]]
         self.assertLess(len(off) / len(got), 0.05, f"{len(off)} of {len(got)} cap hits differ from the save's cap salary")
+
+    def test_team_box_scores_match_the_game_lines(self):
+        """Every completed game has Madden's team box score; its rushing yards and attempts equal the team's player
+        lines wherever Madden has linked them."""
+        ls.load_snapshot(self.cur, self.snapshot, season=TEST_SEASON)
+        self.cur.execute("""
+            SELECT count(*) FILTER (WHERE t.total_offense = 0) FROM team_stats t JOIN games g ON g.id = t.game_id
+            WHERE g.season = %s AND g.status = 'COMPLETED'""", (TEST_SEASON,))
+        self.assertEqual(self.cur.fetchone(), (0,))
+        self.cur.execute("""
+            SELECT t.game_id, t.team_name FROM team_stats t JOIN games g ON g.id = t.game_id JOIN teams tm ON tm.name = t.team_name
+            JOIN (SELECT game_id, team_id, SUM(rush_yards) ry, SUM(rush_attempts) ra FROM player_stats GROUP BY 1, 2) l
+              ON l.game_id = t.game_id AND l.team_id = tm.id
+            WHERE g.season = %s AND (l.ry, l.ra) <> (t.rushing_yards, t.rushing_attempts)""", (TEST_SEASON,))
+        self.assertEqual(self.cur.fetchall(), [])
 
     def test_every_completed_game_scores_add_up(self):
         ls.load_snapshot(self.cur, self.snapshot, season=TEST_SEASON)

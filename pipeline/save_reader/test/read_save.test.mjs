@@ -35,6 +35,10 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
       const sum = q => q.reduce((a, b) => a + b, 0);
       assert.equal(sum(g.home_quarters) + g.home_ot, g.home_score, `home quarters add up (game row ${g.row})`);
       assert.equal(sum(g.away_quarters) + g.away_ot, g.away_score, `away quarters add up (game row ${g.row})`);
+      for (const side of ['home', 'away']) {
+        const ts = g[`${side}_team_stats`];
+        assert.ok(ts && Number.isInteger(ts.OFFYARDS), `${side} team box score (game row ${g.row})`);
+      }
     }
   }
 

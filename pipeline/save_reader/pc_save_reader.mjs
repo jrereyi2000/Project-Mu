@@ -18,7 +18,7 @@ import {
   arrayRefs, calendarYear, decodeRef, isExportableGame, numberedFields, pickRatings, plainFields, STAT_KINDS, weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 2;
+export const READER_VERSION = 3;
 
 const STAT_REF_FIELDS = ['SeasonGame', 'OpposingTeam'];
 
@@ -113,6 +113,8 @@ async function readGames(tables, gameTable, teamTableId, teamIndexByRow, baseCal
         precipitation: g.Precipitation, cloud_cover: g.CloudCover,
       },
       scoring_plays: await readScoringPlays(tables, g.ScoringSummaries),
+      home_team_stats: await readTeamStats(tables, g.HomeTeamStatCache),
+      away_team_stats: await readTeamStats(tables, g.AwayTeamStatCache),
     };
     if (isExportableGame(game)) games.push(game);
   }
@@ -138,6 +140,18 @@ async function readScoringPlays(tables, bits) {
     });
   }
   return plays;
+}
+
+// SeasonGame.Home/AwayTeamStatCache → a TeamStats row: the team box score (yards, first downs, third downs,
+// penalties, possession time, red zone, giveaways). Filled for played games, including the latest week, whose
+// player lines Madden hasn't linked yet (§5.4).
+async function readTeamStats(tables, bits) {
+  const ref = decodeRef(bits);
+  if (!ref) return null;
+  const t = await tables.byId(ref.table);
+  const s = t?.records[ref.row];
+  if (!s || s.isEmpty) return null;
+  return plainFields(s, fieldNames(s));
 }
 
 async function readContract(tables, bits) {
