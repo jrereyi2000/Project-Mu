@@ -8,10 +8,12 @@ prerequisites needed to start a brand new franchise save with native PC save loa
   2. 32 NFL Franchises in `teams` (abbreviations, colors, stadiums, divisions)
   3. `league_state` initialized to the designated starting season and week (e.g. 2024, 2025, 2026)
   4. `gm_team_settings` populated for all 32 teams with user-control flags
-  5. NFL Baseline Record Book (real NFL history through 2025: categories, franchise records, top 10s)
+  5. NFL Baseline Record Book (real NFL history through 2025: categories, franchise records, top 10s; the old
+     universe's 2026-2035 'BOOK' rows that two of its migrations load are deleted)
   6. Real NFL Head Coaches & Coordinators with schemes, slants, and starting tenures
   7. 32 GM Personas & 3 Draft Classes of Draft Capital (`draft_picks` via engines.gm_personas)
-  8. 192+ Newsroom Media Writer Personas into `personas`, `persona_sliders`, `persona_traits`
+  8. Newsroom writers: the 38 archetype personas (agent_personas.json) into `persona_sliders`, `persona_traits`,
+     `persona_views`, and the 218 writer/social accounts (newsroom/config/agent_accounts.json) into `agent_memories`
   9. Default Napper Fantasy user profile
 
 Usage:
@@ -19,12 +21,14 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
 import psycopg
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+AGENT_ACCOUNTS_PATH = REPO_ROOT / "newsroom" / "config" / "agent_accounts.json"
 
 TEAMS_DATA = [
     # (name, city, abbreviation, team_color, stadium_name, conference, division)
@@ -232,6 +236,32 @@ def seed_records(cur):
     ]
     for mf in migration_files:
         execute_sql_file(cur, mf)
+    # 2026_10_28 and 2026_11_15 also load the old Mu universe's 2026-2035 record book (source 'BOOK'); a fresh
+    # franchise starts from real NFL history only. The BOOK categories stay, empty until this league sets them.
+    cur.execute("DELETE FROM franchise_records WHERE source <> 'NFL';")
+    cur.execute("DELETE FROM league_record_entries WHERE source <> 'NFL';")
+
+
+def seed_agent_accounts(cur, team_ids: dict[str, int], path: Path = AGENT_ACCOUNTS_PATH) -> int:
+    """Seeds the newsroom's writer and social accounts (agent_memories identity rows) from agent_accounts.json."""
+    with open(path) as f:
+        accounts = json.load(f)["accounts"]
+    for a in accounts:
+        cur.execute("""
+            INSERT INTO agent_memories (agent_id, archetype, assigned_team_id, persistent_memory, handle,
+                                        display_name, bio, avatar_color)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (agent_id) DO UPDATE SET
+                archetype = EXCLUDED.archetype,
+                assigned_team_id = EXCLUDED.assigned_team_id,
+                persistent_memory = EXCLUDED.persistent_memory,
+                handle = EXCLUDED.handle,
+                display_name = EXCLUDED.display_name,
+                bio = EXCLUDED.bio,
+                avatar_color = EXCLUDED.avatar_color;
+        """, (a["agent_id"], a["archetype"], team_ids.get(a["team"]) if a["team"] else None,
+              a["persistent_memory"], a["handle"], a["display_name"], a["bio"], a["avatar_color"]))
+    return len(accounts)
 
 
 def seed_coaches_and_coordinators(cur, team_ids: dict[str, int], season: int):
@@ -387,7 +417,8 @@ def run_clean_seed(
                 from newsroom.personas import seed_writers_to_db
                 writers_count = seed_writers_to_db(cur)
                 report["writers_seeded"] = writers_count
-                log(f"   Seeded {writers_count} writer personas into DB tables.")
+                report["agent_accounts"] = seed_agent_accounts(cur, team_ids)
+                log(f"   Seeded {writers_count} writer personas and {report['agent_accounts']} writer/social accounts.")
             else:
                 log("7. Skipping writer personas.")
 
