@@ -9,11 +9,13 @@
 # Agent season summaries are built from those takes, so they are deleted too, and Agent Wire trends
 # (social_trends) are cleared whenever posts are deleted. Replies cascade with their parent post. The backup is written to
 # db/backups/news_feed_backup_<timestamp>.sql first; restore it with:
-#   docker exec -i madden-db psql -U postgres -d madden < db/backups/news_feed_backup_<timestamp>.sql
+#   docker exec -i madden-db psql -U postgres -d <database> < db/backups/news_feed_backup_<timestamp>.sql
+# The database is MU_DB if set, else the active franchise (db/franchises.py).
 set -euo pipefail
 
 CONTAINER=madden-db
-PSQL=(docker exec -i "$CONTAINER" psql -U postgres -d madden -v ON_ERROR_STOP=1 -At)
+DB="${MU_DB:-$(cd "$(dirname "$0")/.." && python3 -m db.franchises dbname)}"
+PSQL=(docker exec -i "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 -At)
 
 ARTICLES_ONLY=false
 SEASON=""
@@ -98,7 +100,7 @@ for T in power_rankings agent_memory_entries agent_predictions agent_season_summ
 done
 BACKUP="$(dirname "$0")/backups/news_feed_backup_$(date +%Y%m%d_%H%M%S).sql"
 mkdir -p "$(dirname "$BACKUP")"
-docker exec "$CONTAINER" pg_dump -U postgres -d madden --data-only "${TABLES[@]}" > "$BACKUP"
+docker exec "$CONTAINER" pg_dump -U postgres -d "$DB" --data-only "${TABLES[@]}" > "$BACKUP"
 echo "Backup written: $BACKUP"
 
 if [ "$CONFIRM_YES" = false ]; then

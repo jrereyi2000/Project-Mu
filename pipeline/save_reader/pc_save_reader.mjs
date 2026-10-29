@@ -18,7 +18,7 @@ import {
   arrayRefs, calendarYear, decodeRef, isExportableGame, numberedFields, pickRatings, plainFields, STAT_KINDS, weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 2;
+export const READER_VERSION = 3;
 
 const STAT_REF_FIELDS = ['SeasonGame', 'OpposingTeam'];
 
@@ -233,6 +233,8 @@ export async function readSave(savePath) {
   try {
     const tables = tableReader(franchise);
     const info = (await tables.byName('SeasonInfo')).records[0];
+    // Franchise.LeagueID is random per franchise and kept across saves and weeks (pipeline/watch_save.py routes on it).
+    const franchiseInfo = (await tables.byName('Franchise')).records[0];
     const teamTable = await tables.byName('Team');
     const gameTable = await tables.byName('SeasonGame');
     const playerTable = await tables.byName('Player');
@@ -251,6 +253,7 @@ export async function readSave(savePath) {
         schema_expected: franchise.expectedSchemaVersion,
         schema_used: franchise.schema.meta ?? null,
       },
+      franchise: { league_id: franchiseInfo.LeagueID },
       season,
       teams,
       games,

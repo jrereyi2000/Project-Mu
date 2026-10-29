@@ -76,11 +76,12 @@ def _is_scratch_db(dbname: str) -> bool:
 def _check_connection_allowed(conninfo: str, kwargs: dict) -> None:
     dbname = _extract_dbname(conninfo, kwargs)
 
-    # 1. Absolute ban on connecting to the live 'madden' database
-    if dbname == "madden":
+    # 1. Absolute ban on connecting to the live databases: legacy 'madden', the frozen 'madden_2036' archive, and
+    #    every franchise database (madden_<slug>, db/franchises.py); only madden_test is open to tests
+    if dbname == "madden" or (dbname.startswith("madden_") and dbname != TEST_DB_NAME):
         item_name = _CURRENT_ITEM.nodeid if _CURRENT_ITEM is not None else "<collection/import>"
         raise LiveDatabaseAccessForbiddenError(
-            f"[{item_name}] Attempted connection to live 'madden' database ({conninfo!r}) "
+            f"[{item_name}] Attempted connection to live database {dbname!r} ({conninfo!r}) "
             f"is strictly forbidden during pytest!"
         )
 
