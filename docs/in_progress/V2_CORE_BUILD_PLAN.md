@@ -1,6 +1,6 @@
 # Project Mu: V2 Core Build Plan
 
-**Status:** approved by JR (2026-10-30); building, wave 3 of 6 (U7, U8 running; U9 waits for spike R3).
+**Status:** approved by JR (2026-10-30); building, wave 3 of 6 done.
 - *As built (wave 1):* U2's `sign` to a Roster needs a PlayerContract row that no schema field references, and the sample save has none (its one unreferenced row is held by a PersonaNegotiationPackage). Today a Roster signing works only when a release in the same write frees a row. Free agency signs more players than it releases, so creating contract rows (the library can un-empty a table row) is a follow-up to settle with spike R1 before U11/U13 rely on it.
 - *As built (wave 1):* practice-squad players have no contract row and stay listed in `League.FreeAgents` (sample save), so a PracticeSquad signing links no contract and leaves the free-agent list alone.
 - *As built (wave 1):* U3 maps offseason stages to league_state weeks in `contracts_engine.OFFSEASON_STAGE_WEEKS` (OFFSEASON_START 24, RESIGN 25, FREE_AGENCY 26, DRAFT 29, UDFA 30, CUTDOWN 31, PRESEASON 32; estimates). U13's `detect_stage` must use the same mapping.
@@ -8,6 +8,9 @@
 - *As built (wave 2):* the save's 35 DepthChart field names (U6 `POSITION_SLOTS`) differ from V2_MASTER_PLAN §2.2's labels: slot WR is `SLWR`, rush ends `RLE`/`RRE`, rush DT `RDT`, slot CB `SLCB`, sub LB `SUBLB`, plus `NT`, `PWHB`, `GAD`, `KOS`. Every unit uses the save's names.
 - *As built (wave 2):* U4's snapshot adds `players[].confidence` and `players[].traits` ({PT_*: bool}, nested) and a `field` key on each slider entry; LeagueSetting references decode as plain 32-bit ints under schema 620 (`lib.mjs refFromValue`).
 - *As built (wave 2):* U5's `run_wave` doesn't check cap or roster limits (offers carry `team` and `market` context); U11 `cpu_offers` must. `acceptance` takes `best = {offer, team, market, score?, bar_shift?}`; street/UDFA markets take `needs = {team_id: {needs, starter_ovr?, roster_spots?, …}}`.
+- *As built (wave 3):* U7 ran the real backtest and `--simulate 5` on `madden_test` (MAE 1.134; 90+ count 143–147). `dev_after` = `dev_before` until phase H; 'Superstar X-Factor' is stored as 'X-Factor' because `dev_before`/`dev_after` are varchar(16) (widening them is a one-line follow-up migration). `run_progression` gained an optional `traits=` kwarg.
+- *As built (wave 3):* U8 skips loading depth charts outside the regular season and playoffs (no week); U13 can store offseason charts under `OFFSEASON_STAGE_WEEKS`. drift_check reads base ratings from the newest `player_attributes` row and the newest `player_form` overlay.
+- *As built (wave 3):* U9 was built before spike R3: `dev_flag_edit` returns None with a warning until `pc_save_reader.mjs` fills `league_settings.dev_trait_regression_field` (a one-line follow-up once JR flips the setting on a save). JR can turn dev-trait regression off in the menu meanwhile (it isn't a slider the menu clamps).
 - *As built (wave 1):* U1's agent had no database (Docker was down); the orchestrator ran its checks (migration applied twice to `madden_test`, `init_db.sql` built on an empty database).
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2–§5, §7; [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) phases C2, D, E; [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) (absorbed, D2); PROJECT_SPEC §2.17, §2.21, §3.3d, §3.3n, §6.0b.
 
@@ -655,3 +658,4 @@ Each line becomes its own plan. "Needs" is what must be built first; "Alongside"
 | U6 | 2 | worktree-agent-af28754863db29059 | .claude/worktrees/agent-af28754863db29059 | merged (23 tests pass) | 7f8f901 |
 | U8 | 3 | worktree-agent-a4472cad170148473 | .claude/worktrees/agent-a4472cad170148473 | merged (34 tests pass; load_save/watch_save/drift 76 pass on main; resumed once after the usage limit) | 49f093f |
 | U7 | 3 | worktree-agent-a34b5a1445e3ec66c | .claude/worktrees/agent-a34b5a1445e3ec66c | merged (33 unit tests; real backtest and --simulate 5 ran on madden_test: MAE 1.134, 90+ count 143–147; resumed once after the usage limit) | 088816c |
+| U9 | 3 | worktree-agent-ae2a9a6565396189f | .claude/worktrees/agent-ae2a9a6565396189f | merged (16 tests incl. the sample save through save_writer.mjs) | e3b9014 |
