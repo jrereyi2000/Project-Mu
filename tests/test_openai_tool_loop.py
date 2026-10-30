@@ -525,7 +525,8 @@ class TestOpenAIToolLoop(unittest.TestCase):
 
 class TestGeminiToolLoop(unittest.TestCase):
     def test_gemini_missing_api_key_returns_error(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
             result = run_gemini_tool_loop(
                 client=None,
                 model="gemini-3.8-flash",
