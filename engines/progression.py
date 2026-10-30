@@ -48,7 +48,7 @@ from engines.dev_quality import (
 from engines.gm_direction import position_group
 from engines.trade_value import read_fit_rows, fit_aging, age_band, AGE_BANDS
 from pipeline.load_save import POSITIONS
-from pipeline.teleport import TO_MADDEN_POSITION, madden_archetype, settle_archetype
+from pipeline.madden_player_edit import TO_MADDEN_POSITION, madden_archetype, settle_archetype
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
