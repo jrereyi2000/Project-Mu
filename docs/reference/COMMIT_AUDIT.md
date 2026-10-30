@@ -68,7 +68,7 @@ claude -p "<explicit prompt: review base..head for correctness bugs, report-only
   --permission-mode dontAsk \
   --allowedTools Read Grep Glob "Bash(git log:*)" "Bash(git show:*)" "Bash(git diff:*)" \
                  "Bash(git blame:*)" "Bash(git rev-parse:*)" "Bash(git ls-files:*)" "Bash(git cat-file:*)" \
-  --disallowedTools Edit Write NotebookEdit MultiEdit \
+  --disallowedTools Edit Write NotebookEdit \
   --output-format text \
   --tools Read,Grep,Glob,Bash --permission-prompts none --no-session-persistence
 ```

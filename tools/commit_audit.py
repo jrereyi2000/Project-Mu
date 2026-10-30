@@ -49,7 +49,7 @@ _sleep, _clock = time.sleep, time.time  # swapped out by tests
 REVIEW_TOOLS = "Read,Grep,Glob,Bash"
 REVIEW_ALLOWED = ["Read", "Grep", "Glob"] + [f"Bash(git {c}:*)" for c in
                                              ("log", "show", "diff", "blame", "rev-parse", "ls-files", "cat-file")]
-REVIEW_DENIED = ["Edit", "Write", "NotebookEdit", "MultiEdit"]
+REVIEW_DENIED = ["Edit", "Write", "NotebookEdit"]  # every name must be a tool the CLI knows, or the run exits 1
 
 
 def _env_float(key, default):
