@@ -236,6 +236,13 @@ Project Mu/
 │   ├── fantasy_tools.py       #   Fantasy research tools (FANTASY_TOOLS), given only to FANTASY_* article types
 │   ├── fantasy_desk.py        #   Fantasy Editorial Matrix: weekly fantasy slots, Card 03 schedule, fantasy calendar + desk rules
 │   ├── custom_commission.py   #   On-demand article commissioning: Gemini prompt-to-type classification, writer matching, ReAct swarm dispatch
+│   ├── tool_loop/             #   Dual ReAct tool execution engine for Gemini AFC & OpenAI-compatible endpoints (docs/in_progress/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
+│   │   ├── models.py          #     ToolLoopResult dataclass (text, usage, tool_calls_count, iterations, error)
+│   │   ├── schema.py          #     python_func_to_openai_tool: schema converter from callables, docstrings, type annotations, and Pydantic models
+│   │   ├── openai_loop.py     #     run_openai_tool_loop: multi-turn OpenAI tool calling loop with JSON arg parsing, error recovery, and usage tracking
+│   │   ├── gemini_loop.py     #     run_gemini_tool_loop: encapsulates Gemini AFC with wrapper logging and fallback synthesis
+│   │   ├── router.py          #     execute_agent_tool_loop: unified dispatcher routing by provider (gemini vs openai/ollama/vllm/deepseek/glm)
+│   │   └── README.md          #     Architecture, specifications, and provider routing guide
 │   └── config/                #   agent_personas.json (structured personas, §7.11), agent_accounts.json (the 199 writer/social accounts db/seed_clean_db.py writes to agent_memories), persona_traits.json (trait catalogue),
 │                              #   article_types.json, article_structure_directives.json,
 │                              #   curatorial_autonomy_directives.json, playoff_overrides.json,
@@ -276,6 +283,7 @@ Project Mu/
 ├── pytest.ini                 # Pytest configuration registering the @pytest.mark.integration tier
 ├── tests/                     # test_*.py suite: offline unit tier (pytest -m "not integration") + isolated madden_test integration tier (pytest -m integration)
 │   ├── conftest.py            #   Live-DB firewall: blocks all connections to live 'madden', the `madden_2036` archive and every franchise database (`madden_*` other than madden_test), blocks unmocked DB access in unit tests, routes @pytest.mark.integration tests to madden_test (--recreate-test-db), and autouse fixture guards unit tests from logging to llm_usage
+│   ├── test_openai_tool_loop.py # Unit tests for tool schema converter, OpenAI multi-turn loop, Gemini AFC loop, and router
 │   ├── fixtures/attributes/   #   Two labelled grayscale crops of the wide roster list (PUR..INJ, AGE..STR; labels.json: cell centres, values, which columns train the templates, highlighted row) for test_attribute_reader.py
 │   └── fixtures/prospects_board.csv # 40-row draft board with blank cells and a nameless row (draft tests never read data/ or captures/)
 ├── tools/
@@ -2138,4 +2146,14 @@ Personality plan phases 1, 2, and 3 (`docs/in_progress/PERSONALITY_PLAN.md`): pe
 **Tests:** `tests/test_personas.py` (Phase 1 structure: slider budget, trait mix and conflicts, known tags, views, signatures, tone constraints, signals, view selection, avoid list, database fallback); `tests/test_personas_db.py` (Phases 2 & 3: 33 tests covering catalogue integrity, slider budget math, conflict symmetry, deterministic seeding, DB persistence, fallback resilience when tables are missing, GM integration, and debug API endpoints).
 
 **Comparison:** `python3 tools/persona_side_by_side.py [--season 2036] [--week 12] [--slate 4] [--barnwell-weeks 8 12 16] [--model M]` writes the week's first national slate articles (beat and fantasy skipped) plus a Barnwell column for each given week twice, with the old personas (`article_personas` over `archetypes`) and old writer slate filters read from git at `6b8aa81`, and with the current ones; nothing is saved to `news_feed` or memory (Gemini calls still log to `llm_usage`). Output: both persona blocks, headlines, texts and simple measures (words, regression mentions, a Regression Warning heading, subheadings) in `verify_output/persona_side_by_side_<season>_w<week>.md` and `.json`.
+
+### 7.12 Dual ReAct Tool Execution Engine (`newsroom/tool_loop/`)
+Dual ReAct tool calling architecture for newsroom writer agents (docs/in_progress/PC_MIGRATION_PLAN.md §7.3, §7.4; docs/not_started/PRE_PC_WORK_2.md Item A6). Encapsulates Gemini AFC while providing a drop-in multi-turn tool execution loop for OpenAI-compatible endpoints (DeepSeek V4.1 Flash, GLM-5.3-Flash, vLLM, Ollama `qwen2.5:14b`, OpenAI).
+- **Schema Converter (`newsroom/tool_loop/schema.py`):** `python_func_to_openai_tool(fn) -> dict` converts Python callables, docstrings (Google/Sphinx), type hints, LangChain tools (`@tool`, `args_schema`), and Pydantic `BaseModel` classes into standard OpenAI tool definitions `{"type": "function", "function": {"name": ..., "description": ..., "parameters": {...}}}`. Excludes `*args`/`**kwargs` and accurately determines required fields.
+- **OpenAI Multi-Turn Loop (`newsroom/tool_loop/openai_loop.py`):** `run_openai_tool_loop(client, model, system_instruction, prompt, tools, max_steps=50, temperature=0.7) -> ToolLoopResult`. Drives `client.chat.completions.create(model=model, messages=messages, tools=openai_tools)`. Handles assistant message creation, robust JSON argument parsing (returns descriptive errors to model if malformed), execution of target Python callbacks with console logging, appending tool response messages, and turns continuation up to `max_steps`. Includes automatic fallback synthesis if the model completes research without final markdown text.
+- **Gemini AFC Loop (`newsroom/tool_loop/gemini_loop.py`):** `run_gemini_tool_loop(client, model, system_instruction, prompt, tools, temperature=0.7, max_steps=50) -> ToolLoopResult`. Encapsulates `newsroom/swarm_dispatcher.py` (lines 1494–1540), preserving logging wrappers, signature preservation via `@functools.wraps`, AFC configuration (`maximum_remote_calls=max_steps`), token tracking via `UsageMeter` / `usage_metadata`, and fallback synthesis prompts.
+- **Router (`newsroom/tool_loop/router.py`):** `execute_agent_tool_loop(provider, client, model, system_instruction, prompt, tools, **kwargs) -> ToolLoopResult`. Dispatches to `run_gemini_tool_loop` if `provider == "gemini"` or `run_openai_tool_loop` if `provider in ("openai", "ollama", "vllm", "deepseek", "glm")`. Infers provider from model prefix or `LLM_PROVIDER` if omitted.
+- **Standardized Result Model (`newsroom/tool_loop/models.py`):** `ToolLoopResult(text: str, usage: dict, tool_calls_count: dict[str, int], iterations: int, error: Optional[str])`.
+- **Tests:** `tests/test_openai_tool_loop.py` (28 tests covering schema conversion, multi-turn loop, parallel calls, tool errors, malformed JSON, max_steps, fallback synthesis, usage accumulation, Gemini AFC encapsulation, and provider routing).
+
 
