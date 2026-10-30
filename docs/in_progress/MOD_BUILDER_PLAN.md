@@ -1,6 +1,6 @@
 # Project Mu: Mod Builder Plan
 
-**Status:** approved by JR (2026-10-30); building, wave 0 of 2 (spike S-a/S-b/S-c, needs JR at the PC).
+**Status:** approved by JR (2026-10-30); building, wave 0 of 2: S-c passed, S-a half done (no admin needed; screen control waits on a new session), S-b not started.
 **Builds on:** [`MOD_REVERSE_ENGINEERING.md`](../reference/MOD_REVERSE_ENGINEERING.md) §1, §5, §6; [`MOD_INSTALL.md`](../MOD_INSTALL.md) §1, §4; PROJECT_SPEC §1.1 (`tools/fbmod_inspect.py`, `pipeline/mod_packs.py`).
 
 **Goal:** JR describes a mod idea ("make the first-down line yellow", "give the Jaguars and Vikings pink home jerseys") and Claude builds a working `.fbmod` with MMC Editor, puts it in a test pack, and tells JR how to check it in game. There are two ways to drive the editor: Claude works the editor's window with computer-use, or a small console program runs MMC's own libraries with no window. The window route works for anything the editor can do. The console route is for the steps that repeat (texture import, colour edits, export). Both end at the editor's own export, the only thing that makes mods the Mod Manager accepts (payloads are `FMENC001`-encrypted, MOD_REVERSE_ENGINEERING §1). This is only for JR's own mods: it never decrypts other authors' mods and never copies MMC's DLLs anywhere.
@@ -142,6 +142,25 @@ Computer-use on the Windows desktop drives `MMCEditor.exe`, following the runboo
 - **S-a:** computer-use `request_access` for MMC Editor. Can it read the screen, click the Data Explorer, type in the search box? Does the editor need admin?
 - **S-b:** build the yellow first-down mod by hand through the window: export the texture, recolour it with Pillow in WSL, import it, export the mod. Write down every screen. JR loads it in game. This proves the whole chain and gives us a known-good mod for R3.
 - **S-c:** a 30-line `csc.exe` program that loads FrostySdk from the editor folder, initializes the Madden27 profile, prints the game build, and lists one asset name, then writes a file to a `\\wsl` path. Pass means U2 goes ahead. Fail means U2 is dropped and U3 is written for the window route only.
+
+**Spike results (2026-10-30):**
+- **Admin (S-a, D1):** neither `MMCEditor.exe` nor `MMCModManager.exe` asks for admin (both manifests are `requestedExecutionLevel level="asInvoker"`). MMC Editor started from WSL with `Start-Process` runs normally (window "Frosty Editor: MMC Edition - 1.1.0.7"). `C:\Program Files\EA Games\Madden NFL 27\` gives `BUILTIN\Users` read/execute only, so anything that writes there (the Mod Manager launching the game with `CryptBase.dll`, the anti-cheat launcher swap) fails without admin. The fix is a one-time grant of Modify on that folder to JR's account, not elevation. Nothing here needs a Task Scheduler task.
+- **Screen control (S-a):** computer-use only accepts apps in its Start-menu list, which it reads when the session starts. Start-menu shortcuts "MMC Editor" and "MMC Mod Manager" were added to `%APPDATA%\Microsoft\Windows\Start Menu\Programs\` (2026-10-30). Screen control works from a session started after that.
+- **Console route (S-c): passed.** `csc.exe` (v4.0.30319, C# 5, x64) builds against the editor's DLLs, which are loaded from the editor folder by an `AssemblyResolve` handler (none are copied). Spike programs are in `C:\Madden27Modding\MuHarness\spike\` (`Probe.cs`, `Types.cs`, `Fields.cs`, `Calls.cs`, `Init.cs`). The working start-up sequence, about 10 s per run:
+  1. `[STAThread]`, then `Environment.CurrentDirectory` = the editor folder.
+  2. `ProfilesLibrary.Initialize(new Profile[0])` (loads the embedded `FrostySdk.Profiles.bin`), then `ProfilesLibrary.Initialize("Madden27")`.
+  3. Resolve the assembly name `EbxClasses` to `Profiles\MADDEN27SDK.dll` with `Assembly.LoadFile`, cached and guarded against re-entry (without the guard it overflows the stack). Then `TypeLibrary.Initialize(true)`.
+  4. `new FileSystemManager(gamePath)`, `AddSource` for each `ProfilesLibrary.Sources`, then `Initialize(null)`. That gives head 3468304 and 20 catalogs; the profile says `RequiresKey`, but no key was needed.
+  5. `ResourceManager` and `AssetManager` (`Initialize(true, new AssetManagerImportResult())`): 1,451,484 ebx, using the existing cache.
+  6. Set the `Frosty.Core.App` globals (`AssetManager`, `ResourceManager`, `FileSystemManager`, `Logger`, `IsEditor`, `SelectedProfile`, `NotificationManager`, and `PluginManager` with `PluginManagerType.Editor` and `Initialize()`), plus `Config.Load` on a file holding `{}`.
+- **What works headlessly:**
+  - Looking up the first-down texture (`TextureAsset`, 4×512 `BC7_UNORM`, 10 mips; orange `(252,106,41)`).
+  - `TextureExporter.Export(tex, png, "*.png")`.
+  - `FrostyProject.Save` and `FrostyProject.WriteToMod(path, GetModSettings())`, with `ModSettings` Title, Author, Version, Category and Description set by property name.
+  - Writing to `\\wsl.localhost\Ubuntu\...` paths (R4 retired).
+- **What doesn't yet:** `TextureImporter.Import` and `ImportDdsBytes` both run their work inside `FrostyTaskWindow.Show`, a WPF window whose BAML needs the editor's theme resources. It throws without them, so the mod written (262 bytes) is empty. The callback's steps (read from its IL with `Calls.cs`) are all public SDK calls: `FrostyTextureEditor.ConvertImageToDDS`, read the `DDSHeader`, build a `new Texture(...)`, `CalculateMipData`, `AssetManager.ModifyChunk` (or `AddChunk` when `ProfilesLibrary.MustAddChunks`), `Texture.SetData`, set `AssetNameHash`, `AssetManager.ModifyRes`, `EbxAssetEntry.LinkAsset`. **U2 does texture import by making these calls itself, with no window** (Frosty Toolsuite's `TextureImporter.cs` is the reference). Inputs are made in WSL: `data/mod_builds/yellow_first_down/work/firstdown_yellow.png` (hue set to 50°, saturation and value kept) and `firstdown_yellow.dds` (RGBA8, 10 mips, `headshots/portrait_converter/dds.py`).
+- **Never call:** the editor DLLs also hold `FrostyModCryptor.Decrypt`, `FrostyModKeyProvider` and `FrostyModReader.GetResourceData`. The harness must not call these, so other authors' mods are never decrypted (§1 Out). U2's code review checks for them.
+- **Still to do:** S-a screen control in a new session, then S-b (the window runbook and the window-made yellow mod). U1 doesn't depend on the spike and can start now. U2 can also start now that S-c has passed.
 
 ## 4. Tests (synthetic, no live DB)
 
