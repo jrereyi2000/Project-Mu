@@ -273,8 +273,8 @@ class DiffusersBackend(HeadshotBackend):
         try:
             import torch
             if self.device == "cuda":
-                # RTX 5070 Ti (Blackwell) supports bfloat16 and float16 cleanly
-                use_bf16 = self.config.get("use_bfloat16", True)
+                # SDXL and CivitAI models provide native fp16 variants
+                use_bf16 = self.config.get("use_bfloat16", False)
                 return torch.bfloat16 if use_bf16 and hasattr(torch, "bfloat16") else torch.float16
             elif self.device == "mps":
                 return torch.float16
@@ -318,11 +318,18 @@ class DiffusersBackend(HeadshotBackend):
             )
         else:
             logger.info("Loading text-to-image pipeline %s on %s...", self.model_id, self.device)
-            pipe = AutoPipelineForText2Image.from_pretrained(
-                self.model_id,
-                torch_dtype=self.torch_dtype,
-                variant="fp16" if self.torch_dtype == torch.float16 else None,
-            )
+            try:
+                pipe = StableDiffusionXLPipeline.from_pretrained(
+                    self.model_id,
+                    torch_dtype=self.torch_dtype,
+                    variant="fp16" if self.torch_dtype == torch.float16 else None,
+                )
+            except Exception:
+                pipe = AutoPipelineForText2Image.from_pretrained(
+                    self.model_id,
+                    torch_dtype=self.torch_dtype,
+                    variant="fp16" if self.torch_dtype == torch.float16 else None,
+                )
 
         # Attach DPM-Solver++ with Karras sigmas for optimal photorealism if available
         if hasattr(pipe, "scheduler") and hasattr(pipe.scheduler, "config"):
