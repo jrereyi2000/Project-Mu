@@ -70,6 +70,11 @@ The frontend is powered by a live FastAPI backend (`server/api.py`) backed by a 
   - Draft Central consensus big board, prospect modal, and war room.
 - `src/components/napper/`:
   - Napper fantasy league tabs and interactive draft room simulator.
+- `src/components/franchise/` (V2 core, not yet routed; `#franchise` comes in a later wave):
+  - `DepthChartModule.tsx`: the save's 35 depth-chart slots, click-to-swap or drag within a slot, "Let Staff Set" suggestion, Save queues the chart.
+  - `RosterCapModule.tsx`: Active / Practice Squad / IR against 65 / 12, 5-year cap sheet, Cut / PS / IR moves with a cap preview (`MoveDialog`); also exports the shared `franchiseFetch`, `useFranchiseData`, `MoveDialog`.
+  - `TrainingRoomModule.tsx`: medical ledger with IR place/activate.
+- `src/types/franchiseRoster.ts`: JSON contract for `/api/franchise/*` depth-chart, roster, cap, moves and medical (implemented by `server/franchise_api.py`).
 
 ### Routing model
 

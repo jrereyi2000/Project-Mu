@@ -346,6 +346,19 @@ python3 -m pipeline.league_office --snapshot captures/<run>/save.json --save <CA
 
 JSON shapes are fixed in the module docstring of `server/franchise_api.py` and mirrored by the frontend types (U12, U15, U17 build against this table and those shapes).
 
+#### 2.7a JSON contract fixed by U12 (`Mu_Network/src/types/franchiseRoster.ts`; U14 implements it)
+
+Money in whole dollars; null = not recorded; errors are FastAPI `{"detail": string}`; 404 means the API isn't mounted.
+- `GET /api/franchise/{abbr}/depth-chart` → `{team, season, week, source: MADDEN|MU_COACH|JR, pending: QueuedMove|null, slots: {<each of the 35 slot names>: [{player_id, name, position, overall: int|null, injured: bool}] (0–6, best first)}}`.
+- `PUT /api/franchise/{abbr}/depth-chart`, body `{slots: {<slot>: [player_id, …≤6]}}` (all 35 slots) → QueuedMove (kind `DEPTH_CHART`).
+- `POST /api/franchise/{abbr}/depth-chart/staff`, body `{}` → the depth-chart shape with source `MU_COACH`; nothing stored.
+- QueuedMove = `{move_id, kind: DEPTH_CHART|RELEASE|PS_PROMOTE|PS_DEMOTE|IR_PLACE|IR_ACTIVATE, status: PENDING|WRITTEN|REFUSED|CANCELLED, created_at: ISO, player_id: int|null}` (a `franchise_pending_moves` row).
+- `GET /api/franchise/{abbr}/roster` → `{team, season, week, limits: {active: 65, practice_squad: 12}, active, practice_squad, injured_reserve}`, each a list of `{player_id, name, position, age, overall, injury, weeks_out, contract: {length, years_left, through, total_value, guaranteed, contract_type}|null (null on the practice squad), cap_hit, ps_eligible, ir_eligible, pending_move: MoveKind|null}`.
+- `GET /api/franchise/{abbr}/cap?years=5` → `{team, season, years: [{season, cap, committed, dead_money, rookie_reserve, room (= cap − committed − dead_money − rookie_reserve), estimated: bool}]}`.
+- `POST /api/franchise/{abbr}/moves/preview`, body `{kind: MoveKind, payload: {player_id, post_june1?: bool}}` → `{kind, player_id, name, cap_hit, cap_savings (cap_hit − dead_money; may be negative), dead_money, dead_money_next_year, cap_room_before, cap_room_after, active_count_after, practice_squad_count_after, legal: bool, reasons: [str]}`.
+- `POST /api/franchise/{abbr}/moves`, same body → QueuedMove; 409 `{detail}` when illegal.
+- `GET /api/franchise/{abbr}/medical` → `{team, season, week, players: [{player_id, name, position, overall, injury, weeks_out (mu_weeks_out, 0 when healthy), status: OUT|DOUBTFUL|QUESTIONABLE|HEALTHY, on_ir, ir_eligible, pending_move}]}`.
+
 `pipeline/game_launch.py`: `launch(team, season, week, dry_run=False) -> dict`: refuses if moves are pending and unwritten, writes the mod pack (`mod_packs.write_pack`), runs `MMCModManager.exe -launch <pack>` through `cmd.exe` from WSL, returns `{pack, command, started}`.
 
 ### 2.8 Lifecycle (`pipeline/watch_save.py`)
@@ -660,3 +673,4 @@ Each line becomes its own plan. "Needs" is what must be built first; "Alongside"
 | U7 | 3 | worktree-agent-a34b5a1445e3ec66c | .claude/worktrees/agent-a34b5a1445e3ec66c | merged (33 unit tests; real backtest and --simulate 5 ran on madden_test: MAE 1.134, 90+ count 143–147; resumed once after the usage limit) | 088816c |
 | U9 | 3 | worktree-agent-ae2a9a6565396189f | .claude/worktrees/agent-ae2a9a6565396189f | merged (16 tests incl. the sample save through save_writer.mjs) | e3b9014 |
 | U10 | 4 | worktree-agent-a94c32ccc854c0552 | .claude/worktrees/agent-a94c32ccc854c0552 | merged (54 tests; read-only weekly_form on madden_test 2036: sd 0.39–0.46, range −2.77..+3.0 at week 17) | c03a383 |
+| U12 | 4 | worktree-agent-ae2294e09598cd788 | .claude/worktrees/agent-ae2294e09598cd788 | merged (build ok; tsc no new errors; states only type-checked, not run against mocks) | c11cf40 |
