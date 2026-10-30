@@ -228,6 +228,8 @@ flowchart TD
 
 ### 5.1 Dual-Track Media Architecture (Live Marquee vs. Deferred Universe Background)
 
+**Status (2026-10-30): planned, not built.** Today the watcher always writes the slate synchronously with Gemini. There is no coverage-mode setting, `ARTICLE_SLATE` job kind or GPU-queue handler for articles, and the watcher's queue hook only reports pending jobs (it never runs the queue during an ingest).
+
 When playing multiple franchise games or simming through regular season stretches, generating 18 multi-turn research articles synchronously (60–90 seconds) creates unwanted gameplay friction. Conversely, skipping articles entirely damages long-term universe continuity (breaking reporter memories, historical references, and website archives).
 
 The Dual-Track pipeline resolves this tension:
@@ -307,7 +309,7 @@ In-game testing on Madden 27 PC (`CAREER-2026SB-MODIFIED-AUTOSAVE` with Bryce Yo
 ### V2.15 Project Mu Runs the League (Headless League Office)
 Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md)).
 
-### V2.16 Dual-Track Media Engine (Marquee Live vs. Background Universe Queue)
+### V2.16 Dual-Track Media Engine (Marquee Live vs. Background Universe Queue) (Planned)
 Configurable post-game journalism pipeline (§5.1): major matchups, playoffs, and manual requests run synchronous Gemini 3.8 Flash slates for deep reading; fast gameplay sessions advance in <5s and enqueue articles to the RTX 5070 Ti GPU queue for free background drafting with Gemma 4, keeping universe history complete without gameplay interruption.
 
 ---

@@ -11,7 +11,8 @@ save's own franchise year picks which games and season rows belong to it (older 
 Writes, for that season:
   players / player_seasons   every Signed, PracticeSquad or FreeAgent player (a pgid not yet stored gets a new
                              players row); team, position, age, OVR, experience, dev trait, archetype
-  player_attributes          every player's 54 native ratings (Speed, Acceleration, etc.) as JSONB
+  player_attributes          each player's 54 native ratings (Speed, Acceleration, etc.) as JSONB, only when they
+                             changed: a season baseline row, then a row per in-season change (none expected)
   games                      regular-season and playoff games, scheduled and completed (preseason skipped)
   team_stats                 quarter and OT scores plus Madden's team box score (SeasonGame team stat cache:
                              yards, first downs, 3rd/4th downs, turnovers, red zone, penalties, possession) for
@@ -411,22 +412,55 @@ def load_players(cur, snapshot, season, teams, report):
 
 
 def load_player_attributes(cur, snapshot, season, players, report, capture_folder=None):
-    """Upserts each player's 54 Madden ratings into player_attributes for the season."""
+    """Stores each player's 54 Madden ratings in player_attributes, but only when they changed.
+
+    Project Mu owns progression, so ratings should move once a year (the offseason progression write) plus
+    for new players. A row is written when the player has no row for this season yet (flag native_save,
+    the season baseline) or their ratings differ from their newest stored row (flag in_season_change);
+    otherwise nothing is written. In-season changes are counted in the report: with Madden's XP sliders
+    at 0 there should be none (PROGRESSION_PLAN.md phase A check 1). Comparison is against rows from other
+    capture folders, so reloading a capture already stored rewrites its own row in place (same flag)."""
     folder = capture_folder or f"save_{season}"
-    rows = []
+    candidates = {}
     for p in snapshot["players"]:
         who = players.get(p["pgid"])
         ratings = p.get("ratings")
         if who is None or not ratings:
             continue
-        pid, team, pos, _ = who
+        candidates[who[0]] = (who, p, ratings)
+
+    latest = {}
+    if candidates:
+        cur.execute("""
+            SELECT DISTINCT ON (pa.player_id) pa.player_id, pa.season, pa.ratings FROM player_attributes pa
+            LEFT JOIN player_attributes own ON own.player_id = pa.player_id AND own.capture_folder = %s
+            WHERE pa.player_id = ANY(%s) AND pa.season <= %s AND pa.capture_folder <> %s
+              AND (own.id IS NULL OR pa.id < own.id)      -- a reloaded capture compares with what came before it
+            ORDER BY pa.player_id, pa.season DESC, pa.id DESC
+        """, (folder, list(candidates), season, folder))
+        latest = {pid: (s, r) for pid, s, r in cur.fetchall()}
+
+    rows, unchanged, changed = [], 0, 0
+    for pid, (who, p, ratings) in candidates.items():
+        _, team, pos, _ = who
+        prev = latest.get(pid)          # newest row from another capture: (season, ratings)
+        if prev is None or prev[0] < season:
+            flag = "native_save"
+        elif prev[1] == ratings:
+            unchanged += 1
+            continue
+        else:
+            flag = "in_season_change"
+            changed += 1
         rows.append((
             pid, season, team, folder, pos, p.get("age"),
             p.get("overall"), p.get("overall"), "ok", len(ratings),
-            json.dumps(ratings), "native_save"
+            json.dumps(ratings), flag
         ))
+    report["player_attributes"] = len(rows)
+    report["player_attributes_unchanged"] = unchanged
+    report["player_attributes_in_season_changes"] = changed
     if not rows:
-        report["player_attributes"] = 0
         return
     cur.executemany("""
         INSERT INTO player_attributes (
@@ -445,7 +479,6 @@ def load_player_attributes(cur, snapshot, season, players, report, capture_folde
             ratings = EXCLUDED.ratings,
             flags = EXCLUDED.flags
     """, rows)
-    report["player_attributes"] = len(rows)
 
 
 def load_games(cur, snapshot, season, teams, report):
@@ -730,7 +763,8 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     return report
 
 
-REPORT_COUNTS = ("players", "players_created", "player_attributes", "games", "games_completed", "game_line_rows", "team_stat_rows",
+REPORT_COUNTS = ("players", "players_created", "player_attributes", "player_attributes_unchanged",
+                 "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays")
 
 

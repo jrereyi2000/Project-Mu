@@ -654,6 +654,47 @@ class TestJerseyPlateCompositing(unittest.TestCase):
             self.assertTrue(os.path.exists(out_file))
             self.assertEqual(res.size, (800, 1000))
 
+    @staticmethod
+    def _jersey_photo(fabric, w=896, h=1200, skin=(200, 150, 120)):
+        """Transparent backdrop, donor neck skin down to the collar at 75% of the default box, jersey below."""
+        arr = np.zeros((h, w, 4), dtype=np.uint8)
+        collar = round(h * 700 / 1200)
+        arr[:collar, int(w * 0.35):int(w * 0.65)] = (*skin, 255)
+        arr[collar:, int(w * 0.1):int(w * 0.9)] = (*fabric, 255)
+        return Image.fromarray(arr), collar
+
+    def test_extract_keeps_every_jersey_colour(self):
+        from headshots.local.jersey_plate import extract_clean_jersey_plate
+
+        # Red, orange and gold fabric used to be erased as "skin"; brown, burgundy and old gold
+        # have skin-range chroma and are kept only because the plate's own fabric colour is excluded.
+        colours = {
+            "navy": (20, 40, 120), "red": (200, 20, 40), "orange": (250, 80, 20), "gold": (255, 182, 18),
+            "white": (245, 245, 245), "brown": (49, 30, 14), "burgundy": (90, 20, 20), "old gold": (179, 153, 93),
+        }
+        for name, fabric in colours.items():
+            with self.subTest(jersey=name):
+                photo, collar = self._jersey_photo(fabric)
+                out = np.array(extract_clean_jersey_plate(photo))
+                torso = out[collar:int(1200 * 0.95), int(896 * 0.12):int(896 * 0.88), 3]
+                self.assertGreater((torso > 0).mean(), 0.99)
+                # Donor neck removed above the collar
+                self.assertEqual(out[collar - 50, 448, 3], 0)
+
+    def test_extract_and_composite_on_small_plates(self):
+        from headshots.local.jersey_plate import composite_headshot_to_jersey, extract_clean_jersey_plate
+
+        photo, collar = self._jersey_photo((20, 40, 120), w=448, h=600)
+        plate = extract_clean_jersey_plate(photo)
+        self.assertEqual(plate.size, (448, 600))
+        self.assertEqual(np.array(plate)[collar - 20, 224, 3], 0)
+
+        player = Image.new("RGBA", (448, 576), (200, 150, 120, 255))
+        res = composite_headshot_to_jersey(player, plate, out_format="broadcast")
+        self.assertEqual(res.size, (800, 1000))
+        res = composite_headshot_to_jersey(player, Image.new("RGBA", (300, 400)), out_format="none")
+        self.assertEqual(res.size, (300, 400))
+
 
 if __name__ == "__main__":
     unittest.main()

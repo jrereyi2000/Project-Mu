@@ -447,6 +447,17 @@ class IngestSnapshotTest(unittest.TestCase):
             self.assertTrue(any("Nightly queue hook" in l for l in logs))
             self.assertTrue(any("GPU queue hook: checked queue, 0 pending jobs found" in l for l in logs))
 
+    def test_queue_nightly_jobs_leaves_pending_jobs_alone(self):
+        # Runs while Madden is usually still open: must return at once and not run or fail jobs
+        from pipeline.gpu_queue import GPUJob, GPUQueue, SQLiteJobStore, STATUS_PENDING, mock_process_running
+        queue = GPUQueue(store=SQLiteJobStore(":memory:"))
+        queue.enqueue(GPUJob(id="headshot_job", kind="headshot", model_id="sdxl"))
+        logs = []
+        with mock.patch("pipeline.gpu_queue.queue.GPUQueue", return_value=queue), mock_process_running(True):
+            ws.queue_nightly_jobs(2036, 7, log_fn=logs.append)
+        self.assertEqual(queue.get_job("headshot_job").status, STATUS_PENDING)
+        self.assertTrue(any("1 pending jobs found" in l for l in logs))
+
     def test_prepare_next_week_mod_pack_no_user_teams(self):
         logs = []
         with mock.patch("db.franchises.load_registry", return_value={"active": None, "franchises": {}}):

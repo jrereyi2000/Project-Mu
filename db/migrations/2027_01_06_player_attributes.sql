@@ -2,7 +2,9 @@
 -- @REPLACED-BY: pipeline/load_save.py (native PC save reader extracts Player.<field>Rating)
 -- 54 ratings per player per season, loaded by pipeline/load_save.py from native Madden PC save snapshots.
 -- Read by engines/progression.py (fetch_player_attributes_map) for ratings-driven progression and attribute auditing.
--- One row per player per capture folder (or f"save_{season}"), populated directly without OCR.
+-- Written only when ratings change (Project Mu owns progression): a season baseline row per player
+-- (flags native_save), then a row per capture whose ratings differ (flags in_season_change).
+-- Unique per player per capture folder (or f"save_{season}"), populated directly without OCR.
 --   ratings      {"Speed": 99, "Acceleration": 97, ...}: Madden 27 Player.<field>Rating names, 0-99
 --   overall_rating the player's overall rating in the save
 --   confirmed    count of ratings stored (54 for native PC save rows)

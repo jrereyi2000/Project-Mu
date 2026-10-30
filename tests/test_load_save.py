@@ -228,6 +228,7 @@ class LoadTinySnapshotTest(unittest.TestCase):
                       "WHERE player_id = %s AND season = %s", qb[0], TEST_SEASON)
         self.assertEqual(pa[:3], (80, 3, "native_save"))
         self.assertEqual(pa[3], {"Speed": 85, "Awareness": 80, "ThrowPower": 92})
+        self.assertEqual(r["player_attributes_in_season_changes"], 0)
         ps = self.one("SELECT t.abbreviation, position, dev_trait, archetype, years_of_experience FROM player_seasons p "
                       "JOIN teams t ON t.id = p.team_id WHERE player_id = %s AND season = %s", qb[0], TEST_SEASON)
         self.assertEqual(ps, ("CHI", "QB", "Superstar", "Field General", 3))
@@ -311,6 +312,39 @@ class LoadTinySnapshotTest(unittest.TestCase):
         self.assertEqual(self.one("SELECT count(*) FROM player_stats s JOIN games g ON g.id = s.game_id "
                                   "WHERE g.season = %s", TEST_SEASON), (2,))
         self.assertEqual(self.one("SELECT count(*) FROM games WHERE season = %s", TEST_SEASON), (2,))
+
+    def attribute_rows(self, pgid):
+        self.cur.execute("SELECT a.season, a.capture_folder, a.flags, a.ratings FROM player_attributes a "
+                         "JOIN players p ON p.id = a.player_id WHERE p.madden_pgid = %s ORDER BY a.id", (pgid,))
+        return self.cur.fetchall()
+
+    def test_attributes_written_only_when_ratings_change(self):
+        snap = tiny_snapshot()
+        ls.load_snapshot(self.cur, snap, season=TEST_SEASON, capture_folder="week1")
+
+        # Next week's capture, ratings unchanged: nothing new
+        r = ls.load_snapshot(self.cur, snap, season=TEST_SEASON, capture_folder="week2")
+        self.assertEqual((r["player_attributes"], r["player_attributes_unchanged"]), (0, 3))
+        self.assertEqual(len(self.attribute_rows(900001)), 1)
+
+        # A rating moves mid-season: one new row for that player, flagged
+        changed = tiny_snapshot()
+        changed["players"][0]["ratings"] = {"Speed": 84, "Awareness": 80, "ThrowPower": 92}
+        r = ls.load_snapshot(self.cur, changed, season=TEST_SEASON, capture_folder="week3")
+        self.assertEqual((r["player_attributes"], r["player_attributes_in_season_changes"]), (1, 1))
+        rows = self.attribute_rows(900001)
+        self.assertEqual([(f, x) for _, f, x, _ in rows], [("week1", "native_save"), ("week3", "in_season_change")])
+
+        # Reloading a stored capture rewrites its own row, compared with what came before it
+        ls.load_snapshot(self.cur, snap, season=TEST_SEASON, capture_folder="week1")
+        r = ls.load_snapshot(self.cur, changed, season=TEST_SEASON, capture_folder="week3")
+        self.assertEqual(r["player_attributes_in_season_changes"], 1)
+        self.assertEqual(len(self.attribute_rows(900001)), 2)
+
+        # New season: a baseline row even with the same ratings
+        r = ls.load_snapshot(self.cur, changed, season=TEST_SEASON + 1, capture_folder="next_season")
+        self.assertEqual(r["player_attributes_in_season_changes"], 0)
+        self.assertEqual(self.attribute_rows(900001)[-1][:3], (TEST_SEASON + 1, "next_season", "native_save"))
 
 
 @pytest.mark.integration

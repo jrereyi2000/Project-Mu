@@ -372,7 +372,7 @@ CREATE TABLE IF NOT EXISTS captures (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS captures_mode_season_week ON captures (mode, season, week);
 
--- Native player ratings (2027_01_06_player_attributes.sql): 54 ratings per player per season/snapshot, Madden 27 field names
+-- Native player ratings (2027_01_06_player_attributes.sql): 54 Madden 27 ratings per player, a season baseline row plus a row per in-season change
 CREATE TABLE IF NOT EXISTS player_attributes (
     id SERIAL PRIMARY KEY,
     player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,

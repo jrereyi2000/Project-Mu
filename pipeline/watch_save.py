@@ -266,17 +266,15 @@ def snapshot_save(save_path, run_folder, reader_script=READER_SCRIPT, node_bin="
 def queue_nightly_jobs(season, week, log_fn=log):
     """Hook point for Plan §7.5 local-model jobs going onto the nightly queue."""
     log_fn(f"Nightly queue hook: season {season} week {week} (local-model jobs queued when queue is active)")
+    # Only reports the queue. The queue is run by the nightly runner, never inline here: the ingest
+    # happens while Madden is usually still open, when the runner waits indefinitely, and no job
+    # handlers are registered in this process, so running it here would block the week or fail the jobs.
     try:
         from pipeline.gpu_queue.queue import GPUQueue
-        from pipeline.gpu_queue.runner import GPUQueueRunner
 
-        queue = GPUQueue()
-        pending = queue.list_jobs(status="pending")
-        log_fn(f"GPU queue hook: checked queue, {len(pending)} pending jobs found.")
-        if pending:
-            runner = GPUQueueRunner(queue=queue, log_fn=log_fn)
-            processed = runner.run_loop(stop_on_empty=True)
-            log_fn(f"GPU queue hook: processed {processed} pending jobs.")
+        pending = GPUQueue().list_jobs(status="pending")
+        log_fn(f"GPU queue hook: checked queue, {len(pending)} pending jobs found "
+               f"(left for the nightly runner).")
     except Exception as e:
         log_fn(f"Warning: GPU queue hook check encountered an error: {e}")
 
