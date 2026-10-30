@@ -1,4 +1,4 @@
-"""Project Mu mod builder (docs/in_progress/MOD_BUILDER_PLAN.md): recipes, asset index, recolouring, install.
+"""Project Mu mod builder (docs/done/MOD_BUILDER_PLAN.md): recipes, asset index, recolouring, install.
 
     python3 -m tools.mod_builder find <pattern> | new <slug> | build <slug> [--route harness|gui] [--dry-run]
                                  | install <slug> [--pack NAME] | check <slug>

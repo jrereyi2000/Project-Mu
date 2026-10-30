@@ -1,6 +1,6 @@
 # Building Madden 27 Mods
 
-How Project Mu builds JR's own `.fbmod` files: the recipe, the console harness, install into a `Mu Test` pack, and the in-game check. `/build-mod <idea>` (`.claude/skills/build-mod/SKILL.md`) follows this doc. Design and history: [`../in_progress/MOD_BUILDER_PLAN.md`](../in_progress/MOD_BUILDER_PLAN.md). Format of a built mod, and the teardowns of other authors' mods: [`MOD_REVERSE_ENGINEERING.md`](MOD_REVERSE_ENGINEERING.md). Packs and load order: [`../MOD_INSTALL.md`](../MOD_INSTALL.md).
+How Project Mu builds JR's own `.fbmod` files: the recipe, the console harness, install into a `Mu Test` pack, and the in-game check. `/build-mod <idea>` (`.claude/skills/build-mod/SKILL.md`) follows this doc. Design and history: [`../done/MOD_BUILDER_PLAN.md`](../done/MOD_BUILDER_PLAN.md). Format of a built mod, and the teardowns of other authors' mods: [`MOD_REVERSE_ENGINEERING.md`](MOD_REVERSE_ENGINEERING.md). Packs and load order: [`../MOD_INSTALL.md`](../MOD_INSTALL.md).
 
 ```
 python3 -m tools.mod_builder find <pattern> [--kind ebx|res|bundle|legacy|unknown] [--limit N]

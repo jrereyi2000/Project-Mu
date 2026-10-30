@@ -1,7 +1,7 @@
 # MmcHarness: MMC Editor without the window
 
 `MmcHarness.exe` is a small console program that runs MMC Editor's own Frosty libraries headless.
-It is the "console route" of `docs/in_progress/MOD_BUILDER_PLAN.md` (§2.4): export and import
+It is the "console route" of `docs/done/MOD_BUILDER_PLAN.md` (§2.4): export and import
 textures, read and set ebx fields, save `.fbproject` files and export `.fbmod` files through MMC's
 own `FrostyProject.WriteToMod` (the same code as the editor's *Export Mod* menu, so payloads come out
 `FMENC001`-encrypted the way the Mod Manager wants).
@@ -75,7 +75,7 @@ The editor DLLs also hold code that decrypts other authors' mods. The harness mu
 
 ## Known limits
 
-- **ebx needs the game key.** Madden 27's `Data/initfs_Win32` is AES-encrypted (`ProfilesLibrary.RequiresKey`). MMC Editor asks for the key on first start and keeps it as `madden27.key` in its working folder. Without that file the initfs isn't loaded: textures (res + chunk) work, but `ebx-dump`/`ebx-set` (and loading a project with ebx edits) fail with a message saying so, because RIFF ebx needs the initfs's shared type descriptors. Put the editor's `madden27.key` in the editor folder or point `MU_MMC_KEY_FILE` at it. This is the game's content key, the one the editor itself uses to read the game; it has nothing to do with mod encryption.
+- **ebx needs the game key.** Madden 27's `Data/initfs_Win32` is AES-encrypted (`ProfilesLibrary.RequiresKey`). MMC Editor asks for the key on first start and keeps it as `madden27.key` in its working folder. Without that file the initfs isn't loaded: textures (res + chunk) work, but `ebx-dump`/`ebx-set` (and loading a project with ebx edits) fail with a message saying so, because RIFF ebx needs the initfs's shared type descriptors. JR enters the key once in MMC Editor's start-up prompt (KeyPromptWindow), which writes `<editor>\madden27.key`; `MU_MMC_KEY_FILE` can point at that file elsewhere. Never search for or download keys. This is the game's content key, the one the editor itself uses to read the game; it has nothing to do with mod encryption.
 - Only 2D textures import headless (cube/array/3D: use the window route).
 - Legacy (pre-magic) `.fbproject` files and projects from another editor format version are refused; open and re-save them in MMC Editor.
 - `ebx-set` edits fields of internal objects only; it can't repoint a `PointerRef` or edit through an external one.

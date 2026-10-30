@@ -1,5 +1,5 @@
 """
-tests/test_mod_builder.py: Unit tests for tools/mod_builder (docs/in_progress/MOD_BUILDER_PLAN.md §4): recipe
+tests/test_mod_builder.py: Unit tests for tools/mod_builder (docs/done/MOD_BUILDER_PLAN.md §4): recipe
 validation, the three recolour modes and the RGBA8 DDS writer, the asset index on a synthetic zstd cache, the
 read-back check on synthetic .fbmods (helpers from tests/test_fbmod_inspect.py), install against a temp
 manager_config.json and Mods folder with manager_running mocked, and the CLI (new, build --dry-run, build
