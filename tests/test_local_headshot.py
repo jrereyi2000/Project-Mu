@@ -20,6 +20,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+import numpy as np
 from PIL import Image
 
 import headshots.local as hl
@@ -545,5 +546,57 @@ class TestCLI(unittest.TestCase):
             self.assertEqual(im.size, (256, 256))
 
 
+
+class TestJerseyPlateCompositing(unittest.TestCase):
+    """Test two-stage jersey plate extraction and player compositing."""
+
+    def test_extract_clean_jersey_plate(self):
+        from headshots.local.jersey_plate import extract_clean_jersey_plate
+
+        # Create dummy jersey photo (896x1200) with blue jersey at bottom and skin on top
+        im = Image.new("RGBA", (896, 1200), (255, 255, 255, 255))
+        arr = np.array(im)
+        # Top half: skin tone (r > b)
+        arr[:700, :, :3] = [200, 150, 120]
+        # Bottom half: blue jersey (b > r + 30)
+        arr[700:, :, :3] = [0, 100, 200]
+
+        test_img = Image.fromarray(arr)
+        plate = extract_clean_jersey_plate(test_img, collar_y_min=650, collar_y_max=750)
+        plate_arr = np.array(plate)
+
+        # Above y=700 should be alpha 0
+        self.assertEqual(plate_arr[600, 448, 3], 0)
+        # Below y=750 on jersey should be opaque
+        self.assertGreater(plate_arr[800, 448, 3], 0)
+
+    def test_composite_headshot_to_jersey(self):
+        from headshots.local.jersey_plate import composite_headshot_to_jersey
+
+        # Create dummy player cutout (896x1152)
+        player = Image.new("RGBA", (896, 1152), (200, 150, 120, 255))
+        # Create dummy jersey plate (896x1200)
+        plate = Image.new("RGBA", (896, 1200), (0, 0, 0, 0))
+        plate_arr = np.array(plate)
+        # Jersey opaque below y=700
+        plate_arr[700:, :, :] = [0, 100, 200, 255]
+        plate_img = Image.fromarray(plate_arr)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = os.path.join(tmpdir, "test_composite.png")
+            res = composite_headshot_to_jersey(
+                player_cutout=player,
+                jersey_plate=plate_img,
+                scale=0.78,
+                target_chin_y=590,
+                target_center_x=440,
+                out_format="broadcast",
+                output_path=out_file,
+            )
+            self.assertTrue(os.path.exists(out_file))
+            self.assertEqual(res.size, (800, 1000))
+
+
 if __name__ == "__main__":
     unittest.main()
+

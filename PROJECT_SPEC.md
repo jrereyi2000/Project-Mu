@@ -290,6 +290,7 @@ Project Mu/
 │   │   ├── generator.py       #     Core generate_headshot() interface producing PNG bytes
 │   │   ├── backends.py        #     HeadshotBackend, MockBackend (offline PIL), DiffusersBackend (SDXL/Flux/CUDA/MPS), ComfyUIBackend
 │   │   ├── adapter.py         #     Integration adapter patching make_headshot and rookie_headshots when LOCAL_HEADSHOTS=1
+│   │   ├── jersey_plate.py    #     Two-stage jersey plate extraction and silhouette-constrained player neck/shoulder compositing
 │   │   ├── cli.py             #     Standalone CLI for local generation, seeds, and backends
 │   │   └── README.md          #     Interface specifications, VRAM tuning, and ControlNet/IP-Adapter hooks
 │   └── portrait_converter/    #   Standalone portrait converter for Madden 27 modding (BC3/BC1 DDS & RGBA)
@@ -739,8 +740,14 @@ Fictional players in Madden lack official broadcast photography. The headshot su
     - `ComfyUIBackend`: Local REST client communicating with ComfyUI (`http://localhost:8188`), handling image uploads, prompt workflow dispatch, WebSocket polling, and output image retrieval.
     - `MockBackend`: Deterministic offline PIL generator for fast unit tests without requiring GPU hardware or multi-gigabyte model weights.
   - **Seamless Integration Adapter (`adapter.py`):** Provides `get_local_generator_if_enabled()` and monkey-patches `headshots.make_headshot` / `headshots.rookie_headshots` when `USE_LOCAL_HEADSHOTS=1` or `LOCAL_HEADSHOTS=1` is configured, keeping existing trait sampling, prompt templates, and `rembg` cutout pipelines 100% intact.
+  - **Two-Stage Jersey Plate Architecture (`jersey_plate.py`):**
+    - Standardizes the separation of anatomical face generation from team uniform compositing, solving donor neck contamination, shoulder protrusion, and texture resolution mismatches.
+    - **Step 1 (Bare-Neck/Chest Portrait Generation):** Generates the player wearing no shirt/collar (`completely shirtless, bare chest, bare neck`) at native SDXL portrait resolution ($896 \times 1152$), ensuring 100% continuous skin and muscle down to mid-chest with zero AI clothing fighting the uniform.
+    - **Step 2 (Official Jersey Collar Plate Overlay):** Isolates the official team jersey and collar stitching with 100% transparent neck opening (alpha = 0) and zero donor skin pixels.
+    - **Silhouette-Bounded Shoulder Funnel:** Masks the player's shoulders outside the collar apexes ($x \notin [250, 640]$) strictly below the jersey's outer shoulder contour, mathematically preventing bare player deltoids from poking out behind the jersey while preserving full trapezius and neck anatomy.
+    - **Format Normalization:** Exports full-resolution 4:5 broadcast portraits ($800 \times 1000$ / $896 \times 1200$) and standardized transparent media-day cutouts ($700 \times 508$ WebP) for `static/players/{player_id}.webp`.
   - **Standalone CLI (`cli.py`):** `python -m headshots.local.cli --prompt "..." --out test.png [--backend mock|diffusers|comfyui] [--model-id ID] [--seed 42] [--size 1024]`.
-  - **Tests:** `tests/test_local_headshot.py` (33 tests covering mock generation, diffusers device selection, memory offloading, ComfyUI REST lifecycle, adapter patching, and CLI).
+  - **Tests:** `tests/test_local_headshot.py` (35 tests covering mock generation, diffusers device selection, memory offloading, ComfyUI REST lifecycle, adapter patching, CLI, clean jersey plate extraction, and silhouette compositing).
 - **Standalone Portrait Converter (`headshots/portrait_converter/`, `docs/in_progress/PC_MIGRATION_PLAN.md` §9.4, `docs/not_started/PRE_PC_WORK_2.md` Item A5):**
   - Converts transparent WebP media-day cutouts into in-game portrait textures for Madden 27 modding (injecting into `library_icons_brt` via MMC Modding Tools / Frosty to replace retired player portrait IDs).
   - **Core Interface (`converter.py`):** `to_portrait(webp_bytes, width=512, height=512, fmt="DDS_BC3", crop_box=None) -> bytes` and file helper `convert_headshot_file(input_path, output_path, width=512, height=512, fmt="DDS_BC3") -> Path`.
