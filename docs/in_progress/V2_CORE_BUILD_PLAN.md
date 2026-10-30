@@ -659,3 +659,4 @@ Each line becomes its own plan. "Needs" is what must be built first; "Alongside"
 | U8 | 3 | worktree-agent-a4472cad170148473 | .claude/worktrees/agent-a4472cad170148473 | merged (34 tests pass; load_save/watch_save/drift 76 pass on main; resumed once after the usage limit) | 49f093f |
 | U7 | 3 | worktree-agent-a34b5a1445e3ec66c | .claude/worktrees/agent-a34b5a1445e3ec66c | merged (33 unit tests; real backtest and --simulate 5 ran on madden_test: MAE 1.134, 90+ count 143–147; resumed once after the usage limit) | 088816c |
 | U9 | 3 | worktree-agent-ae2a9a6565396189f | .claude/worktrees/agent-ae2a9a6565396189f | merged (16 tests incl. the sample save through save_writer.mjs) | e3b9014 |
+| U10 | 4 | worktree-agent-a94c32ccc854c0552 | .claude/worktrees/agent-a94c32ccc854c0552 | merged (54 tests; read-only weekly_form on madden_test 2036: sd 0.39–0.46, range −2.77..+3.0 at week 17) | c03a383 |
