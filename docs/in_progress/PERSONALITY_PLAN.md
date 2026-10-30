@@ -1,7 +1,7 @@
 # Project Mu: Personality and Agents Plan
 
 **Status:** phases 1, 2, and 3 built (2026-10-28, spec §3.3f, §7.11); phases 4–6 not started.
-**Expands:** V2.13 of [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md). Feeds [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md) §6–§7 and [`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md) (agents, free agency, retirements).
+**Expands:** V2.13 of [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md). Feeds [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md) §6–§7 and [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) (agents, free agency, retirements).
 **Writer personas** can start before the PC (§9, phase 1).
 
 One personality system for everyone in the universe (writers, GMs, players, coaches, owners, agents, scouts), modelled on The Sims: a few sliders with a fixed budget, a handful of traits drawn from a catalogue, and a mood that comes from the week's data. Traits are nudges that mix, so no single belief takes over a character.

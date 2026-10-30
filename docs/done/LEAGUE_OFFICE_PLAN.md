@@ -1,6 +1,6 @@
 # Project Mu: League Office Plan
 
-**Status:** plan, nothing built (2026-10-28).
+**Status:** superseded (2026-10-30) by [`V2_CORE_BUILD_PLAN.md`](../in_progress/V2_CORE_BUILD_PLAN.md), which absorbed its areas (JR, D2). Nothing was built from this plan directly; its open phases G and H and the coach writes are on that plan's §9 roadmap. Written 2026-10-28.
 **Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md)): the save reader, writer and loader (§4–§5 there). Runs alongside [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md), which this plan leans on for player and coach personalities.
 **Replaces on the PC:** decision D3 of [`TEAM_MANAGEMENT_PLAN.md`](../done/TEAM_MANAGEMENT_PLAN.md) (JR switches one team to user control per trade so the CPU keeps doing signings, re-signings and depth charts). Here losing the CPU's front office is the point.
 

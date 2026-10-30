@@ -307,7 +307,7 @@ In-game testing on Madden 27 PC (`CAREER-2026SB-MODIFIED-AUTOSAVE` with Bryce Yo
    - *Rationale:* Madden's save parser does not rewrite the binary database table on disk upon load. External snapshot tools (`load_save.py`), web API queries, and Madden's background CPU logic (such as trade evaluation algorithms and cut decisions) evaluate the static database column directly. Writing both guarantees 100% parity between database state, raw save inspection, and in-game UI.
 
 ### V2.15 Project Mu Runs the League (Headless League Office)
-Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md)).
+Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md)).
 
 ### V2.16 Dual-Track Media Engine (Marquee Live vs. Background Universe Queue) (Planned)
 Configurable post-game journalism pipeline (§5.1): major matchups, playoffs, and manual requests run synchronous Gemini 3.8 Flash slates for deep reading; fast gameplay sessions advance in <5s and enqueue articles to the RTX 5070 Ti GPU queue for free background drafting with Gemma 4, keeping universe history complete without gameplay interruption.
@@ -332,7 +332,7 @@ Phases 1–3 below can start now. These items depend on unfinished work elsewher
 | # | What it affects | Waiting on |
 | :--- | :--- | :--- |
 | P1 | §2.2 "Let Staff Set" (coach philosophy) and §4.1 persona weights | [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phases 4–6 and progression plan phases F–G (player and coach traits). |
-| P2 | V2.15 (headless league office) | [`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md): not started. |
+| P2 | V2.15 (headless league office) | Absorbed by [`V2_CORE_BUILD_PLAN.md`](./V2_CORE_BUILD_PLAN.md) (2026-10-30); [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) is superseded. |
 | P3 | §2.1 / §5 "Play Game" pre-flight mod pack | Wiring `pipeline.mod_packs.write` into `watch_save.py` (PC plan §10, item 3). |
 | P4 | V2.4 portraits in-game | The one-portrait spike (PC plan §9.4, §10 item 2). |
 | P5 | Trust in all scratch-save results | Every §5.4 check was on unmodded `CAREER-WEEK1/2/3`; sim-stat and roster mods change the numbers, so the checks are re-run on a modded save before the 2034 start. |
