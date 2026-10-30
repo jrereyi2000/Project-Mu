@@ -515,7 +515,7 @@ Pick the specific model at test time (§7.4); Ollama or llama.cpp for Windows ho
 | GM persona & trade rationale | Local 24–27B (or MoE offload) | Short prompts; structured output; runs when Madden is idle or during nightly queue |
 | Live GM negotiations & commission classification | Resident local ~1–2GB option (LFM3-1.7B, Gemma 4 E2B/E4B) with Gemini fallback | Option to test resident alongside Madden (§7.5); provider switch falls back to Gemini when local model is unavailable or unfeasible |
 | National articles | Gemini or Hosted Open Model API (DeepSeek V4.1 Flash, GLM-5.3-Flash) | 25–75K-token contexts (up to 150K+) in dozens-of-call tool loops; cannot fit next to local model weights on 16GB VRAM. Evaluated against hosted open-weight models due to 2027 price change (see below) |
-| Local beat articles | Gemini or Hosted Open Model API (DeepSeek V4.1 Flash, GLM-5.3-Flash) | Same `newsroom` tool loop and 192 persona voice requirements as national articles |
+| Local beat articles | Deterministic Python Dossier (§V2.5.3) or Gemini/Hosted Open Model | Over 45% of newsroom volume; predictable queries (`matchup_edges`, `injuries`, `box_scores`) pre-fetched via Python dossier compiler in 15ms, dropping generation to single-turn $0 local or $0.01 Gemini calls |
 
 **Hosted open-weight models for the newsroom (2027 pricing alternative):**
 Gemini 3.8 Flash prices double on 2027-01-01 (input: $0.75 → $1.50 per 1M; output & thinking: $3.75 → $7.50 per 1M). Because the save loader (§5) eliminates screen OCR calls, articles become ~73% of the post-migration LLM bill, projected to rise from ~$125/month to ~$245/month (~$8.2/day).

@@ -262,6 +262,77 @@ A realistic upper bound on gameplay velocity is **at most 2 full franchise seaso
   2. **High-Tier Model Quality Evaluation:** Running the 7-task benchmark matrix ([`tools/llm_compare.py`](../../tools/llm_compare.py)) against candidate 27B–70B open models or large MoEs in vLLM without VRAM offload penalties (~2–3 units per run).
   3. **Generative UI & Visual Journalism:** Experimenting with event photojournalism and championship banner generation.
 
+### 5.3 Deterministic Python Dossier Architecture & Newsroom A/B Testing Framework
+
+#### Architectural Principle: Macro Context vs. Targeted Micro Evidence
+In Project Mu's newsroom, writers already receive a comprehensive macro-level league state in their initial prompt via [`build_weekly_assignment_brief`](../../newsroom/swarm_dispatcher.py):
+* **32-team standings**, win-loss records, point differentials, and 5-year franchise trajectory chips (`5-Yr: 10-7-14-11-9`).
+* Full recap scoreboard with **pivotal 2-minute drive stories** (`game_story`) and preview scoreboard with kickoff times and projected excitement.
+* Active **marquee injuries** (starting QBs, 88+ OVR, 50+ POP), recent transactions, active trade rumors, and the complete 32-team coaching staff directory.
+
+The writer's ReAct tool calls are **not** used to learn the state of the league—they are used exclusively to pull targeted micro-evidence for their specific assigned subject (e.g. passing lines, matchup edges, 3rd-down situational rates).
+
+For **deterministic, subject-bound article types** (which represent over 45% of total newsroom volume), these micro-queries are completely predictable:
+* `LOCAL_MATCHUP_PRIMER` (53 articles in 2036): Always queries `get_matchup_edges`, `get_team_efficiency_profile`, `get_team_injury_report`, and `get_coach_profile` for the two scheduled teams.
+* `SINGLE_GAME_SCHEMATIC_AUTOPSY` & `LOCAL_POSTGAME_REPORT_CARD` (23 articles): Always queries `get_game_box_score`, `get_game_scoring_plays`, and `get_advanced_game_analytics` for the assigned `game_id`.
+* `LOCAL_PLAYER_SPOTLIGHT` (11 articles): Always queries `get_player_season_stats`, `get_player_career`, and `get_player_contract`.
+* `FANTASY_START_SIT` & `FANTASY_BOX_SCORE_USAGE` (24 articles): Always queries weekly touch/target distributions and red-zone usage splits.
+
+#### The Python Dossier Compiler
+Instead of forcing Gemini to spend 10–25 ReAct turns repeatedly accumulating 40K–80K context tokens (~$0.08–$0.10/article), a deterministic Python service (`pipeline/dossier_compiler.py`) executes those 3–5 SQL queries in under 15 milliseconds. It compiles a structured markdown micro-dossier, appends it directly to the Assignment Brief, and executes the article generation in a **single turn** with zero tool calls:
+* **Token Cost:** Drops from ~$0.09 to ~$0.01 on Gemini 3.8 Flash (an 89% savings).
+* **Local Feasibility:** Because single-turn prompts require no function-calling orchestration, they can execute locally on the RTX 5070 Ti (`ollama:gemma4:e4b@nothink`) for **$0.00**.
+
+#### A/B Testing Framework (`tools/dossier_ab_compare.py`)
+To rigorously prove that the Python Dossier matches or exceeds the factual accuracy and literary quality of the ReAct tool loop before switching in production:
+
+```
+                                  ┌───────────────────────────────┐
+                                  │   Target Article Assignment   │
+                                  │ (e.g. Panthers vs. Bears W12) │
+                                  └──────────────┬────────────────┘
+                                                 │
+                        ┌────────────────────────┴────────────────────────┐
+                        ▼                                                 ▼
+        ┌───────────────────────────────┐                 ┌───────────────────────────────┐
+        │     Variant A (Control):      │                 │    Variant B (Treatment):     │
+        │   Multi-Turn ReAct Loop       │                 │   Deterministic Python Dossier│
+        ├───────────────────────────────┤                 ├───────────────────────────────┤
+        │ • 40 Database Tools Exposed   │                 │ • Python pre-fetches micro-   │
+        │ • 10–25 AFC tool call turns   │                 │   stats in 15ms directly to DB│
+        │ • Gemini 3.8 Flash            │                 │ • Appends to Assignment Brief │
+        │                               │                 │ • Single-turn (zero tools)    │
+        │                               │                 │ • Gemini 3.8 Flash or Gemma 4 │
+        └──────────────┬────────────────┘                 └──────────────┬────────────────┘
+                       │                                                 │
+                       └────────────────────────┬────────────────────────┘
+                                                ▼
+                                ┌───────────────────────────────┐
+                                │   Automated Quality Audit &   │
+                                │   Side-by-Side Verification   │
+                                └───────────────────────────────┘
+```
+
+#### Evaluation Scorecard & Quality Gates
+The A/B harness compares Variant A and Variant B across four rigorous pillars:
+1. **Financial & Performance Telemetry:**
+   * Input, cached, output, and thinking tokens.
+   * Total dollar cost per article (measured at Google API rates).
+   * Generation wall-clock latency (seconds) and turn count.
+2. **Ground-Truth Factual Verification (Zero-Hallucination Policy):**
+   * *Scores & Margins:* Regex audit ensuring final scores match `games.home_score` / `away_score`.
+   * *Player Lines:* Cross-references cited yardages, sacks, and touchdowns against `player_stats`.
+   * *Standings & Records:* Verifies team win-loss citations against `team_seasons`.
+   * *Banned Invented Data:* Strict check ensuring no fabricated blitz rates, pressure counts, or down-and-distance percentages appear.
+3. **Persona Voice & Literary Standards:**
+   * *Tone Fidelity:* Adherence to assigned persona vocabulary, perspective, and sentence rhythm.
+   * *Internal Metric Translation:* Verifies zero raw symbols (`$P$`, `Y_prod`, `SpikeIndex`, etc.) appear in published text.
+   * *Banned Clichés:* Zero hits on prohibited idioms ("paper tiger", "blueprint to victory", etc.).
+   * *Structural Conformance:* Proper Markdown `# Title` and `> **EXCERPT:**` formatting.
+4. **Narrative Richness & Depth:**
+   * Word count within the target band (800–1,500 words).
+   * Tactical specificity: Evaluates whether the piece explains *why* the outcome occurred (line play, coverage scheme, red-zone efficiency) rather than offering a generic recap.
+
 ---
 
 ## 6. The V2 Feature Suite (Detailed Catalog)
