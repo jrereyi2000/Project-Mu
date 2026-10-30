@@ -246,21 +246,22 @@ The Dual-Track pipeline resolves this tension:
 For heavy batch multimedia workloads that exceed the RTX 5070 Ti's 16GB VRAM or require long rendering times that could interrupt active gaming, Project Mu leverages monthly cloud GPU credits (e.g. Google One AI Premium Colab allocation: ~100 compute units / month on T4, L4, V100, and A100 GPUs).
 
 #### Monthly Heuristic Baseline (Maximum 2 Seasons / Month)
-A realistic upper bound on gameplay velocity is **at most 2 full franchise seasons completed per calendar month** (~40–48 game weeks total, 2 NFL Draft cycles):
+A realistic upper bound on gameplay velocity is **at most 2 full franchise seasons completed per calendar month** (~36–48 game weeks total, 2 NFL Draft cycles):
 
 | Workload | Model & Target GPU | Compute Duration per Run | Monthly Frequency (2 Seasons/Mo) | Estimated Monthly Compute Units |
 | :--- | :--- | :--- | :--- | :--- |
-| **Weekly Multi-Speaker Broadcast Podcasts (§V2.6)** | F5-TTS / CosyVoice 2 / ChatTTS on **T4 or L4** | ~3–4 min per 10–15 min episode | 40–48 weekly episodes | **~4.5–5.0 units** (T4) or **~18–20 units** (L4) |
+| **Background Newsroom Batch: Dossier Articles & Tweets (§5.3.1)** | Llama 3.3 70B AWQ / Qwen 2.5 72B on **A100 (40GB/80GB)** or Qwen 2.5 14B on **L4** via vLLM | ~60–90s generation (~10–12 min active notebook session) | 36–40 weekly batches (~414 articles + ~3,750 tweets) | **~14–28 units** (A100 70B) or **~7–15 units** (L4 14B) |
+| **Weekly Multi-Speaker Broadcast Podcasts (§V2.6)** | F5-TTS / CosyVoice 2 / ChatTTS on **T4 or L4** | ~3–4 min per 10–15 min episode | 36–48 weekly episodes | **~4.5–5.0 units** (T4) or **~15–20 units** (L4) |
 | **Cinematic Round 1 Draft Walkout Videos (§V2.17)** | LTX-Video / Wan2.1-I2V on **A100 (40GB/80GB)** | ~25s (LTX) to ~70s (Wan2.1) per 5s video | 64 total videos (32 picks × 2 drafts) | **~4.5–5.0 units** (LTX) or **~12–15 units** (Wan2.1) |
-| **Seasonal Rookie & League Headshots** | RealVisXL_V5.0 on **Local RTX 5070 Ti** | ~6s/player (~28 min total/class) | 2 rookie classes | **0 units ($0.00)** — runs entirely on local GPU |
+| **Seasonal Rookie & League Headshots** | RealVisXL_V5.0 on **Local RTX 5070 Ti** | ~6s/player (~28 min total/class) | 2 rookie classes | **0 units (\$0.00)** — runs entirely on local GPU |
 
 #### Monthly Headroom & Feature Expansion Runway
-* **Total Peak Monthly Spend:** **~10 to 25 compute units** across all podcasts and draft video renders combined.
-* **Guaranteed Surplus:** **75 to 90 compute units remain untouched every month** out of the 100-unit monthly quota.
-* **How Surplus Credits Are Allocated:**
-  1. **Writer Persona & GM Style Fine-Tuning:** Running Unsloth/PEFT LoRA training on Qwen 2.5 or Llama 3 models using authentic Project Mu journalistic corpora (~1–2 hours on an A100 = ~10–15 units once or twice a year).
-  2. **High-Tier Model Quality Evaluation:** Running the 7-task benchmark matrix ([`tools/llm_compare.py`](../../tools/llm_compare.py)) against candidate 27B–70B open models or large MoEs in vLLM without VRAM offload penalties (~2–3 units per run).
-  3. **Generative UI & Visual Journalism:** Experimenting with event photojournalism and championship banner generation.
+* **Total Peak Monthly Spend:** **~25 to 55 compute units** across all background text batches, podcasts, and draft video renders combined.
+* **Guaranteed Surplus:** **45 to 75 compute units remain untouched every month** out of the 100-unit monthly quota.
+* **Why Colab Text Batching is Transformative:**
+  1. **Flagship 70B Prose for Free:** Consumer 16GB VRAM GPUs cannot fit 70B models. Colab's A100 enables Llama 3.3 70B or Qwen 2.5 72B for routine beat articles and fan banter without spending a dime on tokens.
+  2. **Surplus Security:** Even running 70B text batching, full radio podcasts, and cinematic draft walkouts simultaneously, over 45 compute units remain for fine-tuning, benchmark audits, and UI visual experimentation.
+  3. **Zero Gameplay Interruptions:** Heavy background generation never locks VRAM from Madden or requires idling on the local PC.
 
 ### 5.3 Deterministic Python Dossier Architecture & Newsroom A/B Testing Framework
 
@@ -332,6 +333,58 @@ The A/B harness compares Variant A and Variant B across four rigorous pillars:
 4. **Narrative Richness & Depth:**
    * Word count within the target band (800–1,500 words).
    * Tactical specificity: Evaluates whether the piece explains *why* the outcome occurred (line play, coverage scheme, red-zone efficiency) rather than offering a generic recap.
+
+#### 5.3.1 Dual-Track Editorial Matrix & Colab Batch Offload Routing
+
+To optimize both immediate player experience and compute spend, the newsroom divides weekly content into two distinct operational tracks:
+
+```mermaid
+flowchart TD
+    subgraph Play ["User Interactive Flow"]
+        PlayGame["1. Play Franchise Game (e.g. Panthers)"] --> Ingest["Ingest Save & Stats (load_save.py)"]
+        Ingest --> FastTrack["Track 1: Marquee Live Coverage"]
+        FastTrack --> ReadNews["2. Read Game Autopsy & Team Beat (Immediate)"]
+        ReadNews --> NextGame["3. Advance to Next Game"]
+    end
+
+    subgraph FastTrackFlow ["Track 1: Interactive & Latency-Critical (Gemini 3.8 Flash)"]
+        FastTrack --> MarqueeItems["• User's Game Autopsy (~1/wk)<br/>• User's Team Beat Primer (~1/wk)<br/>• Macro Slate Recap & Previews (~2/wk)<br/>• Power Rankings & SOTU Audits (~1.5/wk)<br/>• AP All-Pro, Awards & Draft Board (~1/wk)"]
+        MarqueeItems --> FastGen["⚡ Instant Delivery (10–15s)<br/>~$0.40/week (~$7.00/season)"]
+    end
+
+    subgraph BatchTrackFlow ["Track 2: Background Desk (Google Colab A100 / Llama 3.3 70B vLLM)"]
+        Ingest -.-> Compiler["Python Dossier Compiler (15ms/item)"]
+        Compiler --> BatchPayload["Compile weekly_batch.json<br/>• 30 Other Teams' Beat Primers (14/wk)<br/>• All Fantasy Desk Columns (5.5/wk)<br/>• Player Spotlights & Record Breaks (2/wk)<br/>• 100+ Agent Wire & Fantasy Tweets (104/wk)"]
+        BatchPayload --> ColabRun["Google Colab vLLM Continuous Batching<br/>• Llama 3.3 70B AWQ / Qwen 2.5 72B<br/>• ~90s generation time (~14–28 CUs/month)<br/>• $0.00 Token Spend<br/>• Flagship 70B Literary Prose"]
+        ColabRun --> FeedIngest["Push into news_feed Ledger"]
+    end
+```
+
+##### 2036 Production Season Workload Allocation (Measured Database Ground Truth)
+Across the 2036 canonical season (320 articles + 1,876 tweets over 18 weeks):
+
+| Content Category | Season Volume | Weekly Rate | Execution Route | Model & Hardware | Rationale & Latency |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Beat Matchup Primers** | 53 articles | ~3.0 / week | **Track 2 (Colab)** | Llama 3.3 70B (Colab A100) | Zero-tool Python dossier; read asynchronously |
+| **Single-Game Autopsies (Non-User)** | 16 articles | ~1.0 / week | **Track 2 (Colab)** | Llama 3.3 70B (Colab A100) | Bound to single game box score/script |
+| **Postgame Report Cards** | 7 articles | ~0.5 / week | **Track 2 (Colab)** | Llama 3.3 70B (Colab A100) | Bound to single game box score/grades |
+| **Fantasy Desk (Start/Sit, Usage, Tiers)** | 98 articles | ~5.5 / week | **Track 2 (Colab)** | Llama 3.3 70B (Colab A100) | Projections & usage splits compiled deterministically |
+| **Player Spotlights & Progress Audits** | 17 articles | ~1.0 / week | **Track 2 (Colab)** | Llama 3.3 70B (Colab A100) | Bound to single player profile & contract |
+| **Historic Records & Trade Grades** | 16 articles | ~1.0 / week | **Track 2 (Colab)** | Llama 3.3 70B (Colab A100) | Event-driven factual payloads |
+| **Agent Wire & Fantasy Social Posts** | **1,876 posts** | **~104 / week** | **Track 2 (Colab)** | Llama 3.3 70B (Colab A100) | Single-call fact packets; 70B delivers witty banter |
+| **SUBTOTAL BATCH DESK (COLAB)** | **207 articles + 1,876 posts** | **~12 arts + 104 tweets/wk** | **Google Colab** | **Llama 3.3 70B AWQ** | **64.7% of articles + 100% of social wire** |
+| | | | | | |
+| **Macro Slate Recaps & Previews** | 33 articles | ~2.0 / week | **Track 1 (Interactive)** | Gemini 3.8 Flash | Synthesizes entire 16-game league slate |
+| **Power Rankings & SOTU Audits** | 25 articles | ~1.5 / week | **Track 1 (Interactive)** | Gemini 3.8 Flash | Curatorial ranking across all 32 teams |
+| **User's Live Game Autopsy & Beat Story** | ~18 articles | ~1.0 / week | **Track 1 (Interactive)** | Gemini 3.8 Flash | **15-second delivery** right after user plays |
+| **AP All-Pro, Awards & Mock Draft** | 37 articles | ~2.0 / week | **Track 1 (Interactive)** | Gemini 3.8 Flash | Multi-turn curatorial ReAct deliberation |
+| **SUBTOTAL MARQUEE (GEMINI)** | **~113 articles** | **~6.5 arts / week** | **Gemini 3.8 Flash** | **Gemini 3.8 Flash** | **35.3% of articles (~$0.40/week, ~$7/season)** |
+
+##### Batch Generation Workflow
+1. **Dossier Compilation (`pipeline/dossier_compiler.py`):** After weekly game ingestion, a local Python script extracts structured dossiers for all 30 non-user teams, fantasy projections, and ~100 tweet fact packets into `weekly_batch.json` in under 2 seconds.
+2. **Colab Execution (`notebooks/newsroom_batch_vllm.ipynb`):** A headless Colab session mounts Google Drive or pulls the batch payload, boots `vllm.LLM` on an A100 GPU running `meta-llama/Llama-3.3-70B-Instruct-AWQ`, and executes all ~116 text generations in continuous parallel batches (~90 seconds total generation time).
+3. **Database Ingestion:** Generated articles and tweets are validated for structure and ingested directly into `news_feed` via FastAPI backend (`server/api.py`) or direct PostgreSQL connection.
+4. **Local Fallback:** If cloud credits or internet are unavailable, the exact same batch payload runs unattended on the local RTX 5070 Ti overnight via [`pipeline/gpu_queue/`](../../pipeline/gpu_queue/) using Qwen 2.5 14B Q4_K_M for \$0.00.
 
 ---
 
