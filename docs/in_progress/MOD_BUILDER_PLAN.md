@@ -1,6 +1,6 @@
 # Project Mu: Mod Builder Plan
 
-**Status:** approved by JR (2026-10-30); building, wave 0 of 2: S-c passed, S-a half done (no admin needed; screen control waits on a new session), S-b not started.
+**Status:** approved by JR (2026-10-30); building, wave 1 of 2. Wave 0 done: S-c passed, S-a answered the admin question, S-b dropped (JR, 2026-10-30).
 **Builds on:** [`MOD_REVERSE_ENGINEERING.md`](../reference/MOD_REVERSE_ENGINEERING.md) §1, §5, §6; [`MOD_INSTALL.md`](../MOD_INSTALL.md) §1, §4; PROJECT_SPEC §1.1 (`tools/fbmod_inspect.py`, `pipeline/mod_packs.py`).
 
 **Goal:** JR describes a mod idea ("make the first-down line yellow", "give the Jaguars and Vikings pink home jerseys") and Claude builds a working `.fbmod` with MMC Editor, puts it in a test pack, and tells JR how to check it in game. There are two ways to drive the editor: Claude works the editor's window with computer-use, or a small console program runs MMC's own libraries with no window. The window route works for anything the editor can do. The console route is for the steps that repeat (texture import, colour edits, export). Both end at the editor's own export, the only thing that makes mods the Mod Manager accepts (payloads are `FMENC001`-encrypted, MOD_REVERSE_ENGINEERING §1). This is only for JR's own mods: it never decrypts other authors' mods and never copies MMC's DLLs anywhere.
@@ -160,7 +160,7 @@ Computer-use on the Windows desktop drives `MMCEditor.exe`, following the runboo
   - Writing to `\\wsl.localhost\Ubuntu\...` paths (R4 retired).
 - **What doesn't yet:** `TextureImporter.Import` and `ImportDdsBytes` both run their work inside `FrostyTaskWindow.Show`, a WPF window whose BAML needs the editor's theme resources. It throws without them, so the mod written (262 bytes) is empty. The callback's steps (read from its IL with `Calls.cs`) are all public SDK calls: `FrostyTextureEditor.ConvertImageToDDS`, read the `DDSHeader`, build a `new Texture(...)`, `CalculateMipData`, `AssetManager.ModifyChunk` (or `AddChunk` when `ProfilesLibrary.MustAddChunks`), `Texture.SetData`, set `AssetNameHash`, `AssetManager.ModifyRes`, `EbxAssetEntry.LinkAsset`. **U2 does texture import by making these calls itself, with no window** (Frosty Toolsuite's `TextureImporter.cs` is the reference). Inputs are made in WSL: `data/mod_builds/yellow_first_down/work/firstdown_yellow.png` (hue set to 50°, saturation and value kept) and `firstdown_yellow.dds` (RGBA8, 10 mips, `headshots/portrait_converter/dds.py`).
 - **Never call:** the editor DLLs also hold `FrostyModCryptor.Decrypt`, `FrostyModKeyProvider` and `FrostyModReader.GetResourceData`. The harness must not call these, so other authors' mods are never decrypted (§1 Out). U2's code review checks for them.
-- **Still to do:** S-a screen control in a new session, then S-b (the window runbook and the window-made yellow mod). U1 doesn't depend on the spike and can start now. U2 can also start now that S-c has passed.
+- **S-b dropped (JR, 2026-10-30).** The harness exports through MMC's own `FrostyProject.WriteToMod`, the same code as the editor's export menu, so JR's in-game check of the harness-made yellow mod covers R3, and no window-made reference mod is needed. The window route stays in the design as a fallback (§2.5), but its click-by-click runbook is written only if a recipe ever needs an op the harness can't do. Screen control still works from a new session (the Start-menu shortcuts are in place).
 
 ## 4. Tests (synthetic, no live DB)
 
@@ -198,9 +198,9 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 ### U3: Skill and runbook
 
 - **Owns:** `.claude/skills/build-mod/SKILL.md` (new), `docs/reference/MOD_BUILDING.md` (new)
-- **Reads:** this plan; the spike S-a/S-b notes; U1's CLI (`python3 -m tools.mod_builder --help`) and U2's README (merged by then); `.claude/skills/reverse-mod/SKILL.md` for skill style
+- **Reads:** this plan, including the spike results in §3; U1's CLI (`python3 -m tools.mod_builder --help`) and U2's README (merged by then); `.claude/skills/reverse-mod/SKILL.md` for skill style
 - **Depends on:** U1, U2 (or U2 dropped after S-c)
-- **Done when:** the skill covers §2.7 end to end. MOD_BUILDING.md has the window runbook from S-b (§2), the harness command table (§3, if U2 shipped), the recipe format (§4), and the in-game check list (§5).
+- **Done when:** the skill covers §2.7 end to end. MOD_BUILDING.md has the harness route end to end (§2), the harness command table (§3), the window route as a short fallback outline with no click-by-click steps (S-b was dropped), the recipe format (§4), and the in-game check list (§5).
 - **Verify:** the skill frontmatter parses (`python3 -c "import yaml,sys; yaml.safe_load(open('.claude/skills/build-mod/SKILL.md').read().split('---')[1])"`), and every CLI command and harness command named in the skill and doc exists (`python3 -m tools.mod_builder --help`, the README table).
 
 ## 6. Waves
