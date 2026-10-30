@@ -16,7 +16,7 @@ The tools have to be on the same drive as the game. Sabos Gameplay Mod 1.0–1.2
 
 ## 2. Steps JR does by hand
 
-These replace an EA anti-cheat file and run unsigned downloads as Administrator, so they are not automated. Steps 1–2 done 2026-10-29: the MMC launcher is in place (EA's original kept as `_EAAntiCheat.GameServiceLauncher.exe`), and the first modded launch ran with a `Default` pack holding only No VRAM Warning; the Mod Manager then wrote `CryptBase.dll` and `ModData\` into the game folder.
+These replace an EA anti-cheat file and run unsigned downloads as Administrator, so they are not automated. **Install done and verified 2026-10-29:** JR loaded into a game with the full `Default` pack, no breakages. Steps 1–2 done 2026-10-29: the MMC launcher is in place (EA's original kept as `_EAAntiCheat.GameServiceLauncher.exe`), and the first modded launch ran with a `Default` pack holding only No VRAM Warning; the Mod Manager then wrote `CryptBase.dll` and `ModData\` into the game folder.
 
 1. **Swap the anti-cheat launcher** (ReadMe step 2–3). In `C:\Program Files\EA Games\Madden NFL 27\`, rename `EAAntiCheat.GameServiceLauncher.exe` to `_EAAntiCheat.GameServiceLauncher.exe`, then copy in the one from `C:\Madden27Modding\MMC_Modding_Tools_v1.1.0.7\AC_(PUT IN CFB27 or M27 FOLDER)\`. The game folder's existing `*_b` files are EA's own backups; leave them.
 2. **Mod Manager as Administrator:** right-click `MMCModManager.exe` → Properties → Compatibility → *Run this program as administrator*. On first launch pick Madden 27; the 71 mods should already be listed (if not, *Add Mod* and select them from the `Mods\Madden27` folder).
