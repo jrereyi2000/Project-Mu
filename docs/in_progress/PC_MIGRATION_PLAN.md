@@ -650,7 +650,7 @@ The text model, the image model and Madden can't share the 16GB at once, so loca
 2. Headshots for new players and any re-renders (§7.7), then portrait conversion for the next mod build (§9.4).
 3. Audio segments for the broadcast layer (pregame and postgame TTS, Phase 7).
 
-The queue unloads each model before loading the next. An interactive job that can't wait executes against the resident ~1–2GB model or falls back to Gemini (§7.5). Gemini-side / hosted API newsroom articles don't use the GPU and run immediately after the weekly load.
+The queue unloads each model before loading the next. An interactive job that can't wait executes against the resident ~1–2GB model or falls back to Gemini (§7.5). Gemini-side / hosted API newsroom articles don't use the GPU and run immediately after the weekly load, unless deferred to the GPU queue for $0 background drafting by V2's Dual-Track Media Pipeline ([`V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md) §5.1).
 
 ### 7.9 Before the PC Arrives
 

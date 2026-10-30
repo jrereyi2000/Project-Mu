@@ -42,6 +42,9 @@ Rather than relying on Madden's franchise screens, the React 19 + Vite frontend 
 * **Opponent Scouting Dossier:** Record, offensive/defensive rankings (EPA, pass/rush splits), personnel groupings, weather conditions, and the newsroom’s matchup primer.
 * **Matchup Breakdown:** Head-to-head positional battles (e.g. your Pass Rush vs their LT, your Slot WR vs their Nickel CB).
 * **Game Strategy & Focus:** Set weekly offensive/defensive focuses (e.g. Blitz-heavy vs Cover-3; Inside Zone vs Deep Shot; stamina/fatigue management).
+* **Post-Game Media Coverage Preference:** Toggle between:
+  - **Live Marquee Mode (Gemini 3.8 Flash):** Generate comprehensive newsroom coverage immediately upon game completion.
+  - **Fast Play / Deferred GPU Queue (Gemma 4):** Advance immediately to the next week (<5s); enqueue unread routine week coverage to the nightly GPU queue for $0 background drafting.
 * **The "Play Game" Trigger:**
   1. Pre-flight check: validates and writes pending depth charts, roster moves, and injuries to the save.
   2. Compiles and activates the game's tailored mod pack via [`pipeline.mod_packs`](../../pipeline/mod_packs.py) (CBS/FOX/Primetime presentation and scorebugs, crowd density tier, mudded or BCA pink ball).
@@ -203,8 +206,13 @@ flowchart TD
         I --> J["Save Watcher detects debounced CAREER-* file update"]
         J --> K["Ingest Game Box Scores, Snap Counts & Team Stats"]
         K --> L["Execute Deterministic Analytics (Excitement, TWI, POP)"]
-        L --> M["Dispatch Newsroom Swarm & Agent Wire Social Desk"]
-        M --> N["Update Database & Refresh Mu_Network Dashboard"]
+        L --> Decision{"Coverage Mode?"}
+        Decision -- "Live Marquee (Gemini)" --> M1["Synchronous Gemini Swarm (~60s)<br/>Immediate Deep Articles"]
+        Decision -- "Fast Next-Game (GPU Queue)" --> M2["Enqueue to GPU Queue<br/>Immediate Week Advance (<5s)"]
+        M1 --> N["Update Database & Refresh Mu_Network Dashboard"]
+        M2 --> O["Prepare Next-Week Mod Pack & Advance"]
+        M2 -.-> P["Background GPU Runner drafts via Gemma 4<br/>when Madden is closed ($0 cost)"]
+        P -.-> N
     end
 ```
 
@@ -212,10 +220,26 @@ flowchart TD
 2. **Pre-Flight Save Injection:** The backend writes all 32 team depth charts, contracts, and roster moves directly to the save file.
 3. **Mod Pack Activation & Launch:** [`pipeline.mod_packs`](../../pipeline/mod_packs.py) configures the active broadcast presentation (CBS/FOX/TNF/SNF/MNF), crowd tier, and ball type, then executes `MMCModManager.exe -launch <pack>`.
 4. **Gameplay:** You play the game in Madden. On completion, simply save and exit the game to desktop.
-5. **Autonomous Ingestion & Newsroom Dispatch:**
+5. **Autonomous Ingestion & Dual-Track Media Dispatch:**
    - The process monitor ([`pipeline/gpu_queue/process_check.py`](../../pipeline/gpu_queue/process_check.py)) detects `Madden27.exe` has closed.
-   - [`pipeline/watch_save.py`](../../pipeline/watch_save.py) ingests the save, executes deterministic engines, queues nightly batch jobs, and triggers the newsroom journalists.
-   - `Mu_Network` refreshes with completed box scores, postgame quotes, articles, and updated standings.
+   - [`pipeline/watch_save.py`](../../pipeline/watch_save.py) ingests the save, executes deterministic engines, updates standings, and checks the configured coverage mode:
+     - **Live Marquee Mode (Gemini 3.8 Flash):** Executes [`weekly_capture.step_articles()`](../../pipeline/weekly_capture.py) synchronously, delivering full-depth analytical journalism ready for immediate reading.
+     - **Fast Next-Game Mode (Deferred GPU Queue / Gemma 4):** Bypasses synchronous article generation. The watcher enqueues an `ARTICLE_SLATE` job into [`pipeline.gpu_queue`](../../pipeline/gpu_queue/queue.py), prepares the next game's mod pack, and advances the week in **under 5 seconds**, letting you boot straight into the next game. The RTX 5070 Ti drafts the unread articles in the background via `ollama:gemma4:e4b@nothink` at $0 cost once Madden exits or while idle.
+
+### 5.1 Dual-Track Media Architecture (Live Marquee vs. Deferred Universe Background)
+
+When playing multiple franchise games or simming through regular season stretches, generating 18 multi-turn research articles synchronously (60–90 seconds) creates unwanted gameplay friction. Conversely, skipping articles entirely damages long-term universe continuity (breaking reporter memories, historical references, and website archives).
+
+The Dual-Track pipeline resolves this tension:
+
+| Dimension | Live Marquee Mode | Deferred GPU Queue Mode |
+| :--- | :--- | :--- |
+| **Model** | `gemini-3.8-flash:low` (Cloud API) | `ollama:gemma4:e4b@nothink` (Local RTX 5070 Ti) |
+| **Execution Trigger** | Synchronous on save ingest (or manual "Generate Now" click) | Background job runner when `Madden27.exe` is closed |
+| **Best Used For** | Super Bowl, playoff weeks, rivalry games, season openers, feature reads | Routine regular-season weeks, back-to-back gameplay sessions, fast simming |
+| **Post-Game Delay** | ~60–90 seconds (full database research tools) | **< 5 seconds** (stats and week advance only) |
+| **Cost** | ~$0.13 per weekly slate | **$0.00** |
+| **Universe Effect** | Full literary depth, nuanced tactical critique | 100% universe continuity, valid memory takes, populated news feeds |
 
 ---
 
@@ -272,6 +296,9 @@ Madden XP progression sliders set to 0. All player attribute development, stagna
 
 ### V2.15 Project Mu Runs the League (Headless League Office)
 Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md)).
+
+### V2.16 Dual-Track Media Engine (Marquee Live vs. Background Universe Queue)
+Configurable post-game journalism pipeline (§5.1): major matchups, playoffs, and manual requests run synchronous Gemini 3.8 Flash slates for deep reading; fast gameplay sessions advance in <5s and enqueue articles to the RTX 5070 Ti GPU queue for free background drafting with Gemma 4, keeping universe history complete without gameplay interruption.
 
 ---
 
