@@ -17,7 +17,7 @@ export_active_dsn()
 
 from engines.gotw_engine import display_excitement
 from pipeline.commentary_names import player_name_aliases_exist
-from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api
+from server import debug_api, social_api, napper_api, front_office_api, draft_api, history_api, franchise_api
 
 CONN_INFO = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -146,6 +146,7 @@ app.include_router(napper_api.router)  # /api/napper/*: Napper interactive fanta
 app.include_router(front_office_api.router)  # /api/team/{abbr}/front-office: the Team hub's Front Office tab
 app.include_router(draft_api.router)   # /api/draft/*: Draft Central (big board, dossiers, honors, needs, mock, war room)
 app.include_router(history_api.router)  # /api/records/*: the #records Record Book
+app.include_router(franchise_api.router)  # /api/franchise/*: the #franchise page (depth chart, roster, cap, moves, market, launch)
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 os.makedirs(_STATIC_DIR, exist_ok=True)
