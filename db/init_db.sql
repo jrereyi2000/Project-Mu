@@ -372,19 +372,19 @@ CREATE TABLE IF NOT EXISTS captures (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS captures_mode_season_week ON captures (mode, season, week);
 
--- PS5 attribute scan (2027_01_06_player_attributes.sql): 54 ratings per player per scan, Madden 27 field names
+-- Native player ratings (2027_01_06_player_attributes.sql): 54 ratings per player per season/snapshot, Madden 27 field names
 CREATE TABLE IF NOT EXISTS player_attributes (
     id SERIAL PRIMARY KEY,
     player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     season INT NOT NULL,
     team_id INT REFERENCES teams(id),
-    capture_folder VARCHAR(255) NOT NULL,             -- captures/<run> the scan came from
+    capture_folder VARCHAR(255) NOT NULL,             -- captures/<run> or save_<season> from pipeline/load_save.py
     position VARCHAR(10),
     age INT,
-    overall_rating INT,                               -- OVR the list showed
+    overall_rating INT,                               -- OVR from the save
     predicted_ovr INT,                                -- engines/ovr_weights from the ratings
     ovr_check VARCHAR(16),                            -- ok | off by N | n/a
-    confirmed SMALLINT,                               -- ratings read alike in two sweeps (of 54)
+    confirmed SMALLINT,                               -- count of ratings stored (54 for native PC save rows)
     ratings JSONB NOT NULL,                           -- {"Speed": 99, ...} Player.<field>Rating names
     flags TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

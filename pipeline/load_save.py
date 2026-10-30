@@ -11,6 +11,7 @@ save's own franchise year picks which games and season rows belong to it (older 
 Writes, for that season:
   players / player_seasons   every Signed, PracticeSquad or FreeAgent player (a pgid not yet stored gets a new
                              players row); team, position, age, OVR, experience, dev trait, archetype
+  player_attributes          every player's 54 native ratings (Speed, Acceleration, etc.) as JSONB
   games                      regular-season and playoff games, scheduled and completed (preseason skipped)
   team_stats                 quarter and OT scores plus Madden's team box score (SeasonGame team stat cache:
                              yards, first downs, 3rd/4th downs, turnovers, red zone, penalties, possession) for
@@ -409,6 +410,44 @@ def load_players(cur, snapshot, season, teams, report):
     return ids
 
 
+def load_player_attributes(cur, snapshot, season, players, report, capture_folder=None):
+    """Upserts each player's 54 Madden ratings into player_attributes for the season."""
+    folder = capture_folder or f"save_{season}"
+    rows = []
+    for p in snapshot["players"]:
+        who = players.get(p["pgid"])
+        ratings = p.get("ratings")
+        if who is None or not ratings:
+            continue
+        pid, team, pos, _ = who
+        rows.append((
+            pid, season, team, folder, pos, p.get("age"),
+            p.get("overall"), p.get("overall"), "ok", len(ratings),
+            json.dumps(ratings), "native_save"
+        ))
+    if not rows:
+        report["player_attributes"] = 0
+        return
+    cur.executemany("""
+        INSERT INTO player_attributes (
+            player_id, season, team_id, capture_folder, position, age,
+            overall_rating, predicted_ovr, ovr_check, confirmed, ratings, flags
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (player_id, capture_folder) DO UPDATE SET
+            season = EXCLUDED.season,
+            team_id = EXCLUDED.team_id,
+            position = EXCLUDED.position,
+            age = EXCLUDED.age,
+            overall_rating = EXCLUDED.overall_rating,
+            predicted_ovr = EXCLUDED.predicted_ovr,
+            ovr_check = EXCLUDED.ovr_check,
+            confirmed = EXCLUDED.confirmed,
+            ratings = EXCLUDED.ratings,
+            flags = EXCLUDED.flags
+    """, rows)
+    report["player_attributes"] = len(rows)
+
+
 def load_games(cur, snapshot, season, teams, report):
     """Upserts this franchise year's games; returns {snapshot game row: (game id, week, home id, away id)}."""
     year = snapshot["season"]["franchise_year"]
@@ -668,7 +707,7 @@ def update_league_state(cur, season, week, report):
         report["league_state"] = f"kept {stored_season} week {stored_week} (save: {season} week {week})"
 
 
-def load_snapshot(cur, snapshot, season=None, capture_id=None):
+def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=None):
     """The whole load on an open cursor (the caller commits or rolls back). Returns the report."""
     if snapshot.get("meta", {}).get("game_year") != 27:
         raise LoadError(f"not a Madden 27 snapshot: game_year {snapshot.get('meta', {}).get('game_year')}")
@@ -677,6 +716,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None):
               "save_week": {k: snapshot["season"][k] for k in ("week_type", "week_index", "stage")}}
     teams = team_ids(cur, snapshot)
     players = load_players(cur, snapshot, season, teams, report)
+    load_player_attributes(cur, snapshot, season, players, report, capture_folder=capture_folder)
     games = load_games(cur, snapshot, season, teams, report)
     load_game_lines(cur, snapshot, games, players, report)
     load_team_scores(cur, games, report)
@@ -690,7 +730,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None):
     return report
 
 
-REPORT_COUNTS = ("players", "players_created", "games", "games_completed", "game_line_rows", "team_stat_rows",
+REPORT_COUNTS = ("players", "players_created", "player_attributes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays")
 
 
@@ -714,12 +754,13 @@ def capture_row(cur, path, season, week):
 def load(path, season=None, commit=False):
     with open(path) as fh:
         snapshot = json.load(fh)
+    folder = os.path.basename(os.path.dirname(os.path.abspath(path)))
     with psycopg.connect(DSN) as conn:
         cur = conn.cursor()
         cid = None
         if commit:
             cid = capture_row(cur, path, season or snapshot["season"]["calendar_year"], current_week(snapshot))
-        report = load_snapshot(cur, snapshot, season, capture_id=cid)
+        report = load_snapshot(cur, snapshot, season, capture_id=cid, capture_folder=folder)
         if commit:
             cur.execute("UPDATE captures SET status = 'loaded', loaded_at = now(), row_counts = %s WHERE id = %s",
                         (json.dumps({k: report[k] for k in REPORT_COUNTS if isinstance(report.get(k), int)}), cid))

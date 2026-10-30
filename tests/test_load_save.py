@@ -151,11 +151,12 @@ class SaveValuesTest(unittest.TestCase):
 
 def tiny_snapshot():
     """Two teams, one finished game and one scheduled, a QB, a WR/returner, a free agent and a draft prospect."""
-    def player(pgid, first, last, pos, team, status, game_stats=(), season_stats=(), contract=None, injury=None):
+    def player(pgid, first, last, pos, team, status, game_stats=(), season_stats=(), contract=None, injury=None, ratings=None):
         return {"pgid": pgid, "row": pgid, "first_name": first, "last_name": last, "position": pos,
                 "archetype": "QB_FieldGeneral" if pos == "QB" else "WR_Slot", "status": status, "team_index": team,
                 "age": 25, "years_pro": 3, "jersey": 9, "height_in": 74, "weight_lbs": 210, "dev_trait": "College_Star",
-                "overall": 80, "game_stats": list(game_stats), "season_stats": list(season_stats),
+                "overall": 80, "ratings": ratings or {"Speed": 85, "Awareness": 80, "ThrowPower": 92},
+                "game_stats": list(game_stats), "season_stats": list(season_stats),
                 "contract": contract, "injury": injury or {"status": "Uninjured", "injured_reserve": False}}
     qb_line = {"kind": "offense", "game_row": 1, "opponent_team_index": 1,
                "stats": {"PASSCOMPLETED": 22, "PASSATTEMPTS": 27, "PASSYARDS": 264, "PASSTDS": 3, "DOWNSPLAYED": 65}}
@@ -217,11 +218,16 @@ class LoadTinySnapshotTest(unittest.TestCase):
     def test_load(self):
         r = ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
         self.assertEqual((r["players"], r["players_created"]), (3, 3))          # the prospect isn't loaded
+        self.assertEqual(r["player_attributes"], 3)
         self.assertEqual((r["games"], r["games_completed"]), (2, 1))             # preseason skipped
         self.assertEqual(r["team_stat_rows"], 2)
 
         qb = self.one("SELECT id, player_name, full_name, height, origin FROM players WHERE madden_pgid = 900001")
         self.assertEqual(qb[1:], ("T. Passer", "Test Passer", "6'2\"", "SAVE"))
+        pa = self.one("SELECT overall_rating, confirmed, flags, ratings FROM player_attributes "
+                      "WHERE player_id = %s AND season = %s", qb[0], TEST_SEASON)
+        self.assertEqual(pa[:3], (80, 3, "native_save"))
+        self.assertEqual(pa[3], {"Speed": 85, "Awareness": 80, "ThrowPower": 92})
         ps = self.one("SELECT t.abbreviation, position, dev_trait, archetype, years_of_experience FROM player_seasons p "
                       "JOIN teams t ON t.id = p.team_id WHERE player_id = %s AND season = %s", qb[0], TEST_SEASON)
         self.assertEqual(ps, ("CHI", "QB", "Superstar", "Field General", 3))
@@ -398,3 +404,9 @@ class LoadSampleSaveTest(unittest.TestCase):
             WHERE g.season = %s AND g.status = 'COMPLETED' AND t.score <> t.q1 + t.q2 + t.q3 + t.q4 + t.ot""",
                          (TEST_SEASON,))
         self.assertEqual(self.cur.fetchall(), [])
+
+    def test_player_attributes_loaded(self):
+        r = ls.load_snapshot(self.cur, self.snapshot, season=TEST_SEASON)
+        self.assertGreater(r["player_attributes"], 1500)
+        self.cur.execute("SELECT count(*) FROM player_attributes WHERE season = %s", (TEST_SEASON,))
+        self.assertGreater(self.cur.fetchone()[0], 1500)
