@@ -15,6 +15,10 @@ Two Layers (§5.1):
           + offset(age band)              # AGE_BAND_OFFSET, calibration to Madden's 2035->2036 offseason
           + league                        # league-shape term holding the 2036 shape (calibrate_league_term)
           + performance                   # last season's production rank + awards (performance_scores)
+          + wear + continuity + mentor    # phase C2 (§5.8, §5.13); upkeep above 90 sits inside league (§5.10)
+          + persona + coach               # 0 until personalities (§6, §7; V2 core D4)
+   `dev` is growth toward the ceiling band (§5.9: band_growth from the spread and room to the technical ceiling);
+   breakthroughs raise technical and mental ceilings; lasting injury damage lands in `injury`.
    Clamped per age band and OVR band. Each term stored in breakdown dict for newsroom citations.
 
 2. Ratings Layer (§5.4):
@@ -164,9 +168,21 @@ def compute_player_delta(
     aging_curves: Dict[str, Any],
     league_adj: float = 0.0,
     star_adj: float = 0.0,
-    performance: float = 0.0
+    performance: float = 0.0,
+    spread: Optional[float] = None,
+    technical_ceiling: Optional[float] = None,
+    wear: float = 0.0,
+    lasting_damage: int = 0,
+    upkeep: float = 0.0,
+    continuity: float = 0.0,
+    mentor: float = 0.0,
+    breakthrough: bool = False,
 ) -> Tuple[int, int, Dict[str, float], str]:
     """Calculates yearly OVR delta and breakdown of individual causal terms (§5.2).
+    Phase C2 (§5.8-§5.13): `dev` is growth toward the ceiling band (band_growth; spread defaults to the dev rank's
+    BAND_SPREAD_BY_DEV, technical_ceiling to ceiling); `wear` (wear_term) and `lasting_damage` (rating points lost,
+    LASTING_DAMAGE_OVR each, in the injury term) are physical; `upkeep` (upkeep_term) sits inside the league term
+    and is applied only with it; `continuity` and `mentor` are small growth terms. Persona and coach terms are 0.
     Returns (delta_ovr, new_ovr, terms_breakdown, cause_tag)."""
     group = position_group(position)
     band = age_band(age)
@@ -175,15 +191,10 @@ def compute_player_delta(
 
     dr = dev_rank(dev_trait) or 0
 
-    # Dev trait term: young players with high dev grow faster; elite vets resist decline
-    if age <= 24:
-        dev_t = [0.0, 0.50, 1.00, 1.50][dr]
-    elif age <= 26:
-        dev_t = [0.0, 0.30, 0.65, 1.00][dr]
-    elif age <= 28:
-        dev_t = [0.0, 0.15, 0.35, 0.60][dr]
-    else:
-        dev_t = [0.0, 0.20, 0.40, 0.70][dr]
+    # Growth toward the ceiling band (§5.9; replaces the dev table): the spread (from the dev rank unless stored)
+    # sets the rate, room to the technical ceiling scales it; from 29 the band resists decline
+    sp = BAND_SPREAD_BY_DEV[dr] if spread is None else float(spread)
+    dev_t = band_growth(player_id, season, age, ovr, sp, ceiling if technical_ceiling is None else technical_ceiling)
 
     # Ceiling pull: room to grow toward ceiling, shrinking toward 0 near it
     gap = ceiling - ovr
@@ -212,6 +223,8 @@ def compute_player_delta(
         inj_t = -0.45
     elif injury_weeks and injury_weeks >= 2:
         inj_t = -0.20
+    # Lasting damage from a major structural injury (§5.8)
+    inj_t -= LASTING_DAMAGE_OVR * max(0, lasting_damage)
 
     # Seeded noise: strictly deterministic per player and season
     noise_rng = random.Random(f"prog:{season}:{player_id}")
@@ -221,9 +234,12 @@ def compute_player_delta(
     baseline_offset = AGE_BAND_OFFSET[min(band, len(AGE_BAND_OFFSET) - 1)]
     # League shape term (calibrate_league_term): extra development for young players, 0 from 30 on
     league_t = league_adj * league_term_weight(age, ovr) + (star_adj if ovr >= STAR_OVR and age <= STAR_MAX_AGE else 0.0)
+    # Upkeep above 90 (§5.10) is part of the league term
+    league_t += upkeep
     # Performance term (performance_term): how well he played last season, ranked within his position group
     perf_t = performance
-    raw_delta = age_t + dev_t + ceil_t + play_t + inj_t + noise_t + baseline_offset + league_t + perf_t
+    c2_t = wear + continuity + mentor + PERSONA_TERM + COACH_TERM
+    raw_delta = age_t + dev_t + ceil_t + play_t + inj_t + noise_t + baseline_offset + league_t + perf_t + c2_t
 
     # Clamping per age band and OVR band
     if ovr >= 99:
@@ -248,10 +264,16 @@ def compute_player_delta(
     # Assign narrative cause tag (§5.6)
     if is_ir or (inj_t <= -0.4 and final_delta < 0):
         cause = "INJURY"
+    elif breakthrough:
+        cause = "BREAKTHROUGH"
     elif perf_t >= 1.0 and final_delta > 0:
         cause = "STANDOUT_SEASON"
     elif perf_t <= -0.75 and final_delta < 0:
         cause = "POOR_SEASON"
+    elif upkeep <= -1.0 and final_delta < 0:
+        cause = "UPKEEP"
+    elif wear <= -0.6 and final_delta < 0:
+        cause = "WEAR"
     elif final_delta >= 3 and (dev_t + ceil_t >= 1.5):
         cause = "BREAKOUT"
     elif ceil_t >= 0.75 and final_delta > 0:
@@ -276,6 +298,12 @@ def compute_player_delta(
         "noise": round(noise_t, 2),
         "league": round(league_t, 2),
         "performance": round(perf_t, 2),
+        "wear": round(wear, 3),
+        "upkeep": round(upkeep, 3),
+        "continuity": round(continuity, 3),
+        "mentor": round(mentor, 3),
+        "persona": PERSONA_TERM,
+        "coach": COACH_TERM,
     }
 
     return final_delta, new_ovr, breakdown, cause
@@ -285,6 +313,343 @@ def league_term_weight(age: int, ovr: int = 0) -> float:
     by_age = next((w for hi, w in LEAGUE_TERM_WEIGHT if (age or 0) <= hi), 0.0)
     by_ovr = next((w for hi, w in LEAGUE_TERM_OVR_WEIGHT if (ovr or 0) <= hi), 0.0)
     return by_age * by_ovr
+
+
+# ------------------------------------------------------- phase C2 terms (§5.8-§5.13) ----
+# Every C2 term is small, bounded and pure; run_progression reads its inputs from the DB (fetch_c2_inputs).
+# Personality (§6) and coach (§7) terms ship at 0 (V2 core plan D4): persona_term and coach_term are always 0.
+PERSONA_TERM = 0.0
+COACH_TERM = 0.0
+
+# Durability (§5.8, hidden, 0-1): a start from InjuryRating and ToughnessRating (their mean 80 -> 0.5, each 4 points
+# -> 0.1, kept inside DURABILITY_START_RANGE), moved by a seeded draw sha256("durability:" + player_id) of at most
+# ±DURABILITY_SPREAD / 2. No ratings: start 0.5 (source DEFAULT).
+DURABILITY_RATING_MID, DURABILITY_RATING_SCALE = 80.0, 40.0
+DURABILITY_START_RANGE = (0.15, 0.85)
+DURABILITY_SPREAD = 0.3
+
+
+def _sha_unit(key: str) -> float:
+    """A stable number in [0, 1] from sha256(key) (unlike hash(), the same in every process)."""
+    import hashlib
+    return int(hashlib.sha256(key.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+
+
+def seed_durability(player_id: int, injury_rating: Optional[float] = None,
+                    toughness_rating: Optional[float] = None) -> Tuple[float, str]:
+    """(durability 0..1, source 'RATINGS' | 'DEFAULT'), deterministic per player."""
+    vals = [float(v) for v in (injury_rating, toughness_rating) if v is not None]
+    if vals:
+        lo, hi = DURABILITY_START_RANGE
+        start = max(lo, min(hi, 0.5 + (sum(vals) / len(vals) - DURABILITY_RATING_MID) / DURABILITY_RATING_SCALE))
+        source = "RATINGS"
+    else:
+        start, source = 0.5, "DEFAULT"
+    d = start + (_sha_unit(f"durability:{player_id}") - 0.5) * DURABILITY_SPREAD
+    return round(max(0.0, min(1.0, d)), 3), source
+
+
+# Mileage (§5.8): one season's wear points from touches, hits and snaps, weighted by position group so a starter at
+# any position carries roughly 10 a season: (per touch, per hit, per snap). Touches: carries, catches, returns. Hits:
+# QB sacks taken and runs; RB carries and catches; receivers' catches; defenders' tackles. Snaps: downs played, or
+# games x MILEAGE_SNAPS_PER_GAME where downs aren't recorded (before 2035).
+MILEAGE_WEIGHTS = {
+    "QB": (0.0, 0.05, 0.005), "RB": (0.03, 0.01, 0.004), "REC": (0.03, 0.01, 0.006), "OL": (0.0, 0.0, 0.0095),
+    "FRONT": (0.0, 0.03, 0.01), "DB": (0.0, 0.02, 0.0095), "K": (0.0, 0.0, 0.002), "P": (0.0, 0.0, 0.002),
+}
+MILEAGE_SNAPS_PER_GAME = {"QB": 55, "RB": 30, "REC": 40, "OL": 60, "FRONT": 45, "DB": 50, "K": 8, "P": 8}
+DEFAULT_SEASON_WEAR = 6.0       # normal season wear when a group has no stat lines to average
+
+
+def season_mileage(group: Optional[str], r: Dict[str, Any]) -> Dict[str, Any]:
+    """{touches, hits, snaps, wear} for one season stat line (season_stat_lines column names)."""
+    g = lambda k: int(r.get(k) or 0)
+    touches = g("rush_attempts") + g("receptions") + g("kr_returns") + g("pr_returns")
+    if group == "QB":
+        hits = g("pass_sacks") + g("rush_attempts")
+    elif group == "RB":
+        hits = g("rush_attempts") + g("receptions")
+    elif group == "REC":
+        hits = g("receptions")
+    elif group in ("FRONT", "DB"):
+        hits = g("def_tackles")
+    else:
+        hits = 0
+    snaps = g("downs_played") or g("games_played") * MILEAGE_SNAPS_PER_GAME.get(group, 30)
+    wt, wh, ws = MILEAGE_WEIGHTS.get(group, (0.0, 0.0, 0.005))
+    return {"touches": touches, "hits": hits, "snaps": snaps, "wear": round(wt * touches + wh * hits + ws * snaps, 2)}
+
+
+def mileage_excess(career_wear: float, seasons: int, normal_season_wear: float) -> float:
+    """Career wear above (+) or below (-) normal for the seasons he has played at his position group, as a share of
+    normal: 0 = normal, 1 = twice normal. 0 without seasons."""
+    if seasons <= 0 or normal_season_wear <= 0:
+        return 0.0
+    normal = normal_season_wear * seasons
+    return (career_wear - normal) / normal
+
+
+# Wear (§5.8) in OVR a year, part of the physical decline: -WEAR_K x excess (clamped to WEAR_EXCESS_RANGE) x
+# (WEAR_DURABILITY_PIVOT - durability) x the age ramp (0 before the physical decline starts, full WEAR_RAMP_YEARS
+# later; a year earlier for CB, RB, WR). High durability halves it, low durability raises it by half. Low mileage
+# slows the decline a little. Bounded by WEAR_TERM_RANGE.
+WEAR_K = 0.5
+WEAR_EXCESS_RANGE = (-0.5, 1.5)
+WEAR_DURABILITY_PIVOT = 1.5
+WEAR_START_AGE, WEAR_RAMP_YEARS = 27, 4
+WEAR_TERM_RANGE = (-1.2, 0.4)
+
+
+def wear_term(age: int, position: Optional[str], excess: float, durability: float) -> float:
+    start = WEAR_START_AGE - (1 if position_group(position) in EARLY_DECLINE_GROUPS else 0)
+    ramp = max(0.0, min(1.0, ((age or 0) - start + 1) / WEAR_RAMP_YEARS))
+    if not ramp:
+        return 0.0
+    e = max(WEAR_EXCESS_RANGE[0], min(WEAR_EXCESS_RANGE[1], excess))
+    w = -WEAR_K * e * (WEAR_DURABILITY_PIVOT - max(0.0, min(1.0, durability))) * ramp
+    return round(max(WEAR_TERM_RANGE[0], min(WEAR_TERM_RANGE[1], w)), 3)
+
+
+# Lasting injury damage (§5.8): a major structural injury last season (injury_type contains one of these, and not
+# PARTIAL) rolls, seeded per season and player, for a permanent -1..-3 to Speed, Acceleration or Agility and the
+# same off his physical ceiling. Chance LASTING_DAMAGE_BASE x (1.5 - durability), within LASTING_DAMAGE_CHANCE_RANGE.
+# OVR effect: LASTING_DAMAGE_OVR per point, in the injury term.
+MAJOR_STRUCTURAL_INJURIES = ("ACL TEAR", "TORN ACL", "ACHILLES", "LISFRANC", "PATELLA", "DISLOCATED KNEE")
+LASTING_DAMAGE_BASE = 0.5
+LASTING_DAMAGE_CHANCE_RANGE = (0.15, 0.85)
+LASTING_DAMAGE_OVR = 0.35
+LASTING_DAMAGE_RATINGS = ("Speed", "Acceleration", "Agility")
+
+
+def is_major_structural(injury_type: Optional[str]) -> bool:
+    t = (injury_type or "").upper()
+    return "PARTIAL" not in t and any(k in t for k in MAJOR_STRUCTURAL_INJURIES)
+
+
+def lasting_injury_damage(player_id: int, season: int, injury_types: List[Optional[str]],
+                          durability: float) -> Dict[str, int]:
+    """{rating: -points} for at most one physical rating, or {} (no major injury, or the roll missed)."""
+    if not any(is_major_structural(t) for t in injury_types or []):
+        return {}
+    rng = random.Random(f"injury_damage:{season}:{player_id}")
+    lo, hi = LASTING_DAMAGE_CHANCE_RANGE
+    if rng.random() >= max(lo, min(hi, LASTING_DAMAGE_BASE * (1.5 - durability))):
+        return {}
+    return {rng.choice(LASTING_DAMAGE_RATINGS): -rng.randint(1, 3)}
+
+
+# Ceiling bands (§5.9): floor, spread and a ceiling per group. The spread replaces the dev multiplier: growth a year
+# is BAND_GROWTH_PER_SPREAD (by age) x spread x room (technical ceiling - OVR, full at BAND_ROOM_FULL points), plus a
+# seeded draw of at most ±BAND_DRAW_SCALE x spread while he is still growing (28 and under). From 29 the band
+# resists decline at the same rate, room or not. Spreads by dev rank (BAND_SPREAD_BY_DEV) reproduce the old dev table
+# within 0.05 (Normal 0; Star +0.5 / X-Factor +1.5 at 24 and under), so the backtest holds.
+BAND_SPREAD_BY_DEV = (0.0, 1.0, 2.0, 3.0)
+BAND_GROWTH_PER_SPREAD = ((24, 0.5), (26, 0.33), (28, 0.2), (99, 0.23))
+BAND_ROOM_FULL = 3.0
+BAND_DRAW_SCALE = 0.1
+BAND_FLOOR_DROP = 4.0           # floor: OVR - this + dev rank, ± 1 seeded
+MENTAL_CEILING_BONUS = 1.0      # mental ceiling above the technical one (mental grows longest, §5.4)
+STRENGTH_PROGRAM_OVR = 1.0      # physical ceiling above current OVR in the first two seasons
+
+
+def seed_ceiling_band(player_id: int, ovr: int, dev_trait: Optional[str], ceiling: float,
+                      years_pro: Optional[int] = None) -> Dict[str, Any]:
+    """{floor, spread, group_ceilings: {physical, technical, mental}} for a player without a stored band."""
+    dr = dev_rank(dev_trait) or 0
+    rng = random.Random(f"band:{player_id}")
+    floor = max(float(OVR_MIN), min(float(ovr), ceiling) - BAND_FLOOR_DROP + dr + rng.uniform(-1.0, 1.0))
+    phys = min(float(OVR_MAX), ovr + (STRENGTH_PROGRAM_OVR if years_pro is not None and years_pro <= 1 else 0.0))
+    return {"floor": round(floor, 2), "spread": BAND_SPREAD_BY_DEV[dr],
+            "group_ceilings": {"physical": round(phys, 2), "technical": round(float(ceiling), 2),
+                               "mental": round(min(float(OVR_MAX), ceiling + MENTAL_CEILING_BONUS), 2)}}
+
+
+def band_growth(player_id: int, season: int, age: int, ovr: int, spread: float, technical_ceiling: float) -> float:
+    """Growth toward the band (OVR a year), the dev term of §5.2 as §5.9 revises it."""
+    rate = next(r for hi, r in BAND_GROWTH_PER_SPREAD if (age or 0) <= hi)
+    if (age or 0) > 28:
+        return rate * spread
+    room = max(0.0, min(1.0, (technical_ceiling - ovr) / BAND_ROOM_FULL))
+    draw = random.Random(f"band:{season}:{player_id}").uniform(-1.0, 1.0) * BAND_DRAW_SCALE * spread
+    return rate * spread * room + draw * room
+
+
+# Breakthroughs (§5.9): 28 or younger with two straight seasons in his position group's top quarter of
+# performance_scores: with BREAKTHROUGH_CHANCE (personality and coaching odds are 0 until §6, §7), his technical and
+# mental ceilings rise by a seeded 1..4. Cause BREAKTHROUGH.
+BREAKTHROUGH_MAX_AGE = 28
+BREAKTHROUGH_CHANCE = 0.5
+BREAKTHROUGH_RANGE = (1, 4)
+TOP_QUARTER = 0.75
+
+
+def top_quarter(perf: Dict[int, Dict[str, Any]]) -> set:
+    """Players whose score is in the top quarter of their position group (ties share the higher rank)."""
+    by_group = defaultdict(list)
+    for pid, p in (perf or {}).items():
+        if p.get("group"):
+            by_group[p["group"]].append((p.get("score", 0.0), pid))
+    out = set()
+    for vals in by_group.values():
+        if len(vals) < 4:
+            continue
+        scores = sorted((s for s, _ in vals), reverse=True)
+        cut = scores[int(math.ceil((1 - TOP_QUARTER) * len(scores))) - 1]
+        if cut > scores[-1]:
+            out.update(pid for s, pid in vals if s >= cut)
+    return out
+
+
+def breakthrough(player_id: int, season: int, age: int, top_last: bool, top_prev: bool) -> int:
+    """Ceiling points added to technical and mental (0: no breakthrough)."""
+    if (age or 99) > BREAKTHROUGH_MAX_AGE or not (top_last and top_prev):
+        return 0
+    rng = random.Random(f"breakthrough:{season}:{player_id}")
+    return rng.randint(*BREAKTHROUGH_RANGE) if rng.random() < BREAKTHROUGH_CHANCE else 0
+
+
+def apply_breakthrough(band: Dict[str, Any], ceiling: float, points: int) -> Tuple[Dict[str, Any], float]:
+    if not points:
+        return band, ceiling
+    gc = dict(band["group_ceilings"])
+    gc["technical"] = min(float(OVR_MAX), gc["technical"] + points)
+    gc["mental"] = min(float(OVR_MAX), gc["mental"] + points)
+    return {**band, "group_ceilings": gc}, min(float(OVR_MAX), ceiling + points)
+
+
+# Upkeep above 90 (§5.10), part of the league term (off with --follow-madden and in the Madden backtest, which has no
+# league term): -UPKEEP_K x (OVR - 90) x (1 - production), production = (reliability-weighted score + 1) / 2 in 0..1,
+# raised by missed games (up to +UPKEEP_MISSED_MAX at UPKEEP_MISSED_FULL games) and wear above normal (up to
+# +UPKEEP_WEAR_MAX). A 98 with a middling season loses ~2, ~2.75 if he also missed 6 games; a top producer ~0. The
+# star term (calibrate_league_term) keeps the 90+ count, so upkeep decides who holds the spots. Bounded by
+# UPKEEP_TERM_MIN.
+UPKEEP_OVR = 90
+UPKEEP_K = 0.5
+UPKEEP_MISSED_FULL, UPKEEP_MISSED_MAX = 8, 0.5
+UPKEEP_WEAR_MAX = 0.25
+UPKEEP_TERM_MIN = -4.0
+
+
+def upkeep_term(ovr: int, perf_score: Optional[float], games_missed: int = 0, wear_excess: float = 0.0) -> float:
+    if (ovr or 0) <= UPKEEP_OVR:
+        return 0.0
+    production = max(0.0, min(1.0, ((perf_score or 0.0) + 1.0) / 2.0))
+    mult = (1.0 + UPKEEP_MISSED_MAX * min(max(games_missed, 0), UPKEEP_MISSED_FULL) / UPKEEP_MISSED_FULL
+            + UPKEEP_WEAR_MAX * max(0.0, min(1.0, wear_excess)))
+    return round(max(UPKEEP_TERM_MIN, -UPKEEP_K * (ovr - UPKEEP_OVR) * (1.0 - production) * mult), 3)
+
+
+# Scheme continuity (§5.13): the first season under a new coordinator for his side of the ball, or on a new team,
+# costs technical and mental growth CONTINUITY_PENALTY; a second straight season with the same team and staff earns
+# CONTINUITY_BONUS. Weighted by how much he still grows (CONTINUITY_AGE_WEIGHT). Openness (§7) is 0 for now.
+CONTINUITY_PENALTY = 0.25
+CONTINUITY_BONUS = 0.05
+CONTINUITY_AGE_WEIGHT = ((26, 1.0), (29, 0.5), (99, 0.25))
+OFFENSE_GROUPS = ("QB", "RB", "REC", "OL")
+DEFENSE_GROUPS = ("FRONT", "DB")
+
+
+def continuity_term(age: int, new_coordinator: bool, changed_team: bool, known: bool = True) -> float:
+    if not known:
+        return 0.0
+    w = next(x for hi, x in CONTINUITY_AGE_WEIGHT if (age or 0) <= hi)
+    return round(w * (-CONTINUITY_PENALTY if (new_coordinator or changed_team) else CONTINUITY_BONUS), 3)
+
+
+# Mentors (§5.13): a teammate in the same position group, MENTOR_MIN_AGE or older with Awareness MENTOR_MIN_AWARENESS+,
+# speeds a young player's mental growth by MENTOR_BONUS (half from MENTOR_FULL_AGE + 1 to MENTOR_MAX_AGE). The
+# Mentor / Loner traits (§6) multiply it later.
+MENTOR_BONUS = 0.15
+MENTOR_FULL_AGE, MENTOR_MAX_AGE = 23, 25
+MENTOR_MIN_AGE, MENTOR_MIN_AWARENESS = 29, 85
+
+
+def mentor_term(age: int, has_mentor: bool) -> float:
+    if not has_mentor or (age or 99) > MENTOR_MAX_AGE:
+        return 0.0
+    return MENTOR_BONUS if age <= MENTOR_FULL_AGE else MENTOR_BONUS / 2
+
+
+def find_mentor(player: Dict[str, Any], teammates: List[Dict[str, Any]],
+                awareness: Dict[int, int]) -> Optional[int]:
+    """The best-aware eligible veteran teammate in his position group (player_id), or None."""
+    group = _group_of(player.get("position"))
+    best = None
+    for t in teammates:
+        if t["player_id"] == player["player_id"] or _group_of(t.get("position")) != group:
+            continue
+        aw = awareness.get(t["player_id"]) or 0
+        if (t.get("age") or 0) >= MENTOR_MIN_AGE and aw >= MENTOR_MIN_AWARENESS and (best is None or aw > best[0]):
+            best = (aw, t["player_id"])
+    return best[1] if best else None
+
+
+# Behaviour traits (§5.12): PT_* flags gained or lost in the offseason pass, stored in behaviour_changes (written to
+# the save in phase H, not here). At most one gained and one lost per player and season, seeded
+# Random(f"pt:{season}:{player_id}"). A flag is gained only if not known to be set and lost only if known to be set
+# (traits from the save snapshot; none known -> no losses). Penalty-driven flags (PT_UNDISCIPLINED) need penalty
+# stats Project Mu doesn't have yet, so they aren't modelled.
+PT_BAD_QB = ("PT_HAPPYFEET", "PT_SEEINGGHOSTS")
+PT_SACK_RATE_BAD, PT_SACK_RATE_GOOD = 0.08, 0.055
+PT_MIN_ATTEMPTS = 150
+PT_YOUNG_QB_YEARS = 3
+PT_GAIN_CHANCE = 0.25            # + PT_GAIN_PER_RATE x (sack rate - bad rate), at most PT_GAIN_MAX
+PT_GAIN_PER_RATE, PT_GAIN_MAX = 3.0, 0.5
+PT_LOSE_CHANCE = 0.35
+PT_MENTOR_SHIFT = 0.1            # a mentor lowers gain odds and raises loss odds by this
+PT_COVERBALL = "PT_COVERBALL"
+PT_FUMBLE_RATE_BAD, PT_FUMBLE_RATE_GOOD = 0.015, 0.004
+PT_MIN_TOUCHES_LOSE, PT_MIN_TOUCHES_GAIN = 100, 150
+PT_COVERBALL_GAIN_CHANCE = 0.2
+
+
+def behaviour_changes(player_id: int, season: int, position: Optional[str], years_pro: Optional[int],
+                      stats: Optional[Dict[str, Any]], traits: Optional[Dict[str, bool]] = None,
+                      has_mentor: bool = False) -> Optional[Dict[str, List[Dict[str, str]]]]:
+    """{"gained": [{"flag", "cause"}], "lost": [{"flag", "cause"}]} or None when nothing changes."""
+    traits = traits or {}
+    s = stats or {}
+    g = lambda k: float(s.get(k) or 0)
+    group = _group_of(position)
+    rng = random.Random(f"pt:{season}:{player_id}")
+    gain_opts, lose_opts = [], []      # (chance, flag, cause)
+    shift = PT_MENTOR_SHIFT if has_mentor else 0.0
+    if group == "QB" and g("pass_attempts") >= PT_MIN_ATTEMPTS:
+        rate = g("pass_sacks") / (g("pass_attempts") + g("pass_sacks"))
+        young = years_pro is not None and years_pro <= PT_YOUNG_QB_YEARS
+        if young and rate >= PT_SACK_RATE_BAD:
+            chance = max(0.0, min(PT_GAIN_MAX, PT_GAIN_CHANCE + PT_GAIN_PER_RATE * (rate - PT_SACK_RATE_BAD)) - shift)
+            flag = PT_BAD_QB[rng.randrange(len(PT_BAD_QB))]
+            if not traits.get(flag):
+                gain_opts.append((chance, flag, "SACKS"))
+        for flag in PT_BAD_QB:
+            if traits.get(flag) and (rate <= PT_SACK_RATE_GOOD or (years_pro or 0) > PT_YOUNG_QB_YEARS):
+                lose_opts.append((PT_LOSE_CHANCE + shift, flag,
+                                  "BETTER_SITUATION" if rate <= PT_SACK_RATE_GOOD else "EXPERIENCE"))
+    touches = g("rush_attempts") + g("receptions")
+    if group in ("RB", "REC", "QB") and touches > 0:
+        frate = g("fumb") / touches
+        if traits.get(PT_COVERBALL) and touches >= PT_MIN_TOUCHES_LOSE and frate >= PT_FUMBLE_RATE_BAD:
+            lose_opts.append((PT_LOSE_CHANCE, PT_COVERBALL, "FUMBLES"))
+        if (group == "RB" and not traits.get(PT_COVERBALL) and touches >= PT_MIN_TOUCHES_GAIN
+                and frate <= PT_FUMBLE_RATE_GOOD):
+            gain_opts.append((PT_COVERBALL_GAIN_CHANCE, PT_COVERBALL, "BALL_SECURITY"))
+    gained = next(({"flag": f, "cause": c} for ch, f, c in gain_opts if rng.random() < ch), None)
+    lost = next(({"flag": f, "cause": c} for ch, f, c in lose_opts
+                 if rng.random() < ch and (gained is None or gained["flag"] != f)), None)
+    if not gained and not lost:
+        return None
+    return {"gained": [gained] if gained else [], "lost": [lost] if lost else []}
+
+
+def group_changes(ratings_diff: Dict[str, int]) -> Dict[str, int]:
+    """Rating points changed per group (physical, technical, mental) from a ratings diff."""
+    out = {"physical": 0, "technical": 0, "mental": 0}
+    for k, v in (ratings_diff or {}).items():
+        grp = rating_group(k)
+        if grp in out:
+            out[grp] += v
+    return out
 
 
 # ---------------------------------------------------------------- ratings layer ----
@@ -329,9 +694,12 @@ def apply_ratings_progression(
     peak_mental: Optional[Dict[str, int]] = None,
     entry_mental: Optional[Dict[str, int]] = None,
     delta_ovr: Optional[int] = None,
+    wear: float = 0.0,
+    lasting_damage: Optional[Dict[str, int]] = None,
 ) -> Tuple[Dict[str, int], Dict[str, int], str, bool]:
     """Spreads the OVR change over the rating groups (§5.1, §5.4), then checks the archetype stays on top:
-    1. physical: age decline (earlier for CB, RB, WR), the strength program in the first two seasons, injuries;
+    1. physical: age decline (earlier for CB, RB, WR), extra Speed and Agility loss from wear (round(-wear) points,
+       wear_term), the strength program in the first two seasons, injuries and lasting injury damage;
     2. mental: from 30, the peak-based decline (mental_decline);
     3. the rest of the way to target_ovr with ovr_weights.adjust_ratings on the archetype's technical skills, plus
        mental skills when he is growing; all skills only if that can't reach the target.
@@ -373,6 +741,14 @@ def apply_ratings_progression(
         for pr in ("Speed", "Acceleration"):
             if pr in updated:
                 updated[pr] = max(25, updated[pr] - injury_severity)
+    extra = int(round(max(0.0, -wear)))
+    if extra:
+        for pr in ("Speed", "Agility"):
+            if pr in updated:
+                updated[pr] = max(25, updated[pr] - extra)
+    for pr, d in (lasting_damage or {}).items():
+        if pr in updated:
+            updated[pr] = max(25, updated[pr] + d)
 
     # 2. Mental: declines last, by the peak
     mental = {k: updated[k] for k in MENTAL_RATINGS if k in updated}
@@ -422,6 +798,9 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
     has_mental = has_ceilings and cur.fetchone() is not None
     ceiling_col = "pc.ceiling as stored_ceiling" if has_ceilings else "NULL as stored_ceiling"
     mental_cols = "pc.peak_mental, pc.entry_mental" if has_mental else "NULL, NULL"
+    cur.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'player_ceilings' AND column_name = 'group_ceilings'")
+    has_band = has_ceilings and cur.fetchone() is not None
+    band_cols = "pc.floor, pc.spread, pc.group_ceilings" if has_band else "NULL, NULL, NULL"
     ceiling_join = "LEFT JOIN player_ceilings pc ON pc.player_id = ps.player_id" if has_ceilings else ""
 
     cur.execute(f"""
@@ -441,7 +820,8 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
             sp.true_value as prospect_true_val,
             {ceiling_col},
             ps.years_of_experience,
-            {mental_cols}
+            {mental_cols},
+            {band_cols}
         FROM player_seasons ps
         JOIN players p ON p.id = ps.player_id
         LEFT JOIN season_stat_general sg ON sg.player_id = ps.player_id AND sg.season = ps.season
@@ -461,7 +841,8 @@ def fetch_progression_roster(cur, season: int) -> List[Dict[str, Any]]:
     cols = (
         "player_id", "name", "position", "team_id", "age", "overall_rating",
         "dev_trait", "archetype", "games_played", "downs_played",
-        "is_ir", "weeks_remaining", "prospect_true_val", "stored_ceiling", "years_pro", "peak_mental", "entry_mental"
+        "is_ir", "weeks_remaining", "prospect_true_val", "stored_ceiling", "years_pro", "peak_mental", "entry_mental",
+        "stored_floor", "stored_spread", "stored_group_ceilings"
     )
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
@@ -699,6 +1080,114 @@ def performance_scores(cur, season: int) -> Dict[int, Dict[str, Any]]:
     return out
 
 
+SEASON_GAMES = 17               # regular-season games; games missed = SEASON_GAMES - games played (upkeep)
+
+
+def _has_table(cur, name: str) -> bool:
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (f"public.{name}",))
+    return bool((cur.fetchone() or [False])[0])
+
+
+def _has_column(cur, table: str, column: str) -> bool:
+    cur.execute("SELECT 1 FROM information_schema.columns WHERE table_name = %s AND column_name = %s", (table, column))
+    return cur.fetchone() is not None
+
+
+def load_c2_context(cur, season: int) -> Dict[str, Any]:
+    """What the C2 terms read from the DB for the offseason into `season` (last season = season - 1): career stat
+    lines (mileage), the league's normal season wear per position group, last season's injuries, the coordinators
+    in charge last season, each player's team last season and the one before, last season's rosters (mentors) and
+    stored durability. Tables that don't exist give empty parts, so the terms fall back to 0."""
+    last = season - 1
+    ctx: Dict[str, Any] = {"season": season, "stats": defaultdict(dict), "normal_wear": {}, "injuries": defaultdict(list),
+                           "coord_start": {}, "team_last": {}, "team_prev": {}, "roster_by_team": defaultdict(list),
+                           "durability": {}}
+    cur.execute("SELECT * FROM season_stat_lines WHERE season <= %s AND player_id IS NOT NULL", (last,))
+    cols = [d[0] for d in cur.description]
+    for row in cur.fetchall():
+        r = dict(zip(cols, row))
+        prev = ctx["stats"][r["player_id"]].get(r["season"])
+        if prev is None:
+            ctx["stats"][r["player_id"]][r["season"]] = r
+        else:   # several lines for one season (team split): add counts, keep the larger games and downs
+            for k, v in r.items():
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and k not in ("season", "player_id", "team_id"):
+                    prev[k] = (max if k in ("games_played", "downs_played") else (lambda a, b: a + b))(prev.get(k) or 0, v)
+    wear_by_group = defaultdict(list)
+    for seasons in ctx["stats"].values():
+        for line in seasons.values():
+            group = _group_of(line.get("position"))
+            if group and (line.get("games_played") or 0) > 0:
+                wear_by_group[group].append(season_mileage(group, line)["wear"])
+    ctx["normal_wear"] = {g: sum(v) / len(v) for g, v in wear_by_group.items() if v}
+    if _has_table(cur, "injuries"):
+        cur.execute("SELECT player_id, injury_type FROM injuries WHERE season = %s AND player_id IS NOT NULL", (last,))
+        for pid, t in cur.fetchall():
+            ctx["injuries"][pid].append(t)
+    if _has_table(cur, "coordinator_tenures"):
+        cur.execute("""
+            SELECT team_id, role, max(start_season) FROM coordinator_tenures
+            WHERE start_season <= %s AND COALESCE(end_season, 9999) >= %s GROUP BY 1, 2
+        """, (last, last))
+        ctx["coord_start"] = {(t, role): start for t, role, start in cur.fetchall()}
+    cur.execute("""
+        SELECT season, player_id, team_id, position, age FROM player_seasons
+        WHERE season IN (%s, %s) AND position != 'DEF'
+    """, (last, last - 1))
+    for s, pid, team, pos, age in cur.fetchall():
+        if s == last:
+            ctx["team_last"][pid] = team
+            if team:
+                ctx["roster_by_team"][team].append({"player_id": pid, "position": pos, "age": age})
+        else:
+            ctx["team_prev"][pid] = team
+    if _has_table(cur, "player_durability"):
+        cur.execute("SELECT player_id, durability, source FROM player_durability")
+        ctx["durability"] = {pid: (float(d), src) for pid, d, src in cur.fetchall()}
+    return ctx
+
+
+def c2_player_inputs(p: Dict[str, Any], ctx: Dict[str, Any], attrs: Optional[Dict[str, int]],
+                     awareness: Dict[int, int], age: int) -> Dict[str, Any]:
+    """The C2 terms for one player from load_c2_context's ctx (pure). `p` needs player_id and position; `age` is
+    the age the terms are judged at."""
+    pid, pos = p["player_id"], p.get("position")
+    season = ctx["season"]
+    group = _group_of(pos)
+    # Durability: stored, else seeded from InjuryRating / ToughnessRating
+    if pid in ctx["durability"]:
+        durability, d_source = ctx["durability"][pid]
+    else:
+        attrs = attrs or {}
+        durability, d_source = seed_durability(pid, attrs.get("Injury"), attrs.get("Toughness"))
+    # Mileage and wear
+    seasons = ctx["stats"].get(pid, {})
+    mileage = {s: season_mileage(_group_of(line.get("position")) or group, line) for s, line in sorted(seasons.items())}
+    played = [m for s, m in mileage.items() if (seasons[s].get("games_played") or 0) > 0]
+    career = sum(m["wear"] for m in played)
+    excess = mileage_excess(career, len(played), ctx["normal_wear"].get(group, DEFAULT_SEASON_WEAR))
+    wear = wear_term(age, pos, excess, durability)
+    # Lasting injury damage
+    damage = lasting_injury_damage(pid, season, ctx["injuries"].get(pid, []), durability)
+    # Continuity: last season under a new coordinator for his side, or on a new team
+    team_last, team_prev = ctx["team_last"].get(pid), ctx["team_prev"].get(pid)
+    role = "OC" if group in OFFENSE_GROUPS else "DC" if group in DEFENSE_GROUPS else None
+    start = ctx["coord_start"].get((team_last, role)) if role else None
+    new_coord = start is not None and start == season - 1
+    changed = team_last is not None and team_prev is not None and team_last != team_prev
+    known = start is not None or (team_last is not None and team_prev is not None)
+    continuity = continuity_term(age, new_coord, changed, known)
+    # Mentor: a veteran teammate in his position group
+    mentor_id = None
+    if team_last is not None and (age or 99) <= MENTOR_MAX_AGE:
+        mentor_id = find_mentor(p, ctx["roster_by_team"].get(team_last, []), awareness)
+    return {"durability": durability, "durability_source": d_source, "mileage": mileage, "career_wear": round(career, 2),
+            "mileage_excess": round(excess, 3), "wear": wear, "lasting_damage": damage,
+            "lasting_points": -sum(damage.values()), "continuity": continuity,
+            "mentor": mentor_term(age, mentor_id is not None), "mentor_id": mentor_id,
+            "last_stats": seasons.get(season - 1)}
+
+
 def fetch_player_attributes_map(cur, season: int) -> Dict[int, Dict[str, int]]:
     """Loads player ratings from player_attributes for the season."""
     cur.execute("""
@@ -711,29 +1200,68 @@ def fetch_player_attributes_map(cur, season: int) -> Dict[int, Dict[str, int]]:
 
 
 # ---------------------------------------------------------------- execution ----
+DEV_LABEL_MAX = 16      # player_progression_history.dev_before / dev_after are VARCHAR(16)
+
+
+def dev_label(dev_trait: Optional[str]) -> Optional[str]:
+    """The dev trait as stored in dev_before / dev_after: 'Superstar X-Factor' (18 characters) as 'X-Factor'."""
+    if dev_trait is None:
+        return None
+    if len(dev_trait) <= DEV_LABEL_MAX:
+        return dev_trait
+    return "X-Factor" if "X-Factor" in dev_trait else dev_trait[:DEV_LABEL_MAX]
+
+
+def stored_band(p: Dict[str, Any], ceiling: float) -> Optional[Dict[str, Any]]:
+    """The band stored in player_ceilings (floor, spread, group_ceilings), or None when it isn't complete."""
+    gc = p.get("stored_group_ceilings")
+    if isinstance(gc, str):
+        gc = json.loads(gc)
+    if not gc or p.get("stored_spread") is None:
+        return None
+    return {"floor": float(p["stored_floor"]) if p.get("stored_floor") is not None else None,
+            "spread": float(p["stored_spread"]),
+            "group_ceilings": {k: float(gc.get(k, ceiling)) for k in ("physical", "technical", "mental")}}
+
+
 def run_progression(
     conn,
     season: int,
     commit: bool = False,
     dry_run: bool = False,
     hold_shape: bool = True,
-    log=print
+    log=print,
+    traits: Optional[Dict[int, Dict[str, bool]]] = None,
 ) -> Dict[str, Any]:
     """Runs progression for all players into target season, storing results in
     player_progression_history and updating player_ceilings. With hold_shape (default) the development and star
     terms are calibrated first so the league after the coming draft keeps the LEAGUE_SHAPE_SEASON shape: the draft
-    class is projected from that season's real class, sized to refill the league (calibrate_league_term)."""
+    class is projected from that season's real class, sized to refill the league (calibrate_league_term).
+    Phase C2 (§5.8-§5.13): durability (player_durability), mileage and wear (player_mileage), lasting injury damage,
+    ceiling bands and breakthroughs (player_ceilings floor / spread / group_ceilings), upkeep above 90 inside the
+    league term, scheme continuity, mentors and PT_* behaviour changes (stored, not written to the save) are part
+    of each row. `traits` ({player_id: {PT_*: bool}}, e.g. from the save snapshot) lets the behaviour model drop
+    flags a player has; without it only gains are possible. Persona and coach terms are 0 (D4)."""
     with conn.cursor() as cur:
         _, aging_pairs, _ = read_fit_rows(cur, season - 1 if season > 2036 else 2036)
         aging_curves = fit_aging(aging_pairs)
         roster = fetch_progression_roster(cur, season)
         weights_doc = ow.load_weights()
         attr_map = fetch_player_attributes_map(cur, season)
+        awareness = {pid: r.get("Awareness") for pid, r in attr_map.items() if r}
+        ctx = load_c2_context(cur, season)
 
         log(f"Running progression for Season {season}: {len(roster)} eligible players found")
         results = []
         counts_by_cause = defaultdict(int)
         deltas = []
+
+        perf = performance_scores(cur, season - 1)
+        try:
+            perf_prev = performance_scores(cur, season - 2)
+        except Exception:
+            perf_prev = {}
+        top_last, top_prev = top_quarter(perf), top_quarter(perf_prev)
 
         def delta_inputs(p):
             age = p["age"] + 1  # Player advances 1 year in offseason
@@ -743,14 +1271,29 @@ def run_progression(
             else:
                 ceiling, c_source = seed_player_ceiling(
                     p["player_id"], p["overall_rating"], age, p["dev_trait"], p["prospect_true_val"])
-            return ceiling, c_source, dict(
+            band = stored_band(p, ceiling) or seed_ceiling_band(
+                p["player_id"], p["overall_rating"], p["dev_trait"], ceiling, p["years_pro"])
+            c2 = c2_player_inputs(p, ctx, attr_map.get(p["player_id"]), awareness, age)
+            bt = breakthrough(p["player_id"], season, age, p["player_id"] in top_last, p["player_id"] in top_prev)
+            band, ceiling = apply_breakthrough(band, ceiling, bt)
+            if c2["lasting_points"]:
+                gc = dict(band["group_ceilings"])
+                gc["physical"] = max(float(OVR_MIN), gc["physical"] - c2["lasting_points"])
+                band = {**band, "group_ceilings": gc}
+            pf = perf.get(p["player_id"]) or {}
+            missed = max(0, SEASON_GAMES - p["games_played"]) if p["games_played"] is not None else 0
+            upkeep = upkeep_term(p["overall_rating"], pf.get("score"), missed, c2["mileage_excess"]) if hold_shape else 0.0
+            c2.update(band=band, breakthrough_points=bt, upkeep=upkeep)
+            return ceiling, c_source, c2, dict(
                 player_id=p["player_id"], position=p["position"], age=age, ovr=p["overall_rating"],
                 dev_trait=p["dev_trait"], ceiling=ceiling, games_played=p["games_played"],
                 downs_played=p["downs_played"], is_starter=p["is_starter"], is_ir=p["is_ir"],
                 injury_weeks=p["weeks_remaining"], season=season, aging_curves=aging_curves,
-                performance=performance_term(perf.get(p["player_id"])))
+                performance=performance_term(pf or None), spread=band["spread"],
+                technical_ceiling=band["group_ceilings"]["technical"], wear=c2["wear"],
+                lasting_damage=c2["lasting_points"], upkeep=upkeep, continuity=c2["continuity"],
+                mentor=c2["mentor"], breakthrough=bool(bt))
 
-        perf = performance_scores(cur, season - 1)
         prepared = [(p, *delta_inputs(p)) for p in roster]
         terms = (0.0, 0.0)
         if hold_shape and prepared:
@@ -760,13 +1303,13 @@ def run_progression(
                                    random.Random(f"draft:{season}"))
             terms, projected = calibrate_league_term(
                 prepared, [r["ovr"] for r in rookies], target,
-                lambda item, dev, star: compute_player_delta(**item[3], league_adj=dev, star_adj=star)[1])
+                lambda item, dev, star: compute_player_delta(**item[4], league_adj=dev, star_adj=star)[1])
             log(f"League shape: holding {target['season']} (90+={target['count_90_plus']}, "
                 f"mean {target['avg_ovr']:.2f}) with development term {terms[0]:+.1f} and star term "
                 f"{terms[1]:+.2f}; projected after a {class_size}-player draft: 90+={projected['count_90_plus']}, "
                 f"mean {projected['avg_ovr']:.2f}")
 
-        for p, ceiling, c_source, kwargs in prepared:
+        for p, ceiling, c_source, c2, kwargs in prepared:
             p_id = p["player_id"]
             ovr = p["overall_rating"]
             age = kwargs["age"]
@@ -795,11 +1338,16 @@ def run_progression(
                         years_pro=p["years_pro"],
                         peak_mental=peak,
                         entry_mental=entry,
+                        wear=c2["wear"],
+                        lasting_damage=c2["lasting_damage"],
                     )
                     peak = {k: max(v, new_ratings.get(k, v)) for k, v in peak.items()}
                 except Exception:
                     ratings_diff = {}
 
+            behaviour = behaviour_changes(p_id, season, p["position"], p["years_pro"], c2["last_stats"],
+                                          (traits or {}).get(p_id), c2["mentor_id"] is not None)
+            band = c2["band"]
             results.append({
                 "season": season,
                 "player_id": p_id,
@@ -822,6 +1370,28 @@ def run_progression(
                 "peak_mental": peak,
                 "entry_mental": entry,
                 "entry_source": entry_source,
+                # phase C2 (§5.6)
+                "checkpoint": "OFFSEASON",
+                "dev_before": dev_label(p["dev_trait"]),
+                "dev_after": dev_label(p["dev_trait"]),   # dev changes are phase H (§5.7)
+                "group_changes": group_changes(ratings_diff),
+                "wear_term": breakdown["wear"],
+                "upkeep_term": breakdown["upkeep"],
+                "continuity_term": breakdown["continuity"],
+                "mentor_term": breakdown["mentor"],
+                "persona_term": PERSONA_TERM,
+                "coach_term": COACH_TERM,
+                "behaviour_changes": behaviour,
+                "floor": band["floor"],
+                "spread": band["spread"],
+                "group_ceilings": band["group_ceilings"],
+                "breakthrough": c2["breakthrough_points"],
+                "durability": c2["durability"],
+                "durability_source": c2["durability_source"],
+                "mileage": c2["mileage"],
+                "career_wear": c2["career_wear"],
+                "lasting_damage": c2["lasting_damage"],
+                "mentor_id": c2["mentor_id"],
             })
             counts_by_cause[cause] += 1
             deltas.append(delta)
@@ -832,48 +1402,7 @@ def run_progression(
 
         if commit and not dry_run:
             log(f"Writing {len(results)} rows to player_progression_history and updating player_ceilings...")
-            for r in results:
-                cur.execute("""
-                    INSERT INTO player_progression_history (
-                        season, player_id, old_ovr, new_ovr, delta_ovr,
-                        age_term, dev_term, ceiling_term, play_term, injury_term, noise_term, league_term,
-                        performance_term, ratings_diff, cause, created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (season, player_id) DO UPDATE SET
-                        old_ovr = EXCLUDED.old_ovr,
-                        new_ovr = EXCLUDED.new_ovr,
-                        delta_ovr = EXCLUDED.delta_ovr,
-                        age_term = EXCLUDED.age_term,
-                        dev_term = EXCLUDED.dev_term,
-                        ceiling_term = EXCLUDED.ceiling_term,
-                        play_term = EXCLUDED.play_term,
-                        injury_term = EXCLUDED.injury_term,
-                        noise_term = EXCLUDED.noise_term,
-                        league_term = EXCLUDED.league_term,
-                        performance_term = EXCLUDED.performance_term,
-                        ratings_diff = EXCLUDED.ratings_diff,
-                        cause = EXCLUDED.cause,
-                        created_at = NOW();
-                """, (
-                    r["season"], r["player_id"], r["old_ovr"], r["new_ovr"], r["delta_ovr"],
-                    r["age_term"], r["dev_term"], r["ceiling_term"], r["play_term"], r["injury_term"], r["noise_term"],
-                    r["league_term"], r["performance_term"], json.dumps(r["ratings_diff"]), r["cause"]
-                ))
-                cur.execute("""
-                    INSERT INTO player_ceilings (player_id, ceiling, source, updated_season, peak_mental, entry_mental,
-                                                 entry_source, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (player_id) DO UPDATE SET
-                        ceiling = EXCLUDED.ceiling,
-                        source = EXCLUDED.source,
-                        updated_season = EXCLUDED.updated_season,
-                        peak_mental = COALESCE(EXCLUDED.peak_mental, player_ceilings.peak_mental),
-                        entry_mental = COALESCE(player_ceilings.entry_mental, EXCLUDED.entry_mental),
-                        entry_source = COALESCE(player_ceilings.entry_source, EXCLUDED.entry_source),
-                        created_at = NOW();
-                """, (r["player_id"], r["ceiling"], r["ceiling_source"], season,
-                      json.dumps(r["peak_mental"]) if r["peak_mental"] else None,
-                      json.dumps(r["entry_mental"]) if r["entry_mental"] else None, r["entry_source"]))
+            store_progression(cur, results, season)
             conn.commit()
             log("Commit successful.")
         else:
@@ -886,6 +1415,67 @@ def run_progression(
             "causes": dict(counts_by_cause),
             "results": results
         }
+
+
+C2_HISTORY_COLUMNS = ("checkpoint", "dev_before", "dev_after", "group_changes", "wear_term", "upkeep_term",
+                      "continuity_term", "mentor_term", "persona_term", "coach_term", "behaviour_changes")
+_JSONB_COLUMNS = {"ratings_diff", "group_changes", "behaviour_changes"}
+
+
+def history_rows(results: List[Dict[str, Any]], with_c2: bool = True) -> Tuple[Tuple[str, ...], List[tuple]]:
+    """(columns, value tuples) for player_progression_history, JSONB columns as JSON text."""
+    base = ("season", "player_id", "old_ovr", "new_ovr", "delta_ovr", "age_term", "dev_term", "ceiling_term",
+            "play_term", "injury_term", "noise_term", "league_term", "performance_term", "ratings_diff", "cause")
+    cols = base + (C2_HISTORY_COLUMNS if with_c2 else ())
+    return cols, [tuple(json.dumps(r[c]) if c in _JSONB_COLUMNS and r[c] is not None else r[c] for c in cols)
+                  for r in results]
+
+
+def store_progression(cur, results: List[Dict[str, Any]], season: int) -> None:
+    """Writes run_progression's rows: player_progression_history (with the C2 columns when the 2027_01_14
+    migration is applied), player_ceilings (with the band), player_durability and player_mileage."""
+    has_c2 = _has_column(cur, "player_progression_history", "wear_term")
+    has_band = _has_column(cur, "player_ceilings", "group_ceilings")
+    has_dur, has_mil = _has_table(cur, "player_durability"), _has_table(cur, "player_mileage")
+    cols, rows = history_rows(results, has_c2)
+    sql = (f"INSERT INTO player_progression_history ({', '.join(cols)}, created_at) "
+           f"VALUES ({', '.join(['%s'] * len(cols))}, NOW()) ON CONFLICT (season, player_id) DO UPDATE SET "
+           + ", ".join(f"{c} = EXCLUDED.{c}" for c in cols[2:]) + ", created_at = NOW()")
+    cur.executemany(sql, rows)
+    band_cols = ", floor, spread, group_ceilings" if has_band else ""
+    band_ph = ", %s, %s, %s" if has_band else ""
+    band_set = (", floor = EXCLUDED.floor, spread = EXCLUDED.spread, group_ceilings = EXCLUDED.group_ceilings"
+                if has_band else "")
+    for r in results:
+        band_vals = (r["floor"], r["spread"], json.dumps(r["group_ceilings"])) if has_band else ()
+        cur.execute(f"""
+            INSERT INTO player_ceilings (player_id, ceiling, source, updated_season, peak_mental, entry_mental,
+                                         entry_source{band_cols}, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s{band_ph}, NOW())
+            ON CONFLICT (player_id) DO UPDATE SET
+                ceiling = EXCLUDED.ceiling,
+                source = EXCLUDED.source,
+                updated_season = EXCLUDED.updated_season,
+                peak_mental = COALESCE(EXCLUDED.peak_mental, player_ceilings.peak_mental),
+                entry_mental = COALESCE(player_ceilings.entry_mental, EXCLUDED.entry_mental),
+                entry_source = COALESCE(player_ceilings.entry_source, EXCLUDED.entry_source){band_set},
+                created_at = NOW();
+        """, (r["player_id"], r["ceiling"], r["ceiling_source"], season,
+              json.dumps(r["peak_mental"]) if r["peak_mental"] else None,
+              json.dumps(r["entry_mental"]) if r["entry_mental"] else None, r["entry_source"], *band_vals))
+    if has_dur:
+        cur.executemany("""
+            INSERT INTO player_durability (player_id, durability, source, updated_season) VALUES (%s, %s, %s, %s)
+            ON CONFLICT (player_id) DO UPDATE SET durability = EXCLUDED.durability, source = EXCLUDED.source,
+                updated_season = EXCLUDED.updated_season
+        """, [(r["player_id"], r["durability"], r["durability_source"], season) for r in results])
+    if has_mil:
+        cur.executemany("""
+            INSERT INTO player_mileage (player_id, season, touches, hits, snaps, wear) VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (player_id, season) DO UPDATE SET touches = EXCLUDED.touches, hits = EXCLUDED.hits,
+                snaps = EXCLUDED.snaps, wear = EXCLUDED.wear
+        """, [(r["player_id"], s, m["touches"], m["hits"], m["snaps"], m["wear"])
+              for r in results for s, m in (r["mileage"] or {}).items()])
 
 
 # ---------------------------------------------------------------- backtest ----
@@ -910,7 +1500,9 @@ def run_backtest(conn, season: int = 2036, with_performance: bool = False, log=p
                 sg.games_played,
                 sg.downs_played,
                 COALESCE(inj.is_ir, false) as is_ir,
-                COALESCE(inj.weeks_remaining, 0) as weeks_remaining
+                COALESCE(inj.weeks_remaining, 0) as weeks_remaining,
+                ps35.team_id,
+                ps35.years_of_experience
             FROM player_seasons ps35
             JOIN player_seasons ps36 ON ps36.player_id = ps35.player_id AND ps36.season = %s
             LEFT JOIN season_stat_general sg ON sg.player_id = ps35.player_id AND sg.season = %s
@@ -926,6 +1518,11 @@ def run_backtest(conn, season: int = 2036, with_performance: bool = False, log=p
 
         rows = cur.fetchall()
         perf = performance_scores(cur, season - 1) if with_performance else {}
+        # C2 terms with data behind them (wear, lasting damage, continuity, mentors); breakthroughs follow
+        # production, so only with_performance; upkeep is part of the league term, which the backtest leaves out
+        ctx = load_c2_context(cur, season)
+        attr_map = fetch_player_attributes_map(cur, season)
+        perf_prev = performance_scores(cur, season - 2) if with_performance else {}
         # dev_quality comparison fit
         dev_windows = fetch_window(cur, season)
 
@@ -939,9 +1536,14 @@ def run_backtest(conn, season: int = 2036, with_performance: bool = False, log=p
     by_ovr_band = defaultdict(list)
     by_pos_group = defaultdict(list)
 
+    awareness = {pid: a.get("Awareness") for pid, a in attr_map.items() if a}
+    top_last, top_prev = top_quarter(perf), top_quarter(perf_prev)
     for r in rows:
-        p_id, pos, age, o35, o36, dev, gp, downs, is_ir, inj_w = r
+        p_id, pos, age, o35, o36, dev, gp, downs, is_ir, inj_w, _team, yrs = r
         ceiling, _ = seed_player_ceiling(p_id, o35, age, dev)
+        c2 = c2_player_inputs({"player_id": p_id, "position": pos}, ctx, attr_map.get(p_id), awareness, age)
+        bt = breakthrough(p_id, season, age, p_id in top_last, p_id in top_prev)
+        ceiling = min(float(OVR_MAX), ceiling + bt)
         d_pred, _, _, _ = compute_player_delta(
             player_id=p_id,
             position=pos,
@@ -956,7 +1558,12 @@ def run_backtest(conn, season: int = 2036, with_performance: bool = False, log=p
             injury_weeks=inj_w,
             season=season,
             aging_curves=aging_curves,
-            performance=performance_term(perf.get(p_id))
+            performance=performance_term(perf.get(p_id)),
+            wear=c2["wear"],
+            lasting_damage=c2["lasting_points"],
+            continuity=c2["continuity"],
+            mentor=c2["mentor"],
+            breakthrough=bool(bt),
         )
         d_act = o36 - o35
         preds.append(d_pred)
@@ -1229,11 +1836,12 @@ def run_simulation(
 
         def progress(p, dev, star=0.0, sim_s=sim_s):
             ceiling, _ = seed_player_ceiling(p["player_id"], p["ovr"], p["age"] + 1, p["dev"])
+            upkeep = upkeep_term(p["ovr"], (perf.get(p["player_id"]) or {}).get("score")) if hold_shape else 0.0
             return compute_player_delta(
                 player_id=p["player_id"], position=p["position"], age=p["age"] + 1, ovr=p["ovr"], dev_trait=p["dev"],
                 ceiling=ceiling, games_played=16, downs_played=None, is_starter=True, is_ir=False,
                 injury_weeks=0, season=sim_s, aging_curves=aging_curves, league_adj=dev, star_adj=star,
-                performance=performance_term(perf.get(p["player_id"])))[1]
+                performance=performance_term(perf.get(p["player_id"])), upkeep=upkeep)[1]
 
         terms = (calibrate_league_term(staying, [r["ovr"] for r in rookies], target, progress)[0]
                  if hold_shape else (0.0, 0.0))
