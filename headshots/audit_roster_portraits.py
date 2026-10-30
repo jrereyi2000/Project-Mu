@@ -1,21 +1,34 @@
-"""Audit and baseline portrait generator for active rosters (e.g. 2026 initial season).
+"""Audit and baseline portrait generator for active rosters and Madden 27 saves.
 
-Audits all active players in a given season, identifies who has official broadcast
-face scans vs who is missing them, fetches official media-day portraits from ESPN,
-generates local 5-bracket inpainting portraits for players without photos, and
-batch-exports 512x512 BC3 DDS textures + manifest for Madden 27 modding.
+Audits players directly in Madden 27 PC franchise saves (or the database) to identify
+who actually lacks in-game broadcast portraits (where Player.PLYR_PORTRAIT == 0,
+which renders as a blank grey silhouette in Madden).
+
+Generates photorealistic 5-bracket inpainting portraits for those missing players,
+converts them to 512x512 BC3 DDS textures, and creates a mod manifest ready for
+MMC Modding Tools / MyFranchise Tool in-game injection.
 
 Usage:
-    python -m headshots.audit_roster_portraits [--season 2026] [--fetch-espn] [--export-dds] [--dry-run]
+    # Audit real Madden franchise save directly:
+    python -m headshots.audit_roster_portraits --save CAREER-GIANTS-AUTOSAVE
+
+    # Generate portraits for players missing Madden headshots and export DDS textures:
+    python -m headshots.audit_roster_portraits --save CAREER-GIANTS-AUTOSAVE --generate-missing --export-dds
+
+    # Or audit via database season:
+    python -m headshots.audit_roster_portraits --season 2026
 """
 
 from __future__ import annotations
 
 import argparse
 import io
+import json
 import logging
 import os
+import subprocess
 import sys
+import tempfile
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -34,24 +47,169 @@ ROOT = Path(__file__).resolve().parent.parent
 STATIC_PLAYERS_DIR = ROOT / "static" / "players"
 BACKUP_PLAYERS_DIR = ROOT / "data" / "headshots" / "players_backup"
 DEFAULT_DDS_DIR = ROOT / "data" / "headshots" / "dds" / "2026_baseline"
+READER_SCRIPT = ROOT / "pipeline" / "save_reader" / "pc_save_reader.mjs"
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
-ESPN_HEADSHOT_URL = "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{espn_id}.png&w=1000&h=1000"
 
 
-def get_current_season(dsn: str = DSN) -> int:
-    try:
-        with psycopg.connect(dsn) as conn, conn.cursor() as cur:
-            cur.execute("SELECT current_season FROM league_state WHERE id = 1")
-            row = cur.fetchone()
-            if row and row[0]:
-                return int(row[0])
-    except Exception:
-        pass
-    return 2026
+def audit_madden_save(
+    save_or_snapshot_path: Path,
+    include_practice_squad: bool = True,
+    generate_missing: bool = False,
+    export_dds: bool = False,
+    dds_dir: Path = DEFAULT_DDS_DIR,
+) -> Dict[str, Any]:
+    """Audit players directly from a Madden 27 PC save file or snapshot JSON."""
+    logger.info(f"Loading Madden franchise save from {save_or_snapshot_path}...")
+
+    if save_or_snapshot_path.suffix == ".json":
+        with open(save_or_snapshot_path, "r", encoding="utf-8") as f:
+            snapshot = json.load(f)
+    else:
+        # Run pc_save_reader.mjs to generate temporary snapshot
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            cmd = ["node", str(READER_SCRIPT), str(save_or_snapshot_path), "--out", str(tmp_path)]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode != 0:
+                raise RuntimeError(f"Save reader failed: {res.stderr.strip() or res.stdout.strip()}")
+            with open(tmp_path, "r", encoding="utf-8") as f:
+                snapshot = json.load(f)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
+    players = snapshot.get("players", [])
+    teams_dict = snapshot.get("teams", {})
+    # Map team_index -> team abbreviation
+    team_map = {}
+    for t in teams_dict:
+        if isinstance(t, dict):
+            t_idx = t.get("team_index")
+            t_abbr = t.get("short_name") or t.get("abbr") or t.get("nick_name")
+            if t_idx is not None and t_abbr:
+                team_map[t_idx] = normalize_team(t_abbr)
+
+    signed_players = [p for p in players if p.get("status") == "Signed"]
+    ps_players = [p for p in players if p.get("status") == "PracticeSquad"]
+    fa_players = [p for p in players if p.get("status") == "FreeAgent"]
+
+    def is_missing_portrait(p):
+        return (p.get("appearance", {}).get("portrait_id") or 0) == 0
+
+    signed_missing = [p for p in signed_players if is_missing_portrait(p)]
+    signed_have = [p for p in signed_players if not is_missing_portrait(p)]
+
+    ps_missing = [p for p in ps_players if is_missing_portrait(p)]
+    ps_have = [p for p in ps_players if not is_missing_portrait(p)]
+
+    logger.info("=================================================================")
+    logger.info(f"   MADDEN 27 IN-GAME HEADSHOT AUDIT ({save_or_snapshot_path.name})")
+    logger.info("=================================================================")
+    logger.info(f"  Signed Roster Players (53-man active): {len(signed_players)}")
+    logger.info(f"    - HAVE Authentic Madden Headshots: {len(signed_have)} ({len(signed_have)/len(signed_players)*100:.1f}%)")
+    logger.info(f"    - MISSING Headshot (portrait_id = 0, blank silhouette): {len(signed_missing)} ({len(signed_missing)/len(signed_players)*100:.1f}%)")
+    logger.info(f"  Practice Squad Players: {len(ps_players)}")
+    logger.info(f"    - HAVE Authentic Madden Headshots: {len(ps_have)}")
+    logger.info(f"    - MISSING Headshot: {len(ps_missing)}")
+    logger.info("-----------------------------------------------------------------")
+
+    targets = list(signed_missing)
+    if include_practice_squad:
+        targets.extend(ps_missing)
+
+    logger.info(f"Total players lacking in-game portraits targeted for generation: {len(targets)}")
+    for p in targets[:15]:
+        t_abbr = team_map.get(p.get("team_index"), "FA")
+        logger.info(f"   * {p.get('first_name')} {p.get('last_name')} ({p.get('position')}, {t_abbr}, OVR {p.get('overall')})")
+    if len(targets) > 15:
+        logger.info(f"   ... and {len(targets) - 15} more players.")
+
+    generated_count = 0
+    if generate_missing and targets:
+        logger.info(f"Generating 5-bracket inpainting portraits for {len(targets)} players...")
+        from headshots.local.adapter import patch_headshot_generator
+        from headshots.rookie_headshots import generate_player_headshot
+
+        patch_headshot_generator(force=True)
+
+        for p in targets:
+            full_name = f"{p.get('first_name')} {p.get('last_name')}".strip()
+            team_abbr = team_map.get(p.get("team_index"), "CAR")
+            height_in = p.get("height_in") or 73
+            height_str = f"{height_in // 12}'{height_in % 12}\""
+            weight = p.get("weight_lbs") or 220
+            age = p.get("age") or 23
+            pos = p.get("position") or "WR"
+            pgid = p.get("pgid") or p.get("row")
+
+            try:
+                generate_player_headshot(
+                    player={
+                        "id": pgid,
+                        "full_name": full_name,
+                        "team": team_abbr,
+                        "position": pos,
+                        "height": height_str,
+                        "weight": weight,
+                        "age": age,
+                    },
+                    static_dir=str(STATIC_PLAYERS_DIR),
+                    backup_dir=str(BACKUP_PLAYERS_DIR),
+                )
+                generated_count += 1
+            except Exception as e:
+                logger.error(f"Failed to generate headshot for {full_name}: {e}")
+
+        logger.info(f"Successfully generated {generated_count}/{len(targets)} headshots.")
+
+    exported_dds_count = 0
+    if export_dds and targets:
+        dds_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = dds_dir / "madden_portrait_gapfill_manifest.csv"
+        logger.info(f"Exporting 512x512 BC3 DDS textures to {dds_dir}...")
+
+        lines = ["pgid,full_name,team,position,status,dds_filename\n"]
+        for p in targets:
+            pgid = p.get("pgid") or p.get("row")
+            full_name = f"{p.get('first_name')} {p.get('last_name')}".strip()
+            team_abbr = team_map.get(p.get("team_index"), "FA")
+            pos = p.get("position") or "WR"
+            status = p.get("status") or "Signed"
+
+            webp_path = STATIC_PLAYERS_DIR / f"{pgid}.webp"
+            dds_filename = f"{pgid}.dds"
+            dds_path = dds_dir / dds_filename
+
+            if webp_path.exists():
+                try:
+                    with open(webp_path, "rb") as f:
+                        webp_bytes = f.read()
+                    dds_bytes = to_portrait(webp_bytes, width=512, height=512, fmt="DDS_BC3")
+                    with open(dds_path, "wb") as f:
+                        f.write(dds_bytes)
+                    exported_dds_count += 1
+                    lines.append(f"{pgid},\"{full_name}\",{team_abbr},{pos},{status},{dds_filename}\n")
+                except Exception as e:
+                    logger.warning(f"Could not convert {full_name} to DDS: {e}")
+
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+        logger.info(f"Exported {exported_dds_count} gap-fill DDS portraits to {dds_dir}.")
+        logger.info(f"Wrote mod manifest to {manifest_path}")
+
+    return {
+        "signed_total": len(signed_players),
+        "signed_missing_portrait": len(signed_missing),
+        "ps_total": len(ps_players),
+        "ps_missing_portrait": len(ps_missing),
+        "generated": generated_count,
+        "exported_dds": exported_dds_count,
+    }
 
 
-def fetch_season_roster(season: int, dsn: str = DSN) -> List[Dict[str, Any]]:
+def fetch_database_roster(season: int, dsn: str = DSN) -> List[Dict[str, Any]]:
     query = """
         SELECT p.id,
                COALESCE(NULLIF(TRIM(p.full_name), ''), p.player_name) AS full_name,
@@ -89,185 +247,32 @@ def fetch_season_roster(season: int, dsn: str = DSN) -> List[Dict[str, Any]]:
     return roster
 
 
-def download_espn_cutout(espn_id: int) -> Optional[Image.Image]:
-    """Download official ESPN portrait and segment background via rembg."""
-    url = ESPN_HEADSHOT_URL.format(espn_id=espn_id)
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = resp.read()
-            # Default ESPN silhouettes are usually < 15KB or contain default placeholder
-            if len(data) < 20000:
-                return None
-            im = Image.open(io.BytesIO(data)).convert("RGBA")
-            import rembg
-            nobg = rembg.remove(im)
-            return nobg
-    except Exception:
-        return None
-
-
-def run_audit(
-    season: int = 2026,
-    fetch_espn: bool = False,
-    generate_missing: bool = False,
-    export_dds: bool = False,
-    dds_dir: Path = DEFAULT_DDS_DIR,
-    max_workers: int = 6,
-    dsn: str = DSN,
-) -> Dict[str, Any]:
-    """Audit roster face scans and portraits for a starting franchise season."""
-    roster = fetch_season_roster(season, dsn)
-    total_players = len(roster)
-    logger.info(f"Loaded {total_players} rostered players for Season {season}.")
-
-    STATIC_PLAYERS_DIR.mkdir(parents=True, exist_ok=True)
-    BACKUP_PLAYERS_DIR.mkdir(parents=True, exist_ok=True)
-
-    has_webp = []
-    missing_webp_with_espn = []
-    missing_webp_no_espn = []
-
-    for p in roster:
-        webp_path = STATIC_PLAYERS_DIR / f"{p['id']}.webp"
-        if webp_path.exists() and webp_path.stat().st_size > 0:
-            has_webp.append(p)
-        elif p.get("espn_id"):
-            missing_webp_with_espn.append(p)
-        else:
-            missing_webp_no_espn.append(p)
-
-    logger.info(f"--- Season {season} Face Scan Audit ---")
-    logger.info(f"  Total Roster Players: {total_players}")
-    logger.info(f"  Already have WebP Cutout: {len(has_webp)} ({len(has_webp)/total_players*100:.1f}%)")
-    logger.info(f"  Missing WebP (have ESPN ID): {len(missing_webp_with_espn)}")
-    logger.info(f"  Missing WebP (no ESPN ID): {len(missing_webp_no_espn)}")
-
-    fetched_espn_count = 0
-    if fetch_espn and missing_webp_with_espn:
-        logger.info(f"Fetching official ESPN headshots for {len(missing_webp_with_espn)} players...")
-
-        def _fetch_worker(player):
-            pid = player["id"]
-            eid = player["espn_id"]
-            target_webp = STATIC_PLAYERS_DIR / f"{pid}.webp"
-            backup_webp = BACKUP_PLAYERS_DIR / f"{pid}.webp"
-            cutout = download_espn_cutout(eid)
-            if cutout:
-                cutout.save(backup_webp, format="WEBP", quality=90, method=4)
-                final_img = cutout.resize((700, 508), Image.Resampling.LANCZOS)
-                final_img.save(target_webp, format="WEBP", quality=90, method=4)
-                return True
-            return False
-
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = [pool.submit(_fetch_worker, p) for p in missing_webp_with_espn]
-            for f in as_completed(futures):
-                if f.result():
-                    fetched_espn_count += 1
-
-        logger.info(f"Successfully fetched and segmented {fetched_espn_count} ESPN broadcast headshots.")
-
-    # Check remaining players needing synthetic face scans
-    still_needing = []
-    for p in roster:
-        webp_path = STATIC_PLAYERS_DIR / f"{p['id']}.webp"
-        if not webp_path.exists() or webp_path.stat().st_size == 0:
-            still_needing.append(p)
-
-    logger.info(f"Players lacking portraits after fetch: {len(still_needing)}")
-
-    generated_count = 0
-    if generate_missing and still_needing:
-        logger.info(f"Generating local 5-bracket inpainting portraits for {len(still_needing)} players...")
-        from headshots.rookie_headshots import generate_player_headshot
-        from headshots.local.adapter import patch_headshot_generator
-
-        patch_headshot_generator(force=True)
-
-        for p in still_needing:
-            try:
-                generate_player_headshot(
-                    player={
-                        "id": p["id"],
-                        "full_name": p["full_name"],
-                        "team": p["team_name"],
-                        "position": p["position"],
-                        "height": p["height"],
-                        "weight": p["weight"],
-                        "age": p["age"],
-                    },
-                    static_dir=str(STATIC_PLAYERS_DIR),
-                    backup_dir=str(BACKUP_PLAYERS_DIR),
-                )
-                generated_count += 1
-            except Exception as e:
-                logger.error(f"Failed to generate headshot for {p['full_name']}: {e}")
-
-    # Export DDS portrait textures if requested
-    exported_dds_count = 0
-    if export_dds:
-        dds_dir.mkdir(parents=True, exist_ok=True)
-        manifest_path = dds_dir / "portrait_manifest.csv"
-        logger.info(f"Exporting 512x512 BC3 DDS textures to {dds_dir}...")
-
-        manifest_lines = ["player_id,full_name,team,position,years_exp,dds_filename,status\n"]
-
-        for p in roster:
-            pid = p["id"]
-            webp_path = STATIC_PLAYERS_DIR / f"{pid}.webp"
-            dds_file = f"{pid}.dds"
-            dds_path = dds_dir / dds_file
-
-            if webp_path.exists():
-                try:
-                    with open(webp_path, "rb") as f:
-                        webp_bytes = f.read()
-                    dds_bytes = to_portrait(webp_bytes, width=512, height=512, fmt="DDS_BC3")
-                    with open(dds_path, "wb") as f:
-                        f.write(dds_bytes)
-                    exported_dds_count += 1
-                    manifest_lines.append(f"{pid},\"{p['full_name']}\",{p['team_abbr']},{p['position']},{p['years_of_experience']},{dds_file},OK\n")
-                except Exception as e:
-                    manifest_lines.append(f"{pid},\"{p['full_name']}\",{p['team_abbr']},{p['position']},{p['years_of_experience']},{dds_file},CONVERT_ERROR\n")
-            else:
-                manifest_lines.append(f"{pid},\"{p['full_name']}\",{p['team_abbr']},{p['position']},{p['years_of_experience']},MISSING,NO_PORTRAIT\n")
-
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            f.writelines(manifest_lines)
-
-        logger.info(f"Exported {exported_dds_count}/{total_players} DDS portrait textures to {dds_dir}.")
-        logger.info(f"Wrote mod manifest to {manifest_path}")
-
-    return {
-        "season": season,
-        "total_roster": total_players,
-        "initial_webp_count": len(has_webp),
-        "fetched_espn": fetched_espn_count,
-        "generated_missing": generated_count,
-        "exported_dds": exported_dds_count,
-        "uncovered_count": len(still_needing) - generated_count,
-    }
-
-
 def main():
-    parser = argparse.ArgumentParser(description="Audit and package starting roster portraits for Madden 27 modding.")
-    parser.add_argument("--season", type=int, default=2026, help="Season to audit (default: 2026).")
-    parser.add_argument("--fetch-espn", action="store_true", help="Download official ESPN headshots for real players.")
-    parser.add_argument("--generate-missing", action="store_true", help="Generate 5-bracket portraits for players lacking photos.")
+    parser = argparse.ArgumentParser(description="Audit and package portraits for Madden 27 franchise modding.")
+    parser.add_argument("--save", type=Path, help="Path to Madden CAREER-* franchise save file to audit in-game portraits directly.")
+    parser.add_argument("--snapshot", type=Path, help="Path to save.json snapshot.")
+    parser.add_argument("--season", type=int, default=2026, help="Season to audit in database (default: 2026).")
+    parser.add_argument("--no-ps", action="store_true", help="Exclude practice squad players from save audit.")
+    parser.add_argument("--generate-missing", action="store_true", help="Generate 5-bracket inpainting portraits for players missing portraits.")
     parser.add_argument("--export-dds", action="store_true", help="Batch export 512x512 BC3 DDS textures and manifest.")
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_DDS_DIR, help="Destination directory for DDS textures.")
-    parser.add_argument("--workers", type=int, default=6, help="Parallel workers for ESPN fetching.")
     args = parser.parse_args()
 
-    run_audit(
-        season=args.season,
-        fetch_espn=args.fetch_espn,
-        generate_missing=args.generate_missing,
-        export_dds=args.export_dds,
-        dds_dir=args.out_dir,
-        max_workers=args.workers,
-    )
+    save_path = args.save or args.snapshot
+    if save_path:
+        audit_madden_save(
+            save_or_snapshot_path=save_path,
+            include_practice_squad=not args.no_ps,
+            generate_missing=args.generate_missing,
+            export_dds=args.export_dds,
+            dds_dir=args.out_dir,
+        )
+    else:
+        # Fall back to database audit
+        roster = fetch_database_roster(args.season)
+        logger.info(f"Database Audit: {len(roster)} players loaded for season {args.season}.")
+        has_webp = sum(1 for p in roster if (STATIC_PLAYERS_DIR / f"{p['id']}.webp").exists())
+        logger.info(f"Players with WebP cutout: {has_webp}/{len(roster)} ({has_webp/len(roster)*100:.1f}%)")
 
 
 if __name__ == "__main__":
