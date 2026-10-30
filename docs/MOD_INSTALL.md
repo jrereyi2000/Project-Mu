@@ -62,14 +62,28 @@ Where his order differs from §3: the scorebugs sit above Shifted Kick Meter, so
 
 His UI folders aren't part of the pack string; they would have to be recreated in the UI.
 
-## 4. Switching mods per game (idea, not built)
+## 4. Per-game packs (`pipeline/mod_packs.py`)
 
-JR wants the scorebug/network, crowd tier and ball (BCA Pink in October, maybe on chosen players only) picked automatically per game from team popularity and the matchup. What the tools allow:
+**Pack format.** Packs live in `C:\Users\jrere\AppData\Local\MMC\manager_config.json` under `Games.Madden27.Packs`, one string per pack: `"<file>.fbmod:True|<file>.fbmod:False|..."` (`True` = enabled), listed from **lowest priority to highest**, so the last mod in the string wins a shared asset (checked 2026-10-29: a pack with MUT Remover lowest and More Gameday Cutscenes highest was saved as `MUTRemover1.6.fbmod:True|No VRAM Warning.fbmod:True|More Gameday Cutscenes.fbmod:True`). `Games.Madden27.Options.SelectedPack` names the active pack. The UI reads the file fresh on every start (checked 2026-10-29: a scripted `MuTest` pack with one mod disabled opened selected, with the same mods, order and on/off states), but while it is open it keeps its own copy and can save it over the file, so the file is only edited while `MMCModManager.exe` is closed. `MMCModManager.exe -launch <pack name>` starts the game with a saved pack. Mods apply at launch, so a switch happens between games, not mid-game. To write a pack from the table in §3, reverse it: the table's last row goes first in the string.
 
-- `MMCModManager.exe -launch <pack name>` launches the game with a saved pack (strings in the binary; error text "Unable to find pack with name {0}").
-- Packs are kept in `C:\Users\jrere\AppData\Local\MMC\manager_config.json` under `Games.Madden27.Packs`, one string per pack: `"<file>.fbmod:True|<file>.fbmod:False|..."` (`True` = enabled), listed from **lowest priority to highest**, so the last mod in the string wins a shared asset (checked 2026-10-29: a pack with MUT Remover lowest and More Gameday Cutscenes highest was saved as `MUTRemover1.6.fbmod:True|No VRAM Warning.fbmod:True|More Gameday Cutscenes.fbmod:True`). `Games.Madden27.Options.SelectedPack` naming the active one. Edit it only while the Mod Manager is closed: the UI keeps its own copy of the packs while it is open and can save it over the file. The UI reads the file fresh on every start (checked 2026-10-29: a `MuTest` pack written by script with one mod disabled, and set as `SelectedPack`, opened selected with the same mods, order and on/off states), so packs a script writes show up in the UI exactly. A switcher should check that `MMCModManager.exe` isn't running (`tasklist.exe` from WSL), use one named pack per combination, set `SelectedPack` to the pack it launches, and always launch through `-launch`.
-- So one approach: save a pack per combination (e.g. `FOX-Tier1-Mudded`), or rewrite one pack's enabled list in `manager_config.json`, then launch with `-launch`. Project Mu would choose the pack from the week's schedule (network by kickoff window, crowd tier by team popularity/record, October → BCA).
-- Mods are applied at launch, so a change needs a game restart; it fits between games, not mid-game.
-- Pink gear on only some players would mean editing the BCA mod in MMC Editor (it replaces shared textures, so it is all-or-nothing as shipped).
+**What a game's pack is.** The hand-kept **`Mu Base`** pack (JR plays from `Default`, so it can't be the base) with three groups switched for the game:
 
-To write a pack from the table in §3, reverse it: the table's last row goes first in the string.
+| Group | Rule |
+|---|---|
+| Broadcast window (`games.game_time`) | Thu from 6 PM → TNF; Mon → MNF; Sat/Sun from 6 PM → SNF (also playoff evening games and the Super Bowl); anything else → **CBS** when the road team is AFC, **FOX** when it's NFC (the NFL's afternoon rule). CBS/FOX: that network's presentation, Real Broadcast Music, scorebug and team logos. Primetime: its own presentation, the **FOX** scorebug and logos (the FOX pack has primetime bugs; JR, 2026-10-29), no network music |
+| Ball | BCA Pink when the game's date (`newsroom.social_publish.kickoff`: week 1 opens the Thursday after Labor Day) is in October, Mudded ball otherwise |
+| Crowd | Playoff games: **Full** (no crowd mod, Madden's sold-out stands). Regular season: score = 100 × (0.50 home popularity + 0.30 home form + 0.20 opponent popularity) + 8 division game + 6 primetime + 6 week 15+ with the home team at .500 or better. Popularity is the team's rank among the 32 by `team_seasons.popularity_index` (0–1; last season's until this one has values); form is the home team's win share in completed regular-season games before the week, blended with last season's until 4 games are played. Full ≥ 80, Tier 1 (80%) ≥ 54, Tier 2 (70%) ≥ 40, Tier 3 (60%) ≥ 25, Tier 4 (40%) below. Calibrated on 2036 (regular season: Full 12%, Tier 1 38%, Tier 2 24%, Tier 3 18%, Tier 4 8%); 2035 comes out 11 / 42 / 21 / 17 / 9% |
+
+Every other mod keeps the state and position it has in `Mu Base`. Mods are matched by file-name pattern (e.g. `^M27_NFLScorebugs_(CBS|FOX)`), so a newer version of a switched mod keeps working. Each combination gets its own named pack, e.g. `Mu FOX Tier2 Mudded`, `Mu MNF Tier1 BCA`, `Mu SNF Full Mudded`, created only when a game needs it, so the dropdown shows which combination ran.
+
+```
+python3 -m pipeline.mod_packs seed-base --from Default          # once: copy a pack into Mu Base (never overwrites)
+python3 -m pipeline.mod_packs plan [--season S] [--week W] [--team ABBR]
+python3 -m pipeline.mod_packs write --team NYG [--week W] [--dry-run] [--launch]   # or --game <games.id>
+```
+
+`plan` lists each game's window, crowd score and pack. `write` builds the game's pack, refuses while the Mod Manager is open (`tasklist.exe`), writes it and selects it; `--launch` then runs `MMCModManager.exe -launch "<pack>"` through `cmd.exe start` (the exe runs as Administrator, so Windows asks for consent; not yet tried). Reads `DATABASE_URL` (default: the active franchise, `db.franchises`), `MMC_CONFIG` (default: the one `manager_config.json` under `C:\Users\*\AppData\Local\MMC`) and `MMC_MANAGER_DIR`. Tests: `tests/test_mod_packs.py`.
+
+Example, 2036 Giants: week 6 MIN @ NYG Mon 8:30 PM → `Mu MNF Tier1 BCA` (score 77.0); week 7 CLE @ NYG Sun 1:00 PM → `Mu CBS Tier1 BCA`; week 17 NYG @ ATL → `Mu FOX Tier3 Mudded` (28.6); wild card NYG @ AZ → `Mu FOX Full Mudded`.
+
+Not built: pink gear on only some players (the BCA mod replaces shared textures, so it is all-or-nothing as shipped; per-player would mean editing it in MMC Editor), and wiring `write` into the save watcher so the next game's pack is ready after each week.
