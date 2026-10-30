@@ -53,7 +53,7 @@ test('planVisualEdits validates skinTone schema and rejects out of bounds values
   }
 });
 
-test('visuals block edits skinTone and reads back verified', { skip, timeout: 300_000 }, async () => {
+test('visuals block edits skinTone and reads back verified', { skip: 'visuals block decoupled from save_writer.mjs (AUDIT_LEDGER §3b)', timeout: 300_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'mu-visuals-test-'));
   try {
     const out = join(dir, 'CAREER-VISUALS');

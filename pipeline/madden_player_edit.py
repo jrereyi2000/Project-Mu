@@ -51,14 +51,14 @@ def madden_archetype(doc_or_pos, madden_position=None, mu_archetype=None):
       madden_archetype(doc, madden_position, mu_archetype)
       madden_archetype(madden_position, mu_archetype)
     """
-    if mu_archetype is None:
-        doc = ow.load_weights()
-        pos = doc_or_pos
-        want_text = madden_position
-    else:
+    if isinstance(doc_or_pos, dict):
         doc = doc_or_pos
         pos = madden_position
         want_text = mu_archetype
+    else:
+        doc = ow.load_weights()
+        pos = doc_or_pos
+        want_text = madden_position
 
     want = _key(want_text)
     if not want or not doc or "slots" not in doc:
