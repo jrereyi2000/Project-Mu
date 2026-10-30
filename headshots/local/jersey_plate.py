@@ -81,7 +81,7 @@ def composite_headshot_to_jersey(
     scale: float = 0.78,
     target_chin_y: int = 590,
     target_center_x: int = 440,
-    collar_x_bounds: Tuple[int, int] = (250, 640),
+    collar_x_bounds: Tuple[int, int] = (305, 595),
     out_format: str = "broadcast",
     output_path: Optional[str] = None,
 ) -> Image.Image:
@@ -147,16 +147,63 @@ def composite_headshot_to_jersey(
 
     player_canvas[y1:y2, x1:x2] = scaled_arr[src_y1:src_y2, src_x1:src_x2]
 
-    # 4. Shoulder Elimination Mask:
-    # Outside the collar corridor (collar_x_bounds), any player body pixel
-    # appearing above the jersey shoulder line (y < jersey_top[x]) is erased.
-    # This mathematically guarantees zero bare player shoulders poke outside the jersey.
-    left_bound, right_bound = collar_x_bounds
+    # 4. Anatomical Neck Corridor & Shoulder Silhouette Mask:
+    # Generates a smooth anatomical funnel that transitions from the jaw/chin
+    # directly into the jersey collar apexes, eliminating all bare player trapezius
+    # and shoulder flares above the jersey shoulder contour.
+    left_apex_x, right_apex_x = collar_x_bounds
+
+    # Measure neck width at chin level or fallback to standard anatomical proportions
+    chin_row_alpha = player_canvas[target_chin_y, :, 3]
+    chin_xs = np.where(chin_row_alpha > 50)[0]
+    if len(chin_xs) > 0:
+        chin_neck_left = float(max(chin_xs.min(), target_center_x - int(pw * 0.14)))
+        chin_neck_right = float(min(chin_xs.max(), target_center_x + int(pw * 0.15)))
+    else:
+        chin_neck_left = float(target_center_x - int(pw * 0.14))
+        chin_neck_right = float(target_center_x + int(pw * 0.15))
+
+    # Determine apex y level on jersey plate: minimum jersey_top within apex bounds
+    apex_slice = jersey_top[left_apex_x:right_apex_x]
+    apex_y = (
+        int(apex_slice.min())
+        if len(apex_slice) > 0 and apex_slice.min() < ph
+        else target_chin_y + 98
+    )
+
+    # 4a. Above the jersey shoulder line (y < jersey_top[x]), strictly enforce the natural neck corridor:
+    for y in range(target_chin_y, ph):
+        if y <= apex_y:
+            t = (y - target_chin_y) / max(1.0, float(apex_y - target_chin_y))
+            c_left = chin_neck_left - t * (chin_neck_left - left_apex_x)
+            c_right = chin_neck_right + t * (right_apex_x - chin_neck_right)
+        else:
+            c_left = float(left_apex_x)
+            c_right = float(right_apex_x)
+
+        for x in range(pw):
+            jt = jersey_top[x]
+            if y < jt:
+                # Background region above jersey: eliminate trap/shoulder protrusions
+                if x < c_left - 3.0:
+                    player_canvas[y, x, 3] = 0
+                elif x < c_left:
+                    feather = (x - (c_left - 3.0)) / 3.0
+                    player_canvas[y, x, 3] = int(player_canvas[y, x, 3] * feather)
+                elif x > c_right + 3.0:
+                    player_canvas[y, x, 3] = 0
+                elif x > c_right:
+                    feather = ((c_right + 3.0) - x) / 3.0
+                    player_canvas[y, x, 3] = int(player_canvas[y, x, 3] * feather)
+
+    # 4b. Under the jersey:
+    # Zero out outer shoulders outside the collar socket region below chin level
+    # so player deltoids do not bleed through outer armholes or edges
+    outer_left = max(0, left_apex_x - 25)
+    outer_right = min(pw, right_apex_x + 25)
     for x in range(pw):
-        if x < left_bound or x > right_bound:
-            j_top = jersey_top[x]
-            if j_top > 470:
-                player_canvas[470:j_top, x, 3] = 0
+        if x < outer_left or x > outer_right:
+            player_canvas[target_chin_y:, x, 3] = 0
 
     # 5. Composite layers
     # Bottom: Pure white studio backdrop (#FFFFFF)
