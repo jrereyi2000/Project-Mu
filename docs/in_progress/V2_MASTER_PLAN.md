@@ -241,6 +241,27 @@ The Dual-Track pipeline resolves this tension:
 | **Cost** | ~$0.13 per weekly slate | **$0.00** |
 | **Universe Effect** | Full literary depth, nuanced tactical critique | 100% universe continuity, valid memory takes, populated news feeds |
 
+### 5.2 Cloud GPU Studio & Monthly Compute Budget (Google Colab Stretch Goal)
+
+For heavy batch multimedia workloads that exceed the RTX 5070 Ti's 16GB VRAM or require long rendering times that could interrupt active gaming, Project Mu leverages monthly cloud GPU credits (e.g. Google One AI Premium Colab allocation: ~100 compute units / month on T4, L4, V100, and A100 GPUs).
+
+#### Monthly Heuristic Baseline (Maximum 2 Seasons / Month)
+A realistic upper bound on gameplay velocity is **at most 2 full franchise seasons completed per calendar month** (~40–48 game weeks total, 2 NFL Draft cycles):
+
+| Workload | Model & Target GPU | Compute Duration per Run | Monthly Frequency (2 Seasons/Mo) | Estimated Monthly Compute Units |
+| :--- | :--- | :--- | :--- | :--- |
+| **Weekly Multi-Speaker Broadcast Podcasts (§V2.6)** | F5-TTS / CosyVoice 2 / ChatTTS on **T4 or L4** | ~3–4 min per 10–15 min episode | 40–48 weekly episodes | **~4.5–5.0 units** (T4) or **~18–20 units** (L4) |
+| **Cinematic Round 1 Draft Walkout Videos (§V2.17)** | LTX-Video / Wan2.1-I2V on **A100 (40GB/80GB)** | ~25s (LTX) to ~70s (Wan2.1) per 5s video | 64 total videos (32 picks × 2 drafts) | **~4.5–5.0 units** (LTX) or **~12–15 units** (Wan2.1) |
+| **Seasonal Rookie & League Headshots** | RealVisXL_V5.0 on **Local RTX 5070 Ti** | ~6s/player (~28 min total/class) | 2 rookie classes | **0 units ($0.00)** — runs entirely on local GPU |
+
+#### Monthly Headroom & Feature Expansion Runway
+* **Total Peak Monthly Spend:** **~10 to 25 compute units** across all podcasts and draft video renders combined.
+* **Guaranteed Surplus:** **75 to 90 compute units remain untouched every month** out of the 100-unit monthly quota.
+* **How Surplus Credits Are Allocated:**
+  1. **Writer Persona & GM Style Fine-Tuning:** Running Unsloth/PEFT LoRA training on Qwen 2.5 or Llama 3 models using authentic Project Mu journalistic corpora (~1–2 hours on an A100 = ~10–15 units once or twice a year).
+  2. **High-Tier Model Quality Evaluation:** Running the 7-task benchmark matrix ([`tools/llm_compare.py`](../../tools/llm_compare.py)) against candidate 27B–70B open models or large MoEs in vLLM without VRAM offload penalties (~2–3 units per run).
+  3. **Generative UI & Visual Journalism:** Experimenting with event photojournalism and championship banner generation.
+
 ---
 
 ## 6. The V2 Feature Suite (Detailed Catalog)
@@ -267,8 +288,13 @@ Use local image generation with IP-Adapter / face-ID adapters to generate photoj
 ### V2.5 Fan Ecosystem & Team Sentiment
 Agent fans reacting to game outcomes, generating article comments, team forum threads, and driving a dynamic team sentiment index that impacts coach hot seats and ticket demand.
 
-### V2.6 Radio Shows & Podcasts
-Automated weekly audio recaps and podcasts voiced with local TTS models, produced overnight on the nightly GPU queue and published to `Mu_Network`.
+### V2.6 Radio Shows & Podcasts (Multi-Voice Neural TTS & Cloud GPU Studio)
+Automated weekly audio recaps, pregame primers, and roundtable sports talk shows published to `Mu_Network`. Powered by modern open zero-shot neural TTS models (e.g. F5-TTS, CosyVoice 2, or ChatTTS) using reference audio anchors to produce distinct, expressive, human-sounding voices across contrasting archetypes:
+* **The Play-by-Play Host:** Fast-paced, measured, broadcast cadence.
+* **The Film Room Analyst (Barnwell-style):** Analytical, deliberate, citing EPA and coverage schemes.
+* **The Reactionary Pundit:** Loud, energetic hot takes with natural vocal interruptions.
+* **The Local Beat Reporter:** Direct from locker rooms with insider updates and injury notes.
+Can be rendered locally on the nightly GPU queue or offloaded in ~3–4 minutes to the Cloud GPU Studio (Colab T4/L4) for ~0.1 compute units per episode (§5.2).
 
 ### V2.7 Complete League Game Recaps
 Detailed narrative recaps for all 16 games every week generated from native box scores and scoring summaries.
@@ -307,6 +333,14 @@ Full front-office automation for all 32 teams across trades, signings, cuts, dra
 
 ### V2.16 Dual-Track Media Engine (Marquee Live vs. Background Universe Queue)
 Configurable post-game journalism pipeline (§5.1): major matchups, playoffs, and manual requests run synchronous Gemini 3.8 Flash slates for deep reading; fast gameplay sessions advance in <5s and enqueue articles to the RTX 5070 Ti GPU queue for free background drafting with Gemma 4, keeping universe history complete without gameplay interruption.
+
+### V2.17 Cinematic Round 1 Draft Walkout Videos (Stretch Goal)
+Automated generation of 31–32 five-second broadcast video clips for Round 1 NFL Draft picks, showing each drafted prospect walking onto the draft stage, shaking the NFL Commissioner's hand, and donning the drafting team's official cap.
+* **Architecture:** 2-step Image-to-Video generation pipeline executed via the Cloud GPU Studio (§5.2):
+  1. *Staging Composite:* Composites the drafted rookie's synthesized media-day portrait (`static/players/{player_id}.webp`, from `headshots/`) onto a high-resolution draft-stage body plate in a tailored suit holding or wearing the drafting franchise's team cap and jersey.
+  2. *I2V Diffusion Animation:* Passes the staged portrait into an open Image-to-Video DiT model (LTX-Video on A100 at ~25s/clip, or Wan2.1-I2V / CogVideoX-5B at ~60–75s/clip) with cinematic broadcast camera tracking and flashbulb lighting prompts.
+* **Delivery & Interface:** Exports 5-second 720p/1080p MP4s to `static/draft/videos/{season}_pick_{pick_no}.mp4`. In `Mu_Network`'s Draft Central War Room, clicking on any Round 1 pick seamlessly plays their official stage entrance video inline.
+* **Compute Cost:** ~4.5–5 compute units on Colab A100 once per draft (~9–10 units/year for 2 drafts).
 
 ---
 
