@@ -1,0 +1,15 @@
+#!/bin/sh
+# mu-commit-audit: installed as post-commit and post-merge by `python3 -m tools.commit_audit install`.
+# Report-only: spawns a detached audit worker for commits on main and returns at once. Never fails the commit.
+[ "$(git symbolic-ref --short -q HEAD)" = "main" ] || exit 0
+top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ -f "$top/tools/commit_audit.py" ] || exit 0
+# Python: MU_PYTHON, else the main worktree's .venv (hooks often run without the venv active), else python3.
+py=${MU_PYTHON:-}
+if [ -z "$py" ]; then
+    common=$(cd "$top" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    py="$(dirname "$common")/.venv/bin/python3"
+    [ -x "$py" ] || py=python3
+fi
+cd "$top" && "$py" -m tools.commit_audit hook >/dev/null 2>&1 || true
+exit 0
