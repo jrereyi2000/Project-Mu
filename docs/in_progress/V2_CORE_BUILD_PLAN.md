@@ -362,6 +362,15 @@ Money in whole dollars; null = not recorded; errors are FastAPI `{"detail": stri
 - `POST /api/franchise/{abbr}/moves`, same body → QueuedMove; 409 `{detail}` when illegal.
 - `GET /api/franchise/{abbr}/medical` → `{team, season, week, players: [{player_id, name, position, overall, injury, weeks_out (mu_weeks_out, 0 when healthy), status: OUT|DOUBTFUL|QUESTIONABLE|HEALTHY, on_ir, ir_eligible, pending_move}]}`.
 
+#### 2.7b JSON contract fixed by U15 (`Mu_Network/src/types/franchiseMarket.ts`; sent to U14 to implement)
+
+- `GET /api/franchise/free-agents?position&min_ovr&max_age&team` → `{season, week, in_season, players: [{player_id, name, position, age, overall, dev_trait, scheme_fit (0..1, vs ?team), market_worth (per year), asking: {years, total_value, guaranteed}|null}]}`.
+- `POST /api/franchise/{abbr}/offers`, body `{player_id, years (1..5), total_value, bonus, guaranteed}` → NegotiationResponse `{offer_id, status: ACCEPT|REJECT|COUNTER, utility, bar, parts: {financial, opportunity, contention, scheme, persona}, counter: {years, total_value, bonus, guaranteed}|null, note}`; stored in `contract_offers` (from_user true), not a signing.
+- `GET /api/franchise/{abbr}/contracts/expiring` → `{team, season, week, players: [{player_id, name, position, overall, age, contract (§2.7a roster contract)|null, cap_hit, eligible, eligible_reason, options: {tag_value?, transition_tag_value?, fifth_year_option?: {tier, salary}}}]}`.
+- `POST /api/franchise/{abbr}/contracts/{player_id}/propose` → NegotiationResponse. `POST …/restructure-preview`, body `{amount}` → `{player_id, amount, max_amount, cap_hit_before, cap_hit_after, cap_savings_now, added_dead_money_future, by_year: [{season, cap_hit_before, cap_hit_after}], legal, reasons}` (preview only; no restructure move kind yet).
+- `GET /api/franchise/{abbr}/picks?seasons=3` (added by U15) → `{team, picks: [{season, round, original_team, overall_pick|null}]}`.
+- `POST /api/franchise/{abbr}/trades/evaluate`, body `{other_team, send: {players, picks: [{season, round, original_team}]}, receive}` → `{surplus_us, surplus_them, verdict: ACCEPT|REJECT|COUNTER (WALK_AWAY → REJECT), counter: {send, receive}|null, cap_legal_us, cap_legal_them, cap_room_after_us, cap_room_after_them, reasons, dialogue}`.
+
 `pipeline/game_launch.py`: `launch(team, season, week, dry_run=False) -> dict`: refuses if moves are pending and unwritten, writes the mod pack (`mod_packs.write_pack`), runs `MMCModManager.exe -launch <pack>` through `cmd.exe` from WSL, returns `{pack, command, started}`.
 
 ### 2.8 Lifecycle (`pipeline/watch_save.py`)
@@ -687,3 +696,4 @@ Each line becomes its own plan. "Needs" is what must be built first; "Alongside"
 | U12 | 4 | worktree-agent-ae2294e09598cd788 | .claude/worktrees/agent-ae2294e09598cd788 | merged (build ok; tsc no new errors; states only type-checked, not run against mocks) | c11cf40 |
 | U11 | 4 | worktree-agent-ad06c118db823bd22 | .claude/worktrees/agent-ad06c118db823bd22 | merged (18 tests; resumed once after the usage limit) | 43de708 |
 | U9b | 3 (follow-up) | worktree-agent-ae2622889d3120a14 | .claude/worktrees/agent-ae2622889d3120a14 | merged (reader tests 46 pass; progression_save 19; both flags written off on the sample save; resumed once after the usage limit) | 661baf5 |
+| U15 | 5 | worktree-agent-a6a0f13b54462085d | .claude/worktrees/agent-a6a0f13b54462085d | merged (build ok; tsc no new errors; jsdom render check with mocked ok/404/empty fetches passed) | ad8cd38 |

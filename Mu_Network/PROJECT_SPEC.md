@@ -74,6 +74,10 @@ The frontend is powered by a live FastAPI backend (`server/api.py`) backed by a 
   - `DepthChartModule.tsx`: the save's 35 depth-chart slots, click-to-swap or drag within a slot, "Let Staff Set" suggestion, Save queues the chart.
   - `RosterCapModule.tsx`: Active / Practice Squad / IR against 65 / 12, 5-year cap sheet, Cut / PS / IR moves with a cap preview (`MoveDialog`); also exports the shared `franchiseFetch`, `useFranchiseData`, `MoveDialog`.
   - `TrainingRoomModule.tsx`: medical ledger with IR place/activate.
+  - `FreeAgencyModule.tsx`: free-agent market and offer form with utility feedback (exports `TermsForm`, `NegotiationResult`, `UtilityBar`).
+  - `ContractRoomModule.tsx`: expiring contracts, extensions, restructure preview, tag / option values.
+  - `TradeMachineModule.tsx`: two-way trade builder with surplus bars, cap legality and the AI GM verdict.
+- `src/types/franchiseMarket.ts`: JSON contract for `/api/franchise/*` free agents, offers, contracts, picks and trades.
 - `src/types/franchiseRoster.ts`: JSON contract for `/api/franchise/*` depth-chart, roster, cap, moves and medical (implemented by `server/franchise_api.py`).
 
 ### Routing model
