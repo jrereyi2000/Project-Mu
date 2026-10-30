@@ -266,6 +266,58 @@ def snapshot_save(save_path, run_folder, reader_script=READER_SCRIPT, node_bin="
 def queue_nightly_jobs(season, week, log_fn=log):
     """Hook point for Plan §7.5 local-model jobs going onto the nightly queue."""
     log_fn(f"Nightly queue hook: season {season} week {week} (local-model jobs queued when queue is active)")
+    try:
+        from pipeline.gpu_queue.queue import GPUQueue
+        from pipeline.gpu_queue.runner import GPUQueueRunner
+
+        queue = GPUQueue()
+        pending = queue.list_jobs(status="pending")
+        log_fn(f"GPU queue hook: checked queue, {len(pending)} pending jobs found.")
+        if pending:
+            runner = GPUQueueRunner(queue=queue, log_fn=log_fn)
+            processed = runner.run_loop(stop_on_empty=True)
+            log_fn(f"GPU queue hook: processed {processed} pending jobs.")
+    except Exception as e:
+        log_fn(f"Warning: GPU queue hook check encountered an error: {e}")
+
+
+def prepare_next_week_mod_pack(dsn, season, next_week, log_fn=log):
+    """Prepares and logs next-week mod pack plan for user-controlled teams."""
+    if not next_week or not season:
+        return
+    try:
+        from db import franchises
+        from pipeline import mod_packs
+
+        reg = franchises.load_registry()
+        db = db_name_of(dsn) if dsn else None
+        _, entry = franchises.find(reg, db) if db else (None, None)
+        if not entry:
+            _, entry = franchises.active_entry(reg)
+        user_teams = (entry or {}).get("user_teams") or []
+        if not user_teams:
+            log_fn("Next-week mod pack: no user teams registered in franchises.json; skipping.")
+            return
+
+        import psycopg
+        with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+            for team in user_teams:
+                games = mod_packs.load_games(cur, season, week=next_week, team=team)
+                if not games:
+                    log_fn(f"Next-week mod pack: no scheduled game found for user team {team} in season {season} week {next_week}.")
+                    continue
+                for g in games:
+                    c = mod_packs.choose(g)
+                    pres = c.window
+                    music = c.window if c.window in ("CBS", "FOX") else "None (Primetime)"
+                    crowd = f"Tier {c.tier}" if c.tier != "FULL" else "FULL"
+                    ball = "BCA Pink" if c.bca else "Mudded"
+                    log_fn(
+                        f"Next-week mod pack plan for {team} (Week {next_week}, {g.away} @ {g.home}, {g.game_time}): "
+                        f"{c.pack_name} | Presentation: {pres}, Music: {music}, Crowd: {crowd} (score: {c.score}), Ball: {ball}"
+                    )
+    except Exception as e:
+        log_fn(f"Warning: next-week mod pack preparation skipped: {e}")
 
 
 def franchise_id(snapshot, save_path):
@@ -382,6 +434,12 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         published = f"slate for Week {res.get('week')}: {res.get('status')}"
         if res.get("status") not in ("published", "skipped_exists", "season_complete"):
             raise WeekStopped(f"Articles did not publish ({res})")
+
+    # Step: next-week mod pack preparation for user teams
+    if save_week is not None:
+        dsn = os.environ.get("DATABASE_URL")
+        next_week = save_week + 1
+        prepare_next_week_mod_pack(dsn, save_season, next_week, log_fn=log_fn)
 
     send_notify(
         f"Ingested season {save_season} week {save_week or 'preseason'} from {save_name}. "

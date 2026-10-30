@@ -34,6 +34,7 @@ a Project Mu overall_pick (the Draft Room locks it at offseason stage 4), PickNu
 """
 import argparse
 import json
+import os
 import sys
 from collections import Counter
 
@@ -42,12 +43,18 @@ import psycopg
 from scipy.optimize import linear_sum_assignment
 
 from engines import ovr_weights as ow
-from pipeline import teleport as tp
 from pipeline.capture_matching import name_case
 from pipeline.load_save import TEAM_ABBR_ALIASES
+from pipeline.madden_player_edit import (
+    ANYWHERE,
+    NEIGHBOUR,
+    NEIGHBOURS,
+    TO_MADDEN_POSITION,
+    player_edit,
+)
 
-DSN = tp.DSN
-SAME, NEIGHBOUR, ANYWHERE = 0, tp.NEIGHBOUR, tp.ANYWHERE
+DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
+SAME = 0
 # Madden position -> DraftPlayer.DraftPosition (ProspectPosition enum).
 PROSPECT_POSITION = {"QB": "QB", "HB": "RB", "FB": "RB", "WR": "WR", "TE": "TE", "LT": "OT", "RT": "OT", "LG": "IOL",
                      "RG": "IOL", "C": "IOL", "LE": "DE", "RE": "DE", "DT": "DT", "LOLB": "OLB", "ROLB": "OLB",
@@ -74,7 +81,7 @@ def draft_cost(mu, donor, doc, cache=None):
     pos = mu["madden_position"]
     if donor["position"] == pos:
         base = SAME
-    elif any(pos in g and donor["position"] in g for g in tp.NEIGHBOURS):
+    elif any(pos in g and donor["position"] in g for g in NEIGHBOURS):
         base = NEIGHBOUR
     else:
         base = ANYWHERE
@@ -116,7 +123,7 @@ def as_teleport_player(p):
             "height": f"{h // 12}'{h % 12}\"" if h else None, "weight": p["weight"], "jersey": None, "team": None,
             "position": p["position"], "archetype": p["archetype"], "overall": p["ovr"], "age": p["age"],
             "years_pro": 0, "dev_trait": None, "projected_pick": p["projected_pick"], "true_rank": p.get("true_rank"),
-            "madden_position": tp.TO_MADDEN_POSITION.get(p["position"], p["position"])}
+            "madden_position": TO_MADDEN_POSITION.get(p["position"], p["position"])}
 
 
 def class_donors(snapshot, draft):
@@ -158,7 +165,7 @@ def draft_class(snapshot, draft, prospects, doc, age_add=0, write_ovr=False):
     kinds, notes_count = Counter(), Counter()
     for m, d in pairs:
         m["madden_archetype"] = best_archetype(doc, m["madden_position"], d)[0]
-        edit, notes = tp.player_edit(m, d, doc, age_add, write_ovr)
+        edit, notes = player_edit(m, d, doc, age_add, write_ovr)
         players.append(edit)
         kind = cost_kind(draft_cost(m, d, doc))
         kinds[kind] += 1

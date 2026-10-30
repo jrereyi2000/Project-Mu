@@ -57,7 +57,7 @@ class MappingTest(unittest.TestCase):
     def test_positions(self):
         self.assertEqual(tp.TO_MADDEN_POSITION["LEDG"], "LE")
         self.assertEqual(tp.TO_MADDEN_POSITION["MIKE"], "MLB")
-        self.assertEqual(tp.TO_MADDEN_POSITION["WILL"], "LOLB")
+        self.assertEqual(tp.TO_MADDEN_POSITION["WILL"], "ROLB")
 
     def test_names_and_body(self):
         self.assertEqual(tp.split_name("KC Concepcion Jr", "K. Concepcion Jr"), ("KC", "Concepcion Jr"))

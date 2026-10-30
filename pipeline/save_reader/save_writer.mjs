@@ -26,7 +26,6 @@ import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
 import { fieldMeta, fieldValueError } from './lib.mjs';
 import { contractRecordOf, planContractEdits } from './contract_edits.mjs';
-import { applyVisualEdits, planVisualEdits, verifyVisualEdits } from './visual_edits.mjs';
 import { applyRecordEdits, planRecordEdits, verifyRecordEdits } from './record_edits.mjs';
 import { applyRelease, planRelease, releaseSummary, verifyRelease } from './release.mjs';
 
@@ -80,8 +79,6 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     const contract = await planContractEdits(franchise, players, edits);
     targets.push(...contract.targets);
     errors.push(...contract.errors);
-    const visuals = await planVisualEdits(franchise, players, edits);
-    errors.push(...visuals.errors);
     const records = await planRecordEdits(franchise, edits.records);
     errors.push(...records.errors);
     const release = edits.release?.length
@@ -89,12 +86,20 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
     errors.push(...(release?.errors ?? []));
     if (errors.length) throw new Error(`edits refused, nothing written:\n  ${errors.join('\n  ')}`);
     for (const t of targets) t.record[t.key] = t.value;
-    applyVisualEdits(visuals.targets);
     applyRecordEdits(records.targets);
     if (release) applyRelease(release.plan);
     const staged = join(dir, 'out');
     await franchise.save(staged);
-    renameSync(staged, out);
+    try {
+      renameSync(staged, out);
+    } catch (err) {
+      if (err.code === 'EXDEV') {
+        copyFileSync(staged, out);
+        rmSync(staged, { force: true });
+      } else {
+        throw err;
+      }
+    }
 
     // Read back from the written file and compare every edited field.
     const check = await Franchise.create(out, { autoParse: true, saveOnChange: false });
@@ -108,13 +113,11 @@ export async function writeSave(inputPath, edits, outPath, { overwriteOut = fals
         mismatches.push(`pgid ${t.pgid} ${t.contract ? 'contract ' : ''}${t.key}: wrote ${t.value}, read ${r?.[t.key]}`);
       }
     }
-    mismatches.push(...await verifyVisualEdits(check, visuals.targets));
     mismatches.push(...await verifyRecordEdits(check, records.targets));
     if (release) mismatches.push(...await verifyRelease(check, release.plan));
     if (mismatches.length) throw new Error(`read-back failed:\n  ${mismatches.join('\n  ')}`);
     return { out, players: new Set(targets.map(t => t.pgid)).size, fields: targets.length,
       contracts: new Set(targets.filter(t => t.contract).map(t => t.pgid)).size,
-      visuals: new Set(visuals.targets.map(t => t.pgid)).size,
       records: new Set(records.targets.map(t => t.where)).size, recordFields: records.targets.length,
       release: release ? releaseSummary(release.plan) : null, verified: true };
   } finally {
@@ -141,8 +144,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   }
   try {
     const report = await writeSave(a.save, JSON.parse(readFileSync(a.edits, 'utf8')), a.out, a);
-    console.error(`${report.fields} fields on ${report.players} players (${report.contracts} contracts, `
-      + `${report.visuals} visuals) and `
+    console.error(`${report.fields} fields on ${report.players} players (${report.contracts} contracts) and `
       + `${report.recordFields} on ${report.records} other records written and read back → ${report.out}`);
     if (report.release) console.error(`released to free agency: ${JSON.stringify(report.release)}`);
   } catch (e) {
