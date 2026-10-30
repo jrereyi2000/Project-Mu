@@ -737,6 +737,7 @@ Madden's commentary is pre-recorded clips triggered inside the game engine. A mo
 [TTS] → played between snaps, ducking Madden's commentary
 ```
 
+* **Found 2026-10-30: the scorebug reader may not be needed.** Madden rewrites `INGAME-RESUMEDATA` in the saves folder after every play (seen with `tools/save_write_logger.py`), and `pipeline/ingame_resume.py` reads the score, clock, down and distance, every play (runner, receiver, yards, points) and each player's running stat line from it. Polling that file gives the triggers above with who did what, without screen capture.
 * There are usually 15–30 seconds between snaps, so 2–4 seconds of generation plus speech is acceptable.
 * The scorebug is one fixed layout, a much simpler read than the menu screens the PS5 capture handles today.
 * No memory reading or engine hooks: those need the anti-tamper module, work offline only and break with patches.
