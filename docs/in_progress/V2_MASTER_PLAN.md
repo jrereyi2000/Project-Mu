@@ -42,6 +42,9 @@ Rather than relying on Madden's franchise screens, the React 19 + Vite frontend 
 * **Opponent Scouting Dossier:** Record, offensive/defensive rankings (EPA, pass/rush splits), personnel groupings, weather conditions, and the newsroom’s matchup primer.
 * **Matchup Breakdown:** Head-to-head positional battles (e.g. your Pass Rush vs their LT, your Slot WR vs their Nickel CB).
 * **Game Strategy & Focus:** Set weekly offensive/defensive focuses (e.g. Blitz-heavy vs Cover-3; Inside Zone vs Deep Shot; stamina/fatigue management).
+* **Post-Game Media Coverage Preference:** Toggle between:
+  - **Live Marquee Mode (Gemini 3.8 Flash):** Generate comprehensive newsroom coverage immediately upon game completion.
+  - **Fast Play / Deferred GPU Queue (Gemma 4):** Advance immediately to the next week (<5s); enqueue unread routine week coverage to the nightly GPU queue for $0 background drafting.
 * **The "Play Game" Trigger:**
   1. Pre-flight check: validates and writes pending depth charts, roster moves, and injuries to the save.
   2. Compiles and activates the game's tailored mod pack via [`pipeline.mod_packs`](../../pipeline/mod_packs.py) (CBS/FOX/Primetime presentation and scorebugs, crowd density tier, mudded or BCA pink ball).
@@ -203,8 +206,13 @@ flowchart TD
         I --> J["Save Watcher detects debounced CAREER-* file update"]
         J --> K["Ingest Game Box Scores, Snap Counts & Team Stats"]
         K --> L["Execute Deterministic Analytics (Excitement, TWI, POP)"]
-        L --> M["Dispatch Newsroom Swarm & Agent Wire Social Desk"]
-        M --> N["Update Database & Refresh Mu_Network Dashboard"]
+        L --> Decision{"Coverage Mode?"}
+        Decision -- "Live Marquee (Gemini)" --> M1["Synchronous Gemini Swarm (~60s)<br/>Immediate Deep Articles"]
+        Decision -- "Fast Next-Game (GPU Queue)" --> M2["Enqueue to GPU Queue<br/>Immediate Week Advance (<5s)"]
+        M1 --> N["Update Database & Refresh Mu_Network Dashboard"]
+        M2 --> O["Prepare Next-Week Mod Pack & Advance"]
+        M2 -.-> P["Background GPU Runner drafts via Gemma 4<br/>when Madden is closed ($0 cost)"]
+        P -.-> N
     end
 ```
 
@@ -212,10 +220,26 @@ flowchart TD
 2. **Pre-Flight Save Injection:** The backend writes all 32 team depth charts, contracts, and roster moves directly to the save file.
 3. **Mod Pack Activation & Launch:** [`pipeline.mod_packs`](../../pipeline/mod_packs.py) configures the active broadcast presentation (CBS/FOX/TNF/SNF/MNF), crowd tier, and ball type, then executes `MMCModManager.exe -launch <pack>`.
 4. **Gameplay:** You play the game in Madden. On completion, advance the week, save, and exit to desktop. The ingest runs on this post-advance save (see the note below).
-5. **Autonomous Ingestion & Newsroom Dispatch:**
+5. **Autonomous Ingestion & Dual-Track Media Dispatch:**
    - The process monitor ([`pipeline/gpu_queue/process_check.py`](../../pipeline/gpu_queue/process_check.py)) detects `Madden27.exe` has closed.
-   - [`pipeline/watch_save.py`](../../pipeline/watch_save.py) ingests the save, executes deterministic engines, queues nightly batch jobs, and triggers the newsroom journalists.
-   - `Mu_Network` refreshes with completed box scores, postgame quotes, articles, and updated standings.
+   - [`pipeline/watch_save.py`](../../pipeline/watch_save.py) ingests the save, executes deterministic engines, updates standings, and checks the configured coverage mode:
+     - **Live Marquee Mode (Gemini 3.8 Flash):** Executes [`weekly_capture.step_articles()`](../../pipeline/weekly_capture.py) synchronously, delivering full-depth analytical journalism ready for immediate reading.
+     - **Fast Next-Game Mode (Deferred GPU Queue / Gemma 4):** Bypasses synchronous article generation. The watcher enqueues an `ARTICLE_SLATE` job into [`pipeline.gpu_queue`](../../pipeline/gpu_queue/queue.py), prepares the next game's mod pack, and advances the week in **under 5 seconds**, letting you boot straight into the next game. The RTX 5070 Ti drafts the unread articles in the background via `ollama:gemma4:e4b@nothink` at $0 cost once Madden exits or while idle.
+
+### 5.1 Dual-Track Media Architecture (Live Marquee vs. Deferred Universe Background)
+
+When playing multiple franchise games or simming through regular season stretches, generating 18 multi-turn research articles synchronously (60–90 seconds) creates unwanted gameplay friction. Conversely, skipping articles entirely damages long-term universe continuity (breaking reporter memories, historical references, and website archives).
+
+The Dual-Track pipeline resolves this tension:
+
+| Dimension | Live Marquee Mode | Deferred GPU Queue Mode |
+| :--- | :--- | :--- |
+| **Model** | `gemini-3.8-flash:low` (Cloud API) | `ollama:gemma4:e4b@nothink` (Local RTX 5070 Ti) |
+| **Execution Trigger** | Synchronous on save ingest (or manual "Generate Now" click) | Background job runner when `Madden27.exe` is closed |
+| **Best Used For** | Super Bowl, playoff weeks, rivalry games, season openers, feature reads | Routine regular-season weeks, back-to-back gameplay sessions, fast simming |
+| **Post-Game Delay** | ~60–90 seconds (full database research tools) | **< 5 seconds** (stats and week advance only) |
+| **Cost** | ~$0.13 per weekly slate | **$0.00** |
+| **Universe Effect** | Full literary depth, nuanced tactical critique | 100% universe continuity, valid memory takes, populated news feeds |
 
 **Decision (JR, 2026-10-30): ingest runs on the save made after Advance Week, not the one made straight after the game (§7.0, B1 resolved).** In `CAREER-WEEK1/2/3` ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §5.4, check 3), each save was made after the week's 15 CPU games were simmed and before CAR's game. The final score, quarter scores and team box score (`SeasonGame` and its `TeamStatCache`) were readable for every game already played, this week's included. The player lines (`Game*Stats`) for this week's games were in their tables too, but had a null `SeasonGame` and no `Player.GameStats` link, so the reader can't credit them; the next week's save had them linked. Whatever links them (the week's last game finishing, or Advance Week) has happened by the time the week is advanced, so the post-advance save holds the whole week's player lines, the user's game included. This also makes it irrelevant whether Madden writes the save mid-game: the watcher only acts on the post-advance save. The cost is that the postgame newsroom for the user's game (press conference, recap, quotes) waits for the advance. If O1 (§7.0) works, the user's game and the earlier-kickoff games can be credited from the save made straight after the game as well.
 
@@ -269,11 +293,22 @@ Persistent narrative arc tracker following season-long storylines (rookie QB dev
 ### V2.13 Personalities Across the NFL Universe (Built, Phases 1–3)
 50-trait validated personality system ([`newsroom/config/persona_traits.json`](../../newsroom/config/persona_traits.json)) extending numeric behavioral sliders to players, coaches, GMs, and scouts.
 
-### V2.14 Project Mu Owns Progression
-Madden XP progression sliders set to 0. All player attribute development, stagnation, and regression calculated deterministically by [`engines/progression.py`](../../engines/progression.py) and written straight to the save file.
+### V2.14 Project Mu Owns Progression & Overall Rating (OVR) Mechanics
+Madden XP progression sliders are set to 0. All player attribute development, stagnation, and age regression are calculated deterministically by [`engines/progression.py`](../../engines/progression.py) and written straight to the save file.
+
+#### In-Game OVR Calculation vs. Static Save Records (Empirical Findings, 2026-10-30)
+In-game testing on Madden 27 PC (`CAREER-2026SB-MODIFIED-AUTOSAVE` with Bryce Young) resolved the critical question of how Madden determines player overall ratings when individual attributes are modified:
+1. **Dynamic Runtime UI & Gameplay Recalculation:** Madden's runtime simulation and UI do *not* rely purely on static table integers. When individual ratings (e.g. Throw Power, Accuracy, Speed, Acceleration) were modified in the save while leaving the stored `Player.OverallRating` field at `82`, loading the save into Madden immediately recalculated and displayed Bryce Young at a morale-adjusted **93 OVR** in the depth chart and player card. Madden continuously calculates effective OVR dynamically from the 54 raw ratings, scheme fit, and morale.
+2. **Formula Fidelity (`engines/ovr_weights.py`):** Project Mu's reverse-engineered formula—fitted with quadratic terms across 9,106 archetype grades—predicted an exact base overall of **94 OVR** (`QB_FieldGeneral`: 94, `QB_StrongArm`: 93, `QB_Improviser`: 90, `QB_Scrambler`: 89) for those exact modified ratings, aligning within $\pm 1$ of Madden's internal calculation.
+3. **Mandatory Dual-Write Rule:** Despite runtime recalculation in the game engine, `save_writer.mjs` and [`engines/progression.py`](../../engines/progression.py) must strictly execute a **dual-write** (using `--write-ovr`):
+   - Always write individual ratings *and* explicitly compute and write `Player.OverallRating`, `OverallGrade0-4`, and `PlayerType`.
+   - *Rationale:* Madden's save parser does not rewrite the binary database table on disk upon load. External snapshot tools (`load_save.py`), web API queries, and Madden's background CPU logic (such as trade evaluation algorithms and cut decisions) evaluate the static database column directly. Writing both guarantees 100% parity between database state, raw save inspection, and in-game UI.
 
 ### V2.15 Project Mu Runs the League (Headless League Office)
 Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md)).
+
+### V2.16 Dual-Track Media Engine (Marquee Live vs. Background Universe Queue)
+Configurable post-game journalism pipeline (§5.1): major matchups, playoffs, and manual requests run synchronous Gemini 3.8 Flash slates for deep reading; fast gameplay sessions advance in <5s and enqueue articles to the RTX 5070 Ti GPU queue for free background drafting with Gemma 4, keeping universe history complete without gameplay interruption.
 
 ---
 

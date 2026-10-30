@@ -437,6 +437,43 @@ class IngestSnapshotTest(unittest.TestCase):
         self.assertIn("--no-articles", res["argv"])
         self.assertEqual(res["argv"][res["argv"].index("--week") + 1], "6")
 
+    def test_queue_nightly_jobs_hook(self):
+        logs = []
+        with mock.patch("pipeline.gpu_queue.queue.GPUQueue") as mock_q_cls:
+            mock_q = mock.MagicMock()
+            mock_q.list_jobs.return_value = []
+            mock_q_cls.return_value = mock_q
+            ws.queue_nightly_jobs(2036, 7, log_fn=logs.append)
+            self.assertTrue(any("Nightly queue hook" in l for l in logs))
+            self.assertTrue(any("GPU queue hook: checked queue, 0 pending jobs found" in l for l in logs))
+
+    def test_prepare_next_week_mod_pack_no_user_teams(self):
+        logs = []
+        with mock.patch("db.franchises.load_registry", return_value={"active": None, "franchises": {}}):
+            ws.prepare_next_week_mod_pack("host=localhost dbname=madden_test", 2036, 8, log_fn=logs.append)
+            self.assertTrue(any("no user teams registered" in l for l in logs))
+
+    def test_prepare_next_week_mod_pack_with_user_teams(self):
+        logs = []
+        registry = {
+            "active": "1",
+            "franchises": {"1": {"db": "madden_car", "user_teams": ["CAR"]}}
+        }
+        mock_game = mock.MagicMock(
+            id=1, season=2036, week=8, game_time="Sun 1:00 PM",
+            game_type="REGULAR_SEASON", home="CAR", away="TB"
+        )
+        mock_choice = mock.MagicMock(
+            window="FOX", tier=2, score=45.0, bca=True, pack_name="Mu FOX Tier2 BCA"
+        )
+        with mock.patch("db.franchises.load_registry", return_value=registry), \
+             mock.patch("psycopg.connect") as mock_conn, \
+             mock.patch("pipeline.mod_packs.load_games", return_value=[mock_game]), \
+             mock.patch("pipeline.mod_packs.choose", return_value=mock_choice):
+            ws.prepare_next_week_mod_pack("host=localhost dbname=madden_car", 2036, 8, log_fn=logs.append)
+            self.assertTrue(any("Next-week mod pack plan for CAR" in l for l in logs))
+            self.assertTrue(any("Mu FOX Tier2 BCA" in l for l in logs))
+
 
 class FranchiseRegistryTest(unittest.TestCase):
     def setUp(self):

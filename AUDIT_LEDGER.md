@@ -125,14 +125,13 @@ The PC starts a fresh 2034 franchise; nothing is teleported and Mu's 2026–2036
 
 | File / Symbol | Classification | Replaced By | Evidence |
 | :--- | :--- | :--- | :--- |
-| `pipeline/teleport.py` | `OBSOLETE_FRESH_SAVE` (prune after extract) | NONE | The teleporter itself (old plan §4.3). Still imported by `engines/progression.py` (`TO_MADDEN_POSITION`, `madden_archetype`, `settle_archetype`) and `pipeline/teleport_draft.py` (`ANYWHERE`, `DSN`, `NEIGHBOUR`, `NEIGHBOURS`, `TO_MADDEN_POSITION`, `player_edit`), so those helpers move out first (decouplings below). |
+| `pipeline/teleport.py` | `OBSOLETE_FRESH_SAVE` (prune after extract) | NONE | The teleporter itself (old plan §4.3). Shared helpers (`TO_MADDEN_POSITION`, `madden_archetype`, `settle_archetype`, `player_edit`, etc.) moved to `pipeline/madden_player_edit.py`; `engines/progression.py` and `pipeline/teleport_draft.py` repointed. `teleport.py` re-exports for backwards compatibility until final deletion. |
 | `pipeline/teleport_appearance.py` | `OBSOLETE_FRESH_SAVE` | NONE | Gives Mu players a donor's head and body. Imported only by `teleport.py` and its test. |
 | `pipeline/teleport_contracts.py` | `OBSOLETE_FRESH_SAVE` | NONE | Writes Mu contracts onto donors. Imported only by `teleport.py` and tests. `contract_edits.mjs` (the save edit kind) stays. |
 | `pipeline/character_visuals.py` | `OBSOLETE_FRESH_SAVE` | NONE | `CharacterVisuals.RawData` skin-tone codec for the teleport's appearance step. Imported only by `teleport_appearance.py` and its test. |
-| `pipeline/save_reader/visual_edits.mjs` (+ `test/visual_edits.test.mjs`) | `OBSOLETE_FRESH_SAVE` | NONE | The `visuals` edit kind. Called only from `character_visuals.py`; `save_writer.mjs` imports it statically, so drop that import and the `visuals` branch when pruning. |
+| `pipeline/save_reader/visual_edits.mjs` (+ `test/visual_edits.test.mjs`) | `OBSOLETE_FRESH_SAVE` | NONE | The `visuals` edit kind. Called only from `character_visuals.py`; `save_writer.mjs` static import and `visuals` logic removed (completed 2026-10-30). |
 | `pipeline/attribute_reader.py`, `pipeline/attribute_digits.json` | `OBSOLETE_FRESH_SAVE` | NONE | PS5 attribute-scan digit reader (old plan §2.3). Imported by `madden_capture.py` (v1 shim) and `load_attributes.py`. |
-| `pipeline/load_attributes.py` | `OBSOLETE_FRESH_SAVE` | NONE | Loads the scan into `player_attributes`. Imported only by its test. |
-| `db/migrations/2027_01_06_player_attributes.sql`, table `player_attributes` | `OBSOLETE_FRESH_SAVE` (schema) | NONE | Only the scan writes it and only the teleport reads it. Drop the table from `db/init_db.sql` at prune time. |
+| `pipeline/load_attributes.py` | `OBSOLETE_FRESH_SAVE` | NONE | Loads the PS5 scan into `player_attributes`. Obsolete now that `pipeline/load_save.py` loads native ratings from PC save snapshots directly into `player_attributes`. |
 | `tests/test_teleport.py`, `test_teleport_appearance.py`, `test_teleport_contracts.py`, `test_teleport_release.py`, `test_attribute_reader.py`, `test_load_attributes.py` | `OBSOLETE_FRESH_SAVE` | NONE | Tests of the files above. `tests/test_teleport_draft.py` stays with the draft step. |
 | `madden_capture.py --only attributes` | `OBSOLETE_FRESH_SAVE` (branch) | NONE | Goes with `madden_capture.py` (Tier 4). |
 
@@ -161,6 +160,7 @@ The PC starts a fresh 2034 franchise; nothing is teleported and Mu's 2026–2036
 | `engines/season_archive.py`, `engines/season_ledger.py` | Season rollover and retirements for every season, not just the old ones. Called from `pipeline/weekly_capture.py` (Tier 4 refactor must carry them over). |
 | `engines/game_stat_generator.py` | Stays `LEGACY_SHIM`: the fallback for weeks without per-game rows (PC plan §5.3). |
 | `db/migrations/2026_10_25_former_players.sql`, `2026_10_19_roundtable_panel_agent.sql`, `2026_10_22_agent_wire_social.sql`, `2027_01_07_writer_identity_lines.sql` | Newsroom and Agent Wire data (writers, former-player accounts), not universe history. `db/seed_clean_db.py` doesn't load them; review whether the fresh seed should. |
+| `db/migrations/2027_01_06_player_attributes.sql`, table `player_attributes` | Repurposed for fresh save: stores native 54 ratings from Madden save snapshots via `pipeline/load_save.py`. Read by `engines/progression.py:fetch_player_attributes_map` for progression logic and ratings inspection. |
 | Mixed schema + data migrations (`2026_10_30_coaches`, `2026_11_05_coach_tendencies`, `2026_11_07_coach_2034_totals`, `2026_12_19_charles_grant_full_control`, `2026_12_31_awards_source`) | Their schema lives on in `init_db.sql`; the data parts are old-universe only. Left unmarked; prune with the rest of the migration history if migrations are ever squashed. |
 
 ### Seed problem found (not fixed here)
@@ -169,10 +169,10 @@ The PC starts a fresh 2034 franchise; nothing is teleported and Mu's 2026–2036
 
 ### Decouplings needed before pruning
 
-1. Move `TO_MADDEN_POSITION`, `NEIGHBOURS`/`NEIGHBOUR`/`ANYWHERE`, `madden_archetype`, `settle_archetype`, `player_edit` (and the helpers it calls: `split_name`, `height_inches`, `DEV_TO_MADDEN`, `WEIGHT_OFFSET`) from `pipeline/teleport.py` into a shared module (e.g. `pipeline/madden_player_edit.py`); repoint `engines/progression.py` and `pipeline/teleport_draft.py`. `teleport_draft.py` also takes `DSN` from `teleport.py` (and defaults to `dbname=madden`): read it from `DATABASE_URL` directly.
-2. `pipeline/save_reader/save_writer.mjs`: remove the static import of `visual_edits.mjs` and the `visuals` edit branch.
+1. **[COMPLETED 2026-10-30]** Move `TO_MADDEN_POSITION`, `NEIGHBOURS`/`NEIGHBOUR`/`ANYWHERE`, `madden_archetype`, `settle_archetype`, `player_edit` (and the helpers it calls: `split_name`, `height_inches`, `DEV_TO_MADDEN`, `WEIGHT_OFFSET`) from `pipeline/teleport.py` into a shared module (`pipeline/madden_player_edit.py`); repoint `engines/progression.py` and `pipeline/teleport_draft.py`. `teleport_draft.py` DSN decoupled from `teleport.py` to read `DATABASE_URL` directly.
+2. **[COMPLETED 2026-10-30]** `pipeline/save_reader/save_writer.mjs`: removed static import of `visual_edits.mjs` and `visuals` edit planning, application, and verification; added cross-device `EXDEV` move fallback for `renameSync`.
 3. `madden_capture.py`: drop `--only attributes` and its `attribute_reader` import (or prune the whole file, Tier 4).
-4. Drop `player_attributes`, `player_career_totals` and the history staging tables from `db/init_db.sql`; check `server/history_api.py` and `newsroom/db_tools.py` first.
+4. Drop `player_career_totals` and the history staging tables from `db/init_db.sql` (`player_attributes` is kept and actively populated by `load_save.py`); check `server/history_api.py` and `newsroom/db_tools.py` first.
 
 ---
 
