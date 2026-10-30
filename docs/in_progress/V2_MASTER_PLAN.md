@@ -336,7 +336,7 @@ Phases 1–3 below can start now. These items depend on unfinished work elsewher
 | P3 | §2.1 / §5 "Play Game" pre-flight mod pack | Wiring `pipeline.mod_packs.write` into `watch_save.py` (PC plan §10, item 3). |
 | P4 | V2.4 portraits in-game | The one-portrait spike (PC plan §9.4, §10 item 2). |
 | P5 | Trust in all scratch-save results | Every §5.4 check was on unmodded `CAREER-WEEK1/2/3`; sim-stat and roster mods change the numbers, so the checks are re-run on a modded save before the 2034 start. |
-| P6 | Phase 1 `depth_chart.mjs` | The "35 positions × 6 slots" `Team.DepthChart` layout is from this plan, not yet read from a save; check it on `CAREER-WEEK3` first. |
+| ~~P6~~ | Phase 1 `depth_chart.mjs` | **Resolved:** `release.mjs` had already read the 35 positions × 6-slot `Team.DepthChart` layout on every row of the sample save, and `depth_chart.mjs` (V2_CORE_BUILD_PLAN U2, 2026-10-30) writes and reads it back. |
 
 **Open items** (not blocking)
 
