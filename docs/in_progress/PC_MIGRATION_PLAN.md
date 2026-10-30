@@ -1,8 +1,11 @@
-# Project Mu: PC Migration & Universe Teleportation Master Plan
+# Project Mu: PC Migration & Native Save Architecture Plan
 
-**Status (2026-10-29):** The PC is set up (§3). **Plan changed 2026-10-29: fresh 2034 franchise, no teleport** (see the decision below). §2 (Mac/PS5 prep) and §4 (teleporter) are obsolete and kept only until the code they describe is pruned ([AUDIT_LEDGER.md](../../AUDIT_LEDGER.md) §3b). Done since: the §5.4 save checks on an unmodded test franchise (JR confirmed the in-game box score, team stats, OLB slots and cap hits), one database per franchise with a fixed `--auto-init` (§5.2), a clean seed with all newsroom accounts and real NFL records only, the §7.4 quality-test harness, and the mods staged and launched once ([MOD_INSTALL.md](../MOD_INSTALL.md)). Next: turn on the roster-size and sim mods in the pack, create the 2034 franchise (year set with `seasonYearSetup.exe`), register it with the watcher, then repeat §5.4 on it. Part 2 (V2) status is at its end.
+**Status (2026-10-29):** The PC environment, save reader/writer, and Docker Postgres are operational (§3, §5). 
+**Scope of this document:** Focuses exclusively on the **PC Hardware, Direct Save Loader, and Migration Infrastructure** (§1–§9). 
+**Follow-on V2 features, headless Madden architecture, and franchise command center:** Moved to [`V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md).
 
-**Decision 2026-10-29: fresh 2034 save, Mu history discarded (JR).** The universe does not move to PC. A new Madden 27 PC franchise starts in **2034** (start year set with `seasonYearSetup.exe`, roster-size mod installed first), with modded gameplay and sim stats. All of Project Mu's 2026–2036 history is dropped because its stats are inflated; the new league starts from real NFL history through 2025 (`db/seed_clean_db.py`), so the record book jumps from 2025 to 2034. The 2036 database is kept read-only as `madden_2036` (archive, and the inputs for the §7.4 quality tests). Reasons and the PC setup plan: [Fresh Save Strategy PDF](./Project%20Mu_%20Fresh%20Save%20Strategy%20%26%20Remote%20PC-WSL%20Migration%20Plan.pdf), with its outdated parts listed in [FRESH_SAVE_STRATEGY_NOTES.md](./FRESH_SAVE_STRATEGY_NOTES.md). What this makes obsolete:
+**Strategic Decision (JR, 2026-10-29): Hold live 2034 franchise start until V2 is ready.**
+The universe starts over with a **fresh 2034 PC franchise** (start year set with `seasonYearSetup.exe`, roster-size mod installed first), with modded gameplay and sim stats. All of Project Mu's 2026–2036 history is dropped because its stats are inflated; the new league starts from real NFL history through 2025 (`db/seed_clean_db.py`), so the record book jumps from 2025 to 2034. The 2036 database is kept read-only as `madden_2036` (archive, and the inputs for the §7.4 quality tests). **JR decision (2026-10-29):** The creation of the canonical 2034 franchise is deliberately deferred until V2 (progression ownership, 32-team depth chart control, and CBA contract logic) is built and tested on scratch/sample saves (`CAREER-WEEK1/2/3`). Testing V2 first ensures that when the live 2034 universe starts, Project Mu controls the entire league operating system rather than Madden's native CPU algorithms. Plan details: [V2 Master Plan](./V2_MASTER_PLAN.md). Reasons and the original PC setup plan: [Fresh Save Strategy PDF](./Project%20Mu_%20Fresh%20Save%20Strategy%20%26%20Remote%20PC-WSL%20Migration%20Plan.pdf), with its outdated parts listed in [FRESH_SAVE_STRATEGY_NOTES.md](./FRESH_SAVE_STRATEGY_NOTES.md). What this makes obsolete:
 * §2 (finish 2036 on the PS5, final backup, PS5 attribute scan) and [PRE_PC_WORK_2.md](../not_started/PRE_PC_WORK_2.md) §D.
 * §4 (the 2037 offseason teleporter). Its draft step (`pipeline/teleport_draft.py`, writing Mu's scouted class and pick owners into the save) and the OVR formulas (`engines/ovr_weights.py`, used by `engines/progression.py`) stay; both import helpers from `pipeline/teleport.py` that must move out first.
 * Code that only served the teleport or the 2026–2036 history is marked `OBSOLETE_FRESH_SAVE` in [AUDIT_LEDGER.md](../../AUDIT_LEDGER.md) for later deletion.
@@ -14,7 +17,7 @@
 
 Timings and counts below are estimates until measured on the PC.
 
-**Part 1 (§1–§9)** is the migration. **Part 2 (V2.0–V2.16)** is the follow-on work the PC makes possible.
+This document covers **Part 1 (§1–§9): The PC Migration**. Follow-on V2 features, the Franchise Command Center, and headless Madden orchestration are in [`V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md).
 
 ---
 
@@ -764,124 +767,17 @@ Player models are barely visible in play, so they only need to be close: the tra
 
 ---
 
-# Part 2: V2 Integration Efforts
+## 10. Next Steps & Transition to V2
 
-Part 1 (§1–§9) moves Project Mu onto the PC. Part 2 uses what the PC adds, mainly a local model whose calls cost nothing and have no rate limit, to make the universe feel lived-in. Two kinds of work become practical that a paid API makes you ration: **volume** (thousands of small voices) and **interaction** (JR talking to the world, live).
+The infrastructure work for the PC migration (Windows 11 setup, WSL2 Ubuntu, Docker Postgres `madden-db`, MMC Modding Tools with 71 mods staged and verified, Node.js save reader/writer, Python save loader, multi-franchise watcher routing, and the local model tooling) is operational.
 
-## V2.0 Ground Rules
+### Active Migration Work Remaining:
+1. **Decouple and Prune Obsolete Teleport/History Code:** Follow [`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b to decouple shared helpers from `pipeline/teleport.py` and delete obsolete teleport, PS5 attribute scan, and history backfill files.
+2. **One-Portrait Spike (§9.4):** Export a sample portrait via MMC Modding Tools, verify DDS format/dimensions, and test in-game injection of a Project Mu WebP headshot converted via [`headshots/portrait_converter.py`](../../headshots/portrait_converter.py).
+3. **Mod Pack Weekly Run Trigger (§5.2):** Wire `pipeline.mod_packs.write --team <user_team>` into `watch_save.py` post-ingest.
 
-* **Numbers stay deterministic.** Engines decide values, ratings, deals, draft boards and outcomes; the model writes prose, dialogue and choices among options the engines allow. This is the existing rule for GM agents ("the LLM never chooses or changes a deal") and scouting ("numbers are always deterministic; the LLM only rewrites prose"), extended to everything below.
-* **Hallucination policy:** invent untracked narrative freely, never contradict data. Quotes, fan posts, photos and storylines must agree with box scores, injuries, contracts and records.
-* **Where it runs:** batch work (images, audio, bulk text) goes on the nightly GPU queue (§7.8). Interactive work (press conferences, conversations, negotiations) uses the local model while JR is at the PC but not playing; otherwise it falls back to Gemini.
-* **Quality gate:** each feature passes the §7.4 side-by-side check before it replaces anything Gemini does today.
+### Transition to V2:
+All universe features, the headless Madden game loop, the Franchise Command Center, 32-team depth chart control, real NFL CBA contract logic, and progression ownership are now specified in:
 
-## V2.1 Project Mu News Inside Madden
+👉 **[`docs/in_progress/V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md)**
 
-Write Project Mu's top stories into Madden's own news tables (`NewsCenterArticle`, `NewsCenterArticleData`: header text, author, people and team referenced, week, year, breaking flag; 38 rows in `CAREER-GIANTS-AUTOSAVE`), so the universe's headlines show on Madden's in-game news screens. Save editing only, no mod. **First check on the PC:** that Madden displays injected rows and doesn't overwrite them on the next Advance Week.
-
-## V2.2 Press Conferences
-
-After each Panthers game, newsroom personas question JR from the real box score, scoring plays and storylines, with follow-ups. JR's answers become quotes in that week's articles, and writers react to them. Reporters' memory (`newsroom/agent_memory.py`) carries over, so a reporter JR brushed off remembers it. Optional voice through the broadcast layer's TTS.
-
-## V2.3 Player Voices
-
-* Postgame quotes for every game, CPU-simmed included, from the real per-game lines (§5.3).
-* Player accounts on Agent Wire next to the journalists: celebrations, subtweets, rookie excitement, contract-year frustration, injury updates.
-* Players' tone follows their situation (contract, role, team direction, streaks) and their persona (V2.13).
-
-## V2.4 Photography with Consistent Faces
-
-Use each player's headshot as a face reference for the local image model (IP-Adapter / face-ID adapters, §7.7) so every image of a player has the same face: draft-night photos in the new team's cap, trophy and MVP shots, press conferences, retirement ceremonies, Hall of Fame busts, and a lead photo for feature articles. The same approach gives coaches and GMs faces once they have headshots.
-
-## V2.5 Fans
-
-Fans are already agents (§7.7 of the spec). V2 scales them up: comment sections under articles, a forum per team, reactions after big wins and losses, and a fan sentiment score per team that writers, press questions and owner messages can read. Fans react to the data and get louder as streaks build.
-
-## V2.6 Radio and Podcasts
-
-Daily radio segments and weekly two-host podcasts built from the week's data and articles, voiced with local TTS, produced overnight on the GPU queue and published on `Mu_Network`. Original synthetic voices only, never clones of real people.
-
-## V2.7 A Recap for Every Game
-
-A short write-up for all 16 games each week from the real box scores and scoring plays, plus "around the league" notes, alongside the newsroom's existing slate.
-
-## V2.8 League Memory
-
-A narrative search index over every stored article, take, and franchise/league record, so writers, players and broadcasters can pull authentic callbacks ("the last time Carolina came back from 17 down was 2031"). Feeds every feature here that writes text.
-
-**Architecture (Built 2026-10-28):**
-* **Storage:** PostgreSQL 14 table `league_memory` (`id`, `source_table`, `source_id`, `season`, `week`, `team_ids VARCHAR(8)[]`, `player_ids INT[]`, `text_chunk TEXT`, `embedding REAL[]`, `model VARCHAR(64)`, `created_at`, `UNIQUE(source_table, source_id)`). Uses standard Postgres arrays without requiring the `pgvector` extension; cosine similarity runs in Python/numpy.
-* **Corpus Ingestion:** Incremental indexing CLI (`python3 -m newsroom.league_memory index [--limit N] [--season S] [--commit] [--dry-run] [--batch-size 100]`) indexing `news_feed`, `agent_memory_entries`, `franchise_records`, and `league_record_entries`. Skips unchanged rows based on chunk content and model hash. Initial backfill verified on `madden_test` (7,158 chunks, ~437k tokens, ~$0.065 cost).
-* **Embedding Seam:** `embed_text(texts, model=...)` connects to Gemini embeddings (`gemini-embedding-001`), metered into `llm_usage` under source `memory_index`, with test mock seams (`set_mock_embedder`) and local embedding hooks (`set_local_embedder`) for PC migration.
-* **Writer Tool:** `@tool def search_league_memory(query, team=None, player_id=None, seasons=None, top_k=5)` in `newsroom/db_tools.py` and `newsroom/league_memory.py`, registered in `SwarmDispatcher.tools`. Automatically hides future-week memories via `is_visible_week(season, week)` when in an article context.
-
-
-## V2.9 Front-Office Inbox and Conversations
-
-* **Inbox:** messages from the owner, agents and players: trade demands, holdout threats, an impatient owner after a losing streak, a veteran asking about their role. JR chooses how to respond; the response feeds morale, media stories and the hot seat inputs where the engines allow.
-* **Conversations:** message a rival GM, a coach, a retired legend, a beat writer or a draft prospect, each answering from their persona, memory and the data.
-
-## V2.10 Scouting Revamp
-
-Today (spec §2.18): hidden true value `V`, consensus `C = V + e`, team boards, seeded events that explain each step's move, and optional Gemini rewrites for up to 8 movers a step.
-
-* **Every prospect, every step:** with local calls free, every event note gets written, not just the top movers, and prospects get persistent personalities and backstories that carry from college to the NFL.
-* **Team scouts as personas:** each front office gets scouts with their own voice and biases, writing reports that match their team board (`scout_team_boards`), so boards disagree in words as well as numbers.
-* **Interviews:** JR interviews prospects at the combine and on visits; the prospect answers in character. The interview never changes `V`; at most it reveals already-hidden facts the engine allows (e.g. a `MEDICAL` or character flag).
-* **Real college tape:** once the CFB 27 bridge runs (§6), reports cite the prospect's real college games and stats.
-
-## V2.11 Trade Negotiations
-
-Today (spec §3.3f): GM agents propose trades, `engines/trade_value.py` prices them, `gm_trade_negotiations` tracks patience, and the LLM writes rationale only.
-
-* **Free-form talks:** multi-turn negotiation in the GM's voice, with counteroffers chosen from deals the trade-value engine accepts, and patience shown in tone before the GM walks away.
-* **Personality-driven:** aggressiveness, team direction and front-office standing shape how a GM argues, bluffs and concedes.
-* **Leaks and coverage:** talks can leak through `gm_trade_sightings` to insiders and fans, and failed talks become stories.
-* **AI-to-AI deals with a paper trail:** trades between CPU teams get their own negotiation transcripts for the newsroom to report.
-
-## V2.12 Team and League Narratives
-
-A storyline layer that tracks arcs as state across weeks and seasons, each with beats that writers, press questions, player voices, the broadcast layer and the inbox can draw on:
-
-* **Team arcs:** hot seat (spec §2.19), contract years, rebuilds and contention windows, rivalries, streaks, a rookie QB's first season.
-* **League arcs:** a deep QB class, a dynasty under threat, parity, records being chased (`engines/records_engine.py`), the coaching carousel.
-* **Inputs:** game scripts (spec §2.14), the season archive and team arc history, records, contracts, scouting, and Madden's own storyline tables (`Story`, `BranchingStory`, `FootballStory` in the Madden 27 schema; check on the PC what they hold).
-
-## V2.13 Personalities Across the NFL Universe
-
-**Status (2026-10-28):** Phases 1, 2, and 3 built. Writers and GMs use structured database tables (`persona_sliders`, `persona_traits`, `persona_views`, `persona_relationships`, `persona_trait_history`), a 50-trait validated catalogue (`newsroom/config/persona_traits.json`), deterministic seeding (`f"{type}:{id}"`), `#debug` review endpoints (`GET /api/debug/personas`, `POST /api/debug/personas/{type}/{id}`), and GM prompt/dialogue personality reflection.
-
-Extend the persona and memory model the newsroom already uses (identity line, takes log, season summaries) beyond writers and GMs to:
-
-* **Players:** stars and captains first, then anyone who speaks (V2.3, V2.2).
-* **Coaches and coordinators:** from `coaches` and the coaching carousel.
-* **Owners, agents and the commissioner:** for the inbox (V2.9) and league stories.
-* **Scouts:** for V2.10.
-
-Personas are generated once on the local model and stored; memory layers update as they act. Identity stays fixed, like `agent_memories.persistent_memory`. Player and coach personas also get numeric traits (work ethic, coachability, teacher, specialty, …) that feed progression (V2.14).
-
-The personality model (Sims-style sliders with a budget, traits from a catalogue, views that apply only when relevant, mood from the week's data, relationships) and the agent loops are in [`PERSONALITY_PLAN.md`](PERSONALITY_PLAN.md).
-
-## V2.14 Project Mu Owns Progression
-
-Turn off Madden's player progression (XP sliders at 0, which live in the save's `ProgressionXPSlider` table; Madden's offseason regression overwritten from a snapshot) and decide every rating change in `engines/progression.py`: age, dev trait, a hidden ceiling seeded from scouting's `V`, playing time and game grade, injuries, and later coach and player personality traits. Changes are written through the save writer and stored with their causes for the newsroom. Plan: [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md).
-
-## V2.15 Project Mu Runs the League
-
-Madden plays the games; Project Mu makes every front-office decision for all 32 teams and the save writer carries them out: trades without JR's manual Madden steps, the whole draft, the coaching carousel, re-signings and extensions with player agents, free agency, cuts, waivers and the practice squad, coach-set depth charts, retirements, injury durations, media award ballots, the cap and rookie scale. Needs sign and trade moves in the writer, a read-back check after every write, and either all 32 teams user-controlled or the CPU's automation off. JR runs his team from `Mu_Network`. Plan: [`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md).
-
-## V2.16 Suggested Order
-
-| Order | Feature | Builds on |
-| :--- | :--- | :--- |
-| 1 | V2.1 News inside Madden | save writer (§4–§5) |
-| 2 | V2.8 League memory | stored articles and stats |
-| 3 | V2.13 Personalities (players, coaches) | agent memory |
-| 4 | V2.2 Press conferences, V2.3 Player voices | V2.8, V2.13 |
-| 5 | V2.4 Photography | local headshots (§7.7) |
-| 6 | V2.12 Narratives | game scripts, records, hot seat |
-| 7 | V2.11 Negotiations, V2.9 Inbox | GM agents, V2.12, V2.13 |
-| 8 | V2.10 Scouting revamp | scouting engine, CFB bridge (§6) |
-| 9 | V2.5 Fans, V2.6 Radio, V2.7 Every-game recaps | V2.8, TTS (§9) |
-| alongside 3–7 | V2.14 Progression (engine first, then personality and coach terms) | save writer, OVR weights (§4.4), V2.13 |
-| from the first PC season | V2.15 League office (trades, draft and coaching changes first; then the transactions engine, depth charts, retirements, awards) | save writer moves, V2.14 personalities, V2.9, V2.11 |
