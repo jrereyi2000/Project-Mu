@@ -154,6 +154,7 @@ WSL wrapper (`tools/madden_pilot/win.py`): `call(cmd: list[str], timeout=60) -> 
 - **Capture (R1 retired for capture):** `mss` over the client rect gives real frames (luma 0–255), not black.
 - **OCR (R3 mostly retired):** Windows OCR reads breadcrumbs, headings and button labels exactly (`OFFLINE > NFL PRESEASON ROSTER > CHOOSE TEAM >`, `RANDOM TEAM`, `BACK`, team names). It garbles stylised numbers (`OVR` → `WR`, `$10.9M` → `SIO.9M`). Classify on labels and never trust numbers from OCR; stats come from the save (S3).
 - **Input (R1 retired for input):** `SendInput` with hardware scan codes (`KEYEVENTF_SCANCODE`, `EXTENDEDKEY` for arrows) moves Madden's selection exactly one step per press while it has focus (Raiders → Patriots → Panthers on left; Commanders → Falcons → Jets on down). One early press jumped two rows; it happened right after a focus loss, so treat any press made without focus as unreliable. Keyboard is enough, so Q5 is settled with no ViGEm.
+- **CAREER-WEEK1 is no longer a clean week 1 (U4, 2026-10-30):** the copy in Madden's saves folder (modified 07:39) has 15 of the 16 week-1 games simmed (team box scores, no player lines). A clean baseline is needed before cloning (D1 open again).
 - **Screen seen:** the new-franchise flow `OFFLINE > NFL PRESEASON ROSTER > CHOOSE TEAM > CUSTOMIZE` (4×8 team grid, `E` = Random Team, `Backspace`-style key = Back). It was open when the spike started; the highlight was left on the Jaguars as found, and nothing was confirmed.
 
 ## 4. Tests (synthetic, no live DB)
@@ -288,3 +289,4 @@ No path appears twice. No `.gitignore` change: run output goes under `data/` (al
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U4 | 1 (early) | worktree-agent-aafd0eb3664cb3920 | .claude/worktrees/agent-aafd0eb3664cb3920 | merged | a1809e0 |
