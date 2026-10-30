@@ -12,15 +12,17 @@
 //
 // reader_version 4 (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.2) adds `depth_charts` (per real team, 35 positions × 6
 // pgid slots, best first), `league_settings` (the four progression / regression slider records behind LeagueSetting
-// row 0) and, per player, `confidence` (ConfidenceRating) and `traits` (every PT_* flag).
+// row 0, plus the dev-trait regression and breakout-scenario flags) and, per player, `confidence` (ConfidenceRating) and
+// `traits` (every PT_* flag).
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
 import {
-  arrayRefs, arraySlots, calendarYear, decodeRef, depthSlotPgids, isExportableGame, numberedFields, orderSliderRefs, pickRatings,
-  plainFields, playerTraits, refFromValue, STAT_KINDS, weightLbs,
+  arrayRefs, arraySlots, calendarYear, decodeRef, depthSlotPgids, flagValue, isExportableGame, LEAGUE_SETTING_FALLBACK_INDEX,
+  numberedFields, orderSliderRefs, pickRatings, plainFields, playerTraits, refFromValue, schemaFieldName, STAT_KINDS,
+  weightLbs,
 } from './lib.mjs';
 
 export const READER_VERSION = 4;
@@ -280,11 +282,24 @@ async function readDepthCharts(tables, teamTable, playerTableId, pgidByRow) {
   return charts.sort((a, b) => a.team_index - b.team_index);
 }
 
-// LeagueSetting row 0 → the four progression / regression slider records (PROGRESSION_PLAN.md §2). Schema 620 doesn't
-// describe LeagueSetting, so its fields decode as generic Field_N ints and the references are found by value: every
-// 32-bit field whose bits name a table and an existing row; the two int[] targets are by age, the two
+// LeagueSetting row 0 → the four progression / regression slider records (PROGRESSION_PLAN.md §2) and two flags.
+// Schema 620 lists LeagueSetting but the save's table doesn't match it, so the row decodes with madden-franchise's
+// generic names: Field_N = the Nth attribute of the schema's LeagueSetting list. The slider references are found by
+// value: every 32-bit field whose bits name a table and an existing row; the two int[] targets are by age, the two
 // ProgressionXPSlider targets by position, the lower field number of each pair is progression (lib.orderSliderRefs).
-// IsDevTraitRegressionEnabled's Field_N isn't identified yet (V2_CORE_BUILD_PLAN.md R3), so both keys stay null.
+// The flags are found by schema attribute index (lib.schemaFieldName; spike R3, V2_CORE_BUILD_PLAN.md):
+// IsDevTraitRegressionEnabled (Field_88 under 620) and IsDevTraitIncreaseScenarioEnabled (Madden's Breakout Player
+// scenarios, which raise dev traits; Field_86), each a 1-bit int read as true/false. A save whose LeagueSetting decodes
+// with real names uses them.
+function leagueSettingAttrNames(franchise) {
+  try {
+    const schema = franchise.schemaList?.getSchema?.('LeagueSetting');
+    return Array.isArray(schema?.attributes) ? schema.attributes.map(a => a.name) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function readLeagueSettings(franchise, tables) {
   const settingTable = await tables.byName('LeagueSetting');
   const setting = settingTable?.records[0];
@@ -296,10 +311,20 @@ async function readLeagueSettings(franchise, tables) {
     league_setting: settingTable ? { table_id: settingTable.header.tableId, row: 0 } : null,
     dev_trait_regression_field: null,
     dev_trait_regression_enabled: null,
+    breakout_scenarios_field: null,
+    breakout_scenarios_enabled: null,
   };
   if (!setting || setting.isEmpty) return out;
+  const names = fieldNames(setting);
+  const attrNames = leagueSettingAttrNames(franchise);
+  const flag = name => {
+    const field = schemaFieldName(names, attrNames, name, LEAGUE_SETTING_FALLBACK_INDEX[name]);
+    return [field, field ? flagValue(setting[field]) : null];
+  };
+  [out.dev_trait_regression_field, out.dev_trait_regression_enabled] = flag('IsDevTraitRegressionEnabled');
+  [out.breakout_scenarios_field, out.breakout_scenarios_enabled] = flag('IsDevTraitIncreaseScenarioEnabled');
   const candidates = [];
-  for (const field of fieldNames(setting)) {
+  for (const field of names) {
     const offset = setting.getFieldByKey(field)?.offset;
     if (!offset || (offset.length !== 32 && !offset.isReference)) continue;
     const ref = refFromValue(setting[field]);
