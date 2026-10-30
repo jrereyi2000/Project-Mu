@@ -329,6 +329,7 @@ CREATE TABLE IF NOT EXISTS injuries (
     weeks_remaining INT DEFAULT 0,
     is_ir BOOLEAN DEFAULT FALSE,
     captured_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    mu_weeks_out SMALLINT,                             -- Project Mu's duration, written back (2027_01_14_v2_franchise_os.sql)
     CONSTRAINT uq_injuries_season_week_team_name UNIQUE(season, week, team_id, player_name)
 );
 CREATE INDEX IF NOT EXISTS idx_injuries_season_week ON injuries(season, week);
@@ -549,6 +550,89 @@ ALTER TABLE player_contract_years ADD COLUMN IF NOT EXISTS projected BOOLEAN NOT
 ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_at TIMESTAMPTZ;
 ALTER TABLE team_cap_seasons ADD COLUMN IF NOT EXISTS derived_transaction_id INT
     REFERENCES transactions(id) ON DELETE SET NULL;
+
+-- V2 franchise OS core (2027_01_14_v2_franchise_os.sql, docs/in_progress/V2_CORE_BUILD_PLAN.md §2.1).
+-- Contract instruments beyond Madden's plain deal.
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS contract_type VARCHAR(16) NOT NULL DEFAULT 'STANDARD'
+    CHECK (contract_type IN ('STANDARD','ROOKIE','UDFA','FIFTH_YEAR_OPTION','FRANCHISE_EXCL','FRANCHISE_NONEXCL',
+                             'TRANSITION','RFA_TENDER','ERFA_TENDER','MINIMUM'));
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS guaranteed BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS signed_season INT;
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS signed_week INT;
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS last_restructure_season INT;
+ALTER TABLE player_contracts ADD COLUMN IF NOT EXISTS drafted_round SMALLINT;   -- NULL = undrafted
+
+-- Depth charts as Madden holds them (MADDEN), as Project Mu's coaches set them (MU_COACH) or as JR set them (JR).
+CREATE TABLE IF NOT EXISTS depth_charts (
+    team_id INT NOT NULL REFERENCES teams(id),
+    season INT NOT NULL,
+    week INT NOT NULL,
+    position_slot VARCHAR(8) NOT NULL,      -- Madden's DepthChart field name: QB, HB, WR, ..., KR, PR, 3DRB, ...
+    depth SMALLINT NOT NULL CHECK (depth BETWEEN 1 AND 6),
+    player_id INT REFERENCES players(id),
+    source VARCHAR(8) NOT NULL CHECK (source IN ('MADDEN','MU_COACH','JR')),
+    PRIMARY KEY (team_id, season, week, source, position_slot, depth)
+);
+
+-- Every offer or proposal: free agency, re-signing, extension, tender, JR's or a CPU team's.
+CREATE TABLE IF NOT EXISTS contract_offers (
+    id SERIAL PRIMARY KEY,
+    season INT NOT NULL,
+    stage VARCHAR(16) NOT NULL,             -- league_office stage name
+    wave SMALLINT,                          -- free-agency wave 1..3, NULL otherwise
+    kind VARCHAR(12) NOT NULL CHECK (kind IN ('FREE_AGENT','RESIGN','EXTENSION','TENDER','UDFA')),
+    player_id INT NOT NULL REFERENCES players(id),
+    team_id INT NOT NULL REFERENCES teams(id),
+    from_user BOOLEAN NOT NULL DEFAULT false,
+    years SMALLINT NOT NULL,
+    total_value BIGINT NOT NULL,
+    bonus BIGINT NOT NULL DEFAULT 0,
+    guaranteed BIGINT NOT NULL DEFAULT 0,
+    utility NUMERIC(6,4),                   -- free_agency_engine.offer_utility, NULL until scored
+    status VARCHAR(10) NOT NULL DEFAULT 'OPEN'
+        CHECK (status IN ('OPEN','ACCEPTED','REJECTED','COUNTERED','WITHDRAWN','EXPIRED')),
+    counter JSONB,                          -- {years, total_value, bonus, guaranteed} when COUNTERED
+    seed TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS contract_offers_player ON contract_offers (player_id, season, status);
+
+CREATE TABLE IF NOT EXISTS waiver_claims (
+    id SERIAL PRIMARY KEY,
+    season INT NOT NULL, week INT NOT NULL,
+    player_id INT NOT NULL REFERENCES players(id),
+    team_id INT NOT NULL REFERENCES teams(id),
+    priority SMALLINT NOT NULL,             -- 1 = worst record
+    awarded BOOLEAN NOT NULL DEFAULT false
+);
+
+-- JR's queued moves from Mu_Network, applied at the next league office write.
+CREATE TABLE IF NOT EXISTS franchise_pending_moves (
+    id SERIAL PRIMARY KEY,
+    team_id INT NOT NULL REFERENCES teams(id),
+    kind VARCHAR(16) NOT NULL CHECK (kind IN ('DEPTH_CHART','RELEASE','SIGN','TRADE','PS_PROMOTE','PS_DEMOTE',
+                                              'IR_PLACE','IR_ACTIVATE','RESTRUCTURE','EXTENSION','TAG','OPTION')),
+    payload JSONB NOT NULL,
+    status VARCHAR(10) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','WRITTEN','REFUSED','CANCELLED')),
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    written_run INT
+);
+
+-- One row per league office run, and per save write inside it.
+CREATE TABLE IF NOT EXISTS league_office_runs (
+    id SERIAL PRIMARY KEY,
+    season INT NOT NULL, week INT, stage VARCHAR(16) NOT NULL,
+    save_name TEXT NOT NULL,
+    status VARCHAR(10) NOT NULL CHECK (status IN ('PLANNED','WRITTEN','FAILED','DRY_RUN')),
+    edits JSONB NOT NULL,                   -- the exact save_writer edits document
+    summary JSONB,                          -- counts per move kind
+    drift JSONB,                            -- drift_check report before the write
+    error TEXT,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at TIMESTAMPTZ
+);
+
 -- Head coaches & coordinators (coaches, coach_tenures, coordinators, coordinator_tenures, coach_seasons)
 CREATE TABLE IF NOT EXISTS coaches (
     id SERIAL PRIMARY KEY,
@@ -1453,6 +1537,16 @@ CREATE TABLE IF NOT EXISTS player_retirements (
 CREATE UNIQUE INDEX IF NOT EXISTS player_retirements_one ON player_retirements (season, player_id)
     WHERE player_id IS NOT NULL;
 
+-- Madden's retirement call next to Project Mu's (2027_01_14_v2_franchise_os.sql): mu_keep = Project Mu un-retires him.
+CREATE TABLE IF NOT EXISTS retirement_decisions (
+    season INT NOT NULL,
+    player_id INT NOT NULL REFERENCES players(id),
+    madden_retired BOOLEAN NOT NULL,
+    mu_keep BOOLEAN NOT NULL,               -- Project Mu un-retires him
+    reason TEXT,
+    PRIMARY KEY (season, player_id)
+);
+
 -- Each player's fate between two captured seasons (plan D10: captured seasons only, 2035 -> 2036 on).
 CREATE TABLE IF NOT EXISTS player_season_transitions (
     player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -1491,6 +1585,18 @@ CREATE TABLE IF NOT EXISTS player_progression_history (
     ratings_diff JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     cause VARCHAR(32),                                  -- main cause tag (2027_01_11_progression_rating_groups.sql)
+    -- Progression C2 storage (2027_01_14_v2_franchise_os.sql, PROGRESSION_PLAN §5.6)
+    checkpoint VARCHAR(12) NOT NULL DEFAULT 'OFFSEASON',
+    dev_before VARCHAR(16),
+    dev_after VARCHAR(16),
+    group_changes JSONB,
+    wear_term NUMERIC(6,3),
+    upkeep_term NUMERIC(6,3),
+    continuity_term NUMERIC(6,3),
+    mentor_term NUMERIC(6,3),
+    persona_term NUMERIC(6,3) NOT NULL DEFAULT 0,
+    coach_term NUMERIC(6,3) NOT NULL DEFAULT 0,
+    behaviour_changes JSONB,
     UNIQUE (season, player_id)
 );
 CREATE INDEX IF NOT EXISTS idx_player_progression_season ON player_progression_history (season);
@@ -1504,9 +1610,35 @@ CREATE TABLE IF NOT EXISTS player_ceilings (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     peak_mental JSONB,                                  -- career-high Awareness, PlayRecognition
     entry_mental JSONB,                                 -- draft-day Awareness, PlayRecognition
-    entry_source VARCHAR(16)                            -- ESTIMATED (Madden's mean gain) | SAVE
+    entry_source VARCHAR(16),                           -- ESTIMATED (Madden's mean gain) | SAVE
+    floor NUMERIC(5,2),                                 -- 2027_01_14_v2_franchise_os.sql
+    spread NUMERIC(5,2),
+    group_ceilings JSONB                                -- {physical, technical, mental}
 );
 CREATE INDEX IF NOT EXISTS idx_player_ceilings_season ON player_ceilings (updated_season);
+
+-- Weekly form overlay (2027_01_14_v2_franchise_os.sql, progression phase E).
+CREATE TABLE IF NOT EXISTS player_form (
+    player_id INT NOT NULL REFERENCES players(id),
+    season INT NOT NULL, week INT NOT NULL,
+    form NUMERIC(4,2) NOT NULL CHECK (form BETWEEN -3 AND 3),   -- OVR points
+    overlay JSONB NOT NULL,                 -- {RatingName: delta} written on top of the base ratings
+    PRIMARY KEY (player_id, season, week)
+);
+
+-- Durability and workload (2027_01_14_v2_franchise_os.sql, progression C2).
+CREATE TABLE IF NOT EXISTS player_durability (
+    player_id INT PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+    durability NUMERIC(4,3) NOT NULL CHECK (durability BETWEEN 0 AND 1),
+    source VARCHAR(16) NOT NULL, updated_season INT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS player_mileage (
+    player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    season INT NOT NULL,
+    touches INT NOT NULL DEFAULT 0, hits INT NOT NULL DEFAULT 0, snaps INT NOT NULL DEFAULT 0,
+    wear NUMERIC(6,2) NOT NULL DEFAULT 0,
+    PRIMARY KEY (player_id, season)
+);
 
 -- League Memory narrative search index (2027_01_10_league_memory.sql, newsroom/league_memory.py, docs/done/PRE_PC_WORK.md §9, docs/in_progress/V2_MASTER_PLAN.md V2.8).
 CREATE TABLE IF NOT EXISTS league_memory (
