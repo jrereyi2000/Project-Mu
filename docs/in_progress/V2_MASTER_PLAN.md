@@ -195,7 +195,7 @@ flowchart TD
 
     subgraph Madden_Game ["Madden NFL 27 (PC)"]
         F --> G["Play User Game (or CPU vs CPU Spectate)"]
-        G --> H["Save & Quit to Desktop"]
+        G --> H["Advance Week, Save & Quit to Desktop"]
     end
 
     subgraph Post_Game ["Automated Post-Game Pipeline"]
@@ -211,13 +211,13 @@ flowchart TD
 1. **User Action:** You finalize depth charts and game strategy in `Mu_Network`, then click **Play Game**.
 2. **Pre-Flight Save Injection:** The backend writes all 32 team depth charts, contracts, and roster moves directly to the save file.
 3. **Mod Pack Activation & Launch:** [`pipeline.mod_packs`](../../pipeline/mod_packs.py) configures the active broadcast presentation (CBS/FOX/TNF/SNF/MNF), crowd tier, and ball type, then executes `MMCModManager.exe -launch <pack>`.
-4. **Gameplay:** You play the game in Madden. On completion, simply save and exit the game to desktop.
+4. **Gameplay:** You play the game in Madden. On completion, advance the week, save, and exit to desktop. The ingest runs on this post-advance save (see the note below).
 5. **Autonomous Ingestion & Newsroom Dispatch:**
    - The process monitor ([`pipeline/gpu_queue/process_check.py`](../../pipeline/gpu_queue/process_check.py)) detects `Madden27.exe` has closed.
    - [`pipeline/watch_save.py`](../../pipeline/watch_save.py) ingests the save, executes deterministic engines, queues nightly batch jobs, and triggers the newsroom journalists.
    - `Mu_Network` refreshes with completed box scores, postgame quotes, articles, and updated standings.
 
-**Not yet true: player lines can't be read straight after the game (§7.0, B1).** In `CAREER-WEEK1/2/3` ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §5.4, check 3), each save was made after the week's 15 CPU games were simmed and before CAR's game. The final score, quarter scores and team box score (`SeasonGame` and its `TeamStatCache`) were readable for every game already played, this week's included. The player lines (`Game*Stats`) for this week's games were in their tables too, but had a null `SeasonGame` and no `Player.GameStats` link. The reader reaches player lines only through that link, so it can't credit them. The next week's save had them linked. So `CAREER-WEEK3` holds week 1 and week 2 player lines but not week 3's. The saves can't show *what* links them: Advance Week, or the week's last game finishing. Until a PC test answers that, the ingest just after "Save & Quit" can load the score and team stats but not the player lines, and the newsroom would write recaps without player stats. Possible fixes, depending on the test: ingest after the week advances (Project Mu triggers the advance, or the user does), or attribute the unlinked rows directly if they carry enough to find their player and game (§7.0, O1).
+**Decision (JR, 2026-10-30): ingest runs on the save made after Advance Week, not the one made straight after the game (§7.0, B1 resolved).** In `CAREER-WEEK1/2/3` ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §5.4, check 3), each save was made after the week's 15 CPU games were simmed and before CAR's game. The final score, quarter scores and team box score (`SeasonGame` and its `TeamStatCache`) were readable for every game already played, this week's included. The player lines (`Game*Stats`) for this week's games were in their tables too, but had a null `SeasonGame` and no `Player.GameStats` link, so the reader can't credit them; the next week's save had them linked. Whatever links them (the week's last game finishing, or Advance Week) has happened by the time the week is advanced, so the post-advance save holds the whole week's player lines, the user's game included. This also makes it irrelevant whether Madden writes the save mid-game: the watcher only acts on the post-advance save. The cost is that the postgame newsroom for the user's game (press conference, recap, quotes) waits for the advance. If O1 (§7.0) works, the user's game and the earlier-kickoff games can be credited from the save made straight after the game as well.
 
 ---
 
@@ -287,7 +287,7 @@ Phases 1–3 below can start now. These items depend on unfinished work elsewher
 
 | # | What it blocks | Waiting on |
 | :--- | :--- | :--- |
-| B1 | §5 post-game ingest (step K) and Phase 4 | (a) What links a week's player lines (§5 note above): sim or play one game, save, read; then finish the week and advance, and read again. (b) Whether Madden writes the save during a game or only on Save & Quit: run [`tools/save_write_logger.py`](../../tools/save_write_logger.py) on the PC through one played game. |
+| ~~B1~~ | **Resolved (JR, 2026-10-30): ingest runs on the post-advance save (§5 note).** Was: §5 post-game ingest (step K) and Phase 4 | (a) What links a week's player lines (§5 note above): sim or play one game, save, read; then finish the week and advance, and read again. (b) Whether Madden writes the save during a game or only on Save & Quit: run [`tools/save_write_logger.py`](../../tools/save_write_logger.py) on the PC through one played game. |
 | B2 | V2.14 (Project Mu owns progression) | [`PROGRESSION_PLAN.md`](./PROGRESSION_PLAN.md): phase A (PC checks: XP sliders at 0 stop all changes, Madden keeps written ratings), the rest of phase C2, phase D (engine writes the save), decision D13 (how form reaches the game). Plus the OVR-recompute-on-load check ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §5.4, check 7), and moving the helpers `engines/progression.py` imports out of the obsolete `pipeline/teleport.py` ([`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b; PC plan §10, item 1). |
 
 **Partial blockers** (can ship first with the dependent term at 0, or later)
@@ -301,11 +301,11 @@ Phases 1–3 below can start now. These items depend on unfinished work elsewher
 | P5 | Trust in all scratch-save results | Every §5.4 check was on unmodded `CAREER-WEEK1/2/3`; sim-stat and roster mods change the numbers, so the checks are re-run on a modded save before the 2034 start. |
 | P6 | Phase 1 `depth_chart.mjs` | The "35 positions × 6 slots" `Team.DepthChart` layout is from this plan, not yet read from a save; check it on `CAREER-WEEK3` first. |
 
-**Open items** (not blocking; ideas that depend on B1)
+**Open items** (not blocking)
 
 | # | Item | Notes |
 | :--- | :--- | :--- |
-| O1 | Link this week's unlinked player lines ourselves | The game is easy to find: each unlinked row carries `OpposingTeam`, and a team plays once a week, so opponent + week names the game (its score and team box score are already readable). The player is the open question: the reader reaches stat rows only through `Player.GameStats`, so no one has checked whether an unlinked row holds its own player reference. Check on `CAREER-WEEK3` on the PC. If it has none, look for another route (row order following the roster, or lines whose totals add up to the team box score). If O1 works, B1's player-line half goes away: the postgame ingest can credit your own game's lines straight after Save & Quit. |
+| O1 | Link this week's unlinked player lines ourselves | The game is easy to find: each unlinked row carries `OpposingTeam`, and a team plays once a week, so opponent + week names the game (its score and team box score are already readable). The player is the open question: the reader reaches stat rows only through `Player.GameStats`, so no one has checked whether an unlinked row holds its own player reference. Check on `CAREER-WEEK3` on the PC. If it has none, look for another route (row order following the roster, or lines whose totals add up to the team box score). If O1 works, the postgame newsroom for your own game can run straight after Save & Quit instead of waiting for the advance. |
 | O2 | "Around the league" by kickoff window | Madden sims all CPU games of a week together, before the user's game, whatever their scheduled kickoff. Project Mu could reveal only the games whose kickoff is earlier than the user's (Thursday night, then the early and late Sunday windows before a Sunday night game) and hold the rest until after it: their scores and team box scores in the Game Center (§2.1) and newsroom, in kickoff order. Works today with scores and team stats; player stat lines need O1. |
 
 ### 7.1 Phases
@@ -340,6 +340,20 @@ All development and testing will occur on the PC using existing scratch saves (`
 3. **Phase 3: Backend Franchise API (`server/franchise_api.py`):**
    - Endpoints for depth chart management, roster cuts/promotions, free agency offers, contract negotiations, trade evaluations, and the game launch trigger.
 4. **Phase 4: Game Lifecycle Automation:**
-   - Enhance [`pipeline/watch_save.py`](../../pipeline/watch_save.py) and [`pipeline/gpu_queue/process_check.py`](../../pipeline/gpu_queue/process_check.py) to automatically ingest upon `Madden27.exe` process termination.
+   - Enhance [`pipeline/watch_save.py`](../../pipeline/watch_save.py) and [`pipeline/gpu_queue/process_check.py`](../../pipeline/gpu_queue/process_check.py) to automatically ingest the post-advance save once `Madden27.exe` exits (§5 note).
 5. **Phase 5: Frontend Franchise Command Center:**
    - Build the complete `/franchise` dashboard in `Mu_Network`, integrating all 8 modules.
+
+---
+
+## 8. Stretch Explorations
+
+### 8.1 Boot Straight Into the Game
+Today "Play Game" (§2.1, §5) still leaves the user to start Madden, load the franchise and pick Play Week by hand. The stretch goal: one click in `Mu_Network` lands on the pregame or kickoff screen of the right franchise game. No existing mod is known to do this, so it would be built. Routes to explore, roughly from least to most invasive:
+1. **Launch options:** whether `Madden27.exe` (or the EA app / MMC Modding Tools launch) accepts arguments that skip the intro, splash or main menu, or auto-load the most recent save.
+2. **UI automation from Windows:** a small helper started after `MMCModManager.exe -launch <pack>` that drives the menus with controller or keyboard input (e.g. a virtual gamepad), confirming each screen by image match before the next input. No game files change; it breaks if menus or timings change, so it needs screen checks and a timeout that hands control back to the user.
+3. **Save-side setup:** whether anything in the franchise file (the pre-flight in §5 already writes it) can make the loaded franchise open on the user's game, so automation only has to get as far as loading the save.
+4. **A Frostbite mod** through MMC Modding Tools that changes the front-end flow (default menu focus, skipped screens, or a direct load). Most work and least known; check first whether front-end flow is moddable at all.
+
+Before building anything: confirm the chosen route doesn't trip the game's anti-cheat or break offline franchise play, and that the user can always fall back to doing it by hand.
+
