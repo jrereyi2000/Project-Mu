@@ -503,6 +503,24 @@ Automated generation of 31–32 five-second broadcast video clips for Round 1 NF
 * **Delivery & Interface:** Exports 5-second 720p/1080p MP4s to `static/draft/videos/{season}_pick_{pick_no}.mp4`. In `Mu_Network`'s Draft Central War Room, clicking on any Round 1 pick seamlessly plays their official stage entrance video inline.
 * **Compute Cost:** ~4.5–5 compute units on Colab A100 once per draft (~9–10 units/year for 2 drafts).
 
+### V2.18 Napper Fantasy Conversational League & Dynamic Personas
+Transforms Napper from a sterile, template-driven fantasy tool into a living, high-personality fantasy league app (Sleeper-style) where AI league-mates banter, react, negotiate trades with dialogue, and hold multi-season grudges against the user.
+* **Architecture & Workload Routing:**
+  1. *Weekly Batch League Banter (Track 1 - Colab A100 / Llama 3.3 70B vLLM):*
+     - Replaces hardcoded string templates (`PERSONA_BANTER_TEMPLATES` in [`engines/napper_chat_engine.py`](../../engines/napper_chat_engine.py)) with dynamic, contextual LLM chat traffic generated in the weekly batch (~15–20 messages/league/week).
+     - Contextual triggers: benchwarmers with 25+ points, heartbreaking <3-point losses, blowout beatdowns, waiver FAAB overspends, and upcoming rivalry previews.
+     - 4 Distinct Voices: `TRASH_TALKER` (arrogant roasts), `ANALYTICS_NERD` (xFP, variance, regression rants), `WAIVER_HAWK` (late-night snipes), and `DIE_HARD` (film-grind, scheme rants).
+     - Compute duration: ~5–8 seconds during weekly Colab batch (\$0.00 token cost, ~0.01 CUs).
+  2. *Interactive Trade Dialogue & In-Character Counter-Offers (Track 2 - Sub-Second Persona Boundary):*
+     - Proposing, declining, or countering a trade in `server/napper_api.py` pairs the quantitative math ([`engines/napper_trade_engine.py`](../../engines/napper_trade_engine.py)) with personalized manager dialogue delivered in <1 second (Gemini 3.8 Flash `thinking=low` or local resident 1B model).
+     - Replaces generic "❌ Trade Declined" robot cards with in-character responses: roasts on lowballs, analytical breakdowns of point differentials, or trade-block counter-demands.
+  3. *Conversational League Chat (User Reply Hook):*
+     - When the user sends a message in `napper_chat` or @-mentions an AI manager, an event hook triggers an immediate in-character reply (~800ms).
+  4. *Multi-Season Lineage & Grudge Memory:*
+     - Exploits `napper_leagues.lineage_id` to query historical head-to-head records (`H2H: 3-1`), past playoff heartbreak ("You eliminated me in the 2035 semifinals"), and championship banter across league restarts.
+  5. *Personality System Integration ([`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md)):*
+     - Maps each fantasy manager to the 6-slider persona framework (Pettiness, Analytical Bias, Trash Talk Frequency, Risk Tolerance, Loyalty, Trade Activity).
+
 ---
 
 ## 7. Implementation & Testing Roadmap
