@@ -86,4 +86,4 @@ python3 -m pipeline.mod_packs write --team NYG [--week W] [--dry-run] [--launch]
 
 Example, 2036 Giants: week 6 MIN @ NYG Mon 8:30 PM → `Mu MNF Tier1 BCA` (score 77.0); week 7 CLE @ NYG Sun 1:00 PM → `Mu CBS Tier1 BCA`; week 17 NYG @ ATL → `Mu FOX Tier3 Mudded` (28.6); wild card NYG @ AZ → `Mu FOX Full Mudded`.
 
-Not built: pink gear on only some players (the BCA mod replaces shared textures, so it is all-or-nothing as shipped; per-player would mean editing it in MMC Editor), and wiring `write` into the save watcher so the next game's pack is ready after each week.
+Not built: pink gear on only some players (the BCA mod replaces shared textures, so it is all-or-nothing as shipped; per-player would mean editing it in MMC Editor), and wiring `write` into the weekly run so the next game's pack is ready after each week (planned: PC_MIGRATION_PLAN §5.2).
