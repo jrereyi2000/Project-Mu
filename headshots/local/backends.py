@@ -379,15 +379,46 @@ class DiffusersBackend(HeadshotBackend):
             "character sheet, multiple views, multiple people, multiple angles, stadium, "
             "blurry, distorted face, bad anatomy, deformed eyes, text, watermark"
         )
+        neg_prompt = merged_config.get("negative_prompt", default_negative)
+        use_compel = merged_config.get("use_compel", True)
+
+        prompt_embeds = None
+        pooled_prompt_embeds = None
+        neg_prompt_embeds = None
+        neg_pooled_prompt_embeds = None
+
+        if use_compel and hasattr(self._pipe, "tokenizer_2") and hasattr(self._pipe, "text_encoder_2"):
+            try:
+                from compel import Compel, ReturnedEmbeddingsType
+                compel = Compel(
+                    tokenizer=[self._pipe.tokenizer, self._pipe.tokenizer_2],
+                    text_encoder=[self._pipe.text_encoder, self._pipe.text_encoder_2],
+                    returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
+                    requires_pooled=[False, True],
+                    truncate_long_prompts=False,
+                )
+                prompt_embeds, pooled_prompt_embeds = compel(prompt)
+                neg_prompt_embeds, neg_pooled_prompt_embeds = compel(neg_prompt)
+            except Exception as e:
+                logger.debug("Compel long-prompt encoding not active or failed (%s), falling back to raw prompt text.", e)
+
         call_kwargs: Dict[str, Any] = {
-            "prompt": prompt,
-            "negative_prompt": merged_config.get("negative_prompt", default_negative),
             "height": size,
             "width": size,
             "num_inference_steps": merged_config.get("steps", 30),
             "guidance_scale": merged_config.get("guidance_scale", 7.0),
             "generator": generator,
         }
+
+        if prompt_embeds is not None and pooled_prompt_embeds is not None:
+            call_kwargs["prompt_embeds"] = prompt_embeds
+            call_kwargs["pooled_prompt_embeds"] = pooled_prompt_embeds
+            if neg_prompt_embeds is not None and neg_pooled_prompt_embeds is not None:
+                call_kwargs["negative_prompt_embeds"] = neg_prompt_embeds
+                call_kwargs["negative_pooled_prompt_embeds"] = neg_pooled_prompt_embeds
+        else:
+            call_kwargs["prompt"] = prompt
+            call_kwargs["negative_prompt"] = neg_prompt
 
         # IP-Adapter face reference conditioning
         if ref_image and hasattr(self._pipe, "set_ip_adapter_scale"):
