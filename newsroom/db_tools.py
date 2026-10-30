@@ -3805,3 +3805,35 @@ try:
 except Exception:
     pass
 
+
+
+@tool
+def get_player_progression(player_identifier: str, season: int = 0) -> str:
+    """Fetch recorded offseason OVR and dev-tier changes with their main cause for a player name or ID.
+    Ceilings, durability and their numeric inputs are hidden. Missing records mean unknown, not zero change.
+    """
+    try:
+        s_val = resolve_season(season)
+        # Explicit tool arguments must not escape the article's temporal boundary.
+        if context_season() is not None:
+            s_val = min(s_val, context_season())
+        with psycopg.connect(db.db_conn_info) as conn:
+            with conn.cursor() as cur:
+                pid = _resolve_player_id(cur, player_identifier)
+                if not pid:
+                    return "Player not found."
+                cur.execute("SELECT to_regclass('public.player_progression_history')")
+                if not cur.fetchone()[0]:
+                    return "No progression history recorded. Do not infer changes or causes."
+                cur.execute("""
+                    SELECT season, old_ovr, new_ovr, delta_ovr, cause, dev_before, dev_after
+                    FROM player_progression_history
+                    WHERE player_id = %s AND season <= %s AND checkpoint = 'OFFSEASON'
+                    ORDER BY season DESC LIMIT 5
+                """, (pid, s_val))
+                columns = ("season", "old_ovr", "new_ovr", "delta_ovr", "cause", "dev_before", "dev_after")
+                rows = [dict(zip(columns, row)) for row in cur.fetchall()]
+        return json.dumps({"player_id": pid, "changes": rows,
+                           "note": "Only recorded causes may be cited; hidden potential and durability are never disclosed."})
+    except Exception:
+        return "Progression history unavailable. Do not infer changes or causes."

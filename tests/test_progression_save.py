@@ -144,6 +144,21 @@ class RatingEditsTest(unittest.TestCase):
         self.assertEqual(s["OverallGrade4"], 0)          # no archetype in slot 4: stored value kept
         self.assertEqual(s["OverallRating"], max(s[f"OverallGrade{i}"] for i in range(5)))
 
+    def test_missing_authoritative_ratings_refuses_partial_pass(self):
+        with self.assertRaisesRegex(ValueError, "no authoritative progression ratings"):
+            ps.build_document([dict(row(1), target_ratings=None)], snapshot(), PGIDS, doc=DOC)
+
+    def test_absolute_targets_restore_drift_and_are_idempotent(self):
+        snap = snapshot()
+        target = dict(WR_RATINGS, Speed=92)
+        snap["players"][0]["ratings"].update(Speed=87, Catching=77)
+        r = dict(row(1, {"Speed": 2}), target_ratings=target)
+        first = ps.rating_edits([r], snap, PGIDS, DOC)[0]["set"]
+        self.assertEqual(first["SpeedRating"], 92)
+        self.assertEqual(first["CatchingRating"], 80)
+        snap["players"][0]["ratings"] = target
+        self.assertEqual(ps.rating_edits([r], snap, PGIDS, DOC), [])
+
     def test_clamped_and_no_change_no_edit(self):
         self.assertEqual(ps.rating_edits([row(1)], snapshot(), PGIDS, DOC), [])
         s = ps.rating_edits([row(1, {"Speed": 20})], snapshot(), PGIDS, DOC)[0]["set"]
@@ -194,6 +209,16 @@ class FakeCursor:
 
 
 class PassEditsTest(unittest.TestCase):
+    def test_xp_skips_zero_pgid_template_rows(self):
+        snap = snapshot(players=[{"pgid": 0}, {"pgid": 0}, {"pgid": None}, {"pgid": 101}])
+        self.assertEqual(ps.xp_edits(snap), [{"pgid": 101, "set": {"ExperiencePoints": 0, "SkillPoints": 0}}])
+
+    def test_xp_cleared_even_without_progression_or_morale_edits(self):
+        doc = ps.build_document([], snapshot(), PGIDS, morale=None)
+        self.assertEqual({e["pgid"] for e in doc["players"]}, {101, 202, 303})
+        self.assertTrue(all(e["set"] == {"ExperiencePoints": 0, "SkillPoints": 0}
+                            for e in doc["players"]))
+
     def test_fetch_pgid_map(self):
         cur = FakeCursor([(1, 101), (2, 202)])
         self.assertEqual(ps.fetch_pgid_map(cur), {1: 101, 2: 202})
@@ -224,7 +249,7 @@ class PassEditsTest(unittest.TestCase):
         self.assertEqual(by[202]["AwarenessRating"], 68)
         self.assertEqual(by[202]["TraitDevelopment"], "Superstar")
         self.assertNotIn("ConfidenceRating", by[202])
-        self.assertEqual(by[303], {"ConfidenceRating": 50})
+        self.assertEqual(by[303], {"ConfidenceRating": 50, "ExperiencePoints": 0, "SkillPoints": 0})
         self.assertEqual(len(doc["records"]), 4)          # flag fields unknown: sliders only
 
     def test_flags_included_when_known(self):

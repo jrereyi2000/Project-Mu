@@ -1212,6 +1212,38 @@ def dev_label(dev_trait: Optional[str]) -> Optional[str]:
     return "X-Factor" if "X-Factor" in dev_trait else dev_trait[:DEV_LABEL_MAX]
 
 
+def dev_transition(player_id: int, season: int, dev_trait: Optional[str], age: int,
+                   ovr: int, ceiling: float, top_last: bool, top_prev: bool,
+                   bottom_last: bool = False, bottom_prev: bool = False) -> Optional[str]:
+    """One seeded tier step; sustained production gates promotion, band room limits it.
+
+    Unknown/hidden tiers stay unchanged. No personality inference enters this rule.
+    Thresholds and probabilities are tuning constants, not a fit to Madden.
+    """
+    tiers = ("Normal", "Star", "Superstar", "X-Factor")
+    before = dev_label(dev_trait)
+    if before not in tiers:
+        return before
+    rank = tiers.index(before)
+    band_rank = sum(ceiling >= threshold for threshold in (75, 85, 95))
+    room = max(0.0, ceiling - ovr)
+    roll = _sha_unit(f"dev:{season}:{player_id}")
+    if age <= 28 and top_last and top_prev and rank < band_rank and room >= 2:
+        chance = min(0.5, 0.15 + room * 0.02)
+        if roll < chance:
+            return tiers[rank + 1]
+    elif rank > 0 and (bottom_last and bottom_prev or age > 30 and rank > band_rank):
+        chance = min(0.5, 0.15 + max(0, age - 30) * 0.03)
+        if roll < chance:
+            return tiers[rank - 1]
+    return before
+
+
+def bottom_quarter(perf: Dict[int, Dict[str, Any]]) -> set:
+    """Eligible measured players only; missing performance never counts as poor."""
+    return top_quarter({pid: {**p, "score": -p.get("score", 0.0)} for pid, p in perf.items()})
+
+
 def stored_band(p: Dict[str, Any], ceiling: float) -> Optional[Dict[str, Any]]:
     """The band stored in player_ceilings (floor, spread, group_ceilings), or None when it isn't complete."""
     gc = p.get("stored_group_ceilings")
@@ -1247,7 +1279,7 @@ def run_progression(
         aging_curves = fit_aging(aging_pairs)
         roster = fetch_progression_roster(cur, season)
         weights_doc = ow.load_weights()
-        attr_map = fetch_player_attributes_map(cur, season)
+        attr_map = fetch_player_attributes_map(cur, season - 1)
         awareness = {pid: r.get("Awareness") for pid, r in attr_map.items() if r}
         ctx = load_c2_context(cur, season)
 
@@ -1262,6 +1294,7 @@ def run_progression(
         except Exception:
             perf_prev = {}
         top_last, top_prev = top_quarter(perf), top_quarter(perf_prev)
+        bottom_last, bottom_prev = bottom_quarter(perf), bottom_quarter(perf_prev)
 
         def delta_inputs(p):
             age = p["age"] + 1  # Player advances 1 year in offseason
@@ -1317,6 +1350,7 @@ def run_progression(
                 **kwargs, league_adj=terms[0], star_adj=terms[1])
 
             ratings_diff, peak, entry, entry_source = {}, None, None, None
+            new_ratings = None
             if p_id in attr_map:
                 current = attr_map[p_id]
                 mental = {k: current[k] for k in MENTAL_RATINGS if k in current}
@@ -1364,6 +1398,7 @@ def run_progression(
                 "performance_term": breakdown["performance"],
                 "performance_notes": (perf.get(p_id) or {}).get("notes", []),
                 "ratings_diff": ratings_diff,
+                "target_ratings": new_ratings,
                 "ceiling": ceiling,
                 "ceiling_source": c_source,
                 "cause": cause,
@@ -1373,7 +1408,9 @@ def run_progression(
                 # phase C2 (§5.6)
                 "checkpoint": "OFFSEASON",
                 "dev_before": dev_label(p["dev_trait"]),
-                "dev_after": dev_label(p["dev_trait"]),   # dev changes are phase H (§5.7)
+                "dev_after": dev_transition(p_id, season, p["dev_trait"], age, new_ovr, ceiling,
+                                            p_id in top_last, p_id in top_prev,
+                                            p_id in bottom_last, p_id in bottom_prev),
                 "group_changes": group_changes(ratings_diff),
                 "wear_term": breakdown["wear"],
                 "upkeep_term": breakdown["upkeep"],
@@ -1826,6 +1863,7 @@ def run_simulation(
 
     target = {"count_90_plus": base["count_90_plus"], "avg_ovr": base["avg_ovr"]}
     history = []
+    previous_perf = {}
     for yr in range(1, num_seasons + 1):
         sim_s = start_season + yr
         leave_rng = random.Random(f"retire:{sim_s}")
@@ -1845,7 +1883,18 @@ def run_simulation(
 
         terms = (calibrate_league_term(staying, [r["ovr"] for r in rookies], target, progress)[0]
                  if hold_shape else (0.0, 0.0))
-        roster = [{**p, "age": p["age"] + 1, "ovr": progress(p, *terms)} for p in staying]
+        top_now, top_before = top_quarter(perf), top_quarter(previous_perf)
+        bottom_now, bottom_before = bottom_quarter(perf), bottom_quarter(previous_perf)
+        advanced = []
+        for p in staying:
+            new_ovr = progress(p, *terms)
+            ceiling, _ = seed_player_ceiling(p["player_id"], p["ovr"], p["age"] + 1, p["dev"])
+            dev_after = dev_transition(p["player_id"], sim_s, p["dev"], p["age"] + 1, new_ovr, ceiling,
+                                       p["player_id"] in top_now, p["player_id"] in top_before,
+                                       p["player_id"] in bottom_now, p["player_id"] in bottom_before)
+            advanced.append({**p, "age": p["age"] + 1, "ovr": new_ovr, "dev": dev_after})
+        previous_perf = perf
+        roster = advanced
         roster += [{"player_id": 100000 + sim_s * 1000 + i, "team_id": rng.choice(teams), **r}
                    for i, r in enumerate(rookies)]
 

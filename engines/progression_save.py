@@ -174,6 +174,8 @@ def rating_edits(rows: Iterable[Dict[str, Any]], snapshot: Dict[str, Any],
         if p is None:
             _warn(warnings, f"player {pid}: pgid {pgid} not in the snapshot; not written")
             continue
+        if "target_ratings" in r and r["target_ratings"] is None:
+            raise ValueError(f"player {pid}: no authoritative progression ratings; save pass refused")
         current = dict(p.get("ratings") or {})
         new = dict(current)
         for name, d in (r.get("ratings_diff") or {}).items():
@@ -181,6 +183,11 @@ def rating_edits(rows: Iterable[Dict[str, Any]], snapshot: Dict[str, Any],
                 _warn(warnings, f"pgid {pgid}: rating {name} not in the save; skipped")
                 continue
             new[name] = max(RATING_MIN, min(RATING_MAX, int(current[name]) + int(d)))
+        # Absolute Mu targets restore Madden drift and make retrying a pass idempotent.
+        # Diff-only rows remain supported for form overlays and older callers.
+        if r.get("target_ratings") is not None:
+            new = {k: max(RATING_MIN, min(RATING_MAX, int(r["target_ratings"].get(k, v))))
+                   for k, v in current.items()}
         changed = {k: v for k, v in new.items() if v != current.get(k)}
         set_: Dict[str, Any] = {f"{k}Rating": v for k, v in sorted(changed.items())}
         if changed:
@@ -220,6 +227,16 @@ def morale_edits(snapshot: Dict[str, Any], value: int = MORALE_NEUTRAL) -> List[
             if p.get("pgid") is not None and p.get("confidence") is not None and p["confidence"] != value]
 
 
+def xp_edits(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Clear banked XP and skill points for every save player.
+
+    The reader does not expose these balances, so write zero unconditionally.
+    Sliders alone do not remove points earned before Mu took ownership.
+    """
+    return [{"pgid": p["pgid"], "set": {"ExperiencePoints": 0, "SkillPoints": 0}}
+            for p in snapshot.get("players") or [] if p.get("pgid") is not None and p["pgid"] > 0]
+
+
 def merge_players(*edit_lists: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """One players entry per pgid, sets merged in order (later lists win on a shared field)."""
     merged: Dict[int, Dict[str, Any]] = {}
@@ -234,7 +251,7 @@ def build_document(rows: Iterable[Dict[str, Any]], snapshot: Dict[str, Any],
                    doc: Optional[Dict[str, Any]] = None, warnings: Optional[List[str]] = None) -> Dict[str, Any]:
     """The offseason pass's edits document from progression rows (pure): ratings, morale, sliders, and the
     dev-trait regression and breakout-scenario flags."""
-    players = merge_players(rating_edits(rows, snapshot, pgid_by_player, doc, warnings),
+    players = merge_players(xp_edits(snapshot), rating_edits(rows, snapshot, pgid_by_player, doc, warnings),
                             morale_edits(snapshot, morale) if morale is not None else [])
     records = slider_edits(snapshot, warnings)
     for flag in (dev_flag_edit(snapshot, warnings), breakout_flag_edit(snapshot, warnings)):
