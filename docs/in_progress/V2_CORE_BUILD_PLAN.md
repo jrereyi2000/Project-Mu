@@ -1,10 +1,13 @@
 # Project Mu: V2 Core Build Plan
 
-**Status:** approved by JR (2026-10-30); building, wave 2 of 6.
+**Status:** approved by JR (2026-10-30); building, wave 2 of 6 done.
 - *As built (wave 1):* U2's `sign` to a Roster needs a PlayerContract row that no schema field references, and the sample save has none (its one unreferenced row is held by a PersonaNegotiationPackage). Today a Roster signing works only when a release in the same write frees a row. Free agency signs more players than it releases, so creating contract rows (the library can un-empty a table row) is a follow-up to settle with spike R1 before U11/U13 rely on it.
 - *As built (wave 1):* practice-squad players have no contract row and stay listed in `League.FreeAgents` (sample save), so a PracticeSquad signing links no contract and leaves the free-agent list alone.
 - *As built (wave 1):* U3 maps offseason stages to league_state weeks in `contracts_engine.OFFSEASON_STAGE_WEEKS` (OFFSEASON_START 24, RESIGN 25, FREE_AGENCY 26, DRAFT 29, UDFA 30, CUTDOWN 31, PRESEASON 32; estimates). U13's `detect_stage` must use the same mapping.
 - *Spikes R1, R5, R6 (2026-10-30, `CAREER-V2TEST` from `CAREER-WEEK1`: release Simpkins, sign Tyreek Hill to CAR on a reused contract row, trade Jalen Coker CAR→ATL, CAR depth chart King/Young/Pickett at QB and Hill WR1; JR loaded it, advanced a week, saved):* **R1 passed:** the signing, the reused contract row (2152) and the trade all survived load and Advance Week unchanged. **R5 passed:** Madden kept the written depth chart through the advance (no re-sort). **R6:** Madden did not recompute stored cap figures: CAR's `TEAM_SALARY`, `SalCapCapRoom`, `SalCapNextYearCapRoom`, reserves and Hill's `PLYR_CAPSALARY` (5189, from his old deal) were unchanged after the advance. So U13 writes them itself in every run: each moved player's `PLYR_CAPSALARY` (players edit) and each affected team's cap fields (records edit on the Team row), computed with `contracts_engine`. No writer change is needed.
+- *As built (wave 2):* the save's 35 DepthChart field names (U6 `POSITION_SLOTS`) differ from V2_MASTER_PLAN §2.2's labels: slot WR is `SLWR`, rush ends `RLE`/`RRE`, rush DT `RDT`, slot CB `SLCB`, sub LB `SUBLB`, plus `NT`, `PWHB`, `GAD`, `KOS`. Every unit uses the save's names.
+- *As built (wave 2):* U4's snapshot adds `players[].confidence` and `players[].traits` ({PT_*: bool}, nested) and a `field` key on each slider entry; LeagueSetting references decode as plain 32-bit ints under schema 620 (`lib.mjs refFromValue`).
+- *As built (wave 2):* U5's `run_wave` doesn't check cap or roster limits (offers carry `team` and `market` context); U11 `cpu_offers` must. `acceptance` takes `best = {offer, team, market, score?, bar_shift?}`; street/UDFA markets take `needs = {team_id: {needs, starter_ovr?, roster_spots?, …}}`.
 - *As built (wave 1):* U1's agent had no database (Docker was down); the orchestrator ran its checks (migration applied twice to `madden_test`, `init_db.sql` built on an empty database).
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2–§5, §7; [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) phases C2, D, E; [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) (absorbed, D2); PROJECT_SPEC §2.17, §2.21, §3.3d, §3.3n, §6.0b.
 
@@ -647,3 +650,6 @@ Each line becomes its own plan. "Needs" is what must be built first; "Alongside"
 | U1 | 1 | worktree-agent-a1ef8be571108931d | .claude/worktrees/agent-a1ef8be571108931d | merged (migration applied twice to madden_test; init_db.sql builds on an empty db; checked by orchestrator, agent had no DB) | 2fae64b |
 | U2 | 1 | worktree-agent-aa9d82094eb8c2454 | .claude/worktrees/agent-aa9d82094eb8c2454 | merged (save reader tests 39 pass, 1 old skip; 200-move write 0.8 s) | 28b4ba8 |
 | U3 | 1 | worktree-agent-ae037027b0698f284 | .claude/worktrees/agent-ae037027b0698f284 | merged (30 tests pass) | 9afbdbd |
+| U4 | 2 | worktree-agent-a874aed2cc404d905 | .claude/worktrees/agent-a874aed2cc404d905 | merged (reader tests 43 pass, 1 old skip; load_save/watch_save tests pass) | 6e8955a |
+| U5 | 2 | worktree-agent-aa088807b9934f0b4 | .claude/worktrees/agent-aa088807b9934f0b4 | merged (17 tests pass) | b2916f0 |
+| U6 | 2 | worktree-agent-af28754863db29059 | .claude/worktrees/agent-af28754863db29059 | merged (23 tests pass) | 7f8f901 |
