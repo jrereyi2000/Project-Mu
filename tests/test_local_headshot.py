@@ -154,21 +154,27 @@ class TestDiffusersBackend(unittest.TestCase):
     """Test DiffusersBackend device detection, memory optimization, and hooks."""
 
     def test_device_detection_cuda(self):
-        with mock.patch("torch.cuda.is_available", return_value=True):
+        fake_torch = mock.MagicMock()
+        fake_torch.cuda.is_available.return_value = True
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
             backend = DiffusersBackend()
             self.assertEqual(backend.device, "cuda")
 
     def test_device_detection_mps(self):
-        with mock.patch("torch.cuda.is_available", return_value=False):
-            with mock.patch("torch.backends.mps.is_available", return_value=True):
-                backend = DiffusersBackend()
-                self.assertEqual(backend.device, "mps")
+        fake_torch = mock.MagicMock()
+        fake_torch.cuda.is_available.return_value = False
+        fake_torch.backends.mps.is_available.return_value = True
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            backend = DiffusersBackend()
+            self.assertEqual(backend.device, "mps")
 
     def test_device_detection_cpu(self):
-        with mock.patch("torch.cuda.is_available", return_value=False):
-            with mock.patch("torch.backends.mps.is_available", return_value=False):
-                backend = DiffusersBackend()
-                self.assertEqual(backend.device, "cpu")
+        fake_torch = mock.MagicMock()
+        fake_torch.cuda.is_available.return_value = False
+        fake_torch.backends.mps.is_available.return_value = False
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            backend = DiffusersBackend()
+            self.assertEqual(backend.device, "cpu")
 
     def test_diffusers_missing_dependency_raises(self):
         backend = DiffusersBackend()
@@ -187,12 +193,14 @@ class TestDiffusersBackend(unittest.TestCase):
 
         backend._pipe = mock_pipe
 
-        png_bytes = backend.generate(
-            prompt="Diffusers test prompt",
-            seed=42,
-            size=256,
-            config={"guidance_scale": 7.5, "steps": 20},
-        )
+        fake_torch = mock.MagicMock()
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            png_bytes = backend.generate(
+                prompt="Diffusers test prompt",
+                seed=42,
+                size=256,
+                config={"guidance_scale": 7.5, "steps": 20},
+            )
 
         self.assertTrue(png_bytes.startswith(PNG_MAGIC))
         mock_pipe.assert_called_once()
@@ -211,12 +219,14 @@ class TestDiffusersBackend(unittest.TestCase):
         backend._pipe = mock_pipe
 
         ref_bytes = create_dummy_png_bytes(64, 64)
-        backend.generate(
-            prompt="IP-Adapter test",
-            ref_image=ref_bytes,
-            seed=10,
-            size=256,
-        )
+        fake_torch = mock.MagicMock()
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            backend.generate(
+                prompt="IP-Adapter test",
+                ref_image=ref_bytes,
+                seed=10,
+                size=256,
+            )
 
         call_kwargs = mock_pipe.call_args[1]
         self.assertIn("ip_adapter_image", call_kwargs)
@@ -230,16 +240,18 @@ class TestDiffusersBackend(unittest.TestCase):
         backend._pipe = mock_pipe
 
         control_bytes = create_dummy_png_bytes(256, 256)
-        backend.generate(
-            prompt="ControlNet test",
-            seed=10,
-            size=256,
-            config={
-                "controlnet": True,
-                "controlnet_image": control_bytes,
-                "controlnet_conditioning_scale": 0.85,
-            },
-        )
+        fake_torch = mock.MagicMock()
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            backend.generate(
+                prompt="ControlNet test",
+                seed=10,
+                size=256,
+                config={
+                    "controlnet": True,
+                    "controlnet_image": control_bytes,
+                    "controlnet_conditioning_scale": 0.85,
+                },
+            )
 
         call_kwargs = mock_pipe.call_args[1]
         self.assertIn("image", call_kwargs)
