@@ -597,6 +597,66 @@ class TestJerseyPlateCompositing(unittest.TestCase):
             self.assertEqual(res.size, (800, 1000))
 
 
+class TestDonorSystem(unittest.TestCase):
+    """Test 5-bracket weight routing and donor library registry."""
+
+    def test_weight_tier_boundaries(self):
+        from headshots.local.donors import (
+            TIER_EDGE,
+            TIER_LINEMAN,
+            TIER_POWER,
+            TIER_SKILL,
+            TIER_SPEED,
+            get_weight_tier,
+        )
+
+        # Tier 1: Speed (< 200)
+        self.assertEqual(get_weight_tier(170), TIER_SPEED)
+        self.assertEqual(get_weight_tier(199), TIER_SPEED)
+
+        # Tier 2: Skill (200 - 224)
+        self.assertEqual(get_weight_tier(200), TIER_SKILL)
+        self.assertEqual(get_weight_tier(215), TIER_SKILL)
+        self.assertEqual(get_weight_tier(224), TIER_SKILL)
+
+        # Tier 3: Power (225 - 254)
+        self.assertEqual(get_weight_tier(225), TIER_POWER)
+        self.assertEqual(get_weight_tier(240), TIER_POWER)
+        self.assertEqual(get_weight_tier(254), TIER_POWER)
+
+        # Tier 4: Edge (255 - 289)
+        self.assertEqual(get_weight_tier(255), TIER_EDGE)
+        self.assertEqual(get_weight_tier(270), TIER_EDGE)
+        self.assertEqual(get_weight_tier(289), TIER_EDGE)
+
+        # Tier 5: Lineman (>= 290)
+        self.assertEqual(get_weight_tier(290), TIER_LINEMAN)
+        self.assertEqual(get_weight_tier(325), TIER_LINEMAN)
+
+    def test_normalize_team_aliases(self):
+        from headshots.local.donors import normalize_team
+
+        self.assertEqual(normalize_team("NO"), "NO")
+        self.assertEqual(normalize_team("Saints"), "NO")
+        self.assertEqual(normalize_team("New Orleans Saints"), "NO")
+        self.assertEqual(normalize_team("CAR"), "CAR")
+        self.assertEqual(normalize_team("panthers"), "CAR")
+        self.assertEqual(normalize_team("KC"), "KC")
+        self.assertEqual(normalize_team("chiefs"), "KC")
+        self.assertEqual(normalize_team("UNKNOWN_TEAM"), "UNKNOWN_TEAM")
+
+    def test_donor_plate_resolution(self):
+        from headshots.local.donors import get_donor_plate
+
+        # Test plate resolution for Saints 220 lbs (Tier 2)
+        plate_info = get_donor_plate("NO", 220)
+        self.assertIsNotNone(plate_info)
+        self.assertEqual(plate_info["team"], "NO")
+        self.assertEqual(plate_info["tier"], "tier2_skill")
+        self.assertTrue(plate_info["base_path"].endswith("NO/tier2_skill_base.png"))
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

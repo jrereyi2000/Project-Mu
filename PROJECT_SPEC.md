@@ -292,6 +292,8 @@ Project Mu/
 │   │   ├── backends.py        #     HeadshotBackend, MockBackend (offline PIL), DiffusersBackend (SDXL/Flux/CUDA/MPS), ComfyUIBackend
 │   │   ├── adapter.py         #     Integration adapter patching make_headshot and rookie_headshots when LOCAL_HEADSHOTS=1
 │   │   ├── jersey_plate.py    #     Two-stage jersey plate extraction and silhouette-constrained player neck/shoulder compositing
+│   │   ├── donors.py          #     5-tier physical weight bracket router, donor registry loader, and disqualification/swap logic
+│   │   ├── build_donor_library.py # Scrapes ESPN API rosters for all 32 teams, downloads 160 base donor templates into data/headshots/donors/
 │   │   ├── cli.py             #     Standalone CLI for local generation, seeds, and backends
 │   │   └── README.md          #     Interface specifications, VRAM tuning, and ControlNet/IP-Adapter hooks
 │   └── portrait_converter/    #   Standalone portrait converter for Madden 27 modding (BC3/BC1 DDS & RGBA)
