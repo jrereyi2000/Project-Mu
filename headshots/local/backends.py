@@ -245,7 +245,11 @@ class DiffusersBackend(HeadshotBackend):
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
-        self.model_id = self.config.get("model_id", "stabilityai/stable-diffusion-xl-base-1.0")
+        self.model_id = (
+            self.config.get("model_id")
+            or os.environ.get("LOCAL_HEADSHOT_MODEL_ID")
+            or "SG161222/RealVisXL_V5.0"
+        )
         self.device = self._detect_device()
         self.torch_dtype = self._detect_dtype()
         self._pipe = None
@@ -320,6 +324,16 @@ class DiffusersBackend(HeadshotBackend):
                 variant="fp16" if self.torch_dtype == torch.float16 else None,
             )
 
+        # Attach DPM-Solver++ with Karras sigmas for optimal photorealism if available
+        if hasattr(pipe, "scheduler") and hasattr(pipe.scheduler, "config"):
+            try:
+                from diffusers import DPMSolverMultistepScheduler
+                pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                    pipe.scheduler.config, use_karras_sigmas=True
+                )
+            except Exception as e:
+                logger.debug("Could not attach DPMSolverMultistepScheduler: %s", e)
+
         # VRAM Optimizations for 16GB cards (§7.7)
         enable_cpu_offload = self.config.get("enable_model_cpu_offload", True)
         if enable_cpu_offload and self.device == "cuda":
@@ -389,16 +403,27 @@ class DiffusersBackend(HeadshotBackend):
 
         if use_compel and hasattr(self._pipe, "tokenizer_2") and hasattr(self._pipe, "text_encoder_2"):
             try:
-                from compel import Compel, ReturnedEmbeddingsType
-                compel = Compel(
-                    tokenizer=[self._pipe.tokenizer, self._pipe.tokenizer_2],
-                    text_encoder=[self._pipe.text_encoder, self._pipe.text_encoder_2],
-                    returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
-                    requires_pooled=[False, True],
-                    truncate_long_prompts=False,
-                )
-                prompt_embeds, pooled_prompt_embeds = compel(prompt)
-                neg_prompt_embeds, neg_pooled_prompt_embeds = compel(neg_prompt)
+                compel_device = self.device if self.device != "mps" else "cpu"
+                try:
+                    from compel import CompelForSDXL
+                    compel_sdxl = CompelForSDXL(self._pipe, device=compel_device)
+                    cond = compel_sdxl(main_prompt=prompt, negative_prompt=neg_prompt)
+                    prompt_embeds = cond.embeds
+                    pooled_prompt_embeds = cond.pooled_embeds
+                    neg_prompt_embeds = cond.negative_embeds
+                    neg_pooled_prompt_embeds = cond.negative_pooled_embeds
+                except (ImportError, Exception):
+                    from compel import Compel, ReturnedEmbeddingsType
+                    compel = Compel(
+                        tokenizer=[self._pipe.tokenizer, self._pipe.tokenizer_2],
+                        text_encoder=[self._pipe.text_encoder, self._pipe.text_encoder_2],
+                        returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
+                        requires_pooled=[False, True],
+                        truncate_long_prompts=False,
+                        device=compel_device,
+                    )
+                    prompt_embeds, pooled_prompt_embeds = compel(prompt)
+                    neg_prompt_embeds, neg_pooled_prompt_embeds = compel(neg_prompt)
             except Exception as e:
                 logger.debug("Compel long-prompt encoding not active or failed (%s), falling back to raw prompt text.", e)
 
@@ -406,7 +431,7 @@ class DiffusersBackend(HeadshotBackend):
             "height": size,
             "width": size,
             "num_inference_steps": merged_config.get("steps", 30),
-            "guidance_scale": merged_config.get("guidance_scale", 7.0),
+            "guidance_scale": merged_config.get("guidance_scale", 5.0),
             "generator": generator,
         }
 

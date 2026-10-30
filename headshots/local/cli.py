@@ -70,6 +70,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Enable ControlNet pose/depth conditioning for uniform head framing.",
     )
     parser.add_argument(
+        "--model-id",
+        type=str,
+        default=None,
+        help="Model ID or CivitAI/HF checkpoint path (default: SG161222/RealVisXL_V5.0).",
+    )
+    parser.add_argument(
         "--config",
         type=str,
         default=None,
@@ -115,6 +121,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.controlnet:
         extra_config["controlnet"] = True
+
+    if args.model_id:
+        extra_config["model_id"] = args.model_id
 
     if args.negative_prompt:
         extra_config["negative_prompt"] = args.negative_prompt
