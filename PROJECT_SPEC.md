@@ -274,11 +274,16 @@ Project Mu/
 │   │                          #   whose first initial + last name collided, breaking OCR/stat matching), 2026_11_22_rename_colliding_prospects.py
 │   │                          #   (renames 16 2036 draft prospects in draft_prospects and the prospects CSVs)
 │   └── backups/               #   madden_backup_*.sql dumps
-├── headshots/                 # AI player headshot generation (§2.20)
+├── headshots/                 # AI player headshot generation and portrait modding (§2.20)
 │   ├── headshot_appearance_generator.py, make_headshot.py
 │   ├── rookie_headshots.py    #   Automated rookie headshot generation for seasonal pipeline
 │   ├── gen.py                 #   Gemini batch job submit / download
-│   └── process_headshots.py   #   Background removal → static/players/{player_id}.webp
+│   ├── process_headshots.py   #   Background removal → static/players/{player_id}.webp
+│   └── portrait_converter/    #   Standalone portrait converter for Madden 27 modding (BC3/BC1 DDS & RGBA)
+│       ├── converter.py       #     Core conversion pipeline, WebP normalization, auto-framing & headroom padding
+│       ├── dds.py             #     Pure Python vectorized BC1/DXT1 & BC3/DXT5 block compression and DDS headers
+│       ├── cli.py             #     Standalone CLI for single-file and batch conversions
+│       └── README.md          #     Converter documentation, Direct3D DDS specs, and Madden Frosty/MMC guide
 ├── dashboards/                # Streamlit tools: admin_dashboard.py, espn_dashboard.py
 ├── pytest.ini                 # Pytest configuration registering the @pytest.mark.integration tier
 ├── tests/                     # test_*.py suite: offline unit tier (pytest -m "not integration") + isolated madden_test integration tier (pytest -m integration)
@@ -709,6 +714,12 @@ Fictional players in Madden lack official broadcast photography. The headshot su
   - Generates media-day headshots concurrently across 5–6 worker threads using `gemini-nano-banana-2.1`, strips backgrounds with thread-local `rembg` silueta sessions, archives raw cutouts to `data/headshots/players_backup/{player_id}.webp`, and standardizes transparent cutouts to 700×508 WebPs at `static/players/{player_id}.webp`.
   - Fully idempotent: resumes seamlessly across stops and network drops. Standalone CLI: `python3 -m headshots.rookie_headshots [--season N] [--workers 5] [--drafted-only] [--dry-run]`.
 - **Frontend Serving:** Served statically at `/static/players/{player_id}.webp` by FastAPI (`server/api.py`). The React frontend (`Mu_Network/src/App.tsx`) loads headshots with cache-busting `?v=${HEADSHOT_VERSION}` across player modals, roster views, and social cards, falling back to team-colored initialed avatars if missing. Full architectural spec in [`docs/done/HEADSHOT_PIPELINE.md`](docs/done/HEADSHOT_PIPELINE.md).
+- **Standalone Portrait Converter (`headshots/portrait_converter/`, `docs/in_progress/PC_MIGRATION_PLAN.md` §9.4, `docs/not_started/PRE_PC_WORK_2.md` Item A5):**
+  - Converts transparent WebP media-day cutouts into in-game portrait textures for Madden 27 modding (injecting into `library_icons_brt` via MMC Modding Tools / Frosty to replace retired player portrait IDs).
+  - **Core Interface (`converter.py`):** `to_portrait(webp_bytes, width=512, height=512, fmt="DDS_BC3", crop_box=None) -> bytes` and file helper `convert_headshot_file(input_path, output_path, width=512, height=512, fmt="DDS_BC3") -> Path`.
+  - **Framing & Normalization:** Detects alpha bounding box, resizes with Lanczos filter to preserve aspect ratio without distortion, centers subject horizontally, and anchors chest/shoulders to bottom with configurable headroom margin (`headroom_ratio`, default 5%).
+  - **Pure Python / NumPy DDS Compression (`dds.py`):** Encodes Direct3D 9/10 compliant binary DDS textures with standard 128-byte headers (`b"DDS "` magic + 124-byte `DDS_HEADER` struct) and vectorized BC3 / DXT5 (interpolated 8-level alpha) and BC1 / DXT1 (1-bit alpha punchthrough) block compression. Encodes a 512×512 texture in ~60ms without requiring any external C DLL dependencies. Also supports uncompressed 32-bit `RGBA` and `DDS_RGBA`.
+  - **Standalone CLI (`cli.py`):** Supports single file conversion (`python -m headshots.portrait_converter.cli input.webp --out output.dds [--width 512] [--height 512] [--fmt BC3]`) and batch directory processing (`python -m headshots.portrait_converter.cli --batch-dir static/players/ --out-dir portraits/ --limit 50`).
 
 ### 2.21 Player Progression Engine (`engines/progression.py`, `db/migrations/2027_01_08_player_progression.sql`, `2027_01_11_progression_rating_groups.sql`)
 Offline progression engine for the PC era (phase C of `docs/in_progress/PROGRESSION_PLAN.md`, V2.14; PRE_PC_WORK §11). It decides each player's yearly OVR change from stored inputs and a seed, spreads it over his ratings, and stores every term so writers can cite causes. Nothing is written to a save yet (phase D). Phase C2 (the plan's revision) is partly built: the rating groups with the peak-based mental decline, and the performance term for thin-stat positions. Durability and mileage, ceiling bands, upkeep, form, `PT_*` flags, continuity, mentors and the trait terms are not.
