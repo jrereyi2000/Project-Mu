@@ -144,11 +144,20 @@ export function fieldValueError(meta, value) {
   if (meta.type === 'bool') return typeof value === 'boolean' ? null : 'must be true or false';
   if (meta.type === 'int' || meta.type === 'uint' || meta.type === 's_int') {
     if (!Number.isInteger(value)) return 'must be an integer';
+    // A table the schema doesn't describe gets madden-franchise's generic Field_N schema: every field an int with
+    // placeholder minValue = maxValue = 1 (FranchiseFileTable._generateGenericSchema), whatever its bit width. Only
+    // 0 and 1 are sure to fit any width, so those are what a generic field accepts (LeagueSetting's 1-bit flags).
+    if (isGenericIntMeta(meta)) return value === 0 || value === 1 ? null : 'a generic Field_N int takes 0 or 1 here';
     if (Number.isFinite(meta.minValue) && value < meta.minValue) return `below ${meta.minValue}`;
     if (Number.isFinite(meta.maxValue) && value > meta.maxValue) return `above ${meta.maxValue}`;
     return null;
   }
   return `field type ${meta.type} is not writable here`;
+}
+
+// madden-franchise's generic-schema placeholder (see fieldValueError). A described int field never has min = max = 1.
+export function isGenericIntMeta(meta) {
+  return meta.type === 'int' && meta.minValue === 1 && meta.maxValue === 1 && !meta.enumMembers && !meta.isReference;
 }
 
 // Game rows worth exporting: a real matchup (both teams set) that has been scheduled.
@@ -201,4 +210,33 @@ export function playerTraits(record, fieldNames) {
   const out = {};
   for (const k of fieldNames) if (k.startsWith('PT_')) out[k] = Boolean(record[k]);
   return out;
+}
+
+// LeagueSetting fields Project Mu reads by schema name, with the attribute index each has in schema 620's LeagueSetting
+// list (V2_CORE_BUILD_PLAN.md spike R3: JR toggled dev-trait regression and Field_88 went 1 -> 0). Used only when the
+// loaded schema's attribute list can't be reached.
+export const LEAGUE_SETTING_FALLBACK_INDEX = {
+  IsDevTraitRegressionEnabled: 88,
+  IsDevTraitIncreaseScenarioEnabled: 86,
+};
+
+// The record field holding schema attribute `name`. A record decoded with real names (a schema that describes the
+// table) has it under `name`. One decoded generically has it as Field_N, N = the attribute's position in the schema's
+// attribute list (`schemaAttrNames`, from franchise.schemaList.getSchema(table).attributes; e.g. LeagueSetting's
+// PlayerProgressionAgeSliders = 165 = Field_165). When the list isn't reachable (null), `fallbackIndex` stands in;
+// when the list doesn't name the attribute, or the record has no such Field_N, the field is unknown (null).
+export function schemaFieldName(recordFieldNames, schemaAttrNames, name, fallbackIndex = null) {
+  if (recordFieldNames.includes(name)) return name;
+  const index = schemaAttrNames ? schemaAttrNames.indexOf(name) : fallbackIndex;
+  if (!Number.isInteger(index) || index < 0) return null;
+  const generic = `Field_${index}`;
+  return recordFieldNames.includes(generic) ? generic : null;
+}
+
+// A flag's value as a boolean: true/false as is, a 1-bit int 1/0 as true/false, anything else null.
+export function flagValue(value) {
+  if (typeof value === 'boolean') return value;
+  if (value === 1) return true;
+  if (value === 0) return false;
+  return null;
 }

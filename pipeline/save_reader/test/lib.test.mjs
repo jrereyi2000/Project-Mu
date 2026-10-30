@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  arraySlots, arrayRefs, calendarYear, decodeRef, depthSlotPgids, encodeRef, fieldValueError, isExportableGame, isRefValue, NO_REF,
-  numberedFields, orderSliderRefs, packedRefs, packRefs, pickRatings, plainFields, playerTraits, refFromValue, weightLbs,
+  arraySlots, arrayRefs, calendarYear, decodeRef, depthSlotPgids, encodeRef, fieldValueError, flagValue, isExportableGame, isGenericIntMeta, isRefValue, NO_REF,
+  numberedFields, orderSliderRefs, packedRefs, packRefs, pickRatings, plainFields, playerTraits, refFromValue, schemaFieldName, weightLbs,
   withoutRefs,
 } from '../lib.mjs';
 
@@ -141,4 +141,41 @@ test('orderSliderRefs pairs the int[] and ProgressionXPSlider refs, lower field 
 test('playerTraits keeps every PT_ flag as a boolean', () => {
   const rec = { PT_HAPPYFEET: true, PT_SHOWBOAT: 0, SpeedRating: 90 };
   assert.deepEqual(playerTraits(rec, ['PT_HAPPYFEET', 'SpeedRating', 'PT_SHOWBOAT']), { PT_HAPPYFEET: true, PT_SHOWBOAT: false });
+});
+
+test('schemaFieldName maps a schema attribute to its record field by index', () => {
+  const attrs = Array.from({ length: 170 }, (_, i) => `Attr${i}`);
+  attrs[86] = 'IsDevTraitIncreaseScenarioEnabled';
+  attrs[88] = 'IsDevTraitRegressionEnabled';
+  const generic = Array.from({ length: 205 }, (_, i) => `Field_${i}`);
+  assert.equal(schemaFieldName(generic, attrs, 'IsDevTraitRegressionEnabled', 1), 'Field_88');
+  assert.equal(schemaFieldName(generic, attrs, 'IsDevTraitIncreaseScenarioEnabled'), 'Field_86');
+  // A record with real names uses them.
+  assert.equal(schemaFieldName(['IsDevTraitRegressionEnabled', 'Field_88'], attrs, 'IsDevTraitRegressionEnabled'),
+    'IsDevTraitRegressionEnabled');
+  // Schema list unreachable: the fallback index.
+  assert.equal(schemaFieldName(generic, null, 'IsDevTraitRegressionEnabled', 88), 'Field_88');
+  assert.equal(schemaFieldName(generic, null, 'IsDevTraitRegressionEnabled'), null);
+  // The schema doesn't list it (fallback not used), or the record has no such Field_N.
+  assert.equal(schemaFieldName(generic, attrs, 'NoSuchSetting', 88), null);
+  assert.equal(schemaFieldName(generic.slice(0, 50), attrs, 'IsDevTraitRegressionEnabled'), null);
+});
+
+test('flagValue reads 1-bit ints and booleans', () => {
+  assert.equal(flagValue(1), true);
+  assert.equal(flagValue(0), false);
+  assert.equal(flagValue(true), true);
+  assert.equal(flagValue(false), false);
+  assert.equal(flagValue(2), null);
+  assert.equal(flagValue(undefined), null);
+});
+
+test('fieldValueError lets a generic Field_N int take 0 or 1 only', () => {
+  const generic = { type: 'int', minValue: 1, maxValue: 1, enumMembers: null, isReference: false };
+  assert.ok(isGenericIntMeta(generic));
+  assert.equal(fieldValueError(generic, 0), null);
+  assert.equal(fieldValueError(generic, 1), null);
+  assert.match(fieldValueError(generic, 2), /0 or 1/);
+  assert.match(fieldValueError(generic, false), /integer/);
+  assert.ok(!isGenericIntMeta({ type: 'int', minValue: 0, maxValue: 127 }));
 });

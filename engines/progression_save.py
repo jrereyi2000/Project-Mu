@@ -11,8 +11,10 @@ save_writer.mjs edits document:
 
 - Madden's own progression off (plan §3 step 1): all four slider records (progression / regression x by age / by
   position) set to 0, LS included (the menu doesn't show LS, and its regression slider left at 100 still ages long
-  snappers); DefaultValue is left alone. Dev-trait regression off on the LeagueSetting row once spike R3 names its
-  field (snapshot league_settings.dev_trait_regression_field; null today, so no edit and a warning).
+  snappers); DefaultValue is left alone. Dev traits are Project Mu's (spike R3), so on the LeagueSetting row
+  dev-trait regression (IsDevTraitRegressionEnabled, snapshot league_settings.dev_trait_regression_field, Field_88
+  under schema 620) and Breakout Player scenarios (IsDevTraitIncreaseScenarioEnabled, breakout_scenarios_field,
+  Field_86) are both set to 0 (off) when they are on; a field the snapshot doesn't name is skipped with a warning.
 - Project Mu's ratings (plan §3 step 2): every changed rating, plus OverallRating, OverallGrade0-4 and PlayerType
   recomputed from the new ratings with engines/ovr_weights.py (dual-write rule, V2_MASTER_PLAN V2.14), TraitDevelopment
   when the dev trait changes, and PT_* flags gained or lost (behaviour_changes).
@@ -45,6 +47,9 @@ SLIDER_TABLES = {
 }
 SLIDER_KEEP = ("DefaultValue",)
 LEAGUE_SETTING_TABLE = "LeagueSetting"
+# Under schema 620 the LeagueSetting row decodes with generic Field_N ints (save_writer accepts 0 or 1 there,
+# lib.mjs fieldValueError); a save whose row decodes with real names has these as bools.
+FLAG_OFF_GENERIC, FLAG_OFF_NAMED = 0, False
 
 # Our dev labels (player_seasons.dev_trait, progression.dev_label) -> the save's TraitDevelopment enum names.
 DEV_TO_SAVE = {"Normal": "Normal", "Star": "Star", "Superstar": "Superstar", "X-Factor": "XFactor",
@@ -82,21 +87,38 @@ def slider_edits(snapshot: Dict[str, Any], warnings: Optional[List[str]] = None)
     return out
 
 
-def dev_flag_edit(snapshot: Dict[str, Any], warnings: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
-    """A `records` edit turning dev-trait regression off on the LeagueSetting row, or None (with a warning) while the
-    field isn't known (spike R3) or the snapshot has no LeagueSetting row."""
+def _flag_off_edit(snapshot: Dict[str, Any], field_key: str, enabled_key: str, what: str,
+                   warnings: Optional[List[str]]) -> Optional[Dict[str, Any]]:
     ls = snapshot.get("league_settings") or {}
-    field = ls.get("dev_trait_regression_field")
+    field = ls.get(field_key)
     setting = ls.get("league_setting")
     if not field:
-        _warn(warnings, "dev_trait_regression_field unknown (spike R3): dev-trait regression not written; "
-                        "turn it off once in Madden's league settings")
+        _warn(warnings, f"{field_key} not in the snapshot: {what} not written; turn it off once in Madden's league "
+                        "settings")
         return None
     if not setting:
-        _warn(warnings, "no LeagueSetting row in the snapshot: dev-trait regression not written")
+        _warn(warnings, f"no LeagueSetting row in the snapshot: {what} not written")
         return None
+    if ls.get(enabled_key) is False:
+        return None
+    off = FLAG_OFF_GENERIC if field.startswith("Field_") else FLAG_OFF_NAMED
     return {"table": LEAGUE_SETTING_TABLE, "tableId": setting["table_id"], "row": setting.get("row", 0),
-            "set": {field: False}}
+            "set": {field: off}}
+
+
+def dev_flag_edit(snapshot: Dict[str, Any], warnings: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+    """A `records` edit turning dev-trait regression off (0 on a generic Field_N, false on a named field) on the
+    LeagueSetting row; None when it is already off, or (with a warning) when the snapshot doesn't name the field or
+    has no LeagueSetting row."""
+    return _flag_off_edit(snapshot, "dev_trait_regression_field", "dev_trait_regression_enabled",
+                          "dev-trait regression", warnings)
+
+
+def breakout_flag_edit(snapshot: Dict[str, Any], warnings: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+    """dev_flag_edit for Madden's Breakout Player scenarios (IsDevTraitIncreaseScenarioEnabled), which raise dev
+    traits on their own."""
+    return _flag_off_edit(snapshot, "breakout_scenarios_field", "breakout_scenarios_enabled",
+                          "breakout scenarios", warnings)
 
 
 def save_dev(label: Optional[str]) -> Optional[str]:
@@ -210,13 +232,14 @@ def merge_players(*edit_lists: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]
 def build_document(rows: Iterable[Dict[str, Any]], snapshot: Dict[str, Any],
                    pgid_by_player: Optional[Dict[int, int]] = None, morale: Optional[int] = MORALE_NEUTRAL,
                    doc: Optional[Dict[str, Any]] = None, warnings: Optional[List[str]] = None) -> Dict[str, Any]:
-    """The offseason pass's edits document from progression rows (pure): ratings, morale, sliders, dev flag."""
+    """The offseason pass's edits document from progression rows (pure): ratings, morale, sliders, and the
+    dev-trait regression and breakout-scenario flags."""
     players = merge_players(rating_edits(rows, snapshot, pgid_by_player, doc, warnings),
                             morale_edits(snapshot, morale) if morale is not None else [])
     records = slider_edits(snapshot, warnings)
-    flag = dev_flag_edit(snapshot, warnings)
-    if flag:
-        records.append(flag)
+    for flag in (dev_flag_edit(snapshot, warnings), breakout_flag_edit(snapshot, warnings)):
+        if flag:
+            records.append(flag)
     return {"players": players, "records": records}
 
 
@@ -238,7 +261,7 @@ def pass_edits(cur, snapshot: Dict[str, Any], season: int, pgid_by_player: Optio
                morale: Optional[int] = MORALE_NEUTRAL, warnings: Optional[List[str]] = None,
                log_fn=None) -> Dict[str, Any]:
     """The whole offseason edits document: run_progression for `season` (dry: nothing stored, nothing committed) with
-    the snapshot's PT_* traits, then rating, morale, slider and dev-flag edits, one players entry per pgid."""
+    the snapshot's PT_* traits, then rating, morale, slider and the two dev-trait flag edits, one players entry per pgid."""
     if pgid_by_player is None:
         pgid_by_player = fetch_pgid_map(cur)
     conn = getattr(cur, "connection", None)

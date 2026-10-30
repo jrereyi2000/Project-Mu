@@ -73,12 +73,15 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
   for (const d of s.depth_charts) assert.ok(d.slots.QB[0] !== null, `team ${d.team_index} has a starting QB`);
 
   const ls = s.league_settings;
-  assert.equal(ls.dev_trait_regression_field, null);
-  assert.equal(ls.dev_trait_regression_enabled, null);
+  assert.equal(typeof ls.dev_trait_regression_enabled, 'boolean');
+  assert.equal(typeof ls.breakout_scenarios_enabled, 'boolean');
   assert.ok(Number.isInteger(ls.league_setting.table_id) && ls.league_setting.row === 0);
   if (!process.env.MU_SAMPLE_SAVE || /CAREER-GIANTS-AUTOSAVE$/.test(savePath)) {
     // CAREER-GIANTS-AUTOSAVE (PROGRESSION_PLAN.md §2): LeagueSetting 4290, int[] 5949 rows 0/1, ProgressionXPSlider 4317 rows 0/1.
     assert.deepEqual(ls.league_setting, { table_id: 4290, row: 0 });
+    // Spike R3: IsDevTraitRegressionEnabled = Field_88, IsDevTraitIncreaseScenarioEnabled = Field_86 under schema 620.
+    assert.equal(ls.dev_trait_regression_field, 'Field_88');
+    assert.equal(ls.breakout_scenarios_field, 'Field_86');
     const where = k => [ls.sliders[k].table_id, ls.sliders[k].row];
     assert.deepEqual(where('progression_by_age'), [5949, 0]);
     assert.deepEqual(where('progression_by_position'), [4317, 0]);

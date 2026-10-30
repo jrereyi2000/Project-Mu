@@ -28,7 +28,7 @@ WR_RATINGS = {"Speed": 90, "Acceleration": 90, "Agility": 86, "ChangeOfDirection
               "Release": 72, "BCVision": 60, "Carrying": 65, "Injury": 85, "Toughness": 80}
 
 
-def snapshot(players=None, dev_field=None):
+def snapshot(players=None, dev_field=None, breakout_field=None, dev_on=True, breakout_on=True):
     return {
         "meta": {"reader_version": 4},
         "players": players if players is not None else [
@@ -56,7 +56,9 @@ def snapshot(players=None, dev_field=None):
             },
             "league_setting": {"table_id": 4290, "row": 0},
             "dev_trait_regression_field": dev_field,
-            "dev_trait_regression_enabled": True if dev_field else None,
+            "dev_trait_regression_enabled": dev_on if dev_field else None,
+            "breakout_scenarios_field": breakout_field,
+            "breakout_scenarios_enabled": breakout_on if breakout_field else None,
         },
     }
 
@@ -95,14 +97,31 @@ class SliderTest(unittest.TestCase):
 
 
 class DevFlagTest(unittest.TestCase):
-    def test_none_while_field_unknown(self):
+    def test_none_while_fields_unknown(self):
         warnings = []
         self.assertIsNone(ps.dev_flag_edit(snapshot(), warnings))
-        self.assertTrue(any("R3" in w for w in warnings))
+        self.assertIsNone(ps.breakout_flag_edit(snapshot(), warnings))
+        self.assertTrue(any("dev_trait_regression_field" in w for w in warnings))
+        self.assertTrue(any("breakout_scenarios_field" in w for w in warnings))
 
-    def test_edit_when_field_known(self):
-        e = ps.dev_flag_edit(snapshot(dev_field="Field_200"))
-        self.assertEqual(e, {"table": "LeagueSetting", "tableId": 4290, "row": 0, "set": {"Field_200": False}})
+    def test_both_off_when_known_and_on(self):
+        snap = snapshot(dev_field="Field_88", breakout_field="Field_86")
+        self.assertEqual(ps.dev_flag_edit(snap),
+                         {"table": "LeagueSetting", "tableId": 4290, "row": 0, "set": {"Field_88": 0}})
+        self.assertEqual(ps.breakout_flag_edit(snap),
+                         {"table": "LeagueSetting", "tableId": 4290, "row": 0, "set": {"Field_86": 0}})
+
+    def test_named_fields_written_false(self):
+        snap = snapshot(dev_field="IsDevTraitRegressionEnabled", breakout_field="IsDevTraitIncreaseScenarioEnabled")
+        self.assertEqual(ps.dev_flag_edit(snap)["set"], {"IsDevTraitRegressionEnabled": False})
+        self.assertEqual(ps.breakout_flag_edit(snap)["set"], {"IsDevTraitIncreaseScenarioEnabled": False})
+
+    def test_absent_when_already_off(self):
+        snap = snapshot(dev_field="Field_88", breakout_field="Field_86", dev_on=False, breakout_on=False)
+        warnings = []
+        self.assertIsNone(ps.dev_flag_edit(snap, warnings))
+        self.assertIsNone(ps.breakout_flag_edit(snap, warnings))
+        self.assertEqual(warnings, [])
 
 
 class RatingEditsTest(unittest.TestCase):
@@ -206,14 +225,21 @@ class PassEditsTest(unittest.TestCase):
         self.assertEqual(by[202]["TraitDevelopment"], "Superstar")
         self.assertNotIn("ConfidenceRating", by[202])
         self.assertEqual(by[303], {"ConfidenceRating": 50})
-        self.assertEqual(len(doc["records"]), 4)          # dev flag unknown: sliders only
+        self.assertEqual(len(doc["records"]), 4)          # flag fields unknown: sliders only
 
-    def test_dev_flag_included_when_known(self):
+    def test_flags_included_when_known(self):
         cur = FakeCursor([])
         with mock.patch.object(ps.progression, "run_progression", return_value={"results": []}):
-            doc = ps.pass_edits(cur, snapshot(dev_field="Field_200"), 2037, pgid_by_player=PGIDS)
-        self.assertEqual(len(doc["records"]), 5)
-        self.assertEqual(doc["records"][-1]["set"], {"Field_200": False})
+            doc = ps.pass_edits(cur, snapshot(dev_field="Field_88", breakout_field="Field_86"), 2037,
+                                pgid_by_player=PGIDS)
+        self.assertEqual(len(doc["records"]), 6)
+        self.assertEqual([r["set"] for r in doc["records"][-2:]], [{"Field_88": 0}, {"Field_86": 0}])
+
+    def test_flags_absent_when_off_or_null(self):
+        warnings = []
+        doc = ps.build_document([], snapshot(dev_field="Field_88", dev_on=False), PGIDS, doc=DOC, warnings=warnings)
+        self.assertEqual(len(doc["records"]), 4)
+        self.assertTrue(any("breakout_scenarios_field" in w for w in warnings))
 
 
 def _sample_ready():
@@ -223,11 +249,13 @@ def _sample_ready():
 
 @pytest.mark.skipif(not _sample_ready(), reason="sample save, node or pipeline/save_reader node_modules missing")
 class SampleSaveTest(unittest.TestCase):
-    def test_save_writer_accepts_slider_and_morale_edits(self):
+    def test_save_writer_accepts_slider_flag_and_morale_edits(self):
         tmp = tempfile.mkdtemp(prefix="progression_save_")
         try:
             snap_path, edits_path, out_path = (os.path.join(tmp, n) for n in ("save.json", "edits.json", "out-save"))
-            subprocess.run(["node", os.path.join(SAVE_READER, "pc_save_reader.mjs"), SAMPLE_SAVE, "--out", snap_path],
+            save = os.path.join(tmp, "CAREER-COPY")
+            shutil.copyfile(SAMPLE_SAVE, save)
+            subprocess.run(["node", os.path.join(SAVE_READER, "pc_save_reader.mjs"), save, "--out", snap_path],
                            check=True, capture_output=True, timeout=300)
             with open(snap_path) as fh:
                 snap = json.load(fh)
@@ -237,14 +265,22 @@ class SampleSaveTest(unittest.TestCase):
             rows = [{"player_id": 1, "ratings_diff": {"Speed": 1}, "dev_before": "Normal", "dev_after": "Normal",
                      "behaviour_changes": None}]
             doc = ps.build_document(rows, snap, {1: p["pgid"]})
-            self.assertEqual(len(doc["records"]), 4)
+            ls = snap["league_settings"]
+            self.assertEqual(ls["dev_trait_regression_field"], "Field_88")
+            self.assertEqual(ls["breakout_scenarios_field"], "Field_86")
+            expected = 4 + (ls["dev_trait_regression_enabled"] is not False) + (ls["breakout_scenarios_enabled"] is not False)
+            self.assertEqual(len(doc["records"]), expected)
+            if ls["dev_trait_regression_enabled"]:
+                self.assertIn({"Field_88": 0}, [r["set"] for r in doc["records"] if r["table"] == "LeagueSetting"])
+            if ls["breakout_scenarios_enabled"]:
+                self.assertIn({"Field_86": 0}, [r["set"] for r in doc["records"] if r["table"] == "LeagueSetting"])
             for r in doc["records"]:
                 self.assertTrue(all(v == 0 for v in r["set"].values()))
             self.assertIn("LS", next(r for r in doc["records"] if r["table"] == "ProgressionXPSlider")["set"])
             self.assertTrue(doc["players"])
             with open(edits_path, "w") as fh:
                 json.dump(doc, fh)
-            res = subprocess.run(["node", os.path.join(SAVE_READER, "save_writer.mjs"), SAMPLE_SAVE, edits_path,
+            res = subprocess.run(["node", os.path.join(SAVE_READER, "save_writer.mjs"), save, edits_path,
                                   "--out", out_path], capture_output=True, text=True, timeout=600)
             self.assertEqual(res.returncode, 0, res.stderr[-2000:])
             self.assertTrue(os.path.exists(out_path))
