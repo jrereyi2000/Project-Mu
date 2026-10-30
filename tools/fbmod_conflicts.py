@@ -1,7 +1,7 @@
 """Report assets that more than one Frosty .fbmod edits (MMC Mod Manager, Madden 27).
 
-Reads only each mod's header (format version 9): title, author, version and the
-resource list (type, asset name or chunk id, sha1, handler hash). Two mods that
+Reads only each mod's header (format version 9, parsed by tools/fbmod_inspect.py): title,
+author, version and the resource list (type, asset name or chunk id, sha1, handler hash). Two mods that
 replace the same asset conflict: the one higher in the Mod Manager's applied list
 wins. Resources with a handler hash (bundle ref tables, legacy files) are merged
 by the Mod Manager instead, so they are reported but not counted as conflicts.
@@ -10,55 +10,21 @@ by the Mod Manager instead, so they are reported but not counted as conflicts.
 """
 import argparse
 import json
-import re
-import struct
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-TYPES = {0: "embedded", 1: "ebx", 2: "res", 3: "chunk", 4: "bundle", 5: "fsfile", 6: "legacy"}
-
-
-def _cstr(buf, pos):
-    end = buf.index(b"\0", pos)
-    return buf[pos:end].decode("latin-1"), end + 1
+from tools.fbmod_inspect import parse_fbmod
 
 
 def read_fbmod(path):
-    """Header of one .fbmod: details and its resource list."""
-    buf = Path(path).read_bytes()
-    if buf[:6] != b"FROSTY":
-        raise ValueError(f"{path}: not a Frosty mod")
-    version, = struct.unpack_from("<I", buf, 8)
-    data_offset, = struct.unpack_from("<q", buf, 12)
-    header = buf[:data_offset]
-    profile = header[25:25 + header[24]].decode("latin-1")
-    # gameVersion and a hash follow the profile name; the details are the next C strings
-    title_at = re.compile(rb"[\x20-\x7e]{2,}\x00").search(header, 25 + header[24] + 4).start()
-    title, pos = _cstr(header, title_at)
-    author, pos = _cstr(header, pos)
-    category, pos = _cstr(header, pos)
-    mod_version, pos = _cstr(header, pos)
-    # Resources carry consecutive indices: <type byte><int32 index><name>\0<sha1><size>...
-    resources = []
-    index = 0
-    while True:
-        pattern = re.compile(re.escape(struct.pack("<i", index)) + rb"([\x20-\x7e]{2,})\x00")
-        match = next((m for m in pattern.finditer(header, pos) if header[m.start() - 1] in TYPES), None)
-        if match is None:
-            break
-        end = match.end()
-        handler, = struct.unpack_from("<I", header, end + 29)
-        resources.append({
-            "type": TYPES[header[match.start() - 1]],
-            "name": match.group(1).decode("latin-1"),
-            "sha1": header[end:end + 20].hex(),
-            "handler": handler,
-        })
-        pos = end
-        index += 1
-    return {"file": str(path), "format": version, "profile": profile, "title": title.lstrip("UO)k"),
-            "author": author, "category": category, "version": mod_version, "resources": resources}
+    """Header of one .fbmod: details and its resource list (resources that carry data)."""
+    mod = parse_fbmod(path)
+    resources = [{"type": r["type"], "name": r["name"], "sha1": r["sha1"], "handler": r["handler"]}
+                 for r in mod["resources"] if r["index"] != -1]
+    return {"file": str(path), "format": mod["format"], "profile": mod["profile"], "title": mod["title"],
+            "author": mod["author"], "category": mod["category"], "version": mod["version"],
+            "resources": resources}
 
 
 def overlaps(mods):
