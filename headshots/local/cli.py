@@ -28,6 +28,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Text prompt describing the player, jersey, lighting, and style.",
     )
     parser.add_argument(
+        "--negative-prompt",
+        type=str,
+        default=None,
+        help="Optional negative prompt to override default exclusions.",
+    )
+    parser.add_argument(
         "--out",
         type=str,
         default="headshot.png",
@@ -109,6 +115,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.controlnet:
         extra_config["controlnet"] = True
+
+    if args.negative_prompt:
+        extra_config["negative_prompt"] = args.negative_prompt
 
     try:
         logger.info(

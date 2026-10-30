@@ -373,12 +373,15 @@ class DiffusersBackend(HeadshotBackend):
         if seed is not None:
             generator.manual_seed(seed)
 
+        default_negative = (
+            "helmet, football, ball, full body, lower body, legs, feet, cleats, pants, "
+            "hands, gloves, pads, gear, collage, split screen, triptych, turnaround, "
+            "character sheet, multiple views, multiple people, multiple angles, stadium, "
+            "blurry, distorted face, bad anatomy, deformed eyes, text, watermark"
+        )
         call_kwargs: Dict[str, Any] = {
             "prompt": prompt,
-            "negative_prompt": merged_config.get(
-                "negative_prompt",
-                "blurry, distorted, bad anatomy, text, watermark, helmet, extra limbs",
-            ),
+            "negative_prompt": merged_config.get("negative_prompt", default_negative),
             "height": size,
             "width": size,
             "num_inference_steps": merged_config.get("steps", 30),
