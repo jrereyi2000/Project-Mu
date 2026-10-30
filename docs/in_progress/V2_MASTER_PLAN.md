@@ -1,6 +1,7 @@
-# Project Mu: V2 Master Plan — The Autonomous Gridiron Universe
+# Project Mu: V2 Master Plan — The Franchise Operating System
 
-**Status (2026-10-29):** Approved architecture. Split from [`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) to serve as the master specification for all post-migration features, universe agency, front-office control, and the headless Madden architecture.
+**Status (2026-10-30):** Approved architecture for the local franchise operating system. V2 owns headless Madden, front-office control, progression, and the Franchise Command Center. Cloud media, dossier-based writing, multimedia, and conversational Napper enhancements are separately planned in [`V3_STUDIO_PLAN.md`](./V3_STUDIO_PLAN.md).
+**Delivery boundary:** V3 media production is not an additional prerequisite for starting the live 2034 franchise; the existing V2 readiness requirement below remains in force. This is a documentation split, not a completed runtime migration.
 **Prerequisite:** The PC environment, save reader/writer, and Docker Postgres are operational ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §3, §5).
 **Strategic Decision (JR, 2026-10-29):** The live **2034 canonical franchise run is held until V2 systems are fleshed out and tested** on scratch/sample saves (`CAREER-WEEK1/2/3` and `CAREER-GIANTS-AUTOSAVE`). Testing V2 first ensures that when the permanent 2034 league begins, progression, coach-set depth charts, and CBA contract mechanics are fully autonomous and controlled by Project Mu rather than Madden's native CPU algorithms.
 
@@ -42,9 +43,7 @@ Rather than relying on Madden's franchise screens, the React 19 + Vite frontend 
 * **Opponent Scouting Dossier:** Record, offensive/defensive rankings (EPA, pass/rush splits), personnel groupings, weather conditions, and the newsroom’s matchup primer.
 * **Matchup Breakdown:** Head-to-head positional battles (e.g. your Pass Rush vs their LT, your Slot WR vs their Nickel CB).
 * **Game Strategy & Focus:** Set weekly offensive/defensive focuses (e.g. Blitz-heavy vs Cover-3; Inside Zone vs Deep Shot; stamina/fatigue management).
-* **Post-Game Media Coverage Preference:** Toggle between:
-  - **Live Marquee Mode (Gemini 3.8 Flash):** Generate comprehensive newsroom coverage immediately upon game completion.
-  - **Fast Play / Deferred GPU Queue (Gemma 4):** Advance immediately to the next week (<5s); enqueue unread routine week coverage to the nightly GPU queue for $0 background drafting.
+* **Post-Game Coverage Status:** Show ingestion and publication progress, with a link to the newsroom. Generation modes and provider selection belong to [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow); V2 must remain usable while media is pending or unavailable.
 * **The "Play Game" Trigger:**
   1. Pre-flight check: validates and writes pending depth charts, roster moves, and injuries to the save.
   2. Compiles and activates the game's tailored mod pack via [`pipeline.mod_packs`](../../pipeline/mod_packs.py) (CBS/FOX/Primetime presentation and scorebugs, crowd density tier, mudded or BCA pink ball).
@@ -183,249 +182,51 @@ $$\text{Offer Score } (U) = w_{\text{money}} \cdot S_{\text{financial}} + w_{\te
 
 ## 5. The Automated Game Lifecycle Orchestrator
 
-```mermaid
-flowchart TD
-    subgraph Browser ["Mu_Network (Frontend)"]
-        A["Command Center: Review Matchup & Adjust Depth Chart"] --> B["Click 'Play Game'"]
-    end
-
-    subgraph Pre_Flight ["Pre-Flight Orchestration"]
-        B --> C["POST /api/franchise/game/launch"]
-        C --> D["Inject Depth Charts (32 teams) & Roster Moves into Save"]
-        D --> E["Compile Tailored Mod Pack (pipeline/mod_packs.py)"]
-        E --> F["Launch: MMCModManager.exe -launch <pack>"]
-    end
-
-    subgraph Madden_Game ["Madden NFL 27 (PC)"]
-        F --> G["Play User Game (or CPU vs CPU Spectate)"]
-        G --> H["Save & Quit to Desktop"]
-    end
-
-    subgraph Post_Game ["Automated Post-Game Pipeline"]
-        H --> I["Process Monitor detects Madden27.exe termination"]
-        I --> J["Save Watcher detects debounced CAREER-* file update"]
-        J --> K["Ingest Game Box Scores, Snap Counts & Team Stats"]
-        K --> L["Execute Deterministic Analytics (Excitement, TWI, POP)"]
-        L --> Decision{"Coverage Mode?"}
-        Decision -- "Live Marquee (Gemini)" --> M1["Synchronous Gemini Swarm (~60s)<br/>Immediate Deep Articles"]
-        Decision -- "Fast Next-Game (GPU Queue)" --> M2["Enqueue to GPU Queue<br/>Immediate Week Advance (<5s)"]
-        M1 --> N["Update Database & Refresh Mu_Network Dashboard"]
-        M2 --> O["Prepare Next-Week Mod Pack & Advance"]
-        M2 -.-> P["Background GPU Runner drafts via Gemma 4<br/>when Madden is closed ($0 cost)"]
-        P -.-> N
-    end
-```
-
-1. **User Action:** You finalize depth charts and game strategy in `Mu_Network`, then click **Play Game**.
-2. **Pre-Flight Save Injection:** The backend writes all 32 team depth charts, contracts, and roster moves directly to the save file.
-3. **Mod Pack Activation & Launch:** [`pipeline.mod_packs`](../../pipeline/mod_packs.py) configures the active broadcast presentation (CBS/FOX/TNF/SNF/MNF), crowd tier, and ball type, then executes `MMCModManager.exe -launch <pack>`.
-4. **Gameplay:** You play the game in Madden. On completion, simply save and exit the game to desktop.
-5. **Autonomous Ingestion & Dual-Track Media Dispatch:**
-   - The process monitor ([`pipeline/gpu_queue/process_check.py`](../../pipeline/gpu_queue/process_check.py)) detects `Madden27.exe` has closed.
-   - [`pipeline/watch_save.py`](../../pipeline/watch_save.py) ingests the save, executes deterministic engines, updates standings, and checks the configured coverage mode:
-     - **Live Marquee Mode (Gemini 3.8 Flash):** Executes [`weekly_capture.step_articles()`](../../pipeline/weekly_capture.py) synchronously, delivering full-depth analytical journalism ready for immediate reading.
-     - **Fast Next-Game Mode (Deferred GPU Queue / Gemma 4):** Bypasses synchronous article generation. The watcher enqueues an `ARTICLE_SLATE` job into [`pipeline.gpu_queue`](../../pipeline/gpu_queue/queue.py), prepares the next game's mod pack, and advances the week in **under 5 seconds**, letting you boot straight into the next game. The RTX 5070 Ti drafts the unread articles in the background via `ollama:gemma4:e4b@nothink` at $0 cost once Madden exits or while idle.
-
-### 5.1 Dual-Track Media Architecture (Live Marquee vs. Deferred Universe Background)
-
-When playing multiple franchise games or simming through regular season stretches, generating 18 multi-turn research articles synchronously (60–90 seconds) creates unwanted gameplay friction. Conversely, skipping articles entirely damages long-term universe continuity (breaking reporter memories, historical references, and website archives).
-
-The Dual-Track pipeline resolves this tension:
-
-| Dimension | Live Marquee Mode | Deferred GPU Queue Mode |
-| :--- | :--- | :--- |
-| **Model** | `gemini-3.8-flash:low` (Cloud API) | `ollama:gemma4:e4b@nothink` (Local RTX 5070 Ti) |
-| **Execution Trigger** | Synchronous on save ingest (or manual "Generate Now" click) | Background job runner when `Madden27.exe` is closed |
-| **Best Used For** | Super Bowl, playoff weeks, rivalry games, season openers, feature reads | Routine regular-season weeks, back-to-back gameplay sessions, fast simming |
-| **Post-Game Delay** | ~60–90 seconds (full database research tools) | **< 5 seconds** (stats and week advance only) |
-| **Cost** | ~$0.13 per weekly slate | **$0.00** |
-| **Universe Effect** | Full literary depth, nuanced tactical critique | 100% universe continuity, valid memory takes, populated news feeds |
-
-### 5.2 Cloud GPU Studio & Monthly Compute Budget (Google Colab Stretch Goal)
-
-For heavy batch multimedia workloads that exceed the RTX 5070 Ti's 16GB VRAM or require long rendering times that could interrupt active gaming, Project Mu leverages monthly cloud GPU credits (e.g. Google One AI Premium Colab allocation: ~100 compute units / month on T4, L4, V100, and A100 GPUs).
-
-#### Monthly Heuristic Baseline (Maximum 2 Seasons / Month)
-A realistic upper bound on gameplay velocity is **at most 2 full franchise seasons completed per calendar month** (~36–48 game weeks total, 2 NFL Draft cycles):
-
-| Workload | Model & Target GPU | Compute Duration per Run | Monthly Frequency (2 Seasons/Mo) | Estimated Monthly Compute Units |
-| :--- | :--- | :--- | :--- | :--- |
-| **Unified Newsroom Batch: 100% of Articles & Tweets (§5.3.1)** | Llama 3.3 70B AWQ / Qwen 2.5 72B on **A100 (40GB/80GB)** via vLLM | ~90–110s pure generation (~10–12 min active notebook session) | 36–40 weekly batches (640 articles + 3,752 tweets) | **~18–34 units** (A100 70B) or **~9–18 units** (L4 14B) |
-| **Weekly Multi-Speaker Broadcast Podcasts (§V2.6)** | F5-TTS / CosyVoice 2 / ChatTTS on **T4 or L4** | ~3–4 min per 10–15 min episode | 36–48 weekly episodes | **~4.5–5.0 units** (T4) or **~15–20 units** (L4) |
-| **Cinematic Round 1 Draft Walkout Videos (§V2.17)** | LTX-Video / Wan2.1-I2V on **A100 (40GB/80GB)** | ~25s (LTX) to ~70s (Wan2.1) per 5s video | 64 total videos (32 picks × 2 drafts) | **~4.5–5.0 units** (LTX) or **~12–15 units** (Wan2.1) |
-| **Seasonal Rookie & League Headshots** | RealVisXL_V5.0 on **Local RTX 5070 Ti** | ~6s/player (~28 min total/class) | 2 rookie classes | **0 units (\$0.00)** — runs entirely on local GPU |
-
-#### Monthly Headroom & Feature Expansion Runway
-* **Total Peak Monthly Spend:** **~28 to 60 compute units** across 100% of the text media ecosystem, weekly podcasts, and draft video renders combined.
-* **Guaranteed Surplus:** **40 to 72 compute units remain untouched every month** out of the 100-unit monthly quota.
-* **Why 100% Colab Offload Maximizes Both Quality and Price:**
-  1. **Flagship 70B Prose Across the Entire Universe:** Zero articles are relegated to smaller models. Every game autopsy, beat primer, power rankings, and fan tweet gets Llama 3.3 70B's elite literary voice, witty banter, and sports depth.
-  2. **\$0.00 Paid Token Spend:** Eliminates all Gemini API token spend on the newsroom (a 100% reduction).
-  3. **Vastly Superior Latency to PS5:** While not 15-second instant API delivery, the entire weekly batch of 18 articles and 104 tweets completes in **under 2 minutes** on Colab vLLM. Compared to the old PS5 pipeline (which took 60+ minutes per week), 2 minutes feels nearly instantaneous.
-
-#### Surplus Allocation: LoRA Fine-Tuning & Custom Persona Adapters
-The guaranteed surplus of 40–72 compute units per month provides ample runway for custom fine-tuning workflows:
-1. **Journalistic & Pundit LoRA Adapters (Unsloth on A100):**
-   * *Dataset:* Project Mu's 320 canonical human-approved articles and 1,876 Agent Wire posts from the 2036 database, categorized by persona (`Skip_Bayless`, `Mina_Kimes`, `Bill_Barnwell`, `Gregg_Rosenthal`, team beats).
-   * *Compute Cost:* Training a LoRA on an open base model (Qwen 2.5 14B/32B or Llama 3.3 70B) via [Unsloth](https://github.com/unslothai/unsloth) takes ~1 to 2 hours on an A100 GPU (**~5 to 10 compute units** once or twice per year).
-   * *Benefit:* Eliminates prompt engineering overhead; base models natively adopt idiosyncratic vernacular, sentence rhythms, and trademark phrases without prompting instructions.
-2. **Player Likeness & Prospect Visual LoRAs (SDXL / Flux / IP-Adapter):**
-   * For marquee franchise rookies (e.g. 1st-round draft picks) or iconic franchise veterans, training custom face LoRAs or IP-Adapter embeddings ensures consistent facial identity across draft walkout videos (§V2.17), championship photojournalism (§V2.4), and broadcast overlays. Takes ~15–20 minutes on an A100 (**~1.5 CUs per class**).
-
-### 5.3 Deterministic Python Dossier Architecture & Newsroom A/B Testing Framework
-
-#### Architectural Principle: Macro Context vs. Targeted Micro Evidence
-In Project Mu's newsroom, writers already receive a comprehensive macro-level league state in their initial prompt via [`build_weekly_assignment_brief`](../../newsroom/swarm_dispatcher.py):
-* **32-team standings**, win-loss records, point differentials, and 5-year franchise trajectory chips (`5-Yr: 10-7-14-11-9`).
-* Full recap scoreboard with **pivotal 2-minute drive stories** (`game_story`) and preview scoreboard with kickoff times and projected excitement.
-* Active **marquee injuries** (starting QBs, 88+ OVR, 50+ POP), recent transactions, active trade rumors, and the complete 32-team coaching staff directory.
-
-The writer's ReAct tool calls are **not** used to learn the state of the league—they are used exclusively to pull targeted micro-evidence for their specific assigned subject (e.g. passing lines, matchup edges, 3rd-down situational rates).
-
-For **deterministic, subject-bound article types** (which represent over 45% of total newsroom volume), these micro-queries are completely predictable:
-* `LOCAL_MATCHUP_PRIMER` (53 articles in 2036): Always queries `get_matchup_edges`, `get_team_efficiency_profile`, `get_team_injury_report`, and `get_coach_profile` for the two scheduled teams.
-* `SINGLE_GAME_SCHEMATIC_AUTOPSY` & `LOCAL_POSTGAME_REPORT_CARD` (23 articles): Always queries `get_game_box_score`, `get_game_scoring_plays`, and `get_advanced_game_analytics` for the assigned `game_id`.
-* `LOCAL_PLAYER_SPOTLIGHT` (11 articles): Always queries `get_player_season_stats`, `get_player_career`, and `get_player_contract`.
-* `FANTASY_START_SIT` & `FANTASY_BOX_SCORE_USAGE` (24 articles): Always queries weekly touch/target distributions and red-zone usage splits.
-
-#### The Python Dossier Compiler
-Instead of forcing Gemini to spend 10–25 ReAct turns repeatedly accumulating 40K–80K context tokens (~$0.08–$0.10/article), a deterministic Python service (`pipeline/dossier_compiler.py`) executes those 3–5 SQL queries in under 15 milliseconds. It compiles a structured markdown micro-dossier, appends it directly to the Assignment Brief, and executes the article generation in a **single turn** with zero tool calls:
-* **Token Cost:** Drops from ~$0.09 to ~$0.01 on Gemini 3.8 Flash (an 89% savings), or **\$0.00** on Google Colab / local GPU.
-* **Local & Colab Feasibility:** Because single-turn prompts require no function-calling orchestration, they can execute seamlessly on **Llama 3.3 70B** via Colab vLLM or locally on the RTX 5070 Ti (`ollama:gemma4:e4b@nothink`).
-
-#### Why Eliminating Tool Calls Directly Improves Article Quality
-Eliminating tool calls is not a compromise—it is a significant structural upgrade to article quality:
-1. **Elimination of Attention Degradation (Context Bloat):**
-   * In multi-turn ReAct loops, after 10–15 tool turns, the context window accumulates 50,000–80,000 tokens of raw JSON tool definitions, parameters, and intermediate query results.
-   * Transformer attention degrades over long multi-turn contexts (the "lost-in-the-middle" effect). As tool clutter piles up, models lose adherence to nuanced persona traits, vocabulary restrictions, and banned-cliché directives.
-   * With the Python Dossier, the model receives a pristine, single-turn prompt containing only the persona instructions and the structured dossier. **100% of the model's attention heads are focused on prose rhythm, narrative drama, and tactical analysis**.
-2. **Zero Factual Gaps (Guaranteed Coverage):**
-   * ReAct models often suffer from "lazy querying"—skipping the injury report, ignoring red-zone splits, or failing to check 3rd-down conversions due to turn limits.
-   * The Python Dossier compiles **every** relevant statistical dimension upfront (box scores, scoring drives, situational efficiencies, rivalry history, injuries, and coach profiles). The writer has complete, verified truth from sentence one.
-3. **Unlocking Flagship 70B Open Models:**
-   * Open-weights models (Llama 3.3 70B, Qwen 2.5 72B) write vastly superior sports prose, sharper humor, and more authentic dialogue than small API models, but often produce syntax errors or infinite loops when managing complex multi-turn JSON tool schemas.
-   * Zero-tool generation allows these world-class 70B models to do what they do best: write rich, creative, deeply atmospheric football literature.
-
-#### A/B Testing Framework (`tools/dossier_ab_compare.py`)
-To rigorously prove that the Python Dossier matches or exceeds the factual accuracy and literary quality of the ReAct tool loop before switching in production:
-
-```
-                                  ┌───────────────────────────────┐
-                                  │   Target Article Assignment   │
-                                  │ (e.g. Panthers vs. Bears W12) │
-                                  └──────────────┬────────────────┘
-                                                 │
-                        ┌────────────────────────┴────────────────────────┐
-                        ▼                                                 ▼
-        ┌───────────────────────────────┐                 ┌───────────────────────────────┐
-        │     Variant A (Control):      │                 │    Variant B (Treatment):     │
-        │   Multi-Turn ReAct Loop       │                 │   Deterministic Python Dossier│
-        ├───────────────────────────────┤                 ├───────────────────────────────┤
-        │ • 40 Database Tools Exposed   │                 │ • Python pre-fetches micro-   │
-        │ • 10–25 AFC tool call turns   │                 │   stats in 15ms directly to DB│
-        │ • Gemini 3.8 Flash            │                 │ • Appends to Assignment Brief │
-        │                               │                 │ • Single-turn (zero tools)    │
-        │                               │                 │ • Gemini 3.8 Flash or Gemma 4 │
-        └──────────────┬────────────────┘                 └──────────────┬────────────────┘
-                       │                                                 │
-                       └────────────────────────┬────────────────────────┘
-                                                ▼
-                                ┌───────────────────────────────┐
-                                │   Automated Quality Audit &   │
-                                │   Side-by-Side Verification   │
-                                └───────────────────────────────┘
-```
-
-#### Evaluation Scorecard & Quality Gates
-The A/B harness compares Variant A and Variant B across four rigorous pillars:
-1. **Financial & Performance Telemetry:**
-   * Input, cached, output, and thinking tokens.
-   * Total dollar cost per article (measured at Google API rates).
-   * Generation wall-clock latency (seconds) and turn count.
-2. **Ground-Truth Factual Verification (Zero-Hallucination Policy):**
-   * *Scores & Margins:* Regex audit ensuring final scores match `games.home_score` / `away_score`.
-   * *Player Lines:* Cross-references cited yardages, sacks, and touchdowns against `player_stats`.
-   * *Standings & Records:* Verifies team win-loss citations against `team_seasons`.
-   * *Banned Invented Data:* Strict check ensuring no fabricated blitz rates, pressure counts, or down-and-distance percentages appear.
-3. **Persona Voice & Literary Standards:**
-   * *Tone Fidelity:* Adherence to assigned persona vocabulary, perspective, and sentence rhythm.
-   * *Internal Metric Translation:* Verifies zero raw symbols (`$P$`, `Y_prod`, `SpikeIndex`, etc.) appear in published text.
-   * *Banned Clichés:* Zero hits on prohibited idioms ("paper tiger", "blueprint to victory", etc.).
-   * *Structural Conformance:* Proper Markdown `# Title` and `> **EXCERPT:**` formatting.
-4. **Narrative Richness & Depth:**
-   * Word count within the target band (800–1,500 words).
-   * Tactical specificity: Evaluates whether the piece explains *why* the outcome occurred (line play, coverage scheme, red-zone efficiency) rather than offering a generic recap.
-
-#### 5.3.1 Dual-Track vs. Unified Colab Batch Routing
-
-Depending on player preference for article availability, Project Mu supports two operational configurations:
-1. **Interactive Dual-Track Mode (Fastest Turnaround):** Keeps the user's game autopsy, beat story, and macro slates on Gemini 3.8 Flash for 15-second delivery right after playing (~$0.40/week), offloading only routine beat/fantasy articles and tweets to Colab.
-2. **Unified Colab Studio Mode (Maximum Quality & Zero API Spend):** When latency is relaxed to normal franchise waiting bands (~2–3 minutes vs. the old 60+ minute PS5 crawl), **100% of all articles (320/season) and 100% of all tweets (1,876/season) are offloaded to Google Colab**.
+This is the target V2 lifecycle. The Command Center launch API and process-exit trigger are planned; the current watcher detects stable save-file changes and calls articles synchronously.
 
 ```mermaid
 flowchart TD
-    subgraph Play ["User Interactive Flow (PC Save Watcher)"]
-        PlayGame["1. Play Franchise Game (e.g. Panthers)"] --> SaveWrite["Save Written (pc_save_reader.mjs)"]
-        SaveWrite --> Ingest["Ingest Save & Stats (1.5s, load_save.py)"]
-        Ingest --> Compiler["Python Dossier & Brief Compiler (2.0s)"]
-    end
-
-    subgraph ColabStudio ["Unified Colab Studio: 100% Newsroom Offload (Llama 3.3 70B vLLM)"]
-        Compiler --> BatchPayload["Compile weekly_batch.json<br/>• User's Game Autopsy & Team Beat (2/wk)<br/>• All 30 Other Beat Matchup Primers (14/wk)<br/>• Macro Slate Recap, Power Rankings, SOTU (4/wk)<br/>• Fantasy Desk Columns (5.5/wk)<br/>• 100+ Agent Wire & Fantasy Tweets (104/wk)"]
-        BatchPayload --> ColabRun["Google Colab A100 vLLM Continuous Batching<br/>• Llama 3.3 70B AWQ / Qwen 2.5 72B (128k context)<br/>• ~110s parallel generation for entire week<br/>• $0.00 Token Spend<br/>• Flagship 70B Literary Prose across whole league"]
-        ColabRun --> FeedIngest["Push into news_feed Ledger (~2.5 min total)"]
-    end
-
-    FeedIngest --> Ready["Articles & Tweets Populated in Mu_Network"]
+    A["Command Center: review matchup and depth charts"] --> B["Validate and write approved save edits"]
+    B --> C["Prepare mod pack and launch Madden"]
+    C --> D["Play, save, and quit"]
+    D --> E["Detect stable save and ingest into franchise database"]
+    E --> F["Run deterministic analytics and league engines"]
+    F --> G["Refresh Command Center and prepare next game"]
+    F -.-> H["V3 media handoff: frozen weekly context"]
+    H -.-> I["Validated articles and media return to Mu_Network"]
 ```
 
-##### Complete Workload Allocation: 100% Offload vs. Dual-Track
+1. Finalize strategy, roster moves, contracts, and depth charts in `Mu_Network`.
+2. Validate and inject approved changes into a save copy, with read-back verification.
+3. Compile the tailored presentation through [`pipeline/mod_packs.py`](../../pipeline/mod_packs.py) and launch through the mod manager.
+4. Ingest the settled postgame save into its own franchise database and run deterministic engines.
+5. Update league state and the next-game dashboard. Expose a media handoff boundary for V3 without making cloud availability a condition of league-state correctness.
 
-Across the 2036 canonical season (320 articles + 1,876 tweets over 18 weeks):
+### 5.1 Media Handoff (Moved to V3)
 
-| Content Category | Season Volume | Weekly Rate | Dual-Track Mode | Unified Colab Mode (Recommended) | Why 70B Colab Excels Here |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **User's Live Game Autopsy & Beat** | ~18 articles | ~1.0 / week | Gemini 3.8 (15s) | **Colab 70B (2 min)** | Ingests box score + script; zero AI fluff |
-| **Beat Matchup Primers (30 Teams)** | 53 articles | ~3.0 / week | Colab 70B | **Colab 70B (2 min)** | Pure micro-dossier; deep tactical matchups |
-| **Single-Game Autopsies (Non-User)** | 16 articles | ~1.0 / week | Colab 70B | **Colab 70B (2 min)** | Bound to single game box score/script |
-| **Postgame Report Cards** | 7 articles | ~0.5 / week | Colab 70B | **Colab 70B (2 min)** | Bound to single game box score/grades |
-| **Fantasy Desk (Start/Sit, Usage, Tiers)** | 98 articles | ~5.5 / week | Colab 70B | **Colab 70B (2 min)** | Quantitative usage & projections compiled in Python |
-| **Player Spotlights & Progress Audits** | 17 articles | ~1.0 / week | Colab 70B | **Colab 70B (2 min)** | Bound to single player profile & contract |
-| **Historic Records & Trade Grades** | 16 articles | ~1.0 / week | Colab 70B | **Colab 70B (2 min)** | Event-driven factual payloads |
-| **Macro Slate Recaps & Previews** | 33 articles | ~2.0 / week | Gemini 3.8 (15s) | **Colab 70B (2 min)** | 128k context ingests full 16-game slate brief |
-| **Power Rankings & SOTU Audits** | 25 articles | ~1.5 / week | Gemini 3.8 (15s) | **Colab 70B (2 min)** | `power_rankings.py` ELO/POP fed directly to prompt |
-| **AP All-Pro, Awards & Mock Draft** | 37 articles | ~2.0 / week | Gemini 3.8 (15s) | **Colab 70B (2 min)** | Engine-audited ballots (`award_winners.py`) |
-| **Agent Wire & Fantasy Social Posts** | **1,876 posts** | **~104 / week** | Colab 70B | **Colab 70B (2 min)** | 70B produces hilarious, authentic fan banter |
-| **TOTALS** | **320 arts + 1,876 posts** | **~122 items / week** | **65% Colab / 35% Gemini** | **100% Colab A100 (\$0.00 Token Spend)** | **Flagship 70B prose across 100% of the league** |
+The former Live Marquee / Deferred GPU Queue design is retained as an optional routing alternative in [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow). JR's preferred direction is now Colab batch media with relaxed publication latency, subject to quality and runtime validation. The existing watcher does not yet enqueue article slates or expose a coverage-mode switch.
 
-##### Why Latency Relaxation Unlocks Peak Architecture
-1. **The Old PS5 Pipeline Baseline:** In the legacy setup, Remote Play menu capture took 40–50 minutes, OCR took 5–8 minutes, and multi-turn ReAct newsroom loops took 15–25 minutes—totaling **over 60–75 minutes per game week**.
-2. **The New PC + Colab Baseline:**
-   - PC save snapshot: **~1.5 seconds**.
-   - Database ingest: **~0.8 seconds**.
-   - Python dossier compilation: **~2.0 seconds**.
-   - Colab vLLM generation (18 articles + 104 tweets concurrently): **~90 to 110 seconds**.
-   - **Total Turnaround: Under 2.5 minutes!**
-   Waiting 2.5 minutes feels effectively instantaneous compared to the legacy setup, while delivering Pulitzer-tier 70B prose and **slashing Gemini API spend to \$0.00**.
-3. **Colab Budget Math for 100% Offload:**
-   - Generation tokens per week: ~18 articles $\times$ 900 tokens + ~104 tweets $\times$ 60 tokens $\approx$ **22,500 output tokens / week**.
-   - At ~200 tokens/sec on vLLM (A100), pure compute is $\approx \mathbf{110 \text{ seconds per week}}$.
-   - Including a 10–12 minute active notebook session per week, 2 full seasons per month (~36 weeks) consume **~18 to 34 compute units / month** out of 100.
-   - **Over 65 compute units remain completely free** every month for F5-TTS audio podcasts and draft walkout videos!
+### 5.2 Cloud GPU Studio & Budget (Moved to V3)
 
-#### 5.3.2 Interactive Latency Boundaries: GM & Player Negotiations
-While the newsroom and multimedia ecosystem are decoupled from real-time latency and run via batch pipelines, Project Mu preserves a strict **<1.5-second sub-second turnaround boundary** for user-facing interactive conversations:
-1. **AI GM Trade Machine Negotiations ([`engines/gm_negotiation.py`](../../engines/gm_negotiation.py)):** When the user proposes a trade or counters in the Trade Machine, the AI GM must respond instantly with structured evaluation and in-character dialogue ("We value Vance, but you need to add a 3rd-round pick").
-2. **Player Agent Contract Extensions ([`engines/contract_negotiation.py`](../../engines/contract_negotiation.py)):** Real-time conversational bargaining over guaranteed money, incentives, and no-trade clauses.
-3. **Interactive Postgame Press Conferences (§V2.2):** Beat reporters asking tough post-game questions where the user types an answer and the reporter immediately responds.
+Cloud workloads, monthly compute budgeting, podcasts, draft videos, and LoRA experiments are owned by [V3 §5–§6](./V3_STUDIO_PLAN.md#5-monthly-budget-and-benchmarking). Earlier timing and credit figures are hypotheses, not capacity guarantees.
 
-**Execution Routing for Interactive Persona Tasks:**
-* **Cloud Route:** Gemini 3.8 Flash configured with `thinking=low` via [`engines/llm_config.py`](../../engines/llm_config.py) (~700–900ms latency, ~\$0.0002 per dialogue turn; an entire season of 50 trade turns costs <\$0.01).
-* **Local Offline Route:** The ultra-compact resident model on the PC beside Madden ([`docs/in_progress/PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §7.5; Qwen 2.5 1.5B/3B or Llama 3.2 1B occupying only ~1.2GB VRAM), executing at 120+ tokens/sec with zero cloud dependency.
+### 5.3 Dossier Architecture & Evaluation (Moved to V3)
+
+Deterministic dossier compilation, continuity context, and the ReAct comparison belong to [V3 §2 and §4](./V3_STUDIO_PLAN.md#2-deterministic-dossiers-and-continuity). The prototype remains [`tools/dossier_ab_compare.py`](../../tools/dossier_ab_compare.py); it is not a production compiler.
+
+#### 5.3.1 Colab Batch Routing (Moved to V3)
+
+See [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow). The preferred target is broad media offload after evaluation; neither full Colab routing nor a production notebook is implemented by this plan split.
+
+#### 5.3.2 Interactive Latency Boundary
+
+V2 GM/player negotiations stay interactive and use deterministic transaction engines for decisions. V3 shares this boundary for Napper conversations and reporter dialogue ([V3 §7](./V3_STUDIO_PLAN.md#7-interactive-personas-and-napper)). Provider choice, latency targets, and beside-Madden model feasibility require PC measurement; no sub-second performance or per-turn price is guaranteed.
 
 ---
 
-## 6. The V2 Feature Suite (Detailed Catalog)
+## 6. Feature Ownership & V2 Catalog
+
+Historical V2 feature IDs remain stable for older references. Entries marked **Moved to V3** are pointers, not V2 delivery requirements. Built shared foundations (league memory and personas) remain available to both generations.
 
 ### V2.0 Ground Rules
 * **Numbers Stay Deterministic:** Engines decide values, ratings, deals, draft boards, and outcomes. Language models write dialogue, rationale, and choose among engine-permitted options.
@@ -437,28 +238,27 @@ While the newsroom and multimedia ecosystem are decoupled from real-time latency
 Inject top Project Mu headlines directly into Madden's `NewsCenterArticle` and `NewsCenterArticleData` save tables, displaying the universe's headlines inside Madden's in-game menus.
 
 ### V2.2 Interactive Press Conferences
-Postgame press conferences where newsroom personas question JR based on real box-score events, scoring swings, and player usage. JR's answers become quotes in weekly articles and update reporter memories ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)).
+Postgame press conferences where newsroom personas question JR based on real box-score events, scoring swings, and player usage. JR's answers become quotes in weekly articles and update reporter memories ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)). V2 owns the interactive surface; V3 owns downstream media generation and consumes those approved quotes.
 
-### V2.3 Authentic Player Voices
-* Postgame quotes generated for all 16 weekly games from real box-score stat lines.
-* Player accounts on Agent Wire expressing celebration, frustration, contract-year focus, or injury updates in distinct voices.
+### V2.3 Authentic Player Voices (Moved to V3)
 
-### V2.4 Photography with Consistent Faces
-Use local image generation with IP-Adapter / face-ID adapters to generate photojournalism featuring consistent player faces across draft night, award ceremonies, press conferences, and feature articles.
+Postgame quotes and player social posts are media outputs generated from verified facts. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
 
-### V2.5 Fan Ecosystem & Team Sentiment
-Agent fans reacting to game outcomes, generating article comments, team forum threads, and driving a dynamic team sentiment index that impacts coach hot seats and ticket demand.
+### V2.4 Photography with Consistent Faces (Moved to V3)
 
-### V2.6 Radio Shows & Podcasts (Multi-Voice Neural TTS & Cloud GPU Studio)
-Automated weekly audio recaps, pregame primers, and roundtable sports talk shows published to `Mu_Network`. Powered by modern open zero-shot neural TTS models (e.g. F5-TTS, CosyVoice 2, or ChatTTS) using reference audio anchors to produce distinct, expressive, human-sounding voices across contrasting archetypes:
-* **The Play-by-Play Host:** Fast-paced, measured, broadcast cadence.
-* **The Film Room Analyst (Barnwell-style):** Analytical, deliberate, citing EPA and coverage schemes.
-* **The Reactionary Pundit:** Loud, energetic hot takes with natural vocal interruptions.
-* **The Local Beat Reporter:** Direct from locker rooms with insider updates and injury notes.
-Can be rendered locally on the nightly GPU queue or offloaded in ~3–4 minutes to the Cloud GPU Studio (Colab T4/L4) for ~0.1 compute units per episode (§5.2).
+Consistent-face photojournalism and visual identity adapters belong to the studio. Local rookie headshots and in-game portrait integration remain migration infrastructure. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
 
-### V2.7 Complete League Game Recaps
-Detailed narrative recaps for all 16 games every week generated from native box scores and scoring summaries.
+### V2.5 Fan Ecosystem & Team Sentiment (Moved to V3)
+
+Fan reactions, comments, and forums belong to the studio; any effect on simulation metrics needs a separate deterministic contract. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
+
+### V2.6 Radio Shows & Podcasts (Moved to V3)
+
+Multi-speaker neural TTS, show scripts, and Colab audio rendering are V3 stretch goals. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
+
+### V2.7 Complete League Game Recaps (Moved to V3)
+
+All-game recaps use the shared weekly brief and game-specific evidence, subject to data availability and evaluation. See [V3 §2–§3](./V3_STUDIO_PLAN.md#2-deterministic-dossiers-and-continuity).
 
 ### V2.8 League Memory (Built)
 PostgreSQL-backed narrative search index ([`newsroom/league_memory.py`](../../newsroom/league_memory.py)) enabling journalists and agents to pull authentic historical callbacks ("last time Carolina won 5 straight was 2031").
@@ -472,8 +272,9 @@ Comprehensive narrative reports for every draft prospect, individual scout voice
 ### V2.11 Live Multi-Turn Trade Negotiations
 Interactive negotiation loops with AI GMs featuring counter-offers, trade posturing, leaks to media insiders, and published negotiation transcripts for CPU-to-CPU deals.
 
-### V2.12 Long-Term Team and League Narratives
-Persistent narrative arc tracker following season-long storylines (rookie QB development, dynasty defense decline, coach hot seats, contract holdouts).
+### V2.12 Long-Term Team and League Narratives (Moved to V3)
+
+Narrative tracking consumes the shared season-continuity and league-memory foundations. See [V3 §2](./V3_STUDIO_PLAN.md#2-deterministic-dossiers-and-continuity).
 
 ### V2.13 Personalities Across the NFL Universe (Built, Phases 1–3)
 50-trait validated personality system ([`newsroom/config/persona_traits.json`](../../newsroom/config/persona_traits.json)) extending numeric behavioral sliders to players, coaches, GMs, and scouts.
@@ -492,34 +293,17 @@ In-game testing on Madden 27 PC (`CAREER-2026SB-MODIFIED-AUTOSAVE` with Bryce Yo
 ### V2.15 Project Mu Runs the League (Headless League Office)
 Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md)).
 
-### V2.16 Dual-Track Media Engine (Marquee Live vs. Background Universe Queue)
-Configurable post-game journalism pipeline (§5.1): major matchups, playoffs, and manual requests run synchronous Gemini 3.8 Flash slates for deep reading; fast gameplay sessions advance in <5s and enqueue articles to the RTX 5070 Ti GPU queue for free background drafting with Gemma 4, keeping universe history complete without gameplay interruption.
+### V2.16 Media Generation Routing (Moved to V3)
 
-### V2.17 Cinematic Round 1 Draft Walkout Videos (Stretch Goal)
-Automated generation of 31–32 five-second broadcast video clips for Round 1 NFL Draft picks, showing each drafted prospect walking onto the draft stage, shaking the NFL Commissioner's hand, and donning the drafting team's official cap.
-* **Architecture:** 2-step Image-to-Video generation pipeline executed via the Cloud GPU Studio (§5.2):
-  1. *Staging Composite:* Composites the drafted rookie's synthesized media-day portrait (`static/players/{player_id}.webp`, from `headshots/`) onto a high-resolution draft-stage body plate in a tailored suit holding or wearing the drafting franchise's team cap and jersey.
-  2. *I2V Diffusion Animation:* Passes the staged portrait into an open Image-to-Video DiT model (LTX-Video on A100 at ~25s/clip, or Wan2.1-I2V / CogVideoX-5B at ~60–75s/clip) with cinematic broadcast camera tracking and flashbulb lighting prompts.
-* **Delivery & Interface:** Exports 5-second 720p/1080p MP4s to `static/draft/videos/{season}_pick_{pick_no}.mp4`. In `Mu_Network`'s Draft Central War Room, clicking on any Round 1 pick seamlessly plays their official stage entrance video inline.
-* **Compute Cost:** ~4.5–5 compute units on Colab A100 once per draft (~9–10 units/year for 2 drafts).
+The preferred direction is Colab batch media, with local/API alternatives and publication decoupled from league-state updates. See [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow).
 
-### V2.18 Napper Fantasy Conversational League & Dynamic Personas
-Transforms Napper from a sterile, template-driven fantasy tool into a living, high-personality fantasy league app (Sleeper-style) where AI league-mates banter, react, negotiate trades with dialogue, and hold multi-season grudges against the user.
-* **Architecture & Workload Routing:**
-  1. *Weekly Batch League Banter (Track 1 - Colab A100 / Llama 3.3 70B vLLM):*
-     - Replaces hardcoded string templates (`PERSONA_BANTER_TEMPLATES` in [`engines/napper_chat_engine.py`](../../engines/napper_chat_engine.py)) with dynamic, contextual LLM chat traffic generated in the weekly batch (~15–20 messages/league/week).
-     - Contextual triggers: benchwarmers with 25+ points, heartbreaking <3-point losses, blowout beatdowns, waiver FAAB overspends, and upcoming rivalry previews.
-     - 4 Distinct Voices: `TRASH_TALKER` (arrogant roasts), `ANALYTICS_NERD` (xFP, variance, regression rants), `WAIVER_HAWK` (late-night snipes), and `DIE_HARD` (film-grind, scheme rants).
-     - Compute duration: ~5–8 seconds during weekly Colab batch (\$0.00 token cost, ~0.01 CUs).
-  2. *Interactive Trade Dialogue & In-Character Counter-Offers (Track 2 - Sub-Second Persona Boundary):*
-     - Proposing, declining, or countering a trade in `server/napper_api.py` pairs the quantitative math ([`engines/napper_trade_engine.py`](../../engines/napper_trade_engine.py)) with personalized manager dialogue delivered in <1 second (Gemini 3.8 Flash `thinking=low` or local resident 1B model).
-     - Replaces generic "❌ Trade Declined" robot cards with in-character responses: roasts on lowballs, analytical breakdowns of point differentials, or trade-block counter-demands.
-  3. *Conversational League Chat (User Reply Hook):*
-     - When the user sends a message in `napper_chat` or @-mentions an AI manager, an event hook triggers an immediate in-character reply (~800ms).
-  4. *Multi-Season Lineage & Grudge Memory:*
-     - Exploits `napper_leagues.lineage_id` to query historical head-to-head records (`H2H: 3-1`), past playoff heartbreak ("You eliminated me in the 2035 semifinals"), and championship banter across league restarts.
-  5. *Personality System Integration ([`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md)):*
-     - Maps each fantasy manager to the 6-slider persona framework (Pettiness, Analytical Bias, Trash Talk Frequency, Risk Tolerance, Loyalty, Trade Activity).
+### V2.17 Cinematic Round 1 Draft Walkout Videos (Moved to V3)
+
+The 31–32 five-second prospect stage videos are a studio stretch goal requiring a visual-quality and rendering-cost spike. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
+
+### V2.18 Napper Conversational League & Dynamic Personas (Moved to V3)
+
+Weekly personality banter, interactive trade dialogue, user reply hooks, and lineage memory are planned V3 enhancements; existing Napper simulation engines remain unchanged. See [V3 §7](./V3_STUDIO_PLAN.md#7-interactive-personas-and-napper).
 
 ---
 
