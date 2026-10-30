@@ -1,18 +1,22 @@
 # Project Mu: 4-Phase Deprecation & Lineage Audit Ledger
 
 **Generated:** 2026-10-28  
-**Updated:** 2026-10-29 (fresh 2034 save: teleport and Mu 2026–2036 history classified, §3b; Tier 4 moved to refactor-now)  
-**Audit Scope:** Multi-generation evolution (`v0` $\to$ `v1` $\to$ `v2`), plus the abandoned `v2-teleport` branch and the discarded Mu history  
+**Updated:** 2026-10-30 (separate V3 studio planning boundary; fresh-save obsolescence and pruning classifications unchanged)
+
+**Audit Scope:** Implemented-generation reachability (`v0` $\to$ `v1` $\to$ `v2`), the planned `v3` studio boundary, the abandoned `v2-teleport` branch, and the discarded Mu history
+
 **Status:** Non-destructive. Phases 1–3 done; Phase 4 markers in place (`# @AUDIT-STATUS` headers, `pipeline/tombstone.py` decorators in `db/db_handler.py`). Nothing in Tiers 1–5 has been deleted yet.
 
 ---
 
 ## 1. Executive Summary & Definitions
 
-This project has evolved across three distinct architectural paradigms:
+The implemented project spans three architectural generations, with V3 now separately planned:
 - **`v0` ("Twitch stream based capture of PS5 game"):** OpenCV video stream ingestion (`cv2.VideoCapture`), Streamlink (`streamlink`), template matching classifier (`pipeline/template_classifier.py`), video batch scripts (`pipeline/batch_*.py`), stream ingestion (`pipeline/main.py`), and early Streamlit dashboards (`dashboards/`).
 - **`v1` ("Remote control PS5 game via chiaki"):** `chiaki-ng` macro automation via AppleScript/held keypresses (`madden_capture.py`), Gemini vision OCR extraction (`extract.py`), weekly Remote Play orchestration (`pipeline/weekly_capture.py`), CSV capture loader (`pipeline/load_capture.py`), and Vision OCR extraction modules (`pipeline/extract_*_ocr.py`).
 - **`v2` ("Move to PC - Native Save File I/O"):** Direct Madden PC `.CAREER-*` franchise save file parsing and editing via Node.js/`madden-franchise` (`pipeline/save_reader/`), directory save file watcher daemon (`pipeline/watch_save.py`), direct PostgreSQL save loader matching on `madden_pgid` (`pipeline/load_save.py`), universe teleportation/bridge suite (`pipeline/teleport.py`, etc.), and offline progression/OVR systems (`engines/progression.py`, `engines/ovr_weights.py`).
+
+- **`v3` (studio plan separated 2026-10-30):** Deterministic media dossiers, Colab batch generation/publication, multi-speaker podcasts, draft walkout videos, optional writer/visual LoRAs, and Napper personality presentation. Canonical plan: [`docs/in_progress/V3_STUDIO_PLAN.md`](docs/in_progress/V3_STUDIO_PLAN.md). V2 remains the franchise operating system. This designation records ownership and planned architecture, not an implemented replacement or evidence that ReAct tools are dead. Existing media, league memory, personas, and analytics are shared foundations until measured migration gates pass.
 
 - **`v2-teleport` (abandoned 2026-10-29):** the 2037 offseason teleporter that would have rebuilt Mu's 2036 league in a PC save (`pipeline/teleport*.py`, `character_visuals.py`, `visual_edits.mjs`) and the PS5 attribute scan that fed it (`attribute_reader.py`, `load_attributes.py`).
 - **`mu-history` (discarded 2026-10-29):** Project Mu's own 2026–2036 universe: the 2026–2034 history backfill (`engines/history_backfill/`, `load_career_totals.py`) and the data-only migrations that wrote its lore (coaches, coordinators, record names, pick owners).
@@ -50,6 +54,15 @@ The following roots represent the active `v2` system boundaries:
 - `newsroom/social_publish.py` — Agent Wire publishing engine.
 - `newsroom/db_tools.py` & `newsroom/fantasy_tools.py` — 57 dynamic `@tool` ReAct agent research tools.
 - `engines/*.py` — 30+ quantitative analytics engines (SRS, TWI, Excitement, COTY, Hot Seat, Scouting, GM Agents, Napper Fantasy).
+
+---
+
+### D. Planned V3 Studio Boundary (No New Production Roots Yet)
+
+- [`docs/in_progress/V3_STUDIO_PLAN.md`](docs/in_progress/V3_STUDIO_PLAN.md) — canonical media plan, benchmark gates, budget assumptions, and desktop handoff; former V2 §5.1–§5.3 and media feature IDs now redirect here.
+- `tools/dossier_ab_compare.py` — existing research prototype, not a production dossier compiler or complete factual validator.
+- Production compiler, Colab notebook, batch export/import, dynamic Napper replies, and multimedia studio remain planned. Do not prune existing `newsroom/tool_loop/`, `newsroom/db_tools.py`, `newsroom/fantasy_tools.py`, or local/API alternatives on the assumption that V3 is live.
+- V3 does not change the fresh-2034 V2 readiness gate, frozen `madden_2036` policy, or existing Tiers 1–5 classifications.
 
 ---
 

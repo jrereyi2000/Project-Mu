@@ -2,7 +2,7 @@
 
 **Status (2026-10-29):** The PC environment, save reader/writer, and Docker Postgres are operational (§3, §5). 
 **Scope of this document:** Focuses exclusively on the **PC Hardware, Direct Save Loader, and Migration Infrastructure** (§1–§9). 
-**Follow-on V2 features, headless Madden architecture, and franchise command center:** Moved to [`V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md).
+**Follow-on V2 franchise control:** [`V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md). **V3 cloud media and persona presentation:** [`V3_STUDIO_PLAN.md`](./V3_STUDIO_PLAN.md) owns dossiers, Colab text batches, multimedia, LoRAs, and conversational Napper. Migration/local GPU infrastructure stays here.
 
 **Strategic Decision (JR, 2026-10-29): Hold live 2034 franchise start until V2 is ready.**
 The universe starts over with a **fresh 2034 PC franchise** (start year set with `seasonYearSetup.exe`, roster-size mod installed first), with modded gameplay and sim stats. All of Project Mu's 2026–2036 history is dropped because its stats are inflated; the new league starts from real NFL history through 2025 (`db/seed_clean_db.py`), so the record book jumps from 2025 to 2034. The 2036 database is kept read-only as `madden_2036` (archive, and the inputs for the §7.4 quality tests). **JR decision (2026-10-29):** The creation of the canonical 2034 franchise is deliberately deferred until V2 (progression ownership, 32-team depth chart control, and CBA contract logic) is built and tested on scratch/sample saves (`CAREER-WEEK1/2/3`). Testing V2 first ensures that when the live 2034 universe starts, Project Mu controls the entire league operating system rather than Madden's native CPU algorithms. Plan details: [V2 Master Plan](./V2_MASTER_PLAN.md). Reasons and the original PC setup plan: [Fresh Save Strategy PDF](./Project%20Mu_%20Fresh%20Save%20Strategy%20%26%20Remote%20PC-WSL%20Migration%20Plan.pdf), with its outdated parts listed in [FRESH_SAVE_STRATEGY_NOTES.md](./FRESH_SAVE_STRATEGY_NOTES.md). What this makes obsolete:
@@ -17,7 +17,7 @@ The universe starts over with a **fresh 2034 PC franchise** (start year set with
 
 Timings and counts below are estimates until measured on the PC.
 
-This document covers **Part 1 (§1–§9): The PC Migration**. Follow-on V2 features, the Franchise Command Center, and headless Madden orchestration are in [`V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md).
+This document covers the PC migration and infrastructure. Franchise control is in [`V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md); the separate cloud media design, validation, and budget are in [`V3_STUDIO_PLAN.md`](./V3_STUDIO_PLAN.md).
 
 ---
 
@@ -507,6 +507,8 @@ Pick the specific model at test time (§7.4); Ollama or llama.cpp for Windows ho
 
 ### 7.3 Workload Split
 
+The table below records the earlier local/API migration strategy. The preferred media direction now lives in [V3 §2–§5](./V3_STUDIO_PLAN.md#2-deterministic-dossiers-and-continuity): preserve league context, benchmark dossiers, then offload as much text as quality and actual Colab capacity permit. It is a plan, not a completed provider switch. Existing local/API routes remain baselines and alternatives. Historical provider/pricing projections below require revalidation before use.
+
 | Task | Target | Why |
 | :--- | :--- | :--- |
 | Agent Wire tweets | Local 24–27B (or MoE offload) | <2.5K-token prompts, ~60-token output; ~2s a call, ~10 min a day without thinking; runs on nightly queue (§7.8) or idle GPU |
@@ -515,7 +517,7 @@ Pick the specific model at test time (§7.4); Ollama or llama.cpp for Windows ho
 | GM persona & trade rationale | Local 24–27B (or MoE offload) | Short prompts; structured output; runs when Madden is idle or during nightly queue |
 | Live GM negotiations & commission classification | Resident local ~1–2GB option (LFM3-1.7B, Gemma 4 E2B/E4B) with Gemini fallback | Option to test resident alongside Madden (§7.5); provider switch falls back to Gemini when local model is unavailable or unfeasible |
 | National articles | Gemini or Hosted Open Model API (DeepSeek V4.1 Flash, GLM-5.3-Flash) | 25–75K-token contexts (up to 150K+) in dozens-of-call tool loops; cannot fit next to local model weights on 16GB VRAM. Evaluated against hosted open-weight models due to 2027 price change (see below) |
-| Local beat articles | Gemini or Hosted Open Model API (DeepSeek V4.1 Flash, GLM-5.3-Flash) | Same `newsroom` tool loop and 192 persona voice requirements as national articles |
+| Local beat articles | V3 dossier/Colab evaluation; existing Gemini/hosted/local alternatives | See [V3 §2 and §4](./V3_STUDIO_PLAN.md#2-deterministic-dossiers-and-continuity); production compiler, factual validation, and model/budget fit remain to be established |
 
 **Hosted open-weight models for the newsroom (2027 pricing alternative):**
 Gemini 3.8 Flash prices double on 2027-01-01 (input: $0.75 → $1.50 per 1M; output & thinking: $3.75 → $7.50 per 1M). Because the save loader (§5) eliminates screen OCR calls, articles become ~73% of the post-migration LLM bill, projected to rise from ~$125/month to ~$245/month (~$8.2/day).
@@ -655,7 +657,7 @@ The text model, the image model and Madden can't share the 16GB at once, so loca
 2. Headshots for new players and any re-renders (§7.7), then portrait conversion for the next mod build (§9.4).
 3. Audio segments for the broadcast layer (pregame and postgame TTS, Phase 7).
 
-The queue unloads each model before loading the next. An interactive job that can't wait executes against the resident ~1–2GB model or falls back to Gemini (§7.5). Gemini-side / hosted API newsroom articles don't use the GPU and run immediately after the weekly load, unless deferred to the GPU queue for $0 background drafting by V2's Dual-Track Media Pipeline ([`V2_MASTER_PLAN.md`](./V2_MASTER_PLAN.md) §5.1; planned, not built).
+The queue unloads each model before loading the next. An interactive job that cannot wait uses a measured resident-model or API route (§7.5). The current watcher still calls newsroom articles synchronously; local deferred article routing and Colab batch export/import are planned. Their canonical design, dependencies, and validation now live in [V3 §3–§5](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow). V3 also owns podcast/video rendering and LoRA experiments (§6). The previous 28–60 monthly compute-unit estimate and ~2-minute full-week turnaround are unverified; measure the complete workload before reserving credits or committing to a provider.
 
 ### 7.9 Before the PC Arrives
 
@@ -710,7 +712,9 @@ To transition from the temporary Costco prebuilt to your permanent, whisper-quie
 
 ---
 
-## 9. Phase 7: Project Mu Broadcast & Portrait Layer (after the migration)
+## 9. Broadcast & Portrait Integration Boundaries
+
+Batch podcast/show production, consistent-face photojournalism, draft videos, and their cloud compute budget moved to [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals). The build-order list below remains integration context; media production is a V3 deliverable. This migration plan retains the experimental live scorebug/color-layer interface and the local in-game portrait path.
 
 Madden's commentary is pre-recorded clips triggered inside the game engine. A mod can only swap one recording for another, so Madden's live play-by-play stays. Project Mu adds a color-commentary layer on top, built from what it knows and Madden doesn't: records, rivalries, contract years, hot seats, season storylines.
 
@@ -779,7 +783,7 @@ The infrastructure work for the PC migration (Windows 11 setup, WSL2 Ubuntu, Doc
 
 ### Active Migration Work Remaining:
 1. **Decouple and Prune Obsolete Teleport/History Code:** Follow [`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b to decouple shared helpers from `pipeline/teleport.py` and delete obsolete teleport, PS5 attribute scan, and history backfill files.
-2. **One-Portrait Spike (§9.4):** Export a sample portrait via MMC Modding Tools, verify DDS format/dimensions, and test in-game injection of a Project Mu WebP headshot converted via [`headshots/portrait_converter.py`](../../headshots/portrait_converter.py).
+2. **One-Portrait Spike (§9.4):** Export a sample portrait via MMC Modding Tools, verify DDS format/dimensions, and test in-game injection of a Project Mu WebP headshot converted via [`headshots/portrait_converter/`](../../headshots/portrait_converter/).
 3. **Mod Pack Weekly Run Trigger (§5.2):** Wire `pipeline.mod_packs.write --team <user_team>` into `watch_save.py` post-ingest.
 
 ### Transition to V2:

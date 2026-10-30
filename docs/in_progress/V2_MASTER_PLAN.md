@@ -1,6 +1,7 @@
-# Project Mu: V2 Master Plan — The Autonomous Gridiron Universe
+# Project Mu: V2 Master Plan — The Franchise Operating System
 
-**Status (2026-10-29):** Approved architecture. Split from [`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) to serve as the master specification for all post-migration features, universe agency, front-office control, and the headless Madden architecture.
+**Status (2026-10-30):** Approved architecture for the local franchise operating system. V2 owns headless Madden, front-office control, progression, and the Franchise Command Center. Cloud media, dossier-based writing, multimedia, and conversational Napper enhancements are separately planned in [`V3_STUDIO_PLAN.md`](./V3_STUDIO_PLAN.md).
+**Delivery boundary:** V3 media production is not an additional prerequisite for starting the live 2034 franchise; the existing V2 readiness requirement below remains in force. This is a documentation split, not a completed runtime migration.
 **Prerequisite:** The PC environment, save reader/writer, and Docker Postgres are operational ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §3, §5).
 **Strategic Decision (JR, 2026-10-29):** The live **2034 canonical franchise run is held until V2 systems are fleshed out and tested** on scratch/sample saves (`CAREER-WEEK1/2/3` and `CAREER-GIANTS-AUTOSAVE`). Testing V2 first ensures that when the permanent 2034 league begins, progression, coach-set depth charts, and CBA contract mechanics are fully autonomous and controlled by Project Mu rather than Madden's native CPU algorithms.
 
@@ -42,9 +43,7 @@ Rather than relying on Madden's franchise screens, the React 19 + Vite frontend 
 * **Opponent Scouting Dossier:** Record, offensive/defensive rankings (EPA, pass/rush splits), personnel groupings, weather conditions, and the newsroom’s matchup primer.
 * **Matchup Breakdown:** Head-to-head positional battles (e.g. your Pass Rush vs their LT, your Slot WR vs their Nickel CB).
 * **Game Strategy & Focus:** Set weekly offensive/defensive focuses (e.g. Blitz-heavy vs Cover-3; Inside Zone vs Deep Shot; stamina/fatigue management).
-* **Post-Game Media Coverage Preference:** Toggle between:
-  - **Live Marquee Mode (Gemini 3.8 Flash):** Generate comprehensive newsroom coverage immediately upon game completion.
-  - **Fast Play / Deferred GPU Queue (Gemma 4):** Advance immediately to the next week (<5s); enqueue unread routine week coverage to the nightly GPU queue for $0 background drafting.
+* **Post-Game Coverage Status:** Show ingestion and publication progress, with a link to the newsroom. Generation modes and provider selection belong to [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow); V2 must remain usable while media is pending or unavailable.
 * **The "Play Game" Trigger:**
   1. Pre-flight check: validates and writes pending depth charts, roster moves, and injuries to the save.
   2. Compiles and activates the game's tailored mod pack via [`pipeline.mod_packs`](../../pipeline/mod_packs.py) (CBS/FOX/Primetime presentation and scorebugs, crowd density tier, mudded or BCA pink ball).
@@ -183,71 +182,55 @@ $$\text{Offer Score } (U) = w_{\text{money}} \cdot S_{\text{financial}} + w_{\te
 
 ## 5. The Automated Game Lifecycle Orchestrator
 
+This is the target V2 lifecycle. The Command Center launch API and process-exit trigger are planned; the current watcher detects stable save-file changes and calls articles synchronously.
+
 ```mermaid
 flowchart TD
-    subgraph Browser ["Mu_Network (Frontend)"]
-        A["Command Center: Review Matchup & Adjust Depth Chart"] --> B["Click 'Play Game'"]
-    end
-
-    subgraph Pre_Flight ["Pre-Flight Orchestration"]
-        B --> C["POST /api/franchise/game/launch"]
-        C --> D["Inject Depth Charts (32 teams) & Roster Moves into Save"]
-        D --> E["Compile Tailored Mod Pack (pipeline/mod_packs.py)"]
-        E --> F["Launch: MMCModManager.exe -launch <pack>"]
-    end
-
-    subgraph Madden_Game ["Madden NFL 27 (PC)"]
-        F --> G["Play User Game (or CPU vs CPU Spectate)"]
-        G --> H["Advance Week, Save & Quit to Desktop"]
-    end
-
-    subgraph Post_Game ["Automated Post-Game Pipeline"]
-        H --> I["Process Monitor detects Madden27.exe termination"]
-        I --> J["Save Watcher detects debounced CAREER-* file update"]
-        J --> K["Ingest Game Box Scores, Snap Counts & Team Stats"]
-        K --> L["Execute Deterministic Analytics (Excitement, TWI, POP)"]
-        L --> Decision{"Coverage Mode?"}
-        Decision -- "Live Marquee (Gemini)" --> M1["Synchronous Gemini Swarm (~60s)<br/>Immediate Deep Articles"]
-        Decision -- "Fast Next-Game (GPU Queue)" --> M2["Enqueue to GPU Queue<br/>Immediate Week Advance (<5s)"]
-        M1 --> N["Update Database & Refresh Mu_Network Dashboard"]
-        M2 --> O["Prepare Next-Week Mod Pack & Advance"]
-        M2 -.-> P["Background GPU Runner drafts via Gemma 4<br/>when Madden is closed ($0 cost)"]
-        P -.-> N
-    end
+    A["Command Center: review matchup and depth charts"] --> B["Validate and write approved save edits"]
+    B --> C["Prepare mod pack and launch Madden"]
+    C --> D["Play, advance week, save, and quit"]
+    D --> E["Detect stable save and ingest into franchise database"]
+    E --> F["Run deterministic analytics and league engines"]
+    F --> G["Refresh Command Center and prepare next game"]
+    F -.-> H["V3 media handoff: frozen weekly context"]
+    H -.-> I["Validated articles and media return to Mu_Network"]
 ```
 
-1. **User Action:** You finalize depth charts and game strategy in `Mu_Network`, then click **Play Game**.
-2. **Pre-Flight Save Injection:** The backend writes all 32 team depth charts, contracts, and roster moves directly to the save file.
-3. **Mod Pack Activation & Launch:** [`pipeline.mod_packs`](../../pipeline/mod_packs.py) configures the active broadcast presentation (CBS/FOX/TNF/SNF/MNF), crowd tier, and ball type, then executes `MMCModManager.exe -launch <pack>`.
-4. **Gameplay:** You play the game in Madden. On completion, advance the week, save, and exit to desktop. The ingest runs on this post-advance save (see the note below).
-5. **Autonomous Ingestion & Dual-Track Media Dispatch:**
-   - The process monitor ([`pipeline/gpu_queue/process_check.py`](../../pipeline/gpu_queue/process_check.py)) detects `Madden27.exe` has closed.
-   - [`pipeline/watch_save.py`](../../pipeline/watch_save.py) ingests the save, executes deterministic engines, updates standings, and checks the configured coverage mode:
-     - **Live Marquee Mode (Gemini 3.8 Flash):** Executes [`weekly_capture.step_articles()`](../../pipeline/weekly_capture.py) synchronously, delivering full-depth analytical journalism ready for immediate reading.
-     - **Fast Next-Game Mode (Deferred GPU Queue / Gemma 4):** Bypasses synchronous article generation. The watcher enqueues an `ARTICLE_SLATE` job into [`pipeline.gpu_queue`](../../pipeline/gpu_queue/queue.py), prepares the next game's mod pack, and advances the week in **under 5 seconds**, letting you boot straight into the next game. The RTX 5070 Ti drafts the unread articles in the background via `ollama:gemma4:e4b@nothink` at $0 cost once Madden exits or while idle.
+1. Finalize strategy, roster moves, contracts, and depth charts in `Mu_Network`.
+2. Validate and inject approved changes into a save copy, with read-back verification.
+3. Compile the tailored presentation through [`pipeline/mod_packs.py`](../../pipeline/mod_packs.py) and launch through the mod manager.
+4. After playing, advance the week, save, and quit; ingest the settled post-advance save into its own franchise database and run deterministic engines.
+5. Update league state and the next-game dashboard. Expose a media handoff boundary for V3 without making cloud availability a condition of league-state correctness.
 
-### 5.1 Dual-Track Media Architecture (Live Marquee vs. Deferred Universe Background)
+### 5.1 Media Handoff (Moved to V3)
 
-**Status (2026-10-30): planned, not built.** Today the watcher always writes the slate synchronously with Gemini. There is no coverage-mode setting, `ARTICLE_SLATE` job kind or GPU-queue handler for articles, and the watcher's queue hook only reports pending jobs (it never runs the queue during an ingest).
+The former Live Marquee / Deferred GPU Queue design is retained as an optional routing alternative in [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow). JR's preferred direction is now Colab batch media with relaxed publication latency, subject to quality and runtime validation. The existing watcher does not yet enqueue article slates or expose a coverage-mode switch.
 
-When playing multiple franchise games or simming through regular season stretches, generating 18 multi-turn research articles synchronously (60–90 seconds) creates unwanted gameplay friction. Conversely, skipping articles entirely damages long-term universe continuity (breaking reporter memories, historical references, and website archives).
+**Current implementation:** Newsroom articles still run synchronously with Gemini when enabled. The watcher queue hook reports pending jobs only; the separate nightly runner executes them. Deferred article routing remains planned, not built.
 
-The Dual-Track pipeline resolves this tension:
+### 5.2 Cloud GPU Studio & Budget (Moved to V3)
 
-| Dimension | Live Marquee Mode | Deferred GPU Queue Mode |
-| :--- | :--- | :--- |
-| **Model** | `gemini-3.8-flash:low` (Cloud API) | `ollama:gemma4:e4b@nothink` (Local RTX 5070 Ti) |
-| **Execution Trigger** | Synchronous on save ingest (or manual "Generate Now" click) | Background job runner when `Madden27.exe` is closed |
-| **Best Used For** | Super Bowl, playoff weeks, rivalry games, season openers, feature reads | Routine regular-season weeks, back-to-back gameplay sessions, fast simming |
-| **Post-Game Delay** | ~60–90 seconds (full database research tools) | **< 5 seconds** (stats and week advance only) |
-| **Cost** | ~$0.13 per weekly slate | **$0.00** |
-| **Universe Effect** | Full literary depth, nuanced tactical critique | 100% universe continuity, valid memory takes, populated news feeds |
+Cloud workloads, monthly compute budgeting, podcasts, draft videos, and LoRA experiments are owned by [V3 §5–§6](./V3_STUDIO_PLAN.md#5-monthly-budget-and-benchmarking). Earlier timing and credit figures are hypotheses, not capacity guarantees.
+
+### 5.3 Dossier Architecture & Evaluation (Moved to V3)
+
+Deterministic dossier compilation, continuity context, and the ReAct comparison belong to [V3 §2 and §4](./V3_STUDIO_PLAN.md#2-deterministic-dossiers-and-continuity). The prototype remains [`tools/dossier_ab_compare.py`](../../tools/dossier_ab_compare.py); it is not a production compiler.
+
+#### 5.3.1 Colab Batch Routing (Moved to V3)
+
+See [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow). The preferred target is broad media offload after evaluation; neither full Colab routing nor a production notebook is implemented by this plan split.
+
+#### 5.3.2 Interactive Latency Boundary
+
+V2 GM/player negotiations stay interactive and use deterministic transaction engines for decisions. V3 shares this boundary for Napper conversations and reporter dialogue ([V3 §7](./V3_STUDIO_PLAN.md#7-interactive-personas-and-napper)). Provider choice, latency targets, and beside-Madden model feasibility require PC measurement; no sub-second performance or per-turn price is guaranteed.
 
 **Decision (JR, 2026-10-30): ingest runs on the save made after Advance Week, not the one made straight after the game (§7.0, B1 resolved).** In `CAREER-WEEK1/2/3` ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §5.4, check 3), each save was made after the week's 15 CPU games were simmed and before CAR's game. The final score, quarter scores and team box score (`SeasonGame` and its `TeamStatCache`) were readable for every game already played, this week's included. The player lines (`Game*Stats`) for this week's games were in their tables too, but had a null `SeasonGame` and no `Player.GameStats` link, so the reader can't credit them; the next week's save had them linked. Whatever links them (the week's last game finishing, or Advance Week) has happened by the time the week is advanced, so the post-advance save holds the whole week's player lines, the user's game included. This also makes it irrelevant whether Madden writes the save mid-game: the watcher only acts on the post-advance save. The cost is that the postgame newsroom for the user's game (press conference, recap, quotes) waits for the advance. If O1 (§7.0) works, the user's game and the earlier-kickoff games can be credited from the save made straight after the game as well.
 
 ---
 
-## 6. The V2 Feature Suite (Detailed Catalog)
+## 6. Feature Ownership & V2 Catalog
+
+Historical V2 feature IDs remain stable for older references. Entries marked **Moved to V3** are pointers, not V2 delivery requirements. Built shared foundations (league memory and personas) remain available to both generations.
 
 ### V2.0 Ground Rules
 * **Numbers Stay Deterministic:** Engines decide values, ratings, deals, draft boards, and outcomes. Language models write dialogue, rationale, and choose among engine-permitted options.
@@ -259,23 +242,27 @@ The Dual-Track pipeline resolves this tension:
 Inject top Project Mu headlines directly into Madden's `NewsCenterArticle` and `NewsCenterArticleData` save tables, displaying the universe's headlines inside Madden's in-game menus.
 
 ### V2.2 Interactive Press Conferences
-Postgame press conferences where newsroom personas question JR based on real box-score events, scoring swings, and player usage. JR's answers become quotes in weekly articles and update reporter memories ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)).
+Postgame press conferences where newsroom personas question JR based on real box-score events, scoring swings, and player usage. JR's answers become quotes in weekly articles and update reporter memories ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)). V2 owns the interactive surface; V3 owns downstream media generation and consumes those approved quotes.
 
-### V2.3 Authentic Player Voices
-* Postgame quotes generated for all 16 weekly games from real box-score stat lines.
-* Player accounts on Agent Wire expressing celebration, frustration, contract-year focus, or injury updates in distinct voices.
+### V2.3 Authentic Player Voices (Moved to V3)
 
-### V2.4 Photography with Consistent Faces
-Use local image generation with IP-Adapter / face-ID adapters to generate photojournalism featuring consistent player faces across draft night, award ceremonies, press conferences, and feature articles.
+Postgame quotes and player social posts are media outputs generated from verified facts. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
 
-### V2.5 Fan Ecosystem & Team Sentiment
-Agent fans reacting to game outcomes, generating article comments, team forum threads, and driving a dynamic team sentiment index that impacts coach hot seats and ticket demand.
+### V2.4 Photography with Consistent Faces (Moved to V3)
 
-### V2.6 Radio Shows & Podcasts
-Automated weekly audio recaps and podcasts voiced with local TTS models, produced overnight on the nightly GPU queue and published to `Mu_Network`.
+Consistent-face photojournalism and visual identity adapters belong to the studio. Local rookie headshots and in-game portrait integration remain migration infrastructure. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
 
-### V2.7 Complete League Game Recaps
-Detailed narrative recaps for all 16 games every week generated from native box scores and scoring summaries.
+### V2.5 Fan Ecosystem & Team Sentiment (Moved to V3)
+
+Fan reactions, comments, and forums belong to the studio; any effect on simulation metrics needs a separate deterministic contract. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
+
+### V2.6 Radio Shows & Podcasts (Moved to V3)
+
+Multi-speaker neural TTS, show scripts, and Colab audio rendering are V3 stretch goals. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
+
+### V2.7 Complete League Game Recaps (Moved to V3)
+
+All-game recaps use the shared weekly brief and game-specific evidence, subject to data availability and evaluation. See [V3 §2–§3](./V3_STUDIO_PLAN.md#2-deterministic-dossiers-and-continuity).
 
 ### V2.8 League Memory (Built)
 PostgreSQL-backed narrative search index ([`newsroom/league_memory.py`](../../newsroom/league_memory.py)) enabling journalists and agents to pull authentic historical callbacks ("last time Carolina won 5 straight was 2031").
@@ -289,8 +276,9 @@ Comprehensive narrative reports for every draft prospect, individual scout voice
 ### V2.11 Live Multi-Turn Trade Negotiations
 Interactive negotiation loops with AI GMs featuring counter-offers, trade posturing, leaks to media insiders, and published negotiation transcripts for CPU-to-CPU deals.
 
-### V2.12 Long-Term Team and League Narratives
-Persistent narrative arc tracker following season-long storylines (rookie QB development, dynasty defense decline, coach hot seats, contract holdouts).
+### V2.12 Long-Term Team and League Narratives (Moved to V3)
+
+Narrative tracking consumes the shared season-continuity and league-memory foundations. See [V3 §2](./V3_STUDIO_PLAN.md#2-deterministic-dossiers-and-continuity).
 
 ### V2.13 Personalities Across the NFL Universe (Built, Phases 1–3)
 50-trait validated personality system ([`newsroom/config/persona_traits.json`](../../newsroom/config/persona_traits.json)) extending numeric behavioral sliders to players, coaches, GMs, and scouts.
@@ -309,8 +297,17 @@ In-game testing on Madden 27 PC (`CAREER-2026SB-MODIFIED-AUTOSAVE` with Bryce Yo
 ### V2.15 Project Mu Runs the League (Headless League Office)
 Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md)).
 
-### V2.16 Dual-Track Media Engine (Marquee Live vs. Background Universe Queue) (Planned)
-Configurable post-game journalism pipeline (§5.1): major matchups, playoffs, and manual requests run synchronous Gemini 3.8 Flash slates for deep reading; fast gameplay sessions advance in <5s and enqueue articles to the RTX 5070 Ti GPU queue for free background drafting with Gemma 4, keeping universe history complete without gameplay interruption.
+### V2.16 Media Generation Routing (Moved to V3)
+
+The preferred direction is Colab batch media, with local/API alternatives and publication decoupled from league-state updates. See [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow).
+
+### V2.17 Cinematic Round 1 Draft Walkout Videos (Moved to V3)
+
+The 31–32 five-second prospect stage videos are a studio stretch goal requiring a visual-quality and rendering-cost spike. See [V3 §6](./V3_STUDIO_PLAN.md#6-media-features-and-stretch-goals).
+
+### V2.18 Napper Conversational League & Dynamic Personas (Moved to V3)
+
+Weekly personality banter, interactive trade dialogue, user reply hooks, and lineage memory are planned V3 enhancements; existing Napper simulation engines remain unchanged. See [V3 §7](./V3_STUDIO_PLAN.md#7-interactive-personas-and-napper).
 
 ---
 

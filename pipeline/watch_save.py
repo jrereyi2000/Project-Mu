@@ -56,7 +56,7 @@ from contextlib import contextmanager
 from db import franchises
 from pipeline.load_save import current_week
 from pipeline.notify import env, notify as send_notify
-from pipeline.weekly_capture import run_weekly_engines, step_articles, step_preseason_engines, WeekStopped
+from pipeline.weekly_capture import run_weekly_engines, step_articles, step_preseason_engines, step_rookie_headshots, WeekStopped
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CAPTURES = os.path.join(ROOT, "captures")
@@ -418,6 +418,8 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
 
     # Step: engines
     if save_week is None:
+        log_fn(f"Step 6b: rookie headshots (season {save_season})")
+        step_rookie_headshots(save_season)
         log_fn(f"Step 7: start-of-season calibration engines (season {save_season})")
         step_preseason_engines(save_season)
     else:

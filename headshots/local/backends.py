@@ -485,8 +485,8 @@ class DiffusersBackend(HeadshotBackend):
                 logger.debug("Compel long-prompt encoding not active or failed (%s), falling back to raw prompt text.", e)
 
         call_kwargs: Dict[str, Any] = {
-            "height": size,
-            "width": size,
+            "height": merged_config.get("height", size),
+            "width": merged_config.get("width", size),
             "num_inference_steps": merged_config.get("steps", 30),
             "guidance_scale": merged_config.get("guidance_scale", 5.0),
             "generator": generator,

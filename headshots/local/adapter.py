@@ -141,11 +141,24 @@ def patch_headshot_generator(
             for k, val in v.items():
                 prompt = prompt.replace("{" + k + "}", val)
 
+            # Check for authentic donor plate for physical weight tier
+            from headshots.local.donors import get_donor_plate
+            cfg: Dict[str, Any] = {}
+            try:
+                plate = get_donor_plate(team, int(float(weight)))
+                if plate:
+                    cfg["donor_plate"] = plate
+                    cfg["base_image_path"] = plate["base_path"]
+                    cfg["mask_image_path"] = plate["mask_path"]
+            except Exception as e:
+                logger.debug("Could not resolve donor plate for %s (%s lbs): %s", team, weight, e)
+
             # Generate PNG bytes via local engine
             png_bytes = generate_headshot(
                 prompt=prompt,
                 ref_image=ref_image_bytes,
                 backend=backend or os.environ.get("LOCAL_HEADSHOT_BACKEND"),
+                config=cfg if cfg else None,
             )
 
             out_path = out or f"{name.replace(' ', '_')}.png"
@@ -193,10 +206,23 @@ def patch_headshot_generator(
                 for k, val in v.items():
                     prompt = prompt.replace("{" + k + "}", val)
 
+                # Check for authentic donor plate for physical weight tier
+                from headshots.local.donors import get_donor_plate
+                cfg: Dict[str, Any] = {}
+                try:
+                    plate = get_donor_plate(player["team"], int(float(player["weight"])))
+                    if plate:
+                        cfg["donor_plate"] = plate
+                        cfg["base_image_path"] = plate["base_path"]
+                        cfg["mask_image_path"] = plate["mask_path"]
+                except Exception as e:
+                    logger.debug("Could not resolve donor plate: %s", e)
+
                 # Route through local generator
                 png_bytes = generate_headshot(
                     prompt=prompt,
                     backend=backend or os.environ.get("LOCAL_HEADSHOT_BACKEND"),
+                    config=cfg if cfg else None,
                 )
 
                 # Process with rembg and save webp
@@ -215,6 +241,24 @@ def patch_headshot_generator(
                 os.makedirs(static_dir, exist_ok=True)
                 final_img = nobg.resize((700, 508), Image.Resampling.LANCZOS)
                 final_img.save(target_webp, format="WEBP", quality=90, method=4)
+
+                # Export 512x512 BC3 DDS portrait texture for Madden modding
+                dds_dir = os.environ.get("MADDEN_PORTRAITS_DIR") or os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    "data", "headshots", "dds", "rookies"
+                )
+                try:
+                    from headshots.portrait_converter.converter import to_portrait
+                    buf = io.BytesIO()
+                    nobg.save(buf, format="WEBP")
+                    dds_bytes = to_portrait(buf.getvalue(), width=512, height=512, fmt="DDS_BC3")
+                    os.makedirs(dds_dir, exist_ok=True)
+                    dds_path = os.path.join(dds_dir, f"{player['id']}.dds")
+                    with open(dds_path, "wb") as f:
+                        f.write(dds_bytes)
+                except Exception:
+                    pass
+
                 return target_webp
 
             r_make.generate_player_headshot = patched_generate_player_headshot

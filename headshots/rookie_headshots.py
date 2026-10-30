@@ -218,6 +218,21 @@ def generate_player_headshot(
     os.makedirs(static_dir, exist_ok=True)
     final_img = nobg.resize((700, 508), Image.Resampling.LANCZOS)
     final_img.save(out_path, format="WEBP", quality=90, method=4)
+
+    # Export 512x512 BC3 DDS portrait texture for Madden modding
+    dds_dir = os.environ.get("MADDEN_PORTRAITS_DIR") or os.path.join(ROOT, "data", "headshots", "dds", "rookies")
+    try:
+        from headshots.portrait_converter.converter import to_portrait
+        buf = io.BytesIO()
+        nobg.save(buf, format="WEBP")
+        dds_bytes = to_portrait(buf.getvalue(), width=512, height=512, fmt="DDS_BC3")
+        os.makedirs(dds_dir, exist_ok=True)
+        dds_path = os.path.join(dds_dir, f"{pid}.dds")
+        with open(dds_path, "wb") as f:
+            f.write(dds_bytes)
+    except Exception:
+        pass
+
     return out_path
 
 
