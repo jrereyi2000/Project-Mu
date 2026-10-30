@@ -200,6 +200,98 @@ def tiny_snapshot():
     }
 
 
+def v4_snapshot(sliders=None, dev_flag=None):
+    """tiny_snapshot() as reader_version 4: CHI's depth chart (QB: the passer then an empty slot, a prospect who isn't
+    loaded and a deleted player), an unknown position, and the league settings sliders."""
+    snap = tiny_snapshot()
+    snap["meta"]["reader_version"] = 4
+    snap["depth_charts"] = [
+        {"team_index": 0, "slots": {"QB": [900001, None, 900004, 123, None, None],
+                                    "WR": [900002, None, None, None, None, None],
+                                    "BOGUS": [900001, None, None, None, None, None]}},
+        {"team_index": 1, "slots": {"QB": [None] * 6}},
+    ]
+    zero_pos = {"QB": 0, "WR": 0, "LS": 0}
+    zero_age = {"int0": 0, "int1": 0}
+    default = {"progression_by_age": {"table_id": 5949, "row": 0, "field": "Field_165", "values": dict(zero_age)},
+               "progression_by_position": {"table_id": 4317, "row": 0, "field": "Field_167", "values": dict(zero_pos)},
+               "regression_by_age": {"table_id": 5949, "row": 1, "field": "Field_166", "values": dict(zero_age)},
+               "regression_by_position": {"table_id": 4317, "row": 1, "field": "Field_168", "values": dict(zero_pos)}}
+    snap["league_settings"] = {"sliders": sliders if sliders is not None else default,
+                               "league_setting": {"table_id": 4290, "row": 0},
+                               "dev_trait_regression_field": None, "dev_trait_regression_enabled": dev_flag}
+    return snap
+
+
+class FakeCursor:
+    """Records execute / executemany calls (depth_chart_engine.store's DELETE then INSERT rows)."""
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, sql, args=None):
+        self.calls.append(("execute", sql, args))
+
+    def executemany(self, sql, rows):
+        self.calls.append(("executemany", sql, list(rows)))
+
+    def inserted(self):
+        return [r for kind, _, rows in self.calls if kind == "executemany" for r in rows]
+
+
+class DepthChartsAndSettingsTest(unittest.TestCase):
+    # pgid -> (player id, team id, position, name), as load_players returns
+    PLAYERS = {900001: (11, 100, "QB", "T. Passer"), 900002: (12, 100, "WR", "T. Catcher"),
+               900003: (13, None, "WR", "F. Agent")}
+    TEAMS = {0: 100, 1: 101}
+
+    def test_depth_charts_load_as_madden(self):
+        cur, report = FakeCursor(), {}
+        ls.load_depth_charts(cur, v4_snapshot(), TEST_SEASON, 2, self.TEAMS, self.PLAYERS, report)
+        rows = cur.inserted()
+        self.assertEqual(sorted(rows), sorted([(100, TEST_SEASON, 2, "QB", 1, 11, "MADDEN"),
+                                               (100, TEST_SEASON, 2, "WR", 1, 12, "MADDEN")]))
+        deletes = [args for kind, sql, args in cur.calls if kind == "execute" and sql.startswith("DELETE")]
+        self.assertEqual(deletes, [(100, TEST_SEASON, 2, "MADDEN"), (101, TEST_SEASON, 2, "MADDEN")])
+        self.assertEqual((report["depth_charts"], report["depth_chart_rows"], report["depth_chart_unknown_players"]),
+                         (2, 2, 2))      # the prospect and the deleted player
+
+    def test_depth_charts_skipped_outside_a_week(self):
+        cur, report = FakeCursor(), {}
+        ls.load_depth_charts(cur, v4_snapshot(), TEST_SEASON, None, self.TEAMS, self.PLAYERS, report)
+        self.assertEqual(cur.calls, [])
+        self.assertTrue(report["depth_charts"].startswith("skipped"))
+
+    def test_settings_report_all_zero(self):
+        report = {}
+        ls.league_settings_report(v4_snapshot(), report)
+        self.assertEqual(report["settings_warnings"], [])
+        self.assertEqual(report["league_settings"]["sliders"]["progression_by_position"], {"QB": 0, "WR": 0, "LS": 0})
+        self.assertEqual(set(report["league_settings"]["sliders"]), set(ls.SLIDER_KEYS))
+        self.assertIsNone(report["league_settings"]["dev_trait_regression_enabled"])
+
+    def test_settings_warnings_for_nonzero_sliders(self):
+        snap = v4_snapshot(dev_flag=True)
+        snap["league_settings"]["sliders"]["progression_by_position"]["values"]["LS"] = 100
+        snap["league_settings"]["sliders"]["regression_by_age"]["values"]["int1"] = -20
+        snap["league_settings"]["sliders"]["progression_by_age"] = None
+        report = {}
+        ls.league_settings_report(snap, report)
+        self.assertEqual(report["settings_warnings"], [
+            "progression_by_age: slider record not found in the save",
+            "progression_by_position.LS = 100 (Project Mu expects 0)",
+            "regression_by_age.int1 = -20 (Project Mu expects 0)"])
+        self.assertIsNone(report["league_settings"]["sliders"]["progression_by_age"])
+        self.assertIs(report["league_settings"]["dev_trait_regression_enabled"], True)
+
+    def test_v3_snapshot_adds_nothing(self):
+        snap, cur, report = tiny_snapshot(), FakeCursor(), {}
+        ls.load_depth_charts(cur, snap, TEST_SEASON, 2, self.TEAMS, self.PLAYERS, report)
+        ls.league_settings_report(snap, report)
+        self.assertEqual((cur.calls, report), ([], {}))
+        self.assertIsNone(ls.slider_values(snap))
+        self.assertEqual(ls.nonzero_sliders(snap), [])
+
+
 @pytest.mark.integration
 class LoadTinySnapshotTest(unittest.TestCase):
     def setUp(self):
@@ -281,6 +373,20 @@ class LoadTinySnapshotTest(unittest.TestCase):
         self.assertEqual(sum(p["points"] for p in hl if p["team"] == "CHI"), 21)
         self.assertEqual(sum(p["points"] for p in hl if p["team"] == "AZ"), 10)
         self.assertTrue(r["league_state"].startswith("kept"))                   # 2099 isn't the league's season
+
+    def test_v4_load_stores_madden_depth_charts(self):
+        r = ls.load_snapshot(self.cur, v4_snapshot(), season=TEST_SEASON)
+        self.assertEqual((r["depth_charts"], r["depth_chart_rows"]), (2, 2))
+        self.assertEqual(r["settings_warnings"], [])
+        self.cur.execute("SELECT d.position_slot, d.depth, x.madden_pgid FROM depth_charts d JOIN players x "
+                         "ON x.id = d.player_id JOIN teams t ON t.id = d.team_id WHERE d.season = %s AND d.week = 2 "
+                         "AND d.source = 'MADDEN' AND t.abbreviation = 'CHI' ORDER BY 1", (TEST_SEASON,))
+        self.assertEqual(self.cur.fetchall(), [("QB", 1, 900001), ("WR", 1, 900002)])
+
+    def test_v3_load_has_no_v4_keys(self):
+        r = ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
+        self.assertNotIn("depth_charts", r)
+        self.assertNotIn("league_settings", r)
 
     def test_league_state_moves_forward_only(self):
         self.cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
