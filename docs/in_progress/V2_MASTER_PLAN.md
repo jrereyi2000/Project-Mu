@@ -217,6 +217,8 @@ flowchart TD
    - [`pipeline/watch_save.py`](../../pipeline/watch_save.py) ingests the save, executes deterministic engines, queues nightly batch jobs, and triggers the newsroom journalists.
    - `Mu_Network` refreshes with completed box scores, postgame quotes, articles, and updated standings.
 
+**Not yet true: player lines can't be read straight after the game (§7.0, B1).** In `CAREER-WEEK1/2/3` ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §5.4, check 3), each save was made after the week's 15 CPU games were simmed and before CAR's game. The final score, quarter scores and team box score (`SeasonGame` and its `TeamStatCache`) were readable for every game already played, this week's included. The player lines (`Game*Stats`) for this week's games were in their tables too, but had a null `SeasonGame` and no `Player.GameStats` link. The reader reaches player lines only through that link, so it can't credit them. The next week's save had them linked. So `CAREER-WEEK3` holds week 1 and week 2 player lines but not week 3's. The saves can't show *what* links them: Advance Week, or the week's last game finishing. Until a PC test answers that, the ingest just after "Save & Quit" can load the score and team stats but not the player lines, and the newsroom would write recaps without player stats. Possible fixes, depending on the test: ingest after the week advances (Project Mu triggers the advance, or the user does), or attribute the unlinked rows directly if they carry enough to find their player and game.
+
 ---
 
 ## 6. The V2 Feature Suite (Detailed Catalog)
@@ -276,6 +278,30 @@ Full front-office automation for all 32 teams across trades, signings, cuts, dra
 ---
 
 ## 7. Implementation & Testing Roadmap
+
+### 7.0 Dependencies on Other In-Progress Work (checked 2026-10-30)
+
+Phases 1–3 below can start now. These items depend on unfinished work elsewhere:
+
+**Blockers**
+
+| # | What it blocks | Waiting on |
+| :--- | :--- | :--- |
+| B1 | §5 post-game ingest (step K) and Phase 4 | (a) What links a week's player lines (§5 note above): sim or play one game, save, read; then finish the week and advance, and read again. (b) Whether Madden writes the save during a game or only on Save & Quit: run [`tools/save_write_logger.py`](../../tools/save_write_logger.py) on the PC through one played game. |
+| B2 | V2.14 (Project Mu owns progression) | [`PROGRESSION_PLAN.md`](./PROGRESSION_PLAN.md): phase A (PC checks: XP sliders at 0 stop all changes, Madden keeps written ratings), the rest of phase C2, phase D (engine writes the save), decision D13 (how form reaches the game). Plus the OVR-recompute-on-load check ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §5.4, check 7), and moving the helpers `engines/progression.py` imports out of the obsolete `pipeline/teleport.py` ([`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b; PC plan §10, item 1). |
+
+**Partial blockers** (can ship first with the dependent term at 0, or later)
+
+| # | What it affects | Waiting on |
+| :--- | :--- | :--- |
+| P1 | §2.2 "Let Staff Set" (coach philosophy) and §4.1 persona weights | [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phases 4–6 and progression plan phases F–G (player and coach traits). |
+| P2 | V2.15 (headless league office) | [`LEAGUE_OFFICE_PLAN.md`](../not_started/LEAGUE_OFFICE_PLAN.md): not started. |
+| P3 | §2.1 / §5 "Play Game" pre-flight mod pack | Wiring `pipeline.mod_packs.write` into `watch_save.py` (PC plan §10, item 3). |
+| P4 | V2.4 portraits in-game | The one-portrait spike (PC plan §9.4, §10 item 2). |
+| P5 | Trust in all scratch-save results | Every §5.4 check was on unmodded `CAREER-WEEK1/2/3`; sim-stat and roster mods change the numbers, so the checks are re-run on a modded save before the 2034 start. |
+| P6 | Phase 1 `depth_chart.mjs` | The "35 positions × 6 slots" `Team.DepthChart` layout is from this plan, not yet read from a save; check it on `CAREER-WEEK3` first. |
+
+### 7.1 Phases
 
 All development and testing will occur on the PC using existing scratch saves (`CAREER-WEEK3` on `pc-wsl`):
 
