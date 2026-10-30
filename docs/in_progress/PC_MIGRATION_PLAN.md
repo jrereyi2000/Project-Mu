@@ -1,6 +1,6 @@
 # Project Mu: PC Migration & Universe Teleportation Master Plan
 
-**Status (2026-10-29):** The PC is set up (§3). **Plan changed 2026-10-29: fresh 2034 franchise, no teleport** (see the decision below). §2 (Mac/PS5 prep) and §4 (teleporter) are obsolete and kept only until the code they describe is pruned ([AUDIT_LEDGER.md](../../AUDIT_LEDGER.md) §3b). Next: §5.4 save checks, the watcher's auto-init and multi-franchise support (§5.2), mods, then the real franchise. Part 2 (V2) status is at its end.
+**Status (2026-10-29):** The PC is set up (§3). **Plan changed 2026-10-29: fresh 2034 franchise, no teleport** (see the decision below). §2 (Mac/PS5 prep) and §4 (teleporter) are obsolete and kept only until the code they describe is pruned ([AUDIT_LEDGER.md](../../AUDIT_LEDGER.md) §3b). Done since: the §5.4 save checks on an unmodded test franchise (JR confirmed the in-game box score, team stats, OLB slots and cap hits), one database per franchise with a fixed `--auto-init` (§5.2), a clean seed with all newsroom accounts and real NFL records only, the §7.4 quality-test harness, and the mods staged and launched once ([MOD_INSTALL.md](../MOD_INSTALL.md)). Next: turn on the roster-size and sim mods in the pack, create the 2034 franchise (year set with `seasonYearSetup.exe`), register it with the watcher, then repeat §5.4 on it. Part 2 (V2) status is at its end.
 
 **Decision 2026-10-29: fresh 2034 save, Mu history discarded (JR).** The universe does not move to PC. A new Madden 27 PC franchise starts in **2034** (start year set with `seasonYearSetup.exe`, roster-size mod installed first), with modded gameplay and sim stats. All of Project Mu's 2026–2036 history is dropped because its stats are inflated; the new league starts from real NFL history through 2025 (`db/seed_clean_db.py`), so the record book jumps from 2025 to 2034. The 2036 database is kept read-only as `madden_2036` (archive, and the inputs for the §7.4 quality tests). Reasons and the PC setup plan: [Fresh Save Strategy PDF](./Project%20Mu_%20Fresh%20Save%20Strategy%20%26%20Remote%20PC-WSL%20Migration%20Plan.pdf), with its outdated parts listed in [FRESH_SAVE_STRATEGY_NOTES.md](./FRESH_SAVE_STRATEGY_NOTES.md). What this makes obsolete:
 * §2 (finish 2036 on the PS5, final backup, PS5 attribute scan) and [PRE_PC_WORK_2.md](../not_started/PRE_PC_WORK_2.md) §D.
@@ -360,7 +360,7 @@ Once the league runs on PC, screen capture (`madden_capture.py`, `extract.py`, t
 * Playoff games: verify on the first PC postseason that they get game rows and their own stat rows.
 
 ### 5.4 First Checks on the PC
-Before building §4–§5, read a fresh Madden 27 save and confirm:
+Read a fresh Madden 27 save and confirm (done 2026-10-29 on an unmodded test franchise; repeat on the real modded 2034 one):
 1. `madden-franchise` opens it and lists the tables above.
 2. PGIDs are stable across saves and across Advance Week.
 3. That CPU-simmed games actually fill the `Game*Stats` tables, `ScoringSummaries` and the quarter-score fields, and that a sample game's rows match the in-game box score.
