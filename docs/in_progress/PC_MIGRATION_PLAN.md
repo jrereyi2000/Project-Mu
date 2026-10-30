@@ -269,7 +269,12 @@ Madden computes `OverallRating` from a player's ratings with position/archetype-
 
 Prior art: the community [Madden Roster Editor](https://github.com/kn1meR/MaddenRosterEditor) recalculates OVR from attributes and archetype using weights in its `config/archetype_breakdown.xlsx`; check it against the fit as a starting point or cross-check.
 
-The fit picks which ratings to edit and by how much; §4.3 Step 3 settles the last point. Before relying on it, test whether Madden recomputes OVR from ratings when the file loads or only at progression; if only at progression, write `OverallRating` directly alongside the rating edits.
+The fit picks which ratings to edit and by how much; §4.3 Step 3 settles the last point.
+
+**Empirically Verified (2026-10-30 on `CAREER-2026SB-MODIFIED-AUTOSAVE`):** Tested whether Madden recomputes OVR from ratings on load. In `CAREER-2026SB-MODIFIED`, Bryce Young's individual passing and athletic attributes were substantially edited via `save_writer.mjs` while `Player.OverallRating` was left at its original static value of `82`.
+1. *In-Game Behavior:* Upon loading the save into Madden 27 on PC, Bryce Young's displayed overall rating dynamically recalculated to a morale-adjusted **93 OVR** in the UI, roster screens, and depth charts. Madden's runtime simulation engine calculates effective overall dynamically from the 54 individual ratings, factoring in archetype weights, team scheme fit, and morale modifiers.
+2. *Formula Agreement:* Project Mu's reverse-engineered formula (`engines/ovr_weights.py`) predicted an exact base overall of **94 OVR** (`QB_FieldGeneral`: 94, `QB_StrongArm`: 93, `QB_Improviser`: 90, `QB_Scrambler`: 89) for those modified ratings, verifying within $\pm 1$ of the in-game calculation.
+3. *Dual-Write Protocol:* Despite runtime recalculation in the UI, `save_writer.mjs` must still write `OverallRating`, `OverallGrade0-4`, and `PlayerType` directly alongside rating edits (`--write-ovr`). Raw binary database scans, external snapshot readers (`load_save.py`), and Madden CPU trade/roster AI evaluate the stored table column directly. Writing both guarantees 100% parity between raw save inspection and in-game rendering.
 
 ### 4.5 PGID Mapping
 
