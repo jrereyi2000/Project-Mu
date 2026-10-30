@@ -22,6 +22,7 @@ Project Mu/
 ├── PROJECT_SPEC.md            # This document (system-level spec)
 ├── AUDIT_LEDGER.md            # 4-Phase Deprecation & Lineage Audit Ledger (v0/v1/v2 reachability; V3 studio planning boundary and supersession matrix; §3b: what the fresh 2034 save makes obsolete; Tiers 1–5 of what to prune)
 ├── CLAUDE.md                  # Claude Code session rules (read this spec first; keep it updated)
+├── AGENTS.md                  # Codex session rules; relative symlink to CLAUDE.md, tracked by Git
 ├── GEMINI.md                  # Same session rules for Gemini agents
 ├── NOTES.md                   # Feature documentation & engineering notes (draft prospects & OCR pipeline)
 ├── requirements.txt           # Python dependencies for API, database, engines, pipeline, and newsroom
