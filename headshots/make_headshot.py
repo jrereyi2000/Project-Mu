@@ -120,6 +120,18 @@ def make_headshot(name, team, pos, height, weight, age, ref_image_bytes=None, ou
     for k, val in v.items():
         prompt = prompt.replace("{" + k + "}", val)
 
+    try:
+        from headshots.local.adapter import get_local_generator_if_enabled
+        local_gen = get_local_generator_if_enabled()
+    except ImportError:
+        local_gen = None
+
+    if local_gen:
+        png_bytes = local_gen(prompt=prompt, ref_image=ref_image_bytes)
+        path = out or f"{name.replace(' ', '_')}.png"
+        open(path, "wb").write(png_bytes)
+        return path
+
     contents = [prompt]
     if ref_image_bytes:
         contents = [prompt + "\n\n" + STYLE_REF,
@@ -205,8 +217,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Ensure the GEMINI_API_KEY environment variable is set
-    if not os.environ.get("GEMINI_API_KEY"):
+    try:
+        from headshots.local.adapter import is_local_headshots_enabled
+        local_enabled = is_local_headshots_enabled()
+    except ImportError:
+        local_enabled = False
+
+    # Ensure the GEMINI_API_KEY environment variable is set if not using local generator
+    if not local_enabled and not os.environ.get("GEMINI_API_KEY"):
         print("Error: GEMINI_API_KEY environment variable not set.")
         sys.exit(1)
 
