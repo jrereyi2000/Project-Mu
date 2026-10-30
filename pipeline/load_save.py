@@ -25,8 +25,15 @@ Writes, for that season:
   injuries                   the save's injured players for the league's current week (that week's rows replaced)
   game_highlights            scoring plays from SeasonGame.ScoringSummaries (Madden keeps only recent weeks);
                              a game whose highlights came from a capture keeps them
+  depth_charts               reader_version >= 4: every real team's Madden depth chart (35 positions x 6, best
+                             first) as source MADDEN for the save's current week (pgid -> player id through the
+                             players loaded; empty slots and players not loaded are skipped)
   league_state               current week from the save (never moves back; only for the league's season or the
                              next one) and, with --commit, a `captures` row (mode `save`) for the run
+
+The report also carries, for reader_version >= 4, `league_settings` (the four progression / regression slider records'
+values and the dev-trait regression flag, null while unknown) and `settings_warnings` (every slider value that isn't 0:
+Project Mu runs progression itself and expects all four sliders at 0 for every position and age, LS included).
 Not yet: team_cap_seasons (the save's team cap fields aren't in a confirmed unit).
 
 Save lines are stored as line_source CAPTURED, season rows as source CAPTURE and contracts as source SCAN: all are
@@ -42,6 +49,7 @@ import psycopg
 from pipeline.capture_matching import db_player_name
 from pipeline.contracts import insert_contract, supersede_active
 from pipeline.load_capture import team_line_totals
+from engines import depth_chart_engine
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
 
@@ -720,6 +728,82 @@ def load_highlights(cur, games, season, report):
     report["games_with_scoring_plays"] = n
 
 
+def load_depth_charts(cur, snapshot, season, week, teams, players, report):
+    """The save's depth charts (reader_version >= 4) as depth_charts rows, source MADDEN, for (season, week). A team's
+    MADDEN rows for that week are replaced (depth_chart_engine.store). A slot holding a pgid that wasn't loaded (a
+    draft prospect, a deleted player) is skipped like an empty slot; positions outside POSITION_SLOTS are ignored."""
+    charts = snapshot.get("depth_charts")
+    if charts is None:
+        return
+    if week is None:
+        report["depth_charts"] = "skipped: the save isn't in a regular-season or playoff week"
+        return
+    n_teams = n_rows = unknown = 0
+    for entry in charts:
+        team = teams.get(entry.get("team_index"))
+        if team is None:
+            continue
+        chart = {}
+        for slot, pgids in (entry.get("slots") or {}).items():
+            if slot not in depth_chart_engine.POSITION_SLOTS:
+                continue
+            ids = []
+            for pgid in list(pgids or [])[:depth_chart_engine.DEPTH]:
+                who = players.get(pgid) if pgid is not None else None
+                if pgid is not None and who is None:
+                    unknown += 1
+                ids.append(who[0] if who else None)
+            chart[slot] = ids
+            n_rows += sum(1 for i in ids if i is not None)
+        depth_chart_engine.store(cur, team, season, week, chart, "MADDEN")
+        n_teams += 1
+    report["depth_charts"] = n_teams
+    report["depth_chart_rows"] = n_rows
+    report["depth_chart_unknown_players"] = unknown
+
+
+SLIDER_KEYS = ("progression_by_age", "progression_by_position", "regression_by_age", "regression_by_position")
+
+
+def slider_values(snapshot):
+    """{slider key: {field: value} or None when the record wasn't found}, or None for a snapshot without
+    league_settings (reader_version < 4)."""
+    settings = snapshot.get("league_settings")
+    if settings is None:
+        return None
+    sliders = settings.get("sliders") or {}
+    return {k: (dict(sliders[k].get("values") or {}) if sliders.get(k) else None) for k in SLIDER_KEYS}
+
+
+def nonzero_sliders(snapshot):
+    """[(slider key, field, value)] for every slider value that isn't 0, and (key, None, None) for a slider record
+    the reader didn't find. Empty for a snapshot without league_settings."""
+    values = slider_values(snapshot)
+    out = []
+    for key in SLIDER_KEYS if values is not None else ():
+        vals = values[key]
+        if vals is None:
+            out.append((key, None, None))
+            continue
+        out.extend((key, f, v) for f, v in vals.items() if isinstance(v, (int, float)) and not isinstance(v, bool) and v != 0)
+    return out
+
+
+def league_settings_report(snapshot, report):
+    """Adds `league_settings` (slider values, dev-trait regression flag) and `settings_warnings` to the report for a
+    reader_version >= 4 snapshot; older snapshots add nothing."""
+    values = slider_values(snapshot)
+    if values is None:
+        return
+    settings = snapshot["league_settings"]
+    report["league_settings"] = {"sliders": values,
+                                 "dev_trait_regression_field": settings.get("dev_trait_regression_field"),
+                                 "dev_trait_regression_enabled": settings.get("dev_trait_regression_enabled")}
+    report["settings_warnings"] = [
+        f"{key}: slider record not found in the save" if field is None else
+        f"{key}.{field} = {value} (Project Mu expects 0)" for key, field, value in nonzero_sliders(snapshot)]
+
+
 def current_week(snapshot):
     """The save's current week in games.week numbering, or None outside the regular season and playoffs."""
     wk = game_week(snapshot["season"]["week_type"], snapshot["season"]["week_index"])
@@ -759,13 +843,16 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     report["current_week"] = week
     load_injuries(cur, snapshot, season, week, players, report)
     load_highlights(cur, games, season, report)
+    load_depth_charts(cur, snapshot, season, week, teams, players, report)
+    league_settings_report(snapshot, report)
     update_league_state(cur, season, week, report)
     return report
 
 
 REPORT_COUNTS = ("players", "players_created", "player_attributes", "player_attributes_unchanged",
                  "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
-                 "season_line_rows", "contracts", "injuries", "games_with_scoring_plays")
+                 "season_line_rows", "contracts", "injuries", "games_with_scoring_plays", "depth_charts",
+                 "depth_chart_rows")
 
 
 def capture_row(cur, path, season, week):
