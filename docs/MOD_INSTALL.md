@@ -1,6 +1,6 @@
 # Madden 27 Mod Install (PC)
 
-Set up 2026-10-29 from `PC_MODS/` (untracked downloads; see [`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) for what each mod is and where it came from). Install steps follow the MMC Modding Tools v1.1.0.7 ReadMe. The MMC Discord thread JR linked (`1221157058447933530`, *TBRs MyFranchise Tool*) could not be re-read during setup because Discord was logged out; the survey's notes on it still apply. Conflicts were checked by reading every mod's asset list with `python3 -m tools.fbmod_conflicts <folder>`.
+Set up 2026-10-29 from `PC_MODS/` (untracked downloads; see [`MMC_MOD_SURVEY.md`](MMC_MOD_SURVEY.md) for what each mod is and where it came from). Install steps follow the MMC Modding Tools v1.1.0.7 ReadMe. The MMC Discord thread JR linked (`1221157058447933530`, *TBRs MyFranchise Tool*) could not be re-read during setup because Discord was logged out; the survey's notes on it still apply. Conflicts were checked by reading every mod's asset list with `python3 -m tools.fbmod_conflicts <folder>` (counts re-run 2026-10-30 after the reader moved to the full parser in `tools/fbmod_inspect.py`, which also sees resources that reuse another resource's payload; the groups below didn't change). What each mod's assets are is in [`reference/MOD_REVERSE_ENGINEERING.md`](reference/MOD_REVERSE_ENGINEERING.md).
 
 ## 1. Where things are
 
@@ -33,10 +33,10 @@ In the Mod Manager's applied list, a mod with higher priority wins any asset it 
 | 2 | Stadium | Madden 27 Stadium Experience Mod 2.3, Madden 27 Jumbotron Mod 2.7 | Share one Cardinals ribbon board; same author |
 | 3 | Crowd | Dynamic Crowd Density Tier 1–4 | **One at a time** (README: overlapping crowd assets) |
 | 4 | Kick meter | Shifted Kick Meter 1.0 | Must sit above the scorebug: both scorebug packs also edit the kick meter widgets |
-| 5 | Scorebug | M27_NFLScorebugs_CBS_v3 / _FOX_v3 | **One at a time** (319 shared assets) |
-| 6 | Broadcast music | Real Broadcast Music CBS / FOX Primetime 1.4 | **One at a time** (153 shared). Sits above the presentation mods so its primetime cues win (60+ shared music assets) |
-| 7 | Presentation | m27 MNF, SNF, TNF 2.3; m27 CBS 2.3.1 / FOX 2.3 | CBS and FOX are **one at a time** (34 shared intro/replay videos). MNF/SNF/TNF can stay on with either; they only share end-of-game and Super Bowl music |
-| 8 | Logos | CBS / FOX NFL Team Logos 1.4 | **One at a time** (361 shared) |
+| 5 | Scorebug | M27_NFLScorebugs_CBS_v3 / _FOX_v3 | **One at a time** (325 shared assets) |
+| 6 | Broadcast music | Real Broadcast Music CBS / FOX Primetime 1.4 | **One at a time** (161 shared). Sits above the presentation mods so its primetime cues win (60+ shared music assets) |
+| 7 | Presentation | m27 MNF, SNF, TNF 2.3; m27 CBS 2.3.1 / FOX 2.3 | CBS and FOX are **one at a time** (78 shared assets, intro/replay videos among them). MNF/SNF/TNF can stay on with either; they only share end-of-game and Super Bowl music |
+| 8 | Logos | CBS / FOX NFL Team Logos 1.4 | **One at a time** (446 shared) |
 | 9 | Cutscenes / camera | DOF Enabler, More Gameday Cutscenes | Share 10 camera presets; DOF Enabler above keeps its depth-of-field settings. Same author; check in game |
 | 10 | Visuals | BetterGrass Medium, No Film Grain+, lighting overhual, Noblurry, M27 yellow first down marker | Noblurry shares the field grass/turf settings with BetterGrass and the global visual environment with No Film Grain+; keep it at the bottom of this group so the others win |
 | 11 | Ball | Mudded Wilson NFL Ball / BCA Pink Oct | **One at a time** (football texture). BCA Pink is October only |
