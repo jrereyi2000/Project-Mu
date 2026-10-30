@@ -654,6 +654,16 @@ class TestDonorSystem(unittest.TestCase):
         self.assertEqual(plate_info["team"], "NO")
         self.assertEqual(plate_info["tier"], "tier2_skill")
         self.assertTrue(plate_info["base_path"].endswith("NO/tier2_skill_base.png"))
+        self.assertIsNotNone(plate_info["mask_path"])
+        self.assertTrue(plate_info["mask_path"].endswith("NO/tier2_skill_mask.png"))
+
+    def test_generate_tier_mask(self):
+        from headshots.local.donors import generate_tier_mask, TIERS
+
+        for tier in TIERS:
+            mask = generate_tier_mask(tier)
+            self.assertEqual(mask.size, (1024, 1024))
+            self.assertEqual(mask.mode, "L")
 
 
 if __name__ == "__main__":

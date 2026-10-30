@@ -16,6 +16,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from PIL import Image, ImageDraw, ImageFilter
+
 logger = logging.getLogger("headshots.local.donors")
 
 TIER_SPEED = "tier1_speed"
@@ -78,6 +80,92 @@ TIER_METADATA: Dict[str, Dict[str, Any]] = {
 # Default directory for donor templates
 DEFAULT_DONOR_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "headshots" / "donors"
 REGISTRY_PATH = DEFAULT_DONOR_DIR / "registry.json"
+
+# Calibrated 5-tier polygon aperture definitions (1024x1024 coordinate space)
+# Traces collar opening inside jersey ribbing, completely preserving metallic NFL shield
+POLYS_5TIER: Dict[str, List[Tuple[int, int]]] = {
+    TIER_SPEED: [
+        (0, 0), (1024, 0), (1024, 650),
+        (660, 730), (630, 850), (595, 900), (555, 940),
+        (512, 985),
+        (470, 940), (435, 900), (400, 850), (370, 730),
+        (0, 650),
+    ],
+    TIER_SKILL: [
+        (0, 0), (1024, 0), (1024, 650),
+        (665, 730), (635, 840), (595, 890), (555, 930),
+        (512, 955),
+        (465, 930), (430, 890), (390, 840), (360, 730),
+        (0, 650),
+    ],
+    TIER_POWER: [
+        (0, 0), (1024, 0), (1024, 650),
+        (665, 720), (635, 820), (595, 880), (555, 920),
+        (512, 955),
+        (465, 920), (425, 880), (380, 820), (350, 720),
+        (0, 650),
+    ],
+    TIER_EDGE: [
+        (0, 0), (1024, 0), (1024, 650),
+        (670, 715), (640, 810), (600, 875), (560, 915),
+        (512, 935),
+        (465, 915), (420, 875), (375, 810), (345, 715),
+        (0, 650),
+    ],
+    TIER_LINEMAN: [
+        (0, 0), (1024, 0), (1024, 650),
+        (680, 710), (645, 800), (605, 870), (565, 915),
+        (512, 940),
+        (460, 915), (415, 870), (370, 800), (335, 710),
+        (0, 650),
+    ],
+}
+
+
+def generate_tier_mask(tier: str, feather_radius: float = 2.0) -> Image.Image:
+    """Generate calibrated 1024x1024 aperture mask for a physical weight tier.
+
+    Mask has white (255) for the inpaint zone (head, face, neck, collar opening)
+    and black (0) for preserved authentic jersey fabric, shoulder pads, and NFL shield.
+
+    Args:
+        tier: Canonical weight tier (e.g. 'tier1_speed').
+        feather_radius: Gaussian blur radius in pixels for natural contact blending.
+
+    Returns:
+        PIL Image in 'L' mode (grayscale 1024x1024).
+    """
+    poly = POLYS_5TIER.get(tier, POLYS_5TIER[TIER_SKILL])
+    mask = Image.new("L", (1024, 1024), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.polygon(poly, fill=255)
+    if feather_radius > 0:
+        mask = mask.filter(ImageFilter.GaussianBlur(radius=feather_radius))
+    return mask
+
+
+def build_all_donor_masks(donor_dir: Optional[Path] = None) -> int:
+    """Pre-render and save aperture masks for all 32 teams and 5 tiers in donor directory.
+
+    Returns:
+        int: Number of masks saved.
+    """
+    base_dir = donor_dir or DEFAULT_DONOR_DIR
+    created = 0
+    if not base_dir.exists():
+        return 0
+
+    for team_dir in base_dir.iterdir():
+        if not team_dir.is_dir() or len(team_dir.name) > 4:
+            continue
+        for tier in TIERS:
+            base_file = team_dir / f"{tier}_base.png"
+            if base_file.exists():
+                mask_file = team_dir / f"{tier}_mask.png"
+                mask = generate_tier_mask(tier)
+                mask.save(mask_file, format="PNG")
+                created += 1
+    return created
 
 
 def get_weight_tier(weight_lbs: int) -> str:
@@ -205,6 +293,10 @@ def get_donor_plate(
     if not base_path.exists():
         return None
 
+    if not mask_path.exists():
+        mask = generate_tier_mask(tier)
+        mask.save(mask_path, format="PNG")
+
     return {
         "team": norm_team,
         "tier": tier,
@@ -212,7 +304,7 @@ def get_donor_plate(
         "espn_id": team_reg.get("espn_id"),
         "weight": team_reg.get("weight"),
         "base_path": str(base_path),
-        "mask_path": str(mask_path) if mask_path.exists() else None,
+        "mask_path": str(mask_path),
     }
 
 

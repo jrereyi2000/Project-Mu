@@ -141,11 +141,24 @@ def patch_headshot_generator(
             for k, val in v.items():
                 prompt = prompt.replace("{" + k + "}", val)
 
+            # Check for authentic donor plate for physical weight tier
+            from headshots.local.donors import get_donor_plate
+            cfg: Dict[str, Any] = {}
+            try:
+                plate = get_donor_plate(team, int(float(weight)))
+                if plate:
+                    cfg["donor_plate"] = plate
+                    cfg["base_image_path"] = plate["base_path"]
+                    cfg["mask_image_path"] = plate["mask_path"]
+            except Exception as e:
+                logger.debug("Could not resolve donor plate for %s (%s lbs): %s", team, weight, e)
+
             # Generate PNG bytes via local engine
             png_bytes = generate_headshot(
                 prompt=prompt,
                 ref_image=ref_image_bytes,
                 backend=backend or os.environ.get("LOCAL_HEADSHOT_BACKEND"),
+                config=cfg if cfg else None,
             )
 
             out_path = out or f"{name.replace(' ', '_')}.png"
@@ -193,10 +206,23 @@ def patch_headshot_generator(
                 for k, val in v.items():
                     prompt = prompt.replace("{" + k + "}", val)
 
+                # Check for authentic donor plate for physical weight tier
+                from headshots.local.donors import get_donor_plate
+                cfg: Dict[str, Any] = {}
+                try:
+                    plate = get_donor_plate(player["team"], int(float(player["weight"])))
+                    if plate:
+                        cfg["donor_plate"] = plate
+                        cfg["base_image_path"] = plate["base_path"]
+                        cfg["mask_image_path"] = plate["mask_path"]
+                except Exception as e:
+                    logger.debug("Could not resolve donor plate: %s", e)
+
                 # Route through local generator
                 png_bytes = generate_headshot(
                     prompt=prompt,
                     backend=backend or os.environ.get("LOCAL_HEADSHOT_BACKEND"),
+                    config=cfg if cfg else None,
                 )
 
                 # Process with rembg and save webp
