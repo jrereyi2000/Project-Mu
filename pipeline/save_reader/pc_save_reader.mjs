@@ -9,16 +9,25 @@
 // Per-game stat rows are reached through Player.GameStats (an array of references to the Game*Stats tables, each
 // row pointing at its SeasonGame), season rows through Player.SeasonStats. Older weeks are purged by Madden, so
 // the loader must read every week (§5.3).
+//
+// reader_version 4 (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.2) adds `depth_charts` (per real team, 35 positions × 6
+// pgid slots, best first), `league_settings` (the four progression / regression slider records behind LeagueSetting
+// row 0) and, per player, `confidence` (ConfidenceRating) and `traits` (every PT_* flag).
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
 import {
-  arrayRefs, calendarYear, decodeRef, isExportableGame, numberedFields, pickRatings, plainFields, STAT_KINDS, weightLbs,
+  arrayRefs, arraySlots, calendarYear, decodeRef, depthSlotPgids, isExportableGame, numberedFields, orderSliderRefs, pickRatings,
+  plainFields, playerTraits, refFromValue, STAT_KINDS, weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 3;
+export const READER_VERSION = 4;
+
+// Real teams are TeamIndex 0..31 (32 = free agents; the Team table has a few more rows).
+const REAL_TEAMS = 32;
+const DEPTH_SLOTS = 6;
 
 const STAT_REF_FIELDS = ['SeasonGame', 'OpposingTeam'];
 
@@ -219,6 +228,9 @@ async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIn
       jersey: p.JerseyNum,
       height_in: p.Height,
       weight_lbs: weightLbs(p.Weight),
+      // Madden's morale (26-99, 50 the default; PROGRESSION_PLAN.md §2) and every PT_* behaviour flag (reader_version 4).
+      confidence: p.ConfidenceRating,
+      traits: playerTraits(p, names),
       dev_trait: p.TraitDevelopment,
       overall: p.OverallRating,
       // OverallGrade0-4: the player's OVR under each archetype of their position, in Madden's slot order (engines/
@@ -242,6 +254,69 @@ async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIn
   return players;
 }
 
+// Team.DepthChart → one DepthChart row per team whose position fields (QB, HB, ..., 3DRB, SLWR: 35 of them, plus
+// LockedEntries) each point at a Player[] row of 6 slots, best first (release.mjs). One entry per real team:
+// { team_index, slots: { <position>: [pgid | null × 6] } }. A slot pointing at a player the snapshot doesn't export
+// (deleted) is null.
+async function readDepthCharts(tables, teamTable, playerTableId, pgidByRow) {
+  const charts = [];
+  for (const team of teamTable.records) {
+    if (team.isEmpty || !(team.TeamIndex >= 0 && team.TeamIndex < REAL_TEAMS)) continue;
+    const dcRef = decodeRef(team.DepthChart);
+    const dc = dcRef && (await tables.byId(dcRef.table))?.records[dcRef.row];
+    if (!dc) continue;
+    const slots = {};
+    for (const pos of fieldNames(dc)) {
+      if (pos === 'LockedEntries') continue;
+      const ref = decodeRef(dc[pos]);
+      const arr = ref && await tables.byId(ref.table);
+      if (ref && arr?.name !== 'Player[]') continue;
+      const holder = arr?.records[ref.row];
+      const values = holder ? arraySlots(fieldNames(holder)).map(k => holder[k]) : [];
+      slots[pos] = depthSlotPgids(values, playerTableId, row => pgidByRow.get(row), DEPTH_SLOTS);
+    }
+    charts.push({ team_index: team.TeamIndex, slots });
+  }
+  return charts.sort((a, b) => a.team_index - b.team_index);
+}
+
+// LeagueSetting row 0 → the four progression / regression slider records (PROGRESSION_PLAN.md §2). Schema 620 doesn't
+// describe LeagueSetting, so its fields decode as generic Field_N ints and the references are found by value: every
+// 32-bit field whose bits name a table and an existing row; the two int[] targets are by age, the two
+// ProgressionXPSlider targets by position, the lower field number of each pair is progression (lib.orderSliderRefs).
+// IsDevTraitRegressionEnabled's Field_N isn't identified yet (V2_CORE_BUILD_PLAN.md R3), so both keys stay null.
+async function readLeagueSettings(franchise, tables) {
+  const settingTable = await tables.byName('LeagueSetting');
+  const setting = settingTable?.records[0];
+  const empty = {
+    progression_by_age: null, progression_by_position: null, regression_by_age: null, regression_by_position: null,
+  };
+  const out = {
+    sliders: empty,
+    league_setting: settingTable ? { table_id: settingTable.header.tableId, row: 0 } : null,
+    dev_trait_regression_field: null,
+    dev_trait_regression_enabled: null,
+  };
+  if (!setting || setting.isEmpty) return out;
+  const candidates = [];
+  for (const field of fieldNames(setting)) {
+    const offset = setting.getFieldByKey(field)?.offset;
+    if (!offset || (offset.length !== 32 && !offset.isReference)) continue;
+    const ref = refFromValue(setting[field]);
+    if (!ref || !franchise.getTableById(ref.table)) continue;
+    const target = await tables.byId(ref.table);
+    if (!target || ref.row >= target.records.length) continue;
+    candidates.push({ field, offset: offset.offset, table: ref.table, row: ref.row, tableName: target.name });
+  }
+  const sliders = {};
+  for (const [key, c] of Object.entries(orderSliderRefs(candidates))) {
+    const rec = c && (await tables.byId(c.table)).records[c.row];
+    sliders[key] = rec ? { table_id: c.table, row: c.row, field: c.field, values: plainFields(rec, fieldNames(rec)) } : null;
+  }
+  out.sliders = sliders;
+  return out;
+}
+
 export async function readSave(savePath) {
   const { franchise, cleanup } = await openCopy(savePath);
   try {
@@ -256,6 +331,9 @@ export async function readSave(savePath) {
     const season = readSeason(info);
     const games = await readGames(tables, gameTable, teamTable.header.tableId, teamIndexByRow, season.base_calendar_year);
     const players = await readPlayers(tables, playerTable, gameTable.header.tableId, teamTable.header.tableId, teamIndexByRow);
+    const pgidByRow = new Map(players.map(p => [p.row, p.pgid]));
+    const depthCharts = await readDepthCharts(tables, teamTable, playerTable.header.tableId, pgidByRow);
+    const leagueSettings = await readLeagueSettings(franchise, tables);
     const stat = statSync(savePath);
     return {
       meta: {
@@ -272,6 +350,8 @@ export async function readSave(savePath) {
       teams,
       games,
       players,
+      depth_charts: depthCharts,
+      league_settings: leagueSettings,
     };
   } finally {
     cleanup();
@@ -299,7 +379,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     writeFileSync(out, json);
     const s = snapshot;
     console.error(`${s.players.length} players, ${s.games.length} games, ${s.teams.length} teams, `
-      + `${s.season.calendar_year} ${s.season.week_type} week index ${s.season.week_index} → ${out}`);
+      + `${s.depth_charts.length} depth charts, ${s.season.calendar_year} ${s.season.week_type} week index `
+      + `${s.season.week_index} → ${out}`);
   } else {
     process.stdout.write(json);
   }

@@ -153,3 +153,52 @@ export function fieldValueError(meta, value) {
 
 // Game rows worth exporting: a real matchup (both teams set) that has been scheduled.
 export const isExportableGame = game => game.home_team_index != null && game.away_team_index != null && game.status !== 'Invalid_';
+
+// A reference held either as the usual 32-bit string or, in a table the schema doesn't describe (LeagueSetting under
+// schema 620 decodes as generic Field_N ints), as the same 32 bits read as an integer: table id = top 15 bits, row =
+// low 17. Zero, a zero table id or anything else is no reference.
+export function refFromValue(value) {
+  if (typeof value === 'string') return decodeRef(value);
+  if (!Number.isInteger(value) || value === 0 || value < -(2 ** 31) || value >= 2 ** 32) return null;
+  const u = value >>> 0;
+  const table = u >>> 17;
+  return table ? { table, row: u & 0x1ffff } : null;
+}
+
+// One depth-chart position's Player[] slot values (in slot order) as `slots` pgids, best first. A slot that is empty,
+// points outside the Player table, or at a row `pgidOfRow` doesn't know is null; holes stay where they are.
+export function depthSlotPgids(values, playerTableId, pgidOfRow, slots = 6) {
+  return Array.from({ length: slots }, (_, i) => {
+    const ref = decodeRef(values[i]);
+    if (!ref || ref.table !== playerTableId) return null;
+    return pgidOfRow(ref.row) ?? null;
+  });
+}
+
+const fieldNumber = name => { const m = /(\d+)$/.exec(name); return m ? Number(m[1]) : Infinity; };
+
+// LeagueSetting's four slider references (docs/in_progress/PROGRESSION_PLAN.md §2): of the reference fields that land
+// on int[] rows (by age) and ProgressionXPSlider rows (by position), the lower-numbered field of each pair is
+// progression, the higher regression (sample save: Field_165 / Field_166 progression by age / position, Field_167 /
+// Field_168 regression). candidates: [{ field, offset, table, row, tableName }]. A pair that isn't exactly two refs
+// leaves both of its sliders null.
+export function orderSliderRefs(candidates) {
+  const pair = tableName => {
+    const hits = candidates.filter(c => c.tableName === tableName)
+      .sort((a, b) => fieldNumber(a.field) - fieldNumber(b.field) || (a.offset ?? 0) - (b.offset ?? 0));
+    return hits.length === 2 ? hits : [null, null];
+  };
+  const [progAge, regAge] = pair('int[]');
+  const [progPos, regPos] = pair('ProgressionXPSlider');
+  return {
+    progression_by_age: progAge, progression_by_position: progPos,
+    regression_by_age: regAge, regression_by_position: regPos,
+  };
+}
+
+// Every PT_* behaviour flag of a Player record as { PT_NAME: bool }.
+export function playerTraits(record, fieldNames) {
+  const out = {};
+  for (const k of fieldNames) if (k.startsWith('PT_')) out[k] = Boolean(record[k]);
+  return out;
+}
