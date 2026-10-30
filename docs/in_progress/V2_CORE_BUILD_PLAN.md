@@ -11,6 +11,7 @@
 - *As built (wave 3):* U7 ran the real backtest and `--simulate 5` on `madden_test` (MAE 1.134; 90+ count 143–147). `dev_after` = `dev_before` until phase H; 'Superstar X-Factor' is stored as 'X-Factor' because `dev_before`/`dev_after` are varchar(16) (widening them is a one-line follow-up migration). `run_progression` gained an optional `traits=` kwarg.
 - *As built (wave 3):* U8 skips loading depth charts outside the regular season and playoffs (no week); U13 can store offseason charts under `OFFSEASON_STAGE_WEEKS`. drift_check reads base ratings from the newest `player_attributes` row and the newest `player_form` overlay.
 - *As built (wave 3):* U9 was built before spike R3: `dev_flag_edit` returns None with a warning until `pc_save_reader.mjs` fills `league_settings.dev_trait_regression_field` (a one-line follow-up once JR flips the setting on a save). JR can turn dev-trait regression off in the menu meanwhile (it isn't a slider the menu clamps).
+- *Spike R3 (2026-10-30, JR toggled Dev Trait Regression on `CAREER-V2TEST` and saved):* `LeagueSetting.Field_88` went 1 → 0. Under schema 620 `Field_N` is the Nth attribute of the LeagueSetting schema (confirmed: sliders 165–168, GameOptionSlider 69), so `IsDevTraitRegressionEnabled` = `Field_88` and `IsDevTraitIncreaseScenarioEnabled` (Madden's Breakout Player scenarios, which raise dev traits) = `Field_86`. JR (2026-10-30): turn breakout scenarios off too; dev traits are Project Mu's. Follow-up unit U9b (below) does both.
 - *As built (wave 1):* U1's agent had no database (Docker was down); the orchestrator ran its checks (migration applied twice to `madden_test`, `init_db.sql` built on an empty database).
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2–§5, §7; [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) phases C2, D, E; [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) (absorbed, D2); PROJECT_SPEC §2.17, §2.21, §3.3d, §3.3n, §6.0b.
 
@@ -480,6 +481,14 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - **Depends on:** U4 (and spike R3 for the dev flag)
 - **Done when:** `pass_edits` produces one edits document (ratings with OVR dual-write, dev trait, PT flags, sliders to 0 with LS, dev flag, morale 50) that `save_writer.mjs` accepts on the sample save.
 - **Verify:** `pytest -m "not integration" tests/test_progression_save.py` → pass.
+
+### U9b: Dev-trait settings follow-up (added 2026-10-30 after spike R3)
+
+- **Owns:** `pipeline/save_reader/pc_save_reader.mjs`, `pipeline/save_reader/lib.mjs`, `pipeline/save_reader/test/read_save.test.mjs`, `pipeline/save_reader/test/lib.test.mjs`, `engines/progression_save.py`, `tests/test_progression_save.py`
+- **Reads:** the R3 bullet under Status; U4's and U9's code
+- **Depends on:** U4, U9 (merged)
+- **Done when:** the snapshot names `league_settings.dev_trait_regression_field` ("Field_88") and its value, plus `breakout_scenarios_field` ("Field_86") and its value, found by schema attribute index; `progression_save` writes both to 0 (off) in the pass.
+- **Verify:** `cd pipeline/save_reader && npm test` and `pytest -m "not integration" tests/test_progression_save.py` pass.
 
 ### U10: Form and morale (phase E)
 
