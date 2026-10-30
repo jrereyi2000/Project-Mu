@@ -1,6 +1,6 @@
 # Project Mu: Madden Pilot and Tuning Plan
 
-**Status:** approved by JR (2026-10-30); building, wave 0 of 2 (spike P-a/P-b, needs JR's yes for the PC).
+**Status:** approved by JR (2026-10-30); building, wave 0 of 2: P-a done, P-b next. U4 started early (no spike dependency).
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §8.1 route 2 (UI automation from Windows); [`MOD_BUILDER_PLAN.md`](../done/MOD_BUILDER_PLAN.md) (tuning mods are built with `tools/mod_builder`); [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) (Project Mu's own progression engine); PROJECT_SPEC §1.1 (`madden_capture.py`, `pipeline/save_reader/`, `pipeline/load_save.py`).
 
 **Goal:** two agents that let Madden run experiments while JR is away.
@@ -146,6 +146,15 @@ WSL wrapper (`tools/madden_pilot/win.py`): `call(cmd: list[str], timeout=60) -> 
 **Spike first** (inline, before wave 1, with JR's yes for the PC; about 1 hour):
 - **P-a:** start Madden (through the Mod Manager with `Mu Base`). With a 30-line Windows-Python script, capture the window, OCR the main menu, the franchise hub and one settings screen, and press down and confirm. This answers R1–R3.
 - **P-b:** on a copy of a franchise save renamed `CAREER-TUNE-SPIKE` (watcher stopped), find the hub's sim option and sim a few weeks, recording every screen. This answers R5 and gives the first catalog entries.
+
+**Spike P-a results (2026-10-30):**
+- **Windows side:** a separate venv at `C:\Madden27Modding\MuPilot\venv` (Python 3.14.10) with `mss`, `pillow`, `pywin32`, `winrt-runtime` and `winrt-Windows.{Media.Ocr, Graphics.Imaging, Storage, Storage.Streams, Foundation, Foundation.Collections, Globalization}`; JR's global Python is untouched. The spike script is `C:\Madden27Modding\MuPilot\spike\pa.py` (`windows`, `focus`, `look`, `key`). `requirements-win.txt` (U1) must list `winrt-Windows.Storage`; the plan's list missed it.
+- **Not elevated (R2 retired):** `Madden27.exe` runs as the normal user (`TokenElevation` 0), so `SendInput` reaches it.
+- **Window:** titled `Madden NFL 27`, borderless popup (`WS_POPUP`, style `0x14000000`), 2560×1440 client area at (0,0). **It minimizes whenever it loses focus** (the rect goes to -32000,-32000, 0×0). In the spike, the process that took focus was the Claude desktop app itself. So `win_agent.py` must check `foreground` before every key and capture, and refocus with `ShowWindow(SW_RESTORE)` + an Alt tap + `SetForegroundWindow` (works). The `/madden` skill must tell JR to minimize Claude or move it to another monitor during runs.
+- **Capture (R1 retired for capture):** `mss` over the client rect gives real frames (luma 0–255), not black.
+- **OCR (R3 mostly retired):** Windows OCR reads breadcrumbs, headings and button labels exactly (`OFFLINE > NFL PRESEASON ROSTER > CHOOSE TEAM >`, `RANDOM TEAM`, `BACK`, team names). It garbles stylised numbers (`OVR` → `WR`, `$10.9M` → `SIO.9M`). Classify on labels and never trust numbers from OCR; stats come from the save (S3).
+- **Input (R1 retired for input):** `SendInput` with hardware scan codes (`KEYEVENTF_SCANCODE`, `EXTENDEDKEY` for arrows) moves Madden's selection exactly one step per press while it has focus (Raiders → Patriots → Panthers on left; Commanders → Falcons → Jets on down). One early press jumped two rows; it happened right after a focus loss, so treat any press made without focus as unreliable. Keyboard is enough, so Q5 is settled with no ViGEm.
+- **Screen seen:** the new-franchise flow `OFFLINE > NFL PRESEASON ROSTER > CHOOSE TEAM > CUSTOMIZE` (4×8 team grid, `E` = Random Team, `Backspace`-style key = Back). It was open when the spike started; the highlight was left on the Jaguars as found, and nothing was confirmed.
 
 ## 4. Tests (synthetic, no live DB)
 
