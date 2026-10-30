@@ -263,6 +263,15 @@ A realistic upper bound on gameplay velocity is **at most 2 full franchise seaso
   2. **\$0.00 Paid Token Spend:** Eliminates all Gemini API token spend on the newsroom (a 100% reduction).
   3. **Vastly Superior Latency to PS5:** While not 15-second instant API delivery, the entire weekly batch of 18 articles and 104 tweets completes in **under 2 minutes** on Colab vLLM. Compared to the old PS5 pipeline (which took 60+ minutes per week), 2 minutes feels nearly instantaneous.
 
+#### Surplus Allocation: LoRA Fine-Tuning & Custom Persona Adapters
+The guaranteed surplus of 40–72 compute units per month provides ample runway for custom fine-tuning workflows:
+1. **Journalistic & Pundit LoRA Adapters (Unsloth on A100):**
+   * *Dataset:* Project Mu's 320 canonical human-approved articles and 1,876 Agent Wire posts from the 2036 database, categorized by persona (`Skip_Bayless`, `Mina_Kimes`, `Bill_Barnwell`, `Gregg_Rosenthal`, team beats).
+   * *Compute Cost:* Training a LoRA on an open base model (Qwen 2.5 14B/32B or Llama 3.3 70B) via [Unsloth](https://github.com/unslothai/unsloth) takes ~1 to 2 hours on an A100 GPU (**~5 to 10 compute units** once or twice per year).
+   * *Benefit:* Eliminates prompt engineering overhead; base models natively adopt idiosyncratic vernacular, sentence rhythms, and trademark phrases without prompting instructions.
+2. **Player Likeness & Prospect Visual LoRAs (SDXL / Flux / IP-Adapter):**
+   * For marquee franchise rookies (e.g. 1st-round draft picks) or iconic franchise veterans, training custom face LoRAs or IP-Adapter embeddings ensures consistent facial identity across draft walkout videos (§V2.17), championship photojournalism (§V2.4), and broadcast overlays. Takes ~15–20 minutes on an A100 (**~1.5 CUs per class**).
+
 ### 5.3 Deterministic Python Dossier Architecture & Newsroom A/B Testing Framework
 
 #### Architectural Principle: Macro Context vs. Targeted Micro Evidence
@@ -281,8 +290,21 @@ For **deterministic, subject-bound article types** (which represent over 45% of 
 
 #### The Python Dossier Compiler
 Instead of forcing Gemini to spend 10–25 ReAct turns repeatedly accumulating 40K–80K context tokens (~$0.08–$0.10/article), a deterministic Python service (`pipeline/dossier_compiler.py`) executes those 3–5 SQL queries in under 15 milliseconds. It compiles a structured markdown micro-dossier, appends it directly to the Assignment Brief, and executes the article generation in a **single turn** with zero tool calls:
-* **Token Cost:** Drops from ~$0.09 to ~$0.01 on Gemini 3.8 Flash (an 89% savings).
-* **Local Feasibility:** Because single-turn prompts require no function-calling orchestration, they can execute locally on the RTX 5070 Ti (`ollama:gemma4:e4b@nothink`) for **$0.00**.
+* **Token Cost:** Drops from ~$0.09 to ~$0.01 on Gemini 3.8 Flash (an 89% savings), or **\$0.00** on Google Colab / local GPU.
+* **Local & Colab Feasibility:** Because single-turn prompts require no function-calling orchestration, they can execute seamlessly on **Llama 3.3 70B** via Colab vLLM or locally on the RTX 5070 Ti (`ollama:gemma4:e4b@nothink`).
+
+#### Why Eliminating Tool Calls Directly Improves Article Quality
+Eliminating tool calls is not a compromise—it is a significant structural upgrade to article quality:
+1. **Elimination of Attention Degradation (Context Bloat):**
+   * In multi-turn ReAct loops, after 10–15 tool turns, the context window accumulates 50,000–80,000 tokens of raw JSON tool definitions, parameters, and intermediate query results.
+   * Transformer attention degrades over long multi-turn contexts (the "lost-in-the-middle" effect). As tool clutter piles up, models lose adherence to nuanced persona traits, vocabulary restrictions, and banned-cliché directives.
+   * With the Python Dossier, the model receives a pristine, single-turn prompt containing only the persona instructions and the structured dossier. **100% of the model's attention heads are focused on prose rhythm, narrative drama, and tactical analysis**.
+2. **Zero Factual Gaps (Guaranteed Coverage):**
+   * ReAct models often suffer from "lazy querying"—skipping the injury report, ignoring red-zone splits, or failing to check 3rd-down conversions due to turn limits.
+   * The Python Dossier compiles **every** relevant statistical dimension upfront (box scores, scoring drives, situational efficiencies, rivalry history, injuries, and coach profiles). The writer has complete, verified truth from sentence one.
+3. **Unlocking Flagship 70B Open Models:**
+   * Open-weights models (Llama 3.3 70B, Qwen 2.5 72B) write vastly superior sports prose, sharper humor, and more authentic dialogue than small API models, but often produce syntax errors or infinite loops when managing complex multi-turn JSON tool schemas.
+   * Zero-tool generation allows these world-class 70B models to do what they do best: write rich, creative, deeply atmospheric football literature.
 
 #### A/B Testing Framework (`tools/dossier_ab_compare.py`)
 To rigorously prove that the Python Dossier matches or exceeds the factual accuracy and literary quality of the ReAct tool loop before switching in production:
@@ -390,6 +412,16 @@ Across the 2036 canonical season (320 articles + 1,876 tweets over 18 weeks):
    - At ~200 tokens/sec on vLLM (A100), pure compute is $\approx \mathbf{110 \text{ seconds per week}}$.
    - Including a 10–12 minute active notebook session per week, 2 full seasons per month (~36 weeks) consume **~18 to 34 compute units / month** out of 100.
    - **Over 65 compute units remain completely free** every month for F5-TTS audio podcasts and draft walkout videos!
+
+#### 5.3.2 Interactive Latency Boundaries: GM & Player Negotiations
+While the newsroom and multimedia ecosystem are decoupled from real-time latency and run via batch pipelines, Project Mu preserves a strict **<1.5-second sub-second turnaround boundary** for user-facing interactive conversations:
+1. **AI GM Trade Machine Negotiations ([`engines/gm_negotiation.py`](../../engines/gm_negotiation.py)):** When the user proposes a trade or counters in the Trade Machine, the AI GM must respond instantly with structured evaluation and in-character dialogue ("We value Vance, but you need to add a 3rd-round pick").
+2. **Player Agent Contract Extensions ([`engines/contract_negotiation.py`](../../engines/contract_negotiation.py)):** Real-time conversational bargaining over guaranteed money, incentives, and no-trade clauses.
+3. **Interactive Postgame Press Conferences (§V2.2):** Beat reporters asking tough post-game questions where the user types an answer and the reporter immediately responds.
+
+**Execution Routing for Interactive Persona Tasks:**
+* **Cloud Route:** Gemini 3.8 Flash configured with `thinking=low` via [`engines/llm_config.py`](../../engines/llm_config.py) (~700–900ms latency, ~\$0.0002 per dialogue turn; an entire season of 50 trade turns costs <\$0.01).
+* **Local Offline Route:** The ultra-compact resident model on the PC beside Madden ([`docs/in_progress/PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §7.5; Qwen 2.5 1.5B/3B or Llama 3.2 1B occupying only ~1.2GB VRAM), executing at 120+ tokens/sec with zero cloud dependency.
 
 ---
 
