@@ -37,8 +37,8 @@ def _default_unload_model(model_id: str) -> None:
     logger.info("Unloading model %s from GPU VRAM.", model_id)
 
 
-def _default_job_handler(job: GPUJob) -> Dict[str, Any]:
-    """Default pass-through handler for mock runs."""
+def mock_job_handler(job: GPUJob) -> Dict[str, Any]:
+    """Pass-through handler for dry runs and tests. Does no work."""
     return {"job_id": job.id, "kind": job.kind, "model_id": job.model_id, "status": "ok"}
 
 
@@ -62,6 +62,7 @@ class GPUQueueRunner:
         idle_timeout: Optional[float] = None,
         is_madden_idle_fn: Optional[Callable[[], bool]] = None,
         log_fn: Optional[Callable[[str], None]] = None,
+        default_handler: Optional[Callable[[GPUJob], Any]] = None,
     ):
         self.queue = queue if queue is not None else GPUQueue()
         self.is_madden_running_fn = (
@@ -72,14 +73,17 @@ class GPUQueueRunner:
         self.job_handlers: Dict[str, Callable[[GPUJob], Any]] = (
             dict(job_handlers) if job_handlers else {}
         )
-        self.default_handler = _default_job_handler
+        # Used for kinds with no registered handler. None (the default) fails
+        # such jobs instead of marking them completed without doing the work.
+        self.default_handler = default_handler
         self.idle_timeout = idle_timeout
         self.is_madden_idle_fn = is_madden_idle_fn
         self.log_fn = log_fn if log_fn is not None else _default_log
 
         self.active_model: Optional[str] = None
         self.active_model_handle: Any = None
-        self._madden_started_at: Optional[float] = None
+        self._madden_idle_since: Optional[float] = None
+        self._idle_timeout_warned: bool = False
         self._stop_requested: bool = False
 
     def register_handler(self, kind: str, handler: Callable[[GPUJob], Any]) -> None:
@@ -111,7 +115,13 @@ class GPUQueueRunner:
     def is_madden_active(self) -> bool:
         """
         Check if Madden 27 is active and blocking GPU execution.
-        Returns False if Madden is not running, or if idle override applies.
+        Returns False if Madden is not running, or if it is running but idle.
+
+        Idle is decided by is_madden_idle_fn. With idle_timeout set, Madden must
+        be reported idle continuously for idle_timeout seconds before the queue
+        runs; without idle_timeout, the first idle report is enough. Time since
+        Madden started is never treated as idleness, so a long play session
+        does not let the queue take the GPU.
         """
         try:
             running = bool(self.is_madden_running_fn())
@@ -120,30 +130,38 @@ class GPUQueueRunner:
             running = False
 
         if not running:
-            self._madden_started_at = None
+            self._madden_idle_since = None
             return False
 
+        if self.is_madden_idle_fn is None:
+            if self.idle_timeout is not None and not self._idle_timeout_warned:
+                self.log_fn("idle_timeout is set but no is_madden_idle_fn was given; ignoring it.")
+                self._idle_timeout_warned = True
+            return True
+
+        try:
+            idle = bool(self.is_madden_idle_fn())
+        except Exception as e:
+            self.log_fn(f"Idle check error: {e}")
+            idle = False
+
+        if not idle:
+            self._madden_idle_since = None
+            return True
+
         now = time.time()
-        if self._madden_started_at is None:
-            self._madden_started_at = now
+        if self._madden_idle_since is None:
+            self._madden_idle_since = now
 
-        # Check explicit idle hook
-        if self.is_madden_idle_fn is not None:
-            try:
-                if self.is_madden_idle_fn():
-                    return False
-            except Exception:
-                pass
+        if self.idle_timeout is None:
+            return False
 
-        # Check idle timeout
-        if self.idle_timeout is not None:
-            elapsed = now - self._madden_started_at
-            if elapsed >= self.idle_timeout:
-                self.log_fn(
-                    f"Madden active for {elapsed:.1f}s >= idle timeout {self.idle_timeout}s; running queue."
-                )
-                return False
-
+        idle_for = now - self._madden_idle_since
+        if idle_for >= self.idle_timeout:
+            self.log_fn(
+                f"Madden idle for {idle_for:.1f}s >= idle timeout {self.idle_timeout}s; running queue."
+            )
+            return False
         return True
 
     def run_once(self) -> bool:
@@ -169,6 +187,12 @@ class GPUQueueRunner:
             if self.active_model is not None:
                 self.unload_active_model()
             return False
+
+        # Fail jobs nobody can run before spending a model load on them
+        if candidate.kind not in self.job_handlers and self.default_handler is None:
+            self.log_fn(f"No handler registered for job kind '{candidate.kind}'; failing job {candidate.id}.")
+            self.queue.mark_failed(candidate.id, error=f"No handler registered for job kind '{candidate.kind}'")
+            return True
 
         # Switch model if needed
         if self.active_model != candidate.model_id:
@@ -201,14 +225,22 @@ class GPUQueueRunner:
         poll_interval: float = 2.0,
         max_iterations: Optional[int] = None,
         stop_on_empty: bool = True,
+        requeue_stale: bool = False,
     ) -> int:
         """
         Run the queue processing loop.
         Loops until stopped or until empty (if stop_on_empty=True).
+        requeue_stale: first return jobs left 'running' by a crashed run to
+        'pending'. Only safe when no other runner is using the same store.
         Returns total number of jobs processed.
         """
         jobs_processed = 0
         iteration = 0
+
+        if requeue_stale:
+            requeued = self.queue.requeue_running()
+            if requeued:
+                self.log_fn(f"Requeued {requeued} job(s) left running by a previous run.")
 
         while not self._stop_requested:
             if max_iterations is not None and iteration >= max_iterations:
@@ -258,6 +290,8 @@ def run_queue(
     idle_timeout: Optional[float] = None,
     is_madden_idle_fn: Optional[Callable[[], bool]] = None,
     log_fn: Optional[Callable[[str], None]] = None,
+    default_handler: Optional[Callable[[GPUJob], Any]] = None,
+    requeue_stale: bool = False,
 ) -> int:
     """Convenience helper to initialize and run the GPU queue."""
     q = GPUQueue(store=store)
@@ -270,9 +304,11 @@ def run_queue(
         idle_timeout=idle_timeout,
         is_madden_idle_fn=is_madden_idle_fn,
         log_fn=log_fn,
+        default_handler=default_handler,
     )
     return runner.run_loop(
         poll_interval=poll_interval,
         max_iterations=max_iterations,
         stop_on_empty=stop_on_empty,
+        requeue_stale=requeue_stale,
     )

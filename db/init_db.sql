@@ -1508,7 +1508,7 @@ CREATE TABLE IF NOT EXISTS player_ceilings (
 );
 CREATE INDEX IF NOT EXISTS idx_player_ceilings_season ON player_ceilings (updated_season);
 
--- League Memory narrative search index (2027_01_10_league_memory.sql, newsroom/league_memory.py, docs/done/PRE_PC_WORK.md §9, docs/in_progress/PC_MIGRATION_PLAN.md V2.8).
+-- League Memory narrative search index (2027_01_10_league_memory.sql, newsroom/league_memory.py, docs/done/PRE_PC_WORK.md §9, docs/in_progress/V2_MASTER_PLAN.md V2.8).
 CREATE TABLE IF NOT EXISTS league_memory (
     id SERIAL PRIMARY KEY,
     source_table VARCHAR(32) NOT NULL,

@@ -29,6 +29,10 @@ logger = logging.getLogger("headshots.local")
 class HeadshotBackend(ABC):
     """Abstract base class for all headshot generation backends."""
 
+    # When True, get_backend() returns one shared instance per name + config
+    # instead of constructing a new one each call.
+    reuse_instance = False
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config.copy() if config else {}
 
@@ -243,6 +247,10 @@ class DiffusersBackend(HeadshotBackend):
     - VRAM optimizations: enable_model_cpu_offload, vae_slicing, vae_tiling.
     """
 
+    # Loading SDXL takes tens of seconds, so get_backend() reuses one instance
+    # (and its loaded pipeline) per backend name + config.
+    reuse_instance = True
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
         self.model_id = (
@@ -254,6 +262,10 @@ class DiffusersBackend(HeadshotBackend):
         self.torch_dtype = self._detect_dtype()
         self._pipe = None
         self._controlnet = None
+        # Pipeline state the loaded pipe was built with. None means unknown
+        # (pipe assigned from outside), in which case it is used as-is.
+        self._pipe_controlnet: Optional[bool] = None
+        self._ip_adapter_loaded = False
 
     def _detect_device(self) -> str:
         override = self.config.get("device")
@@ -353,17 +365,52 @@ class DiffusersBackend(HeadshotBackend):
         if hasattr(pipe, "enable_vae_tiling"):
             pipe.enable_vae_tiling()
 
+        self._pipe_controlnet = use_controlnet
+        self._ip_adapter_loaded = False
+
         # IP-Adapter initialization if requested
         if use_ip_adapter:
-            ip_repo = self.config.get("ip_adapter_repo", "h94/IP-Adapter")
-            ip_subfolder = self.config.get("ip_adapter_subfolder", "sdxl_models")
-            ip_weight = self.config.get("ip_adapter_weight_name", "ip-adapter-plus-face_sdxl_vit-h.safetensors")
-            logger.info("Loading IP-Adapter face identity weights from %s...", ip_repo)
-            pipe.load_ip_adapter(ip_repo, subfolder=ip_subfolder, weight_name=ip_weight)
-            ip_scale = self.config.get("ip_adapter_scale", 0.7)
-            pipe.set_ip_adapter_scale(ip_scale)
+            self._load_ip_adapter(pipe)
 
         return pipe
+
+    def _load_ip_adapter(self, pipe: Any) -> None:
+        """Load IP-Adapter face identity weights into an existing pipeline."""
+        ip_repo = self.config.get("ip_adapter_repo", "h94/IP-Adapter")
+        ip_subfolder = self.config.get("ip_adapter_subfolder", "sdxl_models")
+        ip_weight = self.config.get("ip_adapter_weight_name", "ip-adapter-plus-face_sdxl_vit-h.safetensors")
+        logger.info("Loading IP-Adapter face identity weights from %s...", ip_repo)
+        pipe.load_ip_adapter(ip_repo, subfolder=ip_subfolder, weight_name=ip_weight)
+        ip_scale = self.config.get("ip_adapter_scale", 0.7)
+        pipe.set_ip_adapter_scale(ip_scale)
+        self._ip_adapter_loaded = True
+
+    def _ensure_pipeline(self, use_controlnet: bool, use_ip_adapter: bool) -> None:
+        """Build the pipeline, or adjust the cached one, to match this call's needs.
+
+        A pipeline with IP-Adapter loaded errors when called without an
+        ip_adapter_image, and one without it cannot take a face reference, so
+        the adapter is loaded/unloaded per call. A ControlNet change needs a
+        different pipeline class, so the pipeline is rebuilt.
+        """
+        if self._pipe is not None and self._pipe_controlnet is not None \
+                and self._pipe_controlnet != use_controlnet:
+            logger.info("ControlNet setting changed; rebuilding diffusers pipeline.")
+            self._pipe = None
+
+        if self._pipe is None:
+            self._pipe = self._init_pipeline(
+                use_controlnet=use_controlnet,
+                use_ip_adapter=use_ip_adapter,
+            )
+            return
+
+        if use_ip_adapter and not self._ip_adapter_loaded:
+            self._load_ip_adapter(self._pipe)
+        elif not use_ip_adapter and self._ip_adapter_loaded:
+            logger.info("Unloading IP-Adapter (no face reference for this call).")
+            self._pipe.unload_ip_adapter()
+            self._ip_adapter_loaded = False
 
     def generate(
         self,
@@ -375,13 +422,11 @@ class DiffusersBackend(HeadshotBackend):
     ) -> bytes:
         merged_config = {**self.config, **(config or {})}
         use_controlnet = bool(merged_config.get("controlnet") or merged_config.get("controlnet_model"))
-        use_ip_adapter = bool(ref_image is not None or merged_config.get("use_ip_adapter"))
+        # IP-Adapter needs an image on every call, so it is only active with a
+        # ref_image; config use_ip_adapter=False turns it off even then.
+        use_ip_adapter = bool(ref_image) and merged_config.get("use_ip_adapter", True) is not False
 
-        if self._pipe is None:
-            self._pipe = self._init_pipeline(
-                use_controlnet=use_controlnet,
-                use_ip_adapter=use_ip_adapter,
-            )
+        self._ensure_pipeline(use_controlnet=use_controlnet, use_ip_adapter=use_ip_adapter)
 
         try:
             import torch
@@ -431,6 +476,11 @@ class DiffusersBackend(HeadshotBackend):
                     )
                     prompt_embeds, pooled_prompt_embeds = compel(prompt)
                     neg_prompt_embeds, neg_pooled_prompt_embeds = compel(neg_prompt)
+                    # truncate_long_prompts=False leaves the two at different token
+                    # lengths; diffusers requires matching shapes.
+                    prompt_embeds, neg_prompt_embeds = compel.pad_conditioning_tensors_to_same_length(
+                        [prompt_embeds, neg_prompt_embeds]
+                    )
             except Exception as e:
                 logger.debug("Compel long-prompt encoding not active or failed (%s), falling back to raw prompt text.", e)
 
@@ -453,7 +503,7 @@ class DiffusersBackend(HeadshotBackend):
             call_kwargs["negative_prompt"] = neg_prompt
 
         # IP-Adapter face reference conditioning
-        if ref_image and hasattr(self._pipe, "set_ip_adapter_scale"):
+        if use_ip_adapter and self._ip_adapter_loaded:
             ref_pil = Image.open(io.BytesIO(ref_image)).convert("RGB")
             call_kwargs["ip_adapter_image"] = ref_pil
 
@@ -730,9 +780,19 @@ _BACKEND_REGISTRY: Dict[str, Type[HeadshotBackend]] = {
 }
 
 
+_INSTANCE_CACHE: Dict[Tuple[str, str], HeadshotBackend] = {}
+
+
 def register_backend(name: str, backend_cls: Type[HeadshotBackend]) -> None:
     """Register a new headshot backend class."""
     _BACKEND_REGISTRY[name.lower()] = backend_cls
+    for key in [k for k in _INSTANCE_CACHE if k[0] == name.lower()]:
+        del _INSTANCE_CACHE[key]
+
+
+def clear_backend_cache() -> None:
+    """Drop cached backend instances (and any pipelines they hold)."""
+    _INSTANCE_CACHE.clear()
 
 
 def get_backend(
@@ -756,4 +816,12 @@ def get_backend(
         )
 
     cls = _BACKEND_REGISTRY[backend_key]
-    return cls(config=config)
+    if not cls.reuse_instance:
+        return cls(config=config)
+
+    cache_key = (backend_key, json.dumps(config or {}, sort_keys=True, default=repr))
+    instance = _INSTANCE_CACHE.get(cache_key)
+    if instance is None:
+        instance = cls(config=config)
+        _INSTANCE_CACHE[cache_key] = instance
+    return instance

@@ -210,7 +210,9 @@ def convert_headshots_batch(
 
     files = sorted(
         in_dir.glob(pattern),
-        key=lambda p: (int(p.stem) if p.stem.isdigit() else p.stem),
+        # Numeric ids first in numeric order, then other names alphabetically
+        # (a bare int/str key raises TypeError on a mixed directory).
+        key=lambda p: (0, int(p.stem), "") if p.stem.isdigit() else (1, 0, p.stem),
     )
     if limit is not None and limit > 0:
         files = files[:limit]

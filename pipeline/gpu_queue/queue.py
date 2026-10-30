@@ -53,6 +53,21 @@ class BaseJobStore(ABC):
         """Remove jobs, optionally filtered by status. Return count removed."""
         pass
 
+    def claim(self, job_id: str, started_at: str) -> bool:
+        """Move a job from pending to running. Return False if it was no longer pending.
+
+        This default is atomic only within one process; SQLiteJobStore overrides
+        it with a single conditional UPDATE so runners in separate processes
+        cannot both claim the same job.
+        """
+        job = self.get(job_id)
+        if job is None or job.status != STATUS_PENDING:
+            return False
+        job.status = STATUS_RUNNING
+        job.started_at = started_at
+        self.update(job)
+        return True
+
 
 class SQLiteJobStore(BaseJobStore):
     """
@@ -240,6 +255,20 @@ class SQLiteJobStore(BaseJobStore):
                 if self._memory_conn is None:
                     conn.close()
 
+    def claim(self, job_id: str, started_at: str) -> bool:
+        with self._lock:
+            conn = self._get_connection()
+            try:
+                cur = conn.execute(
+                    "UPDATE gpu_jobs SET status = ?, started_at = ? WHERE id = ? AND status = ?",
+                    (STATUS_RUNNING, started_at, job_id, STATUS_PENDING),
+                )
+                conn.commit()
+                return cur.rowcount == 1
+            finally:
+                if self._memory_conn is None:
+                    conn.close()
+
     def clear(self, status: Optional[str] = None) -> int:
         with self._lock:
             conn = self._get_connection()
@@ -337,6 +366,10 @@ class JsonJobStore(BaseJobStore):
                 return True
             return False
 
+    def claim(self, job_id: str, started_at: str) -> bool:
+        with self._lock:
+            return super().claim(job_id, started_at)
+
     def clear(self, status: Optional[str] = None) -> int:
         with self._lock:
             jobs = self._load_raw()
@@ -382,13 +415,27 @@ class GPUQueue:
         """
         Retrieve and optionally transition the next eligible job to 'running'.
         """
-        pending = self.store.list(status=STATUS_PENDING)
-        job = self._select_next_job(pending, model_id=model_id)
-        if job and auto_start:
-            job.status = STATUS_RUNNING
-            job.started_at = now_iso()
+        while True:
+            pending = self.store.list(status=STATUS_PENDING)
+            job = self._select_next_job(pending, model_id=model_id)
+            if job is None or not auto_start:
+                return job
+            started_at = now_iso()
+            if self.store.claim(job.id, started_at):
+                job.status = STATUS_RUNNING
+                job.started_at = started_at
+                return job
+            # Another runner claimed it between list and claim; pick again.
+
+    def requeue_running(self) -> int:
+        """Return every 'running' job to 'pending' (e.g. after a crash). Return count."""
+        count = 0
+        for job in self.store.list(status=STATUS_RUNNING):
+            job.status = STATUS_PENDING
+            job.started_at = None
             self.store.update(job)
-        return job
+            count += 1
+        return count
 
     def mark_completed(self, job_id: str, result: Any = None) -> Optional[GPUJob]:
         """Mark job completed with optional result."""

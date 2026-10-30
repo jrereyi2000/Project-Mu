@@ -29,6 +29,7 @@ from pipeline.gpu_queue import (
     SQLiteJobStore,
     JsonJobStore,
     enqueue,
+    mock_job_handler,
     run_queue,
     TIER_1_TEXT,
     TIER_2_IMAGE,
@@ -337,14 +338,17 @@ class ProcessCheckAndPauseResumeTest(unittest.TestCase):
             queue=self.queue,
             is_madden_running_fn=mock_is_madden,
             unload_model=mock_unload,
+            default_handler=mock_job_handler,
         )
 
     def test_process_checker_mock_hook(self):
-        # Test global mock context manager
-        self.assertFalse(is_madden_running())
-        with mock_process_running(True):
-            self.assertTrue(is_madden_running())
-        self.assertFalse(is_madden_running())
+        # Test global mock context manager (nested so the real process list,
+        # which may include a running Madden, is never consulted)
+        with mock_process_running(False):
+            self.assertFalse(is_madden_running())
+            with mock_process_running(True):
+                self.assertTrue(is_madden_running())
+            self.assertFalse(is_madden_running())
 
     def test_pause_when_madden_running_and_resume_when_exits(self):
         job = GPUJob(id="job_pause_test", kind="text", model_id="gemma4:12b")
@@ -387,20 +391,49 @@ class ProcessCheckAndPauseResumeTest(unittest.TestCase):
         self.queue.enqueue(job)
 
         self.madden_active = True
+        self.madden_idle = True
+        self.runner.is_madden_idle_fn = lambda: self.madden_idle
         # Set idle timeout to 0.1s
         self.runner.idle_timeout = 0.1
 
-        # First check: initializes start time, returns False (blocked)
+        # First idle report starts the idle clock; still blocked
         did_run = self.runner.run_once()
         self.assertFalse(did_run)
 
         # Wait past idle timeout
         time.sleep(0.15)
 
-        # Now idle timeout has elapsed: runner proceeds even though process is present
+        # Idle for the whole timeout: runner proceeds even though process is present
         did_run = self.runner.run_once()
         self.assertTrue(did_run)
         self.assertEqual(self.queue.get_job("job_idle_test").status, STATUS_COMPLETED)
+
+    def test_idle_timeout_resets_when_player_returns(self):
+        self.queue.enqueue(GPUJob(id="job_idle_reset", kind="text", model_id="gemma4"))
+        self.madden_active = True
+        self.madden_idle = True
+        self.runner.is_madden_idle_fn = lambda: self.madden_idle
+        self.runner.idle_timeout = 0.1
+
+        self.assertFalse(self.runner.run_once())
+        time.sleep(0.15)
+        # Player came back before the next check: clock resets, still blocked
+        self.madden_idle = False
+        self.assertFalse(self.runner.run_once())
+        self.madden_idle = True
+        self.assertFalse(self.runner.run_once())
+        self.assertEqual(self.queue.get_job("job_idle_reset").status, STATUS_PENDING)
+
+    def test_idle_timeout_without_idle_fn_never_runs_during_game(self):
+        self.queue.enqueue(GPUJob(id="job_no_idle_fn", kind="text", model_id="gemma4"))
+        self.madden_active = True
+        self.runner.idle_timeout = 0.05
+
+        self.assertFalse(self.runner.run_once())
+        time.sleep(0.1)
+        # Time since Madden started is not idleness
+        self.assertFalse(self.runner.run_once())
+        self.assertEqual(self.queue.get_job("job_no_idle_fn").status, STATUS_PENDING)
 
 
 class ErrorHandlingTest(unittest.TestCase):
@@ -441,6 +474,21 @@ class ErrorHandlingTest(unittest.TestCase):
         j_ok = self.queue.get_job("job_will_succeed")
         self.assertEqual(j_ok.status, STATUS_COMPLETED)
 
+    def test_job_without_handler_fails_instead_of_completing(self):
+        self.queue.enqueue(GPUJob(id="job_no_handler", kind="audio_tts", model_id="m1"))
+        loads = []
+        runner = GPUQueueRunner(
+            queue=self.queue,
+            is_madden_running_fn=lambda: False,
+            load_model=lambda m: loads.append(m),
+        )
+
+        self.assertTrue(runner.run_once())
+        saved = self.queue.get_job("job_no_handler")
+        self.assertEqual(saved.status, STATUS_FAILED)
+        self.assertIn("No handler registered", saved.error)
+        self.assertEqual(loads, [])
+
     def test_model_load_exception_marks_job_failed(self):
         job = GPUJob(id="job_bad_model", kind="text", model_id="broken_weights")
         self.queue.enqueue(job)
@@ -452,6 +500,7 @@ class ErrorHandlingTest(unittest.TestCase):
             queue=self.queue,
             is_madden_running_fn=lambda: False,
             load_model=broken_loader,
+            default_handler=mock_job_handler,
         )
 
         did_run = runner.run_once()
@@ -517,11 +566,19 @@ class CLITest(unittest.TestCase):
             ]
         )
 
-        # Run with --ignore-madden and --once
-        ret = cli_main(self.base_args + ["run", "--once", "--ignore-madden"])
+        store = SQLiteJobStore(self.db_path)
+
+        # Without --dry-run the CLI refuses (no real handlers are wired) and
+        # leaves the job untouched
+        with patch("sys.stderr"):
+            ret = cli_main(self.base_args + ["run", "--once", "--ignore-madden"])
+        self.assertEqual(ret, 1)
+        self.assertEqual(store.get("cli_job_2").status, STATUS_PENDING)
+
+        # Run with --dry-run, --ignore-madden and --once
+        ret = cli_main(self.base_args + ["run", "--once", "--ignore-madden", "--dry-run"])
         self.assertEqual(ret, 0)
 
-        store = SQLiteJobStore(self.db_path)
         job = store.get("cli_job_2")
         self.assertEqual(job.status, STATUS_COMPLETED)
 
@@ -595,6 +652,44 @@ class PlatformProcessCheckTest(unittest.TestCase):
         self.assertFalse(is_process_running(["Madden27"]))
 
 
+class ClaimAndRequeueTest(unittest.TestCase):
+    """Atomic job claiming and recovery of jobs left running by a crash."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmp_dir, "claim_test.db")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_two_queues_never_claim_the_same_job(self):
+        q1 = GPUQueue(store=SQLiteJobStore(self.db_path))
+        q2 = GPUQueue(store=SQLiteJobStore(self.db_path))
+        q1.enqueue(GPUJob(id="only_job", kind="text", model_id="m"))
+
+        # q2 already saw the job as pending, but q1 claims it first
+        self.assertTrue(q1.store.claim("only_job", "t1"))
+        self.assertFalse(q2.store.claim("only_job", "t2"))
+        self.assertIsNone(q2.get_next_job())
+
+    def test_requeue_running_returns_stale_jobs_to_pending(self):
+        q = GPUQueue(store=SQLiteJobStore(self.db_path))
+        q.enqueue(GPUJob(id="crashed_job", kind="text", model_id="m"))
+        self.assertEqual(q.get_next_job().id, "crashed_job")
+
+        self.assertEqual(q.requeue_running(), 1)
+        saved = q.get_job("crashed_job")
+        self.assertEqual(saved.status, STATUS_PENDING)
+        self.assertIsNone(saved.started_at)
+
+    def test_json_store_claim(self):
+        store = JsonJobStore(os.path.join(self.tmp_dir, "q.json"))
+        store.add(GPUJob(id="j", kind="text", model_id="m"))
+        self.assertTrue(store.claim("j", "t"))
+        self.assertFalse(store.claim("j", "t"))
+        self.assertEqual(store.get("j").status, STATUS_RUNNING)
+
+
 class TopLevelHelpersTest(unittest.TestCase):
     """Test top-level helper functions enqueue() and run_queue()."""
 
@@ -618,6 +713,7 @@ class TopLevelHelpersTest(unittest.TestCase):
             is_madden_running=lambda: False,
             stop_on_empty=True,
             poll_interval=0.01,
+            default_handler=mock_job_handler,
         )
         self.assertEqual(processed, 1)
 

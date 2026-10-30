@@ -578,6 +578,12 @@ class TestGeminiToolLoop(unittest.TestCase):
         initial_resp = mock.MagicMock()
         initial_resp.text = ""
         initial_resp.candidates = []
+        initial_resp.usage_metadata = mock.MagicMock(
+            prompt_token_count=1000,
+            candidates_token_count=20,
+            cached_content_token_count=0,
+            thoughts_token_count=5,
+        )
 
         # Followup call returns synthesized text
         followup_resp = mock.MagicMock()
@@ -606,6 +612,10 @@ class TestGeminiToolLoop(unittest.TestCase):
         self.assertEqual(result.text, "Synthesized markdown from Gemini.")
         self.assertEqual(fake_chat.send_message.call_count, 2)
         self.assertEqual(result.iterations, 2)
+        # Usage covers both the AFC turn and the synthesis follow-up
+        self.assertEqual(result.usage["input_tokens"], 1200)
+        self.assertEqual(result.usage["output_tokens"], 100)
+        self.assertEqual(result.usage["thinking_tokens"], 5)
 
 
 # ---------------------------------------------------------------------------
@@ -674,6 +684,7 @@ class TestToolLoopRouter(unittest.TestCase):
             system_instruction="sys",
             prompt="prompt",
             tools=[],
+            provider="deepseek",
             max_steps=25,
         )
 
@@ -689,6 +700,42 @@ class TestToolLoopRouter(unittest.TestCase):
         )
         self.assertEqual(res3.text, "From OpenAI")
         mock_openai.assert_called_once()
+
+    @mock.patch("newsroom.tool_loop.router.run_openai_tool_loop")
+    def test_router_strips_provider_prefix(self, mock_openai):
+        mock_openai.return_value = ToolLoopResult(text="ok")
+        execute_agent_tool_loop(None, "c", "ollama:qwen2.5:14b", "sys", "p", [])
+        kwargs = mock_openai.call_args.kwargs
+        self.assertEqual(kwargs["model"], "qwen2.5:14b")
+        self.assertEqual(kwargs["provider"], "ollama")
+
+        # A slash in an HF-style id that isn't the provider prefix is kept
+        execute_agent_tool_loop("vllm", "c", "deepseek-ai/DeepSeek-V3", "sys", "p", [])
+        self.assertEqual(mock_openai.call_args.kwargs["model"], "deepseek-ai/DeepSeek-V3")
+
+    def test_unprefixed_ollama_tag_routes_to_ollama(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(resolve_tool_loop_provider(model="qwen2.5:14b"), "ollama")
+            self.assertEqual(resolve_tool_loop_provider(model="gemma4:12b"), "ollama")
+            self.assertEqual(resolve_tool_loop_provider(model="gemini-3.8-flash"), "gemini")
+
+    def test_default_endpoint_per_provider(self):
+        from newsroom.tool_loop.openai_loop import resolve_endpoint
+        with mock.patch.dict(os.environ, {"OLLAMA_HOST": "localhost:11434"}, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
+            self.assertEqual(resolve_endpoint("ollama"), ("http://localhost:11434/v1", "local"))
+            self.assertEqual(resolve_endpoint("vllm")[0], "http://localhost:8000/v1")
+            # Hosted provider with no key is an error, not a dummy key
+            with self.assertRaises(ValueError):
+                resolve_endpoint("deepseek")
+        with mock.patch.dict(os.environ, {"DEEPSEEK_API_KEY": "k"}, clear=True):
+            self.assertEqual(resolve_endpoint("deepseek"), ("https://api.deepseek.com", "k"))
+
+    def test_openai_loop_missing_key_returns_error(self):
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch("pipeline.notify.env", return_value=None):
+            result = run_openai_tool_loop(None, "deepseek-chat", "s", "p", [], provider="deepseek")
+        self.assertIn("DEEPSEEK_API_KEY", result.error)
 
     def test_provider_from_env_variable(self):
         with mock.patch.dict(os.environ, {"LLM_PROVIDER": "vllm"}):

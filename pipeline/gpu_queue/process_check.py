@@ -99,9 +99,11 @@ def is_process_running(process_names: Union[str, Sequence[str]]) -> bool:
     if pgrep_bin:
         for target in target_lowers:
             try:
-                # -f matches against full command line, -i is case insensitive
+                # -x matches the exact process name (not the full command line,
+                # which would also match any shell whose arguments mention Madden);
+                # -i is case insensitive
                 res = subprocess.run(
-                    [pgrep_bin, "-i", "-f", target],
+                    [pgrep_bin, "-i", "-x", target],
                     capture_output=True,
                     timeout=5.0,
                     check=False,
@@ -117,17 +119,17 @@ def is_process_running(process_names: Union[str, Sequence[str]]) -> bool:
     if ps_bin:
         try:
             res = subprocess.run(
-                [ps_bin, "aux"],
+                [ps_bin, "-eo", "comm="],
                 capture_output=True,
                 text=True,
                 timeout=5.0,
                 check=False,
             )
             if res.returncode == 0:
-                output_lower = res.stdout.lower()
-                for target in target_lowers:
-                    if target in output_lower:
-                        return True
+                # Compare process names exactly, not full command lines
+                running_names = {line.strip().lower() for line in res.stdout.splitlines()}
+                if any(target in running_names for target in target_lowers):
+                    return True
         except Exception:
             pass
 

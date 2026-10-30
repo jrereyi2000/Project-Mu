@@ -46,6 +46,10 @@ def resolve_tool_loop_provider(provider: Optional[str] = None, model: Optional[s
             return "vllm"
         if m.startswith(("openai:", "openai/")):
             return "openai"
+        # Ollama names models "name:tag" (qwen2.5:14b, gemma4:12b); Gemini and
+        # hosted model ids never contain a colon.
+        if ":" in m:
+            return "ollama"
 
     env_provider = os.environ.get("LLM_PROVIDER")
     if env_provider:
@@ -54,6 +58,19 @@ def resolve_tool_loop_provider(provider: Optional[str] = None, model: Optional[s
             return p
 
     return "gemini"
+
+
+def strip_provider_prefix(model: str, provider: str) -> str:
+    """Remove a routing prefix like 'ollama:' or 'deepseek/' that names the resolved provider.
+
+    The prefix only selects the provider; the endpoint expects the bare model id.
+    """
+    m = (model or "").strip()
+    for sep in (":", "/"):
+        prefix = provider + sep
+        if m.lower().startswith(prefix):
+            return m[len(prefix):]
+    return m
 
 
 def execute_agent_tool_loop(
@@ -80,6 +97,7 @@ def execute_agent_tool_loop(
         ToolLoopResult from the executed loop.
     """
     resolved_provider = resolve_tool_loop_provider(provider=provider, model=model)
+    model = strip_provider_prefix(model, resolved_provider)
 
     if resolved_provider == "gemini":
         return run_gemini_tool_loop(
@@ -97,6 +115,7 @@ def execute_agent_tool_loop(
             system_instruction=system_instruction,
             prompt=prompt,
             tools=tools,
+            provider=resolved_provider,
             **kwargs,
         )
     else:

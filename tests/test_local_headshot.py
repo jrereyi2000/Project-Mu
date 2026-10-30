@@ -34,6 +34,7 @@ from headshots.local.backends import (
     DiffusersBackend,
     HeadshotBackend,
     MockBackend,
+    clear_backend_cache,
     get_backend,
     register_backend,
 )
@@ -256,6 +257,63 @@ class TestDiffusersBackend(unittest.TestCase):
         call_kwargs = mock_pipe.call_args[1]
         self.assertIn("image", call_kwargs)
         self.assertEqual(call_kwargs["controlnet_conditioning_scale"], 0.85)
+
+
+class TestDiffusersPipelineReuse(unittest.TestCase):
+    """The loaded pipeline is reused across calls and adjusted per call."""
+
+    def setUp(self):
+        clear_backend_cache()
+        self.addCleanup(clear_backend_cache)
+
+    def _backend_with_pipe(self):
+        backend = DiffusersBackend(config={"device": "cpu"})
+        mock_pipe = mock.MagicMock()
+        mock_pipe.return_value = mock.MagicMock(images=[Image.new("RGB", (64, 64))])
+        backend._pipe = mock_pipe
+        backend._pipe_controlnet = False
+        return backend, mock_pipe
+
+    def test_get_backend_reuses_diffusers_instance(self):
+        a = get_backend("diffusers", config={"device": "cpu"})
+        b = get_backend("diffusers", config={"device": "cpu"})
+        c = get_backend("diffusers", config={"device": "cpu", "model_id": "other/model"})
+        self.assertIs(a, b)
+        self.assertIsNot(a, c)
+        # Mock backend is still built fresh each call
+        self.assertIsNot(get_backend("mock"), get_backend("mock"))
+
+    def test_ip_adapter_loaded_and_unloaded_per_call(self):
+        backend, pipe = self._backend_with_pipe()
+        ref_bytes = create_dummy_png_bytes(32, 32)
+        with mock.patch.dict(sys.modules, {"torch": mock.MagicMock()}):
+            backend.generate(prompt="no ref", size=64)
+            self.assertNotIn("ip_adapter_image", pipe.call_args[1])
+            pipe.load_ip_adapter.assert_not_called()
+
+            backend.generate(prompt="with ref", ref_image=ref_bytes, size=64)
+            pipe.load_ip_adapter.assert_called_once()
+            self.assertIn("ip_adapter_image", pipe.call_args[1])
+
+            backend.generate(prompt="no ref again", size=64)
+            pipe.unload_ip_adapter.assert_called_once()
+            self.assertNotIn("ip_adapter_image", pipe.call_args[1])
+
+    def test_controlnet_change_rebuilds_pipeline(self):
+        backend, old_pipe = self._backend_with_pipe()
+        new_pipe = mock.MagicMock()
+        new_pipe.return_value = mock.MagicMock(images=[Image.new("RGB", (64, 64))])
+
+        def fake_init(use_controlnet=False, use_ip_adapter=False):
+            backend._pipe_controlnet = use_controlnet
+            return new_pipe
+
+        with mock.patch.object(backend, "_init_pipeline", side_effect=fake_init) as init, \
+             mock.patch.dict(sys.modules, {"torch": mock.MagicMock()}):
+            backend.generate(prompt="cn", size=64, config={"controlnet": True})
+        init.assert_called_once_with(use_controlnet=True, use_ip_adapter=False)
+        new_pipe.assert_called_once()
+        old_pipe.assert_not_called()
 
 
 class TestComfyUIBackend(unittest.TestCase):

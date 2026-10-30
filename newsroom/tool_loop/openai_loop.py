@@ -50,6 +50,61 @@ def extract_openai_usage(usage_obj: Any) -> Dict[str, int]:
     }
 
 
+# Default endpoints used when no client is passed. Each base URL can be
+# overridden by its env var; hosted providers need their API key set.
+#   provider: (base_url env, default base_url, api key env or None for local)
+PROVIDER_ENDPOINTS: Dict[str, tuple] = {
+    "openai": ("OPENAI_BASE_URL", None, "OPENAI_API_KEY"),
+    "deepseek": ("DEEPSEEK_BASE_URL", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
+    "glm": ("GLM_BASE_URL", "https://api.z.ai/api/paas/v4", "GLM_API_KEY"),
+    "vllm": ("VLLM_BASE_URL", "http://localhost:8000/v1", None),
+    "ollama": ("OLLAMA_OPENAI_BASE_URL", None, None),
+}
+
+
+def _env(name: str) -> Optional[str]:
+    val = os.environ.get(name)
+    if val:
+        return val
+    try:
+        from pipeline.notify import env
+        return env(name) or None
+    except Exception:
+        return None
+
+
+def resolve_endpoint(provider: str) -> tuple:
+    """Return (base_url, api_key) for a provider's default endpoint.
+
+    base_url None means the OpenAI SDK default. Raises ValueError for an
+    unknown provider or a hosted provider with no API key.
+    """
+    if provider not in PROVIDER_ENDPOINTS:
+        raise ValueError(f"No default endpoint for provider '{provider}'")
+    url_env, default_url, key_env = PROVIDER_ENDPOINTS[provider]
+
+    base_url = _env(url_env) or default_url
+    if provider == "ollama" and not base_url:
+        from engines.llm_provider import get_ollama_base_url
+        base_url = get_ollama_base_url().rstrip("/") + "/v1"
+
+    if key_env:
+        api_key = _env(key_env)
+        if not api_key:
+            raise ValueError(f"{key_env} is not set")
+    else:
+        # Local servers ignore the key, but the SDK requires a non-empty one.
+        api_key = "local"
+    return base_url, api_key
+
+
+def build_default_client(provider: str) -> Any:
+    """Create an OpenAI SDK client pointed at the given provider's endpoint."""
+    base_url, api_key = resolve_endpoint(provider)
+    import openai
+    return openai.OpenAI(api_key=api_key, base_url=base_url)
+
+
 def run_openai_tool_loop(
     client: Any,
     model: str,
@@ -58,6 +113,7 @@ def run_openai_tool_loop(
     tools: list[Callable],
     max_steps: int = 50,
     temperature: float = 0.7,
+    provider: str = "openai",
 ) -> ToolLoopResult:
     """Execute multi-turn autonomous tool calling loop against an OpenAI-compatible endpoint.
 
@@ -69,19 +125,19 @@ def run_openai_tool_loop(
         tools: List of Python callables, LangChain tools, or schema dicts available to model.
         max_steps: Maximum loop iterations before terminating.
         temperature: Sampling temperature for generation.
+        provider: Which endpoint to build a client for when client is None
+            ('openai', 'deepseek', 'glm', 'vllm', 'ollama'); see PROVIDER_ENDPOINTS.
 
     Returns:
         ToolLoopResult with generated text, token usage, tool counts, and iterations.
     """
     if client is None:
         try:
-            import openai
-            api_key = os.environ.get("OPENAI_API_KEY", "dummy-key")
-            client = openai.OpenAI(api_key=api_key)
+            client = build_default_client(provider)
         except Exception as e:
             return ToolLoopResult(
                 text="",
-                error=f"No OpenAI client provided and failed to instantiate default: {e}",
+                error=f"No client provided and failed to create a default {provider} client: {e}",
             )
 
     # Prepare tool mapping and schemas

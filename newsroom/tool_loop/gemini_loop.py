@@ -151,14 +151,16 @@ def run_gemini_tool_loop(
         usage["cached_tokens"] = sum(int(c.get("cached_tokens", 0)) for c in calls)
         usage["thinking_tokens"] = sum(int(c.get("thinking_tokens", 0)) for c in calls)
     else:
-        target_resp = followup if (followup is not None) else response
-        if target_resp is not None:
-            u = getattr(target_resp, "usage_metadata", None)
+        # Without the meter, only the responses we hold are visible: the AFC
+        # turn's final response and the synthesis follow-up. Sum both.
+        # (Intermediate AFC calls are only counted by the meter.)
+        for resp in (response, followup):
+            u = getattr(resp, "usage_metadata", None) if resp is not None else None
             if u is not None:
-                usage["input_tokens"] = int(getattr(u, "prompt_token_count", 0) or 0)
-                usage["output_tokens"] = int(getattr(u, "candidates_token_count", 0) or 0)
-                usage["cached_tokens"] = int(getattr(u, "cached_content_token_count", 0) or 0)
-                usage["thinking_tokens"] = int(getattr(u, "thoughts_token_count", 0) or 0)
+                usage["input_tokens"] += int(getattr(u, "prompt_token_count", 0) or 0)
+                usage["output_tokens"] += int(getattr(u, "candidates_token_count", 0) or 0)
+                usage["cached_tokens"] += int(getattr(u, "cached_content_token_count", 0) or 0)
+                usage["thinking_tokens"] += int(getattr(u, "thoughts_token_count", 0) or 0)
 
     total_tool_calls = sum(tool_call_counts.values())
     print("\n📊 --- RESEARCH TOOL USAGE SUMMARY ---")

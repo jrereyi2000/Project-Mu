@@ -5,7 +5,7 @@ Standalone CLI for the Nightly GPU Queue.
 Usage:
     python -m pipeline.gpu_queue.cli enqueue --kind text --model gemma4:12b --payload '{"prompt": "foo"}'
     python -m pipeline.gpu_queue.cli list [--status pending] [--json]
-    python -m pipeline.gpu_queue.cli run [--once] [--poll-interval 2.0]
+    python -m pipeline.gpu_queue.cli run --dry-run [--once] [--poll-interval 2.0]
     python -m pipeline.gpu_queue.cli clear [--status completed]
     python -m pipeline.gpu_queue.cli check-madden
 """
@@ -15,10 +15,10 @@ import os
 import sys
 from typing import Any, Dict, Optional
 
-from .models import GPUJob
+from .models import GPUJob, VALID_STATUSES
 from .process_check import is_madden_running
 from .queue import GPUQueue, SQLiteJobStore, JsonJobStore, BaseJobStore
-from .runner import GPUQueueRunner
+from .runner import GPUQueueRunner, mock_job_handler
 
 
 def _get_store(args: argparse.Namespace) -> BaseJobStore:
@@ -95,6 +95,18 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    # No real job handlers are wired into the CLI yet. Running without them
+    # would mark every pending job completed without doing the work, so only
+    # the explicit dry run (mock handler) is allowed.
+    if not args.dry_run:
+        print(
+            "Error: no job handlers are wired into the CLI yet. Use --dry-run to exercise "
+            "the queue with the mock handler (jobs are marked completed without doing any "
+            "work), or run the queue from Python with GPUQueueRunner.register_handler().",
+            file=sys.stderr,
+        )
+        return 1
+
     store = _get_store(args)
     queue = GPUQueue(store=store)
 
@@ -107,7 +119,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         queue=queue,
         is_madden_running_fn=is_running_fn,
         log_fn=print_log,
+        default_handler=mock_job_handler,
     )
+
+    if not args.no_requeue_stale:
+        requeued = queue.requeue_running()
+        if requeued:
+            print_log(f"Requeued {requeued} job(s) left running by a previous run.")
 
     if args.once:
         did_work = runner.run_once()
@@ -177,7 +195,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # list
     p_list = subparsers.add_parser("list", help="List jobs in the queue")
-    p_list.add_argument("--status", choices=["pending", "running", "completed", "failed"], help="Filter status")
+    p_list.add_argument("--status", choices=sorted(VALID_STATUSES), help="Filter status")
     p_list.add_argument("--json", action="store_true", help="Output raw JSON array")
     p_list.set_defaults(func=cmd_list)
 
@@ -188,11 +206,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--max-iterations", type=int, default=None, help="Max iterations before exiting")
     p_run.add_argument("--ignore-madden", action="store_true", help="Ignore Madden running check")
     p_run.add_argument("--no-stop-on-empty", action="store_true", help="Keep running even when queue is empty")
+    p_run.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Required for now: run jobs through the mock handler (marks them completed without doing work)",
+    )
+    p_run.add_argument(
+        "--no-requeue-stale",
+        action="store_true",
+        help="Don't return jobs left 'running' by a crashed run to 'pending' (use if another runner is active)",
+    )
     p_run.set_defaults(func=cmd_run)
 
     # clear
     p_clear = subparsers.add_parser("clear", help="Clear jobs from queue")
-    p_clear.add_argument("--status", choices=["pending", "running", "completed", "failed"], help="Filter status")
+    p_clear.add_argument("--status", choices=sorted(VALID_STATUSES), help="Filter status")
     p_clear.set_defaults(func=cmd_clear)
 
     # check-madden

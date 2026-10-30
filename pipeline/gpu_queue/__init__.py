@@ -27,6 +27,7 @@ from .queue import (
 )
 from .runner import (
     GPUQueueRunner,
+    mock_job_handler,
     run_queue,
 )
 from .process_check import (
@@ -53,6 +54,7 @@ __all__ = [
     "JsonJobStore",
     "enqueue",
     "GPUQueueRunner",
+    "mock_job_handler",
     "run_queue",
     "is_madden_running",
     "is_process_running",

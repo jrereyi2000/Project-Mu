@@ -62,7 +62,8 @@ newsroom/tool_loop/
 `execute_agent_tool_loop(provider, client, model, system_instruction, prompt, tools, **kwargs)`:
 - Dispatches to `run_gemini_tool_loop` if `provider == "gemini"`.
 - Dispatches to `run_openai_tool_loop` if `provider in ("openai", "ollama", "vllm", "deepseek", "glm")`.
-- If `provider` is omitted, infers provider from the `model` name prefix (e.g. `ollama:`, `deepseek:`) or `LLM_PROVIDER` environment variable.
+- If `provider` is omitted, infers provider from the `model` name prefix (e.g. `ollama:`, `deepseek:`), an Ollama-style `name:tag` model (`qwen2.5:14b` → ollama), or the `LLM_PROVIDER` environment variable, else gemini. A prefix naming the provider is stripped before the API call (`ollama:qwen2.5:14b` is sent as `qwen2.5:14b`).
+- With `client=None`, the OpenAI-compatible loop builds a client for the resolved provider's endpoint (`PROVIDER_ENDPOINTS` in `openai_loop.py`; base URLs overridable by env, hosted providers need `DEEPSEEK_API_KEY` / `GLM_API_KEY` / `OPENAI_API_KEY`).
 
 ---
 

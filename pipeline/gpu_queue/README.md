@@ -14,7 +14,7 @@ The PC's RTX 5070 Ti has 16GB VRAM. It cannot simultaneously run Madden NFL 27, 
 
 To guarantee stability:
 1. **Sequential Execution:** Exactly one model occupies GPU VRAM at a time. Each model is explicitly unloaded before the next model is loaded.
-2. **Game Awareness:** Batch GPU tasks pause immediately whenever Madden NFL 27 is running (`Madden27.exe`). When Madden is detected, any loaded model is evicted from VRAM to preserve full graphical performance for gameplay. Work resumes once Madden exits or after a configured idle timeout.
+2. **Game Awareness:** Batch GPU tasks pause immediately whenever Madden NFL 27 is running (`Madden27.exe`). When Madden is detected, any loaded model is evicted from VRAM to preserve full graphical performance for gameplay. Work resumes once Madden exits, or while it is running but idle: `is_madden_idle_fn` reports idleness, and with `idle_timeout` set Madden must stay idle that many seconds in a row. Time since Madden started never counts as idle.
 3. **Tier Prioritization (§7.8):**
    - **Tier 1 (Text):** Newsroom text jobs (Agent Wire batches, agent memory takes, scouting notes, GM text).
    - **Tier 2 (Image):** Headshots for new players / re-renders (§7.7), followed by portrait conversion for mod packaging (§9.4).
@@ -68,10 +68,13 @@ python -m pipeline.gpu_queue.cli list
 python -m pipeline.gpu_queue.cli list --status pending
 python -m pipeline.gpu_queue.cli list --json
 
-# Run queue processor
-python -m pipeline.gpu_queue.cli run
-python -m pipeline.gpu_queue.cli run --once
-python -m pipeline.gpu_queue.cli run --poll-interval 1.0
+# Run queue processor. No real job handlers are wired into the CLI yet, so
+# `run` requires --dry-run (mock handler: jobs are marked completed without
+# doing any work). Jobs left 'running' by a crash are requeued first unless
+# --no-requeue-stale.
+python -m pipeline.gpu_queue.cli run --dry-run
+python -m pipeline.gpu_queue.cli run --dry-run --once
+python -m pipeline.gpu_queue.cli run --dry-run --poll-interval 1.0
 
 # Clear completed or failed jobs
 python -m pipeline.gpu_queue.cli clear --status completed
@@ -123,8 +126,11 @@ runner = GPUQueueRunner(
 
 runner.register_handler("text", lambda job: {"output": "Generated text..."})
 runner.register_handler("headshot", lambda job: {"output": "Generated image bytes..."})
+# A job whose kind has no handler is marked failed. Pass
+# default_handler=mock_job_handler to GPUQueueRunner for a dry run instead.
 
-# Run one job or loop until empty
+# Run one job or loop until empty (requeue_stale=True first returns jobs a
+# crashed run left 'running' to 'pending'; only with a single runner)
 runner.run_once()
 runner.run_loop(poll_interval=2.0, stop_on_empty=True)
 ```

@@ -332,6 +332,18 @@ def test_convert_headshot_file_missing_input(tmp_path):
         convert_headshot_file(tmp_path / "missing.webp", tmp_path / "out.dds")
 
 
+def test_convert_headshots_batch_mixed_names(tmp_path, sample_webp_bytes):
+    """Numeric and non-numeric filenames in one folder sort without TypeError."""
+    in_dir = tmp_path / "mixed_in"
+    in_dir.mkdir()
+    for name in ["10", "abc", "2", "Zed"]:
+        (in_dir / f"{name}.webp").write_bytes(sample_webp_bytes)
+
+    outputs = convert_headshots_batch(in_dir, tmp_path / "mixed_out", width=64, height=64)
+
+    assert [p.stem for p in outputs] == ["2", "10", "Zed", "abc"]
+
+
 def test_convert_headshots_batch(tmp_path, sample_webp_bytes):
     """Verify convert_headshots_batch processes multiple files with limits."""
     in_dir = tmp_path / "batch_in"
