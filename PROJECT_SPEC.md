@@ -284,7 +284,8 @@ Project Mu/
 │   └── backups/               #   madden_backup_*.sql dumps
 ├── headshots/                 # AI player headshot generation and portrait modding (§2.20)
 │   ├── headshot_appearance_generator.py, make_headshot.py
-│   ├── rookie_headshots.py    #   Automated rookie headshot generation for seasonal pipeline
+│   ├── rookie_headshots.py    #   Automated rookie headshot generation for seasonal pipeline (dual WebP + BC3 DDS mod export)
+│   ├── audit_roster_portraits.py #  Audits starting 2026 roster broadcast portraits, fetches ESPN media-day cutouts, and batch-packages DDS base mod
 │   ├── gen.py                 #   Gemini batch job submit / download
 │   ├── process_headshots.py   #   Background removal → static/players/{player_id}.webp
 │   ├── local/                 #   Standalone local headshot generation pipeline (docs/in_progress/PC_MIGRATION_PLAN.md §7.7; PRE_PC_WORK_2.md Item A1)
@@ -729,11 +730,20 @@ Fictional players in Madden lack official broadcast photography. The headshot su
   - Uses `rembg` with the edge-preserving ONNX `silueta` model ($\approx 0.35\text{s}$ inference) to cleanly segment players from the white background.
   - Encodes the RGBA cutout into WebP (`quality=90`, `method=4`, $\approx 110\text{–}180\text{ KB}$).
   - Re-maps request keys to each player's primary key `players.id`, saving directly to `static/players/{player_id}.webp`.
-- **Seasonal Rookie Headshot Pipeline (`headshots/rookie_headshots.py`, `pipeline/weekly_capture.py`):**
-  - Automatically runs after `step_load` in start-of-season cadence runs (`--mode season`) and roster scans (`--mode roster`) via `step_rookie_headshots(season)`.
+- **Seasonal Rookie Headshot Pipeline (`headshots/rookie_headshots.py`, `pipeline/weekly_capture.py`, `pipeline/watch_save.py`):**
+  - Automatically runs after `step_load` in start-of-season cadence runs (`--mode season`), roster scans (`--mode roster`), and PC save season rollovers in `watch_save.py` (`step_rookie_headshots(season)`).
   - Queries all rookies entering the league on team rosters (`player_seasons.years_of_experience = 0` / linked `draft_prospects` rows) that do not yet have headshots in `static/players/{player_id}.webp`.
-  - Generates media-day headshots concurrently across 5–6 worker threads using `gemini-nano-banana-2.1`, strips backgrounds with thread-local `rembg` silueta sessions, archives raw cutouts to `data/headshots/players_backup/{player_id}.webp`, and standardizes transparent cutouts to 700×508 WebPs at `static/players/{player_id}.webp`.
+  - When `USE_LOCAL_HEADSHOTS=1`, routes through `headshots.local.adapter`, using the 5-bracket physical weight system (`donors.py`) to select the team's authentic donor template and aperture mask. Inpaints on the RTX 5070 Ti using `RealVisXL_V5.0` (~6s per player; ~28 min for a 224-player draft class).
+  - Generates dual outputs in a single step:
+    1. Standardized 700×508 transparent WebP cutouts at `static/players/{player_id}.webp` for the web newsroom, social cards, player profiles, and Draft Central.
+    2. 512×512 Direct3D BC3/DXT5 DDS textures at `data/headshots/dds/rookies/{player_id}.dds` (via `headshots.portrait_converter`) ready for MMC Mod Manager / Frosty in-game portrait mod injection.
   - Fully idempotent: resumes seamlessly across stops and network drops. Standalone CLI: `python3 -m headshots.rookie_headshots [--season N] [--workers 5] [--drafted-only] [--dry-run]`.
+- **Baseline 2026 Roster Portrait Audit & Mod Packaging (`headshots/audit_roster_portraits.py`):**
+  - Designed for the fresh 2026 PC franchise launch: audits all 1,716 active players on the 32 NFL rosters.
+  - Distinguishes real veterans with official broadcast photography (fetched from ESPN CDN at 1000×1000 RGBA, background-stripped with `rembg`) from players lacking photos.
+  - Synthesizes 5-bracket inpainting portraits for players without photos, ensuring 100% complete portrait coverage across the entire starting league.
+  - Batch-exports all 1,716 portraits as 512×512 BC3 DDS textures into `data/headshots/dds/2026_baseline/` alongside a `portrait_manifest.csv` for initial mod packaging (`Project Mu 2026 Base Portraits` mod pack).
+  - Ensures subsequent franchise seasons only ever generate portraits for incoming rookies.
 - **Frontend Serving:** Served statically at `/static/players/{player_id}.webp` by FastAPI (`server/api.py`). The React frontend (`Mu_Network/src/App.tsx`) loads headshots with cache-busting `?v=${HEADSHOT_VERSION}` across player modals, roster views, and social cards, falling back to team-colored initialed avatars if missing. Full architectural spec in [`docs/done/HEADSHOT_PIPELINE.md`](docs/done/HEADSHOT_PIPELINE.md).
 - **Local Headshot Generation Pipeline (`headshots/local/`, `docs/in_progress/PC_MIGRATION_PLAN.md` §7.7, `docs/not_started/PRE_PC_WORK_2.md` Item A1):**
   - Standalone local generation engine allowing Project Mu to generate broadcast-grade player portraits on the RTX 5070 Ti (16GB VRAM) without cloud API quota constraints.
