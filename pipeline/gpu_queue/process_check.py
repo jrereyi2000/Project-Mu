@@ -6,7 +6,7 @@ Checks if Madden 27 is running via tasklist.exe (WSL2 / Windows) or pgrep (Mac /
 Provides mockable hooks for unit tests and local simulation.
 
 Reference:
-- docs/in_progress/PC_MIGRATION_PLAN.md §7.5
+- docs/done/PC_MIGRATION_PLAN.md §7.5
 - docs/not_started/PRE_PC_WORK_2.md Item A7
 """
 from contextlib import contextmanager

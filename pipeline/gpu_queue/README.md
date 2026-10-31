@@ -3,7 +3,7 @@
 A standalone offline queue and scheduler for orchestrating GPU workloads on the Project Mu PC's NVIDIA RTX 5070 Ti (16GB VRAM).
 
 References:
-- `docs/in_progress/PC_MIGRATION_PLAN.md` §7.5, §7.8
+- `docs/done/PC_MIGRATION_PLAN.md` §7.5, §7.8
 - `docs/not_started/PRE_PC_WORK_2.md` Item A7
 
 ---

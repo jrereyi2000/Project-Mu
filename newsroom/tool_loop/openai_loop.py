@@ -1,6 +1,6 @@
 """
 OpenAI-Compatible Multi-Turn Tool Loop.
-(docs/in_progress/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
+(docs/done/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
 
 Executes multi-turn tool calling with OpenAI-compatible endpoints (DeepSeek, GLM,
 vLLM, Ollama, OpenAI) using standard chat completions API:

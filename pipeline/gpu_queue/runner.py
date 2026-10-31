@@ -4,7 +4,7 @@ Nightly GPU Queue Runner coordinating sequential model execution,
 tier prioritization, Madden process pause/resume, and VRAM management.
 
 Reference:
-- docs/in_progress/PC_MIGRATION_PLAN.md §7.5, §7.8
+- docs/done/PC_MIGRATION_PLAN.md §7.5, §7.8
 - docs/not_started/PRE_PC_WORK_2.md Item A7
 """
 import logging

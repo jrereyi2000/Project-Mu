@@ -1,6 +1,6 @@
 """
 Dual ReAct Tool Execution Engine for Gemini AFC & OpenAI-Compatible Endpoints.
-(docs/in_progress/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
+(docs/done/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
 
 Provides unified interfaces and separate implementations for:
 - Google Gemini via Automatic Function Calling (AFC)

@@ -7,6 +7,8 @@
 
 **Status:** Non-destructive. Phases 1–3 done; Phase 4 markers in place (`# @AUDIT-STATUS` headers, `pipeline/tombstone.py` decorators in `db/db_handler.py`). Nothing in Tiers 1–5 has been deleted yet.
 
+**When pruning happens (JR, 2026-10-30):** removing obsolete code, including the §3b decouplings, is not part of any pipeline version (V2 or V3) or the closed PC migration plan. It is this audit plan's own work, scheduled after V3.
+
 ---
 
 ## 1. Executive Summary & Definitions

@@ -4038,7 +4038,7 @@ def run_roster(out, max_teams=32, resume=False):
 
 
 # ---------------------------------------------------------- attributes ----
-# The wide roster list (docs/in_progress/PC_MIGRATION_PLAN.md §2.3, mapped Oct 28): d-pad left/right moves a column cursor whose
+# The wide roster list (docs/done/PC_MIGRATION_PLAN.md §2.3, mapped Oct 28): d-pad left/right moves a column cursor whose
 # full name shows in the chip at the top right; 11 columns and 14 rows show at once; the highlight scrolls down to
 # the 8th row and stays there. pipeline/attribute_reader.py has the column list and reads the views.
 ATTR_STEP = 7                                   # rows between sweeps, so every player is seen once not highlighted
@@ -4466,7 +4466,7 @@ def main():
                 log("Returning to the hub before contracts")
                 go_hub()
         if a.only == "attributes":
-            # PS5 attribute scan (docs/in_progress/PC_MIGRATION_PLAN.md §2.3); read with python3 -m pipeline.attribute_reader RUN
+            # PS5 attribute scan (docs/done/PC_MIGRATION_PLAN.md §2.3); read with python3 -m pipeline.attribute_reader RUN
             atries = [0]
 
             def attributes():

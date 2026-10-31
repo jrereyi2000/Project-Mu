@@ -1,6 +1,6 @@
 """
 tools/save_write_logger.py: Logs when Madden writes to its saves folder, to learn whether the franchise
-save changes during a game (docs/in_progress/V2_MASTER_PLAN.md §5, docs/in_progress/PC_MIGRATION_PLAN.md §9).
+save changes during a game (docs/in_progress/V2_MASTER_PLAN.md §5, docs/done/PC_MIGRATION_PLAN.md §9).
 
 Polls the saves folder once a second and logs every file that appears, changes (modification time, size or
 content) or disappears, plus when Madden27.exe starts and exits. It only reads: files are hashed in place, and

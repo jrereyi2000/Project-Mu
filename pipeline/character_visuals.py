@@ -2,7 +2,7 @@
 # @REPLACED-BY: NONE (fresh 2034 save, no teleport; AUDIT_LEDGER.md §3b)
 """
 CharacterVisuals.RawData ISON decoder, encoder, and skinTone updater for Madden 27 PC franchise saves
-(docs/done/PRE_PC_WORK.md §3, docs/in_progress/PC_MIGRATION_PLAN.md §4.3 "Appearance").
+(docs/done/PRE_PC_WORK.md §3, docs/done/PC_MIGRATION_PLAN.md §4.3 "Appearance").
 
 CharacterVisuals.RawData storage format:
   In Madden 27 franchise saves, CharacterVisuals is a table with Table3 (binary blob) data.

@@ -3,7 +3,7 @@
 Standalone utility that converts Project Mu player headshots (`static/players/{player_id}.webp`) into in-game player portrait textures for Madden 27 PC.
 
 References:
-- `docs/in_progress/PC_MIGRATION_PLAN.md` §9.4 (*Headshots as In-Game Portraits*)
+- `docs/done/PC_MIGRATION_PLAN.md` §9.4 (*Headshots as In-Game Portraits*)
 - `docs/not_started/PRE_PC_WORK_2.md` Item A5 (*Portrait Converter*)
 
 ---

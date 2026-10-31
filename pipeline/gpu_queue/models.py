@@ -3,7 +3,7 @@ pipeline/gpu_queue/models.py
 Data models and constants for the Nightly GPU Queue.
 
 Reference:
-- docs/in_progress/PC_MIGRATION_PLAN.md §7.5, §7.8
+- docs/done/PC_MIGRATION_PLAN.md §7.5, §7.8
 - docs/not_started/PRE_PC_WORK_2.md Item A7
 """
 from dataclasses import dataclass, field, asdict
@@ -12,7 +12,7 @@ import json
 from typing import Any, Dict, Optional
 import uuid
 
-# Priority tiers as defined in docs/in_progress/PC_MIGRATION_PLAN.md §7.8:
+# Priority tiers as defined in docs/done/PC_MIGRATION_PLAN.md §7.8:
 # Tier 1: Newsroom text jobs (Agent Wire batches, agent memory takes, scouting notes, GM text).
 # Tier 2: Headshot generation for new players / re-renders (§7.7) -> portrait conversion (§9.4).
 # Tier 3: Audio TTS production (§9).

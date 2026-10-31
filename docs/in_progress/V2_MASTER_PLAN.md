@@ -1,9 +1,9 @@
 # Project Mu: V2 Master Plan — The Franchise Operating System
 
 **Status (2026-10-30):** Approved architecture for the local franchise operating system. V2 owns headless Madden, front-office control, progression, and the Franchise Command Center. Cloud media, dossier-based writing, multimedia, and conversational Napper enhancements are separately planned in [`V3_STUDIO_PLAN.md`](./V3_STUDIO_PLAN.md).
-**Delivery boundary:** V3 media production is not an additional prerequisite for starting the live 2034 franchise; the existing V2 readiness requirement below remains in force. This is a documentation split, not a completed runtime migration.
-**Prerequisite:** The PC environment, save reader/writer, and Docker Postgres are operational ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §3, §5).
-**Strategic Decision (JR, 2026-10-29):** The live **2034 canonical franchise run is held until V2 systems are fleshed out and tested** on scratch/sample saves (`CAREER-WEEK1/2/3` and `CAREER-GIANTS-AUTOSAVE`). Testing V2 first ensures that when the permanent 2034 league begins, progression, coach-set depth charts, and CBA contract mechanics are fully autonomous and controlled by Project Mu rather than Madden's native CPU algorithms.
+**Delivery boundary:** V3 media production is not an additional prerequisite for starting the live franchise (2026 Madden start, §7.2); the existing V2 readiness requirement below remains in force. This is a documentation split, not a completed runtime migration.
+**Prerequisite:** The PC environment, save reader/writer, and Docker Postgres are operational ([`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md) §3, §5).
+**Strategic Decision (JR, 2026-10-29; start updated 2026-10-30):** The live **canonical franchise run is held until V2 systems are fleshed out and tested** on scratch/sample saves (`CAREER-WEEK1/2/3` and `CAREER-GIANTS-AUTOSAVE`). The Madden franchise then starts in 2026 and Project Mu runs it as a fully CPU league through 2033 before JR takes over a team in 2034 (§7.2, V2's final milestone). Testing V2 first ensures that when the permanent league begins, progression, coach-set depth charts, and CBA contract mechanics are fully autonomous and controlled by Project Mu rather than Madden's native CPU algorithms.
 
 ---
 
@@ -224,7 +224,7 @@ See [V3 §3](./V3_STUDIO_PLAN.md#3-generation-and-publication-flow). The preferr
 
 V2 GM/player negotiations stay interactive and use deterministic transaction engines for decisions. V3 shares this boundary for Napper conversations and reporter dialogue ([V3 §7](./V3_STUDIO_PLAN.md#7-interactive-personas-and-napper)). Provider choice, latency targets, and beside-Madden model feasibility require PC measurement; no sub-second performance or per-turn price is guaranteed.
 
-**Decision (JR, 2026-10-30): ingest runs on the save made after Advance Week, not the one made straight after the game (§7.0, B1 resolved).** In `CAREER-WEEK1/2/3` ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §5.4, check 3), each save was made after the week's 15 CPU games were simmed and before CAR's game. The final score, quarter scores and team box score (`SeasonGame` and its `TeamStatCache`) were readable for every game already played, this week's included. The player lines (`Game*Stats`) for this week's games were in their tables too, but had a null `SeasonGame` and no `Player.GameStats` link, so the reader can't credit them; the next week's save had them linked. Whatever links them (the week's last game finishing, or Advance Week) has happened by the time the week is advanced, so the post-advance save holds the whole week's player lines, the user's game included. This also makes it irrelevant whether Madden writes the save mid-game: the watcher only acts on the post-advance save. The cost is that the postgame newsroom for the user's game (press conference, recap, quotes) waits for the advance. If O1 (§7.0) works, the user's game and the earlier-kickoff games can be credited from the save made straight after the game as well.
+**Decision (JR, 2026-10-30): ingest runs on the save made after Advance Week, not the one made straight after the game (§7.0, B1 resolved).** In `CAREER-WEEK1/2/3` ([`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md) §5.4, check 3), each save was made after the week's 15 CPU games were simmed and before CAR's game. The final score, quarter scores and team box score (`SeasonGame` and its `TeamStatCache`) were readable for every game already played, this week's included. The player lines (`Game*Stats`) for this week's games were in their tables too, but had a null `SeasonGame` and no `Player.GameStats` link, so the reader can't credit them; the next week's save had them linked. Whatever links them (the week's last game finishing, or Advance Week) has happened by the time the week is advanced, so the post-advance save holds the whole week's player lines, the user's game included. This also makes it irrelevant whether Madden writes the save mid-game: the watcher only acts on the post-advance save. The cost is that the postgame newsroom for the user's game (press conference, recap, quotes) waits for the advance. If O1 (§7.0) works, the user's game and the earlier-kickoff games can be credited from the save made straight after the game as well.
 
 ---
 
@@ -375,8 +375,20 @@ All development and testing will occur on the PC using existing scratch saves (`
    - Endpoints for depth chart management, roster cuts/promotions, free agency offers, contract negotiations, trade evaluations, and the game launch trigger.
 4. **Phase 4: Game Lifecycle Automation:**
    - Enhance [`pipeline/watch_save.py`](../../pipeline/watch_save.py) and [`pipeline/gpu_queue/process_check.py`](../../pipeline/gpu_queue/process_check.py) to automatically ingest the post-advance save once `Madden27.exe` exits (§5 note).
+   - Write next week's mod pack after each ingest (`pipeline.mod_packs.write --team <user_team>`, §5 step 3; moved from the closed PC migration plan).
 5. **Phase 5: Frontend Franchise Command Center:**
    - Build the complete `/franchise` dashboard in `Mu_Network`, integrating all 8 modules.
+
+### 7.2 Final Milestone: The 2026–2033 All-CPU Era and JR's 2034 Takeover (JR, 2026-10-30)
+
+This replaces the earlier "fresh 2034 franchise" start (a new Madden franchise moved to 2034 with `seasonYearSetup.exe`). The goal is that when JR takes over a team in 2034, Project Mu already runs the whole league and the universe already has history, memories and living personas.
+
+* **The Madden franchise starts in 2026,** after the roster-size and sim mods are applied, and is registered at once (`python3 -m pipeline.watch_save <save> --once --auto-init --franchise-name <name>`, no `--user-team`). The clean seed's real 2025 coaches, GMs and records then line up with the first season, and the record book has no 2025→2034 gap.
+* **2026–2033 is a fully CPU league with no user team.** Mu runs every team: progression, depth charts, contracts, free agency, trades, the draft, and hiring and firing staff. Madden only plays the games (§5). Nothing here is new engine work: it is the V2 core ([`V2_CORE_BUILD_PLAN.md`](./V2_CORE_BUILD_PLAN.md)) and the game lifecycle (§5, Phase 4) running for eight seasons, which makes it V2's acceptance run.
+* **Media for those years is a V3 job, not a V2 prerequisite.** League simulation does not wait on articles. V3's dossiers freeze evidence at a season/week cutoff ([`V3_STUDIO_PLAN.md`](./V3_STUDIO_PLAN.md) §2–§3), so coverage for the CPU years can be written in week order during or after the simulation, at no Gemini cost, and every writer still reaches 2034 with seven years of memories. JR expects to read 1–2 articles a season, so a reduced background slate for CPU years is expected (size to decide with V3's budget, §5 there).
+* **To verify before starting:** the database must keep enough week-by-week state (standings, injuries, ratings, contracts, transactions with dates) for a later dossier to rebuild what was known at each week. Check this against V3's dossier compiler before the run, or the media backfill has to run alongside the simulation instead.
+* **In 2034** JR marks his team user-controlled (the `#debug` page, `gm_team_settings.user_controlled`), and the league continues with the user Command Center (§2).
+* The §5.4 save checks are re-run on the modded 2026 save first (§7.0 P5).
 
 ---
 
@@ -391,3 +403,72 @@ Today "Play Game" (§2.1, §5) still leaves the user to start Madden, load the f
 
 Before building anything: confirm the chosen route doesn't trip the game's anti-cheat or break offline franchise play, and that the user can always fall back to doing it by hand.
 
+---
+
+## 9. CFB 27 → Madden Dynasty Bridge (moved from PC migration §6, 2026-10-30)
+
+> Moved here from the PC migration plan on 2026-10-30. Bare section numbers (§3, §5.3, …) inside this section refer to [`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md) and its [archive](../done/PC_MIGRATION_ARCHIVE.md), except where they name another plan.
+
+`madden-franchise` reads CFB 27 PC Dynasty saves, so Project Mu can run a Saturday-to-Sunday pipeline:
+
+```
+[CFB 27 Dynasty Season]
+          │
+          ├──> Week by week: college game results, rankings, playoff bracket
+          │    and award-race stats populate Project Mu's `scout_events` table
+          │
+          ▼
+[Offseason "Players Leaving" Stage]
+          │
+          ├──> `pipeline/cfb_save_reader.js` extracts graduating seniors & early entrants
+          │    (names, schools, physicals, traits, college season totals)
+          │
+          ▼
+[Rating Translation & Compression Engine]
+          │
+          ├──> Compresses CFB 27 ratings into Madden's draft-class rookie distribution
+          │    (top prospect ~82–84 OVR; late rounds ~62–66 OVR; assigns hidden dev traits)
+          │
+          ▼
+[Name Check]
+          │
+          ├──> Each prospect's surname goes through the surname rule (§4.3, `pipeline/commentary_names.py`).
+          │    Prospects with a recorded surname get its commentary ID; the rest get 0
+          │    and are listed so JR can decide whether to keep the name
+          │
+          ▼
+[Inject into Madden Draft Class]
+          │
+          └──> Writes the prospects into Madden's draft class (community
+               `draftPlayerImportNcaa` / `playersToDraftClass` utilities are prior art)
+```
+
+**Prior art to compare before building:** *Pipeline — CFB 27 → Madden 26/27 Draft Class Tool* (MMC Discord, 2026-08) already does most of this chain as a Windows app: it reads the dynasty's leaving players (or predicts them from earlier saves), projects round and pick, converts ratings to Madden's scale with a deterministic, tunable curve, assigns dev traits by target shares and writes an importable draft class with faces. Project Mu still needs its own reader for `scout_events` and the name check, but the rating translation and injection could start from that tool or check against it. Community M27 classes (Eli2Manningham 2027–2033, matched to M27's higher rookie scale) are the fallback for a year without a CFB class. If a class import runs out of player rows, WiiMaster's `trimFreeAgents` utility deletes the lowest free agents to make room ([`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) §2).
+
+**Rookie names:** Madden-generated draft classes already carry commentary IDs. Anything Project Mu names itself (CFB 27 imports that get renamed, fictional prospects or created players) picks surnames from Madden's recorded list, so every new player can be called by name. Existing players keep their names.
+
+---
+
+## 10. Headshots as In-Game Portraits (moved from PC migration §9.4, 2026-10-30)
+
+> Moved here from the PC migration plan on 2026-10-30. Bare section numbers (§3, §5.3, …) inside this section refer to [`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md) and its [archive](../done/PC_MIGRATION_ARCHIVE.md), except where they name another plan.
+
+Owned by V2 because it is save and mod integration (`Player.PLYR_PORTRAIT` writes, MMC texture mods). Generating the headshots stays local (`headshots/`); photojournalism and other media are V3 §6.
+
+Player models are barely visible in play, so they only need to be close: the trait mapping in §4.3 (skin tone, hair, facial hair, build on a generic head) is enough, and custom 3D faces are dropped. What is visible is the player portrait on cards, menus and presentation, and that can show the Project Mu headshot.
+
+**How portraits work (checked on `CAREER-GIANTS-AUTOSAVE`):**
+* `Player.PLYR_PORTRAIT` picks the portrait image; all players use the `library_icons_brt` portrait library.
+* Real NFL players have their own portrait IDs: 2,865 of 3,086 players have a unique ID (range up to 30,000).
+* Madden-generated players share a small set of generic portraits (IDs around 3,300–3,950), and 92 players have 0 (no portrait).
+* The community calls this field "Portrait ID"; with `PLYR_ASSETNAME` (the face scan) it is what portrait and cyberface mods key on, so mods ship ID lists and patchers that rewrite both fields per player (e.g. RFM's 300+ cyberfaces and portraits, Kevin's *Bulk Draft Class Portrait and Cyberface Assignment* from a CSV). MyFranchise Tool can also import a custom portrait image per player, keyed by Portrait ID ([`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) §4).
+
+**Plan:**
+1. By 2036 the real players behind those 2,865 unique slots are long retired, so their portrait images can be overwritten with Project Mu headshots. 2,865 slots cover the 1,829 active players plus several years of rookie classes; slots of players who retire are reused after that.
+2. *(Teleport obsolete 2026-10-29: in the fresh 2034 save, a one-off portrait pass replaces this.)* The teleporter gives each Project Mu player a slot and writes it to `PLYR_PORTRAIT`; the rookie import does the same each season after `headshots/rookie_headshots.py` runs.
+3. A converter takes each headshot (already a transparent cutout, `static/players/{player_id}.webp`), resizes it to Madden's portrait size and encodes it in the game's texture format.
+4. The portrait textures are replaced through MMC Modding Tools (the community's Frosty-based Madden 27 editor, updated for each title update; [FMT.Madden26Plugin](https://github.com/FMTDev/FMT.Madden26Plugin) is the alternative) and loaded as a mod with the anti-tamper module, offline only.
+
+**One-portrait spike first,** on the PC: export one portrait with MMC Modding Tools to learn its size, format and how the ID maps to the image; replace it with a headshot; check it in-game on the player card. Also try the MyFranchise Tool custom-portrait import on one player and check whether Madden's own screens show it or only MFT does; if Madden shows it, it may replace steps 3–4. Portrait texture mods already exist for Madden 27 (WiiMaster's *Old Style Portraits*, Keanu Steez's roster/portrait pack), so the texture route is proven in principle.
+
+**Next step, the one-portrait spike (from the closed migration plan's remaining work):** export a sample portrait with MMC Modding Tools, check its DDS format and size, and test a Project Mu WebP headshot converted with [`headshots/portrait_converter/`](../../headshots/portrait_converter/) in game.

@@ -1,8 +1,8 @@
 # Project Mu: Pre-PC Work Briefs
 
-**Status:** All 11 of 11 items complete (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
+**Status:** All 11 of 11 items complete (2026-10-28). The checklist is [`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md) §2.4. Each brief below is written so an agent can take it on its own: goal, what exists, where to work, steps, and when it's done.
 
-**2026-10-29: the teleport is dropped for a fresh 2034 PC franchise, and Mu's 2026–2036 history is discarded** ([`PC_MIGRATION_PLAN.md`](../in_progress/PC_MIGRATION_PLAN.md), decision at the top; obsolete code in [`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b). Items 2 (surname rename, the 2036 `apply` run) and 3 (body skin tone) only served the teleport; their code is marked for deletion except `commentary_names.py`'s lookup. Items 1 and 4–11 still serve the fresh save.
+**2026-10-29: the teleport is dropped for a fresh 2034 PC franchise, and Mu's 2026–2036 history is discarded** ([`PC_MIGRATION_PLAN.md`](./PC_MIGRATION_PLAN.md), decision at the top; obsolete code in [`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b). Items 2 (surname rename, the 2036 `apply` run) and 3 (body skin tone) only served the teleport; their code is marked for deletion except `commentary_names.py`'s lookup. Items 1 and 4–11 still serve the fresh save.
 
 Nothing here needs the PC or a real 2037 save. On hold, not briefed: `madden_pgid` on the live database (after the PC move), the CFB 27 bridge (§6), the pregame show (§9.1) and the rest of Part 2.
 
@@ -110,7 +110,7 @@ Whether Madden draws the edited body skin tones on PC is added to plan §5.4.
   - `engines/gm_llm.py` `GeminiText` and `make_llm()`: defaults to `low` thinking across `gm_persona`, `gm_rationale`, `gm_negotiation`, `scouting_notes`, and `draft_rationale`. Configurable via `GM_LLM_THINKING`, `GM_THINKING_<LABEL>`, or `model:level`.
   - `newsroom/social_writer.py` `write_post()`: unified on `make_content_config()`.
 * Unit tests in `tests/test_llm_config.py` verify that `ThinkingConfig` is constructed and passed with expected thinking levels using mock clients.
-* Comparison numbers and token savings documented in `docs/in_progress/PC_MIGRATION_PLAN.md` §7.9 and `PROJECT_SPEC.md`.
+* Comparison numbers and token savings documented in `docs/done/PC_MIGRATION_PLAN.md` §7.9 and `PROJECT_SPEC.md`.
 
 ---
 
@@ -315,7 +315,7 @@ must print 32 (or the GM count) with no error.
 
 ## R5. [x] Plan text that isn't true
 
-Docs only, `docs/in_progress/PC_MIGRATION_PLAN.md`:
+Docs only, `docs/done/PC_MIGRATION_PLAN.md`:
 1. **§7.9 "Measured Savings & Token Impact"** states ~100–150 thinking tokens per call at `low`, dollar savings and "zero regression" as measured; nothing measured them. Replace with what is known (the baseline averages from §7.1) and "not yet measured", plus the command to measure: `python3 -m tools.llm_compare --task <task> --season 2036 --week 20 --models gemini-3.8-flash gemini-3.8-flash:low --limit 5` for `memory_takes`, `memory_summary`, `scouting_notes`, `gm_rationale` (≈ 40 Gemini calls; don't run it, JR will).
 2. **§7.3 / §7.5 live GM negotiations:** ed25c3b changed this to a resident small local model with "no cloud fallback needed". That's an untested design change. Restore the fallback (the provider switch falls back to Gemini when the local model is unavailable, §7.5) and keep the resident small model as the option to test, not the decision.
 3. **§3 "Crossing the boundary":** says `pipeline/notify.py`'s notification method needs a Linux equivalent; it uses ntfy over HTTP and works unchanged on WSL2. Say so.

@@ -1,6 +1,6 @@
 """
 Tool Loop Router for Multi-Provider Dispatch.
-(docs/in_progress/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
+(docs/done/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
 
 Routes tool loop execution requests to either the Gemini AFC implementation or the
 OpenAI-compatible multi-turn implementation based on provider or model.

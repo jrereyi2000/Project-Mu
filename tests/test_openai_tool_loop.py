@@ -1,6 +1,6 @@
 """
 Unit tests for the OpenAI-Compatible Tool Loop and Schema Converter.
-(docs/in_progress/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
+(docs/done/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
 
 Verifies:
 1. Tool schema conversion from Python callables, docstrings, type annotations, LangChain tools, and Pydantic models.

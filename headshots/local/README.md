@@ -3,7 +3,7 @@
 Standalone local portrait generation engine for Project Mu player and rookie headshots, designed to transition Project Mu from cloud image generation (`gemini-nano-banana-2.1`) to a dedicated local GPU (RTX 5070 Ti 16GB VRAM).
 
 References:
-- `docs/in_progress/PC_MIGRATION_PLAN.md` §7.7
+- `docs/done/PC_MIGRATION_PLAN.md` §7.7
 - `docs/not_started/PRE_PC_WORK_2.md` Item A1
 
 ---

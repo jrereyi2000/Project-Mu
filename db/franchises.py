@@ -1,5 +1,5 @@
 """
-db/franchises.py: Registry of Madden franchises and their databases (docs/in_progress/PC_MIGRATION_PLAN.md §5.2).
+db/franchises.py: Registry of Madden franchises and their databases (docs/done/PC_MIGRATION_PLAN.md §5.2).
 
 Each Madden franchise gets its own Postgres database, `madden_<slug>`. A franchise is identified by
 `Franchise.LeagueID` from the save (pc_save_reader.mjs puts it in the snapshot as `franchise.league_id`),

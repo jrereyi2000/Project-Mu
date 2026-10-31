@@ -1,6 +1,6 @@
 """
 pipeline/ingame_resume.py: Reader for Madden 27's INGAME-RESUMEDATA, the resume file Madden rewrites
-after every play of a game in progress (docs/in_progress/PC_MIGRATION_PLAN.md §9.2).
+after every play of a game in progress (docs/done/PC_MIGRATION_PLAN.md §9.2).
 
 The file is an FBCHUNKS header (magic, sizes, write time, build, mode such as "Ultimate Career" or
 "Exhibition") followed by an EA Blaze TDF tree: each field is a 3-byte tag (four 6-bit characters,

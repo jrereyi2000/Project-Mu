@@ -1,6 +1,6 @@
 """
 Gemini AFC Tool Loop Encapsulation.
-(docs/in_progress/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
+(docs/done/PC_MIGRATION_PLAN.md §7.3, §7.4; PRE_PC_WORK_2.md Item A6)
 
 Encapsulates the Gemini Automatic Function Calling (AFC) pattern used in
 newsroom/swarm_dispatcher.py, preserving exact tool logging, parameter signature
