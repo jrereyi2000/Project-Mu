@@ -361,7 +361,9 @@ def fits_from_db(cur, season):
 
 
 def read_players(cur, season):
-    """{player_id: player dict} for every rostered player with his ACTIVE contract (years with projected flags)."""
+    """{player_id: player dict} for every rostered player with his ACTIVE contract (years with projected flags).
+    practice_squad: on a team with no ACTIVE contract (the save's squad players have none; the transactions engine's
+    rule, transactions_engine.fetch_league)."""
     from engines.gm_direction import position_group
     cur.execute("""SELECT ps.player_id, ps.team_id, ps.position, ps.overall_rating, ps.age, ps.dev_trait,
                           ps.years_of_experience, p.player_name, p.full_name
@@ -389,6 +391,8 @@ def read_players(cur, season):
                        WHERE contract_id = ANY(%s)""", (list(by_contract),))
         for cid, year, hit, projected in cur.fetchall():
             by_contract[cid]["years"][year] = (hit, bool(projected))
+    for p in players.values():
+        p["practice_squad"] = p["contract"] is None
     for c in by_contract.values():               # a re-signing's projected years extend the deal
         proj = [y for y, (h, pr) in c["years"].items() if pr and h]
         if proj:

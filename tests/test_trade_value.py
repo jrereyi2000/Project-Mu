@@ -2,6 +2,7 @@
 import math
 import random
 
+from engines import trade_value as tv
 from engines.trade_value import (GENERIC_AGING, build_fits, fit_aging, fit_market, league_value, pick_value,
                                  player_value, tradeable, worth)
 
@@ -149,3 +150,27 @@ def test_rotation_tier_between_starter_and_backup():
     assert utility(dict(p, dev="Superstar X-Factor"), base) == ROTATION_U   # an own X-Factor is never a deep backup
     out = {"team_id": 2, "lines": {"WR": 90}, "rotation_lines": {"WR": 80}, "needs": [], "position_bias": {}}
     assert utility(p, out) == ROTATION_U and utility(dict(p, ovr=75), out) == BACKUP_U
+
+
+class _Cursor:
+    """read_players' three queries: rostered players, ACTIVE contracts, contract years."""
+    def __init__(self):
+        self.calls = 0
+
+    def execute(self, sql, args=None):
+        self.calls += 1
+        self.sql = sql
+
+    def fetchall(self):
+        if "FROM player_seasons" in self.sql:
+            return [(1, 10, "QB", 80, 27, "Normal", 5, "A. Starter", "Al Starter"),
+                    (2, 10, "WR", 60, 23, "Normal", 1, "S. Squad", "Sam Squad")]
+        if "FROM player_contracts" in self.sql:
+            return [(77, 1, 10, 2036, 2, False, 0, 0, "SCAN", 3, 9_000_000, 0, None)]
+        return [(77, 2036, 3_000_000, False)]
+
+
+def test_practice_squad_is_a_rostered_player_without_an_active_contract():
+    players = tv.read_players(_Cursor(), 2036)
+    assert (players[1]["practice_squad"], players[2]["practice_squad"]) == (False, True)
+
