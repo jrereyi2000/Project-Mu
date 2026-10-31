@@ -245,13 +245,13 @@ def test_one_mocked_iteration_end_to_end(tmp_path):
     log = S.read_log(out["run_dir"])
     assert len(log) == 2 and log[0]["change"] is None and log[1]["change"]["path"] == "Run.Chance"
     assert log[0]["score"] is not None and log[0]["accepted"]
-    jobs = [c[2:4] if c[0] == "py" else ["node"] for c in calls[:7]]
+    jobs = [c[2:4] if c[0] == "py" else ["node"] for c in calls[:6]]
     assert jobs == [["tools.mod_builder", "build"], ["tools.mod_builder", "install"],
                     ["tools.madden_pilot", "clone-save"], ["tools.madden_pilot", "launch"],
-                    ["tools.madden_pilot", "sim-season"], ["tools.madden_pilot", "quit"], ["node"]]
+                    ["tools.madden_pilot", "sim-season"], ["node"]]
     assert calls[1][-2:] == ["--pack", "Mu Tune"] and calls[3][-1] == "Mu Tune"
     assert ["--from", "CAREER-WEEK1", "--to", "CAREER-TUNE-unit"] == calls[2][-4:]
-    assert calls[6][2] == "/saves/CAREER-TUNE-unit"
+    assert calls[5][2] == "/saves/CAREER-TUNE-unit"
     recipe = json.loads((tmp_path / "builds" / "mu_tune_unit" / "recipe.json").read_text())
     assert recipe["title"] == "Mu Tune unit" and {o["op"] for o in recipe["ops"]} == {"ebx-set"}
     assert recipe["ops"][0]["value"] == pytest.approx(1.4)          # the second iteration's change

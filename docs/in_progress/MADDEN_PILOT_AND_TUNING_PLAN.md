@@ -1,6 +1,6 @@
 # Project Mu: Madden Pilot and Tuning Plan
 
-**Status:** approved by JR (2026-10-30); building, wave 1 of 2 done; wave 2 (U3, U5) next. Wave 0 done (P-a, P-b).
+**Status:** approved by JR (2026-10-30); waves 0–2 built and merged; the first live `sim-season` run (U3's Done when) is still to do with JR's OK, so the plan stays in progress.
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §8.1 route 2 (UI automation from Windows); [`MOD_BUILDER_PLAN.md`](../done/MOD_BUILDER_PLAN.md) (tuning mods are built with `tools/mod_builder`); [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) (Project Mu's own progression engine); PROJECT_SPEC §1.1 (`madden_capture.py`, `pipeline/save_reader/`, `pipeline/load_save.py`).
 
 **Goal:** two agents that let Madden run experiments while JR is away.
@@ -158,6 +158,8 @@ WSL wrapper (`tools/madden_pilot/win.py`): `call(cmd: list[str], timeout=60) -> 
 - **Screen seen:** `OFFLINE > NFL PRESEASON ROSTER > CHOOSE TEAM > CUSTOMIZE` (4×8 team grid, `E` = Random Team, Backspace = Back). This is the in-franchise create-new-character screen (it looks like new-franchise team choice), with CAREER-WEEK1 loaded. The highlight was left on the Jaguars as found, and nothing was confirmed.
 
 - As built (U1): the interpreter is the MuPilot venv (`MU_WIN_PYTHON`, default `/mnt/c/Madden27Modding/MuPilot/venv/Scripts/python.exe`), not the global Python 3.14. `windows` adds `exe`/`minimized`; `key` takes `--title` and refuses per press. Unreadable elevation is refused like elevated.
+- As built (U3): `launch` doesn't call `game_launch.launch` (it builds a per-game pack from the database); it reuses `game_launch.command` or builds `MMCModManager.exe -launch <pack>` itself and skips the start if Madden is running. `sim-season` reads the week from the Weekly Hub header (GAMEDAY has none) and quits itself after a Tab savepoint. `quit` takes `--franchise TUNE-x [--allow-quit]`. The pilot never kills Madden.
+- As built (U5): career targets are the years-pro shares of active players, because `nfl_careers_through_2025.csv` is a cross-section (1,713 of 1,886 careers still active), not completed careers. The replay works on OVR only, with generic aging curves. The supersim search space comes from a `--space` JSON until `ebx-dump` shows the supersim fields. The orchestrator removed U5's extra `quit` call after `sim-season` (sim-season already quits).
 - As built (U2): only `confirm_on` presses Space. `HUB_OTHER` and `DELETE_CONFIRM` were added (todo). `loaded_franchise` is set only from the franchise list (the hub never shows the save name). ADVANCE_MENU allows only `NEXT WEEK` for now. The border highlight reader was checked on spike screenshots with hand-placed boxes; U3 re-checks it with real OCR.
 
 **Spike P-b results (2026-10-30):** screenshots and OCR for every step are in `C:\Madden27Modding\MuPilot\spike\` (`b*`, `c*`, `d*`, `e*`, `f*`, `g*`, `h*`).
@@ -308,3 +310,5 @@ No path appears twice. No `.gitignore` change: run output goes under `data/` (al
 | U4 | 1 (early) | worktree-agent-aafd0eb3664cb3920 | .claude/worktrees/agent-aafd0eb3664cb3920 | merged | a1809e0 |
 | U1 | 1 | worktree-agent-a6eb2ee482d5dfc33 | .claude/worktrees/agent-a6eb2ee482d5dfc33 | merged | a7be57a |
 | U2 | 1 | worktree-agent-a41ea69a7c925f94e | .claude/worktrees/agent-a41ea69a7c925f94e | merged | 635b51c |
+| U3 | 2 | worktree-agent-ae0eeb8979e3ce828 | .claude/worktrees/agent-ae0eeb8979e3ce828 | merged | 5f4e473 |
+| U5 | 2 | worktree-agent-a1940f097e2502879 | .claude/worktrees/agent-a1940f097e2502879 | merged (+ quit-call fix) | dbc3e5b |

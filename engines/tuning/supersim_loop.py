@@ -21,7 +21,6 @@ replaces subprocess.run in tests):
        python3 -m tools.madden_pilot clone-save --from <base> --to CAREER-TUNE-<run>   (a fresh week-1 copy)
        python3 -m tools.madden_pilot launch --pack "Mu Tune"
        python3 -m tools.madden_pilot sim-season --save CAREER-TUNE-<run> --to <to>
-       python3 -m tools.madden_pilot quit
        node pipeline/save_reader/pc_save_reader.mjs <saves>/CAREER-TUNE-<run> --out <iter dir>/snapshot_<r>.json
        engines.tuning.compare: season_from_snapshot + compare against the targets
   4. appends {iter, change, values, score, scores, worst, accepted, ...} to data/tuning/runs/<run>/log.jsonl
@@ -234,8 +233,8 @@ def iteration(run_dir, change, *, fields=None, targets=None, runner=None, base_s
         _run_cmd(runner, [python, "-m", "tools.madden_pilot", "clone-save", "--from", base_save, "--to", save],
                  "clone save")
         _run_cmd(runner, [python, "-m", "tools.madden_pilot", "launch", "--pack", PACK], "launch")
+        # sim-season makes a savepoint and quits to the franchise list itself
         _run_cmd(runner, [python, "-m", "tools.madden_pilot", "sim-season", "--save", save, "--to", to], "sim season")
-        _run_cmd(runner, [python, "-m", "tools.madden_pilot", "quit"], "quit")
         snap = os.path.join(it_dir, f"snapshot_{r}.json")
         _run_cmd(runner, ["node", READER, os.path.join(saves_dir, save), "--out", snap], "save reader")
         report = _score_snapshot(snap, targets)
