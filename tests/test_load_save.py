@@ -232,7 +232,7 @@ def v5_snapshot():
     snap["teams"][2]["ratings"] = {"ovr": 50, "off": 50, "def": 50}
     prospect = dict(snap["players"][3], pgid=900005, row=900005, first_name="Second", last_name="Rounder",
                     position="LE", archetype="DE_SmallerSpeedRusher", overall=70, age=21, height_in=76, weight_lbs=255,
-                    college={"table": 16384, "row": 1886})      # LSU in the committed college map
+                    college={"table": 16384, "row": 1886})      # LSU in Madden's college list
     snap["players"].append(prospect)
     # board order: the edge rusher first, then the QB; an entry whose player isn't a prospect is ignored
     snap["draft_class"] = [{"pgid": 900004, "draft_position": "QB", "initial_draft_rank": 7, "true_overall_ranking": 1},
