@@ -45,7 +45,12 @@ def fetch_base_ratings(cur, season):
     """{player id: ratings} from each player's newest player_attributes row up to the season."""
     cur.execute("SELECT DISTINCT ON (player_id) player_id, ratings FROM player_attributes WHERE season <= %s "
                 "ORDER BY player_id, season DESC, id DESC", (season,))
-    return {pid: r for pid, r in cur.fetchall() if r}
+    observed = {pid: r for pid, r in cur.fetchall() if r}
+    from engines import progression
+    if progression.managed_progression_state(cur):
+        from engines.progression_state import load_bases
+        observed.update(load_bases(cur, season))
+    return observed
 
 
 def fetch_form_overlays(cur, season, week):
@@ -54,7 +59,13 @@ def fetch_form_overlays(cur, season, week):
         return {}
     cur.execute("SELECT DISTINCT ON (player_id) player_id, overlay FROM player_form WHERE season = %s AND week <= %s "
                 "ORDER BY player_id, week DESC", (season, week))
-    return {pid: o for pid, o in cur.fetchall() if o}
+    overlays = {pid: o for pid, o in cur.fetchall() if o}
+    from engines import progression
+    if progression.managed_progression_state(cur):
+        from engines.progression_state import load_applied_overlays
+        # Include empty overlays to clear legacy/prepared entries for owned players.
+        overlays.update(load_applied_overlays(cur, season))
+    return overlays
 
 
 def fetch_contracts(cur, season):

@@ -51,7 +51,7 @@ SHRINK_GAMES = 2.0                   # playing time: effective games / (effectiv
 FIRST_WEEK = 1
 LAST_WEEK = 23                       # weeks 1-18 regular season, 19-23 playoffs; 24+ offseason (contracts_engine)
 NEUTRAL_MORALE = psave.MORALE_NEUTRAL
-NEVER_TOUCH = ("Speed", "Acceleration", "Injury")
+NEVER_TOUCH = tuple(progression.PHYSICAL_RATINGS) + ("Injury",)
 
 
 def in_season(week: Optional[int]) -> bool:
@@ -259,7 +259,8 @@ GAME_LINES_SQL = """
     FROM game_stat_lines l
     JOIN games g ON g.id = l.game_id
     LEFT JOIN player_seasons ps ON ps.player_id = l.player_id AND ps.season = l.season
-    WHERE l.season = %s AND l.week BETWEEN %s AND %s AND COALESCE(g.game_type, 'REGULAR_SEASON') <> 'PRESEASON'
+    WHERE l.season = %s AND l.week BETWEEN %s AND %s AND g.status = 'COMPLETED'
+      AND COALESCE(g.game_type, 'REGULAR_SEASON') NOT IN ('PRESEASON', 'PRO_BOWL')
     ORDER BY l.player_id, l.week
 """
 
@@ -301,15 +302,21 @@ def store_form(cur, season: int, week: int, form_rows: Iterable[Dict[str, Any]])
     return len(rows)
 
 
-def form_edits(cur, snapshot: Dict[str, Any], season: int, week: int, store: bool = True,
+def form_edits(cur, snapshot: Dict[str, Any], season: int, week: int, store: bool = False,
                pgid_by_player: Optional[Dict[int, int]] = None, doc: Optional[Dict[str, Any]] = None,
-               warnings: Optional[List[str]] = None) -> Dict[str, Any]:
+               warnings: Optional[List[str]] = None, verified: bool = False) -> Dict[str, Any]:
     """The weekly edits document: every player's base ratings (newest player_attributes up to `season`) plus this
     week's form overlay, OVR / grades / PlayerType recomputed, ConfidenceRating 50 for all (D13). With store=True the
     week's player_form rows are replaced (the caller commits)."""
+    if store and not verified:
+        raise ValueError("form preparation cannot store applied form; acknowledge a verified save receipt first")
     if pgid_by_player is None:
         pgid_by_player = psave.fetch_pgid_map(cur)
-    base = progression.fetch_player_attributes_map(cur, season)
+    if progression.managed_progression_state(cur):
+        from engines.progression_state import load_bases
+        base = load_bases(cur, season)
+    else:
+        base = progression.fetch_player_attributes_map(cur, season)
     forms = weekly_form(cur, season, week)
     document, form_rows = build_form_document(snapshot, base, forms, pgid_by_player, doc, warnings=warnings)
     if store:
@@ -319,14 +326,14 @@ def form_edits(cur, snapshot: Dict[str, Any], season: int, week: int, store: boo
 
 # --------------------------------------------------------------------- CLI ----
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Build the weekly form save_writer edits document and store player_form "
+    ap = argparse.ArgumentParser(description="Build the weekly form save_writer edits document; no applied state is stored "
                                              "(never writes a save; save_writer.mjs does).")
     ap.add_argument("--snapshot", required=True, help="reader-v4 snapshot JSON (pc_save_reader.mjs)")
     ap.add_argument("--season", type=int, required=True)
     ap.add_argument("--week", type=int, required=True)
     ap.add_argument("--out", help="edits JSON path (default: stdout)")
     ap.add_argument("--dsn", default=os.environ.get("DATABASE_URL", progression.DSN))
-    ap.add_argument("--dry-run", action="store_true", help="don't store player_form")
+    ap.add_argument("--dry-run", action="store_true", help="compatibility flag; preparation never stores player_form")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
     with open(a.snapshot) as fh:
@@ -340,11 +347,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     warnings: List[str] = []
     try:
         with conn.cursor() as cur:
-            doc = form_edits(cur, snapshot, a.season, a.week, store=not a.dry_run, warnings=warnings)
-        if a.dry_run:
-            conn.rollback()
-        else:
-            conn.commit()
+            doc = form_edits(cur, snapshot, a.season, a.week, store=False, warnings=warnings)
+        conn.rollback()
     finally:
         conn.close()
     text = json.dumps(doc, indent=1)

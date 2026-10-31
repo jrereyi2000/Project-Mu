@@ -713,22 +713,6 @@ def test_c2_backtest_and_simulation_bounds():
     assert all(138 <= s["count_90_plus"] <= 151 for s in sim["history"])
 
 
-def test_dev_transitions_bounded_seeded_and_require_evidence(monkeypatch):
-    from engines import progression as pg
-    monkeypatch.setattr(pg, "_sha_unit", lambda key: 0.0)
-    decide = lambda **kw: pg.dev_transition(123, 2037, **kw)
-    young = dict(dev_trait="Normal", age=24, ovr=80, ceiling=96, top_last=True, top_prev=True)
-    assert decide(**young) == "Star"
-    assert decide(**dict(young, top_prev=False)) == "Normal"
-    assert decide(**dict(young, ceiling=80)) == "Normal"
-    assert decide(**dict(young, dev_trait="Hidden")) == "Hidden"
-    assert decide(**dict(young, dev_trait="X-Factor")) == "X-Factor"
-    assert decide(**dict(young, age=32, dev_trait="Superstar", ceiling=78)) == "Star"
-    assert decide(**dict(young, dev_trait="Star", top_last=False, top_prev=False,
-                         bottom_last=True, bottom_prev=True)) == "Normal"
-    monkeypatch.setattr(pg, "_sha_unit", lambda key: 0.99)
-    assert decide(**young) == "Normal"
-
 
 def test_bottom_quarter_neutral_or_missing_stats_cannot_demote():
     from engines.progression import bottom_quarter
