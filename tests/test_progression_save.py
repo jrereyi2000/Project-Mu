@@ -284,7 +284,7 @@ class SampleSaveTest(unittest.TestCase):
                            check=True, capture_output=True, timeout=300)
             with open(snap_path) as fh:
                 snap = json.load(fh)
-            self.assertEqual(snap["meta"]["reader_version"], 4)
+            self.assertGreaterEqual(snap["meta"]["reader_version"], 4)
             # one rated player too, so the OVR dual-write fields go through the writer's schema check
             p = next(x for x in snap["players"] if x["position"] == "WR" and x["ratings"].get("Speed", 99) < 95)
             rows = [{"player_id": 1, "ratings_diff": {"Speed": 1}, "dev_before": "Normal", "dev_after": "Normal",

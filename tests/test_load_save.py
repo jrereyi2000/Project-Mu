@@ -223,6 +223,24 @@ def v4_snapshot(sliders=None, dev_flag=None):
     return snap
 
 
+def v5_snapshot():
+    """v4_snapshot() as reader_version 5: Madden's team ratings on CHI and ARI (none on the free-agent pseudo-team)."""
+    snap = v4_snapshot()
+    snap["meta"]["reader_version"] = 5
+    snap["teams"][0]["ratings"] = {"ovr": 85, "off": 88, "def": 83, "qb": 93, "st": 70}
+    snap["teams"][1]["ratings"] = {"ovr": 74, "off": 72, "def": 77}
+    snap["teams"][2]["ratings"] = {"ovr": 50, "off": 50, "def": 50}
+    prospect = dict(snap["players"][3], pgid=900005, row=900005, first_name="Second", last_name="Rounder",
+                    position="LE", archetype="DE_SmallerSpeedRusher", overall=70, age=21, height_in=76, weight_lbs=255,
+                    college={"table": 16384, "row": 1886})      # LSU in the committed college map
+    snap["players"].append(prospect)
+    # board order: the edge rusher first, then the QB; an entry whose player isn't a prospect is ignored
+    snap["draft_class"] = [{"pgid": 900004, "draft_position": "QB", "initial_draft_rank": 7, "true_overall_ranking": 1},
+                           {"pgid": 900005, "draft_position": "DE", "initial_draft_rank": 2, "true_overall_ranking": 9},
+                           {"pgid": 900003, "draft_position": "WR", "initial_draft_rank": 0, "true_overall_ranking": 0}]
+    return snap
+
+
 class FakeCursor:
     """Records execute / executemany calls (depth_chart_engine.store's DELETE then INSERT rows)."""
     def __init__(self):
@@ -282,6 +300,40 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
             "regression_by_age.int1 = -20 (Project Mu expects 0)"])
         self.assertIsNone(report["league_settings"]["sliders"]["progression_by_age"])
         self.assertIs(report["league_settings"]["dev_trait_regression_enabled"], True)
+
+    def test_team_ratings_upserted_per_real_team(self):
+        cur, report = FakeCursor(), {}
+        ls.load_team_ratings(cur, v5_snapshot(), TEST_SEASON, self.TEAMS, report)
+        self.assertEqual([args for _, _, args in cur.calls], [(100, TEST_SEASON, 85, 88, 83), (101, TEST_SEASON, 74, 72, 77)])
+        self.assertIn("ON CONFLICT (team_id, season) DO UPDATE SET team_ovr = EXCLUDED.team_ovr", cur.calls[0][1])
+        self.assertEqual(report["team_ratings"], 2)
+
+    def test_draft_board_from_the_save(self):
+        board = ls.draft_board_prospects(v5_snapshot())
+        self.assertEqual([(p.projected_pick, p.full_name, p.position, p.archetype, p.projected_round, p.round_pick)
+                          for p in board],
+                         [(1, "Second Rounder", "LEDG", "Speed Rusher", "1", 1),
+                          (2, "Draft Prospect", "QB", "Field General", "1", 2)])
+        self.assertEqual((board[0].height, board[0].weight, board[0].age, board[0].overall_rating, board[0].college),
+                         ("6'4\"", 255, 21, 70, "LSU"))
+        self.assertIsNone(board[1].college)                     # no college reference
+
+    def test_draft_board_rounds_then_udfa(self):
+        snap = v5_snapshot()
+        base = snap["players"][3]
+        snap["players"] = [dict(base, pgid=i, first_name=f"P{i}") for i in range(230)]
+        snap["draft_class"] = [{"pgid": i, "initial_draft_rank": i} for i in range(230)]
+        board = ls.draft_board_prospects(snap)
+        self.assertEqual([(p.projected_round, p.round_pick) for p in (board[31], board[32], board[223], board[224])],
+                         [("1", 32), ("2", 1), ("7", 32), ("UDFA", None)])
+
+    def test_draft_board_empty_before_v5(self):
+        self.assertEqual(ls.draft_board_prospects(v4_snapshot()), [])
+
+    def test_v4_snapshot_has_no_team_ratings(self):
+        cur, report = FakeCursor(), {}
+        ls.load_team_ratings(cur, v4_snapshot(), TEST_SEASON, self.TEAMS, report)
+        self.assertEqual((cur.calls, report), ([], {}))
 
     def test_v3_snapshot_adds_nothing(self):
         snap, cur, report = tiny_snapshot(), FakeCursor(), {}
@@ -383,10 +435,37 @@ class LoadTinySnapshotTest(unittest.TestCase):
                          "AND d.source = 'MADDEN' AND t.abbreviation = 'CHI' ORDER BY 1", (TEST_SEASON,))
         self.assertEqual(self.cur.fetchall(), [("QB", 1, 900001), ("WR", 1, 900002)])
 
+    def test_v5_load_stores_team_ratings(self):
+        self.cur.execute("SELECT id FROM teams WHERE abbreviation = 'CHI'")
+        chi = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO team_seasons (team_id, season, watchability_index) VALUES (%s, %s, 42.5)",
+                         (chi, TEST_SEASON))
+        r = ls.load_snapshot(self.cur, v5_snapshot(), season=TEST_SEASON)
+        self.assertEqual(r["team_ratings"], 2)
+        self.cur.execute("SELECT t.abbreviation, s.team_ovr, s.off_ovr, s.def_ovr, s.watchability_index FROM team_seasons s "
+                         "JOIN teams t ON t.id = s.team_id WHERE s.season = %s ORDER BY 1", (TEST_SEASON,))
+        self.assertEqual(self.cur.fetchall(), [("AZ", 74, 72, 77, 0.0), ("CHI", 85, 88, 83, 42.5)])   # other columns kept
+
+    def test_v5_load_writes_the_coming_class_once(self):
+        r = ls.load_snapshot(self.cur, v5_snapshot(), season=TEST_SEASON, capture_folder="save_run_1")
+        self.assertEqual((r["draft_prospects"], r["draft_class"]), (2, f"{TEST_SEASON + 1} board loaded from the save"))
+        self.cur.execute("SELECT id, projected_pick, full_name, position, ovr, source_capture FROM draft_prospects "
+                         "WHERE draft_season = %s ORDER BY 2", (TEST_SEASON + 1,))
+        rows = self.cur.fetchall()
+        self.assertEqual([r[1:] for r in rows], [(1, "Second Rounder", "LEDG", 70, "save_run_1"),
+                                                 (2, "Draft Prospect", "QB", 80, "save_run_1")])
+        r = ls.load_snapshot(self.cur, v5_snapshot(), season=TEST_SEASON)       # the next save: the board is kept
+        self.assertNotIn("draft_prospects", r)
+        self.assertTrue(r["draft_class"].startswith("kept"))
+        self.cur.execute("SELECT id FROM draft_prospects WHERE draft_season = %s ORDER BY projected_pick", (TEST_SEASON + 1,))
+        self.assertEqual([x[0] for x in self.cur.fetchall()], [x[0] for x in rows])
+
     def test_v3_load_has_no_v4_keys(self):
         r = ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
         self.assertNotIn("depth_charts", r)
         self.assertNotIn("league_settings", r)
+        self.assertNotIn("team_ratings", r)
+        self.assertNotIn("draft_class", r)
 
     def test_league_state_moves_forward_only(self):
         self.cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")

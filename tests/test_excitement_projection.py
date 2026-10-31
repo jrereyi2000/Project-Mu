@@ -3,7 +3,9 @@
 Run: python3 -m unittest tests.test_excitement_projection
 """
 import unittest
+from unittest import mock
 
+from engines import gotw_engine
 from engines.excitement_projection import (
     DEFAULT_MARGIN_SD,
     DEFAULT_OVR_MARGIN_SLOPE,
@@ -17,7 +19,8 @@ from engines.excitement_projection import (
     fit_margin_model,
     project_matchup,
 )
-from engines.gotw_engine import defensive_outlier_points, display_excitement, player_outlier_points, star_score, upset_score
+from engines.gotw_engine import (DEFAULT_TEAM_OVR, defensive_outlier_points, display_excitement, player_outlier_points,
+                                 star_score, team_ovr_or_default, upset_score)
 
 
 def row(team_id, opponent_id, pf, pa, is_home=True, yds=350, top3=85.0, outliers=10):
@@ -59,6 +62,77 @@ class DefensiveOutlierTests(unittest.TestCase):
         self.assertEqual(defensive_outlier_points(3, 0, 0, 0, 0, 0, None), player_outlier_points(0, 0, 150, 0, 0, 0))
         self.assertGreater(defensive_outlier_points(0, 0, 1, 0, 0, 0, None), player_outlier_points(0, 0, 0, 2, 0, 0))
         self.assertGreater(star_score(85, 85, 12), star_score(85, 85, 0))
+
+
+class ScriptedCursor:
+    """Answers evaluate_game's queries for one game (home 24-17 over away), recording the excitement UPDATE."""
+    def __init__(self, team_ovrs):
+        self.team_ovrs, self.updated, self._rows = team_ovrs, None, []
+
+    def execute(self, sql, args=None):
+        if sql.lstrip().startswith("UPDATE games"):
+            self.updated = args
+        elif "home_score, away_score" in sql:
+            self._rows = [(24, 17, "COMPLETED", 2026)]
+        elif "total_offense" in sql:
+            self._rows = [(380,), (320,)]
+        elif "home_team_id, away_team_id" in sql:
+            self._rows = [(1, 2)]
+        elif "team_seasons" in sql:
+            self._rows = list(self.team_ovrs.items())
+        else:                                   # player and defensive lines
+            self._rows = []
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return list(self._rows)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class FakeConn:
+    def __init__(self, cur):
+        self.cur = cur
+
+    def cursor(self):
+        return self.cur
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class MissingTeamOvrTests(unittest.TestCase):
+    """A fresh PC franchise had team_seasons rows with a NULL team_ovr until the save's team ratings were loaded."""
+
+    def evaluate(self, team_ovrs):
+        cur = ScriptedCursor(team_ovrs)
+        with mock.patch.object(gotw_engine.psycopg, "connect", return_value=FakeConn(cur)), \
+                mock.patch.object(gotw_engine, "DatabaseHandler"):
+            e = gotw_engine.GotWEngine().evaluate_game(7)
+        self.assertEqual(cur.updated, (e, 7))
+        return e
+
+    def test_default(self):
+        self.assertEqual(team_ovr_or_default(None), DEFAULT_TEAM_OVR)
+        self.assertEqual(team_ovr_or_default(0), 0)
+        self.assertEqual(team_ovr_or_default(91), 91)
+
+    def test_null_team_ovr_scores_like_a_missing_row(self):
+        null_rows = self.evaluate({1: None, 2: None})
+        self.assertEqual(null_rows, self.evaluate({}))
+        self.assertEqual(null_rows, self.evaluate({1: DEFAULT_TEAM_OVR, 2: DEFAULT_TEAM_OVR}))
+
+    def test_rated_teams_still_drive_the_upset_score(self):
+        self.assertGreater(self.evaluate({1: 75, 2: 88}), self.evaluate({1: 88, 2: 75}))   # the underdog won
 
 
 class ProjectionMathTests(unittest.TestCase):

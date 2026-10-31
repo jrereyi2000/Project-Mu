@@ -212,7 +212,7 @@ class StaffAlreadyNamedForNextSeason(unittest.TestCase):
     def test_hiring_cycle_keeps_coordinators_it_did_not_create(self):
         # Raised ForeignKeyViolation before. The cycle now gets to its own staff check, which refuses (2036's head
         # coaches are already named), so the weekly run never decides 2035 (coaching_carousel.owns).
-        self.assertFalse(cc.owns(SEASON))
+        self.assertFalse(cc.owns(self.cur, SEASON))
         with self.assertRaisesRegex(ValueError, "staff check"):
             cc.run(self.cur, SEASON, log=lambda m: None)
         ids = [c["coordinator_id"] for c in self.named.values()]

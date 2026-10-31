@@ -440,8 +440,10 @@ def step_gm(season, next_stage=False):
 def step_scouting(season):
     """Scouting (team management step 4, engines/scouting_engine.py), Step 7c: the draft class's consensus board,
     events and team boards for league_state's step (the week about to be played, or 23 + the GM offseason stage
-    just run), catching up any missing steps in order. Optional: skipped without the migration or before the class
-    is initialized, and a failure only logs a warning. Returns the steps stored."""
+    just run), catching up any missing steps in order. A class with a draft_prospects board but no scouting rows yet
+    is initialized here at the current step (a PC franchise: load_save writes the board from the save and there is no
+    Season scan to run step_scouting_season). Optional: skipped without the migration or a board, and a failure only
+    logs a warning. Returns the steps stored."""
     try:
         import psycopg
         from pipeline.load_capture import DSN
@@ -457,6 +459,11 @@ def step_scouting(season):
             if step is None:
                 log("  Scouting skipped: the draft has been held")
                 return []
+            cur.execute("""SELECT (SELECT count(*) FROM draft_prospects WHERE draft_season = %(d)s),
+                                  (SELECT count(*) FROM scout_prospects WHERE draft_season = %(d)s)""", {"d": s + 1})
+            board, scouted = cur.fetchone()
+            if board and not scouted:
+                se.init(cur, s + 1, step, log=log)
             done = se.catch_up(cur, s + 1, step, log=log, extras=se.default_extras, llm=llm)
             conn.commit()
         flush(llm)
@@ -500,8 +507,8 @@ def step_coach_hot_seat(season):
     """engines/coaching_carousel.py (Step 7d): whatever of the coaching carousel is ready, once each: Black Monday
     head-coach firings (the Week 18 run, before the Week 19 articles), a playoff team's coach once it is out, the
     coordinator review of every team whose coach kept his job, and the hiring cycle once the Super Bowl is complete.
-    Runs for league_state's season and the one before it (the league may already have rolled over), never a season
-    before coaching_carousel.FIRST_SEASON (2035: the offseason manifest staffed it). JR mirrors
+    Runs for league_state's season and the one before it (the league may already have rolled over), only seasons
+    coaching_carousel.owns (from FIRST_SEASON 2026 on, never madden_2036's manifest-staffed 2035). JR mirrors
     head-coach changes in Madden: one notice lists the coaches to fire, another the openings to fill (hire any coach;
     Mu's hire stands for him). Skipped without the migrations; a failure only logs a warning."""
     try:
@@ -515,7 +522,7 @@ def step_coach_hot_seat(season):
                 log("  Coaching carousel skipped: the coach hot seat / coaching carousel migrations aren't applied")
                 return None
             for s in (season - 1, season):
-                if cc.owns(s):                  # never a season the offseason manifest staffed (2035)
+                if cc.owns(cur, s):             # never a season the offseason manifest staffed (2035)
                     reports.append(cc.run(cur, s, log=log))
             conn.commit()
         for rep in reports:

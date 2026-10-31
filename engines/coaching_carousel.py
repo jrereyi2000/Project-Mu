@@ -35,7 +35,7 @@ PROMOTION_SCORE = 0.4
 RETREAD_PENALTY = 0.3              # owners prefer a fresh face
 OUTSIDE_SLANTS = (("OFFENSIVE", 0.45), ("DEFENSIVE", 0.35), ("CEO", 0.2))
 SIDE = {"OC": "OFFENSIVE", "DC": "DEFENSIVE"}
-FIRST_SEASON = 2036               # the first season Mu ran the carousel (2035 and before: the offseason manifest)
+FIRST_SEASON = 2026               # a fresh franchise's first season: the carousel decides every season from it on
 
 
 # ----------------------------------------------------------------------------------------------- data helpers ----
@@ -575,10 +575,20 @@ def installed(cur):
     return cur.fetchone()[0]
 
 
-def owns(season):
-    """True for the seasons the carousel decides; earlier ones (2035) were set by the offseason manifest, and their
-    next season's staff is already named, so the weekly run must never decide them."""
-    return season >= FIRST_SEASON
+def owns(cur, season):
+    """True for the seasons the carousel decides: every season from FIRST_SEASON on, except one the league finished
+    before the carousel ever ran for it (a season before league_state's with no coach_hot_seat, coordinator_hot_seat or
+    staff_moves rows). That is madden_2036's 2035: the offseason manifest set it and 2036's staff is already named, so
+    the weekly run must never decide it."""
+    if season < FIRST_SEASON:
+        return False
+    cur.execute("SELECT current_season FROM league_state WHERE id = 1")
+    if season >= cur.fetchone()[0]:
+        return True
+    cur.execute("""SELECT EXISTS (SELECT 1 FROM coach_hot_seat WHERE season = %(s)s)
+                       OR EXISTS (SELECT 1 FROM coordinator_hot_seat WHERE season = %(s)s)
+                       OR EXISTS (SELECT 1 FROM staff_moves WHERE season = %(s)s)""", {"s": season})
+    return cur.fetchone()[0]
 
 
 def run(cur, season, log=print):

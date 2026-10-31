@@ -8,8 +8,8 @@ import random
 import unittest
 
 from engines.coach_hot_seat import MAX_EXIT_FIRES, MAX_FIRES, MIN_FIRES, contender_seat, hot_seat
-from engines.coaching_carousel import (APPEAL_WEIGHTS, coordinator_candidacy, coordinator_seat, opening_appeal,
-                                      percentiles, pick)
+from engines.coaching_carousel import (APPEAL_WEIGHTS, FIRST_SEASON, coordinator_candidacy, coordinator_seat,
+                                      opening_appeal, owns, percentiles, pick)
 from newsroom.offseason_service import hot_seat_warnings
 
 SEASON = 2036
@@ -196,6 +196,36 @@ class ManifestReconcileTests(unittest.TestCase):
     def test_after_the_hiring_cycle(self):
         w = hot_seat_warnings([{"team": "KC", "coach": "Ron Leonard"}], [{"team": "IND"}], True, {"CAR", "IND"})
         self.assertEqual(w, [])
+
+
+class OwnsCursor:
+    """league_state's current season and whether the carousel left rows (hot seat, coordinator review, staff moves)
+    for the season asked about."""
+    def __init__(self, current, touched):
+        self.current, self.touched, self._row = current, touched, None
+
+    def execute(self, sql, args=None):
+        self._row = (self.current,) if "league_state" in sql else (args["s"] in self.touched,)
+
+    def fetchone(self):
+        return self._row
+
+
+class OwnsTest(unittest.TestCase):
+    """coaching_carousel.owns: every season from 2026 (a fresh franchise's first) on, except one the league finished
+    before the carousel ever ran for it (madden_2036's manifest-staffed 2035)."""
+
+    def test_first_season_is_a_fresh_franchises_first(self):
+        self.assertEqual(FIRST_SEASON, 2026)
+        self.assertFalse(owns(OwnsCursor(2026, set()), 2025))
+
+    def test_current_season_always_owned(self):
+        self.assertTrue(owns(OwnsCursor(2026, set()), 2026))
+        self.assertTrue(owns(OwnsCursor(2036, set()), 2036))
+
+    def test_past_season_owned_only_if_the_carousel_ran_for_it(self):
+        self.assertFalse(owns(OwnsCursor(2036, set()), 2035))          # madden_2036: the manifest staffed 2035
+        self.assertTrue(owns(OwnsCursor(2027, {2026}), 2026))          # a PC franchise just rolled over
 
 
 if __name__ == "__main__":

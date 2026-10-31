@@ -6,6 +6,12 @@ from db.db_handler import DatabaseHandler
 
 WEIGHTS = {"C": 0.35, "P": 0.25, "S": 0.20, "U": 0.20}
 HEAVYWEIGHT_OVR = 84
+DEFAULT_TEAM_OVR = 80
+
+
+def team_ovr_or_default(ovr: Optional[int]) -> int:
+    """A team's OVR for the upset score: DEFAULT_TEAM_OVR when it has none (no team_seasons row, or a NULL team_ovr)."""
+    return DEFAULT_TEAM_OVR if ovr is None else ovr
 
 
 def competitiveness_score(margin: float) -> float:
@@ -150,9 +156,10 @@ class GotWEngine:
                 cur.execute("""
                     SELECT team_id, team_ovr FROM team_seasons WHERE season = %s AND team_id IN (%s, %s)
                 """, (season, home_team_id, away_team_id))
+                # a team_seasons row with no team_ovr (no ratings captured or loaded yet) counts as a missing row
                 team_ovrs = {r[0]: r[1] for r in cur.fetchall()}
-                home_ovr = team_ovrs.get(home_team_id, 80)
-                away_ovr = team_ovrs.get(away_team_id, 80)
+                home_ovr = team_ovr_or_default(team_ovrs.get(home_team_id))
+                away_ovr = team_ovr_or_default(team_ovrs.get(away_team_id))
                 
                 # --- ALGORITHM CALCULATIONS ---
                 c_score = competitiveness_score(abs(home_score - away_score))
