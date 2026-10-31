@@ -1,6 +1,8 @@
 # Project Mu: Player Progression Plan
 
 **Status (2026-10-30):** C and C2 are implemented; D has the offline save-edit builder and drift checker; E has weekly form and morale 50; H now has seeded dev-tier transitions as well as ceiling breakthroughs, lasting-injury bands and PT writes. The V2 core build log records C2 (U7), D (U9/U9b) and E (U10) already merged before this reconciliation. Save ownership now clears banked XP/skill points and uses absolute pre-rollover rating targets, so Madden drift is overwritten and repeated writes do not stack changes. Player/coach personality effects (F/G) remain neutral by the approved V2 core D4 decision and belong to the personality plan; real-person evidence and reviewed mappings are separate work. Live orchestration and end-to-end in-game acceptance belong to V2 core U13/U16/U17 and are not claimed complete here. The fresh 2034 league remains held; archived madden_2036 remains read-only.
+**Accepted revision (JR, 2026-10-31; implementation pending):** The calendar, form, band-review and dev-label rules below supersede the older offseason-only and two-season breakthrough rules. Existing code still implements those older rules; prior test results establish that implementation, not acceptance of this revision.
+
 **Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md)). It needs the save reader, the save writer and the OVR weights from §4–§5 there.  
 **2026-10-29: the teleport is dropped for a fresh 2034 PC franchise, and Mu's 2026–2036 history is discarded** ([`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md), decision at the top; obsolete code in [`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b). References to "teleport time" and the teleporter's edits below now mean the fresh league's first offseason and the save writer. The backtest on the 2035→2036 offseason stays on `madden_2036`; recalibrate on the new league. `engines/progression.py` now uses `pipeline/madden_player_edit.py` rather than importing `pipeline/teleport.py` (ledger §3b decoupling completed).
 **Companions:** [`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) (the community progression tools), V2.13 (personalities) and V2.14 (this plan's summary) of the migration plan. [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) uses the same personality traits for free agency, contracts and depth charts, and its coach-set depth charts feed the playing-time term here.
@@ -135,12 +137,14 @@ clamped to a band per age and OVR (a 99 can't go up; a single season moves at mo
 
 | Point | What | Share of a year's change |
 |---|---|---|
-| **Offseason pass** (after Madden's rollover, before the draft) | The main change: age, ceiling pull, last season's playing time and grade, injuries. Dev trait changes. Rookie camp changes for the new draft class | ~70% |
-| **In-season checkpoints** (proposed: after weeks 4, 8, 12 and 16) | Small changes from playing time and form: a rookie who earns snaps grows; a vet who loses his job slips. A breakout is noticed during the season, not only in the next one | ~30% |
-| **Major injury** (when it happens) | Ceiling and physical ratings (speed, acceleration) lowered for the worst injuries (torn ACL, Achilles); the roll is in §5.8 | — |
-| **Form** (weekly, D9) | Form from the last few games, written to the save with Madden's morale overridden, and reset to neutral each offseason (§5.11). Not part of the year's change | — |
+| **Offseason development** | Largest physical/technical changes, conditioning, aging and remaining annual development; reconcile gains already awarded in-season | ~70%, league-level starting target |
+| **Mental development** | Every four completed team games, including playoffs: lasting learning from experience and reviewed coaching/mentor inputs | Part of ~30% in-season starting target |
+| **Technical development** | Midseason and season-end checkpoints, including playoff experience; refine supported skills actually used | Part of the same in-season allocation |
+| **Development-band review** | Normally after roughly 6–8 meaningful appearances; regular-season and playoff evidence can combine. An entire sustained playoff run can independently trigger review despite being shorter | Review is not an automatic upgrade |
+| **Major injury** | Record immediately; distinguish temporary impairment from lasting damage assessed through recovery | Separate from routine growth |
+| **Form** | Weekly, including playoffs; temporary execution overlay, initially ±3 OVR, no universal +1/week restriction; reset offseason | Excluded from permanent annual development |
 
-The in-season split is a decision (§9, D3). Weekly save writes happen anyway in season (`LEAGUE_OFFICE_PLAN.md`: trades, waivers, depth charts, injury durations, with Madden closed), so checkpoints and form add rating edits to an existing weekly write, not a new routine. Mileage (§5.8) is counted weekly either way, since it only reads.
+**One annual accounting system:** in-season gains count toward annual development, and offseason work awards what remains rather than paying twice for the same snaps. The 70/30 split is a league-level calibration target, not a hard individual entitlement. Physical improvement is concentrated in the offseason without an absolute biological prohibition; mental learning continues during offseason preparation. Ordinary age decline is primarily offseason, not a birthday-triggered in-season drop. Byes do not advance completed-game checkpoints. A season-end reconciliation includes residual games and postseason experience without counting evidence already used at earlier checkpoints twice. Weekly writes use the post-Advance-Week ingest boundary with the franchise closed.
 
 ### 5.4 Which ratings move
 
@@ -173,9 +177,9 @@ Writer tools read `player_progression_history` with the hidden parts left out: t
 
 ### 5.7 Dev traits
 
-Dev trait changes are part of the offseason pass, with at most one tier step. The implemented rule uses two consecutive top-quarter reliability-weighted production seasons for promotion (the same eligibility as breakthroughs), rather than treating the league-shape subsidy as earned development. Promotion requires age ≤28, at least 2 OVR of ceiling room and a tier below the ceiling summary (75/85/95 mark Star/Superstar/X-Factor). Its seeded chance is min(0.5, 0.15 + 0.02 × room). Two bottom-quarter seasons, or age >30 with a tier above the ceiling summary, permit a downgrade at min(0.5, 0.15 + 0.03 × years past 30). Missing, undersized or all-tied performance groups cannot count as poor seasons. Hidden/unknown dev labels are preserved. These are explicit initial tuning constants, not a Madden fit or real-person personality claims; the fresh league needs recalibration. `dev_quality` can continue measuring the resulting tier changes.
+**Accepted design (JR, 2026-10-31; implementation pending):** dev tiers summarize the hidden development band. Remove the independent performance-based promotion/demotion lottery: evidence may change skills or revise a band, then the display label follows that band. A label change must not itself award growth or raise potential again. An incoming Madden dev tier may initialize an unknown band once, but must not become a recurring driver. Exact label mapping remains to be calibrated rather than treating the current 75/85/95 cutoffs as approved.
 
-**JR decided (2026-10-28):** with ceiling bands (§5.9), the dev trait stays and becomes the visible summary of the hidden band: Madden still needs `TraitDevelopment` in the game (abilities, X-Factor slots), and it tells JR and writers roughly how much room a player has, without the number.
+**Current implementation:** the offseason-only seeded tier lottery and dev-based fallback initialization still exist. Madden also ties TraitDevelopment to ability eligibility. Independent ability assignment must be proven before automatic band-label changes are activated in the live league; that is separate from deciding development. The accepted revision does not claim this gameplay coupling is removed.
 
 ### 5.8 Durability and mileage
 
@@ -189,7 +193,10 @@ Dev trait changes are part of the offseason pass, with at most one tier step. Th
 
 * **Band:** each player has a floor, a ceiling and a spread (how widely his path can land between them), with a ceiling per group: physical about at his draft-day ratings plus the strength program, technical and mental from `true_value` and his profile. A polished four-year starter has a narrow band near the top of his range and reaches it fast; a raw elite athlete has a wide band that needs coaching and snaps; a late-round pick sits low with a small tail. These profiles come out of the prospect's entry ratings and scouting's uncertainty about him; they are not fixed classes.
 * **Growth toward the ceiling** replaces the dev multiplier: room to grow sets the rate, and the spread sets how far a seeded draw can move him each season.
-* **Breakthrough:** a player 28 or younger with two straight seasons in his position group's top quarter (`performance_scores`) can have his technical and mental ceilings raised by a seeded 1–4. Personality and coaching (§6, §7) set the odds, so every breakthrough has a cause tag (`BREAKTHROUGH`) and a reason a writer can give.
+* **Accepted breakthrough review (JR, 2026-10-31; implementation pending):** roughly 6–8 meaningful appearances normally establish review eligibility, using position-specific opportunities, efficiency, baseline change and supported context. Regular-season and playoff games both count. **A sustained full playoff run is an independent route to review**, even when fewer than six games; neither reaching the postseason nor a single spectacular game guarantees a breakout. A first-round bye is not evidence and must not disqualify a shorter deep run. The shorter sample carries uncertainty; exact opportunity and reliability thresholds need testing. There is no hard under-26 or age-28 cutoff in the accepted review design.
+* **Review outcomes:** no lasting change; supported underlying skill improvement; upward technical/mental band revision; or both skill and band changes, accounted for separately. A trigger starts assessment, not an automatic reward. Do not impose unsupported metrics such as separation per route when inputs are unavailable. Missing or unit-level evidence reduces confidence.
+* **Revisable resistance bands:** progress becomes harder near a band's upper end; sufficiently strong evidence can move it. A slump does not automatically lower potential. Aging mainly lowers current physical ability; serious injury may reduce future physical capacity. Preserve league calibration rather than making every good stretch remove growth resistance.
+* **Current implementation:** two consecutive top-quarter seasons, age ≤28 and seeded 1–4 breakthrough points remain in code until the accepted revision is implemented and validated.
 
 ### 5.10 Peaks and upkeep
 
@@ -211,6 +218,8 @@ It rides on the weekly in-season write the league office already needs (§5.3) (
 PC test (phase A (6)), answered by JR 2026-10-30: morale visibly changes play, raising a player's key position ratings by up to ~5. Assumed neutral: 50, Madden's default (most players sit there). Pinning everyone at 50 every week means Madden's morale changes last at most one game before the next write resets them.
 
 Form isn't stored in `player_ceilings` or used by the yearly change; the yearly change reads the season's production instead.
+
+**Accepted clarification (JR, 2026-10-31):** retain ±3 OVR as the initial production setting while testing stronger alternatives; a strong game may change the calculated overlay immediately. Form changes relevant execution skills while preserving physical limits, and should not reproduce the whole statistical outcome through a rating boost. Exceptional outcomes must remain possible without prior boosts. Never convert a percentage of form directly into permanent ratings: sustained performance is evidence for a separate development assessment. Temporary impairment/rest is separate from permanent injury damage. No automatic three-week defensive-adjustment tag, new perceived-OVR system or restoration of the rejected young-player rating-range display is approved. Public expectations may change through narratives and recorded evidence without a new numerical OVR layer.
 
 ### 5.12 Madden's behaviour traits (`PT_*`)
 
@@ -336,7 +345,7 @@ Phases F and G can start before D as data (traits seeded, shown to writers) with
 |---|---|---|
 | D1 | Who owns ratings after the move: Project Mu (this plan) or Madden? | Project Mu, from the 2038 offseason at the latest |
 | D2 | First PC season (2037): Madden's own progression, a community tool, or this engine? | Madden's own with XP off via Sabos, unless phase C is ready by the 2037 offseason |
-| D3 | In-season checkpoints, or offseason only? | Start offseason only; add checkpoints in phase E. The weekly in-season write exists anyway for the league office, so the extra cost is small |
+| D3 | In-season checkpoints, or offseason only? | **JR decided (2026-10-31): both**, one annual accounting system; mental checkpoints every four completed team games, technical midseason/end, playoff evidence included (§5.3). Implementation pending. |
 | D4 | How much weight performance gets against age and talent | Playing time and grade together about a quarter of a typical season's change |
 | D5 | Can JR see ceilings or traits? | Ceilings never (like `true_value`); personality traits visible on player pages once seeded |
 | D6 | Does Project Mu also take over retirements? | Not in this plan; Sabos's lower retirement chance for now, revisit after phase D |
@@ -346,7 +355,8 @@ Phases F and G can start before D as data (traits seeded, shown to writers) with
 | D10 | Mental ratings: never decline, or decline last and slowest? | **JR decided (2026-10-28): last and slowest, at a rate set by the peak** (§5.4) |
 | D11 | Rating ranges instead of numbers for young players on Project Mu's pages? | **JR decided (2026-10-28): dropped** (§5.14) |
 | D13 | How form reaches the game: morale fixed for everyone (50 or 99) with a ratings overlay, or form written into morale itself? | **Decided (JR, 2026-10-30): morale pinned at 50 for everyone on every weekly write; form is separate from morale and is carried by a ratings overlay** (§5.11). |
-| D12 | Dev trait under ceiling bands | **JR decided (2026-10-28): kept, as the visible summary of the hidden band** (§5.7) |
+| D12 | Dev trait under ceiling bands | **JR reaffirmed (2026-10-31): label follows band**, no independent promotion lottery or recurring growth benefit; ability coupling remains an integration gate (§5.7). |
+| D14 | Partial-season and postseason breakouts | **JR decided (2026-10-31): review after meaningful partial-season evidence; a sustained full playoff run can independently qualify even below the normal 6–8 appearances.** Review is not guaranteed improvement (§5.9). |
 
 ---
 
