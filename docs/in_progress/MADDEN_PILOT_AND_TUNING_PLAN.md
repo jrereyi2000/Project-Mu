@@ -1,6 +1,6 @@
 # Project Mu: Madden Pilot and Tuning Plan
 
-**Status:** approved by JR (2026-10-30); building, wave 1 of 2. Wave 0 done (P-a, P-b). U4 merged early.
+**Status:** approved by JR (2026-10-30); building, wave 1 of 2 done; wave 2 (U3, U5) next. Wave 0 done (P-a, P-b).
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §8.1 route 2 (UI automation from Windows); [`MOD_BUILDER_PLAN.md`](../done/MOD_BUILDER_PLAN.md) (tuning mods are built with `tools/mod_builder`); [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) (Project Mu's own progression engine); PROJECT_SPEC §1.1 (`madden_capture.py`, `pipeline/save_reader/`, `pipeline/load_save.py`).
 
 **Goal:** two agents that let Madden run experiments while JR is away.
@@ -157,6 +157,9 @@ WSL wrapper (`tools/madden_pilot/win.py`): `call(cmd: list[str], timeout=60) -> 
 - **CAREER-WEEK1 is the clean baseline (JR, 2026-10-30):** it was created at week 1. Madden sims the week's other games before the user's game, so 15 of 16 week-1 games being simmed (team box scores, no player lines yet) is its normal starting state, not a used save. The tuning comparison scores full seasons, so this doesn't matter.
 - **Screen seen:** `OFFLINE > NFL PRESEASON ROSTER > CHOOSE TEAM > CUSTOMIZE` (4×8 team grid, `E` = Random Team, Backspace = Back). This is the in-franchise create-new-character screen (it looks like new-franchise team choice), with CAREER-WEEK1 loaded. The highlight was left on the Jaguars as found, and nothing was confirmed.
 
+- As built (U1): the interpreter is the MuPilot venv (`MU_WIN_PYTHON`, default `/mnt/c/Madden27Modding/MuPilot/venv/Scripts/python.exe`), not the global Python 3.14. `windows` adds `exe`/`minimized`; `key` takes `--title` and refuses per press. Unreadable elevation is refused like elevated.
+- As built (U2): only `confirm_on` presses Space. `HUB_OTHER` and `DELETE_CONFIRM` were added (todo). `loaded_franchise` is set only from the franchise list (the hub never shows the save name). ADVANCE_MENU allows only `NEXT WEEK` for now. The border highlight reader was checked on spike screenshots with hand-placed boxes; U3 re-checks it with real OCR.
+
 **Spike P-b results (2026-10-30):** screenshots and OCR for every step are in `C:\Madden27Modding\MuPilot\spike\` (`b*`, `c*`, `d*`, `e*`, `f*`, `g*`, `h*`).
 - **Keys on PC (from the on-screen hints):** Space = Select/Accept/Continue, Backspace = Back, Z / C = previous / next top tab, Tab = Create Savepoint, Q = **Delete** on the franchise list (forbidden there), E = Random Team on team choice, T = profile. Esc doesn't back out of anything seen.
 - **Quitting a franchise:** Back on the hub opens `WARNING / Are you sure you want to quit? / YES / NO`, with NO highlighted. Up then Space chooses YES. **Quitting writes `<save>-AUTOSAVE`**: the franchise loaded at the start of the spike was ALLUSER (another session's walkthrough save), not CAREER-WEEK1, and quitting it wrote `ALLUSER-AUTOSAVE` (8:02:42 PM) with no changes made. The pilot must record which franchise is loaded before quitting, and the skill must ask JR before quitting a franchise that isn't `CAREER-TUNE-*`.
@@ -304,3 +307,4 @@ No path appears twice. No `.gitignore` change: run output goes under `data/` (al
 |---|---|---|---|---|---|
 | U4 | 1 (early) | worktree-agent-aafd0eb3664cb3920 | .claude/worktrees/agent-aafd0eb3664cb3920 | merged | a1809e0 |
 | U1 | 1 | worktree-agent-a6eb2ee482d5dfc33 | .claude/worktrees/agent-a6eb2ee482d5dfc33 | merged | a7be57a |
+| U2 | 1 | worktree-agent-a41ea69a7c925f94e | .claude/worktrees/agent-a41ea69a7c925f94e | merged | 635b51c |
