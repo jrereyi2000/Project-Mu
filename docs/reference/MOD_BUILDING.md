@@ -249,7 +249,18 @@ Home jerseys (from `find "*u_jersey_jaguars_2024*"` and `find "*jersey_vikings_2
 - Jaguars: `.../Jersey/Jaguars/U_Jersey_Jaguars_2024_tea` (teal home; not `_teal`), plus `_1gre_teal`, `_1gre_black`, `_1gre_white`, `_2whi*`, `_3bla`.
 - Vikings: `.../Jersey/Vikings/U_Jersey_Vikings_2024_purple` (purple home), plus `_1pur_white`, `_2whi`, `_3pur`, `_4pur`, `_silpur`.
 
-**Next step for the pink Jaguars/Vikings home jerseys** (ebx is readable now, §3):
+**Palettes of the two home jerseys** (2026-10-31; linear `ColorChannels` → sRGB):
+
+| Jersey | Primary | Secondary | Tertiary |
+|---|---|---|---|
+| `Jaguars/U_Jersey_Jaguars_2024_tea` (teal home) | `#262628` near-black | `#00666E` teal | — |
+| `Vikings/U_Jersey_Vikings_2024_purple` (purple home) | `#422D67` purple | `#EBAD33` gold | `#232323` near-black |
+
+The teal jersey's primary is black, so the palette very likely drives the trim, numbers and accents, while the cloth colour comes from `JerseyColorMap`. This is to be confirmed in game.
+
+**Built: `pink_home_jerseys` (2026-10-31, JR chose "pink trim first").** Two `ebx-set` ops set `ItemPalette.SecondaryColor.ColorChannels` on both home jerseys to BCA hot pink `#FF69B4`. **`ebx-set` writes `#RRGGBB` as plain /255 floats, and palettes are linear**, so the recipe passes the linear value `#FF2474` (sRGB `#FF69B4` → linear `(1.000, 0.141, 0.456)`). Passing `#FF69B4` directly would come out as a pale pink. Build: 4 harness calls (info, 2 × ebx-set, export-mod), check OK (7 resources, all FMENC001). Read-back with `ebx-dump --project` shows `(1, 0.1412, 0.4549, 1)` on both. No installed mod touches either jersey (BCA Pink Oct skips both home sets). In game: not yet checked.
+
+**Next steps for the pink Jaguars/Vikings home jerseys** (ebx is readable now, §3):
 
 1. `info` shows `ebx_readable: true`.
 2. `ebx-dump` both home jerseys into `work/` (the Jaguars one is already in `data/mod_builds/_probe/`). Decide with JR which palette slot to make pink (the teal secondary is the likely accent), and try that `ebx-set` first. Read `JerseyColorMap` (its `$external` name is the texture) only if the palette isn't enough. Note whether the two teams' colour maps are shared with other jerseys (the same `$external` name in another jersey's dump means the recolour changes that jersey too).
