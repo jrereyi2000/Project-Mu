@@ -30,7 +30,8 @@ Writes, for that season:
                              losses and the OCR-only rank columns are left alone)
   draft_prospects            reader_version >= 5: the coming class (season + 1) from the save's prospects (status Draft,
                              in DraftPlayer.InitialDraftRank order: projected pick, round 1-7 then UDFA, position,
-                             archetype, age, height, weight and the save's OVR; no college), only when that class has
+                             archetype, age, height, weight, the save's OVR and the college through
+                             pipeline/colleges.py's row map, NULL for a row not mapped), only when that class has
                              no board yet: a scanned or already loaded board is kept, so its ids, mock drafts and
                              scouting links never move
   depth_charts               reader_version >= 4: every real team's Madden depth chart (35 positions x 6, best
@@ -55,6 +56,7 @@ import sys
 import psycopg
 
 from pipeline.capture_matching import db_player_name
+from pipeline.colleges import college_name
 from pipeline.contracts import insert_contract, supersede_active
 from pipeline.draft_board import write_board
 from pipeline.ingest_prospects import Prospect
@@ -751,7 +753,8 @@ def draft_board_prospects(snapshot):
     for pick, (_, p) in enumerate(rows, start=1):
         drafted = pick <= DRAFTED_PICKS
         out.append(Prospect(projected_pick=pick, full_name=f"{p['first_name']} {p['last_name']}".strip(),
-                            position=position(p["position"]), college=None, height=height_text(p["height_in"]),
+                            position=position(p["position"]), college=college_name(p.get("college")),
+                            height=height_text(p["height_in"]),
                             weight=p["weight_lbs"], age=p["age"], overall_rating=p["overall"],
                             archetype=archetype(p["archetype"]),
                             projected_round=str((pick - 1) // 32 + 1) if drafted else "UDFA",

@@ -1,0 +1,1382 @@
+{
+ "_note": "Madden 27 Player.College rows (table 16384) -> college, fitted by pipeline/colleges.py from a save's real players and nflverse colleges; overrides are in-game corrections and always win.",
+ "table": 16384,
+ "source": "CAREER-WEEK1, CAREER-GIANTS-AUTOSAVE",
+ "rows": {
+  "1744": {
+   "name": "AIR FORCE",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1745": {
+   "name": "AKRON",
+   "votes": 0,
+   "of": 0,
+   "rule": "only board school between its neighbours"
+  },
+  "1746": {
+   "name": "ALABAMA",
+   "votes": 125,
+   "of": 125,
+   "rule": "majority"
+  },
+  "1747": {
+   "name": "ALABAMA A&M",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1748": {
+   "name": "ALABAMA STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1750": {
+   "name": "ALCORN STATE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1751": {
+   "name": "APPALACHIAN STATE",
+   "votes": 13,
+   "of": 13,
+   "rule": "majority"
+  },
+  "1752": {
+   "name": "ARIZONA",
+   "votes": 28,
+   "of": 28,
+   "rule": "majority"
+  },
+  "1753": {
+   "name": "ARIZONA STATE",
+   "votes": 27,
+   "of": 27,
+   "rule": "majority"
+  },
+  "1754": {
+   "name": "ARKANSAS",
+   "votes": 37,
+   "of": 37,
+   "rule": "majority"
+  },
+  "1755": {
+   "name": "ARKANSAS AT PINE BLUFF",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1756": {
+   "name": "ARKANSAS STATE",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1757": {
+   "name": "ARMY",
+   "votes": 7,
+   "of": 7,
+   "rule": "majority"
+  },
+  "1758": {
+   "name": "AUBURN",
+   "votes": 66,
+   "of": 66,
+   "rule": "majority"
+  },
+  "1760": {
+   "name": "AUSTIN PEAY",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "1761": {
+   "name": "BALL STATE",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1762": {
+   "name": "BAYLOR",
+   "votes": 27,
+   "of": 27,
+   "rule": "majority"
+  },
+  "1766": {
+   "name": "BOISE STATE",
+   "votes": 24,
+   "of": 24,
+   "rule": "majority"
+  },
+  "1767": {
+   "name": "BOSTON COLLEGE",
+   "votes": 43,
+   "of": 43,
+   "rule": "majority"
+  },
+  "1768": {
+   "name": "BOWLING GREEN STATE",
+   "votes": 6,
+   "of": 6,
+   "rule": "majority"
+  },
+  "1770": {
+   "name": "BROWN",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1772": {
+   "name": "BUFFALO",
+   "votes": 13,
+   "of": 13,
+   "rule": "majority"
+  },
+  "1775": {
+   "name": "BYU",
+   "votes": 34,
+   "of": 34,
+   "rule": "majority"
+  },
+  "1776": {
+   "name": "CAL POLY (SAN LUIS OBISPO)",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1779": {
+   "name": "CALIFORNIA",
+   "votes": 36,
+   "of": 36,
+   "rule": "majority"
+  },
+  "1780": {
+   "name": "UC DAVIS",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1787": {
+   "name": "CENTRAL ARKANSAS",
+   "votes": 6,
+   "of": 6,
+   "rule": "majority"
+  },
+  "1788": {
+   "name": "CENTRAL MICHIGAN",
+   "votes": 12,
+   "of": 12,
+   "rule": "majority"
+  },
+  "1793": {
+   "name": "CINCINNATI",
+   "votes": 42,
+   "of": 42,
+   "rule": "majority"
+  },
+  "1796": {
+   "name": "CLEMSON",
+   "votes": 76,
+   "of": 77,
+   "rule": "majority"
+  },
+  "1798": {
+   "name": "COASTAL CAROLINA",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1802": {
+   "name": "COLORADO",
+   "votes": 18,
+   "of": 18,
+   "rule": "majority"
+  },
+  "1803": {
+   "name": "COLORADO STATE",
+   "votes": 17,
+   "of": 17,
+   "rule": "majority"
+  },
+  "1805": {
+   "name": "CONNECTICUT",
+   "votes": 15,
+   "of": 15,
+   "rule": "majority"
+  },
+  "1807": {
+   "name": "CULVER-STOCKTON COLLEGE",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "1810": {
+   "name": "DAYTON",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1811": {
+   "name": "DELAWARE",
+   "votes": 6,
+   "of": 6,
+   "rule": "majority"
+  },
+  "1813": {
+   "name": "DELTA STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1814": {
+   "name": "DRAKE",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "1815": {
+   "name": "DUKE",
+   "votes": 32,
+   "of": 32,
+   "rule": "majority"
+  },
+  "1816": {
+   "name": "DUQUESNE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1817": {
+   "name": "EASTERN ILLINOIS",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1818": {
+   "name": "EASTERN KENTUCKY",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1819": {
+   "name": "EAST TENNESSEE STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1820": {
+   "name": "EAST CAROLINA",
+   "votes": 8,
+   "of": 8,
+   "rule": "majority"
+  },
+  "1822": {
+   "name": "EASTERN MICHIGAN",
+   "votes": 10,
+   "of": 10,
+   "rule": "majority"
+  },
+  "1824": {
+   "name": "EASTERN WASHINGTON",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "1825": {
+   "name": "ELON",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1828": {
+   "name": "FAU",
+   "votes": 17,
+   "of": 17,
+   "rule": "majority"
+  },
+  "1829": {
+   "name": "FERRIS STATE",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1830": {
+   "name": "FIU",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1831": {
+   "name": "FLORIDA",
+   "votes": 78,
+   "of": 78,
+   "rule": "majority"
+  },
+  "1832": {
+   "name": "FLORIDA A&M",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "1833": {
+   "name": "FLORIDA STATE",
+   "votes": 54,
+   "of": 54,
+   "rule": "majority"
+  },
+  "1834": {
+   "name": "FORDHAM",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1835": {
+   "name": "FORT VALLEY STATE COLLEGE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1837": {
+   "name": "FRESNO STATE",
+   "votes": 20,
+   "of": 20,
+   "rule": "majority"
+  },
+  "1839": {
+   "name": "GEORGIA SOUTHERN",
+   "votes": 8,
+   "of": 8,
+   "rule": "majority"
+  },
+  "1842": {
+   "name": "GEORGIA",
+   "votes": 136,
+   "of": 136,
+   "rule": "majority"
+  },
+  "1843": {
+   "name": "GEORGIA TECH",
+   "votes": 24,
+   "of": 24,
+   "rule": "majority"
+  },
+  "1845": {
+   "name": "GRAND VALLEY STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1848": {
+   "name": "HARVARD",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "1850": {
+   "name": "HAWAII",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "1854": {
+   "name": "HOLY CROSS",
+   "votes": 7,
+   "of": 7,
+   "rule": "majority"
+  },
+  "1855": {
+   "name": "HOUSTON",
+   "votes": 27,
+   "of": 27,
+   "rule": "majority"
+  },
+  "1857": {
+   "name": "IDAHO",
+   "votes": 7,
+   "of": 7,
+   "rule": "majority"
+  },
+  "1858": {
+   "name": "IDAHO STATE",
+   "votes": 0,
+   "of": 0,
+   "rule": "only board school between its neighbours"
+  },
+  "1859": {
+   "name": "ILLINOIS",
+   "votes": 59,
+   "of": 59,
+   "rule": "majority"
+  },
+  "1860": {
+   "name": "ILLINOIS STATE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1861": {
+   "name": "INDIANA",
+   "votes": 43,
+   "of": 43,
+   "rule": "majority"
+  },
+  "1862": {
+   "name": "INDIANA STATE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1864": {
+   "name": "IOWA",
+   "votes": 88,
+   "of": 88,
+   "rule": "majority"
+  },
+  "1865": {
+   "name": "IOWA STATE",
+   "votes": 25,
+   "of": 25,
+   "rule": "majority"
+  },
+  "1866": {
+   "name": "INDIANA (PA)",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1867": {
+   "name": "JAMES MADISON",
+   "votes": 7,
+   "of": 7,
+   "rule": "majority"
+  },
+  "1869": {
+   "name": "JACKSONVILLE STATE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1871": {
+   "name": "KANSAS",
+   "votes": 19,
+   "of": 19,
+   "rule": "majority"
+  },
+  "1872": {
+   "name": "KANSAS STATE",
+   "votes": 30,
+   "of": 30,
+   "rule": "majority"
+  },
+  "1873": {
+   "name": "KENT STATE",
+   "votes": 0,
+   "of": 0,
+   "rule": "only board school between its neighbours"
+  },
+  "1874": {
+   "name": "KENTUCKY",
+   "votes": 43,
+   "of": 43,
+   "rule": "majority"
+  },
+  "1876": {
+   "name": "KUTZTOWN",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "1878": {
+   "name": "LA. TECH",
+   "votes": 8,
+   "of": 8,
+   "rule": "majority"
+  },
+  "1883": {
+   "name": "LIBERTY",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1885": {
+   "name": "LOUISVILLE",
+   "votes": 34,
+   "of": 34,
+   "rule": "majority"
+  },
+  "1886": {
+   "name": "LSU",
+   "votes": 115,
+   "of": 115,
+   "rule": "majority"
+  },
+  "1888": {
+   "name": "MAINE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1889": {
+   "name": "MANITOBA",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1890": {
+   "name": "MARIST",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1891": {
+   "name": "MARSHALL",
+   "votes": 18,
+   "of": 18,
+   "rule": "majority"
+  },
+  "1892": {
+   "name": "MARYLAND",
+   "votes": 39,
+   "of": 41,
+   "rule": "majority"
+  },
+  "1893": {
+   "name": "MASSACHUSETTS",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1895": {
+   "name": "MEMPHIS",
+   "votes": 16,
+   "of": 16,
+   "rule": "majority"
+  },
+  "1898": {
+   "name": "MIAMI",
+   "votes": 64,
+   "of": 64,
+   "rule": "majority"
+  },
+  "1899": {
+   "name": "MIAMI OF OHIO",
+   "votes": 9,
+   "of": 9,
+   "rule": "majority"
+  },
+  "1900": {
+   "name": "MICHIGAN",
+   "votes": 120,
+   "of": 120,
+   "rule": "majority"
+  },
+  "1901": {
+   "name": "MICHIGAN STATE",
+   "votes": 35,
+   "of": 36,
+   "rule": "majority"
+  },
+  "1902": {
+   "name": "MIDDLE TENNESSEE STATE",
+   "votes": 8,
+   "of": 8,
+   "rule": "majority"
+  },
+  "1904": {
+   "name": "MINNESOTA",
+   "votes": 35,
+   "of": 36,
+   "rule": "majority"
+  },
+  "1906": {
+   "name": "MISSISSIPPI STATE",
+   "votes": 32,
+   "of": 32,
+   "rule": "majority"
+  },
+  "1907": {
+   "name": "MISSOURI",
+   "votes": 46,
+   "of": 46,
+   "rule": "majority"
+  },
+  "1910": {
+   "name": "MISSOURI WESTERN",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1911": {
+   "name": "MONMOUTH",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1912": {
+   "name": "MONTANA",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1913": {
+   "name": "MONTANA STATE",
+   "votes": 10,
+   "of": 10,
+   "rule": "majority"
+  },
+  "1916": {
+   "name": "MORGAN STATE",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1920": {
+   "name": "MURRAY STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1922": {
+   "name": "NORTHERN ARIZONA",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1923": {
+   "name": "NORTH CAROLINA A&T",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1924": {
+   "name": "NORTHERN COLORADO",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "1925": {
+   "name": "NORTHERN ILLINOIS",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "1926": {
+   "name": "N.C. STATE",
+   "votes": 46,
+   "of": 46,
+   "rule": "majority"
+  },
+  "1928": {
+   "name": "NAVY",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "1929": {
+   "name": "NORTH CAROLINA CENTRAL",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1931": {
+   "name": "NEBRASKA",
+   "votes": 24,
+   "of": 25,
+   "rule": "majority"
+  },
+  "1933": {
+   "name": "NEVADA",
+   "votes": 7,
+   "of": 7,
+   "rule": "majority"
+  },
+  "1934": {
+   "name": "NEW HAMPSHIRE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1936": {
+   "name": "NEW MEXICO",
+   "votes": 6,
+   "of": 6,
+   "rule": "majority"
+  },
+  "1941": {
+   "name": "NORTH CAROLINA",
+   "votes": 40,
+   "of": 42,
+   "rule": "majority"
+  },
+  "1942": {
+   "name": "NORTH DAKOTA",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1943": {
+   "name": "NORTH DAKOTA STATE",
+   "votes": 29,
+   "of": 29,
+   "rule": "majority"
+  },
+  "1946": {
+   "name": "NORTHERN IOWA",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "1948": {
+   "name": "NORTHWESTERN",
+   "votes": 14,
+   "of": 14,
+   "rule": "majority"
+  },
+  "1950": {
+   "name": "NOTRE DAME",
+   "votes": 103,
+   "of": 104,
+   "rule": "majority"
+  },
+  "1951": {
+   "name": "NORTHWEST MISSOURI STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1954": {
+   "name": "OHIO",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1956": {
+   "name": "OHIO STATE",
+   "votes": 141,
+   "of": 141,
+   "rule": "majority"
+  },
+  "1957": {
+   "name": "OKLAHOMA",
+   "votes": 78,
+   "of": 78,
+   "rule": "majority"
+  },
+  "1958": {
+   "name": "OKLAHOMA STATE",
+   "votes": 31,
+   "of": 31,
+   "rule": "majority"
+  },
+  "1959": {
+   "name": "OLE MISS",
+   "votes": 66,
+   "of": 66,
+   "rule": "majority"
+  },
+  "1960": {
+   "name": "OREGON",
+   "votes": 96,
+   "of": 96,
+   "rule": "majority"
+  },
+  "1961": {
+   "name": "OREGON STATE",
+   "votes": 29,
+   "of": 29,
+   "rule": "majority"
+  },
+  "1964": {
+   "name": "PENN",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1965": {
+   "name": "PENN STATE",
+   "votes": 94,
+   "of": 94,
+   "rule": "majority"
+  },
+  "1967": {
+   "name": "PITTSBURG STATE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1968": {
+   "name": "PITTSBURGH",
+   "votes": 45,
+   "of": 45,
+   "rule": "majority"
+  },
+  "1970": {
+   "name": "PRINCETON",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1971": {
+   "name": "PURDUE",
+   "votes": 19,
+   "of": 19,
+   "rule": "majority"
+  },
+  "1974": {
+   "name": "RHODE ISLAND",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1975": {
+   "name": "RICE",
+   "votes": 12,
+   "of": 12,
+   "rule": "majority"
+  },
+  "1979": {
+   "name": "RUTGERS",
+   "votes": 28,
+   "of": 28,
+   "rule": "majority"
+  },
+  "1981": {
+   "name": "SOUTH DAKOTA STATE",
+   "votes": 14,
+   "of": 14,
+   "rule": "majority"
+  },
+  "1982": {
+   "name": "SOUTHERN ILLINOIS",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "1983": {
+   "name": "SOUTH CAROLINA STATE",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1984": {
+   "name": "SAN DIEGO STATE",
+   "votes": 19,
+   "of": 19,
+   "rule": "majority"
+  },
+  "1985": {
+   "name": "SACRAMENTO STATE",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "1986": {
+   "name": "SACRED HEART",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1987": {
+   "name": "SAGINAW VALLEY STATE",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1988": {
+   "name": "SAM HOUSTON STATE",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "1990": {
+   "name": "SAN DIEGO",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "1991": {
+   "name": "SAN JOSE STATE",
+   "votes": 7,
+   "of": 7,
+   "rule": "majority"
+  },
+  "1993": {
+   "name": "SOUTHEASTERN LOUISIANA",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1995": {
+   "name": "SOUTHEAST MISSOURI STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "1999": {
+   "name": "SMU",
+   "votes": 30,
+   "of": 31,
+   "rule": "majority"
+  },
+  "2001": {
+   "name": "SOUTH CAROLINA",
+   "votes": 56,
+   "of": 57,
+   "rule": "majority"
+  },
+  "2002": {
+   "name": "SOUTH DAKOTA",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "2003": {
+   "name": "SOUTHERN",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "2004": {
+   "name": "SOUTHERN ARKANSAS",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "2005": {
+   "name": "SOUTHERN MISS",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "2006": {
+   "name": "SOUTHERN UTAH",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "2010": {
+   "name": "ST. JOHN'S (MN)",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "2014": {
+   "name": "STANFORD",
+   "votes": 48,
+   "of": 48,
+   "rule": "majority"
+  },
+  "2015": {
+   "name": "STEPHEN F. AUSTIN",
+   "votes": 7,
+   "of": 7,
+   "rule": "majority"
+  },
+  "2020": {
+   "name": "SYRACUSE",
+   "votes": 34,
+   "of": 34,
+   "rule": "majority"
+  },
+  "2022": {
+   "name": "TARLETON STATE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "2023": {
+   "name": "TCU",
+   "votes": 56,
+   "of": 56,
+   "rule": "majority"
+  },
+  "2024": {
+   "name": "TEMPLE",
+   "votes": 19,
+   "of": 19,
+   "rule": "majority"
+  },
+  "2026": {
+   "name": "CHATTANOOGA",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "2027": {
+   "name": "TENNESSEE",
+   "votes": 65,
+   "of": 65,
+   "rule": "majority"
+  },
+  "2030": {
+   "name": "TEXAS",
+   "votes": 91,
+   "of": 91,
+   "rule": "majority"
+  },
+  "2031": {
+   "name": "TEXAS A&M",
+   "votes": 67,
+   "of": 67,
+   "rule": "majority"
+  },
+  "2033": {
+   "name": "TEXAS STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "2034": {
+   "name": "TEXAS TECH",
+   "votes": 40,
+   "of": 40,
+   "rule": "majority"
+  },
+  "2036": {
+   "name": "TOLEDO",
+   "votes": 21,
+   "of": 21,
+   "rule": "majority"
+  },
+  "2039": {
+   "name": "TROY",
+   "votes": 9,
+   "of": 9,
+   "rule": "majority"
+  },
+  "2041": {
+   "name": "TULANE",
+   "votes": 25,
+   "of": 25,
+   "rule": "majority"
+  },
+  "2042": {
+   "name": "TULSA",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "2043": {
+   "name": "TUSCULUM COLLEGE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "2045": {
+   "name": "UAB",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "2046": {
+   "name": "UCF",
+   "votes": 31,
+   "of": 31,
+   "rule": "majority"
+  },
+  "2047": {
+   "name": "UCLA",
+   "votes": 60,
+   "of": 60,
+   "rule": "majority"
+  },
+  "2048": {
+   "name": "UL LAFAYETTE",
+   "votes": 19,
+   "of": 19,
+   "rule": "majority"
+  },
+  "2049": {
+   "name": "UL MONROE",
+   "votes": 0,
+   "of": 0,
+   "rule": "only board school between its neighbours"
+  },
+  "2050": {
+   "name": "UNLV",
+   "votes": 6,
+   "of": 6,
+   "rule": "majority"
+  },
+  "2051": {
+   "name": "USC",
+   "votes": 65,
+   "of": 65,
+   "rule": "majority"
+  },
+  "2052": {
+   "name": "USF",
+   "votes": 4,
+   "of": 6,
+   "rule": "majority"
+  },
+  "2053": {
+   "name": "UTAH",
+   "votes": 57,
+   "of": 57,
+   "rule": "majority"
+  },
+  "2054": {
+   "name": "UTAH STATE",
+   "votes": 7,
+   "of": 7,
+   "rule": "majority"
+  },
+  "2055": {
+   "name": "UTEP",
+   "votes": 10,
+   "of": 10,
+   "rule": "majority"
+  },
+  "2060": {
+   "name": "VANDERBILT",
+   "votes": 22,
+   "of": 22,
+   "rule": "majority"
+  },
+  "2061": {
+   "name": "VILLANOVA",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "2062": {
+   "name": "VIRGINIA",
+   "votes": 20,
+   "of": 20,
+   "rule": "majority"
+  },
+  "2063": {
+   "name": "VIRGINIA TECH",
+   "votes": 44,
+   "of": 44,
+   "rule": "majority"
+  },
+  "2066": {
+   "name": "WESTERN CAROLINA",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "2067": {
+   "name": "WESTERN ILLINOIS",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "2068": {
+   "name": "W. KENTUCKY",
+   "votes": 12,
+   "of": 12,
+   "rule": "majority"
+  },
+  "2069": {
+   "name": "W. MICHIGAN",
+   "votes": 19,
+   "of": 19,
+   "rule": "majority"
+  },
+  "2073": {
+   "name": "WAKE FOREST",
+   "votes": 31,
+   "of": 31,
+   "rule": "majority"
+  },
+  "2075": {
+   "name": "WASHINGTON STATE",
+   "votes": 24,
+   "of": 24,
+   "rule": "majority"
+  },
+  "2076": {
+   "name": "WASHBURN",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "2077": {
+   "name": "WASHINGTON",
+   "votes": 73,
+   "of": 73,
+   "rule": "majority"
+  },
+  "2078": {
+   "name": "WAYNE STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "2079": {
+   "name": "WEBER STATE",
+   "votes": 6,
+   "of": 6,
+   "rule": "majority"
+  },
+  "2081": {
+   "name": "WEST VIRGINIA",
+   "votes": 23,
+   "of": 23,
+   "rule": "majority"
+  },
+  "2088": {
+   "name": "WILLIAM & MARY",
+   "votes": 9,
+   "of": 9,
+   "rule": "majority"
+  },
+  "2090": {
+   "name": "WINGATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "2092": {
+   "name": "WISCONSIN",
+   "votes": 47,
+   "of": 49,
+   "rule": "majority"
+  },
+  "2093": {
+   "name": "WISCONSIN-WHITEWATER",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "2094": {
+   "name": "WOFFORD",
+   "votes": 1,
+   "of": 1,
+   "rule": "single vote in alphabetical order"
+  },
+  "2095": {
+   "name": "WYOMING",
+   "votes": 16,
+   "of": 16,
+   "rule": "majority"
+  },
+  "2096": {
+   "name": "YALE",
+   "votes": 6,
+   "of": 6,
+   "rule": "majority"
+  },
+  "2097": {
+   "name": "YOUNGSTOWN STATE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "7762": {
+   "name": "UTSA",
+   "votes": 9,
+   "of": 9,
+   "rule": "majority"
+  },
+  "26149": {
+   "name": "GEORGIA STATE",
+   "votes": 6,
+   "of": 6,
+   "rule": "majority"
+  },
+  "43713": {
+   "name": "WAGNER",
+   "votes": 2,
+   "of": 3,
+   "rule": "majority"
+  },
+  "55803": {
+   "name": "HUMBOLDT STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "59065": {
+   "name": "COLORADO STATE-PUEBLO",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "59066": {
+   "name": "SOUTH ALABAMA",
+   "votes": 10,
+   "of": 10,
+   "rule": "majority"
+  },
+  "59079": {
+   "name": "MINNESOTA STATE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "60907": {
+   "name": "EAST TEXAS A&M",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  },
+  "96525": {
+   "name": "FAYETTEVILLE STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "98216": {
+   "name": "FINDLAY",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "98889": {
+   "name": "CHARLOTTE",
+   "votes": 5,
+   "of": 5,
+   "rule": "majority"
+  },
+  "99311": {
+   "name": "VIRGINIA COMMONWEALTH",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "103215": {
+   "name": "AZUSA PACIFIC",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "103217": {
+   "name": "WESTERN STATE",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "109582": {
+   "name": "BRITISH COLUMBIA",
+   "votes": 4,
+   "of": 4,
+   "rule": "majority"
+  },
+  "109584": {
+   "name": "SIOUX FALLS",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "118572": {
+   "name": "MISSOURI-ROLLA",
+   "votes": 2,
+   "of": 2,
+   "rule": "majority"
+  },
+  "118573": {
+   "name": "LENOIR RHYNE",
+   "votes": 3,
+   "of": 3,
+   "rule": "majority"
+  }
+ },
+ "overrides": {}
+}

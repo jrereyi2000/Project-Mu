@@ -20,7 +20,9 @@
 // team_seasons team_ovr / off_ovr / def_ovr (on PC there is no Team Overalls OCR capture), and `draft_class`: one
 // entry per DraftPlayer row whose Player is a ContractStatus Draft prospect ({pgid, draft_position, initial_draft_rank,
 // true_overall_ranking, visible}; ranks 0-based, as draft_tables.mjs reads them), which load_save turns into the coming
-// class's draft_prospects board when it has none. The prospects themselves are the `players` with status Draft.
+// class's draft_prospects board when it has none. The prospects themselves are the `players` with status Draft. Each
+// player also gets `college` = {table, row}: Player.College decoded, a reference into the game's static college list
+// (table 16384 in Madden 27; the names aren't in the save, pipeline/colleges.py maps the rows), null when unset.
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
@@ -261,6 +263,7 @@ async function readPlayers(tables, playerTable, gameTableId, teamTableId, teamIn
       age: p.Age,
       years_pro: p.YearsPro,
       year_drafted: p.YearDrafted,
+      college: decodeRef(p.College),
       jersey: p.JerseyNum,
       height_in: p.Height,
       weight_lbs: weightLbs(p.Weight),

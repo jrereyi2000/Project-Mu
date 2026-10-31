@@ -231,7 +231,8 @@ def v5_snapshot():
     snap["teams"][1]["ratings"] = {"ovr": 74, "off": 72, "def": 77}
     snap["teams"][2]["ratings"] = {"ovr": 50, "off": 50, "def": 50}
     prospect = dict(snap["players"][3], pgid=900005, row=900005, first_name="Second", last_name="Rounder",
-                    position="LE", archetype="DE_SmallerSpeedRusher", overall=70, age=21, height_in=76, weight_lbs=255)
+                    position="LE", archetype="DE_SmallerSpeedRusher", overall=70, age=21, height_in=76, weight_lbs=255,
+                    college={"table": 16384, "row": 1886})      # LSU in the committed college map
     snap["players"].append(prospect)
     # board order: the edge rusher first, then the QB; an entry whose player isn't a prospect is ignored
     snap["draft_class"] = [{"pgid": 900004, "draft_position": "QB", "initial_draft_rank": 7, "true_overall_ranking": 1},
@@ -314,7 +315,8 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
                          [(1, "Second Rounder", "LEDG", "Speed Rusher", "1", 1),
                           (2, "Draft Prospect", "QB", "Field General", "1", 2)])
         self.assertEqual((board[0].height, board[0].weight, board[0].age, board[0].overall_rating, board[0].college),
-                         ("6'4\"", 255, 21, 70, None))
+                         ("6'4\"", 255, 21, 70, "LSU"))
+        self.assertIsNone(board[1].college)                     # no college reference
 
     def test_draft_board_rounds_then_udfa(self):
         snap = v5_snapshot()
