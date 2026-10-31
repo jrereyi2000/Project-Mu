@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "doc": [
+    "Madden 27 (PC) screens for the pilot (docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md section 2.2).",
+    "Words are what Windows OCR read in spikes P-a and P-b (C:/Madden27Modding/MuPilot/spike/). Matching is upper-case, punctuation-blind and bounded by whole words inside one OCR line.",
+    "classify() takes the FIRST screen whose 'all' words are all present, at least one 'any' word is present (when 'any' is listed) and no 'none' word is present, so order matters: most specific first.",
+    "keys: logical names used in exits and press(); select is Space and is only ever pressed through confirm_on().",
+    "exits: {TARGET: [step, ...]}. A step is [key, times] (a logical or raw key), ['highlight', LABEL] (move the highlight onto LABEL along 'nav') or ['confirm', LABEL] (confirm_on this screen with LABEL).",
+    "confirm_ok: the labels Space may accept on this screen (fnmatch patterns, e.g. TUNE-*). An empty list means Space is never pressed here.",
+    "options / default / nav: the choices on the screen in on-screen order, the one highlighted on arrival, and the axis the arrow keys move along (vertical: up/down, horizontal: left/right).",
+    "highlight: how to tell which option is highlighted. 'border' = Madden draws a white outline (and on dialogs a light fill) around the selected option, so the screenshot is read: the option with a bright line running along its width just above or below its OCR box wins (screens.border_highlight; 'border_reach' sets how far, as a fraction of the height, default 0.06). OCR alone can't tell. 'ocr_order' = the highlight can't be read from the picture, so the pilot assumes 'default' on arrival and counts its own arrow presses through 'options' (in on-screen OCR order). null = no options; Space just continues.",
+    "Flags: forbidden (whole screen: stop on sight), forbidden_keys (keys never pressed here, e.g. q = Delete on the franchise list), forbidden_confirm (Space is refused here unless the pilot is given a policy for this screen), quit_guard (the confirm label that quits a franchise; refused unless the loaded franchise starts with TUNE- or allow_quit is passed, because quitting writes <save>-AUTOSAVE), loads_franchise (confirming here loads the highlighted franchise), wait_or_back (a video: Backspace steps through it and the frames between are UNKNOWN), repeat (how many times the pilot may land on this same screen in a row while leaving it, e.g. three progress tabs), never_select (Space is never pressed here; no policy can lift it), no_route (never a goto target or a hop), todo (not seen yet or not fully mapped; words are guesses)."
+  ],
+  "keys": {
+    "select": "space",
+    "back": "backspace",
+    "tab_prev": "z",
+    "tab_next": "c",
+    "savepoint": "tab"
+  },
+  "screens": {
+    "DELETE_CONFIRM": {
+      "note": "Not seen. Any dialog about deleting a franchise stops the run.",
+      "all": ["DELETE"],
+      "any": ["ARE YOU SURE", "PERMANENTLY", "CANNOT BE UNDONE"],
+      "none": [],
+      "exits": {},
+      "confirm_ok": [],
+      "forbidden": true,
+      "todo": true
+    },
+    "QUIT_CONFIRM": {
+      "note": "Spike b3: Back on the hub. NO is highlighted on arrival; Up then Space chooses YES, which writes <save>-AUTOSAVE and returns to CURRENT FRANCHISES.",
+      "all": ["ARE YOU SURE YOU WANT TO QUIT"],
+      "any": [],
+      "none": [],
+      "options": ["YES", "NO"],
+      "default": "NO",
+      "nav": "vertical",
+      "highlight": "border",
+      "confirm_ok": ["YES", "NO"],
+      "quit_guard": "YES",
+      "exits": {
+        "FRANCHISE_LIST": [["highlight", "YES"], ["confirm", "YES"]],
+        "HUB_WEEKLY": [["highlight", "NO"], ["confirm", "NO"]]
+      }
+    },
+    "PROGRESSION_WARNING": {
+      "note": "Spike b6: loading a franchise offline. Drawn over CURRENT FRANCHISES, so it comes before FRANCHISE_LIST. Proceed is highlighted on arrival; the franchise loads in about 25 s.",
+      "all": ["PROGRESSION WARNING"],
+      "any": ["PROCEED WITHOUT PROGRESSION", "CANCEL"],
+      "none": [],
+      "options": ["PROCEED WITHOUT PROGRESSION", "CANCEL"],
+      "default": "PROCEED WITHOUT PROGRESSION",
+      "nav": "vertical",
+      "highlight": "border",
+      "confirm_ok": ["PROCEED WITHOUT PROGRESSION", "CANCEL"],
+      "exits": {
+        "HUB_WEEKLY": [["highlight", "PROCEED WITHOUT PROGRESSION"], ["confirm", "PROCEED WITHOUT PROGRESSION"]],
+        "FRANCHISE_LIST": [["highlight", "CANCEL"], ["confirm", "CANCEL"]]
+      }
+    },
+    "ROSTER_DECISION_PROMPT": {
+      "note": "Spike c4: Space on a Weekly Hub roster-decision card. Never selected (JR, 2026-10-30): the cards are optional content, not interrupts, and Project Mu makes every roster decision through the save writer, never in Madden. Not a target of any exit; if the pilot ever lands here it backs out. Space accepts the highlighted choice (one blind Space put R. Walker on IR in the spike), so it is refused.",
+      "all": [],
+      "any": ["PLACE ON INJURED RESERVE", "KEEP ON ACTIVE ROSTER", "ACTIVATE FROM IR", "KEEP ON IR"],
+      "none": ["WEEKLY HUB", "GAMEDAY"],
+      "never_select": true,
+      "no_route": true,
+      "options": [],
+      "nav": "vertical",
+      "highlight": "border",
+      "confirm_ok": [],
+      "forbidden_confirm": true,
+      "exits": {
+        "HUB_WEEKLY": [["back", 1]]
+      }
+    },
+    "COACH_PROGRESS": {
+      "note": "Spike b10, c1: after a simmed week. The only screen that interrupts Advance Week > Next Week (JR, 2026-10-30). Three tabs (COACH PROGRESS, LOADOUT PROGRESS, UNLOCKS); Space (CONTINUE) steps through each, then the Weekly Hub.",
+      "all": [],
+      "any": ["COACH PROGRESS", "LOADOUT PROGRESS"],
+      "none": ["WEEKLY HUB", "GAMEDAY"],
+      "highlight": null,
+      "confirm_ok": ["CONTINUE"],
+      "repeat": 4,
+      "exits": {
+        "HUB_WEEKLY": [["confirm", "CONTINUE"]]
+      }
+    },
+    "WEEKLY_RECAP": {
+      "note": "Recovery screen only: it never plays on its own (JR, 2026-10-30); it started in the spike (e2-h1) only because a Space landed on GAMEDAY's WEEKLY RECAP tile, which is why HUB_GAMEDAY confirms only ADVANCE WEEK and only with the highlight read on it. Backspace steps one segment; most frames have no text (UNKNOWN). Neither Space nor Esc skips it.",
+      "all": ["WEEKLY RECAP"],
+      "any": [],
+      "none": ["GAMEDAY", "WEEKLY HUB", "COACH CENTRAL", "PLAY SEASON GAME"],
+      "highlight": null,
+      "confirm_ok": [],
+      "wait_or_back": true,
+      "max_backs": 15,
+      "repeat": 15,
+      "exits": {
+        "HUB_GAMEDAY": [["back", 1]]
+      }
+    },
+    "ADVANCE_MENU": {
+      "note": "Spike b9: Space on ADVANCE WEEK. NEXT WEEK sims the whole week (under 20 s) including the user's game. Later JUMP AHEAD options not seen yet.",
+      "all": ["NEXT WEEK", "ADVANCE WEEK"],
+      "any": ["JUMP AHEAD", "SIM TO MIDSEASON"],
+      "none": [],
+      "options": ["NEXT WEEK", "SIM TO MIDSEASON"],
+      "default": "NEXT WEEK",
+      "nav": "vertical",
+      "highlight": "border",
+      "confirm_ok": ["NEXT WEEK"],
+      "exits": {
+        "HUB_GAMEDAY": [["back", 1]]
+      }
+    },
+    "CHOOSE_TEAM": {
+      "note": "Spike P-a look1: the in-franchise create-new-character team choice (OFFLINE > NFL PRESEASON ROSTER > CHOOSE TEAM > CUSTOMIZE). E = Random Team. Nothing is ever chosen here; Back's target wasn't seen.",
+      "all": ["CHOOSE TEAM"],
+      "any": ["RANDOM TEAM", "NFL PRESEASON ROSTER"],
+      "none": [],
+      "nav": "horizontal",
+      "highlight": "border",
+      "confirm_ok": [],
+      "forbidden_confirm": true,
+      "forbidden_keys": ["e"],
+      "exits": {}
+    },
+    "FRANCHISE_LIST": {
+      "note": "Spike b5: CURRENT FRANCHISES. Tiles show save names without CAREER- (TUNE-SPIKE, ALLUSER, ...), newest first; Left/Right move; the highlight is a white border. Q = DELETE.",
+      "all": ["CURRENT FRANCHISES"],
+      "any": [],
+      "none": ["PROGRESSION WARNING"],
+      "options": [],
+      "nav": "horizontal",
+      "highlight": "border",
+      "border_reach": 0.075,
+      "confirm_ok": ["TUNE-*"],
+      "loads_franchise": true,
+      "forbidden_keys": ["q"],
+      "exits": {}
+    },
+    "HUB_OTHER": {
+      "note": "The MANAGE ROSTER, COACH CENTRAL, LEAGUE and OPTIONS hub tabs. Words come from madden_capture's PS5 mapping, not this spike. Z steps back toward GAMEDAY.",
+      "all": ["GAMEDAY", "COACH CENTRAL"],
+      "any": ["ADJUST LINEUP", "DEPTH CHART", "STATS & AWARDS", "LEAGUE SETTINGS", "USER SETTINGS"],
+      "none": [],
+      "highlight": null,
+      "confirm_ok": [],
+      "repeat": 5,
+      "todo": true,
+      "exits": {
+        "HUB_GAMEDAY": [["tab_prev", 1]]
+      }
+    },
+    "HUB_GAMEDAY": {
+      "note": "Spike b8, e1: the GAMEDAY tab (MATCHUP). Buttons left to right: [WEEKLY RECAP after a played week], ADVANCE WEEK, PLAY SEASON GAME (order changes between weeks; the highlight is a white border). Space only on ADVANCE WEEK.",
+      "all": ["GAMEDAY", "COACH CENTRAL"],
+      "any": ["ADVANCE WEEK", "PLAY SEASON GAME"],
+      "none": [],
+      "options": ["WEEKLY RECAP", "ADVANCE WEEK", "PLAY SEASON GAME"],
+      "nav": "horizontal",
+      "highlight": "border",
+      "confirm_ok": ["ADVANCE WEEK"],
+      "exits": {
+        "ADVANCE_MENU": [["highlight", "ADVANCE WEEK"], ["confirm", "ADVANCE WEEK"]],
+        "HUB_WEEKLY": [["tab_next", 1]],
+        "QUIT_CONFIRM": [["back", 1]]
+      }
+    },
+    "HUB_WEEKLY": {
+      "note": "Spike b1, d1: the WEEKLY HUB tab (2026. WEEK 1 / VS BEARS). Its cards (roster decisions included) are optional content, never selected (JR, 2026-10-30); Space on one opens ROSTER_DECISION_PROMPT, so Space is never pressed here. Q = HOLD TO DELEGATE (forbidden until delegation is a deliberate policy). The hub doesn't show the save name.",
+      "all": ["GAMEDAY", "WEEKLY HUB", "COACH CENTRAL"],
+      "any": [],
+      "none": [],
+      "nav": "horizontal",
+      "highlight": "border",
+      "confirm_ok": [],
+      "forbidden_confirm": true,
+      "never_select": true,
+      "forbidden_keys": ["q"],
+      "exits": {
+        "HUB_GAMEDAY": [["tab_prev", 1]],
+        "QUIT_CONFIRM": [["back", 1]]
+      }
+    },
+    "MAIN_MENU": {
+      "note": "Placeholder: Madden 27's PC main menu wasn't seen in the spikes. Words are guesses.",
+      "all": ["FRANCHISE"],
+      "any": ["PLAY NOW", "EXHIBITION", "ULTIMATE TEAM"],
+      "none": ["CURRENT FRANCHISES", "GAMEDAY"],
+      "highlight": "border",
+      "confirm_ok": [],
+      "todo": true,
+      "exits": {}
+    }
+  }
+}
