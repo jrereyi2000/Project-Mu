@@ -1,6 +1,6 @@
 # Project Mu: Madden Pilot and Tuning Plan
 
-**Status:** approved by JR (2026-10-30); building, wave 0 of 2: P-a done, P-b next. U4 started early (no spike dependency).
+**Status:** approved by JR (2026-10-30); building, wave 1 of 2. Wave 0 done (P-a, P-b). U4 merged early.
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §8.1 route 2 (UI automation from Windows); [`MOD_BUILDER_PLAN.md`](../done/MOD_BUILDER_PLAN.md) (tuning mods are built with `tools/mod_builder`); [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) (Project Mu's own progression engine); PROJECT_SPEC §1.1 (`madden_capture.py`, `pipeline/save_reader/`, `pipeline/load_save.py`).
 
 **Goal:** two agents that let Madden run experiments while JR is away.
@@ -156,6 +156,20 @@ WSL wrapper (`tools/madden_pilot/win.py`): `call(cmd: list[str], timeout=60) -> 
 - **Input (R1 retired for input):** `SendInput` with hardware scan codes (`KEYEVENTF_SCANCODE`, `EXTENDEDKEY` for arrows) moves Madden's selection exactly one step per press while it has focus (Raiders → Patriots → Panthers on left; Commanders → Falcons → Jets on down). One early press jumped two rows; it happened right after a focus loss, so treat any press made without focus as unreliable. Keyboard is enough, so Q5 is settled with no ViGEm.
 - **CAREER-WEEK1 is the clean baseline (JR, 2026-10-30):** it was created at week 1. Madden sims the week's other games before the user's game, so 15 of 16 week-1 games being simmed (team box scores, no player lines yet) is its normal starting state, not a used save. The tuning comparison scores full seasons, so this doesn't matter.
 - **Screen seen:** `OFFLINE > NFL PRESEASON ROSTER > CHOOSE TEAM > CUSTOMIZE` (4×8 team grid, `E` = Random Team, Backspace = Back). This is the in-franchise create-new-character screen (it looks like new-franchise team choice), with CAREER-WEEK1 loaded. The highlight was left on the Jaguars as found, and nothing was confirmed.
+
+**Spike P-b results (2026-10-30):** screenshots and OCR for every step are in `C:\Madden27Modding\MuPilot\spike\` (`b*`, `c*`, `d*`, `e*`, `f*`, `g*`, `h*`).
+- **Keys on PC (from the on-screen hints):** Space = Select/Accept/Continue, Backspace = Back, Z / C = previous / next top tab, Tab = Create Savepoint, Q = **Delete** on the franchise list (forbidden there), E = Random Team on team choice, T = profile. Esc doesn't back out of anything seen.
+- **Quitting a franchise:** Back on the hub opens `WARNING / Are you sure you want to quit? / YES / NO`, with NO highlighted. Up then Space chooses YES. **Quitting writes `<save>-AUTOSAVE`**: the franchise loaded at the start of the spike was ALLUSER (another session's walkthrough save), not CAREER-WEEK1, and quitting it wrote `ALLUSER-AUTOSAVE` (8:02:42 PM) with no changes made. The pilot must record which franchise is loaded before quitting, and the skill must ask JR before quitting a franchise that isn't `CAREER-TUNE-*`.
+- **Franchise list (`CURRENT FRANCHISES`):** tiles show save names without the `CAREER-` prefix (`TUNE-SPIKE`, `ALLUSER`, `ALLUSER-AUTOSAVE`, `V2TEST-A…`), newest first, with `CREATE NEW LEAGUE` and `0 LEAGUES` below. Left/Right move between tiles. The highlight is a white border (read from the screenshot; OCR can't tell which tile it's on).
+- **Loading offline:** `PROGRESSION WARNING / Unable to connect to EA servers… / PROCEED WITHOUT PROGRESSION / CANCEL` (Proceed highlighted), then Space. TUNE-SPIKE loaded in about 25 s to the Weekly Hub (`2026. WEEK 1 / VS BEARS (0-0-0)`, Panthers, coach D. Canales).
+- **Hub tabs:** `GAMEDAY`, `WEEKLY HUB`, `MANAGE ROSTER`, `COACH CENTRAL`, `LEAGUE`, `OPTIONS`. GAMEDAY shows `MATCHUP` with two buttons, `ADVANCE WEEK` and `PLAY SEASON GAME`.
+- **Sim path:** GAMEDAY → `ADVANCE WEEK` (Space) opens a menu with `NEXT WEEK` and, under `JUMP AHEAD`, `SIM TO MIDSEASON` (later options not seen yet). `NEXT WEEK` simmed all of week 1, including the user's game, in **under 20 s**. A season of `NEXT WEEK` steps is roughly 18 × (20 s sim + interrupts), so an estimated 10–15 min. The jump-ahead options may be faster; this is to check in U3.
+- **Interrupts after a week:**
+  - `COACH PROGRESS` / `LOADOUT PROGRESS` / `UNLOCKS` (three tabs, Space continues through each).
+  - The Weekly Hub with **roster-decision cards** (e.g. `ROSTER DECISION LOOMS AFTER WALKER INJURY`, `EKWONU CAN BE ACTIVATED`). Space on a card opens a prompt (`PLACE ON INJURED RESERVE / KEEP ON ACTIVE ROSTER`, `ACTIVATE FROM IR / KEEP ON IR`), and Space again accepts the highlighted choice. In the spike, one blind Space accepted Place on IR for R. Walker on the clone. This is exactly what `confirm_on` allow-lists exist for. Each card also names a `Delegate` (`Cole Harrington | GM`), so delegating these decisions to the GM is the policy to find (an OPTIONS setting) before season sims.
+  - **`WEEKLY RECAP`:** after a week, Space on GAMEDAY landed on a recap tile and started a long highlight video. Backspace steps one segment (injury report, player of the week, sponsor, highlights), and neither Esc nor Space skips the whole thing. The pilot must never press Space on GAMEDAY without first checking the focus is on `ADVANCE WEEK` (a white border on that button), and the recap screen needs its own stop-or-wait rule.
+- **WSL watcher check:** `pgrep -f pipeline.watch_save` matches the calling shell's own command line (a false "running"). Use `ps -eo args | grep "[p]ipeline[.]watch_save"`.
+- **State left:** Madden is playing the week-1 recap in `CAREER-TUNE-SPIKE` (2026 week 2, Panthers 0-1). The clone is disposable.
 
 ## 4. Tests (synthetic, no live DB)
 
