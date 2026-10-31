@@ -21,6 +21,7 @@
 - *Coach firing and career clock (2026-10-31, `CAREER-CF` vs `CAREER-REALUSERS6`; JR turned both off in the menu):* only two fields changed: `LeagueSetting.Field_44` = `CoachFiring` (enum `CoachFiringSetting`: ON 0, CPU_ONLY 1, OFF 2; schema default CPU_ONLY) went 0 → 2 (ON → OFF), and `Field_82` = `IsCareerClockEnabled` went 1 → 0. The league office's setup step writes CoachFiring OFF (Project Mu runs the coaching carousel) and the career clock off.
 - *Delegation test (2026-10-31, `CAREER-REALUSERS6` → its week-9 autosave):* Madden reset every user's `DefaultRequestAction` to 'Respond' (31 'Ignore' → 'Respond'), so 'Ignore' wasn't tested and can't be relied on as a stored setting. Of 219 players on IR at week 0, 102 were activated by week 9, 107 stayed on IR (4 of them healed but left on IR, Madden's IR bug) and 12 were released; across the league 106 players went from Signed to free agent and 9 free agents were signed. So IR activations, injury replacement signings and the cuts they cause continue for every team. Consequence for U13: the weekly write owns IR (placements, activations, durations) and roster limits, and the drift check reverts what Madden does between writes; setting 'Ignore' is dropped from the design.
 - *Delegation test 2 (2026-10-31, `CAREER-IGNOREMID`: 'Ignore' written for the 31 added users at week 7, after registration):* 'Ignore' then stays set (still 31 'Ignore' at offseason week 3); written at week 0 it is reset to 'Respond' by registration (`CAREER-IGNORE9`). 'Ignore' users answer their advance request automatically (31 of 32 `ReadyToAdvance` true), so once JR advanced, the league kept advancing every week until the free-agency live event stopped it, simming JR's own games too. From week 7 to the offseason no free agents were signed, but IR activations continued (82 of 136 players on IR activated). Decision: keep 'Respond' for all users; U13's weekly write owns IR and roster limits (with a buffer under 65) and the drift check reverts Madden's moves between writes.
+- *U13 scope (JR, 2026-10-31):* adds a one-time `setup` command (all 32 teams real user teams by the REALUSERS3 method, fill roster off, other staff settings left Manual, CoachFiring OFF, career clock off). The write check becomes 'franchise not loaded' (Madden may sit at the main menu) instead of 'Madden not running'. In-season progression (D3: mental every 4 games, technical midseason/end, band reviews) is being built by another agent in `engines/progression.py`; U13 calls an optional hook (`progression.in_season_checkpoint(cur, season, week)` when it exists) and doesn't edit progression files. Live game-end ingest for early articles is a separate roadmap item.
 - *As built (wave 1):* U1's agent had no database (Docker was down); the orchestrator ran its checks (migration applied twice to `madden_test`, `init_db.sql` built on an empty database).
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2–§5, §7; [`PROGRESSION_PLAN.md`](../in_progress/PROGRESSION_PLAN.md) phases C2, D, E; [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) (absorbed, D2); PROJECT_SPEC §2.17, §2.21, §3.3d, §3.3n, §6.0b.
 
@@ -534,7 +535,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 
 ### U13: League office stage loop
 
-- **Owns:** `pipeline/league_office.py` (new), `tests/test_league_office.py` (new)
+- **Owns:** `pipeline/league_office.py` (new), `tests/test_league_office.py` (new), `pipeline/save_reader/league_setup.mjs` (new, added 2026-10-31: the one-time `setup` command), `pipeline/save_reader/test/league_setup.test.mjs` (new)
 - **Reads:** §2.5, §2.6; `LEAGUE_OFFICE_PLAN.md` §2–§4; `pipeline/save_reader/save_writer.mjs` CLI; `pipeline/gpu_queue/process_check.py:139`
 - **Depends on:** U2, U6, U8, U9, U10, U11 (and spikes R2, R4)
 - **Done when:** `--dry-run` on a sample snapshot prints the planned document per stage; a real run writes, reads back, logs and only then replaces the save.
@@ -685,6 +686,7 @@ Each line becomes its own plan. "Needs" is what must be built first; "Alongside"
 | Player and coach traits (personality 4–6, progression F–G) switching on the zero terms | U5, U6, U7 interfaces | Yes |
 | O1 self-linking this week's player lines; O2 kickoff-window reveals | U4 reader; Game Center (U17) for O2 | After wave 2 / 6 |
 | §8.1 boot straight into the game | U14 launch | After wave 5 |
+| Early start at the final whistle: weekly engines and newsroom from the in-game data plus the pre-game save, before the advance; the official load after it | U16, the in-game resume reader | After wave 6 |
 
 ## 10. Build log
 
