@@ -153,4 +153,8 @@ def school(college):
 
 
 def conference_members(conference):
+    """The conference's schools; none for an independent ("Independent", "FCS Independent", ...), which has no
+    conference-mates, so its schedule is non-conference and it plays no title game."""
+    if not conference or conference.endswith("Independent"):
+        return []
     return sorted(k for k, s in colleges()["schools"].items() if s["conference"] == conference)

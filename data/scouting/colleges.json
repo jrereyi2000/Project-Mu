@@ -1,6 +1,24 @@
 {
- "_note": "Draft-class colleges -> conference and nickname (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md \u00a72.6). Invented schedules and title games stay inside the school's conference. aliases maps Draft Board OCR spellings to a school.",
+ "_note": "Draft-class colleges -> conference, nickname and level (docs/done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md \u00a72.6). Every school of Madden 27's college list that plays football (tools/college_conferences.py, from Wikipedia's football program lists; football conferences as of the 2026 season). Invented schedules and title games stay inside the school's conference. aliases maps Draft Board OCR spellings to a school.",
  "schools": {
+  "ABILENE CHRISTIAN": {
+   "display": "Abilene Christian",
+   "nickname": "Wildcats",
+   "conference": "United Athletic",
+   "level": "FCS"
+  },
+  "ADAMS STATE": {
+   "display": "Adams State",
+   "nickname": "Grizzlies",
+   "conference": "RMAC",
+   "level": "D2"
+  },
+  "AIR FORCE": {
+   "display": "Air Force",
+   "nickname": "Falcons",
+   "conference": "Mountain West",
+   "level": "FBS"
+  },
   "AKRON": {
    "display": "Akron",
    "nickname": "Zips",
@@ -12,6 +30,48 @@
    "nickname": "Crimson Tide",
    "conference": "SEC",
    "level": "P4"
+  },
+  "ALABAMA A&M": {
+   "display": "Alabama A&M",
+   "nickname": "Bulldogs",
+   "conference": "SWAC",
+   "level": "FCS"
+  },
+  "ALABAMA STATE": {
+   "display": "Alabama State",
+   "nickname": "Hornets",
+   "conference": "SWAC",
+   "level": "FCS"
+  },
+  "ALBANY": {
+   "display": "Albany",
+   "nickname": "Great Danes",
+   "conference": "CAA",
+   "level": "FCS"
+  },
+  "ALBANY STATE": {
+   "display": "Albany State",
+   "nickname": "Golden Rams",
+   "conference": "SIAC",
+   "level": "D2"
+  },
+  "ALBERTA": {
+   "display": "Alberta",
+   "nickname": "Golden Bears",
+   "conference": "Canada West",
+   "level": "U Sports"
+  },
+  "ALBION COLLEGE": {
+   "display": "Albion",
+   "nickname": "Britons",
+   "conference": "Michigan Intercollegiate",
+   "level": "D3"
+  },
+  "ALCORN STATE": {
+   "display": "Alcorn State",
+   "nickname": "Braves",
+   "conference": "SWAC",
+   "level": "FCS"
   },
   "APPALACHIAN STATE": {
    "display": "App State",
@@ -25,6 +85,12 @@
    "conference": "Big 12",
    "level": "P4"
   },
+  "ARIZONA CHRISTIAN": {
+   "display": "Arizona Christian",
+   "nickname": "Firestorm",
+   "conference": "Frontier Conference",
+   "level": "NAIA"
+  },
   "ARIZONA STATE": {
    "display": "Arizona State",
    "nickname": "Sun Devils",
@@ -36,6 +102,12 @@
    "nickname": "Razorbacks",
    "conference": "SEC",
    "level": "P4"
+  },
+  "ARKANSAS AT PINE BLUFF": {
+   "display": "Arkansas\u2013Pine Bluff",
+   "nickname": "Golden Lions",
+   "conference": "SWAC",
+   "level": "FCS"
   },
   "ARKANSAS STATE": {
    "display": "Arkansas State",
@@ -49,11 +121,53 @@
    "conference": "American",
    "level": "FBS"
   },
+  "ASHLAND": {
+   "display": "Ashland",
+   "nickname": "Eagles",
+   "conference": "G-MAC",
+   "level": "D2"
+  },
+  "ASSUMPTION": {
+   "display": "Assumption",
+   "nickname": "Greyhounds",
+   "conference": "NE-10",
+   "level": "D2"
+  },
   "AUBURN": {
    "display": "Auburn",
    "nickname": "Tigers",
    "conference": "SEC",
    "level": "P4"
+  },
+  "AUGUSTANA": {
+   "display": "Augustana",
+   "nickname": "Vikings",
+   "conference": "NSIC",
+   "level": "D2"
+  },
+  "AUSTIN PEAY": {
+   "display": "Austin Peay",
+   "nickname": "Governors",
+   "conference": "United Athletic",
+   "level": "FCS"
+  },
+  "AZUSA PACIFIC": {
+   "display": "Azusa Pacific",
+   "nickname": "Cougars",
+   "conference": "SCIAC",
+   "level": "D3"
+  },
+  "BAKER": {
+   "display": "Baker",
+   "nickname": "Wildcats",
+   "conference": "Heart of America Athletic Conference",
+   "level": "NAIA"
+  },
+  "BALL STATE": {
+   "display": "Ball State",
+   "nickname": "Cardinals",
+   "conference": "MAC",
+   "level": "FBS"
   },
   "BAYLOR": {
    "display": "Baylor",
@@ -61,16 +175,64 @@
    "conference": "Big 12",
    "level": "P4"
   },
+  "BELHAVEN": {
+   "display": "Belhaven",
+   "nickname": "Blazers",
+   "conference": "USA South",
+   "level": "D3"
+  },
+  "BELOIT COLLEGE": {
+   "display": "Beloit",
+   "nickname": "Buccaneers",
+   "conference": "Midwest Conference",
+   "level": "D3"
+  },
+  "BEMIDJI STATE": {
+   "display": "Bemidji State",
+   "nickname": "Beavers",
+   "conference": "NSIC",
+   "level": "D2"
+  },
+  "BENEDICTINE COLLEGE": {
+   "display": "Benedictine",
+   "nickname": "Ravens",
+   "conference": "Heart of America Athletic Conference",
+   "level": "NAIA"
+  },
+  "BENTLEY COLLEGE": {
+   "display": "Bentley",
+   "nickname": "Falcons",
+   "conference": "NE-10",
+   "level": "D2"
+  },
+  "BERRY COLLEGE": {
+   "display": "Berry",
+   "nickname": "Vikings",
+   "conference": "SAA",
+   "level": "D3"
+  },
   "BETH COOKMAN": {
    "display": "Bethune-Cookman",
    "nickname": "Wildcats",
    "conference": "SWAC",
    "level": "FCS"
   },
+  "BETHEL": {
+   "display": "Bethel",
+   "nickname": "Royals",
+   "conference": "MIAC",
+   "level": "D3"
+  },
+  "BLOOMSBURG": {
+   "display": "Bloomsburg",
+   "nickname": "Huskies",
+   "conference": "PSAC",
+   "level": "D2"
+  },
   "BOISE STATE": {
    "display": "Boise State",
    "nickname": "Broncos",
-   "conference": "Mountain West",
+   "conference": "Pac-12",
    "level": "FBS"
   },
   "BOSTON COLLEGE": {
@@ -79,11 +241,35 @@
    "conference": "ACC",
    "level": "P4"
   },
+  "BOWIE STATE": {
+   "display": "Bowie State",
+   "nickname": "Bulldogs",
+   "conference": "CIAA",
+   "level": "D2"
+  },
   "BOWLING GREEN STATE": {
    "display": "Bowling Green",
    "nickname": "Falcons",
    "conference": "MAC",
    "level": "FBS"
+  },
+  "BRIDGEWATER STATE": {
+   "display": "Bridgewater State",
+   "nickname": "Bears",
+   "conference": "MASCAC",
+   "level": "D3"
+  },
+  "BROWN": {
+   "display": "Brown",
+   "nickname": "Bears",
+   "conference": "Ivy League",
+   "level": "FCS"
+  },
+  "BUCKNELL": {
+   "display": "Bucknell",
+   "nickname": "Bison",
+   "conference": "Patriot League",
+   "level": "FCS"
   },
   "BUFFALO": {
    "display": "Buffalo",
@@ -91,17 +277,83 @@
    "conference": "MAC",
    "level": "FBS"
   },
+  "BUFFALO STATE": {
+   "display": "Buffalo State",
+   "nickname": "Bengals",
+   "conference": "Liberty League",
+   "level": "D3"
+  },
   "BUTLER": {
    "display": "Butler",
    "nickname": "Bulldogs",
    "conference": "Pioneer League",
    "level": "FCS"
   },
+  "BYU": {
+   "display": "BYU",
+   "nickname": "Cougars",
+   "conference": "Big 12",
+   "level": "P4"
+  },
+  "C. CONNECTICUT STATE": {
+   "display": "Central Connecticut",
+   "nickname": "Blue Devils",
+   "conference": "Northeast",
+   "level": "FCS"
+  },
+  "CAL LUTHERAN": {
+   "display": "Cal Lutheran",
+   "nickname": "Kingsmen",
+   "conference": "SCIAC",
+   "level": "D3"
+  },
+  "CAL POLY SLO": {
+   "display": "Cal Poly",
+   "nickname": "Mustangs",
+   "conference": "Big Sky",
+   "level": "FCS"
+  },
+  "CALGARY": {
+   "display": "Calgary",
+   "nickname": "Dinos",
+   "conference": "Canada West",
+   "level": "U Sports"
+  },
   "CALIFORNIA": {
    "display": "California",
    "nickname": "Golden Bears",
    "conference": "ACC",
    "level": "P4"
+  },
+  "CALIFORNIA (PA)": {
+   "display": "California (PA)",
+   "nickname": "Vulcans",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "CAMPBELL UNIVERSITY": {
+   "display": "Campbell",
+   "nickname": "Fighting Camels",
+   "conference": "CAA",
+   "level": "FCS"
+  },
+  "CARROLL COLLEGE": {
+   "display": "Carroll",
+   "nickname": "Fighting Saints",
+   "conference": "Frontier Conference",
+   "level": "NAIA"
+  },
+  "CARSON-NEWMAN": {
+   "display": "Carson\u2013Newman",
+   "nickname": "Eagles",
+   "conference": "SAC",
+   "level": "D2"
+  },
+  "CATAWBA COLLEGE": {
+   "display": "Catawba",
+   "nickname": "Indians",
+   "conference": "SAC",
+   "level": "D2"
   },
   "CENTRAL ARKANSAS": {
    "display": "Central Arkansas",
@@ -115,10 +367,52 @@
    "conference": "MAC",
    "level": "FBS"
   },
+  "CENTRAL MISSOURI": {
+   "display": "Central Missouri",
+   "nickname": "Mules",
+   "conference": "MIAA",
+   "level": "D2"
+  },
+  "CENTRAL OKLAHOMA": {
+   "display": "Central Oklahoma",
+   "nickname": "Bronchos",
+   "conference": "MIAA",
+   "level": "D2"
+  },
+  "CENTRAL STATE (OH)": {
+   "display": "Central State",
+   "nickname": "Marauders",
+   "conference": "SIAC",
+   "level": "D2"
+  },
+  "CENTRAL WASHINGTON": {
+   "display": "Central Washington",
+   "nickname": "Wildcats",
+   "conference": "LSC",
+   "level": "D2"
+  },
+  "CENTRE COLLEGE": {
+   "display": "Centre",
+   "nickname": "Colonels",
+   "conference": "SAA",
+   "level": "D3"
+  },
+  "CHADRON STATE": {
+   "display": "Chadron State",
+   "nickname": "Eagles",
+   "conference": "RMAC",
+   "level": "D2"
+  },
+  "CHARLESTON": {
+   "display": "Charleston",
+   "nickname": "Golden Eagles",
+   "conference": "MEC",
+   "level": "D2"
+  },
   "CHARLESTON SOUTHERN": {
    "display": "Charleston Southern",
    "nickname": "Buccaneers",
-   "conference": "Big South-OVC",
+   "conference": "OVC",
    "level": "FCS"
   },
   "CHARLOTTE": {
@@ -133,11 +427,47 @@
    "conference": "Big 12",
    "level": "P4"
   },
+  "CITADEL": {
+   "display": "The Citadel",
+   "nickname": "Bulldogs",
+   "conference": "SoCon",
+   "level": "FCS"
+  },
+  "CLARION": {
+   "display": "Clarion",
+   "nickname": "Golden Eagles",
+   "conference": "PSAC",
+   "level": "D2"
+  },
   "CLEMSON": {
    "display": "Clemson",
    "nickname": "Tigers",
    "conference": "ACC",
    "level": "P4"
+  },
+  "CLINCH VALLEY": {
+   "display": "UVA Wise",
+   "nickname": "Cavaliers",
+   "conference": "SAC",
+   "level": "D2"
+  },
+  "COASTAL CAROLINA": {
+   "display": "Coastal Carolina",
+   "nickname": "Chanticleers",
+   "conference": "Sun Belt",
+   "level": "FBS"
+  },
+  "COE COLLEGE": {
+   "display": "Coe",
+   "nickname": "Kohawks",
+   "conference": "ARC",
+   "level": "D3"
+  },
+  "COLGATE": {
+   "display": "Colgate",
+   "nickname": "Raiders",
+   "conference": "Patriot League",
+   "level": "FCS"
   },
   "COLORADO": {
    "display": "Colorado",
@@ -148,8 +478,26 @@
   "COLORADO STATE": {
    "display": "Colorado State",
    "nickname": "Rams",
-   "conference": "Mountain West",
+   "conference": "Pac-12",
    "level": "FBS"
+  },
+  "COLUMBIA": {
+   "display": "Columbia",
+   "nickname": "Lions",
+   "conference": "Ivy League",
+   "level": "FCS"
+  },
+  "CONCORDIA": {
+   "display": "Concordia (Moorhead)",
+   "nickname": "Cobbers",
+   "conference": "MIAC",
+   "level": "D3"
+  },
+  "CONCORDIA UNIV.-ST. PAUL": {
+   "display": "Concordia",
+   "nickname": "Golden Bears",
+   "conference": "NSIC",
+   "level": "D2"
   },
   "CONNECTICUT": {
    "display": "UConn",
@@ -157,11 +505,77 @@
    "conference": "Independent",
    "level": "FBS"
   },
+  "CORNELL": {
+   "display": "Cornell",
+   "nickname": "Big Red",
+   "conference": "Ivy League",
+   "level": "FCS"
+  },
+  "CSU-PUEBLO": {
+   "display": "CSU Pueblo",
+   "nickname": "ThunderWolves",
+   "conference": "RMAC",
+   "level": "D2"
+  },
+  "CULVER-STOCKTON": {
+   "display": "Culver\u2013Stockton",
+   "nickname": "Wildcats",
+   "conference": "Heart of America Athletic Conference",
+   "level": "NAIA"
+  },
+  "CUMBERLANDS": {
+   "display": "Cumberlands",
+   "nickname": "Patriots",
+   "conference": "Mid-South Conference",
+   "level": "NAIA"
+  },
+  "DAKOTA STATE": {
+   "display": "Dakota State",
+   "nickname": "Trojans",
+   "conference": "Frontier Conference",
+   "level": "NAIA"
+  },
+  "DARTMOUTH": {
+   "display": "Dartmouth",
+   "nickname": "Big Green",
+   "conference": "Ivy League",
+   "level": "FCS"
+  },
+  "DAVIDSON": {
+   "display": "Davidson",
+   "nickname": "Wildcats",
+   "conference": "Pioneer League",
+   "level": "FCS"
+  },
+  "DAYTON": {
+   "display": "Dayton",
+   "nickname": "Flyers",
+   "conference": "Pioneer League",
+   "level": "FCS"
+  },
   "DELAWARE": {
    "display": "Delaware",
-   "nickname": "Blue Hens",
-   "conference": "CAA",
+   "nickname": "Fightin' Blue Hens",
+   "conference": "Conference USA",
+   "level": "FBS"
+  },
+  "DELAWARE STATE": {
+   "display": "Delaware State",
+   "nickname": "Hornets",
+   "conference": "MEAC",
    "level": "FCS"
+  },
+  "DELTA STATE": {
+   "display": "Delta State",
+   "nickname": "Statesmen",
+   "conference": "GSC",
+   "level": "D2"
+  },
+  "DICKINSON STATE": {
+   "display": "Dickinson State",
+   "nickname": "Blue Hawks",
+   "conference": "Frontier Conference",
+   "level": "NAIA"
   },
   "DRAKE": {
    "display": "Drake",
@@ -169,11 +583,23 @@
    "conference": "Pioneer League",
    "level": "FCS"
   },
+  "DUBUQUE": {
+   "display": "Dubuque",
+   "nickname": "Spartans",
+   "conference": "ARC",
+   "level": "D3"
+  },
   "DUKE": {
    "display": "Duke",
    "nickname": "Blue Devils",
    "conference": "ACC",
    "level": "P4"
+  },
+  "DUQUESNE": {
+   "display": "Duquesne",
+   "nickname": "Dukes",
+   "conference": "Northeast",
+   "level": "FCS"
   },
   "EAST CAROLINA": {
    "display": "East Carolina",
@@ -181,17 +607,113 @@
    "conference": "American",
    "level": "FBS"
   },
+  "EAST CENTRAL UNIVERSITY": {
+   "display": "East Central",
+   "nickname": "Tigers",
+   "conference": "GAC",
+   "level": "D2"
+  },
+  "EAST STROUDSBURG": {
+   "display": "East Stroudsburg",
+   "nickname": "Warriors",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "EAST TENNESSEE STATE": {
+   "display": "East Tennessee State",
+   "nickname": "Buccaneers",
+   "conference": "SoCon",
+   "level": "FCS"
+  },
+  "EAST TEXAS BAPTIST": {
+   "display": "East Texas Baptist",
+   "nickname": "Tigers",
+   "conference": "ASC",
+   "level": "D3"
+  },
+  "EASTERN ILLINOIS": {
+   "display": "Eastern Illinois",
+   "nickname": "Panthers",
+   "conference": "OVC",
+   "level": "FCS"
+  },
+  "EASTERN KENTUCKY": {
+   "display": "Eastern Kentucky",
+   "nickname": "Colonels",
+   "conference": "United Athletic",
+   "level": "FCS"
+  },
   "EASTERN MICHIGAN": {
    "display": "Eastern Michigan",
    "nickname": "Eagles",
    "conference": "MAC",
    "level": "FBS"
   },
+  "EASTERN OREGON": {
+   "display": "Eastern Oregon",
+   "nickname": "Mountaineers",
+   "conference": "Frontier Conference",
+   "level": "NAIA"
+  },
+  "EASTERN WASHINGTON": {
+   "display": "Eastern Washington",
+   "nickname": "Eagles",
+   "conference": "Big Sky",
+   "level": "FCS"
+  },
+  "EDINBORO": {
+   "display": "Edinboro",
+   "nickname": "Fighting Scots",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "ELON UNIVERSITY": {
+   "display": "Elon",
+   "nickname": "Phoenix",
+   "conference": "CAA",
+   "level": "FCS"
+  },
+  "EMPORIA STATE": {
+   "display": "Emporia State",
+   "nickname": "Hornets",
+   "conference": "MIAA",
+   "level": "D2"
+  },
+  "FAIRMONT STATE": {
+   "display": "Fairmont State",
+   "nickname": "Fighting Falcons",
+   "conference": "MEC",
+   "level": "D2"
+  },
   "FAU": {
    "display": "FAU",
    "nickname": "Owls",
    "conference": "American",
    "level": "FBS"
+  },
+  "FAULKNER": {
+   "display": "Faulkner",
+   "nickname": "Eagles",
+   "conference": "NAIA Independent",
+   "level": "NAIA"
+  },
+  "FAYETTEVILLE STATE": {
+   "display": "Fayetteville State",
+   "nickname": "Broncos",
+   "conference": "CIAA",
+   "level": "D2"
+  },
+  "FERRIS STATE": {
+   "display": "Ferris State",
+   "nickname": "Bulldogs",
+   "conference": "GLIAC",
+   "level": "D2"
+  },
+  "FINDLAY": {
+   "display": "Findlay",
+   "nickname": "Oilers",
+   "conference": "G-MAC",
+   "level": "D2"
   },
   "FIU": {
    "display": "FIU",
@@ -205,17 +727,83 @@
    "conference": "SEC",
    "level": "P4"
   },
+  "FLORIDA A&M": {
+   "display": "Florida A&M",
+   "nickname": "Rattlers",
+   "conference": "SWAC",
+   "level": "FCS"
+  },
   "FLORIDA STATE": {
    "display": "Florida State",
    "nickname": "Seminoles",
    "conference": "ACC",
    "level": "P4"
   },
+  "FORDHAM": {
+   "display": "Fordham",
+   "nickname": "Rams",
+   "conference": "Patriot League",
+   "level": "FCS"
+  },
+  "FORT HAYS STATE": {
+   "display": "Fort Hays State",
+   "nickname": "Tigers",
+   "conference": "MIAA",
+   "level": "D2"
+  },
+  "FORT VALLEY STATE": {
+   "display": "Fort Valley State",
+   "nickname": "Wildcats",
+   "conference": "SIAC",
+   "level": "D2"
+  },
+  "FRAMINGHAM STATE": {
+   "display": "Framingham State",
+   "nickname": "Rams",
+   "conference": "MASCAC",
+   "level": "D3"
+  },
+  "FRANKLIN COLLEGE": {
+   "display": "Franklin",
+   "nickname": "Grizzlies",
+   "conference": "HCAC",
+   "level": "D3"
+  },
   "FRESNO STATE": {
    "display": "Fresno State",
    "nickname": "Bulldogs",
-   "conference": "Mountain West",
+   "conference": "Pac-12",
    "level": "FBS"
+  },
+  "FRIENDS UNIVERSITY": {
+   "display": "Friends",
+   "nickname": "Falcons",
+   "conference": "Kansas Collegiate Athletic Conference",
+   "level": "NAIA"
+  },
+  "FROSTBURG STATE": {
+   "display": "Frostburg State",
+   "nickname": "Bobcats",
+   "conference": "MEC",
+   "level": "D2"
+  },
+  "FURMAN": {
+   "display": "Furman",
+   "nickname": "Paladins",
+   "conference": "SoCon",
+   "level": "FCS"
+  },
+  "GANNON UNIVERSITY": {
+   "display": "Gannon",
+   "nickname": "Golden Knights",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "GARDNER-WEBB": {
+   "display": "Gardner\u2013Webb",
+   "nickname": "Runnin' Bulldogs",
+   "conference": "OVC",
+   "level": "FCS"
   },
   "GEORGETOWN": {
    "display": "Georgetown",
@@ -235,17 +823,47 @@
    "conference": "Sun Belt",
    "level": "FBS"
   },
+  "GEORGIA STATE": {
+   "display": "Georgia State",
+   "nickname": "Panthers",
+   "conference": "Sun Belt",
+   "level": "FBS"
+  },
   "GEORGIA TECH": {
    "display": "Georgia Tech",
    "nickname": "Yellow Jackets",
    "conference": "ACC",
    "level": "P4"
   },
+  "GRAMBLING STATE": {
+   "display": "Grambling State",
+   "nickname": "Tigers",
+   "conference": "SWAC",
+   "level": "FCS"
+  },
   "GRAND VALLEY STATE": {
    "display": "Grand Valley State",
    "nickname": "Lakers",
    "conference": "GLIAC",
-   "level": "D2/D3"
+   "level": "D2"
+  },
+  "GREENVILLE COLLEGE": {
+   "display": "Greenville",
+   "nickname": "Panthers",
+   "conference": "UMAC",
+   "level": "D3"
+  },
+  "HAMPTON": {
+   "display": "Hampton",
+   "nickname": "Pirates",
+   "conference": "CAA",
+   "level": "FCS"
+  },
+  "HARDING": {
+   "display": "Harding",
+   "nickname": "Bisons",
+   "conference": "GAC",
+   "level": "D2"
   },
   "HARVARD": {
    "display": "Harvard",
@@ -253,11 +871,77 @@
    "conference": "Ivy League",
    "level": "FCS"
   },
+  "HASTINGS COLLEGE": {
+   "display": "Hastings",
+   "nickname": "Broncos",
+   "conference": "Great Plains Athletic Conference",
+   "level": "NAIA"
+  },
+  "HAWAII": {
+   "display": "Hawaii",
+   "nickname": "Rainbow Warriors",
+   "conference": "Mountain West",
+   "level": "FBS"
+  },
+  "HEIDELBERG": {
+   "display": "Heidelberg",
+   "nickname": "Student Princes",
+   "conference": "OAC",
+   "level": "D3"
+  },
+  "HENDERSON STATE": {
+   "display": "Henderson State",
+   "nickname": "Reddies",
+   "conference": "GAC",
+   "level": "D2"
+  },
+  "HILLSDALE": {
+   "display": "Hillsdale",
+   "nickname": "Chargers",
+   "conference": "G-MAC",
+   "level": "D2"
+  },
+  "HOBART": {
+   "display": "Hobart",
+   "nickname": "Statesmen",
+   "conference": "Liberty League",
+   "level": "D3"
+  },
+  "HOLY CROSS": {
+   "display": "Holy Cross",
+   "nickname": "Crusaders",
+   "conference": "Patriot League",
+   "level": "FCS"
+  },
   "HOUSTON": {
    "display": "Houston",
    "nickname": "Cougars",
    "conference": "Big 12",
    "level": "P4"
+  },
+  "HOUSTON BAPTIST": {
+   "display": "Houston Christian",
+   "nickname": "Huskies",
+   "conference": "Southland",
+   "level": "FCS"
+  },
+  "HOUSTON CHRISTIAN": {
+   "display": "Houston Christian",
+   "nickname": "Huskies",
+   "conference": "Southland",
+   "level": "FCS"
+  },
+  "HOWARD": {
+   "display": "Howard",
+   "nickname": "Bison",
+   "conference": "MEAC",
+   "level": "FCS"
+  },
+  "HUNTINGDON": {
+   "display": "Huntingdon",
+   "nickname": "Hawks",
+   "conference": "USA South",
+   "level": "D3"
   },
   "IDAHO": {
    "display": "Idaho",
@@ -283,6 +967,12 @@
    "conference": "Missouri Valley",
    "level": "FCS"
   },
+  "INCARNATE WORD": {
+   "display": "Incarnate Word",
+   "nickname": "Cardinals",
+   "conference": "Southland",
+   "level": "FCS"
+  },
   "INDIANA": {
    "display": "Indiana",
    "nickname": "Hoosiers",
@@ -294,6 +984,12 @@
    "nickname": "Sycamores",
    "conference": "Missouri Valley",
    "level": "FCS"
+  },
+  "INDIANAPOLIS": {
+   "display": "Indianapolis",
+   "nickname": "Greyhounds",
+   "conference": "GLVC",
+   "level": "D2"
   },
   "IOWA": {
    "display": "Iowa",
@@ -307,6 +1003,36 @@
    "conference": "Big 12",
    "level": "P4"
   },
+  "IUP": {
+   "display": "IUP",
+   "nickname": "Crimson Hawks",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "JACKSON STATE": {
+   "display": "Jackson State",
+   "nickname": "Tigers",
+   "conference": "SWAC",
+   "level": "FCS"
+  },
+  "JACKSONVILLE STATE": {
+   "display": "Jacksonville State",
+   "nickname": "Gamecocks",
+   "conference": "Conference USA",
+   "level": "FBS"
+  },
+  "JAMES MADISON": {
+   "display": "James Madison",
+   "nickname": "Dukes",
+   "conference": "Sun Belt",
+   "level": "FBS"
+  },
+  "JOHN CARROLL": {
+   "display": "John Carroll",
+   "nickname": "Blue Streaks",
+   "conference": "NCAC",
+   "level": "D3"
+  },
   "KANSAS": {
    "display": "Kansas",
    "nickname": "Jayhawks",
@@ -318,6 +1044,12 @@
    "nickname": "Wildcats",
    "conference": "Big 12",
    "level": "P4"
+  },
+  "KENNESAW STATE": {
+   "display": "Kennesaw State",
+   "nickname": "Owls",
+   "conference": "Conference USA",
+   "level": "FBS"
   },
   "KENT STATE": {
    "display": "Kent State",
@@ -331,17 +1063,95 @@
    "conference": "SEC",
    "level": "P4"
   },
+  "KENTUCKY WESLEYAN": {
+   "display": "Kentucky Wesleyan",
+   "nickname": "Panthers",
+   "conference": "G-MAC",
+   "level": "D2"
+  },
+  "KUTZTOWN": {
+   "display": "Kutztown",
+   "nickname": "Golden Bears",
+   "conference": "PSAC",
+   "level": "D2"
+  },
   "LA. TECH": {
    "display": "Louisiana Tech",
    "nickname": "Bulldogs",
-   "conference": "Conference USA",
+   "conference": "Sun Belt",
    "level": "FBS"
+  },
+  "LAFAYETTE": {
+   "display": "Lafayette",
+   "nickname": "Leopards",
+   "conference": "Patriot League",
+   "level": "FCS"
+  },
+  "LAKE ERIE COLLEGE": {
+   "display": "Lake Erie",
+   "nickname": "Storm",
+   "conference": "G-MAC",
+   "level": "D2"
+  },
+  "LAMAR UNIVERSITY": {
+   "display": "Lamar",
+   "nickname": "Cardinals",
+   "conference": "Southland",
+   "level": "FCS"
+  },
+  "LANE": {
+   "display": "Lane",
+   "nickname": "Dragons",
+   "conference": "SIAC",
+   "level": "D2"
+  },
+  "LAVAL": {
+   "display": "Laval",
+   "nickname": "Rouge et Or",
+   "conference": "RSEQ",
+   "level": "U Sports"
   },
   "LEHIGH": {
    "display": "Lehigh",
    "nickname": "Mountain Hawks",
    "conference": "Patriot League",
    "level": "FCS"
+  },
+  "LENOIR-RHYNE": {
+   "display": "Lenoir\u2013Rhyne",
+   "nickname": "Bears",
+   "conference": "SAC",
+   "level": "D2"
+  },
+  "LIBERTY": {
+   "display": "Liberty",
+   "nickname": "Flames",
+   "conference": "Conference USA",
+   "level": "FBS"
+  },
+  "LINDENWOOD": {
+   "display": "Lindenwood",
+   "nickname": "Lions",
+   "conference": "OVC",
+   "level": "FCS"
+  },
+  "LINDSEY WILSON COLLEGE": {
+   "display": "Lindsey Wilson",
+   "nickname": "Blue Raiders",
+   "conference": "Mid-South Conference",
+   "level": "NAIA"
+  },
+  "LIVINGSTONE COLLEGE": {
+   "display": "Livingstone",
+   "nickname": "Blue Bears",
+   "conference": "CIAA",
+   "level": "D2"
+  },
+  "LOUISIANA CHRISTIAN": {
+   "display": "Louisiana Christian",
+   "nickname": "Wildcats",
+   "conference": "Sooner Athletic Conference",
+   "level": "NAIA"
   },
   "LOUISVILLE": {
    "display": "Louisville",
@@ -361,11 +1171,41 @@
    "conference": "CAA",
    "level": "FCS"
   },
+  "MANITOBA": {
+   "display": "Manitoba",
+   "nickname": "Bisons",
+   "conference": "Canada West",
+   "level": "U Sports"
+  },
+  "MARIAN": {
+   "display": "Marian",
+   "nickname": "Knights",
+   "conference": "Mid-States Football Association",
+   "level": "NAIA"
+  },
+  "MARIST": {
+   "display": "Marist",
+   "nickname": "Red Foxes",
+   "conference": "Pioneer League",
+   "level": "FCS"
+  },
+  "MARS HILL": {
+   "display": "Mars Hill",
+   "nickname": "Lions",
+   "conference": "SAC",
+   "level": "D2"
+  },
   "MARSHALL": {
    "display": "Marshall",
    "nickname": "Thundering Herd",
    "conference": "Sun Belt",
    "level": "FBS"
+  },
+  "MARY HARDIN-BAYLOR": {
+   "display": "Mary Hardin-Baylor",
+   "nickname": "Crusaders",
+   "conference": "ASC",
+   "level": "D3"
   },
   "MARYLAND": {
    "display": "Maryland",
@@ -373,17 +1213,59 @@
    "conference": "Big Ten",
    "level": "P4"
   },
+  "MARYVILLE COLLEGE": {
+   "display": "Maryville",
+   "nickname": "Scots",
+   "conference": "SAA",
+   "level": "D3"
+  },
   "MASSACHUSETTS": {
    "display": "UMass",
    "nickname": "Minutemen",
-   "conference": "Independent",
+   "conference": "MAC",
    "level": "FBS"
+  },
+  "MCGILL UNIVERSITY": {
+   "display": "McGill",
+   "nickname": "Redbirds",
+   "conference": "RSEQ",
+   "level": "U Sports"
+  },
+  "MCNEESE STATE": {
+   "display": "McNeese",
+   "nickname": "Cowboys",
+   "conference": "Southland",
+   "level": "FCS"
   },
   "MEMPHIS": {
    "display": "Memphis",
    "nickname": "Tigers",
    "conference": "American",
    "level": "FBS"
+  },
+  "MERCER": {
+   "display": "Mercer",
+   "nickname": "Bears",
+   "conference": "SoCon",
+   "level": "FCS"
+  },
+  "MERCYHURST UNIVERSITY": {
+   "display": "Mercyhurst",
+   "nickname": "Lakers",
+   "conference": "Northeast",
+   "level": "FCS"
+  },
+  "MERRIMACK": {
+   "display": "Merrimack",
+   "nickname": "Warriors",
+   "conference": "FCS Independent",
+   "level": "FCS"
+  },
+  "MESA STATE": {
+   "display": "Colorado Mesa",
+   "nickname": "Mavericks",
+   "conference": "RMAC",
+   "level": "D2"
   },
   "MIAMI": {
    "display": "Miami",
@@ -409,17 +1291,41 @@
    "conference": "Big Ten",
    "level": "P4"
   },
+  "MICHIGAN TECH": {
+   "display": "Michigan Tech",
+   "nickname": "Huskies",
+   "conference": "GLIAC",
+   "level": "D2"
+  },
   "MIDDLE TENNESSEE STATE": {
    "display": "Middle Tennessee",
    "nickname": "Blue Raiders",
    "conference": "Conference USA",
    "level": "FBS"
   },
+  "MIDWESTERN STATE": {
+   "display": "Midwestern State",
+   "nickname": "Mustangs",
+   "conference": "LSC",
+   "level": "D2"
+  },
+  "MINES": {
+   "display": "Colorado Mines",
+   "nickname": "Orediggers",
+   "conference": "RMAC",
+   "level": "D2"
+  },
   "MINNESOTA": {
    "display": "Minnesota",
    "nickname": "Golden Gophers",
    "conference": "Big Ten",
    "level": "P4"
+  },
+  "MINNESOTA STATE": {
+   "display": "Minnesota State",
+   "nickname": "Mavericks",
+   "conference": "NSIC",
+   "level": "D2"
   },
   "MISSISSIPPI STATE": {
    "display": "Mississippi State",
@@ -439,17 +1345,101 @@
    "conference": "SEC",
    "level": "P4"
   },
+  "MISSOURI S&T": {
+   "display": "Missouri S&T",
+   "nickname": "Miners",
+   "conference": "GLVC",
+   "level": "D2"
+  },
+  "MISSOURI SOUTHERN STATE": {
+   "display": "Missouri Southern",
+   "nickname": "Lions",
+   "conference": "MIAA",
+   "level": "D2"
+  },
+  "MISSOURI STATE": {
+   "display": "Missouri State",
+   "nickname": "Bears",
+   "conference": "Conference USA",
+   "level": "FBS"
+  },
+  "MISSOURI WESTERN STATE": {
+   "display": "Missouri Western",
+   "nickname": "Griffons",
+   "conference": "MIAA",
+   "level": "D2"
+  },
+  "MONMOUTH": {
+   "display": "Monmouth",
+   "nickname": "Hawks",
+   "conference": "CAA",
+   "level": "FCS"
+  },
   "MONTANA": {
    "display": "Montana",
    "nickname": "Grizzlies",
    "conference": "Big Sky",
    "level": "FCS"
   },
+  "MONTANA STATE": {
+   "display": "Montana State",
+   "nickname": "Bobcats",
+   "conference": "Big Sky",
+   "level": "FCS"
+  },
+  "MONTCLAIR STATE": {
+   "display": "Montclair State",
+   "nickname": "Red Hawks",
+   "conference": "NJAC",
+   "level": "D3"
+  },
+  "MONTREAL UNIVERSITY": {
+   "display": "Montreal",
+   "nickname": "Carabins",
+   "conference": "RSEQ",
+   "level": "U Sports"
+  },
+  "MOREHEAD STATE": {
+   "display": "Morehead State",
+   "nickname": "Eagles",
+   "conference": "Pioneer League",
+   "level": "FCS"
+  },
+  "MOREHOUSE": {
+   "display": "Morehouse",
+   "nickname": "Maroon Tigers",
+   "conference": "SIAC",
+   "level": "D2"
+  },
+  "MORGAN STATE": {
+   "display": "Morgan State",
+   "nickname": "Bears",
+   "conference": "MEAC",
+   "level": "FCS"
+  },
+  "MORNINGSIDE COLLEGE": {
+   "display": "Morningside",
+   "nickname": "Mustangs",
+   "conference": "Great Plains Athletic Conference",
+   "level": "NAIA"
+  },
   "MOUNT UNION": {
    "display": "Mount Union",
    "nickname": "Purple Raiders",
    "conference": "OAC",
-   "level": "D2/D3"
+   "level": "D3"
+  },
+  "MURRAY STATE": {
+   "display": "Murray State",
+   "nickname": "Racers",
+   "conference": "Missouri Valley",
+   "level": "FCS"
+  },
+  "N.C. A&T": {
+   "display": "North Carolina A&T",
+   "nickname": "Aggies",
+   "conference": "CAA",
+   "level": "FCS"
   },
   "N.C. STATE": {
    "display": "NC State",
@@ -468,6 +1458,12 @@
    "nickname": "Cornhuskers",
    "conference": "Big Ten",
    "level": "P4"
+  },
+  "NEBRASKA-KEARNEY": {
+   "display": "Nebraska\u2013Kearney",
+   "nickname": "Lopers",
+   "conference": "MIAA",
+   "level": "D2"
   },
   "NEVADA": {
    "display": "Nevada",
@@ -493,11 +1489,47 @@
    "conference": "Conference USA",
    "level": "FBS"
   },
+  "NEWBERRY COLLEGE": {
+   "display": "Newberry",
+   "nickname": "Wolves",
+   "conference": "SAC",
+   "level": "D2"
+  },
+  "NICHOLLS STATE": {
+   "display": "Nicholls",
+   "nickname": "Colonels",
+   "conference": "Southland",
+   "level": "FCS"
+  },
+  "NORFOLK STATE": {
+   "display": "Norfolk State",
+   "nickname": "Spartans",
+   "conference": "MEAC",
+   "level": "FCS"
+  },
+  "NORTH ALABAMA": {
+   "display": "North Alabama",
+   "nickname": "Lions",
+   "conference": "United Athletic",
+   "level": "FCS"
+  },
+  "NORTH ARIZONA": {
+   "display": "Northern Arizona",
+   "nickname": "Lumberjacks",
+   "conference": "Big Sky",
+   "level": "FCS"
+  },
   "NORTH CAROLINA": {
    "display": "North Carolina",
    "nickname": "Tar Heels",
    "conference": "ACC",
    "level": "P4"
+  },
+  "NORTH CAROLINA CENTRAL": {
+   "display": "North Carolina Central",
+   "nickname": "Eagles",
+   "conference": "MEAC",
+   "level": "FCS"
   },
   "NORTH DAKOTA": {
    "display": "North Dakota",
@@ -508,8 +1540,14 @@
   "NORTH DAKOTA STATE": {
    "display": "North Dakota State",
    "nickname": "Bison",
-   "conference": "Missouri Valley",
-   "level": "FCS"
+   "conference": "Mountain West",
+   "level": "FBS"
+  },
+  "NORTH GREENVILLE": {
+   "display": "North Greenville",
+   "nickname": "Trailblazers",
+   "conference": "Carolinas",
+   "level": "D2"
   },
   "NORTH TEXAS": {
    "display": "North Texas",
@@ -517,10 +1555,22 @@
    "conference": "American",
    "level": "FBS"
   },
+  "NORTHEASTERN STATE": {
+   "display": "Northeastern State",
+   "nickname": "RiverHawks",
+   "conference": "D2 Independent",
+   "level": "D2"
+  },
+  "NORTHERN COLORADO": {
+   "display": "Northern Colorado",
+   "nickname": "Bears",
+   "conference": "Big Sky",
+   "level": "FCS"
+  },
   "NORTHERN ILLINOIS": {
    "display": "Northern Illinois",
    "nickname": "Huskies",
-   "conference": "MAC",
+   "conference": "Mountain West",
    "level": "FBS"
   },
   "NORTHERN IOWA": {
@@ -529,11 +1579,35 @@
    "conference": "Missouri Valley",
    "level": "FCS"
   },
+  "NORTHERN MICHIGAN": {
+   "display": "Northern Michigan",
+   "nickname": "Wildcats",
+   "conference": "GLIAC",
+   "level": "D2"
+  },
+  "NORTHERN STATE": {
+   "display": "Northern State",
+   "nickname": "Wolves",
+   "conference": "NSIC",
+   "level": "D2"
+  },
   "NORTHWESTERN": {
    "display": "Northwestern",
    "nickname": "Wildcats",
    "conference": "Big Ten",
    "level": "P4"
+  },
+  "NORTHWESTERN STATE": {
+   "display": "Northwestern State",
+   "nickname": "Demons",
+   "conference": "Southland",
+   "level": "FCS"
+  },
+  "NORTHWOOD": {
+   "display": "Northwood",
+   "nickname": "Timberwolves",
+   "conference": "G-MAC",
+   "level": "D2"
   },
   "NOTRE DAME": {
    "display": "Notre Dame",
@@ -541,11 +1615,35 @@
    "conference": "Independent",
    "level": "P4"
   },
+  "NW MISSOURI STATE": {
+   "display": "Northwest Missouri State",
+   "nickname": "Bearcats",
+   "conference": "MIAA",
+   "level": "D2"
+  },
+  "NW OKLAHOMA STATE": {
+   "display": "Northwestern Oklahoma State",
+   "nickname": "Rangers",
+   "conference": "GAC",
+   "level": "D2"
+  },
   "OHIO": {
    "display": "Ohio",
    "nickname": "Bobcats",
    "conference": "MAC",
    "level": "FBS"
+  },
+  "OHIO DOMINICAN": {
+   "display": "Ohio Dominican",
+   "nickname": "Panthers",
+   "conference": "G-MAC",
+   "level": "D2"
+  },
+  "OHIO NORTHERN": {
+   "display": "Ohio Northern",
+   "nickname": "Polar Bears",
+   "conference": "OAC",
+   "level": "D3"
   },
   "OHIO STATE": {
    "display": "Ohio State",
@@ -589,11 +1687,53 @@
    "conference": "Pac-12",
    "level": "FBS"
   },
+  "OTTAWA": {
+   "display": "Ottawa",
+   "nickname": "Gee-Gees",
+   "conference": "OUA",
+   "level": "U Sports"
+  },
+  "OUACHITA BAPTIST": {
+   "display": "Ouachita Baptist",
+   "nickname": "Tigers",
+   "conference": "GAC",
+   "level": "D2"
+  },
+  "PACE UNIVERSITY": {
+   "display": "Pace",
+   "nickname": "Setters",
+   "conference": "NE-10",
+   "level": "D2"
+  },
+  "PENN": {
+   "display": "Penn",
+   "nickname": "Quakers",
+   "conference": "Ivy League",
+   "level": "FCS"
+  },
   "PENN STATE": {
    "display": "Penn State",
    "nickname": "Nittany Lions",
    "conference": "Big Ten",
    "level": "P4"
+  },
+  "PERU STATE COLLEGE": {
+   "display": "Peru State",
+   "nickname": "Bobcats",
+   "conference": "Heart of America Athletic Conference",
+   "level": "NAIA"
+  },
+  "PIKEVILLE": {
+   "display": "Pikeville",
+   "nickname": "Bears",
+   "conference": "Appalachian Athletic Conference",
+   "level": "NAIA"
+  },
+  "PITTSBURG STATE": {
+   "display": "Pittsburg State",
+   "nickname": "Gorillas",
+   "conference": "MIAA",
+   "level": "D2"
   },
   "PITTSBURGH": {
    "display": "Pittsburgh",
@@ -601,11 +1741,53 @@
    "conference": "ACC",
    "level": "P4"
   },
+  "PORTLAND STATE": {
+   "display": "Portland State",
+   "nickname": "Vikings",
+   "conference": "Big Sky",
+   "level": "FCS"
+  },
+  "PRAIRIE VIEW A&M": {
+   "display": "Prairie View A&M",
+   "nickname": "Panthers",
+   "conference": "SWAC",
+   "level": "FCS"
+  },
+  "PRESBYTERIAN": {
+   "display": "Presbyterian",
+   "nickname": "Blue Hose",
+   "conference": "Pioneer League",
+   "level": "FCS"
+  },
+  "PRINCETON": {
+   "display": "Princeton",
+   "nickname": "Tigers",
+   "conference": "Ivy League",
+   "level": "FCS"
+  },
   "PURDUE": {
    "display": "Purdue",
    "nickname": "Boilermakers",
    "conference": "Big Ten",
    "level": "P4"
+  },
+  "QUEEN'S UNIVERSITY": {
+   "display": "Queen's",
+   "nickname": "Gaels",
+   "conference": "OUA",
+   "level": "U Sports"
+  },
+  "REGINA": {
+   "display": "Regina",
+   "nickname": "Rams",
+   "conference": "Canada West",
+   "level": "U Sports"
+  },
+  "RENSSELAER POLY": {
+   "display": "RPI",
+   "nickname": "Engineers",
+   "conference": "Liberty League",
+   "level": "D3"
   },
   "RHODE ISLAND": {
    "display": "Rhode Island",
@@ -619,16 +1801,148 @@
    "conference": "American",
    "level": "FBS"
   },
+  "RICHMOND": {
+   "display": "Richmond",
+   "nickname": "Spiders",
+   "conference": "Patriot League",
+   "level": "FCS"
+  },
+  "ROBERT MORRIS": {
+   "display": "Robert Morris",
+   "nickname": "Colonials",
+   "conference": "Northeast",
+   "level": "FCS"
+  },
+  "ROWAN": {
+   "display": "Rowan",
+   "nickname": "Profs",
+   "conference": "NJAC",
+   "level": "D3"
+  },
   "RUTGERS": {
    "display": "Rutgers",
    "nickname": "Scarlet Knights",
    "conference": "Big Ten",
    "level": "P4"
   },
+  "S. CONNECTICUT STATE": {
+   "display": "Southern Connecticut",
+   "nickname": "Owls",
+   "conference": "NE-10",
+   "level": "D2"
+  },
+  "SACRAMENTO STATE": {
+   "display": "Sacramento State",
+   "nickname": "Hornets",
+   "conference": "MAC",
+   "level": "FBS"
+  },
+  "SACRED HEART": {
+   "display": "Sacred Heart",
+   "nickname": "Pioneers",
+   "conference": "CAA",
+   "level": "FCS"
+  },
+  "SAGINAW VALLEY": {
+   "display": "Saginaw Valley State",
+   "nickname": "Cardinals",
+   "conference": "GLIAC",
+   "level": "D2"
+  },
+  "SALISBURY": {
+   "display": "Salisbury",
+   "nickname": "Seagulls",
+   "conference": "NJAC",
+   "level": "D3"
+  },
+  "SAM HOUSTON": {
+   "display": "Sam Houston",
+   "nickname": "Bearkats",
+   "conference": "Conference USA",
+   "level": "FBS"
+  },
+  "SAMFORD": {
+   "display": "Samford",
+   "nickname": "Bulldogs",
+   "conference": "SoCon",
+   "level": "FCS"
+  },
+  "SAN DIEGO": {
+   "display": "San Diego",
+   "nickname": "Toreros",
+   "conference": "Pioneer League",
+   "level": "FCS"
+  },
   "SAN DIEGO STATE": {
    "display": "San Diego State",
    "nickname": "Aztecs",
+   "conference": "Pac-12",
+   "level": "FBS"
+  },
+  "SAN JOSE STATE": {
+   "display": "San Jose State",
+   "nickname": "Spartans",
    "conference": "Mountain West",
+   "level": "FBS"
+  },
+  "SAVANNAH STATE": {
+   "display": "Savannah State",
+   "nickname": "Tigers",
+   "conference": "SIAC",
+   "level": "D2"
+  },
+  "SE LOUISIANA": {
+   "display": "Southeastern Louisiana",
+   "nickname": "Lions",
+   "conference": "Southland",
+   "level": "FCS"
+  },
+  "SE MISSOURI STATE": {
+   "display": "Southeast Missouri State",
+   "nickname": "Redhawks",
+   "conference": "OVC",
+   "level": "FCS"
+  },
+  "SE OKLAHOMA STATE": {
+   "display": "Southeastern Oklahoma State",
+   "nickname": "Savage Storm",
+   "conference": "GAC",
+   "level": "D2"
+  },
+  "SHEPHERD UNIVERSITY": {
+   "display": "Shepherd",
+   "nickname": "Rams",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "SHIPPENSBURG": {
+   "display": "Shippensburg",
+   "nickname": "Raiders",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "SIOUX FALLS": {
+   "display": "Sioux Falls",
+   "nickname": "Cougars",
+   "conference": "NSIC",
+   "level": "D2"
+  },
+  "SLIPPERY ROCK": {
+   "display": "Slippery Rock",
+   "nickname": "The Rock",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "SMU": {
+   "display": "SMU",
+   "nickname": "Mustangs",
+   "conference": "ACC",
+   "level": "P4"
+  },
+  "SOUTH ALABAMA": {
+   "display": "South Alabama",
+   "nickname": "Jaguars",
+   "conference": "Sun Belt",
    "level": "FBS"
   },
   "SOUTH CAROLINA": {
@@ -655,6 +1969,24 @@
    "conference": "Missouri Valley",
    "level": "FCS"
   },
+  "SOUTHEASTERN UNIVERSITY": {
+   "display": "Southeastern",
+   "nickname": "Fire",
+   "conference": "The Sun Conference",
+   "level": "NAIA"
+  },
+  "SOUTHERN": {
+   "display": "Southern",
+   "nickname": "Jaguars",
+   "conference": "SWAC",
+   "level": "FCS"
+  },
+  "SOUTHERN ARKANSAS": {
+   "display": "Southern Arkansas",
+   "nickname": "Muleriders",
+   "conference": "GAC",
+   "level": "D2"
+  },
   "SOUTHERN ILLINOIS": {
    "display": "Southern Illinois",
    "nickname": "Salukis",
@@ -667,11 +1999,47 @@
    "conference": "Sun Belt",
    "level": "FBS"
   },
+  "SOUTHERN NAZARENE": {
+   "display": "Southern Nazarene",
+   "nickname": "Crimson Storm",
+   "conference": "GAC",
+   "level": "D2"
+  },
+  "SOUTHERN OREGON": {
+   "display": "Southern Oregon",
+   "nickname": "Raiders",
+   "conference": "Frontier Conference",
+   "level": "NAIA"
+  },
   "SOUTHERN UTAH": {
    "display": "Southern Utah",
    "nickname": "Thunderbirds",
    "conference": "Big Sky",
    "level": "FCS"
+  },
+  "ST. FRANCIS": {
+   "display": "Saint Francis",
+   "nickname": "Red Wolves",
+   "conference": "PAC",
+   "level": "D3"
+  },
+  "ST. JOHN'S": {
+   "display": "Saint John's (MN)",
+   "nickname": "Johnnies",
+   "conference": "MIAC",
+   "level": "D3"
+  },
+  "ST. MARY'S": {
+   "display": "Saint Mary's",
+   "nickname": "Huskies",
+   "conference": "AUS",
+   "level": "U Sports"
+  },
+  "ST. NORBERT": {
+   "display": "St. Norbert",
+   "nickname": "Green Knights",
+   "conference": "NACC",
+   "level": "D3"
   },
   "STANFORD": {
    "display": "Stanford",
@@ -679,11 +2047,41 @@
    "conference": "ACC",
    "level": "P4"
   },
+  "STEPHEN F. AUSTIN": {
+   "display": "Stephen F. Austin",
+   "nickname": "Lumberjacks",
+   "conference": "Southland",
+   "level": "FCS"
+  },
+  "STETSON": {
+   "display": "Stetson",
+   "nickname": "Hatters",
+   "conference": "Pioneer League",
+   "level": "FCS"
+  },
+  "STONY BROOK": {
+   "display": "Stony Brook",
+   "nickname": "Seawolves",
+   "conference": "CAA",
+   "level": "FCS"
+  },
+  "SW OKLAHOMA STATE": {
+   "display": "Southwestern Oklahoma State",
+   "nickname": "Bulldogs",
+   "conference": "GAC",
+   "level": "D2"
+  },
   "SYRACUSE": {
    "display": "Syracuse",
    "nickname": "Orange",
    "conference": "ACC",
    "level": "P4"
+  },
+  "TARLETON STATE": {
+   "display": "Tarleton State",
+   "nickname": "Texans",
+   "conference": "United Athletic",
+   "level": "FCS"
   },
   "TCU": {
    "display": "TCU",
@@ -697,6 +2095,18 @@
    "conference": "American",
    "level": "FBS"
   },
+  "TENN-CHATTANOOGA": {
+   "display": "Chattanooga",
+   "nickname": "Mocs",
+   "conference": "SoCon",
+   "level": "FCS"
+  },
+  "TENN-MARTIN": {
+   "display": "UT Martin",
+   "nickname": "Skyhawks",
+   "conference": "OVC",
+   "level": "FCS"
+  },
   "TENNESSEE": {
    "display": "Tennessee",
    "nickname": "Volunteers",
@@ -706,7 +2116,13 @@
   "TENNESSEE STATE": {
    "display": "Tennessee State",
    "nickname": "Tigers",
-   "conference": "Big South-OVC",
+   "conference": "OVC",
+   "level": "FCS"
+  },
+  "TENNESSEE TECH": {
+   "display": "Tennessee Tech",
+   "nickname": "Golden Eagles",
+   "conference": "SoCon",
    "level": "FCS"
   },
   "TEXAS": {
@@ -721,11 +2137,29 @@
    "conference": "SEC",
    "level": "P4"
   },
+  "TEXAS A&M KINGSVILLE": {
+   "display": "Texas A&M\u2013Kingsville",
+   "nickname": "Javelinas",
+   "conference": "LSC",
+   "level": "D2"
+  },
+  "TEXAS A&M-COMMERCE": {
+   "display": "East Texas A&M",
+   "nickname": "Lions",
+   "conference": "Southland",
+   "level": "FCS"
+  },
   "TEXAS SOUTHERN": {
    "display": "Texas Southern",
    "nickname": "Tigers",
    "conference": "SWAC",
    "level": "FCS"
+  },
+  "TEXAS STATE": {
+   "display": "Texas State",
+   "nickname": "Bobcats",
+   "conference": "Pac-12",
+   "level": "FBS"
   },
   "TEXAS TECH": {
    "display": "Texas Tech",
@@ -733,17 +2167,47 @@
    "conference": "Big 12",
    "level": "P4"
   },
+  "TEXAS-PERMIAN BASIN": {
+   "display": "UT Permian Basin",
+   "nickname": "Falcons",
+   "conference": "LSC",
+   "level": "D2"
+  },
+  "TIFFIN": {
+   "display": "Tiffin",
+   "nickname": "Dragons",
+   "conference": "G-MAC",
+   "level": "D2"
+  },
   "TOLEDO": {
    "display": "Toledo",
    "nickname": "Rockets",
    "conference": "MAC",
    "level": "FBS"
   },
+  "TOWSON": {
+   "display": "Towson",
+   "nickname": "Tigers",
+   "conference": "CAA",
+   "level": "FCS"
+  },
+  "TRINITY": {
+   "display": "Trinity (CT)",
+   "nickname": "Bantams",
+   "conference": "NESCAC",
+   "level": "D3"
+  },
   "TROY": {
    "display": "Troy",
    "nickname": "Trojans",
    "conference": "Sun Belt",
    "level": "FBS"
+  },
+  "TRUMAN STATE": {
+   "display": "Truman",
+   "nickname": "Bulldogs",
+   "conference": "GLVC",
+   "level": "D2"
   },
   "TULANE": {
    "display": "Tulane",
@@ -757,11 +2221,35 @@
    "conference": "American",
    "level": "FBS"
   },
+  "TUSCULUM COLLEGE": {
+   "display": "Tusculum",
+   "nickname": "Pioneers",
+   "conference": "SAC",
+   "level": "D2"
+  },
+  "TUSKEGEE": {
+   "display": "Tuskegee",
+   "nickname": "Golden Tigers",
+   "conference": "SIAC",
+   "level": "D2"
+  },
+  "U OF SASKATCHEWAN": {
+   "display": "Saskatchewan",
+   "nickname": "Huskies",
+   "conference": "Canada West",
+   "level": "U Sports"
+  },
   "UAB": {
    "display": "UAB",
    "nickname": "Blazers",
    "conference": "American",
    "level": "FBS"
+  },
+  "UC DAVIS": {
+   "display": "UC Davis",
+   "nickname": "Aggies",
+   "conference": "Big Sky",
+   "level": "FCS"
   },
   "UCF": {
    "display": "UCF",
@@ -786,6 +2274,30 @@
    "nickname": "Warhawks",
    "conference": "Sun Belt",
    "level": "FBS"
+  },
+  "UNI. ARKANSAS MONTICELLO": {
+   "display": "Arkansas\u2013Monticello",
+   "nickname": "Boll Weevils",
+   "conference": "GAC",
+   "level": "D2"
+  },
+  "UNION COLLEGE": {
+   "display": "Union",
+   "nickname": "Garnet Chargers",
+   "conference": "Liberty League",
+   "level": "D3"
+  },
+  "UNIV OF MINNESOTA DULUTH": {
+   "display": "Minnesota Duluth",
+   "nickname": "Bulldogs",
+   "conference": "NSIC",
+   "level": "D2"
+  },
+  "UNIV. BRITISH COLUMBIA": {
+   "display": "UBC",
+   "nickname": "Thunderbirds",
+   "conference": "Canada West",
+   "level": "U Sports"
   },
   "UNLV": {
    "display": "UNLV",
@@ -814,13 +2326,13 @@
   "UTAH STATE": {
    "display": "Utah State",
    "nickname": "Aggies",
-   "conference": "Mountain West",
+   "conference": "Pac-12",
    "level": "FBS"
   },
   "UTEP": {
    "display": "UTEP",
    "nickname": "Miners",
-   "conference": "Conference USA",
+   "conference": "Mountain West",
    "level": "FBS"
   },
   "UTSA": {
@@ -829,11 +2341,47 @@
    "conference": "American",
    "level": "FBS"
   },
+  "UW LA CROSSE": {
+   "display": "Wisconsin-La Crosse",
+   "nickname": "Eagles",
+   "conference": "WIAC",
+   "level": "D3"
+  },
+  "UW STEVENS POINT": {
+   "display": "Wisconsin-Stevens Point",
+   "nickname": "Pointers",
+   "conference": "WIAC",
+   "level": "D3"
+  },
+  "UW-STOUT": {
+   "display": "Wisconsin-Stout",
+   "nickname": "Blue Devils",
+   "conference": "WIAC",
+   "level": "D3"
+  },
+  "VALDOSTA STATE": {
+   "display": "Valdosta State",
+   "nickname": "Blazers",
+   "conference": "GSC",
+   "level": "D2"
+  },
+  "VALPARAISO": {
+   "display": "Valparaiso",
+   "nickname": "Beacons",
+   "conference": "Pioneer League",
+   "level": "FCS"
+  },
   "VANDERBILT": {
    "display": "Vanderbilt",
    "nickname": "Commodores",
    "conference": "SEC",
    "level": "P4"
+  },
+  "VILLANOVA": {
+   "display": "Villanova",
+   "nickname": "Wildcats",
+   "conference": "Patriot League",
+   "level": "FCS"
   },
   "VIRGINIA": {
    "display": "Virginia",
@@ -841,11 +2389,41 @@
    "conference": "ACC",
    "level": "P4"
   },
+  "VIRGINIA STATE": {
+   "display": "Virginia State",
+   "nickname": "Trojans",
+   "conference": "CIAA",
+   "level": "D2"
+  },
   "VIRGINIA TECH": {
    "display": "Virginia Tech",
    "nickname": "Hokies",
    "conference": "ACC",
    "level": "P4"
+  },
+  "VIRGINIA UNION": {
+   "display": "Virginia Union",
+   "nickname": "Panthers",
+   "conference": "CIAA",
+   "level": "D2"
+  },
+  "VMI": {
+   "display": "VMI",
+   "nickname": "Keydets",
+   "conference": "SoCon",
+   "level": "FCS"
+  },
+  "W. CAROLINA": {
+   "display": "Western Carolina",
+   "nickname": "Catamounts",
+   "conference": "SoCon",
+   "level": "FCS"
+  },
+  "W. ILLINOIS": {
+   "display": "Western Illinois",
+   "nickname": "Leathernecks",
+   "conference": "OVC",
+   "level": "FCS"
   },
   "W. KENTUCKY": {
    "display": "Western Kentucky",
@@ -859,11 +2437,41 @@
    "conference": "MAC",
    "level": "FBS"
   },
+  "W. NEW MEXICO": {
+   "display": "Western New Mexico",
+   "nickname": "Mustangs",
+   "conference": "LSC",
+   "level": "D2"
+  },
+  "W. TEXAS A&M": {
+   "display": "West Texas A&M",
+   "nickname": "Buffaloes",
+   "conference": "LSC",
+   "level": "D2"
+  },
+  "WAGNER COLLEGE": {
+   "display": "Wagner",
+   "nickname": "Seahawks",
+   "conference": "Northeast",
+   "level": "FCS"
+  },
   "WAKE FOREST": {
    "display": "Wake Forest",
    "nickname": "Demon Deacons",
    "conference": "ACC",
    "level": "P4"
+  },
+  "WALSH": {
+   "display": "Walsh",
+   "nickname": "Cavaliers",
+   "conference": "G-MAC",
+   "level": "D2"
+  },
+  "WASHBURN": {
+   "display": "Washburn",
+   "nickname": "Ichabods",
+   "conference": "MIAA",
+   "level": "D2"
   },
   "WASHINGTON": {
    "display": "Washington",
@@ -877,11 +2485,47 @@
    "conference": "Pac-12",
    "level": "FBS"
   },
+  "WAYNE STATE": {
+   "display": "Wayne State",
+   "nickname": "Warriors",
+   "conference": "GLIAC",
+   "level": "D2"
+  },
+  "WEBER STATE": {
+   "display": "Weber State",
+   "nickname": "Wildcats",
+   "conference": "Big Sky",
+   "level": "FCS"
+  },
+  "WEST ALABAMA": {
+   "display": "West Alabama",
+   "nickname": "Tigers",
+   "conference": "GSC",
+   "level": "D2"
+  },
+  "WEST CHESTER": {
+   "display": "West Chester",
+   "nickname": "Golden Rams",
+   "conference": "PSAC",
+   "level": "D2"
+  },
+  "WEST FLORIDA": {
+   "display": "West Florida",
+   "nickname": "Argonauts",
+   "conference": "United Athletic",
+   "level": "FCS"
+  },
   "WEST GEORGIA": {
    "display": "West Georgia",
    "nickname": "Wolves",
    "conference": "United Athletic",
    "level": "FCS"
+  },
+  "WEST LIBERTY UNIVERSITY": {
+   "display": "West Liberty",
+   "nickname": "Hilltoppers",
+   "conference": "MEC",
+   "level": "D2"
   },
   "WEST VIRGINIA": {
    "display": "West Virginia",
@@ -889,17 +2533,113 @@
    "conference": "Big 12",
    "level": "P4"
   },
+  "WESTERN COLORADO": {
+   "display": "Western Colorado",
+   "nickname": "Mountaineers",
+   "conference": "RMAC",
+   "level": "D2"
+  },
+  "WESTERN ONTARIO": {
+   "display": "Western",
+   "nickname": "Mustangs",
+   "conference": "OUA",
+   "level": "U Sports"
+  },
+  "WESTERN OREGON": {
+   "display": "Western Oregon",
+   "nickname": "Wolves",
+   "conference": "LSC",
+   "level": "D2"
+  },
+  "WESTERN UNIVERSITY": {
+   "display": "Western",
+   "nickname": "Mustangs",
+   "conference": "OUA",
+   "level": "U Sports"
+  },
+  "WESTMINSTER": {
+   "display": "Westminster (PA)",
+   "nickname": "Titans",
+   "conference": "PAC",
+   "level": "D3"
+  },
+  "WHEATON": {
+   "display": "Wheaton (IL)",
+   "nickname": "Thunder",
+   "conference": "CCIW",
+   "level": "D3"
+  },
+  "WHITWORTH": {
+   "display": "Whitworth",
+   "nickname": "Pirates",
+   "conference": "NWC",
+   "level": "D3"
+  },
+  "WIDENER UNIVERSITY": {
+   "display": "Widener",
+   "nickname": "Pride",
+   "conference": "Middle Atlantic",
+   "level": "D3"
+  },
   "WILLIAM & MARY": {
    "display": "William & Mary",
    "nickname": "Tribe",
-   "conference": "CAA",
+   "conference": "Patriot League",
    "level": "FCS"
+  },
+  "WILLIAM PENN": {
+   "display": "William Penn",
+   "nickname": "Statesmen",
+   "conference": "Heart of America Athletic Conference",
+   "level": "NAIA"
+  },
+  "WINGATE": {
+   "display": "Wingate",
+   "nickname": "Bulldogs",
+   "conference": "SAC",
+   "level": "D2"
+  },
+  "WINSTON SALEM": {
+   "display": "Winston-Salem State",
+   "nickname": "Rams",
+   "conference": "CIAA",
+   "level": "D2"
+  },
+  "WISC-WHITEWATER": {
+   "display": "Wisconsin-Whitewater",
+   "nickname": "Warhawks",
+   "conference": "WIAC",
+   "level": "D3"
   },
   "WISCONSIN": {
    "display": "Wisconsin",
    "nickname": "Badgers",
    "conference": "Big Ten",
    "level": "P4"
+  },
+  "WISCONSIN-EAU CLAIRE": {
+   "display": "Wisconsin-Eau Claire",
+   "nickname": "Blugolds",
+   "conference": "WIAC",
+   "level": "D3"
+  },
+  "WISCONSIN-OSHKOSH": {
+   "display": "Wisconsin-Oshkosh",
+   "nickname": "Titans",
+   "conference": "WIAC",
+   "level": "D3"
+  },
+  "WISCONSIN-PLATTEVILLE": {
+   "display": "Wisconsin-Platteville",
+   "nickname": "Pioneers",
+   "conference": "WIAC",
+   "level": "D3"
+  },
+  "WOFFORD": {
+   "display": "Wofford",
+   "nickname": "Terriers",
+   "conference": "SoCon",
+   "level": "FCS"
   },
   "WYOMING": {
    "display": "Wyoming",
@@ -912,6 +2652,12 @@
    "nickname": "Bulldogs",
    "conference": "Ivy League",
    "level": "FCS"
+  },
+  "YORK UNIVERSITY": {
+   "display": "York",
+   "nickname": "Lions",
+   "conference": "OUA",
+   "level": "U Sports"
   },
   "YOUNGSTOWN STATE": {
    "display": "Youngstown State",
