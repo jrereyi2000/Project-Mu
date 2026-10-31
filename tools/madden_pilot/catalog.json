@@ -77,7 +77,7 @@
       }
     },
     "COACH_PROGRESS": {
-      "note": "Spike b10, c1: after a simmed week. The only screen that interrupts Advance Week > Next Week (JR, 2026-10-30). Three tabs (COACH PROGRESS, LOADOUT PROGRESS, UNLOCKS); Space (CONTINUE) steps through each, then the Weekly Hub.",
+      "note": "Spike b10, c1: after a simmed week. The only screen that interrupts Advance Week > Next Week (JR, 2026-10-30). JR (2026-10-31): a team setting turns off the ability recap; with it off there's no interrupt between weeks and Advance Week > Next Week lands straight on the next week's Weekly Hub. Turn it off in the baseline save so every CAREER-TUNE-* clone inherits it; the pilot still handles this screen when it's on.  Three tabs (COACH PROGRESS, LOADOUT PROGRESS, UNLOCKS); Space (CONTINUE) steps through each, then the Weekly Hub.",
       "all": [],
       "any": ["COACH PROGRESS", "LOADOUT PROGRESS"],
       "none": ["WEEKLY HUB", "GAMEDAY"],
