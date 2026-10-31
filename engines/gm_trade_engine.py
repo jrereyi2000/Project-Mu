@@ -363,7 +363,8 @@ def read_books(cur, season, week, window="IN_SEASON", stage=None):
                       "proj_wins": (r[5] or {}).get("proj_wins"),
                       "direction_score": float(r[6]) if r[6] is not None else None} for r in cur.fetchall()}
     b["cap"] = read_cap(cur, season, b["value_season"])
-    b["players"] = tv.read_players(cur, season)
+    # practice-squad players can't be traded and don't count toward the 53 (NFL rule): they stay out of the books
+    b["players"] = {pid: p for pid, p in tv.read_players(cur, season).items() if not p.get("practice_squad")}
     # Madden heals the season's injuries over the offseason: the injury report only blocks in-season trades
     b["injuries"] = read_injuries(cur, season, week) if window == "IN_SEASON" else {}
     cur.execute("""SELECT a.player_id FROM gm_trade_assets a JOIN gm_trade_proposals p ON p.id = a.proposal_id
@@ -450,6 +451,7 @@ def finish_books(b):
     inj = b.get("injuries") or {}
     b["injured"] = {pid for pid, i in inj.items() if i["is_ir"] or (i["weeks_remaining"] or 0) > 0}
     b["out"] = {pid for pid, i in inj.items() if i["is_ir"] or (i["weeks_remaining"] or 0) >= 3}
+    b["ir"] = {pid for pid, i in inj.items() if i["is_ir"]}
     b.setdefault("acquired", set())
     b.setdefault("value_season", b["season"])
     b["booked_players"], b["booked_picks"] = set(), set()
@@ -663,12 +665,21 @@ def cap_effects(deal, b):
     return out
 
 
+def roster_count(b, tid):
+    """Players counting toward the roster limit: the team's players not on injured reserve (NFL rule; practice-squad
+    players aren't in the books)."""
+    ir = b.get("ir") or set()
+    return sum(1 for pid in b["roster"].get(tid, []) if pid not in ir)
+
+
 def roster_after(deal, b):
+    """{team_id: roster count once the deal is done}; a player on injured reserve moves without counting."""
+    ir = b.get("ir") or set()
     out = {}
     for t in (deal["a"], deal["b"]):
-        n = len(b["roster"].get(t, []))
-        n += sum(1 for x in deal["assets"] if x["type"] == "PLAYER" and x["to"] == t)
-        n -= sum(1 for x in deal["assets"] if x["type"] == "PLAYER" and x["from"] == t)
+        n = roster_count(b, t)
+        n += sum(1 for x in deal["assets"] if x["type"] == "PLAYER" and x["to"] == t and x["player_id"] not in ir)
+        n -= sum(1 for x in deal["assets"] if x["type"] == "PLAYER" and x["from"] == t and x["player_id"] not in ir)
         out[t] = n
     return out
 
@@ -694,7 +705,7 @@ def check_legality(deal, b, valuer=None, ignore_booking=()):
     bad, release = [], {}
     mx = roster_max(window)
     for t, n in rost.items():
-        before = len(b["roster"].get(t, []))
+        before = roster_count(b, t)
         if n > mx and n > before:
             if n == before + 1 and before <= mx:             # one over: he releases a depth player first (2025)
                 cand = release_candidate(b, t, deal)

@@ -127,6 +127,31 @@ def test_roster_fails_over_max():
     assert ge.check_legality(swap, b)["roster"]["ok"]
 
 
+def test_injured_reserve_does_not_count_toward_the_roster_max():
+    # a full 53 plus players on IR (PC rosters: IR players stay Signed on the team)
+    b = star_books()
+    while len(b["roster"][1]) < ge.ROSTER_MAX_IN_SEASON:
+        pid = 5000 + len(b["roster"][1])
+        b["players"][pid] = make_player(pid, 1, "LB", 60)
+        b["roster"][1].append(pid)
+    ir = {}
+    for pid in (6001, 6002, 6003):
+        b["players"][pid] = make_player(pid, 1, "LB", 60)
+        b["roster"][1].append(pid)
+        ir[pid] = {"weeks_remaining": 8, "is_ir": True, "week": WEEK, "team_id": 1}
+    b["injuries"] = ir
+    b = ge.finish_books(b)
+    assert ge.roster_count(b, 1) == ge.ROSTER_MAX_IN_SEASON
+    chk = ge.check_legality(base_deal(), b)["roster"]                   # 53 active + 3 IR: one over, release first
+    assert chk["ok"] and "AAA" in chk["release"]
+
+
+def test_a_player_on_injured_reserve_moves_without_counting():
+    b = star_books(injuries={STAR: {"weeks_remaining": 10, "is_ir": True, "week": WEEK, "team_id": 2}})
+    before = ge.roster_count(b, 1), ge.roster_count(b, 2)
+    assert ge.roster_after(base_deal(), b) == {1: before[0], 2: before[1]}
+
+
 def test_qb_slot_minimum():
     b = star_books()
     qbs = [pid for pid in b["roster"][2] if b["players"][pid]["group"] == "QB"]
