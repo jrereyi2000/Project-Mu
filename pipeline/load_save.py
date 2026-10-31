@@ -31,7 +31,7 @@ Writes, for that season:
   draft_prospects            reader_version >= 5: the coming class (season + 1) from the save's prospects (status Draft,
                              in DraftPlayer.InitialDraftRank order: projected pick, round 1-7 then UDFA, position,
                              archetype, age, height, weight, the save's OVR and the college through
-                             pipeline/colleges.py's row map, NULL for a row not mapped), only when that class has
+                             pipeline/colleges.py (Madden's college list), NULL when unknown), only when that class has
                              no board yet: a scanned or already loaded board is kept, so its ids, mock drafts and
                              scouting links never move
   depth_charts               reader_version >= 4: every real team's Madden depth chart (35 positions x 6, best
