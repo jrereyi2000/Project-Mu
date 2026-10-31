@@ -287,8 +287,9 @@ class RunTest(unittest.TestCase):
 
 
 class CoachingCarouselSeasonsTest(unittest.TestCase):
-    """Step 7d decides league_state's season and the one before, but never a season the offseason manifest staffed
-    (2035): the 2036 Wild Card run decided 2035 and its hiring cycle broke on 2036's coordinators."""
+    """Step 7d decides league_state's season and the one before, but only seasons coaching_carousel.owns: never one
+    the offseason manifest staffed (2035), as the 2036 Wild Card run decided 2035 and its hiring cycle broke on 2036's
+    coordinators (owns itself is tested in tests/test_coach_hot_seat.py)."""
 
     def test_skips_seasons_before_the_carousel(self):
         from engines import coaching_carousel as cc
@@ -299,6 +300,7 @@ class CoachingCarouselSeasonsTest(unittest.TestCase):
                                                              "hot_seat": {"status": "up to date", "fired": []}})[1]
         with mock.patch("psycopg.connect", return_value=conn), \
                 mock.patch.object(cc, "installed", return_value=True), mock.patch.object(cc, "run", side_effect=rep), \
+                mock.patch.object(cc, "owns", lambda cur, s: s != 2035), \
                 mock.patch.object(wc, "log", lambda m: None):
             wc.step_coach_hot_seat(2036)
             self.assertEqual(seasons, [2036])
@@ -332,3 +334,26 @@ class StepScoutingTest(unittest.TestCase):
              mock.patch("engines.gm_llm.make_llm", lambda *a, **k: None):
             self.assertEqual(wc.step_scouting(2036), [])
         self.assertTrue(any("[WARN] Scouting skipped" in m for m in logs))
+
+    def run_step(self, board, scouted):
+        from engines import scouting_engine as se
+        conn = mock.MagicMock()
+        conn.__enter__.return_value = conn
+        conn.cursor.return_value.fetchone.return_value = (board, scouted)
+        calls = []
+        with mock.patch("psycopg.connect", return_value=conn), mock.patch.object(wc, "log", lambda m: None), \
+                mock.patch("engines.gm_llm.make_llm", lambda *a, **k: None), mock.patch("engines.gm_llm.flush"), \
+                mock.patch.object(se, "installed", return_value=True), \
+                mock.patch.object(se, "current_step", return_value=(2026, 1)), \
+                mock.patch.object(se, "init", side_effect=lambda cur, d, step, log=None: calls.append(("init", d, step))), \
+                mock.patch.object(se, "catch_up", side_effect=lambda cur, d, step, **k: calls.append(("catch_up", d, step)) or [step]):
+            wc.step_scouting(2026)
+        return calls
+
+    def test_class_with_a_board_but_no_scouting_rows_is_initialized(self):
+        # a PC franchise: load_save wrote the 2027 board from the save and no Season scan initializes the class
+        self.assertEqual(self.run_step(389, 0), [("init", 2027, 1), ("catch_up", 2027, 1)])
+
+    def test_initialized_or_boardless_class_is_not_reinitialized(self):
+        self.assertEqual(self.run_step(389, 389), [("catch_up", 2027, 1)])
+        self.assertEqual(self.run_step(0, 0), [("catch_up", 2027, 1)])

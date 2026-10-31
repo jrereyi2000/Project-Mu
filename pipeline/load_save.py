@@ -28,6 +28,11 @@ Writes, for that season:
   team_seasons               reader_version >= 5: each real team's Madden team ratings (Team.TEAM_RATINGOVR / OFF /
                              DEF) as team_ovr / off_ovr / def_ovr (the row is created when the season has none; wins,
                              losses and the OCR-only rank columns are left alone)
+  draft_prospects            reader_version >= 5: the coming class (season + 1) from the save's prospects (status Draft,
+                             in DraftPlayer.InitialDraftRank order: projected pick, round 1-7 then UDFA, position,
+                             archetype, age, height, weight and the save's OVR; no college), only when that class has
+                             no board yet: a scanned or already loaded board is kept, so its ids, mock drafts and
+                             scouting links never move
   depth_charts               reader_version >= 4: every real team's Madden depth chart (35 positions x 6, best
                              first) as source MADDEN for the save's current week (pgid -> player id through the
                              players loaded; empty slots and players not loaded are skipped)
@@ -51,6 +56,8 @@ import psycopg
 
 from pipeline.capture_matching import db_player_name
 from pipeline.contracts import insert_contract, supersede_active
+from pipeline.draft_board import write_board
+from pipeline.ingest_prospects import Prospect
 from pipeline.load_capture import team_line_totals
 from engines import depth_chart_engine
 
@@ -731,6 +738,43 @@ def load_highlights(cur, games, season, report):
     report["games_with_scoring_plays"] = n
 
 
+DRAFTED_PICKS = 224                # 7 rounds x 32; later board slots are UDFA
+
+
+def draft_board_prospects(snapshot):
+    """The save's coming class (reader_version >= 5) as draft board Prospects in Madden's board order
+    (DraftPlayer.InitialDraftRank, then OVR). Empty for older snapshots."""
+    players = {p["pgid"]: p for p in snapshot["players"] if p["status"] == "Draft"}
+    rows = [(d, players[d["pgid"]]) for d in snapshot.get("draft_class") or [] if d["pgid"] in players]
+    rows.sort(key=lambda dp: (dp[0]["initial_draft_rank"] is None, dp[0]["initial_draft_rank"] or 0, -(dp[1]["overall"] or 0)))
+    out = []
+    for pick, (_, p) in enumerate(rows, start=1):
+        drafted = pick <= DRAFTED_PICKS
+        out.append(Prospect(projected_pick=pick, full_name=f"{p['first_name']} {p['last_name']}".strip(),
+                            position=position(p["position"]), college=None, height=height_text(p["height_in"]),
+                            weight=p["weight_lbs"], age=p["age"], overall_rating=p["overall"],
+                            archetype=archetype(p["archetype"]),
+                            projected_round=str((pick - 1) // 32 + 1) if drafted else "UDFA",
+                            round_pick=(pick - 1) % 32 + 1 if drafted else None))
+    return out
+
+
+def load_draft_class(cur, snapshot, season, report, capture_folder=None):
+    """The coming class (season + 1) as its draft_prospects board, only when it has none: on PC there is no Draft
+    Board scan, and a board already there (scanned, or loaded from an earlier save) is kept."""
+    prospects = draft_board_prospects(snapshot)
+    if not prospects:
+        return
+    draft_season = season + 1
+    cur.execute("SELECT count(*) FROM draft_prospects WHERE draft_season = %s", (draft_season,))
+    have = cur.fetchone()[0]
+    if have:
+        report["draft_class"] = f"kept the {draft_season} board ({have} prospects)"
+        return
+    report["draft_prospects"] = write_board(cur, draft_season, prospects, source_capture=capture_folder or "save")
+    report["draft_class"] = f"{draft_season} board loaded from the save"
+
+
 TEAM_RATING_COLUMNS = {"ovr": "team_ovr", "off": "off_ovr", "def": "def_ovr"}
 
 
@@ -870,6 +914,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     load_injuries(cur, snapshot, season, week, players, report)
     load_highlights(cur, games, season, report)
     load_depth_charts(cur, snapshot, season, week, teams, players, report)
+    load_draft_class(cur, snapshot, season, report, capture_folder)
     league_settings_report(snapshot, report)
     update_league_state(cur, season, week, report)
     return report
@@ -878,7 +923,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
 REPORT_COUNTS = ("players", "players_created", "player_attributes", "player_attributes_unchanged",
                  "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays", "depth_charts",
-                 "depth_chart_rows", "team_ratings")
+                 "depth_chart_rows", "team_ratings", "draft_prospects")
 
 
 def capture_row(cur, path, season, week):

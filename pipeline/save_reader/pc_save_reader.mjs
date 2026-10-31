@@ -17,7 +17,10 @@
 //
 // reader_version 5 adds, per team, `ratings`: Madden's own team ratings (Team.TEAM_RATINGOVR, OFF, DEF and the unit
 // ratings QB, RB, WR, TE, OL, DL, LB, DB, ST, keyed lower-case), which pipeline/load_save.py stores as the season's
-// team_seasons team_ovr / off_ovr / def_ovr (on PC there is no Team Overalls OCR capture).
+// team_seasons team_ovr / off_ovr / def_ovr (on PC there is no Team Overalls OCR capture), and `draft_class`: one
+// entry per DraftPlayer row whose Player is a ContractStatus Draft prospect ({pgid, draft_position, initial_draft_rank,
+// true_overall_ranking, visible}; ranks 0-based, as draft_tables.mjs reads them), which load_save turns into the coming
+// class's draft_prospects board when it has none. The prospects themselves are the `players` with status Draft.
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
@@ -90,6 +93,21 @@ function teamRatings(record) {
     if (name.startsWith(TEAM_RATING_PREFIX)) ratings[name.slice(TEAM_RATING_PREFIX.length).toLowerCase()] = record[name];
   }
   return Object.keys(ratings).length ? ratings : null;
+}
+
+// DraftPlayer rows → the coming draft class's board (the Player rows with ContractStatus Draft they link).
+function readDraftClass(draftPlayerTable, playerTable) {
+  if (!draftPlayerTable) return [];
+  const out = [];
+  for (const r of draftPlayerTable.records) {
+    const ref = r.isEmpty ? null : decodeRef(r.Player);
+    if (!ref || ref.table !== playerTable.header.tableId) continue;
+    const p = playerTable.records[ref.row];
+    if (!p || p.isEmpty || p.ContractStatus !== 'Draft') continue;
+    out.push({ pgid: p.PresentationId, draft_position: r.DraftPosition, initial_draft_rank: r.InitialDraftRank,
+      true_overall_ranking: r.TrueOverallRanking, visible: r.IsVisible });
+  }
+  return out;
 }
 
 function readTeams(teamTable) {
@@ -375,6 +393,7 @@ export async function readSave(savePath) {
     const pgidByRow = new Map(players.map(p => [p.row, p.pgid]));
     const depthCharts = await readDepthCharts(tables, teamTable, playerTable.header.tableId, pgidByRow);
     const leagueSettings = await readLeagueSettings(franchise, tables);
+    const draftClass = readDraftClass(await tables.byName('DraftPlayer'), playerTable);
     const stat = statSync(savePath);
     return {
       meta: {
@@ -393,6 +412,7 @@ export async function readSave(savePath) {
       players,
       depth_charts: depthCharts,
       league_settings: leagueSettings,
+      draft_class: draftClass,
     };
   } finally {
     cleanup();
@@ -420,7 +440,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     writeFileSync(out, json);
     const s = snapshot;
     console.error(`${s.players.length} players, ${s.games.length} games, ${s.teams.length} teams, `
-      + `${s.depth_charts.length} depth charts, ${s.season.calendar_year} ${s.season.week_type} week index `
+      + `${s.depth_charts.length} depth charts, ${s.draft_class.length} draft prospects, ${s.season.calendar_year} ${s.season.week_type} week index `
       + `${s.season.week_index} → ${out}`);
   } else {
     process.stdout.write(json);

@@ -60,6 +60,13 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
     }
   }
 
+  // reader_version 5: the coming draft class, one board rank each, every entry a status Draft player.
+  const prospects = new Set(s.players.filter(p => p.status === 'Draft').map(p => p.pgid));
+  assert.ok(s.draft_class.length > 200, 'draft class read');
+  for (const d of s.draft_class) assert.ok(prospects.has(d.pgid), `draft class pgid ${d.pgid} is a prospect`);
+  const ranks = s.draft_class.map(d => d.initial_draft_rank);
+  assert.equal(new Set(ranks).size, ranks.length, 'board ranks are unique');
+
   // reader_version 4: depth charts, league settings, PT_* flags and ConfidenceRating.
   assert.deepEqual(s.depth_charts.map(d => d.team_index), [...Array(32).keys()], 'one depth chart per real team');
   const pgidSet = new Set(pgids);
