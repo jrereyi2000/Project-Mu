@@ -2369,13 +2369,14 @@ def get_franchise_rebuild_status(team_identifier: str, season: int = 0) -> str:
                 y_row = cur.fetchone()
                 y_share = round(float(y_row[0] or 0) / float(y_row[1] or 1) * 100, 1) if y_row and y_row[1] else 0.0
 
-                if team_ovr >= 85 and win_pct >= 0.600:
+                # team_ovr is NULL until the season's team ratings are captured or loaded: those tests are skipped
+                if team_ovr is not None and team_ovr >= 85 and win_pct >= 0.600:
                     posture_category = "CHAMPIONSHIP_WINDOW"
                     draft_philosophy = "WIN_NOW_IMPACT: Target immediate Day-1 starter, pass rush depth, or luxury offensive weapon to maximize Lombardi window."
                 elif avg_age <= 26.0 and y_share >= 25.0:
                     posture_category = "YOUTH_ASCENT"
                     draft_philosophy = "FOUNDATIONAL_HIGH_CEILING: Draft high-upside athletic traits at premium positions (QB/OT/EDGE/CB) to elevate ascending core."
-                elif win_pct < 0.350 or (wins <= 5 and team_ovr <= 83):
+                elif win_pct < 0.350 or (wins <= 5 and team_ovr is not None and team_ovr <= 83):
                     posture_category = "GROUND_UP_REBUILD"
                     draft_philosophy = "FRANCHISE_CORNERSTONE: Secure premier foundational talent (franchise signal-caller or blindside trench anchor)."
                 else:

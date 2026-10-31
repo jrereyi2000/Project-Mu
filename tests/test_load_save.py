@@ -223,6 +223,16 @@ def v4_snapshot(sliders=None, dev_flag=None):
     return snap
 
 
+def v5_snapshot():
+    """v4_snapshot() as reader_version 5: Madden's team ratings on CHI and ARI (none on the free-agent pseudo-team)."""
+    snap = v4_snapshot()
+    snap["meta"]["reader_version"] = 5
+    snap["teams"][0]["ratings"] = {"ovr": 85, "off": 88, "def": 83, "qb": 93, "st": 70}
+    snap["teams"][1]["ratings"] = {"ovr": 74, "off": 72, "def": 77}
+    snap["teams"][2]["ratings"] = {"ovr": 50, "off": 50, "def": 50}
+    return snap
+
+
 class FakeCursor:
     """Records execute / executemany calls (depth_chart_engine.store's DELETE then INSERT rows)."""
     def __init__(self):
@@ -282,6 +292,18 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
             "regression_by_age.int1 = -20 (Project Mu expects 0)"])
         self.assertIsNone(report["league_settings"]["sliders"]["progression_by_age"])
         self.assertIs(report["league_settings"]["dev_trait_regression_enabled"], True)
+
+    def test_team_ratings_upserted_per_real_team(self):
+        cur, report = FakeCursor(), {}
+        ls.load_team_ratings(cur, v5_snapshot(), TEST_SEASON, self.TEAMS, report)
+        self.assertEqual([args for _, _, args in cur.calls], [(100, TEST_SEASON, 85, 88, 83), (101, TEST_SEASON, 74, 72, 77)])
+        self.assertIn("ON CONFLICT (team_id, season) DO UPDATE SET team_ovr = EXCLUDED.team_ovr", cur.calls[0][1])
+        self.assertEqual(report["team_ratings"], 2)
+
+    def test_v4_snapshot_has_no_team_ratings(self):
+        cur, report = FakeCursor(), {}
+        ls.load_team_ratings(cur, v4_snapshot(), TEST_SEASON, self.TEAMS, report)
+        self.assertEqual((cur.calls, report), ([], {}))
 
     def test_v3_snapshot_adds_nothing(self):
         snap, cur, report = tiny_snapshot(), FakeCursor(), {}
@@ -383,10 +405,22 @@ class LoadTinySnapshotTest(unittest.TestCase):
                          "AND d.source = 'MADDEN' AND t.abbreviation = 'CHI' ORDER BY 1", (TEST_SEASON,))
         self.assertEqual(self.cur.fetchall(), [("QB", 1, 900001), ("WR", 1, 900002)])
 
+    def test_v5_load_stores_team_ratings(self):
+        self.cur.execute("SELECT id FROM teams WHERE abbreviation = 'CHI'")
+        chi = self.cur.fetchone()[0]
+        self.cur.execute("INSERT INTO team_seasons (team_id, season, watchability_index) VALUES (%s, %s, 42.5)",
+                         (chi, TEST_SEASON))
+        r = ls.load_snapshot(self.cur, v5_snapshot(), season=TEST_SEASON)
+        self.assertEqual(r["team_ratings"], 2)
+        self.cur.execute("SELECT t.abbreviation, s.team_ovr, s.off_ovr, s.def_ovr, s.watchability_index FROM team_seasons s "
+                         "JOIN teams t ON t.id = s.team_id WHERE s.season = %s ORDER BY 1", (TEST_SEASON,))
+        self.assertEqual(self.cur.fetchall(), [("AZ", 74, 72, 77, 0.0), ("CHI", 85, 88, 83, 42.5)])   # other columns kept
+
     def test_v3_load_has_no_v4_keys(self):
         r = ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
         self.assertNotIn("depth_charts", r)
         self.assertNotIn("league_settings", r)
+        self.assertNotIn("team_ratings", r)
 
     def test_league_state_moves_forward_only(self):
         self.cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")

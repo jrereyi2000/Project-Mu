@@ -25,6 +25,9 @@ Writes, for that season:
   injuries                   the save's injured players for the league's current week (that week's rows replaced)
   game_highlights            scoring plays from SeasonGame.ScoringSummaries (Madden keeps only recent weeks);
                              a game whose highlights came from a capture keeps them
+  team_seasons               reader_version >= 5: each real team's Madden team ratings (Team.TEAM_RATINGOVR / OFF /
+                             DEF) as team_ovr / off_ovr / def_ovr (the row is created when the season has none; wins,
+                             losses and the OCR-only rank columns are left alone)
   depth_charts               reader_version >= 4: every real team's Madden depth chart (35 positions x 6, best
                              first) as source MADDEN for the save's current week (pgid -> player id through the
                              players loaded; empty slots and players not loaded are skipped)
@@ -728,6 +731,28 @@ def load_highlights(cur, games, season, report):
     report["games_with_scoring_plays"] = n
 
 
+TEAM_RATING_COLUMNS = {"ovr": "team_ovr", "off": "off_ovr", "def": "def_ovr"}
+
+
+def load_team_ratings(cur, snapshot, season, teams, report):
+    """Madden's team ratings (reader_version >= 5, snapshot teams[].ratings) into team_seasons for the season. A PC
+    franchise never has the PS5 Team Overalls OCR capture, so this is where team_ovr / off_ovr / def_ovr come from;
+    older snapshots add nothing."""
+    n = 0
+    for t in snapshot["teams"]:
+        tid, ratings = teams.get(t["team_index"]), t.get("ratings")
+        if tid is None or not ratings:
+            continue
+        vals = {col: ratings.get(key) for key, col in TEAM_RATING_COLUMNS.items()}
+        cols = list(vals)
+        cur.execute(f"INSERT INTO team_seasons (team_id, season, {', '.join(cols)}) VALUES (%s, %s, "
+                    f"{', '.join(['%s'] * len(cols))}) ON CONFLICT (team_id, season) DO UPDATE SET "
+                    + ", ".join(f"{c} = EXCLUDED.{c}" for c in cols), (tid, season, *[vals[c] for c in cols]))
+        n += 1
+    if n:
+        report["team_ratings"] = n
+
+
 def load_depth_charts(cur, snapshot, season, week, teams, players, report):
     """The save's depth charts (reader_version >= 4) as depth_charts rows, source MADDEN, for (season, week). A team's
     MADDEN rows for that week are replaced (depth_chart_engine.store). A slot holding a pgid that wasn't loaded (a
@@ -832,6 +857,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     report = {"season": season, "franchise_year": snapshot["season"]["franchise_year"],
               "save_week": {k: snapshot["season"][k] for k in ("week_type", "week_index", "stage")}}
     teams = team_ids(cur, snapshot)
+    load_team_ratings(cur, snapshot, season, teams, report)
     players = load_players(cur, snapshot, season, teams, report)
     load_player_attributes(cur, snapshot, season, players, report, capture_folder=capture_folder)
     games = load_games(cur, snapshot, season, teams, report)
@@ -852,7 +878,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
 REPORT_COUNTS = ("players", "players_created", "player_attributes", "player_attributes_unchanged",
                  "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays", "depth_charts",
-                 "depth_chart_rows")
+                 "depth_chart_rows", "team_ratings")
 
 
 def capture_row(cur, path, season, week):

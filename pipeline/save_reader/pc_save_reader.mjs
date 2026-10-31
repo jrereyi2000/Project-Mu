@@ -14,6 +14,10 @@
 // pgid slots, best first), `league_settings` (the four progression / regression slider records behind LeagueSetting
 // row 0, plus the dev-trait regression and breakout-scenario flags) and, per player, `confidence` (ConfidenceRating) and
 // `traits` (every PT_* flag).
+//
+// reader_version 5 adds, per team, `ratings`: Madden's own team ratings (Team.TEAM_RATINGOVR, OFF, DEF and the unit
+// ratings QB, RB, WR, TE, OL, DL, LB, DB, ST, keyed lower-case), which pipeline/load_save.py stores as the season's
+// team_seasons team_ovr / off_ovr / def_ovr (on PC there is no Team Overalls OCR capture).
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
@@ -25,7 +29,7 @@ import {
   weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 4;
+export const READER_VERSION = 5;
 
 // Real teams are TeamIndex 0..31 (32 = free agents; the Team table has a few more rows).
 const REAL_TEAMS = 32;
@@ -77,6 +81,17 @@ function readSeason(info) {
   };
 }
 
+const TEAM_RATING_PREFIX = 'TEAM_RATING';
+
+// Team.TEAM_RATING* → { ovr, off, def, qb, ... } (null when the schema has none of them).
+function teamRatings(record) {
+  const ratings = {};
+  for (const name of fieldNames(record)) {
+    if (name.startsWith(TEAM_RATING_PREFIX)) ratings[name.slice(TEAM_RATING_PREFIX.length).toLowerCase()] = record[name];
+  }
+  return Object.keys(ratings).length ? ratings : null;
+}
+
 function readTeams(teamTable) {
   const teams = [];
   const teamIndexByRow = new Map();
@@ -86,6 +101,7 @@ function readTeams(teamTable) {
     teams.push({
       team_index: r.TeamIndex, row, short_name: r.ShortName, long_name: r.LongName,
       display_name: r.DisplayName, nick_name: r.NickName, presentation_id: r.PresentationId,
+      ratings: teamRatings(r),
     });
   });
   return { teams, teamIndexByRow };

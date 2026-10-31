@@ -52,8 +52,15 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
   assert.ok(lines.length > 0, 'per-game stat lines present');
   for (const line of lines) assert.ok(gameRows.has(line.game_row), 'every game line points at an exported game');
 
+  // reader_version 5: Madden's team ratings on every real team.
+  assert.equal(s.meta.reader_version, 5);
+  for (const t of s.teams.filter(x => x.team_index < 32)) {
+    for (const k of ['ovr', 'off', 'def']) {
+      assert.ok(Number.isInteger(t.ratings?.[k]) && t.ratings[k] > 0 && t.ratings[k] <= 99, `${t.short_name} ${k} rating`);
+    }
+  }
+
   // reader_version 4: depth charts, league settings, PT_* flags and ConfidenceRating.
-  assert.equal(s.meta.reader_version, 4);
   assert.deepEqual(s.depth_charts.map(d => d.team_index), [...Array(32).keys()], 'one depth chart per real team');
   const pgidSet = new Set(pgids);
   let filled = 0;
