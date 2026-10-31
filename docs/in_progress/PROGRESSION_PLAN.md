@@ -146,13 +146,77 @@ clamped to a band per age and OVR (a 99 can't go up; a single season moves at mo
 
 **One annual accounting system:** in-season gains count toward annual development, and offseason work awards what remains rather than paying twice for the same snaps. The 70/30 split is a league-level calibration target, not a hard individual entitlement. Physical improvement is concentrated in the offseason without an absolute biological prohibition; mental learning continues during offseason preparation. Ordinary age decline is primarily offseason, not a birthday-triggered in-season drop. Byes do not advance completed-game checkpoints. A season-end reconciliation includes residual games and postseason experience without counting evidence already used at earlier checkpoints twice. Weekly writes use the post-Advance-Week ingest boundary with the franchise closed.
 
-### 5.3a Implementation and application contract
+### 5.3a Engine interface and U13 application contract
 
-`progression_state.py` owns a separate authoritative base, append-identity checkpoint events, annual accounting and evidence consumption; `progression_evidence.py` supplies completed-game calendars and review windows; `progression_inputs.py` reads real cutoff-bounded game data; `progression_policy.py` returns fractional skill entitlements, band changes and a desired label; `progression_offseason.py` reconciles full-year targets; `progression_checkpoint.py` composes absolute save edits and accepts verified receipts. Annual history remains a compatible summary.
+**Authoritative handoff for the U13 agent (2026-10-31).** Progression is a deterministic engine. U13 owns stage scheduling and save application; the engine owns player checkpoint timing, numerical development, form composition and development accounting. The old assumption that a three-argument hook returns run_progression-style rows is superseded. Do not catch an interface mismatch as "no hook" and silently skip progression in a managed league.
 
-U13 sequence: (1) explicit neutral bootstrap after migration, with morale50 and known neutral form; (2) prepare_weekly_pass or prepare_offseason_pass using the actual input-save fingerprint and retain document/event IDs/edits hash; (3) write a candidate with save_writer and verify readback; (4) durably replace/recover the output and acknowledge_pass with actual output fingerprint and writer success; (5) commit the caller's transaction. PREPARED events award nothing. Acknowledgement checks stored absolute targets as well as the edits, then advances base/accounting/form and annual/C2 summaries together. No helper commits, starts Madden or replaces a save. The optional in_season_checkpoint hook now requires snapshot and source_fingerprint; the old three-argument proposal is insufficient and explicitly refused. A failed or interrupted application must recover using the same retained event/receipt rather than recalculate/reroll.
+`progression_state.py` owns authoritative base/band revisions, checkpoint events, annual accounting and evidence consumption; `progression_evidence.py` owns completed-game calendars/review windows; `progression_inputs.py` reads cutoff-bounded game evidence; `progression_policy.py` returns fractional skill entitlements and separate band revisions; `progression_offseason.py` reconciles annual targets; `progression_checkpoint.py` prepares edits and acknowledges verified application.
 
-Native player_attributes rows remain observations, including overlays or drift. They never become the managed permanent base by ingestion. Form overlays cannot change physical attributes or Injury. The form CLI now emits edits without recording applied form. Thresholds/rates and the ~30/70 aggregate target still need career/gameplay calibration; available box-score proxies cannot prove unsupported route separation, coverage wins or live EPA. Permanent injury consequences still use existing C2 annual recovery/decline inputs; no new live injury instrumentation is claimed.
+| Stage | Actual implemented API | Meaning of season |
+|---|---|---|
+| Explicit initial setup | `progression_checkpoint.bootstrap_pass(cur, snapshot, season, source_fingerprint=source_sha256, form_neutral=True)` | Current application year; requires known-neutral form and player ConfidenceRating50. Apply migration and establish neutral save first; do not assert neutrality for an arbitrary ingest. |
+| Every regular-season/playoff weekly stage | `progression.in_season_checkpoint(cur, season, week, snapshot=snapshot, source_fingerprint=source_sha256)` | Current earned/application season; week bounds completed evidence inclusively. Engine decides whether individual mental/technical checkpoints or band reviews are due. |
+| Equivalent direct weekly entry | `progression_checkpoint.prepare_weekly_pass(cur, snapshot, season, week, source_fingerprint=source_sha256)` | Same behavior as the wrapper; call one entry, not both. |
+| Offseason progression | `progression_checkpoint.prepare_offseason_pass(cur, snapshot, season, source_fingerprint=source_sha256)` | Target application year S; reconciles development earned in S−1 against immutable annual-start ratings. Removes form. Translate U13's stage-year convention explicitly. |
+| After verified application | `progression_checkpoint.acknowledge_pass(cur, prepared, output_snapshot, output_fingerprint=output_sha256, writer_verified=True)` | Uses retained event earned/application years. Returns acknowledged event records; does not commit. |
+
+Import the actual modules with `from engines import progression, progression_checkpoint`. The weekly hook exists and returns the preparation envelope below; calling it with only `(cur, season, week)` raises ValueError. Snapshot/input fingerprint and later receipt acknowledgement are mandatory for safe integration.
+
+```python
+prepared = progression.in_season_checkpoint(
+    cur, season, week,
+    snapshot=input_snapshot,
+    source_fingerprint=input_save_sha256,
+)
+# Or, at the offseason boundary:
+# prepared = progression_checkpoint.prepare_offseason_pass(
+#     cur, input_snapshot, target_season,
+#     source_fingerprint=input_save_sha256,
+# )
+
+# Actual return shape:
+# {
+#   "document": {"players": [...], "records": [...]},
+#   "event_ids": ["pending-event-id", ...],
+#   "source_fingerprint": "input-save-sha256",
+#   "edits_hash": "canonical-progression-document-sha256",
+# }
+
+# U13 then composes other moves, writes/verifies a candidate and durably applies it.
+# Retain prepared unchanged; do not replace its document/hash with the combined one.
+acknowledged_events = progression_checkpoint.acknowledge_pass(
+    cur, prepared, verified_output_snapshot,
+    output_fingerprint=actual_output_save_sha256,
+    writer_verified=True,  # only after the actual writer/readback succeeded
+)
+# U13 owns the caller transaction commit and filesystem recovery protocol.
+```
+
+**Composition ownership:** the prepared document already contains permanent base plus the weekly form overlay, OVR/grades/PlayerType, morale50 and progression-setting safeguards. Offseason documents also support PT changes and reset form. Merge it with depth-chart, IR, roster and contract edits in U13's one save write; do not run a second form overlay or independently spend/store progression. Conflicting player fields are integration errors, not last-writer-wins. If a roster move invalidates edits (for example save_writer forbids players edits for a released player), resolve eligibility/composition before freezing the corresponding proposal; never silently remove its edits and acknowledge its event anyway. The actual dev-field gate remains closed.
+
+**Two hashes have different jobs:** `prepared["edits_hash"]` fingerprints the unchanged progression document, not U13's final combined write. U13 must separately retain the combined document/hash, input file hash, verified output file hash and operation identity. `source_fingerprint`/`output_fingerprint` are hashes of actual save bytes, not snapshot JSON or timestamps. The engine verifies its owned output fields and stored absolute event targets; U13/save_writer verifies the entire combined write, including fields the reader omits such as raw XP balances. `writer_verified=True` represents that completed verification; it is not a request to perform verification.
+
+**Durability and recovery sequence:**
+
+1. Ingest at the agreed post-Advance-Week boundary; verify the franchise is not loaded, input fingerprint and authoritative base revisions. No raw observation may become permanent base merely because it was ingested.
+2. Prepare the weekly/offseason envelope and durably retain the PREPARED event identities, unchanged progression document/hash, combined write and recovery information **before replacing a save**. A transaction may persist PREPARED records without awarding growth; do not rely on uncommitted event rows surviving a crash.
+3. Write a candidate copy and run whole-document save_writer/readback checks. A failed writer, stale input, rejected merge or failed readback awards nothing and must not call acknowledgement.
+4. U13 durably replaces/reconciles the output under its save-write guard, retains actual output fingerprint/verification evidence, then acknowledges the unchanged progression envelope and commits its transaction. Acknowledgement advances permanent base, annual accounting, applied form and annual/C2 summaries together.
+5. If replacement succeeded but acknowledgement/commit was interrupted, use the durable operation record and observed output fingerprint to acknowledge the original events. Do not recalculate development, reroll a review or advance Madden again. If only a candidate was generated, verify whether replacement actually happened before awarding anything. Filesystem replacement and PostgreSQL commit are not one atomic operation.
+
+All progression helpers leave commits and save replacement to U13. Dry-run must roll back preparation and perform no acknowledgement. An empty pending event list means no new accounting award; it is not permission to create a synthetic award. Stale prepared or historical applied targets refuse reuse after a newer base revision. Weekly year transitions refuse skipping offseason reconciliation.
+
+Native player_attributes rows remain observations, including overlays or drift; managed permanent state is independent. Form does not alter physical attributes or Injury. The form CLI emits edits without recording applied form. Candidate rates and the ~30/70 aggregate target still need career/gameplay calibration. Existing C2 annual recovery/decline inputs handle lasting injury consequences; no new live injury instrumentation is claimed.
+
+### 5.3b Development results and explanations
+
+**Current implemented output:** `run_progression` is the annual numerical calculation, returning `{season, players_count, mean_delta, causes, results}`. Each result has player/position, planned old/new/delta OVR, per-rating differences and absolute target ratings, main cause, numerical terms, group changes and private C2 inputs. It is not the managed weekly application interface and raw rows must not be passed directly to writers/UI. In-season proposals retain `metadata.decisions` with checkpoint/review kind, evidence IDs, fractional skill entitlements, separate band changes, reasons, policy configuration and public-summary fragments. Applied receipt events distinguish awards from proposals. `get_player_progression` currently exposes annual summaries only; in-season writer coverage is still pending.
+
+**Required follow-up result view (agreed, not yet implemented):** add a versioned common projection for weekly and annual results. It must distinguish proposal/applied status; player and event identity; earned/application season and evidence cutoff; underlying before/after ratings and realized OVR; temporary form before/after and final effective targets; requested fractional learning, integer awards and carry; reason codes and evidence/reliability; and separate private band changes/desired display label from actual Madden dev-field writes. Prepare results should not be labeled as applied. U13 should preserve the engine's opaque envelope and use such a projection for logs/reporting when available; it must not infer numerical development from text causes or rebuild edits from ratings_diff.
+
+The public projection must exclude hidden ceiling/durability values, seeds and raw private metadata, while explaining recorded skill changes, form and supported causes. The private projection may retain full audit detail. Existing `cause` is a priority-selected shorthand, not proof of the largest numerical contribution; nested terms such as upkeep inside league must not be summed twice. Group rating-point totals are not OVR contributions. Planned OVR and realized rating-derived OVR must be distinguished, including clamp/rounding effects and any failure to distribute ratings. A missing target from annual calculation must remain an explicit application failure, not a successful zero-change result. Unified explanation output and in-season writer projection belong to progression/reporting follow-up, not a reason for U13 to duplicate engine rules.
+
+**U13 integration acceptance checks:** combined progression+form+depth-chart+IR write and verified receipt; one form application; failed/stale/conflicting writes award nothing; durable recovery after replacement-before-commit; duplicate input does not stack ratings; old events cannot overwrite new state; correct earned/target-year conversion; postseason/byes do not reset evidence; raw private metadata never reaches public logs. Use the scratch schema/temporary-save fixtures in tests/test_progression_{state,checkpoint,scenarios,offseason}.py as references. These are requirements for U13's own tests, not a claim that its implementation exists or has passed them.
 
 ### 5.4 Which ratings move
 
