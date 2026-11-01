@@ -241,6 +241,7 @@ def compute_player_delta(
     c2_t = wear + continuity + mentor + PERSONA_TERM + COACH_TERM
     raw_delta = age_t + dev_t + ceil_t + play_t + inj_t + noise_t + baseline_offset + league_t + perf_t + c2_t
 
+    unclamped_delta = raw_delta
     # Clamping per age band and OVR band
     if ovr >= 99:
         raw_delta = min(0.0, raw_delta)
@@ -258,7 +259,8 @@ def compute_player_delta(
     # Overall max change clamp
     raw_delta = min(float(MAX_SEASON_CHANGE), max(float(-MAX_SEASON_CHANGE), raw_delta))
 
-    new_ovr = max(OVR_MIN, min(OVR_MAX, int(round(ovr + raw_delta))))
+    rounded_target = int(round(ovr + raw_delta))
+    new_ovr = max(OVR_MIN, min(OVR_MAX, rounded_target))
     final_delta = new_ovr - ovr
 
     # Assign narrative cause tag (§5.6)
@@ -291,6 +293,10 @@ def compute_player_delta(
 
     breakdown = {
         "age": round(age_t, 2),
+        "calibration": baseline_offset,
+        "unclamped_delta": unclamped_delta,
+        "clamped_delta": raw_delta,
+        "rounded_target": rounded_target,
         "dev": round(dev_t, 2),
         "ceiling": round(ceil_t, 2),
         "play": round(play_t, 2),
@@ -1354,6 +1360,7 @@ def run_progression(
 
             ratings_diff, peak, entry, entry_source = {}, None, None, None
             new_ratings = None
+            ratings_failure = "RATINGS_UNAVAILABLE"
             if p_id in attr_map:
                 current = attr_map[p_id]
                 mental = {k: current[k] for k in MENTAL_RATINGS if k in current}
@@ -1379,8 +1386,27 @@ def run_progression(
                         lasting_damage=c2["lasting_damage"],
                     )
                     peak = {k: max(v, new_ratings.get(k, v)) for k, v in peak.items()}
-                except Exception:
+                    ratings_failure = None
+                except Exception as exc:
                     ratings_diff = {}
+                    new_ratings = None
+                    ratings_failure = "RATING_DISTRIBUTION_FAILED"
+                    log(f"player {p_id}: rating distribution failed ({type(exc).__name__}); no applicable target")
+
+            calculation = {
+                "unclamped_delta": breakdown["unclamped_delta"],
+                "clamped_delta": breakdown["clamped_delta"],
+                "clamp_adjustment": breakdown["clamped_delta"] - breakdown["unclamped_delta"],
+                "rounded_target_ovr": breakdown["rounded_target"],
+                "rounding_adjustment": breakdown["rounded_target"] - (ovr + breakdown["clamped_delta"]),
+                "bounded_target_ovr": new_ovr,
+                "boundary_adjustment": new_ovr - breakdown["rounded_target"],
+                "realized_rating_ovr": None,
+                "rating_target_gap": None,
+            }
+            if new_ratings is not None:
+                realized = ow.predict_ovr(weights_doc, TO_MADDEN_POSITION.get(p["position"], p["position"]), new_ratings)[0]
+                calculation.update(realized_rating_ovr=realized, rating_target_gap=realized-new_ovr)
 
             behaviour = behaviour_changes(p_id, season, p["position"], p["years_pro"], c2["last_stats"],
                                           (traits or {}).get(p_id), c2["mentor_id"] is not None)
@@ -1393,6 +1419,8 @@ def run_progression(
                 "new_ovr": new_ovr,
                 "delta_ovr": delta,
                 "age_term": breakdown["age"],
+                "calibration_term": breakdown["calibration"],
+                "calculation": calculation,
                 "dev_term": breakdown["dev"],
                 "ceiling_term": breakdown["ceiling"],
                 "play_term": breakdown["play"],
@@ -1402,7 +1430,10 @@ def run_progression(
                 "performance_term": breakdown["performance"],
                 "performance_notes": (perf.get(p_id) or {}).get("notes", []),
                 "ratings_diff": ratings_diff,
+                "ratings_before": dict(attr_map[p_id]) if p_id in attr_map else None,
                 "target_ratings": new_ratings,
+                "calculation_status": "FAILED" if ratings_failure else "CALCULATED",
+                "failure_code": ratings_failure,
                 "ceiling": ceiling,
                 "ceiling_source": c_source,
                 "cause": cause,
@@ -1964,6 +1995,20 @@ def in_season_checkpoint(cur, season, week, *, snapshot=None, source_fingerprint
         raise ValueError("progression hook requires snapshot/source_fingerprint and verified receipt acknowledgement")
     from engines.progression_checkpoint import prepare_weekly_pass
     return prepare_weekly_pass(cur, snapshot, season, week, source_fingerprint=source_fingerprint)
+
+
+
+
+def development_report(result, *, audience="public", doc=None):
+    """Versioned explanation view of raw annual calculation rows, never an applied receipt."""
+    from engines.progression_report import project_annual
+    if doc is None:
+        try:
+            doc = ow.load_weights()
+        except OSError:
+            doc = {}
+    return [project_annual(row, audience=audience, doc=doc) for row in result.get("results", [])]
+
 
 
 if __name__ == "__main__":

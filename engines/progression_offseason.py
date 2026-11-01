@@ -114,11 +114,13 @@ def prepare_offseason(cur, rows, *, earned_season, application_season, source_fi
             pgid = (pgid_by_player or {}).get(pid, row.get("pgid"))
             if pgid is None:
                 raise state.ProgressionStateError(f"player {pid}: save pgid missing")
-            metadata = {"week": week, "pgid": pgid, "position": row.get("position"),
+            metadata = {"week": week, "application_week": 0, "pgid": pgid, "position": row.get("position"),
                         "form": 0.0, "fractions": reconciled["fractions"], "annual_start": start,
                         "annual_entitlement": reconciled["annual_entitlement"],
                         "annual_target": target, "decisions": [], "desired_label": desired,
                         "actual_dev_write": None}
+            metadata["report_context"] = state.capture_report_context(
+                cur, current, position=row.get("position"), actual_dev_before=row.get("actual_dev_before"))
             # Full calibrated results remain private receipt metadata. The root
             # coordinator persists legacy annual/C2 state only after verified ack.
             # Pure reconciliation callers may provide minimal rows instead.

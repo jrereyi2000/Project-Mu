@@ -188,6 +188,16 @@ def _load_event(cur, identity, for_update=False):
     return _one(cur)
 
 
+def _proposal_metadata(metadata):
+    """Receipt-only reporting enrichment is not a change to immutable proposal input."""
+    out = dict(metadata)
+    out.pop("report_public", None)
+    if isinstance(out.get("report_context"), Mapping):
+        out["report_context"] = dict(out["report_context"])
+        out["report_context"].pop("actual_dev_after", None)
+    return out
+
+
 def prepare_event(cur, *, player_id, earned_season, application_season, kind, ordinal, rules_version,
                   source_fingerprint, base_revision, candidate_base, candidate_band, overlay=None,
                   evidence_ids=(), evidence_purpose="development", annual_deltas=None, metadata=None):
@@ -221,7 +231,8 @@ def prepare_event(cur, *, player_id, earned_season, application_season, kind, or
             raise ProgressionStateError("authoritative state must be bootstrapped explicitly")
         old = _load_event(cur, identity)
         if old:
-            if any(old[k] != v for k, v in proposal.items()):
+            if any((_proposal_metadata(old[k]) != _proposal_metadata(v)) if k == "metadata"
+                   else old[k] != v for k, v in proposal.items()):
                 raise ProgressionStateError("event identity already has a different proposal")
             return old
         if state["revision"] != base_revision:
@@ -301,3 +312,16 @@ def acknowledge_batch(cur, event_ids, *, source_fingerprint, output_fingerprint,
             cur.execute("UPDATE progression_events SET status='APPLIED',output_fingerprint=%s,edits_hash=%s, "
                         "applied_at=NOW() WHERE event_id=%s", (output, edits, event["event_id"]))
         return [_load_event(cur, identity) for identity in identities]
+
+
+def capture_report_context(cur, current, *, position=None, actual_dev_before=None):
+    """Immutable pre-event audit facts; absence is unknown, never reconstructed from outcomes."""
+    cur.execute("SELECT overlay, metadata->'form' AS form FROM progression_events "
+                "WHERE player_id=%s AND base_revision=%s AND status='APPLIED'",
+                (current["player_id"], current["revision"] - 1))
+    previous = _one(cur)
+    return {"before_base": dict(current["base_ratings"]),
+            "before_band": json.loads(_canonical(current["band"])),
+            "before_overlay": dict(previous["overlay"]) if previous else {},
+            "before_form": previous["form"] if previous else 0.0,
+            "position": position, "actual_dev_before": actual_dev_before}

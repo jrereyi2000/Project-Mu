@@ -720,3 +720,15 @@ def test_bottom_quarter_neutral_or_missing_stats_cannot_demote():
     assert bottom_quarter({i: {"score": 0, "group": "OL"} for i in range(4)}) == set()
     perf = {i: {"score": i, "group": "QB"} for i in range(8)}
     assert bottom_quarter(perf) == {0, 1}
+
+
+def test_explanation_tracks_calibration_and_clamp_without_double_counting_upkeep(mock_aging_curves):
+    _,new,terms,_=compute_player_delta(player_id=771,position="QB",age=23,ovr=99,
+        dev_trait="Star",ceiling=99,games_played=17,downs_played=900,is_starter=True,
+        is_ir=False,injury_weeks=0,season=2037,aging_curves=mock_aging_curves,
+        star_adj=20,upkeep=-2)
+    assert new==99 and terms["unclamped_delta"]>0 and terms["clamped_delta"]==0
+    assert terms["rounded_target"]==99
+    additive=("age","calibration","dev","ceiling","play","injury","noise","league",
+              "performance","wear","continuity","mentor","persona","coach")
+    assert sum(terms[key] for key in additive)==pytest.approx(terms["unclamped_delta"],abs=.05)

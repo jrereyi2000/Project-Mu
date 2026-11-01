@@ -3810,31 +3810,106 @@ except Exception:
 
 @tool
 def get_player_progression(player_identifier: str, season: int = 0) -> str:
-    """Fetch recorded offseason OVR and dev-tier changes with their main cause for a player name or ID.
-    Ceilings, durability and their numeric inputs are hidden. Missing records mean unknown, not zero change.
+    """Fetch verified progression reports and compatible annual history for a player name or ID.
+    Only applied, article-visible public reports are returned. Hidden potential, private
+    audit inputs and prepared changes are excluded. Missing history means unknown.
     """
     try:
+        from engines.progression_report import sanitize_public, REASON_CODES, CAUSE_MAP, LABELS, _num
         s_val = resolve_season(season)
-        # Explicit tool arguments must not escape the article's temporal boundary.
-        if context_season() is not None:
-            s_val = min(s_val, context_season())
+        article_season = context_season()
+        if article_season is not None:
+            s_val = min(s_val, article_season)
+        cut = cutoff_week(s_val)
+        reports, rows, annual_report_seasons = [], [], set()
+        malformed = False
         with psycopg.connect(db.db_conn_info) as conn:
             with conn.cursor() as cur:
                 pid = _resolve_player_id(cur, player_identifier)
                 if not pid:
                     return "Player not found."
-                cur.execute("SELECT to_regclass('public.player_progression_history')")
-                if not cur.fetchone()[0]:
+                cur.execute("SELECT to_regclass('progression_events'), "
+                            "to_regclass('player_progression_history')")
+                has_events, has_history = cur.fetchone() or (None, None)
+                if not has_events and not has_history:
                     return "No progression history recorded. Do not infer changes or causes."
-                cur.execute("""
-                    SELECT season, old_ovr, new_ovr, delta_ovr, cause, dev_before, dev_after
-                    FROM player_progression_history
-                    WHERE player_id = %s AND season <= %s AND checkpoint = 'OFFSEASON'
-                    ORDER BY season DESC LIMIT 5
-                """, (pid, s_val))
-                columns = ("season", "old_ovr", "new_ovr", "delta_ovr", "cause", "dev_before", "dev_after")
-                rows = [dict(zip(columns, row)) for row in cur.fetchall()]
-        return json.dumps({"player_id": pid, "changes": rows,
-                           "note": "Only recorded causes may be cited; hidden potential and durability are never disclosed."})
+                if has_events:
+                    # Select only the persisted public projection, never raw event metadata.
+                    # Missing/malformed current-season week is not visible under an article cutoff.
+                    cur.execute("""
+                        SELECT application_season, kind, event_id, metadata->'report_public'
+                        FROM progression_events
+                        WHERE player_id = %s AND status = 'APPLIED' AND application_season <= %s
+                          AND (application_season < %s OR %s::integer IS NULL OR
+                               CASE
+                                 WHEN metadata ? 'application_week' THEN
+                                   CASE WHEN metadata->>'application_week' ~ '^[0-9]{1,3}$'
+                                        THEN (metadata->>'application_week')::integer END
+                                 WHEN kind = 'OFFSEASON' AND application_season > earned_season THEN 0
+                                 WHEN metadata->>'week' ~ '^[0-9]{1,3}$'
+                                   THEN (metadata->>'week')::integer END < %s)
+                        ORDER BY application_season DESC, applied_at DESC, event_id
+                        LIMIT 20
+                    """, (pid, s_val, s_val, cut, cut))
+                    for application_season, kind, identity, stored in cur.fetchall():
+                        try:
+                            public = sanitize_public(stored)
+                        except (TypeError, ValueError, KeyError):
+                            public = None
+                        if (public is None or public.get("status") != "APPLIED"
+                            or public.get("identity", {}).get("player_id") != pid
+                            or public.get("identity", {}).get("kind") != kind
+                            or public.get("identity", {}).get("event_id") != identity
+                            or public.get("calendar", {}).get("application_season") != application_season):
+                            malformed = True
+                            continue
+                        # Recheck projection time too, in case the stored public payload was contaminated.
+                        report_week = public["calendar"].get("week")
+                        if application_season == s_val and cut is not None and (
+                                report_week is None or report_week >= cut):
+                            malformed = True
+                            continue
+                        reports.append(public)
+                        if kind == "OFFSEASON":
+                            annual_report_seasons.add(application_season)
+                if has_history:
+                    # Once a receipt-backed annual event exists, do not reveal its old
+                    # summary earlier via a legacy row (including malformed public reports).
+                    dedup = """AND NOT EXISTS (
+                        SELECT 1 FROM progression_events e WHERE e.player_id = h.player_id
+                        AND e.application_season = h.season AND e.kind = 'OFFSEASON'
+                        AND e.status = 'APPLIED')""" if has_events else ""
+                    cur.execute(f"""
+                        SELECT h.season, h.old_ovr, h.new_ovr, h.delta_ovr, h.cause, h.dev_before, h.dev_after
+                        FROM player_progression_history h
+                        WHERE h.player_id = %s AND h.season <= %s AND h.checkpoint = 'OFFSEASON'
+                        {dedup}
+                        ORDER BY h.season DESC LIMIT 5
+                    """, (pid, s_val))
+                    columns = ("season", "old_ovr", "new_ovr", "delta_ovr", "cause", "dev_before", "dev_after")
+                    for row in cur.fetchall():
+                        if row[0] in annual_report_seasons:
+                            continue
+                        legacy = dict(zip(columns, row))
+                        # A legacy row is also an untrusted public boundary: do not
+                        # forward arbitrary cause/label strings or nonfinite numbers.
+                        cause = legacy["cause"]
+                        cause = CAUSE_MAP.get(cause, cause) if isinstance(cause, str) else None
+                        legacy["cause"] = cause if cause in REASON_CODES else None
+                        for key in ("dev_before", "dev_after"):
+                            value = legacy[key]
+                            legacy[key] = value if isinstance(value, str) and value in LABELS else None
+                        for key, low, high in (("old_ovr", 0, 99), ("new_ovr", 0, 99),
+                                               ("delta_ovr", -99, 99)):
+                            value = _num(legacy[key])
+                            legacy[key] = value if value is not None and low <= value <= high else None
+                        rows.append(legacy)
+        note = ("Only recorded public causes may be cited; missing progression is unknown, not zero change. "
+                "Permanent rating changes and temporary form are separate. Desired development labels are not "
+                "verified in-game dev changes; use actual_before/actual_after for saved traits. "
+                "Cause codes identify recorded rationale, not exact additive OVR attribution.")
+        if malformed:
+            note += " Some stored reports were unavailable or malformed; do not infer their contents."
+        return json.dumps({"player_id": pid, "changes": rows, "events": reports, "note": note})
     except Exception:
         return "Progression history unavailable. Do not infer changes or causes."

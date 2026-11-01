@@ -548,7 +548,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 - Preserve `{document,event_ids,source_fingerprint,edits_hash}` unchanged. Separately journal U13's final combined document/hash and actual file fingerprints; resolve conflicting edits before freezing proposals.
 - After writer/readback succeeds and output replacement is durably known, call `progression_checkpoint.acknowledge_pass(cur, prepared, verified_output_snapshot, output_fingerprint=output_save_sha256, writer_verified=True)` and commit. The engine never commits or replaces the save. Persist enough PREPARED/recovery information before replacement to recover replacement-before-DB-commit without rerolling.
 - Explicit neutral setup/migration is required. Do not call standalone form storage or another overlay over the engine output. Missing context/receipt or stale revision is an actionable integration failure, not "no in-season hook".
-- Common weekly/annual explanation projection and in-season writer coverage are documented as pending progression follow-up in §5.3b. Preserve event/reason provenance without exposing raw hidden-state metadata; do not invent a competing result schema or infer causes from prose.
+- Common weekly/annual explanation projection and in-season writer coverage are implemented in PROGRESSION_PLAN §5.3b: `progression.development_report`, `progression_checkpoint.explain_prepared`, and APPLIED `event.metadata.report_public`. Use the public proposal view for dry-run logs and the persisted applied view after successful acknowledgement; do not publish private audit or infer development from prose. These helpers do not change the application envelope or its edits hash.
 
 ### U14: Franchise API and game launch
 

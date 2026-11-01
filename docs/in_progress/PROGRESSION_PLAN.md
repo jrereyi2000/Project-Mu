@@ -1,6 +1,6 @@
 # Project Mu: Player Progression Plan
 
-**Status (2026-10-31):** revised evidence/calendar, fractional development/band policy, receipt-driven permanent-state ledger, offseason reconciliation and save/form/drift adapters are implemented. Scratch event/receipt tests and temporary real-save write/readback cover no-double-pay, form separation, playoff-run review and retries. U13 must consume the proposal/receipt contract below before live activation. Personality effects and independent gameplay ability assignment remain deferred; the new rates, opportunity thresholds and label mapping are calibration candidates.
+**Status (2026-10-31):** revised evidence/calendar, fractional development/band policy, receipt-driven permanent-state ledger, offseason reconciliation and save/form/drift adapters are implemented. Scratch event/receipt tests and temporary real-save write/readback cover no-double-pay, form separation, playoff-run review and retries. Shared public/private explanations and applied-only in-season writer access are implemented. U13 must consume the proposal/receipt contract below before live activation. Personality effects and independent gameplay ability assignment remain deferred; the new rates, opportunity thresholds and label mapping are calibration candidates.
 **Accepted revision (JR, 2026-10-31):** the calendar, form, band-review and dev-label rules below supersede the older offseason-only and two-season breakthrough rules. Pure policy and receipt adapters implement the revision; live scheduling/application and tuning acceptance are separate gates.
 
 **Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md)). It needs the save reader, the save writer and the OVR weights from §4–§5 there.  
@@ -210,13 +210,45 @@ Native player_attributes rows remain observations, including overlays or drift; 
 
 ### 5.3b Development results and explanations
 
-**Current implemented output:** `run_progression` is the annual numerical calculation, returning `{season, players_count, mean_delta, causes, results}`. Each result has player/position, planned old/new/delta OVR, per-rating differences and absolute target ratings, main cause, numerical terms, group changes and private C2 inputs. It is not the managed weekly application interface and raw rows must not be passed directly to writers/UI. In-season proposals retain `metadata.decisions` with checkpoint/review kind, evidence IDs, fractional skill entitlements, separate band changes, reasons, policy configuration and public-summary fragments. Applied receipt events distinguish awards from proposals. `get_player_progression` currently exposes annual summaries only; in-season writer coverage is still pending.
+**Implemented (2026-10-31):** `engines/progression_report.py` supplies a versioned common projection for weekly events and annual numerical calculations. Reporting is separate from the application envelope: explanations do not replace the document/event IDs/source/edits hash retained by U13 and cannot award development. Default audience is public; private audit is an explicit opt-in.
 
-**Required follow-up result view (agreed, not yet implemented):** add a versioned common projection for weekly and annual results. It must distinguish proposal/applied status; player and event identity; earned/application season and evidence cutoff; underlying before/after ratings and realized OVR; temporary form before/after and final effective targets; requested fractional learning, integer awards and carry; reason codes and evidence/reliability; and separate private band changes/desired display label from actual Madden dev-field writes. Prepare results should not be labeled as applied. U13 should preserve the engine's opaque envelope and use such a projection for logs/reporting when available; it must not infer numerical development from text causes or rebuild edits from ratings_diff.
+```python
+from engines import progression, progression_checkpoint, progression_report
 
-The public projection must exclude hidden ceiling/durability values, seeds and raw private metadata, while explaining recorded skill changes, form and supported causes. The private projection may retain full audit detail. Existing `cause` is a priority-selected shorthand, not proof of the largest numerical contribution; nested terms such as upkeep inside league must not be summed twice. Group rating-point totals are not OVR contributions. Planned OVR and realized rating-derived OVR must be distinguished, including clamp/rounding effects and any failure to distribute ratings. A missing target from annual calculation must remain an explicit application failure, not a successful zero-change result. Unified explanation output and in-season writer projection belong to progression/reporting follow-up, not a reason for U13 to duplicate engine rules.
+# Annual numerical calculation: CALCULATED, never an applied receipt.
+calculation_reports = progression.development_report(result, audience="public")
 
-**U13 integration acceptance checks:** combined progression+form+depth-chart+IR write and verified receipt; one form application; failed/stale/conflicting writes award nothing; durable recovery after replacement-before-commit; duplicate input does not stack ratings; old events cannot overwrite new state; correct earned/target-year conversion; postseason/byes do not reset evidence; raw private metadata never reaches public logs. Use the scratch schema/temporary-save fixtures in tests/test_progression_{state,checkpoint,scenarios,offseason}.py as references. These are requirements for U13's own tests, not a claim that its implementation exists or has passed them.
+# Retained weekly/offseason event proposals: PROPOSED before acknowledgement.
+proposal_reports = progression_checkpoint.explain_prepared(cur, prepared, audience="public")
+
+# Internal audit only; do not send this view to writers/UI/public logs.
+audit_reports = progression_checkpoint.explain_prepared(cur, prepared, audience="private")
+
+# After the existing write/verify/replace/acknowledge sequence from §5.3a:
+# each acknowledged event has metadata["report_public"] with APPLIED status.
+# Pure projections are also available individually:
+# progression_report.project_event(event, audience="public" or "private")
+# progression_report.project_annual(row, audience="public" or "private")
+# progression_report.sanitize_public(stored_json) -> public dict or None
+```
+
+| Schema_version1 field | Meaning |
+|---|---|
+| `status` | CALCULATED annual numerical result; PROPOSED prepared event; APPLIED only from a verified acknowledgement. Never infer application from report generation. |
+| `identity`, `calendar` | Player/event/kind, earned/application season and application week. Offseason targeting the next year is week0 there; original earned-year stage remains private. |
+| `permanent` | Underlying before/after OVR, separate planned OVR, integer rating changes and before/after OVR source (RATINGS, RECORDED_OVR, or unknown). Proposed after-values remain candidates. |
+| `form` | Requested before/after form, absolute effective before/after OVR, and explicitly named OVR contribution deltas. Form is not permanent development. |
+| `reasons`, `evidence`, `failures` | Recorded safe codes, evidence IDs/count and recorded reliability when available. No fabricated aggregate confidence across multiple different decisions. Missing context and distribution failures are explicit, not zero-change success. |
+| `development_label` | Desired band-derived display label, actual observed before trait, and actual after trait only from verified readback. Raw annual dev_after does not imply a desired band label or an applied dev change. |
+| `audit` (private only) | Full before/after ratings, requested fractional learning/carry, band changes, numeric term breakdown, calibration/clamp/rounding/rating-target-gap details and provenance. |
+
+New event preparation captures authoritative before-base/band and the overlay attached to that revision, plus observed actual dev-before; it does not infer those facts from resulting deltas. Acknowledgement captures actual dev-after and stores a frozen `report_public` alongside applied state in the same savepoint. If reporting fails, the whole acknowledgement rolls back. Receipt-only report enrichment does not change the original proposal's replay identity. Older records without the before context remain unknown rather than reconstructed; existing events are not automatically backfilled.
+
+`run_progression` retains its internal `{season,players_count,mean_delta,causes,results}` calculation interface and now records ratings_before, explicit distribution failure/status, calibration offset and numerical clamp/rounding facts. Use the projection helpers for explanations. A main cause is a priority-selected shorthand, not proof of the largest numeric contribution; positive ceiling-pull cause CEILING is publicly described as POTENTIAL_HEADROOM. Upkeep is nested inside league and must not be counted twice. Group rating-point totals are not OVR contributions. Planned OVR, rating-derived OVR and actual acknowledged state are distinct.
+
+**Writer access:** `get_player_progression` returns sanitized legacy `changes` and applied public `events`. It reads only metadata.report_public from APPLIED events, revalidates nested fields/player/event/calendar, excludes the article's current week and future seasons, and suppresses matching legacy annual fallback whenever a verified annual event exists. Thus malformed/invisible event data cannot leak through fallback. Next-year offseason week0 is visible to that year's week1 article. Legacy cause/label/numeric values are also whitelisted; absent or unsupported records stay unknown. Private metadata, seeds, durability and numerical potential never reach this tool. The existing dispatcher registration is unchanged.
+
+**U13 integration acceptance checks:** compose progression+form+depth-chart+IR once; preserve the envelope and use public proposal reports for dry-run logs, applied report_public only after acknowledgement for successful logs. Verify failed/stale/conflicting writes award nothing, durable recovery after replacement-before-commit, no duplicate awards, historical replay refusal, earned/target-year conversion, postseason/byes and public-data filtering. Reference tests/test_progression_{state,checkpoint,scenarios,offseason,report,reporting_integration,writer}.py. Engine/reporting tests do not establish that U13 itself is implemented or accepted.
 
 ### 5.4 Which ratings move
 
@@ -434,7 +466,7 @@ Phases F and G can start before D as data (traits seeded, shown to writers) with
 
 ## 10. Spec and verification status
 
-The engine and receipt adapters are documented in PROJECT_SPEC §2.21 and the ledger schema in §3.3n. Validation on 2026-10-31 included a 291-test progression/form/save/loader/watcher/writer batch and focused follow-up integration regressions. Isolated schemas in madden_test exercised migration idempotence, failed/stale receipts, cross-player rollback, unchanged permanent base after observed/form ingestion, per-rating annual reconciliation, fresh-evidence consumption, historical replay refusal, window-specific skill evidence and postseason review. A temporary copy of the real sample save passed actual save_writer write/readback, byte fingerprints and receipt acknowledgement; its original bytes were unchanged.
+The engine, receipt adapters and implemented explanation/writer views are documented in PROJECT_SPEC §2.21 and the ledger schema in §3.3n. Validation on 2026-10-31 included the initial 291-test progression batch and a subsequent 354-test progression/reporting/form/save/loader/watcher/writer batch. Final explanation follow-ups passed 35 numerical unit checks and 93 reporting/receipt/writer checks, including real isolated PostgreSQL temporal queries, legacy privacy filtering, projection-failure rollback and idempotent report enrichment. Isolated schemas in madden_test exercised migration idempotence, failed/stale receipts, cross-player rollback, unchanged permanent base after observed/form ingestion, per-rating annual reconciliation, fresh-evidence consumption, historical replay refusal, window-specific skill evidence and postseason review. A temporary copy of the real sample save passed actual save_writer write/readback, byte fingerprints and receipt acknowledgement; its original bytes were unchanged.
 
 The diagnostic 2035→2036 backtest remains MAE 1.134 on 1,385 pairs. The existing five-season OVR-turnover simulation passes (90+ count 143–147, mean OVR 78.08–78.10). This baseline is not a validation of every new multi-year event, injury or personality trajectory, nor of the ~30/70 aggregate split. Candidate policy rates, opportunity/reliability minima and dev-label mapping still need career/gameplay tuning. The scratch migration was not applied to the archive or a live franchise.
 

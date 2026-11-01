@@ -39,7 +39,7 @@ def _used(applied, kind):
 def prepare_player(cur, *, player_id, pgid, earned_season, application_season,
                    as_of_week, source_fingerprint, player_games, team_games,
                    position, age=None, season_closed=False, playoff_run_closed=False,
-                   form_value=0.0, supported_skills=(), notes=(), config=None, doc=None):
+                   form_value=0.0, supported_skills=(), notes=(), actual_dev_before=None, config=None, doc=None):
     """Prepare one composite event/player. Frozen evidence cutoffs make retries stable.
 
     Ordinary checkpoint evidence and breakout review evidence are accounted separately.
@@ -86,7 +86,7 @@ def prepare_player(cur, *, player_id, pgid, earned_season, application_season,
         for rating, amount in result["skill_deltas"].items():
             requested[rating] += amount
         decisions.append({"kind": checkpoint["group"], "evidence_ids": sorted(ids),
-                          "result": result})
+                          "evidence": observed, "result": result})
     review = evidence.build_evidence(
         player_games, season=earned_season, as_of_week=as_of_week, team_games=team_games,
         playoff_run_closed=playoff_run_closed, accounted_evidence_ids=_used(applied, "REVIEW"))
@@ -101,7 +101,7 @@ def prepare_player(cur, *, player_id, pgid, earned_season, application_season,
         for rating, amount in result["skill_deltas"].items():
             requested[rating] += amount
         decisions.append({"kind": "REVIEW", "evidence_ids": review.get("fresh_evidence_ids", review["evidence_ids"]),
-                          "result": result})
+                          "evidence": review, "result": result})
     # Fractional learning is retained only by applied events, never by prepared plans.
     latest = max(applied, key=lambda e: e["base_revision"], default=None)
     fractions = latest["metadata"].get("fractions", {}) if latest else {}
@@ -115,11 +115,13 @@ def prepare_player(cur, *, player_id, pgid, earned_season, application_season,
         if actual.get(rating, 0) != delta:
             carry[rating] = 0.0
     overlay = form.overlay(candidate, save_position, None, form_value, doc)
-    metadata = {"week": as_of_week, "pgid": pgid, "position": position,
+    metadata = {"week": as_of_week, "application_week": as_of_week, "pgid": pgid, "position": position,
                 "decisions": decisions, "fractions": carry, "form": float(form_value),
                 "input_notes": list(notes),
                 "annual_start": applied[0]["metadata"].get("annual_start", base) if applied else base,
                 "desired_label": policy.summarize_band(band, config), "actual_dev_write": None}
+    metadata["report_context"] = state.capture_report_context(
+        cur, current, position=position, actual_dev_before=actual_dev_before)
     consumed = sorted({str(gid) for d in decisions for gid in d["evidence_ids"]})
     return state.prepare_event(
         cur, player_id=player_id, earned_season=earned_season, application_season=application_season,
@@ -146,7 +148,10 @@ def prepare_pass(cur, snapshot, season, week, *, source_fingerprint,
     """
     events = []
     with state._savepoint(cur):
+        players = {p["pgid"]: p for p in snapshot.get("players", []) if p.get("pgid") is not None}
         for pid, inputs in sorted(player_inputs.items()):
+            inputs = dict(inputs)
+            inputs.setdefault("actual_dev_before", players.get(inputs.get("pgid"), {}).get("dev_trait"))
             events.append(prepare_player(cur, player_id=pid, earned_season=season,
                 application_season=season, as_of_week=week, source_fingerprint=source_fingerprint,
                 form_value=(forms or {}).get(pid, 0.0), config=config, **inputs))
@@ -256,7 +261,35 @@ def acknowledge_pass(cur, prepared, observed, *, output_fingerprint, writer_veri
                 row.update(event["candidate_band"])
                 row["ceiling"] = max(event["candidate_band"]["group_ceilings"][k] for k in ("technical", "mental"))
                 progression.store_progression(cur, [row], event["application_season"])
+        # Publish a versioned whitelist projection only after verified application.
+        # It lives in the same acknowledgement savepoint as the permanent award.
+        from engines.progression_report import project_event
+        report_weights = ow.load_weights()
+        for event in events:
+            md = event["metadata"]
+            context = dict(md.get("report_context") or {})
+            context["actual_dev_after"] = observed_players[md["pgid"]].get("dev_trait")
+            md["report_context"] = context
+            # The first receipt projection is immutable on retry, including unknown
+            # facts from legacy events that did not capture a before context.
+            if "report_public" not in md:
+                md["report_public"] = project_event(event, audience="public", doc=report_weights)
+                cur.execute("UPDATE progression_events SET metadata=%s::jsonb WHERE event_id=%s AND status='APPLIED'",
+                            (json.dumps(md, sort_keys=True, allow_nan=False), event["event_id"]))
         return events
+
+
+def explain_prepared(cur, prepared, *, audience="public"):
+    """Read-only report projection; retain the original preparation envelope for application."""
+    from engines.progression_report import project_event
+    reports = []
+    weights = ow.load_weights()
+    for identity in prepared["event_ids"]:
+        event = state._load_event(cur, identity)
+        if event is None:
+            raise state.ProgressionStateError("unknown progression event")
+        reports.append(project_event(event, audience=audience, doc=weights))
+    return reports
 
 
 def bootstrap_pass(cur, snapshot, season, *, source_fingerprint, form_neutral=False,
@@ -311,7 +344,9 @@ def prepare_offseason_pass(cur, snapshot, season, *, source_fingerprint, config=
         traits=psave.snapshot_traits(snapshot, ids), baseline_ratings=bases, band_overrides=bands,
         log=lambda message: None)
     rows = [row for row in result["results"] if row["player_id"] in bases]
+    observed_players = {p["pgid"]: p for p in snapshot.get("players", [])}
     for row in rows:
+        row["actual_dev_before"] = observed_players.get(ids.get(row["player_id"]), {}).get("dev_trait")
         # Preserve lasting physical injury-band changes while keeping the reviewed
         # stored technical/mental bands supplied to annual calculation.
         if row.get("group_ceilings"):
