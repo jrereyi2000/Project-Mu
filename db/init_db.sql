@@ -1671,7 +1671,7 @@ CREATE TABLE IF NOT EXISTS persona_sliders (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (persona_type, persona_id),
-    CONSTRAINT chk_persona_sliders_budget CHECK (temperament + sociability + confidence + openness + warmth + drive = 30)
+    CONSTRAINT chk_persona_sliders_budget CHECK (temperament + sociability + confidence + openness + warmth + drive BETWEEN 24 AND 36)
 );
 CREATE INDEX IF NOT EXISTS idx_persona_sliders_type ON persona_sliders (persona_type);
 

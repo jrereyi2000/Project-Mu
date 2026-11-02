@@ -1,8 +1,9 @@
 """Writer and pundit personas (docs/in_progress/PERSONALITY_PLAN.md phase 1).
 
 Each persona in newsroom/config/agent_personas.json ("archetypes") is character, not orders: a voice, six sliders
-with a fixed budget, traits from newsroom/config/persona_traits.json, views that each apply only in some
-situations, a pool of optional signature moves, one want and one fear, and habits per format (ARTICLE, POST).
+with a total in a 24-36 band (seeded at 30), traits from newsroom/config/persona_traits.json, views that each apply
+only in some situations, a pool of optional signature moves, one want and one fear, and habits per format (ARTICLE,
+POST).
 
 render_persona() turns one persona into the ROLE & PERSONA block of a prompt. It shows only the views whose
 `when` tags match this piece (its article type or post kind, the season phase, and the subject team's data), offers
@@ -20,7 +21,9 @@ PERSONAS_PATH = os.path.join(CONFIG_DIR, "agent_personas.json")
 TRAITS_PATH = os.path.join(CONFIG_DIR, "persona_traits.json")
 
 SLIDERS = ("temperament", "sociability", "confidence", "openness", "warmth", "drive")
-SLIDER_BUDGET = 30
+SLIDER_BUDGET = 30          # the total seed_sliders deals; every seeded persona sums to exactly this
+SLIDER_BUDGET_MIN = 24      # validation band: hand edits and event moves may leave the total anywhere in 24-36
+SLIDER_BUDGET_MAX = 36
 # (low end, high end) words; 4-6 is unremarkable and left out of the sentence.
 SLIDER_WORDS = {
     "temperament": ("calm and even-keeled", "volatile and quick to boil over"),
@@ -157,7 +160,8 @@ def validate_trait_catalogue(traits: dict = None) -> bool:
 
 
 def validate_slider_budget(sliders: dict) -> bool:
-    """Validates that a persona's 6 sliders are in [0, 10] and sum to exactly SLIDER_BUDGET (30)."""
+    """Validates that a persona's 6 sliders are integers in [0, 10] with a total in [SLIDER_BUDGET_MIN,
+    SLIDER_BUDGET_MAX] (24-36). Seeding still deals exactly SLIDER_BUDGET (30)."""
     if not isinstance(sliders, dict):
         raise ValueError("Sliders must be a dictionary")
     diff = set(SLIDERS) - set(sliders.keys())
@@ -173,8 +177,8 @@ def validate_slider_budget(sliders: dict) -> bool:
         if not (0 <= v <= 10):
             raise ValueError(f"Slider '{s}' value {v} out of bounds [0, 10]")
     total = sum(sliders[s] for s in SLIDERS)
-    if total != SLIDER_BUDGET:
-        raise ValueError(f"Slider total {total} does not match budget {SLIDER_BUDGET}")
+    if not (SLIDER_BUDGET_MIN <= total <= SLIDER_BUDGET_MAX):
+        raise ValueError(f"Slider total {total} outside budget band {SLIDER_BUDGET_MIN}-{SLIDER_BUDGET_MAX}")
     return True
 
 
@@ -416,6 +420,14 @@ def save_persona(persona_type: str, persona_id: str, sliders: dict = None,
     return get_persona(persona_type, persona_id, cur=cur)
 
 
+def _sliders_ok(sliders) -> bool:
+    """validate_slider_budget as a yes/no, for loaders that skip bad rows instead of raising."""
+    try:
+        return validate_slider_budget(sliders)
+    except ValueError:
+        return False
+
+
 def seed_writers_to_db(cur, personas_data: dict = None) -> int:
     """Seeds writer personas from agent_personas.json into the DB tables, preserving identities."""
     if cur is None or not persona_tables_exist(cur, views=True):
@@ -425,7 +437,7 @@ def seed_writers_to_db(cur, personas_data: dict = None) -> int:
     count = 0
     for k, p in personas_data.items():
         s = p.get("sliders", {})
-        if set(s.keys()) == set(SLIDERS) and sum(s.values()) == SLIDER_BUDGET:
+        if _sliders_ok(s):
             cur.execute("""
                 INSERT INTO persona_sliders (persona_type, persona_id, temperament, sociability,
                                              confidence, openness, warmth, drive, updated_at)

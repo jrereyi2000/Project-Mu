@@ -1,10 +1,10 @@
 # Project Mu: Personality and Agents Plan
 
 **Status:** phases 1, 2, and 3 built (2026-10-28, spec §3.3f, §7.11); phase 4 feature-independent core built (2026-10-31, §5.2), evidence samples and feature policies remain for review; no production profiles seeded or effects activated; phases 5–6 not started. See [Panthers review sample](PERSONALITY_PANTHERS_SAMPLE.md) and [generated-player effect matrix and examples](PERSONALITY_GENERATED_EFFECTS_DESIGN.md) (design for review; no activation).
-**Expands:** V2.13 of [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md). Feeds [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md) §6–§7 and [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) (agents, free agency, retirements).
+**Expands:** V2.13 of [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md). Feeds [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md) §6–§7 and [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) (free agency, retirements).
 **Writer personas** can start before the PC (§9, phase 1).
 
-One personality system for everyone in the universe (writers, GMs, players, coaches, owners, agents, scouts), modelled on The Sims: a few sliders with a fixed budget, a handful of traits drawn from a catalogue, and a mood that comes from the week's data. Traits are nudges that mix, so no single belief takes over a character.
+One personality system for everyone in the universe (writers, GMs, players, coaches, owners, scouts), modelled on The Sims: a few sliders with a budget, a handful of traits drawn from a catalogue, and a mood that comes from the week's data. Traits are nudges that mix, so no single belief takes over a character.
 
 ---
 
@@ -48,7 +48,7 @@ A belief written as a rule for every piece becomes a catchphrase. Adding a want 
 
 ### 4.1 Sliders (everyone; numbers with a budget)
 
-Six sliders from 0 to 10, with a total budget (proposed 30 of 60), so nobody is high on everything. A high setting in one place costs something somewhere else, which is what makes characters distinct (The Sims 1–2: 25 points over five sliders).
+Six sliders from 0 to 10. The total must stay between 24 and 36 (of 60), and seeding deals exactly 30, so nobody is high on everything. A high setting in one place still costs something somewhere else, which is what makes characters distinct (The Sims 1–2: 25 points over five sliders). Why a band and not an exact 30 (JR, 2026-11-02): an exact total makes some characters impossible and ties unrelated sliders together, because one slider can't move unless another moves the other way.
 
 | Slider | 0 ↔ 10 |
 |---|---|
@@ -105,11 +105,13 @@ Worked out at prompt time, never stored as identity:
 | New team, new job | Eager / uncertain |
 | Injury | Anxious / determined (by traits) |
 
+When more than one situation applies, they are read in this order: own role or health first, then contract or job security, then team results. The first match is the main mood and the next one is an undertone. Example: a benched starter in a contract year on a 10–0 team is Frustrated, with an undertone of Pressure.
+
 Mood shifts tone for the week without changing who the agent is.
 
 ### 4.7 Relationships
 
-A row per pair with history: `trust` (−1 to 1), `last_interaction` (what and when), a short note, and tags (`RIVAL`, `MENTOR`, `FEUD`, `FORMER_TEAMMATE`). Updated after interactions the engines record (trades, negotiations, articles naming someone, press conferences, firings). Prompts include the relationship only when that person is involved.
+One-way rows (A → B), as `persona_relationships` stores them (`persona_type/persona_id → target_type/target_id`). A's view of B and B's view of A are separate rows, so one-sided grudges and unreturned loyalty are allowed. Each row holds history: `trust` (−1 to 1), `last_interaction` (what and when), a short note, and tags (`RIVAL`, `MENTOR`, `FEUD`, `FORMER_TEAMMATE`). Updated after interactions the engines record (trades, negotiations, articles naming someone, press conferences, firings). Prompts include the relationship only when that person is involved.
 
 ### 4.8 Memory
 
@@ -121,7 +123,7 @@ The newsroom's model, extended to every agent: an episodic log (takes, quotes, d
 
 1. **Draw the numbers.** Sliders and traits are dealt from a seed (`sha256("persona:" + role + ":" + id)`) and spread across the league so the mix is realistic: a few divas, some mentors, most in between. Stratified like GM traits in `engines/gm_personas.py`; checked so no team or desk gets an odd cluster.
 2. **Start from what is known.** Madden's `Player.Focus` (`LoveOfTheGame`, `Winning`, `Financial`, `PersonalAccolades`) sets ambition odds for players. Real-world writers and coaches get traits that fit their known public style (hallucination policy: invented narrative, never contradicting data). JR can adjust any persona before it is first used.
-3. **Write the identity once.** The model writes name (where needed), a short bio and voice notes from the numbers. Validated and stored; never regenerated.
+3. **Write the identity once.** The model writes name (where needed), a short bio and voice notes from the numbers. Validated and stored. Bio facts are fixed and never regenerated. Voice notes are rewritten after any logged trait or slider change, so the voice follows the character.
 4. **Let it grow.** Memory and relationships fill as the agent acts; summaries are rewritten as entries pile up.
 
 ### 5.1 Approved rollout direction (JR, 2026-10-30)
@@ -138,13 +140,13 @@ Design deliverable drafted: [generated-player effect matrix and examples](PERSON
 
 `personality/README.md` documents the implemented API and ownership boundaries. The core supplies stable universe identity, explicit one-time initialization, verified aliases, versioned catalogue/profile snapshots, provenance-scoped feature views and audited one-change-per-season evolution candidates. Persistence reuses existing slider/trait/history tables with sidecars in `2027_01_16_personality_core.sql`; no production migration or seeding has run. Existing writer/GM paths are unchanged. Generated initialization still seeds four traits and a total of 30; real/unknown defaults are neutral, with sparse evidence permissions for reviewed real people. Missing reads never generate profiles and storage failures are explicit.
 
-Contracts, progression, relationships/mood, trade requests and retirement remain separate feature policies. The core checks and records a candidate; it does not decide that a title, payday or benching should cause one. Verified pipeline identity binding, classification/adoption workflows and feature activation remain integration work. Unknown identities must not be guessed as generated. The current SQL has an exact-30 constraint; the separately owned slider-band change must migrate that constraint as well as the Python validator before single-slider evolution is possible. Core trait evolution already works, and future slider evolution adopts the active validated band without reseeding.
+Contracts, progression, relationships/mood, trade requests and retirement remain separate feature policies. The core checks and records a candidate; it does not decide that a title, payday or benching should cause one. Verified pipeline identity binding, classification/adoption workflows and feature activation remain integration work. Unknown identities must not be guessed as generated. The slider band (2026-11-02) moved both the Python validator and the SQL constraint (`2027_01_17_persona_slider_band.sql`) from an exact 30 to 24–36, so single-slider evolution is possible once that migration is applied. Core trait evolution already works, and future slider evolution adopts the active validated band without reseeding.
 
 Parallel work can proceed on cap history/career earnings and contract pricing independently; relationship/reaction policy can now target the core identity/event interface; progression/depth-chart owners can develop pure consumers of feature views. Trade-request/retirement baseline design is independent, with execution integration later. Shared core schemas and public API changes require coordination; feature policies must not edit core state or introduce duplicate personality schemas.
 
 ### Change over time
 
-Like Sims aspirations: at most once a season, a major event can add or drop a trait or move a slider a step (seeded). A title can turn Ring Chaser into Legacy Builder; a firing can raise Temperament; a mentor's retirement can make a player a Mentor. Each change is logged with its cause, so writers can tell the story.
+Like Sims aspirations: at most once a season, a major event can add or drop a trait or move a slider a step (seeded). A title can turn Ring Chaser into Legacy Builder; a firing can raise Temperament; a mentor's retirement can make a player a Mentor. A slider move that keeps the total inside the 24–36 band needs no paired move on another slider. Each change is logged with its cause, so writers can tell the story.
 
 ---
 
@@ -154,7 +156,7 @@ Like Sims aspirations: at most once a season, a major event can add or drop a tr
 
 | Where | How |
 |---|---|
-| **Engines** | Traits multiply formula terms within caps. Progression (full table in `PROGRESSION_PLAN.md` §6.1, coach side §7): Workout Fanatic slows physical wear, Coasting speeds it and lowers ceiling pull, Film Room Rat grows mental ratings and the mental ceiling, Perfectionist grows technical ratings, Mentor speeds young teammates' mental growth (Loner gives none), Legacy Builder and Ring Chaser resist peak upkeep while Money First after a big deal doesn't, the Confidence and Temperament sliders set form swings and the odds of Madden behaviour flags like Happy Feet, coachability scales the coaching term; coaches' Disciplinarian, Players' Coach, QB Whisperer, Youth Developer, Old School (workload) and Scheme Nerd and the openness slider act on the same terms. These go into each catalogue entry's `effects` (empty today in `persona_traits.json`). Free agency: Ring Chaser takes less from a contender, Hometown Guy favours his old team, Money First follows the top offer. Trades: Grudge Holder adds a discount toward a team that wronged him. Retirements: Legacy Builder chases records, Coasting retires earlier |
+| **Engines** | Traits multiply formula terms within caps. Progression (full table in `PROGRESSION_PLAN.md` §6.1, coach side §7): Workout Fanatic slows physical wear, Coasting speeds it and lowers ceiling pull, Film Room Rat grows mental ratings and the mental ceiling, Perfectionist grows technical ratings, Mentor speeds young teammates' mental growth (Loner gives none), Legacy Builder and Ring Chaser resist peak upkeep while Money First after a big deal doesn't, the Confidence and Temperament sliders set form swings and the odds of Madden behaviour flags like Happy Feet, coachability scales the coaching term; coaches' Disciplinarian, Players' Coach, QB Whisperer, Youth Developer, Old School (workload) and Scheme Nerd and the openness slider act on the same terms. These go into each catalogue entry's `effects` (empty today in `persona_traits.json`). Free agency: Ring Chaser takes less from a contender, Hometown Guy favours his old team, Money First follows the top offer. Money First and Ring Chaser are weight shifts with a written bound (coefficient below 0.20 for Money First and below 0.45 for Ring Chaser, design §2), so they lean a choice but never reverse it. Strong ring chasing needs the career-earnings gate, counted in cap shares: `engines/career_earnings.py` `is_secure` is True at 0.15 of a cap earned, and unknown history leaves it inactive. Trades: Grudge Holder adds a discount toward a team that wronged him. Retirements: Legacy Builder chases records, Coasting retires earlier |
 | **Prompts** | Sliders as a short description; only traits and views whose trigger matches; mood; relationship with whoever is involved; signature moves as options; recent angles to avoid |
 | **Agent loops** | Traits pick which tools an agent reaches for first and how long it keeps going: an aggressive GM makes more calls before the deadline, a Guarded player declines interviews |
 | **Site** | Traits shown on player, coach and writer pages once seeded (decision D3); hidden values (ceilings, reserves) stay hidden |
@@ -166,7 +168,8 @@ Caps keep personality a colouring: no trait moves a number further than the limi
 ## 7. Prompt assembly
 
 ```
-[identity]       name, role, bio, voice                     (fixed)
+[identity]       name, role, bio                            (fixed)
+[voice notes]    how this person talks                      (rewritten after a logged trait or slider change)
 [personality]    sliders as one sentence                    (fixed, slow change)
 [active traits]  traits whose "when" matches, as tendencies
 [active views]   views whose trigger matches the subject/data
@@ -184,10 +187,10 @@ Every line is chosen by code from stored data. Nothing in it says "always".
 
 ## 8. Agentic loops
 
-For agents that act rather than only write (GMs, players, agents, coaches, owners):
+For agents that act rather than only write (GMs, players, coaches, owners). A player's own AI loop does his negotiating; no hired agent sits between him and the GM:
 
 * **Triggers:** schedule (each week, each offseason stage) and events (injury to a starter, offer received, benched, fired).
-* **Tools per role, kept narrow.** GM: roster, needs, cap, `price_deal`, `message_gm`, `make_offer`, inbox. Player agent: market value, offers, `counter`, `leak`. Coach: depth chart, practice reports, `set_depth`. No web access; the league is the world.
+* **Tools per role, kept narrow.** GM: roster, needs, cap, `price_deal`, `message_gm`, `make_offer`, inbox. Player (negotiating): market value, offers, `counter`, `leak`. Coach: depth chart, practice reports, `set_depth`. No web access; the league is the world.
 * **Guardrails:** step and budget limits; every action that changes the league goes through the owning engine's legality and acceptance checks; outputs validated against the data.
 * **Record, don't replay:** model choices aren't reproducible, so every action is stored and the stored record is the truth.
 * **Cost:** many calls per loop; runs on the local model (migration plan §7) where it passes the §7.4 quality gate.
@@ -203,7 +206,7 @@ For agents that act rather than only write (GMs, players, agents, coaches, owner
 | **3. GMs** (built 2026-10-28) | Sliders and traits on top of `gm_profiles` (and `engines/gm_personas.py`), GM prompt formatting and negotiation dialogue reflection in `engines/gm_negotiation.py` without altering deterministic trade values | 2 |
 | **4. Players and coaches** | Generated draft classes first during the controlled run to 2034 (§5.1), plus generated people already at the starting checkpoint; persistent event evolution; participating coaches and decision-makers; limited evidence-backed real-person initialization; bounded contract, development, trade and career effects through owning engines (not yet activated) | 2, PC |
 | **5. Agentic GMs** | Trigger + tools + loop for GM talks and trades (V2.11), inside the trade engine's checks | 3, league office save moves |
-| **6. Owners, player agents, scouts, media voters** | Inbox (V2.9), free agency (league office plan), scouting (V2.10), award ballots | 2–5 |
+| **6. Owners, scouts, media voters** | Inbox (V2.9), free agency (league office plan), scouting (V2.10), award ballots | 2–5 |
 
 ---
 
@@ -211,7 +214,7 @@ For agents that act rather than only write (GMs, players, agents, coaches, owner
 
 | # | Question | Recommendation |
 |---|---|---|
-| D1 | Slider budget and count | Six sliders, 30 points of 60 |
+| D1 | Slider budget and count | Six sliders, 0–10 each, total 24–36, seeded at 30 (JR, 2026-11-02) |
 | D2 | Traits per agent | 3–5 (writers 4, stars 5, depth players 3) |
 | D3 | Are traits visible on the site? | Yes for traits and sliders; mood shown as a tag; engine effects never shown as numbers |
 | D4 | Can JR edit personas? | Yes, before first use; afterwards only through events |
@@ -224,3 +227,28 @@ For agents that act rather than only write (GMs, players, agents, coaches, owner
 ## 11. Spec changes when built
 
 Persona tables (sliders, traits, views, relationships, trait history) in spec §3; prompt assembly in the newsroom section (§7) and `agent_personas.json` structure; engine trait effects in each engine's section; writer tools gaining relationships and traits.
+
+---
+
+## 12. Deferred
+
+Agreed on 2026-10-31 and left for later work:
+
+* **Lowball zone in re-sign and extension talks.** An offer far below his value costs trust with the GM and may leak to the press.
+* **Cap casualty after a discount.** A player who took less and is then cut for cap reasons loses trust toward that GM (one-way). Any trait change waits for the yearly review.
+* **Elite positional-rank demand.** A top player asks to be paid among the top few at his position.
+* **Two or three views for players who speak.** Players who give interviews get views like writers do.
+* **Owner and scout categories (phase 6).** Owners: Meddler / Hands-Off, Deep Pockets / Budget Conscious, Headline Hunter / Patient Builder. Scouts: Traits Chaser, Tape Grinder, Character Hawk, Floor Seeker / Ceiling Gambler.
+
+---
+
+## 13. Considered and rejected (2026-10-31)
+
+| Idea | Why not |
+|---|---|
+| "Bag Drop": Money First plus low Drive gains Coasting | Wanting money must not mean working less after payday (§6 design qualification). |
+| Warmth as a switching cost | Warmth is manner, not attachment. Staying comes from earned attachment (LOYAL tiers). |
+| Confidence changes guarantee demands | Public style must not set pay terms; the engine already scores guarantees. |
+| Scheme Nerd contract multiplier | Scheme fit is already a utility term; a multiplier counts it twice. |
+| Sliders on 0–100 | False precision. Prompts and yearly steps work in whole points on 0–10. |
+| Separate hired agents for players | One more actor with no new decisions. The player's own loop negotiates. |
