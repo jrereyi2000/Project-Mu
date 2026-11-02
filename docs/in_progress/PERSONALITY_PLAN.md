@@ -1,6 +1,6 @@
 # Project Mu: Personality and Agents Plan
 
-**Status:** phases 1, 2, and 3 built (2026-10-28, spec §3.3f, §7.11); phases 4–6 not started.
+**Status:** phases 1, 2, and 3 built (2026-10-28, spec §3.3f, §7.11); phase 4 feature-independent core built (2026-10-31, §5.2), evidence samples and feature policies remain for review; no production profiles seeded or effects activated; phases 5–6 not started. See [Panthers review sample](PERSONALITY_PANTHERS_SAMPLE.md) and [generated-player effect matrix and examples](PERSONALITY_GENERATED_EFFECTS_DESIGN.md) (design for review; no activation).
 **Expands:** V2.13 of [`PC_MIGRATION_PLAN.md`](PC_MIGRATION_PLAN.md). Feeds [`PROGRESSION_PLAN.md`](PROGRESSION_PLAN.md) §6–§7 and [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) (agents, free agency, retirements).
 **Writer personas** can start before the PC (§9, phase 1).
 
@@ -124,6 +124,24 @@ The newsroom's model, extended to every agent: an episodic log (takes, quotes, d
 3. **Write the identity once.** The model writes name (where needed), a short bio and voice notes from the numbers. Validated and stored; never regenerated.
 4. **Let it grow.** Memory and relationships fill as the agent acts; summaries are rewritten as entries pile up.
 
+### 5.1 Approved rollout direction (JR, 2026-10-30)
+
+The current plan is to control the simulation from its starting season through 2034, rather than first importing a league already in 2034. Prioritize consequential personalities for generated players: seed each generated draft class when prospects enter the universe, before personality-dependent decisions, and preserve identity, traits and logged evolution throughout the run. Any generated players already present at the starting checkpoint need one-time initialization; do not redraw returning players each season. Confirm the actual starting season/save before binding identities.
+
+Personality is intended to influence contracts, development, trades and career decisions through bounded formulas in the owning engines, without duplicating ratings or scheme fit or overriding legality. Dialogue and visible badges are optional presentation, not the reason to build the system. Existing catalogue effects or prompt support do not establish that these integrations are implemented or approved coefficients.
+
+Stop expanding manual research of today's real-player population. The Panthers sample is a limited evidence-method reference, not a league-wide seeding template or a prerequisite to generated-player work. For real people participating during the run, use conservative supported observations; unsupported private motivations remain neutral. Generated people can receive plausible seeded motivations. Both populations subsequently evolve from logged events in the simulated universe. Initialize participating coaches and decision-makers as well, with separate treatment of observed football tendencies and uncertain private motives.
+
+Design deliverable drafted: [generated-player effect matrix and examples](PERSONALITY_GENERATED_EFFECTS_DESIGN.md), including deterministic identity/seed handling, persistence across seasons, bounded effects, event evolution and offline validation. It recommends safe identity/resolution first, contract preferences next, then coordination with development/coaching owners and later requests/retirement. Proposed trial coefficients remain for review; no engine changes are implemented. Offline demonstration now available: `python -m tools.personality_contract_demo` produces seven synthetic situations and 525 parameter combinations; see the design document for bounds, threshold and noise findings. This direction does not authorize production seeding or activate engine effects. JR refinement: strong ring chasing is situational (established career, achieved financial security and usable contender role), not universal or inferred from elite ratings. Earned loyalty reflects simulated history and treatment, separately from a smaller verified-hometown preference; no relationship-count bonuses. Equal-strength loyalty examples and trial tiers are in the generated-player design. The existing six sliders and trait catalogue remain the foundation.
+
+### 5.2 Feature-independent core (built 2026-10-31)
+
+`personality/README.md` documents the implemented API and ownership boundaries. The core supplies stable universe identity, explicit one-time initialization, verified aliases, versioned catalogue/profile snapshots, provenance-scoped feature views and audited one-change-per-season evolution candidates. Persistence reuses existing slider/trait/history tables with sidecars in `2027_01_16_personality_core.sql`; no production migration or seeding has run. Existing writer/GM paths are unchanged. Generated initialization still seeds four traits and a total of 30; real/unknown defaults are neutral, with sparse evidence permissions for reviewed real people. Missing reads never generate profiles and storage failures are explicit.
+
+Contracts, progression, relationships/mood, trade requests and retirement remain separate feature policies. The core checks and records a candidate; it does not decide that a title, payday or benching should cause one. Verified pipeline identity binding, classification/adoption workflows and feature activation remain integration work. Unknown identities must not be guessed as generated. The current SQL has an exact-30 constraint; the separately owned slider-band change must migrate that constraint as well as the Python validator before single-slider evolution is possible. Core trait evolution already works, and future slider evolution adopts the active validated band without reseeding.
+
+Parallel work can proceed on cap history/career earnings and contract pricing independently; relationship/reaction policy can now target the core identity/event interface; progression/depth-chart owners can develop pure consumers of feature views. Trade-request/retirement baseline design is independent, with execution integration later. Shared core schemas and public API changes require coordination; feature policies must not edit core state or introduce duplicate personality schemas.
+
 ### Change over time
 
 Like Sims aspirations: at most once a season, a major event can add or drop a trait or move a slider a step (seeded). A title can turn Ring Chaser into Legacy Builder; a firing can raise Temperament; a mentor's retirement can make a player a Mentor. Each change is logged with its cause, so writers can tell the story.
@@ -131,6 +149,8 @@ Like Sims aspirations: at most once a season, a major event can add or drop a tr
 ---
 
 ## 6. Where personalities act
+
+**Design qualification (2026-10-30):** the generated-player design reviews the older examples below. Financial preference must not imply low effort after payment, and public style must not imply confidence or ability. Do not activate those older causal shortcuts; use the scoped effect matrix and owning-engine review in PERSONALITY_GENERATED_EFFECTS_DESIGN.md. Engine integrations remain inactive.
 
 | Where | How |
 |---|---|
@@ -181,7 +201,7 @@ For agents that act rather than only write (GMs, players, agents, coaches, owner
 | **1. Writer personas, now** (built) | `agent_personas.json` rewritten from rules into sliders, traits, views with triggers, signature pools and a want/fear, with the long-form voices folded in as `formats.ARTICLE`; no "always / must / end with". `newsroom/personas.py` picks active views from the piece's tags and the subject team's results; recent headlines and recently used signatures form the avoid list (from `news_feed`, no new table). The 13 writer slate-selection directives rewritten as leanings with alternatives. Still to do: the side-by-side test against current output on a week's slate (costs model calls) | Nothing new |
 | **2. Catalogue and tables** (built 2026-10-28) | Full 50-trait catalogue in `persona_traits.json` with categories, role odds, prompt tendencies, and optional effects; tables for persona sliders (`persona_sliders`), traits (`persona_traits`), views (`persona_views`), relationships (`persona_relationships`), and trait history (`persona_trait_history`); deterministic seeding and budget validation; review endpoints in `#debug` (`GET/POST /api/debug/personas`) | — |
 | **3. GMs** (built 2026-10-28) | Sliders and traits on top of `gm_profiles` (and `engines/gm_personas.py`), GM prompt formatting and negotiation dialogue reflection in `engines/gm_negotiation.py` without altering deterministic trade values | 2 |
-| **4. Players and coaches** | Personas for stars and captains first, then everyone who speaks; coaches and coordinators; Focus mapping; progression terms (progression plan phases F–G) | 2, PC |
+| **4. Players and coaches** | Generated draft classes first during the controlled run to 2034 (§5.1), plus generated people already at the starting checkpoint; persistent event evolution; participating coaches and decision-makers; limited evidence-backed real-person initialization; bounded contract, development, trade and career effects through owning engines (not yet activated) | 2, PC |
 | **5. Agentic GMs** | Trigger + tools + loop for GM talks and trades (V2.11), inside the trade engine's checks | 3, league office save moves |
 | **6. Owners, player agents, scouts, media voters** | Inbox (V2.9), free agency (league office plan), scouting (V2.10), award ballots | 2–5 |
 
