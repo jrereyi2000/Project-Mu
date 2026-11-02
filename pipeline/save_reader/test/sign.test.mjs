@@ -11,6 +11,19 @@ import { decodeRef } from '../lib.mjs';
 import { readSave } from '../pc_save_reader.mjs';
 import { writeSave } from '../save_writer.mjs';
 
+// Team cap fields a roster move may change (the writer updates roster counts; Madden recalculates cap totals itself).
+function teamsApartFromCap(teams) {
+  return teams.map(({ cap, ...rest }) => rest);
+}
+function capChanges(before, after) {
+  const out = new Set();
+  before.forEach((t, i) => {
+    for (const k of Object.keys(t.cap || {})) if (t.cap[k] !== after[i].cap?.[k]) out.add(k);
+  });
+  return [...out].sort();
+}
+
+
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const savePath = process.env.MU_SAMPLE_SAVE || join(repoRoot, 'CAREER-GIANTS-AUTOSAVE');
 const skip = existsSync(savePath) ? false : `no sample save at ${savePath}`;
@@ -129,7 +142,8 @@ test('signs a free agent and a prospect to rosters (reusing released contract ro
       // Everyone else reads back as before.
       const moved = new Set([...gone, ...edits.sign.map(e => e.pgid)]);
       for (const p of a.players) if (!moved.has(p.pgid)) assert.deepEqual(after.get(p.pgid), p);
-      assert.deepEqual(b.teams, a.teams);
+      assert.deepEqual(teamsApartFromCap(b.teams), teamsApartFromCap(a.teams));
+      assert.deepEqual(capChanges(a.teams, b.teams), ['SalCapNextYearRosterSize', 'SalCapRosterSize'], 'only roster counts change');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

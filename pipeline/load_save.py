@@ -22,6 +22,8 @@ Writes, for that season:
                              (Madden purges old weeks, so a game with no lines in this save keeps what it has)
   season_stats, season_stat_* season totals (a player traded mid-season is summed across teams)
   player_contracts (+ years)  every rostered player's contract: the season's ACTIVE rows are superseded first
+  team_cap_seasons           reader_version >= 5: each real team's Team Salary strip from the save's cap fields (checked
+                             against the Panthers' Team Salary screen in CAREER-WEEK1, 2026-11-02; team_cap_values)
   injuries                   the save's injured players for the league's current week (that week's rows replaced)
   game_highlights            scoring plays from SeasonGame.ScoringSummaries (Madden keeps only recent weeks);
                              a game whose highlights came from a capture keeps them
@@ -43,7 +45,6 @@ Writes, for that season:
 The report also carries, for reader_version >= 4, `league_settings` (the four progression / regression slider records'
 values and the dev-trait regression flag, null while unknown) and `settings_warnings` (every slider value that isn't 0:
 Project Mu runs progression itself and expects all four sliders at 0 for every position and age, LS included).
-Not yet: team_cap_seasons (the save's team cap fields aren't in a confirmed unit).
 
 Save lines are stored as line_source CAPTURED, season rows as source CAPTURE and contracts as source SCAN: all are
 real data read from Madden, which is what readers treat those values as.
@@ -57,7 +58,7 @@ import psycopg
 
 from pipeline.capture_matching import db_player_name
 from pipeline.colleges import college_name
-from pipeline.contracts import insert_contract, supersede_active
+from pipeline.contracts import insert_contract, supersede_active, upsert_team_cap
 from pipeline.draft_board import write_board
 from pipeline.ingest_prospects import Prospect
 from pipeline.load_capture import team_line_totals
@@ -778,6 +779,40 @@ def load_draft_class(cur, snapshot, season, report, capture_folder=None):
     report["draft_class"] = f"{draft_season} board loaded from the save"
 
 
+CAP_ROOM_OFFSET = 160_000           # Team.SalCapCapRoom = cap space + 160000 (every team, CAREER-WEEK1)
+
+
+def team_cap_values(cap):
+    """A snapshot team's raw cap fields -> upsert_team_cap's values (whole dollars), as the Team Salary screen shows
+    them (CAR, CAREER-WEEK1: cap $301M, 25 rollover $13.8M, adjusted cap $315M, cap space $11.7M, 26 salaries $279M,
+    26 cap penalty $24.6M, 26 total spend $303M): salaries = SalCapRosterReserve, cap penalty = ThisYearCapPenalties,
+    rollover = RolloverCap, cap space = SalCapCapRoom - 160000; adjusted cap = space + salaries + penalty and cap =
+    adjusted cap - rollover - ThisYearCapCredits (credits add to a team's cap like rollover: the league cap comes out
+    the same for all 32 teams, $301.2M in CAREER-WEEK1 and $331.3M in CAREER-GIANTS-AUTOSAVE's 2027, where five teams
+    have credits). The next season's rookie reserve has no field found yet (NULL)."""
+    salaries, penalty, rollover = cap["SalCapRosterReserve"], cap["ThisYearCapPenalties"], cap["RolloverCap"]
+    space = cap["SalCapCapRoom"] - CAP_ROOM_OFFSET
+    adjusted = space + salaries + penalty
+    return {k: v * MONEY_UNIT for k, v in {
+        "cap": adjusted - rollover - cap.get("ThisYearCapCredits", 0), "rollover": rollover, "adjusted_cap": adjusted,
+        "cap_space": space,
+        "salaries": salaries, "cap_penalty": penalty, "total_spend": salaries + penalty}.items()}
+
+
+def load_team_cap(cur, snapshot, season, teams, report, capture_id=None):
+    """Every real team's team_cap_seasons row for the season from the save (reader_version >= 5; the latest load
+    wins, as a Team Salary scan does). Older snapshots add nothing."""
+    n = 0
+    for t in snapshot["teams"]:
+        tid, cap = teams.get(t["team_index"]), t.get("cap")
+        if tid is None or not cap:
+            continue
+        upsert_team_cap(cur, tid, season, team_cap_values(cap), capture_id)
+        n += 1
+    if n:
+        report["team_caps"] = n
+
+
 TEAM_RATING_COLUMNS = {"ovr": "team_ovr", "off": "off_ovr", "def": "def_ovr"}
 
 
@@ -912,6 +947,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     load_team_scores(cur, games, report)
     load_season_lines(cur, snapshot, season, players, report)
     load_contracts(cur, snapshot, season, players, report, capture_id)
+    load_team_cap(cur, snapshot, season, teams, report, capture_id)
     week = current_week(snapshot)
     report["current_week"] = week
     load_injuries(cur, snapshot, season, week, players, report)
@@ -926,7 +962,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
 REPORT_COUNTS = ("players", "players_created", "player_attributes", "player_attributes_unchanged",
                  "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays", "depth_charts",
-                 "depth_chart_rows", "team_ratings", "draft_prospects")
+                 "depth_chart_rows", "team_ratings", "draft_prospects", "team_caps")
 
 
 def capture_row(cur, path, season, week):

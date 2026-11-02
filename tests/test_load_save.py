@@ -223,6 +223,12 @@ def v4_snapshot(sliders=None, dev_flag=None):
     return snap
 
 
+# The Panthers' raw cap fields in CAREER-WEEK1 (the Team Salary screen: cap $301M, 25 rollover $13.8M, adjusted cap
+# $315M, cap space $11.7M, 26 salaries $279M, 26 cap penalty $24.6M, 26 total spend $303M)
+CAR_CAP = {"SalCapCapRoom": 161169, "SalCapRosterReserve": 27868, "ThisYearCapPenalties": 2463, "RolloverCap": 1380,
+           "ThisYearCapCredits": 0, "TEAM_SALARY": 10294}
+
+
 def v5_snapshot():
     """v4_snapshot() as reader_version 5: Madden's team ratings on CHI and ARI (none on the free-agent pseudo-team)."""
     snap = v4_snapshot()
@@ -230,6 +236,8 @@ def v5_snapshot():
     snap["teams"][0]["ratings"] = {"ovr": 85, "off": 88, "def": 83, "qb": 93, "st": 70}
     snap["teams"][1]["ratings"] = {"ovr": 74, "off": 72, "def": 77}
     snap["teams"][2]["ratings"] = {"ovr": 50, "off": 50, "def": 50}
+    snap["teams"][0]["cap"] = dict(CAR_CAP)
+    snap["teams"][2]["cap"] = dict(CAR_CAP)                      # the free-agent pseudo-team: never loaded
     prospect = dict(snap["players"][3], pgid=900005, row=900005, first_name="Second", last_name="Rounder",
                     position="LE", archetype="DE_SmallerSpeedRusher", overall=70, age=21, height_in=76, weight_lbs=255,
                     college={"table": 16384, "row": 1886})      # LSU in Madden's college list
@@ -329,6 +337,28 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
 
     def test_draft_board_empty_before_v5(self):
         self.assertEqual(ls.draft_board_prospects(v4_snapshot()), [])
+
+    def test_team_cap_values_match_the_team_salary_screen(self):
+        v = ls.team_cap_values(CAR_CAP)
+        self.assertEqual(v, {"cap": 301_200_000, "rollover": 13_800_000, "adjusted_cap": 315_000_000,
+                             "cap_space": 11_690_000, "salaries": 278_680_000, "cap_penalty": 24_630_000,
+                             "total_spend": 303_310_000})
+
+    def test_cap_credits_add_to_the_team_cap_like_rollover(self):
+        # CAREER-GIANTS-AUTOSAVE 2027, NYG: $500K of cap credits; the league cap is $331.3M for every team
+        nyg = {"SalCapCapRoom": 161475, "SalCapRosterReserve": 33221, "ThisYearCapPenalties": 803, "RolloverCap": 2317,
+               "ThisYearCapCredits": 50}
+        v = ls.team_cap_values(nyg)
+        self.assertEqual((v["cap"], v["adjusted_cap"], v["cap_space"]), (331_320_000, 354_990_000, 14_750_000))
+
+    def test_team_cap_loaded_per_real_team(self):
+        cur, report = FakeCursor(), {}
+        ls.load_team_cap(cur, v5_snapshot(), TEST_SEASON, self.TEAMS, report, capture_id=7)
+        self.assertEqual(len(cur.calls), 1)                      # CHI only: ARI has no cap fields, FA isn't a team
+        _, sql, args = cur.calls[0]
+        self.assertIn("INSERT INTO team_cap_seasons", sql)
+        self.assertEqual((args[0], args[1], args[-1]), (100, TEST_SEASON, 7))
+        self.assertEqual(report["team_caps"], 1)
 
     def test_v4_snapshot_has_no_team_ratings(self):
         cur, report = FakeCursor(), {}
@@ -460,12 +490,21 @@ class LoadTinySnapshotTest(unittest.TestCase):
         self.cur.execute("SELECT id FROM draft_prospects WHERE draft_season = %s ORDER BY projected_pick", (TEST_SEASON + 1,))
         self.assertEqual([x[0] for x in self.cur.fetchall()], [x[0] for x in rows])
 
+    def test_v5_load_stores_the_team_cap(self):
+        ls.load_snapshot(self.cur, v5_snapshot(), season=TEST_SEASON)
+        self.cur.execute("SELECT cap, rollover, adjusted_cap, cap_space, salaries, cap_penalty, total_spend, "
+                         "next_rookie_reserve, derived_at FROM team_cap_seasons c JOIN teams t ON t.id = c.team_id "
+                         "WHERE c.season = %s AND t.abbreviation = 'CHI'", (TEST_SEASON,))
+        self.assertEqual(self.cur.fetchone(), (301_200_000, 13_800_000, 315_000_000, 11_690_000, 278_680_000,
+                                               24_630_000, 303_310_000, None, None))   # read, not derived
+
     def test_v3_load_has_no_v4_keys(self):
         r = ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)
         self.assertNotIn("depth_charts", r)
         self.assertNotIn("league_settings", r)
         self.assertNotIn("team_ratings", r)
         self.assertNotIn("draft_class", r)
+        self.assertNotIn("team_caps", r)
 
     def test_league_state_moves_forward_only(self):
         self.cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")

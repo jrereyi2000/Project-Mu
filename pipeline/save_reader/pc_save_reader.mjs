@@ -17,7 +17,9 @@
 //
 // reader_version 5 adds, per team, `ratings`: Madden's own team ratings (Team.TEAM_RATINGOVR, OFF, DEF and the unit
 // ratings QB, RB, WR, TE, OL, DL, LB, DB, ST, keyed lower-case), which pipeline/load_save.py stores as the season's
-// team_seasons team_ovr / off_ovr / def_ovr (on PC there is no Team Overalls OCR capture), and `draft_class`: one
+// team_seasons team_ovr / off_ovr / def_ovr (on PC there is no Team Overalls OCR capture), `cap`: the team's raw
+// salary-cap fields (Team.SalCap*, RolloverCap, This/NextYearCapPenalties and Credits, TEAM_SALARY; $10,000 units, and
+// SalCapCapRoom carries a 160000 offset: pipeline/load_save.py turns them into the Team Salary strip), and `draft_class`: one
 // entry per DraftPlayer row whose Player is a ContractStatus Draft prospect ({pgid, draft_position, initial_draft_rank,
 // true_overall_ranking, visible}; ranks 0-based, as draft_tables.mjs reads them), which load_save turns into the coming
 // class's draft_prospects board when it has none. The prospects themselves are the `players` with status Draft. Each
@@ -112,6 +114,15 @@ function readDraftClass(draftPlayerTable, playerTable) {
   return out;
 }
 
+const TEAM_CAP_FIELD = /^(SalCap|RolloverCap$|(This|Next)YearCap(Penalties|Credits)$|TEAM_SALARY$)/;
+
+// Team salary-cap fields, raw ({field: value}; null when the schema has none of them).
+function teamCap(record) {
+  const cap = {};
+  for (const name of fieldNames(record)) if (TEAM_CAP_FIELD.test(name)) cap[name] = record[name];
+  return Object.keys(cap).length ? cap : null;
+}
+
 function readTeams(teamTable) {
   const teams = [];
   const teamIndexByRow = new Map();
@@ -122,6 +133,7 @@ function readTeams(teamTable) {
       team_index: r.TeamIndex, row, short_name: r.ShortName, long_name: r.LongName,
       display_name: r.DisplayName, nick_name: r.NickName, presentation_id: r.PresentationId,
       ratings: teamRatings(r),
+      cap: teamCap(r),
     });
   });
   return { teams, teamIndexByRow };

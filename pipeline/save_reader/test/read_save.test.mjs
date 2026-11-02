@@ -52,6 +52,16 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
   assert.ok(lines.length > 0, 'per-game stat lines present');
   for (const line of lines) assert.ok(gameRows.has(line.game_row), 'every game line points at an exported game');
 
+  // reader_version 5: Madden's team ratings and cap fields on every real team (cap space = SalCapCapRoom - 160000, and
+  // every team's cap works out to the same league cap: pipeline/load_save.py team_cap_values).
+  const leagueCaps = new Set();
+  for (const t of s.teams.filter(x => x.team_index < 32)) {
+    const c = t.cap;
+    assert.ok(c && Number.isInteger(c.SalCapCapRoom) && Number.isInteger(c.SalCapRosterReserve), `${t.short_name} cap fields`);
+    leagueCaps.add(c.SalCapCapRoom - 160000 + c.SalCapRosterReserve + c.ThisYearCapPenalties - c.RolloverCap
+      - c.ThisYearCapCredits);
+  }
+  assert.equal(leagueCaps.size, 1, 'one league cap');
   // reader_version 5: Madden's team ratings on every real team.
   assert.equal(s.meta.reader_version, 5);
   for (const t of s.teams.filter(x => x.team_index < 32)) {
