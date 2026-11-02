@@ -368,7 +368,9 @@ Project Mu/
 │   ├── check_capture_load.py  #   Phase 3 exit check: backfill against a DB (analytics blocked) + per-player game lines vs season_stats
 │   ├── rebuild_backfill.py    #   One-time: clear a season's backfilled lines (every game but the kept team's, default Panthers = real) and re-run the backfill
 │   ├── vision_dump.py         #   Apple Vision OCR of a capture folder or frame folder → vision_ocr.json (read-only; used for the Oct 13 OCR tests)
-│   └── vision_cells.py        #   Per-cell Apple Vision OCR experiment from cell_plan.json → vision_cells.json (read-only)
+│   ├── vision_cells.py        #   Per-cell Apple Vision OCR experiment from cell_plan.json → vision_cells.json (read-only)
+│   ├── build_reviewer_html.py #   Builds standalone HTML review studio for evaluating and swapping 32-team 5-tier headshot donor plates
+│   └── apply_review_decisions.py # Applies user swap decisions into data/headshots/donors/registry.json and fetches updated donor plates
 ├── static/players/            # Served headshots ({player_id}.webp) at /static/players/
 ├── docs/
 │   ├── OPEN_MODEL_RESEARCH.md # Research (2026-10-28, folded into PC_MIGRATION_PLAN §7) on replacing gemini-3.8-flash with open-weight models: llm_usage cost by source at current and 2027 Gemini prices, 16GB local candidates (Gemma 4 26B-A4B, Qwen3.8-27B, LFM2.5-24B-A2B, MoE expert offload, LFM3-1.7B beside Madden), hosted frontier open models (DeepSeek V4.1 Flash, GLM-5.3, Kimi K3, …) for the newsroom and how their features and benchmarks compare with what Project Mu uses from Gemini (§4.1), and 5-step evaluation order
