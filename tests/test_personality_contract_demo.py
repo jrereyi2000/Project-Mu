@@ -67,3 +67,39 @@ def test_financial_gap_threshold_and_default_controls():
         assert evaluate(scenario('clear_money'), profile)['choice']=='A'
     assert evaluate(scenario('weak'),'neutral')['choice']=='No immediate signing'
     assert evaluate(scenario('weak'),'money')['choice']=='B'
+
+
+def test_preferences_never_invert_base_weights(monkeypatch):
+    """CAP_RELATIVE_CONTRACTS_PLAN §2.6, S8: preference = k (financial - contention) x direction is a weight shift.
+    Money First moves the team weight 0.20 -> 0.20 - k; Ring Chaser moves the money weight 0.45 -> 0.45 - k. For the
+    trial k values neither weight reaches zero, so a trait can lean but never reverse the base preference."""
+    from engines import free_agency_engine as fa
+    import tools.personality_contract_demo as demo
+    caps = sorted({r['cap'] for r in build_report()['sweep']})
+    assert caps == [0, .02, .04, .08, .12]
+    # Offer pairs scored through the demo's own fixtures() path: (pay, contention, depth, context).
+    equal_money = [(f'money_{i}', 'Equal money', 75, [(pay, .30, 1, 0), (pay, .85, 1, 0)])
+                   for i, pay in enumerate((.70, 1.00, 1.30, 1.60))]
+    equal_contention = [(f'ring_{i}', 'Equal contention', 85, [(.80, con, 1, 0), (1.40, con, 1, 0)])
+                        for i, con in enumerate((.75, .90))]
+    monkeypatch.setattr(demo, 'SCENARIOS', equal_money + equal_contention)
+    scenarios = demo.fixtures()
+    for k in (.05, .10, .15):
+        assert k < fa.W_DEFAULT['team'] < fa.W_DEFAULT['money']
+        for cap in caps:
+            for s in scenarios:
+                lo, hi = s['offers']
+                if s['id'].startswith('money_'):
+                    assert lo['score']['financial'] == hi['score']['financial']
+                    assert hi['score']['contention'] > lo['score']['contention']
+                    rows = evaluate(s, 'money', coefficient=k, cap=cap)['rows']
+                else:
+                    assert lo['score']['contention'] == hi['score']['contention']
+                    assert hi['score']['financial'] > lo['score']['financial']
+                    result = evaluate(s, 'ring', coefficient=k, cap=cap, career_context='secure')
+                    assert result['ring_active']
+                    rows = result['rows']
+                r_lo, r_hi = rows
+                assert r_hi['utility'] >= r_lo['utility'] - 1e-12, (s['id'], k, cap)
+                if not all(abs(r['raw']) >= cap for r in rows):  # the cap isn't binding on both offers
+                    assert r_hi['utility'] > r_lo['utility'], (s['id'], k, cap)

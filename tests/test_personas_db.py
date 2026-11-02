@@ -81,11 +81,55 @@ class SliderBudgetValidationTests(unittest.TestCase):
         sliders = {"temperament": 5, "sociability": 5, "confidence": 5, "openness": 5, "warmth": 5, "drive": 5}
         self.assertTrue(P.validate_slider_budget(sliders))
 
-    def test_invalid_sum_raises(self):
-        sliders = {"temperament": 6, "sociability": 5, "confidence": 5, "openness": 5, "warmth": 5, "drive": 5}
-        with self.assertRaises(ValueError) as ctx:
-            P.validate_slider_budget(sliders)
-        self.assertIn("does not match budget 30", str(ctx.exception))
+    @staticmethod
+    def _with_total(total):
+        """Six sliders summing to `total`: 5s, with drive moved to make up the difference."""
+        sliders = {s: 5 for s in P.SLIDERS}
+        sliders["drive"] += total - 30
+        sliders["warmth"] += max(0, sliders["drive"] - 10) - max(0, -sliders["drive"])
+        sliders["drive"] = min(10, max(0, sliders["drive"]))
+        assert sum(sliders.values()) == total
+        return sliders
+
+    def test_band_edges_pass(self):
+        self.assertEqual((P.SLIDER_BUDGET_MIN, P.SLIDER_BUDGET, P.SLIDER_BUDGET_MAX), (24, 30, 36))
+        for total in (24, 30, 36):
+            self.assertTrue(P.validate_slider_budget(self._with_total(total)), total)
+
+    def test_total_outside_band_raises(self):
+        for total in (23, 37):
+            with self.assertRaises(ValueError) as ctx:
+                P.validate_slider_budget(self._with_total(total))
+            self.assertIn("outside budget band 24-36", str(ctx.exception))
+            self.assertIn(f"Slider total {total}", str(ctx.exception))
+
+    def test_writer_loader_uses_the_band(self):
+        """seed_writers_to_db writes sliders for any total in the band and skips totals outside it."""
+        class Cur:
+            def __init__(self):
+                self.slider_rows = []
+
+            def execute(self, sql, params=None):
+                if "INSERT INTO persona_sliders" in sql:
+                    self.slider_rows.append(params[0])
+
+        data = {"IN_LOW": {"sliders": self._with_total(24)}, "IN_HIGH": {"sliders": self._with_total(36)},
+                "OUT_LOW": {"sliders": self._with_total(23)}, "OUT_HIGH": {"sliders": self._with_total(37)}}
+        cur = Cur()
+        with mock.patch.object(P, "persona_tables_exist", return_value=True):
+            self.assertEqual(P.seed_writers_to_db(cur, data), 2)
+        self.assertEqual(cur.slider_rows, ["IN_LOW", "IN_HIGH"])
+
+    def test_schema_states_the_band(self):
+        """The new migration and db/init_db.sql both write chk_persona_sliders_budget as BETWEEN 24 AND 36."""
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        band = "temperament + sociability + confidence + openness + warmth + drive BETWEEN 24 AND 36"
+        for rel in ("db/migrations/2027_01_17_persona_slider_band.sql", "db/init_db.sql"):
+            with open(os.path.join(root, rel)) as f:
+                text = " ".join(f.read().split())
+            self.assertIn("chk_persona_sliders_budget", text, rel)
+            self.assertIn(band, text, rel)
+            self.assertNotIn("warmth + drive = 30", text, rel)
 
     def test_out_of_bounds_value_raises(self):
         sliders = {"temperament": 11, "sociability": -1, "confidence": 5, "openness": 5, "warmth": 5, "drive": 5}
@@ -234,7 +278,7 @@ class DebugApiUnitTests(unittest.TestCase):
                        "openness": 5, "warmth": 5, "drive": 5}
         r = self.client.post("/api/debug/personas/writer/ESPN", json={"sliders": bad_sliders}, headers=self.headers)
         self.assertEqual(r.status_code, 400)
-        self.assertIn("does not match budget 30", r.json()["detail"])
+        self.assertIn("outside budget band 24-36", r.json()["detail"])
 
     def test_post_persona_validates_trait_conflicts(self):
         bad_traits = ["ANALYTICS_BELIEVER", "OLD_SCHOOL", "QUOTABLE"]
