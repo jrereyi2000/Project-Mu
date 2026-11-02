@@ -21,6 +21,9 @@
 //   * Every TeamSetting row a team (Team.TeamSettingRef) or a user (FranchiseUser.TeamSetting) uses gets
 //     IsCPUFillRosterEnabled false. The other staff switches (injury management, cut players, re-sign, offseason FA,
 //     draft: they read backwards, true = Manual) and IsTradesEnabled are left as they are.
+//   * Every live Player row gets ConfidenceRating 50 (morale neutral, D13), so the new save is the known-neutral
+//     starting point progression's explicit bootstrap needs (PROGRESSION_PLAN §5.3a: bootstrap_pass requires every
+//     player at ConfidenceRating 50 and neutral form; no Project Mu form overlay exists before the first write).
 //   * LeagueSetting row 0: CoachFiring = 2 (OFF; enum CoachFiringSetting ON 0, CPU_ONLY 1, OFF 2) and
 //     IsCareerClockEnabled = 0. Under schema 620 the row decodes with generic names, so each field is resolved by its
 //     position in the schema's LeagueSetting attribute list (lib.mjs schemaFieldName: Field_44 and Field_82 on the
@@ -28,7 +31,8 @@
 //   The input save is never written (a temp copy is opened), --out must not exist, and the written file is re-opened
 //   and checked: one user per real team, distinct user ids, each user's team pointing back at the user's coach
 //   (UserCharacter = HeadCoach = UserEntity, Coach.IsUserControlled), every user in UserRegistry.Users, fill roster
-//   off on every used TeamSetting row, CoachFiring OFF, career clock off. A failed check deletes the output.
+//   off on every used TeamSetting row, CoachFiring OFF, career clock off, every live player at ConfidenceRating 50.
+//   A failed check deletes the output.
 //
 // state: what pipeline/league_office.py needs beyond the snapshot to write cap fields and to know how many Roster
 //   signings one write can take: {team_table_id, salary_cap (SalaryInfo.TeamSalaryCap, $10,000 units),
@@ -54,6 +58,8 @@ export const NULLED = new Set(['CurrentPlayerQuestsData', 'ObjectiveProgressArra
 export const FILL_ROSTER = 'IsCPUFillRosterEnabled';
 // LeagueSetting fields the setup writes: schema attribute name -> [value, attribute index under schema 620].
 export const LEAGUE_SETTINGS = { CoachFiring: [2, 44], IsCareerClockEnabled: [0, 82] };
+export const CONFIDENCE = 'ConfidenceRating';
+export const NEUTRAL_CONFIDENCE = 50;
 export const CAP_FIELDS = ['TEAM_SALARY', 'SalCapCapRoom', 'SalCapNextYearCapRoom', 'SalCapSpendingMoney'];
 const CONTRACT_TABLE = 'PlayerContract';
 
@@ -225,7 +231,27 @@ export async function applySetup(franchise) {
     if (before !== want) setting[field] = want;
     leagueSettings[name] = { field, before, after: want };
   }
-  return { usersCreated: created, teamSettingRows: settingRows.length, fillRosterChanged, leagueSettings };
+  const confidence = await neutralConfidence(tables, true);
+  return { usersCreated: created, teamSettingRows: settingRows.length, fillRosterChanged, leagueSettings,
+    confidenceChanged: confidence.changed, players: confidence.players };
+}
+
+// Every live Player row at ConfidenceRating 50 (`write` true) or a count of those that aren't (`write` false).
+async function neutralConfidence(tables, write) {
+  const player = await tables.byName('Player');
+  if (!player || !player.records.some(r => !r.isEmpty && CONFIDENCE in r.fields)) {
+    throw new Error(`no Player table with ${CONFIDENCE}`);
+  }
+  let changed = 0;
+  let off = 0;
+  let players = 0;
+  for (const r of player.records) {
+    if (r.isEmpty) continue;
+    players++;
+    if (r[CONFIDENCE] === NEUTRAL_CONFIDENCE) continue;
+    if (write) { r[CONFIDENCE] = NEUTRAL_CONFIDENCE; changed++; } else off++;
+  }
+  return { changed, off, players };
 }
 
 // Checks a written save: returns a list of problems (empty = good) plus counts.
@@ -273,8 +299,10 @@ export async function verifySetup(franchise) {
     settings[name] = got;
     if (got !== value && got !== Boolean(value)) problems.push(`${name} (${field}) is ${got}, not ${value}`);
   }
+  const confidence = await neutralConfidence(tables, false);
+  if (confidence.off) problems.push(`${confidence.off} of ${confidence.players} players not at ${CONFIDENCE} ${NEUTRAL_CONFIDENCE}`);
   return { problems, users: users.length, distinctIds: ids.size, registryListed: users.length - missing,
-    teamSettingRows: settingRows.length, settings };
+    teamSettingRows: settingRows.length, settings, playersChecked: confidence.players };
 }
 
 export async function setupLeague(inputPath, outPath) {
@@ -381,7 +409,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
       console.error(`users created ${r.usersCreated.length} (${r.usersCreated.join(' ') || 'none'}); users ${r.users}, `
         + `distinct ids ${r.distinctIds}, registry ${r.registryListed}; fill roster turned off on ${r.fillRosterChanged} `
         + `of ${r.teamSettingRows} TeamSetting rows; ${Object.entries(r.leagueSettings).map(([k, v]) => `${k} `
-        + `${v.field} ${v.before} -> ${v.after}`).join(', ')}; read back -> ${r.out}`);
+        + `${v.field} ${v.before} -> ${v.after}`).join(', ')}; ConfidenceRating 50 set on ${r.confidenceChanged} of `
+        + `${r.players} players; read back -> ${r.out}`);
       process.stdout.write(JSON.stringify(r));
     } else if (cmd === 'state') {
       if (!save) usage();

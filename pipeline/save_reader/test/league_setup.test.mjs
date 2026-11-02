@@ -65,6 +65,10 @@ async function inspect(path) {
     await ls.readRecords();
     out.leagueSetting = { coachFiring: ls.records[0].Field_44, careerClock: ls.records[0].Field_82 };
     out.realTeams = team.records.filter(r => !r.isEmpty && r.TeamIndex < 32).length;
+    const player = await biggest('Player');
+    const live = player.records.filter(r => !r.isEmpty);
+    out.players = live.length;
+    out.confidenceOff = live.filter(r => r.ConfidenceRating !== 50).length;
     return out;
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -98,12 +102,16 @@ test('setup makes all 32 teams real users with fill roster, coach firing and the
       if (n) assert.deepEqual([n.injury, n.trades], [o.injury, o.trades]);
     }
     assert.deepEqual(s.leagueSetting, { coachFiring: 2, careerClock: 0 });
+    assert.equal(s.players, original.players, 'no player rows added or removed');
+    assert.equal(s.confidenceOff, 0, 'every player at ConfidenceRating 50 (neutral for the progression bootstrap)');
+    assert.equal(r1.confidenceChanged, original.confidenceOff);
 
     // a second run adds nobody and changes nothing
     const out2 = join(dir, 'twice');
     const r2 = await setupLeague(out1, out2);
     assert.deepEqual(r2.usersCreated, []);
     assert.equal(r2.fillRosterChanged, 0);
+    assert.equal(r2.confidenceChanged, 0);
     assert.deepEqual(await inspect(out2), s);
 
     await assert.rejects(setupLeague(savePath, out1), /exists/, 'an existing --out is refused');

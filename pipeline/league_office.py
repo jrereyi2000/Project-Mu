@@ -1,64 +1,68 @@
 """
-League office stage loop (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.6, U13; docs/done/LEAGUE_OFFICE_PLAN.md §3.3).
+League office stage loop (docs/in_progress/V2_CORE_BUILD_PLAN.md §2.6, U13; docs/done/LEAGUE_OFFICE_PLAN.md §3.3;
+progression contract: docs/in_progress/PROGRESSION_PLAN.md §5.3a-§5.3b).
 
-After JR advances Madden to a stage, saves and quits, the league office plans Project Mu's moves for that stage as one
-pipeline/save_reader/save_writer.mjs edits document, writes it to a temp copy of the save, reads the copy back and only
-then replaces the save:
+After JR advances Madden to a stage, saves and closes the franchise, the league office plans Project Mu's moves for that
+stage, composes them with the progression engine's prepared document into ONE pipeline/save_reader/save_writer.mjs
+edits document, writes it to a temp copy of the save, reads the copy back and only then replaces the save:
 
   python3 -m pipeline.league_office --snapshot captures/<run>/save.json --save <CAREER-file>
                                     [--stage auto|<STAGE>] [--wave N] [--seed S] [--dry-run] [--dsn ...]
                                     [--confirm-franchise-closed]
-  python3 -m pipeline.league_office setup --save <CAREER-file> --out <new-file>
+  python3 -m pipeline.league_office --recover <run_id> [--save <CAREER-file>] [--dsn ...]
+  python3 -m pipeline.league_office setup --save <CAREER-file> --out <new-file> [--dsn ...]
 
 Stages (detect_stage). Regular season and playoffs come from season.week_type. The offseason (season.stage OffSeason)
-comes from season.offseason_stage (SeasonInfo.CurrentOffseasonStage) and week_index, as JR's 2026 stage saves show:
-  stage 1: week 0 OFFSEASON_START (Madden's retirements announced), week 1 RESIGN, week 2+ FREE_AGENCY wave 1 (Madden's
-  FAPREP: every expiring contract has become a free agent); stage 2 FREE_AGENCY wave 2 (Madden's live free-agency
-  event); stage 3 FREE_AGENCY wave 3; stages 4-5 COMBINE; stages 6-8 PRO_DAY; stage 9 DRAFT (the draft screen); stage
-  10+ UDFA (the post-draft recap and its live UDFA event). Without an offseason stage number the week index stands in
-  (0 START, 1 RESIGN, 2-4 FA waves 1-3, 5-6 COMBINE, 7-10 PRO_DAY, 11-14 DRAFT, 15+ UDFA). season.stage PreSeason is
-  PRESEASON before week PRESEASON_CUTDOWN_WEEK and CUTDOWN from it (an estimate until a save at the last preseason
-  week exists). League-state weeks are contracts_engine.OFFSEASON_STAGE_WEEKS (OFFSEASON_START 24, RESIGN 25,
-  FREE_AGENCY 26 for every wave, DRAFT 29, UDFA 30, CUTDOWN 31, PRESEASON 32) plus COMBINE 27 and PRO_DAY 28, the two
-  weeks between free agency and the draft that the engine's map leaves free.
+is Madden's 8 stops, one Advance each (docs/reference/MADDEN_OFFSEASON_WALKTHROUGH.md, an all-user manual franchise),
+keyed on (week_index, CurrentOffseasonStage = season.offseason_stage):
+  (0, 1) Staff          OFFSEASON_START       (1, 1) Re-sign     RESIGN
+  (2, 1) FA prep        FREE_AGENCY wave 1    (3, 2) Free agency FREE_AGENCY wave 2
+  (5, 4) Combine        COMBINE (+ FA wave 3) (7, 6) Pro day     PRO_DAY
+  (11, 9) Draft         DRAFT                 (15, 10) Recap     UDFA
+Without an offseason stage number the week index alone decides; a week index or stage number that is none of the 8
+stops (the skipped numbers are internal to Madden) is a StageError (pass --stage). Stage 10+ / week 15+ is UDFA.
+season.stage PreSeason is PRESEASON before week PRESEASON_CUTDOWN_WEEK and CUTDOWN from it (an estimate until a save at
+the last preseason week exists). League-state weeks are contracts_engine.OFFSEASON_STAGE_WEEKS (OFFSEASON_START 24,
+RESIGN 25, FREE_AGENCY 26 for both waves, DRAFT 29, UDFA 30, CUTDOWN 31, PRESEASON 32) plus COMBINE 27 and PRO_DAY 28.
 
 Seasons. `season` is league_state's season: the snapshot's calendar year, except at PRESEASON / CUTDOWN, where the
 save has already rolled into the new year and the offseason's season is the year before. The league year moves count
 against is transactions_engine.target_season (season + 1 in the offseason). Madden's contracts roll into the new league
-year at FAPREP (the stage saves show all expiring deals freed there), so a contract written at OFFSEASON_START or
-RESIGN for the coming league year keeps the deal's current-year terms as year 0 and puts the new years after it; from
-FREE_AGENCY on, and in season, year 0 is the league year itself. Written contracts always start at CurrentYear 0.
+year at FA prep, so a contract written at OFFSEASON_START or RESIGN for the coming league year keeps the deal's
+current-year terms as year 0 and puts the new years after it; from FREE_AGENCY on, and in season, year 0 is the league
+year itself. Written contracts always start at CurrentYear 0. Progression years (§5.3a): the weekly checkpoint gets
+(season, league week); OFFSEASON_START prepares target application year S = season + 1 (it reconciles development
+earned in `season`); setup bootstraps application year `season` in season and at OFFSEASON_START, else season + 1.
 
-Every stage plans, in this priority (a player takes part in one of release / sign / trade per write; the first claim
-wins, and a lower-priority player field never overwrites a higher one):
+Every stage plans, in this order (eligibility is decided as the plan goes: a player takes part in one of release /
+sign / trade per write and the first claim stands; a second, different contract for the same player is refused; a
+players-edit field already planned with a different value is a CompositionError, never last-writer-wins):
   1. JR's PENDING franchise_pending_moves (marked WRITTEN, or REFUSED with the reason, after the write).
   2. contract_offers JR's targets ACCEPTED (from_user): FREE_AGENT / UDFA -> a Roster signing, RESIGN / EXTENSION /
      TENDER -> the player's contract rewritten.
   3. drift_check.diff write-back: a player Madden signed is released, one Madden cut is signed back with Project Mu's
      contract, one Madden traded is traded back, contracts and depth charts Project Mu stored are restored, sliders
-     go back to 0 (rating drift is written back at the lowest priority, under the stage's own rating edits).
+     go back to 0. Rating drift is written back only at stages without progression (in REGULAR_WEEK, PLAYOFF_WEEK and
+     OFFSEASON_START the progression engine owns every rating it writes; the entries are counted, not written).
   4. The stage:
      REGULAR_WEEK / PLAYOFF_WEEK  injuries (Project Mu's duration: the previous mu_weeks_out minus the weeks since,
          or a seeded draw in Madden's MinInjuryDuration..MaxInjuryDuration; written to both fields and to
          injuries.mu_weeks_out), IR placement at IR_MIN_WEEKS+ weeks out, activation only when healthy (including
-         players Madden left on IR after they healed), waiver claims for the players released by the last WRITTEN
-         run (transactions_engine.waivers; a claim can't be written in the write that releases him), form_engine's
-         form overlay and morale 50, progression.in_season_checkpoint when that hook exists (its rows become rating
-         edits through progression_save.rating_edits; skipped with a log line when absent), then roster legality:
-         every team down to MAX_ACTIVE active players (ROSTER_LIMIT 65 minus ROSTER_BUFFER 2: room for one injury
-         replacement so Madden never has a reason to sign or cut on its own) by releasing the lowest-OVR healthy
-         non-starters (ties: the biggest cut savings first), and coach depth charts (depth_chart_engine) for every
-         team except one that queued its own (a PENDING DEPTH_CHART move) or a user team with a stored JR chart.
-     OFFSEASON_START  progression_save.pass_edits for season + 1 (ratings, XP, morale, sliders 0 incl. LS, dev-trait
-         regression and breakout scenarios off) over form_engine's reset (base ratings, no overlay); retirements:
-         every player Madden retired is recorded in retirement_decisions and Project Mu keeps (un-retires) him when
-         keep_retired says so; contracts for the practice-squad players Madden promoted (a 1-year minimum for the
-         coming league year, contracts_engine.minimum_salary).
+         players Madden left on IR after they healed; a player JR moved on or off IR is left to JR's move), waiver
+         claims for the players released by the last WRITTEN run (transactions_engine.waivers; a claim can't be
+         written in the write that releases him), then roster legality: every team down to MAX_ACTIVE active players
+         (ROSTER_LIMIT 65 minus ROSTER_BUFFER 2: room for one injury replacement so Madden never has a reason to sign or
+         cut on its own) by releasing the lowest-OVR healthy non-starters with no other edit planned (ties: the biggest
+         cut savings first), and coach depth charts (depth_chart_engine) for every team except one that queued its own
+         (a PENDING DEPTH_CHART move) or a user team with a stored JR chart.
+     OFFSEASON_START  retirements: every player Madden retired is recorded in retirement_decisions and Project Mu
+         keeps (un-retires) him when keep_retired says so; contracts for the practice-squad players Madden promoted (a
+         1-year minimum for the coming league year, contracts_engine.minimum_salary).
      RESIGN  transactions_engine.resign_decisions (CONTRACT / TAG / EXTENSION / OPTION rewrite the contract; LET_GO
-         is left to Madden's FAPREP).
-     FREE_AGENCY  cpu_offers for the wave, free_agency_engine.run_wave, signings_from_decisions (offers' statuses
-         updated after the write).
-     COMBINE, PRO_DAY  only the every-stage items.
+         is left to Madden's FA prep).
+     FREE_AGENCY (waves 1-2), COMBINE (wave 3)  cpu_offers for the wave, free_agency_engine.run_wave,
+         signings_from_decisions (offers' statuses updated after the write).
+     PRO_DAY  only the every-stage items.
      DRAFT  every pick from the owner's team board (scout_team_boards, newest step), JR's own picks from the war room
          (scout_draft_picks JR_TEAM), else Madden's board order; each drafted prospect signed with
          contracts_engine.rookie_contract.
@@ -68,29 +72,63 @@ wins, and a lower-priority player field never overwrites a higher one):
      retiree back to his old team when his stored contract runs into the league year.
   5. Cap fields (spike R6: Madden doesn't recompute them): each signed or re-contracted player's PLYR_CAPSALARY (the
      written contract's current-year SalaryYear + BonusYear, $10,000 units) and, on each affected team's Team row,
-     TEAM_SALARY (the sum of current-year base salaries: matches the sample save within a few units) and
-     SalCapCapRoom / SalCapSpendingMoney / SalCapNextYearCapRoom moved by the cap-hit change. Those three aren't in a
-     confirmed unit (on CAREER-GIANTS-AUTOSAVE they don't match the x$10,000 contract hits on any one scale), so they
-     are adjusted by the change from the save's stored value in $10,000 units (CAP_ROOM_UNIT) rather than recomputed.
-     A release frees cap hit - dead money (all remaining bonus accelerates, load_save's rule); a trade moves the
-     full cap hit. The stored values come from `league_setup.mjs state`.
+     TEAM_SALARY (the sum of current-year base salaries) and SalCapCapRoom / SalCapSpendingMoney /
+     SalCapNextYearCapRoom moved by the cap-hit change in $10,000 units (CAP_ROOM_UNIT; their stored unit is not
+     confirmed, so they are adjusted from the save's stored value rather than recomputed). A release frees cap hit -
+     dead money (all remaining bonus accelerates, load_save's rule); a trade moves the full cap hit. The stored
+     values come from `league_setup.mjs state`.
+  6. Progression (REGULAR_WEEK / PLAYOFF_WEEK: progression.in_season_checkpoint(cur, season, week, snapshot=...,
+     source_fingerprint=<sha256 of the input save bytes>); OFFSEASON_START: progression_checkpoint.
+     prepare_offseason_pass(cur, snapshot, season + 1, source_fingerprint=...)). Required: a missing hook, a wrong
+     signature or an envelope that isn't {document, event_ids, source_fingerprint, edits_hash} with a matching
+     fingerprint and hash is a ProgressionIntegrationError, never a skip. The engine sees the snapshot without the
+     players this write releases (the writer refuses players edits for a released player), so eligibility is fixed
+     before its proposals are frozen. Its document already holds permanent base + weekly form overlay, OVR / grades /
+     PlayerType, morale 50, XP / skill points 0 and the progression-setting safeguards (sliders, dev-trait regression
+     and breakout scenarios off); the league office adds no form or morale of its own. compose() merges it with the
+     moves above into one document; a player field or record field both set with different values, or a progression
+     edit of a released player, is a CompositionError. `prepared` is kept unchanged; the combined document has its
+     own hash.
 
-Writer limits handled here (BLOCKERS for the writer, not this file): a Roster signing needs a PlayerContract row no
-field references (the save has none spare; each Roster release in the same write frees one), so signings beyond the
-free rows are deferred (reported, not written); the writer has no practice-squad promote / demote move, so those are
-deferred or REFUSED; a kept retiree is un-retired as a free agent (ContractStatus FreeAgent, TeamIndex 32) and signed
-back in a later write, since a move can't plan against the Retired status.
+Writing and the receipt protocol (run; §5.3a steps 1-5). The input save's sha256 is the source fingerprint. The
+league_office_runs row (status PLANNED) is inserted and committed first; after planning, the operation record goes into
+its summary JSONB under "operation" (operation_id, phase, save path, input / candidate / output sha256, combined hash,
+the unchanged prepared envelope, and what record_written needs) and edits holds the combined document; that is
+COMMITTED with the PREPARED progression events (phase PREPARED) before anything is written. The document then goes to
+`node save_writer.mjs <save> <edits> --out <temp copy>` (whole-document plan, write and read-back), the copy is read
+with pc_save_reader.mjs and checked again (verify_read_back); on any failure the run is FAILED, nothing is awarded and
+nothing is acknowledged. Otherwise the candidate's sha256 is committed (phase CANDIDATE_VERIFIED), the save is replaced
+atomically from the copy under the franchise-closed guard, the output file's sha256 is checked against the candidate's
+and committed (phase REPLACED), the output save is read, progression_checkpoint.acknowledge_pass(cur, prepared,
+output_snapshot, output_fingerprint=output_sha256, writer_verified=True) runs, record_written stores the plan's DB side
+and the run becomes WRITTEN (phase ACKNOWLEDGED) in one commit. If anything after the replacement fails, the run is
+left PLANNED for --recover. --recover <run_id> never recalculates, re-rolls or advances: it reads the stored
+operation, hashes the save as it is now and (a) when that equals the recorded candidate / output sha256 the
+replacement happened: it reads that save and acknowledges the ORIGINAL prepared envelope with the observed output
+fingerprint, then records and commits; (b) when it equals the input sha256 the save was never replaced: the run is
+marked FAILED and nothing is awarded; (c) anything else is refused (RecoveryError) and nothing changes. A run already
+WRITTEN is reported and left alone. --dry-run writes no save, prints the plan with the engine's public proposal reports
+(progression_checkpoint.explain_prepared), rolls the preparation back, never acknowledges, and keeps one DRY_RUN row.
 
-Writing (run). The document goes to `node save_writer.mjs <save> <edits> --out <temp copy>`, which checks every edit,
-writes and reads the copy back; the copy is then read with pc_save_reader.mjs and the moved players checked again.
-The save is replaced (atomically, from the verified copy) only when both passed and the franchise isn't loaded.
 Madden may sit at its main menu with the franchise closed, which can't be told apart from a loaded franchise, so
 while Madden27.exe runs the write needs --confirm-franchise-closed (or LEAGUE_OFFICE_FRANCHISE_CLOSED=1, for the
-watcher); with Madden not running it writes. league_office_runs logs PLANNED -> WRITTEN | FAILED (edits, summary,
-drift, error); --dry-run writes no save and no DB rows except one DRY_RUN run row (the engines' own inserts, such as
-cpu_offers, are rolled back).
+watcher); with Madden not running it writes.
+
+Writer limits handled here: a Roster signing needs a PlayerContract row no field references (each Roster release in
+the same write frees one), so signings beyond the free rows are deferred (reported, not written); the writer has no
+practice-squad promote / demote move, so those are deferred or REFUSED; a kept retiree is un-retired as a free agent
+(ContractStatus FreeAgent, TeamIndex 32) and signed back in a later write.
+
+Setup (one time, before the franchise's first league office run): league_setup.mjs makes every team a real user team,
+turns fill roster off, CoachFiring OFF, the career clock off and sets every player's ConfidenceRating to 50, writing a
+NEW save (--out) and reading it back. The league office then reads the new save, checks every player is at
+ConfidenceRating 50 and that no player_form row exists for the year (form is known-neutral), and calls
+progression_checkpoint.bootstrap_pass(cur, snapshot, application_season, source_fingerprint=<sha256 of the new save>,
+form_neutral=True) and commits. A failure rolls back and deletes the new save. bootstrap_pass is never called for any
+other ingest.
 """
 import argparse
+import copy
 import hashlib
 import json
 import logging
@@ -124,13 +162,21 @@ IN_SEASON = (REGULAR_WEEK, PLAYOFF_WEEK)
 NEW_YEAR_STAGES = (PRESEASON, CUTDOWN)          # the snapshot's calendar year is already the new season
 PRE_ROLLOVER = IN_SEASON + (OFFSEASON_START, RESIGN)   # the save's contract year is still `season`
 FA_WAVES = 3
-# CurrentOffseasonStage -> (stage, wave); stage 1 is split by week (0 START, 1 RESIGN, 2+ FA wave 1).
-OFFSEASON_BY_NUMBER = {2: (FREE_AGENCY, 2), 3: (FREE_AGENCY, 3), 4: (COMBINE, None), 5: (COMBINE, None),
-                       6: (PRO_DAY, None), 7: (PRO_DAY, None), 8: (PRO_DAY, None), 9: (DRAFT, None)}
-UDFA_FROM_STAGE = 10
-# Fallback without an offseason stage number: week index -> (stage, wave).
-OFFSEASON_BY_WEEK = [(0, OFFSEASON_START, None), (1, RESIGN, None), (2, FREE_AGENCY, 1), (3, FREE_AGENCY, 2),
-                     (4, FREE_AGENCY, 3), (5, COMBINE, None), (7, PRO_DAY, None), (11, DRAFT, None), (15, UDFA, None)]
+# Madden's 8 offseason stops (docs/reference/MADDEN_OFFSEASON_WALKTHROUGH.md):
+# (week_index, CurrentOffseasonStage, stage, free-agency wave, Madden's name).
+OFFSEASON_STOPS = (
+    (0, 1, OFFSEASON_START, None, "Staff"),
+    (1, 1, RESIGN, None, "Re-sign"),
+    (2, 1, FREE_AGENCY, 1, "FA prep"),
+    (3, 2, FREE_AGENCY, 2, "Free agency"),
+    (5, 4, COMBINE, 3, "Combine"),
+    (7, 6, PRO_DAY, None, "Pro day"),
+    (11, 9, DRAFT, None, "Draft"),
+    (15, 10, UDFA, None, "Recap / UDFA"),
+)
+UDFA_FROM_STAGE, UDFA_FROM_WEEK = 10, 15
+FA_STAGES = (FREE_AGENCY, COMBINE)             # stages that run a free-agency wave
+PROGRESSION_STAGES = IN_SEASON + (OFFSEASON_START,)
 PRESEASON_CUTDOWN_WEEK = 3                     # estimate: the last preseason week
 STAGE_WEEKS = dict(ce.OFFSEASON_STAGE_WEEKS, COMBINE=ce.OFFSEASON_STAGE_WEEKS["FREE_AGENCY"] + 1,
                    PRO_DAY=ce.OFFSEASON_STAGE_WEEKS["FREE_AGENCY"] + 2)
@@ -163,7 +209,12 @@ MOVE_FIELDS = {
 FREE_AGENT_TEAM = ls.FREE_AGENT_TEAM_INDEX
 FRANCHISE_CLOSED_ENV = "LEAGUE_OFFICE_FRANCHISE_CLOSED"
 
-PRIORITY_JR, PRIORITY_OFFER, PRIORITY_DRIFT, PRIORITY_STAGE, PRIORITY_FORM, PRIORITY_DRIFT_RATINGS = 0, 1, 2, 3, 4, 5
+# Claim order (informational: the first claim on a player stands) and depth-chart precedence (JR > JR_STORED >
+# MU_COACH > DRIFT).
+PRIORITY_JR, PRIORITY_OFFER, PRIORITY_DRIFT, PRIORITY_STAGE = 0, 1, 2, 3
+
+PREPARED_KEYS = ("document", "event_ids", "source_fingerprint", "edits_hash")
+PHASES = ("PREPARED", "CANDIDATE_VERIFIED", "REPLACED", "ACKNOWLEDGED", "FAILED")
 
 
 class StageError(Exception):
@@ -172,6 +223,32 @@ class StageError(Exception):
 
 class FranchiseOpenError(Exception):
     pass
+
+
+class ProgressionIntegrationError(Exception):
+    """The progression engine's U13 interface is missing or returned something else (never a silent skip)."""
+
+
+class CompositionError(Exception):
+    """Two edits for the same player / record field disagree, or a released player would get a players edit."""
+
+
+class RecoveryError(Exception):
+    pass
+
+
+def canonical_hash(value):
+    """sha256 of canonical JSON (progression_checkpoint.fingerprint's rule)."""
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def file_sha256(path):
+    """sha256 of a file's bytes (the save fingerprints of §5.3a are of actual save bytes)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 # ------------------------------------------------------------ pure helpers ----
@@ -200,20 +277,23 @@ def stage_and_wave(snapshot):
     if stage == "offseason":
         number = s.get("offseason_stage")
         if isinstance(number, int) and number >= 1:
-            if number == 1:
-                if (week or 0) <= 0:
-                    return OFFSEASON_START, None
-                return (RESIGN, None) if week == 1 else (FREE_AGENCY, 1)
             if number >= UDFA_FROM_STAGE:
                 return UDFA, None
-            return OFFSEASON_BY_NUMBER[number]
+            stops = [r for r in OFFSEASON_STOPS if r[1] == number]
+            if number == 1:
+                stops = [r for r in stops if r[0] == (week or 0)]
+            if len(stops) != 1:
+                raise StageError(f"offseason stage {number} week {week} is not one of Madden's 8 offseason stops "
+                                 "(pass --stage)")
+            return stops[0][2], stops[0][3]
         if week is None:
             raise StageError("offseason save without a week index or offseason stage")
-        found = OFFSEASON_BY_WEEK[0]
-        for row in OFFSEASON_BY_WEEK:
-            if week >= row[0]:
-                found = row
-        return found[1], found[2]
+        if week >= UDFA_FROM_WEEK:
+            return UDFA, None
+        stop = next((r for r in OFFSEASON_STOPS if r[0] == week), None)
+        if stop is None:
+            raise StageError(f"offseason week {week} is not one of Madden's 8 offseason stops (pass --stage)")
+        return stop[2], stop[3]
     if wtype in ls.PLAYOFF_WEEKS or wtype.lower() == "probowl":
         return PLAYOFF_WEEK, None
     if wtype == "RegularSeason" or stage == "nflseason":
@@ -244,6 +324,19 @@ def target_season(season, stage, week):
 def save_year(season, stage):
     """The league year the save's contracts are in (CurrentYear): `season` until RESIGN, the next one from FAPREP."""
     return season if stage in PRE_ROLLOVER else season + 1
+
+
+def offseason_target_season(season):
+    """The application year S prepare_offseason_pass takes at OFFSEASON_START: the season after `season` (the one whose
+    development it reconciles)."""
+    return season + 1
+
+
+def setup_application_season(stage, season):
+    """The application year a setup bootstraps progression at: `season` in season and at OFFSEASON_START (its
+    offseason pass is still to come), else season + 1 (later offseason stops and the preseason are already the next
+    year's; a setup after OFFSEASON_START has no offseason pass that year)."""
+    return season if stage in PROGRESSION_STAGES else season + 1
 
 
 def keep_retired(player, season, seed):
@@ -390,7 +483,7 @@ class Plan:
         # current view: pgid -> (status, team_index); IR view: pgid -> bool
         self.view = {g: (p.get("status"), p.get("team_index")) for g, p in self.players.items()}
         self.ir = {g: bool((p.get("injury") or {}).get("injured_reserve")) for g, p in self.players.items()}
-        self.edits = {}            # pgid -> {"set": {field: value}, "prio": {field: priority}, "contract": block}
+        self.edits = {}            # pgid -> {"set": {field: value}, "contract": block or None}
         self.release, self.trades, self.signs = [], [], []
         self.records = []
         self.depth = {}            # team_index -> {"slots": {...}, "source", "priority"}
@@ -431,9 +524,12 @@ class Plan:
         return self.note(tag, False, reason)
 
     def step(self, name, fn, *args, **kwargs):
-        """Runs one planning step; an exception becomes a plan error (the run then writes nothing)."""
+        """Runs one planning step; an exception becomes a plan error (the run then writes nothing). Composition and
+        progression-interface errors are raised."""
         try:
             return fn(*args, **kwargs)
+        except (CompositionError, ProgressionIntegrationError):
+            raise
         except Exception as e:     # noqa: BLE001 - every step's failure is reported, not raised mid-plan
             log.exception("step %s failed", name)
             self.errors.append(f"{name}: {type(e).__name__}: {e}")
@@ -463,6 +559,10 @@ class Plan:
             return self.note(tag, False, f"{self.name(pgid)} is {status}, not on a roster")
         if expect_team is not None and team != expect_team:
             return self.note(tag, False, f"{self.name(pgid)} is on team {team}, not {expect_team}")
+        if pgid in self.edits:
+            # The writer refuses a players edit of a released player; this write already planned one for him.
+            self.warn(f"{self.name(pgid)}: not released ({reason}): an edit for him is already planned this write")
+            return self.note(tag, False, f"{self.name(pgid)} already has a players edit planned this write")
         if not self._claim(pgid, "release", team, priority, tag):
             return False
         self.release.append(pgid)
@@ -523,16 +623,18 @@ class Plan:
         self.counts["trade"] += 1
         return self.note(tag, True, reason)
 
-    def set_fields(self, pgid, fields, priority, tag=None):
-        """Player fields; a field a higher-priority source already set is kept."""
+    def set_fields(self, pgid, fields, tag=None):
+        """Player fields. A field already planned with a different value is a CompositionError (steps decide
+        eligibility first; nothing is overwritten)."""
         if pgid not in self.players:
             return self.note(tag, False, f"pgid {pgid} not in the save")
-        e = self.edits.setdefault(pgid, {"set": {}, "prio": {}, "contract": None})
+        if pgid in self.claimed and self.claimed[pgid][0] == "release":
+            raise CompositionError(f"{self.name(pgid)} (pgid {pgid}) is released this write: no players edit allowed")
+        e = self.edits.setdefault(pgid, {"set": {}, "contract": None})
         for k, v in fields.items():
-            if k in e["prio"] and e["prio"][k] < priority:
-                continue
-            e["set"][k] = v
-            e["prio"][k] = priority
+            if k in e["set"] and e["set"][k] != v:
+                raise CompositionError(f"pgid {pgid} {k}: planned {e['set'][k]!r} and {v!r} in the same write")
+        e["set"].update(fields)
         return self.note(tag, True)
 
     def set_contract(self, pgid, priority, reason, tag=None, contract=None, block=None, offset=None):
@@ -545,25 +647,27 @@ class Plan:
             return self.note(tag, False, f"{self.name(pgid)} has no contract record ({status})")
         if pgid in self.claimed and self.claimed[pgid][0] in ("release", "sign"):
             return self.note(tag, False, f"{self.name(pgid)} already has a {self.claimed[pgid][0]} this write")
-        e = self.edits.setdefault(pgid, {"set": {}, "prio": {}, "contract": None, "contract_prio": None})
-        if e.get("contract") is not None and (e.get("contract_prio") or 0) <= priority:
-            return self.note(tag, False, "a higher-priority contract change is already planned")
+        have = self.edits.get(pgid)
+        if have and have.get("contract") is not None:
+            return self.note(tag, False, f"{self.name(pgid)}: a contract change is already planned this write")
         if block is None:
             block, dropped = contract_block(contract, old, self.offset if offset is None else offset, self.slots)
             if dropped:
                 self.warn(f"{self.name(pgid)}: {dropped} contract years past the save's {self.slots} slots dropped")
         if block == snapshot_block(old):
             return self.note(tag, True, "contract already as planned")
-        prev = e.get("contract") or snapshot_block(old)
-        h0, n0, b0 = cap_change(prev)
+        h0, n0, b0 = cap_change(snapshot_block(old))
         h1, n1, b1 = cap_change(block)
         self._cap(team, h0 - h1, n0 - n1, b1 - b0)
-        e["contract"], e["contract_prio"] = block, priority
+        e = self.edits.setdefault(pgid, {"set": {}, "contract": None})
+        e["contract"] = block
         self.contracts_written[pgid] = block
         self.counts["contract"] += 1
         return self.note(tag, True, reason)
 
     def depth_chart(self, team_index, slots_pgids, source, priority, tag=None):
+        """A team's chart for this write; the first one of a source at least as strong stands (JR > JR_STORED >
+        MU_COACH > DRIFT, step_coach_charts replaces a DRIFT chart)."""
         have = self.depth.get(team_index)
         if have and have["priority"] <= priority:
             return self.note(tag, False, f"team {team_index} already has a {have['source']} depth chart this write")
@@ -622,14 +726,13 @@ class Plan:
         released = set(self.release)
         moved = {g: m for g, (m, _, _) in self.claimed.items()}
         players = []
-        dropped = 0
         for g, e in sorted(self.edits.items()):
             if g in released:
-                dropped += 1
-                continue
+                raise CompositionError(f"pgid {g}: a players edit is planned for a released player")
             st = dict(e["set"])
-            for k in MOVE_FIELDS.get(moved.get(g), ()):
-                st.pop(k, None)
+            clash = [k for k in MOVE_FIELDS.get(moved.get(g), ()) if k in st]
+            if clash:
+                raise CompositionError(f"pgid {g}: the {moved[g]} move sets {', '.join(clash)}, also in a players edit")
             block = e.get("contract")
             if g in self.contracts_written:
                 st["PLYR_CAPSALARY"] = _clamp(block_hit(self.contracts_written[g], 0), CAPSALARY_RANGE)
@@ -642,8 +745,6 @@ class Plan:
             if s["list"] == "Roster" and not any(p["pgid"] == s["pgid"] for p in players):
                 players.append({"pgid": s["pgid"],
                                 "set": {"PLYR_CAPSALARY": _clamp(block_hit(s["contract"], 0), CAPSALARY_RANGE)}})
-        if dropped:
-            self.warn(f"{dropped} players edits dropped for released players (the writer refuses them)")
         doc = {}
         if players:
             doc["players"] = players
@@ -803,18 +904,40 @@ class Deps:
     def waivers(self, cur, season, week, released, seed):
         return te.waivers(cur, season, week, released, seed)
 
-    def form_edits(self, cur, snapshot, season, week, store=True):
-        from engines import form_engine
-        return form_engine.form_edits(cur, snapshot, season, week, store=store)
-
-    def pass_edits(self, cur, snapshot, season):
-        from engines import progression_save
-        return progression_save.pass_edits(cur, snapshot, season)
-
-    def in_season_checkpoint(self):
-        """progression.in_season_checkpoint when the progression engine has it, else None."""
+    # -- progression (PROGRESSION_PLAN §5.3a; the engine prepares and acknowledges, the league office commits)
+    def progression_weekly(self, cur, season, week, snapshot, source_fingerprint):
+        """progression.in_season_checkpoint: required, never optional."""
         from engines import progression
-        return getattr(progression, "in_season_checkpoint", None)
+        hook = getattr(progression, "in_season_checkpoint", None)
+        if hook is None:
+            raise ProgressionIntegrationError("engines.progression has no in_season_checkpoint: the managed league "
+                                              "can't run a week without it")
+        return hook(cur, season, week, snapshot=snapshot, source_fingerprint=source_fingerprint)
+
+    def progression_offseason(self, cur, snapshot, target_season, source_fingerprint):
+        from engines import progression_checkpoint as pc
+        return pc.prepare_offseason_pass(cur, snapshot, target_season, source_fingerprint=source_fingerprint)
+
+    def progression_explain(self, cur, prepared):
+        """Public proposal reports (§5.3b) for dry-run logs; read-only."""
+        from engines import progression_checkpoint as pc
+        return pc.explain_prepared(cur, prepared, audience="public")
+
+    def progression_acknowledge(self, cur, prepared, output_snapshot, output_fingerprint):
+        """Only after the whole-document writer read-back passed and the output file is known to be the save."""
+        from engines import progression_checkpoint as pc
+        return pc.acknowledge_pass(cur, prepared, output_snapshot, output_fingerprint=output_fingerprint,
+                                   writer_verified=True)
+
+    def progression_bootstrap(self, cur, snapshot, season, source_fingerprint):
+        """Setup only: the explicit neutral bootstrap (never for an arbitrary ingest)."""
+        from engines import progression_checkpoint as pc
+        return pc.bootstrap_pass(cur, snapshot, season, source_fingerprint=source_fingerprint, form_neutral=True)
+
+    def applied_form_rows(self, cur, season):
+        """player_form rows already stored for `season` (setup refuses: form isn't known-neutral then)."""
+        cur.execute("SELECT count(*) FROM player_form WHERE season = %s", (season,))
+        return int(cur.fetchone()[0])
 
     def rating_edits(self, rows, snapshot, pgid_by_player):
         from engines import progression_save
@@ -916,6 +1039,12 @@ class Deps:
             raise RuntimeError(f"league_setup.mjs state failed: {res.stderr.strip()[-500:]}")
         return json.loads(res.stdout)
 
+    def run_setup(self, save, out_path):
+        """league_setup.mjs setup: (ok, stdout, stderr)."""
+        res = subprocess.run(["node", SETUP, "setup", save, "--out", out_path], capture_output=True, text=True,
+                             timeout=1800)
+        return res.returncode == 0, res.stdout, res.stderr.strip()
+
     def write_save(self, save_path, edits_path, out_path):
         """(ok, report text) from save_writer.mjs (plan, write to out_path, read back)."""
         res = subprocess.run(["node", WRITER, save_path, edits_path, "--out", out_path], capture_output=True,
@@ -976,7 +1105,7 @@ def step_pending(plan, moves):
                 if status != "Signed" or on != team:
                     plan.note(tag, False, f"{plan.name(g)} is not on the team's active roster")
                 else:
-                    plan.set_fields(g, {"IsInjuredReserve": k == "IR_PLACE"}, PRIORITY_JR, tag)
+                    plan.set_fields(g, {"IsInjuredReserve": k == "IR_PLACE"}, tag)
                     plan.counts["ir_place" if k == "IR_PLACE" else "ir_activate"] += 1
             elif k in ("EXTENSION", "TAG", "OPTION"):
                 if not p.get("contract"):
@@ -1129,25 +1258,25 @@ def step_injuries(plan, prev, seed):
         injured = inj.get("status") not in HEALTHY
         on_ir = bool(inj.get("injured_reserve"))
         pid = plan.pid(g)
+        jr_ir = "IsInjuredReserve" in (plan.edits.get(g) or {}).get("set", {})   # JR's IR move decides
         if injured:
             weeks = injury_weeks(inj, prev.get(pid), plan.week, seed, g)
             fields = {"MinInjuryDuration": weeks, "MaxInjuryDuration": weeks}
-            if weeks >= IR_MIN_WEEKS and not on_ir:
+            if weeks >= IR_MIN_WEEKS and not on_ir and not jr_ir:
                 fields["IsInjuredReserve"] = True
                 plan.counts["ir_place"] += 1
-            if fields:
-                plan.set_fields(g, fields, PRIORITY_STAGE)
+            plan.set_fields(g, fields)
             plan.counts["injury_durations"] += 1
             if pid is not None:
                 plan.db["injuries"].append({"player_id": pid, "mu_weeks_out": weeks})
-        elif on_ir:
-            plan.set_fields(g, {"IsInjuredReserve": False}, PRIORITY_STAGE)
+        elif on_ir and not jr_ir:
+            plan.set_fields(g, {"IsInjuredReserve": False})
             plan.counts["ir_activate"] += 1
 
 
 def step_legality(plan, limit, protect=frozenset()):
-    """Releases the lowest-OVR healthy non-starters (ties: biggest cut savings) until each team has at most `limit`
-    active (non-IR) players."""
+    """Releases the lowest-OVR healthy non-starters with no other edit planned (ties: biggest cut savings) until each
+    team has at most `limit` active (non-IR) players."""
     for team, pgids in sorted(plan.rosters().items()):
         active = [g for g in pgids if not plan.on_ir(g)]
         excess = len(active) - limit
@@ -1161,7 +1290,8 @@ def step_legality(plan, limit, protect=frozenset()):
         cands = []
         for g in active:
             p = plan.players[g]
-            if g in starters or g in protect or g in plan.claimed or (p.get("injury") or {}).get("status") not in HEALTHY:
+            if (g in starters or g in protect or g in plan.claimed or g in plan.edits
+                    or (p.get("injury") or {}).get("status") not in HEALTHY):
                 continue
             room, _, _ = release_cap(snapshot_block(p.get("contract")))
             cands.append((p.get("overall") or 0, -room, g))
@@ -1200,11 +1330,13 @@ def step_coach_charts(plan, deps, cur, user_teams, jr_charts, schemes):
             plan.db["charts"].append({"team_index": team_index, "team_id": team_id, "source": "MU_COACH"})
 
 
-def step_merge_doc(plan, doc, priority):
-    """A players / records document from an engine (form, progression pass) merged at `priority`."""
-    for e in (doc or {}).get("players") or []:
-        plan.set_fields(e["pgid"], e.get("set") or {}, priority)
-    plan.add_records((doc or {}).get("records"))
+def step_drift_ratings(plan, deps, rows):
+    """Rating drift written back (stages without progression only), skipping players this write releases."""
+    released = set(plan.release)
+    rows = [r for r in rows if r["pgid"] not in released]
+    for e in deps.rating_edits(rows, plan.snapshot, {}) or []:
+        plan.set_fields(e["pgid"], e.get("set") or {})
+    plan.counts["drift_ratings_written"] = len(rows)
 
 
 def step_moves(plan, moves, priority, label):
@@ -1249,7 +1381,7 @@ def step_retirements(plan, seed):
         plan.db["retirements"].append({"player_id": pid, "mu_keep": keep, "reason": reason})
         plan.counts["retired_by_madden"] += 1
         if keep:
-            plan.set_fields(g, {"ContractStatus": "FreeAgent", "TeamIndex": FREE_AGENT_TEAM}, PRIORITY_STAGE)
+            plan.set_fields(g, {"ContractStatus": "FreeAgent", "TeamIndex": FREE_AGENT_TEAM})
             plan.view[g] = ("Retired", None)   # signable only in a later write
             plan.counts["unretired"] += 1
 
@@ -1368,23 +1500,117 @@ def step_free_agency(plan, deps, cur, seed):
         plan.counts["fa_signings"] += 1
 
 
+# ------------------------------------------------------------ progression ----
+def check_prepared(prepared, source_fingerprint):
+    """The engine's envelope, checked as §5.3a fixes it; returned unchanged."""
+    if not isinstance(prepared, dict) or any(k not in prepared for k in PREPARED_KEYS):
+        raise ProgressionIntegrationError(f"progression returned {type(prepared).__name__} without "
+                                          f"{', '.join(PREPARED_KEYS)} (the U13 envelope)")
+    doc = prepared["document"]
+    if not isinstance(doc, dict) or set(doc) - {"players", "records"}:
+        raise ProgressionIntegrationError("progression document must hold only players / records")
+    if not isinstance(prepared["event_ids"], list):
+        raise ProgressionIntegrationError("progression event_ids must be a list")
+    if prepared["source_fingerprint"] != source_fingerprint:
+        raise ProgressionIntegrationError("progression prepared a different input save (source fingerprint)")
+    if canonical_hash(doc) != prepared["edits_hash"]:
+        raise ProgressionIntegrationError("progression edits_hash doesn't match its document")
+    return prepared
+
+
+def eligible_snapshot(snapshot, released):
+    """The snapshot the engine prepares from: without the players this write releases (the writer refuses their
+    players edits), so their proposals are never frozen."""
+    if not released:
+        return snapshot
+    out = dict(snapshot)
+    out["players"] = [p for p in snapshot.get("players") or [] if p.get("pgid") not in released]
+    return out
+
+
+def prepare_progression(cur, deps, snapshot, stage, season, week, source_fingerprint, released):
+    """(prepared envelope unchanged, info) for a progression stage, else (None, None). Errors are raised."""
+    if stage not in PROGRESSION_STAGES:
+        return None, None
+    if not source_fingerprint:
+        raise ProgressionIntegrationError("progression needs the input save's sha256 (source_fingerprint)")
+    snap = eligible_snapshot(snapshot, released)
+    try:
+        if stage in IN_SEASON:
+            info = {"kind": "WEEKLY", "season": season, "week": week}
+            prepared = deps.progression_weekly(cur, season, week, snap, source_fingerprint)
+        else:
+            target = offseason_target_season(season)
+            info = {"kind": "OFFSEASON", "earned_season": season, "target_season": target}
+            prepared = deps.progression_offseason(cur, snap, target, source_fingerprint)
+    except TypeError as e:
+        raise ProgressionIntegrationError(f"progression interface mismatch: {e}") from e
+    check_prepared(prepared, source_fingerprint)
+    info.update(events=len(prepared["event_ids"]), players=len(prepared["document"].get("players") or []),
+                records=len(prepared["document"].get("records") or []), edits_hash=prepared["edits_hash"],
+                released_excluded=len(released))
+    return prepared, info
+
+
+def compose(edits, progression_doc, released=(), moved=None):
+    """The ONE save_writer document: the league office's moves plus the progression document. A player or record
+    field set by both with different values, or a progression players edit of a released player (or of a move's own
+    field), is a CompositionError. Neither input is changed."""
+    if not progression_doc:
+        return copy.deepcopy(edits)
+    released, moved = set(released or ()), dict(moved or {})
+    out = copy.deepcopy(edits)
+    players = {e["pgid"]: e for e in out.get("players") or []}
+    for e in progression_doc.get("players") or []:
+        g = e["pgid"]
+        if g in released:
+            raise CompositionError(f"pgid {g}: progression edit for a player this write releases")
+        clash = [k for k in MOVE_FIELDS.get(moved.get(g), ()) if k in (e.get("set") or {})]
+        if clash:
+            raise CompositionError(f"pgid {g}: progression sets {', '.join(clash)}, which the {moved[g]} move sets")
+        have = players.setdefault(g, {"pgid": g, "set": {}})
+        for k, v in (e.get("set") or {}).items():
+            if k in have["set"] and have["set"][k] != v:
+                raise CompositionError(f"pgid {g} {k}: league office {have['set'][k]!r}, progression {v!r}")
+            have["set"][k] = v
+    if players:
+        out["players"] = [players[g] for g in sorted(players)]
+    records, index = [], {}
+    for r in list(out.get("records") or []) + list(progression_doc.get("records") or []):
+        key = (r.get("table"), r.get("tableId"), r.get("row"))
+        if key not in index:
+            index[key] = len(records)
+            records.append({**r, "set": dict(r.get("set") or {})})
+            continue
+        have = records[index[key]]["set"]
+        for k, v in (r.get("set") or {}).items():
+            if k in have and have[k] != v:
+                raise CompositionError(f"record {key} {k}: {have[k]!r} and {v!r} in the same write")
+            have[k] = v
+    if records:
+        out["records"] = records
+    return out
+
+
 # ------------------------------------------------------------- plan_stage ----
-def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None):
-    """Plans one stage: {"stage", "wave", "season", "week", "edits" (the save_writer document), "summary", "drift",
-    "deferred", "warnings", "errors", "db" (what run() records after a successful write), "results"}."""
+def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, source_fingerprint=None):
+    """Plans one stage: {"stage", "wave", "season", "week", "edits" (the ONE combined save_writer document),
+    "edits_hash" (its canonical hash), "league_edits" (the league office's own part), "prepared" (the progression
+    envelope, unchanged, or None), "progression" (what it was asked), "summary", "drift", "deferred", "warnings",
+    "errors", "db" (what run() records after a successful write), ...}. Progression and composition errors raise."""
     deps = deps or Deps()
     if stage not in STAGES:
         raise StageError(f"unknown stage {stage}")
-    if stage == FREE_AGENCY and wave is None:
+    if stage in FA_STAGES and wave is None:
         try:
             wave = stage_and_wave(snapshot)[1]
         except StageError:
             wave = None
-        wave = wave or 1
+        wave = wave or (FA_WAVES if stage == COMBINE else 1)
     season, week = league_season(snapshot, stage), league_week(snapshot, stage)
     calendar = snapshot["season"]["calendar_year"]
     teams = deps.team_ids(cur, snapshot)
-    plan = Plan(snapshot, stage, season, week, wave if stage == FREE_AGENCY else None, seed, teams,
+    plan = Plan(snapshot, stage, season, week, wave if stage in FA_STAGES else None, seed, teams,
                 deps.pgid_map(cur), state)
     if state is None:
         plan.warn("no league state from the save: team cap fields and spare contract rows unknown")
@@ -1409,22 +1635,7 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None):
         if rel_pids:
             plan.step("waivers", lambda: step_moves(plan, deps.waivers(cur, season, week, rel_pids, seed),
                                                     PRIORITY_STAGE, "waivers"))
-        plan.step("form", lambda: step_merge_doc(plan, deps.form_edits(cur, snapshot, season, week), PRIORITY_FORM))
-        hook = plan.step("in-season checkpoint", deps.in_season_checkpoint)
-        if hook is None:
-            log.info("progression.in_season_checkpoint not available; in-season progression skipped")
-            plan.counts["in_season_checkpoint"] = 0
-        else:
-            def _checkpoint():
-                rows = hook(cur, season, week) or []
-                step_merge_doc(plan, {"players": deps.rating_edits(rows, snapshot, plan.pgid_by_pid)}, PRIORITY_STAGE)
-                plan.counts["in_season_checkpoint"] = len(rows)
-            plan.step("in-season checkpoint", _checkpoint)
     elif stage == OFFSEASON_START:
-        plan.step("form reset", lambda: step_merge_doc(
-            plan, deps.form_edits(cur, snapshot, season, week, store=False), PRIORITY_FORM))
-        plan.step("progression pass", lambda: step_merge_doc(plan, deps.pass_edits(cur, snapshot, season + 1),
-                                                             PRIORITY_STAGE))
         plan.step("retirements", step_retirements, plan, seed)
         plan.step("promoted practice squads", lambda: step_promoted_ps(plan, deps.ps_without_contract(cur, calendar)))
     else:
@@ -1434,7 +1645,7 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None):
     if stage == RESIGN:
         plan.step("re-signings", lambda: step_moves(plan, deps.resign_decisions(cur, season, seed), PRIORITY_STAGE,
                                                     "resign"))
-    elif stage == FREE_AGENCY:
+    elif stage in FA_STAGES:
         plan.step("free agency", step_free_agency, plan, deps, cur, seed)
     elif stage == DRAFT:
         def _draft():
@@ -1462,11 +1673,17 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None):
         plan.step("coach depth charts", step_coach_charts, plan, deps, cur, user_teams, jr_charts, schemes)
         if stage in IN_SEASON:
             plan.step("roster legality", step_legality, plan, MAX_ACTIVE)
-    if rating_rows:
-        plan.step("drift ratings", lambda: step_merge_doc(
-            plan, {"players": deps.rating_edits(rating_rows, snapshot, {})}, PRIORITY_DRIFT_RATINGS))
+    if rating_rows and stage in PROGRESSION_STAGES:
+        plan.counts["drift_ratings_left_to_progression"] = len(rating_rows)
+    elif rating_rows:
+        plan.step("drift ratings", step_drift_ratings, plan, deps, rating_rows)
 
-    edits, summary = plan.finalize()
+    # 6. progression, prepared against the players this write keeps (eligibility fixed first), then one document
+    league_edits, summary = plan.finalize()
+    released = set(plan.release)
+    prepared, prog_info = prepare_progression(cur, deps, snapshot, stage, season, week, source_fingerprint, released)
+    moved = {g: m for g, (m, _, _) in plan.claimed.items() if m in MOVE_FIELDS}
+    edits = compose(league_edits, prepared["document"] if prepared else None, released, moved)
     for p in plan.db["pending"]:
         ok, reason = plan.results.get(p["tag"], (False, "not planned"))
         p["status"], p["reason"] = ("WRITTEN" if ok else "REFUSED"), (None if ok else reason)
@@ -1480,9 +1697,14 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None):
     summary["pending_written"] = sum(1 for p in plan.db["pending"] if p["status"] == "WRITTEN")
     summary["pending_refused"] = sum(1 for p in plan.db["pending"] if p["status"] == "REFUSED")
     summary["drift"] = {k: len(v) for k, v in drift.items() if isinstance(v, list)}
+    summary["drift_ratings_left_to_progression"] = plan.counts.get("drift_ratings_left_to_progression", 0)
+    summary["progression"] = prog_info
+    summary["players_edited"] = len(edits.get("players") or [])
+    summary["records"] = len(edits.get("records") or [])
     return {"stage": stage, "wave": plan.wave, "season": season, "week": week, "calendar_year": calendar,
-            "seed": seed, "edits": edits, "summary": summary, "drift": drift, "deferred": plan.deferred,
-            "warnings": plan.warnings, "errors": plan.errors, "db": plan.db,
+            "seed": seed, "edits": edits, "edits_hash": canonical_hash(edits), "league_edits": league_edits,
+            "prepared": prepared, "progression": prog_info, "summary": summary, "drift": drift,
+            "deferred": plan.deferred, "warnings": plan.warnings, "errors": plan.errors, "db": plan.db,
             "team_ids": plan.teams, "pid_by_pgid": plan.pid_by_pgid}
 
 
@@ -1600,9 +1822,57 @@ def replace_save(src, dest):
     os.replace(tmp, dest)
 
 
+# --------------------------------------------------- the operation record ----
+def plan_record(plan):
+    """What record_written needs, as JSON (stored with the operation so --recover can finish the run)."""
+    return {"db": plan["db"], "season": plan["season"], "week": plan["week"], "calendar_year": plan["calendar_year"],
+            "team_ids": {str(k): v for k, v in plan["team_ids"].items()},
+            "pid_by_pgid": {str(k): v for k, v in plan["pid_by_pgid"].items()}}
+
+
+def plan_from_record(record, edits):
+    """record_written's plan dict back from a stored operation record."""
+    return {"db": record["db"], "season": record["season"], "week": record["week"],
+            "calendar_year": record["calendar_year"], "edits": edits,
+            "team_ids": {int(k): v for k, v in record["team_ids"].items()},
+            "pid_by_pgid": {int(k): v for k, v in record["pid_by_pgid"].items()}}
+
+
+def new_operation(plan, run_id, save_path, input_sha256):
+    """The durable operation record (§5.3a step 2): identity, fingerprints, the unchanged prepared envelope and the
+    combined document's hash. The combined document itself is the run's edits column."""
+    ident = canonical_hash({"run_id": run_id, "save": os.path.abspath(save_path), "stage": plan["stage"],
+                            "season": plan["season"], "week": plan["week"], "input_sha256": input_sha256,
+                            "combined_hash": plan["edits_hash"],
+                            "progression_hash": (plan["prepared"] or {}).get("edits_hash")})
+    return {"operation_id": ident, "run_id": run_id, "phase": "PREPARED", "save_path": os.path.abspath(save_path),
+            "candidate_path": None, "edits_path": None, "input_sha256": input_sha256, "candidate_sha256": None,
+            "output_sha256": None, "combined_hash": plan["edits_hash"], "prepared": plan["prepared"],
+            "progression": plan["progression"], "record": plan_record(plan), "acknowledged_events": None}
+
+
+def _store_operation(cur, run_id, op, summary, edits=None):
+    cur.execute("UPDATE league_office_runs SET edits = COALESCE(%s::jsonb, edits), summary = %s::jsonb WHERE id = %s",
+                (json.dumps(edits) if edits is not None else None,
+                 json.dumps(dict(summary, operation=op), default=str), run_id))
+
+
+def _load_run(cur, run_id):
+    cur.execute("SELECT id, status, stage, save_name, edits, summary FROM league_office_runs WHERE id = %s",
+                (run_id,))
+    row = cur.fetchone()
+    if not row:
+        raise RecoveryError(f"no league_office_runs row {run_id}")
+    load = lambda v: json.loads(v) if isinstance(v, str) else (v or {})    # noqa: E731
+    return {"id": row[0], "status": row[1], "stage": row[2], "save_name": row[3], "edits": load(row[4]),
+            "summary": load(row[5])}
+
+
+# -------------------------------------------------------------------- run ----
 def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise_closed=False, seed=None,
         deps=None, wave=None, out=print):
-    """Plans and writes one stage; returns the league_office_runs id. See the module docstring for the rules."""
+    """Plans and writes one stage; returns the league_office_runs id. See the module docstring for the rules and
+    the receipt protocol."""
     deps = deps or Deps()
     conn = cur.connection
     if stage in (None, "auto"):
@@ -1615,9 +1885,10 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
     if not dry_run and not confirmed and deps.madden_running():
         msg = ("Madden27.exe is running and the franchise may be loaded: save and quit to the main menu, then pass "
                f"--confirm-franchise-closed (or {FRANCHISE_CLOSED_ENV}=1)")
-        run_id = _insert_run(cur, meta, save_name, "FAILED", error=msg)
+        _insert_run(cur, meta, save_name, "FAILED", error=msg)
         conn.commit()
         raise FranchiseOpenError(msg)
+    input_sha = file_sha256(save_path)
     try:
         state = deps.league_state(save_path)
     except Exception as e:      # noqa: BLE001 - planned without it, with a warning
@@ -1628,22 +1899,30 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
         run_id = _insert_run(cur, meta, save_name, "PLANNED")
         conn.commit()
     try:
-        plan = plan_stage(cur, snapshot, stage, seed, deps=deps, wave=wave, state=state)
+        plan = plan_stage(cur, snapshot, stage, seed, deps=deps, wave=wave, state=state, source_fingerprint=input_sha)
     except Exception as e:
-        conn.rollback()
+        conn.rollback()                          # nothing prepared survives
         if run_id is not None:
-            _finish_run(cur, run_id, "FAILED", error=f"planning failed: {e}")
+            _finish_run(cur, run_id, "FAILED", error=f"planning failed: {type(e).__name__}: {e}")
             conn.commit()
         raise
     report = {"stage": plan["stage"], "wave": plan["wave"], "season": plan["season"], "week": plan["week"],
               "summary": plan["summary"], "deferred": plan["deferred"], "warnings": plan["warnings"],
-              "errors": plan["errors"]}
+              "errors": plan["errors"], "input_sha256": input_sha, "combined_hash": plan["edits_hash"],
+              "progression_edits_hash": (plan["prepared"] or {}).get("edits_hash")}
     if dry_run:
-        conn.rollback()                      # the engines' own inserts (offers, claims, form rows) go
+        proposals = None
+        if plan["prepared"] is not None:
+            try:
+                proposals = deps.progression_explain(cur, plan["prepared"])
+            except Exception as e:      # noqa: BLE001 - reports are a log, not the plan
+                plan["warnings"].append(f"proposal reports unavailable: {e}")
+        conn.rollback()                      # prepared events, offers, claims: all rolled back; nothing acknowledged
         run_id = _insert_run(cur, meta, save_name, "DRY_RUN", plan["edits"], plan["summary"], plan["drift"],
                              "; ".join(plan["errors"]) or None)
         conn.commit()
-        out(json.dumps(dict(report, run_id=run_id, edits=plan["edits"]), indent=1, default=str))
+        out(json.dumps(dict(report, run_id=run_id, edits=plan["edits"], progression_proposals=proposals),
+                       indent=1, default=str))
         return run_id
     if plan["errors"]:
         conn.rollback()
@@ -1652,57 +1931,177 @@ def run(cur, snapshot, save_path, stage="auto", dry_run=False, confirm_franchise
         conn.commit()
         out(json.dumps(dict(report, run_id=run_id, status="FAILED"), indent=1, default=str))
         return run_id
-    error = None
+    # step 2: PREPARED operation (events + unchanged envelope + combined document) committed before any write
+    op = new_operation(plan, run_id, save_path, input_sha)
+    _store_operation(cur, run_id, op, plan["summary"], plan["edits"])
+    conn.commit()
+
+    def fail(error):
+        conn.rollback()
+        op["phase"] = "FAILED"
+        _store_operation(cur, run_id, op, plan["summary"])
+        _finish_run(cur, run_id, "FAILED", error=error)
+        conn.commit()
+        out(json.dumps(dict(report, run_id=run_id, status="FAILED", error=error), indent=1, default=str))
+        return run_id
+
+    if not plan["edits"]:
+        if plan["prepared"] is not None and plan["prepared"]["event_ids"]:
+            return fail("progression events prepared but the document is empty: nothing can be verified")
+        record_written(cur, plan, run_id, deps)
+        op["phase"] = "ACKNOWLEDGED"
+        _store_operation(cur, run_id, op, plan["summary"])
+        _finish_run(cur, run_id, "WRITTEN")
+        conn.commit()
+        out(json.dumps(dict(report, run_id=run_id, status="WRITTEN", replaced=False), indent=1, default=str))
+        return run_id
     with tempfile.TemporaryDirectory(prefix="mu-league-office-") as tmp:
         edits_path = os.path.join(tmp, "edits.json")
         copy_path = os.path.join(tmp, save_name)
         with open(edits_path, "w") as fh:
             json.dump(plan["edits"], fh)
-        if not plan["edits"]:
-            error = None
-            written = False
-        else:
-            ok, text = deps.write_save(save_path, edits_path, copy_path)
-            written = ok
-            if not ok:
-                error = f"save_writer refused or read-back failed: {text[-2000:]}"
-            else:
-                try:
-                    bad = verify_read_back(plan["edits"], deps.read_snapshot(copy_path))
-                except Exception as e:      # noqa: BLE001
-                    bad = [f"reading the written copy failed: {e}"]
-                if bad:
-                    error = "read-back of the written copy failed: " + "; ".join(bad[:20])
-                elif not confirmed and deps.madden_running():
-                    error = ("Madden27.exe started during the run; the save was not replaced (pass "
-                             "--confirm-franchise-closed once the franchise is closed)")
-                else:
-                    replace_save(copy_path, save_path)
-        if error:
-            conn.rollback()
-            _finish_run(cur, run_id, "FAILED", plan["edits"], plan["summary"], plan["drift"], error)
-            conn.commit()
-            out(json.dumps(dict(report, run_id=run_id, status="FAILED", error=error), indent=1, default=str))
-            return run_id
-    record_written(cur, plan, run_id, deps)
-    _finish_run(cur, run_id, "WRITTEN", plan["edits"], plan["summary"], plan["drift"])
-    conn.commit()
-    out(json.dumps(dict(report, run_id=run_id, status="WRITTEN", replaced=bool(written)), indent=1, default=str))
+        # step 3: candidate copy, whole-document writer read-back, then our own read-back
+        ok, text = deps.write_save(save_path, edits_path, copy_path)
+        if not ok:
+            return fail(f"save_writer refused or read-back failed: {text[-2000:]}")
+        try:
+            bad = verify_read_back(plan["edits"], deps.read_snapshot(copy_path))
+        except Exception as e:      # noqa: BLE001
+            bad = [f"reading the written copy failed: {e}"]
+        if bad:
+            return fail("read-back of the written copy failed: " + "; ".join(bad[:20]))
+        if file_sha256(save_path) != input_sha:
+            return fail("the save changed while the league office ran (input sha256 differs); not replaced")
+        op.update(phase="CANDIDATE_VERIFIED", candidate_path=copy_path, edits_path=edits_path,
+                  candidate_sha256=file_sha256(copy_path))
+        _store_operation(cur, run_id, op, plan["summary"])
+        conn.commit()
+        if not confirmed and deps.madden_running():
+            return fail("Madden27.exe started during the run; the save was not replaced (pass "
+                        "--confirm-franchise-closed once the franchise is closed)")
+        # step 4: replace, fingerprint the output, acknowledge the unchanged envelope, commit
+        replace_save(copy_path, save_path)
+    try:
+        output_sha = file_sha256(save_path)
+        if output_sha != op["candidate_sha256"]:
+            raise RecoveryError(f"the replaced save's sha256 {output_sha} is not the verified candidate's")
+        op.update(phase="REPLACED", output_sha256=output_sha)
+        _store_operation(cur, run_id, op, plan["summary"])
+        conn.commit()
+        acknowledged = _acknowledge(cur, deps, op, save_path, output_sha)
+        record_written(cur, plan, run_id, deps)
+        op.update(phase="ACKNOWLEDGED", acknowledged_events=acknowledged)
+        _store_operation(cur, run_id, op, plan["summary"])
+        _finish_run(cur, run_id, "WRITTEN")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        msg = (f"the save was replaced but acknowledging / recording failed ({type(e).__name__}: {e}); run "
+               f"`python3 -m pipeline.league_office --recover {run_id}`")
+        log.error(msg)
+        out(json.dumps(dict(report, run_id=run_id, status="NEEDS_RECOVERY", error=msg), indent=1, default=str))
+        raise RecoveryError(msg) from e
+    out(json.dumps(dict(report, run_id=run_id, status="WRITTEN", replaced=True, output_sha256=output_sha,
+                        acknowledged_events=acknowledged), indent=1, default=str))
     return run_id
 
 
+def _acknowledge(cur, deps, op, save_path, output_sha):
+    """Reads the output save and acknowledges the ORIGINAL prepared envelope (None when no progression ran).
+    Returns the number of acknowledged events."""
+    prepared = op.get("prepared")
+    if prepared is None:
+        return 0
+    if canonical_hash(prepared["document"]) != prepared["edits_hash"]:
+        raise RecoveryError("the stored progression envelope no longer matches its edits_hash")
+    output_snapshot = deps.read_snapshot(save_path)
+    events = deps.progression_acknowledge(cur, prepared, output_snapshot, output_sha)
+    return len(events or [])
+
+
+def recover(cur, run_id, save_path=None, deps=None, out=print):
+    """Finishes a run whose save replacement may have happened without the acknowledgement / commit (§5.3a step 5).
+    Never recalculates, re-rolls or advances: only the stored operation and the save's observed sha256 are used."""
+    deps = deps or Deps()
+    conn = cur.connection
+    row = _load_run(cur, run_id)
+    op = (row["summary"] or {}).get("operation")
+    if row["status"] == "WRITTEN":
+        out(json.dumps({"run_id": run_id, "status": "WRITTEN", "note": "already acknowledged; nothing to do"}))
+        return "ALREADY_WRITTEN"
+    if not op:
+        raise RecoveryError(f"run {run_id} has no stored operation record ({row['status']})")
+    if row["status"] != "PLANNED" or op.get("phase") not in ("PREPARED", "CANDIDATE_VERIFIED", "REPLACED"):
+        raise RecoveryError(f"run {run_id} is {row['status']} (phase {op.get('phase')}): nothing to recover")
+    path = save_path or op["save_path"]
+    current = file_sha256(path)
+    summary = {k: v for k, v in row["summary"].items() if k != "operation"}
+    replaced_sha = op.get("output_sha256") or op.get("candidate_sha256")
+    if replaced_sha and current == replaced_sha:
+        acknowledged = _acknowledge(cur, deps, op, path, current)
+        record_written(cur, plan_from_record(op["record"], row["edits"]), run_id, deps)
+        op.update(phase="ACKNOWLEDGED", output_sha256=current, acknowledged_events=acknowledged, recovered=True)
+        _store_operation(cur, run_id, op, summary)
+        _finish_run(cur, run_id, "WRITTEN")
+        conn.commit()
+        out(json.dumps({"run_id": run_id, "status": "WRITTEN", "recovered": True, "output_sha256": current,
+                        "acknowledged_events": acknowledged}))
+        return "ACKNOWLEDGED"
+    if current == op["input_sha256"]:
+        op["phase"] = "FAILED"
+        _store_operation(cur, run_id, op, summary)
+        _finish_run(cur, run_id, "FAILED", error="recovery: the save was never replaced; nothing awarded")
+        conn.commit()
+        out(json.dumps({"run_id": run_id, "status": "FAILED", "note": "the save was never replaced"}))
+        return "NOT_REPLACED"
+    raise RecoveryError(f"{path} has sha256 {current}, neither the input ({op['input_sha256']}) nor the verified "
+                        f"output ({replaced_sha}); refusing to acknowledge")
+
+
 # ------------------------------------------------------------------ setup ----
-def setup(save, out_path):
-    """The one-time franchise setup (league_setup.mjs): all 32 teams real users, fill roster off, CoachFiring OFF,
-    career clock off. Never writes `save`; `out_path` must not exist."""
+def setup(save, out_path, cur=None, deps=None):
+    """The one-time franchise setup: league_setup.mjs writes a NEW neutral save (all 32 teams real users, fill
+    roster off, CoachFiring OFF, career clock off, every player ConfidenceRating 50), then progression's explicit
+    neutral bootstrap on that save (bootstrap_pass, form_neutral=True) is committed. Never writes `save`;
+    `out_path` must not exist and is removed again if the bootstrap fails. Returns the setup report."""
+    deps = deps or Deps()
     if os.path.exists(out_path):
         raise FileExistsError(f"{out_path} exists")
-    res = subprocess.run(["node", SETUP, "setup", save, "--out", out_path], capture_output=True, text=True,
-                         timeout=1800)
-    if res.returncode != 0:
-        raise RuntimeError(res.stderr.strip())
-    print(res.stderr.strip())
-    return json.loads(res.stdout)
+    ok, stdout, stderr = deps.run_setup(save, out_path)
+    if not ok:
+        raise RuntimeError(stderr)
+    if stderr:
+        print(stderr, file=sys.stderr)
+    report = json.loads(stdout) if stdout else {}
+    if cur is None:
+        return report
+    conn = cur.connection
+    try:
+        snapshot = deps.read_snapshot(out_path)
+        off = [p.get("pgid") for p in snapshot.get("players") or []
+               if (p.get("pgid") or 0) > 0 and p.get("confidence") != 50]
+        if off:
+            raise RuntimeError(f"{len(off)} players are not at ConfidenceRating 50 in the new save (first: {off[:5]})")
+        stage = detect_stage(snapshot)
+        season = setup_application_season(stage, league_season(snapshot, stage))
+        if deps.applied_form_rows(cur, season):
+            raise RuntimeError(f"player_form already has rows for {season}: form isn't known-neutral; setup is for a "
+                               "franchise Project Mu hasn't written yet")
+        if not deps.pgid_map(cur):
+            raise RuntimeError("no players with a madden_pgid: load the save (pipeline.load_save) before setup")
+        sha = file_sha256(out_path)
+        states = deps.progression_bootstrap(cur, snapshot, season, sha)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        try:
+            os.remove(out_path)
+        except OSError:
+            pass
+        raise
+    report.update(progression_bootstrap={"application_season": season, "stage": stage, "source_sha256": sha,
+                                         "players_bootstrapped": len(states or [])})
+    return report
 
 
 # -------------------------------------------------------------------- CLI ----
@@ -1711,44 +2110,69 @@ def main(argv=None):
     if argv and argv[0] == "setup":
         sp = argparse.ArgumentParser(prog="python3 -m pipeline.league_office setup",
                                      description="One-time franchise setup: every team a real user team, fill roster "
-                                                 "off, CoachFiring OFF, career clock off (league_setup.mjs).")
+                                                 "off, CoachFiring OFF, career clock off, every player ConfidenceRating "
+                                                 "50 (league_setup.mjs), then progression's neutral bootstrap on the "
+                                                 "new save.")
         sp.add_argument("--save", required=True, help="CAREER save to read (never written)")
         sp.add_argument("--out", required=True, help="new save to write (must not exist)")
+        sp.add_argument("--dsn", default=ls.DSN, help="database (default: DATABASE_URL or the local madden database)")
         a = sp.parse_args(argv[1:])
+        if os.path.exists(a.out):
+            print(f"SETUP FAILED: {a.out} exists", file=sys.stderr)
+            return 1
         try:
-            setup(a.save, a.out)
+            import psycopg
+            with psycopg.connect(a.dsn) as conn:
+                report = setup(a.save, a.out, conn.cursor())
         except (RuntimeError, FileExistsError) as e:
             print(f"SETUP FAILED: {e}", file=sys.stderr)
             return 1
+        print(json.dumps(report.get("progression_bootstrap"), default=str))
         return 0
     ap = argparse.ArgumentParser(
         prog="python3 -m pipeline.league_office",
-        description="League office stage loop: plans Project Mu's moves for the save's stage, writes them to a temp "
-                    "copy through save_writer.mjs, reads it back and only then replaces the save.",
+        description="League office stage loop: plans Project Mu's moves for the save's stage, composes them with the "
+                    "progression engine's prepared document into one save_writer document, writes a temp copy, reads "
+                    "it back, replaces the save and acknowledges the progression receipt.",
         epilog="subcommand: python3 -m pipeline.league_office setup --save <CAREER-file> --out <new-file> "
-               f"(one-time franchise setup). Stages: {', '.join(STAGES)}.")
-    ap.add_argument("--snapshot", required=True, help="JSON written by pipeline/save_reader/pc_save_reader.mjs")
-    ap.add_argument("--save", required=True, help="the CAREER save the snapshot was read from")
+               f"(one-time franchise setup and progression bootstrap). Stages: {', '.join(STAGES)}.")
+    ap.add_argument("--snapshot", help="JSON written by pipeline/save_reader/pc_save_reader.mjs (required unless "
+                                       "--recover)")
+    ap.add_argument("--save", help="the CAREER save the snapshot was read from (required unless --recover)")
     ap.add_argument("--stage", default="auto", help="auto (default: from the snapshot) or a stage name")
     ap.add_argument("--wave", type=int, choices=range(1, FA_WAVES + 1), help="free-agency wave (default: from the save)")
     ap.add_argument("--seed", help="default: league id, year, stage, wave and week")
-    ap.add_argument("--dry-run", action="store_true", help="print the plan; no save, only a DRY_RUN run row")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the plan and progression proposals; no save, nothing acknowledged, one DRY_RUN row")
+    ap.add_argument("--recover", type=int, metavar="RUN_ID",
+                    help="finish a run whose save was replaced but not acknowledged (never re-plans)")
     ap.add_argument("--dsn", default=ls.DSN, help="database (default: DATABASE_URL or the local madden database)")
     ap.add_argument("--confirm-franchise-closed", action="store_true",
                     help=f"Madden is running but the franchise is closed (also {FRANCHISE_CLOSED_ENV}=1)")
     a = ap.parse_args(argv)
+    if a.recover is None and (not a.snapshot or not a.save):
+        ap.error("--snapshot and --save are required (or --recover RUN_ID)")
     stage = a.stage.upper() if a.stage.lower() != "auto" else "auto"
     if stage != "auto" and stage not in STAGES:
         ap.error(f"--stage must be auto or one of {', '.join(STAGES)}")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    import psycopg
+    if a.recover is not None:
+        with psycopg.connect(a.dsn) as conn:
+            try:
+                recover(conn.cursor(), a.recover, a.save)
+            except RecoveryError as e:
+                print(f"RECOVERY REFUSED: {e}", file=sys.stderr)
+                return 1
+        return 0
     with open(a.snapshot) as fh:
         snapshot = json.load(fh)
-    import psycopg
     with psycopg.connect(a.dsn) as conn:
         cur = conn.cursor()
         try:
             run(cur, snapshot, a.save, stage, a.dry_run, a.confirm_franchise_closed, a.seed, wave=a.wave)
-        except (FranchiseOpenError, StageError, ls.LoadError) as e:
+        except (FranchiseOpenError, StageError, ls.LoadError, ProgressionIntegrationError, CompositionError,
+                RecoveryError) as e:
             print(f"LEAGUE OFFICE STOPPED: {e}", file=sys.stderr)
             return 1
     return 0
