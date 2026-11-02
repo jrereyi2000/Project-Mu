@@ -4,9 +4,11 @@ Trade value model (docs/done/team_management/03_GM_AGENTS_PLAN.md §2.3, Phase 3
 Everything is in dollars of surplus, so players and picks compare directly. Pure: the fits take rows, the values
 take dicts; read_* gather the rows from the DB (read-only) and the fits are recomputed every run.
 
-  W(ovr, group)   market worth: ln(cap_hit) = a_group + b (ovr - 75), from 2036 ACTIVE SCAN contracts of players
-                  with 4+ years' experience (no rookie deals); a group with < 15 rows uses the league intercept.
-                  x MARKET_PREMIUM: replacing a player costs more than the average existing deal.
+  W(ovr, group)   market worth: ln(dollars) = a_group + b (ovr - 75), from this season's ACTIVE SCAN contracts of
+                  players with 4+ years' experience (no rookie deals); dollars = APY (total_value / length) / the
+                  cap in the season he signed (season - (length - years_remaining)) x this season's cap
+                  (cap_adjust, engines/cap_history.cap_in), so prices keep up with the cap. A group with < 15 rows
+                  uses the league intercept. x MARKET_PREMIUM: replacing a player costs more than the average deal.
   aging           mean same-player OVR change 2035 -> 2036 by age band and group, shrunk toward a generic curve;
                   dev trait adds +1/+2/+2 a year up to age 26 (Star / Superstar / X-Factor).
   player value    V_T = sum_y d_T[y] (W(ovr_y) u_T - cap_hit_y) through the contract's last season (projected
@@ -18,11 +20,18 @@ take dicts; read_* gather the rows from the DB (read-only) and the fits are reco
                   that pure surplus would make the first picks the least valuable, so E[W] carries the outcome
                   spread (upside), u_k is the chance the pick starts, and rookie cost is weighted 0.25.
 
+  drift           new deals' APY / cap in the signing season, by group and season (drift_rows, --drift).
+
   python3 -m engines.trade_value --report [--season S]
+  python3 -m engines.trade_value --drift [--season S]
 """
 import argparse
 import math
 import os
+import statistics
+
+from engines.cap_history import cap_in, league_caps
+from engines.contracts_engine import CBA
 
 DISCOUNTS = {"CONTEND": (1.0, 0.55, 0.35, 0.25, 0.2), "RETOOL": (0.8, 0.75, 0.6, 0.5, 0.4),
              "REBUILD": (0.35, 0.8, 0.9, 0.9, 0.85)}
@@ -30,7 +39,8 @@ HORIZON = 5
 SELLER_THIS_YEAR = 0.15               # a losing / rebuilding team in season: this year's games matter little
 MIN_GROUP_ROWS = 15
 OVR_PIVOT = 75
-MARKET_PREMIUM = 1.3
+MARKET_PREMIUM = 1.20                 # JR, 2026-11-02 (CAP_RELATIVE_CONTRACTS_PLAN D2; 1.3 on the old cap-hit fit)
+FALLBACK_W75 = 3_900_000              # fit_market with no rows: W(75), premium included ($3M x the old 1.3)
 STARTER_U, BACKUP_U, NEED_U = 1.0, 0.3, 0.5
 ROTATION_U = 0.65                     # the first player past a group's starter slots plays real snaps
 YOUTH_PIVOT_AGE = 28
@@ -60,12 +70,29 @@ SMOOTH_WINDOW = 4
 
 
 # -------------------------------------------------------------------- fits ----
+def cap_adjust(rows, caps, season):
+    """rows: [(group, ovr, total_value, length, years_remaining)] -> [(group, ovr, dollars)]: APY = total_value /
+    length, signed in season - (length - years_remaining), dollars = APY x cap_in(season) / cap_in(signed). Drops
+    rows with no length, no value, or length < years_remaining."""
+    now = cap_in(season, caps)
+    at = {}
+    out = []
+    for g, o, total, length, rem in rows:
+        if not length or length <= 0 or not total or total <= 0 or rem is None or length < rem:
+            continue
+        signed = season - (length - rem)
+        if signed not in at:
+            at[signed] = cap_in(signed, caps)
+        out.append((g, o, total / length * now / at[signed]))
+    return out
+
+
 def fit_market(rows):
-    """rows: [(group, ovr, cap_hit)] -> {"b", "a_league", "a": {group: a}, "n": {group: rows}}. One slope, group
+    """rows: [(group, ovr, dollars)] (cap_adjust's output for the DB fit) -> {"b", "a_league", "a": {group: a}, "n": {group: rows}}. One slope, group
     intercepts (within-group regression); groups under MIN_GROUP_ROWS use the league intercept."""
     rows = [(g, o, h) for g, o, h in rows if g and o is not None and h and h > 0]
-    if len(rows) < 2:
-        return {"b": 0.09, "a_league": math.log(3_000_000), "a": {}, "n": {}}
+    if len(rows) < 2:                       # no data: a stub with W(75) = FALLBACK_W75 whatever the premium
+        return {"b": 0.09, "a_league": math.log(FALLBACK_W75 / MARKET_PREMIUM), "a": {}, "n": {}}
     by = {}
     for g, o, h in rows:
         by.setdefault(g, []).append((o - OVR_PIVOT, math.log(h)))
@@ -324,16 +351,19 @@ def pick_value(pick, ctx, fits, season):
 
 
 # --------------------------------------------------------------------- DB ----
-def read_fit_rows(cur, season):
-    """Rows for the three fits (read-only)."""
+def read_fit_rows(cur, season, caps=None):
+    """Rows for the three fits (read-only): market [(group, ovr, dollars)] on the cap-share basis (cap_adjust), aging
+    pairs, draft rows. caps: league_caps(cur) when None."""
     from engines.gm_direction import position_group
-    cur.execute("""SELECT ps.position, ps.overall_rating, y.cap_hit
+    caps = league_caps(cur) if caps is None else caps
+    cur.execute("""SELECT ps.position, ps.overall_rating, c.total_value, c.length, c.years_remaining
                    FROM player_contracts c
                    JOIN player_contract_years y ON y.contract_id = c.id AND y.year = c.season
                    JOIN player_seasons ps ON ps.player_id = c.player_id AND ps.season = c.season
                    WHERE c.season = %s AND c.status = 'ACTIVE' AND c.source = 'SCAN'
                      AND ps.years_of_experience >= 4 AND NOT y.projected""", (season,))
-    market = [(position_group(pos), o, h) for pos, o, h in cur.fetchall()]
+    market = cap_adjust([(position_group(pos), o, tv, ln, rem) for pos, o, tv, ln, rem in cur.fetchall()], caps,
+                        season)
     cur.execute("""SELECT b.position, b.age, b.overall_rating, a.overall_rating
                    FROM player_seasons a JOIN player_seasons b ON b.player_id = a.player_id AND b.season = a.season - 1
                    WHERE a.season = %s""", (season,))
@@ -357,7 +387,105 @@ def build_fits(market_rows, aging_pairs, draft_rows):
 
 
 def fits_from_db(cur, season):
-    return build_fits(*read_fit_rows(cur, season))
+    """The three fits from the DB. fits["market"] also carries "cap" (this season's league cap) and "basis"
+    ("apy_cap_share"); hand-built markets have neither and nothing requires them."""
+    caps = league_caps(cur)
+    fits = build_fits(*read_fit_rows(cur, season, caps))
+    fits["market"]["cap"] = cap_in(season, caps)
+    fits["market"]["basis"] = "apy_cap_share"
+    return fits
+
+
+def _percentile(values, q):
+    """Linear-interpolated percentile of a non-empty list (as SQL percentile_cont)."""
+    v = sorted(values)
+    pos = (len(v) - 1) * q
+    lo = math.floor(pos)
+    hi = min(lo + 1, len(v) - 1)
+    return v[lo] + (v[hi] - v[lo]) * (pos - lo)
+
+
+def _share_summary(season, group, shares):
+    return {"season": season, "group": group, "n": len(shares), "median_share": statistics.median(shares),
+            "p75_share": _percentile(shares, 0.75)}
+
+
+def new_deal_shares(cur, through_season, caps):
+    """[(season, group, share)] for new veteran deals (read-only): ACTIVE or SUPERSEDED contracts signed in their scan
+    season (length = years_remaining), players with 4+ years, either source; one deal per player and season (the
+    latest row: a re-scan supersedes the old rows and inserts the same deal again). share = APY / cap_in(season)."""
+    from engines.gm_direction import position_group
+    cur.execute("""SELECT DISTINCT ON (c.season, c.player_id) c.season, ps.position, c.total_value, c.length
+                   FROM player_contracts c
+                   JOIN player_seasons ps ON ps.player_id = c.player_id AND ps.season = c.season
+                   WHERE c.season <= %s AND c.status IN ('ACTIVE', 'SUPERSEDED')
+                     AND c.length = c.years_remaining AND c.length > 0 AND c.total_value > 0
+                     AND ps.years_of_experience >= 4
+                   ORDER BY c.season, c.player_id, c.id DESC""", (through_season,))
+    out = []
+    for season, pos, total, length in cur.fetchall():
+        g = position_group(pos)
+        if g and length and total:
+            out.append((season, g, total / length / cap_in(season, caps)))
+    return out
+
+
+def drift_rows(cur, through_season, caps=None):
+    """New deals by season (read-only): one dict per (season, group) {season, group, n, median_share, p75_share},
+    share = (total_value / length) / cap_in(season, caps). Sorted by season, then group."""
+    caps = league_caps(cur) if caps is None else caps
+    by = {}
+    for season, g, share in new_deal_shares(cur, through_season, caps):
+        by.setdefault((season, g), []).append(share)
+    return [_share_summary(s, g, v) for (s, g), v in sorted(by.items())]
+
+
+def drift_report(cur, season, log=print):
+    """A groups x seasons table of new deals' median APY / cap with the count, the league row first."""
+    caps = league_caps(cur)
+    deals = new_deal_shares(cur, season, caps)
+    if not deals:
+        log(f"No new veteran deals through {season}.")
+        return []
+    by = {}
+    for s, g, share in deals:
+        by.setdefault((s, g), []).append(share)
+        by.setdefault((s, "LEAGUE"), []).append(share)
+    seasons = sorted({s for s, _, _ in deals})
+    groups = ["LEAGUE"] + sorted({g for _, g, _ in deals})
+    log(f"New veteran deals (4+ years): APY / league cap in the signing season, median % (n). "
+        f"{_caps_known(caps)}")
+    log(f"  {'group':6}" + "".join(f"{s:>14}" for s in seasons))
+    for g in groups:
+        cells = []
+        for s in seasons:
+            v = by.get((s, g))
+            cells.append(f"{statistics.median(v) * 100:.2f}% ({len(v)})" if v else "-")
+        log(f"  {g:6}" + "".join(f"{c:>14}" for c in cells))
+    return drift_rows(cur, season, caps)
+
+
+def _caps_known(caps):
+    growth = f"+{CBA['CAP_GROWTH']['mean'] * 100:.1f}%/yr"
+    if not caps:
+        return f"No caps known: every season uses the reference cap ${CBA['REFERENCE_CAP'] / 1e6:.1f}M."
+    return (f"Caps known: {', '.join(str(s) for s in sorted(caps))}; other seasons estimated at {growth} from the "
+            f"nearest known one.")
+
+
+def basis_line(season, caps):
+    """The report's first line: the market basis, this season's cap and which caps are known or estimated."""
+    cap = cap_in(season, caps)
+    growth = f"+{CBA['CAP_GROWTH']['mean'] * 100:.1f}%/yr"
+    head = f"Market basis: APY / cap at signing, scaled to the {season} cap ${cap / 1e6:.1f}M"
+    if not caps:
+        return f"{head} (no caps known: the reference cap stands in for every season)"
+    known = ", ".join(str(s) for s in sorted(caps))
+    if season not in caps:
+        return f"{head}, estimated (caps known: {known}; other seasons estimated at {growth} from the nearest known one)"
+    if season == min(caps):
+        return f"{head} (caps known: {known}; earlier seasons estimated at {growth})"
+    return f"{head} (caps known: {known}; seasons before {min(caps)} and gaps estimated at {growth})"
 
 
 def read_players(cur, season):
@@ -404,7 +532,8 @@ def read_players(cur, season):
 def report(cur, season, log=print, top=40):
     fits = fits_from_db(cur, season)
     m = fits["market"]
-    log(f"Market fit: ln(hit) = a + {m['b']:.4f} (ovr - 75); league W(75) ${worth(75, None, m) / 1e6:.2f}M, "
+    log(basis_line(season, league_caps(cur)))
+    log(f"Market fit: ln(dollars) = a + {m['b']:.4f} (ovr - 75); league W(75) ${worth(75, None, m) / 1e6:.2f}M, "
         f"W(85) ${worth(85, None, m) / 1e6:.2f}M, W(95) ${worth(95, None, m) / 1e6:.2f}M (x{MARKET_PREMIUM} premium)")
     for g in sorted(m["n"]):
         own = "own" if g in m["a"] else "league"
@@ -438,15 +567,20 @@ def report(cur, season, log=print, top=40):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--report", action="store_true")
+    ap.add_argument("--drift", action="store_true", help="new deals' APY / cap by group and season (read-only)")
     ap.add_argument("--season", type=int)
     a = ap.parse_args(argv)
     import psycopg
     dsn = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
     with psycopg.connect(dsn) as conn:
+        conn.read_only = True                  # both reports only SELECT
         cur = conn.cursor()
         cur.execute("SELECT current_season FROM league_state WHERE id = 1")
         season = a.season or cur.fetchone()[0]
-        report(cur, season)
+        if a.drift:
+            drift_report(cur, season)
+        if a.report or not a.drift:
+            report(cur, season)
         conn.rollback()
 
 
