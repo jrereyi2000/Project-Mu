@@ -97,7 +97,10 @@ V2 §7.2 runs 2026–2033 as a fully CPU league before JR takes a team in 2034. 
 * Coverage is written in week order from frozen per-week dossiers, either alongside the simulation or as a backfill afterwards; memory updates and dependent social stages follow publication order as in §3.
 * No paid API spend for CPU years by default. Route to the Colab batch or the local GPU queue (§10.8), whichever passes the §4 gates first.
 * Volume is the budget question: the 2036 pace (320 articles and 1,876 posts a season) over eight seasons is about 2,500 articles and 15,000 posts, roughly four months at the §5 assumption of two seasons a month. A reduced background slate for CPU years (features and memory-bearing pieces, fewer routine posts) is expected; its size is decided from measured cost.
-* Prerequisite to check: the database keeps enough point-in-time state (standings, injuries, ratings, contracts, dated transactions) for a backfill dossier to see only what was known that week.
+* **Dual-DB Architecture for Backfill (`pipeline/weekly_freeze.py`, JR decision 2026-11-03):** Resolves the latest-only state limitation and preserves writer memory across historical generation:
+  - **Evidence Scratch DB (`madden_snap`):** Restored from `<season>_w<NN>.dump` via `python3 -m pipeline.weekly_freeze restore-scratch --db <canonical_db> --label <season_wNN>`. The dossier builder reads strictly from this scratch snapshot for point-in-time football evidence (ratings, rosters, contracts, standings, depth charts, injuries).
+  - **Canonical DB (`madden_<franchise>`):** Remains the permanent repository for media generation. Articles (`news_feed`), social posts, writer memories (`agent_memory_*`), and cumulative Power Rankings are read from and written to this canonical database. This ensures prior weeks' generated memories and articles are never wiped out when moving between weekly snapshots.
+  - **Award Generation & Progression Coupling:** V2 player progression at `OFFSEASON_START` grants up to +1.5 OVR for All-Pro, MVP, and ROY honors stored in `awards`. When running local generation during simulation, the full slate (or at minimum the 3 hardware-setting articles: W19 All-Pro, W22 Awards, W24 Super Bowl Recap) is generated before advancing into `OFFSEASON_START` so the awards table is populated on time for progression.
 
 ## 4. Evaluation Before Production Migration
 
@@ -513,3 +516,26 @@ Cap the thinking budget on the short Gemini calls (Agent Wire, agent memory, sco
   python3 -m tools.llm_compare --suite --tasks memory_takes memory_summary scouting_notes gm_rationale --season 2036 --week 20 --models gemini-3.8-flash gemini-3.8-flash:low --limit 5
   ```
   (≈ 40 Gemini calls across the 4 tasks; JR will run this).
+
+
+## Colab smoke notebook handoff (2026-10-30)
+
+JR observed an NVIDIA A100-SXM4-40GB (40,960 MiB), 200 available compute units and approximately 6.73 units/hour, then disconnected/deleted the runtime. This is an observed allocation, not guaranteed future hardware or throughput. A manually operated first-article notebook now exists at `notebooks/newsroom_dossier_pilot.ipynb`; it does not implement production batch routing or the planned vLLM batch notebook.
+
+`tools/prepare_colab_pilot.py` exports `verify_output/v3_colab/colab_matchup_input.json` from the corrected schema-v3 matchup packet. It preserves the macro brief, writer, creative-freedom policy and 37 selected subject sources; optional history/contracts, redundant player-season output and non-QB splits are deferred, with omissions recorded. Source field projections are explicit. Full archival packet remains available. This input is a new smoke-test version and cannot be treated as identical to the earlier Gemini dossier.
+
+Candidate: Qwen/Qwen3-32B-AWQ, non-thinking mode, vLLM 0.10.2, one sequence, chunked prefill, 40,960-token total context and 4,096 output allowance. Official [model config](https://huggingface.co/Qwen/Qwen3-32B-AWQ/blob/main/config.json) specifies 4-bit AWQ and max_position_embeddings=40960; [model card](https://huggingface.co/Qwen/Qwen3-32B-AWQ) documents vLLM support. Fit and library compatibility still need the actual Colab run. Offline tokenizer count is 35,402 tokens; with the output allowance, 39,498 total fits the configured limit. No input truncation is allowed. The notebook resolves one immutable model revision for tokenizer/weights, checks actual token count and GPU memory, and exports model/package versions, article, original input and timing. VRAM snapshot is explicitly not a peak measurement; runtime-unit estimate must be reconciled with account balance.
+
+Upload the notebook using Colab File → Upload notebook; select the A100 runtime, then run cells in order. Upload only the input JSON when prompted. No Gemini key, database credentials or Drive mount is needed. Download the result ZIP before disconnecting/deleting the runtime. If installation requires a session restart, restart and rerun the first timing cell; total account units still include installation/restart time. If preflight or model loading fails, stop and inspect the error; no API fallback or automatic retry loop is configured. This initial notebook is a compatibility and first-article test, not a promised latency target or selected production model.
+
+
+### Colab tokenizer compatibility correction
+
+The first real load failed with `Qwen2Tokenizer has no attribute all_special_tokens_extended`. vLLM 0.10.2 accesses that older tokenizer API, while its dependency requirement `transformers>=4.55.2` does not prevent a Transformers 5 installation. The first notebook pinned only vLLM; that was insufficient. Bootstrap now also pins Transformers 4.55.2, tokenizers 0.21.4 and huggingface-hub 0.34.4, requires a session restart, and checks installed/loaded versions plus the tokenizer attribute before weight loading. No compatibility monkeypatch is used. This corrects the identified tokenizer mismatch; actual GPU engine loading remains to be confirmed.
+
+
+### First returned Colab run
+
+JR returned `project_mu_colab_result.zip`. The exact input hash matched the export. Qwen3-32B-AWQ revision `0499c3ac83fdef8810b907a23894ba91e95eddd8`, vLLM 0.10.2, Transformers 4.55.2: model load 105.70 s; generation 80.61 s; 35,402 prompt / 1,311 output tokens; normal stop, no output cap. GPU snapshot 37,354 MiB used of 40,960; not peak. Estimated 1.283 compute units since timing cell, actual ending balance unavailable. Infrastructure compatibility is demonstrated for this run; quality acceptance is not.
+
+`verify_output/v3_colab/returned_run/review.md` and `.json` record targeted factual checks: pre-playoff framing instead of conference championship, duplicate/misrated McCord, wrong line/DT ratings, wrong red-zone ranks, invented pressure count. Correct values were present in the actual uploaded dossier. Invented practice scenes remain allowed. Do not migrate based on this sample or extrapolate accepted weekly throughput. Next useful experiment is a smaller, explicit assignment/fact-card packet and validation, not an unchanged rerun. The root ZIP is preserved.

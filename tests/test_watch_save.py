@@ -205,7 +205,12 @@ class ProcessSaveTest(unittest.TestCase):
             p.start()
         self.ingest = mock.patch("pipeline.watch_save.run_ingest", side_effect=self.fake_ingest).start()
         self.notify = mock.patch("pipeline.watch_save.send_notify").start()
+        self.freezes = mock.patch("pipeline.weekly_freeze.freeze", side_effect=self.fake_freeze).start()
         self.snapshots = {}
+
+    @staticmethod
+    def fake_freeze(db, dsn, save_path, label, **kw):
+        return {"db": db, "label": label, "dump_bytes": 1000, "save_name": os.path.basename(save_path)}
 
     def tearDown(self):
         mock.patch.stopall()
@@ -838,6 +843,51 @@ class LeagueOfficeProcessSaveTest(ProcessSaveTest):
         self.assertEqual(res["reason"], "no_current_week")
 
 
+class FreezeProcessSaveTest(ProcessSaveTest):
+    """The paired database + save freeze after every committed ingest (pipeline/weekly_freeze.py)."""
+
+    offseason_save = LeagueOfficeProcessSaveTest.offseason_save
+
+    def test_new_week_is_frozen_with_its_save(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        save = self.save("CAREER-A", self.LEAGUE_A, week_index=6)
+        res = self.process(save)
+        args, kw = self.freezes.call_args
+        self.assertEqual(args[0], "madden_l91a17291")
+        self.assertEqual(args[2], save)
+        self.assertEqual(args[3], "2034_w07")
+        self.assertEqual((kw["season"], kw["week"]), (2034, 7))
+        self.assertEqual(res["freeze"]["label"], "2034_w07")
+        self.assertTrue(res["freeze"]["ok"])
+
+    def test_seeding_load_is_frozen(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        self.assertEqual(self.freezes.call_count, 1)
+
+    def test_no_freeze_dry_run_and_no_op_skip_it(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True, no_freeze=True)
+        self.process(self.save("CAREER-A", self.LEAGUE_A, week_index=6), dry_run=True)
+        self.process(self.save("CAREER-A", self.LEAGUE_A, week_index=5))     # same week: no-op
+        self.freezes.assert_not_called()
+
+    def test_offseason_stop_label(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        stage = {"stage": "FREE_AGENCY", "wave": 2, "season": 2034, "week": 26}
+        with mock.patch("pipeline.watch_save.league_office_stage", return_value=stage), \
+                mock.patch("pipeline.watch_save.league_office_stage_done", return_value=False):
+            res = self.process(self.offseason_save("CAREER-A"))
+        self.assertEqual(self.freezes.call_args[0][3], "2034_off_FREE_AGENCY_w2")
+        self.assertEqual(res["freeze"]["stage"], stage)
+
+    def test_freeze_failure_is_not_fatal(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        self.freezes.side_effect = RuntimeError("pg_dump missing")
+        res = self.process(self.save("CAREER-A", self.LEAGUE_A, week_index=6))
+        self.assertEqual(res["status"], "success")
+        self.assertFalse(res["freeze"]["ok"])
+        self.assertIn("weekly freeze failed", self.notify.call_args[1]["title"])
+
+
 class WatchLoopLeagueOfficeTest(unittest.TestCase):
     """The daemon's side: its own write isn't re-ingested; a franchise-open refusal is retried later."""
 
@@ -909,6 +959,23 @@ class WatchLoopLeagueOfficeTest(unittest.TestCase):
                                                      self.save))
             self.assertEqual(child.call_args[1]["save_sha256"], ws.file_sha256(self.save))
         self.assertEqual(self.pending, {})
+
+    def test_retry_that_replaces_the_save_refreezes_the_week(self):
+        def franchise_open_with_freeze(*a, **k):
+            res = self.franchise_open()
+            res.update(db="madden_x", freeze={"label": "2034_w07", "season": 2034, "week": 7, "stage": None,
+                                              "ok": True})
+            return res
+        with mock.patch("pipeline.watch_save.process_save", side_effect=franchise_open_with_freeze):
+            self.poll()
+        with mock.patch("pipeline.watch_save.run_league_office_child",
+                        return_value={"status": "written", "replaced": True, "output_sha256": "abc", "run_id": 4}), \
+                mock.patch("pipeline.weekly_freeze.freeze", return_value={"dump_bytes": 1, "save_name": "x"}) as fz:
+            ws.retry_league_office(self.pending, self.debouncer, self.lock, madden_running=lambda: False,
+                                   log_fn=lambda m: None)
+        args, kw = fz.call_args
+        self.assertEqual(args[:4], ("madden_x", "dbname=madden_x", self.save, "2034_w07"))
+        self.assertTrue(kw["extra"]["refrozen_after_retry"])
 
     def test_newer_save_drops_the_retry(self):
         with mock.patch("pipeline.watch_save.process_save", side_effect=self.franchise_open):

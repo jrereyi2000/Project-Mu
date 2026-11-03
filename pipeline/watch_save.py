@@ -55,6 +55,11 @@ Options:
   --confirm-reseed DB      Required with --reseed: the database name being dropped
   --dsn DSN                Load into this database instead of routing by franchise (tests, one-off loads)
   --lock-file PATH         Custom lock file path (default: captures/.weekly_run.lock)
+  --no-freeze              Don't freeze the database + save after the ingest (pipeline/weekly_freeze.py)
+
+After every committed ingest (a week, an offseason stage or the seeding load) the database and the save are frozen
+together into MU_FREEZE_DIR/<db>/<label>/ (pipeline/weekly_freeze.py); a league office retry re-freezes the same
+label once it has replaced the save, so the pair stays in sync. A freeze failure is logged and notified, never fatal.
 """
 import argparse
 import datetime
@@ -74,6 +79,7 @@ from contextlib import contextmanager
 from db import franchises
 from pipeline.load_save import current_week
 from pipeline.notify import env, notify as send_notify
+from pipeline import weekly_freeze
 from pipeline.weekly_capture import run_weekly_engines, step_articles, step_preseason_engines, step_rookie_headshots, WeekStopped
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -754,10 +760,24 @@ def run_league_office_child(snapshot_path, dsn, save_path, save_sha256=None, dry
         return json.load(fh)
 
 
+def freeze_week(db, dsn, save_path, label, season, week, stage=None, extra=None, log_fn=log):
+    """The paired database + save freeze after an ingest (pipeline/weekly_freeze.py). Never fatal: a failure is
+    logged and notified and returns None."""
+    try:
+        m = weekly_freeze.freeze(db, dsn, save_path, label, season=season, week=week, stage=stage, extra=extra)
+        log_fn(f"Freeze {db}/{label}: dump {m['dump_bytes'] / 1e6:.1f} MB, save {m.get('save_name')}")
+        return m
+    except Exception as e:      # noqa: BLE001 - a freeze never stops the week
+        msg = f"Freeze {db}/{label} failed: {e}"
+        log_fn(f"[ERROR] {msg}")
+        send_notify(msg, title="Mu: weekly freeze failed", priority="high", tags=("warning",))
+        return None
+
+
 def process_save(save_path, season=None, dry_run=False, no_articles=False, no_engines=False, force=False,
                  auto_init=False, reseed=False, confirm_reseed=None, user_teams=None, franchise_name=None,
                  run_folder=None, dsn=None, reader_script=READER_SCRIPT, log_fn=log, no_league_office=False,
-                 league_office_dry_run=False):
+                 league_office_dry_run=False, no_freeze=False):
     """
     Core processing for a settled save file:
     1. Snapshots into captures/<run>/save.json
@@ -768,6 +788,7 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
     4. If new week / stage (or force or just seeded): runs load_save -> engines -> league office -> articles ->
        mod pack there (run_ingest). The league office runs only on a new week or stage (not right after seeding,
        not on a forced re-load), never with --dry-run or --no-league-office.
+    5. Freezes the database and the save together (freeze_week), unless --dry-run or --no-freeze.
     """
     if run_folder is None:
         run_name = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -809,11 +830,13 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
         return {"status": "no_op", "reason": reason, "db": db, "franchise": fid, "season": save_season, "week": save_week}
 
     classification = None
+    stage_info = None
     if not just_seeded:
         classification = classify_week(save_season, save_week, stored_season, stored_week)
         if classification == "no_current_week" and lo_enabled:
             stage = league_office_stage(snapshot, log_fn=log_fn)
             if stage is not None:
+                stage_info = stage
                 done = league_office_stage_done(dsn, stage)
                 classification = "same_stage" if done else "new_stage"
                 log_fn(f"Offseason stop {stage['stage']} (season {stage['season']}, week {stage['week']}"
@@ -860,8 +883,18 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
                      no_engines=no_engines, save_name=save_name, log_fn=log_fn, save_path=save_path,
                      league_office=run_lo, league_office_dry_run=league_office_dry_run,
                      save_sha256=save_sha256, stage_only=stage_only)
+    freeze = None
+    if not dry_run and not no_freeze:
+        label = weekly_freeze.label_for(save_season, save_week, stage_info if stage_only else None)
+        lo = res.get("league_office") or {}
+        freeze = freeze_week(db, dsn, save_path, label, save_season, save_week,
+                             stage=stage_info if stage_only else None,
+                             extra={"classification": classification, "articles": not no_articles and not stage_only,
+                                    "league_office_status": lo.get("status")}, log_fn=log_fn)
+        freeze = {"label": label, "season": save_season, "week": save_week,
+                  "stage": stage_info if stage_only else None, "ok": freeze is not None}
     return {**res, "db": db, "dsn": dsn, "franchise": fid, "snapshot_path": snapshot_path, "save_path": save_path,
-            "save_sha256": save_sha256, "classification": classification}
+            "save_sha256": save_sha256, "classification": classification, "freeze": freeze}
 
 
 def watch_loop(watch_path, pattern="CAREER-*", debounce_seconds=DEFAULT_DEBOUNCE,
@@ -895,7 +928,8 @@ def note_league_office(res, save_file, debouncer, pending, league_office_dry_run
         debouncer.note_own_write(save_file, lo_res["output_sha256"])
     if lo_res.get("status") == "franchise_open" and res.get("snapshot_path") and res.get("dsn"):
         pending[save_file] = {"snapshot_path": res["snapshot_path"], "dsn": res["dsn"],
-                              "save_sha256": res.get("save_sha256"), "dry_run": league_office_dry_run}
+                              "save_sha256": res.get("save_sha256"), "dry_run": league_office_dry_run,
+                              "db": res.get("db"), "freeze": res.get("freeze")}
         log_fn(f"League office for {os.path.basename(save_file)} queued: retried once Madden27.exe has closed.")
 
 
@@ -918,6 +952,12 @@ def retry_league_office(pending, debouncer, lock_path, madden_running=None, log_
                 if lo_res.get("replaced") and lo_res.get("output_sha256"):
                     debouncer.note_own_write(save_file, lo_res["output_sha256"])
                 line = report_league_office(lo_res, os.path.basename(save_file), log_fn=log_fn)
+                fz = job.get("freeze")
+                if fz and lo_res.get("replaced") and job.get("db"):
+                    # The save changed after the week's freeze: freeze the pair again under the same label.
+                    freeze_week(job["db"], job["dsn"], save_file, fz["label"], fz.get("season"), fz.get("week"),
+                                stage=fz.get("stage"), extra={"league_office_status": lo_res.get("status"),
+                                                              "refrozen_after_retry": True}, log_fn=log_fn)
                 if lo_res.get("status") in ("written", "dry_run"):
                     send_notify(f"{line} (retried after Madden closed).", title="Mu: league office done",
                                 tags=("white_check_mark",))
@@ -1022,6 +1062,8 @@ def main():
     ap.add_argument("--confirm-reseed", metavar="DB", help="Required with --reseed: the database name being dropped")
     ap.add_argument("--dsn", help="Load into this database instead of routing by franchise")
     ap.add_argument("--lock-file", default=DEFAULT_LOCK_PATH, help=f"Lock file path (default: {DEFAULT_LOCK_PATH})")
+    ap.add_argument("--no-freeze", action="store_true",
+                    help="Don't freeze the database + save after each ingest (pipeline/weekly_freeze.py)")
     # Internal: the child process run_ingest starts.
     ap.add_argument("--ingest", help=argparse.SUPPRESS)
     ap.add_argument("--week", type=int, help=argparse.SUPPRESS)
@@ -1054,7 +1096,7 @@ def main():
                       no_engines=args.no_engines, force=args.force,
                       auto_init=args.auto_init, user_teams=user_teams, franchise_name=args.franchise_name,
                       dsn=args.dsn, no_league_office=args.no_league_office,
-                      league_office_dry_run=args.league_office_dry_run)
+                      league_office_dry_run=args.league_office_dry_run, no_freeze=args.no_freeze)
 
     if args.once:
         save_files = find_save_files(watch_path, pattern=args.pattern)
