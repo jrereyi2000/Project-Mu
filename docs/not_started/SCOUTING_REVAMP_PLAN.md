@@ -1,6 +1,6 @@
 # Project Mu: Scouting Revamp & Combine Interviews Plan (V2.10)
 
-**Status:** proposal, awaiting JR's approval (2026-11-03).
+**Status:** approved by JR (2026-11-03), all §8 recommendations accepted; not built. Builds after the inbox plan's U1 (V2.9) is on main.
 **Builds on:** PROJECT_SPEC §2.18, §3.3c, §3.3g, §4.6, §5.2; [`FRONT_OFFICE_INBOX_PLAN.md`](./FRONT_OFFICE_INBOX_PLAN.md) (V2.9, unapproved; its U1 must be on main before this plan's wave 1); [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §5.3.2, §6 (V2.0, V2.10); [`04_SCOUTING_AND_DRAFT_PLAN.md`](../done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) phase 6; [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](./PERSONALITY_DRAFT_INTEGRATION_PLAN.md) (unapproved).
 
 **Goal:** Every prospect in the class gets a full written scouting report (traits, strengths, concerns, production, athletic profile, projection, bottom line) in three editions a year, and JR can sit down with prospects himself: formal combine interviews and top-30 visits, run as conversations in the V2.9 front-office inbox (a `PROSPECT` inbox kind), started from the Command Center's Draft War Room. A neutral `SCOUT` inbox kind tells JR when interview windows open and new report editions land. The engines decide every grade, trait score, answer quality and board effect; the LLM only writes the words and, for a typed question, picks which engine-permitted topic it is. Scouts speak as one neutral "Mu Scouting Department" until personality phase 6 gives them names, voices and regional biases; prospects answer from neutral, seeded dispositions until the personality draft integration plan is built. Both have hooks so they plug in later without a schema change.
@@ -409,9 +409,9 @@ No path appears twice.
 - Repository Layout: `engines/scouting_reports.py`, `engines/scout_voice.py`, `engines/scouting_interviews.py`, `engines/inbox/kinds/prospect.py`, `engines/inbox/kinds/scout.py`, `pipeline/prospect_ratings.py`, `db/migrations/2027_01_21_scouting_reports.sql`, `Mu_Network/src/types/scoutingReports.ts`, the five new test files.
 - `V2_MASTER_PLAN.md` §6 V2.10 status line (orchestrator).
 
-## 8. Decisions for JR
+## 8. Decisions for JR (all decided 2026-11-03: JR accepted every recommendation)
 
-| # | Question | Recommendation |
+| # | Question | Recommendation (accepted) |
 |---|---|---|
 | Q1 | Trait grades: from the save's real prospect ratings seen through noise (new hidden table, small loader hook), or only from what Mu already stores (stats, combine, events)? | Real ratings through noise. Reports then agree with how the player turns out after the draft; facts-only reports could call a slow receiver fast. |
 | Q2 | What do JR's interviews change? Recommended: VISITs replace his team's seeded visits one for one (6 a step, same as CPU teams) and get the existing `VISIT_M` board effect; combine interviews are information only. | As recommended. Keeps the frozen calibration fair; more visits or a combine effect would make JR's board sharper than every CPU team's. |
