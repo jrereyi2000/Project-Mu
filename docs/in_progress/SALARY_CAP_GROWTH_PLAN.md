@@ -1,6 +1,6 @@
 # Project Mu: Salary Cap Growth Plan
 
-**Status:** approved by JR (2026-11-02); building, wave 1 of 2 done.
+**Status:** approved by JR (2026-11-02); building, wave 2 of 2 done.
 - **As built (Wave 1):** In `pipeline/save_reader/pc_save_reader.mjs`, preserved `SalCapRosterSize` and `SalCapNextYearRosterSize` in `teams[].cap` so save-writer assertions in `release.test.mjs` and `sign.test.mjs` continue checking that roster moves only change roster counts.
 - **As built (Wave 1):** In `pipeline/load_save.py`, resolved merge conflict against commit `7081f81` by combining in-season draft pick rookie reserve estimation (`rookie_reserve_estimate`) with reader v6 `team_cap_seasons` ingestion (`load_team_caps`) and offseason reserve updates.
 **Builds on:** PROJECT_SPEC §2.17 (trade value, cap history), §2.17a (contracts engine), §2.17d (transactions engine), §2.21a (league office), §3.3d (`team_cap_seasons`), §4.6b (`/api/franchise`), §6.0b (PC save loader); [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (U3, U11, U13); [`CAP_RELATIVE_CONTRACTS_PLAN.md`](../done/CAP_RELATIVE_CONTRACTS_PLAN.md); [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) §4.11.
@@ -308,4 +308,5 @@ Q1–Q2 are answered (D1–D2 above). None open.
 |---|---|---|---|---|---|
 | U1 | 1 | `worktree-salary-cap-u1` | `.claude/worktrees/salary-cap-u1` | merged | 59e3133 |
 | U2 | 1 | `worktree-salary-cap-u2` | `.claude/worktrees/salary-cap-u2` | merged | 45a7fb7 |
+| U3 | 2 | `worktree-salary-cap-u3` | `.claude/worktrees/salary-cap-u3` | merged | a8bd989 |
 
