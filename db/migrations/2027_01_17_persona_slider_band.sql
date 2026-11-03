@@ -1,4 +1,4 @@
--- Persona slider total becomes a band (docs/in_progress/CAP_RELATIVE_CONTRACTS_PLAN.md §2.5;
+-- Persona slider total becomes a band (docs/done/CAP_RELATIVE_CONTRACTS_PLAN.md §2.5;
 -- PERSONALITY_PLAN.md §4.1; PROJECT_SPEC §3.3p, §7.11). Requires 2027_01_09_personas.sql.
 -- chk_persona_sliders_budget was "total = 30"; it becomes "total BETWEEN 24 AND 36". Seeding still deals exactly 30,
 -- so every stored row already passes. No-op where the persona tables don't exist. Idempotent.

@@ -1,5 +1,5 @@
 """
-Career-earnings ledger (docs/in_progress/CAP_RELATIVE_CONTRACTS_PLAN.md §2.4; PROJECT_SPEC §2.17a).
+Career-earnings ledger (docs/done/CAP_RELATIVE_CONTRACTS_PLAN.md §2.4; PROJECT_SPEC §2.17a).
 
 All money is in cap shares: each season's pay (APY = total_value / length) / that season's league cap
 (engines/cap_history.cap_in). Derived from player_contracts history; no table of its own. Earnings before a player's

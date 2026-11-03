@@ -1,5 +1,5 @@
 """
-League cap history (docs/in_progress/CAP_RELATIVE_CONTRACTS_PLAN.md §2.1; PROJECT_SPEC §2.17).
+League cap history (docs/done/CAP_RELATIVE_CONTRACTS_PLAN.md §2.1; PROJECT_SPEC §2.17).
 
   league_caps(cur)        {season: median team `cap`} from team_cap_seasons, every season (read-only).
   cap_in(season, caps)    the league cap in a season: the known value, else the nearest known season's cap moved by

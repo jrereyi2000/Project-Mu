@@ -1,14 +1,15 @@
 # Project Mu: Cap-Relative Contracts and Personality Contract Fixes Plan
 
-**Status:** approved by JR (2026-11-02); building, wave 1 of 2 done. Wave 0 done: the finished personality work was committed unchanged as 786ab35 (Q1).
-As built (wave 1):
+**Status:** built and on main (2026-11-02); approved by JR the same day. Wave 0: the finished personality work was committed unchanged as 786ab35 (Q1).
+As built:
 - **W level (U1, read-only on `madden_2036` 2036):** league W(75) $4.24M → $4.17M, W(80) $6.89M → ~$6.92M, W(85) $11.19M → $11.47M, W(95) $29.54M → $31.57M; `b` 0.0970 → 0.1012; W(95)/W(75) 7.0 → 7.6 (R3).
 - **`FALLBACK_W75` (U1):** the no-data stub market keeps W(75) at $3.9M (its old dollar level) whatever the premium; at 1.20 the old stub dropped below the RFA second-round tender and broke `test_resign_tenders_young_players_and_tags_at_most_one`.
 - **Drift dedupe (U1):** `--drift` counts one deal per player and season (`DISTINCT ON`, latest row), because a re-scan supersedes old rows and inserts the same deal again.
 - **Writer loader (U3):** `seed_writers_to_db` now runs the full `validate_slider_budget` check (via `_sliders_ok`), so it also rejects non-integer or out-of-range sliders, not just totals.
 - **Extra edits (U3):** PERSONALITY_PLAN §5.2's stale exact-30 sentence rewritten; the `#debug` API budget-message test updated.
-- **Base (both):** worktrees start from `origin/main` (`140a7a9`, not on local main); each unit reset its fresh branch to `1d95a9d` first. The first attempts stopped at the base check without changes.
-**Builds on:** PROJECT_SPEC §2.17 (trade value, market worth), §2.17a (contracts engine), §2.17b (free agency), §7.11 (personas); [`PERSONALITY_PLAN.md`](PERSONALITY_PLAN.md) §4–§6 and §10; [`PERSONALITY_GENERATED_EFFECTS_DESIGN.md`](PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §2 and §5. Comes out of JR's review of a Gemini conversation (`Gemini_NFL-Finances-and-Contender-Dynamics_20261031-1900.pdf`, repo root) on 2026-10-31.
+- **Career earnings (U2):** deals are grouped on `(player_id, team_id, signed, length)` only (R4), so restructures and a TRANSACTION row followed by the next season's SCAN of the same deal stay one deal; a TRADED row doesn't cut a deal. On `madden_2036` 2036: 1,777 players, 86 secure, 521 not secure, 1,170 unknown, 522 complete. A deal first seen mid-term is back-dated at its full APY, so big recent extensions can overstate early seasons. The spec section is §2.17e, as planned.
+- **Base (all units):** worktrees start from `origin/main` (`140a7a9`, not on local main); each unit reset its fresh branch to `1d95a9d` first. The first attempts stopped at the base check without changes.
+**Builds on:** PROJECT_SPEC §2.17 (trade value, market worth), §2.17a (contracts engine), §2.17b (free agency), §7.11 (personas); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §4–§6 and §10; [`PERSONALITY_GENERATED_EFFECTS_DESIGN.md`](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §2 and §5. Comes out of JR's review of a Gemini conversation (`Gemini_NFL-Finances-and-Contender-Dynamics_20261031-1900.pdf`, repo root) on 2026-10-31.
 
 **Goal:** Contract prices should keep up with the salary cap over a long simulated run. Today the market worth `W` is fitted on cap hits of deals signed one to five years earlier, so asking prices trail the cap and nothing anchors them. This plan prices every veteran deal as a share of the cap in the season it was signed and converts that share to this season's cap. It adds a drift report so JR can watch the market over seasons. It adds a career-earnings ledger, measured in cap shares, as the input for the "financially secure" gate on strong ring chasing. It relaxes the persona slider total from exactly 30 to a 24–36 band. It updates the personality plan and design with what JR agreed after the Gemini review. Personality engine effects stay inactive.
 
@@ -255,7 +256,7 @@ No path appears twice.
 - New §2.17e Career Earnings (`engines/career_earnings.py`): spans, shares, `is_secure`, `FINANCIAL_SECURITY_SHARE`, CLI, "inactive: no engine reads it yet".
 - §7.11 Personas: "enforces budget 30" becomes "seeds a total of 30; validation accepts 24–36".
 - §3.3p Persona tables: `chk_persona_sliders_budget` is a 24–36 band (`2027_01_17_persona_slider_band.sql`).
-- Repository Layout: add `engines/cap_history.py`, `engines/career_earnings.py`, `tests/test_cap_history.py`, `tests/test_career_earnings.py`, `db/migrations/2027_01_17_persona_slider_band.sql`; update the `trade_value.py` line (`--report`, `--drift`); add `docs/done/CAP_RELATIVE_CONTRACTS_PLAN.md` once built.
+- Repository Layout: add `engines/cap_history.py`, `engines/career_earnings.py`, `tests/test_cap_history.py`, `tests/test_career_earnings.py`, `db/migrations/2027_01_17_persona_slider_band.sql`; update the `trade_value.py` line (`--report`, `--drift`); add `docs/done/CAP_RELATIVE_CONTRACTS_PLAN.md`.
 - §1.2 Running the System: the two read-only report commands.
 
 ## 8. Decisions for JR
@@ -272,3 +273,4 @@ Q2–Q4 are answered (D2–D4 above). One question is left.
 |---|---|---|---|---|---|
 | U3 | 1 | worktree-agent-a1ca098db05b03e62 | .claude/worktrees/agent-a1ca098db05b03e62 | merged (first try blocked at the base check: worktrees start from origin/main; retried with a reset to 1d95a9d) | 5b3d9da |
 | U1 | 1 | worktree-agent-a2913a514934d3831 | .claude/worktrees/agent-a2913a514934d3831 | merged (first try blocked at the base check; retried with the reset) | cde251d |
+| U2 | 2 | worktree-agent-a36ea960cc4824ee8 | .claude/worktrees/agent-a36ea960cc4824ee8 | merged (paused once by the session usage limit; resumed in the same worktree) | 99cd58b |
