@@ -783,34 +783,70 @@ def load_draft_class(cur, snapshot, season, report, capture_folder=None):
 
 
 CAP_ROOM_OFFSET = 160_000           # Team.SalCapCapRoom = cap space + 160000 (every team, CAREER-WEEK1)
+ROOKIE_SCALE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                 "data", "scouting", "madden27_rookie_scale.json")
+_ROOKIE_SCALE = None
 
 
-def team_cap_values(cap):
+def rookie_scale():
+    """data/scouting/madden27_rookie_scale.json: {first_year_cap_hit: {slot: dollars}, reserve_factor,
+    reference_league_cap}."""
+    global _ROOKIE_SCALE
+    if _ROOKIE_SCALE is None:
+        with open(ROOKIE_SCALE_PATH) as fh:
+            _ROOKIE_SCALE = json.load(fh)
+    return _ROOKIE_SCALE
+
+
+def rookie_reserve_estimate(slots, league_cap):
+    """Madden's in-season estimate of next season's rookie reserve for a team holding these overall slots (1-224) in
+    the coming draft: the slots' first-year cap hits x 1.016, scaled by this season's league cap against the 2026 cap
+    the scale reproduces (CAREER-WEEK1, CAR, slots 19/51/83/114/115/179/194/211: $14.2M, its Team Salary screen),
+    rounded to $10,000. A slot past 224 counts as 224."""
+    sc = rookie_scale()
+    hits = sum(sc["first_year_cap_hit"][str(min(max(int(s), 1), 224))] for s in slots)
+    est = hits * sc["reserve_factor"] * league_cap / sc["reference_league_cap"]
+    return int(round(est / MONEY_UNIT)) * MONEY_UNIT
+
+
+def team_cap_values(cap, slots=None):
     """A snapshot team's raw cap fields -> upsert_team_cap's values (whole dollars), as the Team Salary screen shows
     them (CAR, CAREER-WEEK1: cap $301M, 25 rollover $13.8M, adjusted cap $315M, cap space $11.7M, 26 salaries $279M,
     26 cap penalty $24.6M, 26 total spend $303M): salaries = SalCapRosterReserve, cap penalty = ThisYearCapPenalties,
     rollover = RolloverCap, cap space = SalCapCapRoom - 160000; adjusted cap = space + salaries + penalty and cap =
     adjusted cap - rollover - ThisYearCapCredits (credits add to a team's cap like rollover: the league cap comes out
     the same for all 32 teams, $301.2M in CAREER-WEEK1 and $331.3M in CAREER-GIANTS-AUTOSAVE's 2027, where five teams
-    have credits). The next season's rookie reserve has no field found yet (NULL)."""
+    have credits). Next season's rookie reserve: Madden's own SalCapRookieReserve once it sets one (the offseason, from
+    the Super Bowl to the draft: SalCapRookieCount > 0), else, in season, rookie_reserve_estimate over `slots` (the
+    team's overall slots in the coming draft), else NULL."""
     salaries, penalty, rollover = cap["SalCapRosterReserve"], cap["ThisYearCapPenalties"], cap["RolloverCap"]
     space = cap["SalCapCapRoom"] - CAP_ROOM_OFFSET
     adjusted = space + salaries + penalty
-    return {k: v * MONEY_UNIT for k, v in {
+    out = {k: v * MONEY_UNIT for k, v in {
         "cap": adjusted - rollover - cap.get("ThisYearCapCredits", 0), "rollover": rollover, "adjusted_cap": adjusted,
         "cap_space": space,
         "salaries": salaries, "cap_penalty": penalty, "total_spend": salaries + penalty}.items()}
+    if cap.get("SalCapRookieCount"):
+        out["next_rookie_reserve"] = cap.get("SalCapRookieReserve", 0) * MONEY_UNIT
+    elif slots:
+        out["next_rookie_reserve"] = rookie_reserve_estimate(slots, out["cap"])
+    return out
 
 
 def load_team_cap(cur, snapshot, season, teams, report, capture_id=None):
     """Every real team's team_cap_seasons row for the season from the save (reader_version >= 5; the latest load
-    wins, as a Team Salary scan does). Older snapshots add nothing."""
+    wins, as a Team Salary scan does). Older snapshots add nothing. The coming draft's slots (draft_picks with
+    year_offset 0, pick_number + 1) feed the in-season rookie reserve estimate."""
+    slots = {}
+    for p in snapshot.get("draft_picks") or []:
+        if p["year_offset"] == 0 and p["current_team_index"] is not None:
+            slots.setdefault(p["current_team_index"], []).append(p["pick_number"] + 1)
     n = 0
     for t in snapshot["teams"]:
         tid, cap = teams.get(t["team_index"]), t.get("cap")
         if tid is None or not cap:
             continue
-        upsert_team_cap(cur, tid, season, team_cap_values(cap), capture_id)
+        upsert_team_cap(cur, tid, season, team_cap_values(cap, slots.get(t["team_index"])), capture_id)
         n += 1
     if n:
         report["team_caps"] = n

@@ -62,6 +62,11 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
       - c.ThisYearCapCredits);
   }
   assert.equal(leagueCaps.size, 1, 'one league cap');
+  // reader_version 5: every future pick, wherever the save keeps it (one table, or one table per pick).
+  const offsets = {};
+  for (const p of s.draft_picks) offsets[p.year_offset] = (offsets[p.year_offset] || 0) + 1;
+  assert.deepEqual(offsets, { 0: 224, 1: 224, 2: 224 }, 'three drafts of 224 picks');
+  assert.ok(s.draft_picks.every(p => Number.isInteger(p.current_team_index) && p.round >= 1 && p.round <= 7));
   // reader_version 5: Madden's team ratings on every real team.
   assert.equal(s.meta.reader_version, 5);
   for (const t of s.teams.filter(x => x.team_index < 32)) {

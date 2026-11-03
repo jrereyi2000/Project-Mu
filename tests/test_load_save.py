@@ -237,6 +237,10 @@ def v5_snapshot():
     snap["teams"][1]["ratings"] = {"ovr": 74, "off": 72, "def": 77}
     snap["teams"][2]["ratings"] = {"ovr": 50, "off": 50, "def": 50}
     snap["teams"][0]["cap"] = dict(CAR_CAP)
+    snap["draft_picks"] = [{"year_offset": 0, "round": 1, "pick_number": 0, "original_team_index": 1,
+                            "current_team_index": 0},
+                           {"year_offset": 1, "round": 1, "pick_number": 0, "original_team_index": 0,
+                            "current_team_index": 0}]
     snap["teams"][2]["cap"] = dict(CAR_CAP)                      # the free-agent pseudo-team: never loaded
     prospect = dict(snap["players"][3], pgid=900005, row=900005, first_name="Second", last_name="Rounder",
                     position="LE", archetype="DE_SmallerSpeedRusher", overall=70, age=21, height_in=76, weight_lbs=255,
@@ -344,6 +348,22 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
                              "cap_space": 11_690_000, "salaries": 278_680_000, "cap_penalty": 24_630_000,
                              "total_spend": 303_310_000})
 
+    def test_rookie_reserve_in_season_is_estimated_from_the_picks(self):
+        # CAREER-WEEK1, CAR: overall slots 19, 51, 83, 114, 115, 179, 194, 211 -> $14.2M on its Team Salary screen
+        v = ls.team_cap_values(CAR_CAP, [19, 51, 83, 114, 115, 179, 194, 211])
+        self.assertEqual(v["next_rookie_reserve"], 14_200_000)
+        self.assertNotIn("next_rookie_reserve", ls.team_cap_values(CAR_CAP))            # no picks read: NULL
+
+    def test_rookie_reserve_in_the_offseason_is_maddens_own(self):
+        # CAREER-STAFF (offseason stage 1), CAR: 8 picks, SalCapRookieReserve 2227 -> $22.27M, whatever the picks say
+        off = dict(CAR_CAP, SalCapRookieReserve=2227, SalCapRookieCount=8)
+        self.assertEqual(ls.team_cap_values(off, [1])["next_rookie_reserve"], 22_270_000)
+
+    def test_rookie_reserve_scales_with_the_league_cap(self):
+        bigger = dict(CAR_CAP, SalCapCapRoom=CAR_CAP["SalCapCapRoom"] + 3012)          # cap +$30.12M = +10%
+        self.assertEqual(ls.team_cap_values(bigger, [1])["next_rookie_reserve"],
+                         int(round(12_000_000 * 1.016 * 1.1 / 10_000)) * 10_000)
+
     def test_cap_credits_add_to_the_team_cap_like_rollover(self):
         # CAREER-GIANTS-AUTOSAVE 2027, NYG: $500K of cap credits; the league cap is $331.3M for every team
         nyg = {"SalCapCapRoom": 161475, "SalCapRosterReserve": 33221, "ThisYearCapPenalties": 803, "RolloverCap": 2317,
@@ -357,6 +377,7 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
         self.assertEqual(len(cur.calls), 1)                      # CHI only: ARI has no cap fields, FA isn't a team
         _, sql, args = cur.calls[0]
         self.assertIn("INSERT INTO team_cap_seasons", sql)
+        self.assertIn("next_rookie_reserve", sql)                 # CHI holds pick #1 in the snapshot's draft_picks
         self.assertEqual((args[0], args[1], args[-1]), (100, TEST_SEASON, 7))
         self.assertEqual(report["team_caps"], 1)
 
@@ -496,7 +517,8 @@ class LoadTinySnapshotTest(unittest.TestCase):
                          "next_rookie_reserve, derived_at FROM team_cap_seasons c JOIN teams t ON t.id = c.team_id "
                          "WHERE c.season = %s AND t.abbreviation = 'CHI'", (TEST_SEASON,))
         self.assertEqual(self.cur.fetchone(), (301_200_000, 13_800_000, 315_000_000, 11_690_000, 278_680_000,
-                                               24_630_000, 303_310_000, None, None))   # read, not derived
+                                               24_630_000, 303_310_000, 12_190_000, None))
+        # read, not derived; the rookie reserve is pick #1's first-year hit x 1.016 (CHI holds it in draft_picks)
 
     def test_v3_load_has_no_v4_keys(self):
         r = ls.load_snapshot(self.cur, tiny_snapshot(), season=TEST_SEASON)

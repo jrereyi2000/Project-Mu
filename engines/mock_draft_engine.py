@@ -8,7 +8,8 @@ Simulates an analytical 32-pick Round 1 NFL Mock Draft by pairing:
 
 The board's value term is the public scouting consensus (team management step 4, engines/scouting_engine.py): BPA =
 (grade - 60) * 4 plus the slot delta against the consensus rank, so this stays the media's mock, which the GM agents'
-real draft can beat or miss. Without a visible consensus (no scouting layer yet, or a CSV board) it falls back to OVR.
+real draft can beat or miss. Without a visible consensus (no scouting layer yet, or a CSV board) it falls back to
+Madden's public board order (projected pick, graded on the scouting anchors), never the true OVR the board stores.
 
 Each selection carries its pick's `locked` flag and `selection_status` from the draft order. A run from the
 database is saved to mock_draft_picks for its (season, week) by `save`, so every article in a week cites the
@@ -25,9 +26,23 @@ import json
 import sys
 from typing import Dict, List, Optional
 
+from engines.scouting_value import GRADE_ANCHORS
 from pipeline.ingest_prospects import Prospect, load_prospects_from_csv
 
-UNRATED_OVR = 50.0    # a prospect whose OVR the scan left blank is valued as a low grade, not dropped
+
+def board_grade(rank):
+    """A board rank on the scouting grade scale: linear between GRADE_ANCHORS (#1 92, #32 80, #64 74, #224 60),
+    flat past either end; an unranked prospect grades as the last anchor."""
+    if rank is None:
+        return GRADE_ANCHORS[-1][1]
+    pts = GRADE_ANCHORS
+    if rank <= pts[0][0]:
+        return pts[0][1]
+    for (r0, g0), (r1, g1) in zip(pts, pts[1:]):
+        if rank <= r1:
+            return g0 + (g1 - g0) * (rank - r0) / (r1 - r0)
+    return pts[-1][1]
+
 
 
 # Positional Group mapping matching newsroom/db_tools.py
@@ -130,18 +145,17 @@ class MockDraftEngine:
         """Calculate composite fit score and analytical rationale."""
         pos_group = POSITION_GROUP_MAP.get(prospect.position, prospect.position)
         prem = POSITIONAL_PREMIUM.get(pos_group, 1.0)
-        ovr = prospect.overall_rating if prospect.overall_rating is not None else UNRATED_OVR
         cons = self.grades.get(prospect.prospect_id) if getattr(self, "grades", None) else None
 
-        # 1. Base Player Value (BPA): the public consensus grade when the scouting layer has one, else OVR
+        # 1. Base Player Value (BPA): the public consensus grade when the scouting layer has one, else Madden's public
+        # board order graded on the same anchors. Never the stored OVR: on PC it is the save's true rating.
         if cons:
-            bpa_score = (cons["grade"] - 60.0) * 4.0
-            slot_value = (pick_number - cons["consensus_rank"]) * 0.5
-            elite = cons["grade"] >= 88.0
+            grade, rank = cons["grade"], cons["consensus_rank"]
         else:
-            bpa_score = (ovr - 70.0) * 4.0
-            slot_value = (pick_number - prospect.projected_pick) * 0.5
-            elite = bpa_score > 35
+            grade, rank = board_grade(prospect.projected_pick), prospect.projected_pick
+        bpa_score = (grade - 60.0) * 4.0
+        slot_value = (pick_number - rank) * 0.5
+        elite = grade >= 88.0
         bpa_score += slot_value
 
         # 2. Team Need Fit
