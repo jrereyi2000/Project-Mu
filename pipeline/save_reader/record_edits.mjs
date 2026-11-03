@@ -4,9 +4,9 @@
 //   {"records": [{"table": "DraftPick", "tableId": 4540, "row": 17, "set": {"CurrentTeam": {"tableId": 5934, "row": 3}}},
 //                {"table": "DraftPlayer", "tableId": 4135, "row": 1, "set": {"DraftPosition": "OLB"}}]}
 //
-// A save holds several tables of one name (three DraftPick tables: a 1-row default, the last draft's 224 selections and
-// the 672 future picks), so an edit names the table by id and by name, and both must agree (draft_tables.mjs prints
-// both). Plain fields are checked like Player fields (lib.mjs fieldValueError). A reference field is written only when
+// A save holds several tables of one name (many DraftPick tables: the future picks sit in one 672-row table in some
+// saves and in one-row tables of their own in a fresh career), so an edit names the table by id and by name, and both
+// must agree (draft_tables.mjs prints each pick's table id and row). Plain fields are checked like Player fields (lib.mjs fieldValueError). A reference field is written only when
 // its type is in WRITABLE_REFERENCES (Team: pick ownership), the value is {tableId, row}, that table has the field's
 // type as its name, the row is a non-empty record, and the field already points into that same table (or nowhere): it
 // re-points an existing link and never creates records.

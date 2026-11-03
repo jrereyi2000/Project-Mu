@@ -48,7 +48,7 @@ test('a pick changes owner and a prospect changes group; nothing else moves', { 
     const owner = before.teams.find(t => t.team_index < 32 && t.row !== pick.current_team_row);
     const prospect = before.prospects.find(p => p.contract_status === 'Draft' && p.draft_position !== 'LS');
     const edits = { records: [
-      { table: 'DraftPick', tableId: before.draft_pick_table_id, row: pick.row,
+      { table: 'DraftPick', tableId: pick.table_id, row: pick.row,
         set: { CurrentTeam: { tableId: before.team_table_id, row: owner.row }, PickNumber: 223 } },
       { table: 'DraftPlayer', tableId: before.draft_player_table_id, row: prospect.row,
         set: { DraftPosition: 'LS', InitialDraftRank: 401 } }] };
@@ -74,7 +74,7 @@ test('a bad record edit writes nothing', { skip, timeout: 300_000 }, async () =>
   try {
     const t = await readDraftTables(await open(savePath));
     const out = join(dir, 'CAREER-BAD');
-    const pick = (set, extra = {}) => ({ table: 'DraftPick', tableId: t.draft_pick_table_id, row: 0, set, ...extra });
+    const pick = (set, extra = {}) => ({ table: 'DraftPick', tableId: t.picks[0].table_id, row: t.picks[0].row, set, ...extra });
     const bad = async records => assert.rejects(writeSave(savePath, { records }, out));
     const team = { tableId: t.team_table_id, row: t.teams[0].row };
     await bad([pick({ CurrentTeam: team }, { tableId: t.draft_player_table_id })]);    // id of another table

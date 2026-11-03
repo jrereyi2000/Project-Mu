@@ -4,12 +4,16 @@
 //
 //   node draft_tables.mjs <CAREER-save> [--out draft.json]
 //
-// How the save keeps them (CAREER-GIANTS-AUTOSAVE, schema M27_620_0):
-// * Picks are DraftPick records. Three tables share the name: a 1-row default, the last draft's selections (224 rows,
-//   SelectedPlayer set, no OriginalTeam) and the future picks (672 = 3 drafts x 7 rounds x 32 teams). A future pick is
-//   YearOffset (0 = the coming draft), Round (0-6), PickNumber (0-223, the projected overall slot, reordered by
-//   Madden) and two Team references: OriginalTeam and CurrentTeam (the owner). A traded pick has CurrentTeam !=
-//   OriginalTeam; no team keeps its own pick list (DraftPick[] is one league-wide list of all 672).
+// How the save keeps them (schema M27_620_0):
+// * Picks are DraftPick records, and many tables share the name. A future pick is the one with an OriginalTeam set;
+//   there are 672 of them (3 drafts x 7 rounds x 32 teams), but where they live varies by save. CAREER-GIANTS-AUTOSAVE
+//   keeps them in one 672-row table (4540) beside a 1-row default and the last draft's 224 selections (SelectedPlayer
+//   set, no OriginalTeam). A fresh career (CAREER-STAFF, CAREER-WEEK1) keeps each future pick in its own one-row table
+//   (674 such tables) and leaves the 672-row table empty. So every DraftPick table is read, and each pick carries its
+//   own table id and row, which is how record_edits.mjs and trade.mjs address it. A future pick is YearOffset (0 = the
+//   coming draft), Round (0-6), PickNumber (0-223, the projected overall slot, reordered by Madden) and two Team
+//   references: OriginalTeam and CurrentTeam (the owner). A traded pick has CurrentTeam != OriginalTeam; no team keeps
+//   its own pick list.
 // * The class is Player records with ContractStatus Draft (TeamIndex 32), each linked from a DraftPlayer record
 //   (DraftPosition, the board's InitialDraftRank and the hidden TrueOverallRanking, both 0-based, plus combine and pro
 //   day results). Player.College is a reference into the game's static college list (table 16384), not into the save.
@@ -19,7 +23,7 @@ import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
 import { decodeRef } from './lib.mjs';
 
-const READER_VERSION = 1;
+const READER_VERSION = 2;
 
 async function readAll(franchise, name) {
   const all = franchise.getAllTablesByName(name);
@@ -28,18 +32,21 @@ async function readAll(franchise, name) {
 }
 
 const largest = tables => tables.reduce((b, t) => (!b || t.records.length > b.records.length ? t : b), null);
-const live = t => t.records.filter(r => !r.isEmpty);
 
-// The future-picks table: the DraftPick table whose records carry an OriginalTeam.
-export function futurePicksTable(tables) {
-  const withOwners = tables.filter(t => live(t).some(r => decodeRef(r.OriginalTeam)));
-  return largest(withOwners);
+// The future picks: every live DraftPick record with an OriginalTeam, across all the DraftPick tables (see the header),
+// as {table, row, record}, ordered by table id then row.
+export function futurePicks(tables) {
+  const picks = [];
+  for (const t of [...tables].sort((a, b) => a.header.tableId - b.header.tableId)) {
+    t.records.forEach((r, row) => { if (!r.isEmpty && decodeRef(r.OriginalTeam)) picks.push({ table: t, row, record: r }); });
+  }
+  return picks;
 }
 
 export async function readDraftTables(franchise) {
   const teamTable = largest(await readAll(franchise, 'Team'));
   const players = largest(await readAll(franchise, 'Player'));
-  const picksTable = futurePicksTable(await readAll(franchise, 'DraftPick'));
+  const future = futurePicks(await readAll(franchise, 'DraftPick'));
   const draftPlayers = largest(await readAll(franchise, 'DraftPlayer'));
   const teamRow = bits => {
     const d = decodeRef(bits);
@@ -49,10 +56,10 @@ export async function readDraftTables(franchise) {
   };
   const teams = teamTable.records.map((r, row) => (r.isEmpty ? null : {
     row, team_index: r.TeamIndex, short_name: r.ShortName, display_name: r.DisplayName })).filter(Boolean);
-  const picks = picksTable ? picksTable.records.map((r, row) => (r.isEmpty ? null : {
-    row, year_offset: r.YearOffset, round: r.Round + 1, pick_number: r.PickNumber,
+  const picks = future.map(({ table, row, record: r }) => ({
+    table_id: table.header.tableId, row, year_offset: r.YearOffset, round: r.Round + 1, pick_number: r.PickNumber,
     original_team_row: teamRow(r.OriginalTeam), current_team_row: teamRow(r.CurrentTeam),
-    selected: Boolean(decodeRef(r.SelectedPlayer)) })).filter(Boolean) : [];
+    selected: Boolean(decodeRef(r.SelectedPlayer)) }));
   const prospects = [];
   for (const [row, r] of draftPlayers.records.entries()) {
     const d = r.isEmpty ? null : decodeRef(r.Player);
@@ -65,7 +72,7 @@ export async function readDraftTables(franchise) {
   return {
     meta: { draft_tables_version: READER_VERSION },
     team_table_id: teamTable.header.tableId,
-    draft_pick_table_id: picksTable?.header.tableId ?? null,
+    draft_pick_table_ids: [...new Set(picks.map(p => p.table_id))],
     draft_player_table_id: draftPlayers.header.tableId,
     teams, picks, prospects,
   };

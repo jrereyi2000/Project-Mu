@@ -73,7 +73,7 @@ test('trades roster and practice-squad players and a pick between two teams', { 
     const back = x.teams[DAL].roster.find(g => a.players.find(p => p.pgid === g).contract.length > 1);
     const pick = x.draft.picks.find(p => p.current_team_row === rowOf(NYG) && !p.selected);
     const edits = { trade: [
-      { from_team_index: NYG, to_team_index: DAL, pgids: [qb, ps], picks: [{ tableId: x.draft.draft_pick_table_id, row: pick.row }] },
+      { from_team_index: NYG, to_team_index: DAL, pgids: [qb, ps], picks: [{ tableId: pick.table_id, row: pick.row }] },
       { from_team_index: DAL, to_team_index: NYG, pgids: [back] },
     ] };
     // DAL's practice squad has room (9 of 12).
@@ -138,7 +138,7 @@ test('a trade that can\'t be done writes nothing', { skip, timeout: 300_000 }, a
     const bad = (trade, re) => assert.rejects(writeSave(savePath, { trade }, out), re);
     await bad([{ from_team_index: DAL, to_team_index: NYG, pgids: [nygPlayer] }], /not on DAL's roster/);
     await bad([{ from_team_index: NYG, to_team_index: NYG, pgids: [nygPlayer] }], /same team/);
-    await bad([{ from_team_index: NYG, to_team_index: DAL, picks: [{ tableId: x.draft.draft_pick_table_id, row: dalPick.row }] }], /not NYG/);
+    await bad([{ from_team_index: NYG, to_team_index: DAL, picks: [{ tableId: dalPick.table_id, row: dalPick.row }] }], /not NYG/);
     await bad([{ from_team_index: NYG, to_team_index: DAL, picks: [{ tableId: x.draft.team_table_id, row: 0 }] }], /not a DraftPick table/);
     await bad([{ from_team_index: NYG, to_team_index: DAL, pgids: [nygPlayer] }, { from_team_index: NYG, to_team_index: 3, pgids: [nygPlayer] }], /listed twice/);
     // NYG's practice squad is full (12): a practice-squad player can't go there.
