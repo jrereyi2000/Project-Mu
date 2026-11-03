@@ -140,6 +140,7 @@ import sys
 import tempfile
 from collections import Counter, defaultdict
 
+from engines import cap_history
 from engines import contracts_engine as ce
 from engines import transactions_engine as te
 from pipeline import load_save as ls
@@ -196,7 +197,7 @@ UNRETIRE_LATE_AGE, UNRETIRE_LATE_OVR, UNRETIRE_LATE_P = 34, 85, 0.5   # 33-34 wi
 # Cap fields on the Team row (spike R6).
 CAP_ROOM_UNIT = 1                              # stored room change per $10,000 of cap hit (unit unconfirmed)
 TEAM_SALARY_RANGE = (0, 1_048_575)
-CAP_ROOM_RANGE = (-40_000, 200_000)
+CAP_ROOM_RANGE = (-40_000, 484_287)
 CAPSALARY_RANGE = (0, 32_766)
 DEFAULT_CONTRACT_SLOTS = 7
 
@@ -478,6 +479,7 @@ class Plan:
         self.pid_by_pgid = {g: p for p, g in self.pgid_by_pid.items()}
         self.players = {p["pgid"]: p for p in snapshot.get("players") or [] if p.get("pgid") is not None}
         self.state = state
+        self.league_cap_dollars = league_cap(state, snapshot)
         self.slots = next((len(p["contract"]["salary_by_year"]) for p in self.players.values()
                            if p.get("contract") and p["contract"].get("salary_by_year")), DEFAULT_CONTRACT_SLOTS)
         # current view: pgid -> (status, team_index); IR view: pgid -> bool
@@ -495,7 +497,7 @@ class Plan:
         self.counts = Counter()
         self.cap = defaultdict(lambda: [0, 0, 0])   # team_index -> [room, next-year room, base salary] change (units)
         self.db = {"pending": [], "charts": [], "injuries": [], "retirements": [], "offers": [],
-                   "written_offer_ids": []}
+                   "written_offer_ids": [], "salary_cap": None}
 
     # -- lookups
     def pgid(self, player_id):
@@ -770,6 +772,8 @@ class Plan:
                         "depth_charts": len(charts), "deferred": len(self.deferred), "warnings": len(self.warnings),
                         "errors": len(self.errors), "free_contract_rows_left": self.free_rows,
                         "written_offer_ids": list(self.db["written_offer_ids"])})
+        if self.db.get("salary_cap"):
+            summary["salary_cap"] = dict(self.db["salary_cap"])
         return doc, summary
 
     def _charts(self):
@@ -857,6 +861,17 @@ class Deps:
                        WHERE status = 'ACCEPTED' AND from_user AND season >= %s ORDER BY id""", (season,))
         keys = ("id", "kind", "player_id", "team_id", "years", "total_value", "bonus", "guaranteed")
         return [dict(zip(keys, r)) for r in cur.fetchall() if r[0] not in done]
+
+    # -- cap
+    def league_caps(self, cur):
+        return cap_history.league_caps(cur)
+
+    def sync_team_caps(self, cur, season, cap_dollars):
+        cur.execute("""UPDATE team_cap_seasons
+                       SET cap = %s,
+                           adjusted_cap = %s + COALESCE(rollover, 0) + (COALESCE(adjusted_cap, cap) - cap - COALESCE(rollover, 0)),
+                           cap_space = (%s + COALESCE(rollover, 0) + (COALESCE(adjusted_cap, cap) - cap - COALESCE(rollover, 0))) - COALESCE(total_spend, 0)
+                       WHERE season = %s""", (cap_dollars, cap_dollars, cap_dollars, season))
 
     # -- drift
     def drift(self, snapshot, cur, season, week):
@@ -1173,6 +1188,18 @@ def step_accepted_offers(plan, offers):
 
 def step_drift(plan, report, stored, kept_retirees=frozenset()):
     """Corrective edits for drift_check's report: Project Mu's version is written back."""
+    if plan.stage != OFFSEASON_START and report.get("salary_cap"):
+        entry = report["salary_cap"][0]
+        plan.league_cap_dollars = entry["expected"]
+        salary_table_id = (plan.state or {}).get("salary_info_table_id") or (plan.snapshot.get("salary_cap") or {}).get("table_id")
+        if salary_table_id is not None:
+            raw_target = entry["expected"] // ce.MONEY_UNIT - ce.SALARY_CAP_OFFSET_UNITS
+            plan.add_records([{"table": "SalaryInfo", "tableId": salary_table_id, "row": 0,
+                               "set": {"TeamSalaryCap": raw_target}}])
+        room_delta = (entry["expected"] - entry["found"]) // ce.MONEY_UNIT
+        for team_index in plan.teams:
+            plan._cap(team_index, room_delta, room_delta, 0)
+        plan.counts["drift_salary_cap"] += 1
     ids = plan.pid_by_pgid
     by_pid = {pid: g for g, pid in ids.items()}
     retired_pgids = {g for g, p in plan.players.items() if p.get("status") == "Retired"}
@@ -1405,7 +1432,7 @@ def step_restore_retirees(plan, kept, stored):
 
 def step_promoted_ps(plan, ps_ids):
     """Contracts for the practice-squad players Madden signed to the active roster at the offseason start."""
-    cap = league_cap(plan.state)
+    cap = getattr(plan, "league_cap_dollars", None) or league_cap(getattr(plan, "state", None), getattr(plan, "snapshot", None))
     for pid in sorted(ps_ids):
         g = plan.pgid(pid)
         if g is None or plan.roster_status(g)[0] != "Signed" or not (plan.players[g].get("contract")):
@@ -1417,10 +1444,52 @@ def step_promoted_ps(plan, ps_ids):
             plan.counts["ps_promoted_contracts"] += 1
 
 
-def league_cap(state):
+def league_cap_units(state, snapshot=None) -> int | None:
+    """The decoded $10,000-unit salary cap from the save state or snapshot, or None if unknown."""
+    if state and state.get("salary_cap") is not None:
+        return int(state["salary_cap"])
+    if snapshot and isinstance(snapshot.get("salary_cap"), dict):
+        sc = snapshot["salary_cap"].get("team_salary_cap")
+        if sc is not None:
+            return int(sc)
+    return None
+
+
+def league_cap(state, snapshot=None):
     """The league cap in dollars: SalaryInfo.TeamSalaryCap ($10,000 units) when known, else the reference cap."""
-    v = (state or {}).get("salary_cap")
-    return int(v) * ce.MONEY_UNIT if v else ce.CBA["REFERENCE_CAP"]
+    units = league_cap_units(state, snapshot)
+    return units * ce.MONEY_UNIT if units is not None else ce.CBA["REFERENCE_CAP"]
+
+
+def step_salary_cap(plan, deps, cur):
+    """Annual salary cap rollover at OFFSEASON_START: computes next_cap, writes SalaryInfo.TeamSalaryCap,
+    and shifts team cap rooms."""
+    caps = deps.league_caps(cur) if hasattr(deps, "league_caps") else {}
+    prev_cap = caps.get(plan.season) or plan.league_cap_dollars
+    league_id = (plan.snapshot.get("franchise") or {}).get("league_id")
+    seed_str = ce.cap_seed(league_id)
+    target_cap = ce.next_cap(prev_cap, plan.target, seed_str)
+    plan.league_cap_dollars = target_cap
+
+    salary_table_id = (plan.state or {}).get("salary_info_table_id") or (plan.snapshot.get("salary_cap") or {}).get("table_id")
+    target_units = target_cap // ce.MONEY_UNIT
+    save_units = league_cap_units(plan.state, plan.snapshot)
+    if salary_table_id is not None and save_units is not None and target_units != save_units:
+        plan.add_records([{"table": "SalaryInfo", "tableId": salary_table_id, "row": 0,
+                           "set": {"TeamSalaryCap": target_units - ce.SALARY_CAP_OFFSET_UNITS}}])
+        delta = target_units - save_units
+        for team_index in plan.teams:
+            plan._cap(team_index, delta, delta, 0)
+        plan.counts["salary_cap_updated"] = 1
+
+    plan.db["salary_cap"] = {
+        "season": plan.target,
+        "prev_cap": prev_cap,
+        "cap": target_cap,
+        "madden_cap": save_units * ce.MONEY_UNIT if save_units is not None else None,
+        "growth_pct": round((target_cap - prev_cap) / prev_cap * 100, 2) if prev_cap else 0.0,
+        "seed": seed_str,
+    }
 
 
 def step_draft(plan, slots, boards, jr, seed):
@@ -1442,7 +1511,7 @@ def step_draft(plan, slots, boards, jr, seed):
              for d in plan.snapshot.get("draft_class") or []}
     fallback = sorted(prospects, key=lambda g: (order.get(g, 10 ** 6), -(prospects[g].get("overall") or 0), g))
     picks = choose_picks(slots, board_pgids, jr_pgids, fallback)
-    cap = league_cap(plan.state)
+    cap = getattr(plan, "league_cap_dollars", None) or league_cap(getattr(plan, "state", None), getattr(plan, "snapshot", None))
     for pk in picks:
         team = plan.team_index.get(pk["team_id"])
         c = ce.rookie_contract(min(max(1, pk["overall_pick"]), ce.CBA["DRAFT_PICKS"]), plan.target, cap)
@@ -1636,6 +1705,7 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
             plan.step("waivers", lambda: step_moves(plan, deps.waivers(cur, season, week, rel_pids, seed),
                                                     PRIORITY_STAGE, "waivers"))
     elif stage == OFFSEASON_START:
+        plan.step("salary cap", step_salary_cap, plan, deps, cur)
         plan.step("retirements", step_retirements, plan, seed)
         plan.step("promoted practice squads", lambda: step_promoted_ps(plan, deps.ps_without_contract(cur, calendar)))
     else:
@@ -1701,11 +1771,13 @@ def plan_stage(cur, snapshot, stage, seed, deps=None, wave=None, state=None, sou
     summary["progression"] = prog_info
     summary["players_edited"] = len(edits.get("players") or [])
     summary["records"] = len(edits.get("records") or [])
+    if plan.db.get("salary_cap"):
+        summary["salary_cap"] = dict(plan.db["salary_cap"])
     return {"stage": stage, "wave": plan.wave, "season": season, "week": week, "calendar_year": calendar,
             "seed": seed, "edits": edits, "edits_hash": canonical_hash(edits), "league_edits": league_edits,
             "prepared": prepared, "progression": prog_info, "summary": summary, "drift": drift,
             "deferred": plan.deferred, "warnings": plan.warnings, "errors": plan.errors, "db": plan.db,
-            "team_ids": plan.teams, "pid_by_pgid": plan.pid_by_pgid}
+            "team_ids": plan.teams, "pid_by_pgid": plan.pid_by_pgid, "cap": plan.cap}
 
 
 # -------------------------------------------------------------- read-back ----
@@ -1747,6 +1819,18 @@ def verify_read_back(edits, snapshot):
                 continue
             if got != v:
                 bad.append(f"pgid {e['pgid']} {k}: wrote {v}, read {got}")
+    for r in edits.get("records") or []:
+        if r.get("table") == "SalaryInfo" and r.get("row") == 0 and "TeamSalaryCap" in (r.get("set") or {}):
+            written_raw = r["set"]["TeamSalaryCap"]
+            sc = snapshot.get("salary_cap")
+            if sc:
+                raw_got = sc.get("raw_team_salary_cap")
+                if raw_got != written_raw:
+                    bad.append(f"SalaryInfo row 0 raw_team_salary_cap: wrote {written_raw}, read {raw_got}")
+                expected_units = written_raw + ce.SALARY_CAP_OFFSET_UNITS
+                units_got = sc.get("team_salary_cap")
+                if units_got != expected_units:
+                    bad.append(f"SalaryInfo row 0 team_salary_cap: expected {expected_units}, read {units_got}")
     return bad
 
 
@@ -1813,6 +1897,48 @@ def record_written(cur, plan, run_id, deps=None):
         if o.get("skip") or not o.get("status"):
             continue
         cur.execute("UPDATE contract_offers SET status = %s WHERE id = %s", (o["status"], o["id"]))
+    _apply_db(cur, plan, deps)
+
+
+def _apply_db(cur, plan, deps=None):
+    """Post-write database synchronization: syncs team_cap_seasons with new salary cap and move deltas."""
+    if deps is None:
+        deps = Deps()
+    db = plan.db if hasattr(plan, "db") else (plan.get("db") or {})
+    info = db.get("salary_cap")
+    if not info:
+        return
+    season = info.get("season")
+    cap_dollars = info.get("cap")
+    if season is None or cap_dollars is None:
+        return
+    deps.sync_team_caps(cur, season, cap_dollars)
+
+    cap_deltas = plan.cap if hasattr(plan, "cap") else (plan.get("cap") or {})
+    teams = plan.teams if hasattr(plan, "teams") else (plan.get("team_ids") or {})
+    teams_map = {int(k): v for k, v in teams.items()}
+
+    madden_cap = info.get("madden_cap")
+    if madden_cap is not None:
+        cap_delta_units = (cap_dollars // ce.MONEY_UNIT) - (madden_cap // ce.MONEY_UNIT)
+    else:
+        cap_delta_units = 0
+
+    for team_idx, deltas in cap_deltas.items():
+        team_id = teams_map.get(int(team_idx))
+        if team_id is None:
+            continue
+        room_units = deltas[0]
+        move_room = room_units - cap_delta_units
+        if move_room == 0:
+            continue
+        delta_dollars = move_room * ce.MONEY_UNIT
+        cur.execute("""
+            UPDATE team_cap_seasons
+            SET cap_space = cap_space + %s,
+                total_spend = total_spend - %s
+            WHERE team_id = %s AND season = %s
+        """, (delta_dollars, delta_dollars, team_id, season))
 
 
 def replace_save(src, dest):
@@ -1827,7 +1953,8 @@ def plan_record(plan):
     """What record_written needs, as JSON (stored with the operation so --recover can finish the run)."""
     return {"db": plan["db"], "season": plan["season"], "week": plan["week"], "calendar_year": plan["calendar_year"],
             "team_ids": {str(k): v for k, v in plan["team_ids"].items()},
-            "pid_by_pgid": {str(k): v for k, v in plan["pid_by_pgid"].items()}}
+            "pid_by_pgid": {str(k): v for k, v in plan["pid_by_pgid"].items()},
+            "cap": {str(k): v for k, v in (plan.get("cap") or {}).items()}}
 
 
 def plan_from_record(record, edits):
@@ -1835,7 +1962,8 @@ def plan_from_record(record, edits):
     return {"db": record["db"], "season": record["season"], "week": record["week"],
             "calendar_year": record["calendar_year"], "edits": edits,
             "team_ids": {int(k): v for k, v in record["team_ids"].items()},
-            "pid_by_pgid": {int(k): v for k, v in record["pid_by_pgid"].items()}}
+            "pid_by_pgid": {int(k): v for k, v in record["pid_by_pgid"].items()},
+            "cap": {int(k): v for k, v in (record.get("cap") or {}).items()}}
 
 
 def new_operation(plan, run_id, save_path, input_sha256):
