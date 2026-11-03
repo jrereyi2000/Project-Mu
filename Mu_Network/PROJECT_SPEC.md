@@ -70,13 +70,17 @@ The frontend is powered by a live FastAPI backend (`server/api.py`) backed by a 
   - Draft Central consensus big board, prospect modal, and war room.
 - `src/components/napper/`:
   - Napper fantasy league tabs and interactive draft room simulator.
-- `src/components/franchise/` (V2 core, not yet routed; `#franchise` comes in a later wave):
+- `src/components/franchise/` (V2 core, routed at `#franchise`):
+  - `FranchisePage.tsx`: the page shell: team header with a Your team / Not a user team badge from `/overview`, a 32-team picker, a tab bar for the eight modules in V2 order, `#franchise-<module>[?team=ABBR]` deep links.
+  - `GameCenterModule.tsx`: overview tiles, pending moves, the next opponent's dossier (ratings and per-game ranks), unit matchups with edges, and Play Game (`POST /game/launch`, dry run by default).
+  - `DraftWarRoomModule.tsx`: the team's war-room status, Round 1 slots and picks, the draft capital ledger for the next 3 drafts and its board with `ProspectModal`; links to `#draft?tab=war-room`.
   - `DepthChartModule.tsx`: the save's 35 depth-chart slots, click-to-swap or drag within a slot, "Let Staff Set" suggestion, Save queues the chart.
   - `RosterCapModule.tsx`: Active / Practice Squad / IR against 65 / 12, 5-year cap sheet, Cut / PS / IR moves with a cap preview (`MoveDialog`); also exports the shared `franchiseFetch`, `useFranchiseData`, `MoveDialog`.
   - `TrainingRoomModule.tsx`: medical ledger with IR place/activate.
   - `FreeAgencyModule.tsx`: free-agent market and offer form with utility feedback (exports `TermsForm`, `NegotiationResult`, `UtilityBar`).
   - `ContractRoomModule.tsx`: expiring contracts, extensions, restructure preview, tag / option values.
   - `TradeMachineModule.tsx`: two-way trade builder with surplus bars, cap legality and the AI GM verdict.
+- `src/types/franchiseGame.ts`: the overview, game-center and game/launch shapes.
 - `src/types/franchiseMarket.ts`: JSON contract for `/api/franchise/*` free agents, offers, contracts, picks and trades.
 - `src/types/franchiseRoster.ts`: JSON contract for `/api/franchise/*` depth-chart, roster, cap, moves and medical (implemented by `server/franchise_api.py`).
 
@@ -105,6 +109,7 @@ The app integrates with the canonical PostgreSQL database via RESTful JSON endpo
 | `#` or no hash | Gridiron Newsroom home | Editorial + Standings API |
 | `#team-{abbr}` | Team page | `/api/team/{abbr}`, `/api/team/{id}/roster/{season}`, `/api/team/{id}/season_stats/{season}` |
 | `#team-schedule-{abbr}` | Team schedule | `/api/team/{abbr}/schedule` |
+| `#franchise`, `#franchise-{module}` (game-center, depth-chart, roster-cap, free-agency, contract-room, trade-machine, draft-war-room, training-room), optional `?team=ABBR` | Franchise Command Center (`FranchisePage`) | `/api/franchise/{abbr}/*`, `/api/draft/war-room?team=` |
 | `#schedule` | League schedule | `/api/schedule` |
 | `#game-{id}` | Game page | `/api/game/{id}` |
 | `#player-{id}` | Player profile | `/api/player/{id}` |
