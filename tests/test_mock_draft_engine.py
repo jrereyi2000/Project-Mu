@@ -125,14 +125,20 @@ def test_mock_draft_engine_run():
     assert "(provisional)" in board
 
 
-def test_unrated_prospect_is_still_draftable():
-    from engines.mock_draft_engine import UNRATED_OVR
+def test_stored_ovr_never_moves_the_mock():
+    # on PC the board's OVR is the save's true rating: without a consensus the mock reads Madden's public order only
     engine = MockDraftEngine(season=2035, prospects_path="unused.csv")
     p = Prospect(projected_pick=6, full_name="No Grade", position="CB", college=None, height=None, weight=None,
                  age=None, overall_rating=None)
-    graded = Prospect(projected_pick=6, full_name="Graded", position="CB", college=None, height=None, weight=None,
-                      age=None, overall_rating=int(UNRATED_OVR))
-    assert engine.evaluate_fit(p, 6, [])[0] == engine.evaluate_fit(graded, 6, [])[0]
+    rated = Prospect(projected_pick=6, full_name="Graded", position="CB", college=None, height=None, weight=None,
+                     age=None, overall_rating=95)
+    assert engine.evaluate_fit(p, 6, [])[0] == engine.evaluate_fit(rated, 6, [])[0]
+
+
+def test_board_grade_follows_the_scouting_anchors():
+    from engines.mock_draft_engine import board_grade
+    assert [board_grade(r) for r in (1, 32, 64, 224, 300)] == [92.0, 80.0, 74.0, 60.0, 60.0]
+    assert board_grade(48) == 77.0 and board_grade(None) == 60.0
 
 
 def test_only_a_database_mock_can_be_saved():
@@ -156,4 +162,4 @@ def test_consensus_grade_drives_bpa():
     s2, why = engine.evaluate_fit(hi_grade, 5, [])
     assert s2 > s1 and "consensus grade" in why and "OVR" not in why
     plain = MockDraftEngine(season=2036)
-    assert plain.evaluate_fit(hi_ovr, 5, [])[0] > plain.evaluate_fit(hi_grade, 5, [])[0]   # no board: OVR fallback
+    assert plain.evaluate_fit(hi_ovr, 5, [])[0] > plain.evaluate_fit(hi_grade, 5, [])[0]   # no board: Madden's order

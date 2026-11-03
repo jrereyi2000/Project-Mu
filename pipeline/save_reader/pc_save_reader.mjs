@@ -23,6 +23,10 @@
 // entry per DraftPlayer row whose Player is a ContractStatus Draft prospect ({pgid, draft_position, initial_draft_rank,
 // true_overall_ranking, visible}; ranks 0-based, as draft_tables.mjs reads them), which load_save turns into the coming
 // class's draft_prospects board when it has none. The prospects themselves are the `players` with status Draft. Each
+// snapshot also carries `draft_picks`: every future pick (a DraftPick record with an OriginalTeam) as {year_offset (0 =
+// the coming draft), round (1-7), pick_number (0-based overall slot, Madden's projection), original_team_index,
+// current_team_index}. A fresh career keeps each future pick in its own one-row DraftPick table (674 of them in
+// CAREER-STAFF), the older sample save in one 672-row table, so every DraftPick table is read. Each
 // player also gets `college` = {table, row}: Player.College decoded, a reference into the game's static college list
 // (table 16384 in Madden 27; the names aren't in the save, pipeline/colleges.py maps the rows), null when unset.
 import { copyFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs';
@@ -121,6 +125,24 @@ function teamCap(record) {
   const cap = {};
   for (const name of fieldNames(record)) if (TEAM_CAP_FIELD.test(name)) cap[name] = record[name];
   return Object.keys(cap).length ? cap : null;
+}
+
+// Every future pick across the DraftPick tables (see the header).
+async function readDraftPicks(franchise, tables, teamTableId, teamIndexByRow) {
+  const teamOf = bits => {
+    const ref = decodeRef(bits);
+    return ref && ref.table === teamTableId ? teamIndexByRow.get(ref.row) ?? null : null;
+  };
+  const picks = [];
+  for (const table of franchise.getAllTablesByName('DraftPick')) {
+    const t = await tables.byId(table.header.tableId);
+    for (const r of t.records) {
+      if (r.isEmpty || !decodeRef(r.OriginalTeam)) continue;
+      picks.push({ year_offset: r.YearOffset, round: r.Round + 1, pick_number: r.PickNumber,
+        original_team_index: teamOf(r.OriginalTeam), current_team_index: teamOf(r.CurrentTeam) });
+    }
+  }
+  return picks;
 }
 
 function readTeams(teamTable) {
@@ -409,6 +431,7 @@ export async function readSave(savePath) {
     const depthCharts = await readDepthCharts(tables, teamTable, playerTable.header.tableId, pgidByRow);
     const leagueSettings = await readLeagueSettings(franchise, tables);
     const draftClass = readDraftClass(await tables.byName('DraftPlayer'), playerTable);
+    const draftPicks = await readDraftPicks(franchise, tables, teamTable.header.tableId, teamIndexByRow);
     const stat = statSync(savePath);
     return {
       meta: {
@@ -428,6 +451,7 @@ export async function readSave(savePath) {
       depth_charts: depthCharts,
       league_settings: leagueSettings,
       draft_class: draftClass,
+      draft_picks: draftPicks,
     };
   } finally {
     cleanup();
