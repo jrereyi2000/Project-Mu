@@ -13,7 +13,23 @@ from unittest import mock
 
 import pytest
 
+from pipeline import mod_packs
 from pipeline import watch_save as ws
+
+REAL_WRITE_PACK = mod_packs.write_pack     # the autouse fixture replaces the module attribute
+
+
+@pytest.fixture(autouse=True)
+def no_real_mod_manager(tmp_path, monkeypatch):
+    """Never touch JR's real MMC manager_config.json or run tasklist.exe: MMC_CONFIG points at a missing temp file
+    and manager_running / write_pack fail unless a test mocks them."""
+    monkeypatch.setenv("MMC_CONFIG", str(tmp_path / "no_manager_config.json"))
+
+    def refuse(*a, **k):
+        raise AssertionError("a test reached the real Mod Manager")
+
+    monkeypatch.setattr("pipeline.mod_packs.manager_running", refuse)
+    monkeypatch.setattr("pipeline.mod_packs.write_pack", refuse)
 
 
 class DebouncerTest(unittest.TestCase):
@@ -484,6 +500,427 @@ class IngestSnapshotTest(unittest.TestCase):
             ws.prepare_next_week_mod_pack("host=localhost dbname=madden_car", 2036, 8, log_fn=logs.append)
             self.assertTrue(any("Next-week mod pack plan for CAR" in l for l in logs))
             self.assertTrue(any("Mu FOX Tier2 BCA" in l for l in logs))
+            # MMC_CONFIG points at a missing file (fixture): logged, nothing written
+            self.assertTrue(any("not written" in l and "missing" in l for l in logs))
+
+
+def fake_game(home="CAR", away="TB"):
+    return mock.MagicMock(id=1, season=2036, week=8, game_time="Sun 1:00 PM", game_type="REGULAR_SEASON",
+                          home=home, away=away)
+
+
+class ModPackWriteTest(unittest.TestCase):
+    """prepare_next_week_mod_pack writes the pack (mod_packs.write_pack, selected) unless the manager is open."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.config = os.path.join(self.tmp, "manager_config.json")
+        base = "m27_fox_presentation.fbmod:False|m27_cbs_presentation.fbmod:True|Other.fbmod:True"
+        with open(self.config, "w") as f:
+            json.dump({"Games": {"Madden27": {"Packs": {"Mu Base": base}, "Options": {"SelectedPack": "Default"}}}}, f)
+        registry = {"active": "1", "franchises": {"1": {"db": "madden_car", "user_teams": ["CAR"]}}}
+        self.patches = [
+            mock.patch.dict(os.environ, {"MMC_CONFIG": self.config}),
+            mock.patch("db.franchises.load_registry", return_value=registry),
+            mock.patch("psycopg.connect"),
+            mock.patch("pipeline.mod_packs.load_games", return_value=[fake_game()]),
+            mock.patch("pipeline.mod_packs.choose", return_value=mod_packs.Choice("FOX", 2, 45.0, False)),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        mock.patch.stopall()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def packs(self):
+        with open(self.config) as f:
+            return json.load(f)["Games"]["Madden27"]
+
+    def test_pack_written_and_selected(self):
+        logs = []
+        with mock.patch("pipeline.mod_packs.manager_running", return_value=False), \
+             mock.patch("pipeline.mod_packs.write_pack", side_effect=REAL_WRITE_PACK) as wp:
+            written = ws.prepare_next_week_mod_pack("host=localhost dbname=madden_car", 2036, 8, log_fn=logs.append)
+        self.assertEqual(written, ["Mu FOX Tier2 Mudded"])
+        wp.assert_called_once()
+        self.assertTrue(wp.call_args[1]["select"])
+        cfg = self.packs()
+        self.assertEqual(cfg["Options"]["SelectedPack"], "Mu FOX Tier2 Mudded")
+        self.assertIn("m27_fox_presentation.fbmod:True", cfg["Packs"]["Mu FOX Tier2 Mudded"])
+        self.assertIn("m27_cbs_presentation.fbmod:False", cfg["Packs"]["Mu FOX Tier2 Mudded"])
+        self.assertTrue(any("wrote 'Mu FOX Tier2 Mudded'" in l for l in logs))
+
+    def test_skipped_while_manager_running(self):
+        logs = []
+        with mock.patch("pipeline.mod_packs.manager_running", return_value=True), \
+             mock.patch("pipeline.mod_packs.write_pack") as wp:
+            written = ws.prepare_next_week_mod_pack("host=localhost dbname=madden_car", 2036, 8, log_fn=logs.append)
+        self.assertEqual(written, [])
+        wp.assert_not_called()
+        self.assertTrue(any("MMCModManager.exe is open" in l for l in logs))
+        self.assertEqual(self.packs()["Options"]["SelectedPack"], "Default")
+
+    def test_skipped_without_base_pack(self):
+        with open(self.config, "w") as f:
+            json.dump({"Games": {"Madden27": {"Packs": {}}}}, f)
+        logs = []
+        with mock.patch("pipeline.mod_packs.manager_running", return_value=False), \
+             mock.patch("pipeline.mod_packs.write_pack") as wp:
+            written = ws.prepare_next_week_mod_pack("host=localhost dbname=madden_car", 2036, 8, log_fn=logs.append)
+        self.assertEqual(written, [])
+        wp.assert_not_called()
+        self.assertTrue(any("not written" in l and "Mu Base" in l for l in logs))
+
+
+class LeagueOfficeIngestTest(unittest.TestCase):
+    """The child side with the league office: load -> engines -> league office -> articles -> mod pack."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.snapshot = os.path.join(self.tmp, "save.json")
+        with open(self.snapshot, "w") as f:
+            json.dump({"season": {"calendar_year": 2036, "week_type": "RegularSeason", "week_index": 5}}, f)
+        self.save = os.path.join(self.tmp, "CAREER-A")
+        with open(self.save, "w") as f:
+            f.write("save")
+        self.calls = mock.Mock()
+        self.env = mock.patch.dict(os.environ, {"DATABASE_URL": "host=localhost dbname=madden_test user=postgres"})
+        self.env.start()
+        def record(name, ret=None):
+            def side_effect(*a, **k):
+                getattr(self.calls, name)()
+                return ret
+            return side_effect
+        mock.patch("pipeline.load_save.load",
+                   side_effect=record("load", {"league_state": "x", "players": 1, "games_completed": 1})).start()
+        mock.patch("pipeline.watch_save.run_weekly_engines", side_effect=record("engines")).start()
+        mock.patch("pipeline.watch_save.queue_nightly_jobs").start()
+        self.articles = mock.patch("pipeline.watch_save.step_articles",
+                                   side_effect=record("articles", {"status": "published", "week": 6})).start()
+        self.pack = mock.patch("pipeline.watch_save.prepare_next_week_mod_pack",
+                               side_effect=record("mod_pack", [])).start()
+        self.notify = mock.patch("pipeline.watch_save.send_notify").start()
+
+    def tearDown(self):
+        mock.patch.stopall()
+        self.env.stop()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def ingest(self, lo_result, **kw):
+        def fake_lo(*a, **k):
+            self.calls.league_office(*a, **k)
+            return dict({"status": None, "run_id": 7, "error": None, "output_sha256": None, "replaced": False},
+                        **lo_result)
+        self.lo = mock.patch("pipeline.watch_save.run_league_office", side_effect=fake_lo).start()
+        return ws.ingest_snapshot(self.snapshot, 2036, 6, save_name="CAREER-A", save_path=self.save,
+                                  league_office=True, save_sha256="abc", **kw)
+
+    def order(self):
+        return [c[0] for c in self.calls.mock_calls]
+
+    def test_league_office_runs_after_engines_before_articles(self):
+        res = self.ingest({"status": "written", "replaced": True, "output_sha256": "out"})
+        self.assertEqual(self.order(), ["load", "engines", "league_office", "articles", "mod_pack"])
+        args, kw = self.lo.call_args
+        self.assertEqual(args[:3], (self.snapshot, self.save, "host=localhost dbname=madden_test user=postgres"))
+        self.assertFalse(kw["dry_run"])
+        self.assertEqual(kw["expected_sha256"], "abc")
+        self.assertEqual(res["league_office"]["output_sha256"], "out")
+        self.assertIn("League office wrote CAREER-A", self.notify.call_args[0][0])
+        # the mod pack is for the save's current week (Madden's next unplayed week)
+        self.assertEqual(self.pack.call_args[0][1:3], (2036, 6))
+
+    def test_league_office_off(self):
+        self.lo = mock.patch("pipeline.watch_save.run_league_office").start()
+        res = ws.ingest_snapshot(self.snapshot, 2036, 6, save_name="CAREER-A", save_path=self.save)
+        self.lo.assert_not_called()
+        self.assertIsNone(res["league_office"])
+        self.assertEqual(self.order(), ["load", "engines", "articles", "mod_pack"])
+
+    def test_dry_run_flag_passed_through(self):
+        self.ingest({"status": "dry_run"}, league_office_dry_run=True)
+        self.assertTrue(self.lo.call_args[1]["dry_run"])
+
+    def test_failure_still_runs_articles_and_notifies(self):
+        res = self.ingest({"status": "failed", "error": "CompositionError: pgid 5 clash"})
+        self.assertEqual(self.order(), ["load", "engines", "league_office", "articles", "mod_pack"])
+        self.assertEqual(res["status"], "success")
+        titles = [c[1].get("title") for c in self.notify.call_args_list]
+        self.assertIn("Mu: league office failed", titles)
+        self.assertIn("Mu: week done", titles)
+
+    def test_needs_recovery_notifies_with_the_command(self):
+        self.ingest({"status": "needs_recovery",
+                     "error": "replaced; run `python3 -m pipeline.league_office --recover 7`"})
+        msg = next(c[0][0] for c in self.notify.call_args_list if c[1].get("title") == "Mu: league office needs recovery")
+        self.assertIn("python3 -m pipeline.league_office --recover 7", msg)
+        self.assertIn("articles", self.order())
+
+    def test_franchise_open_is_logged_not_fatal(self):
+        logs = []
+        self.lo = mock.patch("pipeline.watch_save.run_league_office",
+                             return_value={"status": "franchise_open", "error": "Madden27.exe is running"}).start()
+        res = ws.ingest_snapshot(self.snapshot, 2036, 6, save_name="CAREER-A", save_path=self.save,
+                                 league_office=True, log_fn=logs.append)
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["league_office"]["status"], "franchise_open")
+        self.assertIn("LEAGUE_OFFICE_FRANCHISE_CLOSED=1 python3 -m pipeline.league_office",
+                      res["league_office"]["retry_command"])
+        self.articles.assert_called_once()
+        self.assertTrue(any("[WARN] League office not run" in l for l in logs))
+        titles = [c[1].get("title") for c in self.notify.call_args_list]
+        self.assertEqual(titles, ["Mu: week done"], "a franchise-open refusal is not an error alert")
+
+    def test_offseason_stage_only_loads_and_runs_the_league_office(self):
+        def fake_lo(*a, **k):
+            self.calls.league_office()
+            return {"status": "written", "replaced": True, "output_sha256": "o", "run_id": 3}
+        mock.patch("pipeline.watch_save.run_league_office", side_effect=fake_lo).start()
+        res = ws.ingest_snapshot(self.snapshot, 2036, None, save_name="CAREER-A", save_path=self.save,
+                                 league_office=True, stage_only=True)
+        self.assertEqual(self.order(), ["load", "league_office"])
+        self.assertEqual(res["league_office"]["status"], "written")
+
+
+class RunLeagueOfficeTest(unittest.TestCase):
+    """run_league_office: the in-process call into pipeline.league_office.run and its error mapping."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.snapshot = os.path.join(self.tmp, "save.json")
+        with open(self.snapshot, "w") as f:
+            json.dump({"season": {"calendar_year": 2036}}, f)
+        self.save = os.path.join(self.tmp, "CAREER-A")
+        with open(self.save, "w") as f:
+            f.write("save")
+        self.connect = mock.patch("psycopg.connect").start()
+
+    def tearDown(self):
+        mock.patch.stopall()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_lo(self, side_effect, **kw):
+        with mock.patch("pipeline.league_office.run", side_effect=side_effect) as run:
+            res = ws.run_league_office(self.snapshot, self.save, "dbname=madden_test", **kw)
+        return res, run
+
+    def test_written(self):
+        def fake(cur, snapshot, save_path, stage, dry_run, confirm_franchise_closed, out):
+            out(json.dumps({"run_id": 4, "stage": "REGULAR_WEEK", "status": "WRITTEN", "replaced": True,
+                            "output_sha256": "new"}))
+            return 4
+        res, run = self.run_lo(fake)
+        self.assertEqual((res["status"], res["run_id"], res["output_sha256"]), ("written", 4, "new"))
+        self.assertEqual(run.call_args[1]["stage"], "auto")
+        self.assertFalse(run.call_args[1]["dry_run"])
+        self.assertEqual(run.call_args[0][2], self.save)
+
+    def test_dry_run_passed_to_league_office(self):
+        res, run = self.run_lo(lambda *a, **k: 5, dry_run=True)
+        self.assertTrue(run.call_args[1]["dry_run"])
+        self.assertEqual(res["status"], "dry_run")
+
+    def test_env_var_confirms_franchise_closed(self):
+        with mock.patch.dict(os.environ, {"LEAGUE_OFFICE_FRANCHISE_CLOSED": "1"}):
+            _, run = self.run_lo(lambda *a, **k: 5, dry_run=True)
+        self.assertTrue(run.call_args[1]["confirm_franchise_closed"])
+        with mock.patch.dict(os.environ, {"LEAGUE_OFFICE_FRANCHISE_CLOSED": ""}):
+            _, run = self.run_lo(lambda *a, **k: 5, dry_run=True)
+        self.assertFalse(run.call_args[1]["confirm_franchise_closed"])
+
+    def test_franchise_open_refusal(self):
+        from pipeline import league_office as lo
+        res, _ = self.run_lo(lo.FranchiseOpenError("Madden27.exe is running"))
+        self.assertEqual(res["status"], "franchise_open")
+        self.assertIn("LEAGUE_OFFICE_FRANCHISE_CLOSED", res["error"])
+
+    def test_league_office_errors_are_failures(self):
+        from pipeline import league_office as lo
+        for err in (lo.CompositionError("clash"), lo.ProgressionIntegrationError("no hook"), lo.StageError("?")):
+            res, _ = self.run_lo(err)
+            self.assertEqual(res["status"], "failed")
+            self.assertIn(type(err).__name__, res["error"])
+
+    def test_failed_report_is_a_failure(self):
+        def fake(*a, out, **k):
+            out(json.dumps({"run_id": 9, "status": "FAILED", "error": "save_writer refused"}))
+            return 9
+        res, _ = self.run_lo(fake)
+        self.assertEqual((res["status"], res["run_id"]), ("failed", 9))
+        self.assertIn("save_writer refused", res["error"])
+
+    def test_recovery_error_names_the_recover_command(self):
+        from pipeline import league_office as lo
+
+        def fake(*a, out, **k):
+            out(json.dumps({"run_id": 12, "status": "NEEDS_RECOVERY"}))
+            raise lo.RecoveryError("the replaced save's sha256 differs")
+        res, _ = self.run_lo(fake)
+        self.assertEqual(res["status"], "needs_recovery")
+        self.assertIn("python3 -m pipeline.league_office --recover 12", res["error"])
+
+    def test_changed_save_is_skipped(self):
+        res, run = self.run_lo(lambda *a, **k: 1, expected_sha256="not-the-sha")
+        run.assert_not_called()
+        self.assertEqual(res["status"], "skipped")
+
+
+class LeagueOfficeProcessSaveTest(ProcessSaveTest):
+    """process_save's league office decisions (flags, offseason stops, its own write)."""
+
+    def offseason_save(self, name, week_index=3, stage=2):
+        path = self.save(name, self.LEAGUE_A, week_index=week_index)
+        self.snapshots[path]["season"].update(week_type="Offseason", stage="Offseason", offseason_stage=stage)
+        return path
+
+    def lo_kw(self):
+        return self.ingest.call_args[1]
+
+    def test_new_week_runs_the_league_office(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        self.assertFalse(self.lo_kw()["league_office"], "not on the load that seeds the franchise")
+        save = self.save("CAREER-A", self.LEAGUE_A, week_index=6)
+        res = self.process(save)
+        kw = self.lo_kw()
+        self.assertTrue(kw["league_office"])
+        self.assertFalse(kw["league_office_dry_run"])
+        self.assertEqual(kw["save_path"], save)
+        self.assertEqual(kw["save_sha256"], ws.file_sha256(save))
+        self.assertEqual(res["classification"], "new_week")
+
+    def test_no_league_office_flag(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        self.process(self.save("CAREER-A", self.LEAGUE_A, week_index=6), no_league_office=True)
+        self.assertFalse(self.lo_kw()["league_office"])
+
+    def test_league_office_dry_run_flag(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        self.process(self.save("CAREER-A", self.LEAGUE_A, week_index=6), league_office_dry_run=True)
+        self.assertTrue(self.lo_kw()["league_office"])
+        self.assertTrue(self.lo_kw()["league_office_dry_run"])
+
+    def test_dry_run_skips_the_league_office(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        self.process(self.save("CAREER-A", self.LEAGUE_A, week_index=6), dry_run=True)
+        self.assertFalse(self.lo_kw()["league_office"])
+
+    def test_own_write_is_same_week(self):
+        """The league office's write keeps the season and week: reading it again is a same_week no-op."""
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        save = self.save("CAREER-A", self.LEAGUE_A, week_index=6)
+        self.process(save)
+        with open(save, "w") as f:
+            f.write("written by the league office")
+        res = self.process(save)
+        self.assertEqual((res["status"], res["reason"]), ("no_op", "same_week"))
+        self.assertEqual(self.ingest.call_count, 2)
+
+    def test_offseason_stop_new_then_same_stage(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        done = []
+        with mock.patch("pipeline.watch_save.league_office_stage_done", side_effect=lambda dsn, info: bool(done)):
+            res = self.process(self.offseason_save("CAREER-A"))
+            self.assertEqual(res["classification"], "new_stage")
+            self.assertTrue(self.lo_kw()["league_office"])
+            self.assertTrue(self.lo_kw()["stage_only"])
+            done.append(True)      # the league office wrote it: league_office_runs has a WRITTEN row
+            res = self.process(self.offseason_save("CAREER-A"))
+            self.assertEqual((res["status"], res["reason"]), ("no_op", "same_stage"))
+        self.assertEqual(self.ingest.call_count, 2)
+
+    def test_offseason_stop_without_league_office_is_a_no_op(self):
+        self.process(self.save("CAREER-A", self.LEAGUE_A), auto_init=True)
+        res = self.process(self.offseason_save("CAREER-A"), no_league_office=True)
+        self.assertEqual(res["reason"], "no_current_week")
+
+
+class WatchLoopLeagueOfficeTest(unittest.TestCase):
+    """The daemon's side: its own write isn't re-ingested; a franchise-open refusal is retried later."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.save = os.path.join(self.tmp, "CAREER-A")
+        with open(self.save, "w") as f:
+            f.write("week 6")
+        t = time.time() - 60
+        os.utime(self.save, (t, t))
+        self.lock = os.path.join(self.tmp, "run.lock")
+        self.debouncer = ws.FileDebouncer(debounce_seconds=0)     # settles on the second look at a change
+        self.pending = {}
+        mock.patch("pipeline.watch_save.send_notify").start()
+        mock.patch("pipeline.gpu_queue.process_check.is_madden_running", return_value=True).start()
+
+    def tearDown(self):
+        mock.patch.stopall()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def league_office_writes(self, *a, **k):
+        with open(self.save, "w") as f:
+            f.write("week 6 + league office")
+        t = time.time() - 30
+        os.utime(self.save, (t, t))
+        return {"status": "success", "snapshot_path": "s.json", "dsn": "dbname=madden_x",
+                "league_office": {"status": "written", "replaced": True,
+                                  "output_sha256": ws.file_sha256(self.save)}}
+
+    def poll(self, **kw):
+        ws.poll_once(self.tmp, "CAREER-*", self.debouncer, self.pending, self.lock, log_fn=lambda m: None, **kw)
+
+    def test_own_write_not_reingested(self):
+        with mock.patch("pipeline.watch_save.process_save", side_effect=self.league_office_writes) as ps:
+            self.poll()
+            self.assertEqual(ps.call_count, 1)
+            self.poll()     # the file changed (the league office's write): settles, recognised by sha256
+            self.poll()
+            self.assertEqual(ps.call_count, 1)
+        # Madden saving again afterwards is a new save
+        with open(self.save, "w") as f:
+            f.write("week 7")
+        t = time.time() - 20
+        os.utime(self.save, (t, t))
+        with mock.patch("pipeline.watch_save.process_save", return_value={"status": "success"}) as ps:
+            self.poll()
+            self.poll()
+            self.assertEqual(ps.call_count, 1)
+
+    def franchise_open(self, *a, **k):
+        return {"status": "success", "snapshot_path": os.path.join(self.tmp, "save.json"), "dsn": "dbname=madden_x",
+                "save_sha256": ws.file_sha256(self.save), "league_office": {"status": "franchise_open"}}
+
+    def test_franchise_open_retried_once_madden_closes(self):
+        with mock.patch("pipeline.watch_save.process_save", side_effect=self.franchise_open):
+            self.poll(league_office_dry_run=False)
+        self.assertIn(self.save, self.pending)
+        with mock.patch("pipeline.watch_save.run_league_office_child") as child:
+            ws.retry_league_office(self.pending, self.debouncer, self.lock, madden_running=lambda: True,
+                                   log_fn=lambda m: None)
+            child.assert_not_called()
+            self.assertIn(self.save, self.pending)
+            child.return_value = {"status": "written", "replaced": False, "run_id": 3}
+            ws.retry_league_office(self.pending, self.debouncer, self.lock, madden_running=lambda: False,
+                                   log_fn=lambda m: None)
+            child.assert_called_once()
+            self.assertEqual(child.call_args[0][:3], (os.path.join(self.tmp, "save.json"), "dbname=madden_x",
+                                                     self.save))
+            self.assertEqual(child.call_args[1]["save_sha256"], ws.file_sha256(self.save))
+        self.assertEqual(self.pending, {})
+
+    def test_newer_save_drops_the_retry(self):
+        with mock.patch("pipeline.watch_save.process_save", side_effect=self.franchise_open):
+            self.poll()
+        with open(self.save, "w") as f:
+            f.write("week 7")
+        t = time.time() - 20
+        os.utime(self.save, (t, t))
+        with mock.patch("pipeline.watch_save.process_save", return_value={"status": "success"}):
+            self.poll()
+            self.poll()
+        self.assertEqual(self.pending, {})
 
 
 class FranchiseRegistryTest(unittest.TestCase):
