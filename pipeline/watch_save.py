@@ -5,7 +5,21 @@ pipeline/watch_save.py: Debounced save watcher daemon for Madden NFL PC franchis
 Watches a directory for CAREER-* save files, debounces write bursts from Madden,
 snapshots the save via pc_save_reader.mjs, routes it to its franchise's database, and runs
 the weekly ingestion pipeline there:
-  load_save (--commit) -> engines -> newsroom articles
+  load_save (--commit) -> engines -> league office -> newsroom articles -> next week's mod pack
+
+Madden autosaves after Advance Week, so no manual save is needed. After the load and the weekly engines, the league
+office (pipeline.league_office.run, stage auto) runs in the same child process on the save just ingested, so the
+articles can report its moves. It replaces the save (a verified write); that write keeps the season and week, so it is
+never ingested again as a new week (classify_week: same_week; the daemon also remembers the league office's output
+sha256 and skips its own write without reading it). Offseason stops have no current week: with the league office on,
+an offseason save is ingested (load, league office; no engines, no articles) when league_office_runs has no WRITTEN or
+PLANNED run for its stage yet. A league office failure is logged and notified and the articles still run; a run that
+needs recovery names `python3 -m pipeline.league_office --recover <run_id>`. While Madden27.exe runs the league office
+refuses to replace the save unless LEAGUE_OFFICE_FRANCHISE_CLOSED=1 is set (JR sets it when he works at Madden's main
+menu with the franchise closed); without it the refusal is logged, not fatal, and the daemon retries the league office
+on the same snapshot once Madden27.exe has closed (dropped if the save changed in the meantime). The league office is
+not run on the load that first seeds a franchise (run `python3 -m pipeline.league_office setup` first) or on a forced
+re-load of a week already loaded.
 
 Each franchise has its own database (db/franchises.py), found by the save's Franchise.LeagueID, so
 saves from several franchises can share the folder and every save slot of one franchise lands in the
@@ -26,8 +40,11 @@ Options:
   --debounce SECONDS       Debounce wait time in seconds (default: 10)
   --poll-interval SECONDS  Polling interval for daemon loop (default: 2)
   --once                   Process the newest save once and exit
-  --dry-run                Load without commit, skip engines and articles; never creates or seeds a database
+  --dry-run                Load without commit, skip engines, league office and articles; never creates or seeds a
+                           database
   --no-articles            Run loader and engines, skip newsroom articles
+  --no-league-office       Don't run the league office after the weekly engines
+  --league-office-dry-run  Run the league office with dry_run=True (plan only: no save write, nothing acknowledged)
   --no-engines             Run the loader only (no engines, no articles)
   --season N               Override season year (default: save's calendar year)
   --force                  Proceed even if week is same as or older than league_state
@@ -43,6 +60,7 @@ import argparse
 import datetime
 import fcntl
 import glob
+import hashlib
 import json
 import os
 import signal
@@ -64,6 +82,9 @@ READER_SCRIPT = os.path.join(ROOT, "pipeline", "save_reader", "pc_save_reader.mj
 DEFAULT_LOCK_PATH = os.path.join(CAPTURES, ".weekly_run.lock")
 DEFAULT_DEBOUNCE = 10
 DEFAULT_POLL_INTERVAL = 2
+# Set by JR when Madden27.exe sits at its main menu with the franchise closed (pipeline.league_office reads it too).
+FRANCHISE_CLOSED_ENV = "LEAGUE_OFFICE_FRANCHISE_CLOSED"
+LO_RESULT = "league_office_result.json"
 
 
 class WatcherError(Exception):
@@ -178,15 +199,45 @@ class FileDebouncer:
         state = self.states.get(path)
         return state is not None and state.get("last_processed_mtime") == mtime
 
-    def mark_processed(self, path):
-        """Records that the current mtime of the file has been processed."""
-        try:
-            mtime = os.path.getmtime(path)
-        except OSError:
-            return
+    def mark_processed(self, path, mtime=None):
+        """Records that the file's mtime (the current one, or `mtime`, e.g. the one seen before processing started)
+        has been processed."""
+        if mtime is None:
+            try:
+                mtime = os.path.getmtime(path)
+            except OSError:
+                return
         if path not in self.states:
             self.states[path] = {}
         self.states[path]["last_processed_mtime"] = mtime
+
+    def note_own_write(self, path, sha256):
+        """Remembers the sha256 of a save the league office wrote, so the watcher doesn't ingest its own write."""
+        if sha256:
+            self.states.setdefault(path, {})["own_write_sha256"] = sha256
+
+    def is_own_write(self, path):
+        """True when the file's content is exactly the league office's last write to it (then forgets the note
+        only once a different content is seen)."""
+        sha = (self.states.get(path) or {}).get("own_write_sha256")
+        if not sha:
+            return False
+        try:
+            current = file_sha256(path)
+        except OSError:
+            return False
+        if current == sha:
+            return True
+        self.states[path].pop("own_write_sha256", None)
+        return False
+
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def wait_for_settle(path, debounce_seconds=DEFAULT_DEBOUNCE, timeout=60, poll_interval=1):
@@ -280,9 +331,13 @@ def queue_nightly_jobs(season, week, log_fn=log):
 
 
 def prepare_next_week_mod_pack(dsn, season, next_week, log_fn=log):
-    """Prepares and logs next-week mod pack plan for user-controlled teams."""
+    """Writes the mod pack for each user team's next game (`next_week`: the save's current week, Madden's next
+    unplayed week, games.week numbering) into the Mod Manager's config with mod_packs.write_pack, selecting the first
+    one. Skips writing (with a log line) while MMCModManager.exe is open (it saves its own copy of the packs) or when
+    its config or the `Mu Base` pack is missing. Returns the names of the packs written."""
+    written = []
     if not next_week or not season:
-        return
+        return written
     try:
         from db import franchises
         from pipeline import mod_packs
@@ -295,8 +350,9 @@ def prepare_next_week_mod_pack(dsn, season, next_week, log_fn=log):
         user_teams = (entry or {}).get("user_teams") or []
         if not user_teams:
             log_fn("Next-week mod pack: no user teams registered in franchises.json; skipping.")
-            return
+            return written
 
+        planned = []      # (team, game, choice)
         import psycopg
         with psycopg.connect(dsn) as conn, conn.cursor() as cur:
             for team in user_teams:
@@ -314,8 +370,43 @@ def prepare_next_week_mod_pack(dsn, season, next_week, log_fn=log):
                         f"Next-week mod pack plan for {team} (Week {next_week}, {g.away} @ {g.home}, {g.game_time}): "
                         f"{c.pack_name} | Presentation: {pres}, Music: {music}, Crowd: {crowd} (score: {c.score}), Ball: {ball}"
                     )
+                    planned.append((team, g, c))
+        if not planned:
+            return written
+
+        # mod_packs' config / manager checks raise SystemExit; they mean "skip writing", never a failed week.
+        try:
+            path = mod_packs.config_path()
+        except SystemExit as e:
+            log_fn(f"Next-week mod pack: not written, no Mod Manager config ({e}).")
+            return written
+        if not os.path.exists(path):
+            log_fn(f"Next-week mod pack: not written, Mod Manager config {path} is missing.")
+            return written
+        try:
+            running = mod_packs.manager_running()
+        except SystemExit as e:
+            log_fn(f"Next-week mod pack: not written, can't tell whether MMCModManager.exe is open ({e}).")
+            return written
+        if running:
+            log_fn("Next-week mod pack: not written, MMCModManager.exe is open (it saves its own copy of the packs); "
+                   "close it and run `python3 -m pipeline.mod_packs write --team <TEAM>`.")
+            return written
+        try:
+            base = mod_packs.base_pack(path)
+        except SystemExit as e:
+            log_fn(f"Next-week mod pack: not written, {e}.")
+            return written
+        for team, g, c in planned:
+            if c.pack_name in written:
+                continue
+            mod_packs.write_pack(path, c.pack_name, mod_packs.build_pack(base, c), select=not written)
+            log_fn(f"Next-week mod pack: wrote '{c.pack_name}' for {team} ({g.away} @ {g.home}) to {path}"
+                   + ("" if written else " and selected it"))
+            written.append(c.pack_name)
     except Exception as e:
         log_fn(f"Warning: next-week mod pack preparation skipped: {e}")
+    return written
 
 
 def franchise_id(snapshot, save_path):
@@ -400,9 +491,144 @@ def route_franchise(fid, save_name, save_season, save_week, auto_init=False, res
     return {"status": "ready", "db": db, "dsn": dsn, "seeded": False}
 
 
+# ----------------------------------------------------------------------------------------- league office ---
+def franchise_closed_env():
+    """True when JR has set LEAGUE_OFFICE_FRANCHISE_CLOSED (Madden at its main menu, franchise closed)."""
+    return os.environ.get(FRANCHISE_CLOSED_ENV, "").strip().lower() in ("1", "true", "yes")
+
+
+def league_office_stage(snapshot, log_fn=log):
+    """{"stage", "wave", "season", "week"} as the league office will see the snapshot (league_state numbering), or
+    None when it isn't one of the league office's stages."""
+    try:
+        from pipeline import league_office as lo
+        stage, wave = lo.stage_and_wave(snapshot)
+        return {"stage": stage, "wave": wave, "season": lo.league_season(snapshot, stage),
+                "week": lo.league_week(snapshot, stage)}
+    except Exception as e:      # noqa: BLE001 - StageError or a snapshot without a season block
+        log_fn(f"League office stage not recognised for this save: {e}")
+        return None
+
+
+def league_office_stage_done(dsn, info):
+    """True when league_office_runs already has a WRITTEN (or PLANNED: waiting for --recover) run for this stage,
+    week and free-agency wave. A database without the table, or one that can't be read, counts as done (no-op)."""
+    import psycopg
+    try:
+        with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('public.league_office_runs')")
+            reg = cur.fetchone()
+            if not reg or not reg[0]:
+                return True
+            cur.execute("""SELECT 1 FROM league_office_runs WHERE season = %s AND stage = %s
+                           AND week IS NOT DISTINCT FROM %s AND status IN ('WRITTEN', 'PLANNED')
+                           AND COALESCE(summary->>'wave', '') = %s LIMIT 1""",
+                        (info["season"], info["stage"], info["week"],
+                         "" if info.get("wave") is None else str(info["wave"])))
+            return cur.fetchone() is not None
+    except Exception:
+        return True
+
+
+def league_office_command(snapshot_path, save_path, dsn):
+    """The manual command that runs the league office on this snapshot later."""
+    return (f"{FRANCHISE_CLOSED_ENV}=1 python3 -m pipeline.league_office --snapshot {snapshot_path} "
+            f"--save '{save_path}' --dsn '{dsn}'")
+
+
+def run_league_office(snapshot_path, save_path, dsn, dry_run=False, expected_sha256=None, log_fn=log):
+    """Runs pipeline.league_office.run(cur, snapshot, save_path, stage="auto") in this process on the franchise's
+    database. Never raises: returns {"status": "written" | "dry_run" | "failed" | "franchise_open" |
+    "needs_recovery" | "skipped", "run_id", "error", "output_sha256", "stage", "replaced"}."""
+    from pipeline import league_office as lo
+
+    res = {"status": None, "run_id": None, "error": None, "output_sha256": None, "stage": None, "replaced": False,
+           "dry_run": bool(dry_run)}
+    if not save_path or not os.path.exists(save_path):
+        return dict(res, status="skipped", error=f"save {save_path!r} not found")
+    if expected_sha256 and file_sha256(save_path) != expected_sha256:
+        return dict(res, status="skipped",
+                    error="the save changed since it was read (a newer save will be ingested on its own)")
+    with open(snapshot_path) as fh:
+        snapshot = json.load(fh)
+    reports = []
+
+    def out(text):
+        reports.append(text)
+
+    def last_report():
+        for text in reversed(reports):
+            try:
+                return json.loads(text)
+            except (TypeError, ValueError):
+                continue
+        return {}
+
+    log_fn(f"League office: {os.path.basename(save_path)} (stage auto, dry_run={bool(dry_run)})")
+    try:
+        import psycopg
+        with psycopg.connect(dsn) as conn:
+            run_id = lo.run(conn.cursor(), snapshot, save_path, stage="auto", dry_run=dry_run,
+                            confirm_franchise_closed=franchise_closed_env(), out=out)
+    except lo.FranchiseOpenError as e:
+        return dict(res, status="franchise_open",
+                    error=f"{e}. Left for a later retry (the watcher retries once Madden27.exe has closed; JR sets "
+                          f"{FRANCHISE_CLOSED_ENV}=1 when he works at Madden's main menu).")
+    except lo.RecoveryError as e:
+        rep = last_report()
+        run_id = rep.get("run_id")
+        msg = str(e)
+        if "--recover" not in msg:
+            msg += f"; run `python3 -m pipeline.league_office --recover {run_id if run_id else '<run_id>'}`"
+        return dict(res, status="needs_recovery", run_id=run_id, stage=rep.get("stage"), error=msg)
+    except Exception as e:      # noqa: BLE001 - StageError, ProgressionIntegrationError, CompositionError, ...
+        rep = last_report()
+        return dict(res, status="failed", run_id=rep.get("run_id"), stage=rep.get("stage"),
+                    error=f"{type(e).__name__}: {e}")
+    rep = last_report()
+    res.update(run_id=run_id, stage=rep.get("stage"))
+    status = rep.get("status")
+    if dry_run:
+        return dict(res, status="dry_run")
+    if status == "WRITTEN":
+        return dict(res, status="written", replaced=bool(rep.get("replaced")), output_sha256=rep.get("output_sha256"))
+    return dict(res, status="failed", error=rep.get("error") or f"league office run {run_id} ended {status}")
+
+
+def report_league_office(result, save_name, log_fn=log):
+    """Logs the league office result and notifies on a failure; returns a short line for the week's notification."""
+    status = result.get("status")
+    run = f" (run {result['run_id']})" if result.get("run_id") else ""
+    if status == "written":
+        line = (f"League office wrote {save_name}{run}" if result.get("replaced")
+                else f"League office: nothing to write{run}")
+        log_fn(line)
+        return line
+    if status == "dry_run":
+        line = f"League office dry run{run} (nothing written)"
+        log_fn(line)
+        return line
+    if status == "franchise_open":
+        line = "League office waiting: Madden27.exe is running"
+        log_fn(f"[WARN] League office not run on {save_name}: {result.get('error')}")
+        return line
+    if status == "skipped":
+        line = f"League office skipped: {result.get('error')}"
+        log_fn(line)
+        return line
+    title = "Mu: league office needs recovery" if status == "needs_recovery" else "Mu: league office failed"
+    msg = f"League office on {save_name}{run} {status.replace('_', ' ')}: {result.get('error')}"
+    log_fn(f"[ERROR] {msg}")
+    send_notify(msg, title=title, priority="high", tags=("warning", "x"))
+    return f"League office {status.replace('_', ' ')}{run}"
+
+
 def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_articles=False, no_engines=False,
-                    save_name="", log_fn=log):
-    """load_save -> engines -> articles against DATABASE_URL. Runs in the child process run_ingest starts."""
+                    save_name="", log_fn=log, save_path=None, league_office=False, league_office_dry_run=False,
+                    save_sha256=None, stage_only=False):
+    """load_save -> engines -> league office -> articles -> next week's mod pack against DATABASE_URL. Runs in the
+    child process run_ingest starts. `league_office` runs the league office on `save_path` (checked against
+    `save_sha256`); `stage_only` (an offseason stop) loads and runs the league office only."""
     from pipeline import load_save
 
     load_report = load_save.load(snapshot_path, season=save_season, commit=(not dry_run))
@@ -412,9 +638,35 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     if dry_run:
         log_fn("Dry run mode: database changes rolled back, skipping engines and articles.")
         return {"status": "success", "dry_run": True, "season": save_season, "week": save_week, "load_report": load_report}
+    dsn = os.environ.get("DATABASE_URL")
+    lo_result = None
+
+    def step_league_office():
+        nonlocal lo_result
+        if not league_office:
+            return None
+        log_fn("Step 7e: league office")
+        lo_result = run_league_office(snapshot_path, save_path, dsn, dry_run=league_office_dry_run,
+                                      expected_sha256=save_sha256, log_fn=log_fn)
+        if lo_result["status"] == "franchise_open":
+            lo_result["retry_command"] = league_office_command(snapshot_path, save_path, dsn)
+            log_fn(f"League office retry, by hand: {lo_result['retry_command']}")
+        return report_league_office(lo_result, save_name, log_fn=log_fn)
+
+    def result():
+        return {"status": "success", "dry_run": False, "season": save_season, "week": save_week,
+                "load_report": load_report, "league_office": lo_result}
+
+    if stage_only:
+        # An offseason stop: no current week, so no weekly engines, articles or mod pack.
+        lo_line = step_league_office()
+        send_notify(f"Ingested season {save_season} offseason stage from {save_name}. {lo_line or ''}".strip(),
+                    title="Mu: offseason stage done", tags=("white_check_mark",))
+        return result()
+
     if no_engines:
-        log_fn("--no-engines: loaded only, skipping engines and articles.")
-        return {"status": "success", "dry_run": False, "season": save_season, "week": save_week, "load_report": load_report}
+        log_fn("--no-engines: loaded only, skipping engines, league office and articles.")
+        return result()
 
     # Step: engines
     if save_week is None:
@@ -426,6 +678,9 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         run_weekly_engines(save_season, mode="weekly", log_fn=log_fn)
         queue_nightly_jobs(save_season, save_week, log_fn=log_fn)
 
+    # Step: league office (after the engines, before the articles, so they can report its moves; never fatal)
+    lo_line = step_league_office()
+
     # Step: articles
     published = None
     if not no_articles and save_week is not None:
@@ -435,24 +690,23 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
         if res.get("status") not in ("published", "skipped_exists", "season_complete"):
             raise WeekStopped(f"Articles did not publish ({res})")
 
-    # Step: next-week mod pack preparation for user teams
+    # Step: the mod pack for the user teams' next game (the save's current week is Madden's next unplayed week)
     if save_week is not None:
-        dsn = os.environ.get("DATABASE_URL")
-        next_week = save_week + 1
-        prepare_next_week_mod_pack(dsn, save_season, next_week, log_fn=log_fn)
+        prepare_next_week_mod_pack(dsn, save_season, save_week, log_fn=log_fn)
 
     send_notify(
         f"Ingested season {save_season} week {save_week or 'preseason'} from {save_name}. "
-        f"{published or 'Articles skipped.'}",
+        f"{published or 'Articles skipped.'}" + (f" {lo_line}." if lo_line else ""),
         title="Mu: week done",
         tags=("white_check_mark",)
     )
 
-    return {"status": "success", "dry_run": False, "season": save_season, "week": save_week, "load_report": load_report}
+    return result()
 
 
 def run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=False, no_articles=False, no_engines=False,
-               save_name="", log_fn=log):
+               save_name="", log_fn=log, save_path=None, league_office=False, league_office_dry_run=False,
+               save_sha256=None, stage_only=False):
     """Runs ingest_snapshot in a child process with DATABASE_URL=dsn (most modules read it at import time);
     returns the child's result dict."""
     result_path = os.path.join(os.path.dirname(snapshot_path), "ingest_result.json")
@@ -466,6 +720,14 @@ def run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=False, no_art
         cmd.append("--no-articles")
     if no_engines:
         cmd.append("--no-engines")
+    if league_office:
+        cmd += ["--run-league-office", "--save-path", save_path]
+        if save_sha256:
+            cmd += ["--save-sha256", save_sha256]
+        if league_office_dry_run:
+            cmd.append("--league-office-dry-run")
+    if stage_only:
+        cmd.append("--stage-only")
     p = subprocess.run(cmd, cwd=ROOT, env={**os.environ, "DATABASE_URL": dsn})
     if p.returncode != 0 or not os.path.exists(result_path):
         raise WatcherError(f"Ingest of {save_name} into {db_name_of(dsn)} failed (exit {p.returncode}); see the log above.")
@@ -473,21 +735,47 @@ def run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=False, no_art
         return json.load(fh)
 
 
+def run_league_office_child(snapshot_path, dsn, save_path, save_sha256=None, dry_run=False):
+    """A retry of the league office alone (after a franchise-open refusal), in a child process with
+    DATABASE_URL=dsn; returns run_league_office's result."""
+    result_path = os.path.join(os.path.dirname(snapshot_path), LO_RESULT)
+    if os.path.exists(result_path):
+        os.remove(result_path)
+    cmd = [sys.executable, "-m", "pipeline.watch_save", "--league-office-only", snapshot_path,
+           "--save-path", save_path]
+    if save_sha256:
+        cmd += ["--save-sha256", save_sha256]
+    if dry_run:
+        cmd.append("--league-office-dry-run")
+    p = subprocess.run(cmd, cwd=ROOT, env={**os.environ, "DATABASE_URL": dsn})
+    if p.returncode != 0 or not os.path.exists(result_path):
+        return {"status": "failed", "error": f"league office child failed (exit {p.returncode}); see the log above"}
+    with open(result_path) as fh:
+        return json.load(fh)
+
+
 def process_save(save_path, season=None, dry_run=False, no_articles=False, no_engines=False, force=False,
                  auto_init=False, reseed=False, confirm_reseed=None, user_teams=None, franchise_name=None,
-                 run_folder=None, dsn=None, reader_script=READER_SCRIPT, log_fn=log):
+                 run_folder=None, dsn=None, reader_script=READER_SCRIPT, log_fn=log, no_league_office=False,
+                 league_office_dry_run=False):
     """
     Core processing for a settled save file:
     1. Snapshots into captures/<run>/save.json
     2. Routes it to its franchise's database (route_franchise), creating and seeding it with --auto-init;
        an explicit `dsn` skips routing and loads into that database
-    3. Compares save season & week against that database's league_state
-    4. If new week (or force or just seeded): runs load_save -> engines -> articles there (run_ingest)
+    3. Compares save season & week against that database's league_state; with the league office on, an
+       offseason stop is a 'new_stage' until league_office_runs has a WRITTEN / PLANNED run for it
+    4. If new week / stage (or force or just seeded): runs load_save -> engines -> league office -> articles ->
+       mod pack there (run_ingest). The league office runs only on a new week or stage (not right after seeding,
+       not on a forced re-load), never with --dry-run or --no-league-office.
     """
     if run_folder is None:
         run_name = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         run_folder = os.path.join(CAPTURES, run_name)
 
+    lo_enabled = not no_league_office and not dry_run
+    # The save's fingerprint as read: the league office (and a later retry) only runs on that exact save.
+    save_sha256 = file_sha256(save_path) if lo_enabled else None
     snapshot_path = snapshot_save(save_path, run_folder, reader_script=reader_script)
     with open(snapshot_path) as fh:
         snapshot = json.load(fh)
@@ -520,8 +808,22 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
         shutil.rmtree(run_folder, ignore_errors=True)
         return {"status": "no_op", "reason": reason, "db": db, "franchise": fid, "season": save_season, "week": save_week}
 
-    if not force and not just_seeded:
+    classification = None
+    if not just_seeded:
         classification = classify_week(save_season, save_week, stored_season, stored_week)
+        if classification == "no_current_week" and lo_enabled:
+            stage = league_office_stage(snapshot, log_fn=log_fn)
+            if stage is not None:
+                done = league_office_stage_done(dsn, stage)
+                classification = "same_stage" if done else "new_stage"
+                log_fn(f"Offseason stop {stage['stage']} (season {stage['season']}, week {stage['week']}"
+                       + (f", wave {stage['wave']}" if stage.get("wave") else "") + "): "
+                       + ("league office already ran for it" if done else "league office not run yet"))
+
+    if not force and not just_seeded:
+        if classification == "same_stage":
+            log_fn(f"Save {save_name} is at an offseason stop the league office already handled for {db}. No-op.")
+            return no_op("same_stage")
         if classification == "same_week":
             log_fn(f"Save {save_name} is at season {save_season} week {save_week}, same as {db}'s league_state. No-op.")
             return no_op("same_week")
@@ -538,11 +840,28 @@ def process_save(save_path, season=None, dry_run=False, no_articles=False, no_en
             log_fn(f"Save {save_name} is not at a regular season or playoff week (season {save_season}). No-op.")
             return no_op("no_current_week")
 
-    log_fn(f"Ingesting week: season {save_season} week {save_week} into {db} "
-           f"(dry_run={dry_run}, no_articles={no_articles}, no_engines={no_engines})")
+    run_lo = lo_enabled and not no_engines and classification in ("new_week", "new_stage")
+    if lo_enabled and not run_lo:
+        if just_seeded:
+            log_fn("League office not run on the load that seeds the franchise: run "
+                   "`python3 -m pipeline.league_office setup` before its first league office run.")
+        elif no_engines:
+            log_fn("League office not run with --no-engines.")
+        else:
+            log_fn(f"League office not run on a forced re-load ({classification}).")
+    elif not lo_enabled:
+        log_fn("League office not run (" + ("--dry-run" if dry_run else "--no-league-office") + ").")
+    stage_only = classification == "new_stage"
+
+    log_fn(f"Ingesting {'offseason stage' if stage_only else 'week'}: season {save_season} week {save_week} into {db} "
+           f"(dry_run={dry_run}, no_articles={no_articles}, no_engines={no_engines}, league_office={run_lo}"
+           f"{', league office dry run' if run_lo and league_office_dry_run else ''})")
     res = run_ingest(snapshot_path, dsn, save_season, save_week, dry_run=dry_run, no_articles=no_articles,
-                     no_engines=no_engines, save_name=save_name, log_fn=log_fn)
-    return {**res, "db": db, "franchise": fid}
+                     no_engines=no_engines, save_name=save_name, log_fn=log_fn, save_path=save_path,
+                     league_office=run_lo, league_office_dry_run=league_office_dry_run,
+                     save_sha256=save_sha256, stage_only=stage_only)
+    return {**res, "db": db, "dsn": dsn, "franchise": fid, "snapshot_path": snapshot_path, "save_path": save_path,
+            "save_sha256": save_sha256, "classification": classification}
 
 
 def watch_loop(watch_path, pattern="CAREER-*", debounce_seconds=DEFAULT_DEBOUNCE,
@@ -561,38 +880,118 @@ def watch_loop(watch_path, pattern="CAREER-*", debounce_seconds=DEFAULT_DEBOUNCE
     signal.signal(signal.SIGTERM, _sig_handler)
 
     log_fn(f"Watching '{watch_path}' (pattern: {pattern}, debounce: {debounce_seconds}s, poll: {poll_interval}s)")
+    pending = {}      # save path -> league office retry (refused while Madden27.exe ran)
 
     while running:
-        save_files = find_save_files(watch_path, pattern=pattern)
-        for save_file in save_files:
-            if debouncer.is_already_processed(save_file):
-                continue
-
-            if debouncer.is_settled(save_file):
-                log_fn(f"Settled save file detected: {save_file}")
-                try:
-                    with run_lock(lock_path):
-                        res = process_save(save_file, log_fn=log_fn, **process_kw)
-                        debouncer.mark_processed(save_file)
-                        log_fn(f"Result for {os.path.basename(save_file)}: {res.get('status')}")
-                except LockError as e:
-                    log_fn(f"Lock active: {e}. Will retry on next check.")
-                except Exception as e:
-                    traceback.print_exc()
-                    err_msg = f"Save watcher error on {os.path.basename(save_file)}: {e}"
-                    log_fn(f"[ERROR] {err_msg}")
-                    send_notify(err_msg, title="Mu: save watcher error", priority="high", tags=("warning", "x"))
-                    # Mark processed so we don't immediately crash in an infinite loop on the same failing save
-                    debouncer.mark_processed(save_file)
-
+        poll_once(watch_path, pattern, debouncer, pending, lock_path, log_fn=log_fn, **process_kw)
         time.sleep(poll_interval)
+
+
+def note_league_office(res, save_file, debouncer, pending, league_office_dry_run=False, log_fn=log):
+    """After process_save: remember the league office's own write, or queue a retry after a franchise-open
+    refusal."""
+    lo_res = (res or {}).get("league_office") or {}
+    if lo_res.get("replaced") and lo_res.get("output_sha256"):
+        debouncer.note_own_write(save_file, lo_res["output_sha256"])
+    if lo_res.get("status") == "franchise_open" and res.get("snapshot_path") and res.get("dsn"):
+        pending[save_file] = {"snapshot_path": res["snapshot_path"], "dsn": res["dsn"],
+                              "save_sha256": res.get("save_sha256"), "dry_run": league_office_dry_run}
+        log_fn(f"League office for {os.path.basename(save_file)} queued: retried once Madden27.exe has closed.")
+
+
+def retry_league_office(pending, debouncer, lock_path, madden_running=None, log_fn=log):
+    """Runs queued league office retries once Madden27.exe has closed (each on its own snapshot, only while the save
+    is unchanged)."""
+    if not pending:
+        return
+    if madden_running is None:
+        from pipeline.gpu_queue.process_check import is_madden_running as madden_running
+    if madden_running():
+        return
+    for save_file, job in list(pending.items()):
+        try:
+            with run_lock(lock_path):
+                pending.pop(save_file, None)
+                log_fn(f"Madden27.exe has closed: retrying the league office on {os.path.basename(save_file)}")
+                lo_res = run_league_office_child(job["snapshot_path"], job["dsn"], save_file,
+                                                 save_sha256=job.get("save_sha256"), dry_run=job.get("dry_run"))
+                if lo_res.get("replaced") and lo_res.get("output_sha256"):
+                    debouncer.note_own_write(save_file, lo_res["output_sha256"])
+                line = report_league_office(lo_res, os.path.basename(save_file), log_fn=log_fn)
+                if lo_res.get("status") in ("written", "dry_run"):
+                    send_notify(f"{line} (retried after Madden closed).", title="Mu: league office done",
+                                tags=("white_check_mark",))
+        except LockError as e:
+            pending.setdefault(save_file, job)
+            log_fn(f"Lock active: {e}. League office retry waits for the next check.")
+            return
+        except Exception as e:      # noqa: BLE001 - a retry never stops the daemon
+            traceback.print_exc()
+            msg = f"League office retry on {os.path.basename(save_file)} failed: {e}"
+            log_fn(f"[ERROR] {msg}")
+            send_notify(msg, title="Mu: league office failed", priority="high", tags=("warning", "x"))
+
+
+def poll_once(watch_path, pattern, debouncer, pending, lock_path, log_fn=log, **process_kw):
+    """One pass of the daemon: league office retries, then every settled save not processed yet."""
+    retry_league_office(pending, debouncer, lock_path, log_fn=log_fn)
+    save_files = find_save_files(watch_path, pattern=pattern)
+    for save_file in save_files:
+        if debouncer.is_already_processed(save_file):
+            continue
+
+        if debouncer.is_settled(save_file):
+            if debouncer.is_own_write(save_file):
+                log_fn(f"{os.path.basename(save_file)} is the league office's own write; not ingested again.")
+                debouncer.mark_processed(save_file)
+                continue
+            log_fn(f"Settled save file detected: {save_file}")
+            # A newer save replaces any queued league office retry for the older one.
+            if pending.pop(save_file, None):
+                log_fn(f"Dropped the queued league office retry for {os.path.basename(save_file)}: the save "
+                       "changed.")
+            try:
+                before = os.path.getmtime(save_file)
+            except OSError:
+                continue
+            try:
+                with run_lock(lock_path):
+                    res = process_save(save_file, log_fn=log_fn, **process_kw)
+                    # The mtime seen before processing: a save written meanwhile (Madden, or the league office,
+                    # recognised by its sha256) is looked at again.
+                    debouncer.mark_processed(save_file, mtime=before)
+                    note_league_office(res, save_file, debouncer, pending,
+                                       league_office_dry_run=process_kw.get("league_office_dry_run", False),
+                                       log_fn=log_fn)
+                    log_fn(f"Result for {os.path.basename(save_file)}: {res.get('status')}")
+            except LockError as e:
+                log_fn(f"Lock active: {e}. Will retry on next check.")
+            except Exception as e:
+                traceback.print_exc()
+                err_msg = f"Save watcher error on {os.path.basename(save_file)}: {e}"
+                log_fn(f"[ERROR] {err_msg}")
+                send_notify(err_msg, title="Mu: save watcher error", priority="high", tags=("warning", "x"))
+                # Mark processed so we don't immediately crash in an infinite loop on the same failing save
+                debouncer.mark_processed(save_file)
 
 
 def ingest_main(args):
     """The child side of run_ingest: DATABASE_URL already names the franchise's database."""
     res = ingest_snapshot(args.ingest, args.season, args.week, dry_run=args.dry_run,
-                          no_articles=args.no_articles, no_engines=args.no_engines, save_name=args.save_name)
+                          no_articles=args.no_articles, no_engines=args.no_engines, save_name=args.save_name,
+                          save_path=args.save_path, league_office=args.run_league_office,
+                          league_office_dry_run=args.league_office_dry_run, save_sha256=args.save_sha256,
+                          stage_only=args.stage_only)
     with open(os.path.join(os.path.dirname(args.ingest), "ingest_result.json"), "w") as fh:
+        json.dump(res, fh, default=str)
+    return 0
+
+
+def league_office_main(args):
+    """The child side of run_league_office_child (a retry): DATABASE_URL names the franchise's database."""
+    res = run_league_office(args.league_office_only, args.save_path, os.environ.get("DATABASE_URL"),
+                            dry_run=args.league_office_dry_run, expected_sha256=args.save_sha256)
+    with open(os.path.join(os.path.dirname(args.league_office_only), LO_RESULT), "w") as fh:
         json.dump(res, fh, default=str)
     return 0
 
@@ -605,9 +1004,15 @@ def main():
     ap.add_argument("--debounce", type=int, default=DEFAULT_DEBOUNCE, help=f"Debounce wait in seconds (default: {DEFAULT_DEBOUNCE})")
     ap.add_argument("--poll-interval", type=int, default=DEFAULT_POLL_INTERVAL, help=f"Poll interval in seconds (default: {DEFAULT_POLL_INTERVAL})")
     ap.add_argument("--once", action="store_true", help="Process the newest save once and exit")
-    ap.add_argument("--dry-run", action="store_true", help="Load without commit, no engines, articles or database setup")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="Load without commit, no engines, league office, articles or database setup")
     ap.add_argument("--no-articles", action="store_true", help="Run loader and engines, skip newsroom articles")
     ap.add_argument("--no-engines", action="store_true", help="Run the loader only (no engines, no articles)")
+    ap.add_argument("--no-league-office", action="store_true",
+                    help="Don't run the league office (pipeline.league_office) after the weekly engines")
+    ap.add_argument("--league-office-dry-run", action="store_true",
+                    help="Run the league office with dry_run=True: plan only, no save write, nothing acknowledged "
+                         f"(the real run needs {FRANCHISE_CLOSED_ENV}=1 while Madden27.exe is open)")
     ap.add_argument("--season", type=int, help="Override season year (default: save's calendar year)")
     ap.add_argument("--force", action="store_true", help="Run even if week is same as or older than league_state")
     ap.add_argument("--auto-init", action="store_true", help="Create and seed the database of a franchise seen for the first time")
@@ -621,10 +1026,18 @@ def main():
     ap.add_argument("--ingest", help=argparse.SUPPRESS)
     ap.add_argument("--week", type=int, help=argparse.SUPPRESS)
     ap.add_argument("--save-name", default="", help=argparse.SUPPRESS)
+    ap.add_argument("--save-path", help=argparse.SUPPRESS)
+    ap.add_argument("--save-sha256", help=argparse.SUPPRESS)
+    ap.add_argument("--run-league-office", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--stage-only", action="store_true", help=argparse.SUPPRESS)
+    # Internal: the child process run_league_office_child starts (a league office retry).
+    ap.add_argument("--league-office-only", help=argparse.SUPPRESS)
     args = ap.parse_args()
 
     if args.ingest:
         sys.exit(ingest_main(args))
+    if args.league_office_only:
+        sys.exit(league_office_main(args))
 
     watch_path = args.path or args.saves_dir or env("MADDEN_SAVES_DIR", ".")
     watch_path = os.path.abspath(watch_path)
@@ -640,7 +1053,8 @@ def main():
     process_kw = dict(season=args.season, dry_run=args.dry_run, no_articles=args.no_articles,
                       no_engines=args.no_engines, force=args.force,
                       auto_init=args.auto_init, user_teams=user_teams, franchise_name=args.franchise_name,
-                      dsn=args.dsn)
+                      dsn=args.dsn, no_league_office=args.no_league_office,
+                      league_office_dry_run=args.league_office_dry_run)
 
     if args.once:
         save_files = find_save_files(watch_path, pattern=args.pattern)
