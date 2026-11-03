@@ -268,6 +268,6 @@ def test_drift_report_prints_league_row_first():
 def test_basis_line():
     assert tv.basis_line(2036, {2036: 367_000_000}) == (
         "Market basis: APY / cap at signing, scaled to the 2036 cap $367.0M (caps known: 2036; earlier seasons "
-        "estimated at +6.5%/yr)")
+        "estimated at +4.5%/yr)")
     assert "estimated" in tv.basis_line(2038, {2036: 367_000_000}).split("(")[0]
 

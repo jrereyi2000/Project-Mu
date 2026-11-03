@@ -125,6 +125,45 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(out, [{"slider": "regression_by_position", "field": "LS", "expected": 0, "found": 100}])
 
 
+    def test_compare_salary_cap_regular_season(self):
+        snap = snapshot()
+        snap["salary_cap"] = {"team_salary_cap": 30120}  # $301.20M
+        st = state()
+        st["league_caps"] = {SEASON: 301_200_000}
+
+        # Matching: no drift
+        self.assertEqual(dc.compare_salary_cap(snap, st, SEASON), [])
+
+        # Drift: save cap differs
+        snap["salary_cap"]["team_salary_cap"] = 28000
+        self.assertEqual(
+            dc.compare_salary_cap(snap, st, SEASON),
+            [{"season": SEASON, "field": "team_salary_cap", "expected": 301_200_000, "found": 280_000_000}],
+        )
+
+        # Missing salary_cap in snapshot or missing row in league_caps: no drift reported
+        self.assertEqual(dc.compare_salary_cap({}, st, SEASON), [])
+        self.assertEqual(dc.compare_salary_cap({"salary_cap": None}, st, SEASON), [])
+        self.assertEqual(dc.compare_salary_cap(snap, {"league_caps": {}}, SEASON), [])
+
+    def test_compare_salary_cap_offseason(self):
+        snap = snapshot()
+        snap["season"]["week_type"] = "OffSeason"
+        snap["salary_cap"] = {"team_salary_cap": 32000}  # $320.00M for target SEASON + 1
+        st = state()
+        st["league_caps"] = {SEASON: 301_200_000, SEASON + 1: 320_000_000}
+
+        # OffSeason checks target season (SEASON + 1): matching -> no drift
+        self.assertEqual(dc.compare_salary_cap(snap, st, SEASON), [])
+
+        # Drift: save cap is still last year's $301.20M
+        snap["salary_cap"]["team_salary_cap"] = 30120
+        self.assertEqual(
+            dc.compare_salary_cap(snap, st, SEASON),
+            [{"season": SEASON + 1, "field": "team_salary_cap", "expected": 320_000_000, "found": 301_200_000}],
+        )
+
+
 class FakeCursor:
     """Answers each SELECT with the rows registered for a substring of its SQL."""
     def __init__(self, answers):
@@ -160,12 +199,15 @@ class FetchTest(unittest.TestCase):
             "FROM player_contracts": [(11, CHI, 5, 4, 69_980_000, 14_190_000, 13_770_000)],
             "FROM player_seasons": [(11, CHI), (12, CHI), (13, None)],
             "FROM depth_charts": [(CHI, 3, "MU_COACH", "QB", 1, 11), (CHI, 3, "MU_COACH", "WR", 1, 12)],
+            "FROM team_cap_seasons": [(SEASON, 301_200_000)],
         })
         self.assertEqual(dc.diff(snapshot(), cur, SEASON, WEEK), {k: [] for k in dc.KINDS})
         snap = snapshot()
         snap["players"][0]["ratings"]["Awareness"] = 75
+        snap["salary_cap"] = {"team_salary_cap": 25000}
         report = dc.diff(snap, cur, SEASON, WEEK)
         self.assertEqual([(e["field"], e["expected"], e["found"]) for e in report["ratings"]], [("Awareness", 80, 75)])
+        self.assertEqual(report["salary_cap"], [{"season": SEASON, "field": "team_salary_cap", "expected": 301_200_000, "found": 250_000_000}])
 
 
 if __name__ == "__main__":

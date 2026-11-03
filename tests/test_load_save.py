@@ -253,6 +253,34 @@ def v5_snapshot():
     return snap
 
 
+def v6_snapshot():
+    """v5_snapshot() as reader_version 6: salary_cap block and decoded teams[].cap in $10k units."""
+    snap = v5_snapshot()
+    snap["meta"]["reader_version"] = 6
+    snap["salary_cap"] = {
+        "table_id": 5186,
+        "row": 0,
+        "raw_team_salary_cap": 18120,
+        "team_salary_cap": 30120,
+        "initial_salary_cap": 30120,
+    }
+    snap["teams"][0]["cap"] = {
+        "rollover": 1380,
+        "cap_credits": 0,
+        "roster_reserve": 27868,
+        "cap_penalties": 2463,
+        "offers_reserve": 0,
+        "rookie_reserve": 500,
+        "fill_reserve": 0,
+        "this_year_offer_reserve": 0,
+        "cap_room": 1169,
+        "spending_money": 1169,
+        "next_year_cap_room": 1433,
+        "team_salary": 10294,
+    }
+    return snap
+
+
 class FakeCursor:
     """Records execute / executemany calls (depth_chart_engine.store's DELETE then INSERT rows)."""
     def __init__(self):
@@ -342,6 +370,47 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
     def test_draft_board_empty_before_v5(self):
         self.assertEqual(ls.draft_board_prospects(v4_snapshot()), [])
 
+    def test_cap_season(self):
+        # RegularSeason / PreSeason -> season
+        self.assertEqual(ls.cap_season({"season": {"week_type": "RegularSeason"}}, 2026), 2026)
+        self.assertEqual(ls.cap_season({"season_info": {"week_type": "PreSeason"}}, 2026), 2026)
+        # OffSeason -> season + 1
+        self.assertEqual(ls.cap_season({"season": {"week_type": "OffSeason"}}, 2026), 2027)
+        self.assertEqual(ls.cap_season({"season_info": {"week_type": "OffSeason"}}, 2026), 2027)
+
+    def test_team_cap_dollars(self):
+        tc = {
+            "rollover": 1380,
+            "cap_credits": 50,
+            "roster_reserve": 27868,
+            "cap_penalties": 2463,
+            "offers_reserve": 100,
+            "rookie_reserve": 500,
+            "cap_room": 1169,
+        }
+        league_cap = 30120
+        d = ls.team_cap_dollars(league_cap, tc)
+        self.assertEqual(d["cap"], 301_200_000)
+        self.assertEqual(d["rollover"], 13_800_000)
+        self.assertEqual(d["adjusted_cap"], 315_500_000)
+        self.assertEqual(d["cap_space"], 11_690_000)
+        self.assertEqual(d["cap_penalty"], 24_630_000)
+        self.assertEqual(d["total_spend"], 303_810_000)
+        self.assertEqual(d["salaries"], 303_810_000 - 24_630_000 - 1_000_000)
+        self.assertEqual(d["rookie_reserve_dollars"], 5_000_000)
+        # Identity: adjusted_cap - total_spend == cap_space
+        self.assertEqual(d["adjusted_cap"] - d["total_spend"], d["cap_space"])
+
+        # After cap room delta (e.g. signing lowers room by 200 units)
+        tc_after = dict(tc, cap_room=tc["cap_room"] - 200)
+        d_after = ls.team_cap_dollars(league_cap, tc_after)
+        self.assertEqual(d_after["adjusted_cap"] - d_after["total_spend"], d_after["cap_space"])
+
+        # When rookie_reserve is 0 or missing, rookie_reserve_dollars is absent
+        tc_no_rookie = dict(tc, rookie_reserve=0)
+        d_no_rookie = ls.team_cap_dollars(league_cap, tc_no_rookie)
+        self.assertNotIn("rookie_reserve_dollars", d_no_rookie)
+
     def test_team_cap_values_match_the_team_salary_screen(self):
         v = ls.team_cap_values(CAR_CAP)
         self.assertEqual(v, {"cap": 301_200_000, "rollover": 13_800_000, "adjusted_cap": 315_000_000,
@@ -371,14 +440,35 @@ class DepthChartsAndSettingsTest(unittest.TestCase):
         v = ls.team_cap_values(nyg)
         self.assertEqual((v["cap"], v["adjusted_cap"], v["cap_space"]), (331_320_000, 354_990_000, 14_750_000))
 
-    def test_team_cap_loaded_per_real_team(self):
+    def test_load_team_caps_v5_is_noop(self):
         cur, report = FakeCursor(), {}
-        ls.load_team_cap(cur, v5_snapshot(), TEST_SEASON, self.TEAMS, report, capture_id=7)
-        self.assertEqual(len(cur.calls), 1)                      # CHI only: ARI has no cap fields, FA isn't a team
+        ls.load_team_caps(cur, v5_snapshot(), TEST_SEASON, self.TEAMS, report, capture_id=7)
+        self.assertEqual(cur.calls, [])
+        self.assertNotIn("team_caps", report)
+
+    def test_load_team_caps_v6_in_regular_season(self):
+        cur, report = FakeCursor(), {}
+        ls.load_team_caps(cur, v6_snapshot(), TEST_SEASON, self.TEAMS, report, capture_id=7)
+        self.assertEqual(len(cur.calls), 1)  # CHI only (ARI has no cap, FA not a real team)
         _, sql, args = cur.calls[0]
         self.assertIn("INSERT INTO team_cap_seasons", sql)
         self.assertIn("next_rookie_reserve", sql)                 # CHI holds pick #1 in the snapshot's draft_picks
         self.assertEqual((args[0], args[1], args[-1]), (100, TEST_SEASON, 7))
+        self.assertEqual(report["team_caps"], 1)
+
+    def test_load_team_caps_v6_in_offseason(self):
+        cur, report = FakeCursor(), {}
+        snap = v6_snapshot()
+        snap["season"]["week_type"] = "OffSeason"
+        ls.load_team_caps(cur, snap, TEST_SEASON, self.TEAMS, report, capture_id=7)
+        # 1 insert for (team 100, TEST_SEASON + 1) and 1 update on TEST_SEASON row for next_rookie_reserve
+        self.assertEqual(len(cur.calls), 2)
+        _, ins_sql, ins_args = cur.calls[0]
+        self.assertIn("INSERT INTO team_cap_seasons", ins_sql)
+        self.assertEqual((ins_args[0], ins_args[1], ins_args[-1]), (100, TEST_SEASON + 1, 7))
+        _, upd_sql, upd_args = cur.calls[1]
+        self.assertIn("UPDATE team_cap_seasons SET next_rookie_reserve", upd_sql)
+        self.assertEqual(upd_args, (5_000_000, 100, TEST_SEASON))
         self.assertEqual(report["team_caps"], 1)
 
     def test_v4_snapshot_has_no_team_ratings(self):

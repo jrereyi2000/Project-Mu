@@ -306,6 +306,33 @@ class RosterCapTest(ApiTest):
     def test_cap_years_bounds(self):
         self.assertEqual(self.client.get("/api/franchise/CAR/cap?years=0").status_code, 400)
 
+    def test_cap_years_deterministic_projection_and_recorded_rows(self):
+        # 1. Unrecorded future years project deterministically with cap_history.cap_in and estimated: True
+        # Ensure contracts_engine.next_cap is never called.
+        caps = {2036: {"cap": 300_000_000, "next_rookie_reserve": 8_000_000}}
+        with mock.patch("engines.contracts_engine.next_cap", side_effect=AssertionError("next_cap should not be called")):
+            years = fa.cap_years([], caps, season=2036, T=2036, years=4)
+        self.assertEqual(len(years), 4)
+        # 2036: recorded, estimated is False
+        self.assertEqual((years[0]["season"], years[0]["cap"], years[0]["estimated"]), (2036, 300_000_000, False))
+        # 2037: unrecorded, 300M * 1.045 = 313.5M rounded to 100k -> 313_500_000, estimated True
+        self.assertEqual((years[1]["season"], years[1]["cap"], years[1]["estimated"]), (2037, 313_500_000, True))
+        # 2038: 313.5M * 1.045 = 327.6075M -> 327_600_000, estimated True
+        self.assertEqual((years[2]["season"], years[2]["cap"], years[2]["estimated"]), (2038, 327_600_000, True))
+
+        # 2. Recorded future year in caps is used and marked estimated: False
+        caps_with_future = {
+            2036: {"cap": 300_000_000, "next_rookie_reserve": 8_000_000},
+            2037: {"cap": 320_000_000},
+        }
+        years2 = fa.cap_years([], caps_with_future, season=2036, T=2036, years=2)
+        self.assertEqual((years2[1]["season"], years2[1]["cap"], years2[1]["estimated"]), (2037, 320_000_000, False))
+
+        # 3. Clamping at CBA["MAX_SAVE_CAP"]
+        caps_high = {2036: {"cap": 970_000_000, "next_rookie_reserve": 8_000_000}}
+        years_clamped = fa.cap_years([], caps_high, season=2036, T=2036, years=3)
+        self.assertEqual(years_clamped[2]["cap"], fa.ce.CBA["MAX_SAVE_CAP"])
+
 
 class MovesTest(ApiTest):
     def preview(self, kind, pid, **extra):

@@ -122,6 +122,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from engines import cap_history
 from engines import contracts_engine as ce
 from engines import depth_chart_engine as dce
 from engines import free_agency_engine as fae
@@ -647,10 +648,9 @@ def cap_years(players: list, caps: dict, season: int, T: int, years: int) -> lis
         estimated = not row.get("cap")
         if row.get("cap"):
             cap = int(row["cap"])
-        elif prev is not None:
-            cap = ce.next_cap(prev, y, CAP_SEED)
         else:
-            cap = int(ce.CBA["REFERENCE_CAP"])
+            base = {y - 1: prev} if prev is not None else {}
+            cap = min(cap_history.cap_in(y, base), ce.CBA["MAX_SAVE_CAP"])
         committed = 0
         for p in players:
             c = p.get("contract")
