@@ -51,7 +51,7 @@ Initialization records each starting trait in existing `persona_trait_history`; 
 
 The originating policy owns whether the simulated event justifies the candidate. The core checks validity, revision, origin, chronology and at most one change per season. It does not verify another engine's source-event ledger; callers must supply verified canonical events. A real person's newly changed field requires scoped evidence with `source='simulation:' + source_event_id`; an old interview cannot grant new permissions. Replayed identical events return the original receipt, never revert a newer state. Reusing either event ID with a different payload or canonical source under a new ID fails.
 
-**Slider-band dependency:** the existing SQL really does contain `chk_persona_sliders_budget` for exactly 30. The cap-relative plan's claim that no total constraint exists is incorrect. This build does not edit that plan or change its owned validator. Core initialization records the active legacy validator's bounds (currently 30/30; seeded total 30). Evolution adopts explicit legacy MIN/MAX bounds once that owner implements them. A single-slider move cannot pass the present exact-30 rule; it remains blocked until Python AND PostgreSQL are migrated to the approved band. Failure on an old DB is atomic. A band change does not reseed existing profiles. Trait evolution already works under the current constraint.
+**Slider band:** since 2026-11-02 (`docs/done/CAP_RELATIVE_CONTRACTS_PLAN.md`) the legacy validator (`newsroom/personas.py` `SLIDER_BUDGET_MIN`/`MAX`) and `chk_persona_sliders_budget` (`2027_01_17_persona_slider_band.sql`, applied to `madden_test`; `db/init_db.sql`) accept totals 24–36; seeding still deals 30. Core initialization records the active validator's bounds (now 24/36), and evolution adopts them, so a single-slider move works on a migrated database. A database still on the exact-30 constraint rejects it. Failure on an old DB is atomic. A band change does not reseed existing profiles. Trait evolution already works under the current constraint.
 
 No automatic event rules, probabilistic trait changes, retrospective migration, prose generation, production ingestion scheduling or feature effects are activated. No hired player-agent role is added. Mood and relationships will be separate consumers/producers of verified events, not fields inferred from these sliders.
 
@@ -67,7 +67,7 @@ PERSONALITY_CORE_TEST_DSN='host=localhost dbname=madden_test user=postgres passw
 Parallel ownership:
 
 - This core: `personality/`, core migration, core tests and core API documentation.
-- Cap-relative contracts/earnings: existing contract/market files, new cap-history/earnings modules, legacy slider-band change and corresponding SQL constraint migration. Consume core snapshots; do not move contract math into core.
+- Cap-relative contracts/earnings (built 2026-11-02): `engines/trade_value.py`, `engines/cap_history.py`, `engines/career_earnings.py`, the legacy slider-band change and its SQL constraint migration. Consume core snapshots; do not move contract math into core.
 - Relationships/reactions: design and a separate module against canonical identity/revision and event IDs; no core schema edits without coordination.
 - Progression/coaching: existing progression/depth-chart owners can implement pure policy consumers once the profile view is fixed; integration waits for their neutral-control validation.
 - Trade requests/retirement: baseline/policy design can proceed independently, with execution integration later.
