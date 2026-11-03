@@ -168,7 +168,7 @@ test('players, records, release, sign, trade and depthCharts in one write', { sk
       release: cut,
       sign: [{ pgid: fa, team_index: NYG, list: 'Roster', contract: { Length: 2, SalaryYear0: 90, SalaryYear1: 95 } }],
       trade: [{ from_team_index: NYG, to_team_index: DAL, pgids: [outgoing] },
-        { from_team_index: DAL, to_team_index: NYG, pgids: [incoming], picks: [{ tableId: x.draft.draft_pick_table_id, row: pick.row }] }],
+        { from_team_index: DAL, to_team_index: NYG, pgids: [incoming], picks: [{ tableId: pick.table_id, row: pick.row }] }],
       // The signed and the traded-in player can be listed in the same write.
       depthCharts: [{ team_index: NYG, slots: { QB: [fa, ...qbs.slice(0, 2)], KR: [incoming] } }],
     };
@@ -218,8 +218,8 @@ test('a player in two moves, or in a move and a conflicting players edit, writes
     await bad({ players: [{ pgid: nyg[2], set: { TeamIndex: 3 } }], trade: trade([nyg[2]]) }, /sets TeamIndex, which the trade move sets/);
     await bad({ players: [{ pgid: fa, set: { ContractStatus: 'Signed' } }], sign: [{ pgid: fa, team_index: 0, list: 'PracticeSquad' }] },
       /sets ContractStatus, which the sign move sets/);
-    await bad({ records: [{ table: 'DraftPick', tableId: x.draft.draft_pick_table_id, row: pick.row, set: { CurrentTeam: { tableId: x.draft.team_table_id, row: 3 } } }],
-      trade: [{ from_team_index: 15, to_team_index: 10, picks: [{ tableId: x.draft.draft_pick_table_id, row: pick.row }] }] }, /edited in "records" and traded/);
+    await bad({ records: [{ table: 'DraftPick', tableId: pick.table_id, row: pick.row, set: { CurrentTeam: { tableId: x.draft.team_table_id, row: 3 } } }],
+      trade: [{ from_team_index: 15, to_team_index: 10, picks: [{ tableId: pick.table_id, row: pick.row }] }] }, /edited in "records" and traded/);
     assert.equal(existsSync(out), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });

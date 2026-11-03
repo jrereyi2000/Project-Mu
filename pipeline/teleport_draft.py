@@ -7,7 +7,8 @@ pipeline/save_reader/save_writer.mjs applies; reads the database, never writes i
                                      [--report report.json] [--age-add N] [--write-ovr]
 
 <snapshot.json> is pc_save_reader.mjs's read of the save (version 2+: the prospects' ratings), <draft.json> is
-pipeline/save_reader/draft_tables.mjs's read of the same save (picks, DraftPlayer rows, Team rows). --draft-season is
+pipeline/save_reader/draft_tables.mjs's read of the same save (picks, each with its own DraftPick table id and row,
+DraftPlayer rows, Team rows). --draft-season is
 the class on the save's coming draft (YearOffset 0; default league_state.current_season + 1); picks for it and the next
 two drafts are mapped. pipeline/teleport.py --draft <draft.json> runs this too and writes one edits file.
 
@@ -213,7 +214,7 @@ def pick_edits(draft, mu_picks, draft_season):
     rows = team_rows(draft)
     abbr_of = {row: abbr for abbr, row in rows.items()}
     mu = {(p["draft_season"], p["round"], p["original"]): p for p in mu_picks}
-    table_id, team_table = draft["draft_pick_table_id"], draft["team_table_id"]
+    team_table = draft["team_table_id"]
     coming = [p for p in mu_picks if p["draft_season"] == draft_season]
     numbers = sorted(p["overall_pick"] for p in coming if p["overall_pick"] is not None)
     write_numbers = numbers == list(range(1, ROUNDS * 32 + 1))
@@ -244,7 +245,7 @@ def pick_edits(draft, mu_picks, draft_season):
             set_["PickNumber"] = m["overall_pick"] - 1
             renumbered += 1
         if set_:
-            records.append({"table": "DraftPick", "tableId": table_id, "row": pk["row"], "set": set_})
+            records.append({"table": "DraftPick", "tableId": pk["table_id"], "row": pk["row"], "set": set_})
     seasons = {draft_season + pk["year_offset"] for pk in draft["picks"] if not pk["selected"]}
     report = {
         "save_picks": sum(1 for pk in draft["picks"] if not pk["selected"]), "matched": len(seen),

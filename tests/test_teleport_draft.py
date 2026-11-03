@@ -42,7 +42,7 @@ def snap_player(pgid, position, archetype, ratings, overall=65, last="Smith", st
 def draft_doc(prospects=(), picks=()):
     teams = [{"row": 0, "team_index": 14, "short_name": "SF"}, {"row": 1, "team_index": 0, "short_name": "CHI"},
              {"row": 7, "team_index": 6, "short_name": "ARI"}, {"row": 18, "team_index": 32, "short_name": "FA"}]
-    return {"team_table_id": 5934, "draft_pick_table_id": 4540, "draft_player_table_id": 4135, "teams": teams,
+    return {"team_table_id": 5934, "draft_pick_table_ids": [4540], "draft_player_table_id": 4135, "teams": teams,
             "prospects": list(prospects), "picks": list(picks)}
 
 
@@ -134,11 +134,11 @@ class DraftClassTest(unittest.TestCase):
 
 
 class PicksTest(unittest.TestCase):
-    PICKS = [{"row": 0, "year_offset": 0, "round": 1, "pick_number": 5, "original_team_row": 0, "current_team_row": 0,
+    PICKS = [{"table_id": 4540, "row": 0, "year_offset": 0, "round": 1, "pick_number": 5, "original_team_row": 0, "current_team_row": 0,
               "selected": False},
-             {"row": 1, "year_offset": 0, "round": 2, "pick_number": 40, "original_team_row": 1, "current_team_row": 0,
+             {"table_id": 4540, "row": 1, "year_offset": 0, "round": 2, "pick_number": 40, "original_team_row": 1, "current_team_row": 0,
               "selected": False},
-             {"row": 2, "year_offset": 1, "round": 1, "pick_number": 3, "original_team_row": 7, "current_team_row": 7,
+             {"table_id": 4540, "row": 2, "year_offset": 1, "round": 1, "pick_number": 3, "original_team_row": 7, "current_team_row": 7,
               "selected": False}]
 
     def mu(self, season, rnd, orig, owner, overall=None):
@@ -162,13 +162,13 @@ class PicksTest(unittest.TestCase):
         self.assertEqual(sorted(report["save_picks_without_project_mu_row"]), ["2037 R2 CHI", "2038 R1 AZ"])
 
     def test_pick_numbers_only_with_the_full_order(self):
-        picks = [{"row": i, "year_offset": 0, "round": i // 32 + 1, "pick_number": i, "original_team_row": 0,
+        picks = [{"table_id": 4540, "row": i, "year_offset": 0, "round": i // 32 + 1, "pick_number": i, "original_team_row": 0,
                   "current_team_row": 0, "selected": False} for i in range(1)]
         mu = [self.mu(2037, 1, "SF", "SF", overall=8)]
         _, report = td.pick_edits(draft_doc(picks=picks), mu, 2037)
         self.assertIsInstance(report["pick_numbers"], str)                     # 1 of 224: not a full order
         teams = [{"row": i, "team_index": i, "short_name": f"T{i}"} for i in range(32)]
-        picks = [{"row": r * 32 + t, "year_offset": 0, "round": r + 1, "pick_number": r * 32 + t,
+        picks = [{"table_id": 4540, "row": r * 32 + t, "year_offset": 0, "round": r + 1, "pick_number": r * 32 + t,
                   "original_team_row": t, "current_team_row": t, "selected": False} for r in range(7) for t in range(32)]
         mu = [self.mu(2037, r + 1, f"T{t}", f"T{t}", overall=r * 32 + (31 - t) + 1) for r in range(7) for t in range(32)]
         doc = {**draft_doc(picks=picks), "teams": teams}
@@ -245,8 +245,8 @@ class SampleDraftTest(unittest.TestCase):
         touched = {pr["donor_pgid"] for pr in self.report["draft_class"]["pairs"]}
         before = {p["pgid"]: p for p in self.snapshot["players"]}
         self.assertTrue(all(before[p["pgid"]] == p for p in self.after["players"] if p["pgid"] not in touched))
-        pick_rows = {r["row"] for r in self.edits["records"] if r["table"] == "DraftPick"}
-        old = {p["row"]: p for p in self.draft["picks"]}
+        pick_rows = {(r["tableId"], r["row"]) for r in self.edits["records"] if r["table"] == "DraftPick"}
+        old = {(p["table_id"], p["row"]): p for p in self.draft["picks"]}
         for pk in self.draft_after["picks"]:
-            if pk["row"] not in pick_rows:
-                self.assertEqual(pk, old[pk["row"]])
+            if (pk["table_id"], pk["row"]) not in pick_rows:
+                self.assertEqual(pk, old[(pk["table_id"], pk["row"])])
