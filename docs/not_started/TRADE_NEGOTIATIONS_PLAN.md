@@ -1,6 +1,6 @@
 # Project Mu: Live Multi-Turn Trade Negotiations Plan (V2.11)
 
-**Status:** proposal, awaiting JR's approval (2026-11-03).
+**Status:** proposal; JR answered the open decisions on 2026-11-03 (below, and §8). Not yet approved to build.
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §6 V2.11, §2.6 (Trade Machine), §5.3.2 (interactive latency boundary), §7.2 (the 2026–2033 all-CPU era); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8 (agentic loops) and §9 phase 5; PROJECT_SPEC §2.17 (trade value, proposal engine, negotiation), §2.21a (league office), §3.3f (GM agents tables), §4.6b (franchise endpoints); [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md); [`FRONT_OFFICE_INBOX_PLAN.md`](./FRONT_OFFICE_INBOX_PLAN.md) (V2.9: JR's GM talks live in its `GM_TALK` inbox kind, `engines/inbox/kinds/gm_talk.py`, which this plan extends).
 **Precondition:** V2.9 is built and on main before this plan's wave 1 (its own Q1 recommends going first): its U1 owns `pipeline/weekly_capture.py`'s inbox hook and migration `2027_01_19`, its U2 `FranchisePage.tsx` and `types/franchiseInbox.ts`, its U4 `engines/inbox/kinds/gm_talk.py`, its U5 `server/api.py`. Nothing here edits `server/api.py` or `FranchisePage.tsx`; this plan's edits to `weekly_capture.py` and `gm_talk.py` start from V2.9's merged versions.
 
@@ -16,6 +16,17 @@
 - Trade Machine: **Talk to their GM** (opens a `GM_TALK` inbox thread with the builder's package, then `#franchise-inbox`) and a **League talks** list of published transcripts.
 - Newsroom: leaks become rumor rows (`front_office.trade_rumors`), rendered by `roster_moves.leak_line`, first to the insider who got the leak (`social_desk`); an executed trade with a published transcript carries up to three quoted GM lines (`roster_moves.trade_line`).
 
+**JR's answers (2026-11-03):**
+- **D1:** Project Mu's `draft_picks` is the source of truth for traded picks. The save's DraftPick rows are not written.
+- **D2:** Agreed CPU-to-CPU deals need no action from JR.
+- **D3:** In JR's talks the model writes the GM's words only. The engine and the persona policy choose his moves.
+- **D4:** GMs may leak JR's talks: positions only, the same odds as CPU talks, unless JR insulted the GM.
+- **D5:** A talk may carry over once, only when the sides are close, never past the deadline.
+- **D6:** Transcripts are published only for completed deals.
+- **D7:** Build order: the inbox plan (V2.9) first.
+- **D8 (S7):** The franchise registry's `user_teams` is the source of truth for which teams JR controls. In Madden every team stays a user team (V2_CORE_BUILD_PLAN spike R2: the only way to stop Madden's own CPU-to-CPU trades), so Madden's flags say nothing about JR. §2.10 makes the GM engines read the registry.
+- **Terminology:** "agent" means an agentic interface for a persona (GM, coach, player), never a sports agent.
+
 ---
 
 ## 0. Survey (code facts that set the scope)
@@ -28,7 +39,7 @@
 | S4 | `record_written` (`pipeline/league_office.py:1784`) marks pending moves WRITTEN but never runs `trade_moves.execute_trade`; only `#debug`'s **Made it** does (`engines/front_office.py:527` `_execute`, `:540` `confirm`). | A trade written by the league office leaves `gm_trade_proposals`, contracts, cap rows and `draft_picks` stale. `record_written` must execute each written trade. |
 | S5 | `engines/gm_negotiation.py` already runs JR-vs-GM talks: `respond` (`:166`), `counter` (`:111`, returns only the single best counter), patience and mood, `open_negotiation` (`:425`), `offer` (`:460`), `accept_counter` (`:503`), `_agree` (`:539`, stores an APPROVED USER proposal with Madden steps). Tables `gm_trade_negotiations` / `_turns` (`db/init_db.sql:878`, `:897`; turn `actor` is `JR` or `GM`, `db/migrations/2026_12_21_gm_negotiations.sql:33`). | The judging, counter and patience maths exist and are pure. CPU talks reuse them with the initiating GM in JR's seat; the tables are extended rather than duplicated. `counter` must return several options for a chooser. |
 | S6 | `counter`, `judge`, `gm_floor`, `user_pool` take any two team ids and read `b["ctx"][team]` and rosters from the books (`engines/gm_negotiation.py:43-108`); nothing in them is specific to JR. | No new valuation code. The initiator's own acceptance of a counter is `judge` with the roles swapped. |
-| S7 | `open_negotiation` requires `gm_team_settings.user_controlled` for JR's team (`engines/gm_negotiation.py:437-438`); the Command Center's authority is the franchise registry's `user_teams` (`server/franchise_api.py:223` `require_user_team`). | The two can disagree. Talks opened from the inbox (`gm_talk.py`) pass `require_control=False` after `require_user_team` has passed. Spec/code mismatch to note: nothing keeps the two lists in step. |
+| S7 | `open_negotiation` requires `gm_team_settings.user_controlled` for JR's team (`engines/gm_negotiation.py:437-438`); the Command Center's authority is the franchise registry's `user_teams` (`server/franchise_api.py:223` `require_user_team`). | The two can disagree, and nothing keeps them in step (spec/code mismatch). Per D8 the registry wins: §2.10 makes the GM books read `user_teams`, so `open_negotiation`'s check, the engine's advisory flags and `eligible_team` all follow the registry. |
 | S8 | `POST /{abbr}/trades/evaluate` (`server/franchise_api.py:1395`) runs `gm_negotiation.respond` as a fresh negotiation and never stores anything; `MOVE_KINDS` (`:133`) has no `TRADE`, so the Command Center cannot queue a trade at all. `franchise_pending_moves.kind` already allows `TRADE` (V2_CORE_BUILD_PLAN.md:160). | The agreed trade needs a way into the queue. The table needs no change. |
 | S15 | V2.9 (`FRONT_OFFICE_INBOX_PLAN.md` §2.3, §2.9, R6) makes the inbox the place JR talks to GMs: kind `GM_TALK` (`engines/inbox/kinds/gm_talk.py`) wraps `gm_negotiation.open_negotiation` / `offer` / `accept_counter` / `close` and copies the GM's turn message; its voice layer has an 8 s budget (`INBOX_LLM_BUDGET_S`); it leaves posturing, leaks, CPU transcripts and "does the league office write an agreed trade" to V2.11. Its migration is `2027_01_19`. | No parallel conversation surface or talk endpoints here: JR's talks are the inbox thread, extended in `gm_talk.py`. This plan's migration takes `2027_01_22`. |
 | S9 | `engines/gm_llm.py:89` `call` has no timeout; the GM reply is one Gemini call validated by `gm_rationale.validate_rationale` with a template fallback (`engines/gm_negotiation.py:306` `gm_message`). | JR's turn needs a timeout around the call (§5.3.2: no sub-second promise). The validator is reused for every line in a transcript. |
@@ -53,7 +64,7 @@
 **Out (non-goals):**
 - Draft-day and Round 2–7 trades (`run_draft_day`, `run_draft_round`): they run live pick by pick and stay one-shot.
 - Writing traded picks into the save's DraftPick rows (Q1; a separate follow-up once a pick mapping exists).
-- Three-team trades, player trade requests (`PERSONALITY_TRADE_REQUESTS_PLAN.md`), agents, owners.
+- Three-team trades, player trade requests (`PERSONALITY_TRADE_REQUESTS_PLAN.md`), owners.
 - The inbox itself (tables, scan, API, `InboxModule.tsx`, `FranchisePage.tsx`, `server/api.py`): V2.9's plan. CPU talks are newsroom output, not inbox threads (V2.9 §2.9).
 - New talk endpoints on `/api/franchise/{abbr}/trades/*`: the inbox's `/inbox` endpoints carry JR's talks. `trades/evaluate` stays the preview.
 - A `TRADE_LEAK` REPORTER inbox intent (a beat writer asking JR about a leak): possible later, V2.9 §2.9 allows it.
@@ -165,7 +176,7 @@ No `su`, `sg`, `options`, `choice_source` or `legality` in the public shape.
 ### 2.4 JR's talks (`engines/gm_negotiation.py` changes)
 
 - `counter_options(b, valuer, deal, user, gm, reserve, counters_made, k=OPTION_K) -> list[counter dict]`; `counter` becomes `counter_options(...)[0]` or None (behaviour unchanged; existing tests stay green).
-- `open_negotiation(..., require_control=True)`: `gm_talk.py` passes False, since the inbox API has already applied `require_user_team` (S7).
+- `open_negotiation`'s control check is unchanged in code; it now reads the registry through the books (§2.10), so no bypass flag is needed.
 - `_agree` also calls `queue_trade_move(cur, proposal_id)` (in `gm_talks`), which inserts a `franchise_pending_moves` row `kind = 'TRADE'`, `team_id` = JR's team, payload `{"proposal_id", "other_team_id", "send": {"players": [ids], "picks": [{season, round, original_team_id}]}, "receive": {...}}`, when that table exists. The `#debug` card's Madden steps stay for old saves; the league office path replaces them where the table exists.
 - JR's GM reply: `gm_message` and `open_negotiation` / `offer` / `accept_counter` get `timeout=None` and `posture=None` passthroughs; `gm_talk.py` passes the inbox budget. The responding GM's counter is chosen by `policy_choice` among `counter_options` (MEET or HOLD), and the chosen `posture` is stored on the turn. The model writes the words only (Q3): one model call per JR turn.
 - Leaks on JR's talks: `leak_events` runs on JR's talks too (Q4), with JR's side never named unless JR's offer was INSULTING.
@@ -187,8 +198,8 @@ No `su`, `sg`, `options`, `choice_source` or `legality` in the public shape.
 
 ### 2.7 JR's talks in the inbox (`engines/inbox/kinds/gm_talk.py`, extended) and published transcripts (`server/franchise_api.py`)
 
-V2.9's `GM_TALK` kind stays the only way JR talks to a GM. This plan changes, inside `gm_talk.py` only (no change to the inbox's store, registry, scan, API or tables):
-- `act` calls `gm_negotiation` with `require_control=False` and `timeout=INBOX_LLM_BUDGET_S`; the GM's COUNTERPART message carries `engine_ref = {negotiation_id, turn_no, posture}`.
+V2.9's `GM_TALK` kind stays the only way JR talks to a GM. V2.9 is being revised so JR can control any number of personas (GM, coach, player); a `GM_TALK` thread is then "a GM persona JR controls ↔ another GM". The extension below is written for that: it takes JR's side from the thread (the controlled GM persona's team, `user_team_id` on the negotiation), never from a single "JR's team", and works the same for any number of controlled GMs. A turn's actor `JR` means "the persona JR controls". This plan changes, inside `gm_talk.py` only (no change to the inbox's store, registry, scan, API or tables):
+- `act` calls `gm_negotiation` with `timeout=INBOX_LLM_BUDGET_S`; the GM's COUNTERPART message carries `engine_ref = {negotiation_id, turn_no, posture}`.
 - After every GM turn, `gm_talks.leak_events` runs on the talk (Q4); a leak is stored in `gm_trade_leaks` and is never mentioned in the thread.
 - On AGREED, the reply template becomes "Agreed. Queued for the league office (move #<id>)", using the pending move `_agree` queued (§2.4); the thread closes as V2.9 already does.
 Published transcripts (read-only, `server/franchise_api.py`; no inbox file involved):
@@ -213,6 +224,16 @@ Both are open to every team (league news, not a user-team action). `trades/evalu
 - `roster_moves.leak_line(leak, team_names)`: "Week 6 · RUMOR, not a done deal · per a source, the Jets and the Patriots have talked about CB Tre Reyes; talks are close." Stage words: OPENED "have opened talks", CLOSE "talks are close", STALLED "talks stalled, no deal". `RUMOR_NOTE` gains one sentence: a named player in a leak may be named, still never as traded. `trade_line` appends the quotes as "GM <name>: '<line>'".
 - `social_desk.load_trades`: a leak with `insider_key` goes to that insider's pool first (the existing two-rumor cap applies); other insiders see it from the following week.
 
+### 2.10 Team control: the registry is the source of truth (D8)
+
+Choice: **the GM engines read the registry**, rather than keeping `gm_team_settings.user_controlled` as a synced copy. A copy needs a writer that runs at every registry change (registry edits happen outside the database, by `db.franchises` CLI or by hand) and would drift silently; reading at book time cannot drift. Every reader already goes through `read_books`, so one overlay covers `open_negotiation`'s check (`engines/gm_negotiation.py:437-438`), `eligible_team`, the `advisory:` flags and the CPU-talk filter.
+
+- `front_office.controlled_team_ids(cur) -> set[int] | None` (U6): `SELECT current_database()`; the registry entry (`db.franchises.load_registry()`) whose `db` equals it; its `user_teams` abbreviations → team ids. No entry (tests, `madden_test`, `madden_2036`) or an unreadable registry → None. An entry with an empty list → `set()`: no team is JR's (the 2026–2033 all-CPU era). This differs on purpose from `franchise_api.require_user_team`, where an empty list allows every team (a convenience for the Command Center); that rule is unchanged.
+- `gm_trade_engine.read_books` (U2): after loading `gm_team_settings`, `ids = front_office.controlled_team_ids(cur)` (lazy import); when `ids is not None`, `b["gm"][t]["user_controlled"] = t in ids` for every team. `suggestions_on` still comes from `gm_team_settings`.
+- `front_office.set_team_control` (U6): when `controlled_team_ids(cur)` is not None, a `user_controlled` change → `FrontOfficeError(409, "team control comes from the franchise registry (python3 -m db.franchises)")`; `suggestions_on` still saves. `front_office_state` reports `user_controlled` from the same overlay.
+- `gm_team_settings.user_controlled` stays as a column (fallback only). Nothing writes it from the registry.
+- Personas: when V2.9 lets JR control GM, coach or player personas, a controlled **GM persona** means its team is in `user_teams`; the registry stays the single list.
+
 ## 3. Risks and unknowns
 
 | # | Risk or unknown | How we find out | If it goes wrong |
@@ -226,19 +247,21 @@ Both are open to every team (league news, not a user-team action). `trades/evalu
 | R7 | Shared files with sibling plans: `engines/inbox/kinds/gm_talk.py` (V2.9 U4 creates it; this plan's U4 extends it), `pipeline/weekly_capture.py` (V2.9 U1's `step_inbox` hook; maybe V2.2's postgame step), `db/init_db.sql` and migration order (V2.9 `2027_01_19`, V2.2 press conferences `2027_01_20`, V2.10 scouting `2027_01_21`, this plan `2027_01_22`; V2.2 also edits `init_db.sql` in later waves, so U1's mirror edit must not run alongside them), `newsroom/swarm_dispatcher.py` (V2.2 edits it; U6 only reads `new_week_trades`, so a rename there breaks U6), `server/api.py` (V2.2 and V2.9 edit it; this plan doesn't), `server/franchise_api.py` (V2.10 may add endpoints), `newsroom/social_desk.py` and `newsroom/roster_moves.py` (V2.2 press conferences, `AGENT_WIRE_VOICE_PLAN.md`), `Mu_Network/src/types/franchiseMarket.ts` (V2.9 U2 reads it). | The orchestrator compares the four plans' Owns lists before wave 1. | V2.9 first (precondition); with V2.2 or V2.10, run waves one plan at a time where Owns lists overlap. Renumber the migration date if another must apply first. |
 | R8 | V2.9's `gm_talk.py` changes shape while it is built (e.g. option names), so §2.7's extension no longer fits. | U4 reads the merged `gm_talk.py` and `tests/test_inbox_kinds_gm_talk.py` first. | Keep the extension to the four §2.7 bullets and adapt names; the engine side (`gm_negotiation`, `gm_talks`) doesn't depend on the inbox. |
 | R9 | `gm_talk.py` and `#debug`'s Negotiate card both drive JR's talks; only the inbox path draws leaks. | U4 test. | Acceptable: `#debug` is a tool, not JR's normal surface. |
+| R10 | V2.9's revision (JR controls many personas) changes how a `GM_TALK` thread names JR's side. | U4 reads V2.9's merged `gm_talk.py` first. | §2.7's extension takes JR's side from the negotiation row, so only field names should need adapting. |
+| R11 | A registry edit while the server runs: `read_books` reads the registry on every call, so it is current; `franchise_api.user_teams()` is too. | — | — |
 
 **Spike first:** none needed. R1's replay runs after wave 2 as U2's verification, before any live week.
 
 ## 4. Tests (synthetic, no live DB)
 
 - `tests/test_gm_talks.py` → options are all legal and keep the core; an anchor can sit below the other floor; ACCEPT appears only above the actor's floor; patience 0 offers only WALK_AWAY; policy is seeded (same seed, same choice) and follows sliders (high aggressiveness anchors more over 1,000 draws); a model choice outside the list falls back to POLICY; an invalid message falls back to the template; two fixed personas converge to AGREED and the agreed deal passes `accepts`; carry-over only from CLOSE, never past the deadline week, at most once; a resumed talk with an injured core stalls; leaks: GUARDED halves the rate (1,000 draws), names players only for aggressive leakers, never on an AGREED turn, at most one per talk per week; `talk_json(public=True)` has no surpluses, options or legality; `call_with_timeout` returns None on a slow fake; `talk_thread` order and shape.
-- `tests/test_gm_negotiation.py` → `counter_options[0]` equals the old `counter` on the existing fixtures; the policy's posture is stored on the GM's turn; `timeout` reaches the reply call; `require_control=False` opens for a registry user team; `_agree` queues one TRADE pending move with `proposal_id` when the table exists, none when it doesn't; `expire_stale` leaves CPU talks alone.
-- `tests/test_gm_trade_engine.py` → CPU-to-CPU picks go to `run_talks` and advisory ones are stored as before; AGREED stores APPROVED with `talks:` and `auto_approved`; STALLED counts as decided and doesn't bar players; dry run stores nothing; draft-day paths unchanged; `simulate_season` with `talk_stall=0.25` stays within ±2 of the old mean.
+- `tests/test_gm_negotiation.py` → `counter_options[0]` equals the old `counter` on the existing fixtures; the policy's posture is stored on the GM's turn; `timeout` reaches the reply call; `_agree` queues one TRADE pending move with `proposal_id` when the table exists, none when it doesn't; `expire_stale` leaves CPU talks alone.
+- `tests/test_gm_trade_engine.py` → `read_books` takes `user_controlled` from `controlled_team_ids` when it isn't None and from `gm_team_settings` when it is; CPU-to-CPU picks go to `run_talks` and advisory ones are stored as before; AGREED stores APPROVED with `talks:` and `auto_approved`; STALLED counts as decided and doesn't bar players; dry run stores nothing; draft-day paths unchanged; `simulate_season` with `talk_stall=0.25` stays within ±2 of the old mean.
 - `tests/test_weekly_capture.py` → `step_gm` passes a `gm_talks` LLM and a failure still only warns.
 - `tests/test_league_office.py` → `step_engine_trades` plans player legs and skips picks; a claimed player refuses the whole trade; the second refusal calls `could_not_make`; `step_pending_trade` accepts a pick trade (players written, pick noted); `record_written` executes JR's and engine trades once and publishes talks; an old payload without `proposal_id` is untouched.
-- `tests/test_inbox_kinds_gm_talk.py` (V2.9's file, extended) → `act` passes `require_control=False` and the budget; posture lands in `engine_ref`; a leak draw runs per GM turn and never appears in a message; AGREED reply names the queued pending move; V2.9's existing cases still pass.
+- `tests/test_inbox_kinds_gm_talk.py` (V2.9's file, extended) → `act` passes the budget; two threads for two different controlled GM personas each act for their own team; posture lands in `engine_ref`; a leak draw runs per GM turn and never appears in a message; AGREED reply names the queued pending move; V2.9's existing cases still pass.
 - `tests/test_franchise_api.py` → `/trade-talks` returns only published CPU talks, newest first, with no surplus, options or legality; `/trade-talks/{id}` 404s for an unpublished or USER talk.
-- `tests/test_front_office.py` → leak rows join `trade_rumors` only when the table exists; a leaked talk's proposal isn't duplicated as a plain rumor; `executed_trades` carries `talk_quotes` only for published talks.
+- `tests/test_front_office.py` → `controlled_team_ids`: registry entry for this database with teams → their ids; entry with an empty list → empty set; no entry → None; `set_team_control` refuses `user_controlled` with 409 when the registry lists the database, still sets `suggestions_on`; leak rows join `trade_rumors` only when the table exists; a leaked talk's proposal isn't duplicated as a plain rumor; `executed_trades` carries `talk_quotes` only for published talks.
 - `tests/test_roster_moves.py` → `leak_line` wording per stage, named vs positions only, never "traded" or a figure; `trade_line` with quotes.
 - `tests/test_social_desk.py` → a leak goes to its insider first and to others the week after.
 - Frontend: `npm run build` in `Mu_Network/` (type check of the Talk to their GM button and League talks list against mocked shapes).
@@ -260,9 +283,9 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 ### U2: Trade engine wiring
 
 - **Owns:** `engines/gm_trade_engine.py`, `pipeline/weekly_capture.py`, `tests/test_gm_trade_engine.py`, `tests/test_weekly_capture.py`
-- **Reads:** §2.3, §2.6; `engines/gm_talks.py` (U1); `pipeline/weekly_capture.py` as merged by V2.9 (its `step_inbox` hook stays after `step_gm`)
-- **Depends on:** U1 (and V2.9 on main)
-- **Done when:** `run_week` routes CPU-to-CPU deals through talks and stores APPROVED / STALLED rows; the season simulation stays near target.
+- **Reads:** §2.3, §2.6, §2.10; `engines/gm_talks.py` (U1); `front_office.controlled_team_ids` (U6); `pipeline/weekly_capture.py` as merged by V2.9 (its `step_inbox` hook stays after `step_gm`)
+- **Depends on:** U1, U6 (and V2.9 on main)
+- **Done when:** `read_books` takes team control from the registry; `run_week` routes CPU-to-CPU deals through talks and stores APPROVED / STALLED rows; the season simulation stays near target.
 - **Verify:** `pytest -m "not integration" tests/test_gm_trade_engine.py tests/test_gm_trade_shapes.py tests/test_weekly_capture.py` pass; `python3 -m engines.gm_trade_engine --simulate-season --talk-stall 0.25` prints a mean within 18–22 a season.
 
 ### U3: League office execution
@@ -292,9 +315,9 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 ### U6: Leaks and transcripts in the newsroom
 
 - **Owns:** `engines/front_office.py`, `newsroom/roster_moves.py`, `newsroom/social_desk.py`, `tests/test_front_office.py`, `tests/test_roster_moves.py`, `tests/test_social_desk.py`
-- **Reads:** §2.2 (`gm_trade_leaks`), §2.9; `newsroom/swarm_dispatcher.py` (`new_week_trades`)
+- **Reads:** §2.2 (`gm_trade_leaks`), §2.9, §2.10 (`controlled_team_ids`, `set_team_control`); `newsroom/swarm_dispatcher.py` (`new_week_trades`); `db/franchises.py` (`load_registry`, entry `db`, `user_teams`)
 - **Depends on:** none (reads the §2.2 table only when it exists)
-- **Done when:** leak rows appear as labelled rumors and reach their insider first; executed trades carry quotes when published.
+- **Done when:** `controlled_team_ids` reads the registry; leak rows appear as labelled rumors and reach their insider first; executed trades carry quotes when published.
 - **Verify:** `pytest -m "not integration" tests/test_front_office.py tests/test_roster_moves.py tests/test_social_desk.py tests/test_newsroom_trades.py` pass.
 
 ## 6. Waves
@@ -302,7 +325,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this
 | Wave | Units | Needs merged first | Why together |
 |---|---|---|---|
 | 1 | U1, U5, U6 | — | No shared files; U5 and U6 build against §2.2 and §2.7 shapes |
-| 2 | U2, U3, U4 | U1 | Each imports `gm_talks` or the new `gm_negotiation` options; no shared files between them |
+| 2 | U2, U3, U4 | U1, U6 (U2 only) | Each imports `gm_talks` or the new `gm_negotiation` options; no shared files between them |
 
 All waves start only after V2.9 is on main (precondition).
 
@@ -342,8 +365,9 @@ No path appears twice.
 ## 7. Spec changes when built
 
 - §2.17 Proposal engine: CPU-to-CPU deals go through talks; APPROVED with `talks:` / `auto_approved`; `STALLED` status and pacing; `--simulate-season --talk-stall`.
-- §2.17 Negotiation: `counter_options`, `require_control`, the TRADE pending move on agreement, reply timeout, leaks on JR's talks; a new **Talks** paragraph for `engines/gm_talks.py` (options, policy formulas, model choice, carry-over, leaks, publication, `talk_thread`, CLI); tests line.
+- §2.17 Negotiation: `counter_options`, the TRADE pending move on agreement, reply timeout, leaks on JR's talks; a new **Talks** paragraph for `engines/gm_talks.py` (options, policy formulas, model choice, carry-over, leaks, publication, `talk_thread`, CLI); tests line.
 - §2.21a League office: `step_engine_trades`, picks in `step_pending_trade`, trade execution and publication in `record_written`, report counts.
+- §3.3f and §2.17 (team control): the franchise registry's `user_teams` is the source of truth for which teams JR controls; `gm_trade_engine.read_books` reads it through `front_office.controlled_team_ids` (registry entry matched by `current_database()`); `gm_team_settings.user_controlled` is only the fallback for a database with no registry entry (tests, `madden_2036`), and `#debug`'s JR-controls toggle refuses (409) on a registered franchise. Note why: in Madden all 32 teams stay user teams to stop Madden's own CPU trades (V2_CORE_BUILD_PLAN spike R2), so Madden's flags never say which teams JR runs. Fixes the S7 mismatch.
 - §3.3f: new columns on `gm_trade_negotiations` and `gm_trade_negotiation_turns`, `STALLED` on proposals and talks, table `gm_trade_leaks`; migration list.
 - §4.6b: `/trade-talks` and `/trade-talks/{id}`.
 - Inbox section (added by V2.9): `GM_TALK` posture, leaks, the queued move on agreement.
@@ -355,12 +379,15 @@ No path appears twice.
 
 ## 8. Decisions for JR
 
-| # | Question | Recommendation |
+All decided by JR on 2026-11-03 (D1–D8 at the top). Nothing is open.
+
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Traded picks: move them only in Mu's books (`draft_picks`, which Mu's draft uses), or also map and write the save's DraftPick rows now? | Mu's books only for now. Mu makes every pick from `draft_picks` and you never open Madden's draft. Writing the save's rows is a follow-up once a pick mapping exists. |
-| Q2 | Should agreed CPU-to-CPU deals go through with no step from you, or wait for a click on `#debug`? | No step. From 2026 to 2033 there is no user team and nobody to click. `#debug` still lists them, and `--no-league-office` stops every write. |
-| Q3 | In your own talks, should the model also choose the GM's counter (from the engine's legal list), or only write his words? | Words only. That keeps each of your turns to one model call and keeps the GM's moves predictable. CPU talks run in batch, so there the model may choose. |
-| Q4 | Can a GM leak your talks with him to the insiders? | Yes, with the same odds as CPU talks, positions only, unless your offer insulted him. |
-| Q5 | May a talk carry over to the next week (or offseason stage), so leaks come before the outcome? | Yes, once, only when the two sides are close, and never past the deadline week. Without it a leak can only be about talks that already failed. |
-| Q6 | Publish transcripts of talks that broke down too, or only of deals that went through? | Only deals that went through. Failed talks stay rumors through the leaks. |
-| Q7 | Build order with the inbox (V2.9)? | V2.9 first, then this plan. Your own talks live in its `GM_TALK` thread, and this plan extends that file and the weekly hook it adds. |
+| Q1 | Traded picks: Mu's books only, or also the save's DraftPick rows? | Mu's `draft_picks` is the source of truth; the save's rows are not written (D1). |
+| Q2 | Do agreed CPU-to-CPU deals need a step from JR? | No (D2). |
+| Q3 | In JR's talks, does the model choose the GM's counter or only write his words? | Words only (D3). |
+| Q4 | Can a GM leak JR's talks? | Yes: positions only, same odds as CPU talks, unless JR insulted him (D4). |
+| Q5 | May a talk carry over? | Yes, once, only when close, never past the deadline (D5). |
+| Q6 | Which transcripts are published? | Completed deals only (D6). |
+| Q7 | Build order with V2.9? | V2.9 first (D7). |
+| Q8 | Which list says which teams JR controls? | The franchise registry's `user_teams`; the GM books read it (§2.10, D8). |
