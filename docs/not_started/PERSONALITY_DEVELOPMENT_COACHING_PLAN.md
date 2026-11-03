@@ -1,7 +1,7 @@
 # Project Mu: Personality Development and Coaching Plan
 
-**Status:** proposal, awaiting JR's direct review (2026-10-31). PLAN ONLY. No implementation, migration, seeding or activation authorized.
-**JR decisions (2026-11-03; supersede conflicting text below):** (1) every persona named after a real person (writers, GMs, coaches, players) is a fictional character inspired by that person and may hold views, moods and relationships formed from simulated events; the conservative real-person rules below (neutral private appraisal, scoped evidence permissions) no longer apply to them. (2) Existing players get engine-generated profiles once at the 2026 start (not researched); prospects at draft-class entry; JR can edit any profile. (3) Existing real coaches get reviewed profiles shaped to their real counterparts (separate workstream). (4) The relationships plan owns trust; trust is one-way; promises use `promise_made`/`promise_resolved`. (5) Migration dates are reserved in PERSONALITY_PLAN §5.3. See PERSONALITY_PLAN §5 step 3, §5.1 and D8–D13. For this plan: coach initialization is decided (reviewed profiles for existing real coaches), and this plan owns the eventual consumer of the V2.9 inbox's team-vision playing-time philosophy setting (stored by the inbox plan's `team_vision` table, no effect until this plan's depth-chart seam acts on it).
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); not built. Approval covers building the units; enabled configs and each activation (learning, then opportunities) still need JR's separate go-ahead (§2.7 gates G3–G5).
+**JR decisions this plan follows (2026-11-03, PERSONALITY_PLAN §5.1, D11–D13):** every player has a generated profile (the 2026 roster at the league start, prospects at class entry), editable by JR. Existing real coaches get reviewed profiles from a separate workstream; personas named after real people are fictional characters inspired by them. This plan also owns the eventual consumer of the V2.9 inbox's team-vision playing-time setting (§2.5).
 **Builds on:** PROJECT_SPEC §§2.17c, 2.19, 2.21, 3.3n, 3.3p, 7.11; [core README](../../personality/README.md); [PERSONALITY_PLAN.md](../in_progress/PERSONALITY_PLAN.md) §§5.1–5.2; [generated-effects design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md). Active progression implementation owns the current entitlement/state system; reconcile interfaces before integrating.
 
 **Goal:** Let persistent preparation and teaching influence eligible development, and coaching preferences influence close opportunity decisions, with one owner for every effect. Separate permanent learning from temporary form, health and role choices. Measure each change against a replayable neutral control before activation.
@@ -13,15 +13,13 @@
 - `tools/personality_development_demo.py`: synthetic paired-control CLI, without a database connection.
 - Disabled integration seams in existing progression receipts and staff depth-chart scoring, after owner handoff; tests and rollout gates.
 
-JR requested a reviewable plan before clarification. Recommendations are provisional; no answers or implementation approval are recorded. Only this assigned plan is written by this chat.
-
 ## 0. Survey (code facts that set the scope)
 
 Surveyed the canonical WSL working tree on 2026-10-31. Progression and shared documents have concurrent edits; recheck these references at implementation handoff. No live/archive database access.
 
 | # | Fact (file:line) | Consequence |
 |---|---|---|
-| S1 | `personality/core.py:144–163` exposes generated profiles and filters real fields by exact feature permission; missing is neutral. `personality/README.md:3` assigns numeric consequences to features. | Consume scoped views; no second profile or `newsroom.personas.get_persona` fallback. |
+| S1 | `personality/core.py:144–163` exposes generated profiles and filters real fields by exact feature permission; missing is neutral. `personality/README.md:3` assigns numeric consequences to features. | Consume scoped views; no second profile or `newsroom.personas.get_persona` fallback. Players are all generated, so they read in full. Reviewed real-coach profiles are `real` origin, and today's filter would hide their fields from `coaching`; D13 drops that conservative rule, so the core change that exposes reviewed coach fields belongs to the coach-profile workstream and is a dependency of the teaching/opportunity channels. |
 | S2 | `personality/store.py:35–61` propagates failures and rejects unmanaged canonical edits; `:85–116` initializes once; `:119–142` binds/resolves verified aliases. | Reads never seed; pipeline identity binding is an external prerequisite. |
 | S3 | `personality/core.py:166–225` enforces chronology, revision, annual change limit and simulation evidence for real people. `personality/store.py:145–175` deduplicates event/source and uses caller transactions. | Feature may later propose reviewed event changes, never mutate profiles directly or infer evolution from one good game. |
 | S4 | `db/migrations/2027_01_09_personas.sql:21` really contains exact-30 `chk_persona_sliders_budget`. `2027_01_16_personality_core.sql:1–3` leaves legacy constraints and activation unchanged. | Superseded 2026-11-02: the cap-relative plan built the 24–36 band in Python and SQL (`2027_01_17_persona_slider_band.sql`, applied to `madden_test`). This plan owns neither; single-slider evolution works where the migration is applied. |
@@ -43,14 +41,14 @@ Surveyed the canonical WSL working tree on 2026-10-31. Progression and shared do
 ## 1. Scope
 
 **In:**
-- Generated classes and verified generated players already at the checkpoint first; persistent identities across years and transfers; scoped real-person observations and later recorded simulation evolution.
+- Every player's generated profile (the 2026 roster and each class), reviewed real-coach profiles once their workstream lands, persistent identities across years and transfers, and later recorded simulation evolution.
 - Bounded film/technical preparation and coach teaching on eligible mental/technical learning; isolated existing mentor growth.
 - Close youth/veteran opportunity decisions; advice among caller-supplied legal scheme options; independent activation gates.
 - Immutable snapshots, annual attribution, deterministic replay, synthetic controls, receipt/year-end integration and default-off hooks.
-- Synthetic 2026–2033 seasons, 2034 JR handoff and longer runs for compounding. Imported real prospects remain real; late draft year is not classification evidence.
+- Synthetic 2026–2033 seasons, 2034 JR handoff and longer runs for compounding. Imported real-player classes are generated at entry like any other class.
 
 **Out (non-goals):**
-- Core seeding/binding, real-person research campaign, catalogue edits, slider migration, autonomous profile evolution and production activation.
+- Core seeding/binding, researching real coaches (their workstream), catalogue edits, slider migration, autonomous profile evolution and production activation.
 - Contract prices/earnings/security, trade requests and retirement. Money preference is not effort. Strong ring chasing belongs elsewhere and needs established career, financial security and usable contender role, never an elite-OVR shortcut.
 - Personality effects on physical ratings, wear, durability, health/recovery, upkeep, ceilings, REVIEW odds, breakthroughs, PT flags and actual dev abilities in release one. WORKOUT_FANATIC can appear in preview with an explicit deferred reason; no unsupported training effect is silently invented.
 - Practice simulation, rotations/snap allocation, automatic scheme installation, second hiring engine, mood or relationship store. No friend-count attachment logic.
@@ -62,7 +60,7 @@ All new names below are **proposed**. Existing APIs are identified explicitly.
 
 ### 2.1 Inputs, scopes and modes
 
-Use existing `feature_view(profile, 'development')` for players/mentors and `'coaching'` for coaches/owners. A real coach's public scheme tendency does not authorize private teaching ability. Real and generated people can later evolve from recorded simulated events through reviewed core changes; unknown origin remains neutral. Never infer private motivations from contract size, quietness, name, age, rating or loader origin.
+Use existing `feature_view(profile, 'development')` for players/mentors and `'coaching'` for coaches/owners. A real coach's teaching traits come from his reviewed profile; a public scheme tendency alone does not establish teaching ability. Until reviewed coach profiles exist, coaches are missing and their channels are neutral. Every profile can later evolve from recorded simulated events through reviewed core changes; unknown origin remains neutral. Never infer private motivations from contract size, quietness, name, age, rating or loader origin.
 
 Frozen `DevelopmentConfig` fields:
 
@@ -165,7 +163,7 @@ def rank_scheme_choices(*, choices: list[dict], coach_view: dict,
 # result: {ranked:list[str],advice_only:True,attribution:list[dict]}
 ```
 
-YOUTH_DEVELOPER favors youth only inside the configured neutral-score gap from the strongest eligible candidate for a slot. Veteran preference requires a reviewed specific coaching input; OLD_SCHOOL alone is not evidence of veteran favoritism. Neutral score already includes ability, eligibility penalty and scheme fit. Clip once, then run existing greedy staff algorithm. Preserve injuries, base-starter uniqueness, fallbacks and ties. This is neither rotation logic nor guaranteed snaps.
+YOUTH_DEVELOPER favors youth only inside the configured neutral-score gap from the strongest eligible candidate for a slot. The V2.9 inbox stores a team-vision `playing_time` setting (`YOUTH|VETERANS|MERIT`) with no consumer (its O1); its eventual consumer is this seam, as one more bounded input inside the same close-score window and cap, never a separate adjustment, and only after opportunity activation. Veteran preference requires a reviewed specific coaching input; OLD_SCHOOL alone is not evidence of veteran favoritism. Neutral score already includes ability, eligibility penalty and scheme fit. Clip once, then run existing greedy staff algorithm. Preserve injuries, base-starter uniqueness, fallbacks and ties. This is neither rotation logic nor guaranteed snaps.
 
 Proposed optional keyword `score_adjustments=None` on existing `staff_depth_chart`, threaded internally by its owner, avoids enabling global COACH_TRUST_SCALE for unrelated callers. Off/zero produces identical charts. Validate finite adjustments, known eligible player/slot and agreed score caps. Current production callers pass none until a later reviewed execution integration.
 
@@ -175,7 +173,7 @@ Scheme advice ranks only caller-supplied legal choices. Neutral ordering changes
 
 ### 2.6 Later event evolution, hiring and owner patience
 
-Receipts can supply verified source IDs for later reviewed sustained preparation, development milestones or mentoring events. One good week or invented practice prose cannot change a profile. Core owns revision/annual limits; a cross-feature review coordinator must arbitrate its single annual change slot. That coordinator is not built here. Real changes need scoped simulation evidence; unknowns need classification; slider changes wait for both band migrations.
+Receipts can supply verified source IDs for later reviewed sustained preparation, development milestones or mentoring events. One good week or invented practice prose cannot change a profile. Core owns revision/annual limits; a cross-feature review coordinator must arbitrate its single annual change slot. That coordinator is not built here. Changes to `real`-origin coach profiles need the core's simulation evidence; unknowns need classification; slider changes wait for both band migrations.
 
 Later hiring preferences belong in `coaching_carousel.opening_appeal`/`pick`; owner patience belongs in existing hot-seat policy. Preserve one hiring cycle, user-team restrictions, tenure/championship protections, firing budgets and recorded moves. Do not infer teaching quality from win totals, count churn twice, add an owner scalar store or build a parallel hiring engine. These are dependency notes, not implementation units.
 
@@ -185,7 +183,7 @@ Later hiring preferences belong in `coaching_carousel.opening_appeal`/`pick`; ow
 
 Private attribution separates baseline learning, preparation, teaching, mentoring, caps, rounding, receipt status and multi-year divergence. Public projection uses existing safe PERSONALITY/COACHING reasons only for supported applied effects; no seeds, private motives, evidence text, hidden ceilings or shadow claims. No new endpoint/frontend.
 
-G0: direct JR plan review. G1: owner reconciliation/spikes. G2: off/zero equality and synthetic invariants. G3: JR reviews paired multi-season reports and explicit strengths/caps. G4: verified binding, schema readiness, neutral bootstrap and existing save verification gates; shadow changes no target. G5: separate direct activation decision for learning, then separately for opportunities. Profile availability never activates effects. No gate is executed by drafting this plan.
+G0: JR plan approval (done 2026-11-03). G1: owner reconciliation/spikes. G2: off/zero equality and synthetic invariants. G3: JR reviews paired multi-season reports and explicit strengths/caps. G4: verified binding, schema readiness, neutral bootstrap and existing save verification gates; shadow changes no target. G5: separate direct activation decision for learning, then separately for opportunities. Profile availability never activates effects. No gate is executed by drafting this plan.
 
 ## 3. Risks and unknowns
 
@@ -200,7 +198,7 @@ G0: direct JR plan review. G1: owner reconciliation/spikes. G2: off/zero equalit
 | R7 | Missing migration resembles absent profile. | Inject schema/connection/corruption errors. | Abort enabled batch; off never queries core. |
 | R8 | Strengths lack calibration. | Explicit sweeps by age/group/base/profile and reviewed reports. | Ship no active preset or claim of empirical league stability. |
 
-**Spike first:** After direct review authorizes further work, coordinator runs A (annual neutral/effect accounting and mentor component contract), B (safe cap evaluation with versioned weights), C (verified alias/staff/exposure source availability). Estimate: one bounded research session, not a calibration promise. A/B can change design and must settle before U1 interface freeze; C blocks non-neutral integration, not pure experiments. Record findings here. No DB access needed. If additional shared files/schema/evidence types are required, return an amended plan to JR; do not expand ownership silently.
+**Spike first:** coordinator runs A (annual neutral/effect accounting and mentor component contract), B (safe cap evaluation with versioned weights), C (verified alias/staff/exposure source availability). Estimate: one bounded research session, not a calibration promise. A/B can change design and must settle before U1 interface freeze; C blocks non-neutral integration, not pure experiments. Record findings here. No DB access needed. If additional shared files/schema/evidence types are required, return an amended plan to JR; do not expand ownership silently.
 
 ## 4. Tests (synthetic, no live DB)
 
@@ -225,13 +223,13 @@ Integration-named new files above are ordinary offline tests using fakes, not DB
 
 ## 5. Work breakdown
 
-Shared documents are orchestrator-only: PROJECT_SPEC.md, this plan, CLAUDE.md and consolidated personality references. Future units require direct execution authorization; drafting starts none. Each unit receives current sources, this plan and the frozen spike/interface note.
+Shared documents are orchestrator-only: PROJECT_SPEC.md, this plan, CLAUDE.md and consolidated personality references. Each unit receives current sources, this plan and the frozen spike/interface note.
 
 ### U1: Pure development and coaching policy
 
 - **Owns:** `engines/personality_development.py`, `engines/personality_coaching.py`, `tests/test_personality_development.py`, `tests/test_personality_coaching.py` (all new).
 - **Reads:** core README/API, progression policy/evidence, depth chart and §§0–4.
-- **Depends on:** A/B spike outcomes and direct review; no code unit.
+- **Depends on:** A/B spike outcomes; no code unit.
 - **Done when:** exact pure interfaces exist; defaults are neutral; invalid active configs fail; every causal mapping tested; no DB writes or active preset.
 - **Verify:** `.venv/bin/python -m pytest -m 'not integration' tests/test_personality_development.py tests/test_personality_coaching.py -q` passes.
 
@@ -256,7 +254,7 @@ Shared documents are orchestrator-only: PROJECT_SPEC.md, this plan, CLAUDE.md an
 
 - **Owns:** `engines/depth_chart_engine.py`, `tests/test_personality_depth_integration.py` (new).
 - **Reads:** U1 coaching, existing chart tests and staff-setting callers.
-- **Depends on:** U1 and depth-chart owner handoff; not U3.
+- **Depends on:** U1 and depth-chart owner handoff; not U3. The V2.9 inbox (builds first) reads `engines/depth_chart_engine.py`; re-read it after that lands.
 - **Done when:** optional score_adjustments is bounded/validated, neutral charts identical, original eligibility/uniqueness preserved. Production callers pass none; scheme execution remains absent.
 - **Verify:** `.venv/bin/python -m pytest -m 'not integration' tests/test_personality_coaching.py tests/test_personality_depth_integration.py tests/test_depth_chart_engine.py -q` passes.
 
@@ -264,13 +262,13 @@ Shared documents are orchestrator-only: PROJECT_SPEC.md, this plan, CLAUDE.md an
 
 | Wave | Units | Needs merged first | Why together |
 |---|---|---|---|
-| Prebuild | Spikes A–C/owner reconciliation | Direct review | Settle annual accounting, safe caps and sources. |
+| Prebuild | Spikes A–C/owner reconciliation | JR approval (done 2026-11-03) | Settle annual accounting, safe caps and sources. |
 | 1 | U1 | Frozen interfaces | Coherent pure policies/tests. |
 | 2 | U2, U4 | U1; U4 handoff | Runner/chart seam share only read-only policy interfaces. |
 | 3 | U3 | U1/U2 review and progression handoff | Receipt/annual integration requires stable owner/control evidence. |
 | Gates | JR config/activation review | Relevant checks/reports | No merge automatically activates effects. |
 
-U4 may be deferred independently. No subagents are spawned by this planning task; future delegation needs explicit execution instructions.
+U4 may be deferred independently.
 
 **File ownership check (sorted; no path duplicated):**
 
@@ -297,13 +295,13 @@ Rollback disables future effect preparation and retains receipts/profiles. Rebui
 
 ## 7. Spec changes when built
 
-Parent consolidates these; this chat edits no shared document.
+The parent consolidates these when the units land.
 
 - PROJECT_SPEC §1.1: new policy/adapter/demo/test paths and actual status.
 - §§2.21, 3.3n: fractional placement, paired control, annual attribution/caps, year-end remainder, immutable metadata, receipt spending; legacy persona/coach constants remain zero.
 - §2.17c: optional per-slot scoring, close candidate preference, default neutrality, preserved eligibility and indirect feedback gate.
 - §2.19: later hiring/patience dependencies only, no implemented effect claim.
-- §§3.3p, 7.11: exact permission names, missing/error distinction, binding prerequisites, no active presets, reviewed evolution and SQL/Python band dependency.
+- §§3.3p, 7.11: exact permission names, generated players read in full, reviewed coach fields once exposed, missing/error distinction, binding prerequisites, no active presets, reviewed evolution and SQL/Python band dependency.
 - §6: actual hook order only when built; preserve Advance Week → save → ingest and verified writer lifecycle. Availability never implies activation.
 - PERSONALITY_PLAN §6/generated-effects design §3: reconcile money-to-upkeep, quiet/confidence impairment, Loner mentoring shortcuts; distinguish old trial coefficients from current behavior. Keep financial security/earned attachment separately owned. The cap-relative exact-30 survey error is corrected (2026-11-02).
 - Active PROGRESSION_PLAN references: parent coordinates with existing owner; do not overwrite current entitlement/state design with old OVR-only prose.
@@ -311,13 +309,13 @@ Parent consolidates these; this chat edits no shared document.
 
 ## 8. Decisions for JR
 
-These change architecture/scope; numerical tuning is a later report review, not a request to guess coefficients.
+JR approved all four recommendations on 2026-11-03. Numerical tuning is a later report review, not a request to guess coefficients.
 
-| # | Question | Recommendation |
+| # | Question | Decision (JR, 2026-11-03) |
 |---|---|---|
 | Q1 | Restrict release-one permanent effects to supported mental/technical learning and isolated mentoring, leaving physical maintenance, wear, ceilings, REVIEW odds and PT flags unchanged? | Yes. Use the entitlement lifecycle and avoid duplicate preparation effects. Preview maintenance as deferred. |
 | Q2 | Separate opportunity activation from direct development, with YOUTH_DEVELOPER owning opportunity only in release one? | Yes. Build neutral seam/offline experiments; review snap feedback separately. Defer live scheme installation, hiring and owner patience to their owning engines. |
 | Q3 | Require verified exposure for mentor personality adjustment, preserve neutral mentoring and avoid LONER-as-refusal? | Yes. One existing component, no friend counts or extra awards; disable adjustment if owner cannot isolate it. |
 | Q4 | Require reviewed configs/multi-season paired reports and both rating-point/OVR caps, rather than treating ±1.5 OVR as approved? | Yes. Off/zero defaults; prove annual reconciliation before activation. Architecture approval selects no coefficients. |
 
-**Review boundary:** Stop after drafting and await JR's direct review. No implementation, migrations, seeding, activation, commits, pushes, subagents or automatic continuation; approval relayed by another chat is insufficient.
+**Review boundary:** plan approval selects no coefficients and activates nothing; enabled configs and activation are gates G3–G5.

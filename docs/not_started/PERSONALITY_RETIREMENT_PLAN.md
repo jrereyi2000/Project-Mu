@@ -1,14 +1,14 @@
 # Project Mu: Retirement Decisions Plan
 
-**Status:** proposal, awaiting JR's direct review (2026-10-31). PLAN ONLY; no implementation or activation authorized.
-**JR decisions (2026-11-03; supersede conflicting text below):** (1) every persona named after a real person (writers, GMs, coaches, players) is a fictional character inspired by that person and may hold views, moods and relationships formed from simulated events; the conservative real-person rules below (neutral private appraisal, scoped evidence permissions) no longer apply to them. (2) Existing players get engine-generated profiles once at the 2026 start (not researched); prospects at draft-class entry; JR can edit any profile. (3) Existing real coaches get reviewed profiles shaped to their real counterparts (separate workstream). (4) The relationships plan owns trust; trust is one-way; promises use `promise_made`/`promise_resolved`. (5) Migration dates are reserved in PERSONALITY_PLAN §5.3. See PERSONALITY_PLAN §5 step 3, §5.1 and D8–D13.
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); not built. Approval covers building the units; save experiments, migration and each activation still need JR's separate go-ahead (§2.6 gates G4–G6).
+**JR decisions this plan follows (2026-11-03, PERSONALITY_PLAN §5.1, D8–D13):** every player has a generated profile (the 2026 roster at the league start, prospects at class entry), editable by JR; players named after real people are fictional characters inspired by them. Earned attachment comes from the relationships plan, which owns one-way trust.
 **Builds on:** PROJECT_SPEC §2.17b–d, §3.3m, §3.3q, §6.0b; [V2 core](../done/V2_CORE_BUILD_PLAN.md) U13; [core API](../../personality/README.md); [effect design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md). The separately owned [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02) supplies earnings inputs: `engines/career_earnings.py` (`earned_shares`, three-state `is_secure`, PROJECT_SPEC §2.17e).
 
 **Goal:** Give Mu a reproducible, explainable annual retirement policy, starting with a neutral baseline. Keep willingness to play, contract acceptance and retirement execution consistent. Prove save authority before replacing Madden's choices.
 
 **Delivers:** proposed neutral policy, career state machine, audit sidecars, offline preview and default-deny edit planner. All functions and files in §2 are proposals, not claims of existing behavior. Production wiring requires a separately reviewed U13 integration.
 
-Mu starts in 2026, controls CPU teams through 2033, and JR takes over in 2034. Only this plan is changed. No database access, executable launch, migrations, seeding, save writes, coefficients, commits or agents are part of drafting. JR's plan-first review order overrides the proposal skill's ask-first order; consolidated spec edits are deferred to §7.
+Mu starts in 2026, controls CPU teams through 2033, and JR takes over in 2034. Drafting involved no database access, executable launch, migrations, seeding, save writes or coefficients; consolidated spec edits are deferred to §7.
 
 ## 0. Survey (code facts that set the scope)
 
@@ -67,9 +67,9 @@ evaluate_annual(ctx, policy, *, features_enabled=False) -> RetirementDecision
 - Opportunity includes existing legal contract, usable role, real offer IDs, acceptance results from the contract owner, roster legality, stage and market coverage. Need alone is not an offer. No offers before market opening is not rejection.
 - Career includes verified seasons, tenure and achievements. Earnings shape: `{known_cap_share: str|null, coverage, secure: bool|null, source_version: str|null, source_ids: [...]}`. Partial low earnings do not prove insecurity. A lower bound can prove security only under the earnings owner's reviewed rule. Face value is not earned money; earnings are not net worth.
 - Goal shape: `{goal_id, kind: record|title|role, target_id, current_value, target_value, projected_range, confidence, coverage, source_ids}`. Reachability needs a documented production/role scenario. Tied, surpassed, unreachable and unknown are distinct. Missing record coverage disables the term.
-- Attachment contains versioned tenure, meaningful relationships, role satisfaction, treatment and unresolved breaches. Never friend counts. Hometown remains separate and initially unused here.
+- Attachment contains versioned tenure, meaningful relationships, role satisfaction, treatment and unresolved breaches, from the relationships plan's `relationship_context` (the player's own one-way view of his team). Never friend counts. Hometown remains separate and initially unused here.
 
-Baseline snapshots work without core, earnings or relationship integration. Use a verified universe/immutable player key for replay; absent or ambiguous identity blocks. Core aliases later bind that same person without redrawing. Do not infer generated origin from SAVE provenance or an unfamiliar name. Optional adapters consume explicit versioned snapshots rather than importing unapproved interfaces.
+Baseline snapshots work without core, earnings or relationship integration. Use a verified universe/immutable player key for replay; absent or ambiguous identity blocks. Core aliases later bind that same person without redrawing. Origin comes from the lifecycle plan (every player is generated), never from SAVE provenance or a name. Optional adapters consume explicit versioned snapshots rather than importing unapproved interfaces.
 
 ### 2.2 Neutral baseline before modifiers
 
@@ -85,7 +85,7 @@ Optional adjustment is one bounded aggregate log-odds delta, with base/final pro
 
 Legacy Builder requires a reachable recorded goal and usable opportunity; it never suppresses retirement risk to zero. Coasting alone never triggers retirement; defer numeric effect without a distinct reviewed career-preference mechanism. Strong ring preference requires established career evidence, achieved financial security and usable contender role together; unknown earnings disables it, and elite OVR is no substitute. Earned attachment is team-specific, can weaken after mistreatment, and does not guarantee a contract or lifelong loyalty. Allocate attachment once across career willingness/contract utility to avoid double counting.
 
-Read only core fields permitted for `retirement`. Real-person unsupported motives remain neutral. Both populations may evolve from canonical simulated events through the core; this engine does not mutate profiles. A missing profile is neutral; schema/storage/corruption error blocks effects-enabled finalization. A labelled neutral preview may still be shown.
+Read only core fields permitted for `retirement`; every player is generated, so that is his full profile. Every player may evolve from canonical simulated events through the core; this engine does not mutate profiles. A missing profile is neutral; schema/storage/corruption error blocks effects-enabled finalization. A labelled neutral preview may still be shown.
 
 ### 2.4 Seeded annual review and one career state machine
 
@@ -113,7 +113,7 @@ Persistence APIs `reserve_contract(cur, decision_id, offer_id, expected_revision
 
 ### 2.5 Persistence, migration, idempotency and rollback
 
-Proposed migration `db/migrations/2027_01_26_retirement_policy.sql`; filename provisional, recheck before build. Baseline requires V2 schema, not persona migration.
+Migration `db/migrations/2027_01_26_retirement_policy.sql` (reserved in PERSONALITY_PLAN §5.3; recheck at build). Baseline requires V2 schema, not persona migration.
 
 - `career_decision_states`: `universe_id TEXT`, `person_key TEXT`, `earned_season INT`, `player_id INT REFERENCES players(id)`, `state TEXT` checked against §2.4, `revision INT CHECK >=0`, `decision_id UUID UNIQUE`, `reservation JSONB NULL`, `updated_at TIMESTAMPTZ`; PK `(universe_id,person_key,earned_season)`.
 - `retirement_policy_events`: `event_id UUID PRIMARY KEY`, `decision_id UUID REFERENCES career_decision_states(decision_id)`, `checkpoint TEXT`, `event_kind TEXT`, `source_event_id TEXT`, `request_hash TEXT`, `input_snapshot JSONB`, `policy_snapshot JSONB`, `draw_hex TEXT`, `breakdown JSONB`, `before_state JSONB`, `after_state JSONB`, `created_at TIMESTAMPTZ`; unique `(decision_id,source_event_id)`.
@@ -171,7 +171,7 @@ Run `.venv/bin/python -m pytest -m "not integration" tests/test_retirement_polic
 
 ## 5. Work breakdown
 
-Shared orchestrator files: PROJECT_SPEC.md, this plan, CLAUDE.md. No unit edits core, earnings, other plans or active progression files. Units describe future work, not current delegation authorization.
+Shared orchestrator files: PROJECT_SPEC.md, this plan, CLAUDE.md. No unit edits core, earnings, other plans or active progression files.
 
 ### U0: Authority/interface inventory
 - **Owns:** `docs/reference/RETIREMENT_AUTHORITY.md` (new).
@@ -205,7 +205,7 @@ Shared orchestrator files: PROJECT_SPEC.md, this plan, CLAUDE.md. No unit edits 
 - **Owns:** `engines/retirement_store.py`, `db/migrations/2027_01_26_retirement_policy.sql`, `db/init_db.sql`, `tests/test_retirement_store.py` (new except init_db).
 - **Reads:** §2.5, core transaction patterns, firewall and U13 receipts.
 - **Depends on:** U1, U2.
-- **Done when:** replay/reservations/receipts and schema checks pass offline/scratch tests; no auto-application. Recheck migration name and serialize init_db ownership with active chats first.
+- **Done when:** replay/reservations/receipts and schema checks pass offline/scratch tests; no auto-application. Recheck migration name; `db/init_db.sql` is also edited by the inbox, press conference, scouting, trade-talks, lifecycle and salary-cap-growth plans, so U4 re-reads it and merges after whichever lands first.
 - **Verify:** focused pure store tests plus explicitly configured isolated-schema migration/CAS tests pass.
 
 ### U5: Guarded planner and preview
@@ -219,7 +219,7 @@ Shared orchestrator files: PROJECT_SPEC.md, this plan, CLAUDE.md. No unit edits 
 
 | Wave | Units | Needs first | Reason |
 |---|---|---|---|
-| 0 | U0 | JR direct review | Inventory design-changing authority gaps. |
+| 0 | U0 | JR approval (done 2026-11-03) | Inventory design-changing authority gaps. |
 | 1 | U1, U2 | U0 | Independent policy and state files. |
 | 2 | U3, U4 | U1; U4 also U2 | Context/controls and persistence share no files. |
 | 3 | U5 | U1, U2, U3 | Compose pure preview and guarded planning. |
@@ -264,13 +264,13 @@ Parent/orchestrator coordinates these; no shared spec edit in this planning task
 
 ## 8. Decisions for JR
 
-Recommendations remain unresolved pending direct review. Plan review does not automatically authorize building.
+JR approved all four recommendations on 2026-11-03.
 
-| # | Design-changing question | Recommendation |
+| # | Design-changing question | Decision (JR, 2026-11-03) |
 |---|---|---|
 | Q1 | Should Mu ultimately restore native retirees and retire native-active players, or only restore initially? | Design both actions; enable restoration first after proof. Retire-active stays unsupported until its own contract/cap/history test passes. Preview only if neither is proven. |
 | Q2 | From 2034, should JR's team get a review hold, and what if unanswered at rollover? | Hold irreversible retirements for review and stop advance until resolved. Explicit overrides audited; no forced contract acceptance. |
 | Q3 | May someone who wants to continue but has no acceptable offer remain unsigned next season? | Yes when preservation is proven; otherwise block rollover for review, not invented retirement/signing. Reuse annual draw, no weekly rerolls. |
 | Q4 | What unlocks baseline calibration and later modifiers? | Synthetic/state work first; recorded retirement cohorts with cut/unsigned censoring and position/age uncertainty before baseline activation. Separate matched-control review for modifiers; no numerical coefficients approved now. |
 
-Present this plan and questions, then wait for JR's direct review. Do not implement, spawn agents or automatically continue after drafting or approval; this assigned chat remains planning-only unless JR directly changes its scope.
+Plan approval does not authorize save experiments, migration or activation; those are gates G4–G6.

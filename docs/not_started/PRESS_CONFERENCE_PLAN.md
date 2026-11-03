@@ -489,7 +489,7 @@ Player pressers would add `select_player_subjects(sheet, team_id, n=3)` (the gam
 | R8 | Copyright of real transcripts. | — | Raw transcripts stay in `data/press_corpus/` (gitignored by `data/*`). Only derived statistics and the taxonomy are committed. No transcript text goes into prompts (D8). |
 | R9 | Coach personality is neutral until coach profiles are switched on, so AI coaches sound alike. | Read a dry week. | The profile (schemes, tendencies, tenure, hot seat) and the result already set different situations. Real personality comes when coach profiles are switched on (D5). |
 | R10 | V2.9's `Kind` protocol changes in its revision. | U8 reads the built code first. | `press.py` is one small file. |
-| R11 | Migration date: V2.10/V2.11 may also choose `2027_01_20`; the relationships plan reserves `2027_01_18_personality_relationships.sql`. | `ls db/migrations` at U6. | This plan keeps `2027_01_20` (coordinator, D12); a sibling takes the next. |
+| R11 | Migration date: V2.10/V2.11 may also choose `2027_01_20`; the relationships plan reserves `2027_01_27_personality_relationships.sql`. | `ls db/migrations` at U6. | This plan keeps `2027_01_20` (coordinator, D12); a sibling takes the next. |
 
 **Spike first (before wave 2; part of U1, about half a day):**
 1. Collect at least 40 real postgame coach pressers (§4 U1 sources) and measure questions per presser, follow-up rate, question length, and share by type, split by win, loss and blowout loss.
@@ -732,7 +732,7 @@ All decided by JR, 2026-11-03.
 | D9 | Wrong numbers in JR's answers get a warning only; his quote stands and writers get the recorded figure. |
 | D10 | Cross-plan (personality plan §4.7, §5.1; relationships plan §0b). The relationships plan owns trust. Each appraised answer is a `meaningful_interaction` event; being skipped, cut off or stood up is a `treatment` event, in that plan's §2.2 envelope, appended through `personality/relationship_store.append_events`. Until that plan is built, the events wait in `press_attendees.judgment` in the same shape. This plan computes no trust; its bounds are suggested starting values for that plan's policy. Prompts read trust only through `relationship_context` once it exists, and are neutral before. Nothing writes `persona_relationships`. |
 | D11 | Cross-plan. Trust is one-way: nothing reads a reporter's trust as the coach's view, and legacy tags (GRUDGE, FAVOURITE, …) are not read. Until coaches have profiles and their own views, an AI coach's pick has no relationship input (only his pick and skip history and neutral guidance). Real coaches will get reviewed profiles of their real counterparts (personality plan D11), and coach → reporter views arrive through the relationships plan into `coach_pick`'s `coach_views` slot. Coach voice stays neutral until those profiles exist (D5). |
-| D12 | Cross-plan. The relationships plan reserves migration `2027_01_18_personality_relationships.sql`; this plan's stays `2027_01_20_press_conferences.sql`. |
+| D12 | Cross-plan. The relationships plan reserves migration `2027_01_27_personality_relationships.sql`; this plan's stays `2027_01_20_press_conferences.sql`. |
 | D13 | Cross-plan (JR, 2026-11-03, PERSONALITY_PLAN D12–D13). Reporters named after real writers (Schefter, Barnwell, …) are fictional characters inspired by them, so their appraisals and views are allowed like any persona's. Real coaches appraise once their reviewed profiles exist. |
 
 **Still open** (each has a working value in the plan; none blocks wave 1):

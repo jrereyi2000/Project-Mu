@@ -1,7 +1,7 @@
 # Project Mu: Player Dissatisfaction and Trade Requests Plan
 
-**Status:** proposal, awaiting JR's direct review (2026-10-31). Plan only; no implementation authorized.
-**JR decisions (2026-11-03; supersede conflicting text below):** (1) every persona named after a real person (writers, GMs, coaches, players) is a fictional character inspired by that person and may hold views, moods and relationships formed from simulated events; the conservative real-person rules below (neutral private appraisal, scoped evidence permissions) no longer apply to them. (2) Existing players get engine-generated profiles once at the 2026 start (not researched); prospects at draft-class entry; JR can edit any profile. (3) Existing real coaches get reviewed profiles shaped to their real counterparts (separate workstream). (4) The relationships plan owns trust; trust is one-way; promises use `promise_made`/`promise_resolved`. (5) Migration dates are reserved in PERSONALITY_PLAN §5.3. See PERSONALITY_PLAN §5 step 3, §5.1 and D8–D13. For this plan: broken promises arrive from V2.9 inbox role talks in the relationships plan's promise format; Madden's all-32-user setting is separate from Project Mu's `user_teams`, which is the source of truth for JR's teams.
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); not built. Approval covers building the units; production policy, migration and activation each still need JR's separate go-ahead (§6 gates G3–G5).
+**JR decisions this plan follows (2026-11-03, PERSONALITY_PLAN §5.1, D8–D13):** every player has a generated profile (the 2026 roster at the league start, prospects at class entry), editable by JR; players named after real people are fictional characters inspired by them. The relationships plan owns one-way trust, and its `promise_made`/`promise_resolved` records (including promises from V2.9 inbox role talks) are this plan's broken-promise source.
 **Builds on:** PROJECT_SPEC §2.17, §2.17a–d, §3.3f, §7.11; [PERSONALITY_PLAN.md](../in_progress/PERSONALITY_PLAN.md) §4.6–4.8, §5.2; [PERSONALITY_GENERATED_EFFECTS_DESIGN.md](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §3–5.
 
 **Goal:** Give players a persistent, explainable way to request a move after verified sustained dissatisfaction, and to reconcile when the cause is repaired. Preserve JR's control and existing GM valuation, legality and execution. A request records a desired outcome; it does not execute a trade.
@@ -12,7 +12,7 @@
 - `tools/player_trade_request_preview.py`: synthetic JSON review without database access.
 - Proposed relationship/reaction and contract-policy interfaces, with production integration explicitly deferred.
 
-JR's instructions settle the chronology: Madden starts in 2026, Mu manages the CPU league through 2033, JR takes over in 2034. This is not permission to invent retrospective history or initialize production profiles. Recommendations below remain open for direct review.
+Chronology: Madden starts in 2026, Mu manages the CPU league through 2033, JR takes over in 2034. That is not permission to invent retrospective history; this plan initializes no profiles.
 
 ## 0. Survey (code facts that set the scope)
 
@@ -20,7 +20,7 @@ Source inspection on 2026-10-31 in `/home/jrereyi/Project-Mu`. Existing tracked 
 
 | # | Fact (file:line) | Consequence |
 |---|---|---|
-| S1 | `personality/core.py:38–54` derives identity from universe/role/immutable birth key; `:144–163` returns feature-scoped views, missing profiles neutral and real fields evidence-filtered. | Use `feature_view(profile, 'trade_requests')`; no name/team/OVR identity or unsupported private motivations. |
+| S1 | `personality/core.py:38–54` derives identity from universe/role/immutable birth key; `:144–163` returns feature-scoped views, missing profiles neutral and real fields evidence-filtered. | Use `feature_view(profile, 'trade_requests')`; no name/team/OVR identity. Players are all generated, so the view is the full profile. |
 | S2 | `personality/store.py:35–61` reads without seeding and detects external changes; `:119–142` owns verified aliases. | Require verified identity binding. This feature never initializes/adopts profiles. |
 | S3 | `personality/store.py:145–184` audits explicit evolution; `personality/core.py:166–223` limits changes by revision and season. | Request state is separate feature state, not a trait mutation or use of the annual evolution slot. |
 | S4 | `db/migrations/2027_01_16_personality_core.sql:8–42` supplies profile/alias/event sidecars. `personality/README.md` explicitly says no production ingestion hook or franchise migration was applied. | Core API availability is not feature activation. Binding, producer and migration gates remain. |
@@ -32,14 +32,14 @@ Source inspection on 2026-10-31 in `/home/jrereyi/Project-Mu`. Existing tracked 
 | S10 | Generated-effects design `:70–95` describes request-only effects and annual decisions; personality plan `:159–165` retains old grudge-discount prose. | Follow later design; coordinator reconciles obsolete prose in §7. Illustrative odds are not calibration. |
 | S11 | `tests/conftest.py:1–12` describes DB isolation; `_check_connection_allowed` rejects franchise/archive connections. | Synthetic tests and isolated scratch schemas only; never napper wholesale. |
 
-Related plans inspected: the [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02) owns pricing, earnings and the slider band; do not edit or duplicate it. `AGENT_WIRE_VOICE_PLAN.md` owns writer biases, not player treatment truth. No player relationship/reaction plan was present at inspection. Recheck before build; later interfaces are dependencies to reconcile, not approved facts. No proposed request function is claimed to exist today.
+Related plans inspected: the [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02) owns pricing, earnings and the slider band; do not edit or duplicate it. `AGENT_WIRE_VOICE_PLAN.md` owns writer biases, not player treatment truth. The [relationships plan](PERSONALITY_RELATIONSHIPS_PLAN.md) (approved 2026-11-03, not built) supplies incidents, promises and repair; its interfaces are dependencies to reconcile before build. No proposed request function is claimed to exist today.
 
 ## 1. Scope
 
 **In:**
 - Persistent lost role, broken recorded promises and verified adverse treatment; consume shared assessments without copying relationship/mood state.
 - Annual/window deduplication, deterministic choices, reconciliation, disclosure, user control, factual statuses and audit.
-- Neutral event baseline for both real/generated people; only scoped traits modify it. Unknown inputs never create grudges.
+- Neutral event baseline for every player; only scoped traits modify it. Unknown inputs never create grudges.
 - Offline baseline/personality comparison and isolated persistence checks; no live wiring.
 
 **Out (non-goals):**
@@ -68,9 +68,9 @@ Define frozen dataclasses with schema-v1 JSON serialization in `engines/player_t
 
 Incident kinds: `LOST_ROLE|BROKEN_PROMISE|TREATMENT`; states: `OPEN|REPAIRED|DISPUTED|UNKNOWN`; severity: `MATERIAL|SEVERE|UNKNOWN`; disclosure: `PRIVATE|PUBLIC_VERIFIED`. Shared relationship/reaction owner groups repeated observations into one incident, certifies duration/severity/repair and owns that ledger. This feature stores decision snapshots/references only. Conflicting source IDs mapped to different incidents reject the batch pending reconciliation. Do not add trust, mood, attachment or grudge counters here.
 
-A promise requires recorded maker/recipient/commitment/due condition and verified breach in the producer ledger. Prose, losing games, perceived unfairness or missing role data cannot establish a breach. Completeness means all eligible observations in the interval are accounted for; unavailable assessments are deferred, not interpreted as happiness or hostility.
+A promise is a relationships-plan `promise_made` (issuer, beneficiary, measurable criterion, due time) and a breach its `promise_resolved` with `resolution='broken'`; V2.9 inbox role talks are the first producer. Prose, losing games, perceived unfairness or missing role data cannot establish a breach. Completeness means all eligible observations in the interval are accounted for; unavailable assessments are deferred, not interpreted as happiness or hostility.
 
-Use existing `feature_view(profile, 'trade_requests')`. Persist filtered view and core/catalogue/profile versions in receipts. Missing/unknown profile gives neutral event baseline; unsupported real-person fields stay neutral. A storage/schema/corruption error blocks persisted evaluation rather than silently substituting a profile. Both real/generated people can respond to actual recorded simulated events; neither population receives invented history. No request action changes a profile.
+Use existing `feature_view(profile, 'trade_requests')`. Persist filtered view and core/catalogue/profile versions in receipts. Missing/unknown profile gives neutral event baseline. A storage/schema/corruption error blocks persisted evaluation rather than silently substituting a profile. Every player, real-inspired or not, responds to actual recorded simulated events; nobody receives invented history. No request action changes a profile.
 
 ### 2.2 Pure interfaces and policy
 
@@ -132,7 +132,7 @@ Check team/identity, chronology and expected revision on every new action. Exact
 
 `request_projection(..., audience='FRONT_OFFICE')` returns ID, identity/team, factual status, response, actionable, visibility, as-of checkpoint and safe reason codes. Authorized audit view can inspect private evidence separately. `audience='PUBLIC'` returns `None` for private/voided episodes and otherwise only disclosed facts. Never expose hidden traits, probability/draw, relationship scores or private promises to writers. Public closure requires a disclosure update; until then mark prior public facts as dated, not current. Private withdrawal stays private.
 
-In 2026–2033 use simulated team authority where configured. From JR's 2034 takeover, Mu may simulate the player's decision while JR chooses team response and transactions. Other CPU teams remain simulated. `suggestions_on=false` suppresses GM proposal/advice, not authorized truthful request inbox state. Ignoring/dismissing a card is not treatment. Unknown authority blocks automated responses. Temporary ALLUSER Madden operation must be mapped explicitly to Mu decision authority; do not treat temporary save flags as proof all clubs are JR-managed.
+In 2026–2033 use simulated team authority where configured. From JR's 2034 takeover, Mu may simulate the player's decision while JR chooses team response and transactions. Other CPU teams remain simulated. `suggestions_on=false` suppresses GM proposal/advice, not authorized truthful request inbox state. Ignoring/dismissing a card is not treatment. Unknown authority blocks automated responses. Madden keeps all 32 teams as user teams (ALLUSER) to stop CPU moves; that flag is not authority. The franchise registry's `user_teams` (V2.9 inbox D6) is the source of truth for which teams JR controls.
 
 Future GM handoff: `{request_id, persona_id, team_id, status, cause_codes, actionable}`. A later owner may consider an ordinary search using existing budget/rejection cooldown/valuation/legality. V1 exports a signal only; no `gm_trade_engine.py` edits. No guaranteed destination or deadline, price discount or universal player veto. Any NTC consent workflow belongs to legality owner; a request never waives a clause.
 
@@ -142,7 +142,7 @@ Earned attachment remains tenure/meaningful relationships/role/treatment, never 
 
 ### 2.6 Persistence, migration, replay and rollback
 
-Proposed migration `db/migrations/2027_01_25_player_trade_requests.sql`; inspected next date is free but not reserved. Coordinator checks collisions before build and renames references consistently. Do not edit core/legacy migrations.
+Migration `db/migrations/2027_01_25_player_trade_requests.sql` (reserved in PERSONALITY_PLAN §5.3); coordinator rechecks collisions at build and renames references consistently. Do not edit core/legacy migrations.
 
 - `player_trade_request_decisions`: `universe_id TEXT, persona_id VARCHAR(64), season INTEGER, decision_id UUID UNIQUE, input_hash TEXT, policy_version TEXT, seed_algorithm TEXT, draw DOUBLE PRECISION CHECK(draw>=0 AND draw<1), receipt JSONB`; PK universe/persona/season. Only annual REQUEST/NO_REQUEST rows, never deferred reservations.
 - `player_trade_requests`: `request_id UUID PRIMARY KEY, decision_id UUID UNIQUE REFERENCES player_trade_request_decisions(decision_id), universe_id TEXT, persona_type VARCHAR(32) CHECK(persona_type='player'), persona_id VARCHAR(64), team_id INTEGER REFERENCES teams(team_id), opened_season INTEGER, revision INTEGER CHECK(revision>=0), status TEXT` (checked enum above), `state JSONB`. Composite FK to core profiles; validate matching universe through locked core read. Partial unique universe/persona where ACTIVE. Verify actual teams PK name before migration. Do not require a temporary roster row to live forever.
@@ -164,18 +164,18 @@ Rollback: disable feature and future scheduling; retain/export audit. Never reve
 
 | # | Risk or unknown | How we find out | If it goes wrong |
 |---|---|---|---|
-| R1 | Player role/promise/treatment producers have no approved shared contract yet. | Prebuild interface review with relationship/reaction owner and complete/missing/disputed fixture examples. | Build pure offline policy only; no local inference or duplicate relationship ledger. |
+| R1 | The shared role/promise/treatment contract is approved in the relationships plan but not built. | Prebuild interface review with relationship/reaction owner and complete/missing/disputed fixture examples. | Build pure offline policy only; no local inference or duplicate relationship ledger. |
 | R2 | Annual opportunity misses a serious later incident after NO_REQUEST. | Q1 plus multi-window synthetic cases. | Keep explicit v1 limit; any exception requires versioned reviewed budget, never weekly retries. |
-| R3 | Temporary ALLUSER flags conflate interaction control and authority. | Trace owning settings with 2026/2034/manual-stage fixtures. | Unknown authority blocks responses/advice automation. |
+| R3 | Madden's ALLUSER flag gets mistaken for JR's authority. | Fixtures read authority from `user_teams` across 2026/2034/manual stages. | Unknown authority blocks responses/advice automation. |
 | R4 | Trial odds/trait mapping/duration produce arbitrary volume. | Fixed-draw sensitivity grid; report eligibility denominator separately from requests by origin/window/trait. | No invented target rate; JR selects production policy before activation. |
 | R5 | Consumers amplify one incident or feed request back into treatment. | Shared contribution-key review and synthetic cross-consumer test. | No request-as-incident; incident modifiers blocked without deduplication. |
 | R6 | Concurrent migrations/core/interfaces drift. | Recheck Git/files and pin accepted contracts before dispatch. | Coordinator reconciles; never stage unrelated work automatically. |
 
-**Spike first:** Coordinator interface/source review, estimated half a day before wave 1: clock semantics, incident grouping/repair, real simulation scope, verified identity aliases, actual team PK and authority/contribution IDs. Record agreed example payloads here at review. No DB access needed. Failure blocks activation, not permission to duplicate producer state.
+**Spike first:** Coordinator interface/source review, estimated half a day before wave 1: clock semantics, incident grouping/repair, verified identity aliases, actual team PK and authority/contribution IDs. Record agreed example payloads here at review. No DB access needed. Failure blocks activation, not permission to duplicate producer state.
 
 ## 4. Tests (synthetic, no live DB)
 
-- `tests/test_player_trade_requests.py`: role/breach/treatment duration, injury/bye/gap exclusions, disputed/unknown inputs, neutral real/generated event baseline and scoped trait rules; seed test vectors, no stacking, errors visible, annual/window/team deduplication, carryover, disabled no effects. Lifecycle covers one-game repair versus persistent repair, new promise insufficient, refusal not withdrawal, approved/rejected/expired deal not executed trade, employment closure, corrections/replay, privacy/stale public facts and ignored inbox not treatment.
+- `tests/test_player_trade_requests.py`: role/breach/treatment duration, injury/bye/gap exclusions, disputed/unknown inputs, neutral event baseline and scoped trait rules; seed test vectors, no stacking, errors visible, annual/window/team deduplication, carryover, disabled no effects. Lifecycle covers one-game repair versus persistent repair, new promise insufficient, refusal not withdrawal, approved/rejected/expired deal not executed trade, employment closure, corrections/replay, privacy/stale public facts and ignored inbox not treatment.
 - `tests/test_player_trade_request_store.py`: isolated synthetic schema; repeat/incompatible migration, annual/window uniqueness, concurrent claims, conflicting replay, historical receipts after later revisions, forced rollback after each write, caller transaction retained, role/universe/binding isolation, mixed rewind rejection. Opt-in `mu_scratch_*` DSN only, never automatic fixture provisioning from franchise DB.
 - `tests/test_player_trade_request_preview.py`: byte-identical reports, disabled neutral equality, shadow without external writes, malformed/out-of-order inputs, 2026–2034/ALLUSER authority examples. Same incident presented through role/breach aliases counts once. Contract stub receives relationship + request + trait context and charges that incident once; request layer adds zero utility penalty. Clearly label this a handoff contract test, not production contract integration.
 
@@ -210,7 +210,7 @@ Shared coordinator files, never unit-owned: `PROJECT_SPEC.md`, this plan, `CLAUD
 
 | Wave | Units | Needs merged first | Why together |
 |---|---|---|---|
-| 0 | Coordinator spike and JR decisions | Direct review | Fix producer/control contracts before build; no automatic continuation. |
+| 0 | Coordinator spike | JR approval (done 2026-11-03) | Fix producer/control contracts before build. |
 | 1 | U1 | Wave 0 | Coherent pure policy/lifecycle. |
 | 2 | U2, U3 | U1 | Disjoint persistence/harness files, both consume U1. |
 
@@ -229,7 +229,7 @@ Shared coordinator files, never unit-owned: `PROJECT_SPEC.md`, this plan, `CLAUD
 
 Every path appears once. No unit owns relationship/core/contract/GM shared files.
 
-**Gates:** G0 JR review + interface reconciliation; G1 disabled exact neutral control and pure tests; G2 persistence/replay/repair/privacy tests pass; G3 JR reviews sensitivity and chooses production policy; G4 separately scoped identity/producer/scheduler/control/contract integration proves neutral controls and incident deduplication; G5 explicit migration/activation authorization for a selected franchise/checkpoint. U1–U3 do not deliver G4/G5. No live integration or migration application is in these waves.
+**Gates:** G0 JR approval (done 2026-11-03) + interface reconciliation; G1 disabled exact neutral control and pure tests; G2 persistence/replay/repair/privacy tests pass; G3 JR reviews sensitivity and chooses production policy; G4 separately scoped identity/producer/scheduler/control/contract integration proves neutral controls and incident deduplication; G5 explicit migration/activation authorization for a selected franchise/checkpoint. U1–U3 do not deliver G4/G5. No live integration or migration application is in these waves.
 
 ## 7. Spec changes when built
 
@@ -240,18 +240,18 @@ Parent coordinator consolidates these; this planning chat edits none:
 - §2.17a/b/d: context-only contract handoff and shared incident deduplication; no active extension refusal claimed.
 - §3 schema: new subsection assigned by coordinator; §3.3o currently describes League Memory, so do not overwrite it. Document feature tables and actual migration status.
 - Repository Layout: new modules, migration, preview, tests/reference guide and proposal entry. No API/frontend endpoint in v1.
-- PERSONALITY_PLAN §4.6–4.8, §5.2, §6 and generated-effects design §3/§5: producer ownership, real/generated simulated events, no grudge discount, annual/repair/privacy boundaries and deferred consequences. Consolidate 2026–2033/2034 chronology. Replace illustrative odds only after policy review.
+- PERSONALITY_PLAN §4.6–4.8, §5.2, §6 and generated-effects design §3/§5: producer ownership, simulated events for every player, no grudge discount, annual/repair/privacy boundaries and deferred consequences. Consolidate 2026–2033/2034 chronology. Replace illustrative odds only after policy review.
 - The cap-relative plan is built; its SQL constraint migration (`2027_01_17_persona_slider_band.sql`) exists. This feature never edits that work.
 
 ## 8. Decisions for JR
 
-Recommendations remain unresolved; delegation is not approval.
+JR approved all four recommendations on 2026-11-03.
 
-| # | Question | Recommendation |
+| # | Question | Decision (JR, 2026-11-03) |
 |---|---|---|
 | Q1 | Keep one first-qualified annual draw even if another serious incident occurs after NO_REQUEST? | Yes for v1: four eligible games of lost role, two observations after breach/treatment, two for repair; no immediate severe-incident exception. Review odds/durations offline before activation. |
 | Q2 | Begin privately, with reporting only after verified disclosure? | Yes. Authorized front-office facts for JR; writers get dated, explicitly disclosed facts only. No automatic leak probability. |
-| Q3 | Simulate player decisions and show factual requests on JR teams when suggestions are off? | Yes. Suggestions off suppresses GM advice/proposals; JR controls response and transactions. Require explicit temporary ALLUSER authority mapping. |
+| Q3 | Simulate player decisions and show factual requests on JR teams when suggestions are off? | Yes. Suggestions off suppresses GM advice/proposals; JR controls response and transactions. JR's teams come from `user_teams`, not Madden's ALLUSER flag. |
 | Q4 | Include numeric extension unwillingness or GM search activation in this first build? | No. Deliver request/reconciliation state and offline evidence first; owning policies integrate later with incident deduplication and separate activation review. |
 
-**Review boundary:** Present this draft/questions and wait for JR's direct review. Do not implement, migrate, seed, activate, commit, push, delegate or automatically continue after drafting. Approval of the document does not override the explicit clarification-review-before-implementation instruction.
+**Review boundary:** plan approval sets no production policy and applies no migration; those are gates G3–G5.

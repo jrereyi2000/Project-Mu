@@ -1,14 +1,14 @@
 # Project Mu: Personality Contract Policy Plan
 
-**Status:** proposal, awaiting JR's direct review (2026-10-31). PLAN ONLY. No build, migration, seeding or activation performed.
-**JR decisions (2026-11-03; supersede conflicting text below):** (1) every persona named after a real person (writers, GMs, coaches, players) is a fictional character inspired by that person and may hold views, moods and relationships formed from simulated events; the conservative real-person rules below (neutral private appraisal, scoped evidence permissions) no longer apply to them. (2) Existing players get engine-generated profiles once at the 2026 start (not researched); prospects at draft-class entry; JR can edit any profile. (3) Existing real coaches get reviewed profiles shaped to their real counterparts (separate workstream). (4) The relationships plan owns trust; trust is one-way; promises use `promise_made`/`promise_resolved`. (5) Migration dates are reserved in PERSONALITY_PLAN §5.3. See PERSONALITY_PLAN §5 step 3, §5.1 and D8–D13. For this plan: existing players' contract preferences come from their generated profiles rather than staying neutral.
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); not built. Approval covers building the units; production migration, seeding and activation each still need JR's separate go-ahead (§2.6).
+**JR decisions this plan follows (2026-11-03, PERSONALITY_PLAN §5 step 3, §5.1, D8–D13):** every player has an engine-generated profile (existing players once at the 2026 start, prospects at draft-class entry), and JR can edit any of them; the relationships plan owns one-way trust and the promise format.
 **Builds on:** PROJECT_SPEC §2.17a–b, §2.17d, §3.3p, §4.6b; [core README](../../personality/README.md); [personality plan](../in_progress/PERSONALITY_PLAN.md); [generated effects design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md); [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02).
 
-**Goal:** Let persistent, permitted personality affect voluntary contract decisions through bounded, explainable feature policy. Preserve existing pricing and legal authority. Support Mu's 2026–2033 CPU league and JR's 2034 takeover without redrawing returning people or inventing real people's private motivations.
+**Goal:** Let persistent, permitted personality affect voluntary contract decisions through bounded, explainable feature policy. Preserve existing pricing and legal authority. Support Mu's 2026–2033 CPU league and JR's 2034 takeover. Every player's contract preferences come from his stored generated profile from the first offseason on, and returning people are never redrawn.
 
 **Delivers:** a pure contract policy, explicit core/earnings/relationship adapters, common scoring through counters and markets, CPU voluntary-deal integration, immutable decision receipts, factual event outputs, signed UI explanations and an offline comparison report.
 
-All new symbols below are **proposed**, unless §0 identifies them as existing. Numerical settings are offline trials, not calibrated facts. Unapproved concurrent interfaces remain dependencies to reconcile. This chat owns only this plan. The parent coordinates shared spec references. The `/propose` template and completed draft-round-trades plan supply the house style; JR's plan-first review order overrides ask-first and automatic execution instructions.
+All new symbols below are **proposed**, unless §0 identifies them as existing. Numerical settings are offline trials, not calibrated facts. Unapproved concurrent interfaces remain dependencies to reconcile. The parent coordinates shared spec references. The `/propose` template and completed draft-round-trades plan supply the house style.
 
 ## 0. Survey (code facts that set the scope)
 
@@ -23,7 +23,7 @@ Inspected canonical `/home/jrereyi/Project-Mu` on 2026-10-31. Read root AGENTS.m
 | S5 | `transactions_engine.py:298` plans re-signs; `:342` contains independent test-market randomness; `:380` proposes extensions on team surplus. Neither invokes player utility. `:426` builds FA offers, `:497` market needs, `:509` signings from decisions. | CPU voluntary deals require explicit integration; team value/pricing remain separate. |
 | S6 | `server/franchise_api.py:945` builds score context; `:964–:968` scores/accepts. `:1176` handles FA offers, `:1267` contract proposals, `:443` inserts offers. | One authoritative adapter must serve both UI routes, with receipts in the offer transaction. |
 | S7 | `Mu_Network/src/types/franchiseMarket.ts:43` describes zero persona. `components/franchise/FreeAgencyModule.tsx:126` renders weighted parts; `:136` draws only positive persona; `:8` documents reuse by Contract Room. | Negative adjustments need signed explanation and correct rendering in both reused result paths. |
-| S8 | `personality/core.py:144` feature_view filters real fields by exact permission and makes missing profiles neutral. `store.py:35` reads; `:136` resolves aliases; `:85` explicitly initializes. | Consume feature_view(profile, 'contracts'); never call ensure or newsroom.personas.get_persona on a feature read. Corruption/schema errors propagate. |
+| S8 | `personality/core.py:144` feature_view filters real fields by exact permission and makes missing profiles neutral. `store.py:35` reads; `:136` resolves aliases; `:85` explicitly initializes. | Consume feature_view(profile, 'contracts'); never call ensure or newsroom.personas.get_persona on a feature read. Corruption/schema errors propagate. Every player is `generated` origin (the lifecycle plan initializes the 2026 roster and each class), so the view is his full stored profile; the core's `real`-origin evidence filter never applies to players. |
 | S9 | `core.py:166` validates explicit changes; `store.py:145` persists them. `2027_01_16_personality_core.sql:8,21,30` defines profiles, aliases and audit events. | Consume identity/revision; do not duplicate evolution or trust math. Core exists but live ingestion is not connected and production profiles/migrations were not applied. |
 | S10 | `2027_01_09_personas.sql:21` contains chk_persona_sliders_budget requiring exactly 30; `core.py:136` records current bounds. | Superseded 2026-11-02: the cap-relative plan built the 24–36 band in Python and SQL (`2027_01_17_persona_slider_band.sql`, applied to `madden_test`); `core.py` picks up the new bounds. Single-slider evolution works where the migration is applied; this feature changes neither. |
 | S11 | Built 2026-11-02: `engines/career_earnings.py` provides `earned_shares` and the three-state `is_secure` (True / False / None at 0.15 of a cap; PROJECT_SPEC §2.17e). Generated design §2/refinement describes trial capped effects and earned attachment. | Reuse those earnings semantics; no parallel earnings threshold/ledger. Build against the implemented API. |
@@ -52,7 +52,7 @@ def validate_contract_context(context: dict) -> None: ...
 def contract_personality_delta(parts: dict, view: dict, context: dict, config: dict) -> dict: ...
 ```
 
-Parts are unrounded financial/opportunity/contention/scheme floats from the existing scorer. View is exactly core's contracts feature view, never an unfiltered real profile. Result: `{terms:{ambition,attachment,home,grudge}, raw_delta, capped_delta, cap_applied, gates:dict, reasons:list[str], policy_version}`. Grudge term is signed negative. Reject NaN/infinity and invalid configuration.
+Parts are unrounded financial/opportunity/contention/scheme floats from the existing scorer. View is exactly core's contracts feature view (for a player, his full generated profile, including any revision JR has edited). Result: `{terms:{ambition,attachment,home,grudge}, raw_delta, capped_delta, cap_applied, gates:dict, reasons:list[str], policy_version}`. Grudge term is signed negative. Reject NaN/infinity and invalid configuration.
 
 Config fields: `version:str`, `mode:'off'|'shadow'|'active'`, `ambition_enabled:bool`, `relationship_enabled:bool`, `coefficient:float`, `aggregate_cap:float`, `contender_floor:float`, `attachment_bonus:{none,weak,established,strong:float}`, `home_bonus:float`, `grudge_penalty:float`. Numbers are finite/nonnegative; coefficient strictly below min(W_DEFAULT.money,W_DEFAULT.team). Config is server-owned; a client cannot enable it.
 
@@ -82,7 +82,7 @@ def load_contract_context(cur, *, universe_id, player_id, alias_namespace,
 def evaluate_voluntary_contract(league, ctx, player, contract, *, contract_inputs, seed) -> dict: ...
 ```
 
-First returns `(view, context)` through resolve_alias/read/feature_view. No initialization. Alias namespace is verified by ingestion; never assume roster ID equals pgid. Dependencies supply read-only `career(player_id,as_of)`, `security(player_id,as_of)`, `relationships(persona_id,team_ids,as_of)` adapters producing the above shapes. These are requested contracts, not claims those providers exist. Earnings/relationship owners must reconcile them. Cache only within frozen batch/as-of/revision.
+First returns `(view, context)` through resolve_alias/read/feature_view. No initialization. Alias namespace is verified by ingestion; never assume roster ID equals pgid. Dependencies supply read-only `career(player_id,as_of)`, `security(player_id,as_of)`, `relationships(persona_id,team_ids,as_of)` adapters producing the above shapes. The relationships adapter reads the player's own one-way view of each team from the relationships plan's `relationship_context`, which owns trust, attachment and breaches; this plan never reads the team's view of the player as his. These are requested contracts, not claims those providers exist. Earnings/relationship owners must reconcile them. Cache only within frozen batch/as-of/revision.
 
 Career trial recommendation: four completed accrued seasons from verified history (Q2), independent of age/OVR. Security exclusively consumes `career_earnings.is_secure` (built); unknown is inactive. Exclude proposed deal/future promised salary from already-earned security. No duplicate earnings cutoff here.
 
@@ -124,7 +124,7 @@ Server _score loads authoritative context once for both FA and RESIGN/EXTENSION 
 
 FreeAgencyModule's reused UtilityBar/NegotiationResult shows base contributions, signed adjustment, final utility and bar. Negative delta cannot disappear or become negative CSS width. Labels can exceed 1; any chart clipping is presentation only. ContractRoom consumes the reused component without a second implementation. Missing/review-disabled context shows neutral reason, not invented badges.
 
-Reserve proposed migration `db/migrations/2027_01_23_contract_personality_policy.sql`; recheck name at build:
+Migration `db/migrations/2027_01_23_contract_personality_policy.sql` (reserved in PERSONALITY_PLAN §5.3; recheck at build):
 
 | Table | Exact columns and keys |
 |---|---|
@@ -136,7 +136,7 @@ Snapshot includes permitted view/revision/catalogue version, source/provider ver
 
 New `engines/personality_contract_store.py`: `record_contract_decision(cur,receipt)->dict`, `read_contract_decision(cur,universe_id,decision_id)->dict|None`, `enqueue_contract_events(cur,receipt,facts)->list[str]`, `read_contract_activation(cur,universe_id)->dict`. Caller owns transaction; no commits. Stable IDs identify actual negotiation attempts/batches, not player-season. Same ID/hash returns original; changed hash conflicts. Handle unique-conflict races by reread/hash verification. Receipt, offer status and outbox writes are atomic; previews/dry runs calculate in memory only.
 
-Emit factual events at their actual lifecycle: CONTRACT_OFFER_SUBMITTED, CONTRACT_RESPONSE_RECORDED, CONTRACT_EXECUTED, CONTRACT_INSTRUMENT_APPLIED. Payload v1: `{event_id,source_decision_id,universe_id,player_persona_id,team_id,gm_persona_id|null,as_of,offer_id|null,terms,market_reference,response,execution_id|null}`. Consumers dedupe event_id. Submitted/accepted UI offers are not executed contracts. No preview event. Do not emit LOWBALL, trust delta, promise breach or automatic grudge: relationship owner classifies facts under its own approved policy. Projected role is not a promise; future commitments require canonical promise_id and fulfillment evidence.
+Emit factual events at their actual lifecycle: CONTRACT_OFFER_SUBMITTED, CONTRACT_RESPONSE_RECORDED, CONTRACT_EXECUTED, CONTRACT_INSTRUMENT_APPLIED. Payload v1: `{event_id,source_decision_id,universe_id,player_persona_id,team_id,gm_persona_id|null,as_of,offer_id|null,terms,market_reference,response,execution_id|null}`. Consumers dedupe event_id. Submitted/accepted UI offers are not executed contracts. No preview event. Do not emit LOWBALL, trust delta, promise breach or automatic grudge: relationship owner classifies facts under its own approved policy. Projected role is not a promise; a commitment counts only as a relationships-plan `promise_made` with its `promise_resolved` (for example from a V2.9 inbox role talk).
 
 ### 2.6 Migration, neutral controls, activation and rollback
 
@@ -145,7 +145,7 @@ Emit factual events at their actual lifecycle: CONTRACT_OFFER_SUBMITTED, CONTRAC
 3. Additive scratch migration first; apply twice and check actual schema compatibility rather than relying only on IF NOT EXISTS. No backfill, seeds or import-time migration. Production migration requires separate authorization.
 4. Gate: exact old arithmetic/results/seeds off and neutral, shadow baseline equality, counter consistency, legal controls, receipts/replay and every available caller. Future league-office execution seam must meet the same contract before production activation.
 5. Paired seeded synthetic cohorts through 2034: report signed delta/cap saturation, threshold/ranking flips, counter changes, salary/cap-share distributions, team/player concentration, missing/profile/security/context rates and family activation. No invented acceptable percentages; JR reviews distributions and sets tolerances/config after evidence.
-6. Possible first activation is ambition-only for verified generated identities under explicit universe/version record. Relationships remain independently disabled until reviewed. Real-person fields require exact contracts evidence permission. CPU voluntary/UI routes activate together after parity; absent runner/identity integration blocks production readiness.
+6. Possible first activation is ambition-only for verified player identities (the whole 2026 roster and every class, all generated) under explicit universe/version record. Relationships remain independently disabled until reviewed. CPU voluntary/UI routes activate together after parity; absent runner/identity integration blocks production readiness.
 7. Rollback sets mode off for new decisions. Never overwrite historical receipts or reverse signed contracts by rescoring. Cancel unexecuted batches via existing owner and use new batch IDs. Preserve tables/outbox audit. Actual execution rollback requires paired save/DB checkpoint restoration; disabling effects cannot undo signings. Dropping audit data is separately authorized destructive work.
 
 ## 3. Risks and unknowns
@@ -154,17 +154,17 @@ Emit factual events at their actual lifecycle: CONTRACT_OFFER_SUBMITTED, CONTRAC
 |---|---|---|---|
 | R1 | Ring eligibility discontinuity and popularity inside existing contention. | Sweep below/at/above .70 with F above/below C; compare certification/continuous gate. | JR revises gate before build; no silent baseline contention rewrite. |
 | R2 | Proposed earnings uses reconstructed APY rather than verified cash, incomplete history. | Review dependency coverage/as-of/double-counting tests. | Unknown/inadequate evidence disables strong effect; no local approximation. |
-| R3 | Relationship tier/breach/home APIs unapproved. | Reconcile source-backed outputs and event deduplication with owner. | Disable family; no interim trust math. |
+| R3 | Relationship tier/breach/home outputs are approved in the relationships plan but not built, and its first increment is evidence-only (its Q1). | Reconcile source-backed outputs and event deduplication with owner. | Disable family; no interim trust math. |
 | R4 | CPU extension representation and test-market lottery diverge from UI. | Pure extension/counter seam spike and baseline traces. | Block active rollout until faithful representation and Q3 review. |
 | R5 | Noise overwhelms small deltas; rounding flips boundaries. | Paired draws, raw/final receipt traces and boundary tests. | Review settings separately; no anecdotal demo calibration. |
-| R6 | Concurrent cap owner edits shared transactions/market files. | Ownership review before build/merge. | Merge owner work first or explicitly reassign whole file; no simultaneous ownership. |
+| R6 | Other plans edit the same files: `SALARY_CAP_GROWTH_PLAN` (transactions, franchise API) and the approved V2.9 inbox, press conference, scouting and trade-talks plans (`server/franchise_api.py`, `tests/test_franchise_api.py`). | Ownership review before build/merge. | Those land first; re-read the files and merge after them; no simultaneous ownership. |
 | R7 | Execution runner/IDs unavailable. | Source seam inventory before build and wiring. | External activation gate; no invented save writer or readiness claim. |
 
 **Spike first:** implementation orchestrator, estimated half-day, source/offline only: monotonicity gate alternatives; incremental extension/counter representation; current runner/caller/migration inventory; earnings/relationship interface and cross-plan ownership review. Any formula/CPU semantics change returns to JR before wave 1. No database calibration or migration spike.
 
 ## 4. Tests (synthetic, no live DB)
 
-- `tests/test_personality_contract_policy.py`: bounded terms/stacking/pairwise bound, fixed-gate monotonicity and cross-gate discontinuity; finite config checks; missing/neutral/scoped real views; valid full generated profiles; secure veteran role player versus elite insecure youngster; attachment/home separation and breach/unknown gates; no unsupported trait/slider effects or final U clamp.
+- `tests/test_personality_contract_policy.py`: bounded terms/stacking/pairwise bound, fixed-gate monotonicity and cross-gate discontinuity; finite config checks; missing/neutral views; full generated profiles for existing players and prospects alike, including a JR-edited revision; secure veteran role player versus elite insecure youngster; attachment/home separation and breach/unknown gates; no unsupported trait/slider effects or final U clamp.
 - `tests/test_contract_policy_context.py`: fake providers/cursor; aliases/as-of/revision/universe; no get_persona/ensure; storage failure propagation; frozen security independent of offers; faithful incremental extension representation.
 - `tests/test_contract_policy_store.py`: opt-in explicit madden_test fresh-schema transactions only; migration twice and incompatible schema; replay/conflict/race; rollback between offer/receipt/outbox; no commits; durable snapshot after profile change/archive. Missing/unsafe DSN refuses integration tests. No default live/archive connection.
 - Existing `tests/test_free_agency_engine.py`: exact off/shadow baseline; scoring/ranking/bar/counter context; stale score; repeated identical seed/order and documented permutation sensitivity; hard backup rejection and street/UDFA.
@@ -179,7 +179,7 @@ Proposed CLI: `python3 -m tools.personality_contract_policy_report --input tests
 
 ## 5. Work breakdown
 
-Shared files, parent/orchestrator only: PROJECT_SPEC.md, this plan, CLAUDE.md. Exclusive ownership below is within this plan; reconcile cross-plan shared files first. No work is dispatched by this drafting chat.
+Shared files, parent/orchestrator only: PROJECT_SPEC.md, this plan, CLAUDE.md. Exclusive ownership below is within this plan; reconcile cross-plan shared files first.
 
 ### U1: Pure policy and offline evidence
 
@@ -217,7 +217,7 @@ Shared files, parent/orchestrator only: PROJECT_SPEC.md, this plan, CLAUDE.md. E
 
 | Wave | Units | Needs merged first | Reason |
 |---|---|---|---|
-| 0 | Spikes and design reconciliation | JR direct plan review | Resolve formula/CPU semantics and cross-plan seams. |
+| 0 | Spikes and design reconciliation | JR approval (done 2026-11-03) | Resolve formula/CPU semantics and cross-plan seams. |
 | 1 | U1, U2 | Fixed §2 contracts | Disjoint pure/report and persistence files. |
 | 2 | U3 | U1, U2 (cap-relative already on main) | One owner for shared engine/transactions edits. |
 | 3 | U4 | U3 | Settled scoring/receipts feed HTTP/UI. |
@@ -257,18 +257,18 @@ Parent coordinates these; this task does not edit shared spec/plans.
 - §3.3d/§3.3p: receipt/outbox/activation tables, core identity/provenance boundary, historical snapshots, no implicit seeding/evolution; correct stale rollout descriptions without claiming production application.
 - §4.6b/§5.2: optional explanation, authorized receipt endpoint, stale-preview handling and signed reused result UI.
 - §6/running instructions: off/shadow/active, unavailable execution dependency, synthetic CLI, migration/rollback, 2026–2033 CPU and 2034 JR timeline.
-- §7.11: profile/catalogue availability is not activation; real scoped permissions; relationship event ownership; no money-to-work-ethic inference.
+- §7.11: profile/catalogue availability is not activation; players read as generated profiles; relationship event ownership; no money-to-work-ethic inference.
 - Repository Layout: new modules/tool/migration/tests/fixture listed in §6; parent coordinates plan index/status references.
 
 ## 8. Decisions for JR
 
-No clarification answers assumed. Only design-changing questions remain:
+JR approved all four recommendations on 2026-11-03.
 
-| # | Question | Recommendation |
+| # | Question | Decision (JR, 2026-11-03) |
 |---|---|---|
 | Q1 | Affect ranking and acceptance thresholds, or ranking only? | Both with unchanged base bars/hard rules, so counters reflect willingness. k=.10/cap=.08 stays offline trial pending cohort review. |
 | Q2 | Career and contender eligibility, including the hard .70 discontinuity? | Trial four completed accrued seasons plus approved earned security=True and usable role; frozen independent contender certification per batch. Review gate spike before fixing production semantics; no OVR shortcut. |
 | Q3 | Replace active CPU unrestricted test-market lottery with shared player acceptance/counters? | Yes in active mode; exact baseline lottery in off/shadow, statutory instruments preserved. Activate CPU/UI together after parity. |
 | Q4 | Must relationship effects activate with ambition? | Build adapters now, ambition-first activation after evidence review; attachment/home/grudge stay disabled until owner supplies reviewed source-backed outputs. No local trust substitute. |
 
-Plan review is not migration, seed or activation approval. Stop after drafting and await JR's direct review. Do not automatically invoke implementation, including after relayed approval.
+Plan approval is not migration, seed or activation approval; those stay separate JR decisions (§2.6).

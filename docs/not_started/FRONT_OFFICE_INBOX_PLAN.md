@@ -18,7 +18,7 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - A **counterpart** is the agent on the other side of a thread.
 
 **Delivers:**
-- Tables `controlled_personas`, `inbox_threads`, `inbox_messages`, `inbox_relationship_events` (the event outbox) and `team_vision` (migration `db/migrations/2027_01_19_front_office_inbox.sql`, folded into `db/init_db.sql`; the relationships plan reserves `2027_01_18_personality_relationships.sql`, and this one stays `2027_01_19`).
+- Tables `controlled_personas`, `inbox_threads`, `inbox_messages`, `inbox_relationship_events` (the event outbox) and `team_vision` (migration `db/migrations/2027_01_19_front_office_inbox.sql`, folded into `db/init_db.sql`; the relationships plan reserves `2027_01_27_personality_relationships.sql`, and this one stays `2027_01_19`).
 - Package `engines/inbox/`, each module with one job:
   - `actors.py`: which personas JR controls;
   - `store.py`: threads, messages and `jr_statements`;

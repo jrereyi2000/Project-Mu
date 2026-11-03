@@ -1,14 +1,13 @@
 # Project Mu: Relationships and Reactions Plan
 
-**Status:** proposal, awaiting JR's direct review (2026-10-31). Plan only. No implementation, migrations, profiles or effects authorized by this artifact.
-**JR decisions (2026-11-03; supersede conflicting text below):** (1) every persona named after a real person (writers, GMs, coaches, players) is a fictional character inspired by that person and may hold views, moods and relationships formed from simulated events; the conservative real-person rules below (neutral private appraisal, scoped evidence permissions) no longer apply to them. (2) Existing players get engine-generated profiles once at the 2026 start (not researched); prospects at draft-class entry; JR can edit any profile. (3) Existing real coaches get reviewed profiles shaped to their real counterparts (separate workstream). (4) The relationships plan owns trust; trust is one-way; promises use `promise_made`/`promise_resolved`. (5) Migration dates are reserved in PERSONALITY_PLAN §5.3. See PERSONALITY_PLAN §5 step 3, §5.1 and D8–D13. For this plan: Q2 is settled (appraisal is permitted for every persona, real-inspired included), and the V2.9 inbox and V2.2 press conferences are consumers that record appraisal events (§0b).
+**Status:** approved by JR (2026-11-03): Q2 settled by his cross-plan decisions, Q1, Q3 and Q4 as recommended (§8); not built. Approval covers building the units; production migration, intake and enabling numeric trust each still need JR's separate go-ahead (§6 gates).
 **Builds on:** PROJECT_SPEC §3.3p, §7.11; [Personality plan](../in_progress/PERSONALITY_PLAN.md) §4.6–4.8 and §5.2; [Generated effects design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md); `personality/README.md`.
 
 **Goal:** Preserve how people experience other people and organizations across the 2026–2033 CPU simulation and JR's 2034 takeover. Give consumers explainable directional trust, earned attachment and transient reactions from recorded events. Core retains identity and profile mutation authority; each feature retains its decisions and formulas.
 
 **Delivers (proposed, not existing):** `personality/relationship_events.py`, `relationships.py`, `reactions.py`, `relationship_store.py`, `relationship_preview.py`; an additive feature migration; focused offline tests. No live ingestion or consumer activation.
 
-JR requested plans before clarification review. Recommendations below are unresolved, not approved. This chat writes only this plan; the parent coordinates spec edits. No subagents, database access, migrations, seeds, commits or effects were used. AGENTS.md was read through WSL because PowerShell could not follow its link. Canonical source is `/home/jrereyi/Project-Mu`, never Downloads.
+The parent coordinates spec edits. The survey used no database access, migrations, seeds or effects. Canonical source is `/home/jrereyi/Project-Mu`.
 
 ## 0. Survey (code facts that set the scope)
 
@@ -26,6 +25,7 @@ JR requested plans before clarification review. Recommendations below are unreso
 | S10 | `tests/conftest.py:1–13` documents DB isolation/provisioning; `personality/README.md` documents opt-in isolated core tests and no production migration. | Pure fixtures and manually provisioned empty scratch schemas only. Never provision tests by cloning live/archive DBs. |
 | S11 | `PROJECT_SPEC.md:1206` describes different relationship columns, warmth and -100..100 trust; actual SQL is S4. `personality/core.py:15` omits the spec's unsupported media role. | Parent corrects these discrepancies during consolidated spec work. No core role extension here. |
 | S12 | The [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02) delivered earnings/security (`engines/career_earnings.py`) and the slider band, separately owned. No other personality plan file was present in that folder at survey. | Build against the implemented earnings API (PROJECT_SPEC §2.17e); do not duplicate pricing/earnings/band work. |
+| S13 | `db/migrations/2027_01_18_writer_voice.sql` and `newsroom/relationships.py` (AGENT_WIRE_VOICE U1, built 2026-11-03) add `persona_relationships.evidence` and seed, grow and decay writer biases toward people in the legacy table; `tests/test_relationships.py` tests them. | `2027_01_18` and that test path are taken: this plan's migration is `2027_01_27` and its trust tests are `tests/test_personality_relationships.py`. Writer biases stay the newsroom's legacy store (as the inbox plan's S10 treats them); this plan neither adopts nor dual-writes them (Q4). |
 
 Read AGENTS.md/CLAUDE.md, relevant spec sections, personality README/core/store/core migration, both required personality designs, proposal skill/template, and completed `docs/done/team_management/06_DRAFT_ROUND_TRADES_PLAN.md`. Survey is source-only; no claim about live schema or deployed profiles. Concurrent dirty progression, dossier, images, scripts, JSON and PRE_PC_WORK_2 movement remain untouched.
 
@@ -35,14 +35,14 @@ Settled while reviewing the V2 plans; they bind this plan's design:
 - **This plan owns trust.** The V2.9 inbox and V2.2 press conferences record events here instead of writing `persona_relationships`: a conversation exchange or a presser answer is a `meaningful_interaction` (outcome and significance from the listening agent's own appraisal, with its reason in the payload); being skipped, cut off or stood up by a declined presser is a `treatment`. The agent's appraisal is evidence; this plan's reviewed policy turns events into trust. The bounds those plans proposed (inbox 0.03 per exchange, 0.06 per promise; press ±0.03 per answer, ±0.08 per presser) are starting points for that policy, not separate calculations.
 - **Promises** made in inbox role talks use `promise_made` / `promise_resolved` as defined in §2.2 (issuer, beneficiary, measurable criterion such as a depth-chart slot by a week, due time; resolution read from the actual depth chart).
 - **Trust is one-way.** No consumer reads a relationship as mutual or adopts legacy tags automatically. A coach has his own views of reporters, players and his GM once coaches have profiles.
-- **Real coaches will get reviewed profiles** (personality plan §5.1, D11), and every real-inspired persona may hold appraisals (Q2 settled, personality plan D13). Existing players get generated profiles at the 2026 start (D12), so their appraisals are allowed too.
-- Migration re-reserved as `2027_01_18_personality_relationships.sql` (personality plan §5.3).
+- **Every persona may hold appraisals** (Q2, personality plan D13). Personas named after real people (writers, GMs, coaches, players) are fictional characters inspired by them. Existing players get generated profiles at the 2026 start and prospects at class entry (D12); real coaches get reviewed profiles from a separate workstream (D11) and have views of their own once those exist.
+- Migration reserved as `2027_01_27_personality_relationships.sql` (personality plan §5.3; `2027_01_18` went to the writer-voice migration, S13).
 
 ## 1. Scope
 
 **In:** canonical deduped interactions; directional trust; tenure/role coverage; meaningful ties; promises and organizational treatment; uncertainty, attribution, decay/repair; transient mood; explanations/previews; persistence through seasons; separate reviewed evolution candidates.
 
-**Out:** contract utility/prices/security, trade requests or execution, retirement, ratings/form, save writes, newsroom publication, production ingestion/scheduling, profile seeding, real-person research, legacy adoption, hidden work ethic/coachability axes. Hometown is familiarity, never earned loyalty. Quiet is not low confidence; money preference is not low effort; elite OVR is not financial security. No global league event bus: preserve external canonical IDs in a feature-specific intake.
+**Out:** contract utility/prices/security, trade requests or execution, retirement, ratings/form, save writes, newsroom publication, production ingestion/scheduling, profile seeding, researching real people (the coach-profile workstream owns reviewed coach profiles), legacy adoption, hidden work ethic/coachability axes. Hometown is familiarity, never earned loyalty. Quiet is not low confidence; money preference is not low effort; elite OVR is not financial security. No global league event bus: preserve external canonical IDs in a feature-specific intake.
 
 ## 2. Design
 
@@ -134,7 +134,7 @@ Numeric contract when reviewed: one unique source contributes once per edge/doma
 
 Attachment is a conjunction of evidence dimensions, not a sum. Every positive tier requires covered tenure plus affirmative role/treatment evidence. Established/strong also require meaningful connection evidence and stronger reviewed criteria. Strong requires all strong criteria. An unresolved material organizational breach blocks established/strong despite long tenure. Missing required dimensions yields unknown/ineligible, not weak by default. Complete history without qualifying attachment yields none. Repeated support may establish significance but never multiplies by number of friends. `LOYAL` cannot create history. Hometown familiarity cannot satisfy any attachment criterion. Consumers decide whether a verified tier matters to a specific decision.
 
-Real people may accumulate verified simulation facts. Private appraisal (resentment, satisfaction, forgiveness, consequential attachment) requires scoped review; absent permission expose factual discrepancy/breach, keep private reaction neutral and attachment ineligible. Unknown origin stays neutral until core classification. Public evidence can establish a narrow reviewed starting tie, never invented past simulation events. Generated people still need recorded context; traits alone are insufficient.
+Every persona, real-inspired or not, accumulates verified simulation facts and may form private appraisal from them (resentment, satisfaction, forgiveness, consequential attachment): a player named after a real person is a fictional character with a generated profile, and his appraisal works like anyone else's. Unknown origin (an unresolved identity) stays neutral until core classification. A reviewed real-coach profile may supply a narrow starting tie with `basis='reviewed_evidence'`, never invented past simulation events. Appraisal still needs recorded context; traits alone are insufficient.
 
 ### 2.4 Reactions and mood
 
@@ -142,17 +142,17 @@ Reaction shape: `{reaction_id,subject,target,source_ids,domain,tag,started_at,ex
 
 Recommended priority: serious unresolved treatment/promise; sustained role frustration; current job/injury uncertainty; transition; achievement/team result; neutral. One primary plus at most two noncontradictory secondary tags. Within priority sort approved severity, recency, then source ID. Same-domain conflicting reactions become mixed; explain suppressed candidates. Celebration can remain secondary without erasing breach. Labels: `neutral`, `frustrated`, `uncertain`, `encouraged`, `eager`, `mixed`. None is the Confidence slider.
 
-Team loss/injury does not prove resentment/anxiety/determination. First increment uses evidence-only appraisals; personality-dependent intensity/lifetime needs an approved policy and scoped view. No request odds, sit-outs, ratings, work-ethic effects or automatic trait changes. Public writer context contains public facts and explicitly authorized fictional interior context only. Private simulation state cannot become a sourced quote or real-person allegation. Full audit is JR-only. Target relevance filters relationship context.
+Team loss/injury does not prove resentment/anxiety/determination. First increment uses evidence-only appraisals; personality-dependent intensity/lifetime needs an approved policy and scoped view. No request odds, sit-outs, ratings, work-ethic effects or automatic trait changes. Public writer context contains public facts plus the fictional interior context its `visibility` allows. Private simulation state belongs to the fictional character: it never becomes a sourced quote, and never a claim about the real person he was inspired by. Full audit is JR-only. Target relevance filters relationship context.
 
 ### 2.5 Durable evolution candidates
 
-`validate_evolution_candidate` accepts explicit core candidate fields (`event_id,source_event_id,season,expected_revision,rule_version,reason,kind` plus trait add/remove or slider/step), `review_status:'pending'|'approved'`, reviewer, feature_scope and supporting_source_ids. Return `{status:'review_required'|'ready'|'blocked',candidate,reasons,support}`. Check subject, cutoff, active sources, nonduplicate support and real-person simulation evidence requirements. No automatic event→trait inference or core mutation call ships here.
+`validate_evolution_candidate` accepts explicit core candidate fields (`event_id,source_event_id,season,expected_revision,rule_version,reason,kind` plus trait add/remove or slider/step), `review_status:'pending'|'approved'`, reviewer, feature_scope and supporting_source_ids. Return `{status:'review_required'|'ready'|'blocked',candidate,reasons,support}`. Check subject, cutoff, active sources, nonduplicate support and, for `real`-origin (reviewed coach) profiles, the core's simulation-evidence requirement. No automatic event→trait inference or core mutation call ships here.
 
 Later authorized adapter may submit ready candidates to `store.change`; core annual/revision/conflict checks remain final. Review may choose no change. Trust/repair never uses the annual slot. Single-slider candidate reports `blocked_slider_band` only on a database that lacks `2027_01_17_persona_slider_band.sql` (Python and SQL both carry the band since 2026-11-02). Trait candidates can be reviewed under current budget. Keep ephemeral mood outside profile revision and store.
 
 ### 2.6 Persistence, idempotency and rollback
 
-Proposed free-at-survey filename: `db/migrations/2027_01_18_personality_relationships.sql`; reserve/recheck with concurrent owners before build. No core schema edits, legacy dual-write or `init_db.sql` changes. Add:
+Migration `db/migrations/2027_01_27_personality_relationships.sql` (reserved in PERSONALITY_PLAN §5.3; recheck at build). No core schema edits, legacy dual-write or `init_db.sql` changes. Add:
 
 - `persona_relationship_batches`: `universe_id TEXT,head BIGINT,expected_head BIGINT,batch_hash TEXT,receipt JSONB,created_at TIMESTAMPTZ`; PK universe/head; unique universe/batch_hash. Serialized universe batch head starts at 1.
 - `persona_relationship_events`: `universe_id TEXT,source_event_id TEXT,facet_key TEXT,event_id TEXT,head BIGINT,occurred_season INT,occurred_tick INT,schema_version TEXT,payload_hash TEXT,envelope JSONB,created_at TIMESTAMPTZ`; PK universe/source/facet; unique universe/event/facet; FK universe/head to batches. Facet hashes subject/target/kind. Checks nonnegative tick, positive head, supported schema/object envelope. Index universe/season/tick.
@@ -181,7 +181,7 @@ Consumers use `relationship_context`: tier/eligibility, role coverage, relevant 
 | R3 | Trust/tier/decay criteria uncalibrated. | Fictional matched scenarios and parameter sensitivity reports reviewed by JR. | Evidence-only output; no enabled numeric policy. |
 | R4 | Correction, relocation and concurrent ingestion misattribute treatment. | Scratch conflict/cutoff/lock tests and universe fixtures. | Atomic refusal; reviewed append correction. |
 | R5 | Full 2026–2034 replay expensive. | Synthetic 32-team multicohort benchmark reports time/memory/event count. | Separately design disposable checkpoints after profiling; no invented latency threshold. |
-| R6 | Private real-person appraisal or public leakage. | Scoped evidence/visibility fixtures. | Facts-only context, neutral private mood, ineligible attachment. |
+| R6 | Private appraisal leaks into public context, or a fictional appraisal reads as a claim about the real person. | Visibility fixtures and writer-context tests. | Private by default; public context only through `visibility`, framed as the fictional character's. |
 | R7 | Repair farming, long tenure or duplicated support masks bad treatment. | Adversarial scenario matrix and contribution explanations. | Breach blocks tiers; cap repair and dedupe occurrence. |
 
 **Spike first:** estimated half day before wave 1, implementer performs source-only review of actual applied-transaction receipts, role-window coverage, franchise identity and calendar; drafts synthetic trade, promise/repair and prospect→player envelopes. No DB access. Parent reconciles concurrent contracts. Revise intake if trustworthy mapping/time is unavailable. Numeric activation separately requires JR's policy/scenario review; spikes do not calibrate coefficients by assertion.
@@ -189,34 +189,34 @@ Consumers use `relationship_context`: tier/eligibility, role coverage, relevant 
 ## 4. Tests (synthetic, offline)
 
 - `tests/test_relationship_events.py`: schema/time validation, source facets and alias conflicts, cross-universe/self refs, relocation, correction cycles/order, authority/deadline/unknown outcome, overlapping intervals/calendar gaps.
-- `tests/test_relationships.py`: asymmetric trust, unknown versus zero, interval union, no friend count, moved mentor relevance, tier conjunction, hometown-only ineligible, long-tenure breach, bounded repair, no automatic forgiveness, policy saturation/decay and complete explanations.
-- `tests/test_reactions.py`: breach outranks celebration with secondary preserved, mixed/expiry/ties, no loss/injury stereotype, sparse real permissions, no core mutation, candidate retracted support and blocked slider band, off/observe neutral equality.
+- `tests/test_personality_relationships.py`: asymmetric trust, unknown versus zero, interval union, no friend count, moved mentor relevance, tier conjunction, hometown-only ineligible, long-tenure breach, bounded repair, no automatic forgiveness, policy saturation/decay and complete explanations.
+- `tests/test_reactions.py`: breach outranks celebration with secondary preserved, mixed/expiry/ties, no loss/injury stereotype, real-inspired generated players and reviewed coaches appraise like any persona, no core mutation, candidate retracted support and blocked slider band, off/observe neutral equality.
 - `tests/test_relationship_store.py`: fake-cursor unit failures and opt-in empty scratch schemas for repeat migration, canonical/transport conflicts, replay after newer head, concurrency, mid-batch rollback, no commit, historical cutoffs and real core identity validation.
 - `tests/test_relationship_preview.py`: deterministic CLI/diff/error exit, no DB/LLM/core writes, 2026 prospect→2034 continuity and aliases, synthetic stress/sensitivity reporting to caller-chosen output.
 
-Run `python3 -m pytest -m "not integration" tests/test_relationship_events.py tests/test_relationships.py tests/test_reactions.py tests/test_relationship_store.py tests/test_relationship_preview.py -q`. DB cases skip unless explicit `RELATIONSHIPS_TEST_DSN` targets manually provisioned empty `mu_scratch_relationships`, using isolated schema/rollback and firewall-compatible core test pattern. No automatic integration provisioning from live/archive DB, no napper wholesale. Skips alone do not satisfy persistence acceptance. No proposed tests have run: modules do not exist.
+Run `python3 -m pytest -m "not integration" tests/test_relationship_events.py tests/test_personality_relationships.py tests/test_reactions.py tests/test_relationship_store.py tests/test_relationship_preview.py -q`. DB cases skip unless explicit `RELATIONSHIPS_TEST_DSN` targets manually provisioned empty `mu_scratch_relationships`, using isolated schema/rollback and firewall-compatible core test pattern. No automatic integration provisioning from live/archive DB, no napper wholesale. Skips alone do not satisfy persistence acceptance. No proposed tests have run: modules do not exist.
 
 Neutral acceptance: off and observe return identical consumer context; profile hashes/revisions stay unchanged; no contracts/moves/ratings/form/morale outputs. Enabled cases change reviewed context only. Future consumers must independently demonstrate neutral equivalence and no duplicate rewards before their effects activate.
 
 ## 5. Work breakdown
 
-Shared parent-only files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`. Future unit assignments are not delegation authorization now. New sibling feature files require coordination with package-wide core ownership; no existing core files change.
+Shared parent-only files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`. New sibling feature files require coordination with package-wide core ownership; no existing core files change.
 
 ### U1: Canonical event contract
 
 - **Owns:** `personality/relationship_events.py`, `tests/test_relationship_events.py` (new).
 - **Reads:** core README/identity, actual SQL, §2.1–2.2 and spike findings.
-- **Depends on:** none; JR review and source spike precede coding.
+- **Depends on:** none; the source spike precedes coding.
 - **Done when:** normalized envelope/facet/source/time/correction/registry contracts fixed; no connections.
 - **Verify:** `python3 -m pytest -m "not integration" tests/test_relationship_events.py -q` passes.
 
 ### U2: Trust and attachment
 
-- **Owns:** `personality/relationships.py`, `tests/test_relationships.py` (new).
+- **Owns:** `personality/relationships.py`, `tests/test_personality_relationships.py` (new).
 - **Reads:** U1, core views, §2.3 and earned-attachment design refinement.
 - **Depends on:** U1.
 - **Done when:** pure directional state explains unknown coverage, breaches, repair, tiers and hometown; incomplete policy cannot enable numbers.
-- **Verify:** `python3 -m pytest -m "not integration" tests/test_relationships.py -q` passes.
+- **Verify:** `python3 -m pytest -m "not integration" tests/test_personality_relationships.py -q` passes.
 
 ### U3: Reactions and candidate validation
 
@@ -228,7 +228,7 @@ Shared parent-only files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`. Future unit
 
 ### U4: Persistence and additive migration
 
-- **Owns:** `personality/relationship_store.py`, `db/migrations/2027_01_18_personality_relationships.sql`, `tests/test_relationship_store.py` (new; migration name rechecked).
+- **Owns:** `personality/relationship_store.py`, `db/migrations/2027_01_27_personality_relationships.sql`, `tests/test_relationship_store.py` (new; migration name rechecked).
 - **Reads:** U1, core store/savepoints, actual prerequisite DDL, firewall, §2.6.
 - **Depends on:** U1.
 - **Done when:** atomic explicit-cursor append/read, original replay receipts and expected-head conflicts verified in empty scratch schema; no production runner.
@@ -246,7 +246,7 @@ Shared parent-only files: `PROJECT_SPEC.md`, this plan, `CLAUDE.md`. Future unit
 
 | Wave | Units | Needs merged first | Why together |
 |---|---|---|---|
-| 0 | Source-contract spike and JR review | — | Resolve design-changing questions and input reliability. |
+| 0 | Source-contract spike | — | Confirm input reliability. The V2.9 inbox builds first and queues relationship events in its own outbox; that outbox drains into U4's store once it exists. |
 | 1 | U1 | Wave 0 | Freeze shared contracts. |
 | 2 | U2, U3, U4 | U1 | Exclusive files; U3 uses frozen state fixtures, not U2 code. |
 | 3 | U5 | U2–U4 | Historical cross-module preview and neutral acceptance. |
@@ -257,7 +257,7 @@ Gates: G0 verified core identity/source contracts; G1 focused pure plus actual s
 
 | File | Unit |
 |---|---|
-| `db/migrations/2027_01_18_personality_relationships.sql` | U4 |
+| `db/migrations/2027_01_27_personality_relationships.sql` | U4 |
 | `personality/reactions.py` | U3 |
 | `personality/relationship_events.py` | U1 |
 | `personality/relationship_preview.py` | U5 |
@@ -266,27 +266,27 @@ Gates: G0 verified core identity/source contracts; G1 focused pure plus actual s
 | `tests/test_reactions.py` | U3 |
 | `tests/test_relationship_events.py` | U1 |
 | `tests/test_relationship_preview.py` | U5 |
+| `tests/test_personality_relationships.py` | U2 |
 | `tests/test_relationship_store.py` | U4 |
-| `tests/test_relationships.py` | U2 |
 
 ## 7. Spec changes when built (parent coordinates)
 
 - §1.1: new feature modules/tests/migration/plan layout; §1.2: offline preview command and scratch-only verification.
 - §3.3p: correct legacy relationship columns/scale/direction and unsupported roles from SQL; document feature ledger/batch/source constraints, cutoffs and retention without replacing core/legacy tables.
-- §7.11: canonical inputs, real-person scopes, unknown coverage, trust/attachment/home distinctions, reaction versus evolution, candidate export and off/observe/enable gates.
+- §7.11: canonical inputs, every persona (real-inspired included) may appraise, unknown coverage, trust/attachment/home distinctions, reaction versus evolution, candidate export and off/observe/enable gates.
 - §6 workflow: record future verified-outcome adapter requirements as unconnected; scheduling is separate work.
 - §2.21: reaffirm no mood→form/ratings/Madden morale writes, no new progression effect.
 - Parent reconciles old personality Warmth→loyal wording and automatic injury/benching mood shortcuts; the cap-relative exact-30 survey and both band changes are done (2026-11-02). No shared files edited here.
 
 ## 8. Decisions for JR
 
-These recommendations are unresolved. Existing constraints are not reopened.
+Decided by JR on 2026-11-03.
 
-| # | Design-changing question | Recommendation |
+| # | Design-changing question | Decision (JR, 2026-11-03) |
 |---|---|---|
 | Q1 | Evidence-only first increment, or an enabled numeric trust/decay/tier policy too? | Evidence-only observation first, with stable numeric seam and trial policies confined to offline fixtures. Review matched scenarios/sensitivity before adopting coefficients or tenure cutoffs. |
-| Q2 | Should recorded events automatically establish private appraisal for real people? | Store verified facts for everyone; require scoped reviewed appraisal for real-person private mood/consequential attachment. A factual lost role or broken recorded promise remains inspectable without asserting private feelings. |
+| Q2 | Should recorded events automatically establish private appraisal for real people? | Yes, for every persona (personality plan D13): real-inspired personas are fictional characters and appraise from recorded events like generated ones. Appraisal still needs recorded context, and private state stays private unless `visibility` allows it (§2.4). |
 | Q3 | Can apology alone restore trust/attachment? | Record acknowledgment immediately, but require corrective action plus subject acceptance/reconciliation for material breach closure; unknown acceptance remains open. |
 | Q4 | Replace/dual-write legacy relationship rows or keep feature history separate? | Separate additive ledger, no legacy dual-write. Future adapters target context API; legacy adoption needs explicit provenance review. |
 
-After direct JR review, revise the plan and reconcile input contracts with the parent. Stop here: no automatic continuation, implementation, migration, commit or activation.
+Plan approval does not apply the migration, start production intake or enable numeric trust; those are gates G2–G4.
