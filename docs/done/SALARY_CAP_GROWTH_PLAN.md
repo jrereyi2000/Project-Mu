@@ -1,9 +1,9 @@
 # Project Mu: Salary Cap Growth Plan
 
-**Status:** approved by JR (2026-11-02); building, wave 2 of 2 done.
+**Status:** built and on main (2026-11-03).
 - **As built (Wave 1):** In `pipeline/save_reader/pc_save_reader.mjs`, preserved `SalCapRosterSize` and `SalCapNextYearRosterSize` in `teams[].cap` so save-writer assertions in `release.test.mjs` and `sign.test.mjs` continue checking that roster moves only change roster counts.
 - **As built (Wave 1):** In `pipeline/load_save.py`, resolved merge conflict against commit `7081f81` by combining in-season draft pick rookie reserve estimation (`rookie_reserve_estimate`) with reader v6 `team_cap_seasons` ingestion (`load_team_caps`) and offseason reserve updates.
-**Builds on:** PROJECT_SPEC §2.17 (trade value, cap history), §2.17a (contracts engine), §2.17d (transactions engine), §2.21a (league office), §3.3d (`team_cap_seasons`), §4.6b (`/api/franchise`), §6.0b (PC save loader); [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (U3, U11, U13); [`CAP_RELATIVE_CONTRACTS_PLAN.md`](../done/CAP_RELATIVE_CONTRACTS_PLAN.md); [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) §4.11.
+**Builds on:** PROJECT_SPEC §2.17 (trade value, cap history), §2.17a (contracts engine), §2.17d (transactions engine), §2.21a (league office), §3.3d (`team_cap_seasons`), §4.6b (`/api/franchise`), §6.0b (PC save loader); [`V2_CORE_BUILD_PLAN.md`](V2_CORE_BUILD_PLAN.md) (U3, U11, U13); [`CAP_RELATIVE_CONTRACTS_PLAN.md`](CAP_RELATIVE_CONTRACTS_PLAN.md); [`LEAGUE_OFFICE_PLAN.md`](LEAGUE_OFFICE_PLAN.md) §4.11.
 
 **Goal:** Project Mu sets the league salary cap each offseason and keeps the PC save and PostgreSQL in sync. Today Madden sets `SalaryInfo.TeamSalaryCap` with a hardcoded 4-year schedule that stops growing from franchise year 5 onward, `pc_save_reader.mjs` and `load_save.py` never load `team_cap_seasons` (leaving database-backed engines on the 2024 `$255.4M` fallback), and `league_office.py` reads `SalaryInfo.TeamSalaryCap` without its `$120.0M` binary offset (`$181.2M` instead of `$301.2M`). This plan decodes Madden 27's cap fields, loads `team_cap_seasons` from every PC save, zeroes Madden's built-in cap schedule during league setup, and advances `SalaryInfo.TeamSalaryCap` and all 32 teams' cap rooms at `OFFSEASON_START` with `contracts_engine.next_cap`.
 
