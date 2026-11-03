@@ -244,6 +244,7 @@ Historical V2 feature IDs remain stable for older references. Entries marked **M
 Was: inject top Project Mu headlines into Madden's `NewsCenterArticle` and `NewsCenterArticleData` save tables so they show in Madden's menus. Dropped because JR never uses Madden's menus (status note at the top, §8): the headlines live in `Mu_Network`. Nothing was built.
 
 ### V2.2 Interactive Press Conferences (Not started)
+Plan proposed, awaiting JR's approval: [`PRESS_CONFERENCE_PLAN.md`](../not_started/PRESS_CONFERENCE_PLAN.md).
 Postgame press conferences where newsroom personas question JR based on real box-score events, scoring swings, and player usage. JR's answers become quotes in weekly articles and update reporter memories ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)). V2 owns the interactive surface; V3 owns downstream media generation and consumes those approved quotes.
 
 ### V2.3 Authentic Player Voices (Moved to V3)
@@ -270,15 +271,15 @@ All-game recaps use the shared weekly brief and game-specific evidence, subject 
 PostgreSQL-backed narrative search index ([`newsroom/league_memory.py`](../../newsroom/league_memory.py)) enabling journalists and agents to pull authentic historical callbacks ("last time Carolina won 5 straight was 2031").
 
 ### V2.9 Front-Office Inbox & Direct Conversations (Not started; not blocked)
-Can start with the personas that exist (GMs, writers); owners and scouts have catalogue odds but no profiles until [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phase 6, so they speak neutrally until then.
+Can start with the personas that exist (GMs, writers); owners and scouts have catalogue odds but no profiles until [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phase 6, so they speak neutrally until then. Plan proposed, awaiting JR's approval: [`FRONT_OFFICE_INBOX_PLAN.md`](../not_started/FRONT_OFFICE_INBOX_PLAN.md); it is the shared conversation surface the V2.2, V2.10 and V2.11 plans plug into, so it builds first.
 Interactive messaging system allowing JR to communicate with team owners, player agents, rival GMs, beat reporters, and college prospects.
 
 ### V2.10 Scouting Revamp & Combine Interviews (Not started; not blocked)
-Scout voices and regional biases need scout profiles (personality phase 6); reports and combine interviews can be built first with neutral scouts and prospect personalities added once [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../not_started/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) is approved and built.
+Scout voices and regional biases need scout profiles (personality phase 6); reports and combine interviews can be built first with neutral scouts and prospect personalities added once [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../not_started/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) is approved and built. Plan proposed, awaiting JR's approval: [`SCOUTING_REVAMP_PLAN.md`](../not_started/SCOUTING_REVAMP_PLAN.md).
 Comprehensive narrative reports for every draft prospect, individual scout voices with regional biases, and interactive combine/visit interviews.
 
 ### V2.11 Live Multi-Turn Trade Negotiations (Not started; unblocked)
-This is personality phase 5 (agentic GMs), whose needs are built: GM personalities (phase 3, `engines/gm_personas.py`, `engines/gm_negotiation.py`) and the league office's save moves (V2 core).
+This is personality phase 5 (agentic GMs), whose needs are built: GM personalities (phase 3, `engines/gm_personas.py`, `engines/gm_negotiation.py`) and the league office's save moves (V2 core). Plan proposed, awaiting JR's approval: [`TRADE_NEGOTIATIONS_PLAN.md`](../not_started/TRADE_NEGOTIATIONS_PLAN.md); it also closes the CPU-trade gap in §7.3 item 7 (written as part of it).
 Interactive negotiation loops with AI GMs featuring counter-offers, trade posturing, leaks to media insiders, and published negotiation transcripts for CPU-to-CPU deals.
 
 ### V2.12 Long-Term Team and League Narratives (Moved to V3)
@@ -404,16 +405,17 @@ This replaces the earlier "fresh 2034 franchise" start (a new Madden franchise m
 4. §7.2 check: the database keeps enough dated week-by-week state for V3 dossiers to rebuild each week.
 5. Progression live (§7.0 B2): scheduling and applying the proposal/receipt checkpoints in a real league, and tuning acceptance.
 6. Contract rows for signings: a Roster signing works today only when a release in the same write frees a `PlayerContract` row; free agency signs more than it releases, so creating rows is still a follow-up (V2 core, wave 1 note).
-7. The first live `sim-season` run of the Madden pilot ([`MADDEN_PILOT_AND_TUNING_PLAN.md`](./MADDEN_PILOT_AND_TUNING_PLAN.md)), with JR's OK.
+7. CPU-to-CPU trades are never written: the trade engine stores them as proposals, `pipeline/league_office.py` writes only JR's trades and refuses any trade with a draft pick (`step_pending_trade`). Without a fix the 2026–2033 CPU league has no trades. [`TRADE_NEGOTIATIONS_PLAN.md`](../not_started/TRADE_NEGOTIATIONS_PLAN.md) closes it.
+8. The first live `sim-season` run of the Madden pilot ([`MADDEN_PILOT_AND_TUNING_PLAN.md`](./MADDEN_PILOT_AND_TUNING_PLAN.md)), with JR's OK.
 
 **Booting straight into the game (§8, the adopted approach)**
-8. Route the pilot from launch to the user's pregame/kickoff screen, with screen checks and a hand-back to JR on timeout.
+9. Route the pilot from launch to the user's pregame/kickoff screen, with screen checks and a hand-back to JR on timeout.
 
 **Unbuilt features**
-9. V2.2 press conferences, V2.9 front-office inbox, V2.10 scouting revamp and combine interviews, V2.11 multi-turn trade negotiations. None is blocked: V2.11's needs are built, and V2.9 and V2.10 start with neutral owners and scouts until personality phase 6.
-10. §7.0 P1: coach philosophy in "Let Staff Set" and persona weights in free agency (terms at 0 until personality phases 4–6 and progression F–G).
-11. §7.0 O1, O2. (P3 is obsolete; P4 portraits are deferred.)
-12. §9 CFB 27 bridge (no `cfb_save_reader` yet).
+10. V2.2 press conferences, V2.9 front-office inbox, V2.10 scouting revamp and combine interviews, V2.11 multi-turn trade negotiations (plans proposed 2026-11-03 in `docs/not_started/`; build order V2.9 first). None is blocked: V2.11's needs are built, and V2.9 and V2.10 start with neutral owners and scouts until personality phase 6.
+11. §7.0 P1: coach philosophy in "Let Staff Set" and persona weights in free agency (terms at 0 until personality phases 4–6 and progression F–G).
+12. §7.0 O1, O2. (P3 is obsolete; P4 portraits are deferred.)
+13. §9 CFB 27 bridge (no `cfb_save_reader` yet).
 
 ---
 
