@@ -269,13 +269,16 @@ All-game recaps use the shared weekly brief and game-specific evidence, subject 
 ### V2.8 League Memory (Built)
 PostgreSQL-backed narrative search index ([`newsroom/league_memory.py`](../../newsroom/league_memory.py)) enabling journalists and agents to pull authentic historical callbacks ("last time Carolina won 5 straight was 2031").
 
-### V2.9 Front-Office Inbox & Direct Conversations (Not started; personality phase 6)
+### V2.9 Front-Office Inbox & Direct Conversations (Not started; not blocked)
+Can start with the personas that exist (GMs, writers); owners and scouts have catalogue odds but no profiles until [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phase 6, so they speak neutrally until then.
 Interactive messaging system allowing JR to communicate with team owners, player agents, rival GMs, beat reporters, and college prospects.
 
-### V2.10 Scouting Revamp & Combine Interviews (Not started; personality phase 6)
+### V2.10 Scouting Revamp & Combine Interviews (Not started; not blocked)
+Scout voices and regional biases need scout profiles (personality phase 6); reports and combine interviews can be built first with neutral scouts and prospect personalities added once [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../not_started/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) is approved and built.
 Comprehensive narrative reports for every draft prospect, individual scout voices with regional biases, and interactive combine/visit interviews.
 
-### V2.11 Live Multi-Turn Trade Negotiations (Not started; personality phase 5)
+### V2.11 Live Multi-Turn Trade Negotiations (Not started; unblocked)
+This is personality phase 5 (agentic GMs), whose needs are built: GM personalities (phase 3, `engines/gm_personas.py`, `engines/gm_negotiation.py`) and the league office's save moves (V2 core).
 Interactive negotiation loops with AI GMs featuring counter-offers, trade posturing, leaks to media insiders, and published negotiation transcripts for CPU-to-CPU deals.
 
 ### V2.12 Long-Term Team and League Narratives (Moved to V3)
@@ -407,7 +410,7 @@ This replaces the earlier "fresh 2034 franchise" start (a new Madden franchise m
 8. Route the pilot from launch to the user's pregame/kickoff screen, with screen checks and a hand-back to JR on timeout.
 
 **Unbuilt features**
-9. V2.2 press conferences, V2.9 front-office inbox, V2.10 scouting revamp and combine interviews, V2.11 multi-turn trade negotiations (V2.11 needs personality phase 5; V2.9 and V2.10 phase 6).
+9. V2.2 press conferences, V2.9 front-office inbox, V2.10 scouting revamp and combine interviews, V2.11 multi-turn trade negotiations. None is blocked: V2.11's needs are built, and V2.9 and V2.10 start with neutral owners and scouts until personality phase 6.
 10. §7.0 P1: coach philosophy in "Let Staff Set" and persona weights in free agency (terms at 0 until personality phases 4–6 and progression F–G).
 11. §7.0 O1, O2. (P3 is obsolete; P4 portraits are deferred.)
 12. §9 CFB 27 bridge (no `cfb_save_reader` yet).
