@@ -247,6 +247,8 @@ Reads only; no hidden columns. Interview writes go through the inbox API.
 
 ### 2.8 Inbox kinds (`engines/inbox/kinds/prospect.py`, `scout.py`, U5)
 
+**Who JR speaks as (JR, 2026-11-03):** both kinds set `ACTOR_ROLES = ('GM',)`. Interviews, visits and scout notices belong to the GM persona JR controls on that team (V2.9 `controlled_personas`; JR controls no one by default). If JR doesn't control the team's GM, there are no prospect interviews or scout notices for him, and his team keeps its seeded visits like a CPU team.
+
 Both implement V2.9's `Kind` protocol and are found by auto-discovery; no shared inbox file changes, except the validator hook below.
 
 **`PROSPECT`** (`COUNTERPART_TYPE = "prospect"`, `PERSONA_ROLE = None` until the personality draft plan; counterpart id = `prospect_key`, the stable key of §3.3c, rather than `draft_prospects.id`, which a re-scan replaces; name = the prospect's name; `link_table = "scout_interviews"`).
