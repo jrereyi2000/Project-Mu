@@ -1,6 +1,6 @@
 # Project Mu: Front-Office Inbox & Direct Conversations Plan (V2.9)
 
-**Status:** approved by JR (2026-11-03), with the four still-open items (O1–O4) settled as recommended; not built. Builds first.
+**Status:** approved by JR (2026-11-03), with the four still-open items (O1–O4) settled as recommended; updated the same day for JR's cross-plan decisions D15–D18 (relationships own trust); not built. Builds first.
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2, §5.3.2, §6 V2.0 and V2.9, §7.2; [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8, phases 4 and 6; PROJECT_SPEC §2.16 (team direction), §2.17c (depth charts), §3.3f (GM negotiations), §3.3p (personas and relationships), §3.3q, §4.6b (franchise API), §2.21a (league office).
 
 **Goal:** JR plays through personas he takes control of: a team's GM, its head coach, and later a player. The inbox is where each persona JR controls talks to the other agents in the league, one conversation per pair:
@@ -10,7 +10,7 @@
 - JR's coach and the team's GM agent (or JR's GM and the coach agent) agreeing on a team vision;
 - JR, in any role, with his beat writer in a one-on-one interview.
 
-Engines decide every outcome. The agent on the other side answers in its own voice. A language model writes that answer and it is checked against the facts; fixed template text is the fallback. The agent also judges how the exchange went, and its trust in JR's persona moves a little, with a stored reason. The inbox is also the shared surface the sibling plans plug into: V2.11 deepens trade talks, V2.10 adds prospect interviews and scouts, and V2.2 posts a notice when a press conference is ready.
+Engines decide every outcome. The agent on the other side answers in its own voice. A language model writes that answer and it is checked against the facts; fixed template text is the fallback. Where its profile allows a private appraisal, the agent also appraises how it was treated; the inbox records that as a relationship event (with the reason) for the relationships plan, which alone turns events into trust. The inbox is also the shared surface the sibling plans plug into: V2.11 deepens trade talks, V2.10 adds prospect interviews and scouts, and V2.2 posts a notice when a press conference is ready.
 
 **Terms.**
 - An **agent** is a persona with a personality and an interface to act through: a GM, a coach, a player or a reporter. It never means a player's representative; players speak for themselves.
@@ -18,13 +18,13 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - A **counterpart** is the agent on the other side of a thread.
 
 **Delivers:**
-- Tables `controlled_personas`, `inbox_threads`, `inbox_messages` and `team_vision` (migration `db/migrations/2027_01_19_front_office_inbox.sql`, folded into `db/init_db.sql`).
+- Tables `controlled_personas`, `inbox_threads`, `inbox_messages`, `inbox_relationship_events` (the event outbox) and `team_vision` (migration `db/migrations/2027_01_19_front_office_inbox.sql`, folded into `db/init_db.sql`; the relationships plan reserves `2027_01_18_personality_relationships.sql`, and this one stays `2027_01_19`).
 - Package `engines/inbox/`, each module with one job:
   - `actors.py`: which personas JR controls;
   - `store.py`: threads, messages and `jr_statements`;
   - `registry.py`: conversation kinds, auto-discovered;
   - `voice.py`: the counterpart's words;
-  - `trust.py`: the counterpart's judgment of the exchange;
+  - `appraisal.py`: relationship events (`meaningful_interaction`, `treatment`, `promise_made`, `promise_resolved`) in the relationships plan's envelope, kept in an outbox until that plan's store exists;
   - `parse.py`: typed text → a draft JR confirms;
   - `scan.py`: inbound messages;
   - `__main__.py`: CLI.
@@ -51,10 +51,16 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - D8 (Q1): **By default JR controls no one.** A persona is controlled only when JR explicitly takes control of it, which stores a `controlled_personas` row. A registry user team with no rows has no inbox actors. There is no coach-plus-GM default.
 - D9 (Q2): **Build coach ↔ GM team-vision talks now.** The canonical league starts in 2026 from the real 2025 NFL seed, where head coaches and GMs are separate people with separate personas. Skip vision talks only on a team whose head coach is also its GM. Coach voice is neutral until coach personalities are switched on, as in the press plan.
 - D10 (Q3): Typed text becomes a draft JR confirms, for contract terms, trade packages and role promises. Rules parse it first; the model is the fallback, limited to listed IDs and ranges. Nothing acts without JR's click.
-- D11 (Q6, Q7): **A coach's promise never changes the depth chart.** The coach can tell a player he'll move up and then not do it. The promise is recorded. If it isn't kept by the review point, the player agent judges it, and his trust in the coach drops by a bounded amount, with a reason stored in his relationship memory. It never changes a sim number. A depth-chart change happens only when JR makes it in the Depth Chart module.
+- D11 (Q6, Q7): **A coach's promise never changes the depth chart.** The coach can tell a player he'll move up and then not do it. The promise is recorded as `promise_made` and resolved as `promise_resolved` from the actual depth chart at the due week (D16). What that does to the player's trust is the relationships plan's policy; it never changes a sim number. A depth-chart change happens only when JR makes it in the Depth Chart module.
 - D12 (Q8): **Interviews are open-ended.** The reporter keeps asking until he's done or JR ends it, capped at 10 questions.
-- D13: **The counterpart agent judges trust effects from what was said** (respectful and in depth vs snippy or rude). Each exchange is bounded, the reason is stored, and there is no fixed table of deltas. This matches the press conference plan.
+- D13: **The counterpart agent appraises the exchange from what was said** (respectful and in depth vs snippy or rude), with a stored reason; no fixed table of deltas. This matches the press conference plan. Since D15 the appraisal is evidence recorded as an event, not a trust write.
 - D14: V2.10's `PROSPECT` kind (combine interviews and top-30 visits) and `SCOUT` kind belong to the GM persona JR controls on that team (`ACTOR_ROLES = ('GM',)`). If JR doesn't control that team's GM, he gets no prospect interviews or scout notices.
+
+**Cross-plan decisions (JR, 2026-11-03, after review against [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §4.7, §5.1, D8–D12 and [`PERSONALITY_RELATIONSHIPS_PLAN.md`](./PERSONALITY_RELATIONSHIPS_PLAN.md) §0b):**
+- D15: **The relationships plan owns trust.** The inbox never writes `persona_relationships`. Each exchange with an appraisal-eligible counterpart records a `meaningful_interaction` event (outcome and significance from the counterpart's appraisal, its reason in the payload). Mistreatment is recorded as a `treatment` event. Both use that plan's §2.2 envelope, with `personality/relationship_store.append_events` as the target. Until that plan is built, events wait in the inbox's outbox (`inbox_relationship_events`) in the same shape, ready to append. The bounds 0.03 per exchange and 0.06 per promise become suggested starting values for its policy. The voice reads trust only through `relationship_context` once it exists, and is neutral before.
+- D16: Role-talk promises use `promise_made` / `promise_resolved`: issuer, beneficiary, a measurable criterion (a depth-chart slot by a week), the due time, and a resolution read from the actual depth chart. The trade-requests plan consumes them.
+- D17: Trust is one-way. The inbox never reads a relationship as mutual and never adopts legacy tags.
+- D18: Existing real players have no personality profiles (draft-prospect-only scope, PERSONALITY_PLAN §5.1; JR is reconsidering). They reply in the neutral voice and get no appraisal. A broken promise to one is recorded as a fact with no invented private reaction. Real coaches get reviewed profiles later (D11 there); until then the coach voice stays neutral and coaches give no appraisal.
 
 ---
 
@@ -71,7 +77,7 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 | S7 | `engines/gm_direction.py:119` `assign_directions` overrides: projected wins ≥ 10.5 is always CONTEND; a team over the cap can't REBUILD. `:265` `compute` keeps the previous direction between checkpoint weeks. `:182` `positional_needs` ranks needs by `TRADE_POS_WEIGHT`. There is no pin. Tests: `tests/test_gm_direction.py`. | A vision's direction and emphasis need two small, pure additions to `gm_direction` (§2.9). |
 | S8 | The canonical league starts in 2026 from the real 2025 NFL seed (`V2_MASTER_PLAN.md` §7.2). Head coaches (`coaches`, `coach_tenures`) and GMs (`gm_profiles`, seeded by `engines/gm_personas.py`) are separate personas, and `gm_profiles.coach_id` is NULL unless a team gives its coach full control. Spec §3.3f's Whitfield/Grant coach-GMs come from the discarded 2026–2036 universe. | Vision talks have a counterpart on almost every team. They are skipped only where `coach_id` is set, or where JR controls both the coach and the GM. |
 | S9 | `personality/core.py:144` `feature_view` gives a neutral view for a missing profile; `personality/store.py:85` `ensure` has no caller outside tests, so no player or coach profile is seeded. Writers and GMs have sliders and traits in `persona_sliders`/`persona_traits`. | GMs and writers speak in character. Players and coaches are neutral until their personalities are switched on. |
-| S10 | `persona_relationships` (`db/init_db.sql:1702`): `persona_type` (writer, gm, player, coach, owner, scout), `persona_id`, `target_type`, `target_id`, `trust` NUMERIC(3,2) in −1..1, `tags`, `evidence` JSONB (last events `{season, week, kind, delta, text}`). `newsroom/relationships.py:386` `_adjust` writes only `persona_type = 'writer'`; `EVIDENCE_KEEP = 5` (`:28`), `_clamp` (`:74`). | Counterpart trust toward JR's persona is stored here for any persona type. The reason goes in `evidence`, which is the agent's memory of the relationship. The inbox needs its own writer for non-writer types (`trust.py`). |
+| S10 | `persona_relationships` (`db/init_db.sql:1702`) and `newsroom/relationships.py` are the legacy writer-trust store. [`PERSONALITY_RELATIONSHIPS_PLAN.md`](./PERSONALITY_RELATIONSHIPS_PLAN.md) (not built; §0b binds consumers) owns trust: consumers record canonical events (§2.2 envelope: `schema_version, universe_id, event_id, source_event_id, source_kind, source_refs, kind, occurred_at {season, tick}, subject, target, actor, basis, confidence, reviewer, evidence_scope, visibility, attribution, payload, supersedes_source_event_id`) through `personality/relationship_store.append_events(cur, events, *, expected_head, team_registry)`, and read trust through `relationships.relationship_context(state, *, target)`. Trust is one-way; legacy tags are never adopted. Its migration is `2027_01_18_personality_relationships.sql`. | The inbox never writes `persona_relationships`. It records events in that envelope (`appraisal.py`), holds them in its own outbox table until the store exists, and reads trust only through `relationship_context` (neutral before). |
 | S11 | `agent_memories` (`db/init_db.sql:1911`) has `assigned_team_id`, `display_name`, `person_key`; `LOCAL_BEAT_REPORTER` is an archetype in `newsroom/config/agent_personas.json`. | The interviewer is the team's beat writer, in his own voice. |
 | S12 | `engines/gm_trade_engine.py:1447`–`:1448`, `:1621` flag ENGINE proposals that involve a user-controlled team (via `gm_team_settings`); `engines/front_office.py:492` `approve`, `:508` `reject`. | `GM_TALK`'s trigger reads PROPOSED ENGINE proposals involving a registry user team where JR controls the GM, whatever the flag says. |
 | S13 | `server/franchise_api.py:213` `user_teams()` reads `db/franchises.py:169` `active_entry()`; `:223` `require_user_team`. | The same reader and the same 403 rule apply. |
@@ -91,7 +97,7 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - Inbound messages from engine facts each week, and when JR opens the inbox.
 - JR's replies: a button or form, an optional note, or typed text turned into a draft he confirms.
 - Counterpart replies written by the model in the persona's voice, checked against the facts, with templates as fallback.
-- Trust: after each exchange the counterpart judges JR's persona. The change is bounded and the reason is stored in `persona_relationships.evidence`. Broken promises are judged at review.
+- Relationship events: after each exchange with an appraisal-eligible counterpart, a `meaningful_interaction` (or a `treatment` for mistreatment) with the agent's outcome, significance and reason; `promise_made` / `promise_resolved` for role-talk promises. Recorded in the relationships plan's envelope and appended to its store when it exists (D15–D17).
 - `jr_statements`: JR's interview answers, for articles later.
 - The Inbox module in `Mu_Network`.
 
@@ -101,8 +107,8 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - A consumer for the vision's playing-time setting (Q-open 1).
 - Press conferences (V2.2), prospect interviews and scouts (V2.10), leaks, posture, CPU-to-CPU talks and queuing agreed trades (V2.11).
 - Writers quoting JR's answers (V2.2 reads `jr_statements`).
-- Any effect of trust on a sim number. Trust shapes prompts and later personality plans only.
-- Holdouts and trade requests ([`PERSONALITY_TRADE_REQUESTS_PLAN.md`](./PERSONALITY_TRADE_REQUESTS_PLAN.md) may read promise records and trust).
+- Computing or writing trust (the relationships plan's policy), and any effect of trust on a sim number.
+- Holdouts and trade requests ([`PERSONALITY_TRADE_REQUESTS_PLAN.md`](./PERSONALITY_TRADE_REQUESTS_PLAN.md) consumes the `promise_made` / `promise_resolved` events).
 - National insiders messaging JR.
 
 ## 2. Design
@@ -159,11 +165,11 @@ The rule: **the engine decides what happens; the agent says it and judges how it
 | Trade: accept, counter, reject or walk away | `gm_negotiation.respond` | JR offers a 2nd for a CB; the engine counters by adding JR's 5th. | Writes the GM's reply in his voice. |
 | Team vision: is the direction allowed, does the other side agree | `team_vision.respond` (§2.9) over `gm_direction`'s rules | JR's coach asks the GM to REBUILD. The team isn't over the cap and isn't projected to 10.5 wins, and its D score is close to the REBUILD band, so the GM agrees. | "Fine. We'll sell veterans at the deadline and play the kids." |
 | Should this player be starting? (role-talk trigger) | `depth_chart_engine.staff_depth_chart` vs JR's chart | The staff chart has the rookie at WR1 two weeks running; JR has him at WR3. | Writes the rookie's ask from facts on the sheet. |
-| Was a promise kept? | the newest JR chart at the review week vs the promised depth | JR's coach promised "you'll start by week 9". At week 9 he's still WR3. | The player agent judges how much it hurts and why (D11). |
+| Was a promise kept? | the actual depth chart at the due week vs the promise's criterion | JR's coach promised "you'll start by week 9". At week 9 he's still WR3, so `promise_resolved` is `broken`. | Nothing: the resolution is a fact. Its effect on trust is the relationships policy's; an existing real player gets no invented reaction (D18). |
 | Who writes to JR, and when | each kind's `scan` triggers | An ENGINE trade proposal names JR's LB, so a `TRADE_INTEREST` thread opens. | Writes the opening message. |
-| How much trust moves | bounded by `INBOX_TRUST_MAX`; the amount within it is the agent's judgment | JR answers a contract counter with "Take it or leave it, I don't care." | Judges it rude, −0.03, reason "brushed off my counter without discussing it". |
+| How much trust moves | the relationships plan's reviewed policy, from recorded events | JR's GM answers a GM's counter with "Take it or leave it, I don't care." | The GM agent appraises it: outcome negative, significance routine, reason "brushed off my counter without discussing it", recorded as a `treatment` (`disrespect`). |
 
-Every outcome above is the engine's, so a replay gives the same outcome. The agent's one free judgment, the trust move, is bounded and has no sim effect.
+Every outcome above is the engine's, so a replay gives the same outcome. The agent's one free judgment is its appraisal, recorded as evidence; it moves no number here.
 
 ### 2.3 Typed text vs buttons and forms
 
@@ -194,7 +200,7 @@ Each counterpart line is written by the **model** in the persona's voice. It get
 - the last 6 messages;
 - JR's note;
 - the decision it must convey;
-- its current trust toward JR's persona and the last reasons.
+- its relationship to JR's persona, only as `relationship_context(state, target=actor)` from the relationships plan once it exists and its policy is enabled; neutral (nothing) before.
 
 A **template** (fixed text with the facts filled in) is used only on a timeout (`INBOX_LLM_BUDGET_S = 8.0`, an estimate set by the spike), a failed check (`validate_rationale`, the kind's optional `validate`, the intent check), `MU_INBOX_LLM=0`, or no API key. The UI tags template lines.
 
@@ -202,36 +208,57 @@ A **template** (fixed text with the facts filled in) is used only on a timeout (
 def persona_view(cur, counterpart_type, counterpart_id) -> dict   # feature_view(profile, 'inbox'); missing -> neutral;
                                                                   # writers and GMs fall back to persona_sliders/traits
 def write(cur, kind, thread, intent, facts, history, note=None, llm=None, budget_s=INBOX_LLM_BUDGET_S)
-    -> tuple[str, str, dict | None]       # (text, 'LLM' | 'TEMPLATE', judgment {"trust": -2..2, "reason"} | None)
+    -> tuple[str, str, dict | None]       # (text, 'LLM' | 'TEMPLATE', appraisal {"outcome", "significance", "mistreated", "reason"} | None)
 def default_llm()                          # make_llm("inbox") unless MU_INBOX_LLM == '0'
 ```
 
-One model call returns `{"message", "trust", "reason"}`, so judging costs no extra call.
+One model call returns `{"message", "appraisal": {"outcome": "positive|negative|mixed", "significance": "routine|meaningful", "mistreated": bool, "reason"}}`, so appraising costs no extra call. The appraisal is asked for only when `appraisal.allowed(view)` (§2.5).
 
 Order inside every reply:
 1. `act` runs the engine and stores the decision with JR's message.
 2. `write` produces the reply and the judgment within the budget.
 3. The reply is stored.
-4. `trust.apply` stores the judgment.
+4. `appraisal.record` stores the event (in the outbox).
 
-### 2.5 Trust: the counterpart judges the exchange (`engines/inbox/trust.py`)
+### 2.5 Relationship events: the counterpart's appraisal as evidence (`engines/inbox/appraisal.py`)
 
-Trust is the counterpart agent's opinion of JR's persona. The agent judges it from what was said, not from a table.
+[`PERSONALITY_RELATIONSHIPS_PLAN.md`](./PERSONALITY_RELATIONSHIPS_PLAN.md) owns trust (§0b there). The inbox never writes `persona_relationships` and never computes a trust number. It records what happened as that plan's canonical events (§2.2 envelope), and that plan's reviewed policy turns them into one-way trust.
 
 ```python
-INBOX_TRUST_UNIT = 0.015        # one step; the model returns trust as an integer -2..2
-INBOX_TRUST_MAX = 0.03          # bound per exchange (= 2 steps); estimates, tuned with the press plan's sizes
-PROMISE_TRUST_MAX = 0.06        # bound for one broken or kept promise (D11)
-def apply(cur, counterpart_type, counterpart_id, actor, judgment, ref, season, week) -> float | None
-    # clamps to the bound, writes persona_relationships (persona = counterpart, target = (actor.role.lower(), actor.persona_id)),
-    # appends {season, week, kind: 'INBOX', delta, text: reason[:200], ref} to evidence (EVIDENCE_KEEP), idempotent on ref.
-def judge_promise(cur, llm, thread, kept: bool, facts) -> dict | None     # a separate call at review; -3..3 steps x 0.02
+def allowed(view) -> bool
+    # True only for counterparts whose private appraisal is permitted: a generated core profile (e.g. drafted classes
+    # from 2026), or a legacy generated persona (gm_profiles GMs, the invented LOCAL_BEAT_REPORTER). False for existing
+    # real players (no profiles, PERSONALITY_PLAN §5.1), real coaches until their reviewed profiles exist (D11 there),
+    # and unknown origin. False -> no appraisal is asked for and no interaction event is recorded.
+def interaction_event(thread, message, actor, counterpart, appraisal, at) -> dict
+    # kind 'meaningful_interaction'; subject = the counterpart (PersonRef), target = actor = JR's persona (PersonRef);
+    # basis 'verified_simulation', confidence 'medium', visibility 'private';
+    # payload {relationship_kind: 'collaboration'|'support'|'conflict' (from outcome), outcome, significance,
+    #          opportunity_ref: 'inbox_message:<id>', appraisal_reason, channel: 'inbox', inbox_kind}
+def treatment_event(...) -> dict
+    # kind 'treatment' when the appraisal says mistreated (rude, dismissive, insulting): treatment_kind 'disrespect',
+    # outcome 'negative', significance from the appraisal, team_key of JR's team, outcome_refs ['inbox_message:<id>'],
+    # attribution.responsible = [JR's persona], payload.appraisal_reason. One source gives one event, never both.
+def promise_made(thread, coach, player, criterion, due_at) -> dict
+    # payload {promise_id: 'inbox:<thread_id>:<n>', issuer: coach PersonRef, beneficiary: player PersonRef,
+    #          terms {kind: 'role', description, criterion {type: 'depth_chart_slot', slot, max_depth}},
+    #          due_at {season, tick}, authority_ref: 'inbox_thread:<id>'}; subject = player, target = actor = coach
+def promise_resolved(thread, promise, chart_row) -> dict
+    # payload {promise_id, resolution: 'kept'|'broken'|'unknown' (no chart read at the due week -> unknown, never broken),
+    #          criterion_result {slot, depth_at_due, chart_source, chart_season, chart_week}, outcome_refs, beneficiary_ack_ref: None}
+def record(cur, event) -> int            # inserts into inbox_relationship_events (outbox), idempotent on source_event_id
+def flush(cur) -> dict                   # when personality.relationship_store imports and its table exists: resolve
+                                         # PersonRefs (personality.store.resolve_alias), read_head, append_events(expected_head=...),
+                                         # mark appended; conflicts and unresolved refs stay pending with a reason
 ```
 
-- **What it judges:** respect and depth versus snippy or rude replies. Examples: a thoughtful answer to a beat writer's question, a curt "no comment" on a light question, an insulting lowball note, a coach explaining a benching versus "deal with it". The prompt says the judgment is about how JR's persona treated the counterpart, not about the engine's decision.
-- **No model, no judgment.** A template reply moves no trust. A pending judgment (a promise review without a model) is kept in `thread.state.trust_pending` and retried at the next scan. Nothing is ever applied from a fixed table.
-- **Where it shows:** `inbox_messages.trust_delta` and `trust_reason` (audit), and `persona_relationships.evidence`, which is the agent's memory of the relationship. The voice prompt includes the current trust and the last reasons, so a burned agent sounds like it.
-- **No sim effect.** Engines never read this trust in this plan. Writer rows use the same table as `newsroom/relationships.py` (persona = the writer's person key), so the newsroom's relationship block shows them too.
+- **Envelope details.** `source_event_id` is stable per occurrence (`inbox:msg:<message_id>`, `inbox:promise:<promise_id>:made`, `…:resolved`). `occurred_at` is `{season, tick}` from the relationships plan's calendar. Until that plan exists, the outbox also stores `{season, week, offseason_stage}` and the tick is filled at flush. Subjects and targets carry source refs (`gm_profiles:<id>`, `coaches:<id>`, `players:<id>`, `agent_memories:<agent_id>`) and are resolved to core `PersonRef`s at flush.
+- **One-way.** Every event is about the counterpart's view of JR's persona (or the beneficiary's view of the issuer). The inbox never records or reads the reverse direction as implied, and never reads legacy tags.
+- **What the appraisal judges:** how JR's persona treated the counterpart (respectful and in depth vs snippy or rude), not the engine's decision. Examples: a thoughtful answer to a beat writer's question; a curt "no comment" on a light question; an insulting lowball note; a coach explaining a benching versus "deal with it".
+- **No model, no appraisal.** A template reply records no interaction event. Promise events are facts and are recorded with or without a model.
+- **Existing real players** (D18): neutral voice, no appraisal, no interaction events. A promise to one is still recorded as `promise_made` / `promise_resolved` (facts), with no invented private reaction.
+- **Suggested starting values for the relationships policy** (not used here): 0.03 per exchange and 0.06 per promise, the bounds this plan first proposed.
+- **No sim effect.** Nothing here moves a number.
 
 ### 2.6 Tables (`db/migrations/2027_01_19_front_office_inbox.sql`, mirrored in `db/init_db.sql`)
 
@@ -262,7 +289,7 @@ CREATE TABLE IF NOT EXISTS inbox_threads (
     source_ref        VARCHAR(120) NOT NULL,
     link_table        VARCHAR(48),
     link_id           INT,
-    state             JSONB NOT NULL DEFAULT '{}',             -- kind-owned: {"questions_asked": 4}, {"promise": {...}}, {"trust_pending": [...]}
+    state             JSONB NOT NULL DEFAULT '{}',             -- kind-owned: {"questions_asked": 4}, {"promises": [...]}
     season            INT NOT NULL,
     week              INT,
     offseason_stage   VARCHAR(16),
@@ -286,10 +313,23 @@ CREATE TABLE IF NOT EXISTS inbox_messages (
     options      JSONB NOT NULL DEFAULT '[]',
     facts        JSONB,                       -- never sent to the UI
     engine_ref   JSONB,
-    trust_delta  NUMERIC(4,3),                -- the counterpart's judgment of the JR message this replies to (NULL = none)
-    trust_reason TEXT,
+    appraisal    JSONB,                       -- the counterpart's appraisal of the JR message this replies to (NULL = none)
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (thread_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS inbox_relationship_events (     -- outbox for PERSONALITY_RELATIONSHIPS_PLAN's store
+    id               SERIAL PRIMARY KEY,
+    source_event_id  VARCHAR(120) NOT NULL UNIQUE,         -- 'inbox:msg:812', 'inbox:promise:44:1:made'
+    kind             VARCHAR(32) NOT NULL CHECK (kind IN ('meaningful_interaction','treatment','promise_made','promise_resolved')),
+    thread_id        INT REFERENCES inbox_threads(id) ON DELETE SET NULL,
+    message_id       INT REFERENCES inbox_messages(id) ON DELETE SET NULL,
+    event            JSONB NOT NULL,                       -- the full §2.2 envelope (tick and PersonRefs filled at flush)
+    sim_time         JSONB NOT NULL,                       -- {season, week, offseason_stage}
+    status           VARCHAR(10) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPENDED','REJECTED')),
+    status_reason    TEXT,
+    appended_at      TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS team_vision (
@@ -346,7 +386,7 @@ def kinds() -> dict[str, Kind]        # auto-discovery in engines/inbox/kinds/ (
 |---|---|---|---|---|
 | `GM_TALK` | GM → another GM | `TRADE_INTEREST`: a PROPOSED ENGINE proposal with JR's team (registry, JR controls its GM) on one side, not yet in a thread | Inbound: `OPEN_TALKS` (form `trade_assets`), `NOT_INTERESTED`. In talks: `MAKE_OFFER`, `ACCEPT_COUNTER`, `END_TALKS` | `gm_negotiation` functions and `front_office.reject`. The GM's text is the turn message `gm_negotiation` writes. The judgment comes from a short separate call on JR's note when there is one; none without a note. |
 | `CONTRACT` | GM → own player | `EXTENSION_WINDOW`: a starter becomes eligible with no open thread | `MAKE_OFFER` (`contract_terms`), `ACCEPT_COUNTER`, `WALK_AWAY` | `franchise_api` helpers `_context`, `_player`, `_eligibility`, `_score`, `insert_offer` (lazy import, R4). ACCEPTED closes the thread, and the league office writes the contract. |
-| `ROLE_TALK` | COACH → own player | `LOST_STARTING_JOB` (depth 1 at a base slot last week, not now); `WANTS_MORE` (the staff chart starts him and JR's chart hasn't, 2 straight weeks) | `PROMISE` (form `promise`: slot, depth he'll reach, review week ≥ next week, default week + `PROMISE_REVIEW_WEEKS = 2`), `EXPLAIN` (note required), `NO_CHANGE` | **No chart write** (D11). `PROMISE` stores `state.promise = {slot, depth, review_season, review_week, made_at_depth}`. At the review week, the scan reads JR's newest chart (`stored_depth_chart`, source JR, else MU_COACH): kept if he is at or above the promised depth. A SYSTEM line says "kept" or "not kept". `trust.judge_promise` lets the player agent weigh it, bounded by `PROMISE_TRUST_MAX`, with the reason in evidence. The thread links to `#franchise-depth-chart` for the real move. |
+| `ROLE_TALK` | COACH → own player | `LOST_STARTING_JOB` (depth 1 at a base slot last week, not now); `WANTS_MORE` (the staff chart starts him and JR's chart hasn't, 2 straight weeks) | `PROMISE` (form `promise`: slot, depth he'll reach, review week ≥ next week, default week + `PROMISE_REVIEW_WEEKS = 2`), `EXPLAIN` (note required), `NO_CHANGE` | **No chart write** (D11). `PROMISE` adds `{promise_id, slot, max_depth, due_season, due_week, made_at_depth}` to `state.promises` and records `promise_made` (§2.5). At the due week, the scan reads the actual chart (`stored_depth_chart`, the newest chart in force: JR, else MU_COACH, else MADDEN). He is kept if he is at or above the promised depth; with no chart, the result is `unknown`. It records `promise_resolved`, and a SYSTEM line says "kept", "not kept" or "couldn't check". The thread links to `#franchise-depth-chart` for the real move. |
 | `VISION` | COACH → own GM, or GM → own head coach | `SEASON_VISION`: the first scan of a season with no `team_vision` row. `DIRECTION_SHIFT`: `gm_direction`'s own band moved away from the pinned direction at a checkpoint. Skipped when the coach is the GM, or JR controls both | `PROPOSE` (form `vision`: direction, emphasis, playing time), `ACCEPT_COUNTER`, `KEEP_CURRENT` | `team_vision.respond` (§2.9). AGREED upserts `team_vision` and closes the thread. JR-started any time; one open per team. |
 | `REPORTER` | any controlled persona → the team's beat writer | `INTERVIEW_REQUEST` on: a starter out 4+ weeks, an executed trade or signing, a 3-game streak, a starter losing his job. At most 2 open per team | Per question: `ON_RECORD` (note), `OFF_RECORD` (note), `NO_COMMENT`; any time `END_INTERVIEW` | None. **Open-ended** (D12): after each answer the reporter either asks a follow-up from the facts or wraps up (`"done": true` in the model's JSON; the template asks up to 3 then wraps up). Hard cap `INTERVIEW_MAX_QUESTIONS = 10`. JR-started with a topic. |
 
@@ -362,7 +402,7 @@ A vision is the coach and the GM agreeing on three settings. Each option is one 
 |---|---|---|
 | Direction | CONTEND / RETOOL / REBUILD, minus `assign_directions`' overrides (projected wins ≥ 10.5 → only CONTEND; over the cap → no REBUILD) | `gm_direction.compute` uses the pinned direction for that team and season, at any week, and the overrides still win. Direction feeds trade proposals, needs (the expiring multiplier) and the hot seat's expected wins. |
 | Emphasis | OFFENSE / DEFENSE / BALANCED | `positional_needs(..., emphasis=)` multiplies the emphasised side's group scores by `VISION_EMPHASIS_WEIGHT = 1.15` (offense: QB, RB, WR, TE, OT, IOL; defense: EDGE, DT, LB, CB, S) |
-| Playing time | YOUTH / VETERANS / MERIT | Stored only. Its consumer, `coach_trust`, is held at 0 by the depth-chart plan's D4 (Q-open 1). |
+| Playing time | YOUTH / VETERANS / MERIT | Stored only. Its eventual consumer (depth-chart score adjustments) is owned by [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](./PERSONALITY_DEVELOPMENT_COACHING_PLAN.md), not this plan (O1). |
 
 ```python
 VISION_MARGIN = 0.5                    # D-score units; estimate
@@ -391,12 +431,12 @@ Example: JR controls Carolina's head coach; the GM is a CPU agent with `risk_app
 ```python
 def scan(cur, season, week, teams=None, llm=None) -> dict   # {'created', 'expired', 'reviewed', 'by_kind'}
     # For each registry user team, each controlled actor, each kind serving its role: kind.scan -> Trigger ->
-    # store.create_thread (ON CONFLICT DO NOTHING) -> opening message via voice.write. Then promise reviews and pending
-    # trust judgments (ROLE_TALK), then store.expire_stale. One failing kind is logged and skipped.
+    # store.create_thread (ON CONFLICT DO NOTHING) -> opening message via voice.write. Then due promises (ROLE_TALK ->
+    # promise_resolved), store.expire_stale, appraisal.flush. One failing kind is logged and skipped.
 def step_inbox(season)   # pipeline/weekly_capture.py after step_gm; voice.default_llm(); never raises
 ```
 
-Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at most once per (team, season, week, stage) per server process. Promise reviews and trust judgments wait for the weekly run (which has the model) or the CLI. CLI: `python3 -m engines.inbox scan [--season S --week W] [--team CAR] [--no-llm] [--dry-run]`, `list`, `show <id>`, `control ...`.
+Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at most once per (team, season, week, stage) per server process. Promise resolutions and the outbox flush run in the weekly run or the CLI (`flush-events`). CLI: `python3 -m engines.inbox scan [--season S --week W] [--team CAR] [--no-llm] [--dry-run]`, `list`, `show <id>`, `control ...`.
 
 ### 2.11 Owner agents: options for later
 
@@ -424,7 +464,7 @@ Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at m
 | POST | `/{abbr}/inbox` | `{"kind", "as", ...kind fields, "note"}` | 201 the new thread |
 | POST | `/{abbr}/inbox/{thread_id}/close` | — | the thread |
 
-`Actor = {role, id, name}`. `Thread` adds `actor` and `counterpart` and leaves out `state`. `Message = {id, seq, author, body, source, option_id, engine_ref, trust: {delta, reason} | null, created_at}`; it never includes `facts` or a GM's surplus. Errors use `{"detail"}`: 400, 403 (team not in the registry, or `as` not a controlled role), 404, 409. Notes are at most 600 characters.
+`Actor = {role, id, name}`. `Thread` adds `actor` and `counterpart` and leaves out `state`. `Message = {id, seq, author, body, source, option_id, engine_ref, appraisal: {outcome, reason} | null, created_at}`; it never includes `facts` or a GM's surplus. Errors use `{"detail"}`: 400, 403 (team not in the registry, or `as` not a controlled role), 404, 409. Notes are at most 600 characters.
 
 ### 2.13 Frontend
 
@@ -432,7 +472,7 @@ Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at m
 - `Mu_Network/src/components/franchise/InboxModule.tsx` (`{ teamAbbr }`):
   - **Take control:** with no actors, a panel lists the candidates (GM, head coach) with "Take control". A small "Personas" menu does the same later, and releases.
   - **List:** an "acting as" filter, open/all, kind chips, unread dots.
-  - **Conversation:** messages, with template tags and a small trust marker on counterpart replies that moved trust (▲/▼ and the reason on hover); options, forms (`contract_terms`, `trade_assets`, `promise`, `vision`), a text box, the draft card, and a "Go to Depth Chart" link in role talks.
+  - **Conversation:** messages, with template tags and a small appraisal marker on counterpart replies that carry one (+/−/~ and the reason on hover; no trust number); options, forms (`contract_terms`, `trade_assets`, `promise`, `vision`), a text box, the draft card, and a "Go to Depth Chart" link in role talks.
   - **New conversation:** a picker from `/inbox/kinds`.
 - `FranchisePage.tsx`: the Inbox tab after Game Center, with the unread count.
 
@@ -442,7 +482,7 @@ Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at m
 |---|---|---|
 | V2.11 | Extends `gm_talk.py` (posture, time limit, leaks, queued trades); moves the GM engines to the registry (fixes S2) | `gm_talk.py` after this plan merges |
 | V2.10 | `prospect.py`, `scout.py` (neutral), both `ACTOR_ROLES = ('GM',)` (D14); FKs to `inbox_threads` | none |
-| V2.2 | `press.py` (notice only); reads `jr_statements`; trust from pressers uses the same agent-judged, bounded approach (D13) | none |
+| V2.2 | `press.py` (notice only); reads `jr_statements`; presser answers are recorded as relationship events the same way (D15) | none |
 
 ## 3. Risks and unknowns
 
@@ -450,9 +490,10 @@ Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at m
 |---|---|---|---|
 | R1 | Shared files with the sibling plans: `db/init_db.sql`, `server/api.py`, `pipeline/weekly_capture.py`, `FranchisePage.tsx`, `gm_talk.py`. | Siblings start after this plan (D5). | Siblings read the built code first. |
 | R2 | `gm_negotiation` checks `gm_team_settings.user_controlled` until V2.11. | `test_inbox_kinds_gm_talk.py` covers a mismatch. | The thread shows its 400 text; JR ticks the flag on `#debug` until V2.11 lands. |
-| R3 | Model latency beside Madden. | Spike; `voice.write` logs time and source. | Tune the budget; decisions are stored first. No model means no trust move. |
+| R3 | Model latency beside Madden. | Spike; `voice.write` logs time and source. | Tune the budget; decisions are stored first. No model means no appraisal event. |
 | R4 | `CONTRACT` and `ROLE_TALK` import private `franchise_api` helpers. | Their tests import them by name. | A later plan that owns `franchise_api.py` moves them to an engine module. |
-| R5 | The model's trust judgments drift (everything rude, or everything +2), or take the engine's decision personally. | Tests with fixed fake judgments; the orchestrator's `llm_compare` run includes 10 polite and 10 rude synthetic exchanges. | Bounds cap the damage per exchange; prompt fixes; `INBOX_TRUST_UNIT` can be set to 0 to switch moves off. |
+| R5 | The model's appraisals drift (everything rude, or everything positive), or take the engine's decision personally. | Tests with fixed fake appraisals; the orchestrator's `llm_compare` run includes 10 polite and 10 rude synthetic exchanges. | Prompt fixes. Appraisals are evidence only, and the relationships policy (mode off/observe/enabled) decides whether they ever move trust. |
+| R11 | The relationships plan isn't built when the inbox ships, or its envelope changes in review. | `flush` is guarded (import + table check); outbox rows keep the full envelope. | Events wait in `inbox_relationship_events` (PENDING); a small mapping fix at flush if the envelope changes. Nothing is lost. |
 | R6 | The vision pin changes league-wide outputs. | A test: with no `team_vision` rows `compute` is unchanged; with a pin only that team changes. | Delete the row; the next run reverts. |
 | R7 | A pinned direction raises or lowers the hot seat's expected wins (`EXPECTED_WINS` by direction), so JR's vision affects the coach's job security. | Noted in the vision template ("we'll be judged as a rebuilding team"). | Intended; flag for JR (Q-open 2). |
 | R8 | The model writes a fact that isn't on the sheet, or contradicts the decision. | Validators; tests feed bad outputs. | Template. |
@@ -466,19 +507,19 @@ Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at m
 - `tests/test_inbox_actors.py` → no rows → no actors (D8); take/release; a team outside the registry → 403; a persona not on the team → 409; the coach-GM candidate creates both rows; PLAYER rows are listed but served by no kind.
 - `tests/test_inbox_store.py` → idempotent thread creation; `seq`; expiry; caps; `jr_statements` shape; released actor → thread read-only.
 - `tests/test_inbox_registry.py` → auto-discovery; no `KIND` ignored; duplicate raises; missing `ACTOR_ROLES` → once per team.
-- `tests/test_inbox_voice.py` → neutral view for a missing profile; GM and writer views; invented money, player or contradiction → template; slow fake model → template within the budget; `MU_INBOX_LLM=0`; the judgment parsed from the same JSON; the trust and reasons appear in the prompt.
-- `tests/test_inbox_trust.py` → clamps to `INBOX_TRUST_MAX` and `PROMISE_TRUST_MAX`; writes a `persona_relationships` row for gm/player/coach/writer; evidence keeps 5 with the reason; idempotent on `ref`; no judgment → no write; pending judgments retried.
+- `tests/test_inbox_voice.py` → neutral view for a missing profile; GM and writer views; invented money, player or contradiction → template; slow fake model → template within the budget; `MU_INBOX_LLM=0`; the appraisal parsed from the same JSON and asked for only when `appraisal.allowed`; without `relationship_context` the prompt has no relationship lines.
+- `tests/test_inbox_appraisal.py` → envelope fields for each of the four kinds; one source gives one event (interaction or treatment, never both); `allowed` false for real players, real coaches and unknown origin; promise events for an existing real player are still recorded; `unknown` resolution with no chart; idempotent on `source_event_id`; `flush` is a no-op without the relationships store, appends with `expected_head` when it exists (fake store), and leaves conflicts and unresolved refs PENDING with a reason; nothing writes `persona_relationships`.
 - `tests/test_inbox_parse.py` → contract phrasings; "40" alone → None; the model fallback rejects unknown ids and out-of-range numbers; summaries.
 - `tests/test_inbox_scan.py` → triggers once per actor role; no actors → nothing; reruns create nothing; promise reviews run once; failing kinds skipped.
 - `tests/test_weekly_capture_inbox.py` → `step_inbox` after `step_gm`; errors logged.
 - `tests/test_inbox_kinds_gm_talk.py` → trigger from a registry team where JR controls the GM, flag or not; reject; talk options call `gm_negotiation`; mismatch text; drafting from `team_assets`; no surplus in the JSON.
 - `tests/test_inbox_kinds_contract.py` → `_score` path; intents; counter; ineligible → 409; drafting; the helpers exist.
-- `tests/test_inbox_kinds_role_talk.py` → triggers; `PROMISE` writes no move (no `franchise_pending_moves` insert); a review with the player moved up → kept, without → not kept; each yields one bounded judgment; only COACH actors.
+- `tests/test_inbox_kinds_role_talk.py` → triggers; `PROMISE` writes no move (no `franchise_pending_moves` insert); a due promise with the player moved up → `promise_resolved` kept, without → broken, with no chart → unknown; `promise_made` carries issuer, beneficiary, criterion and due time; only COACH actors.
 - `tests/test_inbox_kinds_reporter.py` → beat writer chosen; continues until the model says done; template wraps up after 3; hard stop at 10; `END_INTERVIEW`; ON_RECORD needs a note; statements stored.
 - `tests/test_inbox_kinds_vision.py` → skipped for a coach-GM team and when JR controls both; COACH and GM actor sides; `PROPOSE` → AGREE / COUNTER / REFUSE from `team_vision.respond`; AGREE upserts `team_vision`; `DIRECTION_SHIFT` fires once.
 - `tests/test_team_vision.py` → `allowed` under each override; `respond` margin with `risk_appetite`; emphasis counter; `current`/`upsert`.
 - `tests/test_gm_direction.py` (extended) → no visions → identical output; a pin applies at a non-checkpoint week; overrides beat the pin; emphasis × 1.15 on the right groups.
-- `tests/test_inbox_api.py` → every §2.12 shape; actors endpoints; empty inbox with no actors; `/draft` never acts; errors; trust shown on messages.
+- `tests/test_inbox_api.py` → every §2.12 shape; actors endpoints; empty inbox with no actors; `/draft` never acts; errors; appraisal shown on messages, no trust number.
 
 Run with `pytest -m "not integration" tests/test_inbox_*.py tests/test_team_vision.py tests/test_gm_direction.py tests/test_weekly_capture_inbox.py`. Frontend: `npm run build` in `Mu_Network/`.
 
@@ -486,29 +527,29 @@ Run with `pytest -m "not integration" tests/test_inbox_*.py tests/test_team_visi
 
 Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, this plan, `CLAUDE.md`.
 
-### U1: Inbox core (tables, actors, store, registry, voice, trust, parse, scan, CLI, weekly hook)
+### U1: Inbox core (tables, actors, store, registry, voice, appraisal events, parse, scan, CLI, weekly hook)
 
 - **Owns:**
-  - New: `db/migrations/2027_01_19_front_office_inbox.sql`; `engines/inbox/__init__.py`, `__main__.py`, `actors.py`, `store.py`, `registry.py`, `voice.py`, `trust.py`, `parse.py`, `scan.py`; `engines/inbox/kinds/__init__.py` (empty).
-  - New tests: `tests/test_inbox_actors.py`, `test_inbox_store.py`, `test_inbox_registry.py`, `test_inbox_voice.py`, `test_inbox_trust.py`, `test_inbox_parse.py`, `test_inbox_scan.py`, `test_weekly_capture_inbox.py`.
+  - New: `db/migrations/2027_01_19_front_office_inbox.sql`; `engines/inbox/__init__.py`, `__main__.py`, `actors.py`, `store.py`, `registry.py`, `voice.py`, `appraisal.py`, `parse.py`, `scan.py`; `engines/inbox/kinds/__init__.py` (empty).
+  - New tests: `tests/test_inbox_actors.py`, `test_inbox_store.py`, `test_inbox_registry.py`, `test_inbox_voice.py`, `test_inbox_appraisal.py`, `test_inbox_parse.py`, `test_inbox_scan.py`, `test_weekly_capture_inbox.py`.
   - Existing: `db/init_db.sql`, `pipeline/weekly_capture.py`.
-- **Reads:** §2.1–§2.8, §2.10; `db/franchises.py:160-180`; `engines/gm_negotiation.py:300-325`; `engines/gm_rationale.py:184`; `engines/gm_llm.py`; `personality/core.py`, `personality/store.py`; `newsroom/personas.py`; `newsroom/relationships.py:20-80`, `:386-460`; `pipeline/weekly_capture.py:540-576`; the sibling plans' inbox sections.
+- **Reads:** §2.1–§2.8, §2.10; `db/franchises.py:160-180`; `engines/gm_negotiation.py:300-325`; `engines/gm_rationale.py:184`; `engines/gm_llm.py`; `personality/core.py`, `personality/store.py`; `newsroom/personas.py`; `docs/not_started/PERSONALITY_RELATIONSHIPS_PLAN.md` §0b, §2.1–§2.2 (envelope, `append_events`, `relationship_context`); `pipeline/weekly_capture.py:540-576`; the sibling plans' inbox sections.
 - **Depends on:** none.
 - **Done when:** the migration applies to `madden_test` and is in `init_db.sql`; the CLI lists scan/list/show/control; the eight test files pass.
-- **Verify:** `pytest -m "not integration" tests/test_inbox_actors.py tests/test_inbox_store.py tests/test_inbox_registry.py tests/test_inbox_voice.py tests/test_inbox_trust.py tests/test_inbox_parse.py tests/test_inbox_scan.py tests/test_weekly_capture_inbox.py` all pass.
+- **Verify:** `pytest -m "not integration" tests/test_inbox_actors.py tests/test_inbox_store.py tests/test_inbox_registry.py tests/test_inbox_voice.py tests/test_inbox_appraisal.py tests/test_inbox_parse.py tests/test_inbox_scan.py tests/test_weekly_capture_inbox.py` all pass.
 
 ### U2: Inbox frontend module
 
 - **Owns:** `Mu_Network/src/types/franchiseInbox.ts` (new), `Mu_Network/src/components/franchise/InboxModule.tsx` (new), `Mu_Network/src/components/franchise/FranchisePage.tsx`.
 - **Reads:** §2.3, §2.12–§2.13; `FranchisePage.tsx`, `ContractRoomModule.tsx`, `TradeMachineModule.tsx`, `DepthChartModule.tsx`, `types/franchiseMarket.ts`.
 - **Depends on:** none (builds against §2.12's fixed JSON).
-- **Done when:** with mocked fetches, `#franchise-inbox` renders the take-control panel, the list, a thread, trust markers and the draft card; the build passes.
+- **Done when:** with mocked fetches, `#franchise-inbox` renders the take-control panel, the list, a thread, appraisal markers and the draft card; the build passes.
 - **Verify:** `cd Mu_Network && npm run build` exits 0.
 
 ### U3: Coach-player and interview kinds
 
 - **Owns:** `engines/inbox/kinds/role_talk.py` (new), `engines/inbox/kinds/reporter.py` (new), `tests/test_inbox_kinds_role_talk.py` (new), `tests/test_inbox_kinds_reporter.py` (new).
-- **Reads:** §2.2–§2.8; U1's package; `server/franchise_api.py:314-360`; `engines/depth_chart_engine.py:39-45`, `:328-420`; `agent_memories` (`db/init_db.sql:1911`); `newsroom/relationships.py:115`.
+- **Reads:** §2.2–§2.8; U1's package; `server/franchise_api.py:314-360`; `engines/depth_chart_engine.py:39-45`, `:328-420`; `agent_memories` (`db/init_db.sql:1911`); `docs/not_started/PERSONALITY_RELATIONSHIPS_PLAN.md` §2.2 (promise events).
 - **Depends on:** U1.
 - **Done when:** both kinds pass their tests; no chart is ever written.
 - **Verify:** `pytest -m "not integration" tests/test_inbox_kinds_role_talk.py tests/test_inbox_kinds_reporter.py tests/test_franchise_api.py` pass.
@@ -572,7 +613,7 @@ After wave 3 the orchestrator runs the page against `madden_test` once (take con
 | `engines/inbox/registry.py` | U1 |
 | `engines/inbox/scan.py` | U1 |
 | `engines/inbox/store.py` | U1 |
-| `engines/inbox/trust.py` | U1 |
+| `engines/inbox/appraisal.py` | U1 |
 | `engines/inbox/voice.py` | U1 |
 | `engines/team_vision.py` | U6 |
 | `pipeline/weekly_capture.py` | U1 |
@@ -590,7 +631,7 @@ After wave 3 the orchestrator runs the page against `madden_test` once (take con
 | `tests/test_inbox_registry.py` | U1 |
 | `tests/test_inbox_scan.py` | U1 |
 | `tests/test_inbox_store.py` | U1 |
-| `tests/test_inbox_trust.py` | U1 |
+| `tests/test_inbox_appraisal.py` | U1 |
 | `tests/test_inbox_voice.py` | U1 |
 | `tests/test_team_vision.py` | U6 |
 | `tests/test_weekly_capture_inbox.py` | U1 |
@@ -600,10 +641,10 @@ No path appears twice.
 ## 7. Spec changes when built
 
 - §1.1 Repository Layout: `engines/inbox/` (package, `kinds/`), `engines/team_vision.py`, `server/inbox_api.py`, `InboxModule.tsx`, `types/franchiseInbox.ts`, the migration, the tests.
-- New §2.21b "Front-Office Inbox": controlled personas (no default), the matrix, who decides what, kinds, voice, trust judgments, drafts, scan, caps, CLI.
+- New §2.21b "Front-Office Inbox": controlled personas (no default), the matrix, who decides what, kinds, voice, appraisal events and the outbox, drafts, scan, caps, CLI.
 - §2.16: the vision pin (`apply_pin`) and needs emphasis; `team_vision`.
-- New §3.3r: `controlled_personas`, `inbox_threads`, `inbox_messages`, `team_vision`.
-- §3.3p: `persona_relationships` rows for gm, player and coach personas from inbox judgments (evidence kind `INBOX`).
+- New §3.3r: `controlled_personas`, `inbox_threads`, `inbox_messages`, `inbox_relationship_events`, `team_vision`.
+- §3.3p / the relationships section: the inbox as a producer of `meaningful_interaction`, `treatment`, `promise_made` and `promise_resolved` events (outbox `inbox_relationship_events`); it never writes `persona_relationships`.
 - New §4.6c: `/api/franchise/{abbr}/inbox*`.
 - §5: the Inbox module.
 - §6.0 / §6.0b: `step_inbox` after `step_gm`; the scan on opening the inbox.
@@ -626,16 +667,20 @@ No path appears twice.
 | D8 | JR controls no one by default; control is explicit (`controlled_personas`) | §2.1, §2.12 |
 | D9 | Coach ↔ GM vision talks built now; skipped where the coach is the GM; coach voice neutral until coach personalities are on | §2.8, §2.9, U6 |
 | D10 | Typed text → a draft JR confirms (contract, trade, promise, vision) | §2.3 |
-| D11 | Promises never move the depth chart; a broken promise is judged by the player agent, bounded, with a stored reason, and never changes a sim number | §2.5, §2.8 |
+| D11 | Promises never move the depth chart; they are recorded and resolved from the actual chart, and never change a sim number | §2.5, §2.8 |
 | D12 | Interviews are open-ended, capped at 10 questions | §2.8 |
-| D13 | Trust effects are judged by the counterpart from what was said, bounded per exchange, with a stored reason; no fixed table | §2.5 |
+| D13 | The counterpart appraises what was said, with a stored reason; no fixed table (as evidence since D15) | §2.5 |
 | D14 | V2.10's `PROSPECT` and `SCOUT` kinds belong to the controlled GM (`ACTOR_ROLES = ('GM',)`); without a controlled GM on that team, none | §2.1, §2.14 |
+| D15 | The relationships plan owns trust; the inbox records `meaningful_interaction` / `treatment` events in its envelope (outbox until its store exists); 0.03 / 0.06 are suggested policy starting values; voice reads trust only via `relationship_context` | §2.4, §2.5, §2.6 |
+| D16 | Promises are `promise_made` / `promise_resolved` with a measurable depth-chart criterion and due time, resolved from the actual chart | §2.5, §2.8 |
+| D17 | Trust is one-way; never read as mutual; no legacy tags | §2.5 |
+| D18 | Existing real players: neutral voice, no appraisal, promises recorded as facts only; real coaches neutral until reviewed profiles | §2.5 |
 
 **Still open:**
 
 | # | Question | Recommendation |
 |---|---|---|
-| O1 | The vision's playing-time setting has no consumer because `COACH_TRUST_SCALE` is 0 (depth-chart plan D4). Turn it on for teams with a vision? | Not in this plan. Store it now and let the coach-personality switch-on decide, since it changes depth charts (a sim effect). |
+| O1 | The vision's playing-time setting has no consumer because `COACH_TRUST_SCALE` is 0 (depth-chart plan D4). | Settled: stored only here. Its eventual consumer (depth-chart score adjustments) is owned by [`PERSONALITY_DEVELOPMENT_COACHING_PLAN.md`](./PERSONALITY_DEVELOPMENT_COACHING_PLAN.md), not this plan. |
 | O2 | A pinned direction changes the hot seat's expected wins (R7). Keep that link? | Yes. A coach who asks to rebuild is judged as a rebuilding coach. The vision template says so. |
-| O3 | Trust bounds: `INBOX_TRUST_MAX = 0.03` per exchange and `PROMISE_TRUST_MAX = 0.06` per promise (estimates, near the press plan's sizes). | Start there and tune after a season of threads, together with the press plan's bounds. |
+| O3 | Trust bounds: 0.03 per exchange and 0.06 per promise. | Settled by D15: suggested starting values for the relationships plan's policy, not a calculation in this plan. |
 | O4 | Wave 3 holds only the API to keep three units per wave. Allow four units in wave 2 instead? | Yes, if JR doesn't mind four parallel agents; it saves a wave. |

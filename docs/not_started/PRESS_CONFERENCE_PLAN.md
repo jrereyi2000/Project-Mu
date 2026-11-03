@@ -1,17 +1,17 @@
 # Project Mu: Press Conferences Plan (V2.2)
 
 **Status:** approved by JR (2026-11-03), with his changes to the redesign recorded in §8 (decisions taken). Not started.
-**Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §5 (ingest runs on the save made after Advance Week), §5.3.2 (interactive latency boundary), §6 V2.0 ground rules and V2.2; [`V3_STUDIO_PLAN.md`](../in_progress/V3_STUDIO_PLAN.md) §7 and its ownership table (V3 reads approved quotes); [`AGENT_WIRE_VOICE_PLAN.md`](../in_progress/AGENT_WIRE_VOICE_PLAN.md) U1 (person keys, writer relationships); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) phases 1–3 and the personality core; [`FRONT_OFFICE_INBOX_PLAN.md`](./FRONT_OFFICE_INBOX_PLAN.md) (V2.9, being revised in parallel; builds first); PROJECT_SPEC §2.1 (excitement and its projection), §2.14 (game scripts), §2.19 (hot seat), §4.6b (franchise API), §7.2 (beat reporting), §7.7 (agent memory), §7.11 (personas).
+**Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §5 (ingest runs on the save made after Advance Week), §5.3.2 (interactive latency boundary), §6 V2.0 ground rules and V2.2; [`V3_STUDIO_PLAN.md`](../in_progress/V3_STUDIO_PLAN.md) §7 and its ownership table (V3 reads approved quotes); [`AGENT_WIRE_VOICE_PLAN.md`](../in_progress/AGENT_WIRE_VOICE_PLAN.md) U1 (person keys, writer relationships); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) phases 1–3, the personality core, §4.7 and §5.1 (D8–D12); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](./PERSONALITY_RELATIONSHIPS_PLAN.md) §0b (consumer decisions), §2.1 (`relationship_context`, `append_events`) and §2.2 (event envelope), which owns trust; [`FRONT_OFFICE_INBOX_PLAN.md`](./FRONT_OFFICE_INBOX_PLAN.md) (V2.9, being revised in parallel; builds first); PROJECT_SPEC §2.1 (excitement and its projection), §2.14 (game scripts), §2.19 (hot seat), §4.6b (franchise API), §7.2 (beat reporting), §7.7 (agent memory), §7.11 (personas).
 
 **Words used here.** An *agent* is a persona with an agentic interface: a writer, a coach, later a player, each with its own prompt, memory and personality, taking turns. The *subject* is the person at the podium (a head coach in this plan). A subject is either *user-controlled* (a persona JR controls; today that means the head coach of a team in the franchise registry's `user_teams`) or an *AI agent*.
 
-**Goal:** Every head coach holds a postgame press conference every week, the way the real league does. Writer agents are each told who they are, given the box score, the game's story and the league's state, and told they are in a postgame press conference with Coach X. They raise their hands; the coach picks who asks; reporters ask, follow up and pick up on each other's questions. The coach answers: an AI coach as his own agent, JR's coach as JR, typing in the Game Center. The presser ends the way real ones do: the reporters run out of questions, or the coach has had enough (sooner after a bad loss, or for a short-tempered coach). Who shows up depends on how big the game looked beforehand: every team's beat reporters cover their own coach, and national reporters go to the week's big games and cover both coaches. The 31 AI pressers run in the background after the week is ingested; JR's own presser waits for him behind a button. Transcripts become the only source of head-coach quotes in that week's beat coverage. Every reporter remembers what was said, and judges for itself how the coach treated it: a thoughtful answer, a snippy one, being passed over again and again, or a presser he never showed up for. That judgment moves its trust toward the coach, within tight bounds, and never touches a sim number.
+**Goal:** Every head coach holds a postgame press conference every week, the way the real league does. Writer agents are each told who they are, given the box score, the game's story and the league's state, and told they are in a postgame press conference with Coach X. They raise their hands; the coach picks who asks; reporters ask, follow up and pick up on each other's questions. The coach answers: an AI coach as his own agent, JR's coach as JR, typing in the Game Center. The presser ends the way real ones do: the reporters run out of questions, or the coach has had enough (sooner after a bad loss, or for a short-tempered coach). Who shows up depends on how big the game looked beforehand: every team's beat reporters cover their own coach, and national reporters go to the week's big games and cover both coaches. The 31 AI pressers run in the background after the week is ingested; JR's own presser waits for him behind a button. Transcripts become the only source of head-coach quotes in that week's beat coverage. Every reporter remembers what was said, and judges for itself how the coach treated it: a thoughtful answer, a snippy one, being passed over again and again, or a presser he never showed up for. That judgment is recorded as relationship events for the relationships plan, which owns trust; it never touches a sim number.
 
 **Delivers:**
 - **Research:** a reference corpus of real recent NFL postgame press conferences. The derived question taxonomy and statistics are committed; the raw transcripts stay local. It is reference and test material only; no real transcript text goes into prompts (U1, D8).
 - **Casting:** `newsroom/config/press_pool.json` (the national press pool with tiers) and `newsroom/press_cast.py` (pre-game interest and who attends which game).
 - **Facts and checking:** `newsroom/press_facts.py` (the fact sheet every agent sees, and the line checker that guards numbers and names).
-- **Agents:** `newsroom/press_agents.py` (reporter turns, the coach's turns including picking the next reporter, coach patience, and each reporter's end-of-presser judgment of its trust).
+- **Agents:** `newsroom/press_agents.py` (reporter turns, the coach's turns including picking the next reporter, coach patience, and each reporter's end-of-presser appraisal, turned into relationship events).
 - **Running pressers:** `newsroom/press_room.py` (the session engine, storage, approval, memory and relationships, the week runner and CLI). It comes with the migration `db/migrations/2027_01_20_press_conferences.sql` (tables `press_conferences`, `press_attendees`, `press_turns`, `press_hands`) and `server/press_api.py` (the live presser API under `/api/franchise/{abbr}/press*`).
 - **Screen:** `Mu_Network/src/components/franchise/PressConferencePanel.tsx` and its types file, opened from a button on the Game Center.
 - **Wiring:**
@@ -34,7 +34,8 @@
 | S4 | Pre-game interest signals that don't know the result: `games.projected_excitement`, raw E projected before kickoff and kept for completed games (`engines/excitement_projection.py:1–20`); `display_excitement` (`engines/gotw_engine.py:77`); `rank_games_by_interest` = projected E + division bonus + playoff-race bonus (`newsroom/slot_targets.py:160`); `crowd_score` = popularity, form, opponent, division and primetime (`pipeline/mod_packs.py:106`), with the broadcast window from `broadcast_window` (`:90`). `team_seasons.popularity_index` is one row per season that the weekly engines rewrite, so after the ingest it already includes the result. | Casting uses only pre-game inputs: projected E, the broadcast window, division, the playoff round, the market constants, and the records from games before this week. It never uses `popularity_index` from the current season (R3). |
 | S5 | Writer personas: 40 archetypes in `newsroom/config/agent_personas.json`. National candidates are ACHO, BARNWELL, BERRY, CHADIHA, CLARK, COWHERD, EISEN, ESPN, HERBSTREIT, JJ_WATT, JOYNER, KIMES, MCAFEE, MEL_KIPER, OCHOCINCO, ORLOVSKY, RAPOPORT, RG3, ROSENTHAL, SANDO, SCHEFTER, SHANNON, SIMMONS, SKIP_BAYLESS, STEPHEN_A, THE_ATHLETIC, WINGO and YATES; the rest are fans, label accounts, panels, fantasy and draft desks. Beat reporters are `agent_memories` rows with `archetype = 'LOCAL_BEAT_REPORTER'` and `assigned_team_id` (`swarm_dispatcher.py:2282`). | The pool is a curated config with tiers (U2), not every archetype. |
 | S6 | No coach has a persona today. `persona_sliders.persona_type` allows `'coach'` (`db/init_db.sql:1663`), and the personality core supports role `coach` (`personality/core.py:14`), but neither is seeded or switched on in production (PROJECT_SPEC §7.11). Coaches have profiles: tenure, schemes, tendencies, hardware (`get_coach_profile`), and the hot seat (`engines/coach_hot_seat.py:47`). | An AI coach speaks from his profile and the situation, with a neutral temperament, until coach personalities are switched on (D5). His patience depends on the result, the streak and the hot seat now, and on temperament later. |
-| S7 | `agent_memory_entries.kind` defaults to `'TAKE'` (`db/init_db.sql:2112`), and every memory read filters on `kind = 'TAKE'` (`newsroom/agent_memory.py:279`, `:285`, `:334`, `:350`). Relationships: `relationships._adjust` (`:386`) and `_already_applied` (`:449`) on `persona_relationships` with target types player, coach and team. | Press memories are `kind = 'PRESS'` rows, so the schema doesn't change and they don't leak into takes. Trust toward a coach moves through `_adjust`, made idempotent with `ref = "press:<id>"`. `persona_relationships.trust` is `NUMERIC(3, 2)` (`db/init_db.sql:1708`), so moves are rounded to 0.01. |
+| S7 | `agent_memory_entries.kind` defaults to `'TAKE'` (`db/init_db.sql:2112`), and every memory read filters on `kind = 'TAKE'` (`newsroom/agent_memory.py:279`, `:285`, `:334`, `:350`). Relationships: `relationships._adjust` (`:386`) and `_already_applied` (`:449`) on `persona_relationships` with target types player, coach and team. | Press memories are `kind = 'PRESS'` rows, so the schema doesn't change and they don't leak into takes. This plan does not write `persona_relationships` or call `_adjust` (S15). |
+| S15 | The relationships plan (`PERSONALITY_RELATIONSHIPS_PLAN.md`, not built) owns trust (§0b, JR 2026-11-03). Consumers record events in its envelope (§2.2: `source_event_id`, `kind`, `subject`, `target`, `actor`, `basis`, `confidence`, `visibility`, `attribution`, `payload`), append them through `personality/relationship_store.append_events(cur, events, *, expected_head, team_registry)` and read trust only through `relationship_context(state, *, target)`, which is neutral while its policy is off. A presser answer is a `meaningful_interaction` (`relationship_kind`, `outcome`, `significance`, `opportunity_ref`); being skipped, cut off or stood up is a `treatment` (`team_key`, `treatment_kind`, `outcome`, `significance`, `outcome_refs`). Trust is one-way: nothing reads it as mutual or adopts legacy tags. It reserves migration `2027_01_18_personality_relationships.sql`. | The reporters' appraisals become events in that envelope, kept in this plan's own tables until `append_events` exists, then appended. Prompts and casting read trust only through `relationship_context` (neutral before). This plan's migration stays `2027_01_20`. |
 | S8 | Play Game: `pipeline/game_launch.py:115` `launch(team, season, week, dry_run)` is called by `POST /api/franchise/{abbr}/game/launch`; it refuses while moves are pending. | This is where an unstarted presser for JR's last game becomes DECLINED (JR's rule), and where the beat wakeup for his team gets started. |
 | S9 | Models: `engines/llm_provider.generate_text(..., source, label, model, provider, thinking_level, response_mime_type, return_usage)` (`:314`), routed by `LLM_PROVIDER_<SOURCE>`/`<LABEL>` (`:71`) and logged to `llm_usage`. The repo's price table has `gemini-3.8-flash` at $0.15 per million input tokens and $0.60 per million output tokens (`estimate_cost`, `:422`). The nightly GPU queue (`pipeline/gpu_queue/`, §7.13) keeps local models off the GPU while Madden runs. | Compute sizing (§2.10) uses that table. Background pressers run while JR may be playing, so they use a cloud model (D4). |
 | S10 | `games.completed_at` is not written by the save loader (no hits in `pipeline/load_save.py`). | Nothing here is timed from the game. Times come from presser rows and Play Game. |
@@ -59,7 +60,7 @@
   - transcripts are quoted in the team's beat coverage;
   - no invented head-coach quotes anywhere;
   - a PRESS memory for every reporter who attended;
-  - each reporter's own judgment of how it was treated (answers, being skipped or cut off, a declined presser), stored with a reason in its memory and applied to its trust, within bounds;
+  - each reporter's own appraisal of how it was treated (answers, being skipped or cut off, a declined presser), stored with its reasons in its memory and as relationship events for the relationships plan;
   - a tool for beat writers;
   - `approved_quotes` for V3.
 - **The research corpus** of real postgame pressers, as reference and test material only.
@@ -70,7 +71,7 @@
 - **Player pressers.** The design leaves room for them (§2.12); building them is a later plan.
 - **Any effect on the sim:**
   - answers never change ratings, morale, progression, contracts or popularity;
-  - only writer trust moves, and that only touches prompts.
+  - only relationship events are recorded, and the relationships plan decides what they do to trust, which only touches prompts.
 - **Pressers in national articles** (D3). The national slate is written at ingest as today, before the week's pressers, and national writers don't quote pressers or call the press tool. No national article type fits: every one of them is written in that same ingest. Nationals who attended still remember the presser, and it can colour their opinions.
 - **Agent Wire reactions to quotes.** That belongs to the Agent Wire voice plan, which owns the social files; a follow-up can feed `approved_quotes` into it.
 - **Audio, video and images.** These are V3.
@@ -162,12 +163,12 @@ The weights are first guesses; U1's corpus and JR's eye set them. The pool and t
                   "CLARK", "RG3", "JJ_WATT", "OCHOCINCO", "HERBSTREIT", "ACHO"]},
  "excluded": ["AGGREGATOR", "STATS_DESK", "ROUNDTABLE_PANEL", "NFL_MEMES", "FANTASY_GURU", "DRAFT_SICKO",
               "MEL_KIPER", "DIE_HARD_FAN", "BANDWAGON_FAN", "FORMER_PLAYER", "SCHEFTER_TWEET", "SKIP_TWEET"],
- "weights": {"former_team_bonus": 2.0, "relationship_bonus": 1.5}}
+ "weights": {"former_team_bonus": 2.0, "relationship_bonus": 0.0}}    // relationship_bonus stays 0 until relationship_context exists
 ```
 
 The tier lists above are a starting proposal; U2 reads each persona's `voice` and records why each archetype sits where it does.
 
-**Assignment:** `cast_week(cur, season: int, week: int) -> dict[game_id, Cast]`. Games are ranked by interest, highest first. Each game draws its national count from the tiers it allows: within a tier, people with a former-team slant or a relationship (|trust| ≥ `relationships.SHOWN_MIN`) to either team are weighted up, and the rest is a seeded draw (`random.Random(f"press:{season}:{week}:{game_id}")`). Each national attends at most one game a week (one person key, one game), as real reporters travel to one game. Beat reporters are every `LOCAL_BEAT_REPORTER` of each team; they attend only their own coach's presser and ask only about their own team. Nationals attend both coaches' pressers at their game. The result never enters casting.
+**Assignment:** `cast_week(cur, season: int, week: int) -> dict[game_id, Cast]`. Games are ranked by interest, highest first. Each game draws its national count from the tiers it allows: within a tier, people with a former-team slant toward either team are weighted up (and, once `relationship_context` exists, people whose context names a tie to either team, with `relationship_bonus`; neutral before), and the rest is a seeded draw (`random.Random(f"press:{season}:{week}:{game_id}")`). Each national attends at most one game a week (one person key, one game), as real reporters travel to one game. Beat reporters are every `LOCAL_BEAT_REPORTER` of each team; they attend only their own coach's presser and ask only about their own team. Nationals attend both coaches' pressers at their game. The result never enters casting.
 
 `Cast = {"game_id", "interest", "tier", "inputs", "nationals": [Attendee], "beats": {team_id: [Attendee]}}`, where `Attendee = {"agent_id", "person_key", "archetype", "display_name", "handle", "role": "BEAT"|"NATIONAL", "pool_tier"}`.
 
@@ -175,7 +176,8 @@ The tier lists above are a starting proposal; U2 reads each persona's `voice` an
 
 **The reporter's turn** is `reporter_turn(attendee, state, llm) -> dict`. Its prompt holds:
 - the persona: `personas.render_persona(persona, "POST", tags={"GAME_REVIEW"}, seed=f"press:{conference_id}:{agent_id}")`;
-- the memory block (`agent_memory.build_memory_block`) and the relationship block (`relationships.relationship_block`);
+- the memory block (`agent_memory.build_memory_block`);
+- its relationship to the coach, only through `relationship_context` once the relationships plan is built (omitted, which is neutral, before);
 - "You are at Coach X's postgame press conference after <the game>. You are a beat reporter for <team> and ask only about <team>" (or "a national reporter covering this game");
 - the fact sheet, then the transcript so far;
 - how many times it has raised its hand and been picked so far in this presser;
@@ -200,7 +202,12 @@ The text must be at most 60 words, use only the sheet's numbers, and not repeat 
 The reply is `{"text": str, "mood": 1..5, "wants_to_end": bool}`; `mood` 1 means irritated. Answers are at most 120 words.
 
 **Who asks next: the coach picks** (D1). There is no moderator.
-- **AI coach:** `coach_pick(subject, hands: list[dict], state, llm) -> {"agent_id": str, "reason": str}`. The coach sees the raised hands as names, outlets and roles. For each reporter, it also sees how that reporter stands with him (the reporter's trust toward him, as a word: friendly, neutral or critical; and its GRUDGE / DOUBTER / FAVOURITE / BELIEVER tags), and how often he has picked or passed over that reporter at his pressers this season. It doesn't see the drafted questions, as a real coach doesn't. The choice may follow those relationships (a coach can freeze out a critic), which then shows up in the reporters' judgments (§2.8). The pick must be one of the raised hands; anything else is retried once, then the fallback order is used.
+- **AI coach:** `coach_pick(subject, hands: list[dict], state, llm, coach_views: dict[str, dict] | None = None) -> {"agent_id": str, "reason": str}`. The coach sees:
+  - the raised hands as names, outlets and roles, with a follow-up marked;
+  - his own pick and skip history with each reporter this season (from `press_hands`: hands up, picked);
+  - neutral guidance: a coach usually lets the local beat open, takes a fair spread of the room, and allows a follow-up.
+  
+  He does not see the drafted questions, as a real coach doesn't, and he gets no relationship input today. Trust is one-way: a reporter's view of the coach is not the coach's view of the reporter, and legacy tags are not read (D11). `coach_views` is the slot for the coach's own views of reporters. Once real coaches have reviewed profiles (personality plan D11) and the relationships plan serves coach → reporter context, `press_agents.coach_views(cur, coach, reporters)` fills it from `relationship_context`; today it returns `None`, and the prompt leaves that block out. The pick must be one of the raised hands; anything else is retried once, then the fallback order is used.
 - **JR:** the panel shows the raised hands (names and roles, not the questions). JR clicks one; that reporter's question appears.
 - **Safety rules (code, not choices):**
   - `MAX_QUESTIONS = 25`;
@@ -228,30 +235,52 @@ A user-controlled subject has no budget: JR ends whenever he presses **That's al
 
 The constants are first guesses; U1's corpus statistics (questions per presser, follow-up rate, length after wins and losses) set them before U4 is built.
 
-**The reporter's judgment** is `reporter_judgment(attendee, conference, llm) -> dict` (D2), one call per reporter after the presser closes or is declined. The reporter agent sees:
-- its persona, its memory and its current trust toward the coach;
+**The reporter's appraisal** is `reporter_judgment(attendee, conference, llm) -> dict` (D2, D10). It is one call per reporter after the presser closes or is declined. The reporter agent sees:
+- its persona and its memory, plus its relationship to the coach through `relationship_context` once that exists (neutral before);
 - its own exchanges (question, answer, NO_COMMENT, follow-ups);
 - how many times it raised its hand and was picked, compared with the others in the room, and whether it was left with a hand up when the coach walked off;
 - its pick and skip history with this coach this season (`skip_history(cur, person_key, coach_id, season)` from `press_hands`);
 - or, for a DECLINED presser, only the fact that the coach didn't show.
 
-It answers in structured JSON:
+It answers in structured JSON, in the relationships plan's terms (§2.2), with no trust numbers:
 ```
-{"exchanges": [{"turn_id": int, "delta": float, "reason": str}],   // one per answer it got
- "treatment": {"delta": float, "reason": str} | null,              // being skipped or cut off, or the decline
+{"exchanges": [{"turn_id": int,
+                "relationship_kind": "support"|"collaboration"|"conflict",
+                "outcome": "positive"|"negative"|"mixed",
+                "significance": "routine"|"meaningful",
+                "reason": str}],                                   // one per answer it got
+ "treatment": {"treatment_kind": "disrespect"|"dismissal"|"recognition",
+               "outcome": "positive"|"negative"|"mixed",
+               "significance": "routine"|"meaningful",
+               "reason": str} | null,                              // skipped, cut off, picked first, or the decline
  "memory": str}                                                    // first person, at most 60 words
 ```
 
 Validation (`validate_judgment(raw, attendee, conference) -> dict`):
-- the JSON parses against that shape. Otherwise it is retried once, then becomes the neutral judgment: all deltas 0, reason "no judgment recorded", memory built from the transcript;
+- the JSON parses against that shape, with the enums above. Otherwise it is retried once, then becomes the neutral appraisal (`exchanges: []`, `treatment: null`, memory built from the transcript);
 - `turn_id`s must be this reporter's own exchanges; others are dropped;
-- each exchange delta is clamped to `±PRESS_EXCHANGE_BOUND = 0.03`;
-- a NO_COMMENT exchange can't be positive (clamped to 0);
-- `treatment` is clamped to `[−0.03, 0]` for skips and cut-offs and `[−0.05, 0]` for a decline;
-- the total for the presser is clamped to `±PRESS_TOTAL_BOUND = 0.08` (scaled down proportionally), then each delta is rounded to 0.01 (S7);
-- each reason must be non-empty and at most 30 words, and the memory must pass `press_facts.check_line` (no invented numbers or names). A failing memory is replaced by the built one.
+- a NO_COMMENT exchange can't be `positive`;
+- `treatment` must match what happened:
+  - `recognition` needs the reporter picked at least once and no hand left up;
+  - `disrespect` or `dismissal` needs a skip, a cut-off or a decline;
+  - a declined presser allows only `dismissal` or `disrespect`;
+- each reason must be non-empty and at most 30 words;
+- the memory must pass `press_facts.check_line` (no invented numbers or names); a failing memory is replaced by the built one.
 
-The bounds are first values (§8, still open).
+No trust number is computed here (D10). The bounds this plan proposed (±0.03 per answer, `[−0.03, 0]` for a skip or cut-off, `[−0.05, 0]` for a declined presser, ±0.08 per presser) are suggested starting values for the relationships plan's reviewed policy, recorded in its §0b.
+
+**Events.** `judgment_events(conference, attendee, appraisal, universe_id) -> list[dict]` builds envelopes (relationships plan §2.2):
+- `source_kind: "press_conference"`;
+- `source_event_id`: `f"press:{conference_id}:turn:{turn_id}"` for each exchange, `f"press:{conference_id}:treatment:{agent_id}"` for a treatment, `f"press:{conference_id}:declined"` for a decline (one occurrence, faceted per reporter);
+- `kind`: `meaningful_interaction` for an exchange, `treatment` for a treatment;
+- `subject`: the reporter (person key); `target` and `actor`: the coach; `attribution.responsible`: the coach;
+- `occurred_at`: the season and the game's week; `basis: "verified_simulation"`, `confidence: "medium"`, `visibility: "public"`;
+- `source_refs: [{"namespace": "press_turns", "key": turn_id}]` or `press_conferences`;
+- `payload`:
+  - for an exchange: the appraisal fields, `opportunity_ref` (the turn) and `reason`;
+  - for a treatment: `team_key` (the coach's team), `treatment_kind`, `outcome`, `significance`, `outcome_refs` (the `press_hands` rounds) and `reason`.
+
+Person and team refs use the relationships plan's `PersonRef` / `TeamRef` as built.
 
 ### 2.6 The session engine (`newsroom/press_room.py`)
 
@@ -354,16 +383,16 @@ Every reader guards with `to_regclass('press_conferences')`. Dropped lines are n
 
 `close_effects` runs once per conference (`effects_applied`). For a CLOSED presser, each attendee:
 1. **Judges the presser** with `reporter_judgment` (§2.5), validated and bounded. The result is stored in `press_attendees.judgment`.
-2. **Moves its trust** toward `('coach', subject_id)` through `relationships._adjust`: one event per non-zero delta, `{season, week, kind: "PRESS", delta, text: reason, ref: f"press:{turn_id}"}`, or `ref: f"press:treatment:{conference_id}"` for the treatment delta. `_already_applied` makes it idempotent.
+2. **Records relationship events** (D10): `judgment_events` builds the envelopes, which are stored with the appraisal as `press_attendees.judgment = {"appraisal": {...}, "events": [...], "appended": false}`. `flush_relationship_events(cur, conference_id) -> int` imports `personality.relationship_store`. When that module doesn't exist yet (the relationships plan isn't built), it returns 0 and the events wait. When it does, it calls `append_events(cur, pending, expected_head=read_head(cur, universe_id), team_registry=...)` and marks them `appended`. `run_week` calls it for every waiting conference, so events recorded before the relationships plan lands are appended later, in order. Nothing here writes `persona_relationships`.
 3. **Gets one memory row** in `agent_memory_entries`, `kind = 'PRESS'`:
    - `week` is the game's week, so it is visible from the next publication week;
    - `team_id` is the conference's team;
    - `player_id` is the subject of its first question when that is a player;
    - the text (at most 600 characters) is the facts of its exchanges plus its judgment's memory and reasons. For example: "Week 5, Coach Whitfield's presser after the 24-17 loss to Atlanta. You asked about McMillan's two catches; he said '…'. You had your hand up six times and he called on you once; he took four from the Charlotte Observer. You came away feeling frozen out."
 
-For a DECLINED presser, every reporter in the cast is still judged (treatment only, bounded to `[−0.05, 0]`) and gets a PRESS memory row ("Coach Whitfield didn't take questions after the Week 5 loss." plus its judgment), with `ref = f"press:declined:{conference_id}"`.
+For a DECLINED presser, every reporter in the cast is still appraised (a `treatment` only) and gets a PRESS memory row ("Coach Whitfield didn't take questions after the Week 5 loss." plus its appraisal); the event's `source_event_id` is `f"press:{conference_id}:declined"`.
 
-JR's pressers are judged the same way: JR's picks, skips, answers and "no comment"s are what the reporters react to. Nothing here moves any sim number (D2).
+JR's pressers are judged the same way: JR's picks, skips, answers and "no comment"s are what the reporters react to. Nothing here moves any sim number (D2), and trust is decided only by the relationships plan's policy (D10).
 
 The memory block (`agent_memory.build_memory_block`) gets "YOUR RECENT PRESS CONFERENCES (you were in the room):" with the person's newest `PRESS_SHOWN = 3` PRESS rows before the publication week. The TAKE queries don't change.
 
@@ -450,7 +479,8 @@ Player pressers would add `select_player_subjects(sheet, team_id, n=3)` (the gam
 | R1 | Agent pressers read as generic ("Talk about the win, Coach") or all alike. | Compare with U1's corpus statistics (question types, length, follow-up rate, share naming a player) on a dry week of 32 pressers (`tools/llm_compare.py` for the V2.0 quality gate). | Tune the hand-written instructions and constants. Give each reporter's persona a "what you care about" line from its views. |
 | R2 | Latency for JR between answer and next question. | The spike measures one parallel round (cloud and local). | Use the hands drafted in advance (`PRESS_REPOLL = "changed"`) and a shorter context (the fact sheet without other games). |
 | R3 | Result leakage into casting (a post-game popularity or E). | U2 tests feed a finished game and assert that the cast is the same as for the unplayed game. | Only the inputs listed in §2.4. |
-| R12 | Judged trust drifts: agents are always negative, or always positive, or every coach ends up hated. | U4 tests with scripted good and bad answers; after the first live weeks, a per-week summary of mean deltas by reporter and coach from `press_attendees.judgment`. | Narrow the bounds; add a slow decay toward zero (`relationships.decay` already runs each season). |
+| R12 | Appraisals drift: agents call everything negative, or everything positive and meaningful. | U4 tests with scripted good and bad answers; after the first live weeks, a per-week count of outcomes and significance by reporter and coach from `press_attendees.judgment`. | Tighten the appraisal prompt and validation here; how much an appraisal moves trust is the relationships plan's policy (D10). |
+| R14 | The relationships plan's envelope or `append_events` changes before it is built, or isn't built for a long time. | U6 reads its current §2.2 when it starts; `flush_relationship_events` is guarded. | Events wait in `press_attendees.judgment` in the agreed shape; a small mapping change at append time. Prompts stay neutral meanwhile. |
 | R13 | An AI coach picks the same favourite every time, so pressers become two-person shows. | Read a dry week; count picks per reporter. | The fallback rules stay safety-only (D1). If it reads badly, give the coach agent its own pick counts in the prompt (already there), and JR can decide whether to add a soft rule. |
 | R4 | The checker misses an invented fact (a wrong role, "your third straight loss"), or flags a fine line. | U3's adversarial tests; a sample of transcripts read by JR in the first live week. | Add patterns; record dropped-line counts per presser and watch them. |
 | R5 | Compute or cost grows (more reporters, retries). | `run_week` returns calls and tokens; `llm_usage` holds them per label. | `PRESS_MAX_NATIONALS`, `MAX_QUESTIONS` and `PRESS_WORKERS` are constants; the cap per AI presser can be lowered. |
@@ -459,7 +489,7 @@ Player pressers would add `select_player_subjects(sheet, team_id, n=3)` (the gam
 | R8 | Copyright of real transcripts. | — | Raw transcripts stay in `data/press_corpus/` (gitignored by `data/*`). Only derived statistics and the taxonomy are committed. No transcript text goes into prompts (D8). |
 | R9 | Coach personality is neutral until coach profiles are switched on, so AI coaches sound alike. | Read a dry week. | The profile (schemes, tendencies, tenure, hot seat) and the result already set different situations. Real personality comes when coach profiles are switched on (D5). |
 | R10 | V2.9's `Kind` protocol changes in its revision. | U8 reads the built code first. | `press.py` is one small file. |
-| R11 | Migration date: V2.10/V2.11 may also choose `2027_01_20`. | `ls db/migrations` at U6. | This plan keeps `2027_01_20` (coordinator); a sibling takes the next. |
+| R11 | Migration date: V2.10/V2.11 may also choose `2027_01_20`; the relationships plan reserves `2027_01_18_personality_relationships.sql`. | `ls db/migrations` at U6. | This plan keeps `2027_01_20` (coordinator, D12); a sibling takes the next. |
 
 **Spike first (before wave 2; part of U1, about half a day):**
 1. Collect at least 40 real postgame coach pressers (§4 U1 sources) and measure questions per presser, follow-up rate, question length, and share by type, split by win, loss and blowout loss.
@@ -474,7 +504,7 @@ The results set the patience constants, `MAX_QUESTIONS` and the national counts,
   - tier bands, playoff floors, and national counts per tier;
   - one game per national per week;
   - excluded archetypes never cast;
-  - former-team and relationship weighting;
+  - former-team weighting; no read of `persona_relationships`; relationship weighting stays neutral without `relationship_context`;
   - beats only at their own team's presser;
   - deterministic for a seed;
   - `press_pool.json` validates (known archetypes, no overlap, every non-excluded national archetype placed).
@@ -486,9 +516,10 @@ The results set the patience constants, `MAX_QUESTIONS` and the national counts,
 - `tests/test_press_agents.py`:
   - reporter and coach prompts contain the persona, the memory, the fact sheet and the transcript, and a beat prompt says "only about <team>";
   - JSON parsing of each action;
-  - `coach_pick`: the prompt holds the hands (no question text), each reporter's standing and this season's pick history; an invalid pick is retried once, then `fallback_pick` (marked FALLBACK);
+  - `coach_pick`: the prompt holds the hands (no question text) and this season's pick and skip history, and has no trust, no tags and no reporter-side relationship; `coach_views=None` leaves the views block out, and a given `coach_views` dict appears in it; an invalid pick is retried once, then `fallback_pick` (marked FALLBACK);
   - safety rules: the 25-question cap, no third follow-up in a row, done after two passes;
-  - `validate_judgment`: per-exchange clamp, NO_COMMENT never positive, treatment bounds for skip and decline, total clamp with proportional scaling, rounding to 0.01, foreign `turn_id`s dropped, bad JSON retried then neutral, a memory with an invented number replaced;
+  - `validate_judgment`: enums, NO_COMMENT never positive, treatment kind consistent with what happened (recognition, skip, cut-off, decline), foreign `turn_id`s dropped, bad JSON retried then neutral, a memory with an invented number replaced;
+  - `judgment_events`: envelopes match the relationships plan §2.2 (kinds, required payload fields, stable `source_event_id`s, one-way subject → target);
   - patience by result, streak and hot seat, with temperament only when present, and the clamps;
   - end conditions.
 - `tests/test_press_room.py`:
@@ -497,7 +528,8 @@ The results set the patience constants, `MAX_QUESTIONS` and the national counts,
   - a user session waits and resumes;
   - SCHEDULED to LIVE to REVIEW to CLOSED, with edits allowed only in REVIEW;
   - `decline` from SCHEDULED, and REVIEW auto-approved;
-  - `close_effects` runs one judgment per attendee, stores it, writes PRESS rows and the judged trust moves once (idempotent), including for a declined presser;
+  - `close_effects` runs one appraisal per attendee, stores the appraisal and its events, and writes PRESS rows once (idempotent), including for a declined presser; it never writes `persona_relationships`;
+  - `flush_relationship_events` returns 0 when `personality.relationship_store` is missing, and appends once and marks `appended` with a fake store;
   - `press_hands` records every round, and `skip_history` counts hands and picks per reporter and coach;
   - a user session waits for a pick, then for an answer;
   - `run_week` is idempotent and one failure doesn't stop the rest;
@@ -552,7 +584,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, `Mu_
 ### U2: Casting and the national pool
 
 - **Owns:** `newsroom/press_cast.py` (new), `newsroom/config/press_pool.json` (new), `tests/test_press_cast.py` (new)
-- **Reads:** this plan §2.4; `engines/excitement_projection.py`, `engines/gotw_engine.py:77`, `newsroom/slot_targets.py:160`, `pipeline/mod_packs.py:90–120`, `:263–285`, `engines/market_constants.py`, `newsroom/relationships.py`, `newsroom/config/agent_personas.json`
+- **Reads:** this plan §2.4; `engines/excitement_projection.py`, `engines/gotw_engine.py:77`, `newsroom/slot_targets.py:160`, `pipeline/mod_packs.py:90–120`, `:263–285`, `engines/market_constants.py`, `newsroom/config/agent_personas.json`, `PERSONALITY_RELATIONSHIPS_PLAN.md` §0b and §2.1
 - **Depends on:** none
 - **Done when:** `cast_week` and `pregame_interest` match §2.4 on fake data, and every pool placement has a one-line reason in a `notes` field of the JSON.
 - **Verify:** `pytest -m "not integration" tests/test_press_cast.py` all pass.
@@ -568,9 +600,9 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, `Mu_
 ### U4: Reporter and coach agents
 
 - **Owns:** `newsroom/press_agents.py` (new), `tests/test_press_agents.py` (new)
-- **Reads:** this plan §2.5; U1's `press_corpus_stats.json` (for test targets); U2's `press_cast.py` (the `Attendee` shape); U3's `press_facts.py`; `newsroom/personas.py`, `newsroom/agent_memory.py:268`, `newsroom/relationships.py:660`, `personality/core.py` (`feature_view`), `engines/llm_provider.py:314`
+- **Reads:** this plan §2.5; U1's `press_corpus_stats.json` (for test targets); U2's `press_cast.py` (the `Attendee` shape); U3's `press_facts.py`; `newsroom/personas.py`, `newsroom/agent_memory.py:268`, `PERSONALITY_RELATIONSHIPS_PLAN.md` §0b, §2.1, §2.2, `personality/core.py` (`feature_view`), `engines/llm_provider.py:314`
 - **Depends on:** U1, U2, U3
-- **Done when:** the reporter turns, the coach's turns and picks, patience, the fallback and safety rules, and the judgment with its validation work on a scripted fake model, and the constants are set from U1's statistics.
+- **Done when:** the reporter turns, the coach's turns and picks (with the empty `coach_views` slot), patience, the fallback and safety rules, and the appraisal with its validation and event envelopes work on a scripted fake model, and the constants are set from U1's statistics.
 - **Verify:** `pytest -m "not integration" tests/test_press_agents.py` all pass.
 
 ### U5: Podium panel
@@ -584,7 +616,7 @@ Shared files (orchestrator only, never owned by a unit): `PROJECT_SPEC.md`, `Mu_
 ### U6: Session engine, tables, runner and API
 
 - **Owns:** `db/migrations/2027_01_20_press_conferences.sql` (new), `db/init_db.sql`, `newsroom/press_room.py` (new), `server/press_api.py` (new), `tests/test_press_room.py` (new), `tests/test_press_api.py` (new)
-- **Reads:** this plan §2.2, §2.6–§2.8, §2.11; U2–U4's modules; `server/franchise_api.py` (`user_teams`, `require_user_team`, `team_row`, `league_state`), `db/franchises.py`, `tests/test_franchise_api.py`, `newsroom/relationships.py:386–460`, `db/migrations/2027_01_18_writer_voice.sql`
+- **Reads:** this plan §2.2, §2.6–§2.8, §2.11; U2–U4's modules; `server/franchise_api.py` (`user_teams`, `require_user_team`, `team_row`, `league_state`), `db/franchises.py`, `tests/test_franchise_api.py`, `PERSONALITY_RELATIONSHIPS_PLAN.md` §2.1–§2.2 (and `personality/relationship_store.py` if built), `db/migrations/2027_01_18_writer_voice.sql`
 - **Depends on:** U4, and V2.9's U1 on main (it owns `db/init_db.sql` and `2027_01_19`)
 - **Done when:**
   - the migration applies twice cleanly to a scratch schema in `madden_test` (manual);
@@ -675,7 +707,7 @@ No path appears twice.
 - **§4 (new §4.6c Press Endpoints):** the eight endpoints and shapes.
 - **§6.0b:** the watcher spawns `newsroom.press_room run-week` after the articles. The `game_launch` entry in §4.6b gains the decline behaviour.
 - **§7.2 and §7.3:** the beat brief block and note; the head-coach quoting rule for all writers; national writers don't use pressers.
-- **§7.7:** the PRESS memory section and the judged trust moves (`reporter_judgment`, `PRESS_EXCHANGE_BOUND`, `PRESS_TOTAL_BOUND`).
+- **§7.7:** the PRESS memory section; reporters' appraisals recorded as relationship events (`reporter_judgment`, `judgment_events`, `flush_relationship_events`), with trust owned by the relationships plan.
 - **§7 tools:** `get_press_conference` (beat writers).
 - **New §7.14 Press Conferences:** agents, the coach's picks and the safety rules, patience, reporters' judgments, the line checker and retries, the runner, the CLI, compute and model routing (`LLM_PROVIDER_PRESS`, `PRESS_MODEL`, `PRESS_WORKERS`, `PRESS_REPOLL`), `approved_quotes` as the V3 interface, and room for player pressers.
 - **The V2.9 inbox section:** the `PRESS` kind.
@@ -689,8 +721,8 @@ All decided by JR, 2026-11-03.
 | # | Decision |
 |---|---|
 | D0 | The redesign stands: every head coach holds a postgame presser every week. The pressers are fully agentic, with no fixed triggers or question count. AI coaches answer as their own agents, in background pressers after the ingest. JR's presser opens from a Game Center button once the post-advance save is ingested. A presser not started by Play Game (or by the next ingest) counts as declined, and the 24-hour hold is gone. Casting uses only pre-game interest: beats cover their own coach, nationals cover both coaches at one game a week. Coaches only for now, with room for about 3 players per team later. No invented head-coach quotes for any coach. Quotes go to V3 through `approved_quotes`. |
-| D1 | The coach decides who asks next. An AI coach agent picks from the raised hands, and its relationships with the reporters may shape the choice; JR picks for his own coach. Picks and skips are recorded and feed the reporters' judgments. There is no moderator; only safety rules remain (25-question cap, at most 2 follow-ups in a row, a fallback order if the coach agent fails). |
-| D2 | Trust isn't a fixed table. Each reporter agent judges how the answers it got, being skipped or cut off, or a declined presser affect its trust and relationship. The judgment is structured output with a delta and a reason, validated and clamped per exchange and per presser, and stored with its reasons in the reporter's memory. Declined pressers are judged too. Trust never affects a sim number. |
+| D1 | The coach decides who asks next. An AI coach agent picks from the raised hands (its relationship input is per D11); JR picks for his own coach. Picks and skips are recorded and feed the reporters' judgments. There is no moderator; only safety rules remain (25-question cap, at most 2 follow-ups in a row, a fallback order if the coach agent fails). |
+| D2 | Trust isn't a fixed table. Each reporter agent appraises the answers it got, being skipped or cut off, or a declined presser. The appraisal is structured output with reasons, validated, and stored with its reasons in the reporter's memory. Declined pressers are appraised too. Trust never affects a sim number. (How appraisals become trust: D10.) |
 | D3 | National articles are written at ingest as today. National writers don't quote pressers or use the press tool; no national article type fits, since all are written before the week's pressers. Beat coverage quotes the transcripts. |
 | D4 | A cloud model runs the pressers for now (background and JR's live presser). |
 | D5 | AI coaches have a neutral voice (profile and situation) until coach personalities are switched on. |
@@ -698,8 +730,10 @@ All decided by JR, 2026-11-03.
 | D7 | A presser left in REVIEW at Play Game is approved as it stands. |
 | D8 | Real transcripts are reference and test material only; none of their text goes into prompts. |
 | D9 | Wrong numbers in JR's answers get a warning only; his quote stands and writers get the recorded figure. |
+| D10 | Cross-plan (personality plan §4.7, §5.1; relationships plan §0b). The relationships plan owns trust. Each appraised answer is a `meaningful_interaction` event; being skipped, cut off or stood up is a `treatment` event, in that plan's §2.2 envelope, appended through `personality/relationship_store.append_events`. Until that plan is built, the events wait in `press_attendees.judgment` in the same shape. This plan computes no trust; its bounds are suggested starting values for that plan's policy. Prompts read trust only through `relationship_context` once it exists, and are neutral before. Nothing writes `persona_relationships`. |
+| D11 | Cross-plan. Trust is one-way: nothing reads a reporter's trust as the coach's view, and legacy tags (GRUDGE, FAVOURITE, …) are not read. Until coaches have profiles and their own views, an AI coach's pick has no relationship input (only his pick and skip history and neutral guidance). Real coaches will get reviewed profiles of their real counterparts (personality plan D11), and coach → reporter views arrive through the relationships plan into `coach_pick`'s `coach_views` slot. Coach voice stays neutral until those profiles exist (D5). |
+| D12 | Cross-plan. The relationships plan reserves migration `2027_01_18_personality_relationships.sql`; this plan's stays `2027_01_20_press_conferences.sql`. |
 
 **Still open** (each has a working value in the plan; none blocks wave 1):
-- The judgment bounds: ±0.03 per exchange, `[−0.03, 0]` for being skipped or cut off, `[−0.05, 0]` for a declined presser, ±0.08 per presser. To be confirmed after U4's tests and a dry week (R12).
-- Coach-side relationships: the coach picks using the reporters' trust toward him, read as mutual. Coaches having their own stored opinions of reporters (`persona_type = 'coach'` rows) fits the personality plan once coach personalities are on.
+- How appraisals become trust (weights, caps, decay) is decided in the relationships plan's reviewed policy, starting from this plan's suggested bounds. Not decided here.
 - The patience and cast constants. U1's corpus sets them before U4 is built.
