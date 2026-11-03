@@ -1,6 +1,6 @@
 # Project Mu: Front-Office Inbox & Direct Conversations Plan (V2.9)
 
-**Status:** proposal; JR's review answers recorded (2026-11-03); awaiting JR's approval.
+**Status:** approved by JR (2026-11-03), with the four still-open items (O1–O4) settled as recommended; not built. Builds first.
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2, §5.3.2, §6 V2.0 and V2.9, §7.2; [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8, phases 4 and 6; PROJECT_SPEC §2.16 (team direction), §2.17c (depth charts), §3.3f (GM negotiations), §3.3p (personas and relationships), §3.3q, §4.6b (franchise API), §2.21a (league office).
 
 **Goal:** JR plays through personas he takes control of: a team's GM, its head coach, and later a player. The inbox is where each persona JR controls talks to the other agents in the league, one conversation per pair:
