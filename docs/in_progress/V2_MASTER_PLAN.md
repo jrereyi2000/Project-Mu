@@ -1,6 +1,7 @@
 # Project Mu: V2 Master Plan — The Franchise Operating System
 
-**Status (2026-10-30):** Approved architecture for the local franchise operating system. V2 owns headless Madden, front-office control, progression, and the Franchise Command Center. Cloud media, dossier-based writing, multimedia, and conversational Napper enhancements are separately planned in [`V3_STUDIO_PLAN.md`](./V3_STUDIO_PLAN.md).
+**Status (2026-11-02):** Approved architecture for the local franchise operating system. V2 owns headless Madden, front-office control, progression, and the Franchise Command Center. Cloud media, dossier-based writing, multimedia, and conversational Napper enhancements are separately planned in [`V3_STUDIO_PLAN.md`](./V3_STUDIO_PLAN.md). **The §7.1 build roadmap (Phases 1–5) is built and on main** through [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (2026-11-02); what remains is live-league validation, progression going live, and the unbuilt features listed in §7.3.
+**Approach (JR, 2026-11-02):** JR never uses Madden's menus. Project Mu handles every franchise function, and "Play Game" boots straight into the game (§8, formerly a stretch goal), so Madden is only ever seen on the field. Anything that exists only to show Project Mu data inside Madden's menus is dropped (V2.1).
 **Delivery boundary:** V3 media production is not an additional prerequisite for starting the live franchise (2026 Madden start, §7.2); the existing V2 readiness requirement below remains in force. This is a documentation split, not a completed runtime migration.
 **Prerequisite:** The PC environment, save reader/writer, and Docker Postgres are operational ([`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md) §3, §5).
 **Strategic Decision (JR, 2026-10-29; start updated 2026-10-30):** The live **canonical franchise run is held until V2 systems are fleshed out and tested** on scratch/sample saves (`CAREER-WEEK1/2/3` and `CAREER-GIANTS-AUTOSAVE`). The Madden franchise then starts in 2026 and Project Mu runs it as a fully CPU league through 2033 before JR takes over a team in 2034 (§7.2, V2's final milestone). Testing V2 first ensures that when the permanent league begins, progression, coach-set depth charts, and CBA contract mechanics are fully autonomous and controlled by Project Mu rather than Madden's native CPU algorithms.
@@ -47,7 +48,8 @@ Rather than relying on Madden's franchise screens, the React 19 + Vite frontend 
 * **The "Play Game" Trigger:**
   1. Pre-flight check: validates and writes pending depth charts, roster moves, and injuries to the save.
   2. Compiles and activates the game's tailored mod pack via [`pipeline.mod_packs`](../../pipeline/mod_packs.py) (CBS/FOX/Primetime presentation and scorebugs, crowd density tier, mudded or BCA pink ball).
-  3. Triggers `MMCModManager.exe -launch <pack>`.
+  3. Triggers `MMCModManager.exe -launch <pack>` ([`pipeline/game_launch.py`](../../pipeline/game_launch.py), `POST /api/franchise/{abbr}/game/launch`; built).
+  4. Boots straight into the user's game, so JR never navigates Madden's menus (§8; not built yet).
 
 ### 2.2 Module 2: Depth Chart & Situational Roles
 * **Visual Interactive Grid for All 35 Positions:**
@@ -182,7 +184,7 @@ $$\text{Offer Score } (U) = w_{\text{money}} \cdot S_{\text{financial}} + w_{\te
 
 ## 5. The Automated Game Lifecycle Orchestrator
 
-This is the target V2 lifecycle. The Command Center launch API and process-exit trigger are planned; the current watcher detects stable save-file changes and calls articles synchronously.
+This is the V2 lifecycle. Built: the Command Center launch API (`pipeline/game_launch.py`), and a watcher that detects the stable post-advance save, ingests it, runs the weekly engines and then the league office in-process (retried once Madden27.exe has closed if it was refused while Madden ran), then the articles synchronously. Not built: booting straight into the game (§8), and writing the next week's mod pack from the watcher (today the pack is built at launch instead, §7.0 P3).
 
 ```mermaid
 flowchart TD
@@ -238,10 +240,10 @@ Historical V2 feature IDs remain stable for older references. Entries marked **M
 * **Resource Separation:** Batch jobs run on the nightly GPU queue ([`pipeline/gpu_queue/`](../../pipeline/gpu_queue/)); interactive tasks use ultra-compact models or cloud fallback.
 * **Quality Gate:** Every feature must pass side-by-side evaluation ([`tools/llm_compare.py`](../../tools/llm_compare.py)) before deployment.
 
-### V2.1 Project Mu News Inside Madden
-Inject top Project Mu headlines directly into Madden's `NewsCenterArticle` and `NewsCenterArticleData` save tables, displaying the universe's headlines inside Madden's in-game menus.
+### V2.1 Project Mu News Inside Madden (Dropped, JR 2026-11-02)
+Was: inject top Project Mu headlines into Madden's `NewsCenterArticle` and `NewsCenterArticleData` save tables so they show in Madden's menus. Dropped because JR never uses Madden's menus (status note at the top, §8): the headlines live in `Mu_Network`. Nothing was built.
 
-### V2.2 Interactive Press Conferences
+### V2.2 Interactive Press Conferences (Not started)
 Postgame press conferences where newsroom personas question JR based on real box-score events, scoring swings, and player usage. JR's answers become quotes in weekly articles and update reporter memories ([`newsroom/agent_memory.py`](../../newsroom/agent_memory.py)). V2 owns the interactive surface; V3 owns downstream media generation and consumes those approved quotes.
 
 ### V2.3 Authentic Player Voices (Moved to V3)
@@ -267,13 +269,13 @@ All-game recaps use the shared weekly brief and game-specific evidence, subject 
 ### V2.8 League Memory (Built)
 PostgreSQL-backed narrative search index ([`newsroom/league_memory.py`](../../newsroom/league_memory.py)) enabling journalists and agents to pull authentic historical callbacks ("last time Carolina won 5 straight was 2031").
 
-### V2.9 Front-Office Inbox & Direct Conversations
+### V2.9 Front-Office Inbox & Direct Conversations (Not started; personality phase 6)
 Interactive messaging system allowing JR to communicate with team owners, player agents, rival GMs, beat reporters, and college prospects.
 
-### V2.10 Scouting Revamp & Combine Interviews
+### V2.10 Scouting Revamp & Combine Interviews (Not started; personality phase 6)
 Comprehensive narrative reports for every draft prospect, individual scout voices with regional biases, and interactive combine/visit interviews.
 
-### V2.11 Live Multi-Turn Trade Negotiations
+### V2.11 Live Multi-Turn Trade Negotiations (Not started; personality phase 5)
 Interactive negotiation loops with AI GMs featuring counter-offers, trade posturing, leaks to media insiders, and published negotiation transcripts for CPU-to-CPU deals.
 
 ### V2.12 Long-Term Team and League Narratives (Moved to V3)
@@ -283,7 +285,7 @@ Narrative tracking consumes the shared season-continuity and league-memory found
 ### V2.13 Personalities Across the NFL Universe (Built, Phases 1–3)
 50-trait validated personality system ([`newsroom/config/persona_traits.json`](../../newsroom/config/persona_traits.json)) extending numeric behavioral sliders to players, coaches, GMs, and scouts.
 
-### V2.14 Project Mu Owns Progression & Overall Rating (OVR) Mechanics
+### V2.14 Project Mu Owns Progression & Overall Rating (OVR) Mechanics (Engine built; live activation open, §7.0 B2)
 Madden XP progression sliders are set to 0. All player attribute development, stagnation, and age regression are calculated deterministically by [`engines/progression.py`](../../engines/progression.py) and written straight to the save file.
 
 #### In-Game OVR Calculation vs. Static Save Records (Empirical Findings, 2026-10-30)
@@ -294,8 +296,8 @@ In-game testing on Madden 27 PC (`CAREER-2026SB-MODIFIED-AUTOSAVE` with Bryce Yo
    - Always write individual ratings *and* explicitly compute and write `Player.OverallRating`, `OverallGrade0-4`, and `PlayerType`.
    - *Rationale:* Madden's save parser does not rewrite the binary database table on disk upon load. External snapshot tools (`load_save.py`), web API queries, and Madden's background CPU logic (such as trade evaluation algorithms and cut decisions) evaluate the static database column directly. Writing both guarantees 100% parity between database state, raw save inspection, and in-game UI.
 
-### V2.15 Project Mu Runs the League (Headless League Office)
-Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md)).
+### V2.15 Project Mu Runs the League (Headless League Office) (Built; first live run open, §7.3)
+Full front-office automation for all 32 teams across trades, signings, cuts, draft picks, and coach hirings, executing moves via the save writer ([`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md), which superseded [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md)).
 
 ### V2.16 Media Generation Routing (Moved to V3)
 
@@ -313,16 +315,16 @@ Weekly personality banter, interactive trade dialogue, user reply hooks, and lin
 
 ## 7. Implementation & Testing Roadmap
 
-### 7.0 Dependencies on Other In-Progress Work (checked 2026-10-30)
+### 7.0 Dependencies on Other In-Progress Work (checked 2026-11-02)
 
-Phases 1–3 below can start now. These items depend on unfinished work elsewhere:
+Phases 1–5 below are built (§7.1). These items depend on unfinished work elsewhere:
 
 **Blockers**
 
 | # | What it blocks | Waiting on |
 | :--- | :--- | :--- |
 | ~~B1~~ | **Resolved (JR, 2026-10-30): ingest runs on the post-advance save (§5 note).** Was: §5 post-game ingest (step K) and Phase 4 | (a) What links a week's player lines (§5 note above): sim or play one game, save, read; then finish the week and advance, and read again. (b) Whether Madden writes the save during a game or only on Save & Quit: run [`tools/save_write_logger.py`](../../tools/save_write_logger.py) on the PC through one played game. |
-| B2 | V2.14 (Project Mu owns progression) | [`PROGRESSION_PLAN.md`](./PROGRESSION_PLAN.md) phase A, answered 2026-10-30 on `CAREER-NOPROGRESSION`: (1) XP at 0 stops all gains (a one-time week-17 rating drop remains; the weekly snapshot comparison overwrites it), (2) players age and regress at the offseason start, (3) OVR recompute (V2.14 above: dual-write), (8) regression sliders written to 0 in `LeagueSetting` hold all season and offseason and stop age regression (only the slider menu resets them). Also settled (JR): (5) retirement isn't a blocker (snapshot before Madden's retirement stage, un-retire whoever Project Mu keeps); (6) morale raises a player's key position ratings by up to ~5, which feeds D13; dev-trait regression off works. (7) written `PT_*` flags are kept (JR, after Advance Week), and (4) abilities aren't stored per player: Madden derives them from dev trait, OVR and archetype, which Project Mu writes. Phase A is done, and D13 is decided (JR, 2026-10-30: morale pinned at 50 every week; form is separate, carried by a ratings overlay). Still open: the rest of phase C2 and phase D, then phase E (form). (Moving `engines/progression.py` off `pipeline/teleport.py` is done: `pipeline/madden_player_edit.py`.) |
+| B2 | V2.14 (Project Mu owns progression) | [`PROGRESSION_PLAN.md`](./PROGRESSION_PLAN.md) phase A, answered 2026-10-30 on `CAREER-NOPROGRESSION`: (1) XP at 0 stops all gains (a one-time week-17 rating drop remains; the weekly snapshot comparison overwrites it), (2) players age and regress at the offseason start, (3) OVR recompute (V2.14 above: dual-write), (8) regression sliders written to 0 in `LeagueSetting` hold all season and offseason and stop age regression (only the slider menu resets them). Also settled (JR): (5) retirement isn't a blocker (snapshot before Madden's retirement stage, un-retire whoever Project Mu keeps); (6) morale raises a player's key position ratings by up to ~5, which feeds D13; dev-trait regression off works. (7) written `PT_*` flags are kept (JR, after Advance Week), and (4) abilities aren't stored per player: Madden derives them from dev trait, OVR and archetype, which Project Mu writes. Phase A is done, and D13 is decided (JR, 2026-10-30: morale pinned at 50 every week; form is separate, carried by a ratings overlay). Phases C2, D (offline components), E (weekly form) and H (edit builders) are implemented, and the league office calls the progression checkpoints (V2 core U13). Still open: live scheduling and application in a real league, tuning acceptance, and phases F–G (personality and coach terms, still 0). (Moving `engines/progression.py` off `pipeline/teleport.py` is done: `pipeline/madden_player_edit.py`.) |
 
 **Partial blockers** (can ship first with the dependent term at 0, or later)
 
@@ -330,9 +332,9 @@ Phases 1–3 below can start now. These items depend on unfinished work elsewher
 | :--- | :--- | :--- |
 | P1 | §2.2 "Let Staff Set" (coach philosophy) and §4.1 persona weights | [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phases 4–6 and progression plan phases F–G (player and coach traits). |
 | P2 | V2.15 (headless league office) | Absorbed by [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (2026-10-30); [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) is superseded. |
-| P3 | §2.1 / §5 "Play Game" pre-flight mod pack | Wiring `pipeline.mod_packs.write` into `watch_save.py` (PC plan §10, item 3). |
-| P4 | V2.4 portraits in-game | The one-portrait spike (PC plan §9.4, §10 item 2). |
-| P5 | Trust in all scratch-save results | Every §5.4 check was on unmodded `CAREER-WEEK1/2/3`; sim-stat and roster mods change the numbers, so the checks are re-run on a modded save before the 2034 start. |
+| P3 | §5 step 3: next week's mod pack written by the watcher | "Play Game" already builds and writes the game's pack at launch (`game_launch.py` → `mod_packs.write_pack`), so launch works. The watcher still doesn't call `mod_packs` after ingest; decide whether that is still needed or close P3. |
+| P4 | §10 portraits in-game | The one-portrait spike (§10). The converter exists ([`headshots/portrait_converter/`](../../headshots/portrait_converter/)); nothing writes `PLYR_PORTRAIT` yet. With the menus out of use (§8), portraits only matter where they show during a game. |
+| P5 | Trust in all scratch-save results | Every §5.4 check was on unmodded `CAREER-WEEK1/2/3`; sim-stat and roster mods change the numbers, so the checks are re-run on a modded save before the 2026 start. |
 | ~~P6~~ | Phase 1 `depth_chart.mjs` | **Resolved:** `release.mjs` had already read the 35 positions × 6-slot `Team.DepthChart` layout on every row of the sample save, and `depth_chart.mjs` (V2_CORE_BUILD_PLAN U2, 2026-10-30) writes and reads it back. |
 
 **Open items** (not blocking)
@@ -342,9 +344,9 @@ Phases 1–3 below can start now. These items depend on unfinished work elsewher
 | O1 | Link this week's unlinked player lines ourselves | The game is easy to find: each unlinked row carries `OpposingTeam`, and a team plays once a week, so opponent + week names the game (its score and team box score are already readable). The player is the open question: the reader reaches stat rows only through `Player.GameStats`, so no one has checked whether an unlinked row holds its own player reference. Check on `CAREER-WEEK3` on the PC. If it has none, look for another route (row order following the roster, or lines whose totals add up to the team box score). If O1 works, the postgame newsroom for your own game can run straight after Save & Quit instead of waiting for the advance. |
 | O2 | "Around the league" by kickoff window | Madden sims all CPU games of a week together, before the user's game, whatever their scheduled kickoff. Project Mu could reveal only the games whose kickoff is earlier than the user's (Thursday night, then the early and late Sunday windows before a Sunday night game) and hold the rest until after it: their scores and team box scores in the Game Center (§2.1) and newsroom, in kickoff order. Works today with scores and team stats; player stat lines need O1. |
 
-### 7.1 Phases
+### 7.1 Phases (built)
 
-All development and testing will occur on the PC using existing scratch saves (`CAREER-WEEK3` on `pc-wsl`):
+All five phases were built by [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (on main 2026-11-02) and tested on scratch saves (`CAREER-WEEK3`, `CAREER-V2TEST` and the spike saves on `pc-wsl`). As built: Phase 1's signing and trading live in `contract_edits.mjs` and `record_edits.mjs` rather than `sign.mjs` / `trade.mjs`; Phase 4's watcher runs the league office after ingest instead of waiting for the process to exit, and the mod pack is written at launch (§7.0 P3). The original plan:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -390,14 +392,34 @@ This replaces the earlier "fresh 2034 franchise" start (a new Madden franchise m
 * **In 2034** JR marks his team user-controlled (the `#debug` page, `gm_team_settings.user_controlled`), and the league continues with the user Command Center (§2).
 * The §5.4 save checks are re-run on the modded 2026 save first (§7.0 P5).
 
+### 7.3 Remaining Work (checked against main, 2026-11-02)
+
+**Before the 2026 start (live validation)**
+1. A real-database dry run of the whole V2 core. `madden_test` lacks the progression tables and players loaded by pgid, so nothing has run end to end on a franchise database yet.
+2. The first `league_office setup` on the canonical franchise.
+3. §7.0 P5: re-run the §5.4 save checks on the modded save.
+4. §7.2 check: the database keeps enough dated week-by-week state for V3 dossiers to rebuild each week.
+5. Progression live (§7.0 B2): scheduling and applying the proposal/receipt checkpoints in a real league, and tuning acceptance.
+6. Contract rows for signings: a Roster signing works today only when a release in the same write frees a `PlayerContract` row; free agency signs more than it releases, so creating rows is still a follow-up (V2 core, wave 1 note).
+7. The first live `sim-season` run of the Madden pilot ([`MADDEN_PILOT_AND_TUNING_PLAN.md`](./MADDEN_PILOT_AND_TUNING_PLAN.md)), with JR's OK.
+
+**Booting straight into the game (§8, the adopted approach)**
+8. Route the pilot from launch to the user's pregame/kickoff screen, with screen checks and a hand-back to JR on timeout.
+
+**Unbuilt features**
+9. V2.2 press conferences, V2.9 front-office inbox, V2.10 scouting revamp and combine interviews, V2.11 multi-turn trade negotiations (V2.11 needs personality phase 5; V2.9 and V2.10 phase 6).
+10. §7.0 P1: coach philosophy in "Let Staff Set" and persona weights in free agency (terms at 0 until personality phases 4–6 and progression F–G).
+11. §7.0 P3 (decide or close), P4 portrait spike, O1, O2.
+12. §9 CFB 27 bridge (no `cfb_save_reader` yet).
+
 ---
 
-## 8. Stretch Explorations
+## 8. Booting Straight Into the Game (adopted approach, JR 2026-11-02)
 
 ### 8.1 Boot Straight Into the Game
-Today "Play Game" (§2.1, §5) still leaves the user to start Madden, load the franchise and pick Play Week by hand. The stretch goal: one click in `Mu_Network` lands on the pregame or kickoff screen of the right franchise game. No existing mod is known to do this, so it would be built. Routes to explore, roughly from least to most invasive:
-1. **Launch options:** whether `Madden27.exe` (or the EA app / MMC Modding Tools launch) accepts arguments that skip the intro, splash or main menu, or auto-load the most recent save.
-2. **UI automation from Windows:** a small helper started after `MMCModManager.exe -launch <pack>` that drives the menus with controller or keyboard input (e.g. a virtual gamepad), confirming each screen by image match before the next input. No game files change; it breaks if menus or timings change, so it needs screen checks and a timeout that hands control back to the user.
+Was a stretch goal; now the way V2 is played. JR never uses Madden's menus: Project Mu handles every franchise function in `Mu_Network`, and Madden is seen only on the field. Today "Play Game" (§2.1, §5) builds the pack and launches Madden, but still leaves the user to load the franchise and pick Play Week by hand. The goal: one click in `Mu_Network` lands on the pregame or kickoff screen of the right franchise game. No existing mod is known to do this, so it would be built. Routes, roughly from least to most invasive:
+1. **Launch options:** whether `Madden27.exe` (or the EA app / MMC Modding Tools launch) accepts arguments that skip the intro, splash or main menu, or auto-load the most recent save. Known so far (dynamic presentation research, PROJECT_SPEC §1.1): MMC's `UseDefaultProfile` / `DefaultProfile="Madden27"` removes the game picker, and a root scheduled task running `MMCModManager.exe -launch <pack>` reached Madden's title screen with no UAC or picker input.
+2. **UI automation from Windows (the chosen route):** the Madden pilot ([`MADDEN_PILOT_AND_TUNING_PLAN.md`](./MADDEN_PILOT_AND_TUNING_PLAN.md), `tools/madden_pilot`) already launches with a pack, reads screens and navigates a screen catalog with guarded key presses; booting into the game is one more route on top of it (to `GAMEDAY` → `PLAY SEASON GAME`). No game files change; it breaks if menus or timings change, so it needs screen checks and a timeout that hands control back to the user.
 3. **Save-side setup:** whether anything in the franchise file (the pre-flight in §5 already writes it) can make the loaded franchise open on the user's game, so automation only has to get as far as loading the save.
 4. **A Frostbite mod** through MMC Modding Tools that changes the front-end flow (default menu focus, skipped screens, or a direct load). Most work and least known; check first whether front-end flow is moddable at all.
 
@@ -464,8 +486,8 @@ Player models are barely visible in play, so they only need to be close: the tra
 * The community calls this field "Portrait ID"; with `PLYR_ASSETNAME` (the face scan) it is what portrait and cyberface mods key on, so mods ship ID lists and patchers that rewrite both fields per player (e.g. RFM's 300+ cyberfaces and portraits, Kevin's *Bulk Draft Class Portrait and Cyberface Assignment* from a CSV). MyFranchise Tool can also import a custom portrait image per player, keyed by Portrait ID ([`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) §4).
 
 **Plan:**
-1. By 2036 the real players behind those 2,865 unique slots are long retired, so their portrait images can be overwritten with Project Mu headshots. 2,865 slots cover the 1,829 active players plus several years of rookie classes; slots of players who retire are reused after that.
-2. *(Teleport obsolete 2026-10-29: in the fresh 2034 save, a one-off portrait pass replaces this.)* The teleporter gives each Project Mu player a slot and writes it to `PLYR_PORTRAIT`; the rookie import does the same each season after `headshots/rookie_headshots.py` runs.
+1. In the 2026-start league the real players behind those 2,865 unique slots retire over the CPU years, so a retired player's portrait image can be overwritten with a Project Mu headshot. Slots of players who retire are reused for rookies.
+2. *(Teleport obsolete 2026-10-29.)* Each Project Mu-generated player gets a free slot written to `PLYR_PORTRAIT`; the rookie import does the same each season after `headshots/rookie_headshots.py` runs.
 3. A converter takes each headshot (already a transparent cutout, `static/players/{player_id}.webp`), resizes it to Madden's portrait size and encodes it in the game's texture format.
 4. The portrait textures are replaced through MMC Modding Tools (the community's Frosty-based Madden 27 editor, updated for each title update; [FMT.Madden26Plugin](https://github.com/FMTDev/FMT.Madden26Plugin) is the alternative) and loaded as a mod with the anti-tamper module, offline only.
 
