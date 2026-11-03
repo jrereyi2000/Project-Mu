@@ -60,7 +60,7 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - D15: **The relationships plan owns trust.** The inbox never writes `persona_relationships`. Each exchange with an appraisal-eligible counterpart records a `meaningful_interaction` event (outcome and significance from the counterpart's appraisal, its reason in the payload). Mistreatment is recorded as a `treatment` event. Both use that plan's §2.2 envelope, with `personality/relationship_store.append_events` as the target. Until that plan is built, events wait in the inbox's outbox (`inbox_relationship_events`) in the same shape, ready to append. The bounds 0.03 per exchange and 0.06 per promise become suggested starting values for its policy. The voice reads trust only through `relationship_context` once it exists, and is neutral before.
 - D16: Role-talk promises use `promise_made` / `promise_resolved`: issuer, beneficiary, a measurable criterion (a depth-chart slot by a week), the due time, and a resolution read from the actual depth chart. The trade-requests plan consumes them.
 - D17: Trust is one-way. The inbox never reads a relationship as mutual and never adopts legacy tags.
-- D18: Existing real players have no personality profiles (draft-prospect-only scope, PERSONALITY_PLAN §5.1; JR is reconsidering). They reply in the neutral voice and get no appraisal. A broken promise to one is recorded as a fact with no invented private reaction. Real coaches get reviewed profiles later (D11 there); until then the coach voice stays neutral and coaches give no appraisal.
+- D18 (revised later on 2026-11-03, PERSONALITY_PLAN D12–D13): every persona, real-inspired included, may appraise; existing players get generated profiles at the 2026 start, and real coaches appraise once their reviewed profiles exist (neutral voice and no appraisal before). Original text: Existing real players have no personality profiles (draft-prospect-only scope, PERSONALITY_PLAN §5.1; JR is reconsidering). They reply in the neutral voice and get no appraisal. A broken promise to one is recorded as a fact with no invented private reaction. Real coaches get reviewed profiles later (D11 there); until then the coach voice stays neutral and coaches give no appraisal.
 
 ---
 
@@ -165,7 +165,7 @@ The rule: **the engine decides what happens; the agent says it and judges how it
 | Trade: accept, counter, reject or walk away | `gm_negotiation.respond` | JR offers a 2nd for a CB; the engine counters by adding JR's 5th. | Writes the GM's reply in his voice. |
 | Team vision: is the direction allowed, does the other side agree | `team_vision.respond` (§2.9) over `gm_direction`'s rules | JR's coach asks the GM to REBUILD. The team isn't over the cap and isn't projected to 10.5 wins, and its D score is close to the REBUILD band, so the GM agrees. | "Fine. We'll sell veterans at the deadline and play the kids." |
 | Should this player be starting? (role-talk trigger) | `depth_chart_engine.staff_depth_chart` vs JR's chart | The staff chart has the rookie at WR1 two weeks running; JR has him at WR3. | Writes the rookie's ask from facts on the sheet. |
-| Was a promise kept? | the actual depth chart at the due week vs the promise's criterion | JR's coach promised "you'll start by week 9". At week 9 he's still WR3, so `promise_resolved` is `broken`. | Nothing: the resolution is a fact. Its effect on trust is the relationships policy's; an existing real player gets no invented reaction (D18). |
+| Was a promise kept? | the actual depth chart at the due week vs the promise's criterion | JR's coach promised "you'll start by week 9". At week 9 he's still WR3, so `promise_resolved` is `broken`. | Nothing: the resolution is a fact. Its effect on trust is the relationships policy's (D18 revised: every player with a profile can react). |
 | Who writes to JR, and when | each kind's `scan` triggers | An ENGINE trade proposal names JR's LB, so a `TRADE_INTEREST` thread opens. | Writes the opening message. |
 | How much trust moves | the relationships plan's reviewed policy, from recorded events | JR's GM answers a GM's counter with "Take it or leave it, I don't care." | The GM agent appraises it: outcome negative, significance routine, reason "brushed off my counter without discussing it", recorded as a `treatment` (`disrespect`). |
 
@@ -226,10 +226,10 @@ Order inside every reply:
 
 ```python
 def allowed(view) -> bool
-    # True only for counterparts whose private appraisal is permitted: a generated core profile (e.g. drafted classes
-    # from 2026), or a legacy generated persona (gm_profiles GMs, the invented LOCAL_BEAT_REPORTER). False for existing
-    # real players (no profiles, PERSONALITY_PLAN §5.1), real coaches until their reviewed profiles exist (D11 there),
-    # and unknown origin. False -> no appraisal is asked for and no interaction event is recorded.
+    # True for any counterpart with a profile or persona: real-inspired personas are fictional characters (PERSONALITY_PLAN
+    # D13), so GMs, writers and players (generated profiles from the 2026 start, D12) all appraise. False only for real
+    # coaches until their reviewed profiles exist (D11) and for anyone whose profile isn't loaded yet.
+    # False -> no appraisal is asked for and no interaction event is recorded.
 def interaction_event(thread, message, actor, counterpart, appraisal, at) -> dict
     # kind 'meaningful_interaction'; subject = the counterpart (PersonRef), target = actor = JR's persona (PersonRef);
     # basis 'verified_simulation', confidence 'medium', visibility 'private';
@@ -256,7 +256,7 @@ def flush(cur) -> dict                   # when personality.relationship_store i
 - **One-way.** Every event is about the counterpart's view of JR's persona (or the beneficiary's view of the issuer). The inbox never records or reads the reverse direction as implied, and never reads legacy tags.
 - **What the appraisal judges:** how JR's persona treated the counterpart (respectful and in depth vs snippy or rude), not the engine's decision. Examples: a thoughtful answer to a beat writer's question; a curt "no comment" on a light question; an insulting lowball note; a coach explaining a benching versus "deal with it".
 - **No model, no appraisal.** A template reply records no interaction event. Promise events are facts and are recorded with or without a model.
-- **Existing real players** (D18): neutral voice, no appraisal, no interaction events. A promise to one is still recorded as `promise_made` / `promise_resolved` (facts), with no invented private reaction.
+- **Existing players** (D18, revised): they have generated profiles from the 2026 start, so they speak in their own voice and appraise like anyone else. A player whose profile isn't loaded yet gets the neutral voice and no appraisal; his promises are still recorded as facts.
 - **Suggested starting values for the relationships policy** (not used here): 0.03 per exchange and 0.06 per promise, the bounds this plan first proposed.
 - **No sim effect.** Nothing here moves a number.
 
@@ -508,7 +508,7 @@ Opening the inbox runs `scan(..., teams=[abbr], llm=None)`: fast templates, at m
 - `tests/test_inbox_store.py` → idempotent thread creation; `seq`; expiry; caps; `jr_statements` shape; released actor → thread read-only.
 - `tests/test_inbox_registry.py` → auto-discovery; no `KIND` ignored; duplicate raises; missing `ACTOR_ROLES` → once per team.
 - `tests/test_inbox_voice.py` → neutral view for a missing profile; GM and writer views; invented money, player or contradiction → template; slow fake model → template within the budget; `MU_INBOX_LLM=0`; the appraisal parsed from the same JSON and asked for only when `appraisal.allowed`; without `relationship_context` the prompt has no relationship lines.
-- `tests/test_inbox_appraisal.py` → envelope fields for each of the four kinds; one source gives one event (interaction or treatment, never both); `allowed` false for real players, real coaches and unknown origin; promise events for an existing real player are still recorded; `unknown` resolution with no chart; idempotent on `source_event_id`; `flush` is a no-op without the relationships store, appends with `expected_head` when it exists (fake store), and leaves conflicts and unresolved refs PENDING with a reason; nothing writes `persona_relationships`.
+- `tests/test_inbox_appraisal.py` → envelope fields for each of the four kinds; one source gives one event (interaction or treatment, never both); `allowed` true for GMs, writers and players with profiles, false for real coaches without reviewed profiles and for unloaded profiles; promise events are recorded either way; `unknown` resolution with no chart; idempotent on `source_event_id`; `flush` is a no-op without the relationships store, appends with `expected_head` when it exists (fake store), and leaves conflicts and unresolved refs PENDING with a reason; nothing writes `persona_relationships`.
 - `tests/test_inbox_parse.py` → contract phrasings; "40" alone → None; the model fallback rejects unknown ids and out-of-range numbers; summaries.
 - `tests/test_inbox_scan.py` → triggers once per actor role; no actors → nothing; reruns create nothing; promise reviews run once; failing kinds skipped.
 - `tests/test_weekly_capture_inbox.py` → `step_inbox` after `step_gm`; errors logged.
@@ -674,7 +674,7 @@ No path appears twice.
 | D15 | The relationships plan owns trust; the inbox records `meaningful_interaction` / `treatment` events in its envelope (outbox until its store exists); 0.03 / 0.06 are suggested policy starting values; voice reads trust only via `relationship_context` | §2.4, §2.5, §2.6 |
 | D16 | Promises are `promise_made` / `promise_resolved` with a measurable depth-chart criterion and due time, resolved from the actual chart | §2.5, §2.8 |
 | D17 | Trust is one-way; never read as mutual; no legacy tags | §2.5 |
-| D18 | Existing real players: neutral voice, no appraisal, promises recorded as facts only; real coaches neutral until reviewed profiles | §2.5 |
+| D18 | Revised (JR, 2026-11-03): every persona may appraise, real-inspired included; existing players have generated profiles from 2026; real coaches neutral until their reviewed profiles exist | §2.5 |
 
 **Still open:**
 

@@ -1,6 +1,7 @@
 # Generated-player personality: effect matrix and worked examples
 
 **Status:** design for review, 2026-10-30. No production seeding, migrations, engine edits or effect activation. Implements the next design deliverable in PERSONALITY_PLAN.md §5.1. JR plans to control the simulation from its starting checkpoint through 2034; confirm the exact starting season before scheduling classes.
+**JR decisions (2026-11-03; supersede conflicting text below):** (1) every persona named after a real person (writers, GMs, coaches, players) is a fictional character inspired by that person and may hold views, moods and relationships formed from simulated events; the conservative real-person rules below (neutral private appraisal, scoped evidence permissions) no longer apply to them. (2) Existing players get engine-generated profiles once at the 2026 start (not researched); prospects at draft-class entry; JR can edit any profile. (3) Existing real coaches get reviewed profiles shaped to their real counterparts (separate workstream). (4) The relationships plan owns trust; trust is one-way; promises use `promise_made`/`promise_resolved`. (5) Migration dates are reserved in PERSONALITY_PLAN §5.3. See PERSONALITY_PLAN §5 step 3, §5.1 and D8–D13. For this design: its effects now apply to existing players too, since they get generated profiles.
 
 ## 1. What exists and where to integrate
 
