@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  arraySlots, arrayRefs, calendarYear, decodeRef, depthSlotPgids, encodeRef, fieldValueError, flagValue, isExportableGame, isGenericIntMeta, isRefValue, NO_REF,
-  numberedFields, orderSliderRefs, packedRefs, packRefs, pickRatings, plainFields, playerTraits, refFromValue, schemaFieldName, weightLbs,
-  withoutRefs,
+  arraySlots, arrayRefs, calendarYear, capRoomUnits, decodeRef, depthSlotPgids, encodeRef, fieldValueError, flagValue, isExportableGame, isGenericIntMeta, isRefValue, NO_REF,
+  numberedFields, orderSliderRefs, packedRefs, packRefs, pickRatings, plainFields, playerTraits, rawCapRoom, rawSalaryCap, refFromValue, salaryCapUnits, SALARY_CAP_OFFSET,
+  SALARY_CAP_RAW_RANGE, SAL_CAP_ROOM_BIAS, schemaFieldName, weightLbs, withoutRefs,
 } from '../lib.mjs';
 
 test('decodeRef splits 15 table bits and 17 row bits', () => {
@@ -178,4 +178,33 @@ test('fieldValueError lets a generic Field_N int take 0 or 1 only', () => {
   assert.match(fieldValueError(generic, 2), /0 or 1/);
   assert.match(fieldValueError(generic, false), /integer/);
   assert.ok(!isGenericIntMeta({ type: 'int', minValue: 0, maxValue: 127 }));
+});
+
+test('salaryCapUnits and rawSalaryCap round-trip', () => {
+  assert.equal(salaryCapUnits(18120), 30120);
+  assert.equal(rawSalaryCap(30120), 18120);
+  assert.equal(rawSalaryCap(salaryCapUnits(18120)), 18120);
+  assert.equal(salaryCapUnits(undefined), null);
+  assert.equal(rawSalaryCap(null), null);
+});
+
+test('capRoomUnits and rawCapRoom round-trip', () => {
+  assert.equal(capRoomUnits(161169), 1169);
+  assert.equal(rawCapRoom(1169), 161169);
+  assert.equal(rawCapRoom(capRoomUnits(161169)), 161169);
+  // Negative room
+  assert.equal(capRoomUnits(121169), -38831);
+  assert.equal(rawCapRoom(-38831), 121169);
+  assert.equal(capRoomUnits(undefined), null);
+  assert.equal(rawCapRoom(null), null);
+});
+
+test('fieldValueError allows widened 19-bit cap room values', () => {
+  const roomMeta = { type: 's_int', minValue: -40000, maxValue: 200000, length: 19 };
+  assert.equal(fieldValueError(roomMeta, 205000), null);
+  assert.equal(fieldValueError(roomMeta, 484287), null);
+  assert.equal(fieldValueError(roomMeta, -40000), null);
+  assert.equal(fieldValueError(roomMeta, 0), null);
+  assert.match(fieldValueError(roomMeta, 484288), /above 484287/);
+  assert.match(fieldValueError(roomMeta, -40001), /below -40000/);
 });

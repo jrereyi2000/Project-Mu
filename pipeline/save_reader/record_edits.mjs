@@ -10,7 +10,7 @@
 // its type is in WRITABLE_REFERENCES (Team: pick ownership), the value is {tableId, row}, that table has the field's
 // type as its name, the row is a non-empty record, and the field already points into that same table (or nowhere): it
 // re-points an existing link and never creates records.
-import { decodeRef, fieldValueError } from './lib.mjs';
+import { decodeRef, fieldMeta, fieldValueError } from './lib.mjs';
 
 export const WRITABLE_REFERENCES = new Set(['Team']);
 
@@ -19,17 +19,6 @@ export function encodeRef(tableId, row) {
   if (!Number.isInteger(tableId) || tableId <= 0 || tableId >= 2 ** 15) throw new Error(`bad table id ${tableId}`);
   if (!Number.isInteger(row) || row < 0 || row >= 2 ** 17) throw new Error(`bad row ${row}`);
   return tableId.toString(2).padStart(15, '0') + row.toString(2).padStart(17, '0');
-}
-
-function fieldMeta(record, key) {
-  const field = record.getFieldByKey(key);
-  if (!field) return null;
-  const o = field.offset;
-  return {
-    type: o.type, isReference: o.isReference, minValue: o.minValue, maxValue: o.maxValue, maxLength: o.maxLength,
-    enumMembers: o.enum ? o.enum.members.map(m => m.name) : null,
-    enumValues: o.enum ? Object.fromEntries(o.enum.members.map(m => [m.name, m._value])) : null,
-  };
 }
 
 // Why a reference value can't be written, or null. `tables`: Map tableId -> table (records read).

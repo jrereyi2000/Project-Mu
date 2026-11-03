@@ -1,5 +1,13 @@
 // Pure helpers for pc_save_reader.mjs: no file access, no madden-franchise import, unit-tested in test/lib.test.mjs.
 
+export const SALARY_CAP_OFFSET = 12_000;          // SalaryInfo.TeamSalaryCap raw + 12,000 = $10k units
+export const SALARY_CAP_RAW_RANGE = [12_000, 85_371];
+export const SAL_CAP_ROOM_BIAS = 160_000;         // Team.SalCap*Room formatted - 160,000 = $10k units
+export const salaryCapUnits = raw => (Number.isFinite(raw) ? raw + SALARY_CAP_OFFSET : null);
+export const rawSalaryCap = units => (Number.isFinite(units) ? units - SALARY_CAP_OFFSET : null);
+export const capRoomUnits = raw => (Number.isFinite(raw) ? raw - SAL_CAP_ROOM_BIAS : null);
+export const rawCapRoom = units => (Number.isFinite(units) ? units + SAL_CAP_ROOM_BIAS : null);
+
 // A reference field is 32 bits: the first 15 are the table id, the last 17 the row index. All zeros is "no reference".
 export function decodeRef(bits) {
   if (typeof bits !== 'string' || !/^[01]{32}$/.test(bits) || /^0+$/.test(bits)) return null;
@@ -121,6 +129,7 @@ export function fieldMeta(record, key) {
   const o = field.offset;
   return {
     type: o.type, isReference: o.isReference, minValue: o.minValue, maxValue: o.maxValue, maxLength: o.maxLength,
+    length: o.length,
     enumMembers: o.enum ? o.enum.members.map(m => m.name) : null,
     // Some enums give two names one stored value (TraitDevelopment: College_Elite = XFactor = 3), and the library
     // reads back the first, so the read-back compares stored values.
@@ -149,7 +158,10 @@ export function fieldValueError(meta, value) {
     // 0 and 1 are sure to fit any width, so those are what a generic field accepts (LeagueSetting's 1-bit flags).
     if (isGenericIntMeta(meta)) return value === 0 || value === 1 ? null : 'a generic Field_N int takes 0 or 1 here';
     if (Number.isFinite(meta.minValue) && value < meta.minValue) return `below ${meta.minValue}`;
-    if (Number.isFinite(meta.maxValue) && value > meta.maxValue) return `above ${meta.maxValue}`;
+    const max = (meta.minValue === -40_000 && meta.maxValue === 200_000 && meta.length === 19)
+      ? (2 ** 19 - 1) + meta.minValue
+      : meta.maxValue;
+    if (Number.isFinite(max) && value > max) return `above ${max}`;
     return null;
   }
   return `field type ${meta.type} is not writable here`;
