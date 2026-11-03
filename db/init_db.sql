@@ -2619,3 +2619,44 @@ CREATE TABLE IF NOT EXISTS progression_evidence_consumption (
 );
 CREATE INDEX IF NOT EXISTS progression_events_player_season
     ON progression_events (player_id, earned_season, status);
+
+-- Relationship event producers (2027_01_28_relationship_producers.sql, engines/relationship_producers/store.py,
+-- docs/in_progress/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md §2.3). Keyed by league_id so held events can exist
+-- before the personality lifecycle registers the universe.
+CREATE TABLE IF NOT EXISTS relationship_producer_runs (
+    league_id BIGINT NOT NULL,
+    season INT NOT NULL,
+    tick SMALLINT NOT NULL CHECK (tick BETWEEN 1 AND 32),
+    rules_version TEXT NOT NULL,
+    source VARCHAR(8) NOT NULL CHECK (source IN ('SAVE','CATCHUP')),
+    input_hash TEXT NOT NULL,          -- sha256 of the canonical inputs read for this tick
+    registry_hash TEXT NOT NULL,
+    event_hashes JSONB NOT NULL,       -- {source_event_id|facet: payload_hash} appended or held
+    counts JSONB NOT NULL,
+    status VARCHAR(10) NOT NULL CHECK (status IN ('APPENDED','HELD','NOOP','FAILED')),
+    error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (league_id, season, tick, rules_version)
+);
+CREATE TABLE IF NOT EXISTS relationship_roster_observations (
+    league_id BIGINT NOT NULL,
+    season INT NOT NULL,
+    tick SMALLINT NOT NULL,
+    player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    team_id INT REFERENCES teams(id),  -- NULL: free agent
+    source VARCHAR(8) NOT NULL CHECK (source IN ('SAVE','CATCHUP')),
+    PRIMARY KEY (league_id, season, tick, player_id)
+);
+CREATE TABLE IF NOT EXISTS relationship_pending_events (
+    league_id BIGINT NOT NULL,
+    source_event_id TEXT NOT NULL,
+    facet_key TEXT NOT NULL,
+    subject_alias JSONB NOT NULL,      -- {role, namespace, external_id}
+    envelope JSONB NOT NULL,           -- complete except subject.persona_id
+    status VARCHAR(10) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPENDED','DROPPED')),
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    appended_at TIMESTAMPTZ,
+    PRIMARY KEY (league_id, source_event_id, facet_key)
+);
+CREATE INDEX IF NOT EXISTS relationship_pending_open ON relationship_pending_events (league_id, status);
