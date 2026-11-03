@@ -184,7 +184,7 @@ $$\text{Offer Score } (U) = w_{\text{money}} \cdot S_{\text{financial}} + w_{\te
 
 ## 5. The Automated Game Lifecycle Orchestrator
 
-This is the V2 lifecycle. Built: the Command Center launch API (`pipeline/game_launch.py`), and a watcher that detects the stable post-advance save, ingests it, runs the weekly engines and then the league office in-process (retried once Madden27.exe has closed if it was refused while Madden ran), then the articles synchronously. Not built: booting straight into the game (§8), and writing the next week's mod pack from the watcher (today the pack is built at launch instead, §7.0 P3).
+This is the V2 lifecycle. Built: the Command Center launch API (`pipeline/game_launch.py`), and a watcher that detects the stable post-advance save, ingests it, runs the weekly engines and then the league office in-process (retried once Madden27.exe has closed if it was refused while Madden ran), then the articles synchronously. Not built: booting straight into the game (§8). Step 3's mod pack is built at launch, not by the watcher (§7.0 P3, obsolete).
 
 ```mermaid
 flowchart TD
@@ -201,7 +201,7 @@ flowchart TD
 1. Finalize strategy, roster moves, contracts, and depth charts in `Mu_Network`.
 2. Validate and inject approved changes into a save copy, with read-back verification.
 3. Compile the tailored presentation through [`pipeline/mod_packs.py`](../../pipeline/mod_packs.py) and launch through the mod manager.
-4. After playing, advance the week, save, and quit; ingest the settled post-advance save into its own franchise database and run deterministic engines.
+4. After playing, advance the week, save, and quit; ingest the settled post-advance save into its own franchise database and run deterministic engines. (The next game's mod pack is built when "Play Game" is pressed, not here.)
 5. Update league state and the next-game dashboard. Expose a media handoff boundary for V3 without making cloud availability a condition of league-state correctness.
 
 ### 5.1 Media Handoff (Moved to V3)
@@ -332,8 +332,8 @@ Phases 1–5 below are built (§7.1). These items depend on unfinished work else
 | :--- | :--- | :--- |
 | P1 | §2.2 "Let Staff Set" (coach philosophy) and §4.1 persona weights | [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phases 4–6 and progression plan phases F–G (player and coach traits). |
 | P2 | V2.15 (headless league office) | Absorbed by [`V2_CORE_BUILD_PLAN.md`](../done/V2_CORE_BUILD_PLAN.md) (2026-10-30); [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) is superseded. |
-| P3 | §5 step 3: next week's mod pack written by the watcher | "Play Game" already builds and writes the game's pack at launch (`game_launch.py` → `mod_packs.write_pack`), so launch works. The watcher still doesn't call `mod_packs` after ingest; decide whether that is still needed or close P3. |
-| P4 | §10 portraits in-game | The one-portrait spike (§10). The converter exists ([`headshots/portrait_converter/`](../../headshots/portrait_converter/)); nothing writes `PLYR_PORTRAIT` yet. With the menus out of use (§8), portraits only matter where they show during a game. |
+| ~~P3~~ | **Obsolete (JR, 2026-11-03).** Was: the watcher writes next week's mod pack after ingest, so it is ready in the Mod Manager when JR launches by hand. "Play Game" builds and writes the game's pack at launch (`game_launch.py` → `mod_packs.write_pack`, after the engines have run), the pilot's `launch` does the same, and JR always launches through Project Mu (§8). | — |
+| P4 | §10 portraits in-game | **Deferred (JR, 2026-11-03).** The one-portrait spike (§10) comes first when picked up: whether portraits are separate 2D textures or an atlas, and whether any in-game broadcast graphic shows them at all (the menus are out of use, §8). Real players already have their own portraits, so the value is in generated players from the first draft class on. The converter exists ([`headshots/portrait_converter/`](../../headshots/portrait_converter/)); nothing writes `PLYR_PORTRAIT` yet. |
 | P5 | Trust in all scratch-save results | Every §5.4 check was on unmodded `CAREER-WEEK1/2/3`; sim-stat and roster mods change the numbers, so the checks are re-run on a modded save before the 2026 start. |
 | ~~P6~~ | Phase 1 `depth_chart.mjs` | **Resolved:** `release.mjs` had already read the 35 positions × 6-slot `Team.DepthChart` layout on every row of the sample save, and `depth_chart.mjs` (V2_CORE_BUILD_PLAN U2, 2026-10-30) writes and reads it back. |
 
@@ -409,7 +409,7 @@ This replaces the earlier "fresh 2034 franchise" start (a new Madden franchise m
 **Unbuilt features**
 9. V2.2 press conferences, V2.9 front-office inbox, V2.10 scouting revamp and combine interviews, V2.11 multi-turn trade negotiations (V2.11 needs personality phase 5; V2.9 and V2.10 phase 6).
 10. §7.0 P1: coach philosophy in "Let Staff Set" and persona weights in free agency (terms at 0 until personality phases 4–6 and progression F–G).
-11. §7.0 P3 (decide or close), P4 portrait spike, O1, O2.
+11. §7.0 O1, O2. (P3 is obsolete; P4 portraits are deferred.)
 12. §9 CFB 27 bridge (no `cfb_save_reader` yet).
 
 ---
