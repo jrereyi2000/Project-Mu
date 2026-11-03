@@ -1710,6 +1710,7 @@ CREATE TABLE IF NOT EXISTS persona_relationships (
     tags TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    evidence JSONB DEFAULT '[]'::jsonb,     -- last events that moved trust {season, week, kind, delta, text} (2027_01_18_writer_voice.sql)
     UNIQUE (persona_type, persona_id, target_type, target_id)
 );
 CREATE INDEX IF NOT EXISTS idx_persona_rel_lookup ON persona_relationships (persona_type, persona_id);
@@ -1918,8 +1919,10 @@ CREATE TABLE IF NOT EXISTS agent_memories (
     display_name VARCHAR(100),
     bio VARCHAR(200),           -- Agent Wire profile line (db/migrations/2026_10_22_agent_wire_social.sql)
     followers INT,              -- simulated follower count, set once by the social desk
-    avatar_color VARCHAR(10)
+    avatar_color VARCHAR(10),
+    person_key VARCHAR(100)     -- the person behind the account (= agent_id; Skip's two accounts share 'Skip_Bayless'); 2027_01_18_writer_voice.sql
 );
+CREATE INDEX IF NOT EXISTS idx_agent_memories_person_key ON agent_memories (person_key);
 
 CREATE TABLE IF NOT EXISTS news_feed (
     id SERIAL PRIMARY KEY,
@@ -2124,13 +2127,32 @@ CREATE TABLE IF NOT EXISTS agent_predictions (
     game_id INT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
     label VARCHAR(60) NOT NULL DEFAULT '',  -- roundtable panellist name; '' otherwise
     team_a_id INT NOT NULL,
-    score_a INT NOT NULL,
+    score_a INT,                             -- NULL for WINNER picks
     team_b_id INT NOT NULL,
-    score_b INT NOT NULL,
+    score_b INT,
     created_at TIMESTAMP DEFAULT NOW(),
+    pick_type VARCHAR(8) NOT NULL DEFAULT 'SCORE',   -- SCORE | WINNER (2027_01_18_writer_voice.sql)
+    winner_team_id INT,                      -- the picked winner of a WINNER pick
     UNIQUE (article_id, game_id, label)
 );
 CREATE INDEX IF NOT EXISTS idx_agent_predictions_agent ON agent_predictions (agent_id, season, week);
+
+-- Season-long calls from posts, graded by agent_memory.grade_season_calls (2027_01_18_writer_voice.sql)
+CREATE TABLE IF NOT EXISTS agent_season_calls (
+    id SERIAL PRIMARY KEY,
+    agent_id VARCHAR(100) NOT NULL,
+    person_key VARCHAR(100) NOT NULL,
+    season INT NOT NULL,
+    made_week INT NOT NULL,
+    article_id INT REFERENCES news_feed(id) ON DELETE CASCADE,
+    call_type VARCHAR(24) NOT NULL,          -- MVP | OPOY | DPOY | ROY | SUPER_BOWL | PLAYOFF_TEAM | MISSES_PLAYOFFS | DIVISION_WINNER | COACH_FIRED
+    subject_type VARCHAR(10),                -- player | coach | team
+    subject_id INT,
+    detail TEXT,
+    result VARCHAR(8) NOT NULL DEFAULT 'PENDING' CHECK (result IN ('PENDING', 'RIGHT', 'WRONG', 'VOID')),
+    graded_week INT
+);
+CREATE INDEX IF NOT EXISTS idx_agent_season_calls_person ON agent_season_calls (person_key, season);
 
 CREATE TABLE IF NOT EXISTS agent_season_summaries (
     agent_id VARCHAR(100) NOT NULL,

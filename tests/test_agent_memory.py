@@ -5,7 +5,8 @@ Run: python3 -m unittest tests.test_agent_memory
 import unittest
 
 from newsroom.agent_memory import (
-    fetch_predictions, format_memory_block, grade_prediction, parse_score_predictions, parse_takes_json,
+    build_memory_block, fetch_predictions, format_memory_block, grade_call, grade_prediction, parse_score_predictions,
+    parse_takes_json, summary_prompt,
 )
 
 TEAMS = [(1, "Bills", "Buffalo", "BUF"), (2, "Dolphins", "Miami", "MIA"), (3, "Chiefs", "Kansas City", "KC"),
@@ -104,6 +105,115 @@ class FetchPredictionsTests(unittest.TestCase):
         self.assertEqual(len(preds), 1)
         self.assertEqual((preds[0]["name_a"], preds[0]["name_b"], preds[0]["result"]),
                          ("Buffalo Bills", "Miami Dolphins", "wrong"))
+
+
+class WinnerPickTests(unittest.TestCase):
+    BASE = {"pick_type": "WINNER", "score_a": None, "score_b": None, "team_a_id": 1, "team_b_id": 2,
+            "name_a": "Buffalo Bills", "name_b": "Miami Dolphins", "week": 4, "label": ""}
+
+    def test_graded_by_winner_only(self):
+        self.assertEqual(grade_prediction({**self.BASE, "winner_team_id": 1, "actual_a": 21, "actual_b": 20})["result"], "correct")
+        self.assertEqual(grade_prediction({**self.BASE, "winner_team_id": 2, "actual_a": 21, "actual_b": 20})["result"], "wrong")
+        self.assertEqual(grade_prediction({**self.BASE, "winner_team_id": 2, "actual_a": 20, "actual_b": 20})["result"], "push")
+        self.assertEqual(grade_prediction({**self.BASE, "winner_team_id": 2, "actual_a": None, "actual_b": None})["result"], "pending")
+        self.assertEqual(grade_prediction({**self.BASE, "winner_team_id": 9, "actual_a": 21, "actual_b": 20})["result"], "pending")
+
+    def test_winner_pick_in_memory_block_and_summary(self):
+        p = grade_prediction({**self.BASE, "winner_team_id": 2, "actual_a": 30, "actual_b": 10})
+        block = format_memory_block("", [], [], [p], (0, 1))
+        self.assertIn("you picked the Miami Dolphins to beat the Buffalo Bills", block)
+        self.assertIn("you were WRONG", block)
+        self.assertNotIn("None", block)
+        self.assertIn("you picked the Miami Dolphins", summary_prompt("X", "", "", [], [p], 4))
+
+
+class SeasonCallTests(unittest.TestCase):
+    FACTS = {"awards": {"MVP": {17}, "ROY": {40, 41}}, "champion": 3, "playoff_teams": {1, 2, 3},
+             "division_winners": {1}, "division_undecided": set(), "fired_teams": {8}, "fired_coaches": {80},
+             "season_final": False}
+
+    def call(self, ctype, stype, sid):
+        return {"call_type": ctype, "subject_type": stype, "subject_id": sid}
+
+    def test_awards(self):
+        self.assertEqual(grade_call(self.call("MVP", "player", 17), self.FACTS), "RIGHT")
+        self.assertEqual(grade_call(self.call("MVP", "player", 18), self.FACTS), "WRONG")
+        self.assertEqual(grade_call(self.call("ROY", "player", 41), self.FACTS), "RIGHT")   # OROY or DROY
+        self.assertIsNone(grade_call(self.call("DPOY", "player", 5), self.FACTS))          # not awarded yet
+        self.assertEqual(grade_call(self.call("MVP", "team", 1), self.FACTS), "VOID")
+
+    def test_super_bowl_and_standings(self):
+        self.assertEqual(grade_call(self.call("SUPER_BOWL", "team", 3), self.FACTS), "RIGHT")
+        self.assertEqual(grade_call(self.call("SUPER_BOWL", "team", 2), self.FACTS), "WRONG")
+        self.assertEqual(grade_call(self.call("PLAYOFF_TEAM", "team", 2), self.FACTS), "RIGHT")
+        self.assertEqual(grade_call(self.call("PLAYOFF_TEAM", "team", 9), self.FACTS), "WRONG")
+        self.assertEqual(grade_call(self.call("MISSES_PLAYOFFS", "team", 9), self.FACTS), "RIGHT")
+        self.assertEqual(grade_call(self.call("DIVISION_WINNER", "team", 1), self.FACTS), "RIGHT")
+        self.assertIsNone(grade_call(self.call("DIVISION_WINNER", "team", 1), {**self.FACTS, "division_undecided": {1}}))
+        self.assertIsNone(grade_call(self.call("PLAYOFF_TEAM", "team", 2), {"season_final": False}))
+
+    def test_coach_fired(self):
+        self.assertEqual(grade_call(self.call("COACH_FIRED", "team", 8), self.FACTS), "RIGHT")
+        self.assertEqual(grade_call(self.call("COACH_FIRED", "coach", 80), self.FACTS), "RIGHT")
+        self.assertIsNone(grade_call(self.call("COACH_FIRED", "team", 1), self.FACTS))
+        self.assertEqual(grade_call(self.call("COACH_FIRED", "team", 1), {**self.FACTS, "season_final": True}), "WRONG")
+
+    def test_open_and_graded_calls_in_memory_block(self):
+        open_calls = [{"made_week": 1, "call_type": "MVP", "subject_name": "Josh Allen", "detail": "book it", "result": "PENDING"}]
+        graded = [{"made_week": 1, "call_type": "COACH_FIRED", "subject_name": "Dallas Cowboys", "detail": None, "result": "RIGHT"},
+                  {"made_week": 1, "call_type": "PLAYOFF_TEAM", "subject_name": "New York Jets", "detail": None, "result": "WRONG"}]
+        block = format_memory_block("", [], [], [], (0, 0), open_calls, graded)
+        self.assertIn("YOUR OPEN SEASON CALLS", block)
+        self.assertIn("Week 1: MVP: Josh Allen (book it)", block)
+        self.assertIn("YOUR SEASON CALL RECORD: 1 right, 1 wrong", block)
+        self.assertIn("New York Jets: you were WRONG", block)
+
+
+class PersonMemoryCursor:
+    """Records every query; answers just enough for build_memory_block over a two-account person."""
+    def __init__(self):
+        self.calls, self._rows = [], []
+
+    def execute(self, sql, params=None):
+        s = " ".join(sql.split())
+        self.calls.append((s, params))
+        if s.startswith(("SAVEPOINT", "RELEASE", "ROLLBACK")):
+            self._rows = []
+        elif "to_regclass('public.agent_memory_entries')" in s:
+            self._rows = [(True,)]
+        elif "to_regclass('public.agent_season_calls')" in s:
+            self._rows = [(True,)]
+        elif "information_schema.columns" in s:
+            self._rows = [(1,)]
+        elif s.startswith("SELECT agent_id FROM agent_memories"):
+            self._rows = [("Skip_Bayless_National",), ("Skip_Bayless",)]
+        elif "FROM agent_memory_entries" in s:
+            self._rows = [(2, "Skip's tweet take")] if "Skip_Bayless" in params[0] else []
+        elif "FROM agent_predictions" in s:
+            self._rows = []
+        elif "FROM agent_season_calls" in s:
+            self._rows = [(1, "MVP", None, "PENDING", None, "Josh Allen")]
+        else:
+            self._rows = []
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        rows, self._rows = self._rows, []
+        return rows
+
+
+class PersonMemoryTests(unittest.TestCase):
+    def test_memory_reads_across_the_persons_accounts(self):
+        cur = PersonMemoryCursor()
+        block = build_memory_block(cur, "Skip_Bayless_National", 2036, 5)
+        self.assertIn("Skip's tweet take", block)
+        self.assertIn("YOUR OPEN SEASON CALLS", block)
+        reads = [p for s, p in cur.calls if "ANY(%s)" in s]
+        self.assertTrue(reads)
+        for params in reads:
+            self.assertIn(["Skip_Bayless_National", "Skip_Bayless"], list(params))
 
 
 if __name__ == "__main__":
