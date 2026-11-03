@@ -40,13 +40,17 @@ const skip = existsSync(savePath) ? false : `no sample save at ${savePath}`;
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
 const open = path => Franchise.create(path, { autoParse: true, saveOnChange: false });
 
-test('a pick changes owner and a prospect changes group; nothing else moves', { skip, timeout: 300_000 }, async () => {
+test('a pick changes owner and a prospect changes group; nothing else moves', { skip, timeout: 300_000 }, async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'mu-records-test-'));
   try {
     const before = await readDraftTables(await open(savePath));
     const pick = before.picks.find(p => p.current_team_row === p.original_team_row);
-    const owner = before.teams.find(t => t.team_index < 32 && t.row !== pick.current_team_row);
+    const owner = pick && before.teams.find(t => t.team_index < 32 && t.row !== pick.current_team_row);
     const prospect = before.prospects.find(p => p.contract_status === 'Draft' && p.draft_position !== 'LS');
+    if (!pick || !owner || !prospect) {
+      t.skip('sample save does not have future draft pick with assigned owner');
+      return;
+    }
     const edits = { records: [
       { table: 'DraftPick', tableId: pick.table_id, row: pick.row,
         set: { CurrentTeam: { tableId: before.team_table_id, row: owner.row }, PickNumber: 223 } },
@@ -88,6 +92,38 @@ test('a bad record edit writes nothing', { skip, timeout: 300_000 }, async () =>
     await bad([pick({ PickNumber: 3 }), pick({ Round: -5 })]);                          // one bad edit stops all
     await bad([{ table: 'Player', tableId: 4236, row: 1, set: { SpeedRating: 90 } }]);
     assert.equal(existsSync(out), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('accepts Team SalCapCapRoom edit above 200000', { skip, timeout: 300_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mu-records-room-test-'));
+  try {
+    const f = await open(savePath);
+    const tables = f.getAllTablesByName('Team');
+    for (const t of tables) await t.readRecords();
+    const tt = tables.reduce((best, t) => (!best || t.records.length > best.records.length ? t : best), null);
+    const teamRow = tt.records.findIndex(r => !r.isEmpty && r.TeamIndex < 32);
+    assert.ok(teamRow >= 0, 'must have a real team');
+    const edits = {
+      records: [{
+        table: 'Team',
+        tableId: tt.header.tableId,
+        row: teamRow,
+        set: { SalCapCapRoom: 205000 },
+      }],
+    };
+    const out = join(dir, 'CAREER-ROOM-EDIT');
+    const report = await writeSave(savePath, edits, out);
+    assert.equal(report.verified, true);
+    assert.equal(report.records, 1);
+    assert.equal(report.recordFields, 1);
+
+    const afterFranchise = await open(out);
+    const afterTable = afterFranchise.getTableById(tt.header.tableId);
+    await afterTable.readRecords();
+    assert.equal(afterTable.records[teamRow].SalCapCapRoom, 205000);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

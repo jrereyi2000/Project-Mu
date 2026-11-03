@@ -69,6 +69,18 @@ async function inspect(path) {
     const live = player.records.filter(r => !r.isEmpty);
     out.players = live.length;
     out.confidenceOff = live.filter(r => r.ConfidenceRating !== 50).length;
+    const salary = f.getAllTablesByName('SalaryInfo')[0];
+    if (salary) {
+      await salary.readRecords();
+      const incRef = decodeRef(salary.records[0].SalaryCapIncreasePerYear);
+      if (incRef) {
+        const incTable = await load(incRef.table);
+        const incRow = incTable.records[incRef.row];
+        out.capIncreases = Object.keys(incRow.fields)
+          .filter(k => k.startsWith('int'))
+          .map(k => incRow[k]);
+      }
+    }
     return out;
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -85,6 +97,7 @@ test('setup makes all 32 teams real users with fill roster, coach firing and the
     assert.equal(sha(savePath), before, 'the input save is never written');
     assert.equal(r1.verified, true);
     assert.equal(r1.usersCreated.length, original.realTeams - original.users.length);
+    assert.ok(r1.capIncreaseZeroed > 0, 'cap increases zeroed on first run');
 
     const s = await inspect(out1);
     assert.equal(s.users.length, 32);
@@ -105,6 +118,9 @@ test('setup makes all 32 teams real users with fill roster, coach firing and the
     assert.equal(s.players, original.players, 'no player rows added or removed');
     assert.equal(s.confidenceOff, 0, 'every player at ConfidenceRating 50 (neutral for the progression bootstrap)');
     assert.equal(r1.confidenceChanged, original.confidenceOff);
+    if (s.capIncreases) {
+      assert.ok(s.capIncreases.every(v => v === 0), 'every SalaryCapIncreasePerYear slot is 0');
+    }
 
     // a second run adds nobody and changes nothing
     const out2 = join(dir, 'twice');
@@ -112,6 +128,7 @@ test('setup makes all 32 teams real users with fill roster, coach firing and the
     assert.deepEqual(r2.usersCreated, []);
     assert.equal(r2.fillRosterChanged, 0);
     assert.equal(r2.confidenceChanged, 0);
+    assert.equal(r2.capIncreaseZeroed, 0, 'cap increases already zero on second run');
     assert.deepEqual(await inspect(out2), s);
 
     await assert.rejects(setupLeague(savePath, out1), /exists/, 'an existing --out is refused');
@@ -123,6 +140,9 @@ test('setup makes all 32 teams real users with fill roster, coach firing and the
 test('state reports the Team table, cap fields and spare contract rows', { skip }, async () => {
   const st = await leagueState(savePath);
   assert.ok(Number.isInteger(st.team_table_id));
+  assert.ok(Number.isInteger(st.salary_info_table_id));
+  assert.ok(Number.isInteger(st.raw_salary_cap));
+  assert.equal(st.salary_cap, st.raw_salary_cap + 12000);
   assert.equal(st.teams.length, 32);
   assert.deepEqual(st.teams.map(t => t.team_index), [...Array(32).keys()]);
   for (const t of st.teams) for (const k of ['TEAM_SALARY', 'SalCapCapRoom', 'SalCapNextYearCapRoom', 'SalCapSpendingMoney']) {

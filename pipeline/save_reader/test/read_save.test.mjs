@@ -49,26 +49,41 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
 
   const gameRows = new Set(s.games.map(g => g.row));
   const lines = s.players.flatMap(p => p.game_stats);
-  assert.ok(lines.length > 0, 'per-game stat lines present');
-  for (const line of lines) assert.ok(gameRows.has(line.game_row), 'every game line points at an exported game');
-
-  // reader_version 5: Madden's team ratings and cap fields on every real team (cap space = SalCapCapRoom - 160000, and
-  // every team's cap works out to the same league cap: pipeline/load_save.py team_cap_values).
-  const leagueCaps = new Set();
-  for (const t of s.teams.filter(x => x.team_index < 32)) {
-    const c = t.cap;
-    assert.ok(c && Number.isInteger(c.SalCapCapRoom) && Number.isInteger(c.SalCapRosterReserve), `${t.short_name} cap fields`);
-    leagueCaps.add(c.SalCapCapRoom - 160000 + c.SalCapRosterReserve + c.ThisYearCapPenalties - c.RolloverCap
-      - c.ThisYearCapCredits);
+  if (lines.length > 0) {
+    for (const line of lines) assert.ok(gameRows.has(line.game_row), 'every game line points at an exported game');
   }
-  assert.equal(leagueCaps.size, 1, 'one league cap');
+
+  // reader_version 6: top-level salary_cap and decoded team cap blocks in $10k units
+  assert.equal(s.meta.reader_version, 6);
+  assert.ok(s.salary_cap, 'salary_cap block present');
+  assert.ok(Number.isInteger(s.salary_cap.table_id));
+  assert.equal(s.salary_cap.row, 0);
+  assert.ok(Number.isInteger(s.salary_cap.raw_team_salary_cap));
+  assert.equal(s.salary_cap.team_salary_cap, s.salary_cap.raw_team_salary_cap + 12000);
+  assert.equal(s.salary_cap.initial_salary_cap, s.salary_cap.raw_team_salary_cap + 12000);
+  assert.ok(s.salary_cap.increase_table, 'salary_cap increase_table present');
+
+  const realTeams = s.teams.filter(x => x.team_index < 32);
+  assert.equal(realTeams.length, 32);
+  for (const t of realTeams) {
+    const c = t.cap;
+    assert.ok(c, `${t.short_name} cap block present`);
+    for (const k of ['rollover', 'cap_credits', 'roster_reserve', 'cap_penalties', 'offers_reserve',
+                     'rookie_reserve', 'fill_reserve', 'this_year_offer_reserve', 'cap_room',
+                     'spending_money', 'next_year_cap_room', 'team_salary']) {
+      assert.ok(Number.isInteger(c[k]), `${t.short_name} cap.${k} must be integer`);
+    }
+    const expectedRoom = (s.salary_cap.team_salary_cap + c.rollover + c.cap_credits)
+      - (c.roster_reserve + c.cap_penalties + c.offers_reserve);
+    assert.equal(c.cap_room, expectedRoom, `${t.short_name} cap room satisfies balance equation`);
+  }
+
   // reader_version 5: every future pick, wherever the save keeps it (one table, or one table per pick).
   const offsets = {};
   for (const p of s.draft_picks) offsets[p.year_offset] = (offsets[p.year_offset] || 0) + 1;
   assert.deepEqual(offsets, { 0: 224, 1: 224, 2: 224 }, 'three drafts of 224 picks');
   assert.ok(s.draft_picks.every(p => Number.isInteger(p.current_team_index) && p.round >= 1 && p.round <= 7));
   // reader_version 5: Madden's team ratings on every real team.
-  assert.equal(s.meta.reader_version, 5);
   for (const t of s.teams.filter(x => x.team_index < 32)) {
     for (const k of ['ovr', 'off', 'def']) {
       assert.ok(Number.isInteger(t.ratings?.[k]) && t.ratings[k] > 0 && t.ratings[k] <= 99, `${t.short_name} ${k} rating`);

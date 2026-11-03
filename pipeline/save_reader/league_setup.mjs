@@ -43,7 +43,7 @@ import { tmpdir } from 'os';
 import { basename, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
-import { arraySlots, decodeRef, encodeRef, NO_REF, schemaFieldName } from './lib.mjs';
+import { arraySlots, decodeRef, encodeRef, NO_REF, salaryCapUnits, schemaFieldName } from './lib.mjs';
 
 export const REAL_TEAMS = 32;
 export const USER_ID_BASE = 2147483648;
@@ -231,9 +231,27 @@ export async function applySetup(franchise) {
     if (before !== want) setting[field] = want;
     leagueSettings[name] = { field, before, after: want };
   }
+  const salary = await tables.first('SalaryInfo');
+  let capIncreaseZeroed = 0;
+  if (salary && salary.records[0] && salary.records[0].SalaryCapIncreasePerYear) {
+    const ref = decodeRef(salary.records[0].SalaryCapIncreasePerYear);
+    if (ref) {
+      const incTable = await tables.byId(ref.table);
+      const incRecord = incTable?.records[ref.row];
+      if (incRecord) {
+        for (const k of Object.keys(incRecord.fields)) {
+          if (!k.startsWith('int')) continue;
+          if (incRecord[k] !== 0) {
+            incRecord[k] = 0;
+            capIncreaseZeroed++;
+          }
+        }
+      }
+    }
+  }
   const confidence = await neutralConfidence(tables, true);
   return { usersCreated: created, teamSettingRows: settingRows.length, fillRosterChanged, leagueSettings,
-    confidenceChanged: confidence.changed, players: confidence.players };
+    confidenceChanged: confidence.changed, players: confidence.players, capIncreaseZeroed };
 }
 
 // Every live Player row at ConfidenceRating 50 (`write` true) or a count of those that aren't (`write` false).
@@ -301,6 +319,22 @@ export async function verifySetup(franchise) {
   }
   const confidence = await neutralConfidence(tables, false);
   if (confidence.off) problems.push(`${confidence.off} of ${confidence.players} players not at ${CONFIDENCE} ${NEUTRAL_CONFIDENCE}`);
+  const salary = await tables.first('SalaryInfo');
+  if (salary && salary.records[0] && salary.records[0].SalaryCapIncreasePerYear) {
+    const ref = decodeRef(salary.records[0].SalaryCapIncreasePerYear);
+    if (ref) {
+      const incTable = await tables.byId(ref.table);
+      const incRecord = incTable?.records[ref.row];
+      if (incRecord) {
+        for (const k of Object.keys(incRecord.fields)) {
+          if (!k.startsWith('int')) continue;
+          if (incRecord[k] !== 0) {
+            problems.push(`SalaryCapIncreasePerYear slot ${k} is ${incRecord[k]}, not 0`);
+          }
+        }
+      }
+    }
+  }
   return { problems, users: users.length, distinctIds: ids.size, registryListed: users.length - missing,
     teamSettingRows: settingRows.length, settings, playersChecked: confidence.players };
 }
@@ -377,9 +411,12 @@ export async function leagueState(savePath) {
       teams.push({ team_index: r.TeamIndex, row, ...Object.fromEntries(CAP_FIELDS.map(k => [k, safe(r, k)])) });
     });
     const salary = await tables.first('SalaryInfo');
+    const rawSalaryCap = salary?.records[0]?.TeamSalaryCap ?? null;
     return {
       team_table_id: team.header.tableId,
-      salary_cap: salary?.records[0]?.TeamSalaryCap ?? null,
+      salary_info_table_id: salary?.header.tableId ?? null,
+      raw_salary_cap: rawSalaryCap,
+      salary_cap: salaryCapUnits(rawSalaryCap),
       teams: teams.sort((a, b) => a.team_index - b.team_index),
       spare_contract_rows: await spareContractRows(franchise, tables),
     };
@@ -410,7 +447,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
         + `distinct ids ${r.distinctIds}, registry ${r.registryListed}; fill roster turned off on ${r.fillRosterChanged} `
         + `of ${r.teamSettingRows} TeamSetting rows; ${Object.entries(r.leagueSettings).map(([k, v]) => `${k} `
         + `${v.field} ${v.before} -> ${v.after}`).join(', ')}; ConfidenceRating 50 set on ${r.confidenceChanged} of `
-        + `${r.players} players; read back -> ${r.out}`);
+        + `${r.players} players; cap increase zeroed on ${r.capIncreaseZeroed} slots; read back -> ${r.out}`);
       process.stdout.write(JSON.stringify(r));
     } else if (cmd === 'state') {
       if (!save) usage();

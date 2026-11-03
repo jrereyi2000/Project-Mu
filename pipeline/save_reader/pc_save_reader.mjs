@@ -35,12 +35,12 @@ import { basename, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import Franchise from 'madden-franchise';
 import {
-  arrayRefs, arraySlots, calendarYear, decodeRef, depthSlotPgids, flagValue, isExportableGame, LEAGUE_SETTING_FALLBACK_INDEX,
-  numberedFields, orderSliderRefs, pickRatings, plainFields, playerTraits, refFromValue, schemaFieldName, STAT_KINDS,
+  arrayRefs, arraySlots, calendarYear, capRoomUnits, decodeRef, depthSlotPgids, flagValue, isExportableGame, LEAGUE_SETTING_FALLBACK_INDEX,
+  numberedFields, orderSliderRefs, pickRatings, plainFields, playerTraits, refFromValue, salaryCapUnits, schemaFieldName, STAT_KINDS,
   weightLbs,
 } from './lib.mjs';
 
-export const READER_VERSION = 5;
+export const READER_VERSION = 6;
 
 // Real teams are TeamIndex 0..31 (32 = free agents; the Team table has a few more rows).
 const REAL_TEAMS = 32;
@@ -118,13 +118,23 @@ function readDraftClass(draftPlayerTable, playerTable) {
   return out;
 }
 
-const TEAM_CAP_FIELD = /^(SalCap|RolloverCap$|(This|Next)YearCap(Penalties|Credits)$|TEAM_SALARY$)/;
-
-// Team salary-cap fields, raw ({field: value}; null when the schema has none of them).
+// Real team salary-cap fields in true $10,000 units.
 function teamCap(record) {
-  const cap = {};
-  for (const name of fieldNames(record)) if (TEAM_CAP_FIELD.test(name)) cap[name] = record[name];
-  return Object.keys(cap).length ? cap : null;
+  if (record.SalCapCapRoom == null && record.SalCapRosterReserve == null) return null;
+  return {
+    rollover: record.RolloverCap,
+    cap_credits: record.ThisYearCapCredits,
+    roster_reserve: record.SalCapRosterReserve,
+    cap_penalties: record.ThisYearCapPenalties,
+    offers_reserve: record.SalCapOffersReserve,
+    rookie_reserve: record.SalCapRookieReserve,
+    fill_reserve: record.SalCapRosterFillReserve,
+    this_year_offer_reserve: record.SalCapThisYearOfferReserve,
+    cap_room: capRoomUnits(record.SalCapCapRoom),
+    spending_money: capRoomUnits(record.SalCapSpendingMoney),
+    next_year_cap_room: capRoomUnits(record.SalCapNextYearCapRoom),
+    team_salary: record.TEAM_SALARY,
+  };
 }
 
 // Every future pick across the DraftPick tables (see the header).
@@ -151,11 +161,12 @@ function readTeams(teamTable) {
   teamTable.records.forEach((r, row) => {
     if (r.isEmpty) return;
     teamIndexByRow.set(row, r.TeamIndex);
+    const isReal = r.TeamIndex < REAL_TEAMS;
     teams.push({
       team_index: r.TeamIndex, row, short_name: r.ShortName, long_name: r.LongName,
       display_name: r.DisplayName, nick_name: r.NickName, presentation_id: r.PresentationId,
       ratings: teamRatings(r),
-      cap: teamCap(r),
+      cap: isReal ? teamCap(r) : null,
     });
   });
   return { teams, teamIndexByRow };
@@ -413,6 +424,38 @@ async function readLeagueSettings(franchise, tables) {
   return out;
 }
 
+async function readSalaryCap(tables) {
+  const salaryTable = await tables.byName('SalaryInfo');
+  if (!salaryTable || !salaryTable.records.length) return null;
+  const r = salaryTable.records[0];
+  if (r.isEmpty) return null;
+  const rawCap = r.TeamSalaryCap;
+  const rawInit = r.InitialSalaryCap;
+
+  let increaseTable = null;
+  const incRef = decodeRef(r.SalaryCapIncreasePerYear);
+  if (incRef) {
+    const t = await tables.byId(incRef.table);
+    const rec = t?.records[incRef.row];
+    if (rec) {
+      increaseTable = {
+        table_id: incRef.table,
+        row: incRef.row,
+        values: plainFields(rec, fieldNames(rec)),
+      };
+    }
+  }
+
+  return {
+    table_id: salaryTable.header.tableId,
+    row: 0,
+    raw_team_salary_cap: rawCap,
+    team_salary_cap: salaryCapUnits(rawCap),
+    initial_salary_cap: salaryCapUnits(rawInit),
+    increase_table: increaseTable,
+  };
+}
+
 export async function readSave(savePath) {
   const { franchise, cleanup } = await openCopy(savePath);
   try {
@@ -445,6 +488,7 @@ export async function readSave(savePath) {
       },
       franchise: { league_id: franchiseInfo.LeagueID },
       season,
+      salary_cap: await readSalaryCap(tables),
       teams,
       games,
       players,
