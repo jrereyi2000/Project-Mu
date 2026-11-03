@@ -87,6 +87,13 @@ class FakeDeps(lo.Deps):
     def user_team_ids(self, cur):
         return self.users
 
+    def league_caps(self, cur):
+        return getattr(self, "caps", {SEASON: 255_400_000})
+
+    def sync_team_caps(self, cur, season, cap_dollars):
+        self.calls.append(("sync_team_caps", season, cap_dollars))
+        super().sync_team_caps(cur, season, cap_dollars)
+
     def pending_moves(self, cur):
         return self.pending
 
@@ -517,7 +524,7 @@ def test_offseason_uses_prepare_offseason_pass_with_target_year():
     # promoted squad player: the current year kept, then a 1-year minimum for the coming league year
     block = sets[2]["contract"]
     assert block["Length"] == 2 and block["SalaryYear0"] == 200
-    assert block["SalaryYear1"] == int(ce.minimum_salary(2, 25540 * 10_000) / 10_000 + 0.5)
+    assert block["SalaryYear1"] == int(ce.minimum_salary(2, p["summary"]["salary_cap"]["cap"]) / 10_000 + 0.5)
     assert sets[2]["set"]["PLYR_CAPSALARY"] == 250
 
 
@@ -1210,3 +1217,178 @@ def test_cli_help_and_setup_subcommand(capsys, tmp_path):
         lo.main(["--snapshot", "s.json", "--save", "x", "--stage", "BOGUS"])
     with pytest.raises(SystemExit):
         lo.main(["--save", "x"])                       # no snapshot and no --recover
+
+
+# ------------------------------------------------------------- salary cap (U3) ----
+def test_cap_room_range_widened():
+    assert lo.CAP_ROOM_RANGE == (-40_000, 484_287)
+    assert lo._clamp(484_287, lo.CAP_ROOM_RANGE) == 484_287
+    assert lo._clamp(500_000, lo.CAP_ROOM_RANGE) == 484_287
+    assert lo._clamp(-40_000, lo.CAP_ROOM_RANGE) == -40_000
+    assert lo._clamp(-50_000, lo.CAP_ROOM_RANGE) == -40_000
+
+    # _cap_records writes above 200,000 without clamping down to 200,000
+    p = lo.Plan(snapshot(), "REGULAR_WEEK", SEASON, 3, None, "seed", {0: CHI}, {1: 1},
+                state={"team_table_id": 5934, "teams": [{"team_index": 0, "row": 1, "SalCapCapRoom": 200_000}]})
+    p._cap(0, 5_000, 0, 0)
+    records = p._cap_records()
+    assert len(records) == 1
+    assert records[0]["set"]["SalCapCapRoom"] == 205_000
+
+
+def test_league_cap_helpers():
+    # state takes precedence
+    assert lo.league_cap_units({"salary_cap": 30120}, {"salary_cap": {"team_salary_cap": 25540}}) == 30120
+    assert lo.league_cap({"salary_cap": 30120}) == 301_200_000
+    # snapshot fallback
+    assert lo.league_cap_units(None, {"salary_cap": {"team_salary_cap": 28000}}) == 28000
+    assert lo.league_cap(None, {"salary_cap": {"team_salary_cap": 28000}}) == 280_000_000
+    # reference fallback
+    assert lo.league_cap_units(None, None) is None
+    assert lo.league_cap(None, None) == ce.CBA["REFERENCE_CAP"]
+
+
+def test_step_salary_cap_at_offseason_start():
+    # 32 teams in snapshot
+    snap_teams = [{"team_index": i, "short_name": f"T{i}"} for i in range(32)]
+    snap = snapshot("OffSeason", "OffSeason", 0, 1, players=[
+        player(1, 0, pos="QB", ovr=85),
+        player(2, 0, status="Signed", years_pro=1),  # PS player Madden promoted to Signed
+    ])
+    snap["teams"] = snap_teams
+    snap["franchise"] = {"league_id": 42}
+    snap["salary_cap"] = {"table_id": 5186, "team_salary_cap": 30120}
+
+    state_teams = [{"team_index": i, "row": i, "TEAM_SALARY": 10000, "SalCapCapRoom": 160000,
+                    "SalCapNextYearCapRoom": 160000, "SalCapSpendingMoney": 160000} for i in range(32)]
+    state = {"team_table_id": 5934, "salary_info_table_id": 5186, "salary_cap": 30120, "spare_contract_rows": 5,
+             "teams": state_teams}
+
+    deps = FakeDeps(snap, ps_ids={pid(2)}, state=state)
+    deps.caps = {SEASON: 301_200_000}
+    deps.team_ids = lambda cur, snapshot: {i: 100 + i for i in range(32)}
+
+    p = plan("OFFSEASON_START", snap, deps, state=state)
+
+    seed_str = ce.cap_seed(42)
+    expected_target_cap = ce.next_cap(301_200_000, SEASON + 1, seed_str)
+    expected_target_units = expected_target_cap // ce.MONEY_UNIT
+    expected_delta = expected_target_units - 30120
+
+    # 1. SalaryInfo record written with -12000 offset
+    sal_rec = next(r for r in p["edits"]["records"] if r.get("table") == "SalaryInfo")
+    assert sal_rec["tableId"] == 5186
+    assert sal_rec["row"] == 0
+    assert sal_rec["set"]["TeamSalaryCap"] == expected_target_units - 12000
+
+    # 2. Room deltas applied to all 32 teams
+    team_recs = [r for r in p["edits"]["records"] if r.get("table") == "Team"]
+    assert len(team_recs) == 32
+    for r in team_recs:
+        assert r["set"]["SalCapCapRoom"] == 160000 + expected_delta
+        if r["row"] == 0:
+            assert r["set"]["SalCapNextYearCapRoom"] != 160000 + expected_delta
+        else:
+            assert r["set"]["SalCapNextYearCapRoom"] == 160000 + expected_delta
+
+    # 3. Counts and summary recorded
+    assert p["summary"]["salary_cap_updated"] == 1
+    sc_summary = p["summary"]["salary_cap"]
+    assert sc_summary["season"] == SEASON + 1
+    assert sc_summary["prev_cap"] == 301_200_000
+    assert sc_summary["cap"] == expected_target_cap
+    assert sc_summary["madden_cap"] == 301_200_000
+    assert sc_summary["seed"] == seed_str
+    assert sc_summary["growth_pct"] == round((expected_target_cap - 301_200_000) / 301_200_000 * 100, 2)
+
+    # 4. Promoted PS player priced on new cap
+    sets = {e["pgid"]: e for e in p["edits"]["players"]}
+    block = sets[2]["contract"]
+    expected_salary = int(ce.minimum_salary(2, expected_target_cap) / ce.MONEY_UNIT + 0.5)
+    assert block["SalaryYear1"] == expected_salary
+
+    # 5. Idempotent on re-run: when save already has the target cap
+    idempotent_state = dict(state, salary_cap=expected_target_units)
+    idempotent_snap = copy.deepcopy(snap)
+    idempotent_snap["salary_cap"]["team_salary_cap"] = expected_target_units
+    p_rerun = plan("OFFSEASON_START", idempotent_snap, deps, state=idempotent_state)
+    assert not any(r.get("table") == "SalaryInfo" for r in p_rerun["edits"]["records"])
+    assert p_rerun["summary"].get("salary_cap_updated", 0) == 0
+    assert p_rerun["summary"]["salary_cap"]["cap"] == expected_target_cap
+
+
+def test_drift_salary_cap_write_back():
+    snap = snapshot("RegularSeason", "RegularSeason", 3, None)
+    snap["salary_cap"] = {"table_id": 5186, "team_salary_cap": 25540}
+    deps = FakeDeps(snap)
+    deps.drift_report = {
+        "salary_cap": [{"season": SEASON, "field": "team_salary_cap", "expected": 260_000_000, "found": 255_400_000}]
+    }
+
+    # On non-OFFSEASON_START stage (e.g. REGULAR_WEEK), cap drift is restored
+    p = plan("REGULAR_WEEK", snap, deps, state=deps.state)
+    sal_rec = next(r for r in p["edits"]["records"] if r.get("table") == "SalaryInfo")
+    assert sal_rec["set"]["TeamSalaryCap"] == (260_000_000 // 10_000) - 12000
+    assert p["summary"]["drift_salary_cap"] == 1
+    # Check cap shift: (260M - 255.4M) / 10k = 460 units
+    expected_shift = 460
+    team_recs = [r for r in p["edits"]["records"] if r.get("table") == "Team"]
+    assert any(r["row"] == 2 and r["set"]["SalCapCapRoom"] == 160000 + expected_shift for r in team_recs)
+
+    # At OFFSEASON_START, step_drift ignores salary_cap drift (left to step_salary_cap)
+    plan_off = lo.Plan(snap, "OFFSEASON_START", SEASON, 0, None, "seed", {0: CHI, 1: AZ}, {1: 1}, state=deps.state)
+    lo.step_drift(plan_off, deps.drift_report, {})
+    assert not any(r.get("table") == "SalaryInfo" for r in plan_off.records)
+    assert plan_off.counts.get("drift_salary_cap", 0) == 0
+
+
+def test_verify_read_back_salary_cap():
+    edits = {"records": [{"table": "SalaryInfo", "tableId": 5186, "row": 0, "set": {"TeamSalaryCap": 20000}}]}
+
+    # Match: raw matches written_raw, team_salary_cap == written_raw + 12000
+    snap_good = {"salary_cap": {"raw_team_salary_cap": 20000, "team_salary_cap": 32000}}
+    assert lo.verify_read_back(edits, snap_good) == []
+
+    # Raw mismatch
+    snap_bad_raw = {"salary_cap": {"raw_team_salary_cap": 18120, "team_salary_cap": 32000}}
+    bad_raw = lo.verify_read_back(edits, snap_bad_raw)
+    assert any("raw_team_salary_cap: wrote 20000, read 18120" in b for b in bad_raw)
+
+    # Decoded units mismatch
+    snap_bad_units = {"salary_cap": {"raw_team_salary_cap": 20000, "team_salary_cap": 30120}}
+    bad_units = lo.verify_read_back(edits, snap_bad_units)
+    assert any("team_salary_cap: expected 32000, read 30120" in b for b in bad_units)
+
+    # Snapshot without salary_cap
+    assert lo.verify_read_back(edits, {}) == []
+
+
+def test_apply_db_sync_team_caps():
+    cur = FakeCursor()
+    deps = FakeDeps()
+
+    # When db has salary_cap info
+    plan_data = {
+        "db": {"salary_cap": {"season": 2027, "cap": 301_200_000, "madden_cap": 280_000_000}},
+        "team_ids": {0: CHI, 1: AZ},
+        # Team 0 has a move reducing cap room by 80 units beyond cap change; Team 1 has only the cap change (2120 units)
+        "cap": {0: [2120 - 80, 0, 0], 1: [2120, 0, 0]},
+    }
+    lo._apply_db(cur, plan_data, deps)
+
+    # Check deps.sync_team_caps was executed
+    sync_sqls = [s for s, a in cur.sql if "UPDATE team_cap_seasons" in s and "SET cap = %s" in s]
+    assert len(sync_sqls) == 1
+    # Check move delta update was executed for team 0 (move_room = -80 units = -$800k)
+    move_sqls = [a for s, a in cur.sql if "UPDATE team_cap_seasons" in s and "SET cap_space = cap_space + %s" in s]
+    assert len(move_sqls) == 1
+    delta_dollars, neg_delta, team_id, season = move_sqls[0]
+    assert delta_dollars == -800_000
+    assert neg_delta == -800_000
+    assert team_id == CHI
+    assert season == 2027
+
+    # When db has no salary_cap info
+    cur_noop = FakeCursor()
+    lo._apply_db(cur_noop, {"db": {}}, deps)
+    assert not any("team_cap_seasons" in s for s, _ in cur_noop.sql)
