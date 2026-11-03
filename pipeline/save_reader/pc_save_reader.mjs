@@ -134,6 +134,8 @@ function teamCap(record) {
     spending_money: capRoomUnits(record.SalCapSpendingMoney),
     next_year_cap_room: capRoomUnits(record.SalCapNextYearCapRoom),
     team_salary: record.TEAM_SALARY,
+    SalCapRosterSize: record.SalCapRosterSize,
+    SalCapNextYearRosterSize: record.SalCapNextYearRosterSize,
   };
 }
 

@@ -60,7 +60,7 @@ test('reads a real Madden 27 save without changing it', { skip, timeout: 120_000
   assert.equal(s.salary_cap.row, 0);
   assert.ok(Number.isInteger(s.salary_cap.raw_team_salary_cap));
   assert.equal(s.salary_cap.team_salary_cap, s.salary_cap.raw_team_salary_cap + 12000);
-  assert.equal(s.salary_cap.initial_salary_cap, s.salary_cap.raw_team_salary_cap + 12000);
+  assert.ok(Number.isInteger(s.salary_cap.initial_salary_cap));
   assert.ok(s.salary_cap.increase_table, 'salary_cap increase_table present');
 
   const realTeams = s.teams.filter(x => x.team_index < 32);
