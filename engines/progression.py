@@ -241,6 +241,7 @@ def compute_player_delta(
     c2_t = wear + continuity + mentor + PERSONA_TERM + COACH_TERM
     raw_delta = age_t + dev_t + ceil_t + play_t + inj_t + noise_t + baseline_offset + league_t + perf_t + c2_t
 
+    unclamped_delta = raw_delta
     # Clamping per age band and OVR band
     if ovr >= 99:
         raw_delta = min(0.0, raw_delta)
@@ -258,7 +259,8 @@ def compute_player_delta(
     # Overall max change clamp
     raw_delta = min(float(MAX_SEASON_CHANGE), max(float(-MAX_SEASON_CHANGE), raw_delta))
 
-    new_ovr = max(OVR_MIN, min(OVR_MAX, int(round(ovr + raw_delta))))
+    rounded_target = int(round(ovr + raw_delta))
+    new_ovr = max(OVR_MIN, min(OVR_MAX, rounded_target))
     final_delta = new_ovr - ovr
 
     # Assign narrative cause tag (§5.6)
@@ -291,6 +293,10 @@ def compute_player_delta(
 
     breakdown = {
         "age": round(age_t, 2),
+        "calibration": baseline_offset,
+        "unclamped_delta": unclamped_delta,
+        "clamped_delta": raw_delta,
+        "rounded_target": rounded_target,
         "dev": round(dev_t, 2),
         "ceiling": round(ceil_t, 2),
         "play": round(play_t, 2),
@@ -1188,6 +1194,15 @@ def c2_player_inputs(p: Dict[str, Any], ctx: Dict[str, Any], attrs: Optional[Dic
             "last_stats": seasons.get(season - 1)}
 
 
+def managed_progression_state(cur) -> bool:
+    """Optional migration detection; observed ratings remain available for legacy analysis."""
+    if not hasattr(cur, "fetchone"):
+        return False
+    cur.execute("SELECT to_regclass('progression_player_state') IS NOT NULL")
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
 def fetch_player_attributes_map(cur, season: int) -> Dict[int, Dict[str, int]]:
     """Loads player ratings from player_attributes for the season."""
     cur.execute("""
@@ -1196,7 +1211,11 @@ def fetch_player_attributes_map(cur, season: int) -> Dict[int, Dict[str, int]]:
         WHERE season <= %s
         ORDER BY player_id, season DESC, id DESC
     """, (season,))
-    return {r[0]: r[1] for r in cur.fetchall()}
+    observed = {r[0]: r[1] for r in cur.fetchall()}
+    if managed_progression_state(cur):
+        from engines.progression_state import load_bases
+        observed.update(load_bases(cur, season))
+    return observed
 
 
 # ---------------------------------------------------------------- execution ----
@@ -1210,33 +1229,6 @@ def dev_label(dev_trait: Optional[str]) -> Optional[str]:
     if len(dev_trait) <= DEV_LABEL_MAX:
         return dev_trait
     return "X-Factor" if "X-Factor" in dev_trait else dev_trait[:DEV_LABEL_MAX]
-
-
-def dev_transition(player_id: int, season: int, dev_trait: Optional[str], age: int,
-                   ovr: int, ceiling: float, top_last: bool, top_prev: bool,
-                   bottom_last: bool = False, bottom_prev: bool = False) -> Optional[str]:
-    """One seeded tier step; sustained production gates promotion, band room limits it.
-
-    Unknown/hidden tiers stay unchanged. No personality inference enters this rule.
-    Thresholds and probabilities are tuning constants, not a fit to Madden.
-    """
-    tiers = ("Normal", "Star", "Superstar", "X-Factor")
-    before = dev_label(dev_trait)
-    if before not in tiers:
-        return before
-    rank = tiers.index(before)
-    band_rank = sum(ceiling >= threshold for threshold in (75, 85, 95))
-    room = max(0.0, ceiling - ovr)
-    roll = _sha_unit(f"dev:{season}:{player_id}")
-    if age <= 28 and top_last and top_prev and rank < band_rank and room >= 2:
-        chance = min(0.5, 0.15 + room * 0.02)
-        if roll < chance:
-            return tiers[rank + 1]
-    elif rank > 0 and (bottom_last and bottom_prev or age > 30 and rank > band_rank):
-        chance = min(0.5, 0.15 + max(0, age - 30) * 0.03)
-        if roll < chance:
-            return tiers[rank - 1]
-    return before
 
 
 def bottom_quarter(perf: Dict[int, Dict[str, Any]]) -> set:
@@ -1264,6 +1256,8 @@ def run_progression(
     hold_shape: bool = True,
     log=print,
     traits: Optional[Dict[int, Dict[str, bool]]] = None,
+    baseline_ratings: Optional[Dict[int, Dict[str, int]]] = None,
+    band_overrides: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Runs progression for all players into target season, storing results in
     player_progression_history and updating player_ceilings. With hold_shape (default) the development and star
@@ -1275,11 +1269,26 @@ def run_progression(
     of each row. `traits` ({player_id: {PT_*: bool}}, e.g. from the save snapshot) lets the behaviour model drop
     flags a player has; without it only gains are possible. Persona and coach terms are 0 (D4)."""
     with conn.cursor() as cur:
+        if commit and not dry_run and managed_progression_state(cur):
+            cur.execute("SELECT EXISTS(SELECT 1 FROM progression_player_state)")
+            if cur.fetchone()[0]:
+                raise ValueError("managed progression requires prepare/verified acknowledgement, not direct --commit")
         _, aging_pairs, _ = read_fit_rows(cur, season - 1 if season > 2036 else 2036)
         aging_curves = fit_aging(aging_pairs)
         roster = fetch_progression_roster(cur, season)
         weights_doc = ow.load_weights()
         attr_map = fetch_player_attributes_map(cur, season - 1)
+        if baseline_ratings is not None:
+            attr_map.update(baseline_ratings)
+            for player in roster:
+                ratings = baseline_ratings.get(player["player_id"])
+                if ratings:
+                    player["overall_rating"] = ow.predict_ovr(weights_doc, TO_MADDEN_POSITION.get(player["position"], player["position"]), ratings)[0]
+                band = (band_overrides or {}).get(player["player_id"])
+                if band:
+                    player.update(stored_floor=band.get("floor"), stored_spread=band.get("spread"),
+                                  stored_group_ceilings=band["group_ceilings"],
+                                  stored_ceiling=max(band["group_ceilings"]["technical"], band["group_ceilings"]["mental"]))
         awareness = {pid: r.get("Awareness") for pid, r in attr_map.items() if r}
         ctx = load_c2_context(cur, season)
 
@@ -1307,7 +1316,7 @@ def run_progression(
             band = stored_band(p, ceiling) or seed_ceiling_band(
                 p["player_id"], p["overall_rating"], p["dev_trait"], ceiling, p["years_pro"])
             c2 = c2_player_inputs(p, ctx, attr_map.get(p["player_id"]), awareness, age)
-            bt = breakthrough(p["player_id"], season, age, p["player_id"] in top_last, p["player_id"] in top_prev)
+            bt = 0  # receipt-driven partial-season/playoff reviews own band revisions
             band, ceiling = apply_breakthrough(band, ceiling, bt)
             if c2["lasting_points"]:
                 gc = dict(band["group_ceilings"])
@@ -1351,6 +1360,7 @@ def run_progression(
 
             ratings_diff, peak, entry, entry_source = {}, None, None, None
             new_ratings = None
+            ratings_failure = "RATINGS_UNAVAILABLE"
             if p_id in attr_map:
                 current = attr_map[p_id]
                 mental = {k: current[k] for k in MENTAL_RATINGS if k in current}
@@ -1376,8 +1386,27 @@ def run_progression(
                         lasting_damage=c2["lasting_damage"],
                     )
                     peak = {k: max(v, new_ratings.get(k, v)) for k, v in peak.items()}
-                except Exception:
+                    ratings_failure = None
+                except Exception as exc:
                     ratings_diff = {}
+                    new_ratings = None
+                    ratings_failure = "RATING_DISTRIBUTION_FAILED"
+                    log(f"player {p_id}: rating distribution failed ({type(exc).__name__}); no applicable target")
+
+            calculation = {
+                "unclamped_delta": breakdown["unclamped_delta"],
+                "clamped_delta": breakdown["clamped_delta"],
+                "clamp_adjustment": breakdown["clamped_delta"] - breakdown["unclamped_delta"],
+                "rounded_target_ovr": breakdown["rounded_target"],
+                "rounding_adjustment": breakdown["rounded_target"] - (ovr + breakdown["clamped_delta"]),
+                "bounded_target_ovr": new_ovr,
+                "boundary_adjustment": new_ovr - breakdown["rounded_target"],
+                "realized_rating_ovr": None,
+                "rating_target_gap": None,
+            }
+            if new_ratings is not None:
+                realized = ow.predict_ovr(weights_doc, TO_MADDEN_POSITION.get(p["position"], p["position"]), new_ratings)[0]
+                calculation.update(realized_rating_ovr=realized, rating_target_gap=realized-new_ovr)
 
             behaviour = behaviour_changes(p_id, season, p["position"], p["years_pro"], c2["last_stats"],
                                           (traits or {}).get(p_id), c2["mentor_id"] is not None)
@@ -1385,10 +1414,13 @@ def run_progression(
             results.append({
                 "season": season,
                 "player_id": p_id,
+                "position": p["position"],
                 "old_ovr": ovr,
                 "new_ovr": new_ovr,
                 "delta_ovr": delta,
                 "age_term": breakdown["age"],
+                "calibration_term": breakdown["calibration"],
+                "calculation": calculation,
                 "dev_term": breakdown["dev"],
                 "ceiling_term": breakdown["ceiling"],
                 "play_term": breakdown["play"],
@@ -1398,7 +1430,10 @@ def run_progression(
                 "performance_term": breakdown["performance"],
                 "performance_notes": (perf.get(p_id) or {}).get("notes", []),
                 "ratings_diff": ratings_diff,
+                "ratings_before": dict(attr_map[p_id]) if p_id in attr_map else None,
                 "target_ratings": new_ratings,
+                "calculation_status": "FAILED" if ratings_failure else "CALCULATED",
+                "failure_code": ratings_failure,
                 "ceiling": ceiling,
                 "ceiling_source": c_source,
                 "cause": cause,
@@ -1408,9 +1443,7 @@ def run_progression(
                 # phase C2 (§5.6)
                 "checkpoint": "OFFSEASON",
                 "dev_before": dev_label(p["dev_trait"]),
-                "dev_after": dev_transition(p_id, season, p["dev_trait"], age, new_ovr, ceiling,
-                                            p_id in top_last, p_id in top_prev,
-                                            p_id in bottom_last, p_id in bottom_prev),
+                "dev_after": dev_label(p["dev_trait"]),  # desired Mu label is handled separately; ability gate stays closed
                 "group_changes": group_changes(ratings_diff),
                 "wear_term": breakdown["wear"],
                 "upkeep_term": breakdown["upkeep"],
@@ -1889,9 +1922,7 @@ def run_simulation(
         for p in staying:
             new_ovr = progress(p, *terms)
             ceiling, _ = seed_player_ceiling(p["player_id"], p["ovr"], p["age"] + 1, p["dev"])
-            dev_after = dev_transition(p["player_id"], sim_s, p["dev"], p["age"] + 1, new_ovr, ceiling,
-                                       p["player_id"] in top_now, p["player_id"] in top_before,
-                                       p["player_id"] in bottom_now, p["player_id"] in bottom_before)
+            dev_after = p["dev"]  # simulation keeps bootstrap labels; no independent dev lottery
             advanced.append({**p, "age": p["age"] + 1, "ovr": new_ovr, "dev": dev_after})
         previous_perf = perf
         roster = advanced
@@ -1950,6 +1981,34 @@ def main():
         else:
             run_progression(conn, season=args.season, commit=args.commit, dry_run=args.dry_run,
                             hold_shape=not args.follow_madden)
+
+
+
+
+def in_season_checkpoint(cur, season, week, *, snapshot=None, source_fingerprint=None):
+    """Receipt-driven U13 hook. Caller must retain proposal and acknowledge after write.
+
+    The old three-argument optional hook cannot safely mutate state without an
+    observed snapshot and fingerprint. Fail explicitly rather than award unsaved growth.
+    """
+    if snapshot is None or source_fingerprint is None:
+        raise ValueError("progression hook requires snapshot/source_fingerprint and verified receipt acknowledgement")
+    from engines.progression_checkpoint import prepare_weekly_pass
+    return prepare_weekly_pass(cur, snapshot, season, week, source_fingerprint=source_fingerprint)
+
+
+
+
+def development_report(result, *, audience="public", doc=None):
+    """Versioned explanation view of raw annual calculation rows, never an applied receipt."""
+    from engines.progression_report import project_annual
+    if doc is None:
+        try:
+            doc = ow.load_weights()
+        except OSError:
+            doc = {}
+    return [project_annual(row, audience=audience, doc=doc) for row in result.get("results", [])]
+
 
 
 if __name__ == "__main__":

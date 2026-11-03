@@ -253,7 +253,39 @@ namespace MuHarness
         internal static ILogger Log = new StderrLogger();
         internal static string ProfileKey;
         internal static string KeyFile;
+        internal static string KeySource = "none";
         static bool booted;
+
+        /// <summary>The game key MMC Editor adds itself: the byte array FrostyProfileTaskWindow's
+        /// Window_Loaded state machine builds with RuntimeHelpers.InitializeArray before
+        /// KeyManager.AddKey("Key1", ...). Found by its ldtoken in that method's IL, so a new MMC
+        /// build keeps working. Returns null if the method or array isn't there.</summary>
+        static byte[] EditorBuiltInKey()
+        {
+            var core = typeof(Frosty.Core.App).Assembly;
+            Type sm;
+            try { sm = core.GetTypes().FirstOrDefault(t => t.FullName != null && t.FullName.StartsWith("Frosty.Core.Windows.FrostyProfileTaskWindow+<Window_Loaded>")); }
+            catch (ReflectionTypeLoadException ex) { sm = ex.Types.FirstOrDefault(t => t != null && t.FullName != null && t.FullName.StartsWith("Frosty.Core.Windows.FrostyProfileTaskWindow+<Window_Loaded>")); }
+            var move = sm == null ? null : sm.GetMethod("MoveNext", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            var body = move == null ? null : move.GetMethodBody();
+            if (body == null) return null;
+            var il = body.GetILAsByteArray();
+            for (int i = 0; i + 4 < il.Length; i++)
+            {
+                if (il[i] != 0xD0) continue;                       // ldtoken
+                int tok = BitConverter.ToInt32(il, i + 1);
+                if ((tok >> 24) != 0x04) continue;                 // a field token
+                FieldInfo f;
+                try { f = move.Module.ResolveField(tok); } catch { continue; }
+                if (f == null || !f.IsStatic || (f.Attributes & FieldAttributes.HasFieldRVA) == 0) continue;
+                int size = System.Runtime.InteropServices.Marshal.SizeOf(f.FieldType);
+                if (size != 16) continue;                          // Key1 is a 16-byte AES key
+                var key = new byte[size];
+                RuntimeHelpers.InitializeArray(key, f.FieldHandle);
+                return key;
+            }
+            return null;
+        }
 
         internal static bool InitfsLoaded { get { return Fs != null && Fs.EnumerateFilesInMemoryFs().Any(); } }
 
@@ -261,8 +293,8 @@ namespace MuHarness
         internal static void RequireInitfs()
         {
             if (InitfsLoaded) return;
-            throw new HarnessException("the game's initfs isn't loaded, so ebx can't be read: MMC Editor keeps the game key it asked for on first start in "
-                + (KeyFile ?? "<editor>\\madden27.key") + ". Put that file there (or set MU_MMC_KEY_FILE to it).");
+            throw new HarnessException("the game's initfs isn't loaded, so ebx can't be read: neither MMC's built-in game key (FrostyProfileTaskWindow) nor a key file at "
+                + (KeyFile ?? "<editor>\\madden27.key") + " was found. Check the MMC Editor install opens Madden 27.");
         }
         static System.Windows.Application wpfApp;
 
@@ -308,12 +340,16 @@ namespace MuHarness
             Fs = new FileSystemManager(Program.GameDir);
             foreach (var src in ProfilesLibrary.Sources)
                 Fs.AddSource((string)Member(src, "Path"), (bool)Member(src, "SubDirs"));
-            // The game's initfs is encrypted with the game key the editor asks for on first start and
-            // keeps in <editor>\<cache>.key (SplashWindow). Without it the initfs isn't read, so
-            // res/chunk assets (textures) work but ebx can't (no shared type descriptors).
+            // The game's initfs is encrypted. MMC Editor's profile window (FrostyCore's
+            // FrostyProfileTaskWindow.Window_Loaded) adds MMC's built-in game key as Key1 when the
+            // profile requires one, then lets <editor>\<cache>.key override it. We do the same, in
+            // memory only (JR, 2026-10-31: "mods should be created the way the editor does"). The key
+            // is never written, logged or printed. Without it textures work but ebx can't be read.
             byte[] key = null;
             if (ProfilesLibrary.RequiresKey)
             {
+                var builtIn = EditorBuiltInKey();
+                if (builtIn != null) { KeyManager.Instance.AddKey("Key1", builtIn); key = builtIn; KeySource = "editor_builtin"; }
                 KeyFile = Environment.GetEnvironmentVariable("MU_MMC_KEY_FILE");
                 if (string.IsNullOrEmpty(KeyFile)) KeyFile = Path.Combine(Program.EditorDir, ProfilesLibrary.CacheName + ".key");
                 if (File.Exists(KeyFile))
@@ -325,9 +361,10 @@ namespace MuHarness
                         KeyManager.Instance.AddKey("Key1", key);
                         if (data.Length >= 32) { var k2 = new byte[16]; Array.Copy(data, 16, k2, 0, 16); KeyManager.Instance.AddKey("Key2", k2); }
                         if (data.Length >= 32 + 16384) { var k3 = new byte[16384]; Array.Copy(data, 32, k3, 0, 16384); KeyManager.Instance.AddKey("Key3", k3); }
+                        KeySource = "key_file";
                     }
                 }
-                else Console.Error.WriteLine("harness: no game key file at " + KeyFile + "; the initfs is not loaded (ebx commands will fail)");
+                if (key == null) Console.Error.WriteLine("harness: no game key (MMC's built-in key not found, no key file at " + KeyFile + "); the initfs is not loaded (ebx commands will fail)");
             }
             Fs.Initialize(key);
             Console.Error.WriteLine("harness: file system head=" + Fs.Head + " catalogs=" + Fs.CatalogCount + " " + sw.Elapsed);
@@ -516,6 +553,7 @@ namespace MuHarness
             r.Set("requires_key", ProfilesLibrary.RequiresKey);
             r.Set("key_file", Boot.KeyFile);
             r.Set("key_file_present", Boot.KeyFile != null && File.Exists(Boot.KeyFile));
+            r.Set("key_source", Boot.KeySource);   // editor_builtin, key_file or none; never the key itself
             r.Set("initfs_files", Boot.Fs.EnumerateFilesInMemoryFs().Count());
             r.Set("ebx_readable", Boot.InitfsLoaded);
             // The 20-byte game-layout fingerprint (MOD_REVERSE_ENGINEERING §2.1) follows the build

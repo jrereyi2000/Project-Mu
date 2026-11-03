@@ -279,6 +279,10 @@ def pass_edits(cur, snapshot: Dict[str, Any], season: int, pgid_by_player: Optio
                log_fn=None) -> Dict[str, Any]:
     """The whole offseason edits document: run_progression for `season` (dry: nothing stored, nothing committed) with
     the snapshot's PT_* traits, then rating, morale, slider and the two dev-trait flag edits, one players entry per pgid."""
+    if progression.managed_progression_state(cur):
+        from engines.progression_state import load_bases
+        if load_bases(cur, season):
+            raise ValueError("managed offseason requires progression_checkpoint.prepare_offseason_pass and verified receipt acknowledgement")
     if pgid_by_player is None:
         pgid_by_player = fetch_pgid_map(cur)
     conn = getattr(cur, "connection", None)

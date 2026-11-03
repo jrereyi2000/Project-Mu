@@ -1,6 +1,8 @@
 # Project Mu: Player Progression Plan
 
-**Status (2026-10-30):** C and C2 are implemented; D has the offline save-edit builder and drift checker; E has weekly form and morale 50; H now has seeded dev-tier transitions as well as ceiling breakthroughs, lasting-injury bands and PT writes. The V2 core build log records C2 (U7), D (U9/U9b) and E (U10) already merged before this reconciliation. Save ownership now clears banked XP/skill points and uses absolute pre-rollover rating targets, so Madden drift is overwritten and repeated writes do not stack changes. Player/coach personality effects (F/G) remain neutral by the approved V2 core D4 decision and belong to the personality plan; real-person evidence and reviewed mappings are separate work. Live orchestration and end-to-end in-game acceptance belong to V2 core U13/U16/U17 and are not claimed complete here. The fresh 2034 league remains held; archived madden_2036 remains read-only.
+**Status (2026-10-31):** revised evidence/calendar, fractional development/band policy, receipt-driven permanent-state ledger, offseason reconciliation and save/form/drift adapters are implemented. Scratch event/receipt tests and temporary real-save write/readback cover no-double-pay, form separation, playoff-run review and retries. Shared public/private explanations and applied-only in-season writer access are implemented. U13 must consume the proposal/receipt contract below before live activation. Personality effects and independent gameplay ability assignment remain deferred; the new rates, opportunity thresholds and label mapping are calibration candidates.
+**Accepted revision (JR, 2026-10-31):** the calendar, form, band-review and dev-label rules below supersede the older offseason-only and two-season breakthrough rules. Pure policy and receipt adapters implement the revision; live scheduling/application and tuning acceptance are separate gates.
+
 **Comes after:** the PC migration ([`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md)). It needs the save reader, the save writer and the OVR weights from §4–§5 there.  
 **2026-10-29: the teleport is dropped for a fresh 2034 PC franchise, and Mu's 2026–2036 history is discarded** ([`PC_MIGRATION_PLAN.md`](../done/PC_MIGRATION_PLAN.md), decision at the top; obsolete code in [`AUDIT_LEDGER.md`](../../AUDIT_LEDGER.md) §3b). References to "teleport time" and the teleporter's edits below now mean the fresh league's first offseason and the save writer. The backtest on the 2035→2036 offseason stays on `madden_2036`; recalibrate on the new league. `engines/progression.py` now uses `pipeline/madden_player_edit.py` rather than importing `pipeline/teleport.py` (ledger §3b decoupling completed).
 **Companions:** [`MMC_MOD_SURVEY.md`](../MMC_MOD_SURVEY.md) (the community progression tools), V2.13 (personalities) and V2.14 (this plan's summary) of the migration plan. [`LEAGUE_OFFICE_PLAN.md`](../done/LEAGUE_OFFICE_PLAN.md) uses the same personality traits for free agency, contracts and depth charts, and its coach-set depth charts feed the playing-time term here.
@@ -135,12 +137,118 @@ clamped to a band per age and OVR (a 99 can't go up; a single season moves at mo
 
 | Point | What | Share of a year's change |
 |---|---|---|
-| **Offseason pass** (after Madden's rollover, before the draft) | The main change: age, ceiling pull, last season's playing time and grade, injuries. Dev trait changes. Rookie camp changes for the new draft class | ~70% |
-| **In-season checkpoints** (proposed: after weeks 4, 8, 12 and 16) | Small changes from playing time and form: a rookie who earns snaps grows; a vet who loses his job slips. A breakout is noticed during the season, not only in the next one | ~30% |
-| **Major injury** (when it happens) | Ceiling and physical ratings (speed, acceleration) lowered for the worst injuries (torn ACL, Achilles); the roll is in §5.8 | — |
-| **Form** (weekly, D9) | Form from the last few games, written to the save with Madden's morale overridden, and reset to neutral each offseason (§5.11). Not part of the year's change | — |
+| **Offseason development** | Largest physical/technical changes, conditioning, aging and remaining annual development; reconcile gains already awarded in-season | ~70%, league-level starting target |
+| **Mental development** | Every four completed team games, including playoffs: lasting learning from experience and reviewed coaching/mentor inputs | Part of ~30% in-season starting target |
+| **Technical development** | Midseason and season-end checkpoints, including playoff experience; refine supported skills actually used | Part of the same in-season allocation |
+| **Development-band review** | Normally after roughly 6–8 meaningful appearances; regular-season and playoff evidence can combine. An entire sustained playoff run can independently trigger review despite being shorter | Review is not an automatic upgrade |
+| **Major injury** | Record immediately; distinguish temporary impairment from lasting damage assessed through recovery | Separate from routine growth |
+| **Form** | Weekly, including playoffs; temporary execution overlay, initially ±3 OVR, no universal +1/week restriction; reset offseason | Excluded from permanent annual development |
 
-The in-season split is a decision (§9, D3). Weekly save writes happen anyway in season (`LEAGUE_OFFICE_PLAN.md`: trades, waivers, depth charts, injury durations, with Madden closed), so checkpoints and form add rating edits to an existing weekly write, not a new routine. Mileage (§5.8) is counted weekly either way, since it only reads.
+**One annual accounting system:** in-season gains count toward annual development, and offseason work awards what remains rather than paying twice for the same snaps. The 70/30 split is a league-level calibration target, not a hard individual entitlement. Physical improvement is concentrated in the offseason without an absolute biological prohibition; mental learning continues during offseason preparation. Ordinary age decline is primarily offseason, not a birthday-triggered in-season drop. Byes do not advance completed-game checkpoints. A season-end reconciliation includes residual games and postseason experience without counting evidence already used at earlier checkpoints twice. Weekly writes use the post-Advance-Week ingest boundary with the franchise closed.
+
+### 5.3a Engine interface and U13 application contract
+
+**Authoritative handoff for the U13 agent (2026-10-31).** Progression is a deterministic engine. U13 owns stage scheduling and save application; the engine owns player checkpoint timing, numerical development, form composition and development accounting. The old assumption that a three-argument hook returns run_progression-style rows is superseded. Do not catch an interface mismatch as "no hook" and silently skip progression in a managed league.
+
+`progression_state.py` owns authoritative base/band revisions, checkpoint events, annual accounting and evidence consumption; `progression_evidence.py` owns completed-game calendars/review windows; `progression_inputs.py` reads cutoff-bounded game evidence; `progression_policy.py` returns fractional skill entitlements and separate band revisions; `progression_offseason.py` reconciles annual targets; `progression_checkpoint.py` prepares edits and acknowledges verified application.
+
+| Stage | Actual implemented API | Meaning of season |
+|---|---|---|
+| Explicit initial setup | `progression_checkpoint.bootstrap_pass(cur, snapshot, season, source_fingerprint=source_sha256, form_neutral=True)` | Current application year; requires known-neutral form and player ConfidenceRating50. Apply migration and establish neutral save first; do not assert neutrality for an arbitrary ingest. |
+| Every regular-season/playoff weekly stage | `progression.in_season_checkpoint(cur, season, week, snapshot=snapshot, source_fingerprint=source_sha256)` | Current earned/application season; week bounds completed evidence inclusively. Engine decides whether individual mental/technical checkpoints or band reviews are due. |
+| Equivalent direct weekly entry | `progression_checkpoint.prepare_weekly_pass(cur, snapshot, season, week, source_fingerprint=source_sha256)` | Same behavior as the wrapper; call one entry, not both. |
+| Offseason progression | `progression_checkpoint.prepare_offseason_pass(cur, snapshot, season, source_fingerprint=source_sha256)` | Target application year S; reconciles development earned in S−1 against immutable annual-start ratings. Removes form. Translate U13's stage-year convention explicitly. |
+| After verified application | `progression_checkpoint.acknowledge_pass(cur, prepared, output_snapshot, output_fingerprint=output_sha256, writer_verified=True)` | Uses retained event earned/application years. Returns acknowledged event records; does not commit. |
+
+Import the actual modules with `from engines import progression, progression_checkpoint`. The weekly hook exists and returns the preparation envelope below; calling it with only `(cur, season, week)` raises ValueError. Snapshot/input fingerprint and later receipt acknowledgement are mandatory for safe integration.
+
+```python
+prepared = progression.in_season_checkpoint(
+    cur, season, week,
+    snapshot=input_snapshot,
+    source_fingerprint=input_save_sha256,
+)
+# Or, at the offseason boundary:
+# prepared = progression_checkpoint.prepare_offseason_pass(
+#     cur, input_snapshot, target_season,
+#     source_fingerprint=input_save_sha256,
+# )
+
+# Actual return shape:
+# {
+#   "document": {"players": [...], "records": [...]},
+#   "event_ids": ["pending-event-id", ...],
+#   "source_fingerprint": "input-save-sha256",
+#   "edits_hash": "canonical-progression-document-sha256",
+# }
+
+# U13 then composes other moves, writes/verifies a candidate and durably applies it.
+# Retain prepared unchanged; do not replace its document/hash with the combined one.
+acknowledged_events = progression_checkpoint.acknowledge_pass(
+    cur, prepared, verified_output_snapshot,
+    output_fingerprint=actual_output_save_sha256,
+    writer_verified=True,  # only after the actual writer/readback succeeded
+)
+# U13 owns the caller transaction commit and filesystem recovery protocol.
+```
+
+**Composition ownership:** the prepared document already contains permanent base plus the weekly form overlay, OVR/grades/PlayerType, morale50 and progression-setting safeguards. Offseason documents also support PT changes and reset form. Merge it with depth-chart, IR, roster and contract edits in U13's one save write; do not run a second form overlay or independently spend/store progression. Conflicting player fields are integration errors, not last-writer-wins. If a roster move invalidates edits (for example save_writer forbids players edits for a released player), resolve eligibility/composition before freezing the corresponding proposal; never silently remove its edits and acknowledge its event anyway. The actual dev-field gate remains closed.
+
+**Two hashes have different jobs:** `prepared["edits_hash"]` fingerprints the unchanged progression document, not U13's final combined write. U13 must separately retain the combined document/hash, input file hash, verified output file hash and operation identity. `source_fingerprint`/`output_fingerprint` are hashes of actual save bytes, not snapshot JSON or timestamps. The engine verifies its owned output fields and stored absolute event targets; U13/save_writer verifies the entire combined write, including fields the reader omits such as raw XP balances. `writer_verified=True` represents that completed verification; it is not a request to perform verification.
+
+**Durability and recovery sequence:**
+
+1. Ingest at the agreed post-Advance-Week boundary; verify the franchise is not loaded, input fingerprint and authoritative base revisions. No raw observation may become permanent base merely because it was ingested.
+2. Prepare the weekly/offseason envelope and durably retain the PREPARED event identities, unchanged progression document/hash, combined write and recovery information **before replacing a save**. A transaction may persist PREPARED records without awarding growth; do not rely on uncommitted event rows surviving a crash.
+3. Write a candidate copy and run whole-document save_writer/readback checks. A failed writer, stale input, rejected merge or failed readback awards nothing and must not call acknowledgement.
+4. U13 durably replaces/reconciles the output under its save-write guard, retains actual output fingerprint/verification evidence, then acknowledges the unchanged progression envelope and commits its transaction. Acknowledgement advances permanent base, annual accounting, applied form and annual/C2 summaries together.
+5. If replacement succeeded but acknowledgement/commit was interrupted, use the durable operation record and observed output fingerprint to acknowledge the original events. Do not recalculate development, reroll a review or advance Madden again. If only a candidate was generated, verify whether replacement actually happened before awarding anything. Filesystem replacement and PostgreSQL commit are not one atomic operation.
+
+All progression helpers leave commits and save replacement to U13. Dry-run must roll back preparation and perform no acknowledgement. An empty pending event list means no new accounting award; it is not permission to create a synthetic award. Stale prepared or historical applied targets refuse reuse after a newer base revision. Weekly year transitions refuse skipping offseason reconciliation.
+
+Native player_attributes rows remain observations, including overlays or drift; managed permanent state is independent. Form does not alter physical attributes or Injury. The form CLI emits edits without recording applied form. Candidate rates and the ~30/70 aggregate target still need career/gameplay calibration. Existing C2 annual recovery/decline inputs handle lasting injury consequences; no new live injury instrumentation is claimed.
+
+### 5.3b Development results and explanations
+
+**Implemented (2026-10-31):** `engines/progression_report.py` supplies a versioned common projection for weekly events and annual numerical calculations. Reporting is separate from the application envelope: explanations do not replace the document/event IDs/source/edits hash retained by U13 and cannot award development. Default audience is public; private audit is an explicit opt-in.
+
+```python
+from engines import progression, progression_checkpoint, progression_report
+
+# Annual numerical calculation: CALCULATED, never an applied receipt.
+calculation_reports = progression.development_report(result, audience="public")
+
+# Retained weekly/offseason event proposals: PROPOSED before acknowledgement.
+proposal_reports = progression_checkpoint.explain_prepared(cur, prepared, audience="public")
+
+# Internal audit only; do not send this view to writers/UI/public logs.
+audit_reports = progression_checkpoint.explain_prepared(cur, prepared, audience="private")
+
+# After the existing write/verify/replace/acknowledge sequence from §5.3a:
+# each acknowledged event has metadata["report_public"] with APPLIED status.
+# Pure projections are also available individually:
+# progression_report.project_event(event, audience="public" or "private")
+# progression_report.project_annual(row, audience="public" or "private")
+# progression_report.sanitize_public(stored_json) -> public dict or None
+```
+
+| Schema_version1 field | Meaning |
+|---|---|
+| `status` | CALCULATED annual numerical result; PROPOSED prepared event; APPLIED only from a verified acknowledgement. Never infer application from report generation. |
+| `identity`, `calendar` | Player/event/kind, earned/application season and application week. Offseason targeting the next year is week0 there; original earned-year stage remains private. |
+| `permanent` | Underlying before/after OVR, separate planned OVR, integer rating changes and before/after OVR source (RATINGS, RECORDED_OVR, or unknown). Proposed after-values remain candidates. |
+| `form` | Requested before/after form, absolute effective before/after OVR, and explicitly named OVR contribution deltas. Form is not permanent development. |
+| `reasons`, `evidence`, `failures` | Recorded safe codes, evidence IDs/count and recorded reliability when available. No fabricated aggregate confidence across multiple different decisions. Missing context and distribution failures are explicit, not zero-change success. |
+| `development_label` | Desired band-derived display label, actual observed before trait, and actual after trait only from verified readback. Raw annual dev_after does not imply a desired band label or an applied dev change. |
+| `audit` (private only) | Full before/after ratings, requested fractional learning/carry, band changes, numeric term breakdown, calibration/clamp/rounding/rating-target-gap details and provenance. |
+
+New event preparation captures authoritative before-base/band and the overlay attached to that revision, plus observed actual dev-before; it does not infer those facts from resulting deltas. Acknowledgement captures actual dev-after and stores a frozen `report_public` alongside applied state in the same savepoint. If reporting fails, the whole acknowledgement rolls back. Receipt-only report enrichment does not change the original proposal's replay identity. Older records without the before context remain unknown rather than reconstructed; existing events are not automatically backfilled.
+
+`run_progression` retains its internal `{season,players_count,mean_delta,causes,results}` calculation interface and now records ratings_before, explicit distribution failure/status, calibration offset and numerical clamp/rounding facts. Use the projection helpers for explanations. A main cause is a priority-selected shorthand, not proof of the largest numeric contribution; positive ceiling-pull cause CEILING is publicly described as POTENTIAL_HEADROOM. Upkeep is nested inside league and must not be counted twice. Group rating-point totals are not OVR contributions. Planned OVR, rating-derived OVR and actual acknowledged state are distinct.
+
+**Writer access:** `get_player_progression` returns sanitized legacy `changes` and applied public `events`. It reads only metadata.report_public from APPLIED events, revalidates nested fields/player/event/calendar, excludes the article's current week and future seasons, and suppresses matching legacy annual fallback whenever a verified annual event exists. Thus malformed/invisible event data cannot leak through fallback. Next-year offseason week0 is visible to that year's week1 article. Legacy cause/label/numeric values are also whitelisted; absent or unsupported records stay unknown. Private metadata, seeds, durability and numerical potential never reach this tool. The existing dispatcher registration is unchanged.
+
+**U13 integration acceptance checks:** compose progression+form+depth-chart+IR once; preserve the envelope and use public proposal reports for dry-run logs, applied report_public only after acknowledgement for successful logs. Verify failed/stale/conflicting writes award nothing, durable recovery after replacement-before-commit, no duplicate awards, historical replay refusal, earned/target-year conversion, postseason/byes and public-data filtering. Reference tests/test_progression_{state,checkpoint,scenarios,offseason,report,reporting_integration,writer}.py. Engine/reporting tests do not establish that U13 itself is implemented or accepted.
 
 ### 5.4 Which ratings move
 
@@ -173,9 +281,9 @@ Writer tools read `player_progression_history` with the hidden parts left out: t
 
 ### 5.7 Dev traits
 
-Dev trait changes are part of the offseason pass, with at most one tier step. The implemented rule uses two consecutive top-quarter reliability-weighted production seasons for promotion (the same eligibility as breakthroughs), rather than treating the league-shape subsidy as earned development. Promotion requires age ≤28, at least 2 OVR of ceiling room and a tier below the ceiling summary (75/85/95 mark Star/Superstar/X-Factor). Its seeded chance is min(0.5, 0.15 + 0.02 × room). Two bottom-quarter seasons, or age >30 with a tier above the ceiling summary, permit a downgrade at min(0.5, 0.15 + 0.03 × years past 30). Missing, undersized or all-tied performance groups cannot count as poor seasons. Hidden/unknown dev labels are preserved. These are explicit initial tuning constants, not a Madden fit or real-person personality claims; the fresh league needs recalibration. `dev_quality` can continue measuring the resulting tier changes.
+**Implemented design (JR, 2026-10-31; live gameplay gate closed):** dev tiers summarize the hidden development band. Remove the independent performance-based promotion/demotion lottery: evidence may change skills or revise a band, then the display label follows that band. A label change must not itself award growth or raise potential again. An incoming Madden dev tier may initialize an unknown band once, but must not become a recurring driver. Exact label mapping remains to be calibrated rather than treating the current 75/85/95 cutoffs as approved.
 
-**JR decided (2026-10-28):** with ceiling bands (§5.9), the dev trait stays and becomes the visible summary of the hidden band: Madden still needs `TraitDevelopment` in the game (abilities, X-Factor slots), and it tells JR and writers roughly how much room a player has, without the number.
+**Implementation:** the independent tier lottery is removed. `progression_policy.summarize_band` produces a desired label with provisional configurable mapping; managed annual targets use stored bands rather than dev-driven reinitialization. Explicit neutral bootstrap can seed an unknown band once from the incoming tier. Actual Madden TraitDevelopment changes stay gated because ability eligibility remains coupled; no ability decoupling is claimed.
 
 ### 5.8 Durability and mileage
 
@@ -189,7 +297,10 @@ Dev trait changes are part of the offseason pass, with at most one tier step. Th
 
 * **Band:** each player has a floor, a ceiling and a spread (how widely his path can land between them), with a ceiling per group: physical about at his draft-day ratings plus the strength program, technical and mental from `true_value` and his profile. A polished four-year starter has a narrow band near the top of his range and reaches it fast; a raw elite athlete has a wide band that needs coaching and snaps; a late-round pick sits low with a small tail. These profiles come out of the prospect's entry ratings and scouting's uncertainty about him; they are not fixed classes.
 * **Growth toward the ceiling** replaces the dev multiplier: room to grow sets the rate, and the spread sets how far a seeded draw can move him each season.
-* **Breakthrough:** a player 28 or younger with two straight seasons in his position group's top quarter (`performance_scores`) can have his technical and mental ceilings raised by a seeded 1–4. Personality and coaching (§6, §7) set the odds, so every breakthrough has a cause tag (`BREAKTHROUGH`) and a reason a writer can give.
+* **Breakthrough review (JR, 2026-10-31; implemented with candidate thresholds):** roughly 6–8 meaningful appearances normally establish review eligibility, using position-specific opportunities, efficiency, baseline change and supported context. Regular-season and playoff games both count. **A sustained full playoff run is an independent route to review**, even when fewer than six games; neither reaching the postseason nor a single spectacular game guarantees a breakout. A first-round bye is not evidence and must not disqualify a shorter deep run. The shorter sample carries uncertainty; exact opportunity and reliability thresholds need testing. There is no hard under-26 or age-28 cutoff in the accepted review design.
+* **Review outcomes:** no lasting change; supported underlying skill improvement; upward technical/mental band revision; or both skill and band changes, accounted for separately. A trigger starts assessment, not an automatic reward. Do not impose unsupported metrics such as separation per route when inputs are unavailable. Missing or unit-level evidence reduces confidence.
+* **Revisable resistance bands:** progress becomes harder near a band's upper end; sufficiently strong evidence can move it. A slump does not automatically lower potential. Aging mainly lowers current physical ability; serious injury may reduce future physical capacity. Preserve league calibration rather than making every good stretch remove growth resistance.
+* **Implementation:** normal reviews initially require six fresh meaningful appearances; a closed playoff-run review initially requires three fresh playoff appearances. Both are configurable, not guarantees of improvement. Consumed review evidence cannot generate another weekly lottery. Historical backtest helpers retain their old comparison formula, but managed progression does not invoke the two-season breakthrough or a hard youth cutoff.
 
 ### 5.10 Peaks and upkeep
 
@@ -211,6 +322,8 @@ It rides on the weekly in-season write the league office already needs (§5.3) (
 PC test (phase A (6)), answered by JR 2026-10-30: morale visibly changes play, raising a player's key position ratings by up to ~5. Assumed neutral: 50, Madden's default (most players sit there). Pinning everyone at 50 every week means Madden's morale changes last at most one game before the next write resets them.
 
 Form isn't stored in `player_ceilings` or used by the yearly change; the yearly change reads the season's production instead.
+
+**Accepted clarification (JR, 2026-10-31):** retain ±3 OVR as the initial production setting while testing stronger alternatives; a strong game may change the calculated overlay immediately. Form changes relevant execution skills while preserving physical limits, and should not reproduce the whole statistical outcome through a rating boost. Exceptional outcomes must remain possible without prior boosts. Never convert a percentage of form directly into permanent ratings: sustained performance is evidence for a separate development assessment. Temporary impairment/rest is separate from permanent injury damage. No automatic three-week defensive-adjustment tag, new perceived-OVR system or restoration of the rejected young-player rating-range display is approved. Public expectations may change through narratives and recorded evidence without a new numerical OVR layer.
 
 ### 5.12 Madden's behaviour traits (`PT_*`)
 
@@ -321,10 +434,10 @@ Coaches have `slant`, schemes and tenure records today. This plan adds developme
 | **C. Engine, offline** | Complete (2026-10-28): `engines/progression.py` built with age, dev, ceiling, playing-time, injury and seeded noise terms, the per-age-band calibration, the league-shape term and the performance term. 2035→2036 backtest: mean ΔOVR −0.159 vs actual −0.147, MAE 1.134, every age band within 0.12 (34+ aside); `--simulate 5` holds the 2036 shape (§5.5). 15 tests in `tests/test_progression.py`. Tables on `madden_test` only. | `dev_quality`, aging fit, scouting |
 | **C2. Revision, offline** | **Implemented (V2 core U7, 2026-10-30):** rating groups and mental decline, thin-stat reliability, durability/mileage/wear, lasting injury damage, ceiling bands/breakthroughs, upkeep, continuity, mentors and PT outcomes. U1 supplies storage. Persona and coach effects stay 0 (D4). Backtest MAE 1.134; five-season OVR stability rechecked on scratch data. | C, sample save |
 | **D. Engine in the save** | **Offline components implemented:** progression_save builds one document with absolute Mu rating targets, OVR/grades/archetype, dev/PT changes, XP/skill clearing, morale 50, four zero slider records including LS and both dev flags off. drift_check detects unauthorized changes; get_player_progression exposes only public recorded outcomes. Temporary-copy save writer validation passes. Scheduling, pre-rollover snapshot capture, applied-save receipt/history coordination and in-game acceptance remain the V2 league-office integration boundary (U13/U16/U17). | A, C2, V2 integration |
-| **E. In-season checkpoints and form** | **Weekly form implemented (U10):** base ratings plus a separate overlay, morale pinned at 50; neutral in preseason/offseason. Permanent in-season checkpoints remain deferred under D3 (offseason only). Live scheduling belongs to V2 integration. | D |
+| **E. In-season checkpoints and form** | **Weekly form implemented (U10):** base ratings plus a separate overlay, morale pinned at 50; neutral in preseason/offseason. Permanent checkpoints are implemented under revised D3; live proposal/receipt scheduling belongs to V2 integration. | D |
 | **F. Player personality traits** | Traits table, seeding (Focus, `PT_*` and toughness as starting points), the trait multipliers of §6.1. Personas' voices (V2.13) | D (C2 for the terms offline), V2.13 |
 | **G. Coach traits** | Coach and coordinator traits (including openness, workload, discipline style), team strength and medical staff, the coaching term, carousel and GM weighting | D, F (coachability) |
-| **H. Dev traits, ceilings and behaviour traits fully owned** | **Engine and edit builders implemented:** one seeded dev-tier step, breakthroughs and injury effects on bands, PT gains/losses written. Full live ownership still requires the V2 integration acceptance run. | D, A(7), V2 integration |
+| **H. Dev traits, ceilings and behaviour traits fully owned** | **Engine and edit builders implemented:** desired dev labels follow revised bands, with actual dev writes gated; breakthroughs and injury effects on bands, PT gains/losses supported. Full live ownership still requires the V2 integration acceptance run. | D, A(7), V2 integration |
 
 Phases F and G can start before D as data (traits seeded, shown to writers) with the terms at 0, so personalities appear in stories first and in the numbers once the engine writes.
 
@@ -336,7 +449,7 @@ Phases F and G can start before D as data (traits seeded, shown to writers) with
 |---|---|---|
 | D1 | Who owns ratings after the move: Project Mu (this plan) or Madden? | Project Mu, from the 2038 offseason at the latest |
 | D2 | First PC season (2037): Madden's own progression, a community tool, or this engine? | Madden's own with XP off via Sabos, unless phase C is ready by the 2037 offseason |
-| D3 | In-season checkpoints, or offseason only? | Start offseason only; add checkpoints in phase E. The weekly in-season write exists anyway for the league office, so the extra cost is small |
+| D3 | In-season checkpoints, or offseason only? | **JR decided (2026-10-31): both**, one annual accounting system; mental checkpoints every four completed team games, technical midseason/end, playoff evidence included (§5.3). Receipt-driven implementation; U13 application pending. |
 | D4 | How much weight performance gets against age and talent | Playing time and grade together about a quarter of a typical season's change |
 | D5 | Can JR see ceilings or traits? | Ceilings never (like `true_value`); personality traits visible on player pages once seeded |
 | D6 | Does Project Mu also take over retirements? | Not in this plan; Sabos's lower retirement chance for now, revisit after phase D |
@@ -346,10 +459,15 @@ Phases F and G can start before D as data (traits seeded, shown to writers) with
 | D10 | Mental ratings: never decline, or decline last and slowest? | **JR decided (2026-10-28): last and slowest, at a rate set by the peak** (§5.4) |
 | D11 | Rating ranges instead of numbers for young players on Project Mu's pages? | **JR decided (2026-10-28): dropped** (§5.14) |
 | D13 | How form reaches the game: morale fixed for everyone (50 or 99) with a ratings overlay, or form written into morale itself? | **Decided (JR, 2026-10-30): morale pinned at 50 for everyone on every weekly write; form is separate from morale and is carried by a ratings overlay** (§5.11). |
-| D12 | Dev trait under ceiling bands | **JR decided (2026-10-28): kept, as the visible summary of the hidden band** (§5.7) |
+| D12 | Dev trait under ceiling bands | **JR reaffirmed (2026-10-31): label follows band**, no independent promotion lottery or recurring growth benefit; ability coupling remains an integration gate (§5.7). |
+| D14 | Partial-season and postseason breakouts | **JR decided (2026-10-31): review after meaningful partial-season evidence; a sustained full playoff run can independently qualify even below the normal 6–8 appearances.** Review is not guaranteed improvement (§5.9). |
 
 ---
 
 ## 10. Spec and verification status
 
-The implemented C2 tables/columns, save-edit builder, weekly form, dev-tier rule and public writer tool are documented in spec §2.21 and §3.3n. Scratch verification (2026-10-30): progression/save/form/drift and writer-privacy tests pass, including a temporary-copy save write; backtest MAE 1.134 on 1,385 pairs; five simulated seasons retain 143–147 players at 90+ and mean OVR 78.08–78.10. Save-reader tests pass with the project Python environment (the system Python lacks zstandard); one pre-existing decoupled visual test is skipped. Simulation covers OVR/dev turnover, not all persisted C2 career contexts. Player/coach/staff personality effects and dev_quality coaching attribution stay deferred; V2 integration must still prove snapshot capture, applied-save/history coordination and weekly scheduling in-game before the fresh 2034 start.
+The engine, receipt adapters and implemented explanation/writer views are documented in PROJECT_SPEC §2.21 and the ledger schema in §3.3n. Validation on 2026-10-31 included the initial 291-test progression batch and a subsequent 354-test progression/reporting/form/save/loader/watcher/writer batch. Final explanation follow-ups passed 35 numerical unit checks and 93 reporting/receipt/writer checks, including real isolated PostgreSQL temporal queries, legacy privacy filtering, projection-failure rollback and idempotent report enrichment. Isolated schemas in madden_test exercised migration idempotence, failed/stale receipts, cross-player rollback, unchanged permanent base after observed/form ingestion, per-rating annual reconciliation, fresh-evidence consumption, historical replay refusal, window-specific skill evidence and postseason review. A temporary copy of the real sample save passed actual save_writer write/readback, byte fingerprints and receipt acknowledgement; its original bytes were unchanged.
+
+The diagnostic 2035→2036 backtest remains MAE 1.134 on 1,385 pairs. The existing five-season OVR-turnover simulation passes (90+ count 143–147, mean OVR 78.08–78.10). This baseline is not a validation of every new multi-year event, injury or personality trajectory, nor of the ~30/70 aggregate split. Candidate policy rates, opportunity/reliability minima and dev-label mapping still need career/gameplay tuning. The scratch migration was not applied to the archive or a live franchise.
+
+Remaining integration gate: U13 must use the snapshot/fingerprint prepare/verified-ack contract, perform durable save replacement/recovery and commit the caller's transaction. Weekly progression refuses a year transition that skipped offseason reconciliation. Actual Madden dev-field changes stay gated by independent ability-assignment feasibility; personality effects stay neutral pending reviewed mappings. No live franchise was started or advanced by this work.

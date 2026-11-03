@@ -75,7 +75,7 @@ The first run in a checkout builds the index (2,252,240 names). A plain pattern 
  "fingerprint":"f7fd7b7b82ebb659d33809e907f61fd38a3df855","harness_version":"1.0", ...}
 ```
 
-`ebx_readable:false` is fine for a texture mod (§3, initfs key).
+That run was before 2026-10-31; `ebx_readable` is now true (§3). A texture mod never needs it.
 
 **4. Dry run.** `python3 -m tools.mod_builder build yellow_first_down --dry-run` (paths shortened):
 
@@ -142,12 +142,12 @@ python3 -c "from tools.mod_builder.harness import run; print(run(['ebx-dump', '<
 |---|---|
 | `texture-recolor` | `export-texture` → local recolour → local `png_to_dds` → `import-texture` |
 | `texture-replace` | (a PNG is turned into a DDS locally) → `import-texture` |
-| `ebx-set` | `ebx-set` (needs the initfs key) |
+| `ebx-set` | `ebx-set` (needs `ebx_readable`, §3) |
 | `legacy-replace` | no harness command: always the window route (§6) |
 
 Every harness build starts with `info` and ends with `export-mod`, then `check`.
 
-**The initfs key (needed for ebx only).** Madden 27's `Data/initfs_Win32` is encrypted (`ProfilesLibrary.RequiresKey`). Without it the initfs isn't loaded, so ebx can't be read: `ebx-dump`, `ebx-set`, and loading a project that holds ebx edits fail with a message saying so, and `info` shows `ebx_readable:false`. Textures (res + chunk) are unaffected. How the key gets there: when `madden27.key` is missing from the editor folder, MMC Editor's start-up (`SplashWindow`) opens a `KeyPromptWindow` asking for the Madden 27 encryption key, writes it to `<editor>\madden27.key`, and adds it with `KeyManager.Instance.AddKey`. The harness reads that same file at start-up (or the file named by `MU_MMC_KEY_FILE`). The key isn't on JR's PC: it comes from the MMC modding community, and **JR types it once into MMC Editor's prompt himself**. Claude never searches for, downloads, or asks for key material; when a build needs ebx and `info` says `ebx_readable:false`, it tells JR and stops. This is the game's content key (what the editor uses to read the game), unrelated to mod encryption.
+**The game key (needed for ebx only).** Madden 27's `Data/initfs_Win32` is encrypted (`ProfilesLibrary.RequiresKey`); without the key the initfs isn't loaded and ebx can't be read (textures are unaffected). MMC ships the key inside its own `FrostyCore.dll`: the editor's profile window (`FrostyProfileTaskWindow.Window_Loaded`) adds it as `Key1` with `KeyManager.Instance.AddKey` when the profile needs one, which is why MMC Editor never asks for a key and no `madden27.key` exists (found 2026-10-31). The harness does the same, as JR decided ("mods should be created the way the editor does", 2026-10-31): `EditorBuiltInKey()` finds that method's 16-byte array by its `ldtoken` in the IL and adds it as `Key1`, in memory only (never written, logged or printed). A `madden27.key` in the editor folder (or `MU_MMC_KEY_FILE`) still overrides it, as in the editor. `info` reports `key_source` (`editor_builtin`, `key_file` or `none`) and `ebx_readable`; on 2026-10-31 it showed `editor_builtin`, 159 initfs files, `ebx_readable: true`. This is the game's content key; MMC's separate mod-encryption code (`FrostyModCryptor`, `FrostyModKeyProvider`) stays on the never-call list.
 
 **Never called** (README "Never call", checked by `tests/test_mmc_harness.py`): `FrostyModCryptor`, `FrostyModKeyProvider`, `FrostyModReader.GetResourceData`, or anything that reads or decrypts a `.fbmod`.
 
@@ -237,29 +237,40 @@ For an op the harness can't do (`legacy-replace`, a cube/array/3D texture, an ed
 - **Ask JR every time** before taking the screen, in that conversation (JR declined screen access once on 2026-10-30). Only work on MMC Editor's window.
 - `python3 -m tools.mod_builder build <slug> --route gui` clicks nothing: it prints the steps (start *MMC Editor* from the Start menu, no admin, open the Madden27 profile; open or create the project; per op: Data Explorer → find the asset → Export/Import, the property grid for an ebx field, the Legacy Explorer for a legacy file; *File → Save Project*; *File → Export Mod* with the recipe's title, author, version, category and description, saved as `<slug>.fbmod`). Run it again after exporting a texture into `work/` and it does the recolour locally.
 - computer-use: `request_access` for "MMC Editor" (the Start-menu shortcuts were added for this). The editor doesn't need admin, so input reaches its window.
-- **Stop and tell JR** on any UAC prompt, a key prompt (§3: JR types the key himself), or any screen you can't explain. No clicking around to recover.
+- **Stop and tell JR** on any UAC prompt, a key prompt (there shouldn't be one: MMC's key is built in, §3), or any screen you can't explain. No clicking around to recover.
 - Then `check`, and the rest as in §5.
 
 ## 7. Uniforms
 
-What U2 found (2026-10-30, at type level from the SDK; the field values need `ebx-dump` and so the initfs key): a jersey asset (`CharacterUniformJerseyItem`, e.g. `content/FootballCharacter/Items/Uniform/Jersey/Jaguars/U_Jersey_Jaguars_2024_tea`) has **no colour field**. Its look comes from texture pointers (`JerseyColorMap` and the other maps) and an `ItemPalette` pointer to shared palette assets. So a per-team jersey colour is a **texture recolour of that jersey's `JerseyColorMap`**, not an `ebx-set`. What BCA Pink Oct changed in its 62 jersey ebx (it calls it the "primary accessory colour") is still unknown; the palette pointer is the likely place (MOD_REVERSE_ENGINEERING §3, §7). The BCA teardown in MOD_REVERSE_ENGINEERING §3 is the map of uniform assets: the jersey ebx folders, and which Jaguars/Vikings sets BCA skips.
+What `ebx-dump` showed (2026-10-31, `data/mod_builds/_probe/jaguars_jersey.json`): a jersey asset (`CharacterUniformJerseyItem`, e.g. `content/FootballCharacter/Items/Uniform/Jersey/Jaguars/U_Jersey_Jaguars_2024_tea`, 184 fields) carries its own palette. `ItemPalette` is a `PaletteVisuals` object **inside the jersey's own asset** (internal ids 2, 3, 6), so editing it changes only that jersey. It has `PrimaryColor` and `SecondaryColor` (`ColorVisuals`, each `ColorChannels` a linear-RGB `Vec4` plus `ColorLookup`); `TertiaryColor` and `QuaternaryColor` are empty. Jaguars teal home: primary `(0.0212, 0.0212, 0.0252, 1)` ≈ `#262628` (near-black), secondary `(0, 0.1329, 0.1812, 1)` ≈ `#00666E` (teal). `JerseyColorMap` is an external texture pointer. So a per-jersey colour change is an **`ebx-set` on `ItemPalette.<Primary|Secondary>Color.ColorChannels`** (linear values: convert sRGB to linear first); a texture recolour of `JerseyColorMap` is the fallback if the palette doesn't drive the part JR wants. What BCA Pink Oct changed in its 62 jersey ebx (it calls it the "primary accessory colour") is still unknown; the palette pointer is the likely place (MOD_REVERSE_ENGINEERING §3, §7). The BCA teardown in MOD_REVERSE_ENGINEERING §3 is the map of uniform assets: the jersey ebx folders, and which Jaguars/Vikings sets BCA skips.
 
 Home jerseys (from `find "*u_jersey_jaguars_2024*"` and `find "*jersey_vikings_2024*"`; there is also a `_footballcharacteritems_brt` bundle-ref table per jersey, and the `vnty_*` menu pictures):
 
 - Jaguars: `.../Jersey/Jaguars/U_Jersey_Jaguars_2024_tea` (teal home; not `_teal`), plus `_1gre_teal`, `_1gre_black`, `_1gre_white`, `_2whi*`, `_3bla`.
 - Vikings: `.../Jersey/Vikings/U_Jersey_Vikings_2024_purple` (purple home), plus `_1pur_white`, `_2whi`, `_3pur`, `_4pur`, `_silpur`.
 
-**Next step for the pink Jaguars/Vikings home jerseys** (needs the initfs key, which JR enters once in MMC Editor's prompt, §3):
+**Palettes of the two home jerseys** (2026-10-31; linear `ColorChannels` → sRGB):
 
-1. `info` until `ebx_readable` is true.
-2. `ebx-dump` both home jerseys into `work/`. Read `JerseyColorMap` (its `$external` name is the texture) and `ItemPalette`. Note whether the two teams' colour maps are shared with other jerseys (the same `$external` name in another jersey's dump means the recolour changes that jersey too).
+| Jersey | Primary | Secondary | Tertiary |
+|---|---|---|---|
+| `Jaguars/U_Jersey_Jaguars_2024_tea` (teal home) | `#262628` near-black | `#00666E` teal | — |
+| `Vikings/U_Jersey_Vikings_2024_purple` (purple home) | `#422D67` purple | `#EBAD33` gold | `#232323` near-black |
+
+The teal jersey's primary is black, so the palette very likely drives the trim, numbers and accents, while the cloth colour comes from `JerseyColorMap`. This is to be confirmed in game.
+
+**Built: `pink_home_jerseys` (2026-10-31, JR chose "pink trim first").** Two `ebx-set` ops set `ItemPalette.SecondaryColor.ColorChannels` on both home jerseys to BCA hot pink `#FF69B4`. **`ebx-set` writes `#RRGGBB` as plain /255 floats, and palettes are linear**, so the recipe passes the linear value `#FF2474` (sRGB `#FF69B4` → linear `(1.000, 0.141, 0.456)`). Passing `#FF69B4` directly would come out as a pale pink. Build: 4 harness calls (info, 2 × ebx-set, export-mod), check OK (7 resources, all FMENC001). Read-back with `ebx-dump --project` shows `(1, 0.1412, 0.4549, 1)` on both. No installed mod touches either jersey (BCA Pink Oct skips both home sets). Installed 2026-10-31 as `Mu_PinkHomeJerseys.fbmod` in `Mu Test` (49 of 68 mods on, this one on top; config backup `manager_config.backup-20261031-114157-before-mu-test.json`). The install worked with Madden running; only renaming the Mod Manager folder is blocked then. In game: not yet checked.
+
+**Next steps for the pink Jaguars/Vikings home jerseys** (ebx is readable now, §3):
+
+1. `info` shows `ebx_readable: true`.
+2. `ebx-dump` both home jerseys into `work/` (the Jaguars one is already in `data/mod_builds/_probe/`). Decide with JR which palette slot to make pink (the teal secondary is the likely accent), and try that `ebx-set` first. Read `JerseyColorMap` (its `$external` name is the texture) only if the palette isn't enough. Note whether the two teams' colour maps are shared with other jerseys (the same `$external` name in another jersey's dump means the recolour changes that jersey too).
 3. `export-texture` each colour map into `work/` and look at it. If it's a painted texture, recolour with `map` from the team colour (teal / purple) to pink with a tolerance that catches the shading; if it's a mask (grey or channel-coded), `tint` won't work (it keeps saturation) and the recolour has to target the channels instead. Decide with JR.
 4. Recipe with two `texture-recolor` ops, `build`, read back with `export-texture --project`, `check`, ask, `install`, check in game (home game for each team).
 5. Write what the dump showed (field names, palette layout, what `ItemPalette` holds) back into this section.
 
 ## 8. Known limits and open items
 
-- **initfs key**: ebx work (`ebx-dump`, `ebx-set`, the pink jerseys) waits until JR enters the Madden 27 key once into MMC Editor's prompt (§3). Textures don't need it. On 2026-10-30, `info` showed `key_file_present:false`, `ebx_readable:false`.
+- **Game key**: resolved 2026-10-31. The harness loads MMC's built-in key the way the editor does (§3), so ebx works (`key_source: editor_builtin`). If a future MMC build moves the key, `info` will show `key_source: none` and `ebx_readable: false`.
 - **2D textures only** through the harness. Cube, array and 3D textures go through the window (§6). Meshes, audio, animation and face scans are out of scope.
 - **13–47 s per harness call**, almost all loading the asset index. Each step of a build is its own call, so a one-texture mod is about four calls (two minutes). Batch ops into one recipe (one project) rather than many builds.
 - `ebx-set` edits fields of internal objects only; it can't repoint a `PointerRef` or edit through an external pointer.

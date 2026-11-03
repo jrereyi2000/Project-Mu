@@ -174,3 +174,100 @@ def test_practice_squad_is_a_rostered_player_without_an_active_contract():
     players = tv.read_players(_Cursor(), 2036)
     assert (players[1]["practice_squad"], players[2]["practice_squad"]) == (False, True)
 
+
+# ------------------------------------------------- cap-share market (CAP_RELATIVE_CONTRACTS_PLAN §2.2-§2.3) ----
+from engines.cap_history import cap_in                                          # noqa: E402
+
+CAPS = {2036: 367_000_000}
+
+
+def test_cap_adjust_new_deal_keeps_its_apy():
+    assert tv.cap_adjust([("WR", 85, 60_000_000, 4, 4)], CAPS, 2036) == [("WR", 85, 15_000_000)]
+
+
+def test_cap_adjust_scales_an_old_deal_by_the_cap_ratio():
+    (_, _, d), = tv.cap_adjust([("QB", 90, 100_000_000, 4, 2)], CAPS, 2036)       # signed 2034
+    assert d == 25_000_000 * cap_in(2036, CAPS) / cap_in(2034, CAPS)
+    assert d > 25_000_000
+
+
+def test_cap_adjust_prices_on_apy_not_cap_hit():
+    # A backloaded 4-year $40M deal signed this season: its later cap hits are far above $10M, but only APY counts.
+    (_, _, d), = tv.cap_adjust([("CB", 80, 40_000_000, 4, 4)], CAPS, 2036)
+    assert d == 10_000_000
+
+
+def test_cap_adjust_drops_bad_rows():
+    bad = [("WR", 80, 10_000_000, None, 1), ("WR", 80, 10_000_000, 0, 0), ("WR", 80, None, 3, 3),
+           ("WR", 80, 0, 3, 3), ("WR", 80, 10_000_000, 2, 3), ("WR", 80, 10_000_000, 2, None)]
+    assert tv.cap_adjust(bad, CAPS, 2036) == []
+
+
+def test_fit_on_adjusted_rows_recovers_a_known_share_curve():
+    """Deals signed at share(ovr) = exp(-4 + 0.1 (ovr - 75)) of the cap in their signing season, of every deal age,
+    fit back to that share of this season's cap."""
+    rows = []
+    for ovr in range(65, 98):
+        for age in range(4):
+            apy = math.exp(-4 + 0.1 * (ovr - 75)) * cap_in(2036 - age, CAPS)
+            rows.append(("WR", ovr, apy * 4, 4, 4 - age))
+    m = fit_market(tv.cap_adjust(rows, CAPS, 2036))
+    assert abs(m["b"] - 0.1) < 1e-6
+    assert abs(math.exp(m["a"]["WR"]) / 367_000_000 - math.exp(-4)) < 1e-9
+    raw = fit_market([(g, o, t / ln) for g, o, t, ln, _ in rows])                 # unadjusted APY trails the cap
+    assert raw["a"]["WR"] < m["a"]["WR"]
+
+
+def test_hand_built_market_has_no_cap_keys_and_still_works():
+    assert "cap" not in FITS["market"] and "basis" not in FITS["market"]
+    assert worth(80, "WR", FITS["market"]) > 0
+
+
+def test_market_premium_is_jr_d2():
+    assert tv.MARKET_PREMIUM == 1.20
+
+
+class _DriftCursor:
+    """league_caps' query and new_deal_shares' query: (season, position, total_value, length)."""
+    def __init__(self, rows, caps=None):
+        self.rows, self.caps = rows, caps or {}
+
+    def execute(self, sql, args=None):
+        self.sql, self.args = sql, args
+
+    def fetchall(self):
+        if "team_cap_seasons" in self.sql:
+            return list(self.caps.items())
+        assert "length = c.years_remaining" in self.sql and "SUPERSEDED" in self.sql
+        return self.rows
+
+
+def test_drift_rows_medians_by_season_and_group():
+    caps = {2036: 300_000_000, 2037: 320_000_000}
+    rows = [(2036, "WR", 3_000_000 * 3, 3), (2036, "WR", 6_000_000 * 2, 2), (2036, "WR", 9_000_000, 1),
+            (2036, "QB", 30_000_000 * 4, 4),
+            (2037, "WR", 6_400_000 * 2, 2), (2037, "WR", 3_200_000, 1)]
+    out = tv.drift_rows(_DriftCursor(rows, caps), 2037)
+    by = {(r["season"], r["group"]): r for r in out}
+    assert [(r["season"], r["group"]) for r in out] == [(2036, "QB"), (2036, "WR"), (2037, "WR")]
+    assert by[(2036, "WR")]["n"] == 3 and abs(by[(2036, "WR")]["median_share"] - 0.02) < 1e-12
+    assert abs(by[(2036, "WR")]["p75_share"] - 0.025) < 1e-12                     # halfway between 0.02 and 0.03
+    assert abs(by[(2036, "QB")]["median_share"] - 0.1) < 1e-12
+    assert abs(by[(2037, "WR")]["median_share"] - 0.015) < 1e-12                  # 0.02 and 0.01 of $320M
+
+
+def test_drift_report_prints_league_row_first():
+    rows = [(2036, "WR", 6_000_000, 1), (2036, "QB", 30_000_000, 1)]
+    lines = []
+    tv.drift_report(_DriftCursor(rows, {2036: 300_000_000}), 2036, log=lines.append)
+    assert lines[1].split()[:2] == ["group", "2036"]
+    assert [ln.split()[0] for ln in lines[2:]] == ["LEAGUE", "QB", "WR"]
+    assert "6.00% (2)" in lines[2] and "10.00% (1)" in lines[3]
+
+
+def test_basis_line():
+    assert tv.basis_line(2036, {2036: 367_000_000}) == (
+        "Market basis: APY / cap at signing, scaled to the 2036 cap $367.0M (caps known: 2036; earlier seasons "
+        "estimated at +6.5%/yr)")
+    assert "estimated" in tv.basis_line(2038, {2036: 367_000_000}).split("(")[0]
+

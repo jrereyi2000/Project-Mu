@@ -268,9 +268,9 @@ def test_form_edits_with_fake_cursor_stores_and_dry_run_doesnt():
     assert sets[101]["ConfidenceRating"] == 50
     assert sets[101]["OverallRating"] > ow.predict_ovr(DOC, "WR", base)[0]
     assert sets[202]["OverallRating"] < ow.predict_ovr(DOC, "WR", base)[0]
-    assert any(sql.startswith("DELETE FROM player_form") for sql, _ in cur.calls)
-    (_, rows), = cur.many
-    assert {r[0] for r in rows} == {1, 2} and all(r[1:3] == (2036, 8) for r in rows)
+    assert not cur.many
+    with pytest.raises(ValueError, match="verified save receipt"):
+        fe.form_edits(cursor(), snap, 2036, 8, store=True)
 
     dry = cursor()
     assert fe.form_edits(dry, snap, 2036, 8, store=False) == doc
@@ -279,8 +279,7 @@ def test_form_edits_with_fake_cursor_stores_and_dry_run_doesnt():
     off = cursor()                              # offseason: everyone back to base, rows with overlay {}
     doc_off = fe.form_edits(off, snap, 2036, 26)
     assert all(set(e["set"]) <= {"ConfidenceRating"} for e in doc_off["players"])
-    (_, rows_off), = off.many
-    assert all(r[3] == 0 and r[4] == "{}" for r in rows_off)
+    assert not off.many
 
 
 def test_cli_dry_run(tmp_path):

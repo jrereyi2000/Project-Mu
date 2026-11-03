@@ -41,6 +41,7 @@ import { PowerRankingsPage, type PowerRankingsResponse } from "./components/news
 import { ArticlePage } from "./components/newsroom/ArticlePage";
 import { AuthorPage } from "./components/newsroom/AuthorPage";
 import { NewsroomHomePage } from "./components/newsroom/NewsroomHomePage";
+import FranchisePage from "./components/franchise/FranchisePage";
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -274,6 +275,7 @@ function App() {
               )}
             </div>
             <a href="#social">Social</a>
+            <a href="#franchise">Franchise</a>
           </div>
           <div className="nav-tools">
             <button
@@ -293,6 +295,8 @@ function App() {
 
       {route === "#debug" ? (
         <DebugPage />
+      ) : route === "#franchise" || route.startsWith("#franchise-") || route.startsWith("#franchise?") ? (
+        <FranchisePage route={route} />
       ) : authorRoute ? (
         <AuthorPage authorKey={authorRoute[1]} key={route} />
       ) : articleRoute ? (

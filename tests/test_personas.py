@@ -22,6 +22,22 @@ class PersonaDataTests(unittest.TestCase):
             self.assertTrue(all(0 <= v <= 10 for v in s.values()), k)
             self.assertEqual(sum(s.values()), P.SLIDER_BUDGET, k)
 
+    def test_seeded_sliders_are_unchanged(self):
+        """seed_sliders still deals exactly 30 (CAP_RELATIVE_CONTRACTS_PLAN D4: the 24-36 band is for validation,
+        not seeding). Snapshot taken from the code before the band was added; GMs are seeded live from this."""
+        snapshot = {
+            ("gm", "CAR"): (4, 6, 5, 7, 6, 2),
+            ("gm", "KC"): (9, 0, 9, 4, 2, 6),
+            ("writer", "BARNWELL"): (0, 9, 5, 7, 3, 6),
+            ("player", "12345"): (0, 7, 9, 6, 3, 5),
+            ("coach", "7"): (6, 7, 3, 6, 5, 3),
+        }
+        for (persona_type, persona_id), expected in snapshot.items():
+            s = P.seed_sliders(persona_type, persona_id)
+            self.assertEqual(tuple(s[k] for k in P.SLIDERS), expected, (persona_type, persona_id))
+            self.assertEqual(sum(s.values()), P.SLIDER_BUDGET)
+        self.assertEqual(P.SLIDER_BUDGET, 30)
+
     def test_traits_exist_and_mix_legally(self):
         for k, p in self.personas.items():
             self.assertTrue(3 <= len(p["traits"]) <= 5, k)

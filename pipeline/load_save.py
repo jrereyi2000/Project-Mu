@@ -433,7 +433,10 @@ def load_players(cur, snapshot, season, teams, report):
 
 
 def load_player_attributes(cur, snapshot, season, players, report, capture_folder=None):
-    """Stores each player's 54 Madden ratings in player_attributes, but only when they changed.
+    """Stores observed native ratings in player_attributes, but only when they changed.
+
+    Observations can include form or Madden drift. They never update the independent
+    progression_player_state permanent base; only a verified Mu write receipt can do that.
 
     Project Mu owns progression, so ratings should move once a year (the offseason progression write) plus
     for new players. A row is written when the player has no row for this season yet (flag native_save,

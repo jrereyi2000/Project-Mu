@@ -14,7 +14,7 @@ Read `docs/reference/MADDEN_PILOT.md` first. It has the keys, every catalogued s
 
 - **Ask JR every time before taking the PC.** The pilot takes over the screen and keyboard. Say what will run and about how long it takes:
   - launch: about 1–2 min;
-  - one simmed week: about 30–40 s (under 20 s of sim, plus Coach Progress and moving between menus);
+  - one simmed week: about 30–40 s (under 20 s of sim, plus Coach Progress and moving between menus); less with the ability recap turned off in the team settings, which removes Coach Progress entirely (JR, 2026-10-31);
   - loading a franchise: about 30 s;
   - a regular season: 10–15 min.
   

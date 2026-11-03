@@ -42,7 +42,7 @@ Plan: `docs/in_progress/MADDEN_PILOT_AND_TUNING_PLAN.md` §2.4, §2.5 (and R4, R
 
 Stop at the first check that fails, and tell JR what's missing.
 
-1. **The key.** Run `/mnt/c/Madden27Modding/MuHarness/MmcHarness.exe info` (read-only, about 30 s). If it says `"ebx_readable": false`, stop. Tell JR: "Supersim tuning edits ebx, which needs the Madden 27 encryption key. Enter it once in MMC Editor's prompt (it saves `madden27.key`), then tell me." `supersim_loop.run` refuses by itself too. As of 2026-10-30 the key isn't entered, so this stop is expected.
+1. **ebx access.** Run `/mnt/c/Madden27Modding/MuHarness/MmcHarness.exe info` (read-only, about 30 s). It should show `"ebx_readable": true` and `"key_source": "editor_builtin"` (the harness loads MMC's built-in game key the way the editor does, since 2026-10-31). If it says `false`, stop and tell JR the MMC build may have moved its key; `supersim_loop.run` refuses by itself too. Never search for or download keys.
 2. **The search space.** You need `data/tuning/runs/<run>/space.json` (or JR's `--space`): `{"fields": [{asset, path, start, step, min, max}]}`, one entry per supersim field to tune.
    - If it's missing, build it with JR. Dump the `football/attribsys/data/supersim_*` assets (`tools.mod_builder.harness.run(['ebx-dump', <asset>, <out.json>])`), and pick the few fields that move the worst stats in a baseline `compare` report (R4).
    - `start` is the game's current value.
