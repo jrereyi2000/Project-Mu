@@ -220,6 +220,27 @@ class RookieScaleTest(unittest.TestCase):
 
 
 class CapGrowthAndUnitsTest(unittest.TestCase):
+    def test_cba_cap_growth_constants(self):
+        self.assertEqual(E.CBA["CAP_GROWTH"], {"mean": 0.045, "sd": 0.020, "lo": -0.01, "hi": 0.09})
+        self.assertEqual(E.CBA["MIN_SAVE_CAP"], 240_000_000)
+        self.assertEqual(E.CBA["MAX_SAVE_CAP"], 973_710_000)
+        self.assertEqual(E.SALARY_CAP_OFFSET_UNITS, 12_000)
+        self.assertEqual(E.SALARY_CAP_RAW_RANGE, (12_000, 85_371))
+        self.assertEqual(E.SAL_CAP_ROOM_BIAS_UNITS, 160_000)
+
+    def test_cap_seed(self):
+        self.assertEqual(E.cap_seed("123"), "salary_cap:123")
+        self.assertEqual(E.cap_seed(999), "salary_cap:999")
+        self.assertEqual(E.cap_seed(None), "salary_cap:default")
+
+    def test_next_cap_clamps_bounds(self):
+        # Clamping at MAX_SAVE_CAP ($973.71M) from $950M and above
+        self.assertEqual(E.next_cap(950_000_000, 2045, "s0"), E.CBA["MAX_SAVE_CAP"])
+        self.assertEqual(E.next_cap(1_000_000_000, 2045, "overflow"), E.CBA["MAX_SAVE_CAP"])
+        # Clamping at MIN_SAVE_CAP ($240.0M) from $241M and below
+        self.assertEqual(E.next_cap(241_000_000, 2045, "s168"), E.CBA["MIN_SAVE_CAP"])
+        self.assertEqual(E.next_cap(200_000_000, 2045, "underflow"), E.CBA["MIN_SAVE_CAP"])
+
     def test_next_cap_seeded_reproducible(self):
         a = E.next_cap(255_400_000, 2037, "league-1")
         self.assertEqual(a, E.next_cap(255_400_000, 2037, "league-1"))

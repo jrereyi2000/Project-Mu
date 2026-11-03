@@ -785,6 +785,36 @@ def load_draft_class(cur, snapshot, season, report, capture_folder=None):
 CAP_ROOM_OFFSET = 160_000           # Team.SalCapCapRoom = cap space + 160000 (every team, CAREER-WEEK1)
 
 
+def cap_season(snapshot: dict, season: int) -> int:
+    """The league year the save's cap sheet belongs to: season + 1 during OffSeason, else season."""
+    week_type = (snapshot.get("season_info") or {}).get("week_type") or (snapshot.get("season") or {}).get("week_type")
+    return season + 1 if week_type == "OffSeason" else season
+
+
+def team_cap_dollars(league_cap_units: int, team_cap: dict) -> dict:
+    """Pure function converting $10k-unit snapshot fields to whole-dollar team_cap_seasons columns."""
+    cap = league_cap_units * MONEY_UNIT
+    rollover = int(team_cap["rollover"]) * MONEY_UNIT
+    adjusted_cap = (league_cap_units + int(team_cap["rollover"]) + int(team_cap.get("cap_credits") or 0)) * MONEY_UNIT
+    cap_space = int(team_cap["cap_room"]) * MONEY_UNIT
+    cap_penalty = int(team_cap["cap_penalties"]) * MONEY_UNIT
+    offers = int(team_cap.get("offers_reserve") or 0) * MONEY_UNIT
+    total_spend = adjusted_cap - cap_space
+    salaries = max(0, total_spend - cap_penalty - offers)
+    out = {
+        "cap": cap,
+        "rollover": rollover,
+        "adjusted_cap": adjusted_cap,
+        "cap_space": cap_space,
+        "salaries": salaries,
+        "cap_penalty": cap_penalty,
+        "total_spend": total_spend,
+    }
+    if int(team_cap.get("rookie_reserve") or 0) > 0:
+        out["rookie_reserve_dollars"] = int(team_cap["rookie_reserve"]) * MONEY_UNIT
+    return out
+
+
 def team_cap_values(cap):
     """A snapshot team's raw cap fields -> upsert_team_cap's values (whole dollars), as the Team Salary screen shows
     them (CAR, CAREER-WEEK1: cap $301M, 25 rollover $13.8M, adjusted cap $315M, cap space $11.7M, 26 salaries $279M,
@@ -802,18 +832,37 @@ def team_cap_values(cap):
         "salaries": salaries, "cap_penalty": penalty, "total_spend": salaries + penalty}.items()}
 
 
-def load_team_cap(cur, snapshot, season, teams, report, capture_id=None):
-    """Every real team's team_cap_seasons row for the season from the save (reader_version >= 5; the latest load
-    wins, as a Team Salary scan does). Older snapshots add nothing."""
-    n = 0
-    for t in snapshot["teams"]:
-        tid, cap = teams.get(t["team_index"]), t.get("cap")
-        if tid is None or not cap:
+def load_team_caps(cur, snapshot: dict, season: int, teams: dict, report: dict, capture_id=None) -> None:
+    """Upserts 32 team_cap_seasons rows for cap_season(snapshot, season) on reader_version >= 6 snapshots."""
+    salary_cap = snapshot.get("salary_cap")
+    if not salary_cap or salary_cap.get("team_salary_cap") is None:
+        return
+    league_cap_units = int(salary_cap["team_salary_cap"])
+    target_cap_season = cap_season(snapshot, season)
+    is_offseason = (
+        (snapshot.get("season_info") or {}).get("week_type") == "OffSeason"
+        or (snapshot.get("season") or {}).get("week_type") == "OffSeason"
+    )
+    count = 0
+    for team in snapshot.get("teams", []):
+        tidx = team.get("team_index")
+        tid = teams.get(tidx)
+        cap_block = team.get("cap")
+        if tid is None or not cap_block:
             continue
-        upsert_team_cap(cur, tid, season, team_cap_values(cap), capture_id)
-        n += 1
-    if n:
-        report["team_caps"] = n
+        vals = team_cap_dollars(league_cap_units, cap_block)
+        upsert_team_cap(cur, tid, target_cap_season, vals, capture_id)
+        if is_offseason and "rookie_reserve_dollars" in vals:
+            cur.execute(
+                "UPDATE team_cap_seasons SET next_rookie_reserve = %s WHERE team_id = %s AND season = %s",
+                (vals["rookie_reserve_dollars"], tid, season),
+            )
+        count += 1
+    if count:
+        report["team_caps"] = count
+
+
+load_team_cap = load_team_caps
 
 
 TEAM_RATING_COLUMNS = {"ovr": "team_ovr", "off": "off_ovr", "def": "def_ovr"}
@@ -950,7 +999,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     load_team_scores(cur, games, report)
     load_season_lines(cur, snapshot, season, players, report)
     load_contracts(cur, snapshot, season, players, report, capture_id)
-    load_team_cap(cur, snapshot, season, teams, report, capture_id)
+    load_team_caps(cur, snapshot, season, teams, report, capture_id)
     week = current_week(snapshot)
     report["current_week"] = week
     load_injuries(cur, snapshot, season, week, players, report)

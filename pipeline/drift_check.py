@@ -5,7 +5,7 @@ wrote its state, i.e. what the user (or Madden) did in the game that Project Mu 
   python3 -m pipeline.drift_check --snapshot captures/<run>/save.json [--season S --week W] [--dsn ...]
 
 `diff(snapshot, cur, season, week)` returns
-  {"ratings": [...], "contracts": [...], "rosters": [...], "depth_charts": [...], "settings": [...]}
+  {"ratings": [...], "contracts": [...], "rosters": [...], "depth_charts": [...], "settings": [...], "salary_cap": [...]}
 where every entry names the player or team, the field, what Project Mu expects and what the save has:
   ratings       Project Mu's ratings: the newest player_attributes row (season <= S) plus the newest player_form
                 overlay of season S up to week W ({Rating: delta}, result clamped to 0..99), vs players[].ratings
@@ -18,6 +18,7 @@ where every entry names the player or team, the field, what Project Mu expects a
   depth_charts  per team, the newest depth_charts week <= W of season S with source MU_COACH or JR (JR wins a tie)
                 vs the save's chart (reader_version >= 4), slot by slot, empty slots dropped
   settings      every progression / regression slider value that isn't 0 (Project Mu expects all 0, LS included)
+  salary_cap    the save's league cap vs team_cap_seasons for cap_season(snapshot, season)
 The comparison (`compare`) is pure; the small fetch_* functions read the database, so tests feed fakes.
 Nothing is written. The league office stores the report in league_office_runs.drift.
 """
@@ -27,9 +28,11 @@ import sys
 
 import psycopg
 
+from engines import cap_history
+from engines import contracts_engine as ce
 from pipeline import load_save as ls
 
-KINDS = ("ratings", "contracts", "rosters", "depth_charts", "settings")
+KINDS = ("ratings", "contracts", "rosters", "depth_charts", "settings", "salary_cap")
 CHART_SOURCES = ("MU_COACH", "JR")
 CONTRACT_FIELDS = ("length", "years_remaining", "total_value", "bonus", "cap_hit")
 
@@ -117,6 +120,7 @@ def fetch_state(cur, snapshot, season, week):
         "contracts": fetch_contracts(cur, season),
         "rosters": fetch_rosters(cur, season),
         "depth_charts": fetch_depth_charts(cur, season, week),
+        "league_caps": cap_history.league_caps(cur),
     }
 
 
@@ -243,6 +247,21 @@ def compare_settings(snapshot):
             for key, field, value in ls.nonzero_sliders(snapshot)]
 
 
+def compare_salary_cap(snapshot, state, season):
+    """Compares the snapshot's league cap against team_cap_seasons for cap_season(snapshot, season)."""
+    salary_cap = snapshot.get("salary_cap")
+    if not salary_cap or salary_cap.get("team_salary_cap") is None:
+        return []
+    target_season = ls.cap_season(snapshot, season)
+    expected = (state.get("league_caps") or {}).get(target_season)
+    if expected is None:
+        return []
+    found = int(salary_cap["team_salary_cap"]) * ce.MONEY_UNIT
+    if expected != found:
+        return [{"season": target_season, "field": "team_salary_cap", "expected": expected, "found": found}]
+    return []
+
+
 def compare(snapshot, state, season):
     """The drift report from a snapshot and fetched state (pure)."""
     return {
@@ -251,6 +270,7 @@ def compare(snapshot, state, season):
         "rosters": compare_rosters(snapshot, state),
         "depth_charts": compare_depth_charts(snapshot, state),
         "settings": compare_settings(snapshot),
+        "salary_cap": compare_salary_cap(snapshot, state, season),
     }
 
 

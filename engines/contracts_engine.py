@@ -42,6 +42,9 @@ TAG_DEADLINE_WEEK = OFFSEASON_STAGE_WEEKS["UDFA"]   # "mid-July": the last stage
 TAG_TYPES = ("FRANCHISE_EXCL", "FRANCHISE_NONEXCL", "TRANSITION")
 TENDER_TYPES = ("ERFA", "RFA_FIRST", "RFA_SECOND", "RFA_ROFR")
 MONEY_UNIT = 10_000                     # Madden stores money in $10,000 units (pipeline/load_save.py)
+SALARY_CAP_OFFSET_UNITS = 12_000
+SALARY_CAP_RAW_RANGE = (12_000, 85_371)
+SAL_CAP_ROOM_BIAS_UNITS = 160_000
 
 
 # ------------------------------------------------------------- rookie scale ----
@@ -79,10 +82,11 @@ CBA = {
     "RFA_ACCRUED": 3,                   # RFA: exactly 3 accrued seasons
     "RESTRUCTURE_MAX_SHARE": 0.9,       # up to 90% of a year's base converts to bonus
     "PRORATION_MAX_YEARS": 5,
-    # Cap growth a year: normal(mean, sd) clamped to [lo, hi]. Estimate: the 2013-2024 cap grew ~6.5% a year
-    # outside the 2021 COVID dip.
-    "CAP_GROWTH": {"mean": 0.065, "sd": 0.025, "lo": -0.02, "hi": 0.12},
+    # Cap growth a year: normal(mean, sd) clamped to [lo, hi]. D1: 4.5% mean, ~27 seasons headroom.
+    "CAP_GROWTH": {"mean": 0.045, "sd": 0.020, "lo": -0.01, "hi": 0.09},
     "CAP_ROUND": 100_000,               # caps are announced in round $100k figures
+    "MIN_SAVE_CAP": (12_000 + 12_000) * 10_000,     # $240,000,000 (raw TeamSalaryCap = 12,000)
+    "MAX_SAVE_CAP": (85_371 + 12_000) * 10_000,     # $973,710,000 (raw TeamSalaryCap = 85,371)
 }
 
 
@@ -344,14 +348,21 @@ def rookie_contract(overall_pick, season, cap):
             "last_restructure_season": None, "drafted_round": rnd}
 
 
-def next_cap(prev_cap, season, seed):
+def cap_seed(league_id) -> str:
+    """Canonical seed for annual league salary-cap draws."""
+    return f"salary_cap:{league_id if league_id is not None else 'default'}"
+
+
+def next_cap(prev_cap: int, season: int, seed: str) -> int:
     """Next season's cap: prev x (1 + growth), growth ~ normal(CAP_GROWTH mean, sd) clamped to [lo, hi], drawn from
-    a generator seeded by (seed, season) so a seed always gives the same cap path. Rounded to CAP_ROUND."""
+    a generator seeded by (seed, season) so a seed always gives the same cap path. Rounded to CAP_ROUND, clamped to
+    [MIN_SAVE_CAP, MAX_SAVE_CAP]."""
     g = CBA["CAP_GROWTH"]
     rng = random.Random(f"contracts_engine.next_cap:{seed}:{season}")
     growth = min(max(rng.gauss(g["mean"], g["sd"]), g["lo"]), g["hi"])
     step = CBA["CAP_ROUND"]
-    return int(round(prev_cap * (1 + growth) / step)) * step
+    val = int(round(prev_cap * (1 + growth) / step)) * step
+    return min(max(val, CBA["MIN_SAVE_CAP"]), CBA["MAX_SAVE_CAP"])
 
 
 # -------------------------------------------------------------- save units ----
