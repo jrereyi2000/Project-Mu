@@ -146,7 +146,7 @@ Team loss/injury does not prove resentment/anxiety/determination. First incremen
 
 ### 2.5 Durable evolution candidates
 
-`validate_evolution_candidate` accepts explicit core candidate fields (`event_id,source_event_id,season,expected_revision,rule_version,reason,kind` plus trait add/remove or slider/step), `review_status:'pending'|'approved'`, reviewer, feature_scope and supporting_source_ids. Return `{status:'review_required'|'ready'|'blocked',candidate,reasons,support}`. Check subject, cutoff, active sources, nonduplicate support and, for `real`-origin (reviewed coach) profiles, the core's simulation-evidence requirement. No automatic event→trait inference or core mutation call ships here.
+`validate_evolution_candidate` accepts explicit core candidate fields (`event_id,source_event_id,season,expected_revision,rule_version,reason,kind` plus trait add/remove or slider/step), `review_status:'pending'|'approved'`, reviewer, feature_scope and supporting_source_ids. Return `{status:'review_required'|'ready'|'blocked',candidate,reasons,support}`. Check subject, cutoff, active sources, nonduplicate support (the core extensions plan removes the special simulation-evidence rule for `real` profiles). No automatic event→trait inference or core mutation call ships here.
 
 Later authorized adapter may submit ready candidates to `store.change`; core annual/revision/conflict checks remain final. Review may choose no change. Trust/repair never uses the annual slot. Single-slider candidate reports `blocked_slider_band` only on a database that lacks `2027_01_17_persona_slider_band.sql` (Python and SQL both carry the band since 2026-11-02). Trait candidates can be reviewed under current budget. Keep ephemeral mood outside profile revision and store.
 
