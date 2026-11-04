@@ -143,13 +143,13 @@ There is **no default**. A user team with no active rows has no actors, so its i
 | JR controls | Counterpart | Kind | What decides | Status |
 |---|---|---|---|---|
 | GM | another team's GM | `GM_TALK` | `gm_negotiation` | **Now**; V2.11 deepens it |
-| GM | own player | `CONTRACT` | free-agency utility (`_score`) | **Now** (player voice neutral) |
+| GM | own player | `CONTRACT` | free-agency utility (`_score`) | **Now** (player voice neutral until the [agent loops plan](COACH_PLAYER_AGENT_LOOPS_PLAN.md)'s `player.respond_inbox`) |
 | GM | own head coach | `VISION` | `team_vision.respond` (§2.9) | **Now** (coach voice neutral until the [real-coach profiles plan](REAL_COACH_PROFILES_PLAN.md)'s `persona_for` exists); skipped when the coach is the GM or JR controls both |
 | GM | beat writer | `REPORTER` | nothing; answers stored | **Now** |
 | GM | draft prospect (combine interviews, top-30 visits) | `PROSPECT` (`ACTOR_ROLES = ('GM',)`) | scouting engines | V2.10 (sibling-owned); none if JR doesn't control that team's GM (D14) |
 | GM | team scout (notices, shortlists) | `SCOUT` (`ACTOR_ROLES = ('GM',)`, neutral) | scouting engines | V2.10 (sibling-owned); none if JR doesn't control that team's GM (D14) |
 | GM | owner | — | — | Later (§2.11) |
-| Coach | own player | `ROLE_TALK` | staff chart (triggers), JR's chart (promise check) | **Now** (player voice neutral) |
+| Coach | own player | `ROLE_TALK` | staff chart (triggers), JR's chart (promise check) | **Now** (player voice neutral until the [agent loops plan](COACH_PLAYER_AGENT_LOOPS_PLAN.md)'s `player.respond_inbox`) |
 | Coach | own GM | `VISION` | `team_vision.respond` | **Now** (GM in character); same skips |
 | Coach | beat writer | `REPORTER` | nothing | **Now** |
 | Coach | the press panel | `PRESS` notice | V2.2 | V2.2 |
