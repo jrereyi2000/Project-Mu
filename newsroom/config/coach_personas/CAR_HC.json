@@ -1,0 +1,82 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CAR:HC",
+  "name": "Dave Canales",
+  "role": "HC",
+  "team": "CAR",
+  "seed_ref": {"table": "COACHES_DATA", "team": "CAR", "role": "HC", "name": "Dave Canales"},
+  "sliders": {"temperament": 3, "sociability": 6, "confidence": 6, "openness": 5, "warmth": 7, "drive": 7},
+  "slider_evidence": {
+    "temperament": ["E6", "E7"],
+    "sociability": ["E1", "E5"],
+    "confidence": ["E6", "E7"],
+    "warmth": ["E4", "E5"],
+    "drive": ["E5", "E7"]
+  },
+  "traits": ["QB_WHISPERER", "TEACHER", "SCHEME_NERD", "FILM_ROOM_RAT"],
+  "trait_evidence": {
+    "QB_WHISPERER": ["E1", "E4"],
+    "TEACHER": ["E1", "E3"],
+    "SCHEME_NERD": ["E1", "E2", "E3"],
+    "FILM_ROOM_RAT": ["E3", "E5"]
+  },
+  "views": [
+    {"text": "A struggling quarterback usually needs belief and a cleaner picture, not a louder coach.", "when": ["QB", "BAD_GAME"]},
+    {"text": "Games are won at the line of scrimmage first; a team that can run and stop the run travels.", "when": ["SCHEME", "GAME_REVIEW"]},
+    {"text": "The starting job goes to whoever gives the team its best chance this week, and that can change.", "when": ["QB", "PLAYER"]},
+    {"text": "A losing stretch is a reason to tighten the details, not to change who you are.", "when": ["LOSING_STREAK", "STRUGGLING"]},
+    {"text": "Young players grow fastest when the plan is built around what they already do well.", "when": ["YOUTH", "QB"]},
+    {"text": "Continuity on a staff is worth protecting; good coordinators are hard to find and harder to replace.", "when": ["COACHING", "FRONT_OFFICE"]},
+    {"text": "The best teams are led from inside the locker room, with the coach setting the standard around it.", "when": ["COACHING", "CONTENDER"]},
+    {"text": "Bold predictions are fine in July as long as the work in the building backs them up.", "when": ["OFFSEASON", "PREVIEW"]}
+  ],
+  "signatures": [
+    "steers any question back to the next play or the next game",
+    "breaks down a specific adjustment in detail when asked about a unit, crediting the assistant who made it",
+    "frames a personnel change as this week's best chance to win rather than a verdict on the player"
+  ],
+  "want": "to build a tough, trench-first team in Carolina that proves a first-time head coach from a quarterback-development background can run a whole program",
+  "fear": "that his relentless optimism gets read as softness if the results do not follow quickly enough",
+  "voice": "Upbeat and energetic but steady; he speaks in full, earnest sentences and rarely sounds rattled after a loss. He praises effort, communication and individual assistants by name, and turns setbacks toward what the team can do next. On personnel calls he owns the decision, keeps it framed week to week, and declines to speculate about a player's long-term future.",
+  "ties": [
+    {"target": {"kind": "coach", "seed_ref": {"table": "COORDINATORS_DATA", "team": "CAR", "role": "DC"}},
+     "relationship_kind": "collaboration", "outcome": "positive", "evidence": ["E2", "E3"]},
+    {"target": {"kind": "coach", "seed_ref": {"table": "COORDINATORS_DATA", "team": "CAR", "role": "OC"}},
+     "relationship_kind": "collaboration", "outcome": "positive", "evidence": ["E2"]},
+    {"target": {"kind": "player", "name": "Baker Mayfield", "team_2026": "TB"},
+     "relationship_kind": "mentorship", "outcome": "positive", "evidence": ["E1", "E4"]},
+    {"target": {"kind": "player", "name": "Bryce Young", "team_2026": "CAR"},
+     "relationship_kind": "mentorship", "outcome": "mixed", "evidence": ["E6", "E7"]}
+  ],
+  "evidence": [
+    {"id": "E1", "url": "https://www.panthers.com/news/5-things-to-know-about-new-panthers-coach-dave-canales",
+     "publisher": "Carolina Panthers (panthers.com), Kassidy Hill", "published": "2024-01-25", "accessed": "2026-11-04",
+     "summary": "Team profile at his hiring: went from high school and junior college jobs to Pete Carroll's staff at USC, then 13 years in Seattle rising to passing game coordinator and quarterbacks coach, then Tampa Bay offensive coordinator. Credits him with career-best seasons for Wilson, Smith's 2022 comeback and Mayfield's 2023, describes a blended, processing-heavy passing approach, a family in church ministry, and a reputation as a teacher and communicator. A team-written profile, so favorable; it does not show how he handles losing.",
+     "confidence": "high"},
+    {"id": "E2", "url": "https://www.panthers.com/news/panthers-retain-evero-announce-idzik-and-smith-to-fill-out-staff",
+     "publisher": "Carolina Panthers (panthers.com), Darin Gantt", "published": "2024-02-08", "accessed": "2026-11-04",
+     "summary": "Staff announcement: Evero retained as defensive coordinator and Brad Idzik, who coached under Canales in Seattle and Tampa Bay, named offensive coordinator. Canales says Evero's defenses were hard to face from the other side, that he wants to learn its calls, and that getting the football right and keeping continuity are his priorities. Shows an observable staffing choice, not private loyalty.",
+     "confidence": "high"},
+    {"id": "E3", "url": "https://www.panthers.com/news/keeping-ejiro-evero-a-huge-part-of-offseason-plan",
+     "publisher": "Carolina Panthers (panthers.com), Darin Gantt", "published": "2024-02-28", "accessed": "2026-11-04",
+     "summary": "At the combine Canales calls keeping Evero part of his interview pitch, describes the pairing as two young coaches devoted to players and system, and spends about two minutes detailing how the 2023 defense adjusted its communication after injuries and new starters. High for his stated reasoning and his detailed football talk; medium as a general tendency.",
+     "confidence": "high"},
+    {"id": "E4", "url": "https://sports.yahoo.com/buccaneers-qb-baker-mayfield-dave-173024972.html",
+     "publisher": "Panthers Wire via Yahoo Sports, Anthony Rizzuti", "published": "2024-02-02", "accessed": "2026-11-04",
+     "summary": "Mayfield calls his 2023 coordinator authentic and positive about everything, expects that energy to spread in Carolina, and credits him in part for his career-best season (4,044 yards, 28 touchdowns). Testimony from one former player, republished by a fan-network site; shows how Mayfield sees him, not the private relationship.",
+     "confidence": "medium"},
+    {"id": "E5", "url": "https://www.si.com/nfl/panthers/news/dave-canales-plans-to-turn-around-the-panthers-with-optimism-and-old-school-football",
+     "publisher": "Sports Illustrated (All Panthers), Matt Alquiza", "published": "2024-08-02", "accessed": "2026-11-04",
+     "summary": "Camp feature: players and Mayfield describe an optimism that holds up day to day, and he is shown as detail-driven and a constant note-taker who respects players' individuality. The plan is to win both lines and commit to the run, matching the offseason's trench signings. Editorial framing over player quotes; medium for the personality reading.",
+     "confidence": "medium"},
+    {"id": "E6", "url": "https://www.si.com/nfl/panthers-coach-dave-canales-explains-why-he-decided-bench-bryce-young",
+     "publisher": "Sports Illustrated, Madison Williams", "published": "2024-09-16", "accessed": "2026-11-04",
+     "summary": "After an 0-2 start he benches Young for Dalton, says it was his call after consulting others, frames it as the best chance to win that week rather than a verdict on Young's future, and will not say how long it lasts. Tone reported as measured and decisive. One decision; it does not show how he treats players in private.",
+     "confidence": "high"},
+    {"id": "E7", "url": "https://www.espn.com.au/nfl/story/_/id/45806941/carolina-panthers-dave-canales-year-two",
+     "publisher": "ESPN, David Newton", "published": "2025-07-24", "accessed": "2026-11-04",
+     "summary": "Year-two camp piece: calmer than in his first camp but still the energy source, predicts the team will be competitive, aims for a player-led locker room, and players call him steady and consistent. Recounts that the Young benching earned locker-room respect and that he later reshaped the offense around Young's strengths. Beat-reporter framing with player quotes.",
+     "confidence": "high"}
+  ],
+  "review": {"status": "draft", "reviewer": null, "reviewed_at": null, "notes": null}
+}
