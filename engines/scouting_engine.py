@@ -245,6 +245,41 @@ def _rerank(cur, draft_season):
                    WHERE s.id = r.id""", (draft_season,))
 
 
+def personality_observe(cur, draft_season):
+    """Observe-mode person lifecycle check (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4 step 4).
+    Reads only and changes no truth, noise, grade or interview text: {"universe_id", "prospects", "pending",
+    "key_collisions"} for the class's permanent prospect IDs, where pending = no lifecycle binding to the prospect's
+    source person and key collisions block that person's later activation. None when the lifecycle migration or the
+    prospect ID table is missing, or no universe is registered for the database's league stamp."""
+    from personality import lifecycle_store as LS
+    if not LS.available(cur):
+        return None
+    cur.execute("SELECT to_regclass('scout_prospect_ids') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return None
+    stamp = LS._league_stamp(cur)
+    universe = LS.universe_for_league(cur, stamp) if stamp is not None else None
+    if universe is None:
+        return None
+    cur.execute("SELECT prospect_uid, source_person_id, status FROM scout_prospect_ids WHERE draft_season = %s",
+                (int(draft_season),))
+    rows = cur.fetchall()
+    cur.execute("SELECT external_id FROM persona_lifecycle_bindings WHERE universe_id = %s AND role = 'player' "
+                "AND namespace = 'source-person' AND valid_to IS NULL", (universe["universe_id"],))
+    bound = {r[0] for r in cur.fetchall()}
+    pending = sum(1 for uid, spid, _ in rows if str(spid or uid) not in bound)
+    return {"universe_id": universe["universe_id"], "prospects": len(rows), "pending": pending,
+            "key_collisions": sum(1 for *_, status in rows if status != "OK")}
+
+
+def _observe(cur, draft_season, log):
+    rep = personality_observe(cur, draft_season)
+    if rep is not None:
+        log(f"  personality (observe): {rep['pending']} of {rep['prospects']} prospects without a lifecycle identity, "
+            f"{rep['key_collisions']} key collisions")
+    return rep
+
+
 def init(cur, draft_season, step=None, dry_run=False, log=print):
     """Create the class's scout_prospects rows from draft_prospects (a class already stored only gains new
     prospects; use relink after a re-scan). Prints counts and the grade distribution, never V by name."""
@@ -267,6 +302,9 @@ def init(cur, draft_season, step=None, dry_run=False, log=print):
     log(f"scouting init {draft_season}: {len(built)} prospects (first step {step}), {existing} already stored, "
         f"{unrated} unrated (valued at OVR {sv.UNRATED_OVR:g}), unmapped colleges {unmapped or 'none'}")
     log(f"  grade distribution: {rep['grades']}")
+    personality = _observe(cur, draft_season, log)
+    if personality is not None:
+        rep["personality"] = personality
     if not dry_run:
         _insert_prospects(cur, draft_season, built)
         _rerank(cur, draft_season)
@@ -408,6 +446,7 @@ def run(cur, draft_season, step, dry_run=False, replace=False, log=print, extras
     label scouting_notes) rewrites up to 8 movers' notes (scouting_narrative; never in a dry run).
     Returns the computed step."""
     season = current_step(cur)[0]
+    _observe(cur, draft_season, log)
     stored = step in stored_steps(cur, draft_season)
     if stored and not replace and not dry_run:
         log(f"scouting {draft_season} step {step}: already stored (use --replace to redraw)")
@@ -582,7 +621,7 @@ def catch_up(cur, draft_season, to_step, log=print, extras=None, dry_run=False, 
         if cls_first is None:
             return []
     start = (max(steps) + 1) if steps else cls_first
-    done = []
+    done = []                         # each run() below makes the observe-mode personality check
     for s in range(start, to_step + 1):
         run(cur, draft_season, s, dry_run=dry_run, log=log, extras=extras, llm=llm)
         done.append(s)

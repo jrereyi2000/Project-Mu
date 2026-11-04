@@ -236,8 +236,10 @@ def load_roster(cur, folder, season, report):
         report["deleted_not_on_any_roster"] = len(drop)
         report["kept_not_on_any_roster"] = sorted(keep)
     # this season's rookies are last year's draft class: link them to their scouted board rows
-    from pipeline.draft_board import link_rookies
+    from pipeline.draft_board import link_rookies, rookie_handoff_candidates
     report["draft_class_rookies"] = link_rookies(cur, season)
+    # a name match is a personality handoff candidate only, never a binding (PERSONALITY_DRAFT_INTEGRATION_PLAN §2.4)
+    report["personality_handoff_candidates"] = len(rookie_handoff_candidates(cur, season))
     # a board scanned in the same run (older captures did both) loads like a prospects run
     if os.path.exists(os.path.join(folder, "prospects.csv")):
         load_prospects(cur, folder, season, report)
@@ -1375,6 +1377,8 @@ def load_prospects(cur, folder, season, report):
 
     draft_season = season + 1
     write_board(cur, draft_season, prospects, os.path.basename(folder))
+    report["personality"] = class_personality(cur, draft_season, prospects, os.path.basename(folder),
+                                              report.pop("personality_context", None))
     # scouting (team management step 4): re-point the class's scouting rows at the new ids (no-op before init)
     from engines.scouting_engine import relink
     report["scouting_relink"] = relink(cur, draft_season, log=lambda *a: None)
@@ -1388,6 +1392,69 @@ def load_prospects(cur, folder, season, report):
     report["prospect_warnings"] = warnings
     report["export_path"] = dest
     return len(prospects)
+
+
+CLASS_ENTRY_SCHEMA = "personality-class-entry-v1"
+
+
+def class_personality(cur, draft_season, prospects, capture, context=None):
+    """Person lifecycle for an imported (CSV/OCR) class (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md
+    §2.4 step 6, Q2). Without context: observe only, nothing written. With context {"entry": a
+    personality-class-entry-v1 bundle {schema, universe_id, cutoff, sidecar, receipt}, "review": JR's receipt naming
+    the bundle's canonical hash}: each row whose supplier `source_id` the reviewed durable sidecar maps is initialized
+    once as a generated player (a real-player class is generated too, D12) and bound to its board row
+    (draft:<class>:<capture>) and, when scouting already gave him a unique prospect_uid, to that ID (scout-uid; its
+    scout_prospect_ids.source_person_id is set). Rows without a mapping stay pending: never keyed by name, rank or
+    row. Off-board recap inserts are not touched here and stay pending until classified."""
+    if not context:                                  # observe: no query, nothing written
+        return {"mode": "observe", "pending": len(prospects)}
+    from personality import lifecycle as L, lifecycle_store as LS
+    if not LS.available(cur):
+        raise LoadError("personality class entry given, but 2027_01_24_personality_lifecycle.sql isn't applied")
+    entry, review = context["entry"], context["review"]
+    try:
+        if entry.get("schema") != CLASS_ENTRY_SCHEMA:
+            raise L.LifecycleError("not a personality class entry")
+        L.validate_review(review, L.canonical_hash(entry))
+        sidecar = L.validate_sidecar(entry["sidecar"])
+        receipt = L.validate_receipt(entry["receipt"])
+        if sidecar["draft_season"] != draft_season or receipt["scope"] != f"class:{draft_season}":
+            raise L.LifecycleError(f"class entry is not for the {draft_season} class")
+        if receipt["origin"] != "generated":
+            raise L.LifecycleError("every drafted player is generated (D12); unknown stays pending")
+        uid, cutoff = entry["universe_id"], L.validate_cutoff(entry["cutoff"])
+        from engines import prospect_ids
+        from engines.scouting_value import prospect_key
+        from pipeline.draft_board import board_ids
+        ids = board_ids(cur, draft_season)
+        out = {"mode": "enforce", "initialized": 0, "existing": 0, "pending": 0, "scout_linked": 0}
+        for p in prospects:
+            spid = L.sidecar_person_id(sidecar, p.source_id)
+            if spid is None:
+                out["pending"] += 1
+                continue
+            aliases = []
+            if ids.get(p.projected_pick) is not None:
+                aliases.append({"namespace": f"draft:{draft_season}:{capture}", "external_id": str(ids[p.projected_pick])})
+            got = LS.initialize_person(cur, uid, "player", spid, "generated", cutoff["season"], cutoff=cutoff,
+                                       receipt=dict(receipt, source_id=p.source_id), aliases=aliases)
+            out["initialized" if got["created"] else "existing"] += 1
+            prospect_uid = prospect_ids.uid_for(cur, draft_season, prospect_key(draft_season, p.full_name, p.position))
+            if prospect_uid is not None and str(prospect_uid) != spid:
+                cur.execute("SELECT source_person_id FROM scout_prospect_ids WHERE prospect_uid = %s",
+                            (str(prospect_uid),))
+                row = cur.fetchone()
+                if row and row[0] and str(row[0]) != spid:
+                    raise L.StaleError(f"prospect {prospect_uid} already belongs to another source person")
+                if row and not row[0]:
+                    cur.execute("UPDATE scout_prospect_ids SET source_person_id = %s WHERE prospect_uid = %s",
+                                (spid, str(prospect_uid)))
+                LS.bind_person(cur, uid, "player", spid, [{"namespace": "scout-uid", "external_id": str(prospect_uid)}],
+                               cutoff=cutoff, receipt=dict(receipt, source_id=p.source_id))
+                out["scout_linked"] += 1
+        return out
+    except L.LifecycleError as e:
+        raise LoadError(f"personality: {e}")
 
 
 # --------------------------------------------------------------- contracts ----
@@ -1598,7 +1665,7 @@ LOADERS = {"roster": load_roster, "season_schedule": load_season_schedule, "week
            "transactions": load_transactions_standalone}
 
 
-def load(folder, dry_run=False, replace=False, apply_from=None):
+def load(folder, dry_run=False, replace=False, apply_from=None, personality=None):
     folder = folder.rstrip("/")
     mode = detect_mode(folder)
     if mode not in LOADERS:
@@ -1606,6 +1673,8 @@ def load(folder, dry_run=False, replace=False, apply_from=None):
     report = {"folder": folder, "mode": mode, "dry_run": dry_run}
     if apply_from:
         report["apply_from_arg"] = apply_from
+    if personality:
+        report["personality_context"] = personality
     with psycopg.connect(DSN) as conn:
         cur = conn.cursor()
         cur.execute("SELECT current_season, current_week FROM league_state WHERE id = 1")
@@ -1648,9 +1717,19 @@ def main():
     ap.add_argument("--apply-from", metavar="HEADING",
                     help='League Transactions: apply effects only from this heading (e.g. "2036 SEASON - WEEK 3"); '
                          "default: from <season> SEASON - WEEK 1 on a season's first load, else every new row")
+    ap.add_argument("--personality-manifest", metavar="PATH",
+                    help="prospects: a reviewed personality-class-entry-v1 bundle (universe, cutoff, class sidecar, "
+                         "classification receipt) for an imported class")
+    ap.add_argument("--personality-review", metavar="PATH", help="JR's review receipt naming the bundle's hash")
     a = ap.parse_args()
     try:
-        report = load(a.folder, a.dry_run, a.replace, a.apply_from)
+        personality = None
+        if a.personality_manifest or a.personality_review:
+            if not (a.personality_manifest and a.personality_review):
+                raise LoadError("--personality-manifest and --personality-review go together")
+            with open(a.personality_manifest) as fh, open(a.personality_review) as rh:
+                personality = {"entry": json.load(fh), "review": json.load(rh)}
+        report = load(a.folder, a.dry_run, a.replace, a.apply_from, personality)
     except LoadError as e:
         print(f"LOAD STOPPED, nothing written: {e}")
         sys.exit(1)

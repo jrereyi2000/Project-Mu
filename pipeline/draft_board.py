@@ -79,6 +79,23 @@ def link_rookies(cur, season: int) -> Dict[str, int]:
     return {"linked": linked, "unlinked": len(prospects) - linked}
 
 
+def board_ids(cur, draft_season: int) -> Dict[int, int]:
+    """{projected_pick: draft_prospects.id} for a class's board. Only meaningful for a board written in the same
+    transaction from a known prospect list (write_board stores one row per projected pick); never a way to map a
+    partial or older board by rank."""
+    cur.execute("SELECT projected_pick, id FROM draft_prospects WHERE draft_season = %s", (draft_season,))
+    return {pick: pid for pick, pid in cur.fetchall()}
+
+
+def rookie_handoff_candidates(cur, season: int) -> List[Dict]:
+    """The class's name-matched rookie links (link_rookies) as personality handoff candidates. A name match is a
+    review candidate only (evidence `name_match`): it never binds a personality identity
+    (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4)."""
+    cur.execute("SELECT id, player_id FROM draft_prospects WHERE draft_season = %s AND player_id IS NOT NULL "
+                "ORDER BY id", (season,))
+    return [{"draft_prospect_id": did, "player_id": pid, "evidence": "name_match"} for did, pid in cur.fetchall()]
+
+
 def save_mock(cur, season: int, week: int, selections: List[Dict]) -> int:
     """Store a Round 1 mock draft for (season, week), replacing that week's earlier run."""
     cur.execute("DELETE FROM mock_draft_picks WHERE season = %s AND week = %s", (season, week))
