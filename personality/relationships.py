@@ -1,4 +1,4 @@
-"""Directional trust and earned attachment (docs/in_progress/PERSONALITY_RELATIONSHIPS_PLAN.md §2.3, unit U2).
+"""Directional trust and earned attachment (docs/done/PERSONALITY_RELATIONSHIPS_PLAN.md §2.3, unit U2).
 
 Pure: active facts from personality.relationship_events in, explainable per-target state out. No database, clock,
 model, profile write or game effect.

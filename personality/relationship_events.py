@@ -1,4 +1,4 @@
-"""Canonical relationship events (docs/in_progress/PERSONALITY_RELATIONSHIPS_PLAN.md §2.1-§2.2, unit U1).
+"""Canonical relationship events (docs/done/PERSONALITY_RELATIONSHIPS_PLAN.md §2.1-§2.2, unit U1).
 
 Pure: plain dicts in, normalized dicts out. No database, clock, model or random reads.
 

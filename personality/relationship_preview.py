@@ -1,4 +1,4 @@
-"""Offline relationships preview (docs/in_progress/PERSONALITY_RELATIONSHIPS_PLAN.md §2.7, unit U5).
+"""Offline relationships preview (docs/done/PERSONALITY_RELATIONSHIPS_PLAN.md §2.7, unit U5).
 
   python3 -m personality.relationship_preview --input fixture.json --out report.json
   python3 -m personality.relationship_preview --stress [--teams 32] [--seasons 9] [--players 53] --out stress.json

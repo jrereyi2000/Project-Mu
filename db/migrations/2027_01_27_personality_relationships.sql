@@ -1,4 +1,4 @@
--- Personality relationships ledger (docs/in_progress/PERSONALITY_RELATIONSHIPS_PLAN.md §2.6;
+-- Personality relationships ledger (docs/done/PERSONALITY_RELATIONSHIPS_PLAN.md §2.6;
 -- personality/relationship_store.py). Requires 2027_01_16_personality_core.sql (persona_core_profiles, read by
 -- the store to validate every PersonRef). Additive feature tables only: no core schema edits, no legacy
 -- persona_relationships dual-write, no backfill, not folded into db/init_db.sql.

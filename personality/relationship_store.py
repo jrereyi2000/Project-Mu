@@ -1,4 +1,4 @@
-"""Relationship ledger persistence (docs/in_progress/PERSONALITY_RELATIONSHIPS_PLAN.md §2.6, unit U4).
+"""Relationship ledger persistence (docs/done/PERSONALITY_RELATIONSHIPS_PLAN.md §2.6, unit U4).
 
 Caller-owned transaction: an explicit psycopg cursor on a NON-autocommit connection. Nothing here connects,
 commits or rolls back the caller's work; every append runs in its own savepoint under the transaction advisory
