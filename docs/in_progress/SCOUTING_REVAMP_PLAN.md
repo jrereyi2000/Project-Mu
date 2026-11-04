@@ -1,7 +1,7 @@
 # Project Mu: Scouting Revamp & Combine Interviews Plan (V2.10)
 
-**Status:** approved by JR (2026-11-03), all §8 recommendations accepted; not built. Builds after the inbox plan's U1 (V2.9) is on main.
-**Builds on:** PROJECT_SPEC §2.18, §3.3c, §3.3g, §4.6, §5.2; [`FRONT_OFFICE_INBOX_PLAN.md`](../in_progress/FRONT_OFFICE_INBOX_PLAN.md) (V2.9, unapproved; its U1 must be on main before this plan's wave 1); [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §5.3.2, §6 (V2.0, V2.10); [`04_SCOUTING_AND_DRAFT_PLAN.md`](../done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) phase 6; [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](./PERSONALITY_DRAFT_INTEGRATION_PLAN.md) (unapproved).
+**Status:** approved by JR (2026-11-03), all §8 recommendations accepted; building U1 (wave 1 of 2); the other units are held until the personality plans are built (PERSONALITY_PLAN §5.3). The inbox plan's U1 (V2.9) is on main.
+**Builds on:** PROJECT_SPEC §2.18, §3.3c, §3.3g, §4.6, §5.2; [`FRONT_OFFICE_INBOX_PLAN.md`](../in_progress/FRONT_OFFICE_INBOX_PLAN.md) (V2.9, unapproved; its U1 must be on main before this plan's wave 1); [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §5.3.2, §6 (V2.0, V2.10); [`04_SCOUTING_AND_DRAFT_PLAN.md`](../done/team_management/04_SCOUTING_AND_DRAFT_PLAN.md); [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) phase 6; [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../not_started/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) (unapproved).
 
 **Goal:** Every prospect in the class gets a full written scouting report (traits, strengths, concerns, production, athletic profile, projection, bottom line) in three editions a year, and JR can sit down with prospects himself: formal combine interviews and top-30 visits, run as conversations in the V2.9 front-office inbox (a `PROSPECT` inbox kind), started from the Command Center's Draft War Room. A neutral `SCOUT` inbox kind tells JR when interview windows open and new report editions land. The engines decide every grade, trait score, answer quality and board effect; the LLM only writes the words and, for a typed question, picks which engine-permitted topic it is. Scouts speak as one neutral "Mu Scouting Department" until personality phase 6 gives them names, voices and regional biases; prospects answer from neutral, seeded dispositions until the personality draft integration plan is built. Both have hooks so they plug in later without a schema change.
 
@@ -55,7 +55,7 @@
 - An Interviews card in the Command Center's Draft War Room module (budget, window, eligible prospects, "Interview" buttons that start inbox threads).
 
 **Out (non-goals):**
-- Named scouts, scout personalities, regional bias numbers: personality phase 6, planned in the [owners, scouts and voters plan](OWNERS_SCOUTS_VOTERS_PLAN.md) (one generated scouting director per team through the `scout_voice` / `regional_bias` hooks).
+- Named scouts, scout personalities, regional bias numbers: personality phase 6, planned in the [owners, scouts and voters plan](../not_started/OWNERS_SCOUTS_VOTERS_PLAN.md) (one generated scouting director per team through the `scout_voice` / `regional_bias` hooks).
 - Prospect personality traits and any write to personality profiles: `PERSONALITY_DRAFT_INTEGRATION_PLAN.md`. Interview text and grades are never personality evidence (§2.6).
 - Allocating `source_person_id` or writing `persona_lifecycle_*` rows: the lifecycle plan (§2.1b says how it adopts this plan's IDs).
 - Re-keying the existing scouting tables (`scout_prospects`, `scout_consensus`, `scout_events`, …) off `prospect_key`: a separate change; this plan only stops new tables depending on it.
@@ -464,3 +464,9 @@ No path appears twice.
 | Q7 | Pro comparisons ("plays like …") in reports? | Not now. An engine-picked comparison is possible but needs its own no-leak rule; propose it with phase 6 scouts. |
 | Q8 | Scout names before phase 6? | No. One "Mu Scouting Department" voice until phase 6 creates scouts through the personality core, so no invented people need adopting later. |
 | Q9 (added 2026-11-03 after approval, from JR's cross-plan decision; mechanism needs JR's confirmation) | Permanent prospect ID before the lifecycle plan exists: allocate `prospect_uid` here (deterministic from class + pgid) for the lifecycle plan to adopt as `source_person_id`, or make V2.10 wait for the lifecycle plan's U1–U2? | Allocate here (§2.1b). JR asked for a permanent ID on 2026-11-03; waiting would block V2.10 behind an unapproved plan, and the derivation is one the lifecycle plan already allows. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
+| U1 | 1 | build/scouting-u1 | .claude/worktrees/scouting-u1 | building | |
