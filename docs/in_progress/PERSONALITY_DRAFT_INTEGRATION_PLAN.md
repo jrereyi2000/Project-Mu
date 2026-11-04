@@ -1,6 +1,8 @@
 # Project Mu: Personality Draft and Person Lifecycle Integration Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); building, wave 1 of 3. Approval covers building the units; applying the inventory to a real franchise, migrations and activation each still need JR's separate go-ahead (§6 gates).
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); building, wave 1 of 3 done.
+- As built (spike, 2026-11-04, offline from code; no snapshot JSON is in verify_output/): reader contract `franchise.league_id`, `meta.reader_version` (draft class needs ≥5), statuses Draft/Signed/PracticeSquad/FreeAgent (others reported unsupported); class year = save season + 1 (load_save); fixed phase order `league_start, preseason, regular_season, playoffs, resign, free_agency, draft, post_draft`; pgid is unique per DB and treated as a lifetime alias `save-pgid:<lifetime>` (default `1`); `load_snapshot` runs on the caller's cursor and `load()` commits once; migration `2027_01_24` is free. No PostgreSQL is available in the build environment, so store tests are fake-cursor plus opt-in scratch-schema cases (skipped here).
+- As built (U1): prospects adopt `prospect_uid`; starting-roster IDs are `uuid5(LIFECYCLE_NS, universe|save-roster|season|pgid)`; later roster rows resolve only by alias; an extra offline `universe` subcommand writes the registration record; database subcommands require an explicit `--dsn` (no `DATABASE_URL` fallback). Approval covers building the units; applying the inventory to a real franchise, migrations and activation each still need JR's separate go-ahead (§6 gates).
 **Scope (JR, 2026-11-03, PERSONALITY_PLAN §5.1, D11–D13):** every player gets one persistent profile. Existing players in the starting 2026 save get engine-generated profiles once, at the league start, with no research into the real player; draft prospects get theirs at draft-class entry, including real-player imported classes. Players named after real people are fictional characters inspired by them, so they are classified `generated` like any other player. JR can edit any profile. Existing real coaches get reviewed profiles from a separate workstream (not planned yet); this plan registers their identities and aliases and initializes coaches only from that workstream's reviewed manifest.
 **Builds on:** PROJECT_SPEC §2.10, §2.18, §2.19, §3.3c, §3.3g, §3.3p, §6.0b, §7.11; [Personality Plan](../in_progress/PERSONALITY_PLAN.md) §5.1–5.2; [Generated Effects Design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §4–5; `personality/README.md`.
 
@@ -262,3 +264,4 @@ JR approved all four recommendations on 2026-11-03.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | build/pdi-u1 | .claude/worktrees/pdi-u1 | merged | 101dc17 |
