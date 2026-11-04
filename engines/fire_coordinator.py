@@ -59,9 +59,11 @@ def phase_for(cur, season, team_id):
 
 
 def fire(cur, season, abbr, role, replacement=None, scheme=None, playbook=None, source="OUTSIDE",
-         background=None, log=print):
+         background=None, log=print, personality=None):
     """Fire JR's `role` coordinator at `abbr` after `season`, inside the caller's transaction. Returns {team, role,
-    fired, phase, replacement (None: the hiring cycle fills it)}."""
+    fired, phase, replacement (None: the hiring cycle fills it), personality}. A new coordinator JR names is a created
+    person (durable event jr-fire:<season>:<abbr>:<role>), a rehired one keeps his identity
+    (coaching_carousel.staff_lifecycle; observe without `personality`)."""
     role = role.upper()
     if role not in ("OC", "DC"):
         raise ValueError("role must be OC or DC")
@@ -98,6 +100,7 @@ def fire(cur, season, abbr, role, replacement=None, scheme=None, playbook=None, 
                 (season, cur_c["coordinator_id"], t["id"], role, season))
 
     hired = None
+    events = []
     if replacement:
         name = replacement.strip()
         cur.execute("""SELECT c.id, c.coordinator_name, c.side, c.scheme, c.playbook,
@@ -115,6 +118,8 @@ def fire(cur, season, abbr, role, replacement=None, scheme=None, playbook=None, 
                 cur.execute("UPDATE coordinators SET scheme = COALESCE(%s, scheme), playbook = COALESCE(%s, playbook) "
                             "WHERE id = %s", (scheme, playbook, cid))
             notes = f"rehired by JR; brings his {scheme or known[3] or 'system'}"
+            events.append({"kind": "retained", "event": f"jr-fire:{season}:{t['abbr']}:{role}",
+                           "namespace": "db-coordinator", "external_id": cid})
         else:
             src = SOURCES.get(source.lower(), source.upper())
             bg = background or ("an internal promotion" if src == "PROMOTED" else "an outside hire")
@@ -126,6 +131,8 @@ def fire(cur, season, abbr, role, replacement=None, scheme=None, playbook=None, 
             notes = (f"{'promoted from ' if src == 'PROMOTED' else 'previously '}{bg}; "
                      + (f"keeps {cur_c['name']}'s system" if keeps else f"runs {scheme or cur_c['scheme']}"))
             inputs["created_coordinator_id"] = cid
+            events.append({"kind": "created", "event": f"jr-fire:{season}:{t['abbr']}:{role}",
+                           "creator": f"fire_coordinator:{src}", "namespace": "db-coordinator", "external_id": cid})
         cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) VALUES (%s, %s, %s, %s)",
                     (cid, t["id"], role, nxt))
         cc._move(cur, season, t["id"], role, "HIRED", name, coordinator_id=cid, source=src,
@@ -143,12 +150,14 @@ def fire(cur, season, abbr, role, replacement=None, scheme=None, playbook=None, 
     log(f"  {t['abbr']} fires {role} {cur_c['name']} after {season} ({phase})"
         + (f"; {hired['coordinator']} ({hired['source'].lower()}) takes over in {nxt}" if hired
            else "; the hiring cycle fills the job after the Super Bowl"))
-    return {"team": t["abbr"], "role": role, "fired": cur_c["name"], "phase": phase, "replacement": hired}
+    return {"team": t["abbr"], "role": role, "fired": cur_c["name"], "phase": phase, "replacement": hired,
+            "personality": cc.staff_lifecycle(cur, events, personality)}
 
 
-def undo(cur, season, abbr, role, log=print):
+def undo(cur, season, abbr, role, log=print, personality=None):
     """Take back JR's firing of `role` at `abbr` after `season` (before the hiring cycle): his tenure reopens, a
-    replacement named with the firing is removed, and the hot-seat row goes back to the review's."""
+    replacement named with the firing is removed (his person lifecycle identity is archived, never deleted), and the
+    hot-seat row goes back to the review's."""
     role = role.upper()
     t = _team(cur, abbr)
     if _cycle_ran(cur, season):
@@ -162,12 +171,15 @@ def undo(cur, season, abbr, role, log=print):
     coord_id, inputs = row
     cur.execute("SELECT coordinator_id FROM staff_moves WHERE season = %s AND team_id = %s AND role = %s "
                 "AND inputs->>'by' = 'JR'", (season, t["id"], role))
+    events = []
     for (hid,) in cur.fetchall():
         cur.execute("DELETE FROM coordinator_tenures WHERE coordinator_id = %s AND team_id = %s AND start_season = %s",
                     (hid, t["id"], season + 1))
         if hid == inputs.get("created_coordinator_id"):
             cur.execute("DELETE FROM staff_moves WHERE coordinator_id = %s", (hid,))
             cur.execute("DELETE FROM coordinators WHERE id = %s", (hid,))
+            events.append({"kind": "deleted", "event": f"jr-fire-undo:{season}:{t['abbr']}:{role}",
+                           "namespace": "db-coordinator", "external_id": hid})
     cur.execute("DELETE FROM staff_moves WHERE season = %s AND team_id = %s AND role = %s AND inputs->>'by' = 'JR'",
                 (season, t["id"], role))
     cur.execute("UPDATE coordinator_tenures SET end_season = %s WHERE coordinator_id = %s AND team_id = %s AND role = %s "
@@ -179,7 +191,8 @@ def undo(cur, season, abbr, role, log=print):
         cur.execute("DELETE FROM coordinator_hot_seat WHERE season = %s AND team_id = %s AND role = %s",
                     (season, t["id"], role))
     log(f"  {t['abbr']} keeps {role} {inputs.get('coordinator')} (firing undone)")
-    return {"team": t["abbr"], "role": role, "kept": inputs.get("coordinator")}
+    return {"team": t["abbr"], "role": role, "kept": inputs.get("coordinator"),
+            "personality": cc.staff_lifecycle(cur, events, personality)}
 
 
 def main(argv=None):
