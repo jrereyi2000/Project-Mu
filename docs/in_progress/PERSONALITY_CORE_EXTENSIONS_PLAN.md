@@ -1,7 +1,7 @@
 # Project Mu: Personality Core Extensions Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); not built. Queued: JR wants every personality sub-plan written and approved before more building (2026-11-03). The other plans' wording was updated at approval (§7).
-**Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §5 step 3, §5.2, D4, D13; [`personality/README.md`](../../personality/README.md); [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §2.1, §2.3, Q4 (the dependencies it leaves to the core owner); PROJECT_SPEC §3.3p, §4.5, §7.11.
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2. The other plans' wording was updated at approval (§7).
+**Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §5 step 3, §5.2, D4, D13; [`personality/README.md`](../../personality/README.md); [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../not_started/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §2.1, §2.3, Q4 (the dependencies it leaves to the core owner); PROJECT_SPEC §3.3p, §4.5, §7.11.
 
 **Goal:** Close the core gaps the sub-plans depend on.
 - JR can change any profile after its first use, audited and outside the one-change-a-season limit.
@@ -28,7 +28,7 @@
 
 **JR's answers (2026-11-03):**
 - D1: Reviewed real profiles are read in full by every feature, like generated ones. Evidence stays as provenance (who reviewed it, from what), not as a per-feature gate, and real-person evolution no longer needs special evidence.
-- D2: The override after first use (PERSONALITY_PLAN D4) is a CLI command plus the existing `#debug` persona endpoints. A proper site editor comes from the [personality display plan](PERSONALITY_DISPLAY_PLAN.md) (approved 2026-11-03).
+- D2: The override after first use (PERSONALITY_PLAN D4) is a CLI command plus the existing `#debug` persona endpoints. A proper site editor comes from the [personality display plan](../not_started/PERSONALITY_DISPLAY_PLAN.md) (approved 2026-11-03).
 - D3: A role change carries the personality over. The new role gets a new profile linked to the old one: sliders copied, traits valid for the new role kept, the rest dropped, nothing redrawn. History reads across the link.
 
 ---
@@ -327,3 +327,8 @@ JR approved all three recommendations on 2026-11-03.
 | Q1 | Three writers carry traits the catalogue doesn't give writers (`SUPERSTITIOUS` for DIE_HARD_FAN; `WORKOUT_FANATIC` for JJ_WATT and FORMER_PLAYER). Fix the catalogue or the writers? | Fix the catalogue: give both traits small `writer` odds (0.05). They suit a superstitious fan and two former players, and the writers stay as you wrote them. |
 | Q2 | What origin should adopted personas carry? | Writers `real` (hand-written, reviewed); GMs `generated` (seeded by the engine). Under D1 both read in full; origin only records where the profile came from. |
 | Q3 | Should JR's overrides be allowed to break the profile rules (for example 6 traits, or a slider total outside 24–36)? | No. An override must pass the same validation as any profile, so no feature has to handle a malformed one. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
