@@ -50,9 +50,12 @@ def test_report_has_every_claim_source_and_decision_line_and_is_deterministic(tm
     assert text == out2.read_text()
     assert '**Decision (coach:CAR:HC):** [ ] approve  [ ] edit  [ ] reject' in text
     for ev in doc['evidence']:
-        assert f"[{ev['id']}]({ev['url']})" in text and ev['summary'] in text
+        assert f"[{ev['id']}]({ev['url']})" in text
+        assert text.count(ev['summary']) == 1          # summaries appear once, in the Sources table
+        assert text.index(ev['summary']) > text.index('### Sources')
     for s, v in doc['sliders'].items():
         assert f'| {s} | {v} |' in text
+    assert '| openness | 5 | none (neutral) |' in text
     for t in ('Scheme nerd', 'QB whisperer', 'Measured'):
         assert f'**{t}**' in text
     for v in doc['views']:

@@ -94,10 +94,6 @@ def _cite(ids, by_id):
     return ', '.join(parts) or 'none'
 
 
-def _reasons(ids, by_id):
-    return ' / '.join(_md(by_id[i].get('summary', '')) for i in ids or [] if i in by_id)
-
-
 def _tie_target(target, index):
     kind = target.get('kind')
     if kind == 'coach':
@@ -125,19 +121,17 @@ def _coach_section(doc, catalogue, index):
     slider_ev = doc.get('slider_evidence') or {}
     out += ['### Sliders', '', f'Total {sum(v for v in sliders.values() if isinstance(v, int))} '
             f'(band {cp.SLIDER_RANGE[0]}-{cp.SLIDER_RANGE[1]}); a slider with no evidence stays 5.', '',
-            '| Slider | Value | Sources | Reason |', '|---|---|---|---|']
+            '| Slider | Value | Sources |', '|---|---|---|']
     for s in legacy.SLIDERS:
         ids = slider_ev.get(s)
-        reason = _reasons(ids, by_id) if ids else 'no evidence: neutral'
-        out.append(f'| {s} | {sliders.get(s)} | {_cite(ids, by_id) if ids else "none"} | {reason} |')
+        out.append(f'| {s} | {sliders.get(s)} | {_cite(ids, by_id) if ids else "none (neutral)"} |')
 
     trait_ev = doc.get('trait_evidence') or {}
     out += ['', '### Traits', '']
     for t in doc.get('traits') or []:
         entry = catalogue.get(t, {})
         out.append(f"- **{entry.get('label', t)}** (`{t}`, {entry.get('category', '?')}): "
-                   f"{entry.get('prompt', '')}. Sources: {_cite(trait_ev.get(t), by_id)}. "
-                   f"Reason: {_reasons(trait_ev.get(t), by_id)}")
+                   f"{entry.get('prompt', '')}. Sources: {_cite(trait_ev.get(t), by_id)}")
 
     out += ['', '### Views', '']
     for v in doc.get('views') or []:
@@ -154,8 +148,7 @@ def _coach_section(doc, catalogue, index):
         out.append('None.')
     for t in ties:
         out.append(f"- {t.get('relationship_kind')}, {t.get('outcome')}: "
-                   f"{_tie_target(t.get('target') or {}, index)}. Sources: {_cite(t.get('evidence'), by_id)}. "
-                   f"Reason: {_reasons(t.get('evidence'), by_id)}")
+                   f"{_tie_target(t.get('target') or {}, index)}. Sources: {_cite(t.get('evidence'), by_id)}")
 
     out += ['', '### Sources', '', '| ID | Published | Publisher | Confidence | What it shows (paraphrase) |',
             '|---|---|---|---|---|']
@@ -170,7 +163,7 @@ def build_report(docs, *, title, missing=()):
     out = [f'# Coach profile review: {title}', '',
            f'{len(docs)} profile(s). Schema {cp.SCHEMA_VERSION}; sources through {cp.SOURCE_CUTOFF}. '
            'Each profile is a fictional character inspired by the real coach; every claim cites a dated public '
-           'source, and confidence is shown on each. Tick one box per coach and add notes; the decisions are '
+           'source by its ID and confidence, and each source is summarised once, in the Sources table. Tick one box per coach and add notes; the decisions are '
            'recorded with `python -m tools.coach_profile_review apply-review`.', '']
     if missing:
         out += ['Not written yet: ' + ', '.join(missing) + '.', '']
