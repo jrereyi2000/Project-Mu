@@ -36,6 +36,10 @@ Writes, for that season:
                              pipeline/colleges.py (Madden's college list), NULL when unknown), only when that class has
                              no board yet: a scanned or already loaded board is kept, so its ids, mock drafts and
                              scouting links never move
+  scout_prospect_ids /       every load (once 2027_01_21_scouting_reports.sql is applied): the coming class's permanent
+  scout_prospect_ratings     prospect IDs (engines/prospect_ids.py; report `prospect_ids`: allocated / renamed /
+                             collisions) and each Draft-status player's native ratings by prospect_uid (hidden;
+                             pipeline/prospect_ratings.py)
   depth_charts               reader_version >= 4: every real team's Madden depth chart (35 positions x 6, best
                              first) as source MADDEN for the save's current week (pgid -> player id through the
                              players loaded; empty slots and players not loaded are skipped)
@@ -62,6 +66,7 @@ from pipeline.contracts import insert_contract, supersede_active, upsert_team_ca
 from pipeline.draft_board import write_board
 from pipeline.ingest_prospects import Prospect
 from pipeline.load_capture import team_line_totals
+from pipeline.prospect_ratings import store_prospect_ratings
 from engines import depth_chart_engine
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -1047,6 +1052,8 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     load_highlights(cur, games, season, report)
     load_depth_charts(cur, snapshot, season, week, teams, players, report)
     load_draft_class(cur, snapshot, season, report, capture_folder)
+    report["prospect_ratings"] = store_prospect_ratings(cur, snapshot, season + 1, capture_folder or f"save_{season}",
+                                                        report)
     league_settings_report(snapshot, report)
     update_league_state(cur, season, week, report)
     return report
@@ -1055,7 +1062,7 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
 REPORT_COUNTS = ("players", "players_created", "player_attributes", "player_attributes_unchanged",
                  "player_attributes_in_season_changes", "games", "games_completed", "game_line_rows", "team_stat_rows",
                  "season_line_rows", "contracts", "injuries", "games_with_scoring_plays", "depth_charts",
-                 "depth_chart_rows", "team_ratings", "draft_prospects", "team_caps")
+                 "depth_chart_rows", "team_ratings", "draft_prospects", "team_caps", "prospect_ratings")
 
 
 def capture_row(cur, path, season, week):
