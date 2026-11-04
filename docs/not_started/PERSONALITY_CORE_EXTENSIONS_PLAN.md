@@ -28,7 +28,7 @@
 
 **JR's answers (2026-11-03):**
 - D1: Reviewed real profiles are read in full by every feature, like generated ones. Evidence stays as provenance (who reviewed it, from what), not as a per-feature gate, and real-person evolution no longer needs special evidence.
-- D2: The override after first use (PERSONALITY_PLAN D4) is a CLI command plus the existing `#debug` persona endpoints. A proper site editor waits for the personality-display plan.
+- D2: The override after first use (PERSONALITY_PLAN D4) is a CLI command plus the existing `#debug` persona endpoints. A proper site editor comes from the [personality display plan](PERSONALITY_DISPLAY_PLAN.md) (approved 2026-11-03).
 - D3: A role change carries the personality over. The new role gets a new profile linked to the old one: sliders copied, traits valid for the new role kept, the rest dropped, nothing redrawn. History reads across the link.
 
 ---
