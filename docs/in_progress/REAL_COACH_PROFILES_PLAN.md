@@ -1,11 +1,12 @@
 # Project Mu: Real-Coach Profiles Plan
 
-**Status:** approved by JR (2026-11-03); building, wave 1 of 3 done; spike CAR_HC.json awaiting JR's review
+**Status:** approved by JR (2026-11-03); building, wave 1 of 3 done; spike approved by JR 2026-11-04; research waves next
 - As built (U1): `seed_index` parses `db/seed_clean_db.py` with `ast` instead of importing it, so no psycopg import.
 - As built (U1): `load_profiles` adds an in-memory `_file` (base name) that `validate_profile_file` checks against team and role; `_`-keys are never written. `validate` and `report` also take `--file PATH ...` (used for the template), and `validate` lists missing team files without failing.
 - As built (U1): a tie's `opportunity_ref` is `coach-profile:<key>:tie:<n>`, not null: the relationships-v1 contract requires nonempty text there. `file_sha256` in the review receipt is the SHA-256 of the file's canonical JSON (sorted keys).
 - As built (U1): `core_initial_values`, `persona_for` and `tie_events` raise on a draft or rejected file; `persona_for` takes a view's sliders/traits only when its status is `stored`.
-- Spike (2026-11-04): `CAR_HC.json` written from 7 sources (2024-01-25 to 2025-07-24), draft; review page at `verify_output/coach_review/spike_CAR.md` (gitignored). Pete Carroll (LV in the real 2025, not in the 2026 seed) gets no tie, per Q3.
+- As built (U1 follow-up, 2026-11-04): the review page cites sources by ID, link and confidence on each slider, trait and tie; each summary appears once, in the Sources table (JR: shorten the page).
+- Spike (2026-11-04): `CAR_HC.json` written from 7 sources (2024-01-25 to 2025-07-24); JR approved it with one edit, recorded by `apply-review` as status `edited`, reviewer JR, 2026-11-04: the Bryce Young tie is mentorship, positive, citing E6, E7 and a new E8 (AP column, 2024-12-03: Young improved steadily after returning from the benching). Now 8 sources. Review page at `verify_output/coach_review/spike_CAR.md` (gitignored). Pete Carroll (LV in the real 2025, not in the 2026 seed) gets no tie, per Q3.
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §4.3–§4.5, §5.1 (coach scope), D5, D11, D13; [`PERSONALITY_PANTHERS_SAMPLE.md`](../in_progress/PERSONALITY_PANTHERS_SAMPLE.md) (the reviewed-evidence method); [`PERSONALITY_CORE_EXTENSIONS_PLAN.md`](../done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) D1 (full reads of reviewed real profiles); [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §2.1, §2.5 (identity registration and reviewed manifests); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.2–§2.3 (`reviewed_evidence` starting ties); PROJECT_SPEC §3.3a, §3.3p, §7.11.
 
 **Goal:** Give every real head coach and coordinator in the 2026 save a personality shaped to his real counterpart, as a fictional character inspired by him (D13). Many of them will still be in the league in 2034, and today they have no persona at all, so pressers and inbox talks give every coach the same neutral voice. Each profile is a full character like the writer personas: sliders, traits, football views, a want and a fear, a voice, signature habits and a few reviewed starting relationships. Every claim cites a dated public source, and JR reviews each one before it counts.
@@ -287,6 +288,7 @@ JR approved all three recommendations on 2026-11-03.
 | Q1 | How recent can sources be? | Through the end of 2025 (`SOURCE_CUTOFF`), matching the clean database's history and the Panthers sample. From 2026 the simulation is the history. |
 | Q2 | How do you review? | One page per batch of 24 coaches, with every claim and its linked source. You reply approve, edit or reject per coach, and I record it with `apply-review`. Start with the single spike page to settle the format. |
 | Q3 | What happens to a tie whose other person isn't in the 2026 league as the same person (for example a GM persona with a different name)? | Drop it and list it in the report. A tie only counts between people who are both actually in the league. |
+| Q4 | Is the spike's format and method right for the other 95? (asked after the spike, 2026-11-04) | JR approved CAR_HC with the Young edit and asked for a shorter page (built as the U1 follow-up). The Canales method applies to the other 95: 5–8 dated sources each, sliders left at 5 without evidence, 3–4 traits. |
 
 ## 9. Build log
 
@@ -294,3 +296,4 @@ JR approved all three recommendations on 2026-11-03.
 |---|---|---|---|---|---|
 | U1 | 1 | build/rcp-u1 | .claude/worktrees/rcp-u1 | merged | 0bc875f |
 | Spike | — | main | — | CAR_HC.json committed (draft) | b0d867f |
+| U1 follow-up | 1 | build/rcp-u1b | .claude/worktrees/rcp-u1b | merged (shorter review page) | a8fb214 |
