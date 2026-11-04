@@ -130,9 +130,10 @@ def _core_view(cur, role, namespace, external_id, universe_id):
     if profile is None:
         return None
     view = feature_view(profile, "inbox")
-    reviewed = profile.get("origin") != "real" or any("inbox" in (e or {}).get("features", ())
-                                                       for e in (profile.get("evidence") or {}).values())
-    return dict(view, role=role, reviewed=reviewed)
+    # Core extensions D1 (views-v2): a stored real profile is a reviewed one and is read in full by every
+    # feature; its evidence is provenance, not a per-feature gate. Real coaches without a stored profile
+    # never reach here (they get the neutral view, reviewed=False).
+    return dict(view, role=role, reviewed=True)
 
 
 def _legacy_view(cur, persona_type, persona_id):
