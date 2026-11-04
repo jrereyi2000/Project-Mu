@@ -271,7 +271,7 @@ All-game recaps use the shared weekly brief and game-specific evidence, subject 
 PostgreSQL-backed narrative search index ([`newsroom/league_memory.py`](../../newsroom/league_memory.py)) enabling journalists and agents to pull authentic historical callbacks ("last time Carolina won 5 straight was 2031").
 
 ### V2.9 Front-Office Inbox & Direct Conversations (Not started; not blocked)
-Can start with the personas that exist (GMs, writers); owners and scouts have catalogue odds but no profiles until [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phase 6, so they speak neutrally until then. Plan proposed, awaiting JR's approval: [`FRONT_OFFICE_INBOX_PLAN.md`](../not_started/FRONT_OFFICE_INBOX_PLAN.md); it is the shared conversation surface the V2.2, V2.10 and V2.11 plans plug into, so it builds first.
+Can start with the personas that exist (GMs, writers); owners and scouts have catalogue odds but no profiles until [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) phase 6, so they speak neutrally until then. Plan proposed, awaiting JR's approval: [`FRONT_OFFICE_INBOX_PLAN.md`](./FRONT_OFFICE_INBOX_PLAN.md); it is the shared conversation surface the V2.2, V2.10 and V2.11 plans plug into, so it builds first.
 Interactive messaging system allowing JR to communicate with team owners, player agents, rival GMs, beat reporters, and college prospects.
 
 ### V2.10 Scouting Revamp & Combine Interviews (Not started; not blocked)
