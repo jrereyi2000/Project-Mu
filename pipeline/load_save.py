@@ -4,6 +4,7 @@ Loads a save-reader snapshot (pipeline/save_reader/pc_save_reader.mjs) into the 
 players.madden_pgid (Madden's Player.PresentationId), so there is no name matching and no OCR check.
 
   python3 -m pipeline.load_save captures/<run>/save.json [--season N] [--commit]
+                               [--personality-manifest PATH --personality-review PATH]
 
 Without --commit the load runs and reports, then rolls back. --season defaults to the save's calendar year; the
 save's own franchise year picks which games and season rows belong to it (older years are history Madden kept).
@@ -40,6 +41,13 @@ Writes, for that season:
   scout_prospect_ratings     prospect IDs (engines/prospect_ids.py; report `prospect_ids`: allocated / renamed /
                              collisions) and each Draft-status player's native ratings by prospect_uid (hidden;
                              pipeline/prospect_ratings.py)
+  persona_lifecycle_*        with --personality-manifest/--personality-review (docs/in_progress/
+                             PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4, personality/lifecycle_store.py): the reviewed
+                             lifecycle manifest previewed from this exact snapshot is applied in the same transaction,
+                             then verified aliases are bound (db-player by pgid, the board rows written by this load as
+                             draft:<class>:<capture>, unique scout:<class> keys) and reviewed import handoffs. Without
+                             them the load observes only: report `personality` counts the people still unbound
+                             (`pending`); nothing personality-related is written
   depth_charts               reader_version >= 4: every real team's Madden depth chart (35 positions x 6, best
                              first) as source MADDEN for the save's current week (pgid -> player id through the
                              players loaded; empty slots and players not loaded are skipped)
@@ -63,10 +71,12 @@ import psycopg
 from pipeline.capture_matching import db_player_name
 from pipeline.colleges import college_name
 from pipeline.contracts import insert_contract, supersede_active, upsert_team_cap
+from pipeline import draft_board
 from pipeline.draft_board import write_board
 from pipeline.ingest_prospects import Prospect
 from pipeline.load_capture import team_line_totals
 from pipeline.prospect_ratings import store_prospect_ratings
+from engines import prospect_ids
 from engines import depth_chart_engine
 
 DSN = os.environ.get("DATABASE_URL", "host=localhost dbname=madden user=postgres password=postgres")
@@ -767,24 +777,121 @@ def draft_board_prospects(snapshot):
                             weight=p["weight_lbs"], age=p["age"], overall_rating=p["overall"],
                             archetype=archetype(p["archetype"]),
                             projected_round=str((pick - 1) // 32 + 1) if drafted else "UDFA",
-                            round_pick=(pick - 1) % 32 + 1 if drafted else None))
+                            round_pick=(pick - 1) % 32 + 1 if drafted else None, source_id=str(p["pgid"])))
     return out
 
 
 def load_draft_class(cur, snapshot, season, report, capture_folder=None):
     """The coming class (season + 1) as its draft_prospects board, only when it has none: on PC there is no Draft
-    Board scan, and a board already there (scanned, or loaded from an earlier save) is kept."""
+    Board scan, and a board already there (scanned, or loaded from an earlier save) is kept. Returns the Prospects
+    written (each carrying its pgid as source_id, for the personality source mapping), or None when kept/empty."""
     prospects = draft_board_prospects(snapshot)
     if not prospects:
-        return
+        return None
     draft_season = season + 1
     cur.execute("SELECT count(*) FROM draft_prospects WHERE draft_season = %s", (draft_season,))
     have = cur.fetchone()[0]
     if have:
         report["draft_class"] = f"kept the {draft_season} board ({have} prospects)"
-        return
+        return None
     report["draft_prospects"] = write_board(cur, draft_season, prospects, source_capture=capture_folder or "save")
     report["draft_class"] = f"{draft_season} board loaded from the save"
+    return prospects
+
+
+def _pgid_bindings(cur, universe_id, namespace):
+    """{pgid text: source_person_id} for the universe's open save-pgid bindings."""
+    cur.execute("SELECT external_id, source_person_id FROM persona_lifecycle_bindings WHERE universe_id = %s "
+                "AND role = 'player' AND namespace = %s AND valid_to IS NULL", (universe_id, namespace))
+    return {ext: str(spid) for ext, spid in cur.fetchall()}
+
+
+def load_personality(cur, snapshot, season, players, report, context=None, board=None, capture_folder=None):
+    """Person lifecycle step (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4), inside the load's
+    transaction. context None = observe: reads only and reports report["personality"]["pending"] (loaded roster
+    and class pgids with no lifecycle binding). context {"manifest", "review", "handoffs"?} = enforce: applies the
+    reviewed manifest (it must have been previewed from this exact snapshot), binds db-player for every loaded
+    player whose pgid is bound (same pgid lifetime: the players row was matched on madden_pgid), board IDs for a
+    board written by this load (draft:<class>:<capture>, lifecycle-only), unique scout:<class> keys, and each
+    handoff validate_handoff verifies. Any lifecycle conflict raises LoadError, which aborts the whole load. A name
+    match never binds; a kept board is not mapped."""
+    from personality import lifecycle as L, lifecycle_store as LS
+    info = {"mode": "enforce" if context else "observe"}
+    report["personality"] = info
+    if not LS.available(cur):
+        if context:
+            raise LoadError("personality manifest given, but 2027_01_24_personality_lifecycle.sql isn't applied")
+        info["status"] = "not installed"
+        return info
+    league = (snapshot.get("franchise") or {}).get("league_id")
+    try:
+        if context:
+            manifest = context["manifest"]
+            if manifest.get("input_hashes", {}).get("snapshot") != L.snapshot_sha256(snapshot):
+                raise LoadError("personality manifest was previewed from a different snapshot: preview and review again")
+            info["batch"] = LS.apply_lifecycle(cur, manifest, expected_hash=manifest.get("manifest_sha256"),
+                                               review_receipt=context["review"])
+            universe = manifest["universe"]
+        else:
+            universe = LS.universe_for_league(cur, league) if league is not None else None
+        if universe is None:
+            info["status"] = "no universe registered for this league"
+            return info
+        uid = universe["universe_id"]
+        info["universe_id"] = uid
+        bound = _pgid_bindings(cur, uid, L.pgid_namespace(universe))
+        draft_season = season + 1
+        class_pgids = [p["pgid"] for p in snapshot.get("players") or [] if p.get("status") == "Draft"
+                       and p.get("pgid") is not None]
+        info["pending"] = sum(1 for pgid in list(players) + class_pgids if str(pgid) not in bound)
+        if not context:
+            return info
+        cutoff = context["manifest"]["cutoff"]
+        stamp = {"batch_id": info["batch"]["batch_id"], "evidence": "same_pgid_lifetime"}
+        counts = {"db_player": 0, "board": 0, "scout": 0}
+        for pgid, (pid, *_rest) in sorted(players.items()):
+            spid = bound.get(str(pgid))
+            if spid:
+                counts["db_player"] += len(LS.bind_person(cur, uid, "player", spid,
+                                                          [{"namespace": "db-player", "external_id": str(pid)}],
+                                                          cutoff=cutoff, receipt=stamp))
+        if board:
+            ids = draft_board.board_ids(cur, draft_season)
+            capture = capture_folder or L.snapshot_sha256(snapshot)[:12]
+            for p in board:
+                spid, row = bound.get(p.source_id or ""), ids.get(p.projected_pick)
+                if spid and row is not None:
+                    counts["board"] += len(LS.bind_person(
+                        cur, uid, "player", spid, [{"namespace": f"draft:{draft_season}:{capture}",
+                                                     "external_id": str(row)}], cutoff=cutoff, receipt=stamp))
+        else:
+            info["board_aliases"] = "board kept or absent: board rows not mapped"
+        for key, (prospect_uid, prospect_key, status) in sorted(prospect_ids.class_ids(cur, draft_season).items(),
+                                                                key=lambda kv: str(kv[0])):
+            spid = bound.get(str(key)) if isinstance(key, int) else None
+            if spid and status == prospect_ids.OK:
+                counts["scout"] += len(LS.bind_person(cur, uid, "player", spid,
+                                                      [{"namespace": f"scout:{draft_season}", "external_id": prospect_key}],
+                                                      cutoff=cutoff, receipt=stamp))
+        handoffs = {"verified": 0, "pending": 0}
+        if context.get("handoffs"):
+            existing = LS.export_state(cur, uid)["bindings"]
+            for candidate in context["handoffs"]:
+                result = L.validate_handoff(candidate, existing)
+                if result["status"] == "conflict":
+                    raise LoadError(f"personality handoff conflict: {result['reason']}")
+                if result["status"] == "verified":
+                    LS.bind_person(cur, uid, candidate.get("role", "player"), result["source_person_id"],
+                                   [candidate["to"]], cutoff=cutoff,
+                                   receipt={"batch_id": info["batch"]["batch_id"],
+                                            "evidence": candidate["evidence"], "receipt": candidate.get("receipt")})
+                    handoffs["verified"] += 1
+                else:
+                    handoffs["pending"] += 1
+        info.update(bound=counts, handoffs=handoffs)
+        return info
+    except L.LifecycleError as e:
+        raise LoadError(f"personality: {e}")
 
 
 CAP_ROOM_OFFSET = 160_000           # Team.SalCapCapRoom = cap space + 160000 (every team, CAREER-WEEK1)
@@ -1029,8 +1136,10 @@ def update_league_state(cur, season, week, report):
         report["league_state"] = f"kept {stored_season} week {stored_week} (save: {season} week {week})"
 
 
-def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=None):
-    """The whole load on an open cursor (the caller commits or rolls back). Returns the report."""
+def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=None, personality_context=None):
+    """The whole load on an open cursor (the caller commits or rolls back). Returns the report. personality_context
+    ({"manifest", "review", "handoffs"?}) applies a reviewed lifecycle manifest in the same transaction; without it
+    the personality step only observes (load_personality)."""
     if snapshot.get("meta", {}).get("game_year") != 27:
         raise LoadError(f"not a Madden 27 snapshot: game_year {snapshot.get('meta', {}).get('game_year')}")
     season = season or snapshot["season"]["calendar_year"]
@@ -1051,9 +1160,10 @@ def load_snapshot(cur, snapshot, season=None, capture_id=None, capture_folder=No
     load_injuries(cur, snapshot, season, week, players, report)
     load_highlights(cur, games, season, report)
     load_depth_charts(cur, snapshot, season, week, teams, players, report)
-    load_draft_class(cur, snapshot, season, report, capture_folder)
+    board = load_draft_class(cur, snapshot, season, report, capture_folder)
     report["prospect_ratings"] = store_prospect_ratings(cur, snapshot, season + 1, capture_folder or f"save_{season}",
                                                         report)
+    load_personality(cur, snapshot, season, players, report, personality_context, board, capture_folder)
     league_settings_report(snapshot, report)
     update_league_state(cur, season, week, report)
     return report
@@ -1082,7 +1192,20 @@ def capture_row(cur, path, season, week):
     return cur.fetchone()[0]
 
 
-def load(path, season=None, commit=False):
+def personality_context(manifest_path=None, review_path=None):
+    """--personality-manifest / --personality-review as a load_personality context (both or neither)."""
+    if not manifest_path and not review_path:
+        return None
+    if not (manifest_path and review_path):
+        raise LoadError("--personality-manifest and --personality-review go together")
+    with open(manifest_path) as fh:
+        manifest = json.load(fh)
+    with open(review_path) as fh:
+        review = json.load(fh)
+    return {"manifest": manifest, "review": review, "handoffs": manifest.get("handoffs") or []}
+
+
+def load(path, season=None, commit=False, personality=None):
     with open(path) as fh:
         snapshot = json.load(fh)
     folder = os.path.basename(os.path.dirname(os.path.abspath(path)))
@@ -1091,7 +1214,8 @@ def load(path, season=None, commit=False):
         cid = None
         if commit:
             cid = capture_row(cur, path, season or snapshot["season"]["calendar_year"], current_week(snapshot))
-        report = load_snapshot(cur, snapshot, season, capture_id=cid, capture_folder=folder)
+        report = load_snapshot(cur, snapshot, season, capture_id=cid, capture_folder=folder,
+                               personality_context=personality)
         if commit:
             cur.execute("UPDATE captures SET status = 'loaded', loaded_at = now(), row_counts = %s WHERE id = %s",
                         (json.dumps({k: report[k] for k in REPORT_COUNTS if isinstance(report.get(k), int)}), cid))
@@ -1108,9 +1232,13 @@ def main():
     ap.add_argument("snapshot", help="JSON written by pipeline/save_reader/pc_save_reader.mjs")
     ap.add_argument("--season", type=int, help="season to load as (default: the save's calendar year)")
     ap.add_argument("--commit", action="store_true", help="write the load (default: run, report, roll back)")
+    ap.add_argument("--personality-manifest", metavar="PATH",
+                    help="reviewed lifecycle manifest previewed from this snapshot (tools/personality_inventory.py)")
+    ap.add_argument("--personality-review", metavar="PATH", help="JR's review receipt naming the manifest's hash")
     a = ap.parse_args()
     try:
-        report = load(a.snapshot, a.season, a.commit)
+        report = load(a.snapshot, a.season, a.commit,
+                      personality_context(a.personality_manifest, a.personality_review))
     except LoadError as e:
         print(f"LOAD STOPPED, nothing written: {e}")
         sys.exit(1)

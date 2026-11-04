@@ -59,9 +59,15 @@ class Prospect:
     projected_round: Optional[str] = None     # "1".."7" or "UDFA"
     round_pick: Optional[int] = None
     prospect_id: Optional[int] = None         # draft_prospects.id when read from the database
+    # The source's immutable person ID (a save pgid, or an imported class's supplier ID column `source_id`). Kept only
+    # in memory, for the personality lifecycle's source mapping (PERSONALITY_DRAFT_INTEGRATION_PLAN §2.4); never a
+    # board column, never in to_dict, never a name/rank/row index.
+    source_id: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        d.pop("source_id", None)
+        return d
 
 
 class SkipRow(ValueError):
@@ -202,6 +208,7 @@ def parse_prospect_row(row: dict, line_num: int, strict: bool = True,
         notes=get_field(["notes", "scouting_report", "summary"], default=None),
         projected_round=projected_round.upper() if projected_round else None,
         round_pick=round_pick,
+        source_id=get_field(["source_id", "prospect_source_id", "supplier_id"], default=None),
     )
 
 
