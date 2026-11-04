@@ -127,7 +127,7 @@ def test_unknown_kind_refused(cur):
 # --------------------------------------------------------------------------------------------------- flush ---
 
 def test_flush_is_a_noop_without_the_relationships_store(cur, monkeypatch):
-    monkeypatch.delitem(sys.modules, "personality.relationship_store", raising=False)
+    monkeypatch.setitem(sys.modules, "personality.relationship_store", None)   # import fails: store absent
     appraisal.record(cur, appraisal.exchange_event(gm_thread(cur), {"id": 5}, None, None, POLITE, AT))
     got = appraisal.flush(cur)
     assert got["status"] == "relationship_store_missing" and got["appended"] == 0
