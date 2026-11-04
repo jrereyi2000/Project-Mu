@@ -1,5 +1,5 @@
 """
-Relationship event producers (docs/in_progress/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md).
+Relationship event producers (docs/done/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md).
 
 Turns what happens in the simulated league (who is on which team, who starts, who is cut, re-signed, hurt,
 honoured, fired or hired) into the relationships plan's canonical events (PERSONALITY_RELATIONSHIPS_PLAN.md

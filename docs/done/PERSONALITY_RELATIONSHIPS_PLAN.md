@@ -48,7 +48,7 @@ Settled while reviewing the V2 plans; they bind this plan's design:
 
 **In:** canonical deduped interactions; directional trust; tenure/role coverage; meaningful ties; promises and organizational treatment; uncertainty, attribution, decay/repair; transient mood; explanations/previews; persistence through seasons; separate reviewed evolution candidates.
 
-**Out:** contract utility/prices/security, trade requests or execution, retirement, ratings/form, save writes, newsroom publication, production ingestion/scheduling, profile seeding, researching real people (the coach-profile workstream owns reviewed coach profiles), legacy adoption, hidden work ethic/coachability axes. Hometown is familiarity, never earned loyalty. Quiet is not low confidence; money preference is not low effort; elite OVR is not financial security. No global league event bus: preserve external canonical IDs in a feature-specific intake.
+**Out:** contract utility/prices/security, trade requests or execution, retirement, ratings/form, save writes, newsroom publication, production ingestion/scheduling (built by [`RELATIONSHIP_EVENT_PRODUCERS_PLAN.md`](RELATIONSHIP_EVENT_PRODUCERS_PLAN.md)), profile seeding, researching real people (the coach-profile workstream owns reviewed coach profiles), legacy adoption, hidden work ethic/coachability axes. Hometown is familiarity, never earned loyalty. Quiet is not low confidence; money preference is not low effort; elite OVR is not financial security. No global league event bus: preserve external canonical IDs in a feature-specific intake.
 
 ## 2. Design
 
