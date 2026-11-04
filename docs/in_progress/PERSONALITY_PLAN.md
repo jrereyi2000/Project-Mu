@@ -166,6 +166,7 @@ This is the parent tracker for the six sub-plans drafted from 2026-10-31. JR app
 | Retirement decisions | [Retirement plan](../not_started/PERSONALITY_RETIREMENT_PLAN.md) | Approved 2026-11-03, not built | Establish neutral baseline and prove save/native-retirement authority before activating modifiers or writes |
 | Simulation event producers | [Relationship event producers plan](RELATIONSHIP_EVENT_PRODUCERS_PLAN.md) | Approved 2026-11-03; wave 1 of 2 built, paused | Turns rosters, depth charts, moves, contracts, injuries, awards, results and coach moves into relationship events by fixed rules; wave 2 waits for the relationships plan's U1 and U4 and for all planning to finish |
 | Personality evolution | [Personality evolution plan](../not_started/PERSONALITY_EVOLUTION_PLAN.md) | Approved 2026-11-03, not built | Seeded event-to-trait/slider rules (evolution-v1) for players and coaches, the one-change-a-season arbiter over rule and other features' candidates, revert by override, change notes; inputs from the producers, relationships and development plans |
+| Coach and player agent loops | [Agent loops plan](../not_started/COACH_PLAYER_AGENT_LOOPS_PLAN.md) | Approved 2026-11-03, not built | CPU coach close calls, promises and reviews; player counter choice, capped public statements and inbox replies; model only where seen (4 marquee CPU cases a week) |
 | Live wiring and activation | [Activation plan](../not_started/PERSONALITY_ACTIVATION_PLAN.md) | Approved 2026-11-03, not built (builds last) | One switchboard per franchise (off/shadow/active, go-live order, one shadow season); shadow seasons run on tuning franchises and their clearances are imported, so every cleared feature is live from the real franchise's 2026 week 1; `PersonalityDeps` in the league office; trade-request scheduling and GM signal |
 | Real-coach profiles and coach views | [Real-coach profiles plan](../not_started/REAL_COACH_PROFILES_PLAN.md) | Approved 2026-11-03, not built | Reviewed, cited profiles for the 32 HCs and 64 coordinators (sliders, traits, views, want/fear, voice, signatures, reviewed starting ties), researched by agents in four batches and reviewed by JR; applied through the lifecycle plan's reviewed manifest; read in full under the core extensions plan (D1); feeds V2.2 press conferences, V2.9 inbox coach voices and the development/coaching teaching channels |
 
@@ -223,6 +224,8 @@ Every line is chosen by code from stored data. Nothing in it says "always".
 ---
 
 ## 8. Agentic loops
+
+Coach and player loops are planned in the [agent loops plan](../not_started/COACH_PLAYER_AGENT_LOOPS_PLAN.md) (approved 2026-11-03, not built): CPU coaches decide close depth-chart calls and make and keep promises; players choose among the engine's clearing counters and may go public, capped; a seeded policy everywhere, the model only where JR or the press sees it. GM loops are the V2.11 trade talks plan.
 
 Target design for agents that act rather than only write (GMs, players, coaches, owners); phase 5 and feature-specific loops are not claimed built. A player's own AI loop does his negotiating; no hired agent sits between him and the GM:
 
