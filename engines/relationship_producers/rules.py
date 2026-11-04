@@ -84,8 +84,9 @@ def coach_alias(coach_id):
 
 
 def coordinator_alias(coordinator_id):
-    """db-coordinator alias for coordinators.id."""
-    return _alias("coordinator", "db-coordinator", coordinator_id)
+    """db-coordinator alias for coordinators.id. Coordinators are core role 'coach' (the core has no coordinator
+    role; lifecycle plan §2.1), told apart from head coaches by the namespace."""
+    return _alias("coach", "db-coordinator", coordinator_id)
 
 
 def person_subject(alias):
@@ -194,16 +195,23 @@ def facet_key(envelope):
 
 
 def envelope(*, kind, source_event_id, season, tick, alias, target, payload, rule, source="SAVE",
-             visibility="public", actor=None, responsible=(), reason_code=None, refs=(), evidence_scope=()):
-    """One canonical envelope (relationships §2.2). universe_id and subject.persona_id stay None for store.py."""
-    refs = list(refs)
+             visibility="public", actor=None, responsible=(), reason_code=None, refs=(), evidence_scope=(),
+             own_refs=()):
+    """One canonical envelope (relationships §2.2). universe_id and subject.persona_id stay None for store.py.
+
+    `own_refs` become source_refs: only a row this occurrence owns outright (an injuries, awards, staff_moves or
+    hot-seat row, a re-sign's new contract), because the relationships store lets one external ref name exactly
+    one occurrence. Shared evidence (a roster, a depth chart, a game, a league-office run, a cause row naming
+    several events) goes in `refs`, which land only in attribution.evidence_refs."""
+    own_refs = list(own_refs)
+    refs = own_refs + list(refs)
     env = {
         "schema_version": RELATIONSHIP_SCHEMA_VERSION,
         "universe_id": None,
         "event_id": None,
         "source_event_id": source_event_id,
         "source_kind": SOURCE_KIND,
-        "source_refs": refs,
+        "source_refs": own_refs,
         "kind": kind,
         "occurred_at": time_point(season, tick),
         "subject": person_subject(alias),
@@ -226,23 +234,24 @@ def envelope(*, kind, source_event_id, season, tick, alias, target, payload, rul
 
 def _situation(*, situation_kind, state, valid_until, source_event_id, season, tick, alias, target, rule, source,
                outcome_refs=(), refs=(), responsible=(), reason_code=None, actor=None, evidence_scope=(),
-               visibility="public", extra=None):
+               visibility="public", extra=None, own_refs=()):
     payload = {"situation_kind": situation_kind, "state": state, "valid_until": valid_until,
                "outcome_refs": list(outcome_refs)}
     payload.update(extra or {})
     return envelope(kind="situation", source_event_id=source_event_id, season=season, tick=tick, alias=alias,
                     target=target, payload=payload, rule=rule, source=source, visibility=visibility, actor=actor,
-                    responsible=responsible, reason_code=reason_code, refs=refs, evidence_scope=evidence_scope)
+                    responsible=responsible, reason_code=reason_code, refs=refs, evidence_scope=evidence_scope,
+                    own_refs=own_refs)
 
 
 def _treatment(*, treatment_kind, outcome, team_id, source_event_id, season, tick, alias, rule, source,
-               outcome_refs=(), refs=(), reason_code=None, evidence_scope=()):
+               outcome_refs=(), refs=(), reason_code=None, evidence_scope=(), own_refs=()):
     payload = {"team_key": team_key(team_id), "treatment_kind": treatment_kind, "outcome": outcome,
                "significance": "meaningful", "outcome_refs": list(outcome_refs)}
     return envelope(kind="treatment", source_event_id=source_event_id, season=season, tick=tick, alias=alias,
                     target=team_ref(team_id), payload=payload, rule=rule, source=source, actor=team_ref(team_id),
                     responsible=[team_ref(team_id)], reason_code=reason_code, refs=refs,
-                    evidence_scope=evidence_scope)
+                    evidence_scope=evidence_scope, own_refs=own_refs)
 
 
 # ------------------------------------------------------------ role tier ----
@@ -500,7 +509,8 @@ def recognition(contract, *, source="SAVE"):
     return _treatment(treatment_kind="recognition", outcome="positive", team_id=contract["team_id"],
                       source_event_id=contract_source_id(contract["contract_id"]), season=contract["season"],
                       tick=contract["tick"], alias=player_alias(contract["player_id"]), rule="resign_recognition",
-                      source=source, refs=refs, outcome_refs=[f"{refs[0]['namespace']}:{refs[0]['key']}"],
+                      source=source, own_refs=refs[:1], refs=refs[1:],
+                      outcome_refs=[f"{refs[0]['namespace']}:{refs[0]['key']}"],
                       reason_code="JR_MOVE" if contract.get("jr_move") else "RE_SIGNED",
                       evidence_scope=["player_contracts"])
 
@@ -522,7 +532,7 @@ def injury_situation(injury, *, source="SAVE"):
     return _situation(situation_kind="injury", state="negative", valid_until=advance(season, tick, max(weeks, 1)),
                       source_event_id=injury_source_id(injury["injury_id"]), season=season, tick=tick,
                       alias=player_alias(injury["player_id"]), target=team_ref(injury["team_id"]),
-                      rule="injury", source=source, refs=[ref], outcome_refs=[f"{ref['namespace']}:{ref['key']}"],
+                      rule="injury", source=source, own_refs=[ref], outcome_refs=[f"{ref['namespace']}:{ref['key']}"],
                       reason_code="INJURY", evidence_scope=["injuries"],
                       extra={"injury_type": injury.get("injury_type"), "weeks_out": weeks,
                              "is_ir": bool(injury.get("is_ir"))})
@@ -558,7 +568,7 @@ def award_situation(award, *, source="SAVE"):
     ref = source_ref("awards", award["award_id"])
     return _situation(situation_kind="award", state="positive", valid_until=time_point(season + 1, 1),
                       source_event_id=award_source_id(award["award_id"]), season=season, tick=tick, alias=alias,
-                      target=team_ref(award["team_id"]), rule="award", source=source, refs=[ref],
+                      target=team_ref(award["team_id"]), rule="award", source=source, own_refs=[ref],
                       outcome_refs=[f"{ref['namespace']}:{ref['key']}"], reason_code="AWARD",
                       evidence_scope=["awards"], extra={"award_type": award.get("award_type")})
 
@@ -653,16 +663,16 @@ def staff_move_events(move, *, source="SAVE"):
     action = move.get("action")
     if action == "LEFT" and move.get("fired"):
         return [_treatment(treatment_kind="dismissal", outcome="negative", team_id=team, source_event_id=sid,
-                           season=season, tick=tick, alias=alias, rule="coach_fired", source=source, refs=refs,
+                           season=season, tick=tick, alias=alias, rule="coach_fired", source=source, own_refs=refs,
                            outcome_refs=orefs, reason_code="FIRED", evidence_scope=["staff_moves", "hot_seat"])]
     if action == "HIRED" and move.get("source") == "PROMOTED":
         return [_treatment(treatment_kind="recognition", outcome="positive", team_id=team, source_event_id=sid,
-                           season=season, tick=tick, alias=alias, rule="coach_promoted", source=source, refs=refs,
+                           season=season, tick=tick, alias=alias, rule="coach_promoted", source=source, own_refs=refs,
                            outcome_refs=orefs, reason_code="PROMOTED", evidence_scope=["staff_moves"])]
     if action == "HIRED":
         return [_situation(situation_kind="arrival", state="positive", valid_until=time_point(season + 1, tick),
                            source_event_id=sid, season=season, tick=tick, alias=alias, target=team_ref(team),
-                           rule="coach_hired", source=source, refs=refs, outcome_refs=orefs,
+                           rule="coach_hired", source=source, own_refs=refs, outcome_refs=orefs,
                            responsible=[team_ref(team)], reason_code="HIRED", actor=team_ref(team),
                            evidence_scope=["staff_moves"], extra={"staff_role": move.get("role")})]
     return []
@@ -684,7 +694,7 @@ def hot_seat_pressure(row, *, source="SAVE"):
     return _situation(situation_kind="job_pressure", state="uncertain",
                       valid_until=time_point(season + 1, OFFSEASON_START_TICK),
                       source_event_id=hot_seat_source_id(season, team, role), season=season, tick=tick, alias=alias,
-                      target=team_ref(team), rule="hot_seat_kept", source=source, refs=[ref],
+                      target=team_ref(team), rule="hot_seat_kept", source=source, own_refs=[ref],
                       outcome_refs=[f"{ref['namespace']}:{ref['key']}"], reason_code="HOT_SEAT",
                       evidence_scope=[table], extra={"score": round(score, 3), "firing_line": line,
                                                      "staff_role": role})

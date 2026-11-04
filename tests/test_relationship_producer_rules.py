@@ -299,7 +299,9 @@ class MoveTest(EnvelopeChecks):
         self.assertEqual(d["source_event_id"], "mu:depart:2026:25:7:3")
         self.assertEqual(t["attribution"]["responsible"], [r.team_ref(3)])
         self.assertEqual(t["attribution"]["reason_code"], "RELEASE")
-        self.assertEqual(t["source_refs"], [{"namespace": "mu-producer", "key": "league_office_runs:12"}])
+        # a league-office run names many moves, so it is evidence only, never an owned source ref
+        self.assertEqual(t["source_refs"], [])
+        self.assertEqual(t["attribution"]["evidence_refs"], ["mu-producer:league_office_runs:12"])
 
     def test_jr_move_reason_code(self):
         out = r.move_events(side(3), side(None), {"kind": "RELEASE", "ref": "franchise_pending_moves:4",
@@ -453,7 +455,9 @@ class CoachFactTest(EnvelopeChecks):
                                                  coordinator_id=8))
         self.check(promo, kind="treatment", rule="coach_promoted")
         self.assertEqual(promo["payload"]["treatment_kind"], "recognition")
-        self.assertEqual(promo["subject_alias"]["namespace"], "db-coordinator")
+        self.assertEqual(promo["subject_alias"], {"role": "coach", "namespace": "db-coordinator", "external_id": "8"})
+        self.assertEqual(promo["subject"]["role"], "coach")                 # the core has no coordinator role
+        self.assertEqual(r.coordinator_alias(8)["role"], "coach")
         self.assertEqual(r.staff_move_events(self.move(coach_id=None)), [])
 
     def test_hot_seat_pressure(self):
@@ -504,6 +508,30 @@ class DeterminismTest(unittest.TestCase):
         self.assertEqual(len({e["source_event_id"] for e in evs}), 1)
         self.assertEqual([r.facet_key(e) for e in evs], ["player:db-player:1|team:3|situation",
                                                          "player:db-player:2|team:3|situation"])
+
+    def test_one_batch_never_reuses_an_owned_source_ref(self):
+        """The relationships store refuses a batch where one external ref names two occurrences."""
+        inj = {"injury_id": 9, "player_id": 7, "team_id": 3, "season": S, "tick": 4, "injury_type": "Knee",
+               "weeks_remaining": 3, "is_ir": False}
+        contract = {"contract_id": 40, "player_id": 7, "team_id": 3, "season": S, "tick": 1, "status": "ACTIVE",
+                    "years_remaining": 1, "superseded_contract_id": 39, "superseded_team_id": 3}
+        evs = [r.role_window(obs(tick=6, player_id=1), hist(["STARTER"] * 5)),
+               r.role_window(obs(tick=6, player_id=2), hist(["STARTER"] * 5)),
+               r.tenure_window(obs(player_id=1)), r.tenure_window(obs(player_id=2)),
+               *r.move_events(side(3, player_id=1), side(None, player_id=1),
+                              {"kind": "RELEASE", "ref": "league_office_runs:5"})["events"],
+               *r.move_events(side(3, player_id=2), side(4, player_id=2),
+                              {"kind": "TRADE", "ref": "league_office_runs:5"})["events"],
+               r.injury_situation(inj), r.injury_resolved(inj, S, 8),
+               r.recognition(contract), r.contract_year(contract, 1),
+               *r.streak_events(3, S, 6, [{"tick": t, "result": "W"} for t in (4, 5, 6)], [{"player_id": 1}]),
+               *r.season_outcome_events(3, S, 6, {"kind": "MISSED_PLAYOFFS"}, [{"player_id": 1}])]
+        evs = [e for e in evs if e is not None]
+        owned = {}
+        for e in evs:
+            for ref in e["source_refs"]:
+                self.assertEqual(owned.setdefault((ref["namespace"], ref["key"]), e["source_event_id"]),
+                                 e["source_event_id"])
 
     def test_constants(self):
         self.assertEqual((r.ROLE_ESTABLISHED_WEEKS, r.INJURY_SITUATION_WEEKS, r.STREAK_GAMES, r.HOT_SEAT_PRESSURE),

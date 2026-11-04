@@ -10,6 +10,12 @@ through personality.store.resolve_alias; resolved envelopes go in one call to
 personality.relationship_store.append_events, and unresolved ones wait in relationship_pending_events until
 `flush_pending` finds an identity for them.
 
+Rejections. append_events EXCLUDES envelopes it cannot admit into receipt['rejected'] ({source_event_id,
+event_id, reason}) and appends the rest. Those are never counted as appended: an `unknown_identity` rejection (the
+alias resolved but the core profile is not there yet) is held PENDING like an unresolved subject, so a later flush
+retries it; any other rejection (the envelope breaks the relationships contract) is stored DROPPED with the reason,
+so it is reported once and never retried. Both keep their key in `event_hashes`.
+
 Event keys. Each envelope's occurrence key is "<source_event_id>|<facet_key>", where facet_key is the
 envelope's own `facet_key` when it has one, otherwise "<role>:<namespace>:<external_id>><target>><kind>"
 (target = team_key, a target alias or "-"). The run's `event_hashes` maps that key to
@@ -293,19 +299,38 @@ def save_observations(cur, league_id, season, tick, rows, source):
 
 # ---------------------------------------------------------------- append, hold, flush
 
-def _insert_holds(cur, league_id, holds):
+def _insert_holds(cur, league_id, holds, status='PENDING'):
     """Idempotent on (league_id, source_event_id, facet_key); returns how many rows were new."""
     if not holds:
         return 0
     cur.execute('''INSERT INTO relationship_pending_events
-        (league_id,source_event_id,facet_key,subject_alias,envelope,reason)
-        SELECT %s,s,f,a::jsonb,e::jsonb,r
-        FROM unnest(%s::text[], %s::text[], %s::text[], %s::text[], %s::text[]) AS h(s,f,a,e,r)
+        (league_id,source_event_id,facet_key,subject_alias,envelope,reason,status)
+        SELECT %s,s,f,a::jsonb,e::jsonb,r,st
+        FROM unnest(%s::text[], %s::text[], %s::text[], %s::text[], %s::text[], %s::text[]) AS h(s,f,a,e,r,st)
         ON CONFLICT (league_id,source_event_id,facet_key) DO NOTHING''',
         (league_id, [env['source_event_id'] for env, _ in holds], [_facet_key(env) for env, _ in holds],
          [_canonical(env['subject_alias']) for env, _ in holds], [_canonical(env) for env, _ in holds],
-         [reason for _, reason in holds]))
+         [reason for _, reason in holds], [status] * len(holds)))
     return max(cur.rowcount or 0, 0)
+
+
+def _split_receipt(receipt, pairs):
+    """(accepted pairs, retry pairs with reason, dropped pairs with reason) from an append_events receipt.
+
+    pairs: [(item, resolved event)]. A rejection names its envelope by (source_event_id, event_id)."""
+    rejected = {}
+    for item in (receipt or {}).get('rejected') or []:
+        rejected[(item.get('source_event_id'), item.get('event_id'))] = str(item.get('reason') or 'rejected')
+    accepted, retry, dropped = [], [], []
+    for item, event in pairs:
+        why = rejected.get((event.get('source_event_id'), event.get('event_id')))
+        if why is None:
+            accepted.append((item, event))
+        elif why.startswith('unknown_identity'):
+            retry.append((item, 'rejected: ' + why))
+        else:
+            dropped.append((item, 'rejected: ' + why))
+    return accepted, retry, dropped
 
 
 def append_or_hold(cur, envelopes, *, league_id, universe_id, team_registry):
@@ -331,21 +356,25 @@ def append_or_hold(cur, envelopes, *, league_id, universe_id, team_registry):
         if event is None:
             holds.append((env, why))
         else:
-            resolved.append(event)
+            resolved.append((env, event))
 
-    receipt = None
+    receipt, accepted, dropped = None, [], []
     with _savepoint(cur):
-        new_holds = _insert_holds(cur, league_id, holds)
         if resolved:
-            receipt = _append(cur, rel_store, resolved, universe_id, team_registry)
+            receipt = _append(cur, rel_store, [event for _, event in resolved], universe_id, team_registry)
+            accepted, retry, dropped = _split_receipt(receipt, resolved)
+            holds.extend(retry)
+        new_holds = _insert_holds(cur, league_id, holds)
+        _insert_holds(cur, league_id, dropped, status='DROPPED')
 
     reasons = {}
-    for _, why in holds:
+    for _, why in holds + dropped:
         reasons[why] = reasons.get(why, 0) + 1
     entries, retracted = _hash_entries(batch)
-    return {'appended': len(resolved), 'held': len(holds), 'newly_held': new_holds,
-            'already_held': len(holds) - new_holds, 'hold_reasons': reasons, 'receipt': receipt,
-            'event_hashes': entries, 'retracted': retracted}
+    return {'appended': len(accepted), 'duplicates': len((receipt or {}).get('duplicates') or []),
+            'held': len(holds), 'newly_held': new_holds, 'already_held': len(holds) - new_holds,
+            'rejected': len(resolved) - len(accepted), 'dropped': len(dropped), 'hold_reasons': reasons,
+            'receipt': receipt, 'event_hashes': entries, 'retracted': retracted}
 
 
 def _pending_order(row):
@@ -380,18 +409,31 @@ def flush_pending(cur, league_id, universe_id, team_registry):
         else:
             ready.append((row, event))
 
-    receipt = None
+    receipt, accepted, retry, dropped = None, [], [], []
     if ready:
         with _savepoint(cur):
             receipt = _append(cur, rel_store, [event for _, event in ready], universe_id, team_registry)
-            cur.execute('''UPDATE relationship_pending_events SET status='APPENDED', appended_at=now(), reason=NULL
-                           WHERE league_id=%s AND status='PENDING'
-                             AND (source_event_id, facet_key) IN
-                                 (SELECT s, f FROM unnest(%s::text[], %s::text[]) AS k(s,f))''',
-                        (league_id, [row['source_event_id'] for row, _ in ready],
-                         [row['facet_key'] for row, _ in ready]))
-    return {'appended': len(ready), 'pending': len(rows) - len(ready), 'hold_reasons': reasons,
-            'receipt': receipt}
+            accepted, retry, dropped = _split_receipt(receipt, ready)
+            if accepted:
+                cur.execute('''UPDATE relationship_pending_events SET status='APPENDED', appended_at=now(), reason=NULL
+                               WHERE league_id=%s AND status='PENDING'
+                                 AND (source_event_id, facet_key) IN
+                                     (SELECT s, f FROM unnest(%s::text[], %s::text[]) AS k(s,f))''',
+                            (league_id, [row['source_event_id'] for row, _ in accepted],
+                             [row['facet_key'] for row, _ in accepted]))
+            for status, group in (('PENDING', retry), ('DROPPED', dropped)):
+                if group:
+                    cur.execute('''UPDATE relationship_pending_events SET status=%s, reason=k.r
+                                   FROM unnest(%s::text[], %s::text[], %s::text[]) AS k(s,f,r)
+                                   WHERE league_id=%s AND status='PENDING'
+                                     AND source_event_id=k.s AND facet_key=k.f''',
+                                (status, [row['source_event_id'] for row, _ in group],
+                                 [row['facet_key'] for row, _ in group], [why for _, why in group], league_id))
+    for _, why in retry + dropped:
+        reasons[why] = reasons.get(why, 0) + 1
+    return {'appended': len(accepted), 'duplicates': len((receipt or {}).get('duplicates') or []),
+            'pending': len(rows) - len(accepted) - len(dropped), 'rejected': len(retry) + len(dropped),
+            'dropped': len(dropped), 'hold_reasons': reasons, 'receipt': receipt}
 
 
 # ---------------------------------------------------------------- corrections
@@ -420,7 +462,7 @@ def _correction(supersedes, original_sid, facet, ref, replacement, digest):
         'event_id': source_event_id,
         'source_event_id': source_event_id,
         'source_kind': basis.get('source_kind'),
-        'source_refs': [{'namespace': 'mu-producer', 'key': f'correction:{original_sid}'}],
+        'source_refs': [],             # a chain of corrections shares its original: evidence only, never owned
         'kind': 'correction',
         'occurred_at': deepcopy(basis.get('occurred_at')),
         'subject': subject | {'universe_id': None, 'persona_id': None},
@@ -431,7 +473,8 @@ def _correction(supersedes, original_sid, facet, ref, replacement, digest):
         'reviewer': None,
         'evidence_scope': [],
         'visibility': basis.get('visibility') or 'private',
-        'attribution': {'responsible': [], 'reason_code': 'producer_correction', 'evidence_refs': []},
+        'attribution': {'responsible': [], 'reason_code': 'producer_correction',
+                        'evidence_refs': [f'mu-producer:correction:{original_sid}']},
         'payload': {'reason': 'inputs_changed' if replacement is not None else 'event_vanished',
                     'replacement_event': replacement_view,
                     'original_source_event_id': original_sid},

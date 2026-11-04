@@ -91,12 +91,12 @@ class FakeCursor:
                 self.obs[(league, season, tick, p)] = (t, source)
             self.rowcount = len(players)
         elif text.startswith('INSERT INTO relationship_pending_events'):
-            league, sids, facets, aliases, envelopes, reasons = params
+            league, sids, facets, aliases, envelopes, reasons, statuses = params
             new = 0
-            for s, f, a, e, r in zip(sids, facets, aliases, envelopes, reasons):
+            for s, f, a, e, r, st in zip(sids, facets, aliases, envelopes, reasons, statuses):
                 if (league, s, f) not in self.pending:
                     self.pending[(league, s, f)] = {'subject_alias': json.loads(a), 'envelope': json.loads(e),
-                                                    'reason': r, 'status': 'PENDING',
+                                                    'reason': r, 'status': st,
                                                     'created_at': self._tick(), 'appended_at': None}
                     new += 1
             self.rowcount = new
@@ -105,6 +105,12 @@ class FakeCursor:
             rows = [(k[1], k[2], deepcopy(v['envelope']), v['created_at'])
                     for k, v in self.pending.items() if k[0] == league and v['status'] == 'PENDING']
             self._result = list(reversed(rows))  # the store must order them itself
+        elif text.startswith('UPDATE relationship_pending_events SET status=%s'):
+            status, sids, facets, reasons, league = params
+            for s, f, r in zip(sids, facets, reasons):
+                row = self.pending[(league, s, f)]
+                if row['status'] == 'PENDING':
+                    row.update(status=status, reason=r)
         elif text.startswith('UPDATE relationship_pending_events'):
             league, sids, facets = params
             for s, f in zip(sids, facets):
@@ -131,6 +137,8 @@ class FakeRelationshipStore(types.ModuleType):
         self.head = 0
         self.calls = []
         self.fail = False
+        self.reject = {}        # source_event_id -> rejection reason (append_events excludes those envelopes)
+        self.stored = set()     # (source_event_id, event_id) already in the ledger: duplicates
 
     def read_head(self, cur, universe_id):
         return self.head
@@ -141,8 +149,21 @@ class FakeRelationshipStore(types.ModuleType):
         assert expected_head == self.head
         self.calls.append({'events': deepcopy(events), 'expected_head': expected_head,
                            'team_registry': team_registry})
-        self.head += 1
-        return {'head': self.head, 'appended': len(events)}
+        rejected, appended, duplicates = [], [], []
+        for ev in events:
+            item = {'source_event_id': ev['source_event_id'], 'event_id': ev['event_id']}
+            if ev['source_event_id'] in self.reject:
+                rejected.append(dict(item, reason=self.reject[ev['source_event_id']]))
+            elif (ev['source_event_id'], ev['event_id']) in self.stored:
+                duplicates.append(item)
+            else:
+                appended.append(item)
+                self.stored.add((ev['source_event_id'], ev['event_id']))
+        if appended:
+            self.head += 1
+        status = 'appended' if appended else ('noop' if duplicates else 'rejected')
+        return {'status': status, 'head': self.head, 'appended': appended, 'duplicates': duplicates,
+                'rejected': rejected}
 
 
 @pytest.fixture
@@ -465,6 +486,66 @@ def test_store_never_commits_or_connects(rel_store, aliases, monkeypatch):
     assert not any(s.split()[0] in ('COMMIT', 'ROLLBACK', 'BEGIN', 'END') for s in cur.sql)
     source = STORE_PATH.read_text()
     assert '.commit(' not in source and 'connect(' not in source
+
+
+# ---------------------------------------------------------------- rejections (receipt['rejected'])
+
+def test_rejected_envelopes_are_held_or_dropped_never_counted_as_appended(rel_store, aliases):
+    for pid in ('1', '2', '3'):
+        aliases.add(('player', 'db-player', pid))
+    rel_store.reject = {'mu:tenure:2026:1:2': 'unknown_identity: player:p2',
+                        'mu:tenure:2026:1:3': "unsupported_role: role 'coordinator' is not a core role (at subject)"}
+    cur = FakeCursor()
+    result = store.append_or_hold(cur, [env(1), env(2), env(3)], league_id=LEAGUE, universe_id=UNIVERSE,
+                                  team_registry=REGISTRY)
+    assert (result['appended'], result['rejected'], result['held'], result['dropped']) == (1, 2, 1, 1)
+    assert result['hold_reasons'] == {
+        'rejected: unknown_identity: player:p2': 1,
+        "rejected: unsupported_role: role 'coordinator' is not a core role (at subject)": 1}
+    rows = {k[1]: v for k, v in cur.pending.items()}
+    assert rows['mu:tenure:2026:1:2']['status'] == 'PENDING'
+    assert rows['mu:tenure:2026:1:3']['status'] == 'DROPPED'
+    assert 'mu:tenure:2026:1:1' not in rows
+    assert len(result['event_hashes']) == 3                  # every key stays tracked for corrections
+
+    # the profile appears: a flush retries the identity rejection, never the dropped one
+    rel_store.reject = {}
+    flushed = store.flush_pending(cur, LEAGUE, UNIVERSE, REGISTRY)
+    assert (flushed['appended'], flushed['pending'], flushed['rejected']) == (1, 0, 0)
+    assert [e['source_event_id'] for e in rel_store.calls[-1]['events']] == ['mu:tenure:2026:1:2']
+    assert {k[1]: v['status'] for k, v in cur.pending.items()} == {'mu:tenure:2026:1:2': 'APPENDED',
+                                                                    'mu:tenure:2026:1:3': 'DROPPED'}
+
+
+def test_flush_keeps_rows_the_store_still_rejects(rel_store, aliases):
+    cur = FakeCursor()
+    store.append_or_hold(cur, [env(4), env(5)], league_id=LEAGUE, universe_id=UNIVERSE, team_registry=REGISTRY)
+    aliases.update({('player', 'db-player', '4'), ('player', 'db-player', '5')})
+    rel_store.reject = {'mu:tenure:2026:1:4': 'unknown_identity: player:p4',
+                        'mu:tenure:2026:1:5': 'invalid_ref: bad'}
+    result = store.flush_pending(cur, LEAGUE, UNIVERSE, REGISTRY)
+    assert (result['appended'], result['pending'], result['rejected'], result['dropped']) == (0, 1, 2, 1)
+    rows = {k[1]: v for k, v in cur.pending.items()}
+    assert rows['mu:tenure:2026:1:4']['status'] == 'PENDING'
+    assert rows['mu:tenure:2026:1:4']['reason'] == 'rejected: unknown_identity: player:p4'
+    assert rows['mu:tenure:2026:1:5']['status'] == 'DROPPED'
+
+
+def test_duplicates_count_as_in_the_ledger(rel_store, aliases):
+    aliases.add(('player', 'db-player', '1'))
+    cur = FakeCursor()
+    store.append_or_hold(cur, [env(1)], league_id=LEAGUE, universe_id=UNIVERSE, team_registry=REGISTRY)
+    again = store.append_or_hold(cur, [env(1)], league_id=LEAGUE, universe_id=UNIVERSE, team_registry=REGISTRY)
+    assert (again['appended'], again['duplicates'], again['rejected'], again['held']) == (1, 1, 0, 0)
+
+
+def test_corrections_own_no_source_ref_so_a_chain_never_conflicts():
+    first = env(6)
+    second = env(6, payload=dict(first['payload'], coverage='partial'))
+    entries, _ = store._hash_entries([first])
+    (fix,) = store.corrections(entries, [second])
+    assert fix['source_refs'] == []
+    assert fix['attribution']['evidence_refs'] == ['mu-producer:correction:mu:tenure:2026:1:6']
 
 
 # ---------------------------------------------------------------- schema text
