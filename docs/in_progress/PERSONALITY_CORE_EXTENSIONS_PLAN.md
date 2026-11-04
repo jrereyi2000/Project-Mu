@@ -1,6 +1,8 @@
 # Project Mu: Personality Core Extensions Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2. The other plans' wording was updated at approval (§7).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 done.
+- As built (U1): the PostgreSQL store tests (`tests/test_personality_core_store.py`, extended) could not be run: no scratch database was reachable from the build machine (no Docker/PostgreSQL in WSL). They skip without `PERSONALITY_CORE_TEST_DSN`; run them against `madden_test` before applying `2027_01_29` anywhere.
+- As built (U1): `Identity` derives `legacy_persona_id` from a `legacy:<role>:<id>` birth key, so `resolve_alias` and stored metadata rebuild adopted identities without a new column. Adoption is a pure `core.adopt` plus `store.adopt_legacy` (a generated GM keeps its seeded values; `initialize` would redraw them). `read_as_of` uses the profile's own receipts; `history` reads across links (ancestors' receipts plus the `role_link` receipts of profiles it was carried to). An override that changes a slider which already had evidence replaces that evidence with the override's provenance. `NotFoundError` is new in `core.py`. The other plans' wording was updated at approval (§7).
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §5 step 3, §5.2, D4, D13; [`personality/README.md`](../../personality/README.md); [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../not_started/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §2.1, §2.3, Q4 (the dependencies it leaves to the core owner); PROJECT_SPEC §3.3p, §4.5, §7.11.
 
 **Goal:** Close the core gaps the sub-plans depend on.
@@ -332,3 +334,4 @@ JR approved all three recommendations on 2026-11-03.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 core and store | 1 | build/pcext-u1 | .claude/worktrees/pcext-u1 | merged | b5f090a |
