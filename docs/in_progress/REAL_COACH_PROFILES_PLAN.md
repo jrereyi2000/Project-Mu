@@ -1,6 +1,11 @@
 # Project Mu: Real-Coach Profiles Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 3. The other plans' pointers were updated at approval (§7).
+**Status:** approved by JR (2026-11-03); building, wave 1 of 3 done; spike CAR_HC.json awaiting JR's review
+- As built (U1): `seed_index` parses `db/seed_clean_db.py` with `ast` instead of importing it, so no psycopg import.
+- As built (U1): `load_profiles` adds an in-memory `_file` (base name) that `validate_profile_file` checks against team and role; `_`-keys are never written. `validate` and `report` also take `--file PATH ...` (used for the template), and `validate` lists missing team files without failing.
+- As built (U1): a tie's `opportunity_ref` is `coach-profile:<key>:tie:<n>`, not null: the relationships-v1 contract requires nonempty text there. `file_sha256` in the review receipt is the SHA-256 of the file's canonical JSON (sorted keys).
+- As built (U1): `core_initial_values`, `persona_for` and `tie_events` raise on a draft or rejected file; `persona_for` takes a view's sliders/traits only when its status is `stored`.
+- Spike (2026-11-04): `CAR_HC.json` written from 7 sources (2024-01-25 to 2025-07-24), draft; review page at `verify_output/coach_review/spike_CAR.md` (gitignored). Pete Carroll (LV in the real 2025, not in the 2026 seed) gets no tie, per Q3.
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §4.3–§4.5, §5.1 (coach scope), D5, D11, D13; [`PERSONALITY_PANTHERS_SAMPLE.md`](../in_progress/PERSONALITY_PANTHERS_SAMPLE.md) (the reviewed-evidence method); [`PERSONALITY_CORE_EXTENSIONS_PLAN.md`](../done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) D1 (full reads of reviewed real profiles); [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §2.1, §2.5 (identity registration and reviewed manifests); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.2–§2.3 (`reviewed_evidence` starting ties); PROJECT_SPEC §3.3a, §3.3p, §7.11.
 
 **Goal:** Give every real head coach and coordinator in the 2026 save a personality shaped to his real counterpart, as a fictional character inspired by him (D13). Many of them will still be in the league in 2034, and today they have no persona at all, so pressers and inbox talks give every coach the same neutral voice. Each profile is a full character like the writer personas: sliders, traits, football views, a want and a fear, a voice, signature habits and a few reviewed starting relationships. Every claim cites a dated public source, and JR reviews each one before it counts.
@@ -287,3 +292,5 @@ JR approved all three recommendations on 2026-11-03.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | build/rcp-u1 | .claude/worktrees/rcp-u1 | merged | 0bc875f |
+| Spike | — | main | — | CAR_HC.json committed (draft) | b0d867f |
