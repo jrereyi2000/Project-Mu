@@ -1,0 +1,32 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:TEAM:ROLE",
+  "name": "<Name exactly as in db/seed_clean_db.py COACHES_DATA or COORDINATORS_DATA>",
+  "role": "ROLE",
+  "team": "TEAM",
+  "seed_ref": {"table": "<COACHES_DATA for HC, COORDINATORS_DATA for OC/DC>", "team": "TEAM", "role": "ROLE", "name": "<Name as in the seed row>"},
+  "sliders": {"temperament": 5, "sociability": 5, "confidence": 5, "openness": 5, "warmth": 5, "drive": 5},
+  "slider_evidence": {},
+  "traits": ["SCHEME_NERD", "TEACHER", "MEASURED"],
+  "trait_evidence": {"SCHEME_NERD": ["E1"], "TEACHER": ["E1"], "MEASURED": ["E2"]},
+  "views": [
+    {"text": "<A football view in his own words, one sentence; style, never his exact phrases>", "when": ["SCHEME"]},
+    {"text": "<A view about quarterbacks or young players>", "when": ["QB", "YOUTH"]},
+    {"text": "<A view about how he handles a losing stretch>", "when": ["LOSING_STREAK", "BAD_GAME"]},
+    {"text": "<A view about winning streaks or contention>", "when": ["WIN_STREAK", "CONTENDER"]},
+    {"text": "<A view about roster moves, the draft or the front office>", "when": ["ROSTER_MOVES", "DRAFT"]},
+    {"text": "<A view about the coaching job itself>", "when": ["COACHING"]}
+  ],
+  "signatures": ["<A recurring habit a writer would notice, in your words>", "<Another habit>"],
+  "want": "<One want: a reasoned reading of his public career, marked medium confidence on review>",
+  "fear": "<One fear, the same way>",
+  "voice": "<Two to four sentences on how he talks: register, pace, what he deflects, what he praises. Style, never his exact phrases.>",
+  "ties": [],
+  "evidence": [
+    {"id": "E1", "url": "https://example.com/source-one", "publisher": "<Publisher>", "published": "2025-01-01",
+     "accessed": "2026-11-04", "summary": "<A paraphrase of what the source shows, and what it does not.>", "confidence": "high"},
+    {"id": "E2", "url": "https://example.com/source-two", "publisher": "<Publisher>", "published": "2025-01-01",
+     "accessed": "2026-11-04", "summary": "<A paraphrase of a second source.>", "confidence": "medium"}
+  ],
+  "review": {"status": "draft", "reviewer": null, "reviewed_at": null, "notes": null}
+}
