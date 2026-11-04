@@ -9,7 +9,7 @@
 - [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.2 (`promise_made` / `promise_resolved`).
 - [`FRONT_OFFICE_INBOX_PLAN.md`](../in_progress/FRONT_OFFICE_INBOX_PLAN.md) (the `CONTRACT` and `ROLE_TALK` kinds).
 - [`PERSONALITY_ACTIVATION_PLAN.md`](PERSONALITY_ACTIVATION_PLAN.md) (the switchboard and `PersonalityDeps`).
-- [`REAL_COACH_PROFILES_PLAN.md`](REAL_COACH_PROFILES_PLAN.md) (`persona_for`).
+- [`REAL_COACH_PROFILES_PLAN.md`](../in_progress/REAL_COACH_PROFILES_PLAN.md) (`persona_for`).
 
 **Goal:** Let CPU coaches and players make their own choices and speak for themselves, inside what the engines allow. A coach decides his close depth-chart calls and can promise an unhappy player a role by a given week. That promise is recorded, kept or broken, and trust and trade requests react to it. A player in contract talks picks how hard to push among the counters the engine says he would accept, and can go public with it. Every decision is a seeded personality choice for free. The model is asked, and writes the words, only where JR or the press will see it.
 

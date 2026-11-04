@@ -1,6 +1,6 @@
 # Project Mu: Real-Coach Profiles Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); not built. Queued: JR wants every personality sub-plan written and approved before more building (2026-11-03). The other plans' pointers were updated at approval (§7).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 3. The other plans' pointers were updated at approval (§7).
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §4.3–§4.5, §5.1 (coach scope), D5, D11, D13; [`PERSONALITY_PANTHERS_SAMPLE.md`](../in_progress/PERSONALITY_PANTHERS_SAMPLE.md) (the reviewed-evidence method); [`PERSONALITY_CORE_EXTENSIONS_PLAN.md`](../done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) D1 (full reads of reviewed real profiles); [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §2.1, §2.5 (identity registration and reviewed manifests); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.2–§2.3 (`reviewed_evidence` starting ties); PROJECT_SPEC §3.3a, §3.3p, §7.11.
 
 **Goal:** Give every real head coach and coordinator in the 2026 save a personality shaped to his real counterpart, as a fictional character inspired by him (D13). Many of them will still be in the league in 2034, and today they have no persona at all, so pressers and inbox talks give every coach the same neutral voice. Each profile is a full character like the writer personas: sliders, traits, football views, a want and a fear, a voice, signature habits and a few reviewed starting relationships. Every claim cites a dated public source, and JR reviews each one before it counts.
@@ -282,3 +282,8 @@ JR approved all three recommendations on 2026-11-03.
 | Q1 | How recent can sources be? | Through the end of 2025 (`SOURCE_CUTOFF`), matching the clean database's history and the Panthers sample. From 2026 the simulation is the history. |
 | Q2 | How do you review? | One page per batch of 24 coaches, with every claim and its linked source. You reply approve, edit or reject per coach, and I record it with `apply-review`. Start with the single spike page to settle the format. |
 | Q3 | What happens to a tie whose other person isn't in the 2026 league as the same person (for example a GM persona with a different name)? | Drop it and list it in the report. A tie only counts between people who are both actually in the league. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
