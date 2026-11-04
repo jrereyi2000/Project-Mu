@@ -1110,3 +1110,124 @@ class WatchSaveIntegrationTest(unittest.TestCase):
             import shutil
             shutil.rmtree(tmp_folder, ignore_errors=True)
 
+
+
+class RelationshipProducersStepTest(unittest.TestCase):
+    """step_relationship_producers: right after the load on weekly and offseason ingests, off by default, never
+    fatal (RELATIONSHIP_EVENT_PRODUCERS_PLAN.md §2.4)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.snapshot = os.path.join(self.tmp, "save.json")
+        with open(self.snapshot, "w") as f:
+            json.dump({"season": {"calendar_year": 2036, "week_type": "RegularSeason", "week_index": 5,
+                                  "stage": "NFLSeason"}, "players": [], "teams": []}, f)
+        self.env = mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://u@h/madden_test"})
+        self.env.start()
+        os.environ.pop(ws.PRODUCERS_ENV, None)
+
+    def tearDown(self):
+        self.env.stop()
+        mock.patch.stopall()
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _conn(self):
+        conn = mock.MagicMock()
+        conn.cursor.return_value.__enter__.return_value = mock.MagicMock()
+        return conn
+
+    def test_off_by_default(self):
+        logs = []
+        connect = mock.Mock()
+        self.assertEqual(ws.step_relationship_producers(self.snapshot, 2036, log_fn=logs.append,
+                                                        connect=connect), {"status": "off"})
+        connect.assert_not_called()
+        with mock.patch.dict(os.environ, {ws.PRODUCERS_ENV: "off"}):
+            self.assertEqual(ws.step_relationship_producers(self.snapshot, 2036, connect=connect)["status"], "off")
+
+    def test_on_runs_one_save_tick_and_commits(self):
+        conn = self._conn()
+        with mock.patch.dict(os.environ, {ws.PRODUCERS_ENV: "on"}), \
+                mock.patch("engines.relationship_producers.sources.tables_ready",
+                           return_value={"producers": True, "relationships": True, "lifecycle": False}), \
+                mock.patch("engines.relationship_producers.sources.league_id", return_value=77), \
+                mock.patch("engines.relationship_producers.sources.roster_from_snapshot", return_value={1: 3}), \
+                mock.patch("engines.relationship_producers.calendar.tick_for", return_value=6), \
+                mock.patch("engines.relationship_producers.run.run_tick",
+                           return_value={"status": "HELD", "counts": {"held": 4}}) as run_tick:
+            res = ws.step_relationship_producers(self.snapshot, 2036, connect=lambda dsn: conn, log_fn=lambda m: None)
+        self.assertEqual(res["status"], "HELD")
+        args, kw = run_tick.call_args
+        self.assertEqual(args[1:], (2036, 6))
+        self.assertEqual((kw["source"], kw["league_id"], kw["roster"], kw["roster_season"]), ("SAVE", 77, {1: 3}, 2036))
+        conn.commit.assert_called_once()
+
+    def test_skipped_when_not_migrated(self):
+        conn = self._conn()
+        logs = []
+        with mock.patch.dict(os.environ, {ws.PRODUCERS_ENV: "on"}), \
+                mock.patch("engines.relationship_producers.sources.tables_ready",
+                           return_value={"producers": True, "relationships": False, "lifecycle": False}), \
+                mock.patch("engines.relationship_producers.calendar.tick_for", return_value=6), \
+                mock.patch("engines.relationship_producers.run.run_tick") as run_tick:
+            res = ws.step_relationship_producers(self.snapshot, 2036, connect=lambda dsn: conn, log_fn=logs.append)
+        self.assertEqual(res["status"], "skipped")
+        run_tick.assert_not_called()
+        self.assertTrue(any("not migrated" in l for l in logs))
+
+    def test_an_exception_is_recorded_and_never_raised(self):
+        conn = self._conn()
+        with mock.patch.dict(os.environ, {ws.PRODUCERS_ENV: "on"}), \
+                mock.patch("pipeline.watch_save.send_notify") as notify, \
+                mock.patch("engines.relationship_producers.sources.tables_ready",
+                           return_value={"producers": True, "relationships": True, "lifecycle": True}), \
+                mock.patch("engines.relationship_producers.sources.league_id", return_value=77), \
+                mock.patch("engines.relationship_producers.sources.roster_from_snapshot", return_value={}), \
+                mock.patch("engines.relationship_producers.calendar.tick_for", return_value=6), \
+                mock.patch("engines.relationship_producers.run.run_tick", side_effect=RuntimeError("boom")), \
+                mock.patch("engines.relationship_producers.run.record_failure") as failure:
+            res = ws.step_relationship_producers(self.snapshot, 2036, connect=lambda dsn: conn, log_fn=lambda m: None)
+        self.assertEqual(res, {"status": "failed", "error": "boom"})
+        conn.rollback.assert_called()
+        self.assertEqual(failure.call_args[0][1:5], (77, 2036, 6, "SAVE"))
+        notify.assert_called_once()
+
+    def _ingest(self, **kw):
+        order = []
+        mock.patch("pipeline.load_save.load", side_effect=lambda *a, **k: order.append("load") or {}).start()
+        mock.patch("pipeline.watch_save.step_relationship_producers",
+                   side_effect=lambda *a, **k: order.append("producers") or {"status": "off"}).start()
+        mock.patch("pipeline.watch_save.run_weekly_engines", side_effect=lambda *a, **k: order.append("engines")).start()
+        mock.patch("pipeline.watch_save.queue_nightly_jobs").start()
+        mock.patch("pipeline.watch_save.prepare_next_week_mod_pack").start()
+        mock.patch("pipeline.watch_save.send_notify").start()
+        mock.patch("pipeline.watch_save.step_articles", return_value={"status": "published", "week": 6}).start()
+        mock.patch("pipeline.watch_save.run_league_office",
+                   side_effect=lambda *a, **k: order.append("league_office") or {"status": "written"}).start()
+        mock.patch("pipeline.watch_save.report_league_office", return_value="").start()
+        res = ws.ingest_snapshot(self.snapshot, 2036, kw.pop("week", 6), save_name="CAREER-A", **kw)
+        return order, res
+
+    def test_hook_runs_after_the_load_on_a_weekly_ingest(self):
+        order, res = self._ingest()
+        self.assertEqual(order[:3], ["load", "producers", "engines"])
+        self.assertEqual(res["relationship_producers"], {"status": "off"})
+
+    def test_hook_runs_on_an_offseason_stop(self):
+        order, _ = self._ingest(week=None, stage_only=True, league_office=True, save_path=self.snapshot)
+        self.assertEqual(order, ["load", "producers", "league_office"])
+
+    def test_a_failing_step_never_stops_the_ingest(self):
+        mock.patch("engines.relationship_producers.run.run_tick", side_effect=RuntimeError("boom")).start()
+        with mock.patch.dict(os.environ, {ws.PRODUCERS_ENV: "on"}):
+            mock.patch("pipeline.load_save.load", return_value={}).start()
+            mock.patch("pipeline.watch_save.run_weekly_engines").start()
+            mock.patch("pipeline.watch_save.queue_nightly_jobs").start()
+            mock.patch("pipeline.watch_save.prepare_next_week_mod_pack").start()
+            mock.patch("pipeline.watch_save.send_notify").start()
+            mock.patch("pipeline.watch_save.step_articles", return_value={"status": "published", "week": 6}).start()
+            with mock.patch("psycopg.connect", side_effect=RuntimeError("no database")):
+                res = ws.ingest_snapshot(self.snapshot, 2036, 6, save_name="CAREER-A")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["relationship_producers"]["status"], "failed")

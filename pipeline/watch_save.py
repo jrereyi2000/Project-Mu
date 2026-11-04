@@ -497,6 +497,80 @@ def route_franchise(fid, save_name, save_season, save_week, auto_init=False, res
     return {"status": "ready", "db": db, "dsn": dsn, "seeded": False}
 
 
+# ---------------------------------------------------------------------------------- relationship producers ---
+PRODUCERS_ENV = "MU_RELATIONSHIP_PRODUCERS"
+
+
+def relationship_producers_on():
+    """True only when MU_RELATIONSHIP_PRODUCERS=on (off by default; the activation plan's switchboard replaces it)."""
+    return os.environ.get(PRODUCERS_ENV, "").strip().lower() == "on"
+
+
+def step_relationship_producers(snapshot_path, save_season, dsn=None, log_fn=log, connect=None):
+    """Relationship event producers for this save (RELATIONSHIP_EVENT_PRODUCERS_PLAN.md §2.4), right after the
+    load, on weekly ingests and offseason stops alike. Its own connection and transaction; skipped unless
+    MU_RELATIONSHIP_PRODUCERS=on, or (with a logged reason) when the producer or relationships tables aren't
+    migrated. Never fails the ingest: an error is logged, notified and recorded as a FAILED run."""
+    if not relationship_producers_on():
+        log_fn(f"Relationship producers off ({PRODUCERS_ENV} is not 'on').")
+        return {"status": "off"}
+    season = tick = league = None
+    conn = None
+    try:
+        from engines.relationship_producers import calendar as rcal, run as runner, sources
+        from pipeline import league_office as lo
+        with open(snapshot_path) as fh:
+            snapshot = json.load(fh)
+        stage = lo.detect_stage(snapshot)
+        season = lo.league_season(snapshot, stage)
+        tick = rcal.tick_for(snapshot, lo.league_week(snapshot, stage) if stage in lo.IN_SEASON else None)
+        if connect is None:
+            import psycopg
+            connect = psycopg.connect
+        conn = connect(dsn or os.environ.get("DATABASE_URL"))
+        with conn.cursor() as cur:
+            ready = sources.tables_ready(cur)
+            missing = [k for k in ("producers", "relationships") if not ready[k]]
+            if missing:
+                conn.rollback()
+                log_fn(f"Relationship producers skipped: {', '.join(missing)} tables not migrated.")
+                return {"status": "skipped", "reason": "not_migrated", "missing": missing}
+            league = sources.league_id(cur)
+            roster = sources.roster_from_snapshot(cur, snapshot)
+            result = runner.run_tick(cur, season, tick, source="SAVE", league_id=league, roster=roster,
+                                     roster_season=save_season)
+        conn.commit()
+        counts = result.get("counts") or {}
+        log_fn(f"Relationship producers {season}:{tick}: {result['status']} ({counts.get('appended', 0)} appended, "
+               f"{counts.get('held', 0)} held, {counts.get('rejected', 0)} rejected)")
+        return {"status": result["status"], "season": season, "tick": tick, "counts": counts}
+    except Exception as e:  # noqa: BLE001 - never fatal to the ingest
+        msg = f"Relationship producers failed for season {season} tick {tick}: {e}"
+        log_fn(msg)
+        traceback.print_exc()
+        if conn is not None:
+            try:
+                conn.rollback()
+                if league is not None and season is not None and tick is not None:
+                    from engines.relationship_producers import run as runner
+                    with conn.cursor() as cur:
+                        runner.record_failure(cur, league, season, tick, "SAVE", e)
+                    conn.commit()
+            except Exception as rec_err:  # noqa: BLE001
+                log_fn(f"Could not record the FAILED producer run: {rec_err}")
+        try:
+            send_notify(msg, title="Mu: relationship producers failed", priority="default", tags=("warning",))
+        except Exception:  # noqa: BLE001
+            pass
+        return {"status": "failed", "error": str(e)}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
 # ----------------------------------------------------------------------------------------- league office ---
 def franchise_closed_env():
     """True when JR has set LEAGUE_OFFICE_FRANCHISE_CLOSED (Madden at its main menu, franchise closed)."""
@@ -647,6 +721,9 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
     dsn = os.environ.get("DATABASE_URL")
     lo_result = None
 
+    # Step: relationship producers (after the load, before the stage_only branch; off by default; never fatal)
+    producers = step_relationship_producers(snapshot_path, save_season, dsn=dsn, log_fn=log_fn)
+
     def step_league_office():
         nonlocal lo_result
         if not league_office:
@@ -661,7 +738,7 @@ def ingest_snapshot(snapshot_path, save_season, save_week, dry_run=False, no_art
 
     def result():
         return {"status": "success", "dry_run": False, "season": save_season, "week": save_week,
-                "load_report": load_report, "league_office": lo_result}
+                "load_report": load_report, "league_office": lo_result, "relationship_producers": producers}
 
     if stage_only:
         # An offseason stop: no current week, so no weekly engines, articles or mod pack.
