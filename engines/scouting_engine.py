@@ -246,7 +246,7 @@ def _rerank(cur, draft_season):
 
 
 def personality_observe(cur, draft_season):
-    """Observe-mode person lifecycle check (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4 step 4).
+    """Observe-mode person lifecycle check (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4 step 4).
     Reads only and changes no truth, noise, grade or interview text: {"universe_id", "prospects", "pending",
     "key_collisions"} for the class's permanent prospect IDs, where pending = no lifecycle binding to the prospect's
     source person and key collisions block that person's later activation. None when the lifecycle migration or the

@@ -319,7 +319,7 @@ def _move(cur, season, team_id, role, action, person, **kw):
 
 
 # ------------------------------------------------------------------------------------------- person lifecycle ----
-# docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.5: every fictional coach the carousel (or JR's
+# docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.5: every fictional coach the carousel (or JR's
 # fire_coordinator replacement) creates gets one durable creation event and a source UUID from it, never from his
 # name, team or job; a promotion adds an alias to the same identity; retreads and rehires keep theirs; a same-cycle
 # stand-in whose row is deleted is archived. The carousel's draws and writes are the same with or without this.

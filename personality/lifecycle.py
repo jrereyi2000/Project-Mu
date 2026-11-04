@@ -1,4 +1,4 @@
-"""Person lifecycle contracts (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2).
+"""Person lifecycle contracts (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2).
 
 Pure: no database, model calls, randomness or clock reads. Turns a save-reader snapshot plus reviewed
 classification receipts (and optional staff records) into a reviewable inventory, then into a

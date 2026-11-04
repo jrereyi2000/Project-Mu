@@ -1,4 +1,4 @@
-"""Person lifecycle inventory CLI (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.6).
+"""Person lifecycle inventory CLI (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.6).
 
 Offline (no database import or connection, no model calls; writes only --out):
 

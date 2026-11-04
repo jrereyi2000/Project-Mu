@@ -1,4 +1,4 @@
-"""Draft ingestion and player handoff (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4, §4; U3).
+"""Draft ingestion and player handoff (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4, §4; U3).
 
 Offline: the in-memory SQLite build of the persona/core/lifecycle migrations from the store tests, plus
 draft_prospects and the scouting prospect-ID tables (2027_01_21). Exercises load_save.load_personality,

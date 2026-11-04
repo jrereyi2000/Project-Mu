@@ -275,7 +275,7 @@ Can start with the personas that exist (GMs, writers); owners and scouts have ca
 Interactive messaging system allowing JR to communicate with team owners, player agents, rival GMs, beat reporters, and college prospects.
 
 ### V2.10 Scouting Revamp & Combine Interviews (Not started; not blocked)
-Scout voices and regional biases need scout profiles (personality phase 6); reports and combine interviews can be built first with neutral scouts and prospect personalities added once [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) is approved and built. Plan proposed, awaiting JR's approval: [`SCOUTING_REVAMP_PLAN.md`](./SCOUTING_REVAMP_PLAN.md).
+Scout voices and regional biases need scout profiles (personality phase 6); reports and combine interviews can be built first with neutral scouts and prospect personalities added once [`PERSONALITY_DRAFT_INTEGRATION_PLAN.md`](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) is approved and built. Plan proposed, awaiting JR's approval: [`SCOUTING_REVAMP_PLAN.md`](./SCOUTING_REVAMP_PLAN.md).
 Comprehensive narrative reports for every draft prospect, individual scout voices with regional biases, and interactive combine/visit interviews.
 
 ### V2.11 Live Multi-Turn Trade Negotiations (Not started; unblocked)

@@ -1398,7 +1398,7 @@ CLASS_ENTRY_SCHEMA = "personality-class-entry-v1"
 
 
 def class_personality(cur, draft_season, prospects, capture, context=None):
-    """Person lifecycle for an imported (CSV/OCR) class (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md
+    """Person lifecycle for an imported (CSV/OCR) class (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md
     §2.4 step 6, Q2). Without context: observe only, nothing written. With context {"entry": a
     personality-class-entry-v1 bundle {schema, universe_id, cutoff, sidecar, receipt}, "review": JR's receipt naming
     the bundle's canonical hash}: each row whose supplier `source_id` the reviewed durable sidecar maps is initialized

@@ -1,4 +1,4 @@
-"""Staff person lifecycle (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.5, §4; U4).
+"""Staff person lifecycle (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.5, §4; U4).
 
 Offline: the in-memory SQLite build of the persona/core/lifecycle migrations from the store tests, plus a small staff
 schema for engines/fire_coordinator.fire/undo. coaching_carousel.hiring_cycle itself needs PostgreSQL (DISTINCT ON,

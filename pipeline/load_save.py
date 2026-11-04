@@ -807,7 +807,7 @@ def _pgid_bindings(cur, universe_id, namespace):
 
 
 def load_personality(cur, snapshot, season, players, report, context=None, board=None, capture_folder=None):
-    """Person lifecycle step (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4), inside the load's
+    """Person lifecycle step (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4), inside the load's
     transaction. context None = observe: reads only and reports report["personality"]["pending"] (loaded roster
     and class pgids with no lifecycle binding). context {"manifest", "review", "handoffs"?} = enforce: applies the
     reviewed manifest (it must have been previewed from this exact snapshot), binds db-player for every loaded

@@ -90,7 +90,7 @@ def board_ids(cur, draft_season: int) -> Dict[int, int]:
 def rookie_handoff_candidates(cur, season: int) -> List[Dict]:
     """The class's name-matched rookie links (link_rookies) as personality handoff candidates. A name match is a
     review candidate only (evidence `name_match`): it never binds a personality identity
-    (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4)."""
+    (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.4)."""
     cur.execute("SELECT id, player_id FROM draft_prospects WHERE draft_season = %s AND player_id IS NOT NULL "
                 "ORDER BY id", (season,))
     return [{"draft_prospect_id": did, "player_id": pid, "evidence": "name_match"} for did, pid in cur.fetchall()]

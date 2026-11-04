@@ -1,4 +1,4 @@
-"""Person lifecycle persistence (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.2-§2.6).
+"""Person lifecycle persistence (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.2-§2.6).
 
 Ledgers from db/migrations/2027_01_24_personality_lifecycle.sql. Every function takes the caller's cursor, works
 inside a savepoint and never commits or connects: profile, aliases, lifecycle rows and the batch receipt share

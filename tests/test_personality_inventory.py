@@ -1,4 +1,4 @@
-"""Offline lifecycle inventory CLI (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.6, §4)."""
+"""Offline lifecycle inventory CLI (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.6, §4)."""
 import json
 import subprocess
 import sys

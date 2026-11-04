@@ -1,4 +1,4 @@
-"""Pure lifecycle contracts (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §4). No database."""
+"""Pure lifecycle contracts (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §4). No database."""
 from copy import deepcopy
 import uuid
 

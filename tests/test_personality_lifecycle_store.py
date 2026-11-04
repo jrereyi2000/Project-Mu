@@ -1,4 +1,4 @@
-"""Lifecycle persistence (docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.2-§2.6, §4).
+"""Lifecycle persistence (docs/done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.2-§2.6, §4).
 
 Offline: an in-memory SQLite database built from the real migrations (persona tables from 2027_01_09, core
 sidecars from 2027_01_16, the core-extension event columns, and 2027_01_24), driven through the psycopg-like
