@@ -32,7 +32,7 @@ Source inspection on 2026-10-31 in `/home/jrereyi/Project-Mu`. Existing tracked 
 | S10 | Generated-effects design `:70–95` describes request-only effects and annual decisions; personality plan `:159–165` retains old grudge-discount prose. | Follow later design; coordinator reconciles obsolete prose in §7. Illustrative odds are not calibration. |
 | S11 | `tests/conftest.py:1–12` describes DB isolation; `_check_connection_allowed` rejects franchise/archive connections. | Synthetic tests and isolated scratch schemas only; never napper wholesale. |
 
-Related plans inspected: the [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02) owns pricing, earnings and the slider band; do not edit or duplicate it. `AGENT_WIRE_VOICE_PLAN.md` owns writer biases, not player treatment truth. The [relationships plan](PERSONALITY_RELATIONSHIPS_PLAN.md) (approved 2026-11-03, not built) supplies incidents, promises and repair; its interfaces are dependencies to reconcile before build. No proposed request function is claimed to exist today.
+Related plans inspected: the [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02) owns pricing, earnings and the slider band; do not edit or duplicate it. `AGENT_WIRE_VOICE_PLAN.md` owns writer biases, not player treatment truth. The [relationships plan](../in_progress/PERSONALITY_RELATIONSHIPS_PLAN.md) (approved 2026-11-03, not built) supplies incidents, promises and repair; its interfaces are dependencies to reconcile before build. No proposed request function is claimed to exist today.
 
 ## 1. Scope
 

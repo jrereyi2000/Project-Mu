@@ -1,7 +1,7 @@
 # Project Mu: Relationships and Reactions Plan
 
-**Status:** approved by JR (2026-11-03): Q2 settled by his cross-plan decisions, Q1, Q3 and Q4 as recommended (§8); not built. Approval covers building the units; production migration, intake and enabling numeric trust each still need JR's separate go-ahead (§6 gates).
-**Builds on:** PROJECT_SPEC §3.3p, §7.11; [Personality plan](../in_progress/PERSONALITY_PLAN.md) §4.6–4.8 and §5.2; [Generated effects design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md); `personality/README.md`.
+**Status:** approved by JR (2026-11-03): Q2 settled by his cross-plan decisions, Q1, Q3 and Q4 as recommended (§8); building, wave 1 of 3 (2026-11-04). Approval covers building the units; production migration, intake and enabling numeric trust each still need JR's separate go-ahead (§6 gates).
+**Builds on:** PROJECT_SPEC §3.3p, §7.11; [Personality plan](PERSONALITY_PLAN.md) §4.6–4.8 and §5.2; [Generated effects design](PERSONALITY_GENERATED_EFFECTS_DESIGN.md); `personality/README.md`.
 
 **Goal:** Preserve how people experience other people and organizations across the 2026–2033 CPU simulation and JR's 2034 takeover. Give consumers explainable directional trust, earned attachment and transient reactions from recorded events. Core retains identity and profile mutation authority; each feature retains its decisions and formulas.
 
@@ -75,7 +75,7 @@ read_head(cur, universe_id: str) -> int
 preview(document: dict) -> dict
 ```
 
-`known_through` is an ingestion sequence, independent of effective simulation time. Historical views fix both cutoffs. Missing profile goes through `feature_view(None, feature)`; invalid profiles/errors fail visibly. Policy has explicit `mode='off'|'observe'|'enabled'`, set per franchise by the [activation plan](PERSONALITY_ACTIVATION_PLAN.md)'s switchboard (`relationships`: off, shadow = observe, active = enabled). Off returns neutral consumer context. Observe computes private audit but returns the same neutral consumer context. Enabled returns reviewed context. Profile availability never activates a feature.
+`known_through` is an ingestion sequence, independent of effective simulation time. Historical views fix both cutoffs. Missing profile goes through `feature_view(None, feature)`; invalid profiles/errors fail visibly. Policy has explicit `mode='off'|'observe'|'enabled'`, set per franchise by the [activation plan](../not_started/PERSONALITY_ACTIVATION_PLAN.md)'s switchboard (`relationships`: off, shadow = observe, active = enabled). Off returns neutral consumer context. Observe computes private audit but returns the same neutral consumer context. Enabled returns reviewed context. Profile availability never activates a feature.
 
 ### 2.2 Canonical intake and attribution
 
@@ -148,7 +148,7 @@ Team loss/injury does not prove resentment/anxiety/determination. First incremen
 
 `validate_evolution_candidate` accepts explicit core candidate fields (`event_id,source_event_id,season,expected_revision,rule_version,reason,kind` plus trait add/remove or slider/step), `review_status:'pending'|'approved'`, reviewer, feature_scope and supporting_source_ids. Return `{status:'review_required'|'ready'|'blocked',candidate,reasons,support}`. Check subject, cutoff, active sources, nonduplicate support (the core extensions plan removes the special simulation-evidence rule for `real` profiles). No automatic event→trait inference or core mutation call ships here.
 
-Ready candidates go to the [personality evolution plan](PERSONALITY_EVOLUTION_PLAN.md)'s arbiter (`source 'RELATIONSHIPS'`), which submits the season's one chosen change to `store.change`; core annual/revision/conflict checks remain final. Review may choose no change. Trust/repair never uses the annual slot. Single-slider candidate reports `blocked_slider_band` only on a database that lacks `2027_01_17_persona_slider_band.sql` (Python and SQL both carry the band since 2026-11-02). Trait candidates can be reviewed under current budget. Keep ephemeral mood outside profile revision and store.
+Ready candidates go to the [personality evolution plan](../not_started/PERSONALITY_EVOLUTION_PLAN.md)'s arbiter (`source 'RELATIONSHIPS'`), which submits the season's one chosen change to `store.change`; core annual/revision/conflict checks remain final. Review may choose no change. Trust/repair never uses the annual slot. Single-slider candidate reports `blocked_slider_band` only on a database that lacks `2027_01_17_persona_slider_band.sql` (Python and SQL both carry the band since 2026-11-02). Trait candidates can be reviewed under current budget. Keep ephemeral mood outside profile revision and store.
 
 ### 2.6 Persistence, idempotency and rollback
 
@@ -290,3 +290,8 @@ Decided by JR on 2026-11-03.
 | Q4 | Replace/dual-write legacy relationship rows or keep feature history separate? | Separate additive ledger, no legacy dual-write. Future adapters target context API; legacy adoption needs explicit provenance review. |
 
 Plan approval does not apply the migration, start production intake or enable numeric trust; those are gates G2–G4.
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
