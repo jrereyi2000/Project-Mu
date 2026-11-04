@@ -557,6 +557,20 @@ def step_coach_hot_seat(season):
         return None
 
 
+def step_inbox(season):
+    """Front-office inbox scan (engines/inbox/scan.py, docs/in_progress/FRONT_OFFICE_INBOX_PLAN.md §2.10) right
+    after step_gm: inbound conversations for the personas JR controls, promise reviews and the relationship-event
+    outbox flush. A no-op with no registry user team or without the inbox migration. Optional: a failure only logs
+    a warning and the run goes on."""
+    try:
+        from engines.inbox.scan import step_inbox as run
+        return run(season, log_fn=log)
+    except Exception as e:
+        traceback.print_exc()
+        log(f"  [WARN] Inbox skipped: {e!r}")
+        return None
+
+
 def run_weekly_engines(season, mode="weekly", log_fn=log):
     """Runs the deterministic stats backfill & analytics engines (Step 7) plus weekly/playoff engines."""
     log_fn(f"Step 7: backfill + engines (season {season})")
@@ -564,6 +578,8 @@ def run_weekly_engines(season, mode="weekly", log_fn=log):
     if mode in ("weekly", "playoff"):
         log_fn("Step 7b: GM trade proposals")
         step_gm(season)
+        log_fn("Step 7b: front-office inbox")
+        step_inbox(season)
         log_fn("Step 7c: scouting")
         step_scouting(season)
     if mode in ("weekly", "playoff", "postgame"):
