@@ -1,6 +1,7 @@
 # Project Mu: Front-Office Inbox & Direct Conversations Plan (V2.9)
 
-**Status:** approved by JR (2026-11-03), with the four still-open items (O1–O4) settled as recommended; updated the same day for JR's cross-plan decisions D15–D18 (relationships own trust); building U1 only (JR, 2026-11-03: inbox U1 first, then scouting U1; the remaining units wait for the personality plans, PERSONALITY_PLAN §5.3).
+**Status:** approved by JR (2026-11-03); building, U1 built; remaining units held until the personality plans are built (PERSONALITY_PLAN §5.3)
+- As built (U1): the migration was not applied to `madden_test` (orchestrator rule: no real database; the DDL is exercised by the tests through an in-memory SQLite translation). The weekly hook is logged as "Step 7b: front-office inbox". Extra core helpers beyond §2: `voice.compose` (returns the model's extra JSON keys, e.g. REPORTER's `done`), `voice.exchange` (one JR turn in §2.4's order, for U5), `scan.start_thread` / `scan.scan_on_open`, and optional kind hooks `review_promises(cur, season, week, team)` (U3's ROLE_TALK promise reviews), `VOICE`, `EXTRA_JSON`, `on_reply`. `kinds/` is empty. The new spec sections are §2.21b and §3.3s (§3.3r was taken by the relationship producers).
 **Builds on:** [`V2_MASTER_PLAN.md`](../in_progress/V2_MASTER_PLAN.md) §2, §5.3.2, §6 V2.0 and V2.9, §7.2; [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §8, phases 4 and 6; PROJECT_SPEC §2.16 (team direction), §2.17c (depth charts), §3.3f (GM negotiations), §3.3p (personas and relationships), §3.3q, §4.6b (franchise API), §2.21a (league office).
 
 **Goal:** JR plays through personas he takes control of: a team's GM, its head coach, and later a player. The inbox is where each persona JR controls talks to the other agents in the league, one conversation per pair:
@@ -689,3 +690,4 @@ No path appears twice.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | build/inbox-u1 | .claude/worktrees/inbox-u1 | merged (built by the orchestrator after the agent worktree was cut from a diverged base) | c04f6e1 |
