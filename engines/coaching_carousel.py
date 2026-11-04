@@ -318,14 +318,81 @@ def _move(cur, season, team_id, role, action, person, **kw):
                 (season, team_id, role, action, person, *kw.values()))
 
 
-def hiring_cycle(cur, season, log=print):
+# ------------------------------------------------------------------------------------------- person lifecycle ----
+# docs/in_progress/PERSONALITY_DRAFT_INTEGRATION_PLAN.md §2.5: every fictional coach the carousel (or JR's
+# fire_coordinator replacement) creates gets one durable creation event and a source UUID from it, never from his
+# name, team or job; a promotion adds an alias to the same identity; retreads and rehires keep theirs; a same-cycle
+# stand-in whose row is deleted is archived. The carousel's draws and writes are the same with or without this.
+STAFF_FEATURE = "staff_lifecycle"
+
+
+def staff_person_id(universe_id, creation_event):
+    """A created coach's source_person_id: uuid5 of the universe and his durable creation event."""
+    import uuid
+    from personality import lifecycle as L
+    return str(uuid.uuid5(L.LIFECYCLE_NS, f"{universe_id}|staff-create|{creation_event}"))
+
+
+def staff_lifecycle(cur, events, context=None):
+    """Applies the cycle's staff events to the person lifecycle. context None = observe: nothing is read or written,
+    the report counts the events. context {"universe_id", "cutoff", "receipt"} (receipt: JR's reviewed `staff:coach`
+    generated classification) = initialize each created coach once (alias db-coordinator / db-coach), add the db-coach
+    alias to a promoted coordinator's identity, check retreads/rehires resolve, archive deleted stand-ins. A coach whose
+    identity can't be resolved (a real coach still waiting for his reviewed profile, an unregistered person) stays
+    pending; a conflict (e.g. an invented name matching an existing coach row) is quarantined, never merged."""
+    info = {"mode": "enforce" if context else "observe", "events": len(events),
+            "created": sum(1 for e in events if e["kind"] == "created"), "pending": [], "quarantined": []}
+    if not context:
+        return info
+    from personality import lifecycle as L, lifecycle_store as LS
+    receipt = L.validate_receipt(context["receipt"])
+    if receipt["scope"] != "staff:coach" or receipt["origin"] != "generated":
+        raise L.LifecycleError("fictional coaches need a reviewed generated staff:coach receipt")
+    uid, cutoff = context["universe_id"], L.validate_cutoff(context["cutoff"])
+
+    def resolve(namespace, external_id):
+        r = LS.resolve_person(cur, uid, "coach", namespace, str(external_id), cutoff=cutoff, feature=STAFF_FEATURE,
+                              current=True)
+        return r["identity"]["source_person_id"] if r["status"] == "ready" else None
+    for e in events:
+        alias = {"namespace": e["namespace"], "external_id": str(e["external_id"])}
+        try:
+            if e["kind"] == "created":
+                if e.get("reused_row"):
+                    info["quarantined"].append(dict(e, reason="invented name matched an existing coach row"))
+                    continue
+                spid = staff_person_id(uid, e["event"])
+                LS.initialize_person(cur, uid, "coach", spid, "generated", cutoff["season"], cutoff=cutoff,
+                                     receipt=dict(receipt, creation_event=e["event"], creator=e["creator"]),
+                                     aliases=[alias])
+            elif e["kind"] == "promoted":
+                spid = resolve("db-coordinator", e["coordinator_id"])
+                if spid is None:
+                    info["pending"].append(dict(e, reason="coordinator identity unresolved"))
+                else:
+                    LS.bind_person(cur, uid, "coach", spid, [alias], cutoff=cutoff,
+                                   receipt={"event": e["event"], "evidence": "promotion"})
+            elif e["kind"] == "retained":
+                if resolve(e["namespace"], e["external_id"]) is None:
+                    info["pending"].append(dict(e, reason="identity unresolved"))
+            elif e["kind"] == "deleted":
+                spid = resolve("db-coordinator", e["external_id"])
+                if spid is not None:
+                    LS.archive_person(cur, uid, "coach", spid, cutoff=cutoff, reason=e["event"])
+                    LS.close_binding(cur, uid, "coach", "db-coordinator", str(e["external_id"]), cutoff=cutoff)
+        except L.LifecycleError as ex:
+            info["quarantined"].append(dict(e, reason=str(ex)))
+    return info
+
+
+def hiring_cycle(cur, season, log=print, personality=None):
     """Fill every opening for season + 1 inside the caller's transaction: head coaches first (most attractive
     opening first, opening_appeal),
     each poach's vacancy by an internal promotion, the new head coach's own coordinator on his side (OFFENSIVE: the
     OC, DEFENSIVE: the DC, CEO: none), then the coordinator openings left (most attractive team first).
     JR's teams fill only the coordinator jobs JR left open himself (engines/fire_coordinator.py).
     Returns {head_coaches: [...], coordinators: [...], jr_losses: [...] (JR's coordinators poached),
-    jr_hires: [...] (the jobs JR left open)}."""
+    jr_hires: [...] (the jobs JR left open), personality (staff_lifecycle: observe without `personality`)}."""
     nxt = season + 1
     tm, mine = teams(cur), jr_teams(cur)
     ranks, res = unit_ranks(cur, season), chs.playoff_results(cur, season)
@@ -338,6 +405,7 @@ def hiring_cycle(cur, season, log=print):
     fired_coord = {(r[0], r[1]): r[2] for r in cur.fetchall()}
     report = {"head_coaches": [], "coordinators": [], "jr_losses": [], "jr_hires": []}
     created = set()                                 # coordinators this cycle created: only these may be undone
+    events = []                                     # person lifecycle events (staff_lifecycle), in order
 
     def promote(team_id, role, prev, why):
         """An internal promotion who keeps the system (prev: the coordinator he replaces)."""
@@ -347,6 +415,8 @@ def hiring_cycle(cur, season, log=print):
         notes = f"{tm[team_id]['name']} {role} from {nxt}; promoted from {tm[team_id]['name']} {bg} {why}"
         cid = _insert_coordinator(cur, name, role, prev.get("scheme"), prev.get("playbook"), prev, notes)
         created.add(cid)
+        events.append({"kind": "created", "event": f"carousel:{seed}", "creator": "coaching_carousel:PROMOTED",
+                       "namespace": "db-coordinator", "external_id": cid})
         cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) VALUES (%s, %s, %s, %s)",
                     (cid, team_id, role, nxt))
         _move(cur, season, team_id, role, "HIRED", name, coordinator_id=cid, source="PROMOTED",
@@ -416,6 +486,7 @@ def hiring_cycle(cur, season, log=print):
                 "man_coverage": (mine_side if slant == "DEFENSIVE" else dc).get("man_coverage") or "Medium"}
         cur.execute("SELECT id FROM coaches WHERE lower(coach_name) = lower(%s)", (name,))
         row = cur.fetchone()
+        reused_row = bool(row)
         if row:
             coach_id = row[0]
             cur.execute("""UPDATE coaches SET slant = %s, offensive_scheme = %s, defensive_scheme = %s, pass_lean = %s,
@@ -430,6 +501,15 @@ def hiring_cycle(cur, season, log=print):
         cur.execute("INSERT INTO coach_tenures (coach_id, team_id, start_season) VALUES (%s, %s, %s)",
                     (coach_id, tid, nxt))
         src = c["kind"]
+        if src == "POACHED":           # the same person, now also a head coach: one identity, one more alias
+            events.append({"kind": "promoted", "event": f"carousel:{seed}", "coordinator_id": c["coordinator_id"],
+                           "namespace": "db-coach", "external_id": coach_id})
+        elif src == "RETREAD":
+            events.append({"kind": "retained", "event": f"carousel:{seed}", "namespace": "db-coach",
+                           "external_id": coach_id})
+        else:
+            events.append({"kind": "created", "event": f"carousel:{seed}", "creator": "coaching_carousel:OUTSIDE",
+                           "namespace": "db-coach", "external_id": coach_id, "reused_row": reused_row})
         _move(cur, season, tid, "HC", "HIRED", name, coach_id=coach_id, source=src,
               from_team_id=c.get("team_id"), from_role=c.get("role"), slant=slant, score=c["score"],
               notes=f"replaces {old_name}; {origin}",
@@ -465,6 +545,8 @@ def hiring_cycle(cur, season, log=print):
                             (season, cur_c["coordinator_id"]))
                 cur.execute("DELETE FROM coordinator_tenures WHERE coordinator_id = %s", (cur_c["coordinator_id"],))
                 cur.execute("DELETE FROM coordinators WHERE id = %s", (cur_c["coordinator_id"],))
+                events.append({"kind": "deleted", "event": f"carousel:{season}:{abbr}:{role}:undone",
+                               "namespace": "db-coordinator", "external_id": cur_c["coordinator_id"]})
                 report["coordinators"] = [x for x in report["coordinators"] if x["coordinator"] != cur_c["name"]]
             elif cur_c:
                 # Anyone else keeps his record (hot-seat rows, history): he is replaced. One already named for next
@@ -487,6 +569,8 @@ def hiring_cycle(cur, season, log=print):
             cid = _insert_coordinator(cur, lname, role, mine_side["scheme"], f"{tm[tid]['name']} "
                                       f"{'Offense' if role == 'OC' else 'Defense'}", tend, notes)
             created.add(cid)
+            events.append({"kind": "created", "event": f"carousel:{lseed}", "creator": "coaching_carousel:HC_STAFF",
+                           "namespace": "db-coordinator", "external_id": cid})
             cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) "
                         "VALUES (%s, %s, %s, %s)", (cid, tid, role, nxt))
             _move(cur, season, tid, role, "HIRED", lname, coordinator_id=cid, source="HC_STAFF",
@@ -526,6 +610,8 @@ def hiring_cycle(cur, season, log=print):
             elif c["kind"] == "REHIRED":
                 name = c["name"]
                 out_of_work.pop(c["coordinator_id"])
+                events.append({"kind": "retained", "event": f"carousel:{seed}", "namespace": "db-coordinator",
+                               "external_id": c["coordinator_id"]})
                 cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) "
                             "VALUES (%s, %s, %s, %s)", (c["coordinator_id"], tid, role, nxt))
                 _move(cur, season, tid, role, "HIRED", name, coordinator_id=c["coordinator_id"], source="REHIRED",
@@ -536,6 +622,8 @@ def hiring_cycle(cur, season, log=print):
                 bg = background(seed, "OUTSIDE", role)
                 notes = f"{tm[tid]['name']} {role} from {nxt}; previously {bg}; keeps the {prev.get('scheme') or 'existing'} system"
                 cid = _insert_coordinator(cur, name, role, prev.get("scheme"), prev.get("playbook"), prev, notes)
+                events.append({"kind": "created", "event": f"carousel:{seed}", "creator": "coaching_carousel:OUTSIDE",
+                               "namespace": "db-coordinator", "external_id": cid})
                 cur.execute("INSERT INTO coordinator_tenures (coordinator_id, team_id, role, start_season) "
                             "VALUES (%s, %s, %s, %s)", (cid, tid, role, nxt))
                 _move(cur, season, tid, role, "HIRED", name, coordinator_id=cid, source="OUTSIDE",
@@ -548,6 +636,7 @@ def hiring_cycle(cur, season, log=print):
 
     cur.execute("SELECT DISTINCT team_id FROM staff_moves WHERE season = %s", (season,))
     check_staffs(cur, nxt, (set(tm) - mine) | {r[0] for r in cur.fetchall()})
+    report["personality"] = staff_lifecycle(cur, events, personality)
     return report
 
 
@@ -591,12 +680,12 @@ def owns(cur, season):
     return cur.fetchone()[0]
 
 
-def run(cur, season, log=print):
+def run(cur, season, log=print, personality=None):
     """Everything ready for `season`, inside the caller's transaction. Returns {season, hot_seat (the coach hot seat
-    report), coordinators_fired, hires (None until the cycle runs)}."""
+    report), coordinators_fired, hires (None until the cycle runs)}. personality: staff_lifecycle's context."""
     rep = {"season": season, "hot_seat": chs.run(cur, season, log=log)}
     rep["coordinators_fired"] = review_coordinators(cur, season, log=log)
-    rep["hires"] = hiring_cycle(cur, season, log=log) if ready_to_hire(cur, season) else None
+    rep["hires"] = hiring_cycle(cur, season, log=log, personality=personality) if ready_to_hire(cur, season) else None
     return rep
 
 
