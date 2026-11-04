@@ -113,6 +113,9 @@ class SliderBudgetValidationTests(unittest.TestCase):
                 if "INSERT INTO persona_sliders" in sql:
                     self.slider_rows.append(params[0])
 
+            def fetchone(self):
+                return (False,)   # no persona_core_profiles table: nothing is core-managed
+
         data = {"IN_LOW": {"sliders": self._with_total(24)}, "IN_HIGH": {"sliders": self._with_total(36)},
                 "OUT_LOW": {"sliders": self._with_total(23)}, "OUT_HIGH": {"sliders": self._with_total(37)}}
         cur = Cur()
@@ -282,9 +285,240 @@ class DebugApiUnitTests(unittest.TestCase):
 
     def test_post_persona_validates_trait_conflicts(self):
         bad_traits = ["ANALYTICS_BELIEVER", "OLD_SCHOOL", "QUOTABLE"]
-        r = self.client.post("/api/debug/personas/writer/ESPN", json={"traits": bad_traits}, headers=self.headers)
+        with mock.patch.object(dbg, "connect", lambda: _FakeDebugConn()), \
+                mock.patch.object(P, "core_managed", return_value=None):
+            r = self.client.post("/api/debug/personas/writer/ESPN", json={"traits": bad_traits}, headers=self.headers)
         self.assertEqual(r.status_code, 400)
         self.assertIn("conflicts with", r.json()["detail"])
+
+
+# ---- core-managed personas (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4) ----
+
+class _FakeDebugCursor:
+    """dict_row-style cursor answering the debug endpoints' persona queries from fixed rows."""
+
+    def __init__(self, conn):
+        self.conn = conn
+        self._rows = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        self.conn.sql.append(sql)
+        if "to_regclass('persona_core_profiles')" in sql:
+            self._rows = [{"ok": self.conn.core_table}]
+        elif "exists_flag" in sql:
+            self._rows = [{"exists_flag": True}]
+        elif "FROM persona_core_profiles" in sql:
+            self._rows = list(self.conn.core_rows)
+        elif "FROM persona_sliders" in sql:
+            self._rows = [{"persona_type": "writer", "persona_id": "ESPN", "temperament": 7, "sociability": 9,
+                           "confidence": 8, "openness": 2, "warmth": 2, "drive": 2},
+                          {"persona_type": "gm", "persona_id": "7", "temperament": 5, "sociability": 5,
+                           "confidence": 5, "openness": 5, "warmth": 5, "drive": 5}]
+        elif "FROM league_state" in sql:
+            self._rows = [{"current_season": 2026, "current_week": 5}]
+        else:
+            self._rows = []
+        return self
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return self._rows
+
+
+class _FakeDebugConn:
+    def __init__(self, core_table=True, core_rows=()):
+        self.core_table, self.core_rows = core_table, core_rows
+        self.sql, self.committed = [], False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def cursor(self, row_factory=None):
+        return _FakeDebugCursor(self)
+
+    def execute(self, sql, params=None):
+        return _FakeDebugCursor(self).execute(sql, params)
+
+    def commit(self):
+        self.committed = True
+
+
+class CoreManagedPersonaTests(unittest.TestCase):
+    SLIDERS = {"temperament": 6, "sociability": 9, "confidence": 8, "openness": 3, "warmth": 2, "drive": 2}
+
+    def setUp(self):
+        app = FastAPI()
+        app.include_router(dbg.router)
+        self.client = TestClient(app)
+        self.patches = [mock.patch.object(dbg, "env", lambda k, d=None: "debug_secret_tok" if k == "DEBUG_TOKEN" else d)]
+        for p in self.patches:
+            p.start()
+        self.headers = {"X-Debug-Token": "debug_secret_tok"}
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def _current(self):
+        from personality.core import Identity, adopt
+        return adopt(Identity.adopted("u", "writer", "ESPN"), "real", 2026,
+                     {"temperament": 7, "sociability": 9, "confidence": 8, "openness": 2, "warmth": 2, "drive": 2},
+                     ["SPOTLIGHT_SEEKER", "HOT_TAKER", "QUOTABLE", "FRONT_RUNNER"])
+
+    def _post(self, body, managed=("u", "legacy:writer:ESPN")):
+        from personality import store as core_store
+        conn = _FakeDebugConn()
+        calls = {"override": [], "save": []}
+        current = self._current()
+
+        def override(cur, identity, request):
+            calls["override"].append((identity, request))
+            after = dict(current, revision=1)
+            after["sliders"] = dict(current["sliders"], **request.get("sliders", {}))
+            return after
+
+        def save(pt, pid, sliders=None, traits=None, views=None, cur=None):
+            calls["save"].append(dict(sliders=sliders, traits=traits, views=views))
+            return {"persona_id": pid}
+        with mock.patch.object(dbg, "connect", lambda: conn), \
+                mock.patch.object(P, "core_managed", return_value=managed), \
+                mock.patch.object(P, "save_persona", save), \
+                mock.patch.object(core_store, "read", lambda cur, identity: current), \
+                mock.patch.object(core_store, "override", override):
+            r = self.client.post("/api/debug/personas/writer/ESPN", json=body, headers=self.headers)
+        return r, calls, conn
+
+    def test_core_managed_post_requires_reason(self):
+        r, calls, conn = self._post({"sliders": self.SLIDERS})
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(calls["override"], [])
+        self.assertFalse(conn.committed)
+
+    def test_core_managed_post_goes_through_the_override(self):
+        traits = ["SPOTLIGHT_SEEKER", "HOT_TAKER", "QUOTABLE", "SUPERSTITIOUS"]
+        r, calls, conn = self._post({"sliders": self.SLIDERS, "traits": traits, "reason": "JR tweak",
+                                     "views": [{"text": "a view", "when": []}]})
+        self.assertEqual(r.status_code, 200, r.text)
+        identity, request = calls["override"][0]
+        self.assertEqual(identity.persona_id, "ESPN")
+        self.assertEqual((request["actor"], request["reason"], request["season"], request["tick"]), ("JR", "JR tweak", 2026, 5))
+        self.assertEqual(request["sliders"], self.SLIDERS)
+        self.assertEqual(request["add_traits"], ["SUPERSTITIOUS"])
+        self.assertEqual(request["remove_traits"], ["FRONT_RUNNER"])
+        self.assertEqual(request["expected_revision"], 0)
+        self.assertTrue(request["override_id"].startswith("debug-"))
+        # Views stay on the legacy path; sliders and traits never reach save_persona.
+        self.assertEqual(calls["save"], [dict(sliders=None, traits=None, views=[{"text": "a view", "when": []}])])
+        self.assertEqual(r.json()["core"]["revision"], 1)
+        self.assertTrue(conn.committed)
+
+    def test_core_managed_post_with_explicit_season_and_tick(self):
+        r, calls, _ = self._post({"sliders": self.SLIDERS, "reason": "x", "season": 2030, "tick": 12})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual((calls["override"][0][1]["season"], calls["override"][0][1]["tick"]), (2030, 12))
+
+    def test_unmanaged_post_keeps_the_legacy_path(self):
+        r, calls, conn = self._post({"sliders": self.SLIDERS}, managed=None)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(calls["override"], [])
+        self.assertEqual(calls["save"], [dict(sliders=self.SLIDERS, traits=None, views=None)])
+        self.assertNotIn("core", r.json())
+
+    def test_get_shows_core_block_for_core_managed(self):
+        conn = _FakeDebugConn(core_rows=[{"persona_type": "writer", "persona_id": "ESPN", "origin": "real",
+                                          "revision": 2, "links": None}])
+        with mock.patch.object(dbg, "connect", lambda: conn):
+            data = self.client.get("/api/debug/personas").json()
+        by_id = {p["persona_id"]: p for p in data["personas"]}
+        self.assertEqual(by_id["ESPN"]["core"], {"origin": "real", "revision": 2, "persona_id": "ESPN",
+                                                 "view_version": "views-v2", "links": []})
+        self.assertNotIn("core", by_id["7"])
+        conn = _FakeDebugConn(core_table=False)
+        with mock.patch.object(dbg, "connect", lambda: conn):
+            data = self.client.get("/api/debug/personas").json()
+        self.assertTrue(all("core" not in p for p in data["personas"]))
+
+
+class LegacyGuardTests(unittest.TestCase):
+    def test_save_persona_refuses_core_managed_sliders_and_traits(self):
+        with mock.patch.object(P, "persona_tables_exist", return_value=True), \
+                mock.patch.object(P, "core_managed", return_value=("u", "legacy:writer:ESPN")):
+            with self.assertRaises(P.CoreManagedError):
+                P.save_persona("writer", "ESPN", sliders={"temperament": 5, "sociability": 5, "confidence": 5,
+                                                          "openness": 5, "warmth": 5, "drive": 5}, cur=object())
+            with self.assertRaises(P.CoreManagedError):
+                P.save_persona("writer", "ESPN", traits=["QUOTABLE"], cur=object())
+
+    def test_core_managed_lookup(self):
+        class Cur:
+            def __init__(self, table, rows):
+                self.table, self.rows, self.last = table, rows, ""
+
+            def execute(self, sql, params=None):
+                self.last = sql
+
+            def fetchone(self):
+                if "to_regclass" in self.last:
+                    return (self.table,)
+                return self.rows[0] if self.rows else None
+
+            def fetchall(self):
+                return [(r[0],) for r in self.rows]
+        self.assertIsNone(P.core_managed(Cur(False, []), "writer", "ESPN"))
+        self.assertIsNone(P.core_managed(Cur(True, []), "writer", "ESPN"))
+        self.assertEqual(P.core_managed(Cur(True, [("u", "legacy:writer:ESPN")]), "writer", "ESPN"),
+                         ("u", "legacy:writer:ESPN"))
+        self.assertEqual(P.core_managed_ids(Cur(True, [("ESPN",)]), "writer"), {"ESPN"})
+        self.assertEqual(P.core_managed_ids(Cur(False, []), "writer"), set())
+
+    def test_seeders_skip_core_managed_ids(self):
+        class Cur:
+            def __init__(self):
+                self.written, self.last = [], ""
+
+            def execute(self, sql, params=None):
+                self.last = sql
+                if "INSERT INTO persona_sliders" in sql:
+                    self.written.append(params[0])
+
+            def fetchone(self):
+                return (True,)
+
+            def fetchall(self):
+                if "FROM persona_core_profiles" in self.last:
+                    return [("ESPN",), ("7",)]
+                if "FROM gm_profiles" in self.last:
+                    return [(7, 1, "A", 0, 0, 0, 0), (8, 2, "B", 0, 0, 0, 0)]
+                return []
+        writers = {k: P.load_personas_json()[k] for k in ("ESPN", "KIMES")}
+        cur, skipped = Cur(), []
+        with mock.patch.object(P, "persona_tables_exist", return_value=True):
+            self.assertEqual(P.seed_writers_to_db(cur, writers, skipped=skipped), 1)
+            self.assertEqual(cur.written, ["KIMES"])
+            self.assertEqual(skipped, [("writer", "ESPN")])
+            cur, skipped = Cur(), []
+            self.assertEqual(P.seed_gms_to_db(cur, skipped=skipped), 1)
+            self.assertEqual(cur.written, ["8"])
+            self.assertEqual(skipped, [("gm", "7")])
+
+    def test_catalogue_lets_all_40_writers_validate(self):
+        from personality.core import Identity, adopt, validate_profile
+        personas = P.load_personas_json()
+        self.assertEqual(len(personas), 40)
+        for key, p in personas.items():
+            self.assertTrue(validate_profile(adopt(Identity.adopted("u", "writer", key), "real", 2026,
+                                                   p["sliders"], p["traits"])), key)
 
 
 @pytest.mark.integration

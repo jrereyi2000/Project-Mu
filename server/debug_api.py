@@ -1097,6 +1097,33 @@ class PersonaUpdateIn(BaseModel):
     traits: Optional[list[Any]] = None
     views: Optional[list[dict[str, Any]]] = None
     notes: Optional[str] = None
+    # Core-managed personas only (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4): sliders and
+    # traits go through the personality core's audited override, which needs a reason; season and tick
+    # default to league_state (tick = current week, clamped to 1-32).
+    reason: Optional[str] = None
+    season: Optional[int] = None
+    tick: Optional[int] = None
+
+
+def _core_blocks(cur, persona_type=None, persona_id=None):
+    """{(type, id): core block} for personas the personality core manages; {} without its tables."""
+    cur.execute("SELECT to_regclass('persona_core_profiles') IS NOT NULL AS ok")
+    if not cur.fetchone()["ok"]:
+        return {}
+    from personality.core import FEATURE_VIEW_VERSION
+    q = ("SELECT persona_type, persona_id, origin, revision, metadata->'links' AS links "
+         "FROM persona_core_profiles WHERE 1=1")
+    params = []
+    if persona_type:
+        q += " AND persona_type = %s"
+        params.append(persona_type)
+    if persona_id:
+        q += " AND persona_id = %s"
+        params.append(persona_id)
+    cur.execute(q, params)
+    return {(r["persona_type"], r["persona_id"]): {
+        "origin": r["origin"], "revision": r["revision"], "persona_id": r["persona_id"],
+        "view_version": FEATURE_VIEW_VERSION, "links": r["links"] or []} for r in cur.fetchall()}
 
 
 @router.get("/personas")
@@ -1165,6 +1192,8 @@ def get_personas_endpoint(type: Optional[str] = None, id: Optional[str] = None):
             except Exception:
                 pass
 
+            core_blocks = _core_blocks(cur, type.lower() if type else None, id)
+
             results = []
             for r in slider_rows:
                 pt, pid = r["persona_type"], r["persona_id"]
@@ -1185,6 +1214,8 @@ def get_personas_endpoint(type: Optional[str] = None, id: Optional[str] = None):
                     "traits": traits_by_key.get(key, []),
                     "views": views_by_key.get(key, [])
                 })
+                if key in core_blocks:
+                    results[-1]["core"] = core_blocks[key]
 
     return {"personas": results, "count": len(results)}
 
@@ -1192,9 +1223,11 @@ def get_personas_endpoint(type: Optional[str] = None, id: Optional[str] = None):
 @router.post("/personas/{persona_type}/{persona_id}")
 def update_persona_endpoint(persona_type: str, persona_id: str, body: PersonaUpdateIn,
                             x_debug_token: Optional[str] = Header(None)):
-    """Edit sliders and traits for a persona before first use (Decision D4)."""
+    """Edit a persona. Unmanaged personas: sliders, traits and views through save_persona (D4, before
+    first use). Core-managed personas: sliders and traits through the personality core's audited
+    override (actor JR, `reason` required); views and notes stay on the legacy path."""
     require_token(x_debug_token)
-    from newsroom.personas import save_persona, validate_slider_budget, validate_persona_traits
+    from newsroom.personas import core_managed, save_persona, validate_slider_budget, validate_persona_traits
     pt = persona_type.lower()
     if pt not in ("writer", "gm", "player", "coach", "owner", "scout"):
         raise HTTPException(400, f"invalid persona_type: {persona_type}")
@@ -1205,20 +1238,74 @@ def update_persona_endpoint(persona_type: str, persona_id: str, body: PersonaUpd
         except ValueError as e:
             raise HTTPException(400, str(e))
 
-    if body.traits is not None:
-        try:
-            trait_ids = [t["trait_id"] if isinstance(t, dict) else t for t in body.traits]
-            validate_persona_traits(trait_ids)
-        except ValueError as e:
-            raise HTTPException(400, str(e))
-
+    core = None
     with connect() as conn:
         with conn.cursor() as cur:
-            res = save_persona(pt, persona_id, sliders=body.sliders,
-                               traits=body.traits, views=body.views, cur=cur)
+            managed = core_managed(cur, pt, persona_id)
+            if managed is None:
+                if body.traits is not None:
+                    try:
+                        trait_ids = [t["trait_id"] if isinstance(t, dict) else t for t in body.traits]
+                        validate_persona_traits(trait_ids)
+                    except ValueError as e:
+                        raise HTTPException(400, str(e))
+                res = save_persona(pt, persona_id, sliders=body.sliders,
+                                   traits=body.traits, views=body.views, cur=cur)
+            else:
+                if body.sliders is not None or body.traits is not None:
+                    core = _core_override(conn, pt, managed, body)
+                res = save_persona(pt, persona_id, views=body.views, cur=cur)
             conn.commit()
 
-    return {"ok": True, "persona_type": pt, "persona_id": persona_id, "persona": res}
+    out = {"ok": True, "persona_type": pt, "persona_id": persona_id, "persona": res}
+    if core is not None:
+        out["core"] = core
+    return out
+
+
+def _core_override(conn, pt, managed, body):
+    """Send a core-managed persona's sliders/traits through personality.store.override (actor JR)."""
+    import uuid
+    from psycopg.rows import tuple_row
+    from personality import store as core_store
+    from personality.core import ConflictError, Identity, NotFoundError, PersonalityError
+    if not (body.reason or "").strip():
+        raise HTTPException(422, "reason is required to change a core-managed persona")
+    season, tick = body.season, body.tick
+    if season is None or tick is None:
+        state = conn.execute("SELECT current_season, current_week FROM league_state WHERE id = 1").fetchone()
+        if state is None:
+            raise HTTPException(422, "no league_state row: pass season and tick")
+        season = state["current_season"] if season is None else season
+        tick = max(1, min(32, state["current_week"] or 1)) if tick is None else tick
+    universe_id, birth_key = managed
+    identity = Identity(universe_id, pt, birth_key)
+    with conn.cursor(row_factory=tuple_row) as tcur:
+        current = core_store.read(tcur, identity)
+        if current is None:
+            raise HTTPException(404, "core profile not found")
+        request = {"override_id": "debug-" + uuid.uuid4().hex, "actor": "JR", "reason": body.reason.strip(),
+                   "season": season, "tick": tick, "expected_revision": current["revision"]}
+        if body.sliders is not None:
+            request["sliders"] = dict(body.sliders)
+        if body.traits is not None:
+            wanted = [t["trait_id"] if isinstance(t, dict) else t for t in body.traits]
+            request["add_traits"] = [t for t in wanted if t not in current["traits"]]
+            request["remove_traits"] = [t for t in current["traits"] if t not in wanted]
+        if (request.get("sliders", {}).items() <= current["sliders"].items()
+                and not request.get("add_traits") and not request.get("remove_traits")):
+            return {"unchanged": True, "origin": current["origin"], "revision": current["revision"],
+                    "persona_id": current["persona_id"]}
+        try:
+            after = core_store.override(tcur, identity, request)
+        except NotFoundError as e:
+            raise HTTPException(404, str(e))
+        except ConflictError as e:
+            raise HTTPException(409, str(e))
+        except PersonalityError as e:
+            raise HTTPException(400, str(e))
+    return {"override_id": request["override_id"], "origin": after["origin"], "revision": after["revision"],
+            "persona_id": after["persona_id"], "sliders": after["sliders"], "traits": after["traits"]}
 
 
 

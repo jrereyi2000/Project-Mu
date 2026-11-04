@@ -696,7 +696,7 @@
       "roles": {
         "player": 2,
         "coach": 1,
-        "writer": 0,
+        "writer": 0.05,
         "gm": 0,
         "owner": 0,
         "scout": 0
@@ -885,7 +885,7 @@
         "player": 1,
         "fan": 2,
         "coach": 1,
-        "writer": 0,
+        "writer": 0.05,
         "gm": 0,
         "owner": 0,
         "scout": 0
