@@ -92,7 +92,7 @@ Engines decide every outcome. The agent on the other side answers in its own voi
 - Taking and releasing control of personas (`controlled_personas`). Only registry user teams count. There is no default.
 - Thread and message storage, one inbox per user team, unread state, expiry, caps.
 - A registry of conversation kinds that sibling plans extend by adding one file.
-- Five kinds: `GM_TALK`, `CONTRACT`, `ROLE_TALK`, `VISION`, `REPORTER`.
+- Five kinds: `GM_TALK`, `CONTRACT`, `ROLE_TALK`, `VISION`, `REPORTER`. A sixth, `OWNER` (an owner → JR's GM), comes later from the [owners, scouts and voters plan](OWNERS_SCOUTS_VOTERS_PLAN.md).
 - `team_vision` with two engine consumers: a direction pin and a needs emphasis in `gm_direction`.
 - Inbound messages from engine facts each week, and when JR opens the inbox.
 - JR's replies: a button or form, an optional note, or typed text turned into a draft he confirms.

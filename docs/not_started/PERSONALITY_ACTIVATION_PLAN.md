@@ -69,7 +69,8 @@ Each feature still earns its way to active: a full simulated season in shadow, i
 ```python
 FEATURES = ('producers', 'relationships', 'profiles', 'evolution', 'contracts_ambition',
             'contracts_relationships', 'development_learning', 'trade_requests', 'retirement',
-            'development_opportunity', 'coach_loop', 'player_loop')   # D2 go-live order; the last two from the agent loops plan
+            'development_opportunity', 'coach_loop', 'player_loop', 'owner_patience', 'owner_hiring',
+            'owner_spending', 'owner_meddling', 'scout_directors', 'media_voters')   # D2 go-live order; coach_loop/player_loop from the agent loops plan, the last six from the owners, scouts and voters plan
 MODES = ('off', 'shadow', 'active')
 def mode(cur, league_id, feature) -> str                       # missing row -> 'off'
 def config(cur, league_id, feature) -> dict                    # {mode, version, config, review_ref, shadow_since}
