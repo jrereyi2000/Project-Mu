@@ -1,6 +1,6 @@
 # Project Mu: Personality Draft and Person Lifecycle Integration Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); not built. Approval covers building the units; applying the inventory to a real franchise, migrations and activation each still need JR's separate go-ahead (§6 gates).
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); building, wave 1 of 3. Approval covers building the units; applying the inventory to a real franchise, migrations and activation each still need JR's separate go-ahead (§6 gates).
 **Scope (JR, 2026-11-03, PERSONALITY_PLAN §5.1, D11–D13):** every player gets one persistent profile. Existing players in the starting 2026 save get engine-generated profiles once, at the league start, with no research into the real player; draft prospects get theirs at draft-class entry, including real-player imported classes. Players named after real people are fictional characters inspired by them, so they are classified `generated` like any other player. JR can edit any profile. Existing real coaches get reviewed profiles from a separate workstream (not planned yet); this plan registers their identities and aliases and initializes coaches only from that workstream's reviewed manifest.
 **Builds on:** PROJECT_SPEC §2.10, §2.18, §2.19, §3.3c, §3.3g, §3.3p, §6.0b, §7.11; [Personality Plan](../in_progress/PERSONALITY_PLAN.md) §5.1–5.2; [Generated Effects Design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md) §4–5; `personality/README.md`.
 
@@ -113,7 +113,7 @@ Inventory actual 2026 starting export, not an assumed 2034/2037 archive. Every p
 
 Fictional coaching creation in hiring_cycle or fire_coordinator gets a durable creation event ID and source UUID, not name/team/job. Bind coordinator ID in the same transaction; HC promotion adds coach alias to same coach identity. Poached/retread people retain identity/classification. A successor inheriting scheme does not inherit predecessor personality. Archive same-cycle temporary identities if their coordinator row is deleted; retain receipt/history. A future personality-dependent candidate policy may create identity before hire, but career/candidate rules remain externally owned.
 
-Existing real coaches use reviewed inventory, supplied as `personality.coach_profiles.lifecycle_entries` from the [real-coach profiles plan](REAL_COACH_PROFILES_PLAN.md): this plan registers their identity and aliases now and applies their profiles when the coach-profile workstream supplies its reviewed manifest; until then they are pending, not neutral-initialized. Future GM/owner/scout creators call apply_lifecycle with durable creator receipts; no new hiring engines or unowned GM policy wiring here. Existing GM personas (phase 3, fictional characters inspired by real GMs) keep their legacy sliders; they are not automatically adopted core profiles. Human cross-role changes remain gated pending core policy.
+Existing real coaches use reviewed inventory, supplied as `personality.coach_profiles.lifecycle_entries` from the [real-coach profiles plan](../not_started/REAL_COACH_PROFILES_PLAN.md): this plan registers their identity and aliases now and applies their profiles when the coach-profile workstream supplies its reviewed manifest; until then they are pending, not neutral-initialized. Future GM/owner/scout creators call apply_lifecycle with durable creator receipts; no new hiring engines or unowned GM policy wiring here. Existing GM personas (phase 3, fictional characters inspired by real GMs) keep their legacy sliders; they are not automatically adopted core profiles. Human cross-role changes remain gated pending core policy.
 
 ### 2.6 CLI, replay and recovery
 
@@ -257,3 +257,8 @@ JR approved all four recommendations on 2026-11-03.
 | Q4 | Include core legacy adoption/historical reconstruction here or gate those people and deliver lifecycle first? | Lifecycle first; adoption, as-of and cross-role APIs come from the core extensions plan (approved 2026-11-03). Do not duplicate core mutation/versioning ownership. |
 
 **Review boundary:** plan approval does not apply migrations, seed a franchise or activate anything; those are the §6 gates.
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|
