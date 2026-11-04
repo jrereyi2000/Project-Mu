@@ -136,7 +136,7 @@ def test_earlier_replay_returns_original_receipt_without_reverting_newer_state(c
         store.change(cur,ident(),dict(e,event_id='relabelled',season=2030,expected_revision=2))
 
 
-# ---- core extensions (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md) ----
+# ---- core extensions (docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) ----
 
 def seed_legacy(cur, role, pid, sliders, traits):
     cur.execute('''INSERT INTO persona_sliders(persona_type,persona_id,temperament,sociability,confidence,

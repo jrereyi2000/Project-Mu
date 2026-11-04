@@ -1,4 +1,4 @@
-"""python -m personality subcommands (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4).
+"""python -m personality subcommands (docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4).
 
 Offline: database commands run against a fake connection injected through the CLI's connect(), with the
 personality.store functions replaced. No real database is opened.

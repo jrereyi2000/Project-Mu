@@ -292,7 +292,7 @@ class DebugApiUnitTests(unittest.TestCase):
         self.assertIn("conflicts with", r.json()["detail"])
 
 
-# ---- core-managed personas (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4) ----
+# ---- core-managed personas (docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4) ----
 
 class _FakeDebugCursor:
     """dict_row-style cursor answering the debug endpoints' persona queries from fixed rows."""

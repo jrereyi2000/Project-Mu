@@ -1097,7 +1097,7 @@ class PersonaUpdateIn(BaseModel):
     traits: Optional[list[Any]] = None
     views: Optional[list[dict[str, Any]]] = None
     notes: Optional[str] = None
-    # Core-managed personas only (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4): sliders and
+    # Core-managed personas only (docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4): sliders and
     # traits go through the personality core's audited override, which needs a reason; season and tick
     # default to league_state (tick = current week, clamped to 1-32).
     reason: Optional[str] = None

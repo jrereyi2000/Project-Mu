@@ -306,7 +306,7 @@ class CoreManagedError(RuntimeError):
     """A legacy write tried to change the sliders or traits of a persona the personality core manages.
 
     Change those through the core's audited override (python -m personality override, or the #debug
-    persona endpoint, which routes core-managed personas there). docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md
+    persona endpoint, which routes core-managed personas there). docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md
     """
 
 

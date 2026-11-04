@@ -1,4 +1,4 @@
--- Personality core extensions (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.2; PROJECT_SPEC §3.3p, §7.11).
+-- Personality core extensions (docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.2; PROJECT_SPEC §3.3p, §7.11).
 -- Requires 2027_01_16_personality_core.sql. Not folded into db/init_db.sql; applied deliberately (JR's call).
 --
 -- persona_core_events gains kind / effective_tick / actor / seq / recorded_at; existing rows become 'evolution'.

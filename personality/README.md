@@ -55,7 +55,7 @@ The originating policy owns whether the simulated event justifies the candidate.
 
 No automatic event rules, probabilistic trait changes, retrospective migration, prose generation, production ingestion scheduling or feature effects are activated. No hired player-agent role is added. Mood and relationships will be separate consumers/producers of verified events, not fields inferred from these sliders.
 
-## Core extensions (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md)
+## Core extensions (docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md)
 
 Migration `db/migrations/2027_01_29_personality_core_extensions.sql` (requires `2027_01_16`; not folded into `init_db.sql`, applied deliberately) gives `persona_core_events` a `kind` (`evolution`, `override`, `adoption`, `role_link`), `effective_tick`, `actor`, `seq` and `recorded_at`, narrows the one-change-a-season rule to `kind = 'evolution'`, and adds `persona_core_links`. `store.change` writes `kind='evolution'`, so it needs this migration.
 

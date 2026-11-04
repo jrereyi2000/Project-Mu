@@ -126,7 +126,7 @@ def test_noop_and_boolean_revision_are_rejected():
     with pytest.raises(PersonalityError): apply_change(p,event(p,expected_revision=False))
 
 
-# ---- core extensions (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md) ----
+# ---- core extensions (docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) ----
 
 def writer_catalogue():
     """The real catalogue plus the two writer odds fixes (plan Q1); the file itself belongs to U2."""

@@ -1,4 +1,4 @@
-"""Personality core CLI (docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4).
+"""Personality core CLI (docs/done/PERSONALITY_CORE_EXTENSIONS_PLAN.md §2.4).
 
   python -m personality [preview] --universe U --role R --birth-key K [--origin O] --season S [--out PATH]
   python -m personality override (--birth-key K | --alias NS:ID | --legacy-id ID) --universe U --role R
