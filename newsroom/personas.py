@@ -302,6 +302,46 @@ def persona_tables_exist(cur, *, views: bool = False, relationships: bool = Fals
         return False
 
 
+class CoreManagedError(RuntimeError):
+    """A legacy write tried to change the sliders or traits of a persona the personality core manages.
+
+    Change those through the core's audited override (python -m personality override, or the #debug
+    persona endpoint, which routes core-managed personas there). docs/in_progress/PERSONALITY_CORE_EXTENSIONS_PLAN.md
+    """
+
+
+def _scalar(row):
+    if not row:
+        return None
+    return row[0] if isinstance(row, (tuple, list)) else next(iter(row.values()))
+
+
+def _core_table_exists(cur) -> bool:
+    cur.execute("SELECT to_regclass('persona_core_profiles') IS NOT NULL")
+    return bool(_scalar(cur.fetchone()))
+
+
+def core_managed(cur, persona_type: str, persona_id: str):
+    """(universe_id, birth_key) when the personality core manages this persona, else None.
+    None also when the core tables don't exist (migration 2027_01_16 not applied)."""
+    if cur is None or not _core_table_exists(cur):
+        return None
+    cur.execute("SELECT universe_id, birth_key FROM persona_core_profiles WHERE persona_type = %s AND persona_id = %s",
+                (persona_type, str(persona_id)))
+    row = cur.fetchone()
+    if not row:
+        return None
+    return tuple(row) if isinstance(row, (tuple, list)) else (row["universe_id"], row["birth_key"])
+
+
+def core_managed_ids(cur, persona_type: str) -> set:
+    """Every persona_id of this type the personality core manages (empty without the core tables)."""
+    if cur is None or not _core_table_exists(cur):
+        return set()
+    cur.execute("SELECT persona_id FROM persona_core_profiles WHERE persona_type = %s", (persona_type,))
+    return {_scalar(r) for r in cur.fetchall()}
+
+
 def get_persona(persona_type: str, persona_id: str, cur=None) -> dict:
     """Reads a persona from the database tables, falling back to JSON or deterministic seeding."""
     if cur is not None and persona_tables_exist(cur, views=True, relationships=True):
@@ -364,11 +404,17 @@ def get_persona(persona_type: str, persona_id: str, cur=None) -> dict:
 
 def save_persona(persona_type: str, persona_id: str, sliders: dict = None,
                  traits: list = None, views: list = None, cur=None) -> dict:
-    """Saves persona sliders, traits, and views to the database."""
+    """Saves persona sliders, traits, and views to the database.
+
+    Sliders and traits of a core-managed persona (a persona_core_profiles row) raise CoreManagedError:
+    they change only through the personality core's override. Views stay legacy fields.
+    """
     if cur is None:
         raise ValueError("Database cursor required to save persona")
     if not persona_tables_exist(cur, views=True if views is not None else False):
         raise RuntimeError("Persona tables do not exist in database")
+    if (sliders is not None or traits is not None) and core_managed(cur, persona_type, persona_id):
+        raise CoreManagedError(f"{persona_type} {persona_id} is managed by the personality core; use its override")
 
     if sliders is not None:
         validate_slider_budget(sliders)
@@ -428,14 +474,24 @@ def _sliders_ok(sliders) -> bool:
         return False
 
 
-def seed_writers_to_db(cur, personas_data: dict = None) -> int:
-    """Seeds writer personas from agent_personas.json into the DB tables, preserving identities."""
+def seed_writers_to_db(cur, personas_data: dict = None, skipped: list = None) -> int:
+    """Seeds writer personas from agent_personas.json into the DB tables, preserving identities.
+
+    Core-managed writers (adopted by the personality core) are left alone and reported: printed, and
+    appended to `skipped` when a list is given.
+    """
     if cur is None or not persona_tables_exist(cur, views=True):
         return 0
     if personas_data is None:
         personas_data = load_personas_json()
+    managed = core_managed_ids(cur, "writer")
     count = 0
     for k, p in personas_data.items():
+        if k in managed:
+            print(f"[personas] skipped core-managed writer {k}", flush=True)
+            if skipped is not None:
+                skipped.append(("writer", k))
+            continue
         s = p.get("sliders", {})
         if _sliders_ok(s):
             cur.execute("""
@@ -471,12 +527,16 @@ def seed_writers_to_db(cur, personas_data: dict = None) -> int:
     return count
 
 
-def seed_gms_to_db(cur, traits_catalogue: dict = None) -> int:
-    """Seeds GM personas into persona_sliders and persona_traits from gm_profiles."""
+def seed_gms_to_db(cur, traits_catalogue: dict = None, skipped: list = None) -> int:
+    """Seeds GM personas into persona_sliders and persona_traits from gm_profiles.
+
+    Core-managed GMs are left alone and reported (printed, and appended to `skipped` when given).
+    """
     if cur is None or not persona_tables_exist(cur):
         return 0
     if traits_catalogue is None:
         traits_catalogue = load_traits()
+    managed = core_managed_ids(cur, "gm")
     cur.execute("""
         SELECT id, team_id, gm_name, aggressiveness, risk_appetite, pick_affinity, youth_bias
         FROM gm_profiles WHERE end_season IS NULL
@@ -485,6 +545,11 @@ def seed_gms_to_db(cur, traits_catalogue: dict = None) -> int:
     count = 0
     for r in rows:
         gm_id = str(r[0])
+        if gm_id in managed:
+            print(f"[personas] skipped core-managed gm {gm_id}", flush=True)
+            if skipped is not None:
+                skipped.append(("gm", gm_id))
+            continue
         sliders = seed_sliders("gm", gm_id)
         traits = seed_traits("gm", gm_id, count=4, traits=traits_catalogue)
 
