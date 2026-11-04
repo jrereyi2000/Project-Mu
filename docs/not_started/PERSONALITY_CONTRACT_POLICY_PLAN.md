@@ -30,7 +30,7 @@ Inspected canonical `/home/jrereyi/Project-Mu` on 2026-10-31. Read root AGENTS.m
 | S12 | Existing tools/personality_contract_demo.py and its test are untracked illustrative artifacts; the design's demo section excludes production counters/markets. | Demo is not calibration, activation or full-path verification. Keep its files under their existing owner's control. |
 | S13 | PROJECT_SPEC §2.17b still documents persona zero; §3.3p includes older rollout descriptions alongside newer core ownership documented in personality/README.md. | Parent consolidates §7 changes. Historical later takeover dates do not replace the requested 2026–2034 timeline. |
 
-Source search found the HTTP scoring callers and pure transaction builders, but no implemented league-office runner invoking run_wave/street_market/udfa_market. Do not invent an existing runner. Its eventual integration and execution receipt seam are activation dependencies.
+**Corrected 2026-11-03 ([activation plan](PERSONALITY_ACTIVATION_PLAN.md) S2):** the league office does run these engines through its `Deps` class (`pipeline/league_office.py:890` `resign_decisions`, `:899` `run_wave`, `:909` `udfa_market`; `:1549` `step_free_agency`). The activation plan's `PersonalityDeps` passes this plan's `contract_inputs` through them. This plan's units add the keyword and stay neutral by default.
 
 ## 1. Scope
 
@@ -130,7 +130,7 @@ Migration `db/migrations/2027_01_23_contract_personality_policy.sql` (reserved i
 |---|---|
 | contract_policy_decisions | universe_id TEXT, decision_id TEXT, season INTEGER, week INTEGER, stage TEXT, player_id BIGINT, persona_id TEXT NULL, revision INTEGER NULL, mode TEXT CHECK off/shadow/active, policy_version TEXT, input_hash TEXT, snapshot JSONB, result JSONB, created_at TIMESTAMPTZ DEFAULT now(); PK(universe_id,decision_id). All other fields NOT NULL. |
 | contract_policy_event_outbox | universe_id TEXT, event_id TEXT, decision_id TEXT, kind TEXT, payload JSONB NOT NULL, delivered_at TIMESTAMPTZ NULL; required IDs/kind NOT NULL; PK(universe_id,event_id), composite FK to receipt. |
-| contract_policy_activation | universe_id TEXT PRIMARY KEY, mode TEXT NOT NULL CHECK off/shadow/active, policy_version TEXT NOT NULL, config JSONB NOT NULL, review_reference TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(). Missing row = off. Migration inserts no activation row. |
+| ~~contract_policy_activation~~ | Not created (activation plan D1, 2026-11-03): the mode, version, config and review note come from the shared switchboard, `personality.features.config(cur, league_id, 'contracts_ambition' / 'contracts_relationships')`. `read_contract_activation` reads that instead. |
 
 Snapshot includes permitted view/revision/catalogue version, source/provider versions/as-of, canonical offer order, market fit/basis/cap, all components/gates/draws/bars/counters, and baseline/adjusted outcomes. Result links existing offer/execution IDs. No FK to mutable profile revision; retirement/archive cannot break historical replay.
 

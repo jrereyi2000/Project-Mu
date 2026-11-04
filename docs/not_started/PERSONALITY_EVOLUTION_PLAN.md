@@ -166,7 +166,7 @@ python -m personality.evolution_run revert --candidate ID --reason TEXT [--dsn D
 
 **Revert** is a JR override back to the before-state (core extensions `store.override`, actor JR), and marks the candidate `reverted`. It never deletes the evolution receipt.
 
-**Watcher step:** on the OFFSEASON_START ingest (tick 24), `step_personality_evolution(season)` runs after the producers step and before the league office, when `MU_PERSONALITY_EVOLUTION=on`. It never fails the ingest, and it notifies "Mu: N personality changes in <season>", with the report path.
+**Watcher step:** on the OFFSEASON_START ingest (tick 24), `step_personality_evolution(season)` runs after the producers step and before the league office, when the switchboard's `evolution` mode allows it ([activation plan](PERSONALITY_ACTIVATION_PLAN.md); `MU_PERSONALITY_EVOLUTION=off` stays as a kill switch). It never fails the ingest, and it notifies "Mu: N personality changes in <season>", with the report path.
 
 ## 3. Risks and unknowns
 

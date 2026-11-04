@@ -229,7 +229,7 @@ Shared coordinator files, never unit-owned: `PROJECT_SPEC.md`, this plan, `CLAUD
 
 Every path appears once. No unit owns relationship/core/contract/GM shared files.
 
-**Gates:** G0 JR approval (done 2026-11-03) + interface reconciliation; G1 disabled exact neutral control and pure tests; G2 persistence/replay/repair/privacy tests pass; G3 JR reviews sensitivity and chooses production policy; G4 separately scoped identity/producer/scheduler/control/contract integration proves neutral controls and incident deduplication; G5 explicit migration/activation authorization for a selected franchise/checkpoint. U1–U3 do not deliver G4/G5. No live integration or migration application is in these waves.
+**Gates:** G0 JR approval (done 2026-11-03) + interface reconciliation; G1 disabled exact neutral control and pure tests; G2 persistence/replay/repair/privacy tests pass; G3 JR reviews sensitivity and chooses production policy; G4 separately scoped identity/producer/scheduler/control/contract integration proves neutral controls and incident deduplication (the scheduler and GM handoff are the [activation plan](PERSONALITY_ACTIVATION_PLAN.md)'s U3); G5 explicit migration/activation authorization for a selected franchise/checkpoint. U1–U3 do not deliver G4/G5. No live integration or migration application is in these waves.
 
 ## 7. Spec changes when built
 
