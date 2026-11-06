@@ -221,7 +221,7 @@ def catch_up(cur, *, through: tuple[int,int], dry_run=False) -> dict
 
 Everything sits inside one savepoint in the caller's transaction. A weekly-freeze restore rolls this plan's tables back together with the relationship ledger, because both are in the same dump.
 
-**Watcher hook (`pipeline/watch_save.py`).** `step_relationship_producers(save_season, tick)` runs right after the load, before the `stage_only` branch. It opens its own connection and transaction, does nothing unless the switchboard's `producers` mode is on ([activation plan](../in_progress/PERSONALITY_ACTIVATION_PLAN.md); `MU_RELATIONSHIP_PRODUCERS=off` stays as a kill switch), and never fails the ingest: errors are logged, notified, and recorded as a FAILED run. It is skipped with a logged reason when the relationships store isn't migrated.
+**Watcher hook (`pipeline/watch_save.py`).** `step_relationship_producers(save_season, tick)` runs right after the load, before the `stage_only` branch. It opens its own connection and transaction, does nothing unless the switchboard's `producers` mode is on ([activation plan](../done/PERSONALITY_ACTIVATION_PLAN.md); `MU_RELATIONSHIP_PRODUCERS=off` stays as a kill switch), and never fails the ingest: errors are logged, notified, and recorded as a FAILED run. It is skipped with a logged reason when the relationships store isn't migrated.
 
 ### 2.5 Catch-up (D3)
 

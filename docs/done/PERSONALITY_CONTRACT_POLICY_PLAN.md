@@ -34,7 +34,7 @@ Inspected canonical `/home/jrereyi/Project-Mu` on 2026-10-31. Read root AGENTS.m
 | S12 | Existing tools/personality_contract_demo.py and its test are untracked illustrative artifacts; the design's demo section excludes production counters/markets. | Demo is not calibration, activation or full-path verification. Keep its files under their existing owner's control. |
 | S13 | PROJECT_SPEC §2.17b still documents persona zero; §3.3p includes older rollout descriptions alongside newer core ownership documented in personality/README.md. | Parent consolidates §7 changes. Historical later takeover dates do not replace the requested 2026–2034 timeline. |
 
-**Corrected 2026-11-03 ([activation plan](../in_progress/PERSONALITY_ACTIVATION_PLAN.md) S2):** the league office does run these engines through its `Deps` class (`pipeline/league_office.py:890` `resign_decisions`, `:899` `run_wave`, `:909` `udfa_market`; `:1549` `step_free_agency`). The activation plan's `PersonalityDeps` passes this plan's `contract_inputs` through them. This plan's units add the keyword and stay neutral by default.
+**Corrected 2026-11-03 ([activation plan](../done/PERSONALITY_ACTIVATION_PLAN.md) S2):** the league office does run these engines through its `Deps` class (`pipeline/league_office.py:890` `resign_decisions`, `:899` `run_wave`, `:909` `udfa_market`; `:1549` `step_free_agency`). The activation plan's `PersonalityDeps` passes this plan's `contract_inputs` through them. This plan's units add the keyword and stay neutral by default.
 
 ## 1. Scope
 

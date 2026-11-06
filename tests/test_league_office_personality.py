@@ -1,4 +1,4 @@
-"""PersonalityDeps and the league office seams (docs/in_progress/PERSONALITY_ACTIVATION_PLAN.md §2.3, U2).
+"""PersonalityDeps and the league office seams (docs/done/PERSONALITY_ACTIVATION_PLAN.md §2.3, U2).
 
 Offline: fake feature adapters, faked engines and tests/test_league_office.py's FakeDeps / FakeCursor / snapshot
 helpers. Shadow must return exactly the baseline and record the adjusted result; active returns the adjusted one.

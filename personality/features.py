@@ -1,4 +1,4 @@
-"""Personality feature switchboard (docs/in_progress/PERSONALITY_ACTIVATION_PLAN.md §2.1-§2.2, §2.5; D1-D4).
+"""Personality feature switchboard (docs/done/PERSONALITY_ACTIVATION_PLAN.md §2.1-§2.2, §2.5; D1-D4).
 
 One switchboard per franchise (keyed by league_state.madden_league_id): each personality feature's mode
 (off | shadow | active), version, config and JR's review note, the history of every change, and shadow seasons

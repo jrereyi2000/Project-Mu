@@ -1,4 +1,4 @@
-"""Personality inputs for the league office (docs/in_progress/PERSONALITY_ACTIVATION_PLAN.md §2.3, U2).
+"""Personality inputs for the league office (docs/done/PERSONALITY_ACTIVATION_PLAN.md §2.3, U2).
 
 `PersonalityDeps` is a `pipeline.league_office.Deps` whose engine calls pass each personality feature's inputs
 according to that feature's mode in the switchboard (`personality/features.py`), read once per write and frozen:

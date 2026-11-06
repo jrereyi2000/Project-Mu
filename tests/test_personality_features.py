@@ -1,4 +1,4 @@
-"""Personality feature switchboard (docs/in_progress/PERSONALITY_ACTIVATION_PLAN.md §2.1-§2.2, §2.5, U1).
+"""Personality feature switchboard (docs/done/PERSONALITY_ACTIVATION_PLAN.md §2.1-§2.2, §2.5, U1).
 
 Offline: a fake cursor dispatches on each statement's '/* q:<name> */' tag over in-memory tables. The opt-in
 scratch test (PERSONALITY_FEATURES_TEST_DSN) applies the migration twice and checks an incompatible table is refused.

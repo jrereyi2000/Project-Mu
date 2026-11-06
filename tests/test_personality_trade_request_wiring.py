@@ -1,5 +1,5 @@
 """Trade-request scheduling, the GM handoff and switchboard-driven watcher flags
-(docs/in_progress/PERSONALITY_ACTIVATION_PLAN.md §2.4, U3). Offline: fake connections, fake stores, synthetic books."""
+(docs/done/PERSONALITY_ACTIVATION_PLAN.md §2.4, U3). Offline: fake connections, fake stores, synthetic books."""
 import json
 import os
 from unittest import mock
