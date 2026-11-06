@@ -139,24 +139,8 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "SEA",
-          "role": "OC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "mixed",
-      "evidence": [
-        "E6",
-        "E7"
-      ]
-    },
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "BAL",
+          "team": "NYG",
           "role": "HC"
         }
       },

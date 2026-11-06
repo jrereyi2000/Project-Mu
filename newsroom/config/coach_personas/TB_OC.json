@@ -1,116 +1,117 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:TB:OC",
-  "name": "Liam Coen",
+  "name": "Zac Robinson",
   "role": "OC",
   "team": "TB",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "TB",
     "role": "OC",
-    "name": "Liam Coen"
+    "name": "Zac Robinson"
   },
   "sliders": {
-    "temperament": 5,
-    "sociability": 6,
+    "temperament": 4,
+    "sociability": 5,
     "confidence": 6,
-    "openness": 5,
+    "openness": 6,
     "warmth": 6,
-    "drive": 7
+    "drive": 5
   },
   "slider_evidence": {
-    "sociability": [
-      "E1",
-      "E5"
+    "temperament": [
+      "E4"
     ],
     "confidence": [
-      "E3",
       "E5"
+    ],
+    "openness": [
+      "E2",
+      "E6"
     ],
     "warmth": [
-      "E1"
-    ],
-    "drive": [
-      "E4",
-      "E5"
+      "E3",
+      "E6"
     ]
   },
   "traits": [
-    "SCHEME_NERD",
     "QB_WHISPERER",
-    "FAMILY_MAN"
+    "SCHEME_NERD",
+    "FILM_ROOM_RAT"
   ],
   "trait_evidence": {
-    "SCHEME_NERD": [
-      "E1",
-      "E3"
-    ],
     "QB_WHISPERER": [
-      "E1",
-      "E4"
+      "E3",
+      "E6"
     ],
-    "FAMILY_MAN": [
-      "E1",
+    "SCHEME_NERD": [
+      "E2",
       "E5"
+    ],
+    "FILM_ROOM_RAT": [
+      "E3",
+      "E4"
     ]
   },
   "views": [
     {
-      "text": "Football is about players, not plays; put the ball in your best athletes' hands in ways they trust.",
+      "text": "A great quarterback's preparation raises the whole staff's level of detail.",
       "when": [
-        "SCHEME",
-        "PLAYER"
+        "QB",
+        "COACHING"
       ]
     },
     {
-      "text": "Be explosive both ways: a run game good enough that the pass looks the same.",
+      "text": "You borrow from the coach who trained you, but you cannot copy him; you build your own version.",
       "when": [
+        "COACHING",
         "SCHEME"
       ]
     },
     {
-      "text": "If the deep ball is not there, the offense has other ways to move the ball; do not force it.",
+      "text": "Formation looks are tools; if defenses think they have you figured out, show them something else from the same look.",
       "when": [
         "SCHEME",
         "GAME_REVIEW"
       ]
     },
     {
-      "text": "A quarterback plays best when the offense is shaped around what he already does well.",
+      "text": "A slow opener usually starts with the play-caller, and the fix is cleaner execution and fewer giveaways.",
       "when": [
-        "QB"
+        "BAD_GAME",
+        "GAME_REVIEW"
       ]
     },
     {
-      "text": "Winning is a habit you build, not a losing streak you try to avoid.",
+      "text": "Have the two-minute calls ready before you need them, so a late drive is just the plan running.",
       "when": [
-        "LOSING_STREAK",
-        "COACHING"
+        "CLOSE_GAMES",
+        "SCHEME"
       ]
     },
     {
-      "text": "The best buildings are the ones where everyone, top to bottom, is in sync.",
+      "text": "A young quarterback benefits from hearing it straight from his coordinator, face to face on the sideline.",
       "when": [
-        "FRONT_OFFICE",
-        "COACHING"
+        "QB",
+        "YOUTH"
       ]
     },
     {
-      "text": "A coordinator should want a head job someday, but the work in front of him comes first.",
+      "text": "Outside criticism of a scheme is often a convenient story; the tape says what really went wrong.",
       "when": [
-        "COACHING",
-        "OFFSEASON"
+        "STRUGGLING",
+        "SCHEME"
       ]
     }
   ],
   "signatures": [
-    "jokes at his own expense before getting into the details",
-    "credits the Rams years under McVay as his real education",
-    "mentions his father and family when talking about big career choices"
+    "credits the quarterback and the line by name after a good drive, and takes the blame himself after a bad one",
+    "explains a scheme choice by listing the variations it hides rather than defending the label",
+    "refers back to what he learned beside McVay and Stafford in Los Angeles"
   ],
-  "want": "to run his own team and prove the Rams-tree offense can build a winning culture from the head chair",
-  "fear": "that the messy way he left Tampa Bay colors how players and coaches see his word",
-  "voice": "Upbeat, self-deprecating and energetic, he jokes easily and talks fast about personnel and run-pass blending. He is relaxed about weaknesses in the offense and credits players and his Rams mentors. On his own ambitions he is candid but says the current job comes first.",
+  "want": "to show that a McVay-tree quarterbacks coach can run his own offense and grow a young passer in Atlanta",
+  "fear": "that his offense gets labeled predictable and the young quarterback's struggles get pinned on him",
+  "voice": "Calm, polite and analytical, a former quarterback who talks in the language of coverages and packaging. He spreads credit to players and owns slow starts, but pushes back firmly when he thinks a criticism of his scheme is lazy. Rarely raises his voice in public.",
   "ties": [
     {
       "target": {
@@ -124,100 +125,109 @@
       "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E5"
+        "E2"
       ]
     },
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COACHES_DATA",
-          "team": "TB",
-          "role": "HC"
+          "table": "COORDINATORS_DATA",
+          "team": "SF",
+          "role": "DC"
         }
       },
       "relationship_kind": "collaboration",
-      "outcome": "mixed",
+      "outcome": "positive",
       "evidence": [
-        "E2",
-        "E6"
+        "E1"
       ]
     },
     {
       "target": {
         "kind": "player",
-        "name": "Baker Mayfield",
-        "team_2026": "TB"
+        "name": "Matthew Stafford",
+        "team_2026": "LAR"
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E4"
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Michael Penix Jr.",
+        "team_2026": "ATL"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://buccaneers.com/news/tampa-bay-buccaneers-offensive-coordinator-liam-coen-introductory-press-conference-quotes-2-6-24",
-      "publisher": "Tampa Bay Buccaneers (buccaneers.com)",
-      "published": "2024-02-06",
+      "url": "https://sportstalkatl.com/raheem-morris-talks-falcons-first-time-play-calling-coordinators",
+      "publisher": "SportsTalk ATL (staff)",
+      "published": "2024-02-14",
       "accessed": "2026-11-05",
-      "summary": "Introductory quotes: build the offense around players, aim for balance and explosiveness, credits McVay for teaching run fits and defensive study, recalls one Kentucky season, praises Mayfield's energy, jokes about himself and calls his father his best friend. His own words on the team site.",
-      "confidence": "high"
+      "summary": "Morris says Robinson's lack of play-calling experience does not concern him and he trusts him fully; reports that about six teams pursued Robinson before he chose Atlanta. Local item, Morris's view.",
+      "confidence": "medium"
     },
     {
       "id": "E2",
-      "url": "https://www.buccaneers.com/news/todd-bowles-new-oc-liam-coen-will-have-play-calling-leeway",
-      "publisher": "Tampa Bay Buccaneers (buccaneers.com), Scott Smith",
-      "published": "2024-02-27",
+      "url": "https://www.si.com/nfl/rams/news/atlanta-falcons-offensive-coordinator-zac-robinson-reflects-head-coach-sean-mcvay-los-angeles-rams",
+      "publisher": "Sports Illustrated (Rams On SI), Anthony Licciardi",
+      "published": "2024-02-16",
       "accessed": "2026-11-05",
-      "summary": "Bowles explains choosing Coen after seven interviews, notes he knew him from the Rams, gives him play-calling while keeping key situations for himself. Bowles's view of the hire.",
+      "summary": "Robinson credits McVay with starting his coaching career, describes him as transparent and accessible, singles out his pregame preparation and plan structure, and says he will use those lessons rather than try to be a copy. His own words.",
       "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://www.si.com/nfl/buccaneers/news/tampa-bay-buccaneers-coach-liam-coen-unbothered-by-lack-of-deep-ball-success",
-      "publisher": "Sports Illustrated (Bucs Gameday), David Harrison",
-      "published": "2024-12-07",
+      "url": "https://www.si.com/nfl/falcons/news/atlanta-falcons-zac-robinson-matthew-stafford-los-angeles-rams-relationship-smartest-guy",
+      "publisher": "Sports Illustrated (Falcons On SI), Jon Alfano",
+      "published": "2024-02-17",
       "accessed": "2026-11-05",
-      "summary": "He says the lack of a deep passing game does not bother him much because the offense has other ways to move the ball, though he would like more shots. Tone relaxed and matter-of-fact.",
-      "confidence": "medium"
+      "summary": "At his introduction he calls Stafford the smartest player he has been around, a meticulous preparer who forced coaches to match his detail; they remain close friends. Notes his rise from assistant to Rams QB coach and pass game coordinator. His view of one player.",
+      "confidence": "high"
     },
     {
       "id": "E4",
-      "url": "https://www.news4jax.com/sports/2025/01/03/on-football-baker-mayfields-success-in-tampa-bay-has-turned-him-into-a-coach-builder/",
-      "publisher": "Associated Press On Football column (Rob Maaddi) via News4JAX",
-      "published": "2025-01-03",
+      "url": "https://www.ajc.com/sports/atlanta-falcons/in-second-game-as-coordinator-falcons-zac-robinson-dialed-up-game-winning-drive/TLOO2UMPD5CWFL3NBLRVTVTIA4",
+      "publisher": "Atlanta Journal-Constitution, D. Orlando Ledbetter",
+      "published": "2024-09-19",
       "accessed": "2026-11-05",
-      "summary": "Column: Mayfield played even better under Coen than under Canales; Coen hopes to be a head coach someday but is focused on Tampa; Mayfield credits him for tailoring the offense to players' strengths. Columnist framing.",
-      "confidence": "medium"
+      "summary": "In his second game calling plays he scripts a late winning drive at Philadelphia, having readied two-minute calls in advance; he credits execution, the line and Cousins, and says the Week 1 problems started with him. Reporter describes him as calm and self-critical.",
+      "confidence": "high"
     },
     {
       "id": "E5",
-      "url": "https://www.news4jax.com/sports/2025/01/27/takeaways-on-liam-coen-hell-call-plays-for-jaguars-the-rams-blueprint-and-big-culture-change",
-      "publisher": "News4JAX",
-      "published": "2025-01-27",
+      "url": "https://www.si.com/nfl/falcons/news/espn-dan-orlovsky-rips-atlanta-falcons-offense-zac-robinson-again",
+      "publisher": "Sports Illustrated (Falcons On SI), Scott Kennedy",
+      "published": "2025-09-25",
       "accessed": "2026-11-05",
-      "summary": "At his Jacksonville introduction he talks about making winning a habit, holds up McVay's aligned Rams building as the model, will call plays, says the move was about helping people, laughs off a shaky crowd chant, and cites family. Local TV takeaways.",
+      "summary": "An analyst attacks the heavy pistol usage as predictable and limiting for Penix; Robinson answers that the pistol is versatile, the run game uses many snap points, and the team adapts to defenses, calling the critique a convenient narrative. Criticism plus his rebuttal.",
       "confidence": "medium"
     },
     {
       "id": "E6",
-      "url": "https://www.si.com/nfl/buccaneers/news/tampa-bay-buccaneers-hc-todd-bowles-opens-up-on-liam-coen-departure-to-jacksonville-jaguars",
-      "publisher": "Sports Illustrated (Bucs Gameday), River Wells",
-      "published": "2025-03-01",
+      "url": "https://www.atlantafalcons.com/news/zac-robinson-falcons-offense-play-calling-sideline",
+      "publisher": "Atlanta Falcons (atlantafalcons.com), Terrin Waack",
+      "published": "2025-09-29",
       "accessed": "2026-11-05",
-      "summary": "Reports Coen had reportedly agreed verbally to a big raise to stay before meeting the Jaguars owner and leaving, frustrating Tampa fans; Bowles shows no resentment. Shows how the exit was perceived.",
-      "confidence": "medium"
+      "summary": "He moves from the booth to the sideline for the first time; Penix says direct feedback built confidence, Bijan Robinson says he explained coverages, and the offense posts season highs. He is not quoted directly; a teammate relays that he said he should always have been downstairs.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

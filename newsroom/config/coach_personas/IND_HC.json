@@ -130,7 +130,7 @@
         "kind": "coach",
         "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "IND",
+          "team": "TEN",
           "role": "DC"
         }
       },

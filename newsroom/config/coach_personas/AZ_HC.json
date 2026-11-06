@@ -1,129 +1,116 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:AZ:HC",
-  "name": "Jonathan Gannon",
+  "name": "Mike LaFleur",
   "role": "HC",
   "team": "AZ",
   "seed_ref": {
     "table": "COACHES_DATA",
     "team": "AZ",
     "role": "HC",
-    "name": "Jonathan Gannon"
+    "name": "Mike LaFleur"
   },
   "sliders": {
     "temperament": 6,
-    "sociability": 6,
-    "confidence": 6,
-    "openness": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
     "warmth": 5,
-    "drive": 7
+    "drive": 6
   },
   "slider_evidence": {
     "temperament": [
-      "E7"
+      "E4"
     ],
-    "sociability": [
-      "E1",
-      "E2"
-    ],
-    "confidence": [
-      "E1",
+    "openness": [
+      "E2",
       "E3"
     ],
     "drive": [
-      "E1",
-      "E2"
+      "E4"
     ]
   },
   "traits": [
-    "QUOTABLE",
-    "OLD_SCHOOL",
-    "SCHEME_NERD"
+    "SCHEME_NERD",
+    "YOUTH_DEVELOPER",
+    "FILM_ROOM_RAT"
   ],
   "trait_evidence": {
-    "QUOTABLE": [
-      "E3"
-    ],
-    "OLD_SCHOOL": [
-      "E1",
-      "E2"
-    ],
     "SCHEME_NERD": [
-      "E6"
+      "E4"
+    ],
+    "YOUTH_DEVELOPER": [
+      "E2",
+      "E4"
+    ],
+    "FILM_ROOM_RAT": [
+      "E2"
     ]
   },
   "views": [
     {
-      "text": "A team should be adaptable, physical, explosive and smart, and every plan should show all four.",
+      "text": "Attack before the snap with motion, formations and tempo, then make the run and pass look alike.",
       "when": [
-        "SCHEME",
-        "PREVIEW"
+        "SCHEME"
       ]
     },
     {
-      "text": "Stay where your feet are; this week's work is the only one you can win.",
+      "text": "A young roster needs coaches to teach habits off the field too: sleep, food, routine.",
       "when": [
-        "COACHING",
-        "WIN_STREAK"
-      ]
-    },
-    {
-      "text": "Put defenses in conflict: when a run and a pass look the same, they have to guess.",
-      "when": [
-        "SCHEME",
-        "QB"
-      ]
-    },
-    {
-      "text": "A dynamic quarterback is a problem for every defense, and the offense should lean into that.",
-      "when": [
-        "QB"
-      ]
-    },
-    {
-      "text": "Hire coaches for how they think and whether they serve players, not for their age.",
-      "when": [
-        "COACHING",
-        "YOUTH"
-      ]
-    },
-    {
-      "text": "Loving football means you never have to look for motivation.",
-      "when": [
-        "COACHING",
-        "OFFSEASON"
-      ]
-    },
-    {
-      "text": "When the head coach loses his composure, he owns it in front of the team, apologizes and moves on.",
-      "when": [
-        "BAD_GAME",
+        "YOUTH",
         "COACHING"
+      ]
+    },
+    {
+      "text": "Players can teach coaches as much as coaches teach players, especially a veteran quarterback.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A season that unravels late is still a lesson worth keeping.",
+      "when": [
+        "STRUGGLING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Not calling plays is fine; building the foundation of the offense is the job.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Every scheme borrows from somewhere, but it has to be tailored to the players you actually have.",
+      "when": [
+        "SCHEME",
+        "ROSTER_MOVES"
       ]
     }
   ],
   "signatures": [
-    "leans on a stock of short catchphrases that reporters start collecting",
-    "brings players into the room at big announcements and speaks to them directly",
-    "apologizes to the team as a group when he crosses a line"
+    "traces his ideas back to the film rooms where he learned from his brother, Shanahan and McVay",
+    "speaks about the Jets years without bitterness, as a lesson he would not trade"
   ],
-  "want": "to build Arizona into a physical, adaptable winner around a young staff he hand-picked",
-  "fear": "that the heat that makes him energizing on the sideline turns into a moment that defines him",
-  "voice": "High-energy, emphatic and full of slogans; he speaks in punchy phrases and repeats a few favorite expressions. He talks up toughness, adaptability and staying present, and is effusive about players he likes. When he gets something wrong he names it plainly and apologizes.",
+  "want": "to get back to calling plays and earn a head job on the strength of the Rams offense",
+  "fear": "that he is seen as a well-connected assistant who only thrives in other people's systems",
+  "voice": "Energetic and a little feisty, he talks quickly about aggression, motion and blending the run and pass. He is open about what the Jets taught him and humble about not calling plays. He credits his mentors freely.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "AZ",
-          "role": "DC"
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
         }
       },
-      "relationship_kind": "mentorship",
+      "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E4",
+        "E2",
         "E5"
       ]
     },
@@ -131,101 +118,99 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "AZ",
-          "role": "OC"
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
         }
       },
-      "relationship_kind": "collaboration",
+      "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E4",
-        "E6"
+        "E1",
+        "E4"
       ]
     },
     {
       "target": {
-        "kind": "player",
-        "name": "Kyler Murray",
-        "team_2026": "MIN"
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "GB",
+          "role": "HC"
+        }
       },
       "relationship_kind": "support",
       "outcome": "positive",
       "evidence": [
         "E1",
-        "E6"
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Matthew Stafford",
+        "team_2026": "LAR"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E5"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.news4jax.com/sports/2023/02/16/gannon-ready-to-lead-cards-after-whirlwind-interview-process/",
-      "publisher": "Associated Press via News4JAX",
-      "published": "2023-02-16",
+      "url": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/rams-announce-mike-lafleur-hiring",
+      "publisher": "NBC Sports (ProFootballTalk), Charean Williams",
+      "published": "2023-01-27",
       "accessed": "2026-11-05",
-      "summary": "Introduced four days after his Eagles lost the Super Bowl, he stresses staying in the present, praises Murray as a rare problem for defenses, and says he never needs to look for motivation because he loves football. Writer contrasts his energy with the reserved previous coach.",
+      "summary": "The Rams hire LaFleur after two seasons running the Jets' offense under Saleh; earlier he was San Francisco's pass game coordinator under Shanahan (2017-2020). His brother Matt was McVay's first offensive coordinator. Facts only.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://www.azcardinals.com/news/right-away-jonathan-gannon-shows-players-his-passion",
-      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
-      "published": "2023-02-16",
+      "url": "https://www.therams.com/news/once-learning-from-sean-mcvay-mike-lafleur-now-gets-to-work-with-him-first-time",
+      "publisher": "Los Angeles Rams (therams.com), Stu Jackson",
+      "published": "2023-02-07",
       "accessed": "2026-11-05",
-      "summary": "Speaking to players seated up front, he lays out a team built on adaptability, physicality, explosiveness and smarts; GM Ossenfort says his energy never dropped in interviews and Ertz, who played for him in Philadelphia, calls him a great leader who stayed in touch. Team site.",
+      "summary": "He recalls spending college-coaching breaks in Washington's film rooms learning from Matt, Shanahan and McVay, says the young Jets roster taught him to coach habits like sleep and nutrition, and expects to learn from Stafford, Kupp and Higbee while McVay calls plays. Team site.",
       "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://arizonasports.com/haboob-blog/let-it-rip-a-guide-to-cardinals-head-coach-jonathan-gannons-vocabulary",
-      "publisher": "Arizona Sports",
-      "published": "2023-02-20",
+      "url": "https://amp.nfl.com/news/new-rams-oc-mike-lafleur-i-can-t-wait-to-start-building-relationship-with-qb-mat",
+      "publisher": "NFL.com, Bobby Kownack",
+      "published": "2023-02-08",
       "accessed": "2026-11-05",
-      "summary": "A light guide to seven recurring phrases from his introduction about accountability, team-first play, bold action and focus; Bidwill says he used one favorite word in about a dozen ways in his interview. Shows a speaking habit, not substance.",
-      "confidence": "medium"
+      "summary": "At his introduction he praises the Rams' culture, is eager to build a relationship with Stafford, believes players can teach coaches, and says not calling plays does not bother him. His words.",
+      "confidence": "high"
     },
     {
       "id": "E4",
-      "url": "https://www.azcardinals.com/news/gannon-cardinals-get-coordinators-nick-rallis-drew-petzing",
-      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
-      "published": "2023-02-19",
+      "url": "https://amp.foxsports.com/stories/nfl/new-rams-oc-mike-lafleur-focused-on-bringing-big-play-offense-back-to-l-a",
+      "publisher": "Fox Sports, Eric D. Williams",
+      "published": "2023-02-15",
       "accessed": "2026-11-05",
-      "summary": "He hires Petzing, 35, who worked with him in Minnesota, and Rallis, 29, his Eagles linebackers coach and a Vikings colleague, saying age was never a factor and he judged candidates on thinking and character. Team site.",
-      "confidence": "high"
+      "summary": "He centers his philosophy on pre-snap aggression and making run and pass look alike, says every scheme must fit its personnel, acknowledges overlap with Shanahan, and calls the Jets years a valuable lesson that unraveled late. Writer expects him to bring some feistiness.",
+      "confidence": "medium"
     },
     {
       "id": "E5",
-      "url": "https://azcardinals.com/news/problem-solver-nick-rallis-ready-for-job-as-cardinals-defensive-coordinator",
-      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
-      "published": "2023-02-22",
+      "url": "https://www.si.com/nfl/rams/onsi/los-angeles-mike-lafleur-saves-day-against-cardinals",
+      "publisher": "Sports Illustrated (Rams On SI), Brock Vierra",
+      "published": "2025-12-09",
       "accessed": "2026-11-05",
-      "summary": "Gannon says he fully trusts Rallis to run the defense, cares more about serving players and results than age, and asks candidates about the best and worst things their bosses did. Team site.",
-      "confidence": "high"
-    },
-    {
-      "id": "E6",
-      "url": "https://africa.espn.com/nfl/story/_/id/39575533/kyler-murray-center-drew-petzing-jonathan-gannon",
-      "publisher": "ESPN, Josh Weinfuss",
-      "published": "2024-02-24",
-      "accessed": "2026-11-05",
-      "summary": "Explains Murray taking more snaps under center in 2023; Gannon says the aim was to create conflict so defenses cannot tell run from pass, and Petzing stresses that every look must appear identical. Scheme detail with quotes.",
-      "confidence": "high"
-    },
-    {
-      "id": "E7",
-      "url": "https://www.news4jax.com/sports/2025/10/08/cardinals-coach-jonathan-gannon-fined-100k-for-sideline-incident-with-player-ap-sources-say/",
-      "publisher": "Associated Press via News4JAX",
-      "published": "2025-10-08",
-      "accessed": "2026-11-05",
-      "summary": "The team fines him $100,000 after video shows him shouting at and swiping toward running back Demercado following a costly fumble; he says he apologized to the player and team, let the moment overwhelm him, and calls it a mistake. One incident; the league took no action.",
-      "confidence": "high"
+      "summary": "With McVay ill, LaFleur relays the play calls to Stafford for the first time since 2022 and McVay praises his decisions afterward. Fan-network writeup.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

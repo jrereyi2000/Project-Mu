@@ -105,9 +105,9 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COACHES_DATA",
-          "team": "AZ",
-          "role": "HC"
+          "table": "COORDINATORS_DATA",
+          "team": "GB",
+          "role": "DC"
         }
       },
       "relationship_kind": "mentorship",

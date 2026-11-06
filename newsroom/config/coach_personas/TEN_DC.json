@@ -1,175 +1,166 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:TEN:DC",
-  "name": "Dennard Wilson",
+  "name": "Gus Bradley",
   "role": "DC",
   "team": "TEN",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "TEN",
     "role": "DC",
-    "name": "Dennard Wilson"
+    "name": "Gus Bradley"
   },
   "sliders": {
     "temperament": 5,
     "sociability": 6,
-    "confidence": 7,
+    "confidence": 5,
     "openness": 5,
-    "warmth": 5,
-    "drive": 6
+    "warmth": 6,
+    "drive": 5
   },
   "slider_evidence": {
-    "confidence": [
-      "E3",
-      "E2"
+    "warmth": [
+      "E1",
+      "E4"
     ],
     "sociability": [
-      "E2",
-      "E3"
-    ],
-    "drive": [
-      "E5",
-      "E3"
+      "E1"
     ]
   },
   "traits": [
     "TEACHER",
-    "DISCIPLINARIAN",
-    "SCHEME_NERD"
+    "LOYAL",
+    "OLD_SCHOOL"
   ],
   "trait_evidence": {
     "TEACHER": [
-      "E2",
       "E3"
     ],
-    "DISCIPLINARIAN": [
-      "E5",
+    "LOYAL": [
       "E3"
     ],
-    "SCHEME_NERD": [
-      "E2",
-      "E3"
+    "OLD_SCHOOL": [
+      "E2"
     ]
   },
   "views": [
     {
-      "text": "Talent shapes the scheme; build the defense around what each player does best.",
+      "text": "Great effort and great enthusiasm create energy on the field, and energy wins downs.",
       "when": [
-        "SCHEME",
-        "PLAYER"
-      ]
-    },
-    {
-      "text": "A defense should swarm the football and take it away, no matter how many weapons the offense has.",
-      "when": [
-        "SCHEME",
-        "PERFORMANCE"
-      ]
-    },
-    {
-      "text": "Do not study other teams' stars; they are strangers, and your own style is what matters.",
-      "when": [
-        "PREVIEW",
+        "PERFORMANCE",
         "SCHEME"
       ]
     },
     {
-      "text": "Coach players hard and push them past what they think they can do; the confident ones make plays.",
+      "text": "A simple defense played fast beats a clever one played slow.",
       "when": [
-        "COACHING",
-        "YOUTH"
+        "SCHEME"
       ]
     },
     {
-      "text": "Limiting explosive plays is the first job of a secondary.",
+      "text": "When the energy dips, send pressure and let the defense feel it can make a play.",
       "when": [
-        "SCHEME",
-        "GAME_REVIEW"
+        "STRUGGLING",
+        "SCHEME"
       ]
     },
     {
-      "text": "The coordinator sets the tone in the meeting room, and the players should eventually take it over.",
+      "text": "Every player deserves a blank slate with a new staff, judged on what he does now.",
+      "when": [
+        "PLAYER",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Keep a staff together across stops; trust built over years is worth more than any new idea.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A steady head coach who holds coaches to the same standard makes a coordinator's job easier.",
       "when": [
         "COACHING",
-        "OFFSEASON"
+        "LOSING_STREAK"
       ]
     }
   ],
   "signatures": [
-    "promises an attacking, physical defense in vivid terms",
-    "mixes humor with hard coaching in meetings"
+    "stays relentlessly upbeat at the podium even after a rough defensive day",
+    "talks about effort and enthusiasm before he talks about scheme"
   ],
-  "want": "to prove that a longtime secondary coach can build an attacking defense of his own and climb further",
-  "fear": "that a losing team buries a good defense and his first coordinator job is judged only by the record",
-  "voice": "Intense, confident and motivational, with flashes of humor; he talks about effort, violence at the point of attack, togetherness and taking the ball away. He stays upbeat in public and focuses on his own unit rather than opponents.",
+  "want": "to field one more defense that plays with the speed and energy of his best units",
+  "fear": "that his positivity is remembered as softness because his records as a head coach and later coordinator fell short",
+  "voice": "Warm, upbeat and earnest; he speaks about effort, enthusiasm and toughness, avoids criticizing players publicly, and keeps a positive tone even when the numbers are bad.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "TEN",
+          "team": "IND",
           "role": "HC"
         }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E1"
+        "E4",
+        "E5"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://tennesseetitans.com/news/titans-hire-nick-holz-as-offensive-coordinator-dennard-wilson-as-defensive-coordinator",
-      "publisher": "Tennessee Titans (tennesseetitans.com), Jim Wyatt",
-      "published": "2024-02-05",
+      "url": "https://abc7news.com/post/jaguars-fire-coach-gus-bradley-after-3-plus-seasons-14-wins/1662505/",
+      "publisher": "Associated Press via ABC7 News",
+      "published": "2016-12-18",
       "accessed": "2026-11-05",
-      "summary": "Staff announcement: Holz, Jacksonville's 2023 passing game coordinator and UNLV's 2022 coordinator, spent nearly a decade with the Raiders, worked with Callahan in 2018, is his high school classmate, and once worked for Callahan's father at Nebraska; Wilson comes from one season as Baltimore's secondary coach after defensive-back jobs with the Rams, Jets and Eagles. Callahan plans to call plays; Holz will help develop Will Levis.",
-      "confidence": "high"
-    },
-    {
-      "id": "E2",
-      "url": "https://www.si.com/nfl/titans/news/baltimore-ravens-pro-bowlers-sing-praises-of-titans-defensive-coordinator-dennard-wilson",
-      "publisher": "Sports Illustrated (All Titans), Nubyjas Wilborn",
-      "published": "2024-02-07",
-      "accessed": "2026-11-05",
-      "summary": "At the Pro Bowl, Roquan Smith says he envies Tennessee for hiring Wilson and praises his multiple coverages and record of improving secondaries; Kyle Hamilton calls him very smart, credits his ideas for limiting big plays, and says he balances humor with seriousness to build confident players.",
+      "summary": "Jacksonville fires Bradley after a ninth straight loss leaves the team 2-12 and him 14-48 over three-plus seasons; he came from Seattle as defensive coordinator; coverage notes his always-positive approach. Date taken from the firing; the AP story itself is a firing report.",
       "confidence": "medium"
     },
     {
-      "id": "E3",
-      "url": "https://tennesseetitans.com/news/new-titans-dc-dennard-wilson-aims-to-coach-with-enthusiasm-unknown-to-mankind",
-      "publisher": "Tennessee Titans (tennesseetitans.com), Jim Wyatt",
-      "published": "2024-04-11",
+      "id": "E2",
+      "url": "https://www.colts.com/news/gus-bradley-defense-2022-cover-3-scheme-blitz-sacks-turnovers",
+      "publisher": "Indianapolis Colts (colts.com), JJ Stankevitz",
+      "published": "2022-02-09",
       "accessed": "2026-11-05",
-      "summary": "Energetic and confident: does not study rival rosters, wants a defense that swarms and takes the ball away, began as a Bears pro scout before coaching defensive backs for the Rams, Jets, Eagles and Ravens, stresses culture early, and plans to coach players hard with great enthusiasm. Team-written.",
+      "summary": "Introduced as coordinator, Bradley wants great effort and great enthusiasm, says enthusiasm creates energy and pressure can restore it, describes a simple, Cover 3-based scheme stressing toughness and communication, and gives players a blank slate. Measured, confident tone; team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.colts.com/news/john-fox-senior-defensive-assistant-nfl-espn-gus-bradley-frank-reich",
+      "publisher": "Indianapolis Colts (colts.com), JJ Stankevitz",
+      "published": "2022-04-12",
+      "accessed": "2026-11-05",
+      "summary": "John Fox joins as senior defensive assistant and calls Bradley an outstanding teacher; notes that Bradley and several assistants have worked together at multiple stops. Testimony from a colleague.",
       "confidence": "high"
     },
     {
       "id": "E4",
-      "url": "https://www.nfl.com/news/new-titans-dc-dennard-wilson-aims-to-cultivate-an-attacking-defense-in-tennessee",
-      "publisher": "NFL.com, Michael Baca",
-      "published": "2024-02-15",
+      "url": "https://www.colts.com/news/shane-steichen-head-coach-afc-playoffs-gus-bradley-julian-blackmon",
+      "publisher": "Indianapolis Colts (colts.com), Raven Moore",
+      "published": "2023-11-30",
       "accessed": "2026-11-05",
-      "summary": "At his introduction Wilson says talent should shape the scheme, cites Patton on attack, promises a violent unit that never stops competing, stresses effort and communication, and casts himself as a teacher who pushes players past their limits. Page date not shown; approximate.",
-      "confidence": "low"
+      "summary": "Team feature on his first season: players say he set a clear standard and lives by it through Richardson's season-ending injury, a suspension and a three-game skid; Tyquan Lewis says he brought accountability; Blackmon says players trust the plan; DC Gus Bradley praises his steady message and that he holds players and coaches alike to the standard. Team-written.",
+      "confidence": "high"
     },
     {
       "id": "E5",
-      "url": "https://www.si.com/nfl/titans/news/tennessee-titans-players-recognize-greatness-dennard-wilson",
-      "publisher": "Sports Illustrated (All Titans), Jeremy Brener",
-      "published": "2024-06-03",
+      "url": "https://www.nfl.com/news/colts-fire-defensive-coordinator-gus-bradley-after-three-seasons",
+      "publisher": "NFL.com",
+      "published": "2025-01-06",
       "accessed": "2026-11-05",
-      "summary": "Chidobe Awuzie says Wilson sets the tone in the meeting room and players must match his intensity until they can set it themselves; notes this is Wilson's first coordinator job after a strong Ravens defense.",
-      "confidence": "medium"
+      "summary": "Indianapolis fires Bradley after three seasons without a playoff berth as the defense allowed the third-, fifth- and ninth-most points and regressed in yards and sacks; Steichen calls him a man of great character whom he respects. Firing report.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

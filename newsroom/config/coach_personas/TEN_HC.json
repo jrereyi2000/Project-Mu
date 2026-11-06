@@ -1,191 +1,217 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:TEN:HC",
-  "name": "Brian Callahan",
+  "name": "Robert Saleh",
   "role": "HC",
   "team": "TEN",
   "seed_ref": {
     "table": "COACHES_DATA",
     "team": "TEN",
     "role": "HC",
-    "name": "Brian Callahan"
+    "name": "Robert Saleh"
   },
   "sliders": {
-    "temperament": 6,
-    "sociability": 5,
+    "temperament": 5,
+    "sociability": 7,
     "confidence": 5,
     "openness": 5,
-    "warmth": 5,
-    "drive": 5
+    "warmth": 7,
+    "drive": 7
   },
   "slider_evidence": {
-    "temperament": [
+    "sociability": [
+      "E1",
+      "E3"
+    ],
+    "warmth": [
       "E2",
-      "E4"
+      "E3"
+    ],
+    "drive": [
+      "E1",
+      "E2"
     ]
   },
   "traits": [
-    "QB_WHISPERER",
-    "GUARDED",
-    "DISCIPLINARIAN"
+    "LOYAL",
+    "YOUTH_DEVELOPER",
+    "FAMILY_MAN",
+    "QUOTABLE"
   ],
   "trait_evidence": {
-    "QB_WHISPERER": [
-      "E1"
+    "LOYAL": [
+      "E4",
+      "E5"
     ],
-    "GUARDED": [
-      "E3"
+    "YOUTH_DEVELOPER": [
+      "E4"
     ],
-    "DISCIPLINARIAN": [
+    "FAMILY_MAN": [
+      "E1",
+      "E2"
+    ],
+    "QUOTABLE": [
       "E2",
       "E4"
     ]
   },
   "views": [
     {
-      "text": "A quarterback is held to a standard; when he puts the team in bad spots, he sits, and that is about this week, not his career.",
+      "text": "The motto is about the process: how a team prepares, recovers and communicates every single day.",
       "when": [
-        "QB",
-        "BAD_GAME"
+        "COACHING",
+        "OFFSEASON"
       ]
     },
     {
-      "text": "Losing games does not make a team soft; anyone who says so is not watching the tape.",
+      "text": "Coaches should invest in players the way they would in their own kids.",
       "when": [
-        "LOSING_STREAK",
-        "STRUGGLING"
+        "PLAYER",
+        "YOUTH"
       ]
     },
     {
-      "text": "Self-inflicted mistakes, penalties and turnovers, lose more games than the opponent does.",
-      "when": [
-        "BAD_GAME",
-        "GAME_REVIEW"
-      ]
-    },
-    {
-      "text": "A head coach sometimes has to hand off what he loves, like calling plays, to see the whole team.",
-      "when": [
-        "COACHING"
-      ]
-    },
-    {
-      "text": "A rookie quarterback needs stability above everything, including from the people around him.",
+      "text": "A young quarterback needs time, and the league's impatience does not get to decide when he is finished.",
       "when": [
         "QB",
         "YOUTH"
       ]
     },
     {
-      "text": "He learned the job watching great quarterbacks prepare; that is what he looks for in his own.",
+      "text": "Draft status has nothing to do with who plays; the best players play.",
+      "when": [
+        "DRAFT",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A rebuild built to win championships takes patience, and shortcuts only set it back.",
+      "when": [
+        "OFFSEASON",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Questions about benching a struggling starter are fair, but the answer comes from the film and the whole team picture.",
       "when": [
         "QB",
-        "HISTORY"
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Energy is contagious; a coach who brings it every day gets it back from the room.",
+      "when": [
+        "COACHING",
+        "WIN_STREAK"
       ]
     }
   ],
   "signatures": [
-    "states the decision flatly and declines to make proclamations about the future",
-    "lets real anger show when the team's toughness is questioned, then returns to the tape",
-    "calls a careless turnover what it is in public, then reaffirms confidence in the player"
+    "repeats his signature motto about relentless process in pressers and team settings",
+    "defends a young player against outside criticism before talking about the player's mistakes",
+    "deflects when cornered on a quarterback decision rather than criticizing the player"
   ],
-  "want": "to prove the quarterback-development reputation he built as a coordinator can carry a whole franchise",
-  "fear": "that his first head-coaching job ends before a young quarterback and roster can grow into his plan",
-  "voice": "Usually measured and matter-of-fact, a quarterback coach's son who explains decisions in plain football terms. He keeps future plans close and gives short answers on personnel, but he can flash a hot, profane temper when he feels his players are being unfairly judged.",
+  "want": "to build a Jets team that wins championships while staying the high-energy, players-first coach he has always been",
+  "fear": "that his loyalty to struggling young players gets read as stubbornness that costs the team",
+  "voice": "High-energy, warm and conversational, with quick, catchy phrases that players and fans repeat. He defends his players hard in public and rails at the league's impatience with young quarterbacks. When pushed on a decision he does not want to explain, he gets visibly uncomfortable and deflects rather than criticize a player.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "TEN",
-          "role": "OC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "positive",
-      "evidence": [
-        "E7"
-      ]
-    },
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "TEN",
+          "team": "ATL",
           "role": "DC"
         }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E7"
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Zach Wilson",
+        "team_2026": "NO"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.news4jax.com/sports/2024/01/24/titans-hire-bengals-offensive-coordinator-brian-callahan-as-their-head-coach/",
-      "publisher": "Associated Press via News4JAX, Teresa M. Walker",
-      "published": "2024-01-24",
-      "accessed": "2026-11-05",
-      "summary": "Tennessee hires the 39-year-old Bengals coordinator, son of former Raiders coach Bill Callahan, a former UCLA quarterback who was in Denver for the Manning title, coached Stafford in Detroit and Carr in Las Vegas, and is credited with helping develop Joe Burrow. Owner Amy Adams Strunk cites his football knowledge, enthusiasm and leadership.",
+      "url": "https://africa.espn.com/nfl/story/_/id/30770998/robert-saleh-journey-new-york-jets-began-9-11-epiphany",
+      "publisher": "ESPN, Rich Cimini",
+      "published": "2021-01-26",
+      "accessed": "2026-11-04",
+      "summary": "Feature at his hiring (updated 2023): left banking for coaching after his brother survived 9/11, family and faith are central, a father of seven, the first Muslim head coach in the league; described as energetic, people-oriented and competitive, and Shanahan praises the environment he built in San Francisco.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://www.cbssports.com/nfl/news/titans-brian-callahan-goes-on-epic-rant-when-asked-about-teams-toughness-complete-and-total-bulls-t",
-      "publisher": "CBS Sports, Jordan Dajani",
-      "published": "2024-12-18",
-      "accessed": "2026-11-05",
-      "summary": "Days after benching Levis, Callahan bristles when asked if the team is soft, says players compete daily and losing does not make a team soft, tells critics they are not watching the tape, and ends with a profane dismissal. Visibly angry; one press conference.",
-      "confidence": "high"
-    },
-    {
-      "id": "E3",
-      "url": "https://www.espn.co.uk/nfl/story/_/id/42988068/titans-bench-levis-3-ints-turn-mason-rudolph",
-      "publisher": "ESPN, Turron Davenport",
-      "published": "2024-12-15",
-      "accessed": "2026-11-05",
-      "summary": "After Levis's turnovers against Cincinnati, Callahan says it was not his day and that bad picks put the team in tough spots, so he sat him; frames it around the offense's need for steady production and will not name the next starter. Measured rather than harsh.",
-      "confidence": "high"
-    },
-    {
-      "id": "E4",
-      "url": "https://www.thescore.com/nfl/news/3076181/titans-callahan-irritated-by-levis-costly-turnovers-he-knows-better",
-      "publisher": "theScore, Matthew Washington",
-      "published": "2024-09-15",
-      "accessed": "2026-11-05",
-      "summary": "After a loss to the Jets, Callahan calls Levis's red-zone lateral attempt dumb and says he knows better, while saying he still has plenty of confidence in him. Page undated; dated to the game.",
+      "url": "https://amny.com/sports/all-gas-no-brake-robert-saleh-ready-to-lay-groundwork-to-turn-jets-around",
+      "publisher": "amNewYork, Joe Pantorno",
+      "published": "2021-01-21",
+      "accessed": "2026-11-04",
+      "summary": "At his introduction he explains his motto as about the daily process of preparing, recovering and communicating, calls coaches and players partners, says coaches should invest in players like their own children, and frames the rebuild as patient work aimed at championships.",
       "confidence": "medium"
     },
     {
-      "id": "E5",
-      "url": "https://africa.espn.com/nfl/story/_/id/46356186/titans-callahan-relinquishes-play-calling-duties-qb-coach",
-      "publisher": "ESPN, Turron Davenport",
-      "published": "2025-09-23",
-      "accessed": "2026-11-05",
-      "summary": "After an 0-3 start Callahan hands play-calling to quarterbacks coach Bo Hardegree to be more present as head coach, choosing him over Holz because of Hardegree's interim-coordinator experience; Holz keeps game-plan work and base downs, the process stays collaborative, and all three meet with rookie Cam Ward.",
+      "id": "E3",
+      "url": "https://www.cbssports.com/nfl/news/jets-rookies-already-impressed-with-new-head-coach-robert-salehs-infectious-energy",
+      "publisher": "CBS Sports, Jordan Dajani",
+      "published": "2021-05-08",
+      "accessed": "2026-11-04",
+      "summary": "After rookie camp, players describe his enthusiasm as constant in meetings and on the field and say they already relate to him. The writer notes personality alone will not win games. Early impressions only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://abc7ny.com/post/robert-saleh-backs-jets-zach-wilson-slams-instant-coffee-era/12590410/",
+      "publisher": "ESPN (Rich Cimini), via ABC7 New York",
+      "published": "2022-12-19",
+      "accessed": "2026-11-04",
+      "summary": "He defends Zach Wilson as a young quarterback with a bright future, criticizes the league's impatient culture with a coffee metaphor, praises his late recovery in a game, and says draft status plays no role in who starts. His own words.",
       "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/2023/11/08/robert-saleh-benched-zach-wilson-plead-the-fifth",
+      "publisher": "Sports Illustrated, Frankie Taddeo",
+      "published": "2023-11-08",
+      "accessed": "2026-11-04",
+      "summary": "On a radio show he declines to explain why Wilson has not been benched, calls the questions fair and says he must weigh the whole team and the film; the writer describes him as flustered. One interview, editorialized.",
+      "confidence": "medium"
     },
     {
       "id": "E6",
-      "url": "https://www.news4jax.com/sports/2025/10/13/titans-fire-coach-brian-callahan-after-4-19-record-and-1-5-start-to-second-season/",
-      "publisher": "Associated Press via News4JAX, Teresa M. Walker",
-      "published": "2025-10-13",
-      "accessed": "2026-11-05",
-      "summary": "Tennessee fires Callahan after 4-19 and a 1-5 start, the first coach fired that season; team president Chad Brinker says the team had not shown the growth it preached; the offense averaged 3.94 yards per play and Ward was sacked a league-high 25 times even after Callahan gave up play-calling.",
-      "confidence": "high"
-    },
-    {
-      "id": "E7",
-      "url": "https://tennesseetitans.com/news/titans-hire-nick-holz-as-offensive-coordinator-dennard-wilson-as-defensive-coordinator",
-      "publisher": "Tennessee Titans (tennesseetitans.com), Jim Wyatt",
-      "published": "2024-02-05",
-      "accessed": "2026-11-05",
-      "summary": "Staff announcement: Holz, Jacksonville's 2023 passing game coordinator and UNLV's 2022 coordinator, spent nearly a decade with the Raiders, worked with Callahan in 2018, is his high school classmate, and once worked for Callahan's father at Nebraska; Wilson comes from one season as Baltimore's secondary coach after defensive-back jobs with the Rams, Jets and Eagles. Callahan plans to call plays; Holz will help develop Will Levis.",
+      "url": "https://www.clickorlando.com/sports/2024/10/09/jeff-ulbrich-was-a-gritty-player-a-respected-assistant-and-now-takes-over-a-struggling-jets-team/",
+      "publisher": "Associated Press (Dennis Waszak Jr.), via ClickOrlando",
+      "published": "2024-10-09",
+      "accessed": "2026-11-04",
+      "summary": "AP profile of his defensive coordinator: Ulbrich credits Saleh with his opportunity and support, Saleh praised him often and predicted he would be a head coach, and the Jets blocked a 2023 interview request to keep him. Written the day after Saleh's dismissal; used here only for the working relationship.",
       "confidence": "high"
     }
   ],
@@ -193,6 +219,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "Seed vs reality: Tennessee fired Callahan in October 2025; the 2026 seed keeps him as HC."
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

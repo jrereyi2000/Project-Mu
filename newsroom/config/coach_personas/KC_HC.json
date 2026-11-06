@@ -129,23 +129,8 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COACHES_DATA",
-          "team": "JAX",
-          "role": "HC"
-        }
-      },
-      "relationship_kind": "mentorship",
-      "outcome": "positive",
-      "evidence": [
-        "E4"
-      ]
-    },
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "KC",
+          "team": "NYG",
           "role": "OC"
         }
       },

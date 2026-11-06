@@ -116,7 +116,7 @@
         "kind": "coach",
         "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "HOU",
+          "team": "MIA",
           "role": "OC"
         }
       },

@@ -114,9 +114,9 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "NO",
-          "role": "OC"
+          "table": "COACHES_DATA",
+          "team": "LV",
+          "role": "HC"
         }
       },
       "relationship_kind": "support",

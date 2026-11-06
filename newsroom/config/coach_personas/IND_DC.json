@@ -1,159 +1,177 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:IND:DC",
-  "name": "Gus Bradley",
+  "name": "Lou Anarumo",
   "role": "DC",
   "team": "IND",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "IND",
     "role": "DC",
-    "name": "Gus Bradley"
+    "name": "Lou Anarumo"
   },
   "sliders": {
     "temperament": 5,
-    "sociability": 6,
+    "sociability": 5,
     "confidence": 5,
-    "openness": 5,
+    "openness": 7,
     "warmth": 6,
-    "drive": 5
+    "drive": 7
   },
   "slider_evidence": {
+    "openness": [
+      "E3",
+      "E5"
+    ],
     "warmth": [
       "E1",
       "E4"
     ],
-    "sociability": [
-      "E1"
+    "drive": [
+      "E3",
+      "E2"
     ]
   },
   "traits": [
+    "SCHEME_NERD",
     "TEACHER",
-    "LOYAL",
-    "OLD_SCHOOL"
+    "FILM_ROOM_RAT"
   ],
   "trait_evidence": {
+    "SCHEME_NERD": [
+      "E3",
+      "E5"
+    ],
     "TEACHER": [
-      "E3"
-    ],
-    "LOYAL": [
-      "E3"
-    ],
-    "OLD_SCHOOL": [
+      "E1",
       "E2"
+    ],
+    "FILM_ROOM_RAT": [
+      "E1",
+      "E3"
     ]
   },
   "views": [
     {
-      "text": "Great effort and great enthusiasm create energy on the field, and energy wins downs.",
+      "text": "An elite quarterback should never see the same look twice.",
       "when": [
-        "PERFORMANCE",
-        "SCHEME"
+        "SCHEME",
+        "QB"
       ]
     },
     {
-      "text": "A simple defense played fast beats a clever one played slow.",
+      "text": "Build the defense around the players you have, not around a system you brought with you.",
       "when": [
-        "SCHEME"
-      ]
-    },
-    {
-      "text": "When the energy dips, send pressure and let the defense feel it can make a play.",
-      "when": [
-        "STRUGGLING",
-        "SCHEME"
-      ]
-    },
-    {
-      "text": "Every player deserves a blank slate with a new staff, judged on what he does now.",
-      "when": [
-        "PLAYER",
+        "SCHEME",
         "ROSTER_MOVES"
       ]
     },
     {
-      "text": "Keep a staff together across stops; trust built over years is worth more than any new idea.",
+      "text": "Trust and relationships with players matter most when results go badly.",
       "when": [
-        "COACHING"
+        "LOSING_STREAK",
+        "PLAYER"
       ]
     },
     {
-      "text": "A steady head coach who holds coaches to the same standard makes a coordinator's job easier.",
+      "text": "Halftime is where games are won; adjust to what the offense is actually doing.",
+      "when": [
+        "GAME_REVIEW",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "Players can question the call, and sometimes they are right.",
       "when": [
         "COACHING",
-        "LOSING_STREAK"
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A defense without stars can still beat the best quarterbacks if it plays as a unit.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "Young defensive backs grow fastest when veterans help coach them.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
       ]
     }
   ],
   "signatures": [
-    "stays relentlessly upbeat at the podium even after a rough defensive day",
-    "talks about effort and enthusiasm before he talks about scheme"
+    "describes disguises and matchup plans in detail when asked about a big win",
+    "invites players to challenge his calls and mentions it",
+    "draws on his years as a teacher when explaining how he coaches"
   ],
-  "want": "to field one more defense that plays with the speed and energy of his best units",
-  "fear": "that his positivity is remembered as softness because his records as a head coach and later coordinator fell short",
-  "voice": "Warm, upbeat and earnest; he speaks about effort, enthusiasm and toughness, avoids criticizing players publicly, and keeps a positive tone even when the numbers are bad.",
+  "want": "to earn a head-coaching job by proving his multiple defense can stop the league's best quarterbacks",
+  "fear": "that he stays labelled a coordinator who is always a finalist and never the hire",
+  "voice": "Direct, intense and approachable, with a Staten Island bluntness and a teacher's patience. He talks scheme with relish but in clear terms, can be fiery after a poor showing yet steady through long stretches, and welcomes players' challenges. He credits players and assistants for adjustments.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "IND",
+          "team": "CIN",
           "role": "HC"
         }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E4",
-        "E5"
+        "E2",
+        "E3"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://abc7news.com/post/jaguars-fire-coach-gus-bradley-after-3-plus-seasons-14-wins/1662505/",
-      "publisher": "Associated Press via ABC7 News",
-      "published": "2016-12-18",
-      "accessed": "2026-11-05",
-      "summary": "Jacksonville fires Bradley after a ninth straight loss leaves the team 2-12 and him 14-48 over three-plus seasons; he came from Seattle as defensive coordinator; coverage notes his always-positive approach. Date taken from the firing; the AP story itself is a firing report.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E2",
-      "url": "https://www.colts.com/news/gus-bradley-defense-2022-cover-3-scheme-blitz-sacks-turnovers",
-      "publisher": "Indianapolis Colts (colts.com), JJ Stankevitz",
-      "published": "2022-02-09",
-      "accessed": "2026-11-05",
-      "summary": "Introduced as coordinator, Bradley wants great effort and great enthusiasm, says enthusiasm creates energy and pressure can restore it, describes a simple, Cover 3-based scheme stressing toughness and communication, and gives players a blank slate. Measured, confident tone; team-written.",
+      "url": "https://www.bengals.com/news/bengals-defense-now-skipping-to-lou",
+      "publisher": "Cincinnati Bengals (bengals.com), Geoff Hobson",
+      "published": "2019-02-21",
+      "accessed": "2026-11-04",
+      "summary": "At his hiring, his first coordinator job: favors a multiple defense fitted to the roster, draws on 4-3 and 3-4 influences, is described as intense but approachable, direct and low-key, stresses trust with players when results go badly; colleagues and Taylor call him a detail-oriented teacher. Team site.",
       "confidence": "high"
     },
     {
+      "id": "E2",
+      "url": "https://bengals.com/news/five-fun-facts-about-lou-anarumo",
+      "publisher": "Cincinnati Bengals (bengals.com), Michael LaPlaca",
+      "published": "2019-03-06",
+      "accessed": "2026-11-04",
+      "summary": "Five facts: on Miami's staff with Taylor 2012-15, interim coordinator in 2015; former players call him smart and energetic; long college career; a special-education graduate whose coaching mirrors his teacher father; Staten Island roots, family of five. Team site.",
+      "confidence": "medium"
+    },
+    {
       "id": "E3",
-      "url": "https://www.colts.com/news/john-fox-senior-defensive-assistant-nfl-espn-gus-bradley-frank-reich",
-      "publisher": "Indianapolis Colts (colts.com), JJ Stankevitz",
-      "published": "2022-04-12",
-      "accessed": "2026-11-05",
-      "summary": "John Fox joins as senior defensive assistant and calls Bradley an outstanding teacher; notes that Bradley and several assistants have worked together at multiple stops. Testimony from a colleague.",
+      "url": "https://www.espn.com/nfl/story/_/id/35532675/mad-scientist-lou-anarumo-man-bengals-defense",
+      "publisher": "ESPN, Ben Baby",
+      "published": "2023-01-28",
+      "accessed": "2026-11-04",
+      "summary": "Feature: players call him a mad scientist who keeps reworking the defense so elite quarterbacks never see the same look; intense after poor performances but steady in hard stretches; welcomes players' challenges; close friend of Taylor from Miami; early veterans who resisted were moved on. Beat-writer profile with player quotes.",
       "confidence": "high"
     },
     {
       "id": "E4",
-      "url": "https://www.colts.com/news/shane-steichen-head-coach-afc-playoffs-gus-bradley-julian-blackmon",
-      "publisher": "Indianapolis Colts (colts.com), Raven Moore",
-      "published": "2023-11-30",
-      "accessed": "2026-11-05",
-      "summary": "Team feature on his first season: players say he set a clear standard and lives by it through Richardson's season-ending injury, a suspension and a three-game skid; Tyquan Lewis says he brought accountability; Blackmon says players trust the plan; DC Gus Bradley praises his steady message and that he holds players and coaches alike to the standard. Team-written.",
-      "confidence": "high"
+      "url": "https://nfl.com/news/bengals-defenders-ecstatic-lou-anarumo-returning-as-defensive-coordinator-2023",
+      "publisher": "NFL.com, Kevin Patra",
+      "published": "2023-02-14",
+      "accessed": "2026-11-04",
+      "summary": "After he misses the Arizona head job, Logan Wilson and Sam Hubbard welcome him back; Wilson calls him a strong leader who lets players play freely. The page shows no date; related links place it in mid-February 2023.",
+      "confidence": "medium"
     },
     {
       "id": "E5",
-      "url": "https://www.nfl.com/news/colts-fire-defensive-coordinator-gus-bradley-after-three-seasons",
-      "publisher": "NFL.com",
-      "published": "2025-01-06",
-      "accessed": "2026-11-05",
-      "summary": "Indianapolis fires Bradley after three seasons without a playoff berth as the defense allowed the third-, fifth- and ninth-most points and regressed in yards and sacks; Steichen calls him a man of great character whom he respects. Firing report.",
+      "url": "https://www.si.com/nfl/2023/08/09/bengals-defensive-coordinator-lou-anarumo-consistent",
+      "publisher": "Sports Illustrated, Matt Verderame",
+      "published": "2023-08-09",
+      "accessed": "2026-11-04",
+      "summary": "Profile: a multiple, matchup-heavy defense that has held up against top quarterbacks without many stars; described as calm under pressure, aggressive in calls and clear about expectations, with a teaching background; D.J. Reader says he listens and makes the best halftime adjustments in the league.",
       "confidence": "high"
     }
   ],
@@ -161,6 +179,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "Seed vs reality: Indianapolis fired Bradley in January 2025; the 2026 seed keeps him as DC."
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

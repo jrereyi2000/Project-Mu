@@ -1,185 +1,185 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:CHI:HC",
-  "name": "Matt Eberflus",
+  "name": "Ben Johnson",
   "role": "HC",
   "team": "CHI",
   "seed_ref": {
     "table": "COACHES_DATA",
     "team": "CHI",
     "role": "HC",
-    "name": "Matt Eberflus"
+    "name": "Ben Johnson"
   },
   "sliders": {
-    "temperament": 5,
+    "temperament": 4,
     "sociability": 5,
-    "confidence": 7,
-    "openness": 5,
+    "confidence": 5,
+    "openness": 7,
     "warmth": 5,
-    "drive": 6
+    "drive": 7
   },
   "slider_evidence": {
-    "confidence": [
+    "temperament": [
       "E1"
     ],
+    "openness": [
+      "E1",
+      "E5"
+    ],
     "drive": [
-      "E3"
+      "E1",
+      "E2"
     ]
   },
   "traits": [
-    "DISCIPLINARIAN",
     "SCHEME_NERD",
-    "CLICHE_MACHINE"
+    "QB_WHISPERER",
+    "PERFECTIONIST",
+    "FILM_ROOM_RAT"
   ],
   "trait_evidence": {
-    "DISCIPLINARIAN": [
-      "E3"
-    ],
     "SCHEME_NERD": [
-      "E5",
-      "E6"
+      "E1",
+      "E5"
     ],
-    "CLICHE_MACHINE": [
+    "QB_WHISPERER": [
+      "E1",
+      "E5"
+    ],
+    "PERFECTIONIST": [
+      "E1"
+    ],
+    "FILM_ROOM_RAT": [
+      "E1",
       "E2"
     ]
   },
   "views": [
     {
-      "text": "Win the turnover battle and you win most games; takeaways are the first thing he checks after any result.",
+      "text": "The best plays start from familiar concepts with one new wrinkle the defense has not seen on film.",
       "when": [
-        "GAME_REVIEW",
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "A quarterback who helps design the offense owns it, and plays faster because of it.",
+      "when": [
+        "QB",
         "SCHEME"
       ]
     },
     {
-      "text": "Effort is measured, not assumed: every loaf on film gets counted and corrected.",
+      "text": "Linemen should get a say in the run game; let them pick the runs they like best each week.",
       "when": [
-        "PERFORMANCE",
-        "BAD_GAME"
+        "SCHEME",
+        "PLAYER"
       ]
     },
     {
-      "text": "A late-game decision that followed the plan was the right call, even if the result went the wrong way.",
+      "text": "Sloppy execution in a win still needs fixing before next week.",
       "when": [
-        "CLOSE_GAMES",
-        "BAD_GAME"
+        "WIN_STREAK",
+        "GAME_REVIEW"
       ]
     },
     {
-      "text": "When a unit is not working, the head coach changes its leadership, and the decision is his alone.",
+      "text": "Take a head coaching job only when you are truly ready for it, not because it is offered.",
       "when": [
-        "COACHING",
-        "STRUGGLING"
+        "COACHING"
       ]
     },
     {
-      "text": "A rookie quarterback's confidence matters most after a loss; check on it first.",
+      "text": "Giving the quarterback several options at the line is how you beat defenses that disguise.",
       "when": [
         "QB",
-        "YOUTH"
-      ]
-    },
-    {
-      "text": "Hustle, intensity, takeaways and smart situational football are the standard every week, win or lose.",
-      "when": [
-        "COACHING",
-        "LOSING_STREAK"
+        "GAME_REVIEW"
       ]
     }
   ],
   "signatures": [
-    "returns to his four-part effort-and-takeaways creed in almost every answer",
-    "defends a late-game decision by walking through the plan step by step",
-    "says he is confident in the direction even during a long losing streak"
+    "explains a big play by naming the small tweak to a familiar concept that made it work",
+    "credits his quarterback's growth in reading pressure and handling protections",
+    "turns aside head coaching questions to focus on the current game"
   ],
-  "want": "to prove a defensive coach with a demanding effort culture can turn around a proud franchise as its head coach",
-  "fear": "that one-score losses and late-game mistakes define him instead of the defense he builds",
-  "voice": "Even, upbeat and repetitive; he speaks in the language of his effort creed and rarely raises his voice in public. He defends his process in detail, shows confidence about his future, and takes formal responsibility for staff changes without criticizing individuals.",
+  "want": "to be recognized as the sharpest offensive mind in the league and to lead a team only when he feels completely ready",
+  "fear": "that his offense is credited to talent and Sean McVay's system rather than to his own design",
+  "voice": "Calm, precise and understated; he speaks in specific football detail about concepts, motions and protections. He is sharp rather than loud about mistakes, credits players for ideas, and gives little away about his own plans.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "CHI",
-          "role": "DC"
+          "table": "COACHES_DATA",
+          "team": "DET",
+          "role": "HC"
         }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E5"
+        "E2",
+        "E3"
       ]
     },
     {
       "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "CHI",
-          "role": "OC"
-        }
+        "kind": "player",
+        "name": "Jared Goff",
+        "team_2026": "DET"
       },
-      "relationship_kind": "collaboration",
-      "outcome": "negative",
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
       "evidence": [
-        "E4"
+        "E1",
+        "E5"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.espn.co.uk/nfl/story/_/id/42679835/sources-bears-fire-eberflus-sixth-straight-loss",
-      "publisher": "ESPN, Courtney Cronin",
-      "published": "2024-11-29",
+      "url": "https://www.theringer.com/2023/08/14/nfl/how-detroit-lions-offensive-coordinator-ben-johnson-fixed-jared-goff",
+      "publisher": "The Ringer, Ben Solak",
+      "published": "2023-08-14",
       "accessed": "2026-11-04",
-      "summary": "On his firing the day after a Thanksgiving loss in Detroit: that morning he told reporters he felt confident he would keep leading the team and defended his final-drive clock management as handled correctly, saying he was saving a timeout. He went 14-32, 5-19 in one-score games, was the first Bears coach fired in-season, and fired eight coaches in two seasons including Waldron.",
+      "summary": "Feature on his offense: seven Miami seasons coaching quarterbacks, tight ends and receivers under three coordinators shaped a flexible style; calm on the sideline but sharp about sloppy execution; clear, precise communication. Builds plays from familiar concepts with new wrinkles, lets linemen circle favorite runs, gives Goff options at the line, and worked with Goff to design the offense from Rams concepts. Analysis with staff input.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://www.si.com/nfl/bears/the-ironic-twist-to-end-matt-eberflus-bears-coaching-era",
-      "publisher": "Sports Illustrated (Bears on SI), Gene Chamberlain",
-      "published": "2024-11-30",
+      "url": "https://www.audacy.com/wwjnewsradio/sports/detroit-lions-dan-campbell-thrilled-to-keep-ben-johnson",
+      "publisher": "WWJ / Audacy, Will Burchfield",
+      "published": "2024-02-28",
       "accessed": "2026-11-04",
-      "summary": "Column on his HITS creed (hustle, intensity, takeaways, smart situational football), preached for nearly three seasons with the most weight on takeaways. The 2024 team finally hit its takeaway goal yet went 4-8, failing on the situational part. Opinion piece; fan comments it quotes are not evidence.",
-      "confidence": "medium"
+      "summary": "Campbell on Johnson staying after interest from Carolina and Washington: he stays fully focused on the task at hand, kept his mind on the playoffs over interviews, is qualified to lead a team but will not take on anything he does not feel ready for, and is one of us. Campbell's view.",
+      "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://www.news4jax.com/sports/2022/01/27/ap-source-bears-hire-colts-dc-matt-eberflus-as-head-coach/",
-      "publisher": "Associated Press, Jay Cohen, via News4JAX",
-      "published": "2022-01-27",
+      "url": "https://abc7news.com/post/dan-campbells-aggressiveness-has-detroit-lions/15727402/",
+      "publisher": "ESPN, Eric Woodyard, via ABC7",
+      "published": "2024-12-30",
       "accessed": "2026-11-04",
-      "summary": "On his hiring: a Toledo linebacker who started coaching there, seven years in Dallas under Rod Marinelli, then four as Indianapolis's coordinator, where the defense rose to eighth in 2020. Known for high standards and pushing for constant effort, counting loafs as Lovie Smith had. Career facts and reputation.",
+      "summary": "On Detroit's fourth-down approach; Johnson describes Campbell as comfortable being himself and accepting the consequences of his choices. Mostly about Campbell; one line from Johnson.",
       "confidence": "high"
     },
     {
       "id": "E4",
-      "url": "https://www.clickondetroit.com/sports/2024/11/12/free-falling-bears-fire-offensive-coordinator-shane-waldron/",
-      "publisher": "Associated Press, Andrew Seligman, via WDIV",
-      "published": "2024-11-12",
+      "url": "https://africa.espn.com/nfl/story/_/id/43492843/coach-dan-campbell-says-lions-gonna-come-back-stronger",
+      "publisher": "ESPN, Eric Woodyard",
+      "published": "2025-01-20",
       "accessed": "2026-11-04",
-      "summary": "He fires coordinator Shane Waldron after nine games, saying the decision followed a review of the whole operation and was his alone; he thanks Waldron and praises Thomas Brown as creative and collaborative. The offense ranked 30th and Williams had struggled behind a poor line.",
+      "summary": "After the playoff loss Campbell expects to lose Johnson and Glenn to head coaching jobs and says both were central to the program's rise. Context for his standing; nothing from Johnson himself.",
       "confidence": "high"
     },
     {
       "id": "E5",
-      "url": "https://sports.yahoo.com/coordinator-eric-washington-eager-put-205200104.html",
-      "publisher": "Chicago Tribune, Dan Wiederer, via Yahoo Sports",
-      "published": "2024-02-22",
+      "url": "https://www.detroitlions.com/news/ben-johnson-returning-as-detroit-lions-offensive-coordinator",
+      "publisher": "Detroit Lions (detroitlions.com), Tim Twentyman",
+      "published": "2023-01-19",
       "accessed": "2026-11-04",
-      "summary": "New coordinator Eric Washington says Eberflus will keep calling the defense, that he trusts Eberflus to read situations, and that he will add perspective rather than impose his own system. About Washington, with Eberflus's role as context.",
-      "confidence": "high"
-    },
-    {
-      "id": "E6",
-      "url": "https://www.foxsports.com/articles/nfl/bears-fire-coach-matt-eberflus-after-skid-marked-by-poor-decisions-late-in-games",
-      "publisher": "Associated Press, via FOX Sports",
-      "published": "2024-11-29",
-      "accessed": "2026-11-04",
-      "summary": "AP on the firing: a 4-8 team on a six-game skid, with late-game blunders at Green Bay, against Minnesota (a fourth-down mix-up he took blame for) and at Detroit. Players had questioned decisions after a loss at Washington. The team had kept him after a late-2023 run when the defense improved with him calling it; Poles praised his leadership.",
+      "summary": "He turns down head coaching interest, including Carolina, citing unfinished business after an offense that ranked fifth in scoring. Goff calls him as instrumental as any coach he has had and says Johnson invited him to help build the scheme. Analysts praise his design, personnel use and motion. Team-written.",
       "confidence": "high"
     }
   ],
@@ -187,6 +187,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

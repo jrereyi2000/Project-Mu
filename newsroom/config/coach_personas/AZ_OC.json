@@ -1,184 +1,186 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:AZ:OC",
-  "name": "Drew Petzing",
+  "name": "Nathaniel Hackett",
   "role": "OC",
   "team": "AZ",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "AZ",
     "role": "OC",
-    "name": "Drew Petzing"
+    "name": "Nathaniel Hackett"
   },
   "sliders": {
     "temperament": 5,
-    "sociability": 5,
+    "sociability": 8,
     "confidence": 5,
-    "openness": 6,
-    "warmth": 6,
+    "openness": 5,
+    "warmth": 7,
     "drive": 5
   },
   "slider_evidence": {
-    "openness": [
-      "E3",
-      "E4"
+    "sociability": [
+      "E1",
+      "E3"
     ],
     "warmth": [
-      "E2"
+      "E2",
+      "E3"
     ]
   },
   "traits": [
-    "SCHEME_NERD",
-    "OLD_SCHOOL",
-    "QB_WHISPERER"
+    "QB_WHISPERER",
+    "LOYAL",
+    "FAMILY_MAN"
   ],
   "trait_evidence": {
-    "SCHEME_NERD": [
-      "E3",
-      "E4"
-    ],
-    "OLD_SCHOOL": [
-      "E3",
-      "E5"
-    ],
     "QB_WHISPERER": [
+      "E1",
+      "E2"
+    ],
+    "LOYAL": [
       "E2",
-      "E4"
+      "E3"
+    ],
+    "FAMILY_MAN": [
+      "E3"
     ]
   },
   "views": [
     {
-      "text": "An offense should blend old and new football and take its shape from whoever proves best on the roster.",
-      "when": [
-        "SCHEME",
-        "OFFSEASON"
-      ]
-    },
-    {
-      "text": "Run the ball well and play-action takes care of itself.",
-      "when": [
-        "SCHEME",
-        "GAME_REVIEW"
-      ]
-    },
-    {
-      "text": "From under center, everything has to look and feel the same until the ball is gone.",
-      "when": [
-        "SCHEME",
-        "QB"
-      ]
-    },
-    {
-      "text": "A mobile quarterback forces defenses to add people and looks; use his legs on purpose.",
+      "text": "An offense works best when the coordinator and the quarterback see the game the same way.",
       "when": [
         "QB",
         "SCHEME"
       ]
     },
     {
-      "text": "Get to know the quarterback as a person first; the football conversations go better after that.",
+      "text": "A staff and a locker room should feel like a family; it is not about any one person.",
       "when": [
-        "QB",
+        "COACHING",
         "PLAYER"
       ]
     },
     {
-      "text": "When the run stalls, the offense gets predictable, so fixing the run is the first job.",
+      "text": "When you fail somewhere, own it completely and move on without excuses.",
       "when": [
-        "STRUGGLING",
-        "SCHEME"
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Football should be fun, even in a hard week; a loose room plays better.",
+      "when": [
+        "HUMOR",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Working again with people you respect matters more than the title on the door.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A great veteran quarterback should have a real say in the offense around him.",
+      "when": [
+        "QB",
+        "PLAYER"
       ]
     }
   ],
   "signatures": [
-    "explains a choice as a week-to-week call based on the opponent rather than a fixed rule",
-    "talks about deception and body language as teaching points for the whole line"
+    "brings up his family's coaching history when talking about the job",
+    "addresses past criticism head-on before anyone asks, owning the mistakes",
+    "talks about the quarterback as a partner and friend rather than a pupil"
   ],
-  "want": "to prove a first-time coordinator's run-first, multiple offense can make a star quarterback better",
-  "fear": "that a stalled ground game makes his offense look predictable and costs the quarterback's trust",
-  "voice": "Calm, technical and relationship-minded; he explains concepts like deception and multiplicity in plain teaching terms. He talks about players as people before players, and frames scheme decisions as matchups rather than doctrine. Rarely heated in public.",
+  "want": "to show that his offense, not just his friendship with a star quarterback, can carry a team",
+  "fear": "that he is remembered for one failed head-coaching season and an offense that never took off",
+  "voice": "Animated, upbeat and constantly 'on'; he talks fast, laughs easily and treats the team as a family. He owns past failures openly and without excuses, and speaks warmly about colleagues and his quarterback. He avoids blaming players when the offense stalls.",
   "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Aaron Rodgers",
+        "team_2026": "PIT"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2",
+        "E3",
+        "E4"
+      ]
+    },
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "AZ",
+          "team": "TEN",
           "role": "HC"
         }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E4"
-      ]
-    },
-    {
-      "target": {
-        "kind": "player",
-        "name": "Kyler Murray",
-        "team_2026": "MIN"
-      },
-      "relationship_kind": "mentorship",
-      "outcome": "positive",
-      "evidence": [
-        "E2",
-        "E4"
+        "E2"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.azcardinals.com/news/gannon-cardinals-get-coordinators-nick-rallis-drew-petzing",
-      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
-      "published": "2023-02-19",
-      "accessed": "2026-11-05",
-      "summary": "Gannon names Petzing, 35, the Browns' quarterbacks coach and a former Vikings colleague, as offensive coordinator, saying he picked coaches for thinking and character. No Petzing quotes.",
-      "confidence": "high"
+      "url": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/aaron-rodgers-nathaniel-hackett-is-my-guy-he-made-it-fun",
+      "publisher": "Pro Football Talk (NBC Sports), Josh Alper",
+      "published": "2023-02-01",
+      "accessed": "2026-11-04",
+      "summary": "After the Jets hire Hackett, Rodgers calls him his guy and says he made the Packers environment fun during Rodgers's two MVP seasons. Rodgers's view, reported secondhand.",
+      "confidence": "medium"
     },
     {
       "id": "E2",
-      "url": "https://www.espn.com/blog/arizona-cardinals/post/_/id/36174/new-cardinals-oc-drew-petzing-eager-to-coach-kyler-murray",
-      "publisher": "ESPN, Josh Weinfuss",
-      "published": "2023-02-25",
-      "accessed": "2026-11-05",
-      "summary": "At his introduction he says he studied Murray's tape and called his former coaches and teammates before interviewing, already talks with Murray about personal things more than football, and plans to use Murray's running. Writer calls him relationship-driven.",
+      "url": "https://www.newyorkjets.com/news/new-jets-oc-nathaniel-hackett-has-been-this-way-before",
+      "publisher": "New York Jets (newyorkjets.com), Ethan Greenberg",
+      "published": "2023-07-03",
+      "accessed": "2026-11-04",
+      "summary": "Team piece: he worked with Saleh in Jacksonville in 2015-16, his father was a Jets coordinator, and he coached Rodgers's two MVP seasons. He says working again with someone he respects as much as Saleh mattered, calls the Rodgers bond strong and stresses unity over any one person. Team site.",
       "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://arizonasports.com/nfl/arizona-cardinals/petzing-offensive-identity-will-mold-around-cardinals-skillsets",
-      "publisher": "Arizona Sports, Wills Rice",
-      "published": "2023-06-08",
-      "accessed": "2026-11-05",
-      "summary": "He describes a blend of traditional and modern football shaped by whichever players prove effective, plans to lean on the run and tight ends while Murray rehabs, and expects Murray under center more. His words via a local outlet.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E4",
-      "url": "https://africa.espn.com/nfl/story/_/id/39575533/kyler-murray-center-drew-petzing-jonathan-gannon",
-      "publisher": "ESPN, Josh Weinfuss",
-      "published": "2024-02-24",
-      "accessed": "2026-11-05",
-      "summary": "Under Petzing Murray took about a quarter of his snaps under center in 2023; Petzing's teaching point was selling the run through body language so every look is identical, and he treated alignment as a game-by-game choice. Scheme detail.",
+      "url": "https://www.newyorkjets.com/news/jets-oc-nathaniel-hackett-on-living-in-a-glass-house-friendship-with-aaron-rodge",
+      "publisher": "New York Jets (newyorkjets.com), Randy Lange",
+      "published": "2023-08-01",
+      "accessed": "2026-11-04",
+      "summary": "He raises Sean Payton's criticism of his Denver tenure unprompted, owns his mistakes with no excuses, and describes coaching as a family tradition; Rodgers says he is always on and defends his character. Team site; his own words.",
       "confidence": "high"
     },
     {
-      "id": "E5",
-      "url": "https://www.si.com/nfl/cardinals/onsi/news/arizona-cardinals-get-honest-rushing-struggles-needs-to-get-better",
-      "publisher": "Sports Illustrated (All Cardinals), Donnie Druin",
-      "published": "2025-09-19",
-      "accessed": "2026-11-05",
-      "summary": "Murray relays that Petzing stresses establishing the run, which keeps defenses tight and powers play-action; when the run stalls the offense becomes predictable. Petzing is not quoted.",
+      "id": "E4",
+      "url": "https://www.si.com/nfl/aaron-rodgers-supportive-jets-strip-nathaniel-hackett-play-calling",
+      "publisher": "Sports Illustrated, Tim Capurso",
+      "published": "2024-10-10",
+      "accessed": "2026-11-04",
+      "summary": "After Saleh's firing, interim coach Ulbrich moves play-calling from Hackett to Todd Downing with Rodgers's backing; Rodgers says their relationship remains strong. Notes the offense ranked near the bottom in 2023 and 2024. A real-world change after the 2026 seed's frame; used only for the Rodgers bond and the offense's record.",
       "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.boston.com/sports/nfl/2022/12/26/broncos-fire-rookie-head-coach-hackett-after-4-11-start/",
+      "publisher": "Associated Press (Arnie Stapleton), via Boston.com",
+      "published": "2022-12-26",
+      "accessed": "2026-11-04",
+      "summary": "Denver fires him with two games left in a 4-11 first season after a 51-14 loss; the story says he never built an offense suited to Russell Wilson. News facts; nothing on his personality.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

@@ -1,126 +1,124 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:ATL:DC",
-  "name": "Jimmy Lake",
+  "name": "Jeff Ulbrich",
   "role": "DC",
   "team": "ATL",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "ATL",
     "role": "DC",
-    "name": "Jimmy Lake"
+    "name": "Jeff Ulbrich"
   },
   "sliders": {
-    "temperament": 5,
+    "temperament": 4,
     "sociability": 5,
     "confidence": 5,
     "openness": 6,
-    "warmth": 5,
-    "drive": 5
+    "warmth": 6,
+    "drive": 7
   },
   "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
     "openness": [
+      "E3",
+      "E4"
+    ],
+    "warmth": [
+      "E1",
       "E3"
+    ],
+    "drive": [
+      "E1",
+      "E2"
     ]
   },
   "traits": [
     "TEACHER",
-    "SCHEME_NERD",
+    "OLD_SCHOOL",
     "LOYAL"
   ],
   "trait_evidence": {
     "TEACHER": [
+      "E1",
       "E3"
     ],
-    "SCHEME_NERD": [
-      "E3",
-      "E5"
+    "OLD_SCHOOL": [
+      "E1",
+      "E2"
     ],
     "LOYAL": [
-      "E1",
       "E2"
     ]
   },
   "views": [
     {
-      "text": "A defense should confuse the offense and still be simple for the players who run it.",
+      "text": "Players should understand the defense well enough to solve problems themselves, without trick calls to bail them out.",
       "when": [
         "SCHEME",
-        "OFFSEASON"
-      ]
-    },
-    {
-      "text": "Before installing a call, ask whether you could process it yourself standing in the player's spot.",
-      "when": [
-        "SCHEME",
-        "YOUTH"
-      ]
-    },
-    {
-      "text": "Build the system one piece at a time; master each install before stacking the next.",
-      "when": [
-        "OFFSEASON",
         "COACHING"
       ]
     },
     {
-      "text": "Keep the words veterans already know, so they spend their energy reacting instead of relearning.",
-      "when": [
-        "PLAYER",
-        "SCHEME"
-      ]
-    },
-    {
-      "text": "The secondary is where games are won or lost against modern passing offenses.",
+      "text": "Fundamentals, technique, effort and toughness come before any wrinkle.",
       "when": [
         "SCHEME",
-        "GAME_REVIEW"
+        "PERFORMANCE"
       ]
     },
     {
-      "text": "In spring the offense has the edge; the defense catches up when the pads come on.",
+      "text": "Defensive linemen are fresher and better on fewer snaps, so rotate them.",
       "when": [
-        "OFFSEASON",
-        "PREVIEW"
+        "SCHEME",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "When the defense struggles, coaches look at their own teaching and drills first.",
+      "when": [
+        "BAD_GAME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A team that is not playing to its talent needs honest self-evaluation and to pull together.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Character matters as much as talent when adding players to a locker room.",
+      "when": [
+        "ROSTER_MOVES",
+        "DRAFT"
       ]
     }
   ],
   "signatures": [
-    "describes his calls from the player's point of view rather than the chalkboard's",
-    "measures progress by install stages rather than wins in the offseason"
+    "saves his loudest energy for celebrating good plays rather than yelling at bad ones",
+    "praises specific players' competitiveness by name when asked about the unit",
+    "credits the head coach who gave him his chance when talking about his career"
   ],
-  "want": "to prove, as a first-time NFL play-caller, that the defenses he built in college translate to the pro game",
-  "fear": "that a second short tenure after Washington defines him as a coach who cannot finish the job",
-  "voice": "Low-key and practical, he talks about teaching and simplicity more than about himself. He explains concepts in plain steps and stays upbeat about effort in the spring. Coverage of him is thin, so most of his public voice comes from team-site interviews.",
+  "want": "to be the gritty former backup who becomes a head coach on the strength of a tough, simple defense",
+  "fear": "that a season of struggles makes people forget the defenses he built",
+  "voice": "Intense but not a yeller; he speaks with the conviction of a ten-year special-teams linebacker and players listen. He is enthusiastic, quick to praise players and humble about coaches' responsibility for mistakes. He talks in terms of toughness, simplicity and honest self-evaluation.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "ATL",
+          "team": "TEN",
           "role": "HC"
         }
       },
       "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E2"
-      ]
-    },
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COACHES_DATA",
-          "team": "LAR",
-          "role": "HC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "positive",
-      "evidence": [
+        "E2",
         "E1"
       ]
     }
@@ -128,54 +126,54 @@
   "evidence": [
     {
       "id": "E1",
-      "url": "https://atlantafalcons.com/news/jimmy-lake-named-falcons-defensive-coordinator-rams-washington-huskies",
-      "publisher": "Atlanta Falcons (atlantafalcons.com), Tori McElhaney",
-      "published": "2024-01-29",
-      "accessed": "2026-11-05",
-      "summary": "Hiring story: began in the NFL in 2007 as an assistant DB coach under Morris in Tampa Bay, returned when Morris became head coach, then spent about ten years in college, rising at Washington from DB coach to coordinator and head coach (7-6, let go in 2021) before joining McVay's Rams in 2023. No quotes on style.",
+      "url": "https://www.newyorkjets.com/news/jeff-ulbrich-s-scheme-as-jets-d-coordinator-simplicity-and-players-first",
+      "publisher": "New York Jets (newyorkjets.com), Randy Lange",
+      "published": "2021-06-08",
+      "accessed": "2026-11-04",
+      "summary": "He wants a defense built on fundamentals, technique, effort and toughness, avoids gimmicks that rescue mistakes, and wants players to understand it well enough to solve problems. Intense but not a yeller, patient in teaching, high energy for celebrations; Saleh calls him genuine and passionate. Team site.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://sportstalkatl.com/raheem-morris-talks-falcons-first-time-play-calling-coordinators",
-      "publisher": "SportsTalk ATL (staff)",
-      "published": "2024-02-14",
-      "accessed": "2026-11-05",
-      "summary": "Morris states full confidence in Lake as a first-time NFL play-caller and points to their long shared history from Tampa Bay. Morris's view, not Lake's.",
-      "confidence": "medium"
+      "url": "https://www.clickorlando.com/sports/2024/10/09/jeff-ulbrich-was-a-gritty-player-a-respected-assistant-and-now-takes-over-a-struggling-jets-team/",
+      "publisher": "Associated Press (Dennis Waszak Jr.), via ClickOrlando",
+      "published": "2024-10-09",
+      "accessed": "2026-11-04",
+      "summary": "AP profile on his promotion to interim head coach: a tough, blue-collar former 49ers linebacker whose words carry weight with players; Atlanta assistant and coordinator before joining Saleh in 2021; credits Saleh for his chance; the Jets blocked a 2023 interview request; he tells the team to unite and evaluate itself honestly. The promotion postdates the seed's frame.",
+      "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://www.atlantafalcons.com/news/jimmy-lake-defensive-coordinator-2024-update",
-      "publisher": "Atlanta Falcons (atlantafalcons.com), Terrin Waack",
-      "published": "2024-05-23",
-      "accessed": "2026-11-05",
-      "summary": "Lake wants a defense that confuses offenses but is easy for players, tests each call by imagining himself in a player's place, installs gradually, keeps carried-over terminology for veterans, and expects defense to catch up once pads arrive. His own stated method.",
-      "confidence": "high"
+      "url": "https://newyorkjets.com/news/dc-jeff-ulbrich-blown-away-by-the-quality-and-character-of-the-jets-new-players",
+      "publisher": "New York Jets (newyorkjets.com), Jack Bell",
+      "published": "2022-06-01",
+      "accessed": "2026-11-04",
+      "summary": "He praises the character of new players, wants defensive linemen limited to about 30-35 snaps for health and performance, and says coaches must examine their own teaching and drills. Upbeat, player-praising tone. Team site.",
+      "confidence": "medium"
     },
     {
       "id": "E4",
-      "url": "https://www.cbssports.com/nfl/news/falcons-fire-defensive-coordinator-jimmy-lake-after-one-season-in-atlanta/",
-      "publisher": "CBS Sports, Tyler Sullivan",
-      "published": "2025-01-11",
-      "accessed": "2026-11-05",
-      "summary": "Atlanta dismisses Lake and line coach Jay Rodgers after one season; Morris calls it necessary after a review. The defense was in the bottom third in points and yards and allowed 37 per game in a late two-game skid. Results only.",
-      "confidence": "high"
+      "url": "https://newyorkjets.com/news/jeff-ulbrich-sees-exciting-d-velopments-for-jets-in-22",
+      "publisher": "New York Jets (newyorkjets.com), Jack Bell",
+      "published": "2022-06-30",
+      "accessed": "2026-11-04",
+      "summary": "Reflecting on an injury- and COVID-hit 2021 with a young roster, he expects more depth and schematic flexibility while keeping a fast, aggressive identity; candid about setbacks without dwelling. Team site.",
+      "confidence": "medium"
     },
     {
       "id": "E5",
-      "url": "https://www.spokesman.com/stories/2025/jan/11/falcons-fire-north-central-high-ewu-grad-jimmy-lak",
-      "publisher": "The Spokesman-Review (AJC report by D. Orlando Ledbetter)",
-      "published": "2025-01-11",
-      "accessed": "2026-11-05",
-      "summary": "Career recap for his hometown paper: Eastern Washington DB and coach, NFL DB jobs, Boise State, then Washington where his 2018 play-calling defense led the Pac-12; head coach for two seasons before a buyout; 2024 was his first NFL season calling plays and Atlanta went 8-9. Factual record.",
-      "confidence": "high"
+      "url": "https://www.si.com/nfl/aaron-rodgers-supportive-jets-strip-nathaniel-hackett-play-calling",
+      "publisher": "Sports Illustrated, Tim Capurso",
+      "published": "2024-10-10",
+      "accessed": "2026-11-04",
+      "summary": "As interim head coach he moves offensive play-calling from Hackett to Downing and says Rodgers backed it. Shows a decisive staff move; it postdates the seed's frame, where he is still defensive coordinator.",
+      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

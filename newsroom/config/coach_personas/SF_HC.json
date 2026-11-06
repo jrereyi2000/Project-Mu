@@ -139,9 +139,9 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "NO",
-          "role": "OC"
+          "table": "COACHES_DATA",
+          "team": "LV",
+          "role": "HC"
         }
       },
       "relationship_kind": "mentorship",
@@ -154,9 +154,9 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "LAR",
-          "role": "OC"
+          "table": "COACHES_DATA",
+          "team": "AZ",
+          "role": "HC"
         }
       },
       "relationship_kind": "mentorship",

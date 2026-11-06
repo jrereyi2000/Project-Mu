@@ -1,163 +1,207 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:CHI:DC",
-  "name": "Eric Washington",
+  "name": "Dennis Allen",
   "role": "DC",
   "team": "CHI",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "CHI",
     "role": "DC",
-    "name": "Eric Washington"
+    "name": "Dennis Allen"
   },
   "sliders": {
     "temperament": 4,
     "sociability": 5,
-    "confidence": 5,
+    "confidence": 6,
     "openness": 5,
     "warmth": 6,
-    "drive": 7
+    "drive": 6
   },
   "slider_evidence": {
     "temperament": [
-      "E2"
+      "E2",
+      "E6"
+    ],
+    "confidence": [
+      "E4"
     ],
     "warmth": [
-      "E2",
-      "E3"
+      "E3",
+      "E6"
     ],
     "drive": [
-      "E2"
+      "E4"
     ]
   },
   "traits": [
-    "TEACHER",
-    "FILM_ROOM_RAT",
-    "LOYAL"
+    "SCHEME_NERD",
+    "GUARDED",
+    "PLAYERS_COACH"
   ],
   "trait_evidence": {
-    "TEACHER": [
+    "SCHEME_NERD": [
+      "E1",
       "E2"
     ],
-    "FILM_ROOM_RAT": [
+    "GUARDED": [
       "E2",
-      "E3"
+      "E4"
     ],
-    "LOYAL": [
-      "E1",
-      "E3"
+    "PLAYERS_COACH": [
+      "E3",
+      "E6"
     ]
   },
   "views": [
     {
-      "text": "Players play faster when they understand why the call is made, not just what their job is.",
-      "when": [
-        "COACHING",
-        "YOUTH"
-      ]
-    },
-    {
-      "text": "The goal is the best pass rush in football, built on four linemen winning one-on-one.",
-      "when": [
-        "SCHEME",
-        "PREVIEW"
-      ]
-    },
-    {
-      "text": "Stop the run and take the ball away, and the offense becomes predictable.",
-      "when": [
-        "SCHEME",
-        "GAME_REVIEW"
-      ]
-    },
-    {
-      "text": "A coordinator who does not call the plays still makes the plan better by adding perspective.",
+      "text": "The biggest lesson of a first head-coaching job is to do it your own way and stay true to yourself.",
       "when": [
         "COACHING"
       ]
     },
     {
-      "text": "A defense is only as strong as its weakest assignment, so every player should know his neighbor's job.",
+      "text": "Handing off the defensive play sheet is hard when you built the defense.",
       "when": [
-        "BAD_GAME",
-        "PERFORMANCE"
+        "SCHEME",
+        "COACHING"
       ]
     },
     {
-      "text": "Great defensive lines are made by talent and a shared love of the game more than by scheme.",
+      "text": "Let players be themselves, as long as the defense stays physical and hard-nosed.",
       "when": [
-        "HISTORY",
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Outside noise comes with the job; the work in the building is what you control.",
+      "when": [
+        "STRUGGLING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "A strong culture is a foundation to build on, not something to tear down and start over.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Injuries explain some losses, but the results still fall short of what the players' effort deserved.",
+      "when": [
+        "INJURY",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Gather the facts before saying anything about a player's off-field trouble.",
+      "when": [
         "PLAYER"
       ]
     }
   ],
   "signatures": [
-    "talks fondly about the defensive linemen he coached years ago and what made them tough",
-    "keeps the same steady tone whether the defense played well or badly"
+    "declines to comment on a player issue until he has gathered the facts",
+    "thanks the owner, general manager, staff and players in turn when looking back",
+    "talks about putting his own stamp on things while keeping what already works"
   ],
-  "want": "to call defensive plays again someday, perhaps as a head coach, after years as a respected line coach",
-  "fear": "that he stays known as a position coach and supporting voice rather than a leader of a defense",
-  "voice": "Calm, warm and steady, with a teacher's habit of explaining the reason behind an assignment. He speaks respectfully of the franchise's history and his head coach's play-calling, and is enthusiastic about pass rushers. Coverage of his public voice is modest.",
+  "want": "to prove his 8-28 Oakland stint was about circumstances, not him, by winning in New Orleans his own way",
+  "fear": "that he is remembered as the coach who could not carry on what Sean Payton built",
+  "voice": "Even-keeled, reserved and businesslike, with a dry streak of humor. He answers carefully, defers on sensitive player matters until he knows more, and shrugs off outside criticism as part of the job. He praises players' effort and commitment even when results are bad.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "CHI",
+          "team": "DEN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LV",
           "role": "HC"
         }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E3"
+        "E4"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://fox32chicago.com/sports/10-takes-from-eric-washingtons-introduction-as-the-chicago-bears-defensive-coordinator",
-      "publisher": "FOX 32 Chicago, Chris Kwiecinski",
-      "published": "2024-02-22",
-      "accessed": "2026-11-04",
-      "summary": "Introduction as coordinator: glad to return to the team where his NFL career began in 2008; a relationship with Eberflus built on mutual respect and years of talking defense; Eberflus keeps the play calls; he hopes to call plays again someday; he expects the front four to drive the pass rush and recalls the 2010 line fondly. His own comments.",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/dennis-allen-on-calling-defensive-plays-hard-to-give-up-your-baby",
+      "publisher": "NBC Sports (ProFootballTalk), Josh Alper",
+      "published": "2022-02-08",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction he says no decision on keeping defensive play-calling, that balancing it with head-coaching is hard, and jokes that giving up the defense is like handing over his baby. Brief item.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://sports.yahoo.com/ex-nfl-star-gerald-mccoy-181757937.html",
-      "publisher": "NBC Sports Chicago, Josh Schrock, via Yahoo Sports",
-      "published": "2024-02-16",
-      "accessed": "2026-11-04",
-      "summary": "Former defensive tackle Gerald McCoy calls him a teacher who explains the reasons behind assignments and fixes players' film study and preparation, driven and hard-working with a steady mood players can count on, and someone who checks that every teammate knows his role. One former player's testimony.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E3",
-      "url": "https://sports.yahoo.com/coordinator-eric-washington-eager-put-205200104.html",
-      "publisher": "Chicago Tribune, Dan Wiederer, via Yahoo Sports",
-      "published": "2024-02-22",
-      "accessed": "2026-11-04",
-      "summary": "He wants a tough, aggressive defense built on fundamentals and one-on-one wins, aims to build the league's best pass rush, and wants to stop the run and force turnovers. He is fine not calling plays and trusts Eberflus. Described as eager, detail-oriented and good at connecting with players; speaks warmly of Julius Peppers and the 2010 line.",
+      "url": "https://africa.espn.com/nfl/story/_/id/33247398/new-saints-head-coach-dennis-allen-wants-create-my-own-legacy-new-orleans",
+      "publisher": "ESPN, Mike Triplett",
+      "published": "2022-02-09",
+      "accessed": "2026-11-05",
+      "summary": "Promoted to replace Payton, his longtime boss, he says his main lesson from 8-28 in Oakland is to do things his own way, feels better prepared, will keep much of the structure, and declines early comment on a player's arrest until he has information. Loomis praises his leadership and teaching.",
       "confidence": "high"
     },
     {
-      "id": "E4",
-      "url": "https://www.buffalorumblings.com/2024/1/27/24052820/chicago-bears-hire-buffalo-bills-dl-eric-washington-as-teams-new-dc",
-      "publisher": "Buffalo Rumblings (SB Nation)",
-      "published": "2024-01-27",
-      "accessed": "2026-11-04",
-      "summary": "Chicago hires Buffalo's assistant head coach and defensive line coach as coordinator. Career context from coverage: Carolina line coach from 2011 and coordinator in 2018-19 under Ron Rivera, then Buffalo from 2020 with Sean McDermott. A fan-network hiring note read through search summaries; facts only.",
+      "id": "E3",
+      "url": "https://www.si.com/nfl/saints/editorial-opinion/new-orleans-saints-cb-dennis-allen-alontae-taylor",
+      "publisher": "Sports Illustrated (Saints News Network), Ross Jackson",
+      "published": "2023-06-02",
+      "accessed": "2026-11-05",
+      "summary": "Cornerback Alontae Taylor says he enjoys playing for Allen, recalls Allen asking for more swagger and energy in practice, and values being allowed to be himself while still playing physical defense. One player's view.",
       "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://global.espn.com/nfl/story/_/id/41137856/new-orleans-saints-dennis-allen-urgency-year-3-week-1-carolina-panthers",
+      "publisher": "ESPN, Katherine Terrell",
+      "published": "2024-09-06",
+      "accessed": "2026-11-05",
+      "summary": "Entering year three, Mathieu says he seems more self-assured and outspoken, Jordan senses urgency, and Allen dismisses outside scrutiny as part of coaching. He replaced Payton's offensive coordinator with Klint Kubiak and chose most of his staff. Beat piece with player quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://global.espn.com/nfl/story/_/id/42189276/sources-saints-fire-coach-dennis-allen-7th-loss-row",
+      "publisher": "ESPN, Katherine Terrell",
+      "published": "2024-11-04",
+      "accessed": "2026-11-05",
+      "summary": "Fired after a seventh straight loss left the Saints 2-7; 18-25 overall in New Orleans after a 2-0 start derailed by injuries. Loomis had defended him citing injuries; Benson called the move necessary; Woods takes over defensive calls. Results, little on demeanor.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://crescentcitysports.com/allen-releases-statement-after-firing-by-saints/",
+      "publisher": "Crescent City Sports (staff)",
+      "published": "2024-11-04",
+      "accessed": "2026-11-05",
+      "summary": "His statement after the firing thanks Benson and Loomis, admits the team fell short, praises his staff, tells players he never doubted their commitment, and thanks fans. Gracious and reflective; a prepared statement.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

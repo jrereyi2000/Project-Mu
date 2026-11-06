@@ -1,137 +1,126 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:DAL:HC",
-  "name": "Mike McCarthy",
+  "name": "Brian Schottenheimer",
   "role": "HC",
   "team": "DAL",
   "seed_ref": {
     "table": "COACHES_DATA",
     "team": "DAL",
     "role": "HC",
-    "name": "Mike McCarthy"
+    "name": "Brian Schottenheimer"
   },
   "sliders": {
-    "temperament": 4,
-    "sociability": 5,
-    "confidence": 7,
+    "temperament": 6,
+    "sociability": 7,
+    "confidence": 5,
     "openness": 5,
-    "warmth": 6,
-    "drive": 7
+    "warmth": 8,
+    "drive": 5
   },
   "slider_evidence": {
     "temperament": [
-      "E1",
       "E4"
     ],
-    "confidence": [
-      "E1",
-      "E3"
+    "sociability": [
+      "E2",
+      "E4"
     ],
     "warmth": [
-      "E1",
-      "E2"
-    ],
-    "drive": [
       "E2",
+      "E3",
       "E4"
     ]
   },
   "traits": [
+    "PLAYERS_COACH",
+    "MENTOR",
     "QB_WHISPERER",
-    "SCHEME_NERD",
-    "OLD_SCHOOL",
-    "GUARDED"
+    "FAMILY_MAN"
   ],
   "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E2",
+      "E4"
+    ],
+    "MENTOR": [
+      "E2"
+    ],
     "QB_WHISPERER": [
+      "E1",
       "E2",
-      "E6"
+      "E5"
     ],
-    "SCHEME_NERD": [
-      "E2",
-      "E4"
-    ],
-    "OLD_SCHOOL": [
-      "E2",
-      "E4"
-    ],
-    "GUARDED": [
+    "FAMILY_MAN": [
       "E3"
     ]
   },
   "views": [
     {
-      "text": "An offense should be built to make the quarterback successful, and the plan starts with what he already knows.",
+      "text": "Players play harder for coaches who show them they care, so the relationship comes before the scheme.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A good quarterback's leadership is worth as much as his arm, and he says so loudly when he sees it.",
       "when": [
         "QB",
-        "SCHEME"
+        "PERFORMANCE"
       ]
     },
     {
-      "text": "Protecting the football and controlling the clock matter more than leading the league in yards.",
+      "text": "A bad loss is a time to keep the room together and lean on the people in it, not to change who you are.",
+      "when": [
+        "LOSING_STREAK",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Rookies and undrafted players should feel the coaches know their names and want them there from the first day.",
+      "when": [
+        "YOUTH",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "Sitting in the other side of the ball's meetings makes an offensive coach better at his own job.",
       "when": [
         "SCHEME",
-        "GAME_REVIEW"
+        "COACHING"
       ]
     },
     {
-      "text": "A team built on its defense and its run game is not a knock on the offense; it is how you win in January.",
+      "text": "A coach who changes his personality when he gets a bigger title usually fails; stay the same man.",
       "when": [
-        "SCHEME",
-        "PLAYOFFS"
-      ]
-    },
-    {
-      "text": "A program can be championship-ready in how it trains and prepares and still have one hurdle left to clear.",
-      "when": [
-        "CONTENDER",
-        "PLAYOFFS"
-      ]
-    },
-    {
-      "text": "When a playoff game gets away, the head coach owns it, and the fix is in the details of how the team prepares.",
-      "when": [
-        "BAD_GAME",
-        "PLAYOFFS"
-      ]
-    },
-    {
-      "text": "Contracts and job security are not something to discuss in public; the direction of the team is what he will talk about.",
-      "when": [
-        "COACHING",
-        "FRONT_OFFICE"
-      ]
-    },
-    {
-      "text": "Calling plays again keeps a head coach in the meeting room and close to the work, which is where he wants to be.",
-      "when": [
-        "COACHING",
-        "SCHEME"
+        "COACHING"
       ]
     }
   ],
   "signatures": [
-    "answers criticism with a calm statement of confidence in the program's direction rather than a rebuttal",
-    "lists his priorities as ball security, time of possession and the run game when asked about the offense",
-    "declines to discuss his own contract and turns the question back to the roster"
+    "praises his quarterback in sweeping terms, often reaching for a comparison to an all-time great",
+    "shows emotion openly on the sidelines and in team meetings, and talks about it afterward",
+    "talks about friendships with other coaches and what he learned from them"
   ],
-  "want": "to prove in Dallas that the Super Bowl-winning coach from Green Bay can get a talented team past the playoff wall it keeps hitting",
-  "fear": "that a strong regular-season record keeps being remembered only for its January losses",
-  "voice": "Direct and matter-of-fact, with a Pittsburgh plainness; he speaks in process terms about preparation, training and details. He takes responsibility for losses in general language, stays confident about the direction of the program, and refuses to be drawn into contract talk. He praises his quarterback steadily and rarely criticizes a player by name.",
+  "want": "to show that a career assistant, and the son of a famous coach, can lead a room on his own energy and relationships",
+  "fear": "that the energy and culture talk gets dismissed as noise if the offense does not produce",
+  "voice": "Loud, warm and emotional; he speaks quickly and with visible enthusiasm, and is quick to hand out praise to players by name. He talks about culture, caring and connection as much as plays, and openly credits mentors and friends. He keeps criticism of players inside the building.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "DAL",
-          "role": "OC"
+          "table": "COACHES_DATA",
+          "team": "PIT",
+          "role": "HC"
         }
       },
-      "relationship_kind": "collaboration",
+      "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E5"
+        "E1",
+        "E3"
       ]
     },
     {
@@ -143,10 +132,10 @@
           "role": "HC"
         }
       },
-      "relationship_kind": "collaboration",
+      "relationship_kind": "support",
       "outcome": "positive",
       "evidence": [
-        "E5"
+        "E3"
       ]
     },
     {
@@ -158,65 +147,55 @@
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E2",
-        "E4"
+        "E4",
+        "E5"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.cbssports.com/nfl/news/cowboys-mike-mccarthy-returns-for-2024-has-championship-level-program-dak-prescott-part-of-solution",
-      "publisher": "CBS Sports, Garrett Podell",
-      "published": "2024-01-18",
+      "url": "https://www.fox4news.com/sports/dallas-cowboys-brian-schottenheimer-head-coach",
+      "publisher": "FOX 4 Dallas-Fort Worth, Adam Fullerton",
+      "published": "2025-01-24",
       "accessed": "2026-11-04",
-      "summary": "Press conference after Jerry Jones kept him for 2024 following a home playoff loss to Green Bay. He says the program is built to win a title but has not cleared the playoff threshold, takes responsibility for the recent postseason losses, says the team chased big plays, and calls Prescott part of the answer with another level to reach. Tone reported as disappointed but determined. One press conference after a painful loss.",
+      "summary": "Hiring story when Dallas made him head coach: son of Marty Schottenheimer, coaching since 1997 with the Rams, Jets, Seahawks and Colts among others, a Cowboys consultant in 2022 and coordinator in 2023-24 while McCarthy called plays. Prescott had his best season in 2023 when the offense led the league in scoring; it fell to 21st in 2024 after Prescott's injury. Facts, little on personality.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://africa.espn.com/nfl/story/_/id/35763380/cowboys-mike-mccarthy-says-new-voice-calling-plays-help-dak-prescott",
+      "url": "https://africa.espn.com/nfl/story/_/id/45024511/nfl-dallas-cowboys-brian-schottenheimer-rookie-minicamp-tyler-booker",
       "publisher": "ESPN, Todd Archer",
-      "published": "2023-03-01",
+      "published": "2025-05-07",
       "accessed": "2026-11-04",
-      "summary": "At the combine, after taking play-calling back from Kellen Moore, he expects the offense to change by roughly a third with the same core terminology, says a new voice will challenge Prescott and the offense will be built around him, and says he will trade some production for fewer turnovers. He values the run, balance and a strong defense over leading the league in offense. His stated plan, not results.",
+      "summary": "Rookie minicamp piece in his first months as head coach: he moves among draft picks and undrafted players starting conversations, players call him energetic and fun but serious when needed, and he wants players to feel cared for and close to their assistants. He adds music to practice, reshuffles meeting and locker room seats, and plans to work closely with the quarterbacks. Describes himself as demanding and says coaches who change their personality fail.",
       "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/mike-mccarthy-on-entering-final-year-of-contract-im-very-confident-where-i-am",
-      "publisher": "NBC Sports (ProFootballTalk), Josh Alper",
-      "published": "2024-01-18",
-      "accessed": "2026-11-04",
-      "summary": "Asked about entering the last year of his deal without an extension, he declines to talk about contracts, his own included, and says he is confident in the team's direction and that it will get over the championship hurdle. The writer notes the precedent of Jason Garrett's lame-duck years. Shows how he deflects job-security questions.",
-      "confidence": "high"
-    },
-    {
-      "id": "E4",
-      "url": "https://abc30.com/post/cowboys-transition-from-playcaller-kellen-moore-to-mike-mccarthy-a/13921873/",
-      "publisher": "ESPN (Todd Archer), via ABC30",
-      "published": "2023-10-16",
-      "accessed": "2026-11-04",
-      "summary": "Midseason look at his play-calling: Prescott's passing yards per game fell from Moore's era, with more snaps under center, more play action, fewer deep shots and quicker throws. He is described as direct and matter-of-fact, says the team is built on its defense, and points to time of possession and ball security as progress. Prescott stays publicly patient. A snapshot of six games.",
-      "confidence": "high"
-    },
-    {
-      "id": "E5",
       "url": "https://www.espn.com/nfl/story/_/id/46626198/nfl-dallas-cowboys-washington-commanders-brian-schottenheimer-dan-quinn",
       "publisher": "ESPN, Todd Archer",
       "published": "2025-10-18",
       "accessed": "2026-11-04",
-      "summary": "Feature on the friendship between Schottenheimer and Dan Quinn. It recounts that McCarthy, who had worked with Schottenheimer before, offered him a consultant role in 2022 when he meant to take a year off, placing him in Quinn's defensive meetings to play the opposing offense. Shows McCarthy's staffing choices and the working link among the three; it is mostly about the other two men.",
+      "summary": "Feature on his friendship with Dan Quinn, dating to the 2007-08 Jets staff. McCarthy brought him to Dallas as a consultant in 2022 when he meant to take a year off, and he sat in Quinn's defensive meetings playing the opposing offense; the two stayed late talking leadership and culture. He calls Quinn a close friend, admits he had lost some passion for coaching before regaining it, and comes across as reflective and family-minded.",
       "confidence": "high"
     },
     {
-      "id": "E6",
-      "url": "https://sports.yahoo.com/marty-schottenheimer-gave-cowboys-mike-173528054.html",
-      "publisher": "Cowboys Wire via Yahoo Sports, Todd Brock",
-      "published": "2021-02-09",
+      "id": "E4",
+      "url": "https://www.si.com/nfl/cowboys/onsi/news/dak-prescott-raves-about-brian-schottenheimer-emotional-leadership-on-hard-knocks",
+      "publisher": "Sports Illustrated (Cowboys on SI), Randy Gurzi",
+      "published": "2025-12-03",
       "accessed": "2026-11-04",
-      "summary": "On Marty Schottenheimer's death, recounts that he hired McCarthy in 1993 as Kansas City's first offensive quality control coach and promoted him to quarterbacks coach in 1995, and that McCarthy worked with Gannon, Grbac and Bono before coaching Favre in Green Bay. McCarthy credits Marty's passion. Career facts from a fan-network site; it does not mention Brian Schottenheimer.",
+      "summary": "Prescott says his head coach is openly emotional and that players feed off it and play harder for him. The piece credits him with steadying the team after a 3-5-1 start and the death of Marshawn Kneeland, before three straight wins. Fan-network framing around a player quote.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/2023/10/31/cowboys-dak-prescott-drew-brees-comparison-brian-schottenheimer",
+      "publisher": "Sports Illustrated",
+      "published": "2023-10-31",
+      "accessed": "2026-11-04",
+      "summary": "As coordinator, asked about Prescott after two wins, he goes well beyond a routine answer and compares his quarterback's makeup to Drew Brees. Read from the headline and search summary, not the full text. Shows his habit of lavish public praise for his quarterback, not his role in the play-calling.",
       "confidence": "medium"
     }
   ],
@@ -224,6 +203,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

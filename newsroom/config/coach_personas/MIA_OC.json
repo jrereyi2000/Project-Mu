@@ -1,168 +1,190 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:MIA:OC",
-  "name": "Frank Smith",
+  "name": "Bobby Slowik",
   "role": "OC",
   "team": "MIA",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "MIA",
     "role": "OC",
-    "name": "Frank Smith"
+    "name": "Bobby Slowik"
   },
   "sliders": {
-    "temperament": 4,
+    "temperament": 5,
     "sociability": 5,
     "confidence": 5,
     "openness": 5,
     "warmth": 5,
     "drive": 5
   },
-  "slider_evidence": {
-    "temperament": [
-      "E2",
-      "E4"
-    ]
-  },
+  "slider_evidence": {},
   "traits": [
-    "MEASURED",
-    "SCHEME_NERD",
-    "PLAYERS_COACH"
+    "QB_WHISPERER",
+    "FILM_ROOM_RAT",
+    "TEACHER"
   ],
   "trait_evidence": {
-    "MEASURED": [
-      "E2",
+    "QB_WHISPERER": [
+      "E3",
       "E4"
     ],
-    "SCHEME_NERD": [
-      "E2",
+    "FILM_ROOM_RAT": [
       "E3"
     ],
-    "PLAYERS_COACH": [
-      "E2",
-      "E5"
+    "TEACHER": [
+      "E3",
+      "E2"
     ]
   },
   "views": [
     {
-      "text": "A struggling run game is a collective problem, never one back's or one lineman's fault.",
+      "text": "A rookie quarterback should be challenged hard in the film room before the draft; how he takes criticism tells you everything.",
+      "when": [
+        "QB",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "Timing and anticipation make a passing game; the ball should come out before the receiver breaks.",
       "when": [
         "SCHEME",
-        "STRUGGLING"
+        "QB"
       ]
     },
     {
-      "text": "A smaller back can still win short yardage if he has the feel and timing to find space.",
-      "when": [
-        "PLAYER",
-        "SCHEME"
-      ]
-    },
-    {
-      "text": "The rookie year is the hardest; the jump comes once the volume of the offense slows down for him.",
-      "when": [
-        "YOUTH",
-        "PLAYER"
-      ]
-    },
-    {
-      "text": "A disappointing season is something to study, not something to bury.",
-      "when": [
-        "BAD_GAME",
-        "OFFSEASON"
-      ]
-    },
-    {
-      "text": "Consistency comes from daily habits in the spring, not from promises in the summer.",
-      "when": [
-        "OFFSEASON",
-        "PREVIEW"
-      ]
-    },
-    {
-      "text": "Game plans are built together by the head coach, the coordinator and the position coaches.",
+      "text": "A coordinator should own his mistakes in front of the room first so players feel free to own theirs.",
       "when": [
         "COACHING",
-        "GAME_REVIEW"
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A defensive background teaches you what coverages hate to see, which is half of calling plays.",
+      "when": [
+        "SCHEME",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "When the line cannot protect, no scheme fixes it; sacks are an offense-wide problem.",
+      "when": [
+        "STRUGGLING",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "Late in a close game, trust the hunch you have prepared for all week.",
+      "when": [
+        "CLOSE_GAMES",
+        "SCHEME"
       ]
     }
   ],
   "signatures": [
-    "credits the position coaches by name for a player's growth",
-    "declines to rank or single out a player when asked to compare him with others",
-    "frames problems as execution against the looks the defense showed"
+    "always has one specific coaching point for the quarterback, even after a good game",
+    "starts a review of a bad half by naming his own call that went wrong"
   ],
-  "want": "to be seen as the architect of a lasting run game in his own right, not only as the head coach's partner",
-  "fear": "that the offense's dips get pinned on him while its best days are credited to the play-caller",
-  "voice": "Earnest, measured and process-focused; he speaks in long, qualified sentences and avoids blaming individuals. He spreads credit to position coaches and players and turns setbacks into lessons to study. He has a light, self-deprecating humor but rarely makes promises. Public coverage of him is thin, so his voice rests mostly on press-conference transcripts.",
+  "want": "to prove the Shanahan-tree offense he built around a rookie quarterback can make him a head coach",
+  "fear": "that one standout season with a rookie gets remembered as the quarterback's doing and not his",
+  "voice": "Analytical and quietly intense, a play-caller who talks in concepts and coaching points. He is candid about his own errors, credits the quarterback and receivers, and avoids grand statements about himself.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "MIA",
+          "team": "HOU",
           "role": "HC"
         }
       },
       "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E2"
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "C.J. Stroud",
+        "team_2026": "HOU"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://africa.espn.com/nfl/story/_/id/33289229/source-miami-dolphins-hire-los-angeles-chargers-frank-smith-offensive-coordinator",
-      "publisher": "ESPN, Marcel Louis-Jacques",
-      "published": "2022-02-14",
-      "accessed": "2026-11-04",
-      "summary": "Hiring report: came from the Chargers as run game coordinator and offensive line coach, after tight ends jobs with the Raiders and Bears and an assistant line job with the Saints; the Chargers' run- and pass-block win rates improved under him. Career facts only.",
-      "confidence": "high"
-    },
-    {
-      "id": "E2",
-      "url": "https://media.miamidolphins.com/?p=41761",
-      "publisher": "Miami Dolphins media site (press-conference transcript)",
-      "published": "2023-10-05",
-      "accessed": "2026-11-04",
-      "summary": "Full transcript: measured and upbeat, he credits position coaches Studesville and Barry, praises players' work habits, declines to rank a tackle, explains receivers' quiet games as collective issues and describes the game plan as a joint process with McDaniel. Primary source; one session.",
-      "confidence": "high"
-    },
-    {
-      "id": "E3",
-      "url": "https://www.si.com/nfl/dolphins/news/why-the-dolphins-like-achane-in-short-yardage-situations-01jexqfk414t",
-      "publisher": "Sports Illustrated (All Dolphins), Alain Poupart",
-      "published": "2024-12-12",
-      "accessed": "2026-11-04",
-      "summary": "He explains how the staff decides whether a short-yardage problem needs correction or a scheme change, rejects the idea that Achane is too small for short yardage, and calls run-game efficiency a collective effort. His own explanation, filtered by a beat writer.",
+      "url": "https://africa.espn.com/nfl/story/_/id/35645096/source-texans-hire-49ers-bobby-slowik-new-oc",
+      "publisher": "ESPN",
+      "published": "2023-02-12",
+      "accessed": "2026-11-05",
+      "summary": "Houston hires Slowik, San Francisco's passing game coordinator, as offensive coordinator; he and Ryans spent six seasons together with the 49ers, and he began as a defensive assistant in Washington when Kyle Shanahan was coordinator there. Hiring report; date taken from the reported Sunday announcement.",
       "confidence": "medium"
     },
     {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/texans/onsi/news/houston-texans-head-coach-demeco-ryans-playing-days-coaching-style-training-camp-bobby-slowik-jonathan-greenard",
+      "publisher": "Sports Illustrated (Texans On SI), Casey Smith",
+      "published": "2023-08-09",
+      "accessed": "2026-11-05",
+      "summary": "Camp piece: Ryans corrects mistakes on the spot and will not soften problems, the blunt style he wished he had as a player, though he prefers to highlight good work; Greenard says he gives it to you straight and expects greatness. Slowik is described as openly owning his own mistakes in offensive meetings. Team-beat site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/39241207/how-texans-oc-bobby-slowik-helped-cj-stroud-excel-rookie",
+      "publisher": "ESPN, DJ Bien-Aime",
+      "published": "2024-01-07",
+      "accessed": "2026-11-05",
+      "summary": "Feature: a first-time play-caller who started under Shanahan as a defensive quality control coach in 2017, built a timing and anticipation passing game around Stroud, and grilled him in pre-draft film sessions to see how he took criticism; players call him detail-oriented and honest, Stroud says he always has a coaching point, and Ryans credits him with the offense.",
+      "confidence": "high"
+    },
+    {
       "id": "E4",
-      "url": "https://www.si.com/nfl/dolphins/news/where-dolphins-oc-wants-to-see-improvement-in-2025-01jw1ayz7acv",
-      "publisher": "Sports Illustrated (All Dolphins), Jake Mendel",
-      "published": "2025-05-24",
-      "accessed": "2026-11-04",
-      "summary": "Spring 2025: he calls 2024 a letdown with some bright spots, wants the consistency and discipline of 2023 back, and uses the offseason to align players' understanding. The writer describes him as earnest, qualified and process-minded.",
+      "url": "https://gmg-kprc-prod.cdn.arcpublishing.com/sports/2025/01/21/will-bobby-slowik-return-as-texans-offensive-coordinator-demeco-ryans-weighs-decision-while-cj-stroud-wants-oc-back",
+      "publisher": "KPRC 2 Click2Houston",
+      "published": "2025-01-21",
+      "accessed": "2026-11-05",
+      "summary": "After the divisional-round loss, Ryans weighs whether to keep Slowik while Stroud says he wants his coordinator back. Report on a pending decision; reflects Stroud's public support.",
       "confidence": "medium"
     },
     {
       "id": "E5",
-      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/dolphins-oc-frank-smith-devon-achane-ready-for-bigger-workload-doing-a-great-job-with-it",
-      "publisher": "Pro Football Talk (NBC Sports), Josh Alper",
-      "published": "2024-11-22",
-      "accessed": "2026-11-04",
-      "summary": "He says Achane has handled a much bigger 2024 workload professionally and that a rookie season is usually the hardest adjustment. Short news item; shows how he talks up a young player, little else.",
-      "confidence": "medium"
+      "url": "https://www.click2houston.com/sports/2025/02/13/very-hard-to-let-bobby-go-texans-demeco-ryans-reflects-on-decision-to-move-on-from-bobby-slowik",
+      "publisher": "KPRC 2 Click2Houston, Aaron Wilson",
+      "published": "2025-02-13",
+      "accessed": "2026-11-05",
+      "summary": "Ryans says letting Slowik go was very hard, calls him a close friend from San Francisco who helped him early in his coaching career, and cites the offense falling to 22nd in yards and 19th in scoring, feedback from key offensive players, and Stroud's career-high 52 sacks; introduces Nick Caley as the replacement.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

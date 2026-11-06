@@ -1,14 +1,14 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:PIT:DC",
-  "name": "Teryl Austin",
+  "name": "Patrick Graham",
   "role": "DC",
   "team": "PIT",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "PIT",
     "role": "DC",
-    "name": "Teryl Austin"
+    "name": "Patrick Graham"
   },
   "sliders": {
     "temperament": 5,
@@ -16,171 +16,138 @@
     "confidence": 5,
     "openness": 6,
     "warmth": 6,
-    "drive": 6
+    "drive": 5
   },
   "slider_evidence": {
     "openness": [
-      "E1"
+      "E3",
+      "E2"
     ],
     "warmth": [
-      "E1"
-    ],
-    "drive": [
-      "E1",
       "E2"
     ]
   },
   "traits": [
+    "FILM_ROOM_RAT",
     "TEACHER",
-    "PLAYERS_COACH",
     "SCHEME_NERD"
   ],
   "trait_evidence": {
-    "TEACHER": [
-      "E1",
-      "E2"
-    ],
-    "PLAYERS_COACH": [
+    "FILM_ROOM_RAT": [
+      "E2",
       "E1"
     ],
+    "TEACHER": [
+      "E2"
+    ],
     "SCHEME_NERD": [
+      "E3",
       "E4"
     ]
   },
   "views": [
     {
-      "text": "Give players a real voice in the room; they see things coaches do not.",
+      "text": "Complacency is how rivals close the gap; every season needs new ideas tested early and kept only if they work.",
+      "when": [
+        "OFFSEASON",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Smart players who read the game make the lab fun; they are an extension of the coach on the field.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A defense full of unknown names can become a top unit if the concepts are taught simply enough.",
+      "when": [
+        "STRUGGLING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Good coaches listen to their players; some of the best adjustments start as a linebacker's suggestion.",
       "when": [
         "COACHING",
         "PLAYER"
       ]
     },
     {
-      "text": "Teach each player the way he learns best, technique and scheme together.",
-      "when": [
-        "YOUTH",
-        "PLAYER"
-      ]
-    },
-    {
-      "text": "A ball-hawking safety needs the freedom to roam, and the corners have to earn him that freedom.",
-      "when": [
-        "SCHEME",
-        "PLAYER"
-      ]
-    },
-    {
-      "text": "Turnovers decide seasons, and a defense that stops forcing them stops winning.",
-      "when": [
-        "SCHEME",
-        "STRUGGLING"
-      ]
-    },
-    {
-      "text": "When a star goes down, the next man has to keep the unit from missing a beat.",
-      "when": [
-        "INJURY",
-        "PLAYER"
-      ]
-    },
-    {
-      "text": "The head coach can add his input on any call; the defense belongs to the whole staff.",
+      "text": "Continuity in a defensive staff shows up in communication on game day.",
       "when": [
         "COACHING",
-        "GAME_REVIEW"
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Head-coaching interviews are nice, but the job in front of you comes first.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
       ]
     }
   ],
   "signatures": [
-    "praises defensive backs by name for their problem-solving",
-    "talks about turnovers as the measure of the defense",
-    "brings energy to the meeting room and keeps it comfortable"
+    "talks about the defense as an experiment he enjoys running with the players",
+    "breaks a complex coverage down into one or two simple ideas when asked about it"
   ],
-  "want": "to prove, after years as a respected coordinator elsewhere, that his defense can be the heart of a contender at home in western Pennsylvania",
-  "fear": "that he is seen as the coordinator who keeps his job only because of the head coach's loyalty",
-  "voice": "Energetic, detail-oriented and player-friendly; players describe him as passionate, comfortable to be around and willing to let them speak. He talks in teaching terms about technique and scheme. Public coverage of his own voice is limited, so it rests mostly on players' descriptions.",
-  "ties": [
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COACHES_DATA",
-          "team": "PIT",
-          "role": "HC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "positive",
-      "evidence": [
-        "E3",
-        "E5"
-      ]
-    },
-    {
-      "target": {
-        "kind": "player",
-        "name": "Minkah Fitzpatrick",
-        "team_2026": "NYJ"
-      },
-      "relationship_kind": "mentorship",
-      "outcome": "positive",
-      "evidence": [
-        "E1",
-        "E4"
-      ]
-    }
-  ],
+  "want": "to turn a reputation as one of the league's sharpest defensive minds into a head-coaching job",
+  "fear": "that a strong defense on a losing team leaves his work unseen",
+  "voice": "Thoughtful, upbeat and professorial; he talks in measured sentences about process, ideas and players' understanding. He gives credit to players and shares little about himself, and he frames each season as a new problem to solve rather than a repeat.",
+  "ties": [],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.audacy.com/937thefan/sports/pittsburgh-steelers/steelers-players-discuss-likely-new-dc-teryl-austin",
-      "publisher": "93.7 The Fan (Audacy), Jeff Hathhorn",
-      "published": "2022-01-23",
-      "accessed": "2026-11-04",
-      "summary": "Before his promotion, Fitzpatrick calls him detail-oriented and passionate and says he gives players a voice; Norwood credits his teaching; Witherspoon says he knows every phase and keeps the room comfortable; Sutton calls him a player's coach who tailors teaching and brings energy daily. Players' views.",
-      "confidence": "medium"
-    },
-    {
-      "id": "E2",
-      "url": "https://www.steelers.com/news/austin-named-defensive-coordinator",
-      "publisher": "Pittsburgh Steelers (steelers.com), Teresa Varley",
-      "published": "2022-02-09",
-      "accessed": "2026-11-04",
-      "summary": "Promotion release: joined in 2019 as senior defensive assistant and secondary coach after 18 NFL years, earlier coordinator for Detroit and Cincinnati; a Sharon, Pennsylvania native who played at Pitt; players praise his teaching and attention to detail. Team site.",
+      "url": "https://www.espn.com/nfl/story/_/id/33219691",
+      "publisher": "ESPN, Paul Gutierrez",
+      "published": "2022-02-04",
+      "accessed": "2026-11-05",
+      "summary": "Las Vegas hires Graham, the Giants' coordinator for two seasons under Joe Judge, after a 2009-15 run in New England as a defensive assistant and position coach; Brian Daboll calls him diligent and smart, and the Giants interviewed him for their head job. Hiring report.",
       "confidence": "high"
     },
     {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/raiders/news/robert-spillane-on-raiders-dc-patrick-graham-01hybxdjzpqk",
+      "publisher": "Sports Illustrated (Raiders Today), Carter Landis",
+      "published": "2024-05-21",
+      "accessed": "2026-11-05",
+      "summary": "On Crosby's podcast, linebacker Spillane says Graham walked him through the defense simply enough to absorb quickly, calls him a Yale-educated student of the game who loves film, and says Graham listens to players and adopted some of his suggestions. One player's testimony.",
+      "confidence": "medium"
+    },
+    {
       "id": "E3",
-      "url": "https://steelersnow.com/tomlin-teryl-austin-will-put-his-imprint-on-steelers-defense",
-      "publisher": "Steelers Now, Nick Farabaugh",
-      "published": "2022-04-01",
-      "accessed": "2026-11-04",
-      "summary": "Tomlin calls the promotion natural, says Austin knows the defense and will have latitude to put his imprint on it, and notes their long history; the writer expects more two-high safety looks. Fan-network site.",
+      "url": "https://www.si.com/nfl/raiders/news/raiders-defensive-coordinator-patrick-graham-is-enjoying-the-process-01hyf3reberd",
+      "publisher": "Sports Illustrated (Raiders Today), Ezekiel Trezevant",
+      "published": "2024-05-22",
+      "accessed": "2026-11-05",
+      "summary": "At OTAs Graham calls the season a new challenge, says returning leaders make the work easier, enjoys experimenting in what he calls the lab with players who read the game, and warns that complacency lets rivals catch up. Upbeat, curious tone.",
       "confidence": "medium"
     },
     {
       "id": "E4",
-      "url": "https://www.dkpittsburghsports.com/2022/02/15/teryl-austin-legacy-tied-scheming-chances-minkah-fitzpatrick-carters-classroom-pittsburgh-steelers-defensive-coordinator-carters-classroom-cdc",
-      "publisher": "DK Pittsburgh Sports, Chris Carter",
-      "published": "2022-02-15",
-      "accessed": "2026-11-04",
-      "summary": "Film column: credits his scheme for Fitzpatrick's interception spike as a free-roaming middle safety in 2019-20 and argues his success depends on giving that freedom back with better corners. Analyst's reading.",
-      "confidence": "medium"
+      "url": "https://www.raiders.com/news/quick-hits-antonio-pierce-raiders-ready-to-hit-the-ground-running-in-training-camp",
+      "publisher": "Las Vegas Raiders (raiders.com), Levi Edwards",
+      "published": "2024-07-23",
+      "accessed": "2026-11-05",
+      "summary": "Opening his first full camp, Pierce says he feels no pressure, wants players to have fun and be physical, and lists bonding, competition, physicality and a Raiders identity as goals; he calls the defense the strength and credits Graham's third year for communication and continuity, and will not rush the quarterback decision. Team site; his own framing.",
+      "confidence": "high"
     },
     {
       "id": "E5",
-      "url": "https://www.nfl.com/news/mike-tomlin-teryl-austin-steelers-defense-struggles",
-      "publisher": "Associated Press, via NFL.com",
-      "published": "2025-10-28",
-      "accessed": "2026-11-04",
-      "summary": "In 2025, with the defense struggling, Tomlin says he has been largely pleased with Austin, rejects taking over play-calling and calls the fix a shared responsibility. Notes Austin has been coordinator since 2022.",
-      "confidence": "medium"
+      "url": "https://www.ksat.com/sports/2025/01/07/raiders-fire-coach-antonio-pierce-after-he-goes-4-13-in-lone-full-season/",
+      "publisher": "Associated Press via KSAT, Mark Anderson",
+      "published": "2025-01-07",
+      "accessed": "2026-11-05",
+      "summary": "Las Vegas fires Pierce after 4-13 in his only full season, which included 10 straight losses amid injuries and the Adams trade; the team credits him with reigniting what it means to be a Raider. He grew up a Raiders fan, coached at Arizona State in 2018-21, and had never been an NFL coordinator. Notes Graham is among Jacksonville's head-coach interview requests.",
+      "confidence": "high"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }
