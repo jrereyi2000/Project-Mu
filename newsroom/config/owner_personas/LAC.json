@@ -1,0 +1,121 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:LAC",
+  "name": "Dean Spanos",
+  "role": "OWNER",
+  "team": "LAC",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "LAC",
+    "name": "Dean Spanos"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "HEADLINE_HUNTER",
+    "BUDGET_CONSCIOUS",
+    "HANDS_OFF"
+  ],
+  "trait_evidence": {
+    "HEADLINE_HUNTER": [
+      "E2"
+    ],
+    "BUDGET_CONSCIOUS": [
+      "E1"
+    ],
+    "HANDS_OFF": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "A proven, famous coach is worth paying when the moment comes.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "People say we will not spend; the record will show otherwise.",
+      "when": [
+        "CAP",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "My son runs football operations; I sign off on the big decisions.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A franchise quarterback demands a coach who can win now.",
+      "when": [
+        "QB",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "Los Angeles is a market we have to win over with results.",
+      "when": [
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "A losing season is a reason to clean house completely.",
+      "when": [
+        "LOSING_STREAK",
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "issues a short prepared statement for hires",
+    "leaves the press conference to family executives"
+  ],
+  "want": "Make the Chargers a contender that wins Los Angeles over (medium).",
+  "fear": "The frugal label sticking and costing him the best people (medium).",
+  "voice": "Reserved and rarely heard, speaking through prepared statements. Praise for hires is warm but brief; leaves explanations to his son and the football staff.",
+  "ties": [],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/2024/01/03/chargers-spend-jim-harbaugh-coach",
+      "publisher": "Sports Illustrated",
+      "published": "2024-01-03",
+      "accessed": "2026-11-06",
+      "summary": "Column on the Chargers' reputation for not spending on coaches, staff and facilities, arguing they should pay what it takes for Jim Harbaugh.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://nesn.com/bets/2024/01/dean-spanos-bold-move-the-chargers-jim-harbaugh-gamble",
+      "publisher": "NESN",
+      "published": "2024-01-25",
+      "accessed": "2026-11-06",
+      "summary": "Covers the Harbaugh hire as a bold move by Spanos, who praised Harbaugh in a prepared statement.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://amp.foxsports.com/stories/nfl/chargers-president-john-spanos-tries-to-chart-new-path-after-firing-coach-staley-gm-telesco",
+      "publisher": "FOX Sports",
+      "published": "2023-12-16",
+      "accessed": "2026-11-06",
+      "summary": "John Spanos, president of football operations, led the public response to the Staley and Telesco firings and said the club would do whatever it takes to win.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

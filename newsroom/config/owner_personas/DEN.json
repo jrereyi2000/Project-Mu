@@ -1,0 +1,114 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:DEN",
+  "name": "Greg Penner",
+  "role": "OWNER",
+  "team": "DEN",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "DEN",
+    "name": "Greg Penner"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "DEEP_POCKETS",
+    "HANDS_OFF",
+    "RING_CHASER"
+  ],
+  "trait_evidence": {
+    "DEEP_POCKETS": [
+      "E1"
+    ],
+    "HANDS_OFF": [
+      "E2"
+    ],
+    "RING_CHASER": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Dead money is a cost, not a reason to keep a quarterback who is not the answer.",
+      "when": [
+        "CAP",
+        "QB"
+      ]
+    },
+    {
+      "text": "I hired a coach to make football decisions, and I back them.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Every choice is a bet on winning more games, not on protecting the books.",
+      "when": [
+        "CONTENDER",
+        "CAP"
+      ]
+    },
+    {
+      "text": "A rookie quarterback with the right coach is worth a patient year.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "We built the facilities and the staff to compete with anyone.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A playoff return is the minimum; titles are the point.",
+      "when": [
+        "PLAYOFFS",
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "frames hard money decisions as bets on winning",
+    "defers football questions to his head coach"
+  ],
+  "want": "Bring a fourth championship to Denver under the ownership group he leads (medium).",
+  "fear": "Repeating an expensive quarterback mistake (medium).",
+  "voice": "Calm, analytical and corporate; talks in terms of investment and outcomes. Rarely emotional in public and comfortable letting his coach be the face of the team.",
+  "ties": [],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/39654399/broncos-cut-russell-wilson-take-85m-dead-money-hit",
+      "publisher": "ESPN",
+      "published": "2024-03-04",
+      "accessed": "2026-11-06",
+      "summary": "Denver released Russell Wilson and absorbed a then-record $85 million in dead money.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://africa.espn.com/nfl/story/_/id/39259274/denver-broncos-russell-wilson-sean-payton-decision",
+      "publisher": "ESPN",
+      "published": "2024-01-08",
+      "accessed": "2026-11-06",
+      "summary": "Penner said the financial fallout of moving on from Wilson would not decide the quarterback question and framed it as a bet on winning, backing Sean Payton's call.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

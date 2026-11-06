@@ -1,0 +1,143 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:NE",
+  "name": "Robert Kraft",
+  "role": "OWNER",
+  "team": "NE",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "NE",
+    "name": "Robert Kraft"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "confidence": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "MEDDLER",
+    "HEADLINE_HUNTER",
+    "LEGACY_BUILDER"
+  ],
+  "trait_evidence": {
+    "MEDDLER": [
+      "E1",
+      "E2"
+    ],
+    "HEADLINE_HUNTER": [
+      "E3"
+    ],
+    "LEGACY_BUILDER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "When a hire fails, it is on me, and I will say so in front of the cameras.",
+      "when": [
+        "COACHING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A former Patriot who has already run a team is a safer bet than a promising first-timer.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "This franchise was built on winning titles, and a season of regression is not acceptable here.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Everything starts with a young quarterback; the coach I hire has to develop him.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "What we built over three decades should outlast any one coach.",
+      "when": [
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "I pick the head coach myself, after listening to the people I trust.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "takes personal responsibility for a failed hire in public",
+    "speaks about the franchise's run of titles as the standard"
+  ],
+  "want": "To prove the Patriots can win titles again after the Belichick era, on a plan he chose (medium).",
+  "fear": "Being remembered for the decline after the dynasty (medium).",
+  "voice": "Warm but businesslike, given to accountability statements and loyalty talk. Speaks about the franchise as a family institution and about the fans. Avoids football jargon.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NE",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/patriots-fire-jerod-mayo-robert-kraft-takes-accountability-for-failed-tenure-says-whole-situation-is-on-me",
+      "publisher": "CBS Sports",
+      "published": "2025-01-06",
+      "accessed": "2026-11-06",
+      "summary": "After firing Jerod Mayo following a 4-13 season, Kraft said the situation was his responsibility; he had handpicked Mayo as Belichick's successor.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nationalfootballpost.com/pats-owner-kraft-i-put-jerod-mayo-in-untenable-position",
+      "publisher": "National Football Post",
+      "published": "2025-01-06",
+      "accessed": "2026-11-06",
+      "summary": "Kraft said he had put Mayo in an untenable position by making him head coach so early.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://wlos.com/news/entertainment/new-england-hires-former-patriots-super-bowl-champ-mike-vrabel-as-its-next-coach-robert-kraft-national-football-league-cleveland-consultant-afc-championship-game-drake-maye-mayo-dismissal",
+      "publisher": "AP via WLOS",
+      "published": "2025-01-12",
+      "accessed": "2026-11-06",
+      "summary": "New England hired former Patriots player and ex-Titans head coach Mike Vrabel a week after the Mayo firing.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

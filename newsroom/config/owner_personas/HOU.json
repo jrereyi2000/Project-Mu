@@ -1,0 +1,143 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:HOU",
+  "name": "Cal McNair",
+  "role": "OWNER",
+  "team": "HOU",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "HOU",
+    "name": "Cal McNair"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "drive": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "DEEP_POCKETS",
+    "MEDDLER",
+    "HEADLINE_HUNTER"
+  ],
+  "trait_evidence": {
+    "DEEP_POCKETS": [
+      "E2"
+    ],
+    "MEDDLER": [
+      "E1"
+    ],
+    "HEADLINE_HUNTER": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "When the window opens, we spend to win now.",
+      "when": [
+        "CONTENDER",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "I sit in on the head-coach search myself; I learned that the hard way.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A young quarterback on a rookie deal is the time to add stars around him.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "We embrace the expectations of being a contender.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "A coach who does not show progress in year one may not get a year two.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Guaranteed money is fine when it buys proven production.",
+      "when": [
+        "CAP"
+      ]
+    }
+  ],
+  "signatures": [
+    "speaks alongside family members at team events",
+    "talks about embracing expectations"
+  ],
+  "want": "Turn the Texans into a perennial AFC contender while the young core is cheap (medium).",
+  "fear": "Wasting a rookie-contract window and returning to the lean years (medium).",
+  "voice": "Polite, earnest, family-centered; speaks in team-mission phrases. Lets his general manager handle the detail and talks about expectations and community.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "HOU",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.pressreader.com/usa/san-antonio-express-news/20230201/282071986045749",
+      "publisher": "San Antonio Express-News",
+      "published": "2023-02-01",
+      "accessed": "2026-11-06",
+      "summary": "After firing two head coaches after one season each, McNair broke from his family's laissez-faire style by taking part in the whole search that produced DeMeco Ryans.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.click2houston.com/sports/2024/04/11/mcnairs-reflect-on-texans-all-in-approach-stefon-diggs-trade-we-want-to-win-now",
+      "publisher": "KPRC",
+      "published": "2024-04-11",
+      "accessed": "2026-11-06",
+      "summary": "The McNairs discussed an aggressive 2024 offseason (Stefon Diggs trade, Danielle Hunter and Joe Mixon deals) and said they wanted to win now and embraced expectations.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espn.com/nfl/story/_/id/39813575/cal-mcnair-approved-texans-principal-owner-nfl-meeting",
+      "publisher": "ESPN",
+      "published": "2024-03-26",
+      "accessed": "2026-11-06",
+      "summary": "NFL owners unanimously approved Cal McNair as the Texans' principal owner, succeeding his mother Janice.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

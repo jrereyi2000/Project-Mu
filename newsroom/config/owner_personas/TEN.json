@@ -1,0 +1,117 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:TEN",
+  "name": "Amy Adams Strunk",
+  "role": "OWNER",
+  "team": "TEN",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "TEN",
+    "name": "Amy Adams Strunk"
+  },
+  "sliders": {
+    "temperament": 6,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "DEEP_POCKETS",
+    "HANDS_OFF",
+    "HEADLINE_HUNTER"
+  ],
+  "trait_evidence": {
+    "DEEP_POCKETS": [
+      "E1"
+    ],
+    "HANDS_OFF": [
+      "E2"
+    ],
+    "HEADLINE_HUNTER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "Two years without improvement is impossible to ignore.",
+      "when": [
+        "FRONT_OFFICE",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "I hire a president of football operations to run the searches; I set the standard.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Spending in free agency is fine, but it has to show up in the standings.",
+      "when": [
+        "CAP",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A new coach gets a second season, but not an open-ended one.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "This franchise owes its fans more than a long rebuild.",
+      "when": [
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "A young quarterback is the center of any plan we make.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    }
+  ],
+  "signatures": [
+    "announces front-office firings by statement",
+    "measures leaders on visible improvement"
+  ],
+  "want": "A return to contention for the Titans and a new stadium era that starts with winning (medium).",
+  "fear": "A long losing stretch that defines her stewardship (medium).",
+  "voice": "Reserved and formal in public, speaking mostly through statements. Emphasizes accountability and improvement. Leaves football detail to her executives.",
+  "ties": [],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2025/01/07/titans-fire-gm-ran-carthon-after-two-seasons-despite-big-spending-spree/",
+      "publisher": "AP via News4JAX",
+      "published": "2025-01-07",
+      "accessed": "2026-11-06",
+      "summary": "Strunk fired GM Ran Carthon after two seasons and a 9-25 record despite a big free-agent spending spree, saying the lack of improvement could not be ignored; Brian Callahan was kept for a second year.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nfl.com/news/titans-fire-general-manager-ran-carthon-after-two-seasons",
+      "publisher": "NFL.com",
+      "published": "2025-01-07",
+      "accessed": "2026-11-06",
+      "summary": "President of football operations Chad Brinker was put in charge of the general manager search.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

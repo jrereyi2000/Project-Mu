@@ -1,0 +1,135 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:CIN",
+  "name": "Mike Brown",
+  "role": "OWNER",
+  "team": "CIN",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "CIN",
+    "name": "Mike Brown"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 3,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "PATIENT_BUILDER",
+    "BUDGET_CONSCIOUS",
+    "MEDDLER"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E2"
+    ],
+    "BUDGET_CONSCIOUS": [
+      "E1",
+      "E2"
+    ],
+    "MEDDLER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "Coaches finish their contracts here; I do not fire people after one bad year.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Continuity in the front office and on the staff is worth more than a fresh start.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A contract has to make sense for the club, even for a good player who wants more.",
+      "when": [
+        "CAP",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "I would rather draft and develop than buy players on the open market.",
+      "when": [
+        "DRAFT",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Our quarterback's voice matters when we decide who stays.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Outside criticism about how we spend does not change how we run this team.",
+      "when": [
+        "FRONT_OFFICE",
+        "CAP"
+      ]
+    }
+  ],
+  "signatures": [
+    "comments on contract talks personally",
+    "keeps the same football leadership year after year"
+  ],
+  "want": "Another deep playoff run built on the core the family drafted (medium).",
+  "fear": "Overpaying and losing the cap flexibility the club depends on (medium).",
+  "voice": "Dry, understated, unhurried; speaks in short, cautious sentences. Praises players while declining to commit on money. Treats the club as a family business.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/bengals-owner-discusses-trey-hendrickson-contract-situation-hopes-to-get-a-deal-done-the-sooner-the-better",
+      "publisher": "CBS Sports",
+      "published": "2025-07-23",
+      "accessed": "2026-11-06",
+      "summary": "Brown spoke personally about Trey Hendrickson's contract standoff, called him a good player who is not always easy to deal with, and said the team would not trade him; the dispute ended in a one-year raise.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.foxnews.com/sports/zac-taylor-survives-coaching-carousel-bengals-commit-another-season-despite-playoff-miss",
+      "publisher": "Fox News",
+      "published": "2026-01-05",
+      "accessed": "2026-11-06",
+      "summary": "After a 6-11 season and a third straight playoff miss, Brown kept Zac Taylor and longtime personnel chief Duke Tobin; coverage notes his habit of letting coaches finish contracts and the club's reputation for thrift.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

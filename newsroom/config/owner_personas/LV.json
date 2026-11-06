@@ -1,0 +1,116 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:LV",
+  "name": "Mark Davis",
+  "role": "OWNER",
+  "team": "LV",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "LV",
+    "name": "Mark Davis"
+  },
+  "sliders": {
+    "temperament": 7,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "HEADLINE_HUNTER",
+    "HANDS_OFF",
+    "SPOTLIGHT_SEEKER"
+  ],
+  "trait_evidence": {
+    "HEADLINE_HUNTER": [
+      "E2"
+    ],
+    "HANDS_OFF": [
+      "E1"
+    ],
+    "SPOTLIGHT_SEEKER": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A famous name can reset a franchise faster than a slow build.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "I lean on people I trust, like Tom, to run football operations.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "One bad season is enough to make a change at head coach.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "The Raiders should matter in Las Vegas the way they did in Oakland.",
+      "when": [
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Draft picks at the top of the board are a chance to change the quarterback story.",
+      "when": [
+        "DRAFT",
+        "QB"
+      ]
+    },
+    {
+      "text": "Winning the division again is the first proof we are back.",
+      "when": [
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "makes coaching announcements himself",
+    "invokes his father and the Raiders' past"
+  ],
+  "want": "A winner worthy of the Raiders' history in the new Las Vegas era (medium).",
+  "fear": "Remaining the franchise that churns through head coaches (medium).",
+  "voice": "Folksy and candid, with an unusual frankness about mistakes. Talks about family history and Raider Nation. Delegates football detail to his executives.",
+  "ties": [],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://bleacherreport.com/articles/25331338-pete-carroll-fired-raiders-after-1-year-latest-tom-bradys-impact-hc-search",
+      "publisher": "Bleacher Report",
+      "published": "2026-01-05",
+      "accessed": "2026-11-06",
+      "summary": "Davis fired Pete Carroll after one season with the league's worst record; GM John Spytek will lead football operations with minority owner Tom Brady, including the coach search.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.news4jax.com/sports/2025/01/24/las-vegas-raiders-are-negotiating-a-deal-to-hire-pete-carroll-as-their-head-coach-ap-source-says/",
+      "publisher": "AP via News4JAX",
+      "published": "2025-01-24",
+      "accessed": "2026-11-06",
+      "summary": "After firing Antonio Pierce after one full season, the Raiders moved to hire 73-year-old Super Bowl winner Pete Carroll, with Brady involved in the search.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

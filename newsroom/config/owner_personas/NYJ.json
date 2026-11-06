@@ -1,0 +1,128 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:NYJ",
+  "name": "Woody Johnson",
+  "role": "OWNER",
+  "team": "NYJ",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "NYJ",
+    "name": "Woody Johnson"
+  },
+  "sliders": {
+    "temperament": 7,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "MEDDLER",
+    "HEADLINE_HUNTER",
+    "SPOTLIGHT_SEEKER"
+  ],
+  "trait_evidence": {
+    "MEDDLER": [
+      "E1",
+      "E2"
+    ],
+    "HEADLINE_HUNTER": [
+      "E1"
+    ],
+    "SPOTLIGHT_SEEKER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "If the quarterback is holding the team back, I will say so to the coaches, star or not.",
+      "when": [
+        "QB",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A big-name receiver for a big-name quarterback is how you win now.",
+      "when": [
+        "TRADE",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "The decision to change coaches is mine and mine alone.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "I let the new coach and general manager make the quarterback call; they report to me.",
+      "when": [
+        "FRONT_OFFICE",
+        "QB"
+      ]
+    },
+    {
+      "text": "A slow start is not something I wait out for a whole season.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "I want people around the league to see the Jets as a serious contender again.",
+      "when": [
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "makes the firing announcement himself",
+    "is reported to weigh in on lineup and personnel questions"
+  ],
+  "want": "A Jets team good enough to end the franchise's long playoff drought (medium).",
+  "fear": "Being cast as the meddling owner behind another failed era (medium).",
+  "voice": "Polished and diplomatic in public statements, terse when announcing a decision. Insists decisions are his own. Keeps the rhetoric about winning and the fans.",
+  "ties": [],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/jets-owner-coaches-bench-aaron-rodgers-tyrod-taylor",
+      "publisher": "Sports Illustrated",
+      "published": "2024-11-20",
+      "accessed": "2026-11-06",
+      "summary": "Summarizes a report that Johnson suggested benching Aaron Rodgers after a Week 4 loss, drove the Davante Adams trade and pushed other personnel moves, taking control from GM Joe Douglas.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://bleacherreport.com/articles/10138624-aaron-rodgers-wasnt-consulted-on-robert-salehs-firing-says-jets-woody-johnson",
+      "publisher": "Bleacher Report",
+      "published": "2024-10-09",
+      "accessed": "2026-11-06",
+      "summary": "Johnson said the firing of Robert Saleh five games into the season was his decision alone and Rodgers was not consulted.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.profootballrumors.com/2025/01/darren-mougey-aaron-glenn-to-each-report-to-ownership-latest-on-jets-aaron-rodgers-decision",
+      "publisher": "Pro Football Rumors",
+      "published": "2025-01-27",
+      "accessed": "2026-11-06",
+      "summary": "Head coach Aaron Glenn and GM Darren Mougey each report to Johnson; he said he would leave the Rodgers decision to them.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

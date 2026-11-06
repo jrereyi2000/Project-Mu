@@ -1,0 +1,146 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:PIT",
+  "name": "Art Rooney II",
+  "role": "OWNER",
+  "team": "PIT",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "PIT",
+    "name": "Art Rooney II"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "warmth": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "PATIENT_BUILDER",
+    "LOYAL",
+    "HOMETOWN_GUY"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1"
+    ],
+    "LOYAL": [
+      "E1"
+    ],
+    "HOMETOWN_GUY": [
+      "E2",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Four head coaches since 1969 is the way this franchise works, and I intend to keep it that way.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "We do not tear the roster down; we look for the coach who can win a championship now.",
+      "when": [
+        "CONTENDER",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A coach who knows Pittsburgh has an edge, but the resume decides.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Fans are allowed to be angry about a hire; the results will answer them.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A one-and-done playoff exit is a reason to look harder, not to panic.",
+      "when": [
+        "PLAYOFFS",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "The quarterback question is part of the plan, but it never decides the coaching hire.",
+      "when": [
+        "QB",
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "points to the franchise's short list of head coaches",
+    "announces hires through the team's own reporter"
+  ],
+  "want": "A seventh Lombardi Trophy without abandoning the franchise's patient way (medium).",
+  "fear": "Breaking the Steelers' tradition of stability with the wrong choice (medium).",
+  "voice": "Even, courteous and unhurried, a lawyer's caution in every answer. Defends decisions without heat. Leans on tradition and the city.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "PIT",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.espn.com.au/nfl/story/_/id/47600644/sources-mike-tomlin-step-steelers-head-coach",
+      "publisher": "ESPN",
+      "published": "2026-01-13",
+      "accessed": "2026-11-06",
+      "summary": "Mike Tomlin stepped down after 19 seasons without a losing record, telling Rooney in a meeting; the Steelers began a search for only their fourth head coach since 1969.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.steelers.com/news/mccarthy-named-17th-head-coach-in-steelers-history",
+      "publisher": "Pittsburgh Steelers",
+      "published": "2026-01-24",
+      "accessed": "2026-11-06",
+      "summary": "The team named Pittsburgh native Mike McCarthy head coach; Rooney said he believed McCarthy was the right coach to lead a championship push.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.behindthesteelcurtain.com/pittsburgh-steelers-news/165671/steelers-reluctance-to-rebuild-played-big-role-in-hiring-mike-mccarthy-art-rooney-ii-adam-schefter",
+      "publisher": "Behind the Steel Curtain",
+      "published": "2026-01-26",
+      "accessed": "2026-11-06",
+      "summary": "Reports that a reluctance to rebuild shaped the McCarthy hire and that Rooney acknowledged Pittsburgh ties were a factor alongside his record.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

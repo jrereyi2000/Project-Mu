@@ -1,0 +1,139 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:BAL",
+  "name": "Steve Bisciotti",
+  "role": "OWNER",
+  "team": "BAL",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "BAL",
+    "name": "Steve Bisciotti"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "PATIENT_BUILDER",
+    "HANDS_OFF",
+    "RING_CHASER"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1"
+    ],
+    "HANDS_OFF": [
+      "E2"
+    ],
+    "RING_CHASER": [
+      "E1",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "I give a head coach many years when he wins, but the standard here is championships, not playoff trips.",
+      "when": [
+        "COACHING",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "My general manager runs the search; I want a thorough process, not a fast one.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A former assistant who knows our values can lead the next era.",
+      "when": [
+        "COACHING",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A slow start can be survived; missing the playoffs with this quarterback cannot be repeated.",
+      "when": [
+        "LOSING_STREAK",
+        "QB"
+      ]
+    },
+    {
+      "text": "Stability is our advantage, and I change course only after a full evaluation.",
+      "when": [
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "The draft is where this franchise was built and where I expect it to keep winning.",
+      "when": [
+        "DRAFT"
+      ]
+    }
+  ],
+  "signatures": [
+    "announces big decisions in a written statement first",
+    "credits the thoroughness of the process"
+  ],
+  "want": "A second Lombardi Trophy of the Lamar Jackson era (medium).",
+  "fear": "Letting a great quarterback's prime pass without a title (medium).",
+  "voice": "Measured and reflective, more comfortable in a statement than a soundbite. Calls hard decisions hard. Speaks of organizational values and the people who carry them.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/47531700/baltimore-ravens-fire-coach-john-harbaugh-whats-next-faq",
+      "publisher": "ESPN",
+      "published": "2026-01-06",
+      "accessed": "2026-11-06",
+      "summary": "Bisciotti fired John Harbaugh after 18 seasons following an 8-9 year without a playoff berth, saying in a statement it was an incredibly difficult decision after a full evaluation.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.wsls.com/sports/2026/01/22/baltimore-ravens-tab-chargers-defensive-coordinator-jesse-minter-as-new-head-coach/",
+      "publisher": "AP via WSLS",
+      "published": "2026-01-22",
+      "accessed": "2026-11-06",
+      "summary": "Baltimore hired Chargers DC Jesse Minter after a search led by GM Eric DeCosta that interviewed 16 candidates; Bisciotti praised the thorough process and Minter's grasp of team values.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.click2houston.com/sports/2026/01/22/ravens-hire-chargers-defensive-coordinator-jesse-minter-as-head-coach/",
+      "publisher": "AP via KPRC",
+      "published": "2026-01-22",
+      "accessed": "2026-11-06",
+      "summary": "Context: the team had not returned to the Super Bowl in the Jackson years, and the change was framed as ending postseason stagnation.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

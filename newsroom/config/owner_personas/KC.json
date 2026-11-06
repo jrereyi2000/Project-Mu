@@ -1,0 +1,133 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:KC",
+  "name": "Clark Hunt",
+  "role": "OWNER",
+  "team": "KC",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "KC",
+    "name": "Clark Hunt"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "PATIENT_BUILDER",
+    "HANDS_OFF",
+    "GUARDED"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1"
+    ],
+    "HANDS_OFF": [
+      "E1"
+    ],
+    "GUARDED": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "When the coach, general manager and president are winning, you extend them and get out of the way.",
+      "when": [
+        "FRONT_OFFICE",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "A franchise quarterback is the complete package; you build everything around him.",
+      "when": [
+        "QB"
+      ]
+    },
+    {
+      "text": "Contract terms stay inside the building.",
+      "when": [
+        "CAP",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A stadium decision has to be right for the next fifty years, not the next season.",
+      "when": [
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A bad stretch does not change a culture that has won titles.",
+      "when": [
+        "LOSING_STREAK",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Draft well and the dynasty renews itself.",
+      "when": [
+        "DRAFT",
+        "YOUTH"
+      ]
+    }
+  ],
+  "signatures": [
+    "declines to share contract terms",
+    "credits the football staff before himself"
+  ],
+  "want": "Keep the Chiefs' title window open and settle the franchise's long-term stadium home (medium).",
+  "fear": "Losing the stability that produced the dynasty (medium).",
+  "voice": "Courteous, low-key and precise. Speaks in long-view terms about stability and the franchise's legacy; avoids controversy and specifics.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "KC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.news4jax.com/sports/2025/02/04/from-cheeseburger-delivery-man-to-architect-of-a-dynasty-chiefs-gm-brett-veach-keeps-kc-humming/",
+      "publisher": "AP via News4JAX",
+      "published": "2025-02-04",
+      "accessed": "2026-11-06",
+      "summary": "Profile of GM Brett Veach noting the 2024 extensions for Veach, Andy Reid and president Mark Donovan and Veach crediting Hunt's guidance.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.kctv5.com/2024/07/23/chiefs-owner-clark-hunt-focused-stadium-solution-kc-metropolitan-area/",
+      "publisher": "KCTV5",
+      "published": "2024-07-23",
+      "accessed": "2026-11-06",
+      "summary": "Hunt said the focus is a stadium solution in the Kansas City area without committing to a side; he kept options open publicly.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}
