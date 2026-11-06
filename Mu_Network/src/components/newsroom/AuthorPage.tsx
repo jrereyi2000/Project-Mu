@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "../../api";
+import { PersonalityPanel } from "../personality/PersonalityPanel";
 
 export function AuthorPage({ authorKey }: { authorKey: string }) {
   const [data, setData] = useState<any>(null);
@@ -68,6 +69,12 @@ export function AuthorPage({ authorKey }: { authorKey: string }) {
           </div>
         </div>
       </header>
+
+      {author.archetype && (
+        <div className="author-articles-section">
+          <PersonalityPanel kind="writer" refId={author.archetype} />
+        </div>
+      )}
 
       <section className="author-articles-section">
         <div className="author-section-title">
