@@ -1,6 +1,8 @@
 # Project Mu: Personality on the Site Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 (2026-11-06). The other plans were updated at approval (§7).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 done (2026-11-06). The other plans were updated at approval (§7).
+- As built (U1): the profile body also carries `revision` (sent back as `expected_revision`, so a stale edit is a 409) and `team`; the no-numbers test allows only `sliders[].value`, `revision` and `trade_request.public_since.{season,tick}`. `ties`, `attachment` and `mood` read the relationships projection only under an enabled policy (`personality_api.RELATIONSHIP_POLICY`, `None` until the activation plan's switchboard), so today they are unavailable "relationships not active yet"; promises read the ledger directly. A mentorship label needs a `direction` on the tie (no producer emits mentorship yet), otherwise the trust band applies. Writers and GMs not yet adopted by the core read from the legacy persona tables as origin `legacy`, read-only; owners and scouts need the owners plan's U6 tables (`team_owners`, `scout_directors`) and are 404 `no_profile` until then. The token check is 403 for unset, missing or wrong. The database reads (`Sources`) are untested offline (no PostgreSQL).
+- As built (U2): the panel takes a `fixture` prop and the editor a `catalogueFixture` prop for offline render checks; there is no frontend test runner, so the fixture checks (hidden prospect, missing blocks, editor total limits, conflicts greyed) ran as a one-off server render, not a committed test.
 **Builds on:** [`PERSONALITY_PLAN.md`](./PERSONALITY_PLAN.md) D3 (traits and sliders visible, mood as a tag, engine effects never as numbers), D4; [`PERSONALITY_CORE_EXTENSIONS_PLAN.md`](../done/PERSONALITY_CORE_EXTENSIONS_PLAN.md) (override, `history`, D2's deferred site editor); [`PERSONALITY_RELATIONSHIPS_PLAN.md`](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.3–§2.4 (ties, attachment, mood); [`PERSONALITY_EVOLUTION_PLAN.md`](../done/PERSONALITY_EVOLUTION_PLAN.md) (change notes); [`PERSONALITY_TRADE_REQUESTS_PLAN.md`](../done/PERSONALITY_TRADE_REQUESTS_PLAN.md) §2.5 (public projection); [`SCOUTING_REVAMP_PLAN.md`](../in_progress/SCOUTING_REVAMP_PLAN.md) (prospects' personalities stay hidden); PROJECT_SPEC §4, §5.
 
 **Goal:** Let JR see who everyone in the league is. A Personality panel on player pages, coach and GM staff cards, the owner and scouting director on the front office tab, and writers' author pages shows:
@@ -213,3 +215,5 @@ JR approved all three recommendations on 2026-11-03.
 
 | Unit | Wave | Branch | Worktree | Result | Merge |
 |---|---|---|---|---|---|
+| U1 | 1 | build/pd-u1 | .claude/worktrees/pd-u1 | merged | 44f3049 |
+| U2 | 1 | build/pd-u2 | .claude/worktrees/pd-u2 | merged | 02fb3fc |
