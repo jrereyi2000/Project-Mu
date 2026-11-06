@@ -13,6 +13,13 @@ from personality import coach_profiles as cp, evolution as evo
 from pipeline import watch_save as ws
 from tests.test_coach_profiles import profile as coach_doc
 
+
+@pytest.fixture(autouse=True)
+def no_switchboard(monkeypatch):
+    """The ingest reads the personality switchboard once (personality_modes), which opens a database connection;
+    tests get None (no switchboard: every step falls back to its env flag) unless they patch it themselves."""
+    monkeypatch.setattr("pipeline.watch_save.personality_modes", lambda *a, **k: None)
+
 VOICE = 'You are a plain-spoken veteran.'
 
 
