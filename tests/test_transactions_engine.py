@@ -439,3 +439,113 @@ def test_public_functions_cover_32_teams_and_store_rows(fake_fits):
     for pid in {r[2] for r in rows}:
         assert sum(1 for r in rows if r[2] == pid and r[5]) == 1
     assert len(by_kind(moves, "WAIVER_CLAIM")) == len({r[2] for r in rows})
+
+
+# ------------------------------------------- personality contract policy (U3) ----
+from engines import personality_contract_context as pcc                                 # noqa: E402
+from engines import personality_contract_policy as cp                                    # noqa: E402
+
+
+def pinputs(pid, mode, traits=()):
+    view = {"status": "stored", "origin": "generated", "sliders": {}, "traits": list(traits), "revision": 0,
+            "persona_id": f"p-{pid}", "catalogue_version": "c", "core_version": "v", "view_version": "views-v2"}
+    ctx = cp.neutral_context("mu:test", pid, {"season": S, "week": te.RESIGN_WEEK, "stage": "RESIGN"}, "b",
+                             persona_id=f"p-{pid}", revision=0, team_ids=TEAMS)
+    return {"view": view, "context": ctx, "policy": cp.trial_config(mode=mode)}
+
+
+def star_league():
+    stars = [player(10 + i, 3, "EDGE", 88, age=26, yoe=6, aav=1_000_000, start=S - 2) for i in range(6)]
+    ext = player(5, 4, "CB", 82, age=25, yoe=4, aav=1_000_000, length=2, start=S, signed=S - 1, dev="Superstar")
+    erfa = player(3, 2, "WR", 70, age=23, yoe=1, aav=900_000, length=2, start=S - 1)
+    return base_league(stars + [ext, erfa]), [10 + i for i in range(6)] + [5, 3]
+
+
+def fake_consent(status, counter=None):
+    def ev(league, ctx, p, terms, *, contract_inputs, seed):
+        return {"status": status, "counter": counter, "score": {"utility": 0.5}, "bar": 0.7, "trace": {},
+                "offer": dict(terms, team_id=ctx["team_id"], player_id=p["id"])}
+    return ev
+
+
+@pytest.mark.parametrize("mode", ["off", "shadow"])
+def test_off_and_shadow_keep_every_move_and_lottery(mode):
+    lg, ids = star_league()
+    base = te.plan_resign(lg, "seed-x")
+    decisions = []
+    got = te.plan_resign(lg, "seed-x", contract_inputs={i: pinputs(i, mode, ["MONEY_FIRST"]) for i in ids},
+                         decisions=decisions)
+    assert got == base
+    assert (len(decisions) > 0) == (mode == "shadow")
+    assert all(d["mode"] == "shadow" for d in decisions)
+
+
+def test_active_resign_uses_player_consent_instead_of_lottery():
+    lg, ids = star_league()
+    decisions = []
+    moves = {m["player_id"]: m for m in te.plan_resign(lg, "seed-x", contract_inputs={
+        i: pinputs(i, "active") for i in ids}, decisions=decisions)}
+    resign = [d for d in decisions if d["kind"] == "RESIGN"]
+    assert {d["player_id"] for d in resign} == {10, 11}      # 12-15: asking price above their value (unchanged)
+    for d in resign:
+        m = moves[d["player_id"]]
+        assert m["consent"] == d["status"]
+        if d["status"] == "ACCEPT":
+            assert m["kind"] in ("CONTRACT", "LET_GO") and "test the market" not in m["reason"]
+    assert moves[3]["kind"] == "CONTRACT" and moves[3]["tender"] == "ERFA" and "consent" not in moves[3]
+
+
+def test_active_reject_can_be_tagged_once_and_tag_is_not_consent(monkeypatch):
+    monkeypatch.setattr(pcc, "evaluate_voluntary_contract", fake_consent("REJECT"))
+    lg, ids = star_league()
+    moves = te.plan_resign(lg, "s", contract_inputs={i: pinputs(i, "active") for i in ids})
+    tags = by_kind(moves, "TAG")
+    assert len(tags) == 1 and tags[0]["consent"] == "REJECT" and "turned down" in tags[0]["reason"]
+    lets = [m for m in moves if m["kind"] == "LET_GO" and m.get("consent")]
+    assert [m["player_id"] for m in lets] == [11] and lets[0]["reason"] == "turned down the re-sign offer"
+    ext = [m for m in moves if m["player_id"] == 5]
+    assert ext == []                                        # rejected extension: the original contract stands
+
+
+def test_active_counter_signs_at_counter_when_team_still_values_it(monkeypatch):
+    counter = {"years": 3, "total_value": 3_300_000, "bonus": 330_000, "guaranteed": 1_200_000}
+    monkeypatch.setattr(pcc, "evaluate_voluntary_contract", fake_consent("COUNTER", counter))
+    lg, ids = star_league()
+    moves = {m["player_id"]: m for m in te.plan_resign(lg, "s", contract_inputs={i: pinputs(i, "active")
+                                                                                 for i in ids})}
+    m = moves[10]
+    assert m["kind"] == "CONTRACT" and m["consent"] == "COUNTER" and m["reason"] == "re-signed at his counter"
+    c = m["contract"]
+    assert c["length"] == 3 and sum(c["salary_by_year"]) + sum(c["bonus_by_year"]) == 3_300_000
+    assert sum(c["bonus_by_year"]) == 330_000
+    e = moves[5]
+    assert e["kind"] == "EXTENSION" and e["consent"] == "COUNTER"
+    assert e["contract"]["length"] == 4 and e["contract"]["salary_by_year"][0] == 1_000_000
+
+
+def test_active_counter_too_rich_lets_him_go(monkeypatch):
+    counter = {"years": 5, "total_value": 900_000_000, "bonus": 0, "guaranteed": 0}
+    monkeypatch.setattr(pcc, "evaluate_voluntary_contract", fake_consent("COUNTER", counter))
+    lg, ids = star_league()
+    moves = {m["player_id"]: m for m in te.plan_resign(lg, "s", contract_inputs={i: pinputs(i, "active")
+                                                                                 for i in ids})}
+    assert moves[10]["kind"] == "LET_GO" and moves[10]["consent"] == "COUNTER"
+    assert 5 not in moves                                   # extension counter fails the surplus test
+
+
+def test_extension_offer_terms_count_only_new_money():
+    new = te.make_contract(5_000_000, 3, "STANDARD", T)
+    t = te.extension_offer_terms({"id": 5}, new)
+    assert t["years"] == 3 and t["total_value"] == 15_000_000 and t["salary_by_year"] == new["salary_by_year"]
+    assert t["bonus"] == sum(new["bonus_by_year"]) and t["guaranteed"] == new["guaranteed"]
+
+
+def test_evaluate_voluntary_contract_scores_through_shared_utility():
+    lg, ids = star_league()
+    ctx = te.contexts(lg)[3]
+    p = lg["players"][10]
+    terms = {"years": 3, "total_value": 30_000_000, "bonus": 3_000_000, "guaranteed": 12_000_000}
+    ev = pcc.evaluate_voluntary_contract(lg, ctx, p, terms, contract_inputs=pinputs(10, "active", ["MONEY_FIRST"]),
+                                         seed="s")
+    assert ev["status"] in ("ACCEPT", "COUNTER", "REJECT") and "policy_explanation" in ev["score"]
+    assert ev["offer"]["team_id"] == 3 and ev["trace"]["bar_base"] == ev["bar"]

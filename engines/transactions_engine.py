@@ -27,6 +27,21 @@ rounded to $10,000, so near-equal players tie and the cap decides.
 
 Randomness: sha256 of the seed string only (no global random state), so a seed always gives the same moves.
 Every threshold below is an estimate unless a comment says otherwise.
+
+Player consent (docs/in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.4, U3). plan_resign / resign_decisions take
+keyword-only contract_inputs {player_id: {view, context, policy}} and an optional `decisions` list. Off and shadow
+keep every move, draw and test-market lottery exactly (shadow records the adjusted alternative in `decisions`). In
+active mode, for that player only:
+  re-sign    the unrestricted re-sign offer (asking price, ideal years, the usual bonus/guarantee shares) is put to
+             him through free_agency_engine's shared utility and acceptance, replacing the independent test-market
+             lottery (Q3). ACCEPT -> CONTRACT; COUNTER -> CONTRACT at his counter only when the team still values
+             the deal and it fits the room, else LET_GO with the reason; REJECT -> the legal franchise tag (the
+             same tag rules; consent stays 'REJECT') or LET_GO.
+  extension  extension_offer_terms (the new-money years only; the owed final year is not new benefit) is put to
+             him. ACCEPT -> EXTENSION; COUNTER -> EXTENSION rebuilt from his counter only when the surplus test still
+             passes; REJECT -> the original contract stands (and the 5th-year option check runs as usual).
+Tenders (ERFA/RFA), tags, 5th-year options and rookie deals stay team instruments: no personality veto. Moves made
+through consent carry `consent` (ACCEPT | COUNTER | REJECT).
 """
 import hashlib
 
@@ -295,13 +310,13 @@ def _move(kind, p, team_id, reason, **extra):
 
 
 # ------------------------------------------------------------- re-signing ----
-def plan_resign(league, seed):
+def plan_resign(league, seed, *, contract_inputs=None, decisions=None):
     """Every team's re-sign stage: for each expiring contract (ends in `season`) CONTRACT (re-sign at the asking
     price, or an ERFA / RFA tender for 0-2 / 3 accrued seasons), TAG (an 80+ player who wants to test the market,
     one tag a team) or LET_GO; for each contract entering its final year EXTENSION when
     contracts_engine.extension_eligible allows it and the surplus is clear; for a 1st-round rookie deal entering
     year 4 without an extension, OPTION when the 5th year is worth its salary. Candidates go most valuable first;
-    every signing must fit the cap room left (2% buffer)."""
+    every signing must fit the cap room left (2% buffer). contract_inputs / decisions: module docstring."""
     S, T, fits = league["season"], league["target"], league["fits"]
     ros = rosters(league)
     ctxs = contexts(league, ros)
@@ -326,20 +341,63 @@ def plan_resign(league, seed):
                 cands.append((current_value(p, ctx, fits, T), p, "FINAL_YEAR", None, None))
         cands.sort(key=lambda c: (-c[0], c[1]["id"]))
         for v, p, mode, ask, yrs in cands:
+            inp = (contract_inputs or {}).get(p["id"])
             if mode == "EXPIRING":
-                m, cost = _resign_one(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed)
+                m, cost = _resign_one(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed, inp, decisions)
                 if m["kind"] == "TAG":
                     tag_used = True
                 room -= cost
                 moves.append(m)
             else:
-                m = _extend_or_option(league, ctx, p, sal_groups)
+                m = _extend_or_option(league, ctx, p, sal_groups, inp, decisions, seed)
                 if m:
                     moves.append(m)
     return moves
 
 
-def _resign_one(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed):
+def _policy_mode(inp):
+    return ((inp or {}).get("policy") or {}).get("mode", "off")
+
+
+def _consent(league, ctx, p, terms, inp, seed, kind, decisions):
+    """The player's answer to a voluntary team offer through the shared free-agency utility."""
+    from engines.personality_contract_context import evaluate_voluntary_contract
+    ev = evaluate_voluntary_contract(league, ctx, p, terms, contract_inputs=inp, seed=seed)
+    if decisions is not None:
+        decisions.append({"player_id": p["id"], "team_id": ctx["team_id"], "kind": kind, "mode": _policy_mode(inp),
+                          "offer": ev["offer"], "status": ev["status"], "counter": ev["counter"],
+                          "utility": ev["score"]["utility"], "bar": ev["bar"], "trace": ev["trace"],
+                          "policy": ev["score"].get("policy_explanation")})
+    return ev
+
+
+def _resign_terms(ask, yrs, vet):
+    c = make_contract(ask, yrs, "STANDARD", None, guar_share=RESIGN_GUAR_SHARE_VET if vet else RESIGN_GUAR_SHARE)
+    return {"years": yrs, "total_value": int(round(ask * yrs)), "bonus": sum(c["bonus_by_year"]),
+            "guaranteed": c["guaranteed"]}
+
+
+def _contract_from_terms(terms, signed_season, ctype="STANDARD"):
+    """A contracts_engine dict that reproduces offer terms (aav x years, bonus share, guaranteed money)."""
+    total = max(1, int(terms["total_value"]))
+    years = max(1, int(terms["years"]))
+    bonus_share = (terms.get("bonus") or 0) / total
+    base = total - int(round(total * bonus_share))
+    guar_share = min(1.0, (terms.get("guaranteed") or 0) / base) if base > 0 else 0.0
+    return make_contract(total / years, years, ctype, signed_season, bonus_share=bonus_share, guar_share=guar_share)
+
+
+def extension_offer_terms(player, contract):
+    """The incremental terms an extension offers: `contract` is the new-money part only (the years added after
+    the owed final year), so salary he is already owed is never counted as new benefit. Returns offer_utility's
+    offer terms {player_id, years, total_value, bonus, guaranteed, salary_by_year}."""
+    return {"player_id": player["id"], "years": contract["length"],
+            "total_value": int(sum(contract["salary_by_year"]) + sum(contract["bonus_by_year"])),
+            "bonus": int(sum(contract["bonus_by_year"])), "guaranteed": int(contract["guaranteed"]),
+            "salary_by_year": list(contract["salary_by_year"])}
+
+
+def _resign_one(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed, inp=None, decisions=None):
     """(move, cap used in the league year) for one expiring player."""
     T, fits, cap, t = league["target"], league["fits"], ctx["cap"], ctx["team_id"]
     acc = accrued(p, league)
@@ -359,6 +417,12 @@ def _resign_one(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed):
                      value=tv_), 0
     if v <= 0:
         return _move("LET_GO", p, t, "asking price above his value to the team", value=v, ask=ask), 0
+    vet = (p.get("age") or 27) + 1 >= VET_AGE
+    mode = _policy_mode(inp)
+    if mode == "active":
+        return _resign_by_consent(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed, inp, decisions, vet)
+    if mode == "shadow":
+        _consent(league, ctx, p, _resign_terms(ask, yrs, vet), inp, seed, "RESIGN", decisions)
     if (p.get("ovr") or 0) >= TAG_MIN_OVR and _u01(seed, "test_market", league["season"], p["id"]) < TEST_MARKET_P:
         prior = hit_at(p, league["season"])
         salary = ce.tag_value(TAG_KIND, p["group"], sal_groups, prior, [cap])
@@ -368,7 +432,6 @@ def _resign_one(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed):
             return _move("TAG", p, t, "wants to test the market: tagged", tag=TAG_KIND, contract=c,
                          value=v_tag), salary
         return _move("LET_GO", p, t, "wants to test the market", value=v, ask=ask), 0
-    vet = (p.get("age") or 27) + 1 >= VET_AGE
     c = make_contract(ask, yrs, "STANDARD", T, guar_share=RESIGN_GUAR_SHARE_VET if vet else RESIGN_GUAR_SHARE)
     cost = ce.cap_hit(c, 0)
     if cost > room:
@@ -377,9 +440,55 @@ def _resign_one(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed):
                  years=yrs, total_value=ask * yrs), cost
 
 
-def _extend_or_option(league, ctx, p, sal_groups):
+def _tag(league, ctx, p, room, sal_groups, reason, **extra):
+    """(TAG move, salary) when the franchise tag is worth it and fits, else None."""
+    T, fits, cap, t = league["target"], league["fits"], ctx["cap"], ctx["team_id"]
+    prior = hit_at(p, league["season"])
+    salary = ce.tag_value(TAG_KIND, p["group"], sal_groups, prior, [cap])
+    v_tag = deal_value(p, ctx, fits, T, [salary])
+    if v_tag > 0 and salary <= room:
+        c = make_contract(salary, 1, TAG_KIND, T, bonus_share=0.0, guar_share=1.0)
+        return _move("TAG", p, t, reason, tag=TAG_KIND, contract=c, value=v_tag, **extra), salary
+    return None
+
+
+def _resign_by_consent(league, ctx, p, v, ask, yrs, tag_used, room, sal_groups, seed, inp, decisions, vet):
+    """Active mode: the re-sign offer goes to the player; no test-market lottery."""
+    T, fits, t = league["target"], league["fits"], ctx["team_id"]
+    terms = _resign_terms(ask, yrs, vet)
+    ev = _consent(league, ctx, p, terms, inp, seed, "RESIGN", decisions)
+    if ev["status"] == "ACCEPT":
+        c = make_contract(ask, yrs, "STANDARD", T, guar_share=RESIGN_GUAR_SHARE_VET if vet else RESIGN_GUAR_SHARE)
+        cost = ce.cap_hit(c, 0)
+        if cost > room:
+            return _move("LET_GO", p, t, "no cap room to re-sign", value=v, ask=ask, consent="ACCEPT"), 0
+        return _move("CONTRACT", p, t, "re-signed", offer_kind="RESIGN", contract=c, value=v, ask=ask, years=yrs,
+                     total_value=ask * yrs, consent="ACCEPT"), cost
+    if ev["status"] == "COUNTER":
+        k = ev["counter"]
+        aav = k["total_value"] / max(1, k["years"])
+        v_c = deal_value(p, ctx, fits, T, [int(round(aav))] * k["years"])
+        c = _contract_from_terms(k, T)
+        cost = ce.cap_hit(c, 0)
+        if v_c <= 0:
+            return _move("LET_GO", p, t, "his counter is above his value to the team", value=v_c, ask=ask,
+                         counter=k, consent="COUNTER"), 0
+        if cost > room:
+            return _move("LET_GO", p, t, "no cap room for his counter", value=v_c, ask=ask, counter=k,
+                         consent="COUNTER"), 0
+        return _move("CONTRACT", p, t, "re-signed at his counter", offer_kind="RESIGN", contract=c, value=v_c,
+                     ask=ask, years=k["years"], total_value=k["total_value"], consent="COUNTER"), cost
+    if (p.get("ovr") or 0) >= TAG_MIN_OVR and not tag_used:
+        tagged = _tag(league, ctx, p, room, sal_groups, "turned down the re-sign offer: tagged", consent="REJECT")
+        if tagged:
+            return tagged
+    return _move("LET_GO", p, t, "turned down the re-sign offer", value=v, ask=ask, consent="REJECT"), 0
+
+
+def _extend_or_option(league, ctx, p, sal_groups, inp=None, decisions=None, seed=None):
     """EXTENSION for an eligible starter with a clear surplus at his asking price, else OPTION for a 1st-round
-    rookie deal entering year 4, else nothing (he plays out the deal)."""
+    rookie deal entering year 4, else nothing (he plays out the deal). In active mode the player answers the
+    extension (module docstring); a rejection leaves the original contract."""
     S, T, fits, t = league["season"], league["target"], league["fits"], ctx["team_id"]
     c = p["contract"]
     elig_c = dict(c, current_year=max(0, S - p["contract_start"]))
@@ -394,13 +503,31 @@ def _extend_or_option(league, ctx, p, sal_groups):
         if marginal > EXTEND_MIN_SURPLUS * ask * yrs:
             y = T - p["contract_start"]
             new = make_contract(ask, yrs, "STANDARD", T)
-            out = {"length": 1 + yrs, "current_year": 0,
-                   "salary_by_year": [c["salary_by_year"][y]] + new["salary_by_year"],
-                   "bonus_by_year": [c["bonus_by_year"][y]] + new["bonus_by_year"],
-                   "guaranteed": new["guaranteed"], "contract_type": "STANDARD", "signed_season": T,
-                   "last_restructure_season": None, "drafted_round": c.get("drafted_round")}
-            return _move("EXTENSION", p, t, why, offer_kind="EXTENSION", contract=out, value=marginal, ask=ask,
-                         years=yrs, total_value=ask * yrs)
+            mode = _policy_mode(inp)
+            consent = {}
+            if mode in ("shadow", "active"):
+                ev = _consent(league, ctx, p, extension_offer_terms(p, new), inp, seed, "EXTENSION", decisions)
+                if mode == "active":
+                    consent = {"consent": ev["status"]}
+                    if ev["status"] == "COUNTER":
+                        k = ev["counter"]
+                        new = _contract_from_terms(k, T)
+                        hits = [this_hit] + [ce.cap_hit(new, i) for i in range(new["length"])]
+                        marginal = deal_value(p, ctx, fits, T, hits) - deal_value(p, ctx, fits, T, [this_hit])
+                        if marginal <= EXTEND_MIN_SURPLUS * k["total_value"]:
+                            new = None
+                        else:
+                            ask, yrs = int(round(k["total_value"] / k["years"])), k["years"]
+                    elif ev["status"] == "REJECT":
+                        new = None
+            if new is not None:
+                out = {"length": 1 + new["length"], "current_year": 0,
+                       "salary_by_year": [c["salary_by_year"][y]] + new["salary_by_year"],
+                       "bonus_by_year": [c["bonus_by_year"][y]] + new["bonus_by_year"],
+                       "guaranteed": new["guaranteed"], "contract_type": "STANDARD", "signed_season": T,
+                       "last_restructure_season": None, "drafted_round": c.get("drafted_round")}
+                return _move("EXTENSION", p, t, why, offer_kind="EXTENSION", contract=out, value=marginal, ask=ask,
+                             years=yrs, total_value=ask * yrs, **consent)
     if (c.get("contract_type") == "ROOKIE" and c.get("drafted_round") == 1 and c["length"] == 4
             and T - p["contract_start"] == 3):
         opt = ce.fifth_year_option({"position": p["group"], "drafted_round": 1, "pro_bowls": p.get("pro_bowls") or 0,
@@ -853,9 +980,10 @@ def store_claims(cur, claims, season, week):
 
 
 # ----------------------------------------------------------------- public ----
-def resign_decisions(cur, season, seed):
-    """Re-sign stage moves for all 32 teams (CONTRACT, TAG, EXTENSION, OPTION, LET_GO)."""
-    return plan_resign(fetch_league(cur, season), seed)
+def resign_decisions(cur, season, seed, *, contract_inputs=None, decisions=None):
+    """Re-sign stage moves for all 32 teams (CONTRACT, TAG, EXTENSION, OPTION, LET_GO). contract_inputs /
+    decisions: the module docstring (default: unchanged behavior)."""
+    return plan_resign(fetch_league(cur, season), seed, contract_inputs=contract_inputs, decisions=decisions)
 
 
 def cpu_offers(cur, season, stage, wave, seed):

@@ -226,3 +226,135 @@ def test_udfa_market_rookie_minimum_and_role():
     assert all(d["player_id"] != 206 for d in out)      # nobody needs a TE
     cb = next(d for d in out if d["player_id"] == 200)
     assert cb["status"] == "ACCEPT" and cb["team_id"] == 2   # starts at CB on team 2
+
+
+# ------------------------------------------- personality contract policy (U3) ----
+from engines import personality_contract_policy as cp                                    # noqa: E402
+from engines.free_agency_engine import canonical_offer_order                            # noqa: E402
+
+CORE = ("player_id", "team_id", "offer_index", "status", "utility", "counter")
+
+
+def pview(traits, pid=1):
+    return {"status": "stored", "origin": "generated", "sliders": {}, "traits": list(traits), "revision": 0,
+            "persona_id": f"p-{pid}", "catalogue_version": "c", "core_version": "v", "view_version": "views-v2"}
+
+
+def pctx(pid=1, team_ids=(1, 2, 3, 10, 11, 12), secure=True, established=True):
+    c = cp.neutral_context("mu:test", pid, {"season": 2036, "week": 25, "stage": "FREE_AGENCY"}, "b1",
+                           persona_id=f"p-{pid}", revision=0, team_ids=team_ids)
+    c["career"]["established"], c["security"]["secure"] = established, secure
+    c["security"]["through_season"] = 2035
+    return c
+
+
+def inputs(traits, mode, pid=1, **kw):
+    return {"view": pview(traits, pid), "context": pctx(pid, **kw), "policy": cp.trial_config(mode=mode)}
+
+
+def core(decisions):
+    return [{k: d[k] for k in CORE} for d in decisions]
+
+
+def test_policy_off_or_absent_is_the_exact_original():
+    p = player()
+    o = offer(p)
+    inp = inputs(["MONEY_FIRST"], "off")
+    base = offer_utility(o, p, NEUTRAL_TEAM, MARKET)
+    assert offer_utility(o, p, NEUTRAL_TEAM, MARKET, inp["view"], contract_context=inp["context"],
+                         policy=inp["policy"]) == base
+    players, offers = wave_fixture()
+    off = {q["id"]: inputs(["MONEY_FIRST"], "off", q["id"]) for q in players}
+    assert run_wave(players, offers, 3, "s", contract_inputs=off) == run_wave(players, offers, 3, "s")
+
+
+def test_shadow_keeps_baseline_decisions_and_records_the_alternative():
+    players, offers = wave_fixture(12)
+    shadow = {q["id"]: inputs(["MONEY_FIRST"], "shadow", q["id"]) for q in players}
+    a = run_wave(players, offers, 3, "s", contract_inputs=shadow)
+    assert core(a) == core(run_wave(players, offers, 3, "s"))
+    d = a[0]
+    assert d["policy_mode"] == "shadow" and len(d["candidates"]) == 3
+    c = d["candidates"][0]
+    assert c["policy"]["applied"] is False and c["policy"]["capped_delta"] != 0
+    assert c["raw_utility"] == c["utility"] and "shadow" in c["trace"]
+    assert {"choice_draw", "noisy_score", "rank", "trace"} <= set(c)
+
+
+def test_active_money_first_takes_richer_offer_over_contender():
+    p = player(ovr=78)
+    rich = dict(offer(p, team_id=3, mult=1.4, years=3), team=REBUILDER, market=MARKET)
+    ring = dict(offer(p, team_id=2, mult=1.0, years=3), team=CONTENDER, market=MARKET)
+    base = run_wave([p], [rich, ring], 3, "z")[0]
+    money = run_wave([p], [rich, ring], 3, "z", contract_inputs={1: inputs(["MONEY_FIRST"], "active")})[0]
+    assert base["team_id"] == 2 and money["team_id"] == 3
+    c = [x for x in money["candidates"] if x["team_id"] == 3][0]
+    assert c["utility"] == round(c["raw_utility"] + c["policy"]["capped_delta"], 4) or abs(
+        c["utility"] - (c["raw_utility"] + c["policy"]["capped_delta"])) < 1e-4
+
+
+def test_active_utility_and_signed_persona_part():
+    p = player()
+    o = offer(p, mult=1.4)
+    inp = inputs(["MONEY_FIRST"], "active")
+    s = offer_utility(o, p, REBUILDER, MARKET, inp["view"], contract_context=inp["context"], policy=inp["policy"])
+    assert s["persona"] > 0 and s["utility"] > s["base_utility"]
+    assert s["policy_explanation"]["applied"] is True and s["policy_explanation"]["fingerprint"]
+
+
+def test_counters_use_the_same_frozen_context():
+    p = player(ovr=80)
+    o = offer(p, mult=0.7, years=2)
+    base = acceptance({"offer": o, "team": REBUILDER, "market": MARKET}, p, False)
+    inp = inputs(["MONEY_FIRST"], "active")
+    trace = {}
+    adj = acceptance({"offer": o, "team": REBUILDER, "market": MARKET}, p, False, persona=inp["view"],
+                     contract_context=inp["context"], policy=inp["policy"], trace=trace)
+    assert base[0] == "COUNTER" and adj[0] in ("COUNTER", "ACCEPT")
+    if adj[0] == "COUNTER":
+        assert adj[1]["total_value"] <= base[1]["total_value"]
+        assert trace["counter_attempts"] and "counter_clearing_step" in trace
+
+
+def test_stale_score_cannot_authorize_acceptance():
+    p = player(ovr=80)
+    o = offer(p, mult=0.7)
+    inp = inputs([], "active")                     # no contract trait: the fresh utility stays below the bar
+    forged = dict(offer_utility(o, p, REBUILDER, MARKET), utility=0.99)
+    trace = {}
+    status, _ = acceptance({"offer": o, "team": REBUILDER, "market": MARKET, "score": forged}, p, False,
+                           persona=inp["view"], contract_context=inp["context"], policy=inp["policy"], trace=trace)
+    assert status != "ACCEPT" and trace["stale_score"] is True
+
+
+def test_hard_backup_rejection_survives_any_delta():
+    p = player(ovr=88)
+    o = offer(p, mult=1.4, depth=3)
+    inp = inputs(["MONEY_FIRST"], "active")
+    trace = {}
+    assert acceptance({"offer": o, "team": NEUTRAL_TEAM, "market": MARKET}, p, False, persona=inp["view"],
+                      contract_context=inp["context"], policy=inp["policy"], trace=trace) == ("REJECT", None)
+    assert trace["hard_rejection"] == "star_backup_role"
+
+
+def test_street_and_udfa_accept_inputs_and_stay_neutral_when_off():
+    fas = [player(pid=100 + i, group="WR", ovr=60 + i, age=29, accrued=4) for i in range(5)]
+    off = {q["id"]: inputs([], "off", q["id"], team_ids=(1, 2, 3)) for q in fas}
+    assert street_market(fas, NEEDS, "st", contract_inputs=off) == street_market(fas, NEEDS, "st")
+    assert udfa_market(fas, NEEDS, "ud", contract_inputs=off) == udfa_market(fas, NEEDS, "ud")
+    on = {q["id"]: inputs(["MONEY_FIRST"], "active", q["id"], team_ids=(1, 2, 3)) for q in fas}
+    out = street_market(fas, NEEDS, "st", contract_inputs=on)
+    assert out and all(d["policy_mode"] == "active" and d["offer_index"] is None for d in out)
+
+
+def test_canonical_order_makes_retries_identical_and_order_stays_significant():
+    players, offers = wave_fixture()
+    rev = list(reversed(offers))
+    a = core(run_wave(players, canonical_offer_order(offers), 3, "s"))
+    b = core(run_wave(players, canonical_offer_order(rev), 3, "s"))
+    assert [(d["player_id"], d["team_id"], d["status"]) for d in a] == \
+        [(d["player_id"], d["team_id"], d["status"]) for d in b]
+    plain = run_wave(players, offers, 3, "s")
+    flipped = run_wave(players, rev, 3, "s")
+    # documented: index-seeded choice noise keeps raw offer order significant (no permutation invariance)
+    assert [(d["player_id"], d["team_id"]) for d in plain] != [(d["player_id"], d["team_id"]) for d in flipped]
