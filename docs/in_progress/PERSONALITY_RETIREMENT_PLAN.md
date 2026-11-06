@@ -1,6 +1,6 @@
 # Project Mu: Retirement Decisions Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); building, wave 1 of 4 done (waves 0–3). Approval covers building the units; save experiments, migration and each activation still need JR's separate go-ahead (§2.6 gates G4–G6).
+**Status:** approved by JR (2026-11-03), Q1–Q4 settled as recommended (§8); building, wave 2 of 4 done (waves 0–3). Approval covers building the units; save experiments, migration and each activation still need JR's separate go-ahead (§2.6 gates G4–G6).
 **JR decisions this plan follows (2026-11-03, PERSONALITY_PLAN §5.1, D8–D13):** every player has a generated profile (the 2026 roster at the league start, prospects at class entry), editable by JR; players named after real people are fictional characters inspired by them. Earned attachment comes from the relationships plan, which owns one-way trust.
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §5.3 (parent tracker), §6; PROJECT_SPEC §2.17b–d, §3.3m, §3.3q, §6.0b; [V2 core](../done/V2_CORE_BUILD_PLAN.md) U13; [core API](../../personality/README.md); [effect design](../in_progress/PERSONALITY_GENERATED_EFFECTS_DESIGN.md). The separately owned [cap-relative plan](../done/CAP_RELATIVE_CONTRACTS_PLAN.md) (built and on main 2026-11-02) supplies earnings inputs: `engines/career_earnings.py` (`earned_shares`, three-state `is_secure`, PROJECT_SPEC §2.17e).
 
@@ -282,3 +282,5 @@ Plan approval does not authorize save experiments, migration or activation; thos
 | U0 | 0 | build/ret-u0 | .claude/worktrees/ret-u0 | merged | d0559a5 |
 | U1 | 1 | build/ret-u1 | .claude/worktrees/ret-u1 | merged | 050f202 |
 | U2 | 1 | build/ret-u2 | .claude/worktrees/ret-u2 | merged | 7822d0e |
+| U3 | 2 | build/ret-u3 | .claude/worktrees/ret-u3 | merged | 390bfb1 |
+| U4 | 2 | build/ret-u4 | .claude/worktrees/ret-u4 | merged | 2a8cc8f |
