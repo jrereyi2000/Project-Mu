@@ -73,7 +73,26 @@ and launch; these are the contract):
        free_agency_engine.ideal_years, guaranteed at the engine's target share: 35%, veterans 60%)}]}, best first.
   NegotiationResponse (offers and proposals) = {offer_id, status: ACCEPT|REJECT|COUNTER, utility, bar: float|null
        (free_agency_engine.accept_bar), parts: {financial, opportunity, contention, scheme, persona} (offer_utility's
-       raw 0..1 scores), counter: {years, total_value, bonus, guaranteed}|null, note: str|null}.
+       raw 0..1 scores; persona = the signed personality adjustment, 0 unless the contract policy is active),
+       counter: {years, total_value, bonus, guaranteed}|null, note: str|null, policy_explanation?: PolicyExplanation
+       (only while the contract policy is shadow or active for the franchise's universe)}.
+       PolicyExplanation = {mode: shadow|active, applied: bool, base_utility, adjusted_utility, delta (signed, capped),
+       raw_delta, cap_applied, terms: {ambition, attachment, home, grudge (<= 0)}, reasons: [str], policy_version,
+       fingerprint}.
+  Contract policy (docs/in_progress/PERSONALITY_CONTRACT_POLICY_PLAN.md §2.5, U4). The server owns it: the mode and
+       config come from engines/personality_contract_store.read_contract_activation for the universe registered to
+       league_state.madden_league_id (persona_lifecycle_universes); no universe, or mode off (the default while the
+       activation switchboard doesn't exist), is the original path with no extra reads or writes. Otherwise both
+       submit routes load the player's view and context once (personality_contract_context.load_contract_context:
+       the save-pgid alias, accrued-season career, career-earnings security through league year - 1; relationships
+       stay unknown until that owner's intake is live), score through the shared engine, and in the same transaction
+       as the contract_offers row record an immutable receipt (decision_id "offer:<offer_id>") and the factual
+       CONTRACT_OFFER_SUBMITTED / CONTRACT_RESPONSE_RECORDED events. A body's optional expected_fingerprint that no
+       longer matches the server's recomputation answers 409 {detail, result: the refreshed NegotiationResponse}
+       and stores nothing. Client fields never set the policy. An accepted offer is not an executed contract.
+  GET  /offers/{offer_id}/policy -> the immutable receipt {offer_id, decision_id, mode, policy_version, input_hash,
+       persona_id, revision, snapshot, result}; 403 for an offer of a team that isn't one of the user teams, 404 when
+       the offer or its receipt doesn't exist.
   POST /{abbr}/offers {player_id, years (1-5), total_value, bonus=0, guaranteed=0} -> NegotiationResponse. Scored
        with offer_utility (projected role from the roster, OC/DC scheme fit, team record and direction) and
        acceptance; stored in contract_offers (kind FREE_AGENT, from_user true, status ACCEPTED|REJECTED|COUNTERED,
@@ -120,12 +139,15 @@ from typing import Dict, List, Optional
 
 import psycopg
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from engines import cap_history
 from engines import contracts_engine as ce
 from engines import depth_chart_engine as dce
 from engines import free_agency_engine as fae
+from engines import personality_contract_context as pcc
+from engines import personality_contract_store as pcs
 from engines import transactions_engine as te
 from engines.gm_direction import SLOTS, position_group
 
@@ -170,6 +192,7 @@ class OfferIn(BaseModel):
     total_value: int
     bonus: int = 0
     guaranteed: int = 0
+    expected_fingerprint: Optional[str] = None     # the policy_explanation.fingerprint the client last saw
 
 
 class ProposeIn(BaseModel):
@@ -177,6 +200,7 @@ class ProposeIn(BaseModel):
     total_value: int
     bonus: int = 0
     guaranteed: int = 0
+    expected_fingerprint: Optional[str] = None
 
 
 class RestructureIn(BaseModel):
@@ -942,8 +966,62 @@ def _preview(cur, ctx: dict, body: MoveIn) -> dict:
                         ctx["pending"], year0["cap"])
 
 
-def _score(cur, ctx, p, years, total, bonus, guaranteed, teammates):
-    """(fa player, team dict, market, offer, utility, decision, counter, depth) for offer_utility / acceptance."""
+def franchise_universe(cur) -> Optional[dict]:
+    """The personality universe registered to league_state.madden_league_id, or None."""
+    if not _regclass(cur, "persona_lifecycle_universes"):
+        return None
+    cur.execute("SELECT madden_league_id FROM league_state WHERE id = 1")
+    row = cur.fetchone()
+    if not row or row[0] is None:
+        return None
+    from personality import lifecycle_store
+    return lifecycle_store.universe_for_league(cur, row[0])
+
+
+def player_pgid(cur, player_id: int):
+    cur.execute("SELECT madden_pgid FROM players WHERE id = %s", (player_id,))
+    row = cur.fetchone()
+    return None if not row else row[0]
+
+
+def _security_provider(cur, through_season: int):
+    def security(player_id, as_of):
+        from engines import career_earnings as ear
+        rows = [r for r in ear.read_contract_rows(cur, through_season) if r["player_id"] == player_id]
+        ledger = ear.earned_shares(ear.deal_spans(rows), cap_history.league_caps(cur), through_season)
+        return pcc.security_from_ledger(ledger.get(player_id), through_season,
+                                        [f"player_contracts:<={through_season}:{player_id}"])
+    return security
+
+
+def policy_inputs(cur, ctx: dict, p: dict, current_team_id) -> Optional[dict]:
+    """{view, context, policy, universe_id} for one negotiation, or None (no universe or mode off)."""
+    universe = franchise_universe(cur)
+    if universe is None:
+        return None
+    activation = pcs.read_contract_activation(cur, universe["universe_id"])
+    cfg = activation["config"]
+    if cfg["mode"] == "off":
+        return None
+    from personality import lifecycle as plc
+    season, week, T = ctx["season"], ctx["week"], ctx["T"]
+    as_of = {"season": season, "week": week, "stage": stage_for(week)}
+    accrued_now = accrued(p, season, T)
+    deps = {"current_team": lambda pid, a: current_team_id,
+            "career": lambda pid, a: pcc.career_from_accrued(accrued_now, [f"player_seasons:{season}:{pid}"]),
+            "security": _security_provider(cur, T - 1)}
+    pgid = player_pgid(cur, p["player_id"])
+    view, context = pcc.load_contract_context(
+        cur, universe_id=universe["universe_id"], player_id=p["player_id"],
+        alias_namespace=plc.pgid_namespace(universe), external_id="none" if pgid is None else pgid, as_of=as_of,
+        team_ids=[ctx["team"]["id"]], batch_id=f"{_seed(ctx)}:{p['player_id']}", dependencies=deps)
+    return {"view": view, "context": context, "policy": cfg, "universe_id": universe["universe_id"],
+            "activation_source": activation["source"]}
+
+
+def _score(cur, ctx, p, years, total, bonus, guaranteed, teammates, inputs=None, extra=None):
+    """(utility, decision, counter, depth, bar) for offer_utility / acceptance. inputs: policy_inputs(...) or None
+    (the original path). extra, a dict, receives team, market, offer, player and the acceptance trace."""
     T = ctx["T"]
     market = market_fit(cur, ctx["season"])
     tc = team_context(cur, ctx["team"]["id"], ctx["season"])
@@ -961,10 +1039,19 @@ def _score(cur, ctx, p, years, total, bonus, guaranteed, teammates):
         market_used = None
     else:
         market_used = market
-    score = fae.offer_utility(offer, player, team, market_used)
     live = in_season(ctx["week"])
-    decision, counter = fae.acceptance({"offer": offer, "team": team, "market": market_used, "score": score}, player,
-                                       live)
+    if inputs is None:
+        score = fae.offer_utility(offer, player, team, market_used)
+        decision, counter = fae.acceptance({"offer": offer, "team": team, "market": market_used, "score": score},
+                                           player, live)
+    else:
+        kw = {"contract_context": inputs["context"], "policy": inputs["policy"]}
+        score = fae.offer_utility(offer, player, team, market_used, inputs["view"], **kw)
+        trace = {}
+        decision, counter = fae.acceptance({"offer": offer, "team": team, "market": market_used, "score": score},
+                                           player, live, persona=inputs["view"], trace=trace, **kw)
+        if extra is not None:
+            extra.update(team=team, market=market_used, offer=offer, player=player, trace=trace)
     bar = fae.accept_bar(player, live)
     return score, decision, counter, depth, round(bar, 4)
 
@@ -1160,11 +1247,64 @@ def free_agents(position: Optional[str] = None, min_ovr: Optional[int] = None, m
         return {"season": season, "week": week, "in_season": in_season(week), "players": out}
 
 
-def negotiation(oid: int, decision: str, score: dict, bar, counter, note=None) -> dict:
-    """The NegotiationResponse shape shared by offers and proposals."""
-    return {"offer_id": oid, "status": decision, "utility": score["utility"], "bar": bar,
-            "parts": {k: score[k] for k in ("financial", "opportunity", "contention", "scheme", "persona")},
-            "counter": counter, "note": note}
+def explanation(score: dict) -> Optional[dict]:
+    """The signed PolicyExplanation for the UI, or None on the original path."""
+    pe = score.get("policy_explanation")
+    if not pe:
+        return None
+    return {"mode": pe["mode"], "applied": pe["applied"], "base_utility": pe["base_utility"],
+            "adjusted_utility": pe["adjusted_utility"], "delta": round(pe["capped_delta"], 4),
+            "raw_delta": round(pe["raw_delta"], 4), "cap_applied": pe["cap_applied"],
+            "terms": {k: round(v, 4) for k, v in pe["terms"].items()}, "reasons": list(pe["reasons"]),
+            "policy_version": pe["policy_version"], "fingerprint": pe["fingerprint"]}
+
+
+def negotiation(oid, decision: str, score: dict, bar, counter, note=None) -> dict:
+    """The NegotiationResponse shape shared by offers and proposals (policy_explanation only when present)."""
+    out = {"offer_id": oid, "status": decision, "utility": score["utility"], "bar": bar,
+           "parts": {k: score[k] for k in ("financial", "opportunity", "contention", "scheme", "persona")},
+           "counter": counter, "note": note}
+    pe = explanation(score)
+    if pe is not None:
+        out["policy_explanation"] = pe
+    return out
+
+
+def stale_preview(expected: Optional[str], score: dict, decision, bar, counter):
+    """409 with the refreshed result when the client's fingerprint no longer matches, else None."""
+    pe = score.get("policy_explanation")
+    if expected is None or pe is None or expected == pe["fingerprint"]:
+        return None
+    return JSONResponse(status_code=409, content={
+        "detail": "the contract context changed since you saw this result: review the refreshed answer",
+        "result": negotiation(None, decision, score, bar, counter, "Refreshed: nothing was stored.")})
+
+
+def record_policy(cur, ctx, inputs, extra, oid, kind, terms, score, decision, counter, bar):
+    """The immutable receipt and the factual events, in the offer's transaction."""
+    pe = score["policy_explanation"]
+    context = inputs["context"]
+    snapshot = {"as_of": context["as_of"], "route": kind, "view": inputs["view"], "context": context,
+                "policy": inputs["policy"], "activation_source": inputs["activation_source"],
+                "offer": extra["offer"], "team": extra["team"], "player": extra["player"],
+                "market_basis": None if extra["market"] is None else {k: extra["market"].get(k) for k in ("a_league", "b")},
+                "components": {k: score[k] for k in ("financial", "opportunity", "contention", "scheme")},
+                "policy_explanation": pe, "trace": extra["trace"], "bar": bar,
+                "baseline": {"utility": score.get("base_utility"), "shadow": extra["trace"].get("shadow")},
+                "adjusted": {"utility": pe["adjusted_utility"]}, "outcome": {"status": decision, "counter": counter}}
+    receipt = {"universe_id": inputs["universe_id"], "decision_id": f"offer:{oid}", "season": ctx["season"],
+               "week": ctx["week"], "stage": stage_for(ctx["week"]), "player_id": int(extra["player"]["id"]),
+               "persona_id": inputs["view"].get("persona_id"), "revision": inputs["view"].get("revision"),
+               "mode": inputs["policy"]["mode"], "policy_version": inputs["policy"]["version"], "snapshot": snapshot,
+               "result": {"offer_id": oid, "kind": kind, "status": decision, "counter": counter,
+                          "utility": score["utility"], "execution_id": None}}
+    stored = pcs.record_contract_decision(cur, receipt)
+    fact = {"team_id": ctx["team"]["id"], "gm_persona_id": None, "offer_id": oid, "terms": terms,
+            "market_reference": snapshot["market_basis"], "execution_id": None}
+    pcs.enqueue_contract_events(cur, stored, [dict(fact, kind="CONTRACT_OFFER_SUBMITTED", response=None),
+                                              dict(fact, kind="CONTRACT_RESPONSE_RECORDED",
+                                                   response={"status": decision, "counter": counter})])
+    return stored
 
 
 NOTES = {"ACCEPT": "He accepts. The deal is stored as an accepted offer; the league office writes it to the save.",
@@ -1191,13 +1331,24 @@ def make_offer(abbr: str, body: OfferIn):
         if len(ctx["roster"]["ACTIVE"]) >= te.ROSTER_LIMIT:
             raise HTTPException(409, f"the active roster is full ({te.ROSTER_LIMIT})")
         teammates = ctx["roster"]["ACTIVE"] + ctx["roster"]["IR"]
+        inputs = policy_inputs(cur, ctx, p, None)          # a free agent has no current team
+        extra = {}
         score, decision, counter, depth, bar = _score(cur, ctx, p, body.years, body.total_value, body.bonus,
-                                                      body.guaranteed, teammates)
+                                                      body.guaranteed, teammates, inputs, extra)
+        stale = stale_preview(body.expected_fingerprint, score, decision, bar, counter)
+        if stale is not None:
+            return stale
         oid = insert_offer(cur, ctx["season"], stage_for(ctx["week"]), "FREE_AGENT", p["player_id"], ctx["team"]["id"],
                            body.years, body.total_value, body.bonus, body.guaranteed, score["utility"],
                            STATUS[decision], counter, _seed(ctx))
+        if inputs is not None:
+            record_policy(cur, ctx, inputs, extra, oid, "FREE_AGENT", _terms(body), score, decision, counter, bar)
         conn.commit()
         return negotiation(oid, decision, score, bar, counter, NOTES[decision])
+
+
+def _terms(body) -> dict:
+    return {"years": body.years, "total_value": body.total_value, "bonus": body.bonus, "guaranteed": body.guaranteed}
 
 
 def salaries_by_position(cur, season: int, T: int) -> dict:
@@ -1278,13 +1429,40 @@ def propose(abbr: str, player_id: int, body: ProposeIn):
             raise HTTPException(409, reason)
         kind = "RESIGN" if p["start"] + c["length"] - 1 <= ctx["T"] else "EXTENSION"
         teammates = ctx["roster"]["ACTIVE"] + ctx["roster"]["IR"]
+        inputs = policy_inputs(cur, ctx, p, ctx["team"]["id"])
+        extra = {}
         score, decision, counter, depth, bar = _score(cur, ctx, p, body.years, body.total_value, body.bonus,
-                                                      body.guaranteed, teammates)
+                                                      body.guaranteed, teammates, inputs, extra)
+        stale = stale_preview(body.expected_fingerprint, score, decision, bar, counter)
+        if stale is not None:
+            return stale
         oid = insert_offer(cur, ctx["season"], stage_for(ctx["week"]), kind, player_id, ctx["team"]["id"], body.years,
                            body.total_value, body.bonus, body.guaranteed, score["utility"], STATUS[decision], counter,
                            _seed(ctx))
+        if inputs is not None:
+            record_policy(cur, ctx, inputs, extra, oid, kind, _terms(body), score, decision, counter, bar)
         conn.commit()
         return negotiation(oid, decision, score, bar, counter, f"{reason}. {NOTES[decision]}")
+
+
+@router.get("/offers/{offer_id}/policy")
+def offer_policy(offer_id: int):
+    """The immutable contract-policy receipt of one offer (module docstring)."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute("""SELECT t.abbreviation FROM contract_offers o JOIN teams t ON t.id = o.team_id
+                       WHERE o.id = %s""", (offer_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, f"offer {offer_id} not found")
+        require_user_team({"abbr": row[0]})
+        universe = franchise_universe(cur)
+        if universe is None or not _regclass(cur, "contract_policy_decisions"):
+            raise HTTPException(404, f"offer {offer_id} has no contract-policy receipt")
+        r = pcs.read_contract_decision(cur, universe["universe_id"], f"offer:{offer_id}")
+        if r is None:
+            raise HTTPException(404, f"offer {offer_id} has no contract-policy receipt")
+        return {"offer_id": offer_id, **{k: r[k] for k in ("decision_id", "mode", "policy_version", "input_hash",
+                                                           "persona_id", "revision", "snapshot", "result")}}
 
 
 @router.post("/{abbr}/contracts/{player_id}/restructure-preview")
