@@ -48,7 +48,7 @@ def test_shadow_writes_only_the_two_report_files(tmp_path, monkeypatch):
     assert code == 0
     assert sorted(p.name for p in out.iterdir()) == ['README.md', 'report.json']
     source = open(pv.__file__, encoding='utf-8').read()
-    assert 'psycopg' not in source and 'player_trade_request_store' not in source and 'environ' not in source
+    assert 'psycopg' not in source and 'player_trade_request_store' not in source and 'os.environ' not in source and 'getenv' not in source
 
 
 def test_example_spans_2026_to_2035_and_matches_the_plan(tmp_path):
