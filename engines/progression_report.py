@@ -24,6 +24,8 @@ STATUSES = frozenset(("PROPOSED", "APPLIED", "CALCULATED"))
 KINDS = frozenset(("CHECKPOINT", "OFFSEASON", "ANNUAL", "MENTAL", "TECHNICAL", "REVIEW"))
 FORM_FIELDS = ("before_requested", "after_requested", "before_effective_ovr", "after_effective_ovr",
                "before_ovr_delta", "after_ovr_delta")
+PERSONALITY_SCHEMA = "personality_development_v1"
+PERSONALITY_REASONS = frozenset(("PERSONALITY", "COACHING"))
 CAUSE_MAP = {"CEILING": "POTENTIAL_HEADROOM", "DEV": "DEVELOPED"}
 POSITION_MAP = {"LEDG": "LE", "REDG": "RE", "MIKE": "MLB", "WILL": "ROLB", "SAM": "LOLB", "RB": "HB"}
 
@@ -206,6 +208,11 @@ def project_event(event, *, audience="public", doc=None):
     annual = metadata.get("annual_result") or {}
     cause = annual.get("cause")
     reasons.append(CAUSE_MAP.get(cause, cause))
+    # Personality development (PERSONALITY_DEVELOPMENT_COACHING_PLAN U3): only supported effects of
+    # APPLIED enabled receipts name PERSONALITY/COACHING; shadow and proposals never claim one.
+    personality = metadata.get(PERSONALITY_SCHEMA) if isinstance(metadata.get(PERSONALITY_SCHEMA), Mapping) else {}
+    if source_status == "APPLIED" and personality.get("mode") == "enabled" and personality.get("attributed_effect"):
+        reasons.extend(r for r in personality.get("public_reasons") or [] if r in PERSONALITY_REASONS)
     application_week = metadata.get("application_week")
     if application_week is None:
         if (event.get("kind") == "OFFSEASON" and isinstance(event.get("application_season"), int)
@@ -236,6 +243,8 @@ def project_event(event, *, audience="public", doc=None):
             "band_changes": _band_diff(context.get("before_band"), event.get("candidate_band")),
             "term_breakdown": _terms(annual), "calculation": _json(annual.get("calculation")),
             "provenance": _json(event)}
+        if personality:
+            result["audit"]["personality_development"] = _json(personality)
     return result
 
 
