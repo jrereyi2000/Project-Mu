@@ -1,0 +1,174 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:GB:DC",
+  "name": "Jeff Hafley",
+  "role": "DC",
+  "team": "GB",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "GB",
+    "role": "DC",
+    "name": "Jeff Hafley"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E1"
+    ],
+    "confidence": [
+      "E1"
+    ],
+    "warmth": [
+      "E2"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "LOYAL",
+    "DISCIPLINARIAN"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1"
+    ],
+    "LOYAL": [
+      "E2"
+    ],
+    "DISCIPLINARIAN": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Coverage beliefs like press-man and vision-and-break work from any front; the front is just the shell.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A post safety who controls the middle, takes away big plays and catches the ball is the heart of a defense.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "The coaches on a staff liking and supporting each other matters more than what they know about X's and O's.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Put players where they can succeed rather than forcing them into a system.",
+      "when": [
+        "SCHEME",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "College football has changed fast with the portal and NIL; some of it needs fixing, but it is still a great game.",
+      "when": [
+        "DRAFT",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "A disciplined team that does not beat itself with penalties gives itself a chance every week.",
+      "when": [
+        "BAD_GAME",
+        "CLOSE_GAMES"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks at length and in detail about coverage technique when given the floor",
+    "praises his assistants by name for their character as much as their football minds"
+  ],
+  "want": "to prove the former college head coach belongs back in the NFL and can build a top defense there",
+  "fear": "that his NFL pass defenses are judged by the struggles of his earlier stops",
+  "voice": "Talkative, upbeat and detailed; he speaks at length about coverage concepts and is open about criticism of his career. He talks about his staff warmly and in terms of character and relationships. Coverage of his day-to-day manner is modest.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "GB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "GB",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/39578458/new-packers-dc-jeff-hafley-4-3-jump-college-nfl-lafleur",
+      "publisher": "ESPN, Rob Demovsky",
+      "published": "2024-02-23",
+      "accessed": "2026-11-04",
+      "summary": "Introductory remarks: moving Green Bay to a 4-3 but saying his coverage beliefs apply to any front; describes a post safety who controls the middle; says college football has changed with COVID, the portal and NIL. Spoke nearly 30 minutes and addressed criticism of his career. LaFleur says he hired the best fit and wants a fast, physical defense.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.packers.com/news/jeff-hafley-excited-to-get-to-work-with-energetic-defensive-staff",
+      "publisher": "Green Bay Packers (packers.com), Wes Hodkiewicz",
+      "published": "2024-03-13",
+      "accessed": "2026-11-04",
+      "summary": "On assembling his staff: relationships among coaches matter more to him than X's and O's; he wants coaches who like and support each other; kept two of Joe Barry's assistants and brought others from the NFL and Boston College, praising them for loyalty, intensity and player relationships. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.packers.com/news/5-things-to-know-about-new-packers-defensive-coordinator-jeff-hafley",
+      "publisher": "Green Bay Packers (packers.com), Wes Hodkiewicz and Mike Spofford",
+      "published": "2024-01-31",
+      "accessed": "2026-11-04",
+      "summary": "Primer: four seasons as Boston College head coach with three bowl-eligible teams and a defense that led the ACC in fewest penalties; worked on Kyle Shanahan's 49ers staff with Adam Stenavich and under Robert Saleh; NFL secondary coach from 2012; a Siena wide receiver. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://spectrumnews1.com/wi/milwaukee/news/2024/02/01/new-green-bay-packers-defensive-coordinator-jeff-hafley-",
+      "publisher": "Spectrum News 1 Wisconsin, Aly Prouty and the Associated Press",
+      "published": "2024-01-31",
+      "accessed": "2026-11-04",
+      "summary": "Hiring story: LaFleur cites his success and player development at every stop; Hafley's statement thanks Boston College warmly. Notes his 22-26 record there and the trend of college head coaches taking NFL assistant jobs. Little on personality.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

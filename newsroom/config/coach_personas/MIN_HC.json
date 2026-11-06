@@ -1,0 +1,230 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:MIN:HC",
+  "name": "Kevin O'Connell",
+  "role": "HC",
+  "team": "MIN",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "MIN",
+    "role": "HC",
+    "name": "Kevin O'Connell"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E1"
+    ],
+    "confidence": [
+      "E2"
+    ],
+    "warmth": [
+      "E1",
+      "E2",
+      "E3"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "PLAYERS_COACH",
+    "SCHEME_NERD"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E2",
+      "E3",
+      "E4"
+    ],
+    "PLAYERS_COACH": [
+      "E2",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E1",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Play the week you are in: the team is one-and-oh or oh-and-one, and nothing else is worth discussing.",
+      "when": [
+        "WIN_STREAK",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "A quarterback plays his best when the play-caller trusts him completely to make the read, mistakes included.",
+      "when": [
+        "QB",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "A veteran who handled hard years well often has his best football ahead of him.",
+      "when": [
+        "QB",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Every season with a quarterback is time to make the most of, wherever he is in his career.",
+      "when": [
+        "QB",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "An award for the coach is really an award for the owners, the players and the staff.",
+      "when": [
+        "AWARDS",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A team that connects off the field early handles adversity better when the season turns.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A coordinator you trust completely is worth letting run his side his own way.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "praises his quarterback after a win with a note of defiance toward doubters",
+    "repeats the one-and-oh motto when asked about streaks or standings",
+    "keeps the door open diplomatically on roster decisions without committing"
+  ],
+  "want": "to win a championship in Minnesota with a quarterback he has developed, adding to the ring he won as a coordinator",
+  "fear": "that his reputation for reviving quarterbacks depends on veterans and not on building a young one",
+  "voice": "Warm, upbeat and sincere; he talks quickly and fluently about quarterback play and credits others for success. He is diplomatic on contracts and roster choices, protective of his players in public, and occasionally playful.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "MIN",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "MIN",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Sam Darnold",
+        "team_2026": "SEA"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.vikings.com/news/kevin-oconnell-nfl-coach-of-the-year-ap-2024",
+      "publisher": "Minnesota Vikings (vikings.com), Lindsey Young",
+      "published": "2025-02-06",
+      "accessed": "2026-11-04",
+      "summary": "On winning AP Coach of the Year after a 14-3 season projected for 6.5 wins: he calls it an organizational honor, crediting ownership, players and staff. His focus-on-the-present motto became the team's mantra. Darnold credits him with early team-building events and a good outlook. A Belichick draft pick, 34-17 in three years. Humble and playful in tone. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://vikings.com/news/sam-darnold-kevin-o-connell-brandon-powell-trust-unsung-hero",
+      "publisher": "Minnesota Vikings (vikings.com), Rob Kleifield",
+      "published": "2024-09-17",
+      "accessed": "2026-11-04",
+      "summary": "After a 2-0 start: he calls plays with full trust in Darnold, helped him bounce back from an interception, and says he is proud of him, with a hint of defiance toward doubters. Team-written and favorable.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/43729012/kevin-oconnell-vikings-ongoing-dialogue-sam-darnold",
+      "publisher": "ESPN, Kevin Seifert",
+      "published": "2025-02-07",
+      "accessed": "2026-11-04",
+      "summary": "He expects Darnold to start somewhere in 2025, says Darnold earned free agency and that dialogue continues, is upbeat about J.J. McCarthy's knee rehab, and speaks of making the most of time with every quarterback. Warm and diplomatic, no commitments.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.cbssports.com/nfl/news/2025-nfl-honors-vikings-kevin-oconnell-wins-coach-of-the-year",
+      "publisher": "CBS Sports, Bryan DeArdo",
+      "published": "2025-02-06",
+      "accessed": "2026-11-04",
+      "summary": "Belichick presents him the award; a brief playing career, then Super Bowl-winning Rams coordinator; 34-17 and two division titles in Minnesota; 14-3 in 2024 despite losing rookie McCarthy in the summer, with Darnold throwing 35 touchdowns. Facts.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.vikings.com/news/brian-flores-defensive-coordinator-introductory-press-conference-takeaways",
+      "publisher": "Minnesota Vikings (vikings.com), Lindsey Young and Craig Peters",
+      "published": "2023-02-15",
+      "accessed": "2026-11-04",
+      "summary": "Flores recalls meeting O'Connell in 2008 when O'Connell was a rookie Patriots quarterback, remembers him as smart, tough and team-first, and says their football philosophies lined up in the interview. Flores's account.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.cbsnews.com/minnesota/news/the-vikings-are-relishing-brian-flores-running-their-defense-as-long-as-they-can/",
+      "publisher": "Associated Press, via CBS News Minnesota",
+      "published": "2023-11-30",
+      "accessed": "2026-11-04",
+      "summary": "O'Connell calls Flores extremely smart, says he trusts him completely and that Flores exceeded his expectations, crediting his leadership, development and situational understanding. O'Connell's own words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.espn.com/nfl/story/_/id/33341841/minnesota-vikings-hiring-los-angeles-rams-wes-phillips-offensive-coordinator-source-says",
+      "publisher": "ESPN, Courtney Cronin",
+      "published": "2022-02-21",
+      "accessed": "2026-11-04",
+      "summary": "Hiring Wes Phillips, who overlapped with O'Connell in Washington and was with him on the Rams staff. O'Connell will call plays, with Phillips building the game plan, mirroring O'Connell's own Rams role under McVay.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

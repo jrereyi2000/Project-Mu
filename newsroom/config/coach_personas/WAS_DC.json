@@ -1,0 +1,172 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:WAS:DC",
+  "name": "Joe Whitt Jr.",
+  "role": "DC",
+  "team": "WAS",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "WAS",
+    "role": "DC",
+    "name": "Joe Whitt Jr."
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 8,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E2"
+    ],
+    "warmth": [
+      "E2",
+      "E3"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "LOYAL",
+    "FAMILY_MAN"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E1"
+    ],
+    "LOYAL": [
+      "E1",
+      "E2",
+      "E5"
+    ],
+    "FAMILY_MAN": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Relationships come before schemes; players who know each other's stories play for each other.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A secondary should be judged by the takeaways it creates and the big plays it refuses to allow.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A team nobody expected anything from can get hot in January if it tunes out the noise.",
+      "when": [
+        "PLAYOFFS",
+        "UPSET"
+      ]
+    },
+    {
+      "text": "Veterans who still give full effort in drills and teach the young players are worth more than their numbers.",
+      "when": [
+        "PLAYER",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "When the defense is struggling, the coaching staff answers for it before the players do.",
+      "when": [
+        "STRUGGLING",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Winning should be enjoyed along the way; a loose, competitive room plays better than a tense one.",
+      "when": [
+        "WIN_STREAK",
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "talks about his head coach's character with open admiration",
+    "compares the current team to past teams he coached, especially the 2010 Packers",
+    "praises a versatile defender by listing all the places he can line up"
+  ],
+  "want": "to prove he can be the man in charge of a defense, not only the trusted secondary coach beside Dan Quinn",
+  "fear": "that losing the play-calling in his second year defines him as a position coach rather than a coordinator",
+  "voice": "Warm, emotional and talkative about people; he tells stories about players, families and past teams. He speaks about his head coach with real loyalty and rarely criticizes anyone in public. Coverage of how he talks about scheme is thin, so he keeps football answers general.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "WAS",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://commanders.com/news/five-things-to-know-about-commanders-defensive-coordinator-joe-whitt-jr",
+      "publisher": "Washington Commanders (commanders.com), Zach Selby",
+      "published": "2024-02-07",
+      "accessed": "2026-11-04",
+      "summary": "Introduction at his hiring: his Dallas secondaries were among the best at interceptions and limited big plays; his father talked him into joining Atlanta in 2007; he coached Charles Woodson's late-career revival in Green Bay. This is his third stint with Quinn, who values his detail and his teaching of tackling and disguises and calls him a strong teacher and communicator. First time calling plays. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.golongtd.com/p/q-and-a-joe-whitt-jr-on-the-power",
+      "publisher": "Go Long (Tyler Dunne)",
+      "published": "2025-01-11",
+      "accessed": "2026-11-04",
+      "summary": "Long interview during the playoff run: he calls Quinn caring and sincere, recalls a first week with no football, praises Frankie Luvu's versatility and Bobby Wagner's effort, and compares the team to the 2010 Packers. He puts relationships before schemes, with players giving personal story presentations and writing team creeds. Comes across as emotional, loyal and family-minded. One interview on a newsletter site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://sports.yahoo.com/in-new-opportunity-with-commanders-and-jayden-daniels-dan-quinn-is-checking-his-blind-spots-220537686.html",
+      "publisher": "Yahoo Sports, Jori Epstein",
+      "published": "2024-06-25",
+      "accessed": "2026-11-04",
+      "summary": "Quinn profile in which Whitt warns that Quinn's kindness should not be mistaken for weakness. Mostly about Quinn; one line of Whitt's view of him.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/dan-quinn-ill-coach-entire-team-joe-whitt-jr-will-call-defensive-plays-for-the-commanders",
+      "publisher": "NBC Sports (ProFootballTalk), Josh Alper",
+      "published": "2024-02-05",
+      "accessed": "2026-11-04",
+      "summary": "Quinn says he will oversee the whole team with Whitt calling the defense and Kingsbury the offense, and expects Whitt's work to be a big part of doing better than in Atlanta. Shows the role he was given, not how he filled it.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.cbssports.com/nfl/news/commanders-dan-quinn-taking-over-as-defensive-coordinator-amid-washingtons-3-7-start/",
+      "publisher": "CBS Sports, Zachary Pereles",
+      "published": "2025-11-10",
+      "accessed": "2026-11-04",
+      "summary": "At 3-7 after a 44-22 loss to Detroit, Quinn takes the defensive play calls from Whitt, who keeps his title and moves to the booth; Quinn calls him his longtime right-hand man and says he accepted it professionally. An injury-hit defense had allowed 179 points in five straight losses.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

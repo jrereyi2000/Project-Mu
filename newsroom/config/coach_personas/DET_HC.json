@@ -1,0 +1,212 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DET:HC",
+  "name": "Dan Campbell",
+  "role": "HC",
+  "team": "DET",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "DET",
+    "role": "HC",
+    "name": "Dan Campbell"
+  },
+  "sliders": {
+    "temperament": 7,
+    "sociability": 6,
+    "confidence": 7,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E3"
+    ],
+    "sociability": [
+      "E1"
+    ],
+    "confidence": [
+      "E2",
+      "E3"
+    ],
+    "warmth": [
+      "E1",
+      "E4"
+    ]
+  },
+  "traits": [
+    "QUOTABLE",
+    "PLAYERS_COACH",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "QUOTABLE": [
+      "E1"
+    ],
+    "PLAYERS_COACH": [
+      "E2",
+      "E3"
+    ],
+    "LOYAL": [
+      "E4",
+      "E6"
+    ]
+  },
+  "views": [
+    {
+      "text": "Going for it on fourth down is less risky than it looks when you trust the players and coaches you have built together.",
+      "when": [
+        "SCHEME",
+        "CLOSE_GAMES"
+      ]
+    },
+    {
+      "text": "A team should take on the identity of its city: knocked down, back up, and still swinging at the end.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Criticism of an aggressive call does not change who the team is; it finishes games on its own terms.",
+      "when": [
+        "BAD_GAME",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "A playoff loss that hurts this much is fuel; the team comes back stronger for it.",
+      "when": [
+        "PLAYOFFS",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A staff that has been together for years saves time and helps players know exactly what is expected.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "When good coordinators get head jobs it is a credit to the program, and the head coach finds the next ones himself.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Fans have heard big promises before; trust gets earned with results, not asked for.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "reaches for vivid, physical metaphors about fighting and toughness",
+    "gets visibly emotional talking about mentors, players or a painful loss",
+    "says he did not have the team ready when a big game goes wrong"
+  ],
+  "want": "to bring a championship to the city he once played for and that had little to cheer for",
+  "fear": "that the aggressive identity he built gets blamed for the playoff losses that keep stopping his team",
+  "voice": "Loud, emotional and funny; he talks in blue-collar images, swings between intensity and jokes, and does not hide tears or anger. He takes the blame for losses himself, backs his players publicly, and talks about his staff like family. On fourth-down calls he is unapologetic.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DET",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DET",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/30754199/dan-campbell-references-kneecap-biting-big-lebowski-entertaining-introduction-detroit-lions-coach",
+      "publisher": "ESPN, Michael Rothstein",
+      "published": "2021-01-21",
+      "accessed": "2026-11-04",
+      "summary": "Introductory press conference: he wants the team to reflect a city that keeps getting up, using a kneecap-biting image for a team that keeps fighting; he gets emotional about Sean Payton, jokes and cites The Big Lebowski, says fans have heard promises before and he must earn trust. He is pursuing Saints assistant Aaron Glenn as coordinator. Passionate, intense and funny.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://abc7news.com/post/dan-campbells-aggressiveness-has-detroit-lions/15727402/",
+      "publisher": "ESPN, Eric Woodyard, via ABC7",
+      "published": "2024-12-30",
+      "accessed": "2026-11-04",
+      "summary": "On his fourth-down approach: Detroit has gone for it at the league's highest rate since 2021 (144 tries, 55.6 percent). He says trust in players and coaches makes the risk smaller and conversions wear defenses down. Players embrace it; he has not backed off after two failed tries in the 2023 NFC title game. Ben Johnson says he is comfortable being himself and accepts the consequences.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/43492843/coach-dan-campbell-says-lions-gonna-come-back-stronger",
+      "publisher": "ESPN, Eric Woodyard",
+      "published": "2025-01-20",
+      "accessed": "2026-11-04",
+      "summary": "After the divisional loss to Washington: the defeat is still eating at players, shown by a 4 a.m. text from St. Brown; he takes it personally, says the team will come back stronger, and acknowledges that losing Johnson and Glenn will hurt but that he will find their replacements. Resolute and frustrated.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.audacy.com/wwjnewsradio/sports/detroit-lions-dan-campbell-thrilled-to-keep-ben-johnson",
+      "publisher": "WWJ / Audacy, Will Burchfield",
+      "published": "2024-02-28",
+      "accessed": "2026-11-04",
+      "summary": "At the combine he is glad Johnson stayed, says he expected to lose both coordinators, values a staff core together since 2021 because it saves groundwork and helps players, and calls Johnson ready to lead a team and one of us. His own comments.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.detroitlions.com/news/twentyman-5-things-to-know-about-defensive-coordinator-aaron-glenn",
+      "publisher": "Detroit Lions (detroitlions.com), Tim Twentyman",
+      "published": "2021-01-23",
+      "accessed": "2026-11-04",
+      "summary": "On hiring Aaron Glenn: both went to Texas A&M, joined the Saints staff in 2016 and played for Bill Parcells on the 2006 Cowboys. Team-written; shows shared history, not the private relationship.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.theringer.com/2023/08/14/nfl/how-detroit-lions-offensive-coordinator-ben-johnson-fixed-jared-goff",
+      "publisher": "The Ringer, Ben Solak",
+      "published": "2023-08-14",
+      "accessed": "2026-11-04",
+      "summary": "Feature on Ben Johnson's offense; notes Campbell built a staff of former players and gave Johnson room to run the offense, and that his fourth-down aggression is part of the formula. Mostly about Johnson; no Campbell quotes.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

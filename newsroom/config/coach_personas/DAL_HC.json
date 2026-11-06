@@ -1,0 +1,229 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DAL:HC",
+  "name": "Mike McCarthy",
+  "role": "HC",
+  "team": "DAL",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "DAL",
+    "role": "HC",
+    "name": "Mike McCarthy"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 7,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E4"
+    ],
+    "confidence": [
+      "E1",
+      "E3"
+    ],
+    "warmth": [
+      "E1",
+      "E2"
+    ],
+    "drive": [
+      "E2",
+      "E4"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "OLD_SCHOOL",
+    "GUARDED"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E2",
+      "E6"
+    ],
+    "SCHEME_NERD": [
+      "E2",
+      "E4"
+    ],
+    "OLD_SCHOOL": [
+      "E2",
+      "E4"
+    ],
+    "GUARDED": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "An offense should be built to make the quarterback successful, and the plan starts with what he already knows.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Protecting the football and controlling the clock matter more than leading the league in yards.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A team built on its defense and its run game is not a knock on the offense; it is how you win in January.",
+      "when": [
+        "SCHEME",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "A program can be championship-ready in how it trains and prepares and still have one hurdle left to clear.",
+      "when": [
+        "CONTENDER",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "When a playoff game gets away, the head coach owns it, and the fix is in the details of how the team prepares.",
+      "when": [
+        "BAD_GAME",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "Contracts and job security are not something to discuss in public; the direction of the team is what he will talk about.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Calling plays again keeps a head coach in the meeting room and close to the work, which is where he wants to be.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers criticism with a calm statement of confidence in the program's direction rather than a rebuttal",
+    "lists his priorities as ball security, time of possession and the run game when asked about the offense",
+    "declines to discuss his own contract and turns the question back to the roster"
+  ],
+  "want": "to prove in Dallas that the Super Bowl-winning coach from Green Bay can get a talented team past the playoff wall it keeps hitting",
+  "fear": "that a strong regular-season record keeps being remembered only for its January losses",
+  "voice": "Direct and matter-of-fact, with a Pittsburgh plainness; he speaks in process terms about preparation, training and details. He takes responsibility for losses in general language, stays confident about the direction of the program, and refuses to be drawn into contract talk. He praises his quarterback steadily and rarely criticizes a player by name.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "DAL",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "WAS",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Dak Prescott",
+        "team_2026": "DAL"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/cowboys-mike-mccarthy-returns-for-2024-has-championship-level-program-dak-prescott-part-of-solution",
+      "publisher": "CBS Sports, Garrett Podell",
+      "published": "2024-01-18",
+      "accessed": "2026-11-04",
+      "summary": "Press conference after Jerry Jones kept him for 2024 following a home playoff loss to Green Bay. He says the program is built to win a title but has not cleared the playoff threshold, takes responsibility for the recent postseason losses, says the team chased big plays, and calls Prescott part of the answer with another level to reach. Tone reported as disappointed but determined. One press conference after a painful loss.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://africa.espn.com/nfl/story/_/id/35763380/cowboys-mike-mccarthy-says-new-voice-calling-plays-help-dak-prescott",
+      "publisher": "ESPN, Todd Archer",
+      "published": "2023-03-01",
+      "accessed": "2026-11-04",
+      "summary": "At the combine, after taking play-calling back from Kellen Moore, he expects the offense to change by roughly a third with the same core terminology, says a new voice will challenge Prescott and the offense will be built around him, and says he will trade some production for fewer turnovers. He values the run, balance and a strong defense over leading the league in offense. His stated plan, not results.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/mike-mccarthy-on-entering-final-year-of-contract-im-very-confident-where-i-am",
+      "publisher": "NBC Sports (ProFootballTalk), Josh Alper",
+      "published": "2024-01-18",
+      "accessed": "2026-11-04",
+      "summary": "Asked about entering the last year of his deal without an extension, he declines to talk about contracts, his own included, and says he is confident in the team's direction and that it will get over the championship hurdle. The writer notes the precedent of Jason Garrett's lame-duck years. Shows how he deflects job-security questions.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://abc30.com/post/cowboys-transition-from-playcaller-kellen-moore-to-mike-mccarthy-a/13921873/",
+      "publisher": "ESPN (Todd Archer), via ABC30",
+      "published": "2023-10-16",
+      "accessed": "2026-11-04",
+      "summary": "Midseason look at his play-calling: Prescott's passing yards per game fell from Moore's era, with more snaps under center, more play action, fewer deep shots and quicker throws. He is described as direct and matter-of-fact, says the team is built on its defense, and points to time of possession and ball security as progress. Prescott stays publicly patient. A snapshot of six games.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.espn.com/nfl/story/_/id/46626198/nfl-dallas-cowboys-washington-commanders-brian-schottenheimer-dan-quinn",
+      "publisher": "ESPN, Todd Archer",
+      "published": "2025-10-18",
+      "accessed": "2026-11-04",
+      "summary": "Feature on the friendship between Schottenheimer and Dan Quinn. It recounts that McCarthy, who had worked with Schottenheimer before, offered him a consultant role in 2022 when he meant to take a year off, placing him in Quinn's defensive meetings to play the opposing offense. Shows McCarthy's staffing choices and the working link among the three; it is mostly about the other two men.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://sports.yahoo.com/marty-schottenheimer-gave-cowboys-mike-173528054.html",
+      "publisher": "Cowboys Wire via Yahoo Sports, Todd Brock",
+      "published": "2021-02-09",
+      "accessed": "2026-11-04",
+      "summary": "On Marty Schottenheimer's death, recounts that he hired McCarthy in 1993 as Kansas City's first offensive quality control coach and promoted him to quarterbacks coach in 1995, and that McCarthy worked with Gannon, Grbac and Bono before coaching Favre in Green Bay. McCarthy credits Marty's passion. Career facts from a fan-network site; it does not mention Brian Schottenheimer.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

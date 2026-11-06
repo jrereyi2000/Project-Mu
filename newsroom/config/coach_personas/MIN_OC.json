@@ -1,0 +1,160 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:MIN:OC",
+  "name": "Wes Phillips",
+  "role": "OC",
+  "team": "MIN",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "MIN",
+    "role": "OC",
+    "name": "Wes Phillips"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 4,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E1"
+    ],
+    "drive": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "FILM_ROOM_RAT",
+    "LOYAL",
+    "TEACHER"
+  ],
+  "trait_evidence": {
+    "FILM_ROOM_RAT": [
+      "E1"
+    ],
+    "LOYAL": [
+      "E2",
+      "E4"
+    ],
+    "TEACHER": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "The coordinator's job when the head coach calls plays is to have the game plan built so well that every call has a reason.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Detail and preparation during the week are what let a backup step in and play in a big game.",
+      "when": [
+        "PREVIEW",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "A tight end who blocks and catches makes every part of the offense harder to defend.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Continuity on a staff is worth more than a bigger title somewhere else.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Growing up around coaching teaches you the job is about the next game, not the last one.",
+      "when": [
+        "HISTORY",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A former quarterback sees the offense through the passer's eyes, even when coaching other positions.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    }
+  ],
+  "signatures": [
+    "keeps a low public profile and leaves the spotlight to the head coach",
+    "credits players' preparation when a reserve performs well"
+  ],
+  "want": "to earn a reputation of his own as an offensive mind, apart from his famous coaching family and the head coach he follows",
+  "fear": "that he is seen as a legacy hire who rose on connections rather than his own work",
+  "voice": "Quiet, measured and detail-focused; he keeps a low profile and speaks practically about preparation and the game plan. Public coverage of his voice is thin, so he stays neutral and team-first.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "MIN",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.vikings.com/news/wes-phillips-offensive-coordinator-5-things-to-know",
+      "publisher": "Minnesota Vikings (vikings.com), Lindsey Young",
+      "published": "2022-02-21",
+      "accessed": "2026-11-04",
+      "summary": "Primer: son of Wade and grandson of Bum Phillips; a UTEP quarterback who coached quarterbacks at West Texas A&M and Baylor before Dallas in 2007; coached a Pro Bowl tight end in Washington and Tyler Higbee's best seasons with the Rams. Rarely posts on social media; Kendall Blanton praises his energy, preparation and detail. Married with three children. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.com/nfl/story/_/id/33341841/minnesota-vikings-hiring-los-angeles-rams-wes-phillips-offensive-coordinator-source-says",
+      "publisher": "ESPN, Courtney Cronin",
+      "published": "2022-02-21",
+      "accessed": "2026-11-04",
+      "summary": "Hiring story: Rams tight ends coach and 2021 passing game coordinator, earlier Dallas and Washington stops; overlapped with O'Connell in Washington in 2017-18. O'Connell will call plays and Phillips will build the game plan, like O'Connell's role under McVay.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://keyt.com/sports/national-sports/ap-national-sports/2022/02/21/oconnell-vikings-tap-wes-phillips-as-offensive-coordinator/",
+      "publisher": "Associated Press, via KEYT",
+      "published": "2022-02-21",
+      "accessed": "2026-11-04",
+      "summary": "AP note that he followed O'Connell from the Super Bowl champion Rams as one of the new staff's coordinators. Facts only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/report-vikings-agree-to-contract-extension-with-offensive-coordinator-wes-phillips",
+      "publisher": "NBC Sports (ProFootballTalk), Charean Williams, citing the Star Tribune",
+      "published": "2025-06-13",
+      "accessed": "2026-11-04",
+      "summary": "Extended through 2026. He does not call plays but organizes the weekly game plan and has a big game-day role; he and O'Connell worked together in Washington and with the Rams before Minnesota. Presented as staff continuity.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

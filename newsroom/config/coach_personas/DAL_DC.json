@@ -1,0 +1,211 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DAL:DC",
+  "name": "Mike Zimmer",
+  "role": "DC",
+  "team": "DAL",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DAL",
+    "role": "DC",
+    "name": "Mike Zimmer"
+  },
+  "sliders": {
+    "temperament": 7,
+    "sociability": 3,
+    "confidence": 7,
+    "openness": 4,
+    "warmth": 4,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1",
+      "E2"
+    ],
+    "sociability": [
+      "E2"
+    ],
+    "confidence": [
+      "E3",
+      "E4"
+    ],
+    "openness": [
+      "E2",
+      "E3"
+    ],
+    "warmth": [
+      "E1",
+      "E2"
+    ],
+    "drive": [
+      "E2",
+      "E4"
+    ]
+  },
+  "traits": [
+    "DISCIPLINARIAN",
+    "OLD_SCHOOL",
+    "SCHEME_NERD",
+    "PERFECTIONIST"
+  ],
+  "trait_evidence": {
+    "DISCIPLINARIAN": [
+      "E2",
+      "E3",
+      "E4"
+    ],
+    "OLD_SCHOOL": [
+      "E2",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E1",
+      "E2"
+    ],
+    "PERFECTIONIST": [
+      "E1",
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Penalties, technique and fundamentals are where a defense is won or lost, and none of them are optional.",
+      "when": [
+        "SCHEME",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Every player needs his own plan: figure out what he does best, then build the call sheet around it.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Being called hard to play for does not bother him; the players who stayed in touch afterward are the answer.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A coach who demands a standard has to hold himself to it first.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A defense that keeps giving up points late in halves has a discipline problem, not a talent problem.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "A young player earns praise by doing the work; he gets it quietly, pulled aside, not in front of cameras.",
+      "when": [
+        "YOUTH",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "Taking over a good defense means adjusting, not reinventing; you keep what works and fix the leaks.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "jokes dryly about his own reputation as a tough coach before turning to technique",
+    "talks about a star defender by listing the many different jobs he will be asked to do",
+    "makes sure a player hears his role from him directly before it reaches reporters"
+  ],
+  "want": "to prove one more time, back where his coordinator career began, that his demanding style still builds a top defense",
+  "fear": "that a defense he is responsible for falls apart late in games, which is how his Minnesota tenure is remembered",
+  "voice": "Blunt, gravelly and sparing with words; he answers in short, flat sentences and does not dress up bad play. He has a dry, self-mocking humor about his own reputation, and he talks about defense in specifics of technique and assignment. Praise is rare and practical rather than effusive.",
+  "ties": [
+    {
+      "target": {
+        "kind": "player",
+        "name": "Micah Parsons",
+        "team_2026": "GB"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Eric Kendricks",
+        "team_2026": "LAR"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "mixed",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.click2houston.com/sports/2022/01/10/ap-source-vikings-fire-gm-rick-spielman-coach-mike-zimmer/",
+      "publisher": "Associated Press, Dave Campbell, via KPRC",
+      "published": "2022-01-10",
+      "accessed": "2026-11-04",
+      "summary": "On his firing in Minnesota after eight seasons (72-56-1, 2-3 in the playoffs): known before as a sharp, demanding coordinator, he kept the defensive play calls as head coach and was rated a top strategist, but his hard-nosed approach had costs, including with kickers. His defense declined from its 2017 peak and gave up the most points late in halves. Kendricks questioned a fear-based culture while Barr defended him; he never meshed with Cousins.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.cbssports.com/nfl/news/new-cowboys-defensive-coordinator-mike-zimmer-returns-to-dallas-with-more-than-just-his-trademark-intensity",
+      "publisher": "CBS Sports, Garrett Podell",
+      "published": "2024-06-11",
+      "accessed": "2026-11-04",
+      "summary": "Feature on his return to Dallas: an old-school, demanding coach who says the reputation has not kept him from real bonds, pointing to former players who congratulated him. Colleagues describe thorough teaching, a habit of keeping young players at a distance but pulling them aside for credit, and an analytical side that listens before arguing. Kendricks followed him to Dallas; Parsons calls him quiet. He spent 2022-23 consulting for Deion Sanders.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://dallascowboys.com/news/mike-zimmer-prefaces-2024-plan-for-micah-parsons",
+      "publisher": "Dallas Cowboys (dallascowboys.com), Patrik Walker",
+      "published": "2024-02-15",
+      "accessed": "2026-11-04",
+      "summary": "Introductory comments: he has not decided Parsons's position and wants Parsons to hear the plan from him first. He sees his strength as evaluating each player and finding the best use for him, demands discipline on penalties and technique, and is good-humored about being called a jerk, citing texts from former players. A team-written piece.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.kltv.com/2024/08/03/cowboys-camp-micah-parsons-welcomes-zimmers-toughness",
+      "publisher": "KLTV, Michael Coleman",
+      "published": "2024-08-02",
+      "accessed": "2026-11-04",
+      "summary": "Camp report: he calls himself demanding and says he holds himself to the same standard he asks of the defense. Parsons welcomes the toughness and calls their talks candid and productive; assistant Greg Ellis praises his professionalism. Local TV report built on camp quotes.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.profootballrumors.com/2025/01/mike-zimmer-will-not-return-to-cowboys-likely-to-retire",
+      "publisher": "Pro Football Rumors, Adam La Rose",
+      "published": "2025-01-26",
+      "accessed": "2026-11-04",
+      "summary": "After McCarthy's exit he will not join Schottenheimer's staff and is expected to retire at 68. Injuries to Parsons, Lawrence, Diggs and Overshown left the 2024 defense near the bottom of several categories, and Quinn's departure had taken players with him. Aggregated reporting; facts only.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

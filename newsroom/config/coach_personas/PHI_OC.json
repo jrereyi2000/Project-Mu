@@ -1,0 +1,208 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:PHI:OC",
+  "name": "Kellen Moore",
+  "role": "OC",
+  "team": "PHI",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "PHI",
+    "role": "OC",
+    "name": "Kellen Moore"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 7,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E3"
+    ],
+    "openness": [
+      "E1",
+      "E3"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "QB_WHISPERER",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E3"
+    ],
+    "QB_WHISPERER": [
+      "E3",
+      "E4"
+    ],
+    "MEASURED": [
+      "E3",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "An offense is a set of systems; keep what already works for these players and change the rest as they learn it.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "If a play makes sense to the players, it stays in; if a player brings a good idea, it can go in the game plan.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A quarterback should take ownership of a new system until it feels like his own.",
+      "when": [
+        "QB"
+      ]
+    },
+    {
+      "text": "When a short-yardage call fails, the coordinator owns not putting the offense in the right spot.",
+      "when": [
+        "BAD_GAME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Balance between run and pass, built around the best players, matters more than a signature style.",
+      "when": [
+        "SCHEME",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "Play-calling is a staff effort, with every assistant feeding in from his own area.",
+      "when": [
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "keeps the same even expression on the sideline whether the offense is rolling or stalling",
+    "credits players for ideas that turned into big plays",
+    "describes the offense as an evolving collaboration rather than his own system"
+  ],
+  "want": "to prove the former record-setting college quarterback is a complete play-caller who can lead a team of his own",
+  "fear": "that he is remembered as the coordinator Dallas let go rather than for what his offenses did afterward",
+  "voice": "Calm, quiet and precise; he answers in short, practical sentences without boasts. He talks about systems, terminology and staff collaboration, shares blame readily, and praises players for their input. He rarely shows emotion in public.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "PHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Dak Prescott",
+        "team_2026": "DAL"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Saquon Barkley",
+        "team_2026": "PHI"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/kellen-moore-making-tweaks-to-eagles-offense-in-first-season-as-offensive-coordinator-there-will-be-changes",
+      "publisher": "CBS Sports, Jeff Kerr",
+      "published": "2024-05-10",
+      "accessed": "2026-11-04",
+      "summary": "In his first Eagles spring he describes offenses as systems each coach approaches his own way, plans to keep what works and adjust as players learn, wants consistent terminology for fast execution, keeps plays that make sense to players, and will focus on the run game and play action in camp. His plan before any games.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.foxsports.com/stories/nfl/jalen-hurts-kellen-moores-eagles-offense-95-percent-new",
+      "publisher": "FOX Sports",
+      "published": "2024-06-06",
+      "accessed": "2026-11-04",
+      "summary": "Hurts says roughly 95 percent of the offense is new and that his aim is to master it and make it his own. Notes Moore has adapted to offensive-minded head coaches before. No Moore quotes; little on their working relationship.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://neworleans.football/article/what-eagles-say-about-kellen-moore",
+      "publisher": "NewOrleans.Football, Mike Triplett",
+      "published": "2025-02-03",
+      "accessed": "2026-11-04",
+      "summary": "Before Super Bowl LIX: Barkley calls him brilliant and open to player input, cites two playoff runs that came from his own suggestions, and says Moore's sideline demeanor never changes. Hurts values his fresh perspective. Doug Nussmeier, who followed him through three jobs, calls him smart, a strong communicator who weighs suggestions and adapts to personnel, and ready to lead. Fangio praises his run-pass balance. Colleagues' praise as he was about to leave.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.dallascowboys.com/news/cowboys-mutually-part-ways-with-kellen-moore",
+      "publisher": "Dallas Cowboys (dallascowboys.com)",
+      "published": "2023-01-29",
+      "accessed": "2026-11-04",
+      "summary": "Team announcement that Dallas and Moore mutually agreed to part ways with a year left on his deal, after McCarthy declined to guarantee his return. McCarthy's statement credits Moore's offensive production and his mentorship of Prescott. McCarthy then took over play-calling. Read through search summaries of the release; no Moore comment.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.inquirer.com/eagles/eagles-saints-nick-sirianni-kellen-moore-play-calling-vic-fangio-20240924.html",
+      "publisher": "Philadelphia Inquirer, Olivia Reiner",
+      "published": "2024-09-24",
+      "accessed": "2026-11-04",
+      "summary": "After a failed fourth-and-1, Moore takes blame alongside Sirianni, saying it was on him to put the offense in the right spot. He describes a collaborative staff with Sirianni heavily involved and calls the process excellent and similar to his earlier stops.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

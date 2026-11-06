@@ -1,0 +1,218 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:WAS:OC",
+  "name": "Kliff Kingsbury",
+  "role": "OC",
+  "team": "WAS",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "WAS",
+    "role": "OC",
+    "name": "Kliff Kingsbury"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 6,
+    "confidence": 5,
+    "openness": 7,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "sociability": [
+      "E2"
+    ],
+    "openness": [
+      "E1",
+      "E2"
+    ],
+    "drive": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "FILM_ROOM_RAT"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E1",
+      "E4",
+      "E5"
+    ],
+    "SCHEME_NERD": [
+      "E1",
+      "E2"
+    ],
+    "FILM_ROOM_RAT": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "The offense should be shaped around what the quarterback does best, and it should keep changing as he grows.",
+      "when": [
+        "QB",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A good idea is worth taking no matter who in the building it comes from, including the players.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Walk-throughs and repetition during the week are why things look easy on Sunday.",
+      "when": [
+        "PREVIEW",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "A rookie quarterback learns fastest when he and his coordinator spend the long hours together.",
+      "when": [
+        "YOUTH",
+        "QB"
+      ]
+    },
+    {
+      "text": "Being fired can show a coach what he failed to set clearly the first time, especially the standard.",
+      "when": [
+        "COACHING",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "When a receiver is not getting the ball, change his role to fit the quarterback rather than wait.",
+      "when": [
+        "PLAYER",
+        "BAD_GAME"
+      ]
+    }
+  ],
+  "signatures": [
+    "stays calm and low-key at the podium but lets frustration show in his play-calling when drives stall",
+    "credits players' suggestions for plays that made the game plan",
+    "talks about his quarterback's growth in specifics of reads and preparation"
+  ],
+  "want": "to show that the head coach Arizona let go has become a better coach and a better leader, with a young star quarterback as proof",
+  "fear": "that his name stays tied to the Arizona failure no matter what his offenses do now",
+  "voice": "Quiet, relaxed and dry; he speaks briefly and evenly, without big claims. He is more open and personal than in his Arizona years, sometimes sharing a story, and he praises his quarterback's preparation more than his talent. He sidesteps questions about head coaching jobs.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "WAS",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jayden Daniels",
+        "team_2026": "WAS"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Caleb Williams",
+        "team_2026": "CHI"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Patrick Mahomes",
+        "team_2026": "KC"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.foxsports.com/stories/nfl/washington-dynamic-duo-jayden-daniels-kliff-kingsbury",
+      "publisher": "FOX Sports, Ralph Vacchiano",
+      "published": "2025-01-24",
+      "accessed": "2026-11-04",
+      "summary": "On his partnership with Daniels: a quarterback specialist who builds the offense around the player, prepares closely with him, uses virtual reality work and takes players' play suggestions, and reshaped McLaurin's role early in the season. Calm and quiet in public but intensely competitive; Quinn says frustration sometimes shows in his calls. Recaps Mahomes and Mayfield at Texas Tech, Murray's rookie award in Arizona, and Caleb Williams at USC.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://africa.espn.com/nfl/story/_/id/43325839/washington-commanders-kliff-kingsbury-success-offense",
+      "publisher": "ESPN, John Keim",
+      "published": "2025-01-28",
+      "accessed": "2026-11-04",
+      "summary": "On his first Washington season: after Arizona fired him he stepped away, then decided he still wanted to coach. Players find him more relaxed, personal and outgoing than in Arizona; he once told them an emotional story about his father. He admits he could have set clearer standards in Arizona and credits Quinn for that lesson, asks for player input, arrives early and runs frequent walk-throughs. Updated to reflect his decision to stay.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://profootballrumors.com/2024/09/kliff-kingsbury-addresses-return-to-coaching-commanders-hire",
+      "publisher": "Pro Football Rumors, Adam La Rose",
+      "published": "2024-09-27",
+      "accessed": "2026-11-04",
+      "summary": "He says he did not expect to coach again after Arizona and was comfortable with retirement. After a year on Lincoln Riley's USC staff, he chased coordinator jobs with Chicago and Philadelphia, lost a Raiders deal over contract length, and that opened the way for Quinn to hire him. Aggregated from his interview.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/commanders/news/washington-commanders-coach-kliff-kingsbury-new-orleans-saints-job-his-wanted-chose-stay",
+      "publisher": "Sports Illustrated (Commanders on SI), Caleb Skinner",
+      "published": "2025-02-12",
+      "accessed": "2026-11-04",
+      "summary": "Relays a radio report that the Saints head coaching job was his if he wanted it, and that he chose to keep calling plays for Daniels in Washington. A second-hand report, not his own words; notes he rebuilt his reputation at USC after Arizona.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://sports.yahoo.com/in-new-opportunity-with-commanders-and-jayden-daniels-dan-quinn-is-checking-his-blind-spots-220537686.html",
+      "publisher": "Yahoo Sports, Jori Epstein",
+      "published": "2024-06-25",
+      "accessed": "2026-11-04",
+      "summary": "Quinn profile noting that he hired Kingsbury, who developed Kyler Murray, to guide a first-round rookie quarterback, and that the staff aimed to give Daniels the right amount of coaching. About Quinn's choices; shows why Kingsbury was hired, not how he works.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

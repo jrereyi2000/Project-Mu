@@ -1,0 +1,208 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:DAL:OC",
+  "name": "Brian Schottenheimer",
+  "role": "OC",
+  "team": "DAL",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "DAL",
+    "role": "OC",
+    "name": "Brian Schottenheimer"
+  },
+  "sliders": {
+    "temperament": 6,
+    "sociability": 7,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 8,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E4"
+    ],
+    "sociability": [
+      "E2",
+      "E4"
+    ],
+    "warmth": [
+      "E2",
+      "E3",
+      "E4"
+    ]
+  },
+  "traits": [
+    "PLAYERS_COACH",
+    "MENTOR",
+    "QB_WHISPERER",
+    "FAMILY_MAN"
+  ],
+  "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E2",
+      "E4"
+    ],
+    "MENTOR": [
+      "E2"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E2",
+      "E5"
+    ],
+    "FAMILY_MAN": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Players play harder for coaches who show them they care, so the relationship comes before the scheme.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A good quarterback's leadership is worth as much as his arm, and he says so loudly when he sees it.",
+      "when": [
+        "QB",
+        "PERFORMANCE"
+      ]
+    },
+    {
+      "text": "A bad loss is a time to keep the room together and lean on the people in it, not to change who you are.",
+      "when": [
+        "LOSING_STREAK",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "Rookies and undrafted players should feel the coaches know their names and want them there from the first day.",
+      "when": [
+        "YOUTH",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "Sitting in the other side of the ball's meetings makes an offensive coach better at his own job.",
+      "when": [
+        "SCHEME",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A coach who changes his personality when he gets a bigger title usually fails; stay the same man.",
+      "when": [
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "praises his quarterback in sweeping terms, often reaching for a comparison to an all-time great",
+    "shows emotion openly on the sidelines and in team meetings, and talks about it afterward",
+    "talks about friendships with other coaches and what he learned from them"
+  ],
+  "want": "to show that a career assistant, and the son of a famous coach, can lead a room on his own energy and relationships",
+  "fear": "that the energy and culture talk gets dismissed as noise if the offense does not produce",
+  "voice": "Loud, warm and emotional; he speaks quickly and with visible enthusiasm, and is quick to hand out praise to players by name. He talks about culture, caring and connection as much as plays, and openly credits mentors and friends. He keeps criticism of players inside the building.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "DAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "WAS",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Dak Prescott",
+        "team_2026": "DAL"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.fox4news.com/sports/dallas-cowboys-brian-schottenheimer-head-coach",
+      "publisher": "FOX 4 Dallas-Fort Worth, Adam Fullerton",
+      "published": "2025-01-24",
+      "accessed": "2026-11-04",
+      "summary": "Hiring story when Dallas made him head coach: son of Marty Schottenheimer, coaching since 1997 with the Rams, Jets, Seahawks and Colts among others, a Cowboys consultant in 2022 and coordinator in 2023-24 while McCarthy called plays. Prescott had his best season in 2023 when the offense led the league in scoring; it fell to 21st in 2024 after Prescott's injury. Facts, little on personality.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://africa.espn.com/nfl/story/_/id/45024511/nfl-dallas-cowboys-brian-schottenheimer-rookie-minicamp-tyler-booker",
+      "publisher": "ESPN, Todd Archer",
+      "published": "2025-05-07",
+      "accessed": "2026-11-04",
+      "summary": "Rookie minicamp piece in his first months as head coach: he moves among draft picks and undrafted players starting conversations, players call him energetic and fun but serious when needed, and he wants players to feel cared for and close to their assistants. He adds music to practice, reshuffles meeting and locker room seats, and plans to work closely with the quarterbacks. Describes himself as demanding and says coaches who change their personality fail.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espn.com/nfl/story/_/id/46626198/nfl-dallas-cowboys-washington-commanders-brian-schottenheimer-dan-quinn",
+      "publisher": "ESPN, Todd Archer",
+      "published": "2025-10-18",
+      "accessed": "2026-11-04",
+      "summary": "Feature on his friendship with Dan Quinn, dating to the 2007-08 Jets staff. McCarthy brought him to Dallas as a consultant in 2022 when he meant to take a year off, and he sat in Quinn's defensive meetings playing the opposing offense; the two stayed late talking leadership and culture. He calls Quinn a close friend, admits he had lost some passion for coaching before regaining it, and comes across as reflective and family-minded.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/cowboys/onsi/news/dak-prescott-raves-about-brian-schottenheimer-emotional-leadership-on-hard-knocks",
+      "publisher": "Sports Illustrated (Cowboys on SI), Randy Gurzi",
+      "published": "2025-12-03",
+      "accessed": "2026-11-04",
+      "summary": "Prescott says his head coach is openly emotional and that players feed off it and play harder for him. The piece credits him with steadying the team after a 3-5-1 start and the death of Marshawn Kneeland, before three straight wins. Fan-network framing around a player quote.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/2023/10/31/cowboys-dak-prescott-drew-brees-comparison-brian-schottenheimer",
+      "publisher": "Sports Illustrated",
+      "published": "2023-10-31",
+      "accessed": "2026-11-04",
+      "summary": "As coordinator, asked about Prescott after two wins, he goes well beyond a routine answer and compares his quarterback's makeup to Drew Brees. Read from the headline and search summary, not the full text. Shows his habit of lavish public praise for his quarterback, not his role in the play-calling.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

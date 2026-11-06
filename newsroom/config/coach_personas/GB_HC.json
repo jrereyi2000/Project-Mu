@@ -1,0 +1,242 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:GB:HC",
+  "name": "Matt LaFleur",
+  "role": "HC",
+  "team": "GB",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "GB",
+    "role": "HC",
+    "name": "Matt LaFleur"
+  },
+  "sliders": {
+    "temperament": 7,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E4",
+      "E5"
+    ],
+    "warmth": [
+      "E1",
+      "E5"
+    ],
+    "drive": [
+      "E1",
+      "E2"
+    ]
+  },
+  "traits": [
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "PLAYERS_COACH"
+  ],
+  "trait_evidence": {
+    "QB_WHISPERER": [
+      "E1",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E6",
+      "E7"
+    ],
+    "PLAYERS_COACH": [
+      "E1",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "A young quarterback needs every rep he can get, and the plan has to bend as he grows.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "A quarterback's voice in the huddle carries more weight with teammates than any coach's.",
+      "when": [
+        "QB",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Back your quarterback in public and fix the mistakes behind closed doors.",
+      "when": [
+        "QB",
+        "BAD_GAME"
+      ]
+    },
+    {
+      "text": "A playoff loss full of missed chances teaches more than a comfortable win; nothing from last year carries over.",
+      "when": [
+        "PLAYOFFS",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Hire the coordinator who fits best, not a scheme; then ask for a fast, physical defense that attacks the ball.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A coach who loses his composure on the sideline has let his team down, and should say so.",
+      "when": [
+        "CLOSE_GAMES",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Good drafts only matter if the young players do the work to grow into them.",
+      "when": [
+        "DRAFT",
+        "YOUTH"
+      ]
+    }
+  ],
+  "signatures": [
+    "loses his temper on the sideline at a bad call, then says plainly afterward that he was embarrassed",
+    "speaks up for his players when an opponent or fan goes after them",
+    "talks about his quarterback's growth in terms of reps, reads and leadership"
+  ],
+  "want": "to prove he can build a contender around a quarterback he developed, not one he inherited",
+  "fear": "that his teams are remembered for playoff exits and his own sideline blowups",
+  "voice": "Measured and analytical at the podium, candid about mistakes including his own; on the sideline he can boil over. He protects his quarterbacks and players in public, talks in detail about reps and development, and keeps criticism of individuals private.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "GB",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "GB",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jordan Love",
+        "team_2026": "GB"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jared Goff",
+        "team_2026": "DET"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/blog/green-bay-packers/post/_/id/53145/how-matt-lafleur-will-get-jordan-love-ready-for-packers-starting-job",
+      "publisher": "ESPN, Rob Demovsky",
+      "published": "2023-04-20",
+      "accessed": "2026-11-04",
+      "summary": "On preparing Jordan Love to start: maximum reps, joint practices and extra preseason work, with a flexible plan. Robert Griffin III says LaFleur built trust by promising to back his quarterbacks and not blame them publicly while demanding they execute. Recaps his work with Griffin, Goff as Rams coordinator, Ryan, Tannehill and Rodgers. Candid and pragmatic about the ups and downs.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.packers.com/news/5-things-learned-from-matt-lafleur-s-season-ending-press-conference-2023",
+      "publisher": "Green Bay Packers (packers.com), Mike Spofford",
+      "published": "2024-01-22",
+      "accessed": "2026-11-04",
+      "summary": "Season-ending press conference after a playoff loss in San Francisco: evaluating every assistant before any staff change, credits recent drafts, praises Love's growth and leadership, treats the final-drive interception as a lesson, says past results guarantee nothing, and calls the team resilient but full of missed chances. Team-written.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/matt-lafleur-looking-for-jordan-love-to-be-more-of-a-vocal-leader",
+      "publisher": "NBC Sports (ProFootballTalk), Josh Alper",
+      "published": "2025-01-14",
+      "accessed": "2026-11-04",
+      "summary": "He wants Love to be a louder leader, speaking up when teammates fall short, because a quarterback's message lands differently than a coach's. Short write-up of his comments.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/nfl-fines-packers-coach-matt-lafleur-14-069-for-unsportsmanlike-conduct",
+      "publisher": "NBC Sports (ProFootballTalk), Mike Florio",
+      "published": "2024-10-05",
+      "accessed": "2026-11-04",
+      "summary": "After a ruling against a late-half touchdown against Minnesota, unable to challenge, he threw his headset, drew an unsportsmanlike penalty and was fined $14,069. Afterward he said he was absolutely embarrassed because he expects his team to stay composed. One incident.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/matt-lafleur-explains-pregame-fracas-arrogant-lions-fan",
+      "publisher": "Sports Illustrated, Tom Dierberger",
+      "published": "2024-12-06",
+      "accessed": "2026-11-04",
+      "summary": "Before a game in Detroit a fan on the field taunted Packers players with throat-slash gestures; LaFleur told him to leave, the fan got in his face and players stepped in. He called it unsportsmanlike, said he had tried to defuse it and that security should have removed the man. One incident.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/39578458/new-packers-dc-jeff-hafley-4-3-jump-college-nfl-lafleur",
+      "publisher": "ESPN, Rob Demovsky",
+      "published": "2024-02-23",
+      "accessed": "2026-11-04",
+      "summary": "On hiring Jeff Hafley, his third defensive coordinator since 2019: LaFleur says he hired the best fit, not a scheme, and wants a fast, physical defense that attacks the ball with a vision-based back end. Hafley had worked with people close to LaFleur.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.espn.com/blog/green-bay-packers/post/_/id/52070/adam-stenavich-takes-wild-path-to-become-packers-offensive-coordinator",
+      "publisher": "ESPN, Rob Demovsky",
+      "published": "2022-04-22",
+      "accessed": "2026-11-04",
+      "summary": "On Adam Stenavich's rise: LaFleur hired him as line coach in 2019 and promoted him to coordinator in 2022, while LaFleur keeps calling the offensive plays. Shows the staff structure.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}
