@@ -1,0 +1,130 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:TB",
+  "name": "Joel Glazer",
+  "role": "OWNER",
+  "team": "TB",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "TB",
+    "name": "Joel Glazer"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "PATIENT_BUILDER",
+    "DEEP_POCKETS",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1",
+      "E2"
+    ],
+    "DEEP_POCKETS": [
+      "E1"
+    ],
+    "MEASURED": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "Continuity and stability in the coach and general manager are how you keep chasing championships.",
+      "when": [
+        "FRONT_OFFICE",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "There is no win threshold a good coach has to hit to keep his job.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Coaching turnover across the league shows how hard this job is.",
+      "when": [
+        "COACHING",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Borrowing from future caps for a title run was worth it.",
+      "when": [
+        "CAP",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "A star quarterback can transform a franchise in a single season.",
+      "when": [
+        "QB",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Our division titles matter even in lean cap years.",
+      "when": [
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "speaks once a year, at the owners meetings",
+    "pairs extensions with talk of continuity"
+  ],
+  "want": "More championships for Tampa Bay with stable leadership (medium).",
+  "fear": "Falling back into the churn of past coaching changes (medium).",
+  "voice": "Polished, low-key and corporate; speaks rarely and in measured terms about stability and championships. Avoids personal criticism of his staff.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "TB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.wsls.com/sports/2025/06/26/buccaneers-extend-coach-todd-bowles-gm-jason-licht/",
+      "publisher": "AP via WSLS",
+      "published": "2025-06-26",
+      "accessed": "2026-11-06",
+      "summary": "Tampa Bay extended coach Todd Bowles and GM Jason Licht; Joel Glazer cited continuity, stability and more championships. Context notes the team borrowed from future caps during the Tom Brady years.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://africa.espn.com/nfl/story/_/id/48371658/tampa-bay-buccaneers-glazer-speaks",
+      "publisher": "ESPN",
+      "published": "2026-03-31",
+      "accessed": "2026-11-06",
+      "summary": "Joel Glazer defended keeping Bowles after an 8-9 season, said there was no win threshold for 2026 and cited league-wide coaching turnover.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check. The Glazer family co-owns the team; Joel Glazer is the co-chairman who speaks publicly. JR to confirm which Glazer the persona should be."
+  }
+}

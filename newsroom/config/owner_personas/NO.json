@@ -1,0 +1,136 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:NO",
+  "name": "Gayle Benson",
+  "role": "OWNER",
+  "team": "NO",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "NO",
+    "name": "Gayle Benson"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "LOYAL",
+    "MEDDLER",
+    "HOMETOWN_GUY"
+  ],
+  "trait_evidence": {
+    "LOYAL": [
+      "E2"
+    ],
+    "MEDDLER": [
+      "E1"
+    ],
+    "HOMETOWN_GUY": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Some decisions an owner has to make herself, even when her general manager sees it differently.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Firing the general manager who brought this city a title would be ridiculous.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "The right head coach is the one who fits this organization and this city.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The Saints belong in New Orleans, now and after me.",
+      "when": [
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "A slow start under a new coach deserves time.",
+      "when": [
+        "LOSING_STREAK",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "This team is part of the community's recovery after every storm.",
+      "when": [
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "speaks of the team as part of the city",
+    "defends longtime executives against fan criticism"
+  ],
+  "want": "Keep the Saints winning and rooted in New Orleans for generations (medium).",
+  "fear": "Fans turning on the organization she has kept loyal to (medium).",
+  "voice": "Gracious, faith-tinged and community-minded, firm when defending her people. Short statements that center the city and the fans.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NO",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://nbcsports.com/nfl/profootballtalk/rumor-mill/news/gayle-benson-on-dennis-allen-this-decision-is-something-i-felt-we-needed-to-make",
+      "publisher": "ProFootballTalk",
+      "published": "2024-11-04",
+      "accessed": "2026-11-06",
+      "summary": "Benson fired Dennis Allen after a 2-7 start, saying it was a decision she felt the team needed to make; reports said GM Mickey Loomis was against it.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nfl.com/news/kellen-moore-saints-eagles-oc-accepts-head-coaching-job",
+      "publisher": "NFL.com",
+      "published": "2025-02-11",
+      "accessed": "2026-11-06",
+      "summary": "New Orleans hired Eagles OC Kellen Moore after a search led by Loomis, whom Benson kept.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.thescore.com/nfl/news/2194251",
+      "publisher": "theScore",
+      "published": "2021-09-01",
+      "accessed": "2026-11-06",
+      "summary": "Benson donated $1 million to Hurricane Ida relief in the Gulf Coast.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

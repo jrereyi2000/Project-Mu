@@ -1,0 +1,130 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:PHI",
+  "name": "Jeffrey Lurie",
+  "role": "OWNER",
+  "team": "PHI",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "PHI",
+    "name": "Jeffrey Lurie"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "PATIENT_BUILDER",
+    "MEDDLER",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1",
+      "E2"
+    ],
+    "MEDDLER": [
+      "E2"
+    ],
+    "LOYAL": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A late-season collapse is not a reason to discard a coach who has won; it is a reason to change the staff around him.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "I think we have the best general manager in football, and he will be here a long time.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "I sit in on choosing the coordinators when the plan needs fixing.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "The middle of a title run is not the time to talk contracts.",
+      "when": [
+        "CAP",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "We are aggressive about our window every year.",
+      "when": [
+        "CONTENDER",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A coach's plan for the future matters more to me than one bad month.",
+      "when": [
+        "STRUGGLING"
+      ]
+    }
+  ],
+  "signatures": [
+    "explains big decisions at the owners meetings",
+    "praises his general manager in superlatives"
+  ],
+  "want": "Keep the Eagles a perennial contender after another championship (medium).",
+  "fear": "Letting a title window close through complacency (medium).",
+  "voice": "Thoughtful and articulate, a film producer's ease with narrative. Defends patience with reasoning and avoids timelines; brief on contract matters.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "PHI",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.inquirer.com/eagles/eagles-nick-sirianni-jeffrey-lurie-exit-meeting-hot-seat-20240118.html",
+      "publisher": "The Philadelphia Inquirer",
+      "published": "2024-01-18",
+      "accessed": "2026-11-06",
+      "summary": "Covers the exit meetings after the 2023 collapse that ended with Lurie keeping Nick Sirianni.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nbcsportsphiladelphia.com/nfl/philadelphia-eagles/jeffrey-lurie-keep-nick-sirianni-2023-collapse-nfl-owners-meetings/573506/",
+      "publisher": "NBC Sports Philadelphia",
+      "published": "2024-03-25",
+      "accessed": "2026-11-06",
+      "summary": "At the owners meetings Lurie explained keeping Sirianni after losing five of six following a 10-1 start; he and Howie Roseman handpicked new coordinators, and he called Roseman the best GM in football.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

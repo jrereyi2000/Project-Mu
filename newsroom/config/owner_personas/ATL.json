@@ -1,0 +1,134 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:ATL",
+  "name": "Arthur Blank",
+  "role": "OWNER",
+  "team": "ATL",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "ATL",
+    "name": "Arthur Blank"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 7,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "warmth": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "HEADLINE_HUNTER",
+    "HANDS_OFF",
+    "PEACEMAKER"
+  ],
+  "trait_evidence": {
+    "HEADLINE_HUNTER": [
+      "E1",
+      "E2"
+    ],
+    "HANDS_OFF": [
+      "E2"
+    ],
+    "PEACEMAKER": [
+      "E1"
+    ]
+  },
+  "views": [
+    {
+      "text": "A franchise legend running football and a proven head coach is a fresh start the fans can believe in.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "I can have great affection for people and still decide we need new leadership.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "My football president makes the coaching hire; I set the vision and the values.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Two straight seasons near .500 is not acceptable for this franchise.",
+      "when": [
+        "STRUGGLING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "The quarterback investment has to pay off on the field.",
+      "when": [
+        "QB",
+        "CAP"
+      ]
+    },
+    {
+      "text": "A great stadium and great fan experience should come with a winning team.",
+      "when": [
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "thanks departing coaches warmly in his statements",
+    "talks about values and the fan experience"
+  ],
+  "want": "A first Super Bowl title for Atlanta in his lifetime (medium).",
+  "fear": "Running out of time without a championship (medium).",
+  "voice": "Gracious and values-driven, a retail founder's talk of people and culture. Kind to the people he lets go, firm about the result.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "ATL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.wrdw.com/2026/01/05/atlanta-falcons-fire-head-coach-raheem-morris-gm-terry-fontenot/",
+      "publisher": "WRDW",
+      "published": "2026-01-05",
+      "accessed": "2026-11-06",
+      "summary": "Blank fired coach Raheem Morris and GM Terry Fontenot hours after an 8-9 finale, expressing affection for both; Matt Ryan became president of football and Greg Beadles replaced Rich McKay as CEO.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.wrdw.com/2026/01/18/atlanta-falcons-hire-kevin-stefanski-new-head-coach/",
+      "publisher": "WRDW",
+      "published": "2026-01-18",
+      "accessed": "2026-11-06",
+      "summary": "Atlanta hired former Browns coach Kevin Stefanski; reports credit Ryan's football operation with making the hire.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

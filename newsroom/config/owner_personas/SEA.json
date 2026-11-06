@@ -1,0 +1,121 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:SEA",
+  "name": "Neeru Khosla",
+  "role": "OWNER",
+  "team": "SEA",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "SEA",
+    "name": "Neeru Khosla"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "DEEP_POCKETS",
+    "ANALYTICS_BELIEVER",
+    "HANDS_OFF"
+  ],
+  "trait_evidence": {
+    "DEEP_POCKETS": [
+      "E1"
+    ],
+    "ANALYTICS_BELIEVER": [
+      "E3"
+    ],
+    "HANDS_OFF": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "You do not tear apart a champion; the best thing a new owner can do is not interfere.",
+      "when": [
+        "FRONT_OFFICE",
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "A record price is a statement of how much this franchise is worth to us.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Good management got this team to a Super Bowl; they keep the football decisions.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "Bets on talent and ideas pay off over decades, not seasons.",
+      "when": [
+        "YOUTH",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "The stadium question can wait until we understand the place.",
+      "when": [
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A family ownership should think in generations.",
+      "when": [
+        "HISTORY"
+      ]
+    }
+  ],
+  "signatures": [
+    "frames the team as a long-term family investment",
+    "praises the existing management first"
+  ],
+  "want": "Keep a champion on top while setting up the franchise for generations (medium).",
+  "fear": "Being the new owners who break what was working (medium).",
+  "voice": "Entrepreneurial and long-view, comfortable with venture-capital ideas of risk and talent. New to football and humble about it in public.",
+  "ties": [],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://kmph.com/news/nation-world/new-owners-of-the-seattle-seahawks-nfl-owners-unanimously-approve-voted-on-the-sale-of-seahawks-to-khosla-family-allen-estate",
+      "publisher": "KMPH",
+      "published": "2026-08-26",
+      "accessed": "2026-11-06",
+      "summary": "NFL owners unanimously approved the Paul G. Allen Trust's sale of the Seahawks to the Khosla family for about $9.6 billion, a record; Neeru Khosla is the controlling owner, Vinod chair, son Neal in a major role.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://sports.mynorthwest.com/nfl/seattle-seahawks/khosla-led-group-seen-as-good-match-seattle-seahawks-culture",
+      "publisher": "MyNorthwest",
+      "published": "2026-08-27",
+      "accessed": "2026-11-06",
+      "summary": "Coverage of the Khosla group as a fit for the Seahawks' culture, with GM John Schneider and coach Mike Macdonald expected to keep running football.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://komonews.com/sports/seahawks/entrepreneurial-khosla-family-bring-unique-ownership-background-to-seahawks",
+      "publisher": "KOMO News",
+      "published": "2026-08-26",
+      "accessed": "2026-11-06",
+      "summary": "Profiles the family's venture-capital and technology background and what it may bring to the ownership.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Brand-new owners: the Khosla family's purchase was approved 2026-08-26 and closed days before the opener. Neeru Khosla is the controlling owner per the NFL; Vinod Khosla (chair) is the family's public voice. Their introductory press conference (2026-09-09) is after the source cutoff and is not used. E2 and E3 dates are taken from the late-August news cycle. JR to confirm which Khosla the persona should be."
+  }
+}

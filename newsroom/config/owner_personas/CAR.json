@@ -1,0 +1,144 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:CAR",
+  "name": "David Tepper",
+  "role": "OWNER",
+  "team": "CAR",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "CAR",
+    "name": "David Tepper"
+  },
+  "sliders": {
+    "temperament": 8,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 8
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E1"
+    ],
+    "drive": [
+      "E1"
+    ]
+  },
+  "traits": [
+    "MEDDLER",
+    "HEADLINE_HUNTER",
+    "DEEP_POCKETS"
+  ],
+  "trait_evidence": {
+    "MEDDLER": [
+      "E1"
+    ],
+    "HEADLINE_HUNTER": [
+      "E1",
+      "E2"
+    ],
+    "DEEP_POCKETS": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "If a coach is not getting it done, I will not wait out the season.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "Drafting a quarterback first overall was the right call, and I will defend it.",
+      "when": [
+        "QB",
+        "DRAFT"
+      ]
+    },
+    {
+      "text": "I give a new coach control of his staff, and I expect results quickly.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The stadium and the city deserve investment, and I will put my own money in.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "People call me impatient; I call it refusing to accept losing.",
+      "when": [
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "I bring my own people in to run things the way I want.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    }
+  ],
+  "signatures": [
+    "fires coaches during the season",
+    "reacts emotionally in the stands"
+  ],
+  "want": "Turn the Panthers into a consistent winner worthy of his investment (medium).",
+  "fear": "Being seen as the reason the franchise keeps failing (medium).",
+  "voice": "Blunt, competitive and impatient, a hedge-fund trader's directness. Defends his decisions combatively and shows his frustration openly.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.cbssports.com/nfl/news/frank-reich-fired-by-panthers-but-carolinas-owner-david-tepper-remains-the-bigger-issue",
+      "publisher": "CBS Sports",
+      "published": "2023-11-27",
+      "accessed": "2026-11-06",
+      "summary": "After Tepper fired Frank Reich 11 games into his first season, CBS argued the owner was the bigger issue, citing reports of meddling and a pattern of mid-season firings.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.bostonglobe.com/2024/01/25/sports/panthers-coach-dave-canales/",
+      "publisher": "The Boston Globe",
+      "published": "2024-01-25",
+      "accessed": "2026-11-06",
+      "summary": "Carolina hired Dave Canales, the seventh head coach (including interims) since Tepper bought the team in 2018.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://abc11.com/post/panthers-tepper-invests-another-500m-stadium-renovation/19562638/",
+      "publisher": "ABC11",
+      "published": "2026-07-23",
+      "accessed": "2026-11-06",
+      "summary": "Tepper committed another $500 million to the Bank of America Stadium renovation, bringing the total to about $1.3 billion.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:GB",
+  "name": "Ed Policy",
+  "role": "OWNER",
+  "team": "GB",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "GB",
+    "name": "Ed Policy"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "PATIENT_BUILDER",
+    "HANDS_OFF",
+    "DEEP_POCKETS"
+  ],
+  "trait_evidence": {
+    "PATIENT_BUILDER": [
+      "E1"
+    ],
+    "HANDS_OFF": [
+      "E3"
+    ],
+    "DEEP_POCKETS": [
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A late-season skid does not undo years of good work; we extend the people who built this.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "My general manager brings me the big trades; I support him and stay informed.",
+      "when": [
+        "TRADE",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A rare player is worth the price when the opportunity comes.",
+      "when": [
+        "TRADE",
+        "CAP"
+      ]
+    },
+    {
+      "text": "We answer to our shareholders and our town, not to a single owner's whims.",
+      "when": [
+        "FRONT_OFFICE",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "Drafting and developing is still the Packers way.",
+      "when": [
+        "DRAFT",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Contending every year is the expectation in Green Bay.",
+      "when": [
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "announces leadership extensions himself",
+    "speaks for a publicly owned club rather than an owner"
+  ],
+  "want": "Keep the publicly owned Packers a perennial contender under his presidency (medium).",
+  "fear": "Being the president when the Packers' long run of stability ends (medium).",
+  "voice": "Lawyerly, measured and institutional. Speaks for the club and its shareholders, credits his football leaders and avoids personal flourishes.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "GB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://fox11online.com/sports/packers-and-nfl/ed-policy-announces-extensions-for-packers-top-front-office-and-coaching-leaders-green-bay-brian-gutekunst-matt-lafleur-russ-ball-nfl-coach-manager",
+      "publisher": "FOX 11",
+      "published": "2026-01-29",
+      "accessed": "2026-11-06",
+      "summary": "Policy announced extensions for coach Matt LaFleur, GM Brian Gutekunst and executive VP Russ Ball despite the season ending with five straight losses.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.espn.ph/nfl/story/_/id/46108320/parsons-expresses-relief-excitement-fresh-start-packers",
+      "publisher": "ESPN",
+      "published": "2025-08-29",
+      "accessed": "2026-11-06",
+      "summary": "Green Bay traded two first-round picks and Kenny Clark for Micah Parsons and gave him a four-year, $188 million extension.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.espnlacrosse.com/?p=102203",
+      "publisher": "ESPN La Crosse",
+      "published": "2025-08-29",
+      "accessed": "2026-11-06",
+      "summary": "Reports Policy was supportive and kept informed of the Parsons pursuit but was not the one who drove it.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check. Green Bay is publicly owned; this is the team president (Ed Policy, president and CEO from July 2025), not an owner."
+  }
+}

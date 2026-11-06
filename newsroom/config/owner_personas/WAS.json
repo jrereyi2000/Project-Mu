@@ -1,0 +1,139 @@
+{
+  "schema_version": "owner-profile-v1",
+  "key": "owner:WAS",
+  "name": "Josh Harris",
+  "role": "OWNER",
+  "team": "WAS",
+  "seed_ref": {
+    "table": "OWNERS_DATA",
+    "team": "WAS",
+    "name": "Josh Harris"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {},
+  "traits": [
+    "HANDS_OFF",
+    "PATIENT_BUILDER",
+    "DEEP_POCKETS"
+  ],
+  "trait_evidence": {
+    "HANDS_OFF": [
+      "E1",
+      "E2"
+    ],
+    "PATIENT_BUILDER": [
+      "E1"
+    ],
+    "DEEP_POCKETS": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Hire the general manager first, let him pick the coach, then step out of the way.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A culture coach and a smart front office matter more than a splashy free agent.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A young quarterback is the foundation; everything is built to protect him.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Breaking from the franchise's past takes more than one good season.",
+      "when": [
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "My partners give input, but the structure is clear: personnel runs through the general manager.",
+      "when": [
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "A playoff run is the start of the work, not the finish.",
+      "when": [
+        "PLAYOFFS",
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "describes decisions as a process with experts",
+    "talks about the stadium and the fan experience"
+  ],
+  "want": "Build Washington into a model franchise after the previous era (medium).",
+  "fear": "Sliding back into the old dysfunction (medium).",
+  "voice": "Calm, polished and corporate, a private-equity vocabulary of process and talent. Shares credit with partners and staff and avoids football specifics.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "WAS",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.si.com/nfl/magic-johnson-celebrates-commanders-playoff-win",
+      "publisher": "Sports Illustrated",
+      "published": "2025-01-13",
+      "accessed": "2026-11-06",
+      "summary": "Co-owner Magic Johnson credited the new ownership's plan: pick coach Dan Quinn and GM Adam Peters and then step out of the way.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/adam-peters-agreed-to-five-year-deal-with-commanders",
+      "publisher": "ProFootballTalk",
+      "published": "2024-01-12",
+      "accessed": "2026-11-06",
+      "summary": "Harris hired Adam Peters as GM on a five-year deal first; the head coach would report to Peters.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://kmph.com/news/nation-world/new-owners-of-the-seattle-seahawks-nfl-owners-unanimously-approve-voted-on-the-sale-of-seahawks-to-khosla-family-allen-estate",
+      "publisher": "KMPH",
+      "published": "2026-08-26",
+      "accessed": "2026-11-06",
+      "summary": "Notes the Commanders' $6.05 billion purchase was the NFL record price before the Seahawks sale.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": "Thin coverage: two to four sources found by web search (2026-11-06); sliders mostly left at 5; a few publication dates are taken from the news cycle the article covers. Draft for JR to check."
+  }
+}
