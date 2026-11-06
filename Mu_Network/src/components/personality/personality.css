@@ -1,0 +1,67 @@
+/* Personality panel and editor (components/personality/; docs/in_progress/PERSONALITY_DISPLAY_PLAN.md §2.2).
+   The site's paper / ink / team-colour tokens (index.css :root); works at phone width. */
+.pp-panel { margin-top: 40px; padding: 22px; background: var(--white); border-top: 3px solid var(--team-color, var(--ink)); box-shadow: 0 10px 30px #11111109; }
+.pp-panel.pp-compact { margin-top: 12px; padding: 12px 0 0; border-top: 1px solid var(--gray-100); box-shadow: none; background: transparent; }
+.pp-title { margin: 0 0 14px; font: 800 18px var(--font-sans); letter-spacing: -.02em; text-transform: uppercase; }
+.pp-state { margin: 0; color: var(--gray-500); font: 600 11px var(--font-mono); }
+
+.pp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.pp-head:empty { display: none; }
+.pp-mood { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-mood-tag { padding: 3px 8px; border-radius: 10px; color: var(--gray-500); background: var(--gray-100); font: 700 9px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+.pp-mood-tag.primary { color: var(--white); background: var(--ink); }
+.pp-trade { padding: 3px 8px; border-radius: 3px; color: var(--white); background: var(--red); font: 700 9px var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+.pp-trade.stale { background: var(--gray-500); }
+.pp-edit { margin-left: auto; height: 28px; padding: 0 12px; border: 2px solid var(--ink); color: var(--ink); background: var(--white); font: 700 9px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.pp-edit:hover:not(:disabled), .pp-edit.primary:not(:disabled) { color: var(--white); background: var(--ink); }
+.pp-edit:disabled { opacity: .4; cursor: default; }
+
+.pp-sliders { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.pp-slider { display: grid; grid-template-columns: 96px 110px 1fr; align-items: center; gap: 12px; }
+.pp-slider-name { color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.pp-bar { height: 6px; background: var(--gray-100); overflow: hidden; }
+.pp-bar i { display: block; height: 100%; background: var(--team-color, var(--ink)); }
+.pp-sentence { font: 500 12px/1.4 var(--font-sans); color: var(--ink); }
+.pp-sentence.muted { color: var(--gray-300); font-style: italic; }
+
+.pp-traits { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-chip { position: relative; display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border: 1px solid var(--gray-100); border-radius: 13px; color: var(--ink); background: var(--white); font: 700 9px var(--font-mono); letter-spacing: .04em; text-transform: uppercase; cursor: default; }
+button.pp-chip { cursor: pointer; }
+button.pp-chip:disabled { color: var(--gray-300); background: var(--paper); cursor: not-allowed; }
+.pp-chip.on { color: var(--white); background: var(--ink); border-color: var(--ink); }
+.pp-tip { display: none; position: absolute; left: 0; top: calc(100% + 6px); z-index: 5; width: max-content; max-width: min(280px, 80vw); padding: 8px 10px; color: var(--white); background: var(--ink); font: 500 11px/1.4 var(--font-sans); letter-spacing: 0; text-transform: none; }
+.pp-chip:hover .pp-tip, .pp-chip:focus .pp-tip { display: block; }
+
+.pp-line { margin: 14px 0 0; font: 500 12px var(--font-sans); }
+.pp-block { margin-top: 16px; }
+.pp-block h4 { margin: 0 0 6px; color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.pp-list { margin: 0; padding-left: 16px; font: 500 12px/1.5 var(--font-sans); }
+.pp-list a { color: var(--ink); font-weight: 700; text-decoration: underline; text-decoration-color: var(--gray-300); }
+.pp-list a:hover { color: var(--team-color, var(--red)); }
+
+/* Editor */
+.pe-editor h4 { margin: 0 0 10px; font: 800 13px var(--font-sans); text-transform: uppercase; }
+.pe-sliders { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 16px; }
+.pe-sliders li { display: flex; align-items: center; gap: 8px; }
+.pe-name { flex: 1; color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.pe-sliders button { width: 32px; height: 32px; border: 1px solid var(--gray-300); background: var(--white); font: 700 14px var(--font-mono); cursor: pointer; }
+.pe-sliders button:disabled { opacity: .35; cursor: default; }
+.pe-sliders output { width: 22px; text-align: center; font: 700 13px var(--font-mono); }
+.pe-total { margin: 10px 0 0; font: 700 10px var(--font-mono); color: var(--gray-500); }
+.pe-total.bad { color: var(--red); }
+.pe-traits { margin-top: 16px; }
+.pe-label { display: block; margin-bottom: 6px; color: var(--gray-500); font: 700 8px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.pe-selected, .pe-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.pe-picker { margin-top: 10px; max-height: 220px; overflow-y: auto; padding: 8px; background: var(--paper); }
+.pe-reason { display: block; margin-top: 16px; }
+.pe-reason input { width: 100%; box-sizing: border-box; height: 36px; padding: 0 10px; border: 1px solid var(--gray-300); font: 500 13px var(--font-sans); }
+.pe-msg { margin: 10px 0 0; color: var(--red); font: 600 11px var(--font-mono); }
+.pe-actions { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; }
+.pe-actions .pp-edit { margin-left: 0; }
+
+@media (max-width: 640px) {
+  .pp-panel { padding: 16px; }
+  .pp-slider { grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+  .pp-sentence { grid-column: 1 / -1; }
+  .pe-sliders { grid-template-columns: 1fr; }
+}
