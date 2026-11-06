@@ -1,0 +1,184 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:SF:DC",
+  "name": "Nick Sorensen",
+  "role": "DC",
+  "team": "SF",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "SF",
+    "role": "DC",
+    "name": "Nick Sorensen"
+  },
+  "sliders": {
+    "temperament": 4,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 6
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E4"
+    ],
+    "warmth": [
+      "E2"
+    ],
+    "drive": [
+      "E3",
+      "E5"
+    ]
+  },
+  "traits": [
+    "PERFECTIONIST",
+    "PLAYERS_COACH",
+    "OLD_SCHOOL"
+  ],
+  "trait_evidence": {
+    "PERFECTIONIST": [
+      "E4",
+      "E5"
+    ],
+    "PLAYERS_COACH": [
+      "E2",
+      "E3"
+    ],
+    "OLD_SCHOOL": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "The offense protects the ball and the defense takes it away; that message belongs to the whole team.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Play fast and attack: speed, violence and finish are the foundation.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "The only measure that matters is whether the team won; a loss means the defense fell short.",
+      "when": [
+        "BAD_GAME",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "A first-time coordinator figures it out as he goes, and owns his part in the struggles.",
+      "when": [
+        "COACHING",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Opponents know what you run, so run it better and add a few wrinkles.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Newer players grow into their roles over a season; the standard does not change for them.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    }
+  ],
+  "signatures": [
+    "answers criticism by pointing back to the next week's work",
+    "says he is harder on himself than any outside critic could be"
+  ],
+  "want": "to restore the 49ers defense to its dominant standard as a former player who rose through the building",
+  "fear": "that one injury-hit season as play-caller ends his chance to coordinate a defense",
+  "voice": "Calm, direct and matter-of-fact, a former safety who talks in short, practical sentences. He measures himself by wins, owns his part in losses and does not argue with critics. Players describe a respected leader in the room.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E2",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Fred Warner",
+        "team_2026": "SF"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E3"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.wsls.com/sports/2024/03/02/49ers-promote-sorensen-to-dc-and-hire-staley-as-an-assistant-ap-source-says/",
+      "publisher": "Associated Press via WSLS",
+      "published": "2024-03-02",
+      "accessed": "2026-11-05",
+      "summary": "Promotion report: joined in 2022, coached linebackers while a colleague had cancer, ran the pass defense and nickel group and weekly turnover meetings; earlier special teams in Jacksonville and eight years in Seattle; a Virginia Tech quarterback turned ten-year NFL defensive back. Background.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/49ers/why-49ers-promoted-nick-sorensen-defensive-coordinator",
+      "publisher": "Sports Illustrated (49ers On SI), Jose Sanchez",
+      "published": "2024-03-27",
+      "accessed": "2026-11-05",
+      "summary": "Shanahan cites his scheme knowledge, players' comfort with him from weekly team talks, and readiness; the writer thinks locker-room rapport drove the choice and that Staley's hiring is a safeguard. Mixed sourcing.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/40186438/49ers-hope-defensive-coordinator-nick-sorensen-make-defense-elite",
+      "publisher": "ESPN, Nick Wagoner",
+      "published": "2024-05-21",
+      "accessed": "2026-11-05",
+      "summary": "He wants an attacking defense built on speed, violence and finish, describes the shift to running a whole staff, and is known for the team-wide ball-security meeting; Warner expects him to do excellent work. Beat feature.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.nbcsportsbayarea.com/nfl/san-francisco-49ers/nick-sorensen-outside-scrutiny-loss-season/1808566/",
+      "publisher": "NBC Sports Bay Area, Matt Maiocco",
+      "published": "2024-11-29",
+      "accessed": "2026-11-05",
+      "summary": "Amid criticism he says he focuses on the next week, judges his work only by wins, and sees newer players growing; tone calm and direct. His words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.espn.com.au/nfl/story/_/id/43328800/nick-sorensen-49ers-defensive-coordinator-source-says",
+      "publisher": "ESPN, Nick Wagoner",
+      "published": "2025-01-08",
+      "accessed": "2026-11-05",
+      "summary": "Removed as coordinator after one season (29th in scoring defense, 116 points allowed in three closing losses), with the team hoping to keep him in another role; he says he was figuring it out as he went and is harder on himself than anyone. Results plus his words.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

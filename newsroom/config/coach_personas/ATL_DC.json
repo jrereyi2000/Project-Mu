@@ -1,0 +1,181 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:ATL:DC",
+  "name": "Jimmy Lake",
+  "role": "DC",
+  "team": "ATL",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "ATL",
+    "role": "DC",
+    "name": "Jimmy Lake"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 5,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "openness": [
+      "E3"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "SCHEME_NERD",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E3",
+      "E5"
+    ],
+    "LOYAL": [
+      "E1",
+      "E2"
+    ]
+  },
+  "views": [
+    {
+      "text": "A defense should confuse the offense and still be simple for the players who run it.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "Before installing a call, ask whether you could process it yourself standing in the player's spot.",
+      "when": [
+        "SCHEME",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Build the system one piece at a time; master each install before stacking the next.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Keep the words veterans already know, so they spend their energy reacting instead of relearning.",
+      "when": [
+        "PLAYER",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "The secondary is where games are won or lost against modern passing offenses.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "In spring the offense has the edge; the defense catches up when the pads come on.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "describes his calls from the player's point of view rather than the chalkboard's",
+    "measures progress by install stages rather than wins in the offseason"
+  ],
+  "want": "to prove, as a first-time NFL play-caller, that the defenses he built in college translate to the pro game",
+  "fear": "that a second short tenure after Washington defines him as a coach who cannot finish the job",
+  "voice": "Low-key and practical, he talks about teaching and simplicity more than about himself. He explains concepts in plain steps and stays upbeat about effort in the spring. Coverage of him is thin, so most of his public voice comes from team-site interviews.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "ATL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E2"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://atlantafalcons.com/news/jimmy-lake-named-falcons-defensive-coordinator-rams-washington-huskies",
+      "publisher": "Atlanta Falcons (atlantafalcons.com), Tori McElhaney",
+      "published": "2024-01-29",
+      "accessed": "2026-11-05",
+      "summary": "Hiring story: began in the NFL in 2007 as an assistant DB coach under Morris in Tampa Bay, returned when Morris became head coach, then spent about ten years in college, rising at Washington from DB coach to coordinator and head coach (7-6, let go in 2021) before joining McVay's Rams in 2023. No quotes on style.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://sportstalkatl.com/raheem-morris-talks-falcons-first-time-play-calling-coordinators",
+      "publisher": "SportsTalk ATL (staff)",
+      "published": "2024-02-14",
+      "accessed": "2026-11-05",
+      "summary": "Morris states full confidence in Lake as a first-time NFL play-caller and points to their long shared history from Tampa Bay. Morris's view, not Lake's.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.atlantafalcons.com/news/jimmy-lake-defensive-coordinator-2024-update",
+      "publisher": "Atlanta Falcons (atlantafalcons.com), Terrin Waack",
+      "published": "2024-05-23",
+      "accessed": "2026-11-05",
+      "summary": "Lake wants a defense that confuses offenses but is easy for players, tests each call by imagining himself in a player's place, installs gradually, keeps carried-over terminology for veterans, and expects defense to catch up once pads arrive. His own stated method.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.cbssports.com/nfl/news/falcons-fire-defensive-coordinator-jimmy-lake-after-one-season-in-atlanta/",
+      "publisher": "CBS Sports, Tyler Sullivan",
+      "published": "2025-01-11",
+      "accessed": "2026-11-05",
+      "summary": "Atlanta dismisses Lake and line coach Jay Rodgers after one season; Morris calls it necessary after a review. The defense was in the bottom third in points and yards and allowed 37 per game in a late two-game skid. Results only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.spokesman.com/stories/2025/jan/11/falcons-fire-north-central-high-ewu-grad-jimmy-lak",
+      "publisher": "The Spokesman-Review (AJC report by D. Orlando Ledbetter)",
+      "published": "2025-01-11",
+      "accessed": "2026-11-05",
+      "summary": "Career recap for his hometown paper: Eastern Washington DB and coach, NFL DB jobs, Boise State, then Washington where his 2018 play-calling defense led the Pac-12; head coach for two seasons before a buyout; 2024 was his first NFL season calling plays and Atlanta went 8-9. Factual record.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

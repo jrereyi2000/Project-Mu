@@ -1,0 +1,279 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:SEA:HC",
+  "name": "Mike Macdonald",
+  "role": "HC",
+  "team": "SEA",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "SEA",
+    "role": "HC",
+    "name": "Mike Macdonald"
+  },
+  "sliders": {
+    "temperament": 3,
+    "sociability": 5,
+    "confidence": 7,
+    "openness": 7,
+    "warmth": 5,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E7",
+      "E8"
+    ],
+    "confidence": [
+      "E1",
+      "E6"
+    ],
+    "openness": [
+      "E8"
+    ],
+    "drive": [
+      "E5",
+      "E6"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "DISCIPLINARIAN",
+    "MEASURED"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E5"
+    ],
+    "DISCIPLINARIAN": [
+      "E5"
+    ],
+    "MEASURED": [
+      "E7"
+    ]
+  },
+  "views": [
+    {
+      "text": "Be physical and explosive, and build around the players you actually have.",
+      "when": [
+        "SCHEME",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "You build around the quarterback; there is no other way.",
+      "when": [
+        "QB",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Make it right: own the mistake and fix it rather than explaining it away.",
+      "when": [
+        "BAD_GAME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A head coach should point out his own flaws first so players feel safe admitting theirs.",
+      "when": [
+        "COACHING",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "When the offense drifts from the vision, you change direction, even after one season.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "NFL play-calling experience is not the first thing to look for in a coordinator; alignment is.",
+      "when": [
+        "COACHING",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "Defense is about being adaptable and aggressive in how you get there.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Keep the routine the same no matter how big the week gets.",
+      "when": [
+        "PLAYOFFS",
+        "CONTENDER"
+      ]
+    }
+  ],
+  "signatures": [
+    "keeps the specifics of staff decisions private while explaining the reasoning in general terms",
+    "brings outside help like a performance coach in to review his own team meetings",
+    "fills the building with slogans and reminders of the team's wins"
+  ],
+  "want": "to prove the league's youngest head coach can build a physical, connected contender in Seattle on his own terms",
+  "fear": "that his analytical, nerdy style fails to reach players when the season turns hard",
+  "voice": "Calm, precise and analytical; he talks in measured sentences about alignment, vision and process and rarely raises his voice. He is candid about his own mistakes but keeps private matters private. His humor is dry and sometimes misses, which players find endearing.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "SEA",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "SEA",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E6",
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "BAL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAC",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Leonard Williams",
+        "team_2026": "SEA"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.seahawks.com/news/updates-from-mike-macdonald-s-february-1-press-conference",
+      "publisher": "Seattle Seahawks (seahawks.com), John Boyle and Graham Kinsinger",
+      "published": "2024-02-01",
+      "accessed": "2026-11-05",
+      "summary": "At his introduction he wants a physical, explosive team built on its roster, will call defensive plays at first, will not imitate Carroll but be authentic, builds around the quarterback, and thanks the Ravens front office and both Harbaughs. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.si.com/nfl/seahawks/news/seattle-seahawks-aden-durde-mike-macdonald-coach-hire-dallas-cowboys-dan-quinn",
+      "publisher": "Sports Illustrated (All Seahawks), Corbin K. Smith",
+      "published": "2024-02-13",
+      "accessed": "2026-11-05",
+      "summary": "He explains hiring Durde: strong record and peer recommendations, a shared view of defending modern offenses, and an excellent in-person interview; jokes the accent helped. His words.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.seahawks.com/news/5-things-to-know-about-new-seahawks-defensive-coordinator-aden-durde",
+      "publisher": "Seattle Seahawks (seahawks.com), Maliik Obee",
+      "published": "2024-02-14",
+      "accessed": "2026-11-05",
+      "summary": "Profile of Durde in which Macdonald says Durde came highly recommended and impressed him with a similar defensive view. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.spokesman.com/stories/2024/feb/17/how-aden-durdes-unusual-role-with-seahawks-follows",
+      "publisher": "The Spokesman-Review",
+      "published": "2024-02-17",
+      "accessed": "2026-11-05",
+      "summary": "Macdonald will call the defense himself, leaving Durde's role to be built over time; Macdonald may hand off play-calling eventually. Shows the arrangement.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://africa.espn.com/nfl/story/_/id/41423786/how-seahawks-head-coach-mike-macdonald-became-pete-carroll-successor",
+      "publisher": "ESPN, Brady Henderson",
+      "published": "2024-09-30",
+      "accessed": "2026-11-05",
+      "summary": "Profile: Georgia finance graduate, nine of 14 seasons on John Harbaugh's Ravens staff, Michigan DC under Jim Harbaugh in 2021; players call him very smart and nerdy, friendly though his jokes miss, direct and demanding, with a make-it-right accountability motto unlike Carroll's leniency.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/43310535/sources-seahawks-fire-oc-ryan-grubb-one-season",
+      "publisher": "ESPN, Brady Henderson",
+      "published": "2025-01-06",
+      "accessed": "2026-11-05",
+      "summary": "A day after a 10-7 season without playoffs he fires OC Grubb, saying the offense drifted from his vision; passing was eighth but rushing 28th; Geno Smith defends Grubb. Shows a decisive staff move.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.yahoo.com/news/coach-words-why-mike-macdonald-003551463.html",
+      "publisher": "The News Tribune (Tacoma), Gregg Bell, via Yahoo",
+      "published": "2025-01-08",
+      "accessed": "2026-11-05",
+      "summary": "He explains the Grubb decision as alignment and vision, credits the offense for good things, keeps details private, and lists what he wants: a physical, controlling offense, a fast quarterback and a fixed line. Reporter calls him measured and respectful.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://africa.espn.com/nfl/story/_/id/47339227/seattle-seahawks-mission-bs-culture-nfc-west-los-angeles-rams",
+      "publisher": "ESPN, Brady Henderson",
+      "published": "2025-12-18",
+      "accessed": "2026-11-05",
+      "summary": "Culture feature in an 11-3 season: he redecorated the building with images of team wins and slogans, brought in a performance psychologist and a former kicker to review his meetings, and admits his mistakes; Leonard Williams says that openness makes players comfortable. Beat feature.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

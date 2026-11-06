@@ -1,0 +1,185 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LAR:DC",
+  "name": "Chris Shula",
+  "role": "DC",
+  "team": "LAR",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "LAR",
+    "role": "DC",
+    "name": "Chris Shula"
+  },
+  "sliders": {
+    "temperament": 2,
+    "sociability": 5,
+    "confidence": 5,
+    "openness": 7,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "temperament": [
+      "E4",
+      "E5"
+    ],
+    "openness": [
+      "E4"
+    ],
+    "warmth": [
+      "E4"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "YOUTH_DEVELOPER",
+    "TEACHER"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E3",
+      "E4"
+    ],
+    "YOUTH_DEVELOPER": [
+      "E4",
+      "E5"
+    ],
+    "TEACHER": [
+      "E3"
+    ]
+  },
+  "views": [
+    {
+      "text": "Having coached every level of a defense lets you be a resource to every player on it.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Keep the core principles, but tailor the plan to what the players can execute with confidence.",
+      "when": [
+        "SCHEME",
+        "OFFSEASON"
+      ]
+    },
+    {
+      "text": "A rough early stretch is a time to stay composed and keep believing in the group.",
+      "when": [
+        "LOSING_STREAK",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Give a young pass rush room to build its own packages once it starts winning.",
+      "when": [
+        "YOUTH",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Do the job as yourself; trying to imitate someone else is where coordinators go wrong.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Listen to the players; their feedback makes the plan better.",
+      "when": [
+        "PLAYER",
+        "GAME_REVIEW"
+      ]
+    }
+  ],
+  "signatures": [
+    "sits in on different position meetings instead of watching from above",
+    "talks about trusting his players rather than about his own calls"
+  ],
+  "want": "to show he earned the job on his own merits and build a young Rams defense into a lasting strength",
+  "fear": "that he is seen as the boss's college teammate and a famous grandson rather than a coordinator in his own right",
+  "voice": "Even, unflappable and collaborative; he speaks in measured terms about trust, adaptability and the players' ideas. He rarely sounds rattled by a bad week and credits the room for improvements. He keeps the focus off himself and his family name.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Jared Verse",
+        "team_2026": "CLE"
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/39438351/sources-rams-tab-chris-shula-replace-raheem-morris-dc",
+      "publisher": "ESPN, Sarah Barshop",
+      "published": "2024-02-01",
+      "accessed": "2026-11-05",
+      "summary": "Reports his promotion to replace Morris; he joined McVay's staff in 2017 after two years with the Chargers, was McVay's college teammate at Miami (Ohio) 2004-2007, and is Don Shula's grandson and David Shula's son. Background.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.therams.com/news/rams-promote-chris-shula-to-defensive-coordinator",
+      "publisher": "Los Angeles Rams (therams.com), Stu Jackson",
+      "published": "2024-02-02",
+      "accessed": "2026-11-05",
+      "summary": "Team announcement tracing his Rams roles: linebackers, outside linebackers, defensive backs in 2022, then linebackers and pass-rush coordinator; credits him with Ernest Jones's development. No McVay quote.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/rams-defensive-coordinator-chris-shula-plans-to-use-a-lot-of-the-same-structures",
+      "publisher": "NBC Sports (ProFootballTalk), Myles Simmons",
+      "published": "2024-02-07",
+      "accessed": "2026-11-05",
+      "summary": "He says coaching several position groups lets him be a resource for players, keeps the 3-4 base and principles, calls the plan a work in progress, and wants schemes tailored to what players do well. His words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.therams.com/news/chris-shula-s-trust-and-adaptability-empowering-young-rams-defense",
+      "publisher": "Los Angeles Rams (therams.com), Stu Jackson",
+      "published": "2025-01-17",
+      "accessed": "2026-11-05",
+      "summary": "Feature on his first year: sits in on many meetings, changes schemes as needed, lets the young pass rush build packages, welcomes player feedback, stayed composed through a rough start; McVay calls him steady and unflinching and players praise his trust. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/rams/los-angeles-chris-shula-sean-mcvay-braden-fiske-jared-verse-training-camp",
+      "publisher": "Sports Illustrated (Rams On SI), Zak Gilbert",
+      "published": "2025-08-02",
+      "accessed": "2026-11-05",
+      "summary": "Recounts McVay's talk with Shula after a 1-4 start, which Shula says freed him to make calls without fear; rookies Fiske and Verse then surged. McVay calls him mentally tough. Retold a season later.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

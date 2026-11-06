@@ -1,0 +1,280 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:LAR:HC",
+  "name": "Sean McVay",
+  "role": "HC",
+  "team": "LAR",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "LAR",
+    "role": "HC",
+    "name": "Sean McVay"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 7,
+    "confidence": 5,
+    "openness": 6,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E4",
+      "E5"
+    ],
+    "openness": [
+      "E3",
+      "E8"
+    ],
+    "warmth": [
+      "E1",
+      "E7"
+    ],
+    "drive": [
+      "E3"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "TEACHER",
+    "FILM_ROOM_RAT",
+    "LOYAL"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E2",
+      "E5"
+    ],
+    "TEACHER": [
+      "E5",
+      "E7"
+    ],
+    "FILM_ROOM_RAT": [
+      "E3",
+      "E5"
+    ],
+    "LOYAL": [
+      "E1",
+      "E4"
+    ]
+  },
+  "views": [
+    {
+      "text": "Coaching is a privilege, and it is easy to lose perspective and purpose if you are not careful.",
+      "when": [
+        "COACHING",
+        "LOSING_STREAK"
+      ]
+    },
+    {
+      "text": "A first-year coordinator going through a rough start should lead as himself, not as a copy of anyone.",
+      "when": [
+        "COACHING",
+        "STRUGGLING"
+      ]
+    },
+    {
+      "text": "Treat every season as a fresh start; it builds urgency and appreciation in the building.",
+      "when": [
+        "OFFSEASON",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "The best assistants tell you what you need to hear, not what you want to hear.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Good assistants deserve head jobs, even when losing them hurts.",
+      "when": [
+        "COACHING",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "When you can hand the offense to your coordinator for a day and it runs smoothly, the staff is built right.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "Adversity early in a season shows you who people really are.",
+      "when": [
+        "LOSING_STREAK",
+        "COACHING"
+      ]
+    }
+  ],
+  "signatures": [
+    "praises departing assistants publicly and calls them friends",
+    "talks about his own mistakes in energy and presence with unusual candor",
+    "credits the whole offensive staff after a game he did not fully run"
+  ],
+  "want": "to keep the Rams contending year after year and grow a coaching tree that spreads his way of building a staff",
+  "fear": "that the job's intensity burns him out or that he stops giving players and staff the presence they deserve",
+  "voice": "Fast-talking, intense and full of energy, with a vocabulary of football detail and a habit of praising people by name. He is candid about his own lapses and burnout and speaks warmly of assistants who leave. He does not hide emotion, and he relishes talking scheme.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "ATL",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "LAR",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E6",
+        "E7"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "LAR",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E8"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "ATL",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://www.ajc.com/sports/atlanta-falcons/rams-sean-mcvay-on-raheem-morris-hes-a-big-brother-to-me/NEIX2NAGWFHLXG4DBEMFPHECOU",
+      "publisher": "Atlanta Journal-Constitution, D. Orlando Ledbetter",
+      "published": "2022-02-13",
+      "accessed": "2026-11-05",
+      "summary": "McVay calls his defensive coordinator Morris a big brother, traces their history from Tampa Bay and Washington, and credits Morris for candid advice rather than flattery and for much of the team's success. McVay's own words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.therams.com/news/once-learning-from-sean-mcvay-mike-lafleur-now-gets-to-work-with-him-first-time",
+      "publisher": "Los Angeles Rams (therams.com), Stu Jackson",
+      "published": "2023-02-07",
+      "accessed": "2026-11-05",
+      "summary": "Mike LaFleur recalls visiting Washington's film rooms in 2010-11 to learn from his brother Matt, Kyle Shanahan and McVay, connecting most with McVay; now McVay hires him and keeps calling plays. Shows the shared Washington staff and long friendship.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://africa.espn.com/nfl/story/_/id/38335554/rams-coach-sean-mcvay-ready-considering-retirement",
+      "publisher": "ESPN, Sarah Barshop and Dan Greenspan",
+      "published": "2023-09-06",
+      "accessed": "2026-11-05",
+      "summary": "After a 5-12 season he weighed stepping away, chose to stay, calls the job a privilege, admits he had not always brought the energy and presence he wanted, and treats 2023 as a fresh start; the front office sees him taking more time on decisions. Beat feature with his words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/rams/news/truly-unmatched-los-angeles-rams-sean-mcvay-raheem-morris-head-coach-atlanta-falcons-hire",
+      "publisher": "Sports Illustrated (Rams On SI), John Macon Gillespie",
+      "published": "2024-01-26",
+      "accessed": "2026-11-05",
+      "summary": "McVay's statement on Morris's hiring: a close friend who connects with players and coaches like few others, a natural leader, and he is glad Morris got another head job. Shows his public support of departing staff.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/rams/news/atlanta-falcons-offensive-coordinator-zac-robinson-reflects-head-coach-sean-mcvay-los-angeles-rams",
+      "publisher": "Sports Illustrated (Rams On SI), Anthony Licciardi",
+      "published": "2024-02-16",
+      "accessed": "2026-11-05",
+      "summary": "Former assistant Zac Robinson calls McVay transparent and accessible, credits him for his career start, and singles out his pregame preparation and game-plan structure. A protege's view.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.therams.com/news/chris-shula-s-trust-and-adaptability-empowering-young-rams-defense",
+      "publisher": "Los Angeles Rams (therams.com), Stu Jackson",
+      "published": "2025-01-17",
+      "accessed": "2026-11-05",
+      "summary": "McVay describes coordinator Chris Shula as steady, resilient, mentally tough and unflinching, amid a feature on Shula's adaptable, trusting style with a young defense. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.si.com/nfl/rams/los-angeles-chris-shula-sean-mcvay-braden-fiske-jared-verse-training-camp",
+      "publisher": "Sports Illustrated (Rams On SI), Zak Gilbert",
+      "published": "2025-08-02",
+      "accessed": "2026-11-05",
+      "summary": "After a 1-4 start in 2024 McVay had a candid talk with Shula, told him to lead as himself, and Shula says it showed McVay's trust; McVay says the adversity revealed Shula's character. Recounted a season later.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E8",
+      "url": "https://www.si.com/nfl/rams/onsi/los-angeles-mike-lafleur-saves-day-against-cardinals",
+      "publisher": "Sports Illustrated (Rams On SI), Brock Vierra",
+      "published": "2025-12-09",
+      "accessed": "2026-11-05",
+      "summary": "Ill before a game, McVay hands play-calling to LaFleur, then praises his decisions and the whole offensive staff for keeping it smooth. Fan-network writeup of his remarks.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

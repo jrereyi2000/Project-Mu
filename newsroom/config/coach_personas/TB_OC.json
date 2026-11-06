@@ -1,0 +1,223 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:TB:OC",
+  "name": "Liam Coen",
+  "role": "OC",
+  "team": "TB",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "TB",
+    "role": "OC",
+    "name": "Liam Coen"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 6,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 7
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E1",
+      "E5"
+    ],
+    "confidence": [
+      "E3",
+      "E5"
+    ],
+    "warmth": [
+      "E1"
+    ],
+    "drive": [
+      "E4",
+      "E5"
+    ]
+  },
+  "traits": [
+    "SCHEME_NERD",
+    "QB_WHISPERER",
+    "FAMILY_MAN"
+  ],
+  "trait_evidence": {
+    "SCHEME_NERD": [
+      "E1",
+      "E3"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E4"
+    ],
+    "FAMILY_MAN": [
+      "E1",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Football is about players, not plays; put the ball in your best athletes' hands in ways they trust.",
+      "when": [
+        "SCHEME",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "Be explosive both ways: a run game good enough that the pass looks the same.",
+      "when": [
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "If the deep ball is not there, the offense has other ways to move the ball; do not force it.",
+      "when": [
+        "SCHEME",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "A quarterback plays best when the offense is shaped around what he already does well.",
+      "when": [
+        "QB"
+      ]
+    },
+    {
+      "text": "Winning is a habit you build, not a losing streak you try to avoid.",
+      "when": [
+        "LOSING_STREAK",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "The best buildings are the ones where everyone, top to bottom, is in sync.",
+      "when": [
+        "FRONT_OFFICE",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "A coordinator should want a head job someday, but the work in front of him comes first.",
+      "when": [
+        "COACHING",
+        "OFFSEASON"
+      ]
+    }
+  ],
+  "signatures": [
+    "jokes at his own expense before getting into the details",
+    "credits the Rams years under McVay as his real education",
+    "mentions his father and family when talking about big career choices"
+  ],
+  "want": "to run his own team and prove the Rams-tree offense can build a winning culture from the head chair",
+  "fear": "that the messy way he left Tampa Bay colors how players and coaches see his word",
+  "voice": "Upbeat, self-deprecating and energetic, he jokes easily and talks fast about personnel and run-pass blending. He is relaxed about weaknesses in the offense and credits players and his Rams mentors. On his own ambitions he is candid but says the current job comes first.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E5"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "TB",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E2",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Baker Mayfield",
+        "team_2026": "TB"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E4"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://buccaneers.com/news/tampa-bay-buccaneers-offensive-coordinator-liam-coen-introductory-press-conference-quotes-2-6-24",
+      "publisher": "Tampa Bay Buccaneers (buccaneers.com)",
+      "published": "2024-02-06",
+      "accessed": "2026-11-05",
+      "summary": "Introductory quotes: build the offense around players, aim for balance and explosiveness, credits McVay for teaching run fits and defensive study, recalls one Kentucky season, praises Mayfield's energy, jokes about himself and calls his father his best friend. His own words on the team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.buccaneers.com/news/todd-bowles-new-oc-liam-coen-will-have-play-calling-leeway",
+      "publisher": "Tampa Bay Buccaneers (buccaneers.com), Scott Smith",
+      "published": "2024-02-27",
+      "accessed": "2026-11-05",
+      "summary": "Bowles explains choosing Coen after seven interviews, notes he knew him from the Rams, gives him play-calling while keeping key situations for himself. Bowles's view of the hire.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.si.com/nfl/buccaneers/news/tampa-bay-buccaneers-coach-liam-coen-unbothered-by-lack-of-deep-ball-success",
+      "publisher": "Sports Illustrated (Bucs Gameday), David Harrison",
+      "published": "2024-12-07",
+      "accessed": "2026-11-05",
+      "summary": "He says the lack of a deep passing game does not bother him much because the offense has other ways to move the ball, though he would like more shots. Tone relaxed and matter-of-fact.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.news4jax.com/sports/2025/01/03/on-football-baker-mayfields-success-in-tampa-bay-has-turned-him-into-a-coach-builder/",
+      "publisher": "Associated Press On Football column (Rob Maaddi) via News4JAX",
+      "published": "2025-01-03",
+      "accessed": "2026-11-05",
+      "summary": "Column: Mayfield played even better under Coen than under Canales; Coen hopes to be a head coach someday but is focused on Tampa; Mayfield credits him for tailoring the offense to players' strengths. Columnist framing.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.news4jax.com/sports/2025/01/27/takeaways-on-liam-coen-hell-call-plays-for-jaguars-the-rams-blueprint-and-big-culture-change",
+      "publisher": "News4JAX",
+      "published": "2025-01-27",
+      "accessed": "2026-11-05",
+      "summary": "At his Jacksonville introduction he talks about making winning a habit, holds up McVay's aligned Rams building as the model, will call plays, says the move was about helping people, laughs off a shaky crowd chant, and cites family. Local TV takeaways.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/buccaneers/news/tampa-bay-buccaneers-hc-todd-bowles-opens-up-on-liam-coen-departure-to-jacksonville-jaguars",
+      "publisher": "Sports Illustrated (Bucs Gameday), River Wells",
+      "published": "2025-03-01",
+      "accessed": "2026-11-05",
+      "summary": "Reports Coen had reportedly agreed verbally to a big raise to stay before meeting the Jaguars owner and leaving, frustrating Tampa fans; Bowles shows no resentment. Shows how the exit was perceived.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

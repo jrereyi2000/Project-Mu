@@ -1,0 +1,275 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:ATL:HC",
+  "name": "Raheem Morris",
+  "role": "HC",
+  "team": "ATL",
+  "seed_ref": {
+    "table": "COACHES_DATA",
+    "team": "ATL",
+    "role": "HC",
+    "name": "Raheem Morris"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 7,
+    "confidence": 6,
+    "openness": 6,
+    "warmth": 7,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E4",
+      "E5"
+    ],
+    "confidence": [
+      "E3",
+      "E6"
+    ],
+    "openness": [
+      "E2",
+      "E3"
+    ],
+    "warmth": [
+      "E1",
+      "E5"
+    ]
+  },
+  "traits": [
+    "PLAYERS_COACH",
+    "LOYAL",
+    "FAMILY_MAN"
+  ],
+  "trait_evidence": {
+    "PLAYERS_COACH": [
+      "E4",
+      "E5"
+    ],
+    "LOYAL": [
+      "E6",
+      "E8"
+    ],
+    "FAMILY_MAN": [
+      "E1",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "A quarterback is only as good as the people around him, so picking and building one is a group decision.",
+      "when": [
+        "QB",
+        "FRONT_OFFICE"
+      ]
+    },
+    {
+      "text": "The best quarterbacks see it fast, decide with conviction and play free; that is what you develop.",
+      "when": [
+        "QB",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "Nothing in this league is permanent; the job goes to whoever gives you the best chance right now.",
+      "when": [
+        "QB",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A coach at thirty-two thinks he has every answer; a better one leans on the smart people in the room.",
+      "when": [
+        "COACHING"
+      ]
+    },
+    {
+      "text": "Win the division first; everything else in January starts there.",
+      "when": [
+        "CONTENDER",
+        "PREVIEW"
+      ]
+    },
+    {
+      "text": "Camp should be hard and competitive, but the fights have to stay on the practice field.",
+      "when": [
+        "OFFSEASON",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "When a defense or offense falls short, you review everything and make the change, even with people you trust.",
+      "when": [
+        "LOSING_STREAK",
+        "COACHING"
+      ]
+    },
+    {
+      "text": "You want good people as well as good players, because the room carries you through bad weeks.",
+      "when": [
+        "PLAYER",
+        "STRUGGLING"
+      ]
+    }
+  ],
+  "signatures": [
+    "calls almost every big decision a collaboration and names the people who shared it",
+    "praises a benched or released veteran's character in the same breath as announcing the move",
+    "brings up his family and the idea of coming home when talking about Atlanta"
+  ],
+  "want": "to prove in Atlanta that the second head-coaching chance is the one where the lessons from Tampa Bay pay off",
+  "fear": "that an upbeat, people-first style gets blamed if the losing seasons he carried from Tampa follow him to Atlanta",
+  "voice": "Loud, warm and quick, a talker who fills a room and laughs easily, yet turns careful and inclusive on hard calls. He frames choices as shared, praises character before talent, and keeps quarterback news short: who starts now, without long promises. After a loss he points to review and fixes rather than blame.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "LAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "ATL",
+          "role": "OC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E8"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "ATL",
+          "role": "DC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E8"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Michael Penix Jr.",
+        "team_2026": "ATL"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Kirk Cousins",
+        "team_2026": "LV"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "mixed",
+      "evidence": [
+        "E6"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://atlantafalcons.com/news/raheem-morris-head-coach-press-conference-takeaways-terry-fontenot",
+      "publisher": "Atlanta Falcons (atlantafalcons.com), Terrin Waack",
+      "published": "2024-02-05",
+      "accessed": "2026-11-05",
+      "summary": "Team recap of his introduction: he thanks his wife, children and parents, calls the hire a homecoming after his 2015-2020 stint, frames decisions as joint work with GM Fontenot under owner Blank, and treats becoming the first full-time Black head coach of the club as wider progress. Team-written, so favorable; says little about players.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.ajc.com/sports/atlanta-falcons/raheem-morris-talks-collaboration-in-selecting-developing-quarterbacks/CAAO6OWPCRBLBIADA6TBS24Y5E",
+      "publisher": "Atlanta Journal-Constitution, Lawrence Price III",
+      "published": "2024-02-05",
+      "accessed": "2026-11-05",
+      "summary": "At the same event he declines to name a quarterback plan, calls the search a shared job with Fontenot and the staff, cites Stafford and Ryan as passers who process fast and play free, and names new OC Zac Robinson as a key voice. Shows stated method, not results.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.ajc.com/sports/mike-check-blog/raheem-morris-comes-to-falcons-with-losing-record-but-new-approach/N2AALQ36WVAXVEOASG4CQGHZRI",
+      "publisher": "Atlanta Journal-Constitution, Michael Cunningham",
+      "published": "2024-02-05",
+      "accessed": "2026-11-05",
+      "summary": "Columnist notes his 21-38 record in Tampa Bay (2009-2011) and reports Morris saying he thought he knew everything at 32 and now relies on capable people and keeps learning; team president Beadles says he turned setbacks into lessons. His own account of change, not proof of it.",
+      "confidence": "high"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.si.com/nfl/rams/news/truly-unmatched-los-angeles-rams-sean-mcvay-raheem-morris-head-coach-atlanta-falcons-hire",
+      "publisher": "Sports Illustrated (Rams On SI), John Macon Gillespie",
+      "published": "2024-01-26",
+      "accessed": "2026-11-05",
+      "summary": "McVay's reaction to the hire: calls Morris a close friend whose connection with players and coaches is rare, a natural leader who lifts every room, and a better person than coach. Praise from a friend and former boss after three seasons together.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.si.com/nfl/falcons/jessie-bates-chris-lindstrom-back-atlanta-falcons-raheem-morris",
+      "publisher": "Sports Illustrated (Falcons On SI), Daniel Flick",
+      "published": "2024-05-01",
+      "accessed": "2026-11-05",
+      "summary": "Before any practices, Bates describes a lighthearted leader who keeps the room upbeat and expects players to be good people, and Lindstrom, there for the 2020 interim spell, praises his daily energy and aggressive mindset. Two players' early impressions.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.cbssports.com/nfl/news/kirk-cousins-benched-raheem-morris-says-nothing-permanent-in-nfl-in-naming-michael-penix-jr-new-falcons-qb",
+      "publisher": "CBS Sports, Jordan Dajani",
+      "published": "2024-12-18",
+      "accessed": "2026-11-05",
+      "summary": "Explaining the switch from Cousins to rookie Penix, he says Cousins was disappointed but professional, praises his character, keeps him as backup, and says nothing is guaranteed but Penix is the quarterback now. Tone respectful and present-focused. One decision.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.ajc.com/sports/2025/08/competitive-atmosphere-another-scuffle-breaks-out-at-intense-falcons-camp",
+      "publisher": "Atlanta Journal-Constitution, Michael Cunningham",
+      "published": "2025-08-01",
+      "accessed": "2026-11-05",
+      "summary": "His second camp is clearly harder, with more full-contact team periods; scuffles still break out though he wants them stopped, and coordinator Robinson credits the culture he built. Morris is barely quoted, so it shows his choices more than his words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E8",
+      "url": "https://sportstalkatl.com/raheem-morris-talks-falcons-first-time-play-calling-coordinators",
+      "publisher": "SportsTalk ATL (staff)",
+      "published": "2024-02-14",
+      "accessed": "2026-11-05",
+      "summary": "Morris says neither Robinson nor Lake having called plays worries him and he has full confidence in both; notes his long history with Lake from Tampa Bay and that several teams wanted Robinson. A short local item with his stated trust in the hires.",
+      "confidence": "medium"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}

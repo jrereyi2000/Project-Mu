@@ -1,0 +1,184 @@
+{
+  "schema_version": "coach-profile-v1",
+  "key": "coach:CAR:OC",
+  "name": "Brad Idzik",
+  "role": "OC",
+  "team": "CAR",
+  "seed_ref": {
+    "table": "COORDINATORS_DATA",
+    "team": "CAR",
+    "role": "OC",
+    "name": "Brad Idzik"
+  },
+  "sliders": {
+    "temperament": 5,
+    "sociability": 6,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 6,
+    "drive": 5
+  },
+  "slider_evidence": {
+    "sociability": [
+      "E4"
+    ],
+    "warmth": [
+      "E4"
+    ]
+  },
+  "traits": [
+    "TEACHER",
+    "LOYAL",
+    "FILM_JUNKIE"
+  ],
+  "trait_evidence": {
+    "TEACHER": [
+      "E1",
+      "E4"
+    ],
+    "LOYAL": [
+      "E2",
+      "E3"
+    ],
+    "FILM_JUNKIE": [
+      "E4",
+      "E5"
+    ]
+  },
+  "views": [
+    {
+      "text": "Deep passing is a timing problem; fix the routes and the quarterback's deep ball follows.",
+      "when": [
+        "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "Receivers develop through detail and repetition, not through one big day.",
+      "when": [
+        "YOUTH",
+        "PLAYER"
+      ]
+    },
+    {
+      "text": "A quarterback who slides and protects himself is making a smart football play, not a soft one.",
+      "when": [
+        "QB",
+        "INJURY"
+      ]
+    },
+    {
+      "text": "A win built on protecting the ball and getting it out on time counts even when the yardage is low.",
+      "when": [
+        "GAME_REVIEW",
+        "QB"
+      ]
+    },
+    {
+      "text": "The head coach calls the plays; the coordinator's job is to have the plan and the players ready.",
+      "when": [
+        "COACHING",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A young quarterback and young receivers grow together; their connection is a season-long project.",
+      "when": [
+        "YOUTH",
+        "QB"
+      ]
+    }
+  ],
+  "signatures": [
+    "opens a press conference with a light personal story before turning to the football",
+    "thanks staff and players by name, down to small favors",
+    "explains a quarterback's good day through specific mechanics like timing and ball security"
+  ],
+  "want": "to grow from Dave Canales's trusted receivers coach into an offensive coordinator respected on his own",
+  "fear": "that he is seen only as the head coach's friend rather than as a coach who earned the title",
+  "voice": "Friendly, lighthearted and a little playful at the podium, he likes a personal anecdote before business. On football he is detail-first and encouraging, crediting the quarterback's growth and the receivers' work. Coverage is thin, so his voice is drawn mostly from team-site pieces.",
+  "ties": [
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "CAR",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E2",
+        "E3"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Bryce Young",
+        "team_2026": "CAR"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E4",
+        "E5"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "url": "https://africa.espn.com/nfl/story/_/id/39422716/sources-brad-idzik-panthers-oc-call-plays",
+      "publisher": "ESPN, David Newton",
+      "published": "2024-01-30",
+      "accessed": "2026-11-05",
+      "summary": "Report that Idzik, 32, will be Carolina's OC without calling plays (Canales will). He has never called plays, is known for developing receivers, spent four seasons with Canales in Seattle and followed him to Tampa Bay, and played receiver at Wake Forest. Background only.",
+      "confidence": "high"
+    },
+    {
+      "id": "E2",
+      "url": "https://www.panthers.com/news/panthers-retain-evero-announce-idzik-and-smith-to-fill-out-staff",
+      "publisher": "Carolina Panthers (panthers.com), Darin Gantt",
+      "published": "2024-02-08",
+      "accessed": "2026-11-05",
+      "summary": "Staff announcement naming Idzik, who coached under Canales in Seattle and Tampa Bay, as offensive coordinator alongside the retained Evero; Canales stresses continuity. Shows the working relationship, not its private nature.",
+      "confidence": "high"
+    },
+    {
+      "id": "E3",
+      "url": "https://www.tampabay.com/sports/bucs/2024/01/27/brad-idzik-dave-canales-panthers-mike-evans-chris-godwin/",
+      "publisher": "Tampa Bay Times, Rick Stroud",
+      "published": "2024-01-27",
+      "accessed": "2026-11-05",
+      "summary": "Reports Carolina asked to interview the Bucs receivers coach; notes four years with Canales on Carroll's Seattle staff and that he followed Canales to Tampa. No quotes about his personality.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E4",
+      "url": "https://www.panthers.com/news/notebook-brad-idzik-is-the-king-of-halloween",
+      "publisher": "Carolina Panthers (panthers.com), Kassidy Hill",
+      "published": "2024-10-31",
+      "accessed": "2026-11-05",
+      "summary": "Notebook: he opens his Halloween presser thanking staff by name for candy and telling stories of homemade childhood costumes, then talks about receivers' route timing on deep balls and Bryce Young's improving connection with young wideouts. Team-site, light in tone.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://www.panthers.com/news/three-takeaways-from-panthers-coordinators-ahead-of-the-patriots-matchup-derrick-brown-bryce-young-ryan-fitzgerald",
+      "publisher": "Carolina Panthers (panthers.com), Darin Gantt and Kassidy Hill",
+      "published": "2025-09-25",
+      "accessed": "2026-11-05",
+      "summary": "Idzik says he is comfortable with Young sliding to avoid late hits and credits him for protecting the ball and throwing on time in a shutout win with modest passing yards. Short quotes on one week.",
+      "confidence": "high"
+    }
+  ],
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": null
+  }
+}
