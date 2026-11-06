@@ -81,7 +81,7 @@ read_head(cur, universe_id: str) -> int
 preview(document: dict) -> dict
 ```
 
-`known_through` is an ingestion sequence, independent of effective simulation time. Historical views fix both cutoffs. Missing profile goes through `feature_view(None, feature)`; invalid profiles/errors fail visibly. Policy has explicit `mode='off'|'observe'|'enabled'`, set per franchise by the [activation plan](../not_started/PERSONALITY_ACTIVATION_PLAN.md)'s switchboard (`relationships`: off, shadow = observe, active = enabled). Off returns neutral consumer context. Observe computes private audit but returns the same neutral consumer context. Enabled returns reviewed context. Profile availability never activates a feature.
+`known_through` is an ingestion sequence, independent of effective simulation time. Historical views fix both cutoffs. Missing profile goes through `feature_view(None, feature)`; invalid profiles/errors fail visibly. Policy has explicit `mode='off'|'observe'|'enabled'`, set per franchise by the [activation plan](../in_progress/PERSONALITY_ACTIVATION_PLAN.md)'s switchboard (`relationships`: off, shadow = observe, active = enabled). Off returns neutral consumer context. Observe computes private audit but returns the same neutral consumer context. Enabled returns reviewed context. Profile availability never activates a feature.
 
 ### 2.2 Canonical intake and attribution
 

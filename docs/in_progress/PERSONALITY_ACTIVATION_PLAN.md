@@ -1,6 +1,6 @@
 # Project Mu: Personality Live Wiring and Activation Plan
 
-**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); not built. Queued: JR wants every personality sub-plan written and approved before more building (2026-11-03). The other plans were updated at approval (§7).
+**Status:** approved by JR (2026-11-03), Q1–Q3 settled as recommended (§8); building, wave 1 of 2 (2026-11-06). Building the switchboard switches nothing on: every feature stays `off` by default, no migration is applied, no shadow season run and no clearance imported (JR's calls, §6).
 **Builds on:** [`PERSONALITY_PLAN.md`](../in_progress/PERSONALITY_PLAN.md) §5.3, §6; the approved feature plans: [contracts](../done/PERSONALITY_CONTRACT_POLICY_PLAN.md) §2.4, §2.6; [development/coaching](../done/PERSONALITY_DEVELOPMENT_COACHING_PLAN.md) §2.4–§2.5, §2.7; [trade requests](../done/PERSONALITY_TRADE_REQUESTS_PLAN.md) §2.5, gates G4–G5; [retirement](../done/PERSONALITY_RETIREMENT_PLAN.md) §2.4–§2.6, gates G4–G6; [relationships](../done/PERSONALITY_RELATIONSHIPS_PLAN.md) §2.1 modes; [event producers](../done/RELATIONSHIP_EVENT_PRODUCERS_PLAN.md); [evolution](../done/PERSONALITY_EVOLUTION_PLAN.md); [lifecycle](../done/PERSONALITY_DRAFT_INTEGRATION_PLAN.md) §6 gates; PROJECT_SPEC §2.21a, §6.0b.
 
 **Goal:** Connect the personality features to the live league, live from the real franchise's first season (2026 week 1). Each feature plan builds its policy, storage and offline reports and stops before the live hookup. This plan:
@@ -308,3 +308,8 @@ JR approved all three recommendations on 2026-11-03.
 | Q1 | Is the go-live order right: producers, relationships, profiles, evolution, contracts (ambition, then relationships), development learning, trade requests, retirement, depth-chart opportunities? | Yes, on the tuning franchises. Facts and profiles first, then money decisions (easiest to inspect), then development, then features that move players (requests, retirement, opportunities) last. On the real franchise, everything cleared switches on together at 2026 week 1. |
 | Q2 | When a request is active, may the CPU GM shop the player? | Yes, at his normal value, through the usual legality and acceptance checks, and never on your teams. A request is a reason to listen to offers, not a discount. |
 | Q3 | In active retirement mode, may the policy only decide about players Madden retired (keep or let go), not retire active players? | Yes, until the retirement plan's own proof for retiring an active player passes (its Q1). Then it adds that action through its own plan. |
+
+## 9. Build log
+
+| Unit | Wave | Branch | Worktree | Result | Merge |
+|---|---|---|---|---|---|

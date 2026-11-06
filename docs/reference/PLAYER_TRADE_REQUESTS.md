@@ -66,7 +66,7 @@ The report shows matched personality and neutral arms, eligibility versus draws,
 
 ## Deferred (not built here)
 
-- Scheduling the reviews in the watcher, building `RequestContext`/`RequestClock` from live data, adding the GM search signal (`gm_trade_engine.run_week(request_signals=)`) and the switchboard: the [activation plan](../not_started/PERSONALITY_ACTIVATION_PLAN.md)'s U3.
+- Scheduling the reviews in the watcher, building `RequestContext`/`RequestClock` from live data, adding the GM search signal (`gm_trade_engine.run_week(request_signals=)`) and the switchboard: the [activation plan](../in_progress/PERSONALITY_ACTIVATION_PLAN.md)'s U3.
 - Contract willingness that reads the request context: the contract policy, with incident deduplication and its own activation review.
 - Inbox cards, newsroom coverage and API/frontend display, which belong to their owners. Holdouts, fines and effort or playing-time consequences need a separate plan.
 - Gates still open: G3 (JR reviews sensitivity and picks a production policy), G4 (integration) and G5 (applying the migration and activating for a chosen franchise and checkpoint).
