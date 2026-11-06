@@ -1,114 +1,130 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:GB:DC",
-  "name": "Jeff Hafley",
+  "name": "Jonathan Gannon",
   "role": "DC",
   "team": "GB",
   "seed_ref": {
     "table": "COORDINATORS_DATA",
     "team": "GB",
     "role": "DC",
-    "name": "Jeff Hafley"
+    "name": "Jonathan Gannon"
   },
   "sliders": {
-    "temperament": 5,
+    "temperament": 6,
     "sociability": 6,
     "confidence": 6,
     "openness": 5,
-    "warmth": 7,
-    "drive": 5
+    "warmth": 5,
+    "drive": 7
   },
   "slider_evidence": {
+    "temperament": [
+      "E7"
+    ],
     "sociability": [
-      "E1"
+      "E1",
+      "E2"
     ],
     "confidence": [
-      "E1"
+      "E1",
+      "E3"
     ],
-    "warmth": [
+    "drive": [
+      "E1",
       "E2"
     ]
   },
   "traits": [
-    "SCHEME_NERD",
-    "LOYAL",
-    "DISCIPLINARIAN"
+    "QUOTABLE",
+    "OLD_SCHOOL",
+    "SCHEME_NERD"
   ],
   "trait_evidence": {
-    "SCHEME_NERD": [
-      "E1"
+    "QUOTABLE": [
+      "E3"
     ],
-    "LOYAL": [
+    "OLD_SCHOOL": [
+      "E1",
       "E2"
     ],
-    "DISCIPLINARIAN": [
-      "E3"
+    "SCHEME_NERD": [
+      "E6"
     ]
   },
   "views": [
     {
-      "text": "Coverage beliefs like press-man and vision-and-break work from any front; the front is just the shell.",
-      "when": [
-        "SCHEME"
-      ]
-    },
-    {
-      "text": "A post safety who controls the middle, takes away big plays and catches the ball is the heart of a defense.",
+      "text": "A team should be adaptable, physical, explosive and smart, and every plan should show all four.",
       "when": [
         "SCHEME",
-        "PLAYER"
+        "PREVIEW"
       ]
     },
     {
-      "text": "The coaches on a staff liking and supporting each other matters more than what they know about X's and O's.",
+      "text": "Stay where your feet are; this week's work is the only one you can win.",
       "when": [
-        "COACHING"
+        "COACHING",
+        "WIN_STREAK"
       ]
     },
     {
-      "text": "Put players where they can succeed rather than forcing them into a system.",
+      "text": "Put defenses in conflict: when a run and a pass look the same, they have to guess.",
       "when": [
         "SCHEME",
+        "QB"
+      ]
+    },
+    {
+      "text": "A dynamic quarterback is a problem for every defense, and the offense should lean into that.",
+      "when": [
+        "QB"
+      ]
+    },
+    {
+      "text": "Hire coaches for how they think and whether they serve players, not for their age.",
+      "when": [
+        "COACHING",
         "YOUTH"
       ]
     },
     {
-      "text": "College football has changed fast with the portal and NIL; some of it needs fixing, but it is still a great game.",
+      "text": "Loving football means you never have to look for motivation.",
       "when": [
-        "DRAFT",
-        "HISTORY"
+        "COACHING",
+        "OFFSEASON"
       ]
     },
     {
-      "text": "A disciplined team that does not beat itself with penalties gives itself a chance every week.",
+      "text": "When the head coach loses his composure, he owns it in front of the team, apologizes and moves on.",
       "when": [
         "BAD_GAME",
-        "CLOSE_GAMES"
+        "COACHING"
       ]
     }
   ],
   "signatures": [
-    "talks at length and in detail about coverage technique when given the floor",
-    "praises his assistants by name for their character as much as their football minds"
+    "leans on a stock of short catchphrases that reporters start collecting",
+    "brings players into the room at big announcements and speaks to them directly",
+    "apologizes to the team as a group when he crosses a line"
   ],
-  "want": "to prove the former college head coach belongs back in the NFL and can build a top defense there",
-  "fear": "that his NFL pass defenses are judged by the struggles of his earlier stops",
-  "voice": "Talkative, upbeat and detailed; he speaks at length about coverage concepts and is open about criticism of his career. He talks about his staff warmly and in terms of character and relationships. Coverage of his day-to-day manner is modest.",
+  "want": "to build Arizona into a physical, adaptable winner around a young staff he hand-picked",
+  "fear": "that the heat that makes him energizing on the sideline turns into a moment that defines him",
+  "voice": "High-energy, emphatic and full of slogans; he speaks in punchy phrases and repeats a few favorite expressions. He talks up toughness, adaptability and staying present, and is effusive about players he likes. When he gets something wrong he names it plainly and apologizes.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COACHES_DATA",
-          "team": "GB",
-          "role": "HC"
+          "table": "COORDINATORS_DATA",
+          "team": "AZ",
+          "role": "DC"
         }
       },
-      "relationship_kind": "collaboration",
+      "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E4"
+        "E4",
+        "E5"
       ]
     },
     {
@@ -116,52 +132,93 @@
         "kind": "coach",
         "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "GB",
+          "team": "DET",
           "role": "OC"
         }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E3"
+        "E4",
+        "E6"
+      ]
+    },
+    {
+      "target": {
+        "kind": "player",
+        "name": "Kyler Murray",
+        "team_2026": "MIN"
+      },
+      "relationship_kind": "support",
+      "outcome": "positive",
+      "evidence": [
+        "E1",
+        "E6"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://africa.espn.com/nfl/story/_/id/39578458/new-packers-dc-jeff-hafley-4-3-jump-college-nfl-lafleur",
-      "publisher": "ESPN, Rob Demovsky",
-      "published": "2024-02-23",
-      "accessed": "2026-11-04",
-      "summary": "Introductory remarks: moving Green Bay to a 4-3 but saying his coverage beliefs apply to any front; describes a post safety who controls the middle; says college football has changed with COVID, the portal and NIL. Spoke nearly 30 minutes and addressed criticism of his career. LaFleur says he hired the best fit and wants a fast, physical defense.",
+      "url": "https://www.news4jax.com/sports/2023/02/16/gannon-ready-to-lead-cards-after-whirlwind-interview-process/",
+      "publisher": "Associated Press via News4JAX",
+      "published": "2023-02-16",
+      "accessed": "2026-11-05",
+      "summary": "Introduced four days after his Eagles lost the Super Bowl, he stresses staying in the present, praises Murray as a rare problem for defenses, and says he never needs to look for motivation because he loves football. Writer contrasts his energy with the reserved previous coach.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://www.packers.com/news/jeff-hafley-excited-to-get-to-work-with-energetic-defensive-staff",
-      "publisher": "Green Bay Packers (packers.com), Wes Hodkiewicz",
-      "published": "2024-03-13",
-      "accessed": "2026-11-04",
-      "summary": "On assembling his staff: relationships among coaches matter more to him than X's and O's; he wants coaches who like and support each other; kept two of Joe Barry's assistants and brought others from the NFL and Boston College, praising them for loyalty, intensity and player relationships. Team-written.",
+      "url": "https://www.azcardinals.com/news/right-away-jonathan-gannon-shows-players-his-passion",
+      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
+      "published": "2023-02-16",
+      "accessed": "2026-11-05",
+      "summary": "Speaking to players seated up front, he lays out a team built on adaptability, physicality, explosiveness and smarts; GM Ossenfort says his energy never dropped in interviews and Ertz, who played for him in Philadelphia, calls him a great leader who stayed in touch. Team site.",
       "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://www.packers.com/news/5-things-to-know-about-new-packers-defensive-coordinator-jeff-hafley",
-      "publisher": "Green Bay Packers (packers.com), Wes Hodkiewicz and Mike Spofford",
-      "published": "2024-01-31",
-      "accessed": "2026-11-04",
-      "summary": "Primer: four seasons as Boston College head coach with three bowl-eligible teams and a defense that led the ACC in fewest penalties; worked on Kyle Shanahan's 49ers staff with Adam Stenavich and under Robert Saleh; NFL secondary coach from 2012; a Siena wide receiver. Facts only.",
-      "confidence": "high"
+      "url": "https://arizonasports.com/haboob-blog/let-it-rip-a-guide-to-cardinals-head-coach-jonathan-gannons-vocabulary",
+      "publisher": "Arizona Sports",
+      "published": "2023-02-20",
+      "accessed": "2026-11-05",
+      "summary": "A light guide to seven recurring phrases from his introduction about accountability, team-first play, bold action and focus; Bidwill says he used one favorite word in about a dozen ways in his interview. Shows a speaking habit, not substance.",
+      "confidence": "medium"
     },
     {
       "id": "E4",
-      "url": "https://spectrumnews1.com/wi/milwaukee/news/2024/02/01/new-green-bay-packers-defensive-coordinator-jeff-hafley-",
-      "publisher": "Spectrum News 1 Wisconsin, Aly Prouty and the Associated Press",
-      "published": "2024-01-31",
-      "accessed": "2026-11-04",
-      "summary": "Hiring story: LaFleur cites his success and player development at every stop; Hafley's statement thanks Boston College warmly. Notes his 22-26 record there and the trend of college head coaches taking NFL assistant jobs. Little on personality.",
+      "url": "https://www.azcardinals.com/news/gannon-cardinals-get-coordinators-nick-rallis-drew-petzing",
+      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
+      "published": "2023-02-19",
+      "accessed": "2026-11-05",
+      "summary": "He hires Petzing, 35, who worked with him in Minnesota, and Rallis, 29, his Eagles linebackers coach and a Vikings colleague, saying age was never a factor and he judged candidates on thinking and character. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E5",
+      "url": "https://azcardinals.com/news/problem-solver-nick-rallis-ready-for-job-as-cardinals-defensive-coordinator",
+      "publisher": "Arizona Cardinals (azcardinals.com), Darren Urban",
+      "published": "2023-02-22",
+      "accessed": "2026-11-05",
+      "summary": "Gannon says he fully trusts Rallis to run the defense, cares more about serving players and results than age, and asks candidates about the best and worst things their bosses did. Team site.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/39575533/kyler-murray-center-drew-petzing-jonathan-gannon",
+      "publisher": "ESPN, Josh Weinfuss",
+      "published": "2024-02-24",
+      "accessed": "2026-11-05",
+      "summary": "Explains Murray taking more snaps under center in 2023; Gannon says the aim was to create conflict so defenses cannot tell run from pass, and Petzing stresses that every look must appear identical. Scheme detail with quotes.",
+      "confidence": "high"
+    },
+    {
+      "id": "E7",
+      "url": "https://www.news4jax.com/sports/2025/10/08/cardinals-coach-jonathan-gannon-fined-100k-for-sideline-incident-with-player-ap-sources-say/",
+      "publisher": "Associated Press via News4JAX",
+      "published": "2025-10-08",
+      "accessed": "2026-11-05",
+      "summary": "The team fines him $100,000 after video shows him shouting at and swiping toward running back Demercado following a costly fumble; he says he apologized to the player and team, let the moment overwhelm him, and calls it a mistake. One incident; the league took no action.",
       "confidence": "high"
     }
   ],
@@ -169,6 +226,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

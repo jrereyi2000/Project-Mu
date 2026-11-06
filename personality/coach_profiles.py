@@ -30,7 +30,7 @@ from personality import core
 from personality import relationship_events as rev
 
 SCHEMA_VERSION = 'coach-profile-v1'
-SOURCE_CUTOFF = '2025-12-31'
+SOURCE_CUTOFF = '2026-09-08'  # eve of the 2026 opener (Sep 9, 2026), JR 2026-11-06
 MAX_QUOTE_WORDS = 15
 PROFILE_DIR = 'newsroom/config/coach_personas'
 

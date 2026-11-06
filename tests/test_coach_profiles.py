@@ -51,8 +51,10 @@ def has(errs, fragment):
     return any(fragment in e for e in errs)
 
 
-def test_seed_index_has_96_people_without_importing_the_seeder():
+def test_seed_index_has_96_people_without_importing_the_seeder(monkeypatch):
     import sys
+    # Other tests (test_watch_save) import the seeder first; drop it so the check is order-independent.
+    monkeypatch.delitem(sys.modules, 'db.seed_clean_db', raising=False)
     idx = cp.seed_index()
     assert len(idx) == 96
     assert idx[('COACHES_DATA', 'CAR', 'HC')]['name'] == 'Dave Canales'
@@ -98,7 +100,7 @@ def copy16(d):
     (lambda d: d.update(views=d['views'][:5]), 'views must number'),
     (lambda d: d.update(signatures=['one']), 'signatures must number'),
     (lambda d: d.update(fear=' '), 'fear must be nonempty'),
-    (lambda d: d['evidence'][0].update(published='2026-01-02'), 'after the source cutoff'),
+    (lambda d: d['evidence'][0].update(published='2026-09-09'), 'after the source cutoff'),
     (lambda d: d['evidence'][0].update(url='not a url'), 'url'),
     (lambda d: d['evidence'][0].update(confidence='certain'), 'confidence must be'),
     (lambda d: d['trait_evidence'].update(MEASURED=['E4']), 'low-confidence E4'),

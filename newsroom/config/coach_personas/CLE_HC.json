@@ -1,215 +1,191 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:CLE:HC",
-  "name": "Kevin Stefanski",
+  "name": "Todd Monken",
   "role": "HC",
   "team": "CLE",
   "seed_ref": {
     "table": "COACHES_DATA",
     "team": "CLE",
     "role": "HC",
-    "name": "Kevin Stefanski"
+    "name": "Todd Monken"
   },
   "sliders": {
-    "temperament": 2,
-    "sociability": 4,
+    "temperament": 6,
+    "sociability": 5,
     "confidence": 5,
-    "openness": 6,
-    "warmth": 6,
-    "drive": 5
+    "openness": 7,
+    "warmth": 5,
+    "drive": 7
   },
   "slider_evidence": {
     "temperament": [
-      "E2",
-      "E3"
-    ],
-    "sociability": [
-      "E2"
+      "E4"
     ],
     "openness": [
-      "E1"
+      "E3",
+      "E4"
     ],
-    "warmth": [
-      "E2",
-      "E5"
+    "drive": [
+      "E4",
+      "E6"
     ]
   },
   "traits": [
-    "MEASURED",
-    "ANALYTICS_BELIEVER",
-    "LOYAL"
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "PERFECTIONIST"
   ],
   "trait_evidence": {
-    "MEASURED": [
-      "E1",
-      "E2"
-    ],
-    "ANALYTICS_BELIEVER": [
-      "E1"
-    ],
-    "LOYAL": [
+    "QB_WHISPERER": [
       "E2",
+      "E3"
+    ],
+    "SCHEME_NERD": [
+      "E4",
       "E5"
+    ],
+    "PERFECTIONIST": [
+      "E5",
+      "E6"
     ]
   },
   "views": [
     {
-      "text": "Build the foundation first: fundamentals, scheme and technique, then add layers.",
+      "text": "The league is moving toward quarterbacks who extend plays, not pocket statues, so build for them.",
       "when": [
-        "COACHING",
-        "OFFSEASON"
+        "QB",
+        "SCHEME"
       ]
     },
     {
-      "text": "Analytics are a tool for better decisions on game day, not a department that writes the plan.",
+      "text": "If the quarterback sends you a play he likes, put it in and practice it.",
       "when": [
-        "SCHEME",
-        "FRONT_OFFICE"
+        "QB",
+        "PLAYER"
       ]
     },
     {
-      "text": "An offense should be multiple enough to win by the run or the pass.",
+      "text": "You cannot control a game if you cannot run the ball, and abandoning the plan is on the play-caller.",
       "when": [
         "SCHEME",
+        "PLAYOFFS"
+      ]
+    },
+    {
+      "text": "After a loss, review the scheme, the coaching, the execution and the plan, and own your part first.",
+      "when": [
+        "BAD_GAME",
         "GAME_REVIEW"
       ]
     },
     {
-      "text": "A season of injuries and five quarterbacks is survived by staying the same person every day.",
+      "text": "Good ideas come from anywhere, including a clip a player found online.",
       "when": [
-        "INJURY",
-        "STRUGGLING"
+        "SCHEME",
+        "COACHING"
       ]
     },
     {
-      "text": "Success belongs to the players and the staff; the head coach steps back when things go well.",
-      "when": [
-        "WIN_STREAK",
-        "AWARDS"
-      ]
-    },
-    {
-      "text": "A quarterback plays loosest when the coach keeps the moment light.",
+      "text": "A star's reputation as a passer often lags behind what the film shows.",
       "when": [
         "QB",
-        "CLOSE_GAMES"
-      ]
-    },
-    {
-      "text": "Bold predictions are not worth making; the work speaks for itself.",
-      "when": [
-        "PREVIEW",
-        "OFFSEASON"
+        "PERFORMANCE"
       ]
     }
   ],
   "signatures": [
-    "deflects questions about himself and praises assistants by name",
-    "uses a dry one-liner to take the tension out of a big moment",
-    "explains decisions in calm, organized terms without raising his voice"
+    "takes the blame for an offensive failure before anyone else is mentioned",
+    "talks about borrowing concepts from players and odd places",
+    "is self-deprecating and funny in the room but the loudest voice on the practice field"
   ],
-  "want": "to build a steady winner in Cleveland that survives injuries and quarterback turnover on the strength of its process",
-  "fear": "that his calm gets mistaken for a lack of urgency when an offense stalls",
-  "voice": "Calm, organized and understated, with a dry wit and a habit of pranks in private; he rarely talks about himself and readily credits assistants and players. He avoids bold predictions, speaks in measured, precise terms about process and analytics, and sounds the same after wins and losses.",
+  "want": "to prove that a lifelong college-and-pro journeyman can coordinate a champion offense around an MVP quarterback",
+  "fear": "that one bad championship-game plan is the call he gets remembered for",
+  "voice": "Blunt, funny and self-deprecating; he takes responsibility quickly and plainly when the offense fails. In public he is relaxed and candid, but he is described as intense and loud on the field. He praises his quarterback's passing and openness to ideas, and talks in detailed, practical football terms.",
   "ties": [
     {
       "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "NE",
-          "role": "OC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "positive",
-      "evidence": [
-        "E4",
-        "E5"
-      ]
-    },
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "CLE",
-          "role": "OC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "positive",
-      "evidence": [
-        "E6"
-      ]
-    },
-    {
-      "target": {
         "kind": "player",
-        "name": "Baker Mayfield",
-        "team_2026": "TB"
+        "name": "Lamar Jackson",
+        "team_2026": "BAL"
+      },
+      "relationship_kind": "collaboration",
+      "outcome": "positive",
+      "evidence": [
+        "E3",
+        "E4"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "NYG",
+          "role": "HC"
+        }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
         "E1",
-        "E2"
+        "E4"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.nfl.com/news/kevin-stefanski-stresses-leadership-in-browns-intro-0ap3000001096696",
-      "publisher": "NFL.com, Nick Shook",
-      "published": "2020-01-14",
+      "url": "https://www.baltimoreravens.com/news/press-release-ravens-name-todd-monken-offensive-coordinator",
+      "publisher": "Baltimore Ravens (club press release)",
+      "published": "2023-02-14",
       "accessed": "2026-11-04",
-      "summary": "Introductory press conference (the page shows no date; it covers his January 2020 introduction): he plans to lead authentically, give players credit, build a foundation before adding layers, avoid bold predictions, run a multiple offense, support Mayfield's growth and use analytics as a decision tool, dismissing a report that analysts would write game plans.",
+      "summary": "Hiring release: about 35 years coaching, Georgia coordinator for two straight national titles, earlier coordinator for Tampa Bay and Cleveland, Southern Miss head coach. Harbaugh describes a wide search and praises his leadership and system-building. Facts and a club statement.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://africa.espn.com/blog/cleveland-browns/post/_/id/28358/scottish-accents-pranks-and-humor-unflappable-kevin-stefanski-perfect-fit-for-browns",
-      "publisher": "ESPN (Browns blog), Jake Trotter",
-      "published": "2021-01-15",
+      "url": "https://www.baltimoreravens.com/news/todd-monken-says-lamar-jackson-elite-underrated-passer",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Clifton Brown",
+      "published": "2023-02-21",
       "accessed": "2026-11-04",
-      "summary": "Profile in his first playoff run: colleagues call him unflappable and the same every day; an understated wit and long history of pranks; Ivy League, never an NFL player, avoids talking about himself, praises assistants; brought staff from Minnesota; Keenum and Mayfield trust him. Beat profile; favorable moment.",
+      "summary": "At his introduction he calls Jackson underrated as a passer, especially deep, says his reputation was shaped by early doubts, sees the league moving toward mobile quarterbacks, and says he trusts DeCosta and Harbaugh. His own words before meeting Jackson.",
       "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://www.clevelandbrowns.com/news/kevin-stefanski-named-ap-2023-nfl-coach-of-the-year",
-      "publisher": "Cleveland Browns (clevelandbrowns.com), Kelsey Russo",
-      "published": "2024-02-08",
+      "url": "https://www.nbcsports.com/nfl/profootballtalk/rumor-mill/news/lamar-jackson-on-todd-monken-empowering-him-in-offense-im-glad-hes-listening-to-me",
+      "publisher": "Pro Football Talk (NBC Sports), Charean Williams",
+      "published": "2023-08-12",
       "accessed": "2026-11-04",
-      "summary": "His second Coach of the Year award after an 11-6 season with five starting quarterbacks and major injuries; he credits coaches, players, staff and fans, and coaches describe him as a calm presence who kept players confident. Team site.",
-      "confidence": "high"
-    },
-    {
-      "id": "E4",
-      "url": "https://www.clevelandbrowns.com/news/alex-van-pelt-sees-great-opportunity-as-browns-offensive-coordinator",
-      "publisher": "Cleveland Browns (clevelandbrowns.com), Andrew Gribble",
-      "published": "2020-02-10",
-      "accessed": "2026-11-04",
-      "summary": "At Van Pelt's hiring, Stefanski says he wanted a coordinator with versatility across systems, values Van Pelt's backup-quarterback understanding of preparation, and wants staff ideas blended into one system. Team site.",
-      "confidence": "high"
-    },
-    {
-      "id": "E5",
-      "url": "https://www.si.com/nfl/patriots/news/new-england-patriots-alex-van-pelt-praise-kevin-stefanski-cleveland-browns-endorse",
-      "publisher": "Sports Illustrated (Patriots Country), Jon Alfano",
-      "published": "2024-03-01",
-      "accessed": "2026-11-04",
-      "summary": "After they part ways, Stefanski calls Van Pelt one of the best people in coaching and a close friend and credits his quarterback background for teaching. His words at the combine.",
+      "summary": "Jackson says he sends Monken plays he spots and Monken practices them, calls his meeting rooms full of ideas and is glad he listens. Jackson's view in a preseason broadcast.",
       "confidence": "medium"
     },
     {
-      "id": "E6",
-      "url": "https://ca.sports.yahoo.com/news/browns-seek-fresh-approach-offensive-170748911.html",
-      "publisher": "UPI (Alex Butler), via Yahoo Sports",
-      "published": "2024-02-05",
+      "id": "E4",
+      "url": "https://www.baltimoreravens.com/news/todd-monken-ravens-evolution-family-offensive-coordinator-2023",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Ryan Mink",
+      "published": "2023-09-01",
       "accessed": "2026-11-04",
-      "summary": "Stefanski says he hired Dorsey for a fresh approach on offense, citing his work with top quarterbacks, his college playing record and his understanding of what the Browns mean to Cleveland. Statements at a hiring.",
+      "summary": "Feature (page undated; contents place it at the start of the 2023 season): funny, self-deprecating and relaxed off the field, intense and loud at practice; from a coaching family; aggressive but calculated, borrows ideas widely, gives candid feedback; says he learned from Cleveland and that Harbaugh's relationship skills let him coach less abrasively. Jackson calls him fun and empowering. Team site.",
+      "confidence": "medium"
+    },
+    {
+      "id": "E5",
+      "url": "https://baltimoreravens.com/news/todd-monken-reflects-run-rushing-attempts-afc-championship-ravens-otas-game",
+      "publisher": "Baltimore Ravens (baltimoreravens.com), Clifton Brown",
+      "published": "2024-05-23",
+      "accessed": "2026-11-04",
+      "summary": "He takes responsibility for the AFC Championship loss, says execution problems start with him, admits the team had to run better and stick to its plan, and wants a faster, more consistent second season. His words.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://www.si.com/nfl/ravens/news/baltimore-ravens-todd-monken-accountability-questionable-play-calling",
+      "publisher": "Sports Illustrated (Ravens on SI), Josh Reed",
+      "published": "2025-10-03",
+      "accessed": "2026-11-04",
+      "summary": "After Harbaugh publicly critiques his play-calling in a loss, he says nothing was new because they had already talked, describes reviewing scheme, coaching, execution and plan each week, owns the shortcomings and commits to more runs. His words, filtered by a fan-network writer.",
       "confidence": "medium"
     }
   ],
@@ -217,6 +193,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

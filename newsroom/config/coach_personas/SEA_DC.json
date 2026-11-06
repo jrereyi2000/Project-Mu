@@ -138,7 +138,7 @@
         "kind": "coach",
         "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "NYJ",
+          "team": "ATL",
           "role": "DC"
         }
       },

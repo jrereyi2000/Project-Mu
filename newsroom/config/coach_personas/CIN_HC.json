@@ -128,7 +128,7 @@
         "kind": "coach",
         "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "CIN",
+          "team": "IND",
           "role": "DC"
         }
       },

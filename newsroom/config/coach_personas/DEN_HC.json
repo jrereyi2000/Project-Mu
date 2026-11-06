@@ -121,21 +121,6 @@
         "seed_ref": {
           "table": "COORDINATORS_DATA",
           "team": "DEN",
-          "role": "OC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "positive",
-      "evidence": [
-        "E3"
-      ]
-    },
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "DEN",
           "role": "DC"
         }
       },

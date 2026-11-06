@@ -126,24 +126,9 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "TB",
-          "role": "DC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "positive",
-      "evidence": [
-        "E8"
-      ]
-    },
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "TB",
-          "role": "OC"
+          "table": "COACHES_DATA",
+          "team": "JAX",
+          "role": "HC"
         }
       },
       "relationship_kind": "collaboration",

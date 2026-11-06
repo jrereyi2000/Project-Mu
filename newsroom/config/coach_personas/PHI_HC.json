@@ -120,9 +120,9 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "PHI",
-          "role": "OC"
+          "table": "COACHES_DATA",
+          "team": "NO",
+          "role": "HC"
         }
       },
       "relationship_kind": "collaboration",

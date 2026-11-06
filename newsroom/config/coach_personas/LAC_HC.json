@@ -118,25 +118,9 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "LAC",
-          "role": "OC"
-        }
-      },
-      "relationship_kind": "collaboration",
-      "outcome": "positive",
-      "evidence": [
-        "E6",
-        "E2"
-      ]
-    },
-    {
-      "target": {
-        "kind": "coach",
-        "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "LAC",
-          "role": "DC"
+          "table": "COACHES_DATA",
+          "team": "BAL",
+          "role": "HC"
         }
       },
       "relationship_kind": "collaboration",
@@ -151,7 +135,7 @@
         "kind": "coach",
         "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "BAL",
+          "team": "NYG",
           "role": "HC"
         }
       },

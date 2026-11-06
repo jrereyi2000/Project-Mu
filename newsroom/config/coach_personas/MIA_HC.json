@@ -1,152 +1,128 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:MIA:HC",
-  "name": "Mike McDaniel",
+  "name": "Jeff Hafley",
   "role": "HC",
   "team": "MIA",
   "seed_ref": {
     "table": "COACHES_DATA",
     "team": "MIA",
     "role": "HC",
-    "name": "Mike McDaniel"
+    "name": "Jeff Hafley"
   },
   "sliders": {
-    "temperament": 4,
-    "sociability": 7,
+    "temperament": 5,
+    "sociability": 6,
     "confidence": 6,
-    "openness": 7,
+    "openness": 5,
     "warmth": 7,
     "drive": 5
   },
   "slider_evidence": {
-    "temperament": [
-      "E4"
-    ],
     "sociability": [
-      "E1",
-      "E5"
+      "E1"
     ],
     "confidence": [
-      "E4",
-      "E5"
-    ],
-    "openness": [
-      "E2",
-      "E5"
+      "E1"
     ],
     "warmth": [
-      "E2",
-      "E5"
+      "E2"
     ]
   },
   "traits": [
-    "QUOTABLE",
-    "FAMILY_MAN",
-    "TEACHER",
-    "PLAYERS_COACH"
+    "SCHEME_NERD",
+    "LOYAL",
+    "DISCIPLINARIAN"
   ],
   "trait_evidence": {
-    "QUOTABLE": [
-      "E1",
-      "E5"
+    "SCHEME_NERD": [
+      "E1"
     ],
-    "FAMILY_MAN": [
-      "E3",
-      "E5"
-    ],
-    "TEACHER": [
+    "LOYAL": [
       "E2"
     ],
-    "PLAYERS_COACH": [
-      "E2",
+    "DISCIPLINARIAN": [
       "E3"
     ]
   },
   "views": [
     {
-      "text": "A player's health comes before any game, and the protocol is not something a coach gets to bend.",
+      "text": "Coverage beliefs like press-man and vision-and-break work from any front; the front is just the shell.",
       "when": [
-        "INJURY",
+        "SCHEME"
+      ]
+    },
+    {
+      "text": "A post safety who controls the middle, takes away big plays and catches the ball is the heart of a defense.",
+      "when": [
+        "SCHEME",
         "PLAYER"
       ]
     },
     {
-      "text": "Telling players about your own failures earns more trust than pretending you never had any.",
+      "text": "The coaches on a staff liking and supporting each other matters more than what they know about X's and O's.",
       "when": [
-        "COACHING",
-        "YOUTH"
-      ]
-    },
-    {
-      "text": "Results belong to the whole team, so no quarterback should carry a loss alone.",
-      "when": [
-        "QB",
-        "BAD_GAME"
-      ]
-    },
-    {
-      "text": "Outside criticism is mostly knee-jerk; dwelling on it only steals focus from the next game.",
-      "when": [
-        "STRUGGLING",
-        "LOSING_STREAK"
-      ]
-    },
-    {
-      "text": "Being yourself in front of the room is a form of respect, not a lack of seriousness.",
-      "when": [
-        "COACHING",
-        "HUMOR"
-      ]
-    },
-    {
-      "text": "The best run games come from a staff that gives its young assistants room to try ideas.",
-      "when": [
-        "SCHEME",
         "COACHING"
       ]
     },
     {
-      "text": "A hot streak is a reason to stay focused on your own team, whoever is on the other sideline.",
+      "text": "Put players where they can succeed rather than forcing them into a system.",
       "when": [
-        "WIN_STREAK",
-        "CONTENDER"
+        "SCHEME",
+        "YOUTH"
+      ]
+    },
+    {
+      "text": "College football has changed fast with the portal and NIL; some of it needs fixing, but it is still a great game.",
+      "when": [
+        "DRAFT",
+        "HISTORY"
+      ]
+    },
+    {
+      "text": "A disciplined team that does not beat itself with penalties gives itself a chance every week.",
+      "when": [
+        "BAD_GAME",
+        "CLOSE_GAMES"
       ]
     }
   ],
   "signatures": [
-    "answers a dry question with an offbeat joke, then gives a careful football answer",
-    "tells a story from his own rough years when a player is going through something",
-    "turns questions about a quarterback's mistakes toward the whole unit's execution"
+    "talks at length and in detail about coverage technique when given the floor",
+    "praises his assistants by name for their character as much as their football minds"
   ],
-  "want": "to prove that an unconventional, openly human head coach can build a winner and keep it winning",
-  "fear": "that his quirks get read as a lack of seriousness the moment the team stops winning",
-  "voice": "Quick, playful and openly unguarded; he jokes with reporters, calls himself random and a nerd, and wanders into long, thoughtful answers. When a player is hurt he turns serious and plainly shaken, speaking about the person before the player. He shrugs off outside criticism, credits mentors warmly and explains scheme in plain language.",
+  "want": "to prove the former college head coach belongs back in the NFL and can build a top defense there",
+  "fear": "that his NFL pass defenses are judged by the struggles of his earlier stops",
+  "voice": "Talkative, upbeat and detailed; he speaks at length about coverage concepts and is open about criticism of his career. He talks about his staff warmly and in terms of character and relationships. Coverage of his day-to-day manner is modest.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
           "table": "COACHES_DATA",
-          "team": "SF",
+          "team": "GB",
           "role": "HC"
         }
       },
-      "relationship_kind": "mentorship",
+      "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E6"
+        "E1",
+        "E4"
       ]
     },
     {
       "target": {
-        "kind": "player",
-        "name": "Tua Tagovailoa",
-        "team_2026": "ATL"
+        "kind": "coach",
+        "seed_ref": {
+          "table": "COORDINATORS_DATA",
+          "team": "GB",
+          "role": "OC"
+        }
       },
-      "relationship_kind": "mentorship",
+      "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E2",
         "E3"
       ]
     }
@@ -154,63 +130,45 @@
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.si.com/extra-mustard/2022/03/03/mike-mcdaniel-dolphins-interviews-rich-eisen-cliches",
-      "publisher": "Sports Illustrated (Extra Mustard), Jimmy Traina",
-      "published": "2022-03-03",
+      "url": "https://africa.espn.com/nfl/story/_/id/39578458/new-packers-dc-jeff-hafley-4-3-jump-college-nfl-lafleur",
+      "publisher": "ESPN, Rob Demovsky",
+      "published": "2024-02-23",
       "accessed": "2026-11-04",
-      "summary": "Column on his first weeks as Miami coach: he jokes freely with interviewers, calls himself random and embraces the nerd label, takes up a dare to use three cliches at a press conference, and teases that his style beats Shanahan's. A columnist's enthusiasm; shows his public manner only.",
-      "confidence": "medium"
+      "summary": "Introductory remarks: moving Green Bay to a 4-3 but saying his coverage beliefs apply to any front; describes a post safety who controls the middle; says college football has changed with COVID, the portal and NIL. Spoke nearly 30 minutes and addressed criticism of his career. LaFleur says he hired the best fit and wants a fast, physical defense.",
+      "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://www.upi.com/Sports_News/NFL/2022/07/28/Mike-McDaniel-uses-his-vulnerability-lessons-from-past-to-coach-Dolphins/6441659020143/",
-      "publisher": "UPI, Alex Butler",
-      "published": "2022-07-28",
+      "url": "https://www.packers.com/news/jeff-hafley-excited-to-get-to-work-with-energetic-defensive-staff",
+      "publisher": "Green Bay Packers (packers.com), Wes Hodkiewicz",
+      "published": "2024-03-13",
       "accessed": "2026-11-04",
-      "summary": "Camp feature: he shares his past struggles with alcohol and depression with players a little at a time, tells Tagovailoa about his own lowest moment as an assistant and stresses that results are collective. Players say it builds trust; his Yale coach praises how clearly he explains complex concepts.",
+      "summary": "On assembling his staff: relationships among coaches matter more to him than X's and O's; he wants coaches who like and support each other; kept two of Joe Barry's assistants and brought others from the NFL and Boston College, praising them for loyalty, intensity and player relationships. Team-written.",
       "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://www.cbssports.com/nfl/news/dolphins-mike-mcdaniel-details-tua-tagovailoa-head-injury-qb-issues-heartfelt-statement",
-      "publisher": "CBS Sports, Jeff Kerr",
-      "published": "2022-09-30",
+      "url": "https://www.packers.com/news/5-things-to-know-about-new-packers-defensive-coordinator-jeff-hafley",
+      "publisher": "Green Bay Packers (packers.com), Wes Hodkiewicz and Mike Spofford",
+      "published": "2024-01-31",
       "accessed": "2026-11-04",
-      "summary": "After Tagovailoa's head injury in Cincinnati he is visibly shaken, describes the quarterback asking for him on the field, centers the person over the player and promises the concussion protocol will not be bent. One press conference in an extreme moment.",
+      "summary": "Primer: four seasons as Boston College head coach with three bowl-eligible teams and a defense that led the ACC in fewest penalties; worked on Kyle Shanahan's 49ers staff with Adam Stenavich and under Robert Saleh; NFL secondary coach from 2012; a Siena wide receiver. Facts only.",
       "confidence": "high"
     },
     {
       "id": "E4",
-      "url": "https://www.espn.com/nfl/story/_/id/34733611/miami-dolphins-coach-mike-mcdaniel-not-fretting-criticism-team-handling-tua-tagovailoa",
-      "publisher": "ESPN, Marcel Louis-Jacques",
-      "published": "2022-10-05",
+      "url": "https://spectrumnews1.com/wi/milwaukee/news/2024/02/01/new-green-bay-packers-defensive-coordinator-jeff-hafley-",
+      "publisher": "Spectrum News 1 Wisconsin, Aly Prouty and the Associated Press",
+      "published": "2024-01-31",
       "accessed": "2026-11-04",
-      "summary": "Facing criticism of the team's handling of Tagovailoa, he says outside opinion is beyond his control and often knee-jerk, and that dwelling on it would pull his focus from the team. Shows how he talks about criticism, not whether it bothers him privately.",
+      "summary": "Hiring story: LaFleur cites his success and player development at every stop; Hafley's statement thanks Boston College warmly. Notes his 22-26 record there and the trend of college head coaches taking NFL assistant jobs. Little on personality.",
       "confidence": "high"
-    },
-    {
-      "id": "E5",
-      "url": "https://www.nbcmiami.com/news/sports/miami-dolphins/dolphins-coach-mike-mcdaniel-is-unapologetically-himself-and-thats-no-joke/3155646/",
-      "publisher": "Associated Press (Tim Reynolds), via NBC 6 South Florida",
-      "published": "2023-11-09",
-      "accessed": "2026-11-04",
-      "summary": "AP feature: he believes leaders owe people their genuine selves, is known for quick jokes in pressers and on the sideline, speaks openly about his past adversity, and players call him smart, relatable and passionate about their welfare. Profile with player quotes; favorable framing.",
-      "confidence": "high"
-    },
-    {
-      "id": "E6",
-      "url": "https://www.nbcsportsbayarea.com/nfl/san-francisco-49ers/mcdaniel-explains-what-shanahan-game-vs-49ers-mean-to-him/1444279/",
-      "publisher": "NBC Sports Bay Area, Angelina Martin",
-      "published": "2022-12-01",
-      "accessed": "2026-11-04",
-      "summary": "Before facing San Francisco he credits Kyle Shanahan with seeing his potential early and giving him room to grow, jokes about their long friendship, and says his focus is on his own team and its winning streak. His own account of the relationship.",
-      "confidence": "medium"
     }
   ],
   "review": {
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

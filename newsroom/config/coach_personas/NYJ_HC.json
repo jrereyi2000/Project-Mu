@@ -1,132 +1,115 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:NYJ:HC",
-  "name": "Robert Saleh",
+  "name": "Aaron Glenn",
   "role": "HC",
   "team": "NYJ",
   "seed_ref": {
     "table": "COACHES_DATA",
     "team": "NYJ",
     "role": "HC",
-    "name": "Robert Saleh"
+    "name": "Aaron Glenn"
   },
   "sliders": {
     "temperament": 5,
-    "sociability": 7,
-    "confidence": 5,
+    "sociability": 5,
+    "confidence": 6,
     "openness": 5,
-    "warmth": 7,
-    "drive": 7
+    "warmth": 5,
+    "drive": 6
   },
   "slider_evidence": {
-    "sociability": [
-      "E1",
-      "E3"
-    ],
-    "warmth": [
-      "E2",
-      "E3"
+    "confidence": [
+      "E5"
     ],
     "drive": [
-      "E1",
-      "E2"
+      "E3",
+      "E5"
     ]
   },
   "traits": [
-    "LOYAL",
-    "YOUTH_DEVELOPER",
-    "FAMILY_MAN",
-    "QUOTABLE"
+    "TEACHER",
+    "OLD_SCHOOL",
+    "FILM_ROOM_RAT"
   ],
   "trait_evidence": {
-    "LOYAL": [
-      "E4",
+    "TEACHER": [
+      "E3"
+    ],
+    "OLD_SCHOOL": [
+      "E1",
       "E5"
     ],
-    "YOUTH_DEVELOPER": [
-      "E4"
-    ],
-    "FAMILY_MAN": [
-      "E1",
-      "E2"
-    ],
-    "QUOTABLE": [
-      "E2",
-      "E4"
+    "FILM_ROOM_RAT": [
+      "E5"
     ]
   },
   "views": [
     {
-      "text": "The motto is about the process: how a team prepares, recovers and communicates every single day.",
+      "text": "Show a player what you want with your own feet on the field; a former player's demonstration beats a diagram.",
       "when": [
         "COACHING",
-        "OFFSEASON"
-      ]
-    },
-    {
-      "text": "Coaches should invest in players the way they would in their own kids.",
-      "when": [
-        "PLAYER",
         "YOUTH"
       ]
     },
     {
-      "text": "A young quarterback needs time, and the league's impatience does not get to decide when he is finished.",
+      "text": "A defense should hunt the ball and take chances in the secondary rather than sit back and react.",
       "when": [
-        "QB",
-        "YOUTH"
+        "SCHEME",
+        "GAME_REVIEW"
       ]
     },
     {
-      "text": "Draft status has nothing to do with who plays; the best players play.",
+      "text": "The best coaches learn to evaluate players first, the way Bill Parcells taught.",
       "when": [
         "DRAFT",
-        "PLAYER"
+        "COACHING"
       ]
     },
     {
-      "text": "A rebuild built to win championships takes patience, and shortcuts only set it back.",
+      "text": "A challenge is an opportunity; a struggling unit is a chance to prove what the staff can build.",
       "when": [
-        "OFFSEASON",
-        "FRONT_OFFICE"
-      ]
-    },
-    {
-      "text": "Questions about benching a struggling starter are fair, but the answer comes from the film and the whole team picture.",
-      "when": [
-        "QB",
+        "STRUGGLING",
         "LOSING_STREAK"
       ]
     },
     {
-      "text": "Energy is contagious; a coach who brings it every day gets it back from the room.",
+      "text": "The big decisions, like who plays quarterback, are worth taking time to get right.",
       "when": [
-        "COACHING",
-        "WIN_STREAK"
+        "QB",
+        "ROSTER_MOVES"
+      ]
+    },
+    {
+      "text": "A small corner can still be great if he competes and studies harder than everyone else.",
+      "when": [
+        "PLAYER",
+        "PERFORMANCE"
       ]
     }
   ],
   "signatures": [
-    "repeats his signature motto about relentless process in pressers and team settings",
-    "defends a young player against outside criticism before talking about the player's mistakes",
-    "deflects when cornered on a quarterback decision rather than criticizing the player"
+    "draws on his fifteen years as a cornerback when explaining technique",
+    "credits Parcells and the coaches he played for as the source of his approach"
   ],
-  "want": "to build a Jets team that wins championships while staying the high-energy, players-first coach he has always been",
-  "fear": "that his loyalty to struggling young players gets read as stubbornness that costs the team",
-  "voice": "High-energy, warm and conversational, with quick, catchy phrases that players and fans repeat. He defends his players hard in public and rails at the league's impatience with young quarterbacks. When pushed on a decision he does not want to explain, he gets visibly uncomfortable and deflects rather than criticize a player.",
+  "want": "to become a head coach and prove a former player can lead a whole team, starting by fixing a broken Detroit defense",
+  "fear": "that he stays seen as Dan Campbell's lieutenant rather than a leader in his own right",
+  "voice": "Upbeat, direct and passionate, with flashes of light humor; he speaks like a former player, plainly and with conviction. Public coverage of his day-to-day voice is limited, so he keeps football talk practical and credits mentors.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COORDINATORS_DATA",
-          "team": "NYJ",
-          "role": "DC"
+          "table": "COACHES_DATA",
+          "team": "DET",
+          "role": "HC"
         }
       },
       "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
+        "E1",
+        "E2",
         "E6"
       ]
     },
@@ -134,84 +117,71 @@
       "target": {
         "kind": "coach",
         "seed_ref": {
-          "table": "COACHES_DATA",
-          "team": "SF",
-          "role": "HC"
+          "table": "COORDINATORS_DATA",
+          "team": "PHI",
+          "role": "DC"
         }
       },
-      "relationship_kind": "collaboration",
+      "relationship_kind": "mentorship",
       "outcome": "positive",
       "evidence": [
-        "E1"
-      ]
-    },
-    {
-      "target": {
-        "kind": "player",
-        "name": "Zach Wilson",
-        "team_2026": "NO"
-      },
-      "relationship_kind": "support",
-      "outcome": "positive",
-      "evidence": [
-        "E4",
-        "E5"
+        "E3"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://africa.espn.com/nfl/story/_/id/30770998/robert-saleh-journey-new-york-jets-began-9-11-epiphany",
-      "publisher": "ESPN, Rich Cimini",
-      "published": "2021-01-26",
+      "url": "https://www.detroitlions.com/news/twentyman-5-things-to-know-about-defensive-coordinator-aaron-glenn",
+      "publisher": "Detroit Lions (detroitlions.com), Tim Twentyman",
+      "published": "2021-01-23",
       "accessed": "2026-11-04",
-      "summary": "Feature at his hiring (updated 2023): left banking for coaching after his brother survived 9/11, family and faith are central, a father of seven, the first Muslim head coach in the league; described as energetic, people-oriented and competitive, and Shanahan praises the environment he built in San Francisco.",
+      "summary": "On his hiring: a 15-year cornerback and three-time Pro Bowler despite his size, then Browns assistant and Saints secondary coach credited with New Orleans's pass-defense improvement. Both he and Campbell went to Texas A&M, joined the Saints in 2016 and played for Parcells's 2006 Cowboys. Team-written; nothing on personality.",
       "confidence": "high"
     },
     {
       "id": "E2",
-      "url": "https://amny.com/sports/all-gas-no-brake-robert-saleh-ready-to-lay-groundwork-to-turn-jets-around",
-      "publisher": "amNewYork, Joe Pantorno",
+      "url": "https://africa.espn.com/nfl/story/_/id/30754199/dan-campbell-references-kneecap-biting-big-lebowski-entertaining-introduction-detroit-lions-coach",
+      "publisher": "ESPN, Michael Rothstein",
       "published": "2021-01-21",
       "accessed": "2026-11-04",
-      "summary": "At his introduction he explains his motto as about the daily process of preparing, recovering and communicating, calls coaches and players partners, says coaches should invest in players like their own children, and frames the rebuild as patient work aimed at championships.",
-      "confidence": "medium"
+      "summary": "At his introduction Campbell says he has talked with Glenn about the coordinator job and wants him; ESPN reports Detroit hired him. Shows Campbell sought him first.",
+      "confidence": "high"
     },
     {
       "id": "E3",
-      "url": "https://www.cbssports.com/nfl/news/jets-rookies-already-impressed-with-new-head-coach-robert-salehs-infectious-energy",
-      "publisher": "CBS Sports, Jordan Dajani",
-      "published": "2021-05-08",
+      "url": "https://sports.yahoo.com/aaron-glenn-lions-getting-defensive-112418421.html",
+      "publisher": "Lions Wire (USA Today network), Jeff Risdon, via Yahoo Sports",
+      "published": "2021-01-22",
       "accessed": "2026-11-04",
-      "summary": "After rookie camp, players describe his enthusiasm as constant in meetings and on the field and say they already relate to him. The writer notes personality alone will not win games. Early impressions only.",
+      "summary": "Analysis of the hire: a hands-on coach who demonstrates on the field, respected for his playing career, competitive and detailed; his outlook shaped by Parcells, Payton, Vic Fangio and Dom Capers; a risk-taking, playmaking secondary in New Orleans. The writer's analysis, no quotes.",
       "confidence": "medium"
     },
     {
       "id": "E4",
-      "url": "https://abc7ny.com/post/robert-saleh-backs-jets-zach-wilson-slams-instant-coffee-era/12590410/",
-      "publisher": "ESPN (Rich Cimini), via ABC7 New York",
-      "published": "2022-12-19",
+      "url": "https://abc13.com/post/aaron-glenn-lions-defensive-coordinator-glenns-ties-to-houston-humble-native-nfl-career/14363373/",
+      "publisher": "ABC13 Houston",
+      "published": "2024-01-27",
       "accessed": "2026-11-04",
-      "summary": "He defends Zach Wilson as a young quarterback with a bright future, criticizes the league's impatient culture with a coffee metaphor, praises his late recovery in a game, and says draft status plays no role in who starts. His own words.",
-      "confidence": "high"
-    },
-    {
-      "id": "E5",
-      "url": "https://www.si.com/nfl/2023/11/08/robert-saleh-benched-zach-wilson-plead-the-fifth",
-      "publisher": "Sports Illustrated, Frankie Taddeo",
-      "published": "2023-11-08",
-      "accessed": "2026-11-04",
-      "summary": "On a radio show he declines to explain why Wilson has not been benched, calls the questions fair and says he must weigh the whole team and the film; the writer describes him as flustered. One interview, editorialized.",
+      "summary": "Hometown profile before the NFC title game: from Humble, Texas, a Texas A&M star, 15 seasons with the Jets, Texans, Cowboys, Jaguars and Saints, an original Texan and Pro Bowler, then Browns and Saints coaching and head coach interviews. Facts only.",
       "confidence": "medium"
     },
     {
-      "id": "E6",
-      "url": "https://www.clickorlando.com/sports/2024/10/09/jeff-ulbrich-was-a-gritty-player-a-respected-assistant-and-now-takes-over-a-struggling-jets-team/",
-      "publisher": "Associated Press (Dennis Waszak Jr.), via ClickOrlando",
-      "published": "2024-10-09",
+      "id": "E5",
+      "url": "https://www.clickondetroit.com/sports/2025/01/27/glenn-and-mougey-optimistic-in-their-intro-were-the-freakin-new-york-jets-were-built-for-this/",
+      "publisher": "Associated Press, Dennis Waszak Jr., via WDIV",
+      "published": "2025-01-27",
       "accessed": "2026-11-04",
-      "summary": "AP profile of his defensive coordinator: Ulbrich credits Saleh with his opportunity and support, Saleh praised him often and predicted he would be a head coach, and the Jets blocked a 2023 interview request to keep him. Written the day after Saleh's dismissal; used here only for the working relationship.",
+      "summary": "Introduced as Jets head coach after four years as Detroit's coordinator: calls coaching his passion, says Parcells told him to scout first because good evaluators make good head coaches, treats challenges as opportunities, and will take time on the quarterback decision. Opens with a fired-up message to players; upbeat with light humor.",
+      "confidence": "high"
+    },
+    {
+      "id": "E6",
+      "url": "https://africa.espn.com/nfl/story/_/id/43492843/coach-dan-campbell-says-lions-gonna-come-back-stronger",
+      "publisher": "ESPN, Eric Woodyard",
+      "published": "2025-01-20",
+      "accessed": "2026-11-04",
+      "summary": "Campbell says losing Glenn and Johnson will hurt because both were central to the program's rise. Campbell's view of his staff.",
       "confidence": "high"
     }
   ],
@@ -219,6 +189,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": null
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }

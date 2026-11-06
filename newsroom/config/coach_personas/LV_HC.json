@@ -1,127 +1,131 @@
 {
   "schema_version": "coach-profile-v1",
   "key": "coach:LV:HC",
-  "name": "Antonio Pierce",
+  "name": "Klint Kubiak",
   "role": "HC",
   "team": "LV",
   "seed_ref": {
     "table": "COACHES_DATA",
     "team": "LV",
     "role": "HC",
-    "name": "Antonio Pierce"
+    "name": "Klint Kubiak"
   },
   "sliders": {
-    "temperament": 6,
-    "sociability": 5,
-    "confidence": 6,
-    "openness": 4,
-    "warmth": 6,
-    "drive": 5
+    "temperament": 4,
+    "sociability": 3,
+    "confidence": 5,
+    "openness": 5,
+    "warmth": 5,
+    "drive": 7
   },
   "slider_evidence": {
     "temperament": [
-      "E4"
+      "E5"
     ],
-    "confidence": [
-      "E3",
-      "E4"
+    "sociability": [
+      "E5"
     ],
-    "warmth": [
-      "E1",
+    "drive": [
+      "E5",
       "E2"
-    ],
-    "openness": [
-      "E3",
-      "E7"
     ]
   },
   "traits": [
-    "OLD_SCHOOL",
-    "DISCIPLINARIAN",
-    "LOYAL",
-    "QUOTABLE"
+    "GUARDED",
+    "QB_WHISPERER",
+    "SCHEME_NERD",
+    "DISCIPLINARIAN"
   ],
   "trait_evidence": {
-    "OLD_SCHOOL": [
-      "E3",
-      "E7"
+    "GUARDED": [
+      "E5"
+    ],
+    "QB_WHISPERER": [
+      "E1",
+      "E2"
+    ],
+    "SCHEME_NERD": [
+      "E1",
+      "E5"
     ],
     "DISCIPLINARIAN": [
-      "E4"
-    ],
-    "LOYAL": [
-      "E1",
-      "E6"
-    ],
-    "QUOTABLE": [
-      "E4"
+      "E5"
     ]
   },
   "views": [
     {
-      "text": "Football should be played physical and with joy at the same time; the two are not opposites.",
+      "text": "Build the offense around the quarterback: open receivers, help in protection and room to extend plays.",
       "when": [
-        "COACHING",
-        "OFFSEASON"
-      ]
-    },
-    {
-      "text": "A team that runs the ball, protects it and takes the occasional deep shot can beat anybody on a given Sunday.",
-      "when": [
+        "QB",
         "SCHEME"
       ]
     },
     {
-      "text": "If a player makes a business decision on the field, the team can make one about him off it.",
+      "text": "Teach in long meetings first, so players carry a lot of information onto the field.",
       "when": [
-        "BAD_GAME",
-        "ROSTER_MOVES"
-      ]
-    },
-    {
-      "text": "Wearing the silver and black should mean something, and the coach's first job is to make the players feel that.",
-      "when": [
-        "HISTORY",
+        "OFFSEASON",
         "COACHING"
       ]
     },
     {
-      "text": "Do not rush a quarterback decision; name the starter when the practice tape makes it obvious.",
+      "text": "A good start is no reason to feel satisfied; stay hungry.",
       "when": [
-        "QB",
-        "PREVIEW"
+        "WIN_STREAK",
+        "CONTENDER"
       ]
     },
     {
-      "text": "Injuries and lineup churn are no excuse; play the way the roster you have can play.",
-      "when": [
-        "INJURY",
-        "STRUGGLING"
-      ]
-    },
-    {
-      "text": "A coordinator who cannot get the unit headed the right way has to go, even midseason.",
+      "text": "Pressure in a winning program is healthy if you show up with backup plans and real reasons for your ideas.",
       "when": [
         "COACHING",
-        "LOSING_STREAK"
+        "CONTENDER"
+      ]
+    },
+    {
+      "text": "Correct the mistake where everyone can learn from it, and praise it the same way when it is earned.",
+      "when": [
+        "PLAYER",
+        "GAME_REVIEW"
+      ]
+    },
+    {
+      "text": "Players should enjoy the game and celebrate; the standard and the fun are not opposites.",
+      "when": [
+        "PLAYER",
+        "WIN_STREAK"
       ]
     }
   ],
   "signatures": [
-    "answers bluntly after a bad loss, sometimes with a single word, and calls out effort without naming names",
-    "talks about Raider identity and history as if he were still a fan in the stands",
-    "credits the defense and its coordinator first when asked what the team does well"
+    "answers in short, direct sentences and steers away from talking about himself",
+    "describes himself through his job, his faith and being a father",
+    "credits the head coach who opened his game-planning meetings to him"
   ],
-  "want": "to restore a proud, physical Raiders identity and prove a former linebacker without coordinator experience can run an NFL team",
-  "fear": "that the players' faith that got him the job is spent before the results arrive",
-  "voice": "Direct, emotional and plain-spoken, a former linebacker who talks in terms of effort, physicality and pride. He backs his players warmly in public until he thinks effort is lacking, then turns cutting and terse. He deflects talk of pressure and speaks about the franchise's history with a fan's affection.",
+  "want": "to show he is a play-caller in his own right, not just a famous coaching son and brother",
+  "fear": "that the early fireworks fade and he is judged only by a collapsing season around him",
+  "voice": "Reserved, brief and focused; he gives short answers and little of himself to reporters. Players describe a demanding thinker who corrects in front of the group and praises when earned. When he does open up, it is about faith, family and the work.",
   "ties": [
     {
       "target": {
         "kind": "coach",
         "seed_ref": {
+          "table": "COACHES_DATA",
+          "team": "SF",
+          "role": "HC"
+        }
+      },
+      "relationship_kind": "mentorship",
+      "outcome": "positive",
+      "evidence": [
+        "E1"
+      ]
+    },
+    {
+      "target": {
+        "kind": "coach",
+        "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "LV",
+          "team": "CHI",
           "role": "DC"
         }
       },
@@ -136,93 +140,83 @@
         "kind": "coach",
         "seed_ref": {
           "table": "COORDINATORS_DATA",
-          "team": "LV",
+          "team": "SF",
           "role": "OC"
         }
       },
-      "relationship_kind": "collaboration",
-      "outcome": "negative",
+      "relationship_kind": "support",
+      "outcome": "positive",
       "evidence": [
-        "E5",
-        "E7"
+        "E6"
       ]
     },
     {
       "target": {
         "kind": "player",
-        "name": "Maxx Crosby",
-        "team_2026": "LV"
+        "name": "Alvin Kamara",
+        "team_2026": "NO"
       },
-      "relationship_kind": "support",
+      "relationship_kind": "collaboration",
       "outcome": "positive",
       "evidence": [
-        "E1",
-        "E2"
+        "E4",
+        "E5"
       ]
     }
   ],
   "evidence": [
     {
       "id": "E1",
-      "url": "https://www.news4jax.com/sports/2024/01/19/raiders-agree-to-hire-antonio-pierce-as-their-next-head-coach-ap-source-says/",
-      "publisher": "Associated Press via News4JAX, Mark Anderson",
-      "published": "2024-01-19",
+      "url": "https://sports.yahoo.com/klint-kubiak-reflects-eye-opening-184434554.html",
+      "publisher": "Saints Wire (USA Today) via Yahoo Sports, John Sigler",
+      "published": "2024-02-14",
       "accessed": "2026-11-05",
-      "summary": "Owner Mark Davis drops the interim tag after Pierce goes 5-4 following McDaniels' Halloween-night firing, despite more experienced candidates; players pushed for him, Crosby credits him with changing the culture and improving the defense, and fans chanted his initials in the finale.",
-      "confidence": "high"
+      "summary": "He calls his year under Shanahan eye-opening: the head coach shared his reasoning in game-plan meetings, was demanding, and the pressure was useful if coaches had backup plans; the main lesson was building around the quarterback. Earlier called plays for Minnesota (2021) and briefly Denver (2022).",
+      "confidence": "medium"
     },
     {
       "id": "E2",
-      "url": "https://www.si.com/nfl/2024/01/13/maxx-crosby-trade-request-las-vegas-raiders-antonio-pierce",
-      "publisher": "Sports Illustrated, Tim Capurso",
-      "published": "2024-01-13",
+      "url": "https://www.wlox.com/2024/06/14/saints-qb-derek-carr-connecting-with-new-offensive-coordinator-klint-kubiak/",
+      "publisher": "WVUE Fox 8 via WLOX, Sean Fazende",
+      "published": "2024-06-14",
       "accessed": "2026-11-05",
-      "summary": "Crosby publicly campaigns to hire the interim coach and, per NFL Network, would consider a trade request if the team does not keep him; locker-room leaders value Pierce after a 5-4 interim run with three wins in the last four. Shows player backing, reported secondhand for the trade part.",
-      "confidence": "high"
+      "summary": "Offseason piece: he teaches through long meeting time, praises Carr's intelligence and says he exceeded expectations, but tells players to stay hungry and never satisfied. Local TV report.",
+      "confidence": "medium"
     },
     {
       "id": "E3",
-      "url": "https://www.raiders.com/news/quick-hits-antonio-pierce-raiders-ready-to-hit-the-ground-running-in-training-camp",
-      "publisher": "Las Vegas Raiders (raiders.com), Levi Edwards",
-      "published": "2024-07-23",
+      "url": "https://global.espn.com/nfl/story/_/id/41137856/new-orleans-saints-dennis-allen-urgency-year-3-week-1-carolina-panthers",
+      "publisher": "ESPN, Katherine Terrell",
+      "published": "2024-09-06",
       "accessed": "2026-11-05",
-      "summary": "Opening his first full camp, Pierce says he feels no pressure, wants players to have fun and be physical, and lists bonding, competition, physicality and a Raiders identity as goals; he calls the defense the strength and credits Graham's third year for communication and continuity, and will not rush the quarterback decision. Team site; his own framing.",
+      "summary": "Allen replaced Payton-era coordinator Carmichael with Kubiak and installed a new scheme, part of a staff Allen chose himself. Shows the hire, not the working relationship in depth.",
       "confidence": "high"
     },
     {
       "id": "E4",
-      "url": "https://www.cbssports.com/nfl/news/antonio-pierce-says-some-raiders-players-made-business-decisions-in-week-3-loss-to-panthers",
-      "publisher": "CBS Sports, Tyler Sullivan",
-      "published": "2024-09-22",
+      "url": "https://www.foxsports.com/articles/nfl/derek-carr-and-the-saints-rout-the-panthers-4710-in-klint-kubiaks-playcalling-debut",
+      "publisher": "Associated Press via Fox Sports",
+      "published": "2024-09-08",
       "accessed": "2026-11-05",
-      "summary": "After a 36-22 home loss to winless Carolina, Pierce says some individuals made business decisions on the field and the team will make its own going forward, without naming anyone; asked for positives, he answers with one word: none. One postgame press conference.",
+      "summary": "In his New Orleans play-calling debut the Saints score on their first nine possessions in a 47-10 win; Kamara ties the result to the changes made. Kubiak is not quoted.",
       "confidence": "high"
     },
     {
       "id": "E5",
-      "url": "https://www.news4jax.com/sports/2024/11/04/raiders-fire-offensive-coordinator-luke-getsy-and-2-other-offensive-coaches/",
-      "publisher": "Associated Press via News4JAX, Mark Anderson",
-      "published": "2024-11-04",
+      "url": "https://neworleanssaints.com/news/new-orleans-saints-offensive-coordinator-klint-kubiak-let-s-his-work-do-the-talking",
+      "publisher": "New Orleans Saints (neworleanssaints.com), John DeShazier",
+      "published": "2024-09-20",
       "accessed": "2026-11-05",
-      "summary": "After a 41-24 loss at Cincinnati left the team 2-7, the Raiders fire Getsy, the quarterbacks coach and the offensive line coach; the offense averaged 18.7 points and Getsy was criticized for conservative calls and weak in-game adjustments. Notes Pierce's own decisions are also under scrutiny.",
+      "summary": "Team-site profile: reserved with media, short answers, describes himself by job, faith and fatherhood; Carr says he loves football, demands a lot and corrects mistakes in front of peers but praises when earned; Kamara calls him a constant schemer. 91 points in the first two games.",
       "confidence": "high"
     },
     {
       "id": "E6",
-      "url": "https://www.ksat.com/sports/2025/01/07/raiders-fire-coach-antonio-pierce-after-he-goes-4-13-in-lone-full-season/",
-      "publisher": "Associated Press via KSAT, Mark Anderson",
-      "published": "2025-01-07",
+      "url": "https://www.si.com/nfl/49ers/news/klay-kubiak-explains-his-role-as-the-49ers-pass-game-coordinator-01hynzqzpfm1",
+      "publisher": "Sports Illustrated (49ers On SI), Grant Cohn",
+      "published": "2024-05-24",
       "accessed": "2026-11-05",
-      "summary": "Las Vegas fires Pierce after 4-13 in his only full season, which included 10 straight losses amid injuries and the Adams trade; the team credits him with reigniting what it means to be a Raider. He grew up a Raiders fan, coached at Arizona State in 2018-21, and had never been an NFL coordinator. Notes Graham is among Jacksonville's head-coach interview requests.",
-      "confidence": "high"
-    },
-    {
-      "id": "E7",
-      "url": "https://www.si.com/nfl/raiders/news/breaking-raiders-pierce-responds-to-luke-getsy-s-firing-01jbw18cm5jy",
-      "publisher": "Sports Illustrated (Raiders Today), Ezekiel Trezevant",
-      "published": "2024-11-04",
-      "accessed": "2026-11-05",
-      "summary": "After the coordinator firings, Pierce describes the offense he wants: physical, run-first and disciplined, with deep shots and ball security, while saying the team must do whatever gives it the best chance with the players it has after injuries and lineup changes. Pragmatic, forward-looking tone.",
+      "summary": "His younger brother Klay, taking over Klint's 49ers pass game role, says it is the same job Klint held and that the two worked very closely together. Klay's account.",
       "confidence": "medium"
     }
   ],
@@ -230,6 +224,6 @@
     "status": "draft",
     "reviewer": null,
     "reviewed_at": null,
-    "notes": "Seed vs reality: Las Vegas fired Pierce in January 2025 and Getsy in November 2024; the 2026 seed keeps both."
+    "notes": "moved seat 2026; re-research for 2026 sources"
   }
 }
